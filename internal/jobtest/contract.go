@@ -27,6 +27,7 @@ type Payload struct {
 
 func Run(t *testing.T, makeFixture func(*testing.T) Fixture) {
 	t.Helper()
+	t.Run("manual-retry", func(t *testing.T) { manualRetry(t, makeFixture) })
 	t.Run("workflows", func(t *testing.T) { workflows(t, makeFixture); failureBoundaries(t, makeFixture) })
 	t.Run("ownership-and-identity", func(t *testing.T) {
 		f := makeFixture(t)

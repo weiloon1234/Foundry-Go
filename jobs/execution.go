@@ -7,7 +7,9 @@ import (
 )
 
 // Attempt is immutable handler metadata. ID is stable across worker redelivery;
-// Number counts started executions and is not an exactly-once guarantee.
+// Number counts started executions in the current manual-retry cycle. Retry is
+// zero for original dispatch and increments for each explicit operator retry.
+// Neither value is an exactly-once guarantee; idempotency should use ID.
 // No reservation owner is exposed to application handlers.
 type Attempt struct {
 	ID      ExecutionID
@@ -15,6 +17,7 @@ type Attempt struct {
 	Version Version
 	Queue   Queue
 	Number  uint32
+	Retry   uint32
 }
 type executionFrame struct {
 	worker  *Worker

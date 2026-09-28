@@ -45,11 +45,18 @@ func (w *Worker) process(parent context.Context, key Key, reservation Reservatio
 		parent = observed
 	}
 	outcome := observability.Panicked
+	attemptNumber := reservation.Attempts
+	var completion Result
+	finalized := false
 	defer func() {
 		if processErr != nil {
+			w.stop()
 			outcome = observability.OutcomeFor(processErr)
 		}
 		span.End(observability.Result{Outcome: outcome})
+		if completion.State != "" || processErr != nil {
+			w.logAttempt(parent, envelope, attemptNumber, reservation.Retries, completion, finalized)
+		}
 	}()
 	if parent.Err() != nil {
 		outcome = observability.Cancelled
@@ -58,7 +65,10 @@ func (w *Worker) process(parent context.Context, key Key, reservation Reservatio
 	entry, err := w.registry.lookup(jobKey{envelope.Name(), envelope.Version()})
 	if err != nil || entry.prepare == nil {
 		outcome = observability.Failed
-		return w.finish(key, reservation.Ownership, Result{State: Failed, Reason: Unregistered})
+		completion = Result{State: Failed, Reason: Unregistered}
+		processErr = w.finish(key, reservation.Ownership, completion)
+		finalized = processErr == nil
+		return processErr
 	}
 	work, cancel := context.WithCancelCause(parent)
 	defer cancel(context.Canceled)
@@ -68,12 +78,15 @@ func (w *Worker) process(parent context.Context, key Key, reservation Reservatio
 	// Finalization begins only after all preparation, handler and middleware
 	// callbacks exit. Heartbeats therefore also cover context-ignoring admission.
 	finish := func(result Result) error {
+		completion = result
 		outcome = jobOutcome(result)
 		close(stopHeartbeat)
 		if err := <-heartbeatDone; err != nil {
 			return err
 		}
-		return w.finish(key, reservation.Ownership, result)
+		err := w.finish(key, reservation.Ownership, result)
+		finalized = err == nil
+		return err
 	}
 	invocation, stopTimeout := context.WithTimeout(work, envelope.Policy().Timeout)
 	defer stopTimeout()
@@ -121,7 +134,8 @@ func (w *Worker) process(parent context.Context, key Key, reservation Reservatio
 		close(stopHeartbeat)
 		return errors.Join(fault.New(fault.Internal, "backend returned an invalid job attempt"), <-heartbeatDone)
 	}
-	frame = &executionFrame{worker: w, typ: entry.typ, attempt: Attempt{ID: envelope.ID(), Name: envelope.Name(), Version: envelope.Version(), Queue: envelope.Queue(), Number: attempt}}
+	attemptNumber = attempt
+	frame = &executionFrame{worker: w, typ: entry.typ, attempt: Attempt{ID: envelope.ID(), Name: envelope.Name(), Version: envelope.Version(), Queue: envelope.Queue(), Number: attempt, Retry: reservation.Retries}}
 	frame.active.Store(true)
 	handlerContext := context.WithValue(invocation, executionKey{}, frame)
 	handlerErr := prepareErr
@@ -159,10 +173,12 @@ func (w *Worker) heartbeat(key Key, proof Ownership, cancel context.CancelCauseF
 			done()
 			if err != nil {
 				cancel(ErrOwnershipLost)
+				w.stop()
 				return err
 			}
 			if !status.Owned {
 				cancel(ErrOwnershipLost)
+				w.stop()
 				return ErrOwnershipLost
 			}
 			if status.CancellationRequested {

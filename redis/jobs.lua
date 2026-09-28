@@ -56,6 +56,9 @@ local function load(id)
     if (record.state == 'reserved' or record.state == 'running') and (#record.owner ~= limits.owner_bytes or record.expiry <= 0) then
         corrupt = true; return nil
     end
+    if record.retries and not integer(record.retries, 0, limits.manual_retries) then corrupt = true; return nil end
+    if record.last_retry and (type(record.last_retry) ~= 'string' or #record.last_retry ~= 64 or not string.match(record.last_retry, '^[0-9a-f]+$')) then corrupt = true; return nil end
+    if ((record.retries or 0) > 0) ~= (record.last_retry ~= nil) then corrupt = true; return nil end
     loaded[id] = record
     return record
 end
@@ -82,7 +85,7 @@ local function transition(r, state, reason)
     r.state = state
     if state ~= 'reserved' and state ~= 'running' then r.owner = ''; r.expiry = 0 end
     if terminal(state) then r.finished = now end
-    table.insert(r.history, {state=state, at=now, attempt=r.attempts, reason=reason})
+    table.insert(r.history, {state=state, at=now, attempt=r.attempts, reason=reason, retry=r.retries or 0})
     if #r.history > limits.history then table.remove(r.history, 1) end
     dirty[r.id] = true
     if terminal(state) and not was_terminal and r.workflow then advance(r) end
@@ -279,6 +282,19 @@ elseif op == 'list' then
     end
 elseif op == 'inspect' then
     result.record = r
+elseif op == 'retry' then
+    if not r or r.name ~= request.name or r.version ~= request.version then return {-7} end
+    if r.last_retry == request.retry_token then result.changed = false
+    else
+        if r.state ~= 'failed' or r.workflow or r.cancelled or (r.retries or 0) >= request.max_retries
+            or r.envelope ~= request.envelope or r.created ~= request.expected_created
+            or r.finished ~= request.expected_finished or r.attempts ~= request.expected_attempts
+            or (r.retries or 0) ~= request.expected_retries then return {-7} end
+        r.retries = (r.retries or 0) + 1; r.last_retry = request.retry_token
+        r.attempts = 0; r.finished = 0; r.available = now
+        transition(r, 'waiting', 'manually_retried')
+        result.changed = true
+    end
 elseif op == 'cancel' then
     result.changed = false
     if r and not terminal(r.state) and r.name == request.name and r.version == request.version then

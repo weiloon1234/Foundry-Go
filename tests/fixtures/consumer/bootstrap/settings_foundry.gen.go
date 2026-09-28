@@ -253,7 +253,9 @@ type SettingsAppWorkerConfigKeySet struct {
 
 // SettingsAppWorkerConfigConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppWorkerConfigConfigKeySet struct {
-	Namespace SettingsAppWorkerConfigNamespaceConfigKeySet
+	// FailureLog selects app.worker.config.failure_log. Set accepts bool.
+	FailureLog config.Key[Settings, bool]
+	Namespace  SettingsAppWorkerConfigNamespaceConfigKeySet
 	// Queues selects app.worker.config.queues. Set accepts []jobs.Subscription.
 	Queues config.Key[Settings, []jobs.Subscription]
 	// Concurrency selects app.worker.config.concurrency. Set accepts int.
@@ -968,6 +970,7 @@ func SettingsConfigKeys() SettingsConfigKeySet {
 				Enabled:    config.Scalar[Settings, bool]("app.worker.enabled", func(settings *Settings) *bool { return &settings.App.Worker.Enabled }),
 				Connection: config.Scalar[Settings, jobs.ConnectionName]("app.worker.connection", func(settings *Settings) *jobs.ConnectionName { return &settings.App.Worker.Connection }),
 				Config: SettingsAppWorkerConfigConfigKeySet{
+					FailureLog: config.Scalar[Settings, bool]("app.worker.config.failure_log", func(settings *Settings) *bool { return &settings.App.Worker.Config.FailureLog }),
 					Namespace: SettingsAppWorkerConfigNamespaceConfigKeySet{
 						Application: config.Scalar[Settings, string]("app.worker.config.namespace.application", func(settings *Settings) *string { return &settings.App.Worker.Config.Namespace.Application }),
 						Environment: config.Scalar[Settings, string]("app.worker.config.namespace.environment", func(settings *Settings) *string { return &settings.App.Worker.Config.Namespace.Environment }),
@@ -1368,6 +1371,7 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.App.HTTP.SecurityHeaders,
 		keys.App.Worker.Enabled,
 		keys.App.Worker.Connection,
+		keys.App.Worker.Config.FailureLog,
 		keys.App.Worker.Config.Namespace.Application,
 		keys.App.Worker.Config.Namespace.Environment,
 		keys.App.Worker.Config.Queues,

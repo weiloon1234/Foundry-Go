@@ -184,6 +184,8 @@ func compilerCases() []compilerCase {
 		{"job_workflow_payload", "cannot use"},
 		{"job_options_owner", "cannot use"},
 		{"job_identity_owner", "cannot use"},
+		{"job_retry_identity", "cannot use"},
+		{"job_with_middleware_owner", "does not match inferred type"},
 		{"job_handler_owner", "cannot use"},
 		{"job_identity_conversion", "cannot convert"},
 

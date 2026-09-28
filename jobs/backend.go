@@ -43,11 +43,12 @@ const (
 	WorkerStopped    Reason = "worker_stopped"
 	RateLimited      Reason = "rate_limited"
 	DependencyFailed Reason = "dependency_failed"
+	ManuallyRetried  Reason = "manually_retried"
 )
 
 func (r Reason) Validate() error {
 	switch r {
-	case NoReason, HandlerFailed, HandlerPanicked, PayloadInvalid, Unregistered, AttemptLimit, LeaseExpired, TimedOut, CancelRequested, WorkerStopped, RateLimited, DependencyFailed:
+	case NoReason, HandlerFailed, HandlerPanicked, PayloadInvalid, Unregistered, AttemptLimit, LeaseExpired, TimedOut, CancelRequested, WorkerStopped, RateLimited, DependencyFailed, ManuallyRetried:
 		return nil
 	}
 	return fault.New(fault.Invalid, "invalid job failure classification")
@@ -93,6 +94,7 @@ func (Ownership) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("job owners
 // Reservation is returned only after an atomic ready-to-leased transition.
 // Attempts excludes the reserved attempt until JobStart confirms it.
 type Reservation struct {
+	Retries   uint32
 	Envelope  Envelope
 	Ownership Ownership
 	Attempts  uint32
@@ -134,10 +136,13 @@ type Transition struct {
 	At      time.Time
 	Attempt uint32
 	Reason  Reason
+	Retry   uint32
 }
 
 // Record is an owned inspection snapshot. Envelope access remains explicit.
 type Record struct {
+	Retries               uint32
+	LastRetry             RetryToken
 	Workflow              WorkflowID
 	Position              uint32
 	Envelope              Envelope

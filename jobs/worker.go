@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -24,6 +25,7 @@ type Worker struct {
 	backend  Backend
 	registry *Registry
 	config   WorkerConfig
+	logger   *slog.Logger
 	schedule []Key
 	cursor   atomic.Uint64
 	active   atomic.Int64
@@ -34,7 +36,7 @@ type Worker struct {
 	done     chan struct{}
 }
 
-func NewWorker(backend Backend, registry *Registry, config WorkerConfig) (*Worker, error) {
+func NewWorker(backend Backend, registry *Registry, config WorkerConfig, options ...WorkerOption) (*Worker, error) {
 	if backend == nil || isNil(backend) || registry == nil || registry.entries == nil {
 		return nil, fault.New(fault.Invalid, "worker requires a backend and registry")
 	}
@@ -42,6 +44,14 @@ func NewWorker(backend Backend, registry *Registry, config WorkerConfig) (*Worke
 		return nil, err
 	}
 	worker := &Worker{backend: backend, registry: registry, config: config.snapshot(), done: make(chan struct{})}
+	for _, option := range options {
+		if option == nil {
+			return nil, fault.New(fault.Invalid, "nil job worker option")
+		}
+		if err := option(worker); err != nil {
+			return nil, err
+		}
+	}
 	for _, subscription := range config.Queues {
 		key, err := NewKey(config.Namespace, subscription.Queue)
 		if err != nil {
@@ -83,6 +93,7 @@ func (w *Worker) Run(ctx context.Context) error {
 			if err := w.loop(run); err != nil {
 				failures <- err
 				w.stop()
+				w.logBackendFailure(run)
 			}
 		})
 	}

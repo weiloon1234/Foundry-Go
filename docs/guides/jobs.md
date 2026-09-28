@@ -7,6 +7,11 @@ The [master roadmap](../../blueprint/00-master-architecture-and-parity.md) recor
 acceptance and verification evidence. The [independent consumer](../../tests/fixtures/consumer/background/)
 contains compiling public API examples; acceptance results are recorded separately.
 
+[Worker operations](jobs-operations.md) covers automatic failure logging,
+failed-job inspection, explicit retry tokens, application CLI registration and
+deployment ownership. The [boilerplate handoff](jobs-boilerplate-handoff.md)
+collects the integration steps for a separate application repository.
+
 ## Concrete payloads and stable dispatch
 
 Declare one named DTO and reuse its definition for registration and dispatch:
@@ -150,6 +155,14 @@ Filtered pages can be empty while `Next` is nonzero. Pagination is weakly
 consistent during mutation. Returned payload/history snapshots are explicit
 private-data boundaries; authorize access before exposing them through HTTP.
 History uses bounded classifications rather than arbitrary error or panic text.
+
+Independent failed jobs can be retried explicitly through `Definition.Retry`,
+`Bound.Retry` or the application-owned `jobs retry` command. Retain the token
+from the observed failed record before retrying. The same token is idempotent
+after uncertain responses and cannot reopen a subsequent failure. IDs, envelopes
+and bounded history stay intact; each manual retry starts a new attempt budget.
+Workflow members cannot be reopened individually because their dependent
+transitions have already been committed. See [retry semantics](jobs-operations.md).
 
 ## Transactional publication
 

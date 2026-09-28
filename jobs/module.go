@@ -98,6 +98,6 @@ func registerWorker(r *foundation.Registrar, key foundation.Key[*Dispatcher], co
 		if err := validateWorkerDispatcher(dispatcher, config); err != nil {
 			return nil, err
 		}
-		return NewWorker(dispatcher.backend, dispatcher.registry, config)
+		return NewWorker(dispatcher.backend, dispatcher.registry, config, WithWorkerLogger(runtime.Logger()))
 	})
 }

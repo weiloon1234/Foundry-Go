@@ -2,9 +2,11 @@ package jobs
 
 import (
 	"context"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 const MaxListLimit = 100
@@ -41,6 +43,53 @@ func (o ListOptions) Matches(r Record) bool {
 type Page struct {
 	Records []Record
 	Next    ExecutionID
+}
+
+// Summary is safe operational metadata: no payload, origin, lease owner or raw
+// error. RetryToken identifies the current failed state; it grants no permission.
+type Summary struct {
+	ID          ExecutionID `json:"id"`
+	Name        Name        `json:"name"`
+	Version     Version     `json:"version"`
+	Queue       Queue       `json:"queue"`
+	State       State       `json:"state"`
+	Attempts    uint32      `json:"attempts"`
+	MaxAttempts uint32      `json:"max_attempts"`
+	Retries     uint32      `json:"retries"`
+	Reason      Reason      `json:"reason,omitempty"`
+	Workflow    WorkflowID  `json:"workflow,omitzero"`
+	AvailableAt time.Time   `json:"available_at"`
+	CreatedAt   time.Time   `json:"created_at"`
+	FinishedAt  time.Time   `json:"finished_at,omitzero"`
+	RetryToken  RetryToken  `json:"retry_token,omitempty"`
+}
+
+func (r Record) Summary() Summary {
+	token, _ := r.RetryToken()
+	result := Summary{ID: r.Envelope.ID(), Name: r.Envelope.Name(), Version: r.Envelope.Version(), Queue: r.Envelope.Queue(), State: r.State, Attempts: r.Attempts, MaxAttempts: r.Envelope.Policy().Attempts, Retries: r.Retries, Workflow: r.Workflow, AvailableAt: r.AvailableAt, CreatedAt: r.CreatedAt, FinishedAt: r.FinishedAt, RetryToken: token}
+	if len(r.History) > 0 {
+		result.Reason = r.History[len(r.History)-1].Reason
+	}
+	return result
+}
+
+// Inspect is the explicit heterogeneous operations boundary. Prefer the typed
+// Definition.Inspect in application domain code. Records contain private payloads;
+// use Summary when emitting operator output.
+func (d *Dispatcher) Inspect(ctx context.Context, queue Queue, id ExecutionID) (value.Optional[Record], error) {
+	release, err := d.begin(ctx)
+	if err != nil {
+		return value.Optional[Record]{}, err
+	}
+	defer release()
+	key, err := NewKey(d.config.Namespace, queue)
+	if err != nil {
+		return value.Optional[Record]{}, err
+	}
+	if id.IsZero() {
+		return value.Optional[Record]{}, fault.New(fault.Invalid, "job inspection requires an identity")
+	}
+	return d.backend.JobInspect(ctx, key, id)
 }
 
 // List is the explicit operational boundary. It returns owned payload/history

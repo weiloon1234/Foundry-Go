@@ -155,7 +155,7 @@ func (b *Backend) transition(item *entry, state jobs.State, reason jobs.Reason, 
 	if state.Terminal() {
 		r.FinishedAt = now
 	}
-	transition := jobs.Transition{State: state, At: now, Attempt: r.Attempts, Reason: reason}
+	transition := jobs.Transition{State: state, At: now, Attempt: r.Attempts, Reason: reason, Retry: r.Retries}
 	if len(r.History) == b.config.MaxHistory {
 		copy(r.History, r.History[1:])
 		r.History[len(r.History)-1] = transition
@@ -258,7 +258,7 @@ func (b *Backend) JobReserve(ctx context.Context, key jobs.Key, owner lease.Owne
 	if err != nil {
 		return value.Optional[jobs.Reservation]{}, err
 	}
-	return value.Set(jobs.Reservation{Envelope: chosen.record.Envelope, Ownership: proof, Attempts: chosen.record.Attempts, ExpiresAt: chosen.record.LeaseExpiresAt}), nil
+	return value.Set(jobs.Reservation{Retries: chosen.record.Retries, Envelope: chosen.record.Envelope, Ownership: proof, Attempts: chosen.record.Attempts, ExpiresAt: chosen.record.LeaseExpiresAt}), nil
 }
 func (b *Backend) JobStart(ctx context.Context, key jobs.Key, proof jobs.Ownership) (uint32, error) {
 	if err := proof.Validate(); err != nil {

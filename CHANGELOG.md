@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Workers log safe structured failure metadata through the configured logger by
+  default. Typed `application.JobWith` adds middleware/admission to ordinary
+  assembly. Failed-job commands inspect metadata and explicitly retry independent
+  failures using a saved concurrency token. Memory/Redis retries retain job IDs,
+  envelopes and bounded history, deduplicate repeated requests, and preserve
+  custom backend compatibility through the optional `jobs.RetryBackend` interface.
+  Lease loss now stops other reservation loops immediately while retaining
+  ownership of handlers that are still draining after cancellation.
+
 - Typed pagination now composes with concrete guard bindings through
   `pagination.Authenticated` for numbered, simple and cursor reads. Scope,
   permission and request authorization retain the HTTP lifecycle; page completion,

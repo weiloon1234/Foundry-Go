@@ -19,6 +19,19 @@ type JobDeclaration struct {
 }
 
 func Job[P any](definition jobs.Definition[P], construct func(Services) (jobs.Handler[P], error)) JobDeclaration {
+	return JobWith(definition, func(services Services) (jobs.Handler[P], jobs.HandlerOptions[P], error) {
+		if construct == nil {
+			return nil, jobs.HandlerOptions[P]{}, fault.New(fault.Invalid, "job requires a typed handler constructor")
+		}
+		handler, err := construct(services)
+		return handler, jobs.HandlerOptions[P]{}, err
+	})
+}
+
+// JobWith binds typed middleware and admission using the same configured
+// registration as Job. Use Failed middleware for explicit domain diagnostics;
+// worker failure metadata is logged automatically by the configured worker.
+func JobWith[P any](definition jobs.Definition[P], construct func(Services) (jobs.Handler[P], jobs.HandlerOptions[P], error)) JobDeclaration {
 	return JobDeclaration{install: func(r *foundation.Registrar, connection jobs.ConnectionName) error {
 		if construct == nil {
 			return fault.New(fault.Invalid, "job requires a typed handler constructor")
@@ -28,11 +41,11 @@ func Job[P any](definition jobs.Definition[P], construct func(Services) (jobs.Ha
 			if err != nil {
 				return jobs.Declaration{}, err
 			}
-			handler, err := construct(services)
+			handler, options, err := construct(services)
 			if err != nil {
 				return jobs.Declaration{}, err
 			}
-			return definition.Declare(handler)
+			return definition.DeclareWith(handler, options)
 		})
 	}}
 }

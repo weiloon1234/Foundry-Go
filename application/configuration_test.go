@@ -45,12 +45,15 @@ cookie='__Host-configured'
 	if err != nil {
 		t.Fatal(err)
 	}
-	settings, _, err := schema.Load(application.DefaultSettings(), config.Inputs[application.Settings]{Files: []config.Values{layer}, Overrides: []config.Override[application.Settings]{keys.Worker.Config.PollInterval.Set(25 * time.Millisecond), keys.Features.Health.Enabled.Set(true)}})
+	settings, _, err := schema.Load(application.DefaultSettings(), config.Inputs[application.Settings]{Files: []config.Values{layer}, Overrides: []config.Override[application.Settings]{keys.Worker.Config.PollInterval.Set(25 * time.Millisecond), keys.Worker.Config.FailureLog.Set(false), keys.Features.Health.Enabled.Set(true)}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if settings.Services.Mail.Mailers["default"].Config.From.Mailbox() != "configured@example.test" || settings.Services.Jobs.Connections["default"].DefaultQueue != "reports" || settings.Worker.Config.PollInterval != 25*time.Millisecond || !settings.Features.Health.Enabled {
 		t.Fatal("nested generated configuration lost typed values")
+	}
+	if settings.Worker.Config.FailureLog {
+		t.Fatal("generated worker logging override was ignored")
 	}
 	settings.HTTP.Enabled = false
 	app, err := application.New(settings, quiet()).Build(t.Context())

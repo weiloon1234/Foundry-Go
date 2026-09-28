@@ -1,0 +1,317 @@
+{
+  "format": 1,
+  "date": "2026-09-28",
+  "status": "accepted",
+  "scope": "Worker operations: default safe failure logs, typed middleware assembly, failed-job inspection and idempotent operator retries, lease-loss admission and shutdown failure reporting",
+  "verification_environment": {
+    "native": "macOS arm64; go1.27.1 selected natively by the existing project setup",
+    "cache": "Existing warm Go caches; no competing full gates",
+    "required_modes": {
+      "FOUNDRY_TEST_POSTGRES_REQUIRED": "1",
+      "FOUNDRY_TEST_REDIS_REQUIRED": "1",
+      "FOUNDRY_TEST_TYPESCRIPT_REQUIRED": "1"
+    },
+    "tools": "Existing real gopls, native Node and project TypeScript compiler selected through the existing test variables",
+    "data": "Existing private test configuration and isolated test data; no reset/drop/flush or new database servers",
+    "logs": ".cache/jobs-operations-20260928/<check>/{stdout,stderr}.log"
+  },
+  "checks": {
+    "focused-runtime": {
+      "command": [
+        "go",
+        "test",
+        "-count=1",
+        "./jobs/...",
+        "./redis",
+        "./application"
+      ],
+      "directory": ".",
+      "exit_code": 0,
+      "seconds": 9.44,
+      "timed_out": false,
+      "stdout_sha256": "ad41412f66a68d33e6cd90edd57af9badd9d9d8deeb5f32614699be27ff2a46c",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "focused-consumer": {
+      "command": [
+        "go",
+        "test",
+        "-count=1",
+        "./background"
+      ],
+      "directory": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "seconds": 4.89,
+      "timed_out": false,
+      "stdout_sha256": "86b63ebda89cfa769e109bb231ebda769641880b03392071a5a57c527a05ce8f",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "focused-compiler": {
+      "command": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestInvalidPublicContractsFailCompilation/(job_retry_identity|job_with_middleware_owner)$",
+        "."
+      ],
+      "directory": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "seconds": 7.44,
+      "timed_out": false,
+      "stdout_sha256": "18aa9d33658163aae23f65753bc86be99a2fe0cd26c93b6aea85e97a428688da",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "focused-editor": {
+      "command": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestRealGoplsConsumer/(typed-job-retry|configured-job-middleware)$",
+        "./internal/agent"
+      ],
+      "directory": ".",
+      "exit_code": 0,
+      "seconds": 3.41,
+      "timed_out": false,
+      "stdout_sha256": "4e60d2aeaf7c910141965170a917dc7d820a83ef13b3fc122b4e5bdc8519bcdf",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "completed-runtime-race": {
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-count=1",
+        "./jobs/...",
+        "./redis",
+        "./application"
+      ],
+      "directory": ".",
+      "exit_code": 0,
+      "seconds": 20.77,
+      "timed_out": false,
+      "stdout_sha256": "f3149d66c8c5bba7affb8e179672778cc7ad4a7ea93c5cc4497fea3e9debb2a3",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_integrity": {
+        "inputs": 4100,
+        "unchanged": true
+      }
+    },
+    "completed-consumer-race": {
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-count=1",
+        "./background"
+      ],
+      "directory": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "seconds": 23.53,
+      "timed_out": false,
+      "stdout_sha256": "a7b8e7135f0c33a6c5b12feb341ff7d68d01eb81efd1280bafd9a2bc9dfb74eb",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_integrity": {
+        "inputs": 4100,
+        "unchanged": true
+      }
+    },
+    "verify-completed": {
+      "command": [
+        "make",
+        "verify"
+      ],
+      "directory": ".",
+      "exit_code": 0,
+      "seconds": 615.89,
+      "timed_out": false,
+      "stdout_sha256": "6b3925872f6ac58ddb797a7da74c3ff67bfe1ea62266f8bfb1705f2fb72546d6",
+      "stderr_sha256": "566638e8c2e6a50a3d346c378335d23907e869a05ea1da82628f738491572352",
+      "source_integrity": {
+        "inputs": 4100,
+        "unchanged": true
+      }
+    }
+  },
+  "source_integrity": {
+    "final_gate_and_final_races_same_inputs": true,
+    "input_files": 4100,
+    "full_input_manifest_sha256": "430e8ab59f05c5b9ebe0b0a7a1ccb49cd2ebdc84b9bc199840ddb140caba4099",
+    "manifest_encoding": "UTF-8 JSON, sorted keys, separators comma/colon, no trailing newline",
+    "local_manifest": ".cache/jobs-operations-20260928/verify-completed-source-after.json",
+    "reporting_only_edits_after_gate": [
+      "docs/guides/jobs-boilerplate-handoff.md",
+      "docs/guides/jobs-operations.md",
+      "docs/evidence/jobs-operations-20260928.json"
+    ],
+    "runtime_generator_consumer_source_unchanged_after_gate": true
+  },
+  "failures_and_corrections": [
+    {
+      "finding": "The first generator invocation lacked access to the native Go cache under the sandbox.",
+      "correction": "Reused the same native warm cache through an approved escalation; generation and final generated-output checks passed."
+    },
+    {
+      "finding": "Redis must encode expected_attempts=0 when retrying a failure that occurred before its first attempt started.",
+      "correction": "Removed omitempty from the expected-attempt comparison field; added the zero-started-attempt case to the shared memory/real-Redis contract."
+    },
+    {
+      "finding": "Lease loss could leave another reservation loop admitting work while a cancelled handler ignored its context.",
+      "reproduction": {
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "-run",
+          "^TestLeaseLossStopsOtherReservationsBeforeUncooperativeHandlerExits$",
+          "./jobs"
+        ],
+        "directory": ".",
+        "exit_code": 1,
+        "seconds": 2.13,
+        "timed_out": false,
+        "stdout_sha256": "192f7a6e4e3a10e1d0f71714618b12ea5d1113e90fb540f436ed9a8d0561bd1f",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "correction": "Heartbeat now stops the worker immediately on lost ownership or renewal error while retaining the affected handler until exit.",
+      "recheck": "Both scenarios pass the final runtime race suite and full gate."
+    },
+    {
+      "finding": "An exhausted attempt budget during worker shutdown needed terminal failure logging and failed observation classification.",
+      "correction": "Classify and log exhausted shutdown as failed; keep ordinary shutdown releases quiet. Both cases have explicit regression assertions.",
+      "recheck": "Final runtime/consumer races and full make verify passed."
+    },
+    {
+      "check": {
+        "command": [
+          "make",
+          "verify"
+        ],
+        "directory": ".",
+        "exit_code": -15,
+        "seconds": 76.58,
+        "timed_out": false,
+        "stdout_sha256": "68d2e58d5473f607bb0a71b8ce03c34e274e96f740392f0c0ea057171343e179",
+        "stderr_sha256": "eeb55aad56bdb0fdf4c9157ce36cd290650d28c0aafe6ade29abaf0dd2d041c9",
+        "source_integrity": {
+          "inputs": 4100,
+          "unchanged": true
+        }
+      },
+      "disposition": "Intentionally stopped the task-owned process group before completion to apply the final shutdown correction; superseded by verify-completed, not accepted as a full gate."
+    },
+    {
+      "finding": "An optional resource-measurement wrapper for the final documentation check could not run /bin/ps inside the sandbox and stopped that child process before checking docs.",
+      "correction": "Ran make docs-check and git diff --check directly; both passed without additional permissions."
+    }
+  ],
+  "earlier_full_gate": {
+    "command": [
+      "make",
+      "verify"
+    ],
+    "directory": ".",
+    "exit_code": 0,
+    "seconds": 639.78,
+    "timed_out": false,
+    "stdout_sha256": "3a0c43da0d1096c7d0dca2600290b1e022b79accc71a6a68762daff175bafd2f",
+    "stderr_sha256": "9751416472c3dcc97750b72a6d1b8127b2efca60877b3718806530da9c9480ac",
+    "source_integrity": {
+      "inputs": 4099,
+      "unchanged": true
+    },
+    "disposition": "Passed before the final audit corrections; retained for history, superseded by verify-completed."
+  },
+  "review": [
+    "Configured modules borrow the runtime logger. FailureLog defaults to true and generated typed settings expose the override; standalone workers require an explicitly injected logger.",
+    "Logs contain safe primitive metadata only. Tests cover retry/terminal levels, unconfirmed finalization, disabled logging, raw error/payload exclusion, panic, Goexit and a blocked sink retaining capacity and shutdown ownership.",
+    "Memory and real Redis share retry contract tests: 16 concurrent submissions apply once, exact envelope and identity survive, attempts restart in a new bounded cycle, stale leases fail, outbox enqueue dedup survives and repeated tokens cannot reopen a later failure.",
+    "Retry tests cover expiry, workflow rejection, zero-started-attempt terminal failure and the manual cycle limit. Ambiguous backend responses reconcile using the same saved token.",
+    "CLI parsing happens before service startup; commands reuse named connections, expose bounded safe metadata and require an explicit saved retry token. Output failure after mutation remains reconcilable.",
+    "The independent consumer exercises configured logging, application.JobWith, typed failure hooks, CLI declaration, selected-connection retry and isolation from another named connection.",
+    "Compiler rejection fixtures preserve payload-specific retry IDs and middleware owners. Real gopls completion, hover and definition probes cover typed retry and configured middleware.",
+    "Existing Backend remains source compatible through optional RetryBackend. Envelope wire format and queue configuration identity are unchanged; optional persisted retry metadata requires coordinated worker/tool rollout before manual retries.",
+    "Retry eligibility and token generation have one shared owner; configured Job delegates to JobWith, and operation commands reuse the existing CLI lifecycle. No new dependencies or mutable application-global services were added.",
+    "The final full gate includes vet, package and independent consumer tests, generated-output checks, documentation checks and release-helper tests. The phase=failure exit=7 line in stdout is an intentional passing Python runner test; the unittest suite and make both exit successfully."
+  ],
+  "evidence_sources": {
+    "retry_contract": "internal/jobtest/retry.go",
+    "retry_reconciliation": "jobs/retry_test.go",
+    "logging": "jobs/worker_logging_test.go",
+    "lease_ownership": "jobs/worker_lease_admission_test.go",
+    "operator_commands": "jobs/command/command_test.go",
+    "consumer": "tests/fixtures/consumer/background/operations_test.go",
+    "compiler": "tests/fixtures/consumer/types_test.go",
+    "editor": "internal/agent/gopls_acceptance_test.go"
+  },
+  "limits": [
+    "At-least-once delivery remains the contract. Stable job IDs help application side-effect idempotency; manual retry cannot prove an earlier effect failed.",
+    "Workflow-member replay is rejected. Whole-workflow recovery requires an explicit application decision.",
+    "No dashboard, autoscaling or automatic process restart is added. Redis persistence/failover and process supervision remain deployment responsibilities.",
+    "Context cancellation cannot terminate an uncooperative handler or logger. Resource ownership remains until actual callback exit.",
+    "Default logs intentionally omit arbitrary returned errors; applications may select safe domain diagnostics in typed Failed middleware.",
+    "Boilerplate integration and deployed multi-process acceptance remain application work. No framework revision was committed, pushed, tagged or published, and no boilerplate dependency was changed."
+  ],
+  "source_sha256": {
+    "Makefile": "d8f9e067e5b10f45bb940b6a06826074c7225ca9ced86b1eb92621186dc19f3e",
+    "application/.foundry-gen.json": "83af92c25de50fbf01511a96a1e4f3930644117caacac114781b29aa3435d2a6",
+    "application/configuration_test.go": "0c63192c7ac100ac9208ec3b316809b1d6dfdbbb9c8d20e13123006d7c40ebd3",
+    "application/declarations.go": "240c97cd478535c192a5f3fb6a1833a262400bf077c23798d55f8f657f4a0072",
+    "application/settings_foundry.gen.go": "ecd8bcbb99f237b7261deab0a7328ce68fbaa5dd56e72f28230ac3e1ffbaddbb",
+    "go.mod": "a9bed05356085487b2754c36bbc73f0bba0899c4ee797d471698f35b8b071102",
+    "go.sum": "021bee3b4b6ff2caf3743a1e77065d8c38be1e3b6d061452fdc1ac7730f2f8b2",
+    "internal/agent/gopls_acceptance_test.go": "1fccce7086f9fc62e2a75b98903c3687405f9be1d86fc4820fd15a76b8bb4672",
+    "internal/jobtest/contract.go": "f3a9af7aa69882e9ecca484b55e19acb98e1955e1b5f6f90361cdcdf944a419d",
+    "internal/jobtest/retry.go": "2a24954897cda1fb2ab6d338999bdc3cb8a163a03a717ad9e7872c051843afa3",
+    "jobs/backend.go": "7b4eb7634aca6ac14f5d6800d87b9947462302e72b61085c95dfddbd980f22eb",
+    "jobs/command/command.go": "8bd68c4f5c625b139d8a870344f2b1885eefa212de18330da4ebeafc0ddf425a",
+    "jobs/command/command_test.go": "d5b666a1a125ad52ba1e0a7c8fa7a44c93ea40b651b323e6af1bb9cbf54284cd",
+    "jobs/execution.go": "5606c8a5d26b045c6667bdcb00580db31e7f3c8b5439b90e6ab484fa7b8f2704",
+    "jobs/inspection.go": "30aaa7f60bc4888148600726888d8bff80b7befc47968324350dbb628de2d620",
+    "jobs/memory/memory.go": "68c075219d2cb0aac2b6fb99085fce42c529e8d11e3ebd81d475e5a64aba3939",
+    "jobs/memory/retry.go": "b3c26e1e464990b7fc0f6d376855453763c3d71dd1193e047f8e5f71c3db1ab4",
+    "jobs/module.go": "982d9a46b13f8035af64ffb1c6ed998e3932c3329b80581b8f7b4723a7cd6a60",
+    "jobs/observation.go": "e072544b57600b12715c2e8ed33d909bf3744cbc4c85875ba6550c6eb093af84",
+    "jobs/retry.go": "23619335bc1e138d16660c646cc9cf3fa24de57854775fe165cc1ad6bbefb79c",
+    "jobs/retry_test.go": "2d3c52bff0eea07f34a79f3e9cc9d2e663258bcfe4a144ff49d0140e70b02e9a",
+    "jobs/worker.go": "da429aac98c773d755a649ae67278eeb650658d7c6deb420a7312aaa5ab15713",
+    "jobs/worker_config.go": "f6b8715f3eaa46b21d657d09724d13d68cf2cbcdf0952bbfb50d27c6f078d087",
+    "jobs/worker_execution.go": "c9469555b97eceb0d407eb02d194ad5de328dc561932f50fb6ede09e57c5712d",
+    "jobs/worker_lease_admission_test.go": "23f6ff5778523e4c876d99c32f1230a658814e2b551e8a643b27a45b2655d671",
+    "jobs/worker_logging.go": "183c3617c35e32721ad80abcd8c42e90df2de2d50dd701f70bd4dddb3debe78b",
+    "jobs/worker_logging_test.go": "8ee7468ebeaa72bd3771b7e5a49d898bc7725965a198e92510768fd8c973cb40",
+    "redis/jobs.go": "dae93d0623dde10e51a44c6aa5f85bbf7df7bc876672ad0404f7dd4aa22c9dfa",
+    "redis/jobs.lua": "f89ba7f0c13a24a5039d409e7ea6043e6d92b3833aa567447acce5bbf1fa1df8",
+    "redis/jobs_retry.go": "cde014a0930a622d5adb464896df11442e8a9165f8fc5652acd75a33ea7b6313",
+    "tests/fixtures/consumer/background/operations.go": "400389d74c62816f8d1dcbf199a9ba40327d8dd89619a28273a4e311d15d81ac",
+    "tests/fixtures/consumer/background/operations_test.go": "9fa9916af1e5bd09238806a025eb1601ee627e70366a4d9f3fa136b2364a7c63",
+    "tests/fixtures/consumer/bootstrap/.foundry-gen.json": "32308121a670dd41a421d096f9f7f0f39f1b9269a77c5d1fadff6d2798a886d3",
+    "tests/fixtures/consumer/bootstrap/settings_foundry.gen.go": "6a051dffb35b3271bba602dbc451ec9c249823d22a03d042420d184d35144a1b",
+    "tests/fixtures/consumer/testdata/compilefail/job_retry_identity/invalid.go": "e2bb9eb7495874c766cca09fc4f8f94d6e3b59fe801951a857b6b283218b331a",
+    "tests/fixtures/consumer/testdata/compilefail/job_with_middleware_owner/invalid.go": "cc9684f75082293dd973ab69637bd3209ef683aa76bb1561b82217b027cad01e",
+    "tests/fixtures/consumer/types_test.go": "77e2b8d28d9c6cdbeca3873e9ee61ea36a91590c9c5b5668870658db0264694a"
+  },
+  "documentation_checks": [
+    {
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "directory": ".",
+      "exit_code": 0,
+      "result": "Documentation links, blueprint numbering, and fixture Go requirements are valid."
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "directory": ".",
+      "exit_code": 0,
+      "result": "No whitespace errors."
+    }
+  ]
+}

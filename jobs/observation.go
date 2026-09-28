@@ -8,7 +8,12 @@ func jobOutcome(result Result) observability.Outcome {
 		return observability.Panicked
 	case TimedOut:
 		return observability.TimedOut
-	case WorkerStopped, CancelRequested:
+	case WorkerStopped:
+		if result.State == Failed {
+			return observability.Failed
+		}
+		return observability.Cancelled
+	case CancelRequested:
 		return observability.Cancelled
 	case RateLimited:
 		return observability.Rejected

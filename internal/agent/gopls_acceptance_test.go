@@ -322,6 +322,8 @@ func consumerEditorProbes() []consumerEditorProbe {
 		{"typed-schedule-next", "scheduling/reports.go", "spec.", "Next", []string{"Next", "TimeZone", "Validate"}, []string{"time.Time", "error"}, "/schedule/spec.go"},
 		{"typed-schedule-module", "scheduling/reports.go", "schedule.", "Module", []string{"Module", "New", "NewRegistry"}, []string{"Scheduler", "lease.Manager", "foundation.Module"}, "/schedule/module.go"},
 		{"typed-job-dispatch", "background/welcome.go", "WelcomeJob.", "Dispatch", []string{"Dispatch", "Capture", "Enqueue", "DeclareWith"}, []string{"Welcome", "Dispatcher", "Receipt"}, "/jobs/dispatcher.go"},
+		{"typed-job-retry", "background/operations.go", "WelcomeJob.", "Retry", []string{"Retry", "Inspect", "Cancel"}, []string{"Welcome", "RetryToken"}, "/jobs/retry.go"},
+		{"configured-job-middleware", "background/operations.go", "application.", "JobWith", []string{"Job", "JobWith"}, []string{"HandlerOptions", "JobDeclaration"}, "/application/declarations.go"},
 		{"typed-job-workflow-step", "background/module.go", "first.", "Step", []string{"Step", "Dispatch", "Enqueue"}, []string{"Step"}, "/jobs/workflow.go"},
 		{"typed-job-module", "background/module.go", "jobs.", "Module", []string{"Module", "NewWorker", "NewDispatcher"}, []string{"Dispatcher", "foundation", "Module"}, "/jobs/module.go"},
 

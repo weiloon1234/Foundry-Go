@@ -16,6 +16,7 @@ type Subscription struct {
 	Weight uint16
 }
 type WorkerConfig struct {
+	FailureLog        bool
 	Namespace         keyspace.Namespace
 	Queues            []Subscription `config:",json"`
 	Concurrency       int
@@ -30,7 +31,7 @@ func DefaultWorkerConfig(namespace keyspace.Namespace, queues ...Queue) WorkerCo
 	for i, queue := range queues {
 		subscriptions[i] = Subscription{Queue: queue, Weight: 1}
 	}
-	return WorkerConfig{Namespace: namespace, Queues: subscriptions, Concurrency: 4, LeaseDuration: 30 * time.Second, HeartbeatInterval: 5 * time.Second, OperationTimeout: 5 * time.Second, PollInterval: 100 * time.Millisecond}
+	return WorkerConfig{FailureLog: true, Namespace: namespace, Queues: subscriptions, Concurrency: 4, LeaseDuration: 30 * time.Second, HeartbeatInterval: 5 * time.Second, OperationTimeout: 5 * time.Second, PollInterval: 100 * time.Millisecond}
 }
 func (c WorkerConfig) Validate() error {
 	if err := c.Namespace.Validate(); err != nil {

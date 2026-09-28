@@ -47,6 +47,7 @@ func NewJobBackend(client *Client, config jobs.QueueConfig) (*JobBackend, error)
 		"record_bytes": 2*(jobs.MaxPayloadBytes+64*1024) + config.MaxHistory*256,
 		"owner_bytes":  lease.OwnerBytes * 2, "attempts": jobs.MaxAttempts, "scan_limit": jobs.ListScanLimit,
 		"workflow_steps": jobs.MaxWorkflowSteps,
+		"manual_retries": jobs.MaxManualRetries,
 	})
 	if err != nil {
 		return nil, err
@@ -57,30 +58,38 @@ func NewJobBackend(client *Client, config jobs.QueueConfig) (*JobBackend, error)
 var _ jobs.Backend = (*JobBackend)(nil)
 
 type jobRequest struct {
-	After        string            `json:"after"`
-	Limit        int               `json:"limit"`
-	WorkflowKind jobs.WorkflowKind `json:"workflow_kind,omitempty"`
-	Steps        []jobRequest      `json:"steps,omitempty"`
-	Completion   string            `json:"completion"`
-	Fingerprint  string            `json:"fingerprint,omitempty"`
-	GroupBytes   int64             `json:"group_bytes,omitempty"`
-	Op           string            `json:"op"`
-	Unique       string            `json:"unique"`
-	UniqueFor    int64             `json:"unique_for"`
-	ID           string            `json:"id,omitempty"`
-	Owner        string            `json:"owner,omitempty"`
-	TTL          int64             `json:"ttl,omitempty"`
-	Envelope     string            `json:"envelope,omitempty"`
-	Name         jobs.Name         `json:"name,omitempty"`
-	Version      jobs.Version      `json:"version,omitempty"`
-	Maximum      uint32            `json:"maximum,omitempty"`
-	Available    int64             `json:"available"`
-	Bytes        int64             `json:"bytes,omitempty"`
-	State        jobs.State        `json:"state,omitempty"`
-	Reason       jobs.Reason       `json:"reason"`
-	Delay        int64             `json:"delay"`
+	RetryToken       jobs.RetryToken   `json:"retry_token,omitempty"`
+	ExpectedCreated  int64             `json:"expected_created"`
+	ExpectedFinished int64             `json:"expected_finished"`
+	ExpectedAttempts uint32            `json:"expected_attempts"`
+	ExpectedRetries  uint32            `json:"expected_retries"`
+	MaxRetries       uint32            `json:"max_retries,omitempty"`
+	After            string            `json:"after"`
+	Limit            int               `json:"limit"`
+	WorkflowKind     jobs.WorkflowKind `json:"workflow_kind,omitempty"`
+	Steps            []jobRequest      `json:"steps,omitempty"`
+	Completion       string            `json:"completion"`
+	Fingerprint      string            `json:"fingerprint,omitempty"`
+	GroupBytes       int64             `json:"group_bytes,omitempty"`
+	Op               string            `json:"op"`
+	Unique           string            `json:"unique"`
+	UniqueFor        int64             `json:"unique_for"`
+	ID               string            `json:"id,omitempty"`
+	Owner            string            `json:"owner,omitempty"`
+	TTL              int64             `json:"ttl,omitempty"`
+	Envelope         string            `json:"envelope,omitempty"`
+	Name             jobs.Name         `json:"name,omitempty"`
+	Version          jobs.Version      `json:"version,omitempty"`
+	Maximum          uint32            `json:"maximum,omitempty"`
+	Available        int64             `json:"available"`
+	Bytes            int64             `json:"bytes,omitempty"`
+	State            jobs.State        `json:"state,omitempty"`
+	Reason           jobs.Reason       `json:"reason"`
+	Delay            int64             `json:"delay"`
 }
 type jobStoredRecord struct {
+	Retries   uint32          `json:"retries"`
+	LastRetry jobs.RetryToken `json:"last_retry"`
 	Workflow  jobs.WorkflowID `json:"workflow,omitempty"`
 	Position  uint32          `json:"position"`
 	ID        string          `json:"id"`
@@ -93,6 +102,7 @@ type jobStoredRecord struct {
 	Finished  int64           `json:"finished"`
 	Cancelled bool            `json:"cancelled"`
 	History   []struct {
+		Retry   uint32      `json:"retry"`
 		State   jobs.State  `json:"state"`
 		At      int64       `json:"at"`
 		Attempt uint32      `json:"attempt"`
@@ -150,6 +160,8 @@ func (b *JobBackend) command(ctx context.Context, key jobs.Key, request jobReque
 		return jobReply{}, jobs.ErrCancelled
 	case -6:
 		return jobReply{}, jobs.ErrNotUnique
+	case -7:
+		return jobReply{}, jobs.ErrNotRetryable
 	case 1:
 	default:
 		return jobReply{}, fault.New(fault.Internal, "invalid Redis job status")
@@ -212,7 +224,7 @@ func (b *JobBackend) JobReserve(ctx context.Context, key jobs.Key, owner lease.O
 	if err != nil {
 		return value.Optional[jobs.Reservation]{}, err
 	}
-	return value.Set(jobs.Reservation{Envelope: record.Envelope, Ownership: proof, Attempts: record.Attempts, ExpiresAt: record.LeaseExpiresAt}), nil
+	return value.Set(jobs.Reservation{Retries: record.Retries, Envelope: record.Envelope, Ownership: proof, Attempts: record.Attempts, ExpiresAt: record.LeaseExpiresAt}), nil
 }
 func proofRequest(op string, proof jobs.Ownership) jobRequest {
 	return jobRequest{Op: op, ID: proof.ID().String(), Owner: hex.EncodeToString(proof.Owner().Bytes())}
@@ -284,7 +296,7 @@ func (r *jobStoredRecord) decode(key jobs.Key) (jobs.Record, error) {
 	if envelope.ID().String() != r.ID {
 		return jobs.Record{}, fault.New(fault.Invalid, "stored Redis job identity differs")
 	}
-	result := jobs.Record{Workflow: r.Workflow, Position: r.Position, Envelope: envelope, State: r.State, Attempts: r.Attempts, AvailableAt: time.UnixMilli(r.Available).UTC(), CreatedAt: time.UnixMilli(r.Created).UTC(), CancellationRequested: r.Cancelled}
+	result := jobs.Record{Retries: r.Retries, LastRetry: r.LastRetry, Workflow: r.Workflow, Position: r.Position, Envelope: envelope, State: r.State, Attempts: r.Attempts, AvailableAt: time.UnixMilli(r.Available).UTC(), CreatedAt: time.UnixMilli(r.Created).UTC(), CancellationRequested: r.Cancelled}
 	if r.Expiry != 0 {
 		result.LeaseExpiresAt = time.UnixMilli(r.Expiry).UTC()
 	}
@@ -292,7 +304,7 @@ func (r *jobStoredRecord) decode(key jobs.Key) (jobs.Record, error) {
 		result.FinishedAt = time.UnixMilli(r.Finished).UTC()
 	}
 	for _, item := range r.History {
-		result.History = append(result.History, jobs.Transition{State: item.State, At: time.UnixMilli(item.At).UTC(), Attempt: item.Attempt, Reason: item.Reason})
+		result.History = append(result.History, jobs.Transition{State: item.State, At: time.UnixMilli(item.At).UTC(), Attempt: item.Attempt, Reason: item.Reason, Retry: item.Retry})
 	}
 	return result, nil
 }
