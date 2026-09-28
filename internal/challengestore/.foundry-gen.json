@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "files": {
+    "entry_foundry.gen.go": "9195ff3f429f545488d2ab812b18ad7b9136bf498dff5f6abb54d871346e9ed2",
+    "prune_candidate_foundry.gen.go": "418ce5f043fa21eb515bebb7c046ecd19b553fc226f6cb29fe55c0a1e8cfbaae",
+    "subject_foundry.gen.go": "b518ed44fb2f381c0026e8df65b73fcc74ddc9141c994d2ecfb42bac74578690"
+  }
+}

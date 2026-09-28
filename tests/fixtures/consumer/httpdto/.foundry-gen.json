@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "files": {
+    "inventory_response_foundry.gen.go": "8534f59be0a390352633d606b2d5502534f007ca6abe5d8f16ae7a928232ff7f",
+    "order_response_foundry.gen.go": "cc90e818122635f81c015eb2f5fc8f2e3b6862966fa7de981361c621df27a33c",
+    "stream_response_foundry.gen.go": "97297497b931a1d0ee545d5a3c2d95e0bf6166c3d0d1e257e8c87ef22dc769b9",
+    "tracking_response_foundry.gen.go": "f10849ac85fe82c97e1d41cde0541a12de9ffc535e97e3cefeeb2688dbaae77f",
+    "update_user_foundry.gen.go": "99dd5341269ca5017a6dfd0a50184297f2096af99cf4471f00a814be91728bd8",
+    "user_response_foundry.gen.go": "bfbcc812112c543e55150bd07f803844d9e5ec3b10e69245f92b4e478ff5c373"
+  }
+}

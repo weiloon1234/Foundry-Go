@@ -1,0 +1,231 @@
+{
+  "date": "2026-09-26",
+  "status": "accepted",
+  "scope": "Request-aware validation messages, typed overrides, shared English/plural recipes, automatic configured HTTP presentation and generated browser rule messages in Foundry-Go",
+  "verification": {
+    "full_gate": {
+      "command": [
+        "make",
+        "GO=/usr/local/go/bin/go",
+        "verify"
+      ],
+      "exit_code": 0,
+      "seconds": 661.68,
+      "source_inputs": 3782,
+      "source_unchanged": true,
+      "required": [
+        "postgres",
+        "redis",
+        "typescript"
+      ],
+      "tools": [
+        "gopls",
+        "node",
+        "typescript"
+      ],
+      "go": "go version go1.27.1 darwin/arm64"
+    },
+    "initial_full_gate": {
+      "command": [
+        "make",
+        "GO=/usr/local/go/bin/go",
+        "verify"
+      ],
+      "exit_code": 0,
+      "seconds": 771.24,
+      "source_inputs": 3782,
+      "source_unchanged": true,
+      "required": [
+        "postgres",
+        "redis",
+        "typescript"
+      ],
+      "tools": [
+        "gopls",
+        "node",
+        "typescript"
+      ],
+      "go": "go version go1.27.1 darwin/arm64"
+    },
+    "focused": [
+      {
+        "name": "focused-root",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-timeout=5m",
+          "./i18n/...",
+          "./validation/...",
+          "./http",
+          "./application"
+        ],
+        "exit_code": 1,
+        "seconds": 14.87
+      },
+      {
+        "name": "focused-consumer",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-timeout=5m",
+          "./localization",
+          "./httpvalidation",
+          "./configuredprofile",
+          "./clientcontracts"
+        ],
+        "exit_code": 0,
+        "seconds": 9.35
+      },
+      {
+        "name": "fixed-http",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-timeout=5m",
+          "./http"
+        ],
+        "exit_code": 0,
+        "seconds": 13.89
+      },
+      {
+        "name": "fixed-client",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-timeout=5m",
+          "./clientcontracts"
+        ],
+        "exit_code": 1,
+        "seconds": 7.83
+      },
+      {
+        "name": "focused-compiler",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-timeout=5m",
+          "-run",
+          "TestInvalidPublicContractsFailCompilation/validation_message",
+          "-count=1",
+          "."
+        ],
+        "exit_code": 0,
+        "seconds": 6.78
+      },
+      {
+        "name": "focused-editor",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-timeout=5m",
+          "./internal/agent",
+          "-run",
+          "TestRealGoplsConsumer/(validation-translated-message|message-typed-bind)$",
+          "-count=1"
+        ],
+        "exit_code": 1,
+        "seconds": 0.76
+      },
+      {
+        "name": "fixed-consumer-final",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-timeout=5m",
+          "./localization",
+          "./clientcontracts"
+        ],
+        "exit_code": 0,
+        "seconds": 8.09
+      },
+      {
+        "name": "fixed-editor",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-timeout=5m",
+          "./internal/agent",
+          "-run",
+          "TestRealGoplsConsumer/(validation-translated-message|message-typed-bind)$",
+          "-count=1"
+        ],
+        "exit_code": 0,
+        "seconds": 2.97
+      }
+    ],
+    "races": [
+      {
+        "name": "root-races",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-race",
+          "-timeout=5m",
+          "./i18n/...",
+          "./validation/...",
+          "./http",
+          "./application"
+        ],
+        "exit_code": 0,
+        "seconds": 41.12
+      },
+      {
+        "name": "consumer-races",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-race",
+          "-timeout=5m",
+          "./localization",
+          "./httpvalidation",
+          "./configuredprofile",
+          "./clientcontracts"
+        ],
+        "exit_code": 0,
+        "seconds": 48.88
+      }
+    ],
+    "source_fingerprint_sha256": "e65fd16b9bd3f8fe680b05c0fe33dfb41bd72c853c8b50c562c1b2abda960409",
+    "private_test_url_absent_from_logs": true,
+    "final_docs": {
+      "command": [
+        "make",
+        "GO=/usr/local/go/bin/go",
+        "docs-check"
+      ],
+      "exit_code": 0
+    }
+  },
+  "audit": {
+    "disposition": "closed; no unresolved findings in this follow-up scope",
+    "corrections": [
+      "Browser substitution now applies the shared i18n byte limit incrementally, avoiding large intermediate strings from repeated placeholders. The generator emits the limit from i18n.MaxTextBytes.",
+      "Unbound typed rule messages retain explicitly supplied attribute arguments; bound field/comparison labels are substituted from their original owners.",
+      "Client label substitution distinguishes an absent comparison label from a translated empty label."
+    ],
+    "verification_fixes": [
+      "Corrected the new form-decoding assertion to expect the existing value issue rather than type.",
+      "Fixed a missing closing brace in the new browser plural fixture.",
+      "Added an executable typed Bind consumer before asserting editor completion for that expression."
+    ],
+    "reviewed": [
+      "owned rule/catalog/recipe snapshots and concurrent locale isolation",
+      "nested/index/comparison paths and issue ordering/truncation",
+      "literal and typed custom overrides, missing translations and English fallback without an enabled English locale",
+      "shared safe HTTP classification, 400 decoding and 422 validation across request sources",
+      "native writer capabilities, bounded extension Unwrap ownership and upload cleanup",
+      "configured application startup signatures and automatic middleware assembly",
+      "shared manifest/client recipe ownership, pluralization, bounded output and server-only skipped checks"
+    ],
+    "race_scope": "All changed Go runtime and consumer source was exercised by the relevant races. The subsequent two-line TypeScript empty-label parity correction is covered by the final required client gate."
+  },
+  "limits": [
+    "English defaults are included; applications supply other-language catalogs.",
+    "Browser rules without supported local semantics remain explicitly skipped; server validation is authoritative.",
+    "Client Intl pluralization uses exact supported numeric arguments; bounds outside the safe integer range fall back to English.",
+    "Opaque custom HTTP wrappers cannot expose endpoint metadata automatically; the documented explicit ValidateMessages startup path remains available."
+  ],
+  "raw_evidence": ".cache/validation-messages-20260926/",
+  "version_control": "No commit, push, merge, tag or publication performed.",
+  "dependencies": "No dependencies added or upgraded."
+}

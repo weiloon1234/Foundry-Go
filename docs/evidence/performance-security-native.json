@@ -1,0 +1,2762 @@
+{
+  "report": {
+    "cpu_count": 16,
+    "disk_after": {
+      "free": 19911667712,
+      "total": 994662584320,
+      "used": 974750916608
+    },
+    "disk_before": {
+      "free": 40569282560,
+      "total": 994662584320,
+      "used": 954093301760
+    },
+    "go_requirement": "1.27.1",
+    "hardware": "hw.model: Mac16,5\nhw.memsize: 68719476736\nhw.physicalcpu: 16\nhw.logicalcpu: 16",
+    "machine": "arm64",
+    "manifest_sha256": "d69a614fa594f1de54ce4598a930474af5d808a8a3ce93786190fdddaf622719",
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "profiles": [
+      {
+        "editor": [
+          {
+            "operation": "complete",
+            "round": 1,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 109842666,
+              "request_ns": 387383667
+            }
+          },
+          {
+            "operation": "hover",
+            "round": 1,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 42627958,
+              "request_ns": 213787458
+            }
+          },
+          {
+            "operation": "complete",
+            "round": 2,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 46708541,
+              "request_ns": 281678583
+            }
+          },
+          {
+            "operation": "hover",
+            "round": 2,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 35220125,
+              "request_ns": 210610958
+            }
+          },
+          {
+            "operation": "complete",
+            "round": 3,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 45852750,
+              "request_ns": 282255583
+            }
+          },
+          {
+            "operation": "hover",
+            "round": 3,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 37264708,
+              "request_ns": 212318291
+            }
+          }
+        ],
+        "generated_after": {
+          "bytes": 68111,
+          "files": 1,
+          "sha256": {
+            "productionprofile/record_foundry.gen.go": "ce1796e205afaa39dd186bfd9d3a4a18c55fec890ef6ca483f565a95a1fac0fd"
+          }
+        },
+        "generated_before": {
+          "bytes": 68111,
+          "files": 1,
+          "sha256": {
+            "productionprofile/record_foundry.gen.go": "ce1796e205afaa39dd186bfd9d3a4a18c55fec890ef6ca483f565a95a1fac0fd"
+          }
+        },
+        "generated_edited": {
+          "bytes": 71967,
+          "files": 1,
+          "sha256": {
+            "productionprofile/record_foundry.gen.go": "0f5deab0be38d905f8635f109587ef3cd1e099be4b3506d3e06a9395ce9c9e90"
+          }
+        },
+        "imported_packages": 174,
+        "linked_binary_bytes": 5346498,
+        "linked_binary_sha256": "1d1cc71efcc3cbbbbc4356ee9e4aca8b4d920186f221b23a5dcef9ae4e5e68d2",
+        "source": "ordinary"
+      },
+      {
+        "editor": [
+          {
+            "operation": "complete",
+            "round": 1,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 38236500,
+              "request_ns": 964345792
+            }
+          },
+          {
+            "operation": "hover",
+            "round": 1,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 33353167,
+              "request_ns": 544731833
+            }
+          },
+          {
+            "operation": "complete",
+            "round": 2,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 32428708,
+              "request_ns": 655896500
+            }
+          },
+          {
+            "operation": "hover",
+            "round": 2,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 45542084,
+              "request_ns": 556307833
+            }
+          },
+          {
+            "operation": "complete",
+            "round": 3,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 36699708,
+              "request_ns": 529245500
+            }
+          },
+          {
+            "operation": "hover",
+            "round": 3,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 34989583,
+              "request_ns": 548287125
+            }
+          }
+        ],
+        "generated_after": {
+          "bytes": 68111,
+          "files": 1,
+          "sha256": {
+            "productionprofile/record_foundry.gen.go": "ce1796e205afaa39dd186bfd9d3a4a18c55fec890ef6ca483f565a95a1fac0fd"
+          }
+        },
+        "generated_before": {
+          "bytes": 68111,
+          "files": 1,
+          "sha256": {
+            "productionprofile/record_foundry.gen.go": "ce1796e205afaa39dd186bfd9d3a4a18c55fec890ef6ca483f565a95a1fac0fd"
+          }
+        },
+        "generated_edited": {
+          "bytes": 71967,
+          "files": 1,
+          "sha256": {
+            "productionprofile/record_foundry.gen.go": "0f5deab0be38d905f8635f109587ef3cd1e099be4b3506d3e06a9395ce9c9e90"
+          }
+        },
+        "imported_packages": 548,
+        "linked_binary_bytes": 35297938,
+        "linked_binary_sha256": "ec69698367336dfd2fc233e7766bd249aedda5888335b81ee4291aa9b3df6f30",
+        "source": "configured"
+      },
+      {
+        "editor": [
+          {
+            "operation": "complete",
+            "round": 1,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 84980666,
+              "request_ns": 869675417
+            }
+          },
+          {
+            "operation": "hover",
+            "round": 1,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 37360584,
+              "request_ns": 727971750
+            }
+          },
+          {
+            "operation": "complete",
+            "round": 2,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 35517209,
+              "request_ns": 742434000
+            }
+          },
+          {
+            "operation": "hover",
+            "round": 2,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 33259333,
+              "request_ns": 741658375
+            }
+          },
+          {
+            "operation": "complete",
+            "round": 3,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 40234583,
+              "request_ns": 780970084
+            }
+          },
+          {
+            "operation": "hover",
+            "round": 3,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 39636667,
+              "request_ns": 745570083
+            }
+          }
+        ],
+        "generated_after": {
+          "bytes": 4546152,
+          "files": 153,
+          "sha256": {
+            "auditqueries/account_foundry.gen.go": "78de28d362fc35795b9ea10f3fd3bcf990087b77150097e3ea6367c5a749a9ac",
+            "auditqueries/label_foundry.gen.go": "4a739095446284edb161131aee7e7f553edbe042bdee70c8b33d6284bdf3fb91",
+            "binarymodels/record_foundry.gen.go": "3b5844def8c444a71989de297ca1d31bd9e956f958628134d2efc43caa22be37",
+            "binarymodels/view_foundry.gen.go": "c92a3c39fbfed4d72d2222eaf79d56ef0fd40843fd200aed2f8e73e347f06e10",
+            "bootstrap/member_foundry.gen.go": "c5fc360d5f2d4bad7b3d79963be1f6c80f3670311ba8e9e8f9b8ff387c93b78c",
+            "bootstrap/operator_foundry.gen.go": "241e33b4b6f9a75fc3571531538cff079d5d8afdc0ec934c21477a54d905f49a",
+            "bootstrap/profile_foundry.gen.go": "5a8261bc65a7cad182735a9d1d5083ac106dc9746bd22ee9a60a75e14dbf6c8a",
+            "bootstrap/settings_foundry.gen.go": "bc9214571e8f3622fc52be997e5787194211d1f830e6a53c22f18e1599a12fc5",
+            "bootstrap/upload_input_foundry.gen.go": "4b634521136e206e1bd95e108cf581d6c074f4e4695ad0da95fa46a1db8cabd0",
+            "bootstrap/upload_result_foundry.gen.go": "5441b796fa5165de1f5f56a29ce6d0302e695e876c0fff4afb55c6679f73add6",
+            "catalog/product_foundry.gen.go": "c5ae4826d509d4767009a99a5a46429135d3ace83356025c7652065508e7b264",
+            "catalog/status/status_foundry.gen.go": "d6b40a59538f91f7ee15c414a9054ae80e69d62df114785c5bdafecda6a5de39",
+            "clientcontracts/filters_foundry.gen.go": "a14c1f9b02145dbc7eb4e94da9498aac5b9f8db6a9619925809829afbaa9f528",
+            "clientcontracts/item_path_foundry.gen.go": "ec7ce734699e868edfae18310bc500e13d082ab22a6133a94e45d763dfbb2333",
+            "clientcontracts/member_foundry.gen.go": "a3441ba780d2246ed05da9fd72158985f92e114c4de673889eb68daf60db4469",
+            "clientcontracts/payload_foundry.gen.go": "f90cc3b047988e14d57821f6fdd700e50b58248e76c7d7fd882d742ebc2d0d88",
+            "configured/settings_foundry.gen.go": "fd21f0208a185e8a3e12b0648578c63b21d40ae91f7d86eed0e4c2c1d5988f66",
+            "eventqueries/event_link_foundry.gen.go": "be0f6958bf2d9a24c429020c57f362365cee8a16a67315f314eb5955dbbca48f",
+            "framequeries/sample_foundry.gen.go": "93be0effed5220b8c023c0c18fce63f11dded244e29befb284d5f88e69ee7ef2",
+            "hookqueries/log_foundry.gen.go": "e6efb08272e0a64b3f7b7dee95ce8d5f9307621b6752829a3a0aa43913e42092",
+            "hookqueries/member_foundry.gen.go": "900da3447c94868bf17b13e38d5b75ff48cc5fc4c8c80404fb0d7387fa46990d",
+            "httpdto/inventory_response_foundry.gen.go": "8534f59be0a390352633d606b2d5502534f007ca6abe5d8f16ae7a928232ff7f",
+            "httpdto/order_response_foundry.gen.go": "cc90e818122635f81c015eb2f5fc8f2e3b6862966fa7de981361c621df27a33c",
+            "httpdto/stream_response_foundry.gen.go": "97297497b931a1d0ee545d5a3c2d95e0bf6166c3d0d1e257e8c87ef22dc769b9",
+            "httpdto/tracking_response_foundry.gen.go": "f10849ac85fe82c97e1d41cde0541a12de9ffc535e97e3cefeeb2688dbaae77f",
+            "httpdto/update_user_foundry.gen.go": "99dd5341269ca5017a6dfd0a50184297f2096af99cf4471f00a814be91728bd8",
+            "httpdto/user_response_foundry.gen.go": "bfbcc812112c543e55150bd07f803844d9e5ec3b10e69245f92b4e478ff5c373",
+            "httpkernel/asset_path_foundry.gen.go": "4e61ce801b1a7b1933fe65703dfb9ed345a78942f053239fcfc22221eabbc004",
+            "httpkernel/user_feed_path_foundry.gen.go": "d3f4ff25960d0231bd0b5e5b83343c76da8ec3eaba1f922f14122de18c9d17eb",
+            "httpkernel/user_path_foundry.gen.go": "5dc7e69c6d2c4b2adf0b37a56db9d6e9ee9e930f55b0e51d641466d67519ae4f",
+            "httppagination/cmd/pagecontract/summary_foundry.gen.go": "4c241972bc427f2f7afe8ea45a6db36e7ed11ef170b2720712423f0d1286c49d",
+            "httppagination/member_filters_foundry.gen.go": "c0f426d5943a34d009637ef98371204e4fa653331e040c2fecffaced3fa61388",
+            "httppagination/member_response_foundry.gen.go": "0337eb8dafa4afaa92ea9bd7ef4c868f5a77fa324507d32b53c0f7fcdbb0a724",
+            "httpquery/nearby_input_foundry.gen.go": "1e6e9fc579c134633ff3c80e0268ab6596119e6a01a292c98a984b3a1e756db7",
+            "httpquery/position_path_foundry.gen.go": "d926cdfe226727df6b0f5a4e5ac974eac1ca822de84848da3a96c45ca6e8027d",
+            "httpquery/priority_path_foundry.gen.go": "0b4fff80b2f9db0c41d56578117238386898ce175557aeaee4e2443bd5c3a16e",
+            "httpquery/priority_query_foundry.gen.go": "be7cb41620ea58a32253082e11bd9ab7a247eddcfcc834b7fce3162e5a2e867a",
+            "httpquery/priority_response_foundry.gen.go": "db14b9b809bb11d737a3f5ca88b709d7e8372981e39bab816e5ee5bd7d817200",
+            "httpquery/search_input_foundry.gen.go": "5c9c3338d3aedc2142a823fd66b37944b6777aa454fd20cbf2f36f29449c35a1",
+            "httpuploads/profile_input_foundry.gen.go": "ccd39005bcb828386f0656e02d60724f625b73bfff147afe1beba9260b2878de",
+            "httpuploads/upload_reply_foundry.gen.go": "5baa4969119c9ccc0c480629af947f4b71e3fad63517ce21ca4cd51076998ae6",
+            "inputqueries/member_foundry.gen.go": "9d830acefbacb5aa4a6fa290f2f6e090500b8d6587fa409ba242d8deabf10be8",
+            "intervalqueries/label_foundry.gen.go": "9dae3bf91c097c57f83c2d1ef438b6f619a1dc0f97dc8a628f94e9af780044cd",
+            "intervalqueries/link_foundry.gen.go": "1e4314fbe61015adfd615d67709750fa728e35cc3cf726a635c801cb52b5ec2b",
+            "intervalqueries/plan_foundry.gen.go": "7cc9a2644a7eac37e4541a94ab75ab6fa2d53c0b29269d92d4b56c5499bb9175",
+            "intervalqueries/sample_foundry.gen.go": "8d0c468ded8b1b1e2d6e408ff70d62587df8d35dac2c411ce267b84df53457f6",
+            "intervalqueries/summary_foundry.gen.go": "d9afda9c901614affb922cc66b07f031eb05acbf938bdc725aa8d0ad16ff2def",
+            "jsonqueries/document_foundry.gen.go": "cb6cb7f4d5cd9088aab1c61a563e171e188d673d1d5f8278d38c4d92da753c48",
+            "jsonqueries/policy_foundry.gen.go": "493f384d8006b04a0095ef6a2e31fb3935d75bd79befb591763e82d5ae9b0bb6",
+            "jsonqueries/snapshot_foundry.gen.go": "7a72ee50e0bedfbce8a493457fe37d64ab65bacf6b615517ffa9420d8f870dfe",
+            "keyqueries/bucket_count_foundry.gen.go": "8192ced61d8031f4b51aa81e77e64941b752746beec4a95c8d23855aed7720b0",
+            "lateralqueries/ranked_order_foundry.gen.go": "08f20df623c989d55920e94512e399032a25c4137aa8eece48078ab33c908731",
+            "lateralqueries/user_order_foundry.gen.go": "3f8d9930e999c309c731ad71f06dc8e469cedd50e01c57bf231fc77945b2377a",
+            "linkqueries/archive_foundry.gen.go": "82ec26477ea28611ec3655043f5a53f0b3957792b1d56c1c93ac5677476dc47c",
+            "linkqueries/friendship_foundry.gen.go": "a2dd52db00e5b45b2bc2d640f86df99ed9670501bc1dffd4a47df6b96cf4af15",
+            "linkqueries/group_foundry.gen.go": "a0c973abd34552dd4f905aa1522a5ccab0c69dc6276cd26c7be6959a41f4059f",
+            "linkqueries/member_foundry.gen.go": "afff28a7a65abee0b6b354d621447b5e5e6c884f471c557874390f811bdcf926",
+            "linkqueries/membership_foundry.gen.go": "ba3f3452d6ed636f88012e6201900394aa31209ffd47ca62820313fb6e904176",
+            "linkqueries/natural_link_foundry.gen.go": "13d08ae87a02155bca416b1652cb52cae1545cf2b193cff2e1d09d0064323c56",
+            "linkqueries/nullable_link_foundry.gen.go": "717d4c07126d416769e21fb6bb51d35a6111d5a5e90884f476ba5f75195b6f3f",
+            "localization/cart_args_foundry.gen.go": "67fbbd54ca124b08fd4b017d8cae9ee714d9974a5c499c12f64bbb1632e8f62f",
+            "localization/literal_args_foundry.gen.go": "cd1c2f4ff51e92b4f4161aa70d56067fb3b4058ec7d29812cf23ea60a9445710",
+            "localization/manage_label_foundry.gen.go": "b123b125128a44fe81714d6a836e2c2c1500c64896f1a919629c675932158df8",
+            "localization/name_label_foundry.gen.go": "bd2e9d0f9ea79e9b610325be059cee829d2992795fd8dbc0e703df9aca75d225",
+            "localization/position_args_foundry.gen.go": "a2b0d0db413ca48a01c2ea4e5763e37197c7db2db8559dbcfa9e7a45d4f69c78",
+            "localization/status_foundry.gen.go": "050e34bd129eb53559667d1666eb3ee9e07e4fef4e78cb55f4ef5a6be5bf4d7c",
+            "localization/welcome_args_foundry.gen.go": "5a6caa3cb7078170d52a490a5a7825f39b37761885444e5eba3b9b2163bebc74",
+            "mailing/recipient_request_foundry.gen.go": "06ab1d9e28001fd695ace1f053bdf7c2d9ab2c00a3d93968187b85abdbb308b6",
+            "models/country_foundry.gen.go": "40115931e5bb64f6729b39e01bb045629fe3621d265daae2e4e0bf1e2d81f8fa",
+            "models/friendship_foundry.gen.go": "c400028ee926d2c04c5f55040d65ee28a3ac85d1cf5ec52933a3544c8debb2f3",
+            "models/group_foundry.gen.go": "f440fa6c4a7b49174e5edeb0ab82bb1f998e19d45dc55dc0ec61f87aaec55fc5",
+            "models/ledger_entry_foundry.gen.go": "f10cf56cdbd8e001c127fd49a636f5ef5d97ff76c8f199b3f07642cdda685362",
+            "models/level_foundry.gen.go": "b3f2e0c16fc34e6e2505ae6ec5949a38baf4883eef9333020384ff6c4d20d1dc",
+            "models/location_foundry.gen.go": "e1a05ec801f2212981c2060c7f68c108d42eb7cd907a5591bb9430461be5157f",
+            "models/measurement_foundry.gen.go": "84e0e60d98f08a11bc652a035c93dbd7595a9897a07a7daa5106c87b9e63f87b",
+            "models/membership_foundry.gen.go": "caa70c31f55d21df468165f32dd59f4504765ae48233f26ada564532d8fa5b63",
+            "models/order_foundry.gen.go": "235593453a466ad8a71014b5e02e5ec7e1f958f6e75f2eb76e4deb057401c08b",
+            "models/status_foundry.gen.go": "4d77be0af0612f5b4e15df31513723c80c3c5ba2172877aa312042fb919a8028",
+            "models/user_foundry.gen.go": "cf0f9a11143f98f2360e751b4b6b23eeb2b45469e2c09c2279afc8e1ae378538",
+            "models/write_record_foundry.gen.go": "fbbedb147e9c6d8146e1005da835c9a1b6430f558b62f395669ad58e113c2316",
+            "multifactor/account_foundry.gen.go": "0741d09e957510ace9a9f099efd189cf4f9314cf91eac66115d813c36fab46b1",
+            "multifactor/confirmation_request_foundry.gen.go": "aa93dada574b05490016f12348d1f80c0983a8bd7c0a710904d6a772032c16e4",
+            "multifactor/enrollment_request_foundry.gen.go": "3d0f8690f7bab053ffde51e7f45140eee730d38c6f5fcff587a6a22bc217288c",
+            "multifactor/recovery_request_foundry.gen.go": "b3bf829bacc346422b9d430a4af45e03cdb369d01ea624da4352e2eb3147cd27",
+            "multifactor/regeneration_request_foundry.gen.go": "3ff53e286f57a3c0d6f8b26750e4bc1d85cc76cece988b0d27992a06e5d379ce",
+            "multifactor/totp_request_foundry.gen.go": "4bbfbe70bd017c04e973de0a62dd26aabb4485f289f40466fcbd6e96df224ebb",
+            "mutatorqueries/member_foundry.gen.go": "3ced1497f66d80ea723b0acdf39ba57d246a8516548bab701540c9b5e2382b9a",
+            "mutatorqueries/state_foundry.gen.go": "a42f1797ddd72a1e6d8a7aceeb6cfc5d1420aa791763a0780f85864ac78d64a9",
+            "notifying/order_card_foundry.gen.go": "096c3369a76306ec85632e4b2830e390dac2a5339d4edb5fa7c835cf41cf0c0f",
+            "notifying/order_placed_foundry.gen.go": "a7ae2d3be3d1f7544248cd3fba2faf18a8be5eaaefa765555dc5d7d7e2a966bf",
+            "observerqueries/effect_foundry.gen.go": "ab7644dbb74ee84234ff2641526e9c228fd562ea2c68c5934e7c4f4bbf0ff5ef",
+            "observerqueries/plain_foundry.gen.go": "78b9bf5f5b12ea9f2987e668c52372e85515449234382d963a41ff9aba883a52",
+            "observerqueries/record_foundry.gen.go": "d6aba0c0d3502e3e963f2ab1825c7da3af4e4d83314eb11e63be98524d1e69f8",
+            "outgoing/account_receipt_foundry.gen.go": "1d9371c7863797c6a248a6ec3bd7b4ccbe3b616825ffc443cb40b9a9ea6ef036",
+            "outgoing/create_account_foundry.gen.go": "dbdebdef8155efd7fced5f482deeee08999c0c824487203cf89ae67b0ea54cb3",
+            "passwords/account_foundry.gen.go": "35fb0be210fd973e66af200565ba4dc70e65185c2e40e2d3a376d76e4e8d506d",
+            "passwords/credential_projection_foundry.gen.go": "7d6e9068e30b506de6c0b6244d91fcf194ad58c47446afec029d54ca679f0da4",
+            "passwords/login_request_foundry.gen.go": "c64e3a4b97ce114099a4c496f48bf5f2eee1cf0fd6f8f6f07e39198b3732ce6d",
+            "productionprofile/record_foundry.gen.go": "ce1796e205afaa39dd186bfd9d3a4a18c55fec890ef6ca483f565a95a1fac0fd",
+            "profiles/preferences_foundry.gen.go": "e7eac64dfeebf5c9a5eb1d100b11a113878de5fc04205c9b776d14a9175b91bf",
+            "profiles/profile_foundry.gen.go": "ae107f306e98d634b80a2466d4ff9d7daf50764dbacb9fcc1319ed55efb77a58",
+            "recovering/link_request_foundry.gen.go": "185c0ae3ab4df2fcda7863d61613749f2cc36d2da8c680d6fbf1837e8761712b",
+            "recovering/member_foundry.gen.go": "563b27d88b3097e1561b1000dbd487ae4bc77e5a5c7584e94aaa8a9dea6d5c43",
+            "recovering/reset_request_foundry.gen.go": "dfe5868095fd8939c2bead1562febd01e68313e74b33ba8b07d0ad2add2669eb",
+            "recovering/verification_request_foundry.gen.go": "a4ac8ec71c25ad8f7fa078d9bc4bc4f52609cbf9a2b87c5d227833c30b9b2215",
+            "recursivequeries/node_foundry.gen.go": "3e1db7aa658c44901bbd573aea607ad68dde0ce7ff823407f15da7d9f23ce488",
+            "reporting/export_members_foundry.gen.go": "7bbc5625f43413539cbbbd277783505ae33ba8fa42fe01eba443a0aa9a8724c0",
+            "reporting/member_foundry.gen.go": "624164d9daf84d811dbfbcf13bf4b4f726624fda17cdf12ac646e8517074d266",
+            "reporting/member_row_foundry.gen.go": "dc516388d701c866f039423ed7b816cb4767f9ff2c901635ef00dcb6d104664e",
+            "reporting/member_total_foundry.gen.go": "c2b327af0ae5bf17bcfdcc0711da38b851c8b1bd2b3b57cce0636ae9353d8de3",
+            "reporting/operator_foundry.gen.go": "630c6ce71b0d359b4e44e49347ec474f16a4a83991925de67fda330ec3b8e074",
+            "reporting/order_foundry.gen.go": "6472bc869b0787c9c0eb432aafd72e6646f204c0c942cc16742eb196d6ed5940",
+            "reporting/order_row_foundry.gen.go": "0dc5dbbd61d4a58d96ea86ab1c4424c380432be6dec8fc29fa83b5021f029bc8",
+            "reporting/state_foundry.gen.go": "cf381576748922b288390c5df72e9d50b6e9fca874722133321c8e35839e9f23",
+            "reports/buyer_totals_foundry.gen.go": "7eb35dff7d7ec039c8fa948807b74b15d5cc4d3dd77af9c52824ffc26a7e209a",
+            "reports/location_row_foundry.gen.go": "8aec0e3e5b8b907f2fcc24052cdb1d8b864a88d6077e75a4e44ae19a2b6a786b",
+            "reports/order_buyer_row_foundry.gen.go": "1b84dee99284e208eb64960a7a953b89dcac29ba8999d2c7bf188940107688c8",
+            "reports/order_summary_foundry.gen.go": "bddc538777f55c8cd380e868e6d35cd9e47e3a08d48bed1d770d11612b52b8a4",
+            "reports/referral_order_row_foundry.gen.go": "86fe923657be0810bcd2468431e261cbf9eab03023cf09e7f30d74b27bfa7910",
+            "reports/referral_row_foundry.gen.go": "7144d2d1f5c80dcfb2ecbdbb919f0f6bd2b28b6b3529bce1a849d9a0a8147eba",
+            "reports/scalar_report_foundry.gen.go": "00db9252fa0c5767782a4ca05fa038448f93f9d28aec0dfd06969d5971f7f1e8",
+            "reports/user_order_stats_foundry.gen.go": "8798f44875cfdfdfa16fa7ac85bbbd7ab0de12ec93fc02d4665296cca2dd1bf1",
+            "reports/user_pair_foundry.gen.go": "898393accb31e007b3449b175e38d4c6353e4447b06e4096b7373e7fb640fde9",
+            "reports/user_summary_foundry.gen.go": "dda093de510fbba3e7d4af3be9a50f48a174338ff06e02de2e1bcad1f4cd678a",
+            "retrievalqueries/group_foundry.gen.go": "0498650def09b576076a8d1f01dbdc1aa3434c17d10c5765b5d118f0f6874917",
+            "retrievalqueries/member_foundry.gen.go": "e648b4a0b94bbe027e5b9826ab732e0c72bab74caeb33214ef95fa6f0e0bbecb",
+            "retrievalqueries/member_label_foundry.gen.go": "2ee49103cdbf4578a654ee6ad4e08211fbf0bc0f431b0a070fe345ad80dc893a",
+            "retrievalqueries/membership_foundry.gen.go": "2431cc07f543959ae8154e7a64f4938e6945a132ea9bb8d0ea0ecc050122d87e",
+            "scalarqueries/calculation_foundry.gen.go": "5f5c174854027d445c83697fd176088c2aed84fab61085d20944aebf725ddb3a",
+            "scalarqueries/sample_foundry.gen.go": "c10ced2dfc8728b122be9c81ae93f96cfac119dfc76c360cdf4364b9931dd7a6",
+            "softqueries/group_foundry.gen.go": "6a304c2df1835dd9d5b290233c67b772685c2cfccdaa6aa3d54c54bd5f538c1f",
+            "softqueries/member_foundry.gen.go": "5d48fb556cbf53db12d688cd58b2a0529c3c20fed27256d0ae0f11b5b4e18f10",
+            "softqueries/member_label_foundry.gen.go": "88c596c40c092ec843122c747e937b3b0479e091c9d35732f4da33264e272adf",
+            "softqueries/membership_foundry.gen.go": "3a411b6c18dca83be2ff3d4e5ea4bd691ffd1bc5f4b18e75a2a8f25641b7a653",
+            "startupconfig/environment_foundry.gen.go": "3bc724aad30b64692ab707e5af5a989c186f1c7277f96a5a1bad7a0ade37732a",
+            "startupconfig/settings_foundry.gen.go": "cfe2895c4c80b83822b50fac910f26e94fa029e2c26698dcf18d6aa79f9f22d6",
+            "temporalqueries/calendar_summary_foundry.gen.go": "1c5c254797e09ba5268b2b665a74497ad861802f0269cdccd3edf8cfb5708458",
+            "temporalqueries/sample_foundry.gen.go": "c21c2e3888d5913cf712168de347c5a18cc1cb6aed229763eff5a02c0f4c0d89",
+            "timequeries/manual_foundry.gen.go": "1d2c80b0e90dd3980836566d154554c34fedc095641c3868e9e7c3a53da46460",
+            "timequeries/member_foundry.gen.go": "e4ff0f0b069372c96c9b48cfddd3a6c0d1bcd52f69e80b4cd9bc8f992abe9efb",
+            "transactionqueries/pair_foundry.gen.go": "5d40a50a0a516e6426246d4d05746cab3bf0a8e5d56225e50eb74a2c03531c4b",
+            "transactionqueries/record_foundry.gen.go": "a9837b6f4a8b322484379a4490f85f2d7c31f6f1ec54c5dc83fd30214e19165c",
+            "transactionqueries/summary_foundry.gen.go": "4ef426ecb80d028d9f4c9b386a97a3c75a2cc2cccdb7b42d09498c33147b717d",
+            "transactionqueries/totals_foundry.gen.go": "c00a51de96df9f09d400da48f91a4228e476bf7be51968e020b5a0dfa7335343",
+            "upsertqueries/excluded_record_foundry.gen.go": "945ed6e8d5392fc6f8e9a013e32210fd77dfc605866b1fccd6dc57323936f723",
+            "validationrules/availability_window_foundry.gen.go": "ba51f1b3990b62b8c6be03fba9bca61a0ad253c4e54739772a502f1d1b467d43",
+            "validationrules/organization_kind_foundry.gen.go": "4c5500b8257077f6f92206cfa9dbe2d03ff3bcbc285a1652f518615034162ff8",
+            "validationrules/presence_input_foundry.gen.go": "38726cb62b6e181d3b5664449800a00888091a6e40d8e3ba83534b6d051993bd",
+            "validationrules/profile_preferences_foundry.gen.go": "fb0cbde5561d22553ae8f16cdeeb3438d6fd62029d63c7f95d6949e2afbadc6c",
+            "validationrules/registration_foundry.gen.go": "1508fe8ddec85509109aee73bc2e6cfc8c1a09e70e4323c17dba99ed5517bd24",
+            "windowqueries/navigation_row_foundry.gen.go": "d8bde59068af57831856f44c122a2a640f4795dffddfa66d9641a57d58f3d894",
+            "windowqueries/ranking_row_foundry.gen.go": "f09ebc0a54f9073c58a76fcb19060419e0f229318fc32d18cb26c360e96326fe",
+            "windowqueries/window_total_foundry.gen.go": "2b93d1aabd019b3f64be340254514c0f62f4e63ae4598ff52db1dca3a6fed0bc"
+          }
+        },
+        "generated_before": {
+          "bytes": 4546152,
+          "files": 153,
+          "sha256": {
+            "auditqueries/account_foundry.gen.go": "78de28d362fc35795b9ea10f3fd3bcf990087b77150097e3ea6367c5a749a9ac",
+            "auditqueries/label_foundry.gen.go": "4a739095446284edb161131aee7e7f553edbe042bdee70c8b33d6284bdf3fb91",
+            "binarymodels/record_foundry.gen.go": "3b5844def8c444a71989de297ca1d31bd9e956f958628134d2efc43caa22be37",
+            "binarymodels/view_foundry.gen.go": "c92a3c39fbfed4d72d2222eaf79d56ef0fd40843fd200aed2f8e73e347f06e10",
+            "bootstrap/member_foundry.gen.go": "c5fc360d5f2d4bad7b3d79963be1f6c80f3670311ba8e9e8f9b8ff387c93b78c",
+            "bootstrap/operator_foundry.gen.go": "241e33b4b6f9a75fc3571531538cff079d5d8afdc0ec934c21477a54d905f49a",
+            "bootstrap/profile_foundry.gen.go": "5a8261bc65a7cad182735a9d1d5083ac106dc9746bd22ee9a60a75e14dbf6c8a",
+            "bootstrap/settings_foundry.gen.go": "bc9214571e8f3622fc52be997e5787194211d1f830e6a53c22f18e1599a12fc5",
+            "bootstrap/upload_input_foundry.gen.go": "4b634521136e206e1bd95e108cf581d6c074f4e4695ad0da95fa46a1db8cabd0",
+            "bootstrap/upload_result_foundry.gen.go": "5441b796fa5165de1f5f56a29ce6d0302e695e876c0fff4afb55c6679f73add6",
+            "catalog/product_foundry.gen.go": "c5ae4826d509d4767009a99a5a46429135d3ace83356025c7652065508e7b264",
+            "catalog/status/status_foundry.gen.go": "d6b40a59538f91f7ee15c414a9054ae80e69d62df114785c5bdafecda6a5de39",
+            "clientcontracts/filters_foundry.gen.go": "a14c1f9b02145dbc7eb4e94da9498aac5b9f8db6a9619925809829afbaa9f528",
+            "clientcontracts/item_path_foundry.gen.go": "ec7ce734699e868edfae18310bc500e13d082ab22a6133a94e45d763dfbb2333",
+            "clientcontracts/member_foundry.gen.go": "a3441ba780d2246ed05da9fd72158985f92e114c4de673889eb68daf60db4469",
+            "clientcontracts/payload_foundry.gen.go": "f90cc3b047988e14d57821f6fdd700e50b58248e76c7d7fd882d742ebc2d0d88",
+            "configured/settings_foundry.gen.go": "fd21f0208a185e8a3e12b0648578c63b21d40ae91f7d86eed0e4c2c1d5988f66",
+            "eventqueries/event_link_foundry.gen.go": "be0f6958bf2d9a24c429020c57f362365cee8a16a67315f314eb5955dbbca48f",
+            "framequeries/sample_foundry.gen.go": "93be0effed5220b8c023c0c18fce63f11dded244e29befb284d5f88e69ee7ef2",
+            "hookqueries/log_foundry.gen.go": "e6efb08272e0a64b3f7b7dee95ce8d5f9307621b6752829a3a0aa43913e42092",
+            "hookqueries/member_foundry.gen.go": "900da3447c94868bf17b13e38d5b75ff48cc5fc4c8c80404fb0d7387fa46990d",
+            "httpdto/inventory_response_foundry.gen.go": "8534f59be0a390352633d606b2d5502534f007ca6abe5d8f16ae7a928232ff7f",
+            "httpdto/order_response_foundry.gen.go": "cc90e818122635f81c015eb2f5fc8f2e3b6862966fa7de981361c621df27a33c",
+            "httpdto/stream_response_foundry.gen.go": "97297497b931a1d0ee545d5a3c2d95e0bf6166c3d0d1e257e8c87ef22dc769b9",
+            "httpdto/tracking_response_foundry.gen.go": "f10849ac85fe82c97e1d41cde0541a12de9ffc535e97e3cefeeb2688dbaae77f",
+            "httpdto/update_user_foundry.gen.go": "99dd5341269ca5017a6dfd0a50184297f2096af99cf4471f00a814be91728bd8",
+            "httpdto/user_response_foundry.gen.go": "bfbcc812112c543e55150bd07f803844d9e5ec3b10e69245f92b4e478ff5c373",
+            "httpkernel/asset_path_foundry.gen.go": "4e61ce801b1a7b1933fe65703dfb9ed345a78942f053239fcfc22221eabbc004",
+            "httpkernel/user_feed_path_foundry.gen.go": "d3f4ff25960d0231bd0b5e5b83343c76da8ec3eaba1f922f14122de18c9d17eb",
+            "httpkernel/user_path_foundry.gen.go": "5dc7e69c6d2c4b2adf0b37a56db9d6e9ee9e930f55b0e51d641466d67519ae4f",
+            "httppagination/cmd/pagecontract/summary_foundry.gen.go": "4c241972bc427f2f7afe8ea45a6db36e7ed11ef170b2720712423f0d1286c49d",
+            "httppagination/member_filters_foundry.gen.go": "c0f426d5943a34d009637ef98371204e4fa653331e040c2fecffaced3fa61388",
+            "httppagination/member_response_foundry.gen.go": "0337eb8dafa4afaa92ea9bd7ef4c868f5a77fa324507d32b53c0f7fcdbb0a724",
+            "httpquery/nearby_input_foundry.gen.go": "1e6e9fc579c134633ff3c80e0268ab6596119e6a01a292c98a984b3a1e756db7",
+            "httpquery/position_path_foundry.gen.go": "d926cdfe226727df6b0f5a4e5ac974eac1ca822de84848da3a96c45ca6e8027d",
+            "httpquery/priority_path_foundry.gen.go": "0b4fff80b2f9db0c41d56578117238386898ce175557aeaee4e2443bd5c3a16e",
+            "httpquery/priority_query_foundry.gen.go": "be7cb41620ea58a32253082e11bd9ab7a247eddcfcc834b7fce3162e5a2e867a",
+            "httpquery/priority_response_foundry.gen.go": "db14b9b809bb11d737a3f5ca88b709d7e8372981e39bab816e5ee5bd7d817200",
+            "httpquery/search_input_foundry.gen.go": "5c9c3338d3aedc2142a823fd66b37944b6777aa454fd20cbf2f36f29449c35a1",
+            "httpuploads/profile_input_foundry.gen.go": "ccd39005bcb828386f0656e02d60724f625b73bfff147afe1beba9260b2878de",
+            "httpuploads/upload_reply_foundry.gen.go": "5baa4969119c9ccc0c480629af947f4b71e3fad63517ce21ca4cd51076998ae6",
+            "inputqueries/member_foundry.gen.go": "9d830acefbacb5aa4a6fa290f2f6e090500b8d6587fa409ba242d8deabf10be8",
+            "intervalqueries/label_foundry.gen.go": "9dae3bf91c097c57f83c2d1ef438b6f619a1dc0f97dc8a628f94e9af780044cd",
+            "intervalqueries/link_foundry.gen.go": "1e4314fbe61015adfd615d67709750fa728e35cc3cf726a635c801cb52b5ec2b",
+            "intervalqueries/plan_foundry.gen.go": "7cc9a2644a7eac37e4541a94ab75ab6fa2d53c0b29269d92d4b56c5499bb9175",
+            "intervalqueries/sample_foundry.gen.go": "8d0c468ded8b1b1e2d6e408ff70d62587df8d35dac2c411ce267b84df53457f6",
+            "intervalqueries/summary_foundry.gen.go": "d9afda9c901614affb922cc66b07f031eb05acbf938bdc725aa8d0ad16ff2def",
+            "jsonqueries/document_foundry.gen.go": "cb6cb7f4d5cd9088aab1c61a563e171e188d673d1d5f8278d38c4d92da753c48",
+            "jsonqueries/policy_foundry.gen.go": "493f384d8006b04a0095ef6a2e31fb3935d75bd79befb591763e82d5ae9b0bb6",
+            "jsonqueries/snapshot_foundry.gen.go": "7a72ee50e0bedfbce8a493457fe37d64ab65bacf6b615517ffa9420d8f870dfe",
+            "keyqueries/bucket_count_foundry.gen.go": "8192ced61d8031f4b51aa81e77e64941b752746beec4a95c8d23855aed7720b0",
+            "lateralqueries/ranked_order_foundry.gen.go": "08f20df623c989d55920e94512e399032a25c4137aa8eece48078ab33c908731",
+            "lateralqueries/user_order_foundry.gen.go": "3f8d9930e999c309c731ad71f06dc8e469cedd50e01c57bf231fc77945b2377a",
+            "linkqueries/archive_foundry.gen.go": "82ec26477ea28611ec3655043f5a53f0b3957792b1d56c1c93ac5677476dc47c",
+            "linkqueries/friendship_foundry.gen.go": "a2dd52db00e5b45b2bc2d640f86df99ed9670501bc1dffd4a47df6b96cf4af15",
+            "linkqueries/group_foundry.gen.go": "a0c973abd34552dd4f905aa1522a5ccab0c69dc6276cd26c7be6959a41f4059f",
+            "linkqueries/member_foundry.gen.go": "afff28a7a65abee0b6b354d621447b5e5e6c884f471c557874390f811bdcf926",
+            "linkqueries/membership_foundry.gen.go": "ba3f3452d6ed636f88012e6201900394aa31209ffd47ca62820313fb6e904176",
+            "linkqueries/natural_link_foundry.gen.go": "13d08ae87a02155bca416b1652cb52cae1545cf2b193cff2e1d09d0064323c56",
+            "linkqueries/nullable_link_foundry.gen.go": "717d4c07126d416769e21fb6bb51d35a6111d5a5e90884f476ba5f75195b6f3f",
+            "localization/cart_args_foundry.gen.go": "67fbbd54ca124b08fd4b017d8cae9ee714d9974a5c499c12f64bbb1632e8f62f",
+            "localization/literal_args_foundry.gen.go": "cd1c2f4ff51e92b4f4161aa70d56067fb3b4058ec7d29812cf23ea60a9445710",
+            "localization/manage_label_foundry.gen.go": "b123b125128a44fe81714d6a836e2c2c1500c64896f1a919629c675932158df8",
+            "localization/name_label_foundry.gen.go": "bd2e9d0f9ea79e9b610325be059cee829d2992795fd8dbc0e703df9aca75d225",
+            "localization/position_args_foundry.gen.go": "a2b0d0db413ca48a01c2ea4e5763e37197c7db2db8559dbcfa9e7a45d4f69c78",
+            "localization/status_foundry.gen.go": "050e34bd129eb53559667d1666eb3ee9e07e4fef4e78cb55f4ef5a6be5bf4d7c",
+            "localization/welcome_args_foundry.gen.go": "5a6caa3cb7078170d52a490a5a7825f39b37761885444e5eba3b9b2163bebc74",
+            "mailing/recipient_request_foundry.gen.go": "06ab1d9e28001fd695ace1f053bdf7c2d9ab2c00a3d93968187b85abdbb308b6",
+            "models/country_foundry.gen.go": "40115931e5bb64f6729b39e01bb045629fe3621d265daae2e4e0bf1e2d81f8fa",
+            "models/friendship_foundry.gen.go": "c400028ee926d2c04c5f55040d65ee28a3ac85d1cf5ec52933a3544c8debb2f3",
+            "models/group_foundry.gen.go": "f440fa6c4a7b49174e5edeb0ab82bb1f998e19d45dc55dc0ec61f87aaec55fc5",
+            "models/ledger_entry_foundry.gen.go": "f10cf56cdbd8e001c127fd49a636f5ef5d97ff76c8f199b3f07642cdda685362",
+            "models/level_foundry.gen.go": "b3f2e0c16fc34e6e2505ae6ec5949a38baf4883eef9333020384ff6c4d20d1dc",
+            "models/location_foundry.gen.go": "e1a05ec801f2212981c2060c7f68c108d42eb7cd907a5591bb9430461be5157f",
+            "models/measurement_foundry.gen.go": "84e0e60d98f08a11bc652a035c93dbd7595a9897a07a7daa5106c87b9e63f87b",
+            "models/membership_foundry.gen.go": "caa70c31f55d21df468165f32dd59f4504765ae48233f26ada564532d8fa5b63",
+            "models/order_foundry.gen.go": "235593453a466ad8a71014b5e02e5ec7e1f958f6e75f2eb76e4deb057401c08b",
+            "models/status_foundry.gen.go": "4d77be0af0612f5b4e15df31513723c80c3c5ba2172877aa312042fb919a8028",
+            "models/user_foundry.gen.go": "cf0f9a11143f98f2360e751b4b6b23eeb2b45469e2c09c2279afc8e1ae378538",
+            "models/write_record_foundry.gen.go": "fbbedb147e9c6d8146e1005da835c9a1b6430f558b62f395669ad58e113c2316",
+            "multifactor/account_foundry.gen.go": "0741d09e957510ace9a9f099efd189cf4f9314cf91eac66115d813c36fab46b1",
+            "multifactor/confirmation_request_foundry.gen.go": "aa93dada574b05490016f12348d1f80c0983a8bd7c0a710904d6a772032c16e4",
+            "multifactor/enrollment_request_foundry.gen.go": "3d0f8690f7bab053ffde51e7f45140eee730d38c6f5fcff587a6a22bc217288c",
+            "multifactor/recovery_request_foundry.gen.go": "b3bf829bacc346422b9d430a4af45e03cdb369d01ea624da4352e2eb3147cd27",
+            "multifactor/regeneration_request_foundry.gen.go": "3ff53e286f57a3c0d6f8b26750e4bc1d85cc76cece988b0d27992a06e5d379ce",
+            "multifactor/totp_request_foundry.gen.go": "4bbfbe70bd017c04e973de0a62dd26aabb4485f289f40466fcbd6e96df224ebb",
+            "mutatorqueries/member_foundry.gen.go": "3ced1497f66d80ea723b0acdf39ba57d246a8516548bab701540c9b5e2382b9a",
+            "mutatorqueries/state_foundry.gen.go": "a42f1797ddd72a1e6d8a7aceeb6cfc5d1420aa791763a0780f85864ac78d64a9",
+            "notifying/order_card_foundry.gen.go": "096c3369a76306ec85632e4b2830e390dac2a5339d4edb5fa7c835cf41cf0c0f",
+            "notifying/order_placed_foundry.gen.go": "a7ae2d3be3d1f7544248cd3fba2faf18a8be5eaaefa765555dc5d7d7e2a966bf",
+            "observerqueries/effect_foundry.gen.go": "ab7644dbb74ee84234ff2641526e9c228fd562ea2c68c5934e7c4f4bbf0ff5ef",
+            "observerqueries/plain_foundry.gen.go": "78b9bf5f5b12ea9f2987e668c52372e85515449234382d963a41ff9aba883a52",
+            "observerqueries/record_foundry.gen.go": "d6aba0c0d3502e3e963f2ab1825c7da3af4e4d83314eb11e63be98524d1e69f8",
+            "outgoing/account_receipt_foundry.gen.go": "1d9371c7863797c6a248a6ec3bd7b4ccbe3b616825ffc443cb40b9a9ea6ef036",
+            "outgoing/create_account_foundry.gen.go": "dbdebdef8155efd7fced5f482deeee08999c0c824487203cf89ae67b0ea54cb3",
+            "passwords/account_foundry.gen.go": "35fb0be210fd973e66af200565ba4dc70e65185c2e40e2d3a376d76e4e8d506d",
+            "passwords/credential_projection_foundry.gen.go": "7d6e9068e30b506de6c0b6244d91fcf194ad58c47446afec029d54ca679f0da4",
+            "passwords/login_request_foundry.gen.go": "c64e3a4b97ce114099a4c496f48bf5f2eee1cf0fd6f8f6f07e39198b3732ce6d",
+            "productionprofile/record_foundry.gen.go": "ce1796e205afaa39dd186bfd9d3a4a18c55fec890ef6ca483f565a95a1fac0fd",
+            "profiles/preferences_foundry.gen.go": "e7eac64dfeebf5c9a5eb1d100b11a113878de5fc04205c9b776d14a9175b91bf",
+            "profiles/profile_foundry.gen.go": "ae107f306e98d634b80a2466d4ff9d7daf50764dbacb9fcc1319ed55efb77a58",
+            "recovering/link_request_foundry.gen.go": "185c0ae3ab4df2fcda7863d61613749f2cc36d2da8c680d6fbf1837e8761712b",
+            "recovering/member_foundry.gen.go": "563b27d88b3097e1561b1000dbd487ae4bc77e5a5c7584e94aaa8a9dea6d5c43",
+            "recovering/reset_request_foundry.gen.go": "dfe5868095fd8939c2bead1562febd01e68313e74b33ba8b07d0ad2add2669eb",
+            "recovering/verification_request_foundry.gen.go": "a4ac8ec71c25ad8f7fa078d9bc4bc4f52609cbf9a2b87c5d227833c30b9b2215",
+            "recursivequeries/node_foundry.gen.go": "3e1db7aa658c44901bbd573aea607ad68dde0ce7ff823407f15da7d9f23ce488",
+            "reporting/export_members_foundry.gen.go": "7bbc5625f43413539cbbbd277783505ae33ba8fa42fe01eba443a0aa9a8724c0",
+            "reporting/member_foundry.gen.go": "624164d9daf84d811dbfbcf13bf4b4f726624fda17cdf12ac646e8517074d266",
+            "reporting/member_row_foundry.gen.go": "dc516388d701c866f039423ed7b816cb4767f9ff2c901635ef00dcb6d104664e",
+            "reporting/member_total_foundry.gen.go": "c2b327af0ae5bf17bcfdcc0711da38b851c8b1bd2b3b57cce0636ae9353d8de3",
+            "reporting/operator_foundry.gen.go": "630c6ce71b0d359b4e44e49347ec474f16a4a83991925de67fda330ec3b8e074",
+            "reporting/order_foundry.gen.go": "6472bc869b0787c9c0eb432aafd72e6646f204c0c942cc16742eb196d6ed5940",
+            "reporting/order_row_foundry.gen.go": "0dc5dbbd61d4a58d96ea86ab1c4424c380432be6dec8fc29fa83b5021f029bc8",
+            "reporting/state_foundry.gen.go": "cf381576748922b288390c5df72e9d50b6e9fca874722133321c8e35839e9f23",
+            "reports/buyer_totals_foundry.gen.go": "7eb35dff7d7ec039c8fa948807b74b15d5cc4d3dd77af9c52824ffc26a7e209a",
+            "reports/location_row_foundry.gen.go": "8aec0e3e5b8b907f2fcc24052cdb1d8b864a88d6077e75a4e44ae19a2b6a786b",
+            "reports/order_buyer_row_foundry.gen.go": "1b84dee99284e208eb64960a7a953b89dcac29ba8999d2c7bf188940107688c8",
+            "reports/order_summary_foundry.gen.go": "bddc538777f55c8cd380e868e6d35cd9e47e3a08d48bed1d770d11612b52b8a4",
+            "reports/referral_order_row_foundry.gen.go": "86fe923657be0810bcd2468431e261cbf9eab03023cf09e7f30d74b27bfa7910",
+            "reports/referral_row_foundry.gen.go": "7144d2d1f5c80dcfb2ecbdbb919f0f6bd2b28b6b3529bce1a849d9a0a8147eba",
+            "reports/scalar_report_foundry.gen.go": "00db9252fa0c5767782a4ca05fa038448f93f9d28aec0dfd06969d5971f7f1e8",
+            "reports/user_order_stats_foundry.gen.go": "8798f44875cfdfdfa16fa7ac85bbbd7ab0de12ec93fc02d4665296cca2dd1bf1",
+            "reports/user_pair_foundry.gen.go": "898393accb31e007b3449b175e38d4c6353e4447b06e4096b7373e7fb640fde9",
+            "reports/user_summary_foundry.gen.go": "dda093de510fbba3e7d4af3be9a50f48a174338ff06e02de2e1bcad1f4cd678a",
+            "retrievalqueries/group_foundry.gen.go": "0498650def09b576076a8d1f01dbdc1aa3434c17d10c5765b5d118f0f6874917",
+            "retrievalqueries/member_foundry.gen.go": "e648b4a0b94bbe027e5b9826ab732e0c72bab74caeb33214ef95fa6f0e0bbecb",
+            "retrievalqueries/member_label_foundry.gen.go": "2ee49103cdbf4578a654ee6ad4e08211fbf0bc0f431b0a070fe345ad80dc893a",
+            "retrievalqueries/membership_foundry.gen.go": "2431cc07f543959ae8154e7a64f4938e6945a132ea9bb8d0ea0ecc050122d87e",
+            "scalarqueries/calculation_foundry.gen.go": "5f5c174854027d445c83697fd176088c2aed84fab61085d20944aebf725ddb3a",
+            "scalarqueries/sample_foundry.gen.go": "c10ced2dfc8728b122be9c81ae93f96cfac119dfc76c360cdf4364b9931dd7a6",
+            "softqueries/group_foundry.gen.go": "6a304c2df1835dd9d5b290233c67b772685c2cfccdaa6aa3d54c54bd5f538c1f",
+            "softqueries/member_foundry.gen.go": "5d48fb556cbf53db12d688cd58b2a0529c3c20fed27256d0ae0f11b5b4e18f10",
+            "softqueries/member_label_foundry.gen.go": "88c596c40c092ec843122c747e937b3b0479e091c9d35732f4da33264e272adf",
+            "softqueries/membership_foundry.gen.go": "3a411b6c18dca83be2ff3d4e5ea4bd691ffd1bc5f4b18e75a2a8f25641b7a653",
+            "startupconfig/environment_foundry.gen.go": "3bc724aad30b64692ab707e5af5a989c186f1c7277f96a5a1bad7a0ade37732a",
+            "startupconfig/settings_foundry.gen.go": "cfe2895c4c80b83822b50fac910f26e94fa029e2c26698dcf18d6aa79f9f22d6",
+            "temporalqueries/calendar_summary_foundry.gen.go": "1c5c254797e09ba5268b2b665a74497ad861802f0269cdccd3edf8cfb5708458",
+            "temporalqueries/sample_foundry.gen.go": "c21c2e3888d5913cf712168de347c5a18cc1cb6aed229763eff5a02c0f4c0d89",
+            "timequeries/manual_foundry.gen.go": "1d2c80b0e90dd3980836566d154554c34fedc095641c3868e9e7c3a53da46460",
+            "timequeries/member_foundry.gen.go": "e4ff0f0b069372c96c9b48cfddd3a6c0d1bcd52f69e80b4cd9bc8f992abe9efb",
+            "transactionqueries/pair_foundry.gen.go": "5d40a50a0a516e6426246d4d05746cab3bf0a8e5d56225e50eb74a2c03531c4b",
+            "transactionqueries/record_foundry.gen.go": "a9837b6f4a8b322484379a4490f85f2d7c31f6f1ec54c5dc83fd30214e19165c",
+            "transactionqueries/summary_foundry.gen.go": "4ef426ecb80d028d9f4c9b386a97a3c75a2cc2cccdb7b42d09498c33147b717d",
+            "transactionqueries/totals_foundry.gen.go": "c00a51de96df9f09d400da48f91a4228e476bf7be51968e020b5a0dfa7335343",
+            "upsertqueries/excluded_record_foundry.gen.go": "945ed6e8d5392fc6f8e9a013e32210fd77dfc605866b1fccd6dc57323936f723",
+            "validationrules/availability_window_foundry.gen.go": "ba51f1b3990b62b8c6be03fba9bca61a0ad253c4e54739772a502f1d1b467d43",
+            "validationrules/organization_kind_foundry.gen.go": "4c5500b8257077f6f92206cfa9dbe2d03ff3bcbc285a1652f518615034162ff8",
+            "validationrules/presence_input_foundry.gen.go": "38726cb62b6e181d3b5664449800a00888091a6e40d8e3ba83534b6d051993bd",
+            "validationrules/profile_preferences_foundry.gen.go": "fb0cbde5561d22553ae8f16cdeeb3438d6fd62029d63c7f95d6949e2afbadc6c",
+            "validationrules/registration_foundry.gen.go": "1508fe8ddec85509109aee73bc2e6cfc8c1a09e70e4323c17dba99ed5517bd24",
+            "windowqueries/navigation_row_foundry.gen.go": "d8bde59068af57831856f44c122a2a640f4795dffddfa66d9641a57d58f3d894",
+            "windowqueries/ranking_row_foundry.gen.go": "f09ebc0a54f9073c58a76fcb19060419e0f229318fc32d18cb26c360e96326fe",
+            "windowqueries/window_total_foundry.gen.go": "2b93d1aabd019b3f64be340254514c0f62f4e63ae4598ff52db1dca3a6fed0bc"
+          }
+        },
+        "generated_edited": {
+          "bytes": 4550008,
+          "files": 153,
+          "sha256": {
+            "auditqueries/account_foundry.gen.go": "78de28d362fc35795b9ea10f3fd3bcf990087b77150097e3ea6367c5a749a9ac",
+            "auditqueries/label_foundry.gen.go": "4a739095446284edb161131aee7e7f553edbe042bdee70c8b33d6284bdf3fb91",
+            "binarymodels/record_foundry.gen.go": "3b5844def8c444a71989de297ca1d31bd9e956f958628134d2efc43caa22be37",
+            "binarymodels/view_foundry.gen.go": "c92a3c39fbfed4d72d2222eaf79d56ef0fd40843fd200aed2f8e73e347f06e10",
+            "bootstrap/member_foundry.gen.go": "c5fc360d5f2d4bad7b3d79963be1f6c80f3670311ba8e9e8f9b8ff387c93b78c",
+            "bootstrap/operator_foundry.gen.go": "241e33b4b6f9a75fc3571531538cff079d5d8afdc0ec934c21477a54d905f49a",
+            "bootstrap/profile_foundry.gen.go": "5a8261bc65a7cad182735a9d1d5083ac106dc9746bd22ee9a60a75e14dbf6c8a",
+            "bootstrap/settings_foundry.gen.go": "bc9214571e8f3622fc52be997e5787194211d1f830e6a53c22f18e1599a12fc5",
+            "bootstrap/upload_input_foundry.gen.go": "4b634521136e206e1bd95e108cf581d6c074f4e4695ad0da95fa46a1db8cabd0",
+            "bootstrap/upload_result_foundry.gen.go": "5441b796fa5165de1f5f56a29ce6d0302e695e876c0fff4afb55c6679f73add6",
+            "catalog/product_foundry.gen.go": "c5ae4826d509d4767009a99a5a46429135d3ace83356025c7652065508e7b264",
+            "catalog/status/status_foundry.gen.go": "d6b40a59538f91f7ee15c414a9054ae80e69d62df114785c5bdafecda6a5de39",
+            "clientcontracts/filters_foundry.gen.go": "a14c1f9b02145dbc7eb4e94da9498aac5b9f8db6a9619925809829afbaa9f528",
+            "clientcontracts/item_path_foundry.gen.go": "ec7ce734699e868edfae18310bc500e13d082ab22a6133a94e45d763dfbb2333",
+            "clientcontracts/member_foundry.gen.go": "a3441ba780d2246ed05da9fd72158985f92e114c4de673889eb68daf60db4469",
+            "clientcontracts/payload_foundry.gen.go": "f90cc3b047988e14d57821f6fdd700e50b58248e76c7d7fd882d742ebc2d0d88",
+            "configured/settings_foundry.gen.go": "fd21f0208a185e8a3e12b0648578c63b21d40ae91f7d86eed0e4c2c1d5988f66",
+            "eventqueries/event_link_foundry.gen.go": "be0f6958bf2d9a24c429020c57f362365cee8a16a67315f314eb5955dbbca48f",
+            "framequeries/sample_foundry.gen.go": "93be0effed5220b8c023c0c18fce63f11dded244e29befb284d5f88e69ee7ef2",
+            "hookqueries/log_foundry.gen.go": "e6efb08272e0a64b3f7b7dee95ce8d5f9307621b6752829a3a0aa43913e42092",
+            "hookqueries/member_foundry.gen.go": "900da3447c94868bf17b13e38d5b75ff48cc5fc4c8c80404fb0d7387fa46990d",
+            "httpdto/inventory_response_foundry.gen.go": "8534f59be0a390352633d606b2d5502534f007ca6abe5d8f16ae7a928232ff7f",
+            "httpdto/order_response_foundry.gen.go": "cc90e818122635f81c015eb2f5fc8f2e3b6862966fa7de981361c621df27a33c",
+            "httpdto/stream_response_foundry.gen.go": "97297497b931a1d0ee545d5a3c2d95e0bf6166c3d0d1e257e8c87ef22dc769b9",
+            "httpdto/tracking_response_foundry.gen.go": "f10849ac85fe82c97e1d41cde0541a12de9ffc535e97e3cefeeb2688dbaae77f",
+            "httpdto/update_user_foundry.gen.go": "99dd5341269ca5017a6dfd0a50184297f2096af99cf4471f00a814be91728bd8",
+            "httpdto/user_response_foundry.gen.go": "bfbcc812112c543e55150bd07f803844d9e5ec3b10e69245f92b4e478ff5c373",
+            "httpkernel/asset_path_foundry.gen.go": "4e61ce801b1a7b1933fe65703dfb9ed345a78942f053239fcfc22221eabbc004",
+            "httpkernel/user_feed_path_foundry.gen.go": "d3f4ff25960d0231bd0b5e5b83343c76da8ec3eaba1f922f14122de18c9d17eb",
+            "httpkernel/user_path_foundry.gen.go": "5dc7e69c6d2c4b2adf0b37a56db9d6e9ee9e930f55b0e51d641466d67519ae4f",
+            "httppagination/cmd/pagecontract/summary_foundry.gen.go": "4c241972bc427f2f7afe8ea45a6db36e7ed11ef170b2720712423f0d1286c49d",
+            "httppagination/member_filters_foundry.gen.go": "c0f426d5943a34d009637ef98371204e4fa653331e040c2fecffaced3fa61388",
+            "httppagination/member_response_foundry.gen.go": "0337eb8dafa4afaa92ea9bd7ef4c868f5a77fa324507d32b53c0f7fcdbb0a724",
+            "httpquery/nearby_input_foundry.gen.go": "1e6e9fc579c134633ff3c80e0268ab6596119e6a01a292c98a984b3a1e756db7",
+            "httpquery/position_path_foundry.gen.go": "d926cdfe226727df6b0f5a4e5ac974eac1ca822de84848da3a96c45ca6e8027d",
+            "httpquery/priority_path_foundry.gen.go": "0b4fff80b2f9db0c41d56578117238386898ce175557aeaee4e2443bd5c3a16e",
+            "httpquery/priority_query_foundry.gen.go": "be7cb41620ea58a32253082e11bd9ab7a247eddcfcc834b7fce3162e5a2e867a",
+            "httpquery/priority_response_foundry.gen.go": "db14b9b809bb11d737a3f5ca88b709d7e8372981e39bab816e5ee5bd7d817200",
+            "httpquery/search_input_foundry.gen.go": "5c9c3338d3aedc2142a823fd66b37944b6777aa454fd20cbf2f36f29449c35a1",
+            "httpuploads/profile_input_foundry.gen.go": "ccd39005bcb828386f0656e02d60724f625b73bfff147afe1beba9260b2878de",
+            "httpuploads/upload_reply_foundry.gen.go": "5baa4969119c9ccc0c480629af947f4b71e3fad63517ce21ca4cd51076998ae6",
+            "inputqueries/member_foundry.gen.go": "9d830acefbacb5aa4a6fa290f2f6e090500b8d6587fa409ba242d8deabf10be8",
+            "intervalqueries/label_foundry.gen.go": "9dae3bf91c097c57f83c2d1ef438b6f619a1dc0f97dc8a628f94e9af780044cd",
+            "intervalqueries/link_foundry.gen.go": "1e4314fbe61015adfd615d67709750fa728e35cc3cf726a635c801cb52b5ec2b",
+            "intervalqueries/plan_foundry.gen.go": "7cc9a2644a7eac37e4541a94ab75ab6fa2d53c0b29269d92d4b56c5499bb9175",
+            "intervalqueries/sample_foundry.gen.go": "8d0c468ded8b1b1e2d6e408ff70d62587df8d35dac2c411ce267b84df53457f6",
+            "intervalqueries/summary_foundry.gen.go": "d9afda9c901614affb922cc66b07f031eb05acbf938bdc725aa8d0ad16ff2def",
+            "jsonqueries/document_foundry.gen.go": "cb6cb7f4d5cd9088aab1c61a563e171e188d673d1d5f8278d38c4d92da753c48",
+            "jsonqueries/policy_foundry.gen.go": "493f384d8006b04a0095ef6a2e31fb3935d75bd79befb591763e82d5ae9b0bb6",
+            "jsonqueries/snapshot_foundry.gen.go": "7a72ee50e0bedfbce8a493457fe37d64ab65bacf6b615517ffa9420d8f870dfe",
+            "keyqueries/bucket_count_foundry.gen.go": "8192ced61d8031f4b51aa81e77e64941b752746beec4a95c8d23855aed7720b0",
+            "lateralqueries/ranked_order_foundry.gen.go": "08f20df623c989d55920e94512e399032a25c4137aa8eece48078ab33c908731",
+            "lateralqueries/user_order_foundry.gen.go": "3f8d9930e999c309c731ad71f06dc8e469cedd50e01c57bf231fc77945b2377a",
+            "linkqueries/archive_foundry.gen.go": "82ec26477ea28611ec3655043f5a53f0b3957792b1d56c1c93ac5677476dc47c",
+            "linkqueries/friendship_foundry.gen.go": "a2dd52db00e5b45b2bc2d640f86df99ed9670501bc1dffd4a47df6b96cf4af15",
+            "linkqueries/group_foundry.gen.go": "a0c973abd34552dd4f905aa1522a5ccab0c69dc6276cd26c7be6959a41f4059f",
+            "linkqueries/member_foundry.gen.go": "afff28a7a65abee0b6b354d621447b5e5e6c884f471c557874390f811bdcf926",
+            "linkqueries/membership_foundry.gen.go": "ba3f3452d6ed636f88012e6201900394aa31209ffd47ca62820313fb6e904176",
+            "linkqueries/natural_link_foundry.gen.go": "13d08ae87a02155bca416b1652cb52cae1545cf2b193cff2e1d09d0064323c56",
+            "linkqueries/nullable_link_foundry.gen.go": "717d4c07126d416769e21fb6bb51d35a6111d5a5e90884f476ba5f75195b6f3f",
+            "localization/cart_args_foundry.gen.go": "67fbbd54ca124b08fd4b017d8cae9ee714d9974a5c499c12f64bbb1632e8f62f",
+            "localization/literal_args_foundry.gen.go": "cd1c2f4ff51e92b4f4161aa70d56067fb3b4058ec7d29812cf23ea60a9445710",
+            "localization/manage_label_foundry.gen.go": "b123b125128a44fe81714d6a836e2c2c1500c64896f1a919629c675932158df8",
+            "localization/name_label_foundry.gen.go": "bd2e9d0f9ea79e9b610325be059cee829d2992795fd8dbc0e703df9aca75d225",
+            "localization/position_args_foundry.gen.go": "a2b0d0db413ca48a01c2ea4e5763e37197c7db2db8559dbcfa9e7a45d4f69c78",
+            "localization/status_foundry.gen.go": "050e34bd129eb53559667d1666eb3ee9e07e4fef4e78cb55f4ef5a6be5bf4d7c",
+            "localization/welcome_args_foundry.gen.go": "5a6caa3cb7078170d52a490a5a7825f39b37761885444e5eba3b9b2163bebc74",
+            "mailing/recipient_request_foundry.gen.go": "06ab1d9e28001fd695ace1f053bdf7c2d9ab2c00a3d93968187b85abdbb308b6",
+            "models/country_foundry.gen.go": "40115931e5bb64f6729b39e01bb045629fe3621d265daae2e4e0bf1e2d81f8fa",
+            "models/friendship_foundry.gen.go": "c400028ee926d2c04c5f55040d65ee28a3ac85d1cf5ec52933a3544c8debb2f3",
+            "models/group_foundry.gen.go": "f440fa6c4a7b49174e5edeb0ab82bb1f998e19d45dc55dc0ec61f87aaec55fc5",
+            "models/ledger_entry_foundry.gen.go": "f10cf56cdbd8e001c127fd49a636f5ef5d97ff76c8f199b3f07642cdda685362",
+            "models/level_foundry.gen.go": "b3f2e0c16fc34e6e2505ae6ec5949a38baf4883eef9333020384ff6c4d20d1dc",
+            "models/location_foundry.gen.go": "e1a05ec801f2212981c2060c7f68c108d42eb7cd907a5591bb9430461be5157f",
+            "models/measurement_foundry.gen.go": "84e0e60d98f08a11bc652a035c93dbd7595a9897a07a7daa5106c87b9e63f87b",
+            "models/membership_foundry.gen.go": "caa70c31f55d21df468165f32dd59f4504765ae48233f26ada564532d8fa5b63",
+            "models/order_foundry.gen.go": "235593453a466ad8a71014b5e02e5ec7e1f958f6e75f2eb76e4deb057401c08b",
+            "models/status_foundry.gen.go": "4d77be0af0612f5b4e15df31513723c80c3c5ba2172877aa312042fb919a8028",
+            "models/user_foundry.gen.go": "cf0f9a11143f98f2360e751b4b6b23eeb2b45469e2c09c2279afc8e1ae378538",
+            "models/write_record_foundry.gen.go": "fbbedb147e9c6d8146e1005da835c9a1b6430f558b62f395669ad58e113c2316",
+            "multifactor/account_foundry.gen.go": "0741d09e957510ace9a9f099efd189cf4f9314cf91eac66115d813c36fab46b1",
+            "multifactor/confirmation_request_foundry.gen.go": "aa93dada574b05490016f12348d1f80c0983a8bd7c0a710904d6a772032c16e4",
+            "multifactor/enrollment_request_foundry.gen.go": "3d0f8690f7bab053ffde51e7f45140eee730d38c6f5fcff587a6a22bc217288c",
+            "multifactor/recovery_request_foundry.gen.go": "b3bf829bacc346422b9d430a4af45e03cdb369d01ea624da4352e2eb3147cd27",
+            "multifactor/regeneration_request_foundry.gen.go": "3ff53e286f57a3c0d6f8b26750e4bc1d85cc76cece988b0d27992a06e5d379ce",
+            "multifactor/totp_request_foundry.gen.go": "4bbfbe70bd017c04e973de0a62dd26aabb4485f289f40466fcbd6e96df224ebb",
+            "mutatorqueries/member_foundry.gen.go": "3ced1497f66d80ea723b0acdf39ba57d246a8516548bab701540c9b5e2382b9a",
+            "mutatorqueries/state_foundry.gen.go": "a42f1797ddd72a1e6d8a7aceeb6cfc5d1420aa791763a0780f85864ac78d64a9",
+            "notifying/order_card_foundry.gen.go": "096c3369a76306ec85632e4b2830e390dac2a5339d4edb5fa7c835cf41cf0c0f",
+            "notifying/order_placed_foundry.gen.go": "a7ae2d3be3d1f7544248cd3fba2faf18a8be5eaaefa765555dc5d7d7e2a966bf",
+            "observerqueries/effect_foundry.gen.go": "ab7644dbb74ee84234ff2641526e9c228fd562ea2c68c5934e7c4f4bbf0ff5ef",
+            "observerqueries/plain_foundry.gen.go": "78b9bf5f5b12ea9f2987e668c52372e85515449234382d963a41ff9aba883a52",
+            "observerqueries/record_foundry.gen.go": "d6aba0c0d3502e3e963f2ab1825c7da3af4e4d83314eb11e63be98524d1e69f8",
+            "outgoing/account_receipt_foundry.gen.go": "1d9371c7863797c6a248a6ec3bd7b4ccbe3b616825ffc443cb40b9a9ea6ef036",
+            "outgoing/create_account_foundry.gen.go": "dbdebdef8155efd7fced5f482deeee08999c0c824487203cf89ae67b0ea54cb3",
+            "passwords/account_foundry.gen.go": "35fb0be210fd973e66af200565ba4dc70e65185c2e40e2d3a376d76e4e8d506d",
+            "passwords/credential_projection_foundry.gen.go": "7d6e9068e30b506de6c0b6244d91fcf194ad58c47446afec029d54ca679f0da4",
+            "passwords/login_request_foundry.gen.go": "c64e3a4b97ce114099a4c496f48bf5f2eee1cf0fd6f8f6f07e39198b3732ce6d",
+            "productionprofile/record_foundry.gen.go": "0f5deab0be38d905f8635f109587ef3cd1e099be4b3506d3e06a9395ce9c9e90",
+            "profiles/preferences_foundry.gen.go": "e7eac64dfeebf5c9a5eb1d100b11a113878de5fc04205c9b776d14a9175b91bf",
+            "profiles/profile_foundry.gen.go": "ae107f306e98d634b80a2466d4ff9d7daf50764dbacb9fcc1319ed55efb77a58",
+            "recovering/link_request_foundry.gen.go": "185c0ae3ab4df2fcda7863d61613749f2cc36d2da8c680d6fbf1837e8761712b",
+            "recovering/member_foundry.gen.go": "563b27d88b3097e1561b1000dbd487ae4bc77e5a5c7584e94aaa8a9dea6d5c43",
+            "recovering/reset_request_foundry.gen.go": "dfe5868095fd8939c2bead1562febd01e68313e74b33ba8b07d0ad2add2669eb",
+            "recovering/verification_request_foundry.gen.go": "a4ac8ec71c25ad8f7fa078d9bc4bc4f52609cbf9a2b87c5d227833c30b9b2215",
+            "recursivequeries/node_foundry.gen.go": "3e1db7aa658c44901bbd573aea607ad68dde0ce7ff823407f15da7d9f23ce488",
+            "reporting/export_members_foundry.gen.go": "7bbc5625f43413539cbbbd277783505ae33ba8fa42fe01eba443a0aa9a8724c0",
+            "reporting/member_foundry.gen.go": "624164d9daf84d811dbfbcf13bf4b4f726624fda17cdf12ac646e8517074d266",
+            "reporting/member_row_foundry.gen.go": "dc516388d701c866f039423ed7b816cb4767f9ff2c901635ef00dcb6d104664e",
+            "reporting/member_total_foundry.gen.go": "c2b327af0ae5bf17bcfdcc0711da38b851c8b1bd2b3b57cce0636ae9353d8de3",
+            "reporting/operator_foundry.gen.go": "630c6ce71b0d359b4e44e49347ec474f16a4a83991925de67fda330ec3b8e074",
+            "reporting/order_foundry.gen.go": "6472bc869b0787c9c0eb432aafd72e6646f204c0c942cc16742eb196d6ed5940",
+            "reporting/order_row_foundry.gen.go": "0dc5dbbd61d4a58d96ea86ab1c4424c380432be6dec8fc29fa83b5021f029bc8",
+            "reporting/state_foundry.gen.go": "cf381576748922b288390c5df72e9d50b6e9fca874722133321c8e35839e9f23",
+            "reports/buyer_totals_foundry.gen.go": "7eb35dff7d7ec039c8fa948807b74b15d5cc4d3dd77af9c52824ffc26a7e209a",
+            "reports/location_row_foundry.gen.go": "8aec0e3e5b8b907f2fcc24052cdb1d8b864a88d6077e75a4e44ae19a2b6a786b",
+            "reports/order_buyer_row_foundry.gen.go": "1b84dee99284e208eb64960a7a953b89dcac29ba8999d2c7bf188940107688c8",
+            "reports/order_summary_foundry.gen.go": "bddc538777f55c8cd380e868e6d35cd9e47e3a08d48bed1d770d11612b52b8a4",
+            "reports/referral_order_row_foundry.gen.go": "86fe923657be0810bcd2468431e261cbf9eab03023cf09e7f30d74b27bfa7910",
+            "reports/referral_row_foundry.gen.go": "7144d2d1f5c80dcfb2ecbdbb919f0f6bd2b28b6b3529bce1a849d9a0a8147eba",
+            "reports/scalar_report_foundry.gen.go": "00db9252fa0c5767782a4ca05fa038448f93f9d28aec0dfd06969d5971f7f1e8",
+            "reports/user_order_stats_foundry.gen.go": "8798f44875cfdfdfa16fa7ac85bbbd7ab0de12ec93fc02d4665296cca2dd1bf1",
+            "reports/user_pair_foundry.gen.go": "898393accb31e007b3449b175e38d4c6353e4447b06e4096b7373e7fb640fde9",
+            "reports/user_summary_foundry.gen.go": "dda093de510fbba3e7d4af3be9a50f48a174338ff06e02de2e1bcad1f4cd678a",
+            "retrievalqueries/group_foundry.gen.go": "0498650def09b576076a8d1f01dbdc1aa3434c17d10c5765b5d118f0f6874917",
+            "retrievalqueries/member_foundry.gen.go": "e648b4a0b94bbe027e5b9826ab732e0c72bab74caeb33214ef95fa6f0e0bbecb",
+            "retrievalqueries/member_label_foundry.gen.go": "2ee49103cdbf4578a654ee6ad4e08211fbf0bc0f431b0a070fe345ad80dc893a",
+            "retrievalqueries/membership_foundry.gen.go": "2431cc07f543959ae8154e7a64f4938e6945a132ea9bb8d0ea0ecc050122d87e",
+            "scalarqueries/calculation_foundry.gen.go": "5f5c174854027d445c83697fd176088c2aed84fab61085d20944aebf725ddb3a",
+            "scalarqueries/sample_foundry.gen.go": "c10ced2dfc8728b122be9c81ae93f96cfac119dfc76c360cdf4364b9931dd7a6",
+            "softqueries/group_foundry.gen.go": "6a304c2df1835dd9d5b290233c67b772685c2cfccdaa6aa3d54c54bd5f538c1f",
+            "softqueries/member_foundry.gen.go": "5d48fb556cbf53db12d688cd58b2a0529c3c20fed27256d0ae0f11b5b4e18f10",
+            "softqueries/member_label_foundry.gen.go": "88c596c40c092ec843122c747e937b3b0479e091c9d35732f4da33264e272adf",
+            "softqueries/membership_foundry.gen.go": "3a411b6c18dca83be2ff3d4e5ea4bd691ffd1bc5f4b18e75a2a8f25641b7a653",
+            "startupconfig/environment_foundry.gen.go": "3bc724aad30b64692ab707e5af5a989c186f1c7277f96a5a1bad7a0ade37732a",
+            "startupconfig/settings_foundry.gen.go": "cfe2895c4c80b83822b50fac910f26e94fa029e2c26698dcf18d6aa79f9f22d6",
+            "temporalqueries/calendar_summary_foundry.gen.go": "1c5c254797e09ba5268b2b665a74497ad861802f0269cdccd3edf8cfb5708458",
+            "temporalqueries/sample_foundry.gen.go": "c21c2e3888d5913cf712168de347c5a18cc1cb6aed229763eff5a02c0f4c0d89",
+            "timequeries/manual_foundry.gen.go": "1d2c80b0e90dd3980836566d154554c34fedc095641c3868e9e7c3a53da46460",
+            "timequeries/member_foundry.gen.go": "e4ff0f0b069372c96c9b48cfddd3a6c0d1bcd52f69e80b4cd9bc8f992abe9efb",
+            "transactionqueries/pair_foundry.gen.go": "5d40a50a0a516e6426246d4d05746cab3bf0a8e5d56225e50eb74a2c03531c4b",
+            "transactionqueries/record_foundry.gen.go": "a9837b6f4a8b322484379a4490f85f2d7c31f6f1ec54c5dc83fd30214e19165c",
+            "transactionqueries/summary_foundry.gen.go": "4ef426ecb80d028d9f4c9b386a97a3c75a2cc2cccdb7b42d09498c33147b717d",
+            "transactionqueries/totals_foundry.gen.go": "c00a51de96df9f09d400da48f91a4228e476bf7be51968e020b5a0dfa7335343",
+            "upsertqueries/excluded_record_foundry.gen.go": "945ed6e8d5392fc6f8e9a013e32210fd77dfc605866b1fccd6dc57323936f723",
+            "validationrules/availability_window_foundry.gen.go": "ba51f1b3990b62b8c6be03fba9bca61a0ad253c4e54739772a502f1d1b467d43",
+            "validationrules/organization_kind_foundry.gen.go": "4c5500b8257077f6f92206cfa9dbe2d03ff3bcbc285a1652f518615034162ff8",
+            "validationrules/presence_input_foundry.gen.go": "38726cb62b6e181d3b5664449800a00888091a6e40d8e3ba83534b6d051993bd",
+            "validationrules/profile_preferences_foundry.gen.go": "fb0cbde5561d22553ae8f16cdeeb3438d6fd62029d63c7f95d6949e2afbadc6c",
+            "validationrules/registration_foundry.gen.go": "1508fe8ddec85509109aee73bc2e6cfc8c1a09e70e4323c17dba99ed5517bd24",
+            "windowqueries/navigation_row_foundry.gen.go": "d8bde59068af57831856f44c122a2a640f4795dffddfa66d9641a57d58f3d894",
+            "windowqueries/ranking_row_foundry.gen.go": "f09ebc0a54f9073c58a76fcb19060419e0f229318fc32d18cb26c360e96326fe",
+            "windowqueries/window_total_foundry.gen.go": "2b93d1aabd019b3f64be340254514c0f62f4e63ae4598ff52db1dca3a6fed0bc"
+          }
+        },
+        "imported_packages": 708,
+        "source": "full"
+      }
+    ],
+    "scanner": "Go: go1.27.1\nScanner: govulncheck@v1.8.0\nDB: https://vuln.go.dev\nDB updated: 2026-09-16 18:00:43 +0000 UTC",
+    "security": "review-required",
+    "status": "measured",
+    "toolchain": {
+      "CGO_ENABLED": "1",
+      "GOARCH": "arm64",
+      "GOOS": "darwin",
+      "GOROOT": "/usr/local/go",
+      "GOVERSION": "go1.27.1"
+    }
+  },
+  "commands": [
+    {
+      "argv": [
+        "/usr/sbin/sysctl",
+        "hw.model",
+        "hw.memsize",
+        "hw.physicalcpu",
+        "hw.logicalcpu"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 1277952,
+      "elapsed_seconds": 0.2278130830018199,
+      "exit": 0,
+      "name": "hardware",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1867776,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "env",
+        "-json",
+        "GOVERSION",
+        "GOOS",
+        "GOARCH",
+        "CGO_ENABLED",
+        "GOROOT"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 14942208,
+      "elapsed_seconds": 0.24141887500081793,
+      "exit": 0,
+      "name": "toolchain",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1425408,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "mod",
+        "download",
+        "all"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+      "darwin_max_process_rss_bytes": 39387136,
+      "elapsed_seconds": 5.6924830000025395,
+      "exit": 0,
+      "name": "configured-download",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 40599552,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "mod",
+        "download",
+        "all"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 25640960,
+      "elapsed_seconds": 0.23464612500174553,
+      "exit": 0,
+      "name": "full-download",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1392640,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "mod",
+        "download",
+        "all"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+      "darwin_max_process_rss_bytes": 26378240,
+      "elapsed_seconds": 0.24513191699952586,
+      "exit": 0,
+      "name": "ordinary-download",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1425408,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "list",
+        "-m",
+        "-json",
+        "all"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 23724032,
+      "elapsed_seconds": 0.24403349999920465,
+      "exit": 0,
+      "name": "module-graph",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1425408,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "mod",
+        "verify"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 63422464,
+      "elapsed_seconds": 0.2397790420000092,
+      "exit": 0,
+      "name": "module-integrity",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1409024,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-o",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "github.com/weiloon1234/Foundry-Go/cmd/foundry"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 1339129856,
+      "elapsed_seconds": 9.01618391699958,
+      "exit": 0,
+      "name": "generator-build",
+      "sampled_compiler_rss_bytes": 1339129856,
+      "sampled_tree_rss_bytes": 1805058048,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "generate",
+        "--recursive",
+        "--dir",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+      "darwin_max_process_rss_bytes": 532135936,
+      "elapsed_seconds": 4.481896582998161,
+      "exit": 0,
+      "name": "ordinary-generation-cold",
+      "sampled_compiler_rss_bytes": 532135936,
+      "sampled_tree_rss_bytes": 793182208,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "generate",
+        "--recursive",
+        "--dir",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+      "darwin_max_process_rss_bytes": 45121536,
+      "elapsed_seconds": 0.24358175000088522,
+      "exit": 0,
+      "name": "ordinary-generation-unchanged",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1376256,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+      "darwin_max_process_rss_bytes": 605716480,
+      "elapsed_seconds": 3.497305791999679,
+      "exit": 0,
+      "name": "ordinary-build-cold",
+      "sampled_compiler_rss_bytes": 602750976,
+      "sampled_tree_rss_bytes": 643661824,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+      "darwin_max_process_rss_bytes": 169197568,
+      "elapsed_seconds": 0.24832341699948302,
+      "exit": 0,
+      "name": "ordinary-build-unchanged",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1392640,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "generate",
+        "--recursive",
+        "--dir",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+      "darwin_max_process_rss_bytes": 582516736,
+      "elapsed_seconds": 1.3987695420000819,
+      "exit": 0,
+      "name": "ordinary-generation-edited",
+      "sampled_compiler_rss_bytes": 581730304,
+      "sampled_tree_rss_bytes": 641974272,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+      "darwin_max_process_rss_bytes": 619364352,
+      "elapsed_seconds": 1.402908332998777,
+      "exit": 0,
+      "name": "ordinary-build-edited",
+      "sampled_compiler_rss_bytes": 616005632,
+      "sampled_tree_rss_bytes": 653934592,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "agent",
+        "complete",
+        "--workspace",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+        "--file",
+        "productionprofile/queries.go",
+        "--line",
+        "16",
+        "--column",
+        "20",
+        "--gopls",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+        "--timeout",
+        "120s"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+      "darwin_max_process_rss_bytes": 396771328,
+      "elapsed_seconds": 1.7467499999984284,
+      "exit": 0,
+      "name": "ordinary-gopls-complete-1",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 542670848,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "agent",
+        "hover",
+        "--workspace",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+        "--file",
+        "productionprofile/queries.go",
+        "--line",
+        "16",
+        "--column",
+        "21",
+        "--gopls",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+        "--timeout",
+        "120s"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+      "darwin_max_process_rss_bytes": 236371968,
+      "elapsed_seconds": 1.478348291999282,
+      "exit": 0,
+      "name": "ordinary-gopls-hover-1",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 382238720,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "agent",
+        "complete",
+        "--workspace",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+        "--file",
+        "productionprofile/queries.go",
+        "--line",
+        "16",
+        "--column",
+        "20",
+        "--gopls",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+        "--timeout",
+        "120s"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+      "darwin_max_process_rss_bytes": 535740416,
+      "elapsed_seconds": 1.4822693329988397,
+      "exit": 0,
+      "name": "ordinary-gopls-complete-2",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 582631424,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "agent",
+        "hover",
+        "--workspace",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+        "--file",
+        "productionprofile/queries.go",
+        "--line",
+        "16",
+        "--column",
+        "21",
+        "--gopls",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+        "--timeout",
+        "120s"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+      "darwin_max_process_rss_bytes": 136347648,
+      "elapsed_seconds": 1.4854015829987475,
+      "exit": 0,
+      "name": "ordinary-gopls-hover-2",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 183304192,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "agent",
+        "complete",
+        "--workspace",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+        "--file",
+        "productionprofile/queries.go",
+        "--line",
+        "16",
+        "--column",
+        "20",
+        "--gopls",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+        "--timeout",
+        "120s"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+      "darwin_max_process_rss_bytes": 467664896,
+      "elapsed_seconds": 1.483624708998832,
+      "exit": 0,
+      "name": "ordinary-gopls-complete-3",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 614367232,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "agent",
+        "hover",
+        "--workspace",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+        "--file",
+        "productionprofile/queries.go",
+        "--line",
+        "16",
+        "--column",
+        "21",
+        "--gopls",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+        "--timeout",
+        "120s"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+      "darwin_max_process_rss_bytes": 136740864,
+      "elapsed_seconds": 1.4907799159991555,
+      "exit": 0,
+      "name": "ordinary-gopls-hover-3",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 183123968,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "list",
+        "-deps",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+      "darwin_max_process_rss_bytes": 33554432,
+      "elapsed_seconds": 0.2545195419988886,
+      "exit": 0,
+      "name": "ordinary-imports",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1425408,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-o",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/ordinary-profile",
+        "./productionprofile/cmd/profile"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+      "darwin_max_process_rss_bytes": 169263104,
+      "elapsed_seconds": 0.2508023749978747,
+      "exit": 0,
+      "name": "ordinary-link",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1425408,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/ordinary-profile"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/ordinary",
+      "darwin_max_process_rss_bytes": 6258688,
+      "elapsed_seconds": 0.49040645899731317,
+      "exit": 0,
+      "name": "ordinary-linked-smoke",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1294336,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "generate",
+        "--recursive",
+        "--dir",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+      "darwin_max_process_rss_bytes": 2213150720,
+      "elapsed_seconds": 20.349932875000377,
+      "exit": 0,
+      "name": "configured-generation-cold",
+      "sampled_compiler_rss_bytes": 2213150720,
+      "sampled_tree_rss_bytes": 6754369536,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "generate",
+        "--recursive",
+        "--dir",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+      "darwin_max_process_rss_bytes": 59080704,
+      "elapsed_seconds": 0.4670481249995646,
+      "exit": 0,
+      "name": "configured-generation-unchanged",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 74416128,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+      "darwin_max_process_rss_bytes": 2354806784,
+      "elapsed_seconds": 21.39949683300074,
+      "exit": 0,
+      "name": "configured-build-cold",
+      "sampled_compiler_rss_bytes": 2354806784,
+      "sampled_tree_rss_bytes": 6239600640,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+      "darwin_max_process_rss_bytes": 1468334080,
+      "elapsed_seconds": 1.853793250000308,
+      "exit": 0,
+      "name": "configured-build-unchanged",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1452523520,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "generate",
+        "--recursive",
+        "--dir",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+      "darwin_max_process_rss_bytes": 766033920,
+      "elapsed_seconds": 4.158624708998104,
+      "exit": 0,
+      "name": "configured-generation-edited",
+      "sampled_compiler_rss_bytes": 742178816,
+      "sampled_tree_rss_bytes": 818118656,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+      "darwin_max_process_rss_bytes": 1484423168,
+      "elapsed_seconds": 4.650503415999992,
+      "exit": 0,
+      "name": "configured-build-edited",
+      "sampled_compiler_rss_bytes": 723517440,
+      "sampled_tree_rss_bytes": 1472905216,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "agent",
+        "complete",
+        "--workspace",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+        "--file",
+        "configuredprofile/routes.go",
+        "--line",
+        "17",
+        "--column",
+        "25",
+        "--gopls",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+        "--timeout",
+        "120s"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+      "darwin_max_process_rss_bytes": 681345024,
+      "elapsed_seconds": 2.178492458002438,
+      "exit": 0,
+      "name": "configured-gopls-complete-1",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 705740800,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "agent",
+        "hover",
+        "--workspace",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+        "--file",
+        "configuredprofile/routes.go",
+        "--line",
+        "17",
+        "--column",
+        "26",
+        "--gopls",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+        "--timeout",
+        "120s"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+      "darwin_max_process_rss_bytes": 325025792,
+      "elapsed_seconds": 1.7038690830013365,
+      "exit": 0,
+      "name": "configured-gopls-hover-1",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 433143808,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "agent",
+        "complete",
+        "--workspace",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+        "--file",
+        "configuredprofile/routes.go",
+        "--line",
+        "17",
+        "--column",
+        "25",
+        "--gopls",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+        "--timeout",
+        "120s"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+      "darwin_max_process_rss_bytes": 354009088,
+      "elapsed_seconds": 1.9548287500001607,
+      "exit": 0,
+      "name": "configured-gopls-complete-2",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 400605184,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "agent",
+        "hover",
+        "--workspace",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+        "--file",
+        "configuredprofile/routes.go",
+        "--line",
+        "17",
+        "--column",
+        "26",
+        "--gopls",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+        "--timeout",
+        "120s"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+      "darwin_max_process_rss_bytes": 359546880,
+      "elapsed_seconds": 1.7343940409991774,
+      "exit": 0,
+      "name": "configured-gopls-hover-2",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 405143552,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "agent",
+        "complete",
+        "--workspace",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+        "--file",
+        "configuredprofile/routes.go",
+        "--line",
+        "17",
+        "--column",
+        "25",
+        "--gopls",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+        "--timeout",
+        "120s"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+      "darwin_max_process_rss_bytes": 340623360,
+      "elapsed_seconds": 1.723106249999546,
+      "exit": 0,
+      "name": "configured-gopls-complete-3",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 487047168,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "agent",
+        "hover",
+        "--workspace",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+        "--file",
+        "configuredprofile/routes.go",
+        "--line",
+        "17",
+        "--column",
+        "26",
+        "--gopls",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+        "--timeout",
+        "120s"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+      "darwin_max_process_rss_bytes": 329777152,
+      "elapsed_seconds": 1.7249891249994107,
+      "exit": 0,
+      "name": "configured-gopls-hover-3",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 403881984,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "list",
+        "-deps",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+      "darwin_max_process_rss_bytes": 48726016,
+      "elapsed_seconds": 0.23779291699975147,
+      "exit": 0,
+      "name": "configured-imports",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1425408,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-o",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/configured-profile",
+        "./configuredprofile/cmd/profile"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+      "darwin_max_process_rss_bytes": 1471758336,
+      "elapsed_seconds": 1.1665683749997697,
+      "exit": 0,
+      "name": "configured-link",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1525743616,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/configured-profile"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+      "darwin_max_process_rss_bytes": 24231936,
+      "elapsed_seconds": 0.7304953329985437,
+      "exit": 0,
+      "name": "configured-linked-smoke",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1294336,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-count=1",
+        "-run",
+        "^TestConfiguredProfile",
+        "./configuredprofile"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+      "darwin_max_process_rss_bytes": 1480114176,
+      "elapsed_seconds": 4.739780583000538,
+      "exit": 0,
+      "name": "configured-consumer-test",
+      "sampled_compiler_rss_bytes": 1335328768,
+      "sampled_tree_rss_bytes": 1552809984,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-run",
+        "^$",
+        "-bench",
+        "Benchmark(Startup|Selection|HTTP)",
+        "-benchmem",
+        "-benchtime=1s",
+        "-count=3",
+        "./configuredprofile"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/configured",
+      "darwin_max_process_rss_bytes": 1475837952,
+      "elapsed_seconds": 26.72739612499936,
+      "exit": 0,
+      "name": "configured-runtime-benchmarks",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1527808000,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "generate",
+        "--recursive",
+        "--dir",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 2850226176,
+      "elapsed_seconds": 58.32894008299991,
+      "exit": 0,
+      "name": "full-generation-cold",
+      "sampled_compiler_rss_bytes": 2850226176,
+      "sampled_tree_rss_bytes": 12622643200,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "generate",
+        "--recursive",
+        "--dir",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 211238912,
+      "elapsed_seconds": 1.1633835419997922,
+      "exit": 0,
+      "name": "full-generation-unchanged",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 212353024,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 2770206720,
+      "elapsed_seconds": 60.76465416599967,
+      "exit": 0,
+      "name": "full-build-cold",
+      "sampled_compiler_rss_bytes": 2770206720,
+      "sampled_tree_rss_bytes": 13074432000,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 1540079616,
+      "elapsed_seconds": 2.784354583000095,
+      "exit": 0,
+      "name": "full-build-unchanged",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 2916876288,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "generate",
+        "--recursive",
+        "--dir",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 765411328,
+      "elapsed_seconds": 4.877724291996856,
+      "exit": 0,
+      "name": "full-generation-edited",
+      "sampled_compiler_rss_bytes": 746799104,
+      "sampled_tree_rss_bytes": 832995328,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 1541472256,
+      "elapsed_seconds": 4.891812707999634,
+      "exit": 0,
+      "name": "full-build-edited",
+      "sampled_compiler_rss_bytes": 762953728,
+      "sampled_tree_rss_bytes": 2087337984,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "agent",
+        "complete",
+        "--workspace",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+        "--file",
+        "catalog/product.go",
+        "--line",
+        "21",
+        "--column",
+        "78",
+        "--gopls",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+        "--timeout",
+        "120s"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 1417936896,
+      "elapsed_seconds": 2.6641884589989786,
+      "exit": 0,
+      "name": "full-gopls-complete-1",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1563607040,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "agent",
+        "hover",
+        "--workspace",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+        "--file",
+        "catalog/product.go",
+        "--line",
+        "21",
+        "--column",
+        "79",
+        "--gopls",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+        "--timeout",
+        "120s"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 348618752,
+      "elapsed_seconds": 1.9394368749999558,
+      "exit": 0,
+      "name": "full-gopls-hover-1",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 428081152,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "agent",
+        "complete",
+        "--workspace",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+        "--file",
+        "catalog/product.go",
+        "--line",
+        "21",
+        "--column",
+        "78",
+        "--gopls",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+        "--timeout",
+        "120s"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 579960832,
+      "elapsed_seconds": 1.9386955840018345,
+      "exit": 0,
+      "name": "full-gopls-complete-2",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 621461504,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "agent",
+        "hover",
+        "--workspace",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+        "--file",
+        "catalog/product.go",
+        "--line",
+        "21",
+        "--column",
+        "79",
+        "--gopls",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+        "--timeout",
+        "120s"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 343310336,
+      "elapsed_seconds": 2.142912166997121,
+      "exit": 0,
+      "name": "full-gopls-hover-2",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 389283840,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "agent",
+        "complete",
+        "--workspace",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+        "--file",
+        "catalog/product.go",
+        "--line",
+        "21",
+        "--column",
+        "78",
+        "--gopls",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+        "--timeout",
+        "120s"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 506642432,
+      "elapsed_seconds": 2.182320374999108,
+      "exit": 0,
+      "name": "full-gopls-complete-3",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 586170368,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/foundry",
+        "agent",
+        "hover",
+        "--workspace",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+        "--file",
+        "catalog/product.go",
+        "--line",
+        "21",
+        "--column",
+        "79",
+        "--gopls",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+        "--timeout",
+        "120s"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 327696384,
+      "elapsed_seconds": 2.1488031660010165,
+      "exit": 0,
+      "name": "full-gopls-hover-3",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 369885184,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "list",
+        "-deps",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 53952512,
+      "elapsed_seconds": 0.24677216700001736,
+      "exit": 0,
+      "name": "full-imports",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1425408,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/milestone24-production/security-tools/govulncheck",
+        "-version"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 18268160,
+      "elapsed_seconds": 0.2335682499979157,
+      "exit": 0,
+      "name": "vulnerability-tool",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1294336,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/milestone24-production/security-tools/govulncheck",
+        "-json",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/measurements/module-cache/github.com/weiloon1234/!foundry-!go@v0.0.0-candidate.review.1",
+      "darwin_max_process_rss_bytes": 2763456512,
+      "elapsed_seconds": 1.85839254199891,
+      "exit": 0,
+      "name": "framework-vulnerabilities",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 2776989696,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/milestone24-production/security-tools/govulncheck",
+        "-json",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-performance-security-20260918/consumers/full",
+      "darwin_max_process_rss_bytes": 3153182720,
+      "elapsed_seconds": 2.328643415999977,
+      "exit": 0,
+      "name": "consumer-vulnerabilities",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 2996568064,
+      "timed_out": false
+    }
+  ],
+  "findings": [
+    {
+      "osv": "GO-2026-5932",
+      "trace": [
+        {
+          "module": "golang.org/x/crypto",
+          "version": "v0.57.0"
+        }
+      ]
+    },
+    {
+      "osv": "GO-2026-5932",
+      "trace": [
+        {
+          "module": "golang.org/x/crypto",
+          "version": "v0.57.0"
+        }
+      ]
+    }
+  ],
+  "dependency_licenses": [
+    {
+      "go": "1.27.1",
+      "licenses": [
+        {
+          "bytes": 1077,
+          "file": "LICENSE",
+          "sha256": "e2827c8fa0c57ff6f68fea4bffdae55f37a64d9669e2285579d0f66b46bea61a"
+        }
+      ],
+      "path": "foundry.test/pluginbase",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v0.0.0-candidate.review.1"
+    },
+    {
+      "go": "1.27.1",
+      "licenses": [
+        {
+          "bytes": 1077,
+          "file": "LICENSE",
+          "sha256": "e2827c8fa0c57ff6f68fea4bffdae55f37a64d9669e2285579d0f66b46bea61a"
+        }
+      ],
+      "path": "foundry.test/plugindep",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v0.0.0-candidate.review.1"
+    },
+    {
+      "go": "1.22.2",
+      "licenses": [
+        {
+          "bytes": 1067,
+          "file": "LICENSE",
+          "sha256": "c991f2fb57a8be578efdd78ef403a7ac878982e4d5acfb3695923851e4df2e92"
+        }
+      ],
+      "path": "github.com/HugoSmits86/nativewebp",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.3.0"
+    },
+    {
+      "go": "1.21",
+      "licenses": [
+        {
+          "bytes": 1078,
+          "file": "LICENSE.txt",
+          "sha256": "2db9097f7b3750c1c9426996d21fe443d339131fb758c2167d2d5fabe8e6cbf9"
+        }
+      ],
+      "path": "github.com/Masterminds/semver/v3",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v3.5.0"
+    },
+    {
+      "go": "1.22",
+      "licenses": [
+        {
+          "bytes": 1084,
+          "file": "LICENSE",
+          "sha256": "3d180008e36922a4e8daec11c34c7af264fed5962d07924aea928c38e8663c94"
+        }
+      ],
+      "path": "github.com/andybalholm/brotli",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.2.4"
+    },
+    {
+      "go": "1.24",
+      "licenses": [
+        {
+          "bytes": 11358,
+          "file": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        },
+        {
+          "bytes": 120,
+          "file": "NOTICE.txt",
+          "sha256": "a6e830174d62dafad3a718384772ea1f4c0e27989f050932dc442a5e3ddad080"
+        }
+      ],
+      "path": "github.com/aws/aws-sdk-go-v2",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.47.0"
+    },
+    {
+      "go": "1.24",
+      "licenses": [
+        {
+          "bytes": 11358,
+          "file": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ],
+      "path": "github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.7.20"
+    },
+    {
+      "go": "1.24",
+      "licenses": [
+        {
+          "bytes": 11358,
+          "file": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ],
+      "path": "github.com/aws/aws-sdk-go-v2/config",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.33.5"
+    },
+    {
+      "go": "1.24",
+      "licenses": [
+        {
+          "bytes": 11358,
+          "file": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ],
+      "path": "github.com/aws/aws-sdk-go-v2/credentials",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.20.5"
+    },
+    {
+      "go": "1.24",
+      "licenses": [
+        {
+          "bytes": 11358,
+          "file": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ],
+      "path": "github.com/aws/aws-sdk-go-v2/feature/ec2/imds",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.20.0"
+    },
+    {
+      "go": "1.24",
+      "licenses": [
+        {
+          "bytes": 11358,
+          "file": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ],
+      "path": "github.com/aws/aws-sdk-go-v2/internal/configsources",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.5.3"
+    },
+    {
+      "go": "1.24",
+      "licenses": [
+        {
+          "bytes": 11358,
+          "file": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ],
+      "path": "github.com/aws/aws-sdk-go-v2/internal/endpoints/v2",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v2.8.3"
+    },
+    {
+      "go": "1.24",
+      "licenses": [
+        {
+          "bytes": 11358,
+          "file": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ],
+      "path": "github.com/aws/aws-sdk-go-v2/internal/v4a",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.5.3"
+    },
+    {
+      "go": "1.24",
+      "licenses": [
+        {
+          "bytes": 11358,
+          "file": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ],
+      "path": "github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.13.19"
+    },
+    {
+      "go": "1.24",
+      "licenses": [
+        {
+          "bytes": 11358,
+          "file": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ],
+      "path": "github.com/aws/aws-sdk-go-v2/service/internal/checksum",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.11.3"
+    },
+    {
+      "go": "1.24",
+      "licenses": [
+        {
+          "bytes": 11358,
+          "file": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ],
+      "path": "github.com/aws/aws-sdk-go-v2/service/internal/presigned-url",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.14.3"
+    },
+    {
+      "go": "1.24",
+      "licenses": [
+        {
+          "bytes": 11358,
+          "file": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ],
+      "path": "github.com/aws/aws-sdk-go-v2/service/internal/s3shared",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.20.3"
+    },
+    {
+      "go": "1.24",
+      "licenses": [
+        {
+          "bytes": 11358,
+          "file": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ],
+      "path": "github.com/aws/aws-sdk-go-v2/service/s3",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.113.1"
+    },
+    {
+      "go": "1.24",
+      "licenses": [
+        {
+          "bytes": 11358,
+          "file": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ],
+      "path": "github.com/aws/aws-sdk-go-v2/service/signin",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.10.0"
+    },
+    {
+      "go": "1.24",
+      "licenses": [
+        {
+          "bytes": 11358,
+          "file": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ],
+      "path": "github.com/aws/aws-sdk-go-v2/service/sso",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.38.0"
+    },
+    {
+      "go": "1.24",
+      "licenses": [
+        {
+          "bytes": 11358,
+          "file": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ],
+      "path": "github.com/aws/aws-sdk-go-v2/service/ssooidc",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.43.0"
+    },
+    {
+      "go": "1.24",
+      "licenses": [
+        {
+          "bytes": 11358,
+          "file": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ],
+      "path": "github.com/aws/aws-sdk-go-v2/service/sts",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.51.0"
+    },
+    {
+      "go": "1.24",
+      "licenses": [
+        {
+          "bytes": 10142,
+          "file": "LICENSE",
+          "sha256": "09e8a9bcec8067104652c168685ab0931e7868f9c8284b66f5ae6edae5f1130b"
+        },
+        {
+          "bytes": 67,
+          "file": "NOTICE",
+          "sha256": "d4290ed64c2edd0fce1d84e3f9dfb2881240fe534def76b8cd29ed6af683e287"
+        }
+      ],
+      "path": "github.com/aws/smithy-go",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.28.1"
+    },
+    {
+      "go": null,
+      "licenses": [
+        {
+          "bytes": 1084,
+          "file": "LICENSE",
+          "sha256": "a91ec19456c4efb3d9fc22dc9c1ec60ec3701a9e8f4be511ebcf908c04288ffb"
+        }
+      ],
+      "path": "github.com/aymerick/douceur",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v0.2.0"
+    },
+    {
+      "go": "1.18",
+      "licenses": [
+        {
+          "bytes": 1062,
+          "file": "LICENSE",
+          "sha256": "3da40f6328f42cbc970672f8129e0ecb6e2cc4f5117a072593ba247276354454"
+        }
+      ],
+      "path": "github.com/bsm/ginkgo/v2",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v2.12.0"
+    },
+    {
+      "go": "1.18",
+      "licenses": [
+        {
+          "bytes": 1062,
+          "file": "LICENSE",
+          "sha256": "3da40f6328f42cbc970672f8129e0ecb6e2cc4f5117a072593ba247276354454"
+        }
+      ],
+      "path": "github.com/bsm/gomega",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.27.10"
+    },
+    {
+      "go": "1.11",
+      "licenses": [
+        {
+          "bytes": 1068,
+          "file": "LICENSE.txt",
+          "sha256": "f566a9f97bacdaf00d9f21dd991e81dc11201c4e016c86b470799429a1c9a79c"
+        }
+      ],
+      "path": "github.com/cespare/xxhash/v2",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v2.3.0"
+    },
+    {
+      "go": "1.23",
+      "licenses": [
+        {
+          "bytes": 720,
+          "file": "LICENSE.txt",
+          "sha256": "cc0975a5f6305145bdd7b41ce9479632fdac3870e6ac4281f28017f18c767c4e"
+        }
+      ],
+      "path": "github.com/coder/websocket",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.8.15"
+    },
+    {
+      "go": null,
+      "licenses": [
+        {
+          "bytes": 766,
+          "file": "LICENSE",
+          "sha256": "1b93a317849ee09d3d7e4f1d20c2b78ddb230b4becb12d7c224c927b9d470251"
+        }
+      ],
+      "path": "github.com/davecgh/go-spew",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.1.1"
+    },
+    {
+      "go": null,
+      "licenses": [
+        {
+          "bytes": 1087,
+          "file": "LICENSE",
+          "sha256": "f1f8058c0e1a6cc9f8602d5082238b4913327bdc07502894da767ff60c57e4d5"
+        }
+      ],
+      "path": "github.com/disintegration/gift",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.2.1"
+    },
+    {
+      "go": "1.26.4",
+      "licenses": [
+        {
+          "bytes": 1361,
+          "file": "COPYING",
+          "sha256": "be086bd51ed0881cae958b54d4bf5428ab0d4b09dad435310d9940075d194325"
+        },
+        {
+          "bytes": 5730,
+          "file": "PATENTS",
+          "sha256": "335eca574598bf4ca181b12f708d6669e5a5e78c8e1513e5b35fa1f03901484b"
+        }
+      ],
+      "path": "github.com/gen2brain/gav1d",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v0.2.5"
+    },
+    {
+      "go": "1.20",
+      "licenses": [
+        {
+          "bytes": 1482,
+          "file": "LICENSE",
+          "sha256": "af11d643d903cb178a641d7512879285287844f7a6c0611e2d0c6b131e50188b"
+        }
+      ],
+      "path": "github.com/gorilla/css",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.0.1"
+    },
+    {
+      "go": "1.12",
+      "licenses": [
+        {
+          "bytes": 1073,
+          "file": "LICENSE",
+          "sha256": "adb1663fda031df8f4344aa68f299fd87d80353e31339406742ded21dae65702"
+        }
+      ],
+      "path": "github.com/jackc/pgpassfile",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.0.0"
+    },
+    {
+      "go": "1.14",
+      "licenses": [
+        {
+          "bytes": 1073,
+          "file": "LICENSE",
+          "sha256": "fc505773403fe869ed64cc2235cdd13988a427bb7e3a7e7004a3f4b27420f8fc"
+        }
+      ],
+      "path": "github.com/jackc/pgservicefile",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v0.0.0-20240606120523-5a60cdf6a761"
+    },
+    {
+      "go": "1.25.0",
+      "licenses": [
+        {
+          "bytes": 1078,
+          "file": "LICENSE",
+          "sha256": "467f95e074fe23079a5623ed652619682692041b8551da27e3c2ddb9659a1507"
+        }
+      ],
+      "path": "github.com/jackc/pgx/v5",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v5.11.0"
+    },
+    {
+      "go": "1.19",
+      "licenses": [
+        {
+          "bytes": 1073,
+          "file": "LICENSE",
+          "sha256": "2d50e98a4900b4d6457a38d39c1432fdc156fc2f7b365f2e33ec9344acbb0057"
+        }
+      ],
+      "path": "github.com/jackc/puddle/v2",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v2.2.2"
+    },
+    {
+      "go": "1.22",
+      "licenses": [
+        {
+          "bytes": 1078,
+          "file": "LICENSE",
+          "sha256": "5d966570d7a442d4e969892860a914e542c97f262c873baee8f0aa48e1f40212"
+        }
+      ],
+      "path": "github.com/klauspost/cpuid/v2",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v2.2.10"
+    },
+    {
+      "go": "1.12",
+      "licenses": [
+        {
+          "bytes": 1052,
+          "file": "License",
+          "sha256": "283c28b781bc7487bd7bcaf453cbd811f5ee8d7ce625cfcf8dcacae6ba1f4bb5"
+        }
+      ],
+      "path": "github.com/kr/pretty",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v0.3.0"
+    },
+    {
+      "go": "1.19",
+      "licenses": [
+        {
+          "bytes": 1518,
+          "file": "LICENSE.md",
+          "sha256": "a8e8489f1168b5f3e0ebb43d7fe1c78a2fd7db9939c1a6cb555940a4b631f8d2"
+        }
+      ],
+      "path": "github.com/microcosm-cc/bluemonday",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.0.27"
+    },
+    {
+      "go": "1.21.0",
+      "licenses": [
+        {
+          "bytes": 1101,
+          "file": "LICENSE",
+          "sha256": "26844e4b53c5adec04e557fd7dfef281cc0205a7d355626b1c68b778b99e9e7b"
+        }
+      ],
+      "path": "github.com/pelletier/go-toml/v2",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v2.4.3"
+    },
+    {
+      "go": null,
+      "licenses": [
+        {
+          "bytes": 1445,
+          "file": "LICENSE",
+          "sha256": "2eb550be6801c1ea434feba53bf6d12e7c71c90253e0a9de4a4f46cf88b56477"
+        }
+      ],
+      "path": "github.com/pmezard/go-difflib",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.0.0"
+    },
+    {
+      "go": "1.24",
+      "licenses": [
+        {
+          "bytes": 1318,
+          "file": "LICENSE",
+          "sha256": "a3a7dff87da3927db65cb4c87b1cfbc96ca2755704461a485d457be7ae300a86"
+        }
+      ],
+      "path": "github.com/redis/go-redis/v9",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v9.22.0"
+    },
+    {
+      "go": "1.12",
+      "licenses": [
+        {
+          "bytes": 1092,
+          "file": "LICENSE",
+          "sha256": "8f650581478707182f3306d9a86676d4e03e2d4edc868344378cf4d6fe6c927a"
+        }
+      ],
+      "path": "github.com/robfig/cron/v3",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v3.0.1"
+    },
+    {
+      "go": null,
+      "licenses": [
+        {
+          "bytes": 1117,
+          "file": "LICENSE",
+          "sha256": "b2663894033a05fd80261176cd8da1d72546e25842d5c1abcc852ca23b6b61b0"
+        }
+      ],
+      "path": "github.com/stretchr/objx",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v0.1.0"
+    },
+    {
+      "go": "1.17",
+      "licenses": [
+        {
+          "bytes": 1103,
+          "file": "LICENSE",
+          "sha256": "f8e536c1c7b695810427095dc85f5f80d44ff7c10535e8a9486cf393e2599189"
+        }
+      ],
+      "path": "github.com/stretchr/testify",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.11.1"
+    },
+    {
+      "go": "1.27.1",
+      "licenses": [
+        {
+          "bytes": 1077,
+          "file": "LICENSE",
+          "sha256": "e2827c8fa0c57ff6f68fea4bffdae55f37a64d9669e2285579d0f66b46bea61a"
+        }
+      ],
+      "path": "github.com/weiloon1234/Foundry-Go",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v0.0.0-candidate.review.1"
+    },
+    {
+      "go": "1.17",
+      "licenses": [
+        {
+          "bytes": 1466,
+          "file": "LICENSE",
+          "sha256": "600fd527a502cc31df79186bf50db4ed680ec5f57e4ac628e54cbfaa4c8140f2"
+        }
+      ],
+      "path": "github.com/xyproto/randomstring",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.0.5"
+    },
+    {
+      "go": "1.22",
+      "licenses": [
+        {
+          "bytes": 1371,
+          "file": "LICENSE",
+          "sha256": "f19854b341534d1f2314c0c70d9cd2bb4fa1f7c86fffdc4444ca33cccce412ba"
+        }
+      ],
+      "path": "github.com/zeebo/xxh3",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.1.0"
+    },
+    {
+      "go": "1.18",
+      "licenses": [
+        {
+          "bytes": 1067,
+          "file": "LICENSE.txt",
+          "sha256": "edbb5a4d165ac69376c765b551c0662ff42bea87e1f1eda85f42ac90c34b09d0"
+        }
+      ],
+      "path": "go.uber.org/atomic",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.11.0"
+    },
+    {
+      "go": "1.26.0",
+      "licenses": [
+        {
+          "bytes": 1453,
+          "file": "LICENSE",
+          "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+        },
+        {
+          "bytes": 1303,
+          "file": "PATENTS",
+          "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc"
+        }
+      ],
+      "path": "golang.org/x/crypto",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v0.57.0"
+    },
+    {
+      "go": "1.26.0",
+      "licenses": [
+        {
+          "bytes": 1453,
+          "file": "LICENSE",
+          "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+        },
+        {
+          "bytes": 1303,
+          "file": "PATENTS",
+          "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc"
+        }
+      ],
+      "path": "golang.org/x/image",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v0.46.0"
+    },
+    {
+      "go": "1.26.0",
+      "licenses": [
+        {
+          "bytes": 1453,
+          "file": "LICENSE",
+          "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+        },
+        {
+          "bytes": 1303,
+          "file": "PATENTS",
+          "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc"
+        }
+      ],
+      "path": "golang.org/x/mod",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v0.41.0"
+    },
+    {
+      "go": "1.26.0",
+      "licenses": [
+        {
+          "bytes": 1453,
+          "file": "LICENSE",
+          "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+        },
+        {
+          "bytes": 1303,
+          "file": "PATENTS",
+          "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc"
+        }
+      ],
+      "path": "golang.org/x/net",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v0.59.0"
+    },
+    {
+      "go": "1.26.0",
+      "licenses": [
+        {
+          "bytes": 1453,
+          "file": "LICENSE",
+          "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+        },
+        {
+          "bytes": 1303,
+          "file": "PATENTS",
+          "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc"
+        }
+      ],
+      "path": "golang.org/x/sync",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v0.23.0"
+    },
+    {
+      "go": "1.26.0",
+      "licenses": [
+        {
+          "bytes": 1453,
+          "file": "LICENSE",
+          "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+        },
+        {
+          "bytes": 1303,
+          "file": "PATENTS",
+          "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc"
+        }
+      ],
+      "path": "golang.org/x/sys",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v0.48.0"
+    },
+    {
+      "go": "1.26.0",
+      "licenses": [
+        {
+          "bytes": 1453,
+          "file": "LICENSE",
+          "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+        },
+        {
+          "bytes": 1303,
+          "file": "PATENTS",
+          "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc"
+        }
+      ],
+      "path": "golang.org/x/term",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v0.46.0"
+    },
+    {
+      "go": "1.26.0",
+      "licenses": [
+        {
+          "bytes": 1453,
+          "file": "LICENSE",
+          "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+        },
+        {
+          "bytes": 1303,
+          "file": "PATENTS",
+          "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc"
+        }
+      ],
+      "path": "golang.org/x/text",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v0.42.0"
+    },
+    {
+      "go": "1.25.0",
+      "licenses": [
+        {
+          "bytes": 1453,
+          "file": "LICENSE",
+          "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+        },
+        {
+          "bytes": 1303,
+          "file": "PATENTS",
+          "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc"
+        }
+      ],
+      "path": "golang.org/x/tools",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v0.49.0"
+    },
+    {
+      "go": "1.11",
+      "licenses": [
+        {
+          "bytes": 1377,
+          "file": "LICENSE",
+          "sha256": "69ce77f2b1c9c608d27f2d749b0e7d0c13960ed3b0dc07b973ac940e362e5d9c"
+        }
+      ],
+      "path": "gopkg.in/check.v1",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v1.0.0-20201130134442-10cb98267c6c"
+    },
+    {
+      "go": null,
+      "licenses": [
+        {
+          "bytes": 2151,
+          "file": "LICENSE",
+          "sha256": "d18f6323b71b0b768bb5e9616e36da390fbd39369a81807cca352de4e4e6aa0b"
+        },
+        {
+          "bytes": 560,
+          "file": "NOTICE",
+          "sha256": "f6c2dd3a67b576eafb89b80200b8b1627230bf3821a0c14cb99a22ac19107d00"
+        }
+      ],
+      "path": "gopkg.in/yaml.v3",
+      "review": "Matches previously classified license/notice/patent hashes; retain original applicable notices.",
+      "version": "v3.0.1"
+    }
+  ],
+  "security_review": {
+    "status": "reviewed",
+    "disposition": "Only the existing module-level OpenPGP advisory was reported for framework/consumer; no affected package or function was reported, and current import graphs contain no OpenPGP package. Retain x/crypto for the unrelated imported primitives; reassess if consumer imports change. Raw runner review-required status is preserved above; this manual disposition completes that review."
+  }
+}

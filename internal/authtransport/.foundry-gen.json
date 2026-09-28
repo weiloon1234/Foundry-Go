@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "files": {
+    "mfa_enrollment_response_foundry.gen.go": "30c9158903229822e11ebd0e7148e3d360c99721dff025d6dfdf3d2ed7137bc0",
+    "mfa_recovery_request_foundry.gen.go": "7ffe22370364c44ac8502d58d9e3e10b56c5ff2db1707bd671332b3bda4d9ea4",
+    "mfa_recovery_response_foundry.gen.go": "8079b76cb2e0b8c20f115f12c33b900627a3c4567166ebc657b4aa63e6a6a369",
+    "mfatotp_request_foundry.gen.go": "6e0b53ee115ccb3cbbb99c344524ca8df92d65f2b5011f32281cbd613cbdaaeb",
+    "refresh_request_foundry.gen.go": "5f8212cecea236592db9bb9d9e37db562310f7ee42f07ed937fd28df22d192cb",
+    "token_response_foundry.gen.go": "9bb735d3dc8b07798ca999c0b8215fd18ed83f03b11dbbceaa820ce7a31cd1a1"
+  }
+}

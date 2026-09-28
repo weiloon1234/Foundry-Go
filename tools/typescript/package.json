@@ -1,0 +1,8 @@
+{
+  "name": "foundry-typescript-acceptance",
+  "private": true,
+  "description": "Compiler only; generated SDKs have no runtime package dependency.",
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

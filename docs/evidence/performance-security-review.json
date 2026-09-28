@@ -1,0 +1,3172 @@
+{
+  "status": "accepted",
+  "date": "2026-09-18",
+  "scope": "Additional risk-focused framework-wide performance/security review after C05; not a line-by-line or exhaustive security proof",
+  "findings": [
+    {
+      "id": "R01",
+      "area": "persistent cache expiry",
+      "status": "fixed; original behavior reproduced where applicable; regressions/races and final gate passed",
+      "files": [
+        "internal/cacheatomic/backend.go",
+        "cache/file/record.go",
+        "cache/postgres/backend.go"
+      ],
+      "trigger": "Exists/Expire captures time before waiting on the driver lock or database transaction. Existing entry expires during the wait. Inspect still considers the entry live; Expire can revive it.",
+      "fix": "Evaluate live state and relative TTL using the authoritative clock under the driver atomic boundary; retain one shared expiry policy.",
+      "proof": "Real file/PostgreSQL contention regressions, original-source overlays and 20 race-enabled repetitions."
+    },
+    {
+      "id": "R02",
+      "area": "memory cache churn",
+      "status": "fixed; original behavior reproduced where applicable; regressions/races and final gate passed",
+      "files": [
+        "cache/memory/memory.go",
+        "cache/memory/entry.go"
+      ],
+      "trigger": "Each new insertion into a full cache scans all entries in purgeExpired even when all are persistent or none is due. Work under one mutex scales with capacity.",
+      "fix": "Track a conservative earliest expiry boundary and skip the scan when no expiry is due, preserving expiry-before-LRU semantics and in-place TTL updates.",
+      "proof": "Existing cache/tag/counter tests plus expiry-boundary regressions and same-host before/after capacity scaling benchmarks."
+    },
+    {
+      "id": "R03",
+      "area": "outbound HTTP stream progress",
+      "status": "fixed; original behavior reproduced where applicable; regressions/races and final gate passed",
+      "files": [
+        "internal/ownedstream/body.go"
+      ],
+      "trigger": "A custom request/response reader repeatedly returning (0,nil) can busy-loop under io.ReadAll until the operation timeout.",
+      "fix": "Reuse workscope.Reader for the existing 100-empty-read progress bound, preserving actual read/close ownership and sticky errors.",
+      "proof": "Sticky failure and recovery after intermittent progress regressions; stream lifecycle races; before/after body read benchmark."
+    }
+  ],
+  "gates": {
+    "psr-targeted-01": {
+      "exit": 0,
+      "elapsed_seconds": 8.1,
+      "log_sha256": "8753ddeea5af43bff3004f4a5e860d21d4c347b52c8dafd6e7489f1c80e5b881"
+    },
+    "psr-contention-repeat": {
+      "exit": 0,
+      "elapsed_seconds": 4.6,
+      "log_sha256": "208860dd1d3ec4d4b2e38a1a8a1486cc3ab06eb2938595b38a9cbfc86567eba3"
+    },
+    "psr-final-verify": {
+      "exit": 0,
+      "elapsed_seconds": 528.1,
+      "log_sha256": "9995cd5c0b02e2a3e49fbb0cb5addd0ebbf895bcd4cbd7c74734c5cc5c750b2a"
+    },
+    "psr-broad-race": {
+      "exit": 0,
+      "elapsed_seconds": 1235.4,
+      "log_sha256": "8665aac84a04052ab7b8efca431227d288a190ca3c64e193ef82e2dc0ebfeb96"
+    },
+    "psr-dependency-review": {
+      "exit": 0,
+      "elapsed_seconds": 0.9,
+      "log_sha256": "d76e38aea30d3c53901c6b80b74e20efbf4e12e0188121b949a2228932017267"
+    },
+    "psr-package": {
+      "exit": 0,
+      "elapsed_seconds": 3.8,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "psr-measure": {
+      "exit": 0,
+      "elapsed_seconds": 286.2,
+      "log_sha256": "86fa1f13d6b5d9e34fce5c20a55106272fe3bf410bb965aedbf29948df1bf510"
+    },
+    "psr-final-docs-02": {
+      "exit": 0,
+      "elapsed_seconds": 0.1,
+      "log_sha256": "fd85898d49c4c9b114d0251a950b2b369f7138485ca00565be369f6c6c8979fb"
+    }
+  },
+  "fuzz": {
+    "targets": 52,
+    "reported_executions": 6045567,
+    "runs": [
+      {
+        "label": "psr-fuzz-00",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzChallengeJSON$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./auth/challenge"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 6.6,
+        "log": ".cache/consumer-startup/psr-fuzz-00/verify.log",
+        "reported_executions": 150306,
+        "log_sha256": "bbd249c1f86a7dcd5248c95269561291b0192e5fb673638e4814baccfd722aae"
+      },
+      {
+        "label": "psr-fuzz-01",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzPHCParser$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./auth/password"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 4.2,
+        "log": ".cache/consumer-startup/psr-fuzz-01/verify.log",
+        "reported_executions": 192026,
+        "log_sha256": "d8ea9a7fac635d46ad753a2675c97fc726936117c8d2e4bfb771adfa62beea43"
+      },
+      {
+        "label": "psr-fuzz-02",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzHashSecret$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./auth/session"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 4.7,
+        "log": ".cache/consumer-startup/psr-fuzz-02/verify.log",
+        "reported_executions": 161777,
+        "log_sha256": "4f1e23aba5ac85b9f0c90ad77fdf53bb9c28b63b9289847ce340af895348cba3"
+      },
+      {
+        "label": "psr-fuzz-03",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzEntryKeyNamespace$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./cache"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 22.6,
+        "log": ".cache/consumer-startup/psr-fuzz-03/verify.log",
+        "reported_executions": 47419,
+        "log_sha256": "0b3edce20d6f4c735a06b155aea297b40453fa37857de6561d0ba9176c56ec41"
+      },
+      {
+        "label": "psr-fuzz-04",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzDecodeBoundedDocument$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./config/toml"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 6.6,
+        "log": ".cache/consumer-startup/psr-fuzz-04/verify.log",
+        "reported_executions": 6420,
+        "log_sha256": "6d018c417276890b01b42b2a225eeb2ce625026cd50cf8c1ab99a7e6daeed19a"
+      },
+      {
+        "label": "psr-fuzz-05",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzManifestDecoder$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./contract/manifest"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 37.7,
+        "log": ".cache/consumer-startup/psr-fuzz-05/verify.log",
+        "reported_executions": 1996,
+        "log_sha256": "89d7f3db337194dcf3727618fd2042215ff28fd04b74432f0d23455056b56e7f"
+      },
+      {
+        "label": "psr-fuzz-06",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzSchemaBoundedValidation$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./contract"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 7.1,
+        "log": ".cache/consumer-startup/psr-fuzz-06/verify.log",
+        "reported_executions": 45813,
+        "log_sha256": "d3de22a1549689d524a1fb1b326ca0c6d3815d127dbb98f73b794925eb81e81c"
+      },
+      {
+        "label": "psr-fuzz-07",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzPlanDocument$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./database/query"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 140.6,
+        "log": ".cache/consumer-startup/psr-fuzz-07/verify.log",
+        "reported_executions": 4795,
+        "log_sha256": "c15f25b089949776cd3af2882d561cfdc177934c16fdc8ab2eb46e18b31bccca"
+      },
+      {
+        "label": "psr-fuzz-08",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzCursorTransport$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./database/query"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 4.8,
+        "log": ".cache/consumer-startup/psr-fuzz-08/verify.log",
+        "reported_executions": 48652,
+        "log_sha256": "ca65387f37429b002a67d344ba9a6f3928637725cc36d7b11234ce9c2053660e"
+      },
+      {
+        "label": "psr-fuzz-09",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzXLSXLiteralRoundTrip$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./datatable"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 13.2,
+        "log": ".cache/consumer-startup/psr-fuzz-09/verify.log",
+        "reported_executions": 26411,
+        "log_sha256": "ef0b9d744f4d5f79c0efbb502a2a9e6592e0e3910c5ead9e062987ef68b41c9a"
+      },
+      {
+        "label": "psr-fuzz-10",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzDatatableRequestBounds$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./datatable"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 5.0,
+        "log": ".cache/consumer-startup/psr-fuzz-10/verify.log",
+        "reported_executions": 11748,
+        "log_sha256": "d58b4f17aa2427c08d17d17ac56e1ed3fee1be4a53904ccab86247be5010a504"
+      },
+      {
+        "label": "psr-fuzz-11",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzExactArithmetic$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./decimal"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 3.8,
+        "log": ".cache/consumer-startup/psr-fuzz-11/verify.log",
+        "reported_executions": 241735,
+        "log_sha256": "06aa3ca7756d3a11d74886e37a52ff37509d3a0dc877f459dab2b229794e44ea"
+      },
+      {
+        "label": "psr-fuzz-12",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzAddressRoundTrip$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./email"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 7.0,
+        "log": ".cache/consumer-startup/psr-fuzz-12/verify.log",
+        "reported_executions": 35898,
+        "log_sha256": "0dc242f09b33d11003cc6c86881b406792ecc6075c63d9c6797325cb666d273c"
+      },
+      {
+        "label": "psr-fuzz-13",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzSnapshotDecode$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./email"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 4.3,
+        "log": ".cache/consumer-startup/psr-fuzz-13/verify.log",
+        "reported_executions": 34344,
+        "log_sha256": "e0a90376ce836264941ea283bba8df09c8ca6414f3c73b703449bd560645d28b"
+      },
+      {
+        "label": "psr-fuzz-14",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzCiphertextParsing$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./encryption"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 3.7,
+        "log": ".cache/consumer-startup/psr-fuzz-14/verify.log",
+        "reported_executions": 257294,
+        "log_sha256": "efe0effb2e02e4a1c004e81ab6b4a132b5898e578058389524b63122a846e261"
+      },
+      {
+        "label": "psr-fuzz-15",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzAssetPathAndSPABoundaries$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./http"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 49.4,
+        "log": ".cache/consumer-startup/psr-fuzz-15/verify.log",
+        "reported_executions": 14725,
+        "log_sha256": "57c04ba8a9f6962238cc642eed49ade8eb112209f147fee61a68942557e4a860"
+      },
+      {
+        "label": "psr-fuzz-16",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzAcceptEncoding$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./http"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 5.2,
+        "log": ".cache/consumer-startup/psr-fuzz-16/verify.log",
+        "reported_executions": 23734,
+        "log_sha256": "9094f8ed18a62aee12b01338e3a96ca54b7a45f989a02a8e32b8ea2699e7c61e"
+      },
+      {
+        "label": "psr-fuzz-17",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzFileDispositionHeaderRoundTrip$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./http"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 5.7,
+        "log": ".cache/consumer-startup/psr-fuzz-17/verify.log",
+        "reported_executions": 22316,
+        "log_sha256": "ad737cd4840650fb61a97255d0bba1df6ae870eb26d0a67950217719b3dc8ff9"
+      },
+      {
+        "label": "psr-fuzz-18",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzCookieReadIsBounded$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./http"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 5.0,
+        "log": ".cache/consumer-startup/psr-fuzz-18/verify.log",
+        "reported_executions": 26379,
+        "log_sha256": "19960f06f1b479bcba70a1309535cc8aa589290b7bdbab7b909653e428047340"
+      },
+      {
+        "label": "psr-fuzz-19",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzCORSRequestedHeaders$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./http"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 4.9,
+        "log": ".cache/consumer-startup/psr-fuzz-19/verify.log",
+        "reported_executions": 30795,
+        "log_sha256": "30085bca6671d12be2cb71fe7f5c50714ddc97ca53649bdb3cfdefe3023b3776"
+      },
+      {
+        "label": "psr-fuzz-20",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzCSPHostSource$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./http"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 6.0,
+        "log": ".cache/consumer-startup/psr-fuzz-20/verify.log",
+        "reported_executions": 17309,
+        "log_sha256": "6f443b64746adf5080e5aecb89e469b265b76b43736623f75f10ae71867a7fda"
+      },
+      {
+        "label": "psr-fuzz-21",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzDownloadRangeBudgetsAndCleanup$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./http"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 6.0,
+        "log": ".cache/consumer-startup/psr-fuzz-21/verify.log",
+        "reported_executions": 11058,
+        "log_sha256": "4bfdd09a1179a33ea34cc2e1b31e25d97f812967d64f024c9a1e8c866a844a37"
+      },
+      {
+        "label": "psr-fuzz-22",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzETagCapturePreservesPrefix$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./http"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 5.8,
+        "log": ".cache/consumer-startup/psr-fuzz-22/verify.log",
+        "reported_executions": 16660,
+        "log_sha256": "3e6cb2903d967d4e1b14dcf1867397a8b780961b4e4aae20c76f7b031fc421b9"
+      },
+      {
+        "label": "psr-fuzz-23",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzMultipartEndpointBoundsAndCleanup$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./http"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 4.9,
+        "log": ".cache/consumer-startup/psr-fuzz-23/verify.log",
+        "reported_executions": 32241,
+        "log_sha256": "b1f674e096bae7980a8e49a328e1396bab385ea332541b3e7ab0018473882655"
+      },
+      {
+        "label": "psr-fuzz-24",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzURLFloatRoundTrip$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./http"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 4.9,
+        "log": ".cache/consumer-startup/psr-fuzz-24/verify.log",
+        "reported_executions": 30708,
+        "log_sha256": "5da46e7330afecfa2c9582a9cd2178272b336adf6bb8d59d42f171ffef1102b8"
+      },
+      {
+        "label": "psr-fuzz-25",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzTypedPathRoundTrip$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./http"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 6.0,
+        "log": ".cache/consumer-startup/psr-fuzz-25/verify.log",
+        "reported_executions": 16945,
+        "log_sha256": "2f54d53e15ed01863c856c4da6ff43b5f1ca5466cfd514e1d1b130b1ce0f4b25"
+      },
+      {
+        "label": "psr-fuzz-26",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzProxyAddresses$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./http"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 5.9,
+        "log": ".cache/consumer-startup/psr-fuzz-26/verify.log",
+        "reported_executions": 20829,
+        "log_sha256": "9af5e9d8c5c45d3f5849c85786f02020261309798282fb6a678312775d1a6e52"
+      },
+      {
+        "label": "psr-fuzz-27",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzPublicURLRemainsOnDeclaredOrigin$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./http"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 5.0,
+        "log": ".cache/consumer-startup/psr-fuzz-27/verify.log",
+        "reported_executions": 35050,
+        "log_sha256": "b4df49402662a97b8b38bb9acc7956b8242e1b8e0e42980d0bcee0d8c865df61"
+      },
+      {
+        "label": "psr-fuzz-28",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzStreamLengthAndCleanup$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./http"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 4.9,
+        "log": ".cache/consumer-startup/psr-fuzz-28/verify.log",
+        "reported_executions": 7365,
+        "log_sha256": "3fbf0bfddaecd330d5f06bc8eeaf2417f75a9e6171154b7f30e7b430ba97da5a"
+      },
+      {
+        "label": "psr-fuzz-29",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzSignedURLVerification$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./http"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 6.1,
+        "log": ".cache/consumer-startup/psr-fuzz-29/verify.log",
+        "reported_executions": 23797,
+        "log_sha256": "0707575e24cd140008819799abe4ea6809a008397c3742872d5f0f6939110a62"
+      },
+      {
+        "label": "psr-fuzz-30",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzCatalogLiteralArguments$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./i18n"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 4.7,
+        "log": ".cache/consumer-startup/psr-fuzz-30/verify.log",
+        "reported_executions": 5485,
+        "log_sha256": "bf882c2665dda2f55ce796fe7c12c0f414a51e518443102c6aa7042aeae90265"
+      },
+      {
+        "label": "psr-fuzz-31",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzInspect$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./imaging"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 4.2,
+        "log": ".cache/consumer-startup/psr-fuzz-31/verify.log",
+        "reported_executions": 131749,
+        "log_sha256": "e58c6c288fc25db991cf078f26f7aa2896b4640c2a8ed048a2cef60a9611ce40"
+      },
+      {
+        "label": "psr-fuzz-32",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzWire$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./internal/agent"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 4.0,
+        "log": ".cache/consumer-startup/psr-fuzz-32/verify.log",
+        "reported_executions": 235520,
+        "log_sha256": "dd0ea485b397e501aceacbe84ff47a4776dd1b0e5f22009b02c29d70208bcc75"
+      },
+      {
+        "label": "psr-fuzz-33",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzIntegerAddition$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./internal/cacheint"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 3.7,
+        "log": ".cache/consumer-startup/psr-fuzz-33/verify.log",
+        "reported_executions": 621880,
+        "log_sha256": "0ec4f6e4d019034cbce68e3f893858313935be2e3784091314738e2912a0da52"
+      },
+      {
+        "label": "psr-fuzz-34",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzNormalizeDisplayName$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./internal/filename"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 4.7,
+        "log": ".cache/consumer-startup/psr-fuzz-34/verify.log",
+        "reported_executions": 297179,
+        "log_sha256": "bea99c360538bf490bf9309e788fc52916a21129dfd5aa4770f31e354114a955"
+      },
+      {
+        "label": "psr-fuzz-35",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzDistributionPaths$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./internal/generate"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 6.2,
+        "log": ".cache/consumer-startup/psr-fuzz-35/verify.log",
+        "reported_executions": 86954,
+        "log_sha256": "715b13011a2dc1e23b351dd512b02c7fd5bd7689f7f0a7d6bc568a76d69f0ce8"
+      },
+      {
+        "label": "psr-fuzz-36",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzQueryRoundTrip$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./internal/httpquery"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 4.8,
+        "log": ".cache/consumer-startup/psr-fuzz-36/verify.log",
+        "reported_executions": 118012,
+        "log_sha256": "071023b232aec19559f2b98013579f82608e42b5fab43c52006d8d474361c641"
+      },
+      {
+        "label": "psr-fuzz-37",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzTransportJSONLosslessTree$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./internal/jsonwire"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 4.7,
+        "log": ".cache/consumer-startup/psr-fuzz-37/verify.log",
+        "reported_executions": 49263,
+        "log_sha256": "07dd4a1b5414a63c554715cb88ff3c9c4f5346e090a96a6e9e2ee5de13385931"
+      },
+      {
+        "label": "psr-fuzz-38",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzBoundedDeliveryQueue$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./internal/pubsubstream"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 3.8,
+        "log": ".cache/consumer-startup/psr-fuzz-38/verify.log",
+        "reported_executions": 242028,
+        "log_sha256": "d5e0a4b48c5fa069af9e25053896276311524f4ef0f050fed3455097fd5af422"
+      },
+      {
+        "label": "psr-fuzz-39",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzExactWindowBoundary$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./internal/ratewindow"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 3.6,
+        "log": ".cache/consumer-startup/psr-fuzz-39/verify.log",
+        "reported_executions": 533614,
+        "log_sha256": "f49608c0ee4ca1397a1cf983c9c9e2d04d96a258eb5eab34da88afa98ce466b1"
+      },
+      {
+        "label": "psr-fuzz-40",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzIDRoundTrip$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./model"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 4.0,
+        "log": ".cache/consumer-startup/psr-fuzz-40/verify.log",
+        "reported_executions": 302968,
+        "log_sha256": "c5c7cb5241ecd52bef243fe64a818ef4c9a8da729f4a17b6e2c3c283e88975d5"
+      },
+      {
+        "label": "psr-fuzz-41",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzManifestValidation$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./plugin/manifest"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 4.0,
+        "log": ".cache/consumer-startup/psr-fuzz-41/verify.log",
+        "reported_executions": 240839,
+        "log_sha256": "e6a4b65e83017eba3d04459556da844e190a638bbc028762ee1f60c7964b43ea"
+      },
+      {
+        "label": "psr-fuzz-42",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzSanitizerPassiveOutput$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./sanitize"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 4.7,
+        "log": ".cache/consumer-startup/psr-fuzz-42/verify.log",
+        "reported_executions": 26754,
+        "log_sha256": "62fd313320e270ae03527be1a117b991fb5247ba433a104e39db93fb488e51a7"
+      },
+      {
+        "label": "psr-fuzz-43",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzObjectKeyJSON$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./storage"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 3.9,
+        "log": ".cache/consumer-startup/psr-fuzz-43/verify.log",
+        "reported_executions": 218156,
+        "log_sha256": "ca0c15c17b42ec8a11ef70dd78729de6f58c1f53084fb7e48a10e02a3e9883b0"
+      },
+      {
+        "label": "psr-fuzz-44",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzContentRange$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./storage/s3"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 4.7,
+        "log": ".cache/consumer-startup/psr-fuzz-44/verify.log",
+        "reported_executions": 76274,
+        "log_sha256": "5af51498cfb5584fa62af3a95e23ea8939f0cd03a2bcfd9d7b0870d963eda3de"
+      },
+      {
+        "label": "psr-fuzz-45",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzIntervalCanonicalRoundTrip$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./temporal"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 3.8,
+        "log": ".cache/consumer-startup/psr-fuzz-45/verify.log",
+        "reported_executions": 223162,
+        "log_sha256": "cebfc159dee0b80783a914c7e1b546400c3417f81f56b3e647a37c0c5ec22405"
+      },
+      {
+        "label": "psr-fuzz-46",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzParseInterval$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./temporal"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 3.4,
+        "log": ".cache/consumer-startup/psr-fuzz-46/verify.log",
+        "reported_executions": 271926,
+        "log_sha256": "9ab06ba3e710b1c6e5fe2e27c1b837b601bdc23372cc467ab501da52aa0d61a9"
+      },
+      {
+        "label": "psr-fuzz-47",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzLocalDateTimeRoundTrip$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./temporal"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 3.5,
+        "log": ".cache/consumer-startup/psr-fuzz-47/verify.log",
+        "reported_executions": 267330,
+        "log_sha256": "56e022f981ae8b80882567977acd2e6b525ee040c7c75f32b286fcc5fa1a599a"
+      },
+      {
+        "label": "psr-fuzz-48",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzTraceContext$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./tracing"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 3.8,
+        "log": ".cache/consumer-startup/psr-fuzz-48/verify.log",
+        "reported_executions": 339141,
+        "log_sha256": "9b38e0c39c53754d45953a24c0e39323601617eb7dd17c65c09900023e9e2d6f"
+      },
+      {
+        "label": "psr-fuzz-49",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzTypedJSONCanonical$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./value"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 4.9,
+        "log": ".cache/consumer-startup/psr-fuzz-49/verify.log",
+        "reported_executions": 78533,
+        "log_sha256": "6217abfbff00cd580ab8f5ecc33297b512035f74d1dc9295c538b0d40de5cbed"
+      },
+      {
+        "label": "psr-fuzz-50",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzDecodePublication$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./websocket"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 6.0,
+        "log": ".cache/consumer-startup/psr-fuzz-50/verify.log",
+        "reported_executions": 39637,
+        "log_sha256": "9bba858c3649b95142c5cdb91de201bb4b50d0fbb3b93f3566a917d42dceed02"
+      },
+      {
+        "label": "psr-fuzz-51",
+        "location": "root",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzProtocolFrame$",
+          "-fuzztime=3s",
+          "-parallel=2",
+          "-timeout=2m",
+          "./websocket"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "elapsed_seconds": 4.9,
+        "log": ".cache/consumer-startup/psr-fuzz-51/verify.log",
+        "reported_executions": 42618,
+        "log_sha256": "96800b9c8b518ef846277678e3884731005f3b70397b5ec795f192016482ae87"
+      }
+    ]
+  },
+  "benchmarks": {
+    "before": {
+      "BenchmarkMemoryCacheChurn/entries=100/finite=false-16": {
+        "samples": [
+          {
+            "ns_per_op": 742.1,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 738.5,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 735.5,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 751.3,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 729.8,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          }
+        ],
+        "median_ns_per_op": 738.5,
+        "range_ns_per_op": [
+          729.8,
+          751.3
+        ]
+      },
+      "BenchmarkMemoryCacheChurn/entries=100/finite=true-16": {
+        "samples": [
+          {
+            "ns_per_op": 838.6,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 866.6,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 842.6,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 844.3,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 863.2,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          }
+        ],
+        "median_ns_per_op": 844.3,
+        "range_ns_per_op": [
+          838.6,
+          866.6
+        ]
+      },
+      "BenchmarkMemoryCacheChurn/entries=10000/finite=false-16": {
+        "samples": [
+          {
+            "ns_per_op": 65181.0,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 64961.0,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 62209.0,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 62320.0,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 62091.0,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          }
+        ],
+        "median_ns_per_op": 62320.0,
+        "range_ns_per_op": [
+          62091.0,
+          65181.0
+        ]
+      },
+      "BenchmarkMemoryCacheChurn/entries=10000/finite=true-16": {
+        "samples": [
+          {
+            "ns_per_op": 75121.0,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 74885.0,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 74968.0,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 75388.0,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 75114.0,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          }
+        ],
+        "median_ns_per_op": 75114.0,
+        "range_ns_per_op": [
+          74885.0,
+          75388.0
+        ]
+      },
+      "BenchmarkBoundedBodyRead-16": {
+        "samples": [
+          {
+            "ns_per_op": 5249.0,
+            "bytes_per_op": 3993,
+            "allocs_per_op": 85
+          },
+          {
+            "ns_per_op": 5180.0,
+            "bytes_per_op": 3992,
+            "allocs_per_op": 85
+          },
+          {
+            "ns_per_op": 5153.0,
+            "bytes_per_op": 3993,
+            "allocs_per_op": 85
+          },
+          {
+            "ns_per_op": 5817.0,
+            "bytes_per_op": 3992,
+            "allocs_per_op": 85
+          },
+          {
+            "ns_per_op": 5129.0,
+            "bytes_per_op": 3992,
+            "allocs_per_op": 85
+          }
+        ],
+        "median_ns_per_op": 5180.0,
+        "range_ns_per_op": [
+          5129.0,
+          5817.0
+        ]
+      }
+    },
+    "after": {
+      "BenchmarkMemoryCacheChurn/entries=100/finite=false-16": {
+        "samples": [
+          {
+            "ns_per_op": 334.6,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 331.0,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 330.3,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 328.6,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 313.9,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          }
+        ],
+        "median_ns_per_op": 330.3,
+        "range_ns_per_op": [
+          313.9,
+          334.6
+        ]
+      },
+      "BenchmarkMemoryCacheChurn/entries=100/finite=true-16": {
+        "samples": [
+          {
+            "ns_per_op": 318.1,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 337.7,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 340.3,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 342.3,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 321.3,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          }
+        ],
+        "median_ns_per_op": 337.7,
+        "range_ns_per_op": [
+          318.1,
+          342.3
+        ]
+      },
+      "BenchmarkMemoryCacheChurn/entries=10000/finite=false-16": {
+        "samples": [
+          {
+            "ns_per_op": 329.6,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 347.1,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 330.3,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 328.3,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 332.1,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          }
+        ],
+        "median_ns_per_op": 330.3,
+        "range_ns_per_op": [
+          328.3,
+          347.1
+        ]
+      },
+      "BenchmarkMemoryCacheChurn/entries=10000/finite=true-16": {
+        "samples": [
+          {
+            "ns_per_op": 339.5,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 338.7,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 337.8,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 342.4,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          },
+          {
+            "ns_per_op": 336.9,
+            "bytes_per_op": 520,
+            "allocs_per_op": 6
+          }
+        ],
+        "median_ns_per_op": 338.7,
+        "range_ns_per_op": [
+          336.9,
+          342.4
+        ]
+      },
+      "BenchmarkBoundedBodyRead-16": {
+        "samples": [
+          {
+            "ns_per_op": 5370.0,
+            "bytes_per_op": 4056,
+            "allocs_per_op": 86
+          },
+          {
+            "ns_per_op": 5356.0,
+            "bytes_per_op": 4057,
+            "allocs_per_op": 86
+          },
+          {
+            "ns_per_op": 5315.0,
+            "bytes_per_op": 4056,
+            "allocs_per_op": 86
+          },
+          {
+            "ns_per_op": 5282.0,
+            "bytes_per_op": 4057,
+            "allocs_per_op": 86
+          },
+          {
+            "ns_per_op": 5277.0,
+            "bytes_per_op": 4056,
+            "allocs_per_op": 86
+          }
+        ],
+        "median_ns_per_op": 5315.0,
+        "range_ns_per_op": [
+          5277.0,
+          5370.0
+        ]
+      }
+    },
+    "runtime": {
+      "BenchmarkConfiguredBuildAndShutdown-16": {
+        "samples": [
+          {
+            "ns_per_op": 277463.0,
+            "bytes_per_op": 279121,
+            "allocs_per_op": 2011
+          },
+          {
+            "ns_per_op": 273907.0,
+            "bytes_per_op": 279094,
+            "allocs_per_op": 2011
+          },
+          {
+            "ns_per_op": 274299.0,
+            "bytes_per_op": 279095,
+            "allocs_per_op": 2011
+          }
+        ],
+        "median_ns_per_op": 274299.0,
+        "range_ns_per_op": [
+          273907.0,
+          277463.0
+        ]
+      },
+      "BenchmarkCursorPlan-16": {
+        "samples": [
+          {
+            "ns_per_op": 15986.0,
+            "bytes_per_op": 13254,
+            "allocs_per_op": 249
+          },
+          {
+            "ns_per_op": 15877.0,
+            "bytes_per_op": 13255,
+            "allocs_per_op": 249
+          },
+          {
+            "ns_per_op": 15907.0,
+            "bytes_per_op": 13255,
+            "allocs_per_op": 249
+          }
+        ],
+        "median_ns_per_op": 15907.0,
+        "range_ns_per_op": [
+          15877.0,
+          15986.0
+        ]
+      },
+      "BenchmarkAssetStreaming/32KiB-16": {
+        "samples": [
+          {
+            "ns_per_op": 14586.0,
+            "bytes_per_op": 39865,
+            "allocs_per_op": 162
+          },
+          {
+            "ns_per_op": 14579.0,
+            "bytes_per_op": 39864,
+            "allocs_per_op": 162
+          },
+          {
+            "ns_per_op": 14590.0,
+            "bytes_per_op": 39864,
+            "allocs_per_op": 162
+          }
+        ],
+        "median_ns_per_op": 14586.0,
+        "range_ns_per_op": [
+          14579.0,
+          14590.0
+        ]
+      },
+      "BenchmarkAssetStreaming/8MiB-16": {
+        "samples": [
+          {
+            "ns_per_op": 333141.0,
+            "bytes_per_op": 131656,
+            "allocs_per_op": 2202
+          },
+          {
+            "ns_per_op": 331259.0,
+            "bytes_per_op": 131656,
+            "allocs_per_op": 2202
+          },
+          {
+            "ns_per_op": 331012.0,
+            "bytes_per_op": 131656,
+            "allocs_per_op": 2202
+          }
+        ],
+        "median_ns_per_op": 331259.0,
+        "range_ns_per_op": [
+          331012.0,
+          333141.0
+        ]
+      },
+      "BenchmarkCompressionBoundedMemory/gzip/65536-16": {
+        "samples": [
+          {
+            "ns_per_op": 68587.0,
+            "bytes_per_op": 815742,
+            "allocs_per_op": 35
+          },
+          {
+            "ns_per_op": 64437.0,
+            "bytes_per_op": 815744,
+            "allocs_per_op": 35
+          },
+          {
+            "ns_per_op": 63367.0,
+            "bytes_per_op": 815743,
+            "allocs_per_op": 35
+          }
+        ],
+        "median_ns_per_op": 64437.0,
+        "range_ns_per_op": [
+          63367.0,
+          68587.0
+        ]
+      },
+      "BenchmarkCompressionBoundedMemory/gzip/16777216-16": {
+        "samples": [
+          {
+            "ns_per_op": 3358444.0,
+            "bytes_per_op": 815749,
+            "allocs_per_op": 35
+          },
+          {
+            "ns_per_op": 3337035.0,
+            "bytes_per_op": 815736,
+            "allocs_per_op": 35
+          },
+          {
+            "ns_per_op": 3325920.0,
+            "bytes_per_op": 815736,
+            "allocs_per_op": 35
+          }
+        ],
+        "median_ns_per_op": 3337035.0,
+        "range_ns_per_op": [
+          3325920.0,
+          3358444.0
+        ]
+      },
+      "BenchmarkCompressionBoundedMemory/br/65536-16": {
+        "samples": [
+          {
+            "ns_per_op": 184300.0,
+            "bytes_per_op": 3697924,
+            "allocs_per_op": 38
+          },
+          {
+            "ns_per_op": 175017.0,
+            "bytes_per_op": 3697459,
+            "allocs_per_op": 37
+          },
+          {
+            "ns_per_op": 176957.0,
+            "bytes_per_op": 3697355,
+            "allocs_per_op": 37
+          }
+        ],
+        "median_ns_per_op": 176957.0,
+        "range_ns_per_op": [
+          175017.0,
+          184300.0
+        ]
+      },
+      "BenchmarkCompressionBoundedMemory/br/16777216-16": {
+        "samples": [
+          {
+            "ns_per_op": 31787515.0,
+            "bytes_per_op": 7759508,
+            "allocs_per_op": 36
+          },
+          {
+            "ns_per_op": 31679805.0,
+            "bytes_per_op": 7759917,
+            "allocs_per_op": 36
+          },
+          {
+            "ns_per_op": 31855836.0,
+            "bytes_per_op": 7759633,
+            "allocs_per_op": 36
+          }
+        ],
+        "median_ns_per_op": 31787515.0,
+        "range_ns_per_op": [
+          31679805.0,
+          31855836.0
+        ]
+      },
+      "BenchmarkDownloadResponseStreaming/32KiB-16": {
+        "samples": [
+          {
+            "ns_per_op": 13094.0,
+            "bytes_per_op": 41384,
+            "allocs_per_op": 157
+          },
+          {
+            "ns_per_op": 13086.0,
+            "bytes_per_op": 41384,
+            "allocs_per_op": 157
+          },
+          {
+            "ns_per_op": 13102.0,
+            "bytes_per_op": 41384,
+            "allocs_per_op": 157
+          }
+        ],
+        "median_ns_per_op": 13094.0,
+        "range_ns_per_op": [
+          13086.0,
+          13102.0
+        ]
+      },
+      "BenchmarkDownloadResponseStreaming/8MiB-16": {
+        "samples": [
+          {
+            "ns_per_op": 190055.0,
+            "bytes_per_op": 133185,
+            "allocs_per_op": 2197
+          },
+          {
+            "ns_per_op": 189165.0,
+            "bytes_per_op": 133186,
+            "allocs_per_op": 2197
+          },
+          {
+            "ns_per_op": 188587.0,
+            "bytes_per_op": 133185,
+            "allocs_per_op": 2197
+          }
+        ],
+        "median_ns_per_op": 189165.0,
+        "range_ns_per_op": [
+          188587.0,
+          190055.0
+        ]
+      },
+      "BenchmarkETagBoundedCapture/32KiB-16": {
+        "samples": [
+          {
+            "ns_per_op": 18350.0,
+            "bytes_per_op": 67965,
+            "allocs_per_op": 32
+          },
+          {
+            "ns_per_op": 18429.0,
+            "bytes_per_op": 67966,
+            "allocs_per_op": 32
+          },
+          {
+            "ns_per_op": 18382.0,
+            "bytes_per_op": 67966,
+            "allocs_per_op": 32
+          }
+        ],
+        "median_ns_per_op": 18382.0,
+        "range_ns_per_op": [
+          18350.0,
+          18429.0
+        ]
+      },
+      "BenchmarkETagBoundedCapture/8MiB-16": {
+        "samples": [
+          {
+            "ns_per_op": 4706.0,
+            "bytes_per_op": 67072,
+            "allocs_per_op": 16
+          },
+          {
+            "ns_per_op": 4675.0,
+            "bytes_per_op": 67072,
+            "allocs_per_op": 16
+          },
+          {
+            "ns_per_op": 4683.0,
+            "bytes_per_op": 67072,
+            "allocs_per_op": 16
+          }
+        ],
+        "median_ns_per_op": 4683.0,
+        "range_ns_per_op": [
+          4675.0,
+          4706.0
+        ]
+      },
+      "BenchmarkFileReaderStreaming/32KiB-16": {
+        "samples": [
+          {
+            "ns_per_op": 4573.0,
+            "bytes_per_op": 33952,
+            "allocs_per_op": 27
+          },
+          {
+            "ns_per_op": 4679.0,
+            "bytes_per_op": 33952,
+            "allocs_per_op": 27
+          },
+          {
+            "ns_per_op": 4657.0,
+            "bytes_per_op": 33952,
+            "allocs_per_op": 27
+          }
+        ],
+        "median_ns_per_op": 4657.0,
+        "range_ns_per_op": [
+          4573.0,
+          4679.0
+        ]
+      },
+      "BenchmarkFileReaderStreaming/8MiB-16": {
+        "samples": [
+          {
+            "ns_per_op": 153923.0,
+            "bytes_per_op": 125753,
+            "allocs_per_op": 2067
+          },
+          {
+            "ns_per_op": 152821.0,
+            "bytes_per_op": 125753,
+            "allocs_per_op": 2067
+          },
+          {
+            "ns_per_op": 153785.0,
+            "bytes_per_op": 125753,
+            "allocs_per_op": 2067
+          }
+        ],
+        "median_ns_per_op": 153785.0,
+        "range_ns_per_op": [
+          152821.0,
+          153923.0
+        ]
+      },
+      "BenchmarkStreamResponseBoundedCopy/32KiB-16": {
+        "samples": [
+          {
+            "ns_per_op": 12024.0,
+            "bytes_per_op": 40376,
+            "allocs_per_op": 137
+          },
+          {
+            "ns_per_op": 12228.0,
+            "bytes_per_op": 40376,
+            "allocs_per_op": 137
+          },
+          {
+            "ns_per_op": 12301.0,
+            "bytes_per_op": 40376,
+            "allocs_per_op": 137
+          }
+        ],
+        "median_ns_per_op": 12228.0,
+        "range_ns_per_op": [
+          12024.0,
+          12301.0
+        ]
+      },
+      "BenchmarkStreamResponseBoundedCopy/8MiB-16": {
+        "samples": [
+          {
+            "ns_per_op": 184198.0,
+            "bytes_per_op": 132177,
+            "allocs_per_op": 2177
+          },
+          {
+            "ns_per_op": 182597.0,
+            "bytes_per_op": 132177,
+            "allocs_per_op": 2177
+          },
+          {
+            "ns_per_op": 182208.0,
+            "bytes_per_op": 132177,
+            "allocs_per_op": 2177
+          }
+        ],
+        "median_ns_per_op": 182597.0,
+        "range_ns_per_op": [
+          182208.0,
+          184198.0
+        ]
+      },
+      "BenchmarkLocalStream/1048576-16": {
+        "samples": [
+          {
+            "ns_per_op": 15444620.0,
+            "bytes_per_op": 37724,
+            "allocs_per_op": 91
+          },
+          {
+            "ns_per_op": 19745273.0,
+            "bytes_per_op": 37721,
+            "allocs_per_op": 91
+          },
+          {
+            "ns_per_op": 13911316.0,
+            "bytes_per_op": 37731,
+            "allocs_per_op": 91
+          }
+        ],
+        "median_ns_per_op": 15444620.0,
+        "range_ns_per_op": [
+          13911316.0,
+          19745273.0
+        ]
+      },
+      "BenchmarkLocalStream/16777216-16": {
+        "samples": [
+          {
+            "ns_per_op": 22107464.0,
+            "bytes_per_op": 37733,
+            "allocs_per_op": 91
+          },
+          {
+            "ns_per_op": 22350445.0,
+            "bytes_per_op": 37730,
+            "allocs_per_op": 91
+          },
+          {
+            "ns_per_op": 23810318.0,
+            "bytes_per_op": 37749,
+            "allocs_per_op": 91
+          }
+        ],
+        "median_ns_per_op": 22350445.0,
+        "range_ns_per_op": [
+          22107464.0,
+          23810318.0
+        ]
+      },
+      "BenchmarkCaptureStreaming/32KiB-16": {
+        "samples": [
+          {
+            "ns_per_op": 172447.0,
+            "bytes_per_op": 35657,
+            "allocs_per_op": 41
+          },
+          {
+            "ns_per_op": 169047.0,
+            "bytes_per_op": 35656,
+            "allocs_per_op": 41
+          },
+          {
+            "ns_per_op": 170555.0,
+            "bytes_per_op": 35657,
+            "allocs_per_op": 41
+          }
+        ],
+        "median_ns_per_op": 170555.0,
+        "range_ns_per_op": [
+          169047.0,
+          172447.0
+        ]
+      },
+      "BenchmarkCaptureStreaming/8MiB-16": {
+        "samples": [
+          {
+            "ns_per_op": 3346492.0,
+            "bytes_per_op": 35659,
+            "allocs_per_op": 41
+          },
+          {
+            "ns_per_op": 3207241.0,
+            "bytes_per_op": 35656,
+            "allocs_per_op": 41
+          },
+          {
+            "ns_per_op": 2864615.0,
+            "bytes_per_op": 35657,
+            "allocs_per_op": 41
+          }
+        ],
+        "median_ns_per_op": 3207241.0,
+        "range_ns_per_op": [
+          2864615.0,
+          3346492.0
+        ]
+      },
+      "BenchmarkQueryRejectOversizedInput/parse-1048576-16": {
+        "samples": [
+          {
+            "ns_per_op": 9.955,
+            "bytes_per_op": 48,
+            "allocs_per_op": 1
+          },
+          {
+            "ns_per_op": 9.83,
+            "bytes_per_op": 48,
+            "allocs_per_op": 1
+          },
+          {
+            "ns_per_op": 9.822,
+            "bytes_per_op": 48,
+            "allocs_per_op": 1
+          }
+        ],
+        "median_ns_per_op": 9.83,
+        "range_ns_per_op": [
+          9.822,
+          9.955
+        ]
+      },
+      "BenchmarkQueryRejectOversizedInput/encode-1048576-16": {
+        "samples": [
+          {
+            "ns_per_op": 32.23,
+            "bytes_per_op": 48,
+            "allocs_per_op": 1
+          },
+          {
+            "ns_per_op": 32.25,
+            "bytes_per_op": 48,
+            "allocs_per_op": 1
+          },
+          {
+            "ns_per_op": 32.11,
+            "bytes_per_op": 48,
+            "allocs_per_op": 1
+          }
+        ],
+        "median_ns_per_op": 32.23,
+        "range_ns_per_op": [
+          32.11,
+          32.25
+        ]
+      },
+      "BenchmarkQueryRejectOversizedInput/parse-16777216-16": {
+        "samples": [
+          {
+            "ns_per_op": 8.255,
+            "bytes_per_op": 48,
+            "allocs_per_op": 1
+          },
+          {
+            "ns_per_op": 8.303,
+            "bytes_per_op": 48,
+            "allocs_per_op": 1
+          },
+          {
+            "ns_per_op": 8.311,
+            "bytes_per_op": 48,
+            "allocs_per_op": 1
+          }
+        ],
+        "median_ns_per_op": 8.303,
+        "range_ns_per_op": [
+          8.255,
+          8.311
+        ]
+      },
+      "BenchmarkQueryRejectOversizedInput/encode-16777216-16": {
+        "samples": [
+          {
+            "ns_per_op": 30.52,
+            "bytes_per_op": 48,
+            "allocs_per_op": 1
+          },
+          {
+            "ns_per_op": 30.53,
+            "bytes_per_op": 48,
+            "allocs_per_op": 1
+          },
+          {
+            "ns_per_op": 30.6,
+            "bytes_per_op": 48,
+            "allocs_per_op": 1
+          }
+        ],
+        "median_ns_per_op": 30.53,
+        "range_ns_per_op": [
+          30.52,
+          30.6
+        ]
+      },
+      "BenchmarkEncodeJSONRejectOversizedNativeString/1MiB-16": {
+        "samples": [
+          {
+            "ns_per_op": 1141.0,
+            "bytes_per_op": 737,
+            "allocs_per_op": 17
+          },
+          {
+            "ns_per_op": 1128.0,
+            "bytes_per_op": 737,
+            "allocs_per_op": 17
+          },
+          {
+            "ns_per_op": 1127.0,
+            "bytes_per_op": 737,
+            "allocs_per_op": 17
+          }
+        ],
+        "median_ns_per_op": 1128.0,
+        "range_ns_per_op": [
+          1127.0,
+          1141.0
+        ]
+      },
+      "BenchmarkEncodeJSONRejectOversizedNativeString/16MiB-16": {
+        "samples": [
+          {
+            "ns_per_op": 1114.0,
+            "bytes_per_op": 736,
+            "allocs_per_op": 17
+          },
+          {
+            "ns_per_op": 1108.0,
+            "bytes_per_op": 736,
+            "allocs_per_op": 17
+          },
+          {
+            "ns_per_op": 1106.0,
+            "bytes_per_op": 736,
+            "allocs_per_op": 17
+          }
+        ],
+        "median_ns_per_op": 1108.0,
+        "range_ns_per_op": [
+          1106.0,
+          1114.0
+        ]
+      },
+      "BenchmarkXLSXStreamingRows/1000-16": {
+        "samples": [
+          {
+            "ns_per_op": 995170.0,
+            "bytes_per_op": 297894,
+            "allocs_per_op": 20063
+          },
+          {
+            "ns_per_op": 970894.0,
+            "bytes_per_op": 298867,
+            "allocs_per_op": 20063
+          },
+          {
+            "ns_per_op": 940682.0,
+            "bytes_per_op": 298654,
+            "allocs_per_op": 20063
+          }
+        ],
+        "median_ns_per_op": 970894.0,
+        "range_ns_per_op": [
+          940682.0,
+          995170.0
+        ]
+      },
+      "BenchmarkXLSXStreamingRows/100000-16": {
+        "samples": [
+          {
+            "ns_per_op": 92358642.0,
+            "bytes_per_op": 29725534,
+            "allocs_per_op": 2099146
+          },
+          {
+            "ns_per_op": 95623097.0,
+            "bytes_per_op": 29724990,
+            "allocs_per_op": 2099138
+          },
+          {
+            "ns_per_op": 92043229.0,
+            "bytes_per_op": 29635206,
+            "allocs_per_op": 2099138
+          }
+        ],
+        "median_ns_per_op": 92358642.0,
+        "range_ns_per_op": [
+          92043229.0,
+          95623097.0
+        ]
+      }
+    },
+    "consumer": {
+      "BenchmarkStartup-16": {
+        "samples": [
+          {
+            "ns_per_op": 334420.0,
+            "bytes_per_op": 331974,
+            "allocs_per_op": 2636
+          },
+          {
+            "ns_per_op": 331324.0,
+            "bytes_per_op": 331930,
+            "allocs_per_op": 2636
+          },
+          {
+            "ns_per_op": 332642.0,
+            "bytes_per_op": 331940,
+            "allocs_per_op": 2636
+          }
+        ],
+        "median_ns_per_op": 332642.0,
+        "range_ns_per_op": [
+          331324.0,
+          334420.0
+        ]
+      },
+      "BenchmarkSelection/retained-16": {
+        "samples": [
+          {
+            "ns_per_op": 1.735,
+            "bytes_per_op": 0,
+            "allocs_per_op": 0
+          },
+          {
+            "ns_per_op": 1.727,
+            "bytes_per_op": 0,
+            "allocs_per_op": 0
+          },
+          {
+            "ns_per_op": 1.713,
+            "bytes_per_op": 0,
+            "allocs_per_op": 0
+          }
+        ],
+        "median_ns_per_op": 1.727,
+        "range_ns_per_op": [
+          1.713,
+          1.735
+        ]
+      },
+      "BenchmarkSelection/default-16": {
+        "samples": [
+          {
+            "ns_per_op": 91.69,
+            "bytes_per_op": 0,
+            "allocs_per_op": 0
+          },
+          {
+            "ns_per_op": 91.54,
+            "bytes_per_op": 0,
+            "allocs_per_op": 0
+          },
+          {
+            "ns_per_op": 90.68,
+            "bytes_per_op": 0,
+            "allocs_per_op": 0
+          }
+        ],
+        "median_ns_per_op": 91.54,
+        "range_ns_per_op": [
+          90.68,
+          91.69
+        ]
+      },
+      "BenchmarkSelection/named-16": {
+        "samples": [
+          {
+            "ns_per_op": 90.57,
+            "bytes_per_op": 0,
+            "allocs_per_op": 0
+          },
+          {
+            "ns_per_op": 90.67,
+            "bytes_per_op": 0,
+            "allocs_per_op": 0
+          },
+          {
+            "ns_per_op": 90.64,
+            "bytes_per_op": 0,
+            "allocs_per_op": 0
+          }
+        ],
+        "median_ns_per_op": 90.64,
+        "range_ns_per_op": [
+          90.57,
+          90.67
+        ]
+      },
+      "BenchmarkHTTPHandler/direct-16": {
+        "samples": [
+          {
+            "ns_per_op": 6288.0,
+            "bytes_per_op": 5243,
+            "allocs_per_op": 74
+          },
+          {
+            "ns_per_op": 6276.0,
+            "bytes_per_op": 5241,
+            "allocs_per_op": 74
+          },
+          {
+            "ns_per_op": 6327.0,
+            "bytes_per_op": 5242,
+            "allocs_per_op": 74
+          }
+        ],
+        "median_ns_per_op": 6288.0,
+        "range_ns_per_op": [
+          6276.0,
+          6327.0
+        ]
+      },
+      "BenchmarkHTTPHandler/configured-16": {
+        "samples": [
+          {
+            "ns_per_op": 6310.0,
+            "bytes_per_op": 5241,
+            "allocs_per_op": 74
+          },
+          {
+            "ns_per_op": 6334.0,
+            "bytes_per_op": 5242,
+            "allocs_per_op": 74
+          },
+          {
+            "ns_per_op": 6323.0,
+            "bytes_per_op": 5244,
+            "allocs_per_op": 74
+          }
+        ],
+        "median_ns_per_op": 6323.0,
+        "range_ns_per_op": [
+          6310.0,
+          6334.0
+        ]
+      },
+      "BenchmarkHTTPRoundTrip-16": {
+        "samples": [
+          {
+            "ns_per_op": 50380.0,
+            "bytes_per_op": 16792,
+            "allocs_per_op": 197
+          },
+          {
+            "ns_per_op": 50287.0,
+            "bytes_per_op": 16834,
+            "allocs_per_op": 197
+          },
+          {
+            "ns_per_op": 49228.0,
+            "bytes_per_op": 16825,
+            "allocs_per_op": 197
+          }
+        ],
+        "median_ns_per_op": 50287.0,
+        "range_ns_per_op": [
+          49228.0,
+          50380.0
+        ]
+      }
+    }
+  },
+  "benchmark_conditions": "Native Apple M4 Max, Go 1.27.1, ordinary compiler defaults; sequential before/after and runtime benchmarks with no concurrent assistant verification workload. OS cache, thermal state and other desktop workloads were not controlled. Full gate and fuzzing overlapped; their durations are acceptance timings, not benchmark comparisons.",
+  "original_source_reproductions": {
+    "expiry": {
+      "exit": 1,
+      "elapsed_seconds": 2.1
+    },
+    "expiry_failed_cases": 40,
+    "stream": {
+      "exit": 1,
+      "elapsed_seconds": 0.7
+    },
+    "disposition": "Expected assertion failures against saved original runtime source using overlays; fixed source was never replaced."
+  },
+  "dependency_review": {
+    "framework": {
+      "import_count": 654,
+      "openpgp_imports": []
+    },
+    "consumer": {
+      "import_count": 708,
+      "openpgp_imports": []
+    },
+    "dependency_license_inventory": [
+      {
+        "path": "github.com/HugoSmits86/nativewebp",
+        "version": "v1.3.0",
+        "license_files": [
+          {
+            "file": "LICENSE",
+            "sha256": "c991f2fb57a8be578efdd78ef403a7ac878982e4d5acfb3695923851e4df2e92",
+            "classification": "MIT text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/Masterminds/semver/v3",
+        "version": "v3.5.0",
+        "license_files": [
+          {
+            "file": "LICENSE.txt",
+            "sha256": "2db9097f7b3750c1c9426996d21fe443d339131fb758c2167d2d5fabe8e6cbf9",
+            "classification": "MIT text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/andybalholm/brotli",
+        "version": "v1.2.4",
+        "license_files": [
+          {
+            "file": "LICENSE",
+            "sha256": "3d180008e36922a4e8daec11c34c7af264fed5962d07924aea928c38e8663c94",
+            "classification": "MIT text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/aws/aws-sdk-go-v2",
+        "version": "v1.47.0",
+        "license_files": [
+          {
+            "file": "NOTICE.txt",
+            "sha256": "a6e830174d62dafad3a718384772ea1f4c0e27989f050932dc442a5e3ddad080",
+            "classification": "review"
+          },
+          {
+            "file": "LICENSE.txt",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+            "classification": "Apache-2.0 text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/aws/aws-sdk-go-v2/config",
+        "version": "v1.33.5",
+        "license_files": [
+          {
+            "file": "LICENSE.txt",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+            "classification": "Apache-2.0 text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/aws/aws-sdk-go-v2/credentials",
+        "version": "v1.20.5",
+        "license_files": [
+          {
+            "file": "LICENSE.txt",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+            "classification": "Apache-2.0 text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/aws/aws-sdk-go-v2/service/s3",
+        "version": "v1.113.1",
+        "license_files": [
+          {
+            "file": "LICENSE.txt",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+            "classification": "Apache-2.0 text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/aws/smithy-go",
+        "version": "v1.28.1",
+        "license_files": [
+          {
+            "file": "LICENSE",
+            "sha256": "09e8a9bcec8067104652c168685ab0931e7868f9c8284b66f5ae6edae5f1130b",
+            "classification": "Apache-2.0 text"
+          },
+          {
+            "file": "NOTICE",
+            "sha256": "d4290ed64c2edd0fce1d84e3f9dfb2881240fe534def76b8cd29ed6af683e287",
+            "classification": "review"
+          }
+        ]
+      },
+      {
+        "path": "github.com/coder/websocket",
+        "version": "v1.8.15",
+        "license_files": [
+          {
+            "file": "LICENSE.txt",
+            "sha256": "cc0975a5f6305145bdd7b41ce9479632fdac3870e6ac4281f28017f18c767c4e",
+            "classification": "review"
+          }
+        ]
+      },
+      {
+        "path": "github.com/disintegration/gift",
+        "version": "v1.2.1",
+        "license_files": [
+          {
+            "file": "LICENSE",
+            "sha256": "f1f8058c0e1a6cc9f8602d5082238b4913327bdc07502894da767ff60c57e4d5",
+            "classification": "MIT text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/gen2brain/gav1d",
+        "version": "v0.2.5",
+        "license_files": [
+          {
+            "file": "COPYING",
+            "sha256": "be086bd51ed0881cae958b54d4bf5428ab0d4b09dad435310d9940075d194325",
+            "classification": "BSD-style text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/jackc/pgx/v5",
+        "version": "v5.11.0",
+        "license_files": [
+          {
+            "file": "LICENSE",
+            "sha256": "467f95e074fe23079a5623ed652619682692041b8551da27e3c2ddb9659a1507",
+            "classification": "MIT text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/microcosm-cc/bluemonday",
+        "version": "v1.0.27",
+        "license_files": [
+          {
+            "file": "LICENSE.md",
+            "sha256": "a8e8489f1168b5f3e0ebb43d7fe1c78a2fd7db9939c1a6cb555940a4b631f8d2",
+            "classification": "BSD-style text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/pelletier/go-toml/v2",
+        "version": "v2.4.3",
+        "license_files": [
+          {
+            "file": "LICENSE",
+            "sha256": "26844e4b53c5adec04e557fd7dfef281cc0205a7d355626b1c68b778b99e9e7b",
+            "classification": "MIT text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/redis/go-redis/v9",
+        "version": "v9.22.0",
+        "license_files": [
+          {
+            "file": "LICENSE",
+            "sha256": "a3a7dff87da3927db65cb4c87b1cfbc96ca2755704461a485d457be7ae300a86",
+            "classification": "BSD-style text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/robfig/cron/v3",
+        "version": "v3.0.1",
+        "license_files": [
+          {
+            "file": "LICENSE",
+            "sha256": "8f650581478707182f3306d9a86676d4e03e2d4edc868344378cf4d6fe6c927a",
+            "classification": "MIT text"
+          }
+        ]
+      },
+      {
+        "path": "golang.org/x/crypto",
+        "version": "v0.57.0",
+        "license_files": [
+          {
+            "file": "LICENSE",
+            "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+            "classification": "BSD-style text"
+          }
+        ]
+      },
+      {
+        "path": "golang.org/x/image",
+        "version": "v0.46.0",
+        "license_files": [
+          {
+            "file": "LICENSE",
+            "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+            "classification": "BSD-style text"
+          }
+        ]
+      },
+      {
+        "path": "golang.org/x/net",
+        "version": "v0.59.0",
+        "license_files": [
+          {
+            "file": "LICENSE",
+            "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+            "classification": "BSD-style text"
+          }
+        ]
+      },
+      {
+        "path": "golang.org/x/text",
+        "version": "v0.42.0",
+        "license_files": [
+          {
+            "file": "LICENSE",
+            "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+            "classification": "BSD-style text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream",
+        "version": "v1.7.20",
+        "license_files": [
+          {
+            "file": "LICENSE.txt",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+            "classification": "Apache-2.0 text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/aws/aws-sdk-go-v2/feature/ec2/imds",
+        "version": "v1.20.0",
+        "license_files": [
+          {
+            "file": "LICENSE.txt",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+            "classification": "Apache-2.0 text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/aws/aws-sdk-go-v2/internal/configsources",
+        "version": "v1.5.3",
+        "license_files": [
+          {
+            "file": "LICENSE.txt",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+            "classification": "Apache-2.0 text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/aws/aws-sdk-go-v2/internal/endpoints/v2",
+        "version": "v2.8.3",
+        "license_files": [
+          {
+            "file": "LICENSE.txt",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+            "classification": "Apache-2.0 text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/aws/aws-sdk-go-v2/internal/v4a",
+        "version": "v1.5.3",
+        "license_files": [
+          {
+            "file": "LICENSE.txt",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+            "classification": "Apache-2.0 text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding",
+        "version": "v1.13.19",
+        "license_files": [
+          {
+            "file": "LICENSE.txt",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+            "classification": "Apache-2.0 text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/aws/aws-sdk-go-v2/service/internal/checksum",
+        "version": "v1.11.3",
+        "license_files": [
+          {
+            "file": "LICENSE.txt",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+            "classification": "Apache-2.0 text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/aws/aws-sdk-go-v2/service/internal/presigned-url",
+        "version": "v1.14.3",
+        "license_files": [
+          {
+            "file": "LICENSE.txt",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+            "classification": "Apache-2.0 text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/aws/aws-sdk-go-v2/service/internal/s3shared",
+        "version": "v1.20.3",
+        "license_files": [
+          {
+            "file": "LICENSE.txt",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+            "classification": "Apache-2.0 text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/aws/aws-sdk-go-v2/service/signin",
+        "version": "v1.10.0",
+        "license_files": [
+          {
+            "file": "LICENSE.txt",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+            "classification": "Apache-2.0 text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/aws/aws-sdk-go-v2/service/sso",
+        "version": "v1.38.0",
+        "license_files": [
+          {
+            "file": "LICENSE.txt",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+            "classification": "Apache-2.0 text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/aws/aws-sdk-go-v2/service/ssooidc",
+        "version": "v1.43.0",
+        "license_files": [
+          {
+            "file": "LICENSE.txt",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+            "classification": "Apache-2.0 text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/aws/aws-sdk-go-v2/service/sts",
+        "version": "v1.51.0",
+        "license_files": [
+          {
+            "file": "LICENSE.txt",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+            "classification": "Apache-2.0 text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/aymerick/douceur",
+        "version": "v0.2.0",
+        "license_files": [
+          {
+            "file": "LICENSE",
+            "sha256": "a91ec19456c4efb3d9fc22dc9c1ec60ec3701a9e8f4be511ebcf908c04288ffb",
+            "classification": "MIT text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/cespare/xxhash/v2",
+        "version": "v2.3.0",
+        "license_files": [
+          {
+            "file": "LICENSE.txt",
+            "sha256": "f566a9f97bacdaf00d9f21dd991e81dc11201c4e016c86b470799429a1c9a79c",
+            "classification": "MIT text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/gorilla/css",
+        "version": "v1.0.1",
+        "license_files": [
+          {
+            "file": "LICENSE",
+            "sha256": "af11d643d903cb178a641d7512879285287844f7a6c0611e2d0c6b131e50188b",
+            "classification": "BSD-style text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/jackc/pgpassfile",
+        "version": "v1.0.0",
+        "license_files": [
+          {
+            "file": "LICENSE",
+            "sha256": "adb1663fda031df8f4344aa68f299fd87d80353e31339406742ded21dae65702",
+            "classification": "MIT text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/jackc/pgservicefile",
+        "version": "v0.0.0-20240606120523-5a60cdf6a761",
+        "license_files": [
+          {
+            "file": "LICENSE",
+            "sha256": "fc505773403fe869ed64cc2235cdd13988a427bb7e3a7e7004a3f4b27420f8fc",
+            "classification": "MIT text"
+          }
+        ]
+      },
+      {
+        "path": "github.com/jackc/puddle/v2",
+        "version": "v2.2.2",
+        "license_files": [
+          {
+            "file": "LICENSE",
+            "sha256": "2d50e98a4900b4d6457a38d39c1432fdc156fc2f7b365f2e33ec9344acbb0057",
+            "classification": "MIT text"
+          }
+        ]
+      },
+      {
+        "path": "go.uber.org/atomic",
+        "version": "v1.11.0",
+        "license_files": [
+          {
+            "file": "LICENSE.txt",
+            "sha256": "edbb5a4d165ac69376c765b551c0662ff42bea87e1f1eda85f42ac90c34b09d0",
+            "classification": "MIT text"
+          }
+        ]
+      },
+      {
+        "path": "golang.org/x/sync",
+        "version": "v0.23.0",
+        "license_files": [
+          {
+            "file": "LICENSE",
+            "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+            "classification": "BSD-style text"
+          }
+        ]
+      },
+      {
+        "path": "golang.org/x/sys",
+        "version": "v0.48.0",
+        "license_files": [
+          {
+            "file": "LICENSE",
+            "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+            "classification": "BSD-style text"
+          }
+        ]
+      }
+    ],
+    "unchanged_module_and_tool_inputs": {
+      "go.mod": "a9bed05356085487b2754c36bbc73f0bba0899c4ee797d471698f35b8b071102",
+      "go.sum": "021bee3b4b6ff2caf3743a1e77065d8c38be1e3b6d061452fdc1ac7730f2f8b2",
+      "tests/fixtures/consumer/go.mod": "7478c05ca43f3cce4bab0457c3c9a57b951e9b1558679101bd3ffd5f995b59d7",
+      "tests/fixtures/consumer/go.sum": "021bee3b4b6ff2caf3743a1e77065d8c38be1e3b6d061452fdc1ac7730f2f8b2",
+      "tests/fixtures/plugin_base/go.mod": "ed4a56571758df0461dc5cfdd0c80f6e106feae27112f88288a124e2d19057b4",
+      "tests/fixtures/plugin_base/go.sum": "4cd590b9756490ea355edb517f0624ca5c6d8a0cd1c92f42fddd48aa292a8cf2",
+      "tests/fixtures/plugin_dep/go.mod": "8513487d10fce9c2501f2c54b9f74d545b50e22888ab6fe823161a855fd2e775",
+      "tests/fixtures/plugin_dep/go.sum": "4cd590b9756490ea355edb517f0624ca5c6d8a0cd1c92f42fddd48aa292a8cf2",
+      "tools/release/go.mod": "ca961e121128fd67175182e38a53a9f617f0f0f24f030c97dfa5c78193f576ad",
+      "tools/release/go.sum": "2136556c30a61c428a360cbb7ed3558c970d89555b7b285be0e1ff426906b6cc",
+      "tools/typescript/package-lock.json": "9b3b8e08941e984872918ef6570844e17d471b95db0367c8f73e1a072723e214",
+      "tools/typescript/package.json": "f709537d0d796c2ea46677407ccc0c95384dc8da99912be4d13f57db0ab3d4b5"
+    }
+  },
+  "initial_security_runs": [
+    {
+      "name": "identity",
+      "command": [
+        "/usr/local/go/bin/go",
+        "version"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 0.01
+    },
+    {
+      "name": "scanner-identity",
+      "command": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/milestone24-production/security-tools/govulncheck",
+        "-version"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 0.48
+    },
+    {
+      "name": "root-modules",
+      "command": [
+        "/usr/local/go/bin/go",
+        "mod",
+        "verify"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 0.32
+    },
+    {
+      "name": "framework",
+      "command": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/milestone24-production/security-tools/govulncheck",
+        "-json",
+        "./..."
+      ],
+      "exit": 0,
+      "elapsed_seconds": 1.95
+    },
+    {
+      "name": "consumer",
+      "command": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/milestone24-production/security-tools/govulncheck",
+        "-json",
+        "./..."
+      ],
+      "exit": 0,
+      "elapsed_seconds": 1.77
+    },
+    {
+      "name": "release",
+      "command": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/milestone24-production/security-tools/govulncheck",
+        "-json",
+        "./..."
+      ],
+      "exit": 0,
+      "elapsed_seconds": 0.76
+    },
+    {
+      "name": "gopls",
+      "command": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/milestone24-production/security-tools/govulncheck",
+        "-json",
+        "-mode=binary",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 0.58
+    },
+    {
+      "name": "scanner-binary",
+      "command": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/milestone24-production/security-tools/govulncheck",
+        "-json",
+        "-mode=binary",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/milestone24-production/security-tools/govulncheck"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 0.6
+    },
+    {
+      "name": "typescript",
+      "command": [
+        "npm",
+        "audit",
+        "--json",
+        "--package-lock-only",
+        "--ignore-scripts"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 0.88
+    }
+  ],
+  "initial_findings": [
+    {
+      "source": "consumer.log",
+      "findings": [
+        {
+          "osv": "GO-2026-5932",
+          "trace": [
+            {
+              "module": "golang.org/x/crypto",
+              "version": "v0.57.0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "source": "framework.log",
+      "findings": [
+        {
+          "osv": "GO-2026-5932",
+          "trace": [
+            {
+              "module": "golang.org/x/crypto",
+              "version": "v0.57.0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "source": "gopls.log",
+      "findings": [
+        {
+          "osv": "GO-2026-6179",
+          "fixed_version": "v0.40.0",
+          "trace": [
+            {
+              "module": "golang.org/x/mod",
+              "version": "v0.37.0"
+            }
+          ]
+        },
+        {
+          "osv": "GO-2026-6180",
+          "fixed_version": "v0.40.0",
+          "trace": [
+            {
+              "module": "golang.org/x/mod",
+              "version": "v0.37.0"
+            }
+          ]
+        },
+        {
+          "osv": "GO-2026-5970",
+          "fixed_version": "v0.39.0",
+          "trace": [
+            {
+              "module": "golang.org/x/text",
+              "version": "v0.38.0"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "prior_measurement_cache_reclamation": {
+    "date_utc": "2026-09-17T17:47:01.726713+00:00",
+    "reason": "Space for fresh native measurements after broad race compilation; removed only recomputable caches of the completed C05 measurement run. Logs, reports, artifacts, copied/generated source, executables, module licenses and editor caches retained.",
+    "removed": [
+      ".cache/release-candidate-startup-c05/measurements/ordinary-build-cache",
+      ".cache/release-candidate-startup-c05/measurements/ordinary-generation-cache",
+      ".cache/release-candidate-startup-c05/measurements/configured-build-cache",
+      ".cache/release-candidate-startup-c05/measurements/configured-generation-cache",
+      ".cache/release-candidate-startup-c05/measurements/full-build-cache",
+      ".cache/release-candidate-startup-c05/measurements/full-generation-cache"
+    ],
+    "unchanged_evidence_sha256": {
+      "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-startup-c05/measurements/report.json": "945500a5808a3cf17ae2f3c25eb9a50519e76db2515654bac9d74b26d8280126",
+      "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-startup-c05/measurements/commands.json": "6192adf0ca71c53ce63a4a469c410d88230a1d072fb022abce375c0d89b3d6e8",
+      "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/release-candidate-startup-c05/manifest.json": "94add64ea0933d0691d9d1ef6237a2cb5218aec4596889e1cd61f1549201584b"
+    },
+    "free_bytes_before": 24125952000,
+    "free_bytes_after": 43739578368
+  },
+  "changes": {
+    "runtime_changes": {
+      "cache/file/record.go": {
+        "before": "0cab8d12b0ffa885e3356b9778a0cae07961fa0c6cee292969251ed00a80c703",
+        "after": "fbc293ccad78a1b10130bab9602e213f3052f96556ebc7f7270382c62985980e"
+      },
+      "cache/memory/entry.go": {
+        "before": "155c6ab06169b9e206046010f801ce8458a1bfe9bfa0d66718056939c4f555bf",
+        "after": "76f9406efbc97998a3dc02ddb492bd4146ff7adb02fcdd774578cc091d61bdfd"
+      },
+      "cache/memory/memory.go": {
+        "before": "f6eba8bcee4d45f1ece3c38c42ddacae81518e78343091388ba32a20d8ecde1b",
+        "after": "42ed2f97ee0e64f5d929468d822fcc4f582e07d56a38c04dba3b2c7a7c17fdba"
+      },
+      "cache/postgres/backend.go": {
+        "before": "d2fa709ffd868f15b778f0b8ff56d646d57a2081aa3ee0c271add818bc23578e",
+        "after": "d7a6deee544c7d078626d814d77ca6899e0d168f85cf570b8fa300a2528013db"
+      },
+      "internal/cacheatomic/backend.go": {
+        "before": "4ce13dd35efa15ae5b7f8e52c3571044d077f7a091874fa4fd8034b4b7a7bd70",
+        "after": "e965f0950c08d24ae876d89c6b34768855d8574faa0ff2ac513a8ddd3dd7c78f"
+      },
+      "internal/ownedstream/body.go": {
+        "before": "6df9f76773febaf7b0dc797c728981f160e9348c81c3a16cbbce80bc818bace0",
+        "after": "35acc9a895cd69be211b45d8dda047298fce4c0822fe8f09555006707fd22ba9"
+      }
+    },
+    "new_go_sources": [
+      "cache/file/contended_expiry_test.go",
+      "cache/memory/churn_benchmark_test.go",
+      "cache/memory/expiry_pressure_test.go",
+      "cache/postgres/contended_expiry_test.go",
+      "httpclient/progress_test.go",
+      "internal/cachetest/contended_expiry.go",
+      "internal/ownedstream/progress_test.go"
+    ],
+    "source_review": "All six runtime diffs and seven new regression/benchmark sources reviewed after targeted races. Original overlays reproduce R01/R03; R02 retains all cache operation paths under the mutex. No dependency, global state, background task or public consumer service API added."
+  },
+  "accepted_source_count": 3529,
+  "accepted_source_manifest_sha256": "34ea1438b5e352bc48ab96cecc0a314f5c9a5037987f3ad3addb0c1feee22945",
+  "candidate_manifest_sha256": "d69a614fa594f1de54ce4598a930474af5d808a8a3ce93786190fdddaf622719",
+  "limits": [
+    "Known database entries and native configuration only; retained module-only tool/runtime advisories are documented.",
+    "Fuzzing uses a three-second search per target plus seed coverage; it is a smoke campaign.",
+    "Memory-cache sweep remains linear when an expiry may be due; benchmarks isolate no-due-entry churn.",
+    "File/PostgreSQL cache quota enforcement retains coarse locking and entry/file scans; persistent adapter correctness is covered, not production throughput at capacity.",
+    "Stream protection targets custom readers and adds one allocation; it does not preempt a callback that never returns.",
+    "Cloud account delivery, production load and other operating systems were not re-certified.",
+    "Whole-framework original C05 limitations, including broad consumer compiler cost and external mail smoke gaps, remain documented."
+  ],
+  "completion_audit": {
+    "status": "passed",
+    "verified_source_inputs_unchanged": 3529,
+    "runtime_diffs": 6,
+    "new_go_test_and_benchmark_sources": 7,
+    "additional_required_fixes": 0,
+    "documentation": "Final links, numbering, fixture versions and factual report checks passed."
+  }
+}

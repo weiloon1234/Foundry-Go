@@ -1,0 +1,690 @@
+{
+  "milestone": "C05",
+  "status": "accepted",
+  "platform": "native macOS",
+  "scope": "Final typed consumer startup acceptance, full C01-C05 change audit, independent private packaging, build/editor/runtime measurements and security review",
+  "runs": [
+    {
+      "label": "c05-generation1",
+      "command": "make fmt generate (complete implementation batch)",
+      "exit": 0,
+      "elapsed_seconds": 14.3
+    },
+    {
+      "label": "c05-core1",
+      "command": "go test -race ./audit/... ./application ./infrastructure -count=1 -timeout=10m",
+      "exit": 0,
+      "elapsed_seconds": 23.8
+    },
+    {
+      "label": "c05-tools1",
+      "command": "make release-tools-check docs-check",
+      "exit": 0,
+      "elapsed_seconds": 5.1
+    },
+    {
+      "label": "c05-generation2",
+      "command": "make fmt generate (batched verification fixes)",
+      "exit": 0,
+      "elapsed_seconds": 14.9
+    },
+    {
+      "label": "c05-consumer2",
+      "command": "go test -race ./configuredprofile/... ./bootstrap/... -count=1 -timeout=10m (independent consumer)",
+      "exit": 0,
+      "elapsed_seconds": 16.4
+    },
+    {
+      "label": "c05-benchmark-smoke",
+      "command": "go test -run ^$ -bench Benchmark(Startup|Selection|HTTP) -benchmem -benchtime=50ms -count=1 ./configuredprofile (execution check only)",
+      "exit": 0,
+      "elapsed_seconds": 6.5
+    },
+    {
+      "label": "c05-full1",
+      "command": "make verify (pre-audit native full gate)",
+      "exit": 0,
+      "elapsed_seconds": 534.1
+    },
+    {
+      "label": "c05-generation3",
+      "command": "make fmt generate (post-audit batch)",
+      "exit": 0,
+      "elapsed_seconds": 11.1
+    },
+    {
+      "label": "c05-full2",
+      "command": "make verify (final post-audit native full gate)",
+      "exit": 0,
+      "elapsed_seconds": 494.9
+    },
+    {
+      "label": "c05-package",
+      "command": "private format-2 module candidate and three independent consumers",
+      "exit": 0,
+      "elapsed_seconds": 1.3
+    },
+    {
+      "label": "c05-command-check",
+      "command": "packaged configured/bootstrap serve commands: HTTP readiness and clean SIGINT with configured shutdown timeout",
+      "exit": 0,
+      "elapsed_seconds": 2.0
+    },
+    {
+      "label": "c05-package-safety",
+      "command": "known configured credential and excluded-file checks on archives/logs",
+      "exit": 0,
+      "elapsed_seconds": 0.1
+    },
+    {
+      "label": "c05-docs-final",
+      "command": "make docs-check after final acceptance documentation",
+      "exit": 0,
+      "elapsed_seconds": 0.2
+    }
+  ],
+  "verification_fix": {
+    "label": "c05-consumer1",
+    "overall_exit": 1,
+    "finding": "ordinary Run cancellation treated as smoke failure",
+    "resolution": "collect Shutdown errors independently, preserve joined cleanup failures; c05-consumer2 passed"
+  },
+  "audit": {
+    "status": "reviewed and final gate passed",
+    "baseline": "accepted milestone24",
+    "pre_audit_gate": {
+      "exit": 0,
+      "elapsed_seconds": 534.1
+    },
+    "reviewed_implementation": [
+      {
+        "path": "Makefile",
+        "sha256": "1e38f93a06ef4f83c98371070f91113fbebe476e39c5d8926c9e238c4de01a5d"
+      },
+      {
+        "path": "application/audit_scope.go",
+        "sha256": "500984c729adc7123733e2cbfa88ac707aa3a5d38083e4d8df776d7d73a2ac47"
+      },
+      {
+        "path": "application/auth_providers.go",
+        "sha256": "a05122c22a6669db50c5a7cf89dd701518fb9f14d5da96d682b88b3fa6c7969b"
+      },
+      {
+        "path": "application/auth_settings.go",
+        "sha256": "8c51d9fe6b520496cc6678bb2955a4cae05583061d641c8706ec2975361ed3d6"
+      },
+      {
+        "path": "application/builder.go",
+        "sha256": "01d94c4f5956ca5719182accf676f007cf05cb0c3996691a2c2d23cdab804714"
+      },
+      {
+        "path": "application/declarations.go",
+        "sha256": "b9cf03386a95468c647f6b16a39fee329916d83e490ba2304046e510aaa23268"
+      },
+      {
+        "path": "application/extension_providers.go",
+        "sha256": "992dfe7bd06febd20a1146863407f6e58af29aa6060e822f98606b582f1810eb"
+      },
+      {
+        "path": "application/feature_declarations.go",
+        "sha256": "fd5ce74ecbbdcca4fb02d1e64aa24127dc1bdc407e1a9ca779e4c60cb01ccd84"
+      },
+      {
+        "path": "application/feature_providers.go",
+        "sha256": "61c9f454e423b216bdb34334f90fd4f1d945db6de5d060d668dcb5ebdac6e5f3"
+      },
+      {
+        "path": "application/feature_settings.go",
+        "sha256": "c89aac7faa9f2e0820917c13eda7435c41df9b8cb45708705006ca7d6d6adee4"
+      },
+      {
+        "path": "application/feature_validation.go",
+        "sha256": "a40f77e77403fa89401faba3852b89721c00b81d9e4870d7926a809d26427bfd"
+      },
+      {
+        "path": "application/kernel_providers.go",
+        "sha256": "37339714a04760a68d0673f0ff2085180856c7fc9539ef3daf08b5750340d372"
+      },
+      {
+        "path": "application/kernel_settings.go",
+        "sha256": "2bed788c66d3761a2b3bb32ae4aeb122be03be273eb776e54ef3465bbe5e7a22"
+      },
+      {
+        "path": "application/logging_settings.go",
+        "sha256": "2a97410a8d3bc006863b73b133860a56d1a5203df01539075c802070db8b4509"
+      },
+      {
+        "path": "application/migrations.go",
+        "sha256": "3a0d641144cd7e3ec18f8bcd67efd114f0934c150dc4ddf3711ac2003fb611c7"
+      },
+      {
+        "path": "application/observation_settings.go",
+        "sha256": "c93b12bd771b4610b533e08f7356fbbe21b8bc3c6db30c5eb8b604edcd395ddf"
+      },
+      {
+        "path": "application/options.go",
+        "sha256": "fadf5e531ed09d9c8cb46ff39b79153e2433ed2e0104f0f7e72f80afb018f7ad"
+      },
+      {
+        "path": "application/outbox_providers.go",
+        "sha256": "9d2da920f9ee4f930bfc04f3b179902d2cfea554c8ccef9c5810822a1b9e1e1f"
+      },
+      {
+        "path": "application/providers.go",
+        "sha256": "29e62991d49526e9cbda76e63456db53881614066681c4e241c3fa51c8192032"
+      },
+      {
+        "path": "application/services.go",
+        "sha256": "9ecff9da74e3f939c3ee2416a03f5d562e07bffe9e726a98684c7d19b0cbd60f"
+      },
+      {
+        "path": "application/settings.go",
+        "sha256": "d50d2c19d862e68b001af480ca43969adbe58f7284f2486fa13aaab3ec48bc86"
+      },
+      {
+        "path": "audit/scope.go",
+        "sha256": "9766781476bfa8cc8aafffa99d7f995e191ca356b7fbc0d70e01f92146a5db47"
+      },
+      {
+        "path": "cache/capabilities.go",
+        "sha256": "c54f16127aecc7a9f7443b5b205b79abada5c0538746cfb90e1ac8f0881cfb54"
+      },
+      {
+        "path": "cache/file/backend.go",
+        "sha256": "7207e14287b5e918dcd442da343d8fe9a4bea3c7bc8000b757b6f7a278ac9a54"
+      },
+      {
+        "path": "cache/file/record.go",
+        "sha256": "0cab8d12b0ffa885e3356b9778a0cae07961fa0c6cee292969251ed00a80c703"
+      },
+      {
+        "path": "cache/named.go",
+        "sha256": "5783f6c5a007df57fc6385c0d475f06652a055f2791312c9a4fa14fccceca0db"
+      },
+      {
+        "path": "cache/postgres/backend.go",
+        "sha256": "d2fa709ffd868f15b778f0b8ff56d646d57a2081aa3ee0c271add818bc23578e"
+      },
+      {
+        "path": "cache/postgres/migrations.go",
+        "sha256": "dddd6f7a805b440f4d116e3681700b6ea94d0ec8abd18e5033bef024f6bfa5c6"
+      },
+      {
+        "path": "cloud/credentials/provider.go",
+        "sha256": "8701a698797565ce8dd3ecf6816c72e2d7d930d5408e60f9f7922b6a856e6bf2"
+      },
+      {
+        "path": "config/scalar.go",
+        "sha256": "7fa658e128aa60acc7c6a0785a207939293e0303458b200ca62df2cbbe120c30"
+      },
+      {
+        "path": "config/schema.go",
+        "sha256": "dcf6c99dd64fda3022a3be6caa39d7150465d07197b339bf6a7ffbdafd5e42d9"
+      },
+      {
+        "path": "config/table.go",
+        "sha256": "019c10f6534458a3df1b111d21da0d9c1a1bd7d29ca74919cea0abad67e9fd43"
+      },
+      {
+        "path": "config/toml/decode.go",
+        "sha256": "b41fdb3ec342e957dbd41fd4d79ff0421b62465b8f01e753ef1867b962e70441"
+      },
+      {
+        "path": "config/toml/file.go",
+        "sha256": "c3e069a7678434e819a9230e47e6a326c9d9f719b6fabbee32a9bb5ec5b154aa"
+      },
+      {
+        "path": "database/named.go",
+        "sha256": "b65733817d651e883a33d8399d30223483d9df53b667fab3ac0bcfb22e8ea0a9"
+      },
+      {
+        "path": "email/address.go",
+        "sha256": "49e6ab62e3790bc0e357e42998f8464cca874ca8f536a8f214ea0e163f79dbea"
+      },
+      {
+        "path": "email/mailer.go",
+        "sha256": "4368a1906f945109fa17d3506398949ec85ee6d0fb8b589a7a96300f91af1762"
+      },
+      {
+        "path": "email/named.go",
+        "sha256": "fbe27c7a7f6fc6efaeb5cd7b8c7f609ffe73161883603c8d95b168ea9355cad9"
+      },
+      {
+        "path": "email/ses/credentials.go",
+        "sha256": "95c86167cf9fff1c9826c122e11f1a0a45e4d8ff2288d0f2e559c48801333454"
+      },
+      {
+        "path": "extensions/module.go",
+        "sha256": "03bf20a8ca51e47c500f8c2a529a0b5643bfe04a329caaae9736f65daa361c96"
+      },
+      {
+        "path": "foundation/runtime.go",
+        "sha256": "b39b84a1e17576e15c05a88a587ffa62ee00a34fd9a86efbc9568b0f45fdd76e"
+      },
+      {
+        "path": "http/authentication.go",
+        "sha256": "3fc0b2d231ef8024e5b2798cd09efef3954583e5cab815e995c61a8a49b13dd0"
+      },
+      {
+        "path": "http/contributions.go",
+        "sha256": "a070cbef910344e80121d2461a88fc8d8bcbf269a6236114f45c61d385a19eb0"
+      },
+      {
+        "path": "http/csrf.go",
+        "sha256": "af5bb1e41218f452bed4776a8a10b1cef00c01fe30c3b18e206cbdb05587f588"
+      },
+      {
+        "path": "http/guard_binding.go",
+        "sha256": "72cb65e778fd5e63d201fa8f29dc883bb1d08d7845cc747dcaee5716f01816a0"
+      },
+      {
+        "path": "http/handler_lifetime.go",
+        "sha256": "e0e0d1725c6b14891d7e7cb4f1a23258186c38d59edd42be5696ab253613f8d4"
+      },
+      {
+        "path": "http/module.go",
+        "sha256": "c123964a25b704b0cc9dd9c81d628894fc7d670e057f5b2e04e4c4e75123b2d4"
+      },
+      {
+        "path": "http/observed_response.go",
+        "sha256": "42be9e9a88f23efda95866218b2e58d9164deeef374e499357abcca1bf2c3798"
+      },
+      {
+        "path": "http/request_observation.go",
+        "sha256": "a208e71ecf9e51019ca2e8e185a133d942b555f6347160b6950f4bce9e3ee9f7"
+      },
+      {
+        "path": "http/request_observer.go",
+        "sha256": "ab5b66d2c51d0aa741380c584bdef8575ebf6236a2c0bda2102398cb85babe10"
+      },
+      {
+        "path": "http/router.go",
+        "sha256": "38c9bf34befb03ab65b37f10afd2c6519564312a5bad57700be2aa734eef26c6"
+      },
+      {
+        "path": "http/server.go",
+        "sha256": "f082515777d1c8739369fca1a0804e2e9b446d2d36c0838bd592438b7101551a"
+      },
+      {
+        "path": "http/server_config.go",
+        "sha256": "8cd49bdd8a7c245758eed3317cd701b12e719e9445fedfc0d1ce94a6aaffb30d"
+      },
+      {
+        "path": "http/spa.go",
+        "sha256": "fb9b22e256f9d37bd9596901191408681fac7f948d48bc5213f035eac1b5e52b"
+      },
+      {
+        "path": "httpclient/config.go",
+        "sha256": "d68a0d519a3423a1555e44e60095719fcf0741d78bf288d0db139a04a7d07161"
+      },
+      {
+        "path": "httpclient/named.go",
+        "sha256": "42923475fa47772387e9be41e1115a7e2770dc597afd1b8d9409a6087de7176f"
+      },
+      {
+        "path": "infrastructure/broker_providers.go",
+        "sha256": "6fe346aa2b86d38d64d487d8aa5dcc6642410cd3b37707d9b9d35da5153f627b"
+      },
+      {
+        "path": "infrastructure/broker_settings.go",
+        "sha256": "a96dc59a54ada6b050b5f17f4c105de24eeafb5c748925de1dbbe569f8f428a0"
+      },
+      {
+        "path": "infrastructure/cache_providers.go",
+        "sha256": "df0c894dcde75476fd7c5a5effc7aa269c27cffa6344a02d3b4d6e8d8e61a522"
+      },
+      {
+        "path": "infrastructure/cache_settings.go",
+        "sha256": "0d5ae5630e9a40c72017f7fbd7ddb69a850326657ee9341604783a059e7cd582"
+      },
+      {
+        "path": "infrastructure/coordination_providers.go",
+        "sha256": "fff4e808d9671c3fb36cb8a21b89a30338f93cbac5de3f3632580afcaca8f45a"
+      },
+      {
+        "path": "infrastructure/coordination_settings.go",
+        "sha256": "fe2e815d5c208da35629078253d5bc20035e025e3290bb5de1301439118bd66b"
+      },
+      {
+        "path": "infrastructure/database_settings.go",
+        "sha256": "3fef57b615fe4d6b341fe27354078fe6a58edb2886285eca7136a717e0725a79"
+      },
+      {
+        "path": "infrastructure/httpclient_settings.go",
+        "sha256": "f6e04a120ada49d8ea7711a76cab6f957b0368b4cd8e8d4fa40681e1fddc7baf"
+      },
+      {
+        "path": "infrastructure/job_providers.go",
+        "sha256": "4283d402c0c2f78557fe7c0d62e7d5d9a1dccf3c733d17d2bed0cc94ce7b92a1"
+      },
+      {
+        "path": "infrastructure/job_settings.go",
+        "sha256": "6e3b581b462f0aa6929fe7593b7b7a3d982c23e2e3410935ff78b67a766f9cdf"
+      },
+      {
+        "path": "infrastructure/mail_providers.go",
+        "sha256": "32467d3afa1560090fb4b3a736a19b3c996565de2cc6d1381582aae231d3584c"
+      },
+      {
+        "path": "infrastructure/mail_settings.go",
+        "sha256": "e6e3eb4ddc9e8a09b84bbfd9761baff83a01405d3fc1a7a61690edb1dd17aaed"
+      },
+      {
+        "path": "infrastructure/owned_adapter.go",
+        "sha256": "1a5035dfd63e0cd51e398dfaf694da264047619896afe66f2074c2dbf1296645"
+      },
+      {
+        "path": "infrastructure/providers.go",
+        "sha256": "655b3f1a004316c6c7b4ba70b5bda804318a06e3630ac2cf446d744706928da2"
+      },
+      {
+        "path": "infrastructure/redis_settings.go",
+        "sha256": "7277cff401e09950cf2b73c346c01b67296fc653532b8d277bd2004752ce9b65"
+      },
+      {
+        "path": "infrastructure/services.go",
+        "sha256": "d7c0e3838d4a4d1e38b4ed6b349be858eda21d9e68c7e76a651370a57c3b97d9"
+      },
+      {
+        "path": "infrastructure/settings.go",
+        "sha256": "1a5c4903a6204293970b92cb8ac9dcd07bbb1d56824e2135a46bee7779a43bb7"
+      },
+      {
+        "path": "infrastructure/storage_registry.go",
+        "sha256": "7c30173173b64ca9a5b33b45dafd5bb63886578bc9a578a0e5b8c92c70003f50"
+      },
+      {
+        "path": "infrastructure/storage_settings.go",
+        "sha256": "b2dcdf5d289bfcfd61c93ac85c71c17311701a0873f1f6f2197d78d055104dfe"
+      },
+      {
+        "path": "infrastructure/supporting_providers.go",
+        "sha256": "188e54a41e437bc273ef2e565c7906e418ab278ad8b9dd3610da657662a3c5d6"
+      },
+      {
+        "path": "infrastructure/supporting_services.go",
+        "sha256": "8e80522cd21d0d8bf1c928ee854264609d0b125f698d6099cefbd8d2c9ad5b77"
+      },
+      {
+        "path": "infrastructure/supporting_validation.go",
+        "sha256": "8c3bad53833a30515b6ccce4493185221a2720449e41732c89795215f068b839"
+      },
+      {
+        "path": "internal/awscredentials/provider.go",
+        "sha256": "17ff631d1cb0132d103e2b6d2eead1d121fb77989501cfcb4615871a79272431"
+      },
+      {
+        "path": "internal/cacheatomic/backend.go",
+        "sha256": "4ce13dd35efa15ae5b7f8e52c3571044d077f7a091874fa4fd8034b4b7a7bd70"
+      },
+      {
+        "path": "internal/cacheatomic/limits.go",
+        "sha256": "2ac02d251a94edba5a8cc03af54b61d94c0d468aa580d6f731a502723d59d6b1"
+      },
+      {
+        "path": "internal/cachetest/basic_entries.go",
+        "sha256": "3ffd036dea1a86ca27091902724956950361884c0c7051d1052abc7d29e76422"
+      },
+      {
+        "path": "internal/filelock/acquire.go",
+        "sha256": "0d1d6d7593f177b9b70f4387ef8e292e190c5e1ed76b35b2e1f3aaafdec2cc64"
+      },
+      {
+        "path": "internal/filelock/lock_other.go",
+        "sha256": "d80e5cf68bcf9df6e4c1a8abb0ec87e063c3d1081055e8518b0c9790714d957b"
+      },
+      {
+        "path": "internal/filelock/lock_unix.go",
+        "sha256": "77dac69c2a4dd7bb5472cb17f969fc1b93798a4688fe7a8aeebf96c4dab04e1b"
+      },
+      {
+        "path": "internal/generate/discover.go",
+        "sha256": "1d3ab03a6f8ca30412667c9d7e14f49cf01f44fa70f2058fd38cacc3e1c6f88d"
+      },
+      {
+        "path": "internal/generate/discover_config.go",
+        "sha256": "4816d349727f2bc8e12cf59dd9a743fe083b4962c64a66a8b2dfdb24f3b40572"
+      },
+      {
+        "path": "internal/generate/emit.go",
+        "sha256": "62c282ec50e5e4e492b2522af8c052ea85a14d91ff46a5146b21abb016971098"
+      },
+      {
+        "path": "internal/generate/emit_config.go",
+        "sha256": "91f2e1ef7500b2da6d17825c68a2921deee0deb30c957df287d026882777cc67"
+      },
+      {
+        "path": "internal/generate/field_documentation.go",
+        "sha256": "aab35002b11c6a8634c5d357e2f53ca92278d4571a997574a8130774277037fc"
+      },
+      {
+        "path": "internal/generate/graph.go",
+        "sha256": "c737d56b718db8095f9ba5db13112a2fe1d3caca34a254ae238082b37be7995a"
+      },
+      {
+        "path": "internal/namedservice/registry.go",
+        "sha256": "880a35819e9e8f06a11d9fd2864dbe862310107a86772ea94317fb3174e9a598"
+      },
+      {
+        "path": "jobs/connection.go",
+        "sha256": "a77b78eb7399378b86c0dec13048de3067a4d111c9164727d380c3a5a3fd23cf"
+      },
+      {
+        "path": "jobs/module.go",
+        "sha256": "12c7d31e8ea84bb5a94b3928d3a77fbecbdb95935e8b3cb8dd0de22d45873f0f"
+      },
+      {
+        "path": "jobs/named.go",
+        "sha256": "3f23da065d75221e1677020a9314dbff81a8ecb81c648a87bbe09feb2a6a50b6"
+      },
+      {
+        "path": "jobs/outbox.go",
+        "sha256": "753a8e339e9529f40a38592bef02499e81fd94b63c3100fcb9275ce50016adb9"
+      },
+      {
+        "path": "jobs/worker_config.go",
+        "sha256": "a37af7ec1eb999b6e6d589d155465c3a40fd3965dc847d047c0936a92f911fd1"
+      },
+      {
+        "path": "logging/channels.go",
+        "sha256": "518bb5af32bfe629383d093cec1c1b6725ceaac9a63630a8e0c2f72b053df805"
+      },
+      {
+        "path": "logging/named.go",
+        "sha256": "88709814d29af3e7eeaeadc61740d4cac7dd03923af4844621292c310b9f49b8"
+      },
+      {
+        "path": "logging/sink.go",
+        "sha256": "51794febc406219deff8b26712e0ae4167347303d471f9d992215186b61bc07b"
+      },
+      {
+        "path": "observability/contracts.go",
+        "sha256": "83aaa66b7dd0c36838d9f209a1c392d538ae6814f43a347dcf1cbdc71be1c5ba"
+      },
+      {
+        "path": "pubsub/named.go",
+        "sha256": "c4f0a2bbe410873aacf76b9634ee5fc2dd16305a81e635c27afa5a7ea120982e"
+      },
+      {
+        "path": "redis/named.go",
+        "sha256": "1ec9ddcd4aa07b768e382a8c16d2d4a3aa456fb7bd3595fb3637ba23dfd96568"
+      },
+      {
+        "path": "schedule/jobs.go",
+        "sha256": "e0e44569829506d4cef51e433d3bb5450f449ae7e80b0a8ee1d8c470bd002dab"
+      },
+      {
+        "path": "storage/local/backend.go",
+        "sha256": "8eeaf1db442c397798ed9ef9db9e853afb39f4ab21b03c19db3baa94e34f0712"
+      },
+      {
+        "path": "storage/local/lock.go",
+        "sha256": "92a298c5c8194a7da54d65b629631cb10009d73bb1904e7eee1774fb1d1b389e"
+      },
+      {
+        "path": "storage/registry.go",
+        "sha256": "8f47215f5352084f92e34117555a567f4dee3626601585f0e26353d4018121fd"
+      },
+      {
+        "path": "storage/s3/credentials.go",
+        "sha256": "13d880f9d5fe3c5392087fccf6373ed450bc0ef05024f50da202418e5724de3c"
+      },
+      {
+        "path": "storage/s3/module.go",
+        "sha256": "ef4841ffdfddaafa3f3dcf6d27b0e8ea3cbafd8bfd7e0699ebd8fd19384ad25f"
+      },
+      {
+        "path": "tests/fixtures/consumer/bootstrap/auth.go",
+        "sha256": "bd8c1faf1651201c4fea8134d105e4a1de597691a921890fad92a2d9d705f622"
+      },
+      {
+        "path": "tests/fixtures/consumer/bootstrap/cmd/serve/main.go",
+        "sha256": "120f3365191ce73f963bc83a4f78718c20b472979030f5432d19514b7ddc5abb"
+      },
+      {
+        "path": "tests/fixtures/consumer/bootstrap/models.go",
+        "sha256": "a9eb03d94fc592fcc70336b74c61f3621c91d768b18d4d671ff64452e7653b37"
+      },
+      {
+        "path": "tests/fixtures/consumer/bootstrap/routes.go",
+        "sha256": "09b6d5aa3137b8386287380d1d0442fd42200e726c16e35275d96a2b500e6cbf"
+      },
+      {
+        "path": "tests/fixtures/consumer/bootstrap/settings.go",
+        "sha256": "dc50ce9d26316463e1f229e44da43d59457dbaa2e5a7ff4b3df08e82c6967ffa"
+      },
+      {
+        "path": "tests/fixtures/consumer/bootstrap/supporting.go",
+        "sha256": "8acebd5f5d8fdac2c14b7df44f17c7adf176959400d6b05d074c53c6a4688472"
+      },
+      {
+        "path": "tests/fixtures/consumer/configured/settings.go",
+        "sha256": "ba7f3a45b8a780976e382a3b4f378a948f165cc5756c05cb129ac0ce422bfe6e"
+      },
+      {
+        "path": "tests/fixtures/consumer/configuredprofile/cmd/profile/main.go",
+        "sha256": "ac96266d56f7ad350504e604b142572e37de9567734ddbd7919376eea0a5a687"
+      },
+      {
+        "path": "tests/fixtures/consumer/configuredprofile/routes.go",
+        "sha256": "618951ddb5d8b38f5fb3853d95062dc0ed1c880537d4e477da72591e53b6affa"
+      },
+      {
+        "path": "tests/fixtures/consumer/configuredprofile/settings.go",
+        "sha256": "825da7e416d85b002456386f90369009566d921f4f43193d623fd7f3c786f8d9"
+      },
+      {
+        "path": "tests/fixtures/consumer/configuredprofile/smoke.go",
+        "sha256": "c373c8a1817167aea3e8a7366f4277a36363c91fc19ea8ebd7a8f1bbec39e354"
+      },
+      {
+        "path": "tests/fixtures/consumer/startupconfig/settings.go",
+        "sha256": "38e3d266a2ca32ea06c45f4413b1a75ee95bc69bb20cb7474fca37d9e27352f2"
+      },
+      {
+        "path": "tools/measure-release.py",
+        "sha256": "57c97db8fed07e53640474bc808a49dddba64f46a6329e8af7692f46cf5eada0"
+      },
+      {
+        "path": "tools/release/main.go",
+        "sha256": "1f232c9b5cec8720dc59788098653c272f3e3fbaabc7eda277a1de82f365584b"
+      },
+      {
+        "path": "websocket/backend_connection.go",
+        "sha256": "55cb3a9ae782688ab8f15407d0796f73b1df603392feed2127551232dbd396d3"
+      },
+      {
+        "path": "websocket/config.go",
+        "sha256": "9907d96387fb0afa57619c88240985c49afb0e2ee14a2d1f23b792bb37f5f085"
+      },
+      {
+        "path": "websocket/module.go",
+        "sha256": "b26b10cf3f1f72c5d30f6effb8252431c6d80f6706bc53c96d3b5a072310b8f7"
+      },
+      {
+        "path": "websocket/named.go",
+        "sha256": "b0e889f341067ee64dcd616676d01e6ae2878892153e0053fca9717b971ff915"
+      }
+    ],
+    "generated_count": 23,
+    "test_and_compiler_fixture_count": 54,
+    "findings": [
+      "serve command cancellation consistency and configured timeout",
+      "stale current database routing status"
+    ],
+    "scope_note": "All 24 handwritten implementation groups reviewed after c05-full1; related regression assertions inspected; generated/test execution covered by native gate.",
+    "final_gate": {
+      "exit": 0,
+      "elapsed_seconds": 494.9
+    },
+    "reviewed_deletions": [
+      "storage/local/lock_other.go",
+      "storage/local/lock_unix.go"
+    ],
+    "deletion_disposition": "Platform locking moved to internal/filelock; local wrapper reuses it and unsupported platforms still fail Config.Validate."
+  },
+  "native_evidence": "consumer-startup-c05-native.json",
+  "checks": [
+    "All C01-C05 requirement rows have direct source and acceptance evidence",
+    "Unchanged typed cache declaration across memory/file/PostgreSQL/Redis; named/default isolation",
+    "Local disk I/O and configured S3/R2 real signing with separate inert credentials, regions and namespaces",
+    "Retained audit scope works after constructor sealing and preserves exact-pool business transaction/schema",
+    "Post-audit full root/independent consumer vet, tests, compiler rejection, real gopls, native PostgreSQL/Redis, strict TypeScript, generation, documentation and release tools passed",
+    "Private canonical module proxy, no local replacements, three independently reproducible consumers, both linked commands passed",
+    "Three repeated native startup/selection/HTTP benchmarks and editor completion/hover rounds per profile",
+    "Both packaged serve commands exited 0 on SIGINT after actual HTTP readiness",
+    "All selected dependency notices accounted for; no affected package/function findings; unused module-only OpenPGP advisory retained",
+    "Verified code hashes unchanged after all acceptance and measurement execution"
+  ],
+  "changed_go_sources_sha256": {
+    "application/audit_scope.go": "500984c729adc7123733e2cbfa88ac707aa3a5d38083e4d8df776d7d73a2ac47",
+    "application/feature_providers.go": "61c9f454e423b216bdb34334f90fd4f1d945db6de5d060d668dcb5ebdac6e5f3",
+    "audit/scope.go": "9766781476bfa8cc8aafffa99d7f995e191ca356b7fbc0d70e01f92146a5db47",
+    "tests/fixtures/consumer/bootstrap/cmd/serve/main.go": "120f3365191ce73f963bc83a4f78718c20b472979030f5432d19514b7ddc5abb",
+    "tests/fixtures/consumer/bootstrap/persistent_test.go": "ca506f4a575d88255d230eb985b548f44193922742d6c84052577c1bb5c2d6ac",
+    "tests/fixtures/consumer/configuredprofile/audit_scope_test.go": "4efac4b9534748a7dba2e9959734b9c39f65ec47ea7385ee49dc0e7daf9caf76",
+    "tests/fixtures/consumer/configuredprofile/backend_switch_test.go": "47e6d02dde46ad0cefec0ffad3297fae4aa63127e6ae63a7c4ec9ee7b361bec7",
+    "tests/fixtures/consumer/configuredprofile/cmd/profile/main.go": "ac96266d56f7ad350504e604b142572e37de9567734ddbd7919376eea0a5a687",
+    "tests/fixtures/consumer/configuredprofile/profile_benchmark_test.go": "52a08066eaa275931c1bee1c3c82aabc8f3fcc5e3abeae42c3a19ffd3b6eb9c7",
+    "tests/fixtures/consumer/configuredprofile/profile_test.go": "ae5b0cf4fc20eae38d84f54197d7f5fa4aabf6b7ca066a4d2112a44dc25c6260",
+    "tests/fixtures/consumer/configuredprofile/routes.go": "618951ddb5d8b38f5fb3853d95062dc0ed1c880537d4e477da72591e53b6affa",
+    "tests/fixtures/consumer/configuredprofile/settings.go": "825da7e416d85b002456386f90369009566d921f4f43193d623fd7f3c786f8d9",
+    "tests/fixtures/consumer/configuredprofile/smoke.go": "c373c8a1817167aea3e8a7366f4277a36363c91fc19ea8ebd7a8f1bbec39e354",
+    "tools/release/main.go": "1f232c9b5cec8720dc59788098653c272f3e3fbaabc7eda277a1de82f365584b",
+    "tools/release/release_test.go": "c3ad8d6f8e0f548f2dbd221586ce6f6b329023f5ac2442ca69b3c11510cfb0d8"
+  },
+  "changed_tool_sources_sha256": {
+    "tools/measure-release.py": "57c97db8fed07e53640474bc808a49dddba64f46a6329e8af7692f46cf5eada0",
+    "tools/measure_release_test.py": "b20020b8e9cee4480765fdfc6c96c0976672776abd306446ae2edbe5eb9996fd"
+  },
+  "deleted_go_sources": [],
+  "frozen_code_and_ownership_input_count": 3481,
+  "frozen_code_manifest_sha256": "d708a470632fafb7725654cf77d7542656c7b07a1128b44eb067b0ccbc677e3c",
+  "limitations": [
+    "Cloud switch proof uses real SDK signing, not a new live S3/R2 account certification; existing provider protocol and scoped historical live evidence remain applicable.",
+    "No new real-account email delivery was performed.",
+    "Single-host cold/incremental observations and fixture microbenchmarks are not production throughput, tail-latency, continuously running IDE or minimum-hardware guarantees.",
+    "Configured assembly imports adapters even when deployment settings disable resources; measured build/import cost is retained.",
+    "Security is scoped to the scanned source and recorded vulnerability database timestamp; module-only OpenPGP advisory remains documented.",
+    "The initial framework roadmap milestone 25 and separately scoped filesystem/general session/view extensions remain outside this consumer-startup goal."
+  ],
+  "packaged_code_files_compared_to_final_source": 3405,
+  "final_review": {
+    "milestones_complete": [
+      "C01",
+      "C02",
+      "C03",
+      "C04",
+      "C05"
+    ],
+    "required_proof_rows": 15,
+    "post_verification_audit_complete": true,
+    "audit_findings_resolved": true,
+    "native_full_gate_exit": 0,
+    "documentation_exit": 0,
+    "frozen_source_inputs_match": 3481,
+    "packaged_code_inputs_match": 3405,
+    "private_candidate_only": true,
+    "git_mutation_performed": false
+  }
+}

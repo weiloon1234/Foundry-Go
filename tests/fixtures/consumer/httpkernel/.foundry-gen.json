@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "files": {
+    "asset_path_foundry.gen.go": "4e61ce801b1a7b1933fe65703dfb9ed345a78942f053239fcfc22221eabbc004",
+    "user_feed_path_foundry.gen.go": "d3f4ff25960d0231bd0b5e5b83343c76da8ec3eaba1f922f14122de18c9d17eb",
+    "user_path_foundry.gen.go": "5dc7e69c6d2c4b2adf0b37a56db9d6e9ee9e930f55b0e51d641466d67519ae4f"
+  }
+}

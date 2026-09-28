@@ -1,0 +1,1912 @@
+{
+  "format": 1,
+  "date": "2026-09-27",
+  "status": "accepted",
+  "objective": "Final deep readiness review before building an independent team boilerplate",
+  "decision": "Ready for team boilerplate development on the supported stack; select a retrievable version for distribution.",
+  "scope": {
+    "module_families": 66,
+    "method": "Reconciled prior whole-framework/security audits through current hashes; directly reviewed recent changes, runtime failure/ownership boundaries and consumer/package entry points. Not a claim that every unchanged line was reread.",
+    "prior_reviews": [
+      "docs/guides/module-review-20260923.md",
+      "docs/guides/security-hardening-20260924.md",
+      "docs/guides/team-readiness-20260925.md"
+    ],
+    "modules": {
+      "(root)": {
+        "source_files": 2,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "application": {
+        "source_files": 32,
+        "changed_since_team_acceptance": [
+          "application/services.go",
+          "application/feature_validation.go",
+          "application/feature_providers.go",
+          "application/settings.go",
+          "application/providers.go",
+          "application/builder.go",
+          "application/logging_settings.go",
+          "application/settings_foundry.gen.go"
+        ],
+        "added_since_team_acceptance": [
+          "application/timezone_test.go"
+        ]
+      },
+      "attachments": {
+        "source_files": 31,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "attribution": {
+        "source_files": 2,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "audit": {
+        "source_files": 20,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "auth": {
+        "source_files": 151,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "cache": {
+        "source_files": 58,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "cli": {
+        "source_files": 7,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "clock": {
+        "source_files": 1,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "cloud": {
+        "source_files": 3,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "cmd": {
+        "source_files": 7,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "collection": {
+        "source_files": 2,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "config": {
+        "source_files": 13,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "contract": {
+        "source_files": 50,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "countries": {
+        "source_files": 9,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "database": {
+        "source_files": 325,
+        "changed_since_team_acceptance": [
+          "database/query/lookup.go"
+        ],
+        "added_since_team_acceptance": []
+      },
+      "datatable": {
+        "source_files": 32,
+        "changed_since_team_acceptance": [
+          "datatable/export.go",
+          "datatable/datatable_postgres_test.go",
+          "datatable/manager.go"
+        ],
+        "added_since_team_acceptance": []
+      },
+      "decimal": {
+        "source_files": 2,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "diagnostics": {
+        "source_files": 4,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "email": {
+        "source_files": 30,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "encryption": {
+        "source_files": 6,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "enum": {
+        "source_files": 4,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "events": {
+        "source_files": 17,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "extensions": {
+        "source_files": 4,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "fault": {
+        "source_files": 2,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "foundation": {
+        "source_files": 18,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "health": {
+        "source_files": 4,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "http": {
+        "source_files": 290,
+        "changed_since_team_acceptance": [
+          "http/locale.go",
+          "http/errors.go"
+        ],
+        "added_since_team_acceptance": [
+          "http/error_messages.go",
+          "http/error_messages_test.go"
+        ]
+      },
+      "httpclient": {
+        "source_files": 19,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "i18n": {
+        "source_files": 15,
+        "changed_since_team_acceptance": [
+          "i18n/message/message.go",
+          "i18n/catalog_test.go"
+        ],
+        "added_since_team_acceptance": [
+          "i18n/prepared.go",
+          "i18n/prepared_test.go",
+          "i18n/prepared_fuzz_test.go"
+        ]
+      },
+      "idempotency": {
+        "source_files": 14,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "imaging": {
+        "source_files": 13,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "infrastructure": {
+        "source_files": 38,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "inspection": {
+        "source_files": 3,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "internal": {
+        "source_files": 296,
+        "changed_since_team_acceptance": [
+          "internal/agent/gopls_acceptance_test.go"
+        ],
+        "added_since_team_acceptance": []
+      },
+      "jobs": {
+        "source_files": 42,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "keyspace": {
+        "source_files": 2,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "lease": {
+        "source_files": 16,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "logging": {
+        "source_files": 14,
+        "changed_since_team_acceptance": [
+          "logging/sink.go",
+          "logging/logger.go",
+          "logging/channel_settings_foundry.gen.go",
+          "logging/channels.go",
+          "logging/logger_test.go"
+        ],
+        "added_since_team_acceptance": [
+          "logging/rotating_file_test.go",
+          "logging/rotation_timezone_test.go",
+          "logging/rotation_config.go",
+          "logging/rotating_file.go"
+        ]
+      },
+      "maintenance": {
+        "source_files": 2,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "metadata": {
+        "source_files": 9,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "model": {
+        "source_files": 5,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "notifications": {
+        "source_files": 23,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "observability": {
+        "source_files": 10,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "openapi": {
+        "source_files": 3,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "outbox": {
+        "source_files": 8,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "plugin": {
+        "source_files": 12,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "pubsub": {
+        "source_files": 15,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "randomtoken": {
+        "source_files": 2,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "ratelimit": {
+        "source_files": 8,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "redis": {
+        "source_files": 85,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "sanitize": {
+        "source_files": 2,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "schedule": {
+        "source_files": 21,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": [
+          "schedule/calendar_test.go",
+          "schedule/calendar.go"
+        ]
+      },
+      "secret": {
+        "source_files": 2,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "settings": {
+        "source_files": 6,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "storage": {
+        "source_files": 63,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "temporal": {
+        "source_files": 15,
+        "changed_since_team_acceptance": [
+          "temporal/helpers.go",
+          "temporal/timezone.go"
+        ],
+        "added_since_team_acceptance": [
+          "temporal/service.go",
+          "temporal/service_test.go"
+        ]
+      },
+      "testkit": {
+        "source_files": 35,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "tools": {
+        "source_files": 3,
+        "changed_since_team_acceptance": [
+          "tools/release/main.go",
+          "tools/release/release_test.go"
+        ],
+        "added_since_team_acceptance": []
+      },
+      "tracing": {
+        "source_files": 3,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "translations": {
+        "source_files": 11,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "typescript": {
+        "source_files": 10,
+        "changed_since_team_acceptance": [
+          "typescript/render.go",
+          "typescript/runtime/validation.ts",
+          "typescript/runtime/http.ts",
+          "typescript/runtime/wire.ts"
+        ],
+        "added_since_team_acceptance": [
+          "typescript/runtime/validation_messages.ts"
+        ]
+      },
+      "validation": {
+        "source_files": 52,
+        "changed_since_team_acceptance": [
+          "validation/metadata.go",
+          "validation/text_format.go",
+          "validation/temporal.go",
+          "validation/presence.go",
+          "validation/format.go",
+          "validation/required.go",
+          "validation/lookup.go",
+          "validation/empty.go",
+          "validation/number.go",
+          "validation/collection.go",
+          "validation/text.go",
+          "validation/label.go",
+          "validation/rule.go",
+          "validation/file.go",
+          "validation/compare.go",
+          "validation/membership.go",
+          "validation/conditional.go",
+          "validation/composition.go",
+          "validation/database/lookup.go"
+        ],
+        "added_since_team_acceptance": [
+          "validation/message_catalog.go",
+          "validation/messages_test.go",
+          "validation/parallel_test.go",
+          "validation/messages_builtin.go",
+          "validation/number_extra.go",
+          "validation/text_extra.go",
+          "validation/messages.go",
+          "validation/expanded_rules_test.go",
+          "validation/collection_extra.go",
+          "validation/messages_builtin_test.go",
+          "validation/batch_lookup_test.go",
+          "validation/password.go",
+          "validation/parallel.go"
+        ]
+      },
+      "value": {
+        "source_files": 14,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "websocket": {
+        "source_files": 48,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      },
+      "webhook": {
+        "source_files": 2,
+        "changed_since_team_acceptance": [],
+        "added_since_team_acceptance": []
+      }
+    }
+  },
+  "changes": [
+    {
+      "id": "R01",
+      "kind": "runtime fix",
+      "files": [
+        "typescript/runtime/validation_messages.ts"
+      ],
+      "problem": "Intl.PluralRules can round fractional scales greater than 20 to zero and select an incorrect form.",
+      "resolution": "Shared renderer uses the exported English fallback beyond its supported scale. Exact Go plural selection is unchanged. Generated-client/real-HTTP and exact-Go boundary/positive/negative regressions passed."
+    },
+    {
+      "id": "R02",
+      "kind": "coverage and guidance",
+      "files": [
+        "tests/fixtures/consumer/model_validation_named_postgres_test.go",
+        "docs/guides/validation-expanded.md"
+      ],
+      "resolution": "Public consumer proves explicitly selected pools survive built-in/custom/batched validation, real concurrent queries, cancellation/reuse and selected-pool failure without fallback."
+    },
+    {
+      "id": "R03",
+      "kind": "fuzz coverage",
+      "files": [
+        "i18n/prepared_fuzz_test.go"
+      ],
+      "resolution": "Prepared recipes preserve serialization/rendering, bounded output and literal fallbacks."
+    },
+    {
+      "id": "R04",
+      "kind": "package acceptance fix",
+      "files": [
+        "tools/release/main.go",
+        "tools/release/release_test.go"
+      ],
+      "problem": "Configured package omitted the localization fixture imported by its translation test.",
+      "resolution": "Include localization source and catalog assets with the configured profile; preserve ordinary profile isolation and verify source/assets in packaging regression."
+    }
+  ],
+  "source": {
+    "final_gate_inputs": 4071,
+    "code_inputs": 3710,
+    "code_sha256": "57c446cb749a460c9e14a0d8016069aed8a02c1da5fe6d140819e3e63c8c68b0",
+    "fingerprint_format": "SHA-256 of compact sorted JSON mapping relative .go/.ts/.mjs/.lua paths to SHA-256 file hashes, excluding caches/tool binaries/dependency trees as run.py specifies.",
+    "changed_since_baseline_sha256": {
+      "CHANGELOG.md": "a4ef4476a9e935150a12bad0ba3f8a33ce4c18485f2d5b15b11dc529d36eb2fd",
+      "docs/guides/validation-expanded.md": "fd7179b71f8e251c097acc195078212678eec27b43b8bf395abb1fd8e1ea64a2",
+      "docs/guides/validation-messages.md": "31b5da9a9da00425100dbf62c7b879ca02ac06a6d9da6991eb71b8128f2f068f",
+      "docs/release-checklist.md": "19d6dd93431b80647e4062423357d4df7cc93af8ea265ee2d6d77044314333ba",
+      "i18n/catalog_test.go": "7667d6edbec6f93f33fadadaae0a0ac08e55ef3c61ef1ad3fbd93868909ef6d4",
+      "i18n/prepared_fuzz_test.go": "be0e2e916b01cef529ea8ffd5f652a83008619bc50ffb7c0589605f8b7eaf9d2",
+      "tests/fixtures/consumer/clientcontracts/contracts.go": "078ebce25bae177a77c736b5db08f5f7a43bee0391b4da83a80b611980f1ec03",
+      "tests/fixtures/consumer/clientcontracts/contracts_test.go": "a4895287f76252697933d9ec0ae1cf6240068c60cf2cc2cfe7ecce66f2570f74",
+      "tests/fixtures/consumer/clientcontracts/testdata/runtime.mjs": "71381f9ae8fedd08a8fe3d0ebc71a8df3b825923e3ae35cc84f76d49a972129a",
+      "tests/fixtures/consumer/clientcontracts/validation_plurals.go": "6cc1d5cbfcf5091b202e1eddb847f65bcfb345fe2ff401c1a39b6efc79de2d3d",
+      "tests/fixtures/consumer/model_validation_named_postgres_test.go": "29089669d2db5447365762fc2b2fee40d73195df42c39f1cfaed08abc0835d5c",
+      "tools/release/main.go": "735a060a58df95208473d3bbae1316e7087b2403614b7d159456ef04213ac6d0",
+      "tools/release/release_test.go": "136ff43364249863be368e1b5bc68bed136ffa0c5bc51e8748df9d55ac3d0b96",
+      "typescript/runtime/validation_messages.ts": "f56b3569877f24c0497b2d8ef15a71e461b70752a7a2466ab6bdea067b84ed14"
+    },
+    "full_gate_inputs_unchanged": true,
+    "raw_inventory": ".cache/final-readiness-20260927/verify-final-package-source-before.json",
+    "reporting_docs_follow_verification": true,
+    "final_reporting_only_changes": [
+      "README.md",
+      "blueprint/00-master-architecture-and-parity.md",
+      "docs/evidence/final-readiness-20260927.json",
+      "docs/guides/final-readiness-20260927.md",
+      "docs/guides/team-adoption.md"
+    ],
+    "final_code_matches_verified": true
+  },
+  "environment": {
+    "go": "go1.27.1",
+    "os": "darwin",
+    "arch": "arm64",
+    "required": [
+      "PostgreSQL",
+      "Redis",
+      "TypeScript"
+    ],
+    "editor": "existing real gopls",
+    "cache": "ordinary warm build cache; isolated package module cache; no new performance claim"
+  },
+  "verification": {
+    "commands": [
+      {
+        "argv": [
+          "make",
+          "GO=/usr/local/go/bin/go",
+          "verify"
+        ],
+        "cwd": "${FOUNDRY_ROOT}",
+        "darwin_max_process_rss_bytes": 4373741568,
+        "elapsed_seconds": 531.6142915840028,
+        "exit": 0,
+        "name": "verify-baseline",
+        "sampled_compiler_rss_bytes": 4373741568,
+        "sampled_tree_rss_bytes": 4543315968,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-race",
+          "-count=1",
+          "-timeout=5m",
+          "-run",
+          "^TestPostgresParallelValidation",
+          "."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/tests/fixtures/consumer",
+        "darwin_max_process_rss_bytes": 2899607552,
+        "elapsed_seconds": 26.038710749999154,
+        "exit": 0,
+        "name": "named-validation-race",
+        "sampled_compiler_rss_bytes": 2899591168,
+        "sampled_tree_rss_bytes": 3425878016,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "test",
+          "./i18n",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzPreparedMessageRoundTrip$",
+          "-fuzztime=30s",
+          "-parallel=2"
+        ],
+        "cwd": "${FOUNDRY_ROOT}",
+        "darwin_max_process_rss_bytes": 129024000,
+        "elapsed_seconds": 32.10281470802147,
+        "exit": 0,
+        "name": "prepared-message-fuzz",
+        "sampled_compiler_rss_bytes": 60997632,
+        "sampled_tree_rss_bytes": 243318784,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "make",
+          "GO=/usr/local/go/bin/go",
+          "race"
+        ],
+        "cwd": "${FOUNDRY_ROOT}",
+        "darwin_max_process_rss_bytes": 10526621696,
+        "elapsed_seconds": 1297.0733021659544,
+        "exit": 0,
+        "name": "race-full",
+        "sampled_compiler_rss_bytes": 10525982720,
+        "sampled_tree_rss_bytes": 14973059072,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-race",
+          "-count=1",
+          "-timeout=5m",
+          "./clientcontracts"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/tests/fixtures/consumer",
+        "darwin_max_process_rss_bytes": 2959196160,
+        "elapsed_seconds": 20.693780792003963,
+        "exit": 0,
+        "name": "client-plural-race",
+        "sampled_compiler_rss_bytes": 2959114240,
+        "sampled_tree_rss_bytes": 3014311936,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-race",
+          "-count=1",
+          "-timeout=5m",
+          "./i18n"
+        ],
+        "cwd": "${FOUNDRY_ROOT}",
+        "darwin_max_process_rss_bytes": 127188992,
+        "elapsed_seconds": 1.9394848329829983,
+        "exit": 0,
+        "name": "i18n-plural-race",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 98353152,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "make",
+          "GO=/usr/local/go/bin/go",
+          "verify"
+        ],
+        "cwd": "${FOUNDRY_ROOT}",
+        "darwin_max_process_rss_bytes": 4455907328,
+        "elapsed_seconds": 536.282090209017,
+        "exit": 0,
+        "name": "verify-final",
+        "sampled_compiler_rss_bytes": 4455645184,
+        "sampled_tree_rss_bytes": 4623171584,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "make",
+          "GO=/usr/local/go/bin/go",
+          "SECURITY_OUTPUT=.cache/final-readiness-20260927/security",
+          "security-check"
+        ],
+        "cwd": "${FOUNDRY_ROOT}",
+        "darwin_max_process_rss_bytes": 3523837952,
+        "elapsed_seconds": 8.906183000013698,
+        "exit": 0,
+        "name": "security-check",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 3259351040,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "test",
+          "./config/toml",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzDecodeBoundedDocument$",
+          "-fuzztime=15s",
+          "-parallel=2"
+        ],
+        "cwd": "${FOUNDRY_ROOT}",
+        "darwin_max_process_rss_bytes": 150503424,
+        "elapsed_seconds": 18.013206833973527,
+        "exit": 0,
+        "name": "fuzz-config",
+        "sampled_compiler_rss_bytes": 83968000,
+        "sampled_tree_rss_bytes": 430194688,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "test",
+          "./contract/manifest",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzManifestDecoder$",
+          "-fuzztime=15s",
+          "-parallel=2"
+        ],
+        "cwd": "${FOUNDRY_ROOT}",
+        "darwin_max_process_rss_bytes": 1597227008,
+        "elapsed_seconds": 34.963722291984595,
+        "exit": 0,
+        "name": "fuzz-manifest",
+        "sampled_compiler_rss_bytes": 1597227008,
+        "sampled_tree_rss_bytes": 2078392320,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "test",
+          "./http",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzMultipartEndpointBoundsAndCleanup$",
+          "-fuzztime=15s",
+          "-parallel=2"
+        ],
+        "cwd": "${FOUNDRY_ROOT}",
+        "darwin_max_process_rss_bytes": 2469068800,
+        "elapsed_seconds": 50.36870833300054,
+        "exit": 0,
+        "name": "fuzz-multipart",
+        "sampled_compiler_rss_bytes": 2469052416,
+        "sampled_tree_rss_bytes": 5681774592,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "test",
+          "./websocket",
+          "-run",
+          "^$",
+          "-fuzz",
+          "^FuzzProtocolFrame$",
+          "-fuzztime=15s",
+          "-parallel=2"
+        ],
+        "cwd": "${FOUNDRY_ROOT}",
+        "darwin_max_process_rss_bytes": 317882368,
+        "elapsed_seconds": 17.950451666023582,
+        "exit": 0,
+        "name": "fuzz-websocket",
+        "sampled_compiler_rss_bytes": 134725632,
+        "sampled_tree_rss_bytes": 553943040,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "run",
+          ".",
+          "--root",
+          "../..",
+          "--out",
+          "../../.cache/final-readiness-candidate-20260927",
+          "--version",
+          "v0.0.0-candidate.final.20260927"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/tools/release",
+        "darwin_max_process_rss_bytes": 33243136,
+        "elapsed_seconds": 0.9302847920334898,
+        "exit": 0,
+        "name": "package",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 54951936,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/tools/release",
+        "darwin_max_process_rss_bytes": 121765888,
+        "elapsed_seconds": 1.9569416669546627,
+        "exit": 0,
+        "name": "release-package-race-final",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 83394560,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "make",
+          "GO=/usr/local/go/bin/go",
+          "verify"
+        ],
+        "cwd": "${FOUNDRY_ROOT}",
+        "darwin_max_process_rss_bytes": 4540612608,
+        "elapsed_seconds": 521.4718246670091,
+        "exit": 0,
+        "name": "verify-final-package",
+        "sampled_compiler_rss_bytes": 4540596224,
+        "sampled_tree_rss_bytes": 4708909056,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "make",
+          "GO=/usr/local/go/bin/go",
+          "SECURITY_OUTPUT=.cache/final-readiness-20260927/security-final-results",
+          "security-check"
+        ],
+        "cwd": "${FOUNDRY_ROOT}",
+        "darwin_max_process_rss_bytes": 3099361280,
+        "elapsed_seconds": 8.159880875027739,
+        "exit": 0,
+        "name": "security-final",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 2955001856,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "run",
+          ".",
+          "--root",
+          "../..",
+          "--out",
+          "../../.cache/final-readiness-candidate-20260927-final",
+          "--version",
+          "v0.0.0-candidate.final.20260927.2"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/tools/release",
+        "darwin_max_process_rss_bytes": 98254848,
+        "elapsed_seconds": 1.4070427079568617,
+        "exit": 0,
+        "name": "package-final",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 54263808,
+        "timed_out": false
+      }
+    ],
+    "full_race_scope": "Framework, plugin and complete consumer make race passed before the TypeScript plural and package corrections. Final client/i18n and release-tool races plus final make verify passed on the corrections; no Go production runtime changed in between.",
+    "fuzz": [
+      {
+        "name": "prepared-message-fuzz",
+        "executions": 329631,
+        "exit": 0,
+        "seconds": 32.1
+      },
+      {
+        "name": "fuzz-config",
+        "executions": 753823,
+        "exit": 0,
+        "seconds": 18.01
+      },
+      {
+        "name": "fuzz-manifest",
+        "executions": 11034,
+        "exit": 0,
+        "seconds": 34.96
+      },
+      {
+        "name": "fuzz-multipart",
+        "executions": 149653,
+        "exit": 0,
+        "seconds": 50.37
+      },
+      {
+        "name": "fuzz-websocket",
+        "executions": 165583,
+        "exit": 0,
+        "seconds": 17.95
+      }
+    ],
+    "package_commands": [
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "mod",
+          "download",
+          "all"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/ordinary",
+        "darwin_max_process_rss_bytes": 38453248,
+        "elapsed_seconds": 5.789696624968201,
+        "exit": 0,
+        "name": "ordinary-download",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 39665664,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "mod",
+          "download",
+          "all"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/configured",
+        "darwin_max_process_rss_bytes": 25935872,
+        "elapsed_seconds": 0.24488729203585535,
+        "exit": 0,
+        "name": "configured-download",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1769472,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "mod",
+          "download",
+          "all"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/full",
+        "darwin_max_process_rss_bytes": 26017792,
+        "elapsed_seconds": 0.24334875005297363,
+        "exit": 0,
+        "name": "full-download",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1425408,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "list",
+          "-m",
+          "-json",
+          "all"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/full",
+        "darwin_max_process_rss_bytes": 23937024,
+        "elapsed_seconds": 0.2520359579939395,
+        "exit": 0,
+        "name": "module-graph",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1425408,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "-o",
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumption/foundry",
+          "github.com/weiloon1234/Foundry-Go/cmd/foundry"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/full",
+        "darwin_max_process_rss_bytes": 1294893056,
+        "elapsed_seconds": 6.730501125042792,
+        "exit": 0,
+        "name": "generator-build",
+        "sampled_compiler_rss_bytes": 1240793088,
+        "sampled_tree_rss_bytes": 1666744320,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumption/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/ordinary"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/ordinary",
+        "darwin_max_process_rss_bytes": 621854720,
+        "elapsed_seconds": 1.6565955839469098,
+        "exit": 0,
+        "name": "ordinary-generate",
+        "sampled_compiler_rss_bytes": 621133824,
+        "sampled_tree_rss_bytes": 682049536,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "mod",
+          "verify"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/ordinary",
+        "darwin_max_process_rss_bytes": 44498944,
+        "elapsed_seconds": 0.46479645802173764,
+        "exit": 0,
+        "name": "ordinary-integrity",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 45760512,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/ordinary",
+        "darwin_max_process_rss_bytes": 168607744,
+        "elapsed_seconds": 0.2542418329976499,
+        "exit": 0,
+        "name": "ordinary-build",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1425408,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumption/foundry",
+          "agent",
+          "complete",
+          "--workspace",
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/ordinary",
+          "--file",
+          "productionprofile/queries.go",
+          "--line",
+          "16",
+          "--column",
+          "20",
+          "--gopls",
+          "${FOUNDRY_ROOT}/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/ordinary",
+        "darwin_max_process_rss_bytes": 322568192,
+        "elapsed_seconds": 1.6980382920010015,
+        "exit": 0,
+        "name": "ordinary-complete",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 505348096,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumption/foundry",
+          "agent",
+          "hover",
+          "--workspace",
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/ordinary",
+          "--file",
+          "productionprofile/queries.go",
+          "--line",
+          "16",
+          "--column",
+          "21",
+          "--gopls",
+          "${FOUNDRY_ROOT}/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/ordinary",
+        "darwin_max_process_rss_bytes": 236470272,
+        "elapsed_seconds": 1.4804564170190133,
+        "exit": 0,
+        "name": "ordinary-hover",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 382517248,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "-o",
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumption/ordinary-profile",
+          "./productionprofile/cmd/profile"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/ordinary",
+        "darwin_max_process_rss_bytes": 169525248,
+        "elapsed_seconds": 0.24454412498744205,
+        "exit": 0,
+        "name": "ordinary-link",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1392640,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumption/ordinary-profile"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/ordinary",
+        "darwin_max_process_rss_bytes": 6291456,
+        "elapsed_seconds": 0.47411795798689127,
+        "exit": 0,
+        "name": "ordinary-smoke",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1294336,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumption/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/configured"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/configured",
+        "darwin_max_process_rss_bytes": 2173140992,
+        "elapsed_seconds": 15.603323458053637,
+        "exit": 0,
+        "name": "configured-generate",
+        "sampled_compiler_rss_bytes": 2172895232,
+        "sampled_tree_rss_bytes": 4965220352,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "mod",
+          "verify"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/configured",
+        "darwin_max_process_rss_bytes": 44908544,
+        "elapsed_seconds": 0.46365329198306426,
+        "exit": 0,
+        "name": "configured-integrity",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 46170112,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/configured",
+        "darwin_max_process_rss_bytes": 1501364224,
+        "elapsed_seconds": 1.1722155829775147,
+        "exit": 0,
+        "name": "configured-build",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1491615744,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumption/foundry",
+          "agent",
+          "complete",
+          "--workspace",
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/configured",
+          "--file",
+          "configuredprofile/routes.go",
+          "--line",
+          "17",
+          "--column",
+          "25",
+          "--gopls",
+          "${FOUNDRY_ROOT}/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/configured",
+        "darwin_max_process_rss_bytes": 467140608,
+        "elapsed_seconds": 2.207841958035715,
+        "exit": 0,
+        "name": "configured-complete",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 626016256,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumption/foundry",
+          "agent",
+          "hover",
+          "--workspace",
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/configured",
+          "--file",
+          "configuredprofile/routes.go",
+          "--line",
+          "17",
+          "--column",
+          "26",
+          "--gopls",
+          "${FOUNDRY_ROOT}/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/configured",
+        "darwin_max_process_rss_bytes": 322060288,
+        "elapsed_seconds": 1.9722726659965701,
+        "exit": 0,
+        "name": "configured-hover",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 485818368,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "-o",
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumption/configured-profile",
+          "./configuredprofile/cmd/profile"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/configured",
+        "darwin_max_process_rss_bytes": 1498578944,
+        "elapsed_seconds": 1.1757754579884931,
+        "exit": 0,
+        "name": "configured-link",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1486110720,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumption/configured-profile"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/configured",
+        "darwin_max_process_rss_bytes": 24854528,
+        "elapsed_seconds": 0.7206446669879369,
+        "exit": 0,
+        "name": "configured-smoke",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1294336,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumption/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/full"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/full",
+        "darwin_max_process_rss_bytes": 3101409280,
+        "elapsed_seconds": 45.46626529202331,
+        "exit": 0,
+        "name": "full-generate",
+        "sampled_compiler_rss_bytes": 3101392896,
+        "sampled_tree_rss_bytes": 13572227072,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "mod",
+          "verify"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/full",
+        "darwin_max_process_rss_bytes": 42008576,
+        "elapsed_seconds": 0.46342404099414125,
+        "exit": 0,
+        "name": "full-integrity",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 43270144,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/full",
+        "darwin_max_process_rss_bytes": 1579302912,
+        "elapsed_seconds": 1.8800631249905564,
+        "exit": 0,
+        "name": "full-build",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 2872508416,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumption/foundry",
+          "agent",
+          "complete",
+          "--workspace",
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/full",
+          "--file",
+          "catalog/product.go",
+          "--line",
+          "21",
+          "--column",
+          "78",
+          "--gopls",
+          "${FOUNDRY_ROOT}/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/full",
+        "darwin_max_process_rss_bytes": 1116241920,
+        "elapsed_seconds": 2.6740385410375893,
+        "exit": 0,
+        "name": "full-complete",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1163198464,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumption/foundry",
+          "agent",
+          "hover",
+          "--workspace",
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/full",
+          "--file",
+          "catalog/product.go",
+          "--line",
+          "21",
+          "--column",
+          "79",
+          "--gopls",
+          "${FOUNDRY_ROOT}/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/full",
+        "darwin_max_process_rss_bytes": 732839936,
+        "elapsed_seconds": 2.173258082999382,
+        "exit": 0,
+        "name": "full-hover",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 478248960,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-count=1",
+          "-run",
+          "^TestConfigured(Profile|Locale)",
+          "./configuredprofile"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/configured",
+        "darwin_max_process_rss_bytes": 1533509632,
+        "elapsed_seconds": 5.195593999989796,
+        "exit": 0,
+        "name": "configured-consumer-test",
+        "sampled_compiler_rss_bytes": 1487831040,
+        "sampled_tree_rss_bytes": 1558675456,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "tool",
+          "foundry",
+          "doctor",
+          "--dir",
+          "."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/full",
+        "darwin_max_process_rss_bytes": 485212160,
+        "elapsed_seconds": 1.1712394170463085,
+        "exit": 0,
+        "name": "pinned-tool",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 163561472,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "-o",
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumption/configured-linux-amd64",
+          "./configuredprofile/cmd/profile"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/configured",
+        "darwin_max_process_rss_bytes": 2154807296,
+        "elapsed_seconds": 18.756714540999383,
+        "exit": 0,
+        "name": "linux-amd64",
+        "sampled_compiler_rss_bytes": 2154774528,
+        "sampled_tree_rss_bytes": 6165774336,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "-o",
+          "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumption/configured-linux-arm64",
+          "./configuredprofile/cmd/profile"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/configured",
+        "darwin_max_process_rss_bytes": 2160017408,
+        "elapsed_seconds": 19.59006750001572,
+        "exit": 0,
+        "name": "linux-arm64",
+        "sampled_compiler_rss_bytes": 2160001024,
+        "sampled_tree_rss_bytes": 5636816896,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "list",
+          "-deps",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumption/module-cache/github.com/weiloon1234/!foundry-!go@v0.0.0-candidate.final.20260927.2",
+        "darwin_max_process_rss_bytes": 51085312,
+        "elapsed_seconds": 0.458676416950766,
+        "exit": 0,
+        "name": "framework-imports",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 37421056,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/milestone24-production/security-tools/govulncheck",
+          "-json",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumption/module-cache/github.com/weiloon1234/!foundry-!go@v0.0.0-candidate.final.20260927.2",
+        "darwin_max_process_rss_bytes": 2901360640,
+        "elapsed_seconds": 1.8646247079595923,
+        "exit": 0,
+        "name": "framework-vulnerabilities",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 2915516416,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "list",
+          "-deps",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/full",
+        "darwin_max_process_rss_bytes": 56475648,
+        "elapsed_seconds": 0.23943395796231925,
+        "exit": 0,
+        "name": "consumer-imports",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1425408,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/milestone24-production/security-tools/govulncheck",
+          "-json",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/final-readiness-candidate-20260927-final/consumers/full",
+        "darwin_max_process_rss_bytes": 3260645376,
+        "elapsed_seconds": 1.612329374998808,
+        "exit": 0,
+        "name": "consumer-vulnerabilities",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 2891923456,
+        "timed_out": false
+      }
+    ]
+  },
+  "failures_and_corrections": [
+    {
+      "stage": "verify-initial",
+      "exit": 2,
+      "classification": "orchestration configuration",
+      "cause": "Required Redis endpoint omitted from private runner environment.",
+      "resolution": "Restored established local endpoint without modifying product code; baseline and final gates passed."
+    },
+    {
+      "stage": "initial candidate configured-consumer-test",
+      "exit": 1,
+      "classification": "package source omission",
+      "cause": "Configured translation test could not import its omitted localization fixture.",
+      "resolution": "Fixed release source selection, passed release-tool races and final full gate, then prepared and verified a fresh candidate. Failed candidate retained unchanged."
+    },
+    {
+      "stage": "release-package-race",
+      "exit": 1,
+      "classification": "test fixture asset format",
+      "cause": "New regression initially used TOML rather than the existing JSON locale asset format.",
+      "resolution": "Corrected fixture to the existing JSON convention; source file policy unchanged."
+    },
+    {
+      "stage": "docs-final",
+      "exit": -15,
+      "classification": "harness sandbox configuration",
+      "cause": "Process sampling was denied without the access used for earlier verification.",
+      "resolution": "Reran with the established access; docs-final-verified passed."
+    }
+  ],
+  "package": {
+    "manifest_sha256": "279917e2d4ce8879f762277604351c9097686365d7983f72b9ee3884bcd595ab",
+    "artifacts": [
+      {
+        "path": "github.com/weiloon1234/Foundry-Go",
+        "version": "v0.0.0-candidate.final.20260927.2",
+        "sha256": "685bede0da49952d8bb2263078e6d620ada164df6cd23e3f9d035f1f77854dac",
+        "sum": "h1:nlEhaFM8NsKDgs0Cj1Jv02QHFaJ6zAaY97o56OC8Ul4="
+      },
+      {
+        "path": "foundry.test/pluginbase",
+        "version": "v0.0.0-candidate.final.20260927.2",
+        "sha256": "9824b04dcd6601a101cd264ab77def1218fa75e360da6e18b4cde1a263819270",
+        "sum": "h1:Xj7/J/yiXXkAvYrCGTdecKnPllO1vUSoWlPYb2ZNEMA="
+      },
+      {
+        "path": "foundry.test/plugindep",
+        "version": "v0.0.0-candidate.final.20260927.2",
+        "sha256": "36d6022b0e3db7050675b667157b60e0dad845ee4d21a00d3d1bec1bfde34ad7",
+        "sum": "h1:YA6rbC+GViyuQQyDdK7gY+b3a2pZ9AMeG1OqOtXMGho="
+      }
+    ],
+    "consumption": {
+      "cold_measurement": false,
+      "import_graphs": [
+        {
+          "name": "framework",
+          "openpgp_imported": false,
+          "packages": 661
+        },
+        {
+          "name": "consumer",
+          "openpgp_imported": false,
+          "packages": 726
+        }
+      ],
+      "linux": "compiled, not executed",
+      "module_count": 61,
+      "module_integrity": true,
+      "no_replacements": true,
+      "profiles": [
+        {
+          "build": "passed",
+          "editor": "passed",
+          "generation_identical": true,
+          "name": "ordinary"
+        },
+        {
+          "build": "passed",
+          "editor": "passed",
+          "generation_identical": true,
+          "name": "configured"
+        },
+        {
+          "build": "passed",
+          "editor": "passed",
+          "generation_identical": true,
+          "name": "full"
+        }
+      ],
+      "status": "passed"
+    },
+    "dependencies": {
+      "status": "reviewed",
+      "dependency_modules": 60,
+      "external_modules": 57,
+      "license_notice_patent_files": 73,
+      "external_versions_and_license_hashes_unchanged_since_20260925": true,
+      "reference": "docs/dependency-review.md",
+      "candidate": ".cache/final-readiness-candidate-20260927-final"
+    },
+    "privacy": {
+      "status": "passed",
+      "checked_files": 2654,
+      "scope": "Known private test URL/password absent from candidate archives and task evidence; prohibited private paths excluded."
+    }
+  },
+  "security": {
+    "source_and_tools": {
+      "format": 1,
+      "status": "passed",
+      "checks": [
+        {
+          "command": [
+            "${FOUNDRY_ROOT}/.cache/milestone24-production/security-tools/govulncheck",
+            "-json",
+            "./..."
+          ],
+          "exit": 0,
+          "seconds": 2.013,
+          "execution_error": null,
+          "name": "go-0",
+          "module": ".",
+          "analysis": {
+            "config": {
+              "protocol_version": "v1.0.0",
+              "scanner_name": "govulncheck",
+              "scanner_version": "v1.8.0",
+              "db": "https://vuln.go.dev",
+              "db_last_modified": "2026-09-24T20:07:49Z",
+              "go_version": "go1.27.1",
+              "scan_level": "symbol",
+              "scan_mode": "source"
+            },
+            "findings": [
+              {
+                "osv": "GO-2026-5932",
+                "trace": [
+                  {
+                    "module": "golang.org/x/crypto",
+                    "version": "v0.57.0"
+                  }
+                ]
+              }
+            ],
+            "affected_function_findings": []
+          },
+          "status": "passed"
+        },
+        {
+          "command": [
+            "${FOUNDRY_ROOT}/.cache/milestone24-production/security-tools/govulncheck",
+            "-json",
+            "./..."
+          ],
+          "exit": 0,
+          "seconds": 0.739,
+          "execution_error": null,
+          "name": "go-1",
+          "module": "tools/release",
+          "analysis": {
+            "config": {
+              "protocol_version": "v1.0.0",
+              "scanner_name": "govulncheck",
+              "scanner_version": "v1.8.0",
+              "db": "https://vuln.go.dev",
+              "db_last_modified": "2026-09-24T20:07:49Z",
+              "go_version": "go1.27.1",
+              "scan_level": "symbol",
+              "scan_mode": "source"
+            },
+            "findings": [],
+            "affected_function_findings": []
+          },
+          "status": "passed"
+        },
+        {
+          "command": [
+            "${FOUNDRY_ROOT}/.cache/milestone24-production/security-tools/govulncheck",
+            "-json",
+            "./..."
+          ],
+          "exit": 0,
+          "seconds": 1.152,
+          "execution_error": null,
+          "name": "go-2",
+          "module": "tests/fixtures/plugin_base",
+          "analysis": {
+            "config": {
+              "protocol_version": "v1.0.0",
+              "scanner_name": "govulncheck",
+              "scanner_version": "v1.8.0",
+              "db": "https://vuln.go.dev",
+              "db_last_modified": "2026-09-24T20:07:49Z",
+              "go_version": "go1.27.1",
+              "scan_level": "symbol",
+              "scan_mode": "source"
+            },
+            "findings": [
+              {
+                "osv": "GO-2026-5932",
+                "trace": [
+                  {
+                    "module": "golang.org/x/crypto",
+                    "version": "v0.57.0"
+                  }
+                ]
+              }
+            ],
+            "affected_function_findings": []
+          },
+          "status": "passed"
+        },
+        {
+          "command": [
+            "${FOUNDRY_ROOT}/.cache/milestone24-production/security-tools/govulncheck",
+            "-json",
+            "./..."
+          ],
+          "exit": 0,
+          "seconds": 1.181,
+          "execution_error": null,
+          "name": "go-3",
+          "module": "tests/fixtures/plugin_dep",
+          "analysis": {
+            "config": {
+              "protocol_version": "v1.0.0",
+              "scanner_name": "govulncheck",
+              "scanner_version": "v1.8.0",
+              "db": "https://vuln.go.dev",
+              "db_last_modified": "2026-09-24T20:07:49Z",
+              "go_version": "go1.27.1",
+              "scan_level": "symbol",
+              "scan_mode": "source"
+            },
+            "findings": [
+              {
+                "osv": "GO-2026-5932",
+                "trace": [
+                  {
+                    "module": "golang.org/x/crypto",
+                    "version": "v0.57.0"
+                  }
+                ]
+              }
+            ],
+            "affected_function_findings": []
+          },
+          "status": "passed"
+        },
+        {
+          "command": [
+            "${FOUNDRY_ROOT}/.cache/milestone24-production/security-tools/govulncheck",
+            "-json",
+            "./..."
+          ],
+          "exit": 0,
+          "seconds": 1.591,
+          "execution_error": null,
+          "name": "go-4",
+          "module": "tests/fixtures/consumer",
+          "analysis": {
+            "config": {
+              "protocol_version": "v1.0.0",
+              "scanner_name": "govulncheck",
+              "scanner_version": "v1.8.0",
+              "db": "https://vuln.go.dev",
+              "db_last_modified": "2026-09-24T20:07:49Z",
+              "go_version": "go1.27.1",
+              "scan_level": "symbol",
+              "scan_mode": "source"
+            },
+            "findings": [
+              {
+                "osv": "GO-2026-5932",
+                "trace": [
+                  {
+                    "module": "golang.org/x/crypto",
+                    "version": "v0.57.0"
+                  }
+                ]
+              }
+            ],
+            "affected_function_findings": []
+          },
+          "status": "passed"
+        },
+        {
+          "command": [
+            "${FOUNDRY_ROOT}/.cache/milestone24-production/security-tools/govulncheck",
+            "-mode=binary",
+            "-json",
+            "${FOUNDRY_ROOT}/bin/gopls"
+          ],
+          "exit": 0,
+          "seconds": 0.647,
+          "execution_error": null,
+          "name": "gopls",
+          "module": ".",
+          "analysis": {
+            "config": {
+              "protocol_version": "v1.0.0",
+              "scanner_name": "govulncheck",
+              "scanner_version": "v1.8.0",
+              "db": "https://vuln.go.dev",
+              "db_last_modified": "2026-09-24T20:07:49Z",
+              "scan_level": "symbol",
+              "scan_mode": "binary"
+            },
+            "findings": [
+              {
+                "osv": "GO-2026-6179",
+                "fixed_version": "v0.40.0",
+                "trace": [
+                  {
+                    "module": "golang.org/x/mod",
+                    "version": "v0.37.0"
+                  }
+                ]
+              },
+              {
+                "osv": "GO-2026-6180",
+                "fixed_version": "v0.40.0",
+                "trace": [
+                  {
+                    "module": "golang.org/x/mod",
+                    "version": "v0.37.0"
+                  }
+                ]
+              },
+              {
+                "osv": "GO-2026-5970",
+                "fixed_version": "v0.39.0",
+                "trace": [
+                  {
+                    "module": "golang.org/x/text",
+                    "version": "v0.38.0"
+                  }
+                ]
+              }
+            ],
+            "affected_function_findings": []
+          },
+          "status": "passed"
+        },
+        {
+          "command": [
+            "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/node",
+            "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/lib/node_modules/npm/bin/npm-cli.js",
+            "audit",
+            "--package-lock-only",
+            "--ignore-scripts",
+            "--json"
+          ],
+          "exit": 0,
+          "seconds": 0.652,
+          "execution_error": null,
+          "name": "typescript",
+          "module": "tools/typescript",
+          "analysis": {
+            "vulnerabilities": {
+              "info": 0,
+              "low": 0,
+              "moderate": 0,
+              "high": 0,
+              "critical": 0,
+              "total": 0
+            }
+          },
+          "status": "passed"
+        }
+      ],
+      "policy": "Fail tool errors, malformed/incomplete results, affected function findings or any npm vulnerability. Preserve module/package-only findings for review."
+    },
+    "packaged": [
+      {
+        "affected_function_findings": [],
+        "config": {
+          "db": "https://vuln.go.dev",
+          "db_last_modified": "2026-09-24T20:07:49Z",
+          "go_version": "go1.27.1",
+          "protocol_version": "v1.0.0",
+          "scan_level": "symbol",
+          "scan_mode": "source",
+          "scanner_name": "govulncheck",
+          "scanner_version": "v1.8.0"
+        },
+        "findings": [
+          {
+            "osv": "GO-2026-5932",
+            "trace": [
+              {
+                "module": "golang.org/x/crypto",
+                "version": "v0.57.0"
+              }
+            ]
+          }
+        ],
+        "name": "framework"
+      },
+      {
+        "affected_function_findings": [],
+        "config": {
+          "db": "https://vuln.go.dev",
+          "db_last_modified": "2026-09-24T20:07:49Z",
+          "go_version": "go1.27.1",
+          "protocol_version": "v1.0.0",
+          "scan_level": "symbol",
+          "scan_mode": "source",
+          "scanner_name": "govulncheck",
+          "scanner_version": "v1.8.0"
+        },
+        "findings": [
+          {
+            "osv": "GO-2026-5932",
+            "trace": [
+              {
+                "module": "golang.org/x/crypto",
+                "version": "v0.57.0"
+              }
+            ]
+          }
+        ],
+        "name": "consumer"
+      }
+    ],
+    "review": "No affected functions. Retained module-only GO-2026-5932 concerns unused OpenPGP; final packaged import graphs contain no OpenPGP packages. Existing gopls binary retains module-only GO-2026-6179/6180/5970 with no affected symbols. Zero npm vulnerabilities. These are known-database/symbol results, not universal security certification."
+  },
+  "limits": [
+    "PostgreSQL only; named pools supported, no distributed validation transaction.",
+    "Standalone Redis; supported macOS/Linux local persistence.",
+    "Linux amd64/arm64 compiled with CGO_ENABLED=0, not executed on Linux.",
+    "Historical AWS S3/R2 certification retained for unchanged adapters; no new live email/provider send.",
+    "Milestone 25 remains deferred; no new public module version was published."
+  ],
+  "required_items_pending": [],
+  "version_control": "No commit, push, merge, tag or publication.",
+  "raw_evidence": [
+    ".cache/final-readiness-20260927",
+    ".cache/final-readiness-candidate-20260927-final/consumption"
+  ],
+  "documentation_verification": {
+    "argv": [
+      "make",
+      "GO=/usr/local/go/bin/go",
+      "docs-check"
+    ],
+    "cwd": "${FOUNDRY_ROOT}",
+    "darwin_max_process_rss_bytes": 29868032,
+    "elapsed_seconds": 0.2300512079964392,
+    "exit": 0,
+    "name": "docs-final-verified",
+    "sampled_compiler_rss_bytes": 0,
+    "sampled_tree_rss_bytes": 1392640,
+    "timed_out": false,
+    "result": "Documentation links, blueprint numbering and fixture Go requirements valid."
+  }
+}

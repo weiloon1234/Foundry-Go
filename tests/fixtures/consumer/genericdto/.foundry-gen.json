@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "files": {
+    "combined_foundry.gen.go": "b2f055b9d4352245929de0e09d7ebeaf692856dc4a8b81fbc96314b843d798b7",
+    "envelope_foundry.gen.go": "f5cb5515359f15edc002a9c6e38b8314a79df987a1c883414d08bc1209243012",
+    "project_dto_foundry.gen.go": "5625ea1bd51d81759623db665071c3218a13d2280d4f2b7cf7dda0e33ed39dc7",
+    "user_dto_foundry.gen.go": "48e2b1e44bf6d81cec0a7f1904e0b6976217f0d145dcfea3e3f67492d508a32b",
+    "user_envelope_foundry.gen.go": "d2bd0a391f61e981688afe18d80ffb11199f1f1fac0fdd81b0502877c57626de"
+  }
+}

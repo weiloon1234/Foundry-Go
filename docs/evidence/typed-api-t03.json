@@ -1,0 +1,252 @@
+{
+  "acceptance": {
+    "compiler_and_editor": [
+      "tests/fixtures/consumer/types_test.go",
+      "internal/agent/gopls_acceptance_test.go"
+    ],
+    "form_grammar_bounds_sources": [
+      "http/form_body_test.go",
+      "http/form_callback_test.go"
+    ],
+    "generated_form_manifest_openapi_typescript_network": [
+      "internal/generate/form_test.go",
+      "tests/fixtures/consumer/requestflow/forms_test.go",
+      "tests/fixtures/consumer/clientcontracts/testdata/runtime.mjs",
+      "tests/fixtures/consumer/clientcontracts/testdata/types.ts"
+    ],
+    "owned_cancellation_and_multipart_cleanup": [
+      "http/endpoint_lifecycle_test.go",
+      "http/form_callback_test.go"
+    ],
+    "preparation_validation_prohibitions": [
+      "http/endpoint_lifecycle_test.go",
+      "validation/prohibitions_test.go"
+    ],
+    "shared_rules_all_four_sources": [
+      "tests/fixtures/consumer/requestflow/forms.go",
+      "tests/fixtures/consumer/requestflow/forms_test.go"
+    ],
+    "typed_required_optional_multiple_actors": [
+      "http/authenticated_lifecycle_test.go"
+    ]
+  },
+  "checks": {
+    "t03-compiler-r1": {
+      "command": "consumer: go test . -run TestInvalidPublicContractsFailCompilation/form_ -count=1",
+      "elapsed_seconds": 7.6,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t03-compiler-r1/verify.log"
+    },
+    "t03-consumer-r1": {
+      "command": "consumer: go test -race ./requestflow ./clientcontracts ./unions",
+      "elapsed_seconds": 36.1,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t03-consumer-r1/verify.log"
+    },
+    "t03-consumer-r2": {
+      "command": "consumer: go test -race ./requestflow ./clientcontracts",
+      "elapsed_seconds": 34.0,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t03-consumer-r2/verify.log"
+    },
+    "t03-cost-r1": {
+      "command": "go test ./http -run ^$ -bench ^BenchmarkRequestLifecycle$ -benchmem -benchtime=300ms -count=5",
+      "elapsed_seconds": 13.4,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t03-cost-r1/verify.log"
+    },
+    "t03-docs-r1": {
+      "command": "make docs-check",
+      "elapsed_seconds": 0.1,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t03-docs-r1/verify.log"
+    },
+    "t03-editor-r1": {
+      "command": "go test ./internal/agent -run TestRealGoplsConsumer/form- -count=1",
+      "elapsed_seconds": 3.1,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t03-editor-r1/verify.log"
+    },
+    "t03-full-r1": {
+      "command": "make verify",
+      "elapsed_seconds": 588.7,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t03-full-r1/verify.log"
+    },
+    "t03-fuzz-r1": {
+      "command": "go test ./http -run ^$ -fuzz ^FuzzFormEndpointBounds$ -fuzztime=30s -parallel=2",
+      "elapsed_seconds": 70.3,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t03-fuzz-r1/verify.log"
+    },
+    "t03-generate-r1": {
+      "command": "go run ./cmd/foundry generate --recursive --dir tests/fixtures/consumer",
+      "elapsed_seconds": 26.2,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t03-generate-r1/verify.log"
+    },
+    "t03-generator-r1": {
+      "command": "go test ./internal/generate -run Test(FreshForm|InvalidForm) -count=1",
+      "elapsed_seconds": 2.3,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t03-generator-r1/verify.log"
+    },
+    "t03-guards-r1": {
+      "command": "go test -race ./http -run TestTypedRequestAuthorizationMultipleGuards -count=1",
+      "elapsed_seconds": 9.7,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t03-guards-r1/verify.log"
+    },
+    "t03-runtime-r1": {
+      "command": "go test -race ./http ./validation ./contract/manifest ./openapi ./typescript -run Test(Form|RequestLifecycle|TypedActorRequestLifecycle|OriginalInputProhibitions)|FuzzFormEndpointBounds",
+      "elapsed_seconds": 36.6,
+      "exit": 1,
+      "log": ".cache/consumer-startup/t03-runtime-r1/verify.log"
+    },
+    "t03-runtime-r2": {
+      "command": "go test -race ./http ./validation -run Test(Form|RequestLifecycle|TypedActorRequestLifecycle|OriginalInputProhibitions|TypedQuery)|FuzzFormEndpointBounds",
+      "elapsed_seconds": 24.7,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t03-runtime-r2/verify.log"
+    }
+  },
+  "cost": {
+    "NoHooks": {
+      "median": {
+        "allocations_per_op": 75,
+        "bytes_per_op": 10531,
+        "ns_per_op": 5475.0
+      },
+      "samples": [
+        {
+          "allocations_per_op": 75,
+          "bytes_per_op": 10531,
+          "ns_per_op": 5570.0
+        },
+        {
+          "allocations_per_op": 75,
+          "bytes_per_op": 10530,
+          "ns_per_op": 5419.0
+        },
+        {
+          "allocations_per_op": 75,
+          "bytes_per_op": 10531,
+          "ns_per_op": 5451.0
+        },
+        {
+          "allocations_per_op": 75,
+          "bytes_per_op": 10531,
+          "ns_per_op": 5475.0
+        },
+        {
+          "allocations_per_op": 75,
+          "bytes_per_op": 10531,
+          "ns_per_op": 5490.0
+        }
+      ]
+    },
+    "PreparationAndAuthorization": {
+      "median": {
+        "allocations_per_op": 93,
+        "bytes_per_op": 11404,
+        "ns_per_op": 6473.0
+      },
+      "samples": [
+        {
+          "allocations_per_op": 93,
+          "bytes_per_op": 11404,
+          "ns_per_op": 6546.0
+        },
+        {
+          "allocations_per_op": 93,
+          "bytes_per_op": 11404,
+          "ns_per_op": 6473.0
+        },
+        {
+          "allocations_per_op": 93,
+          "bytes_per_op": 11404,
+          "ns_per_op": 6470.0
+        },
+        {
+          "allocations_per_op": 93,
+          "bytes_per_op": 11404,
+          "ns_per_op": 6492.0
+        },
+        {
+          "allocations_per_op": 93,
+          "bytes_per_op": 11404,
+          "ns_per_op": 6421.0
+        }
+      ]
+    },
+    "cpu": "Apple M4 Max",
+    "scope": "Native httptest form endpoint; five samples each, no simultaneous verification in this task. Includes request/recorder allocations; not production network throughput."
+  },
+  "date": "2026-09-18",
+  "final_source_sha256": {
+    "contract/manifest/build.go": "9d131c6e4ff49967966b3501f2467c1a73af5be74cee55bb03ea18013681f0a0",
+    "contract/manifest/document.go": "e7b390255d776634c593c4990d23b2de3748ccbe104e4097f237982e2ee0f79e",
+    "contract/manifest/normalize_http.go": "d8d295b7bbcb88465921a5f784bcb640a056e77a8190db3214ae242ea31e0220",
+    "http/authenticated_endpoint.go": "25f5ff49191c53ce0694a2702597f63cb40d91aa01aa884901990c1e1f120dcf",
+    "http/authenticated_lifecycle.go": "af04ada717acfe859e6943e28a7eaf9c5da3211223bce9ba9f4d077a3a10c4e8",
+    "http/authenticated_lifecycle_test.go": "7d8668ed0e981d59c449c15dc5925c634140cdfc9c878a9419ef2a1ccfedb939",
+    "http/endpoint.go": "879a623cacd18ba4a460d3a86d0ed5184c221a66d1b38f56e6531badbbacc803",
+    "http/endpoint_body.go": "1e87209dad3356490b057142457e67394928dda2a8bd49c93d7152596bdfe5d3",
+    "http/endpoint_lifecycle.go": "2fab36b71154169dd490e9ff73ba7c6ef5bbbff423e9b92927d66046d25d8acb",
+    "http/endpoint_lifecycle_test.go": "a615e04d35a1516a545605f3127460651198c4790f81525812b21f0bb14d0c20",
+    "http/endpoint_limits.go": "a1f63c42ca71f96a23649702c22a4595aa328379077788bd13a5c0cfbb10d280",
+    "http/endpoint_metadata.go": "e8f581b7a03c6b13194b4e4af456572179837f0046765c6d62e67408aae1cce8",
+    "http/endpoint_payload.go": "69433f4650a3ff66b27e43c3f8e77ea19c187b9d1cefef01593f1c338b9c1e3b",
+    "http/form_body.go": "26e4de3a47c4ae2074d9d03b511255c7fef11f81a3baeccb0dfdb0422e83037c",
+    "http/form_body_test.go": "d314965d5bc25e4b67b6f608e31dd3675f4990c776fa1414d230a7c813d7b1b6",
+    "http/form_callback_test.go": "770cf706bc17cced2ddd9495ed05fb4e2eadf22b3b1b5dbd90a24c1018229e7a",
+    "http/multipart_body.go": "d1bb1d5d235853ea32ad213bed74528fe39119fe823115a681e9844f8571555d",
+    "http/query.go": "544eb6f265ab91df0cfec3b97adf8dbb358685ce517fac69ae6ea36ceefe7130",
+    "internal/agent/gopls_acceptance_test.go": "0695593f6670942d30bed56a4f9d6a03a0311f851d496b51d32cf588919c1538",
+    "internal/generate/discover.go": "942a69497f40708e96a5e19b51e66f6e6c4c364b3b98ece66ddfcddaba3112e8",
+    "internal/generate/discover_query.go": "a674f926e25857b874c033a573f469cb0f6ea8898a42fdd3e74afdbf63395a20",
+    "internal/generate/emit_query.go": "1252f10964e550fceb26e75c3f5021fff3a27530a23192db82d446bdb6eb85c0",
+    "internal/generate/form_test.go": "52dc597206fa436e6f8111092618209616091f78ca2946d2f931165962e32021",
+    "openapi/openapi.go": "9d455709b012931283f5b83ad2b9b4bebcd1225ca296bc9bdb428403bad4bacd",
+    "tests/fixtures/consumer/clientcontracts/contracts.go": "b0084ea7918dc3bc766525aec15754d8c185d27f9d302368e251e0c65c0d9cd6",
+    "tests/fixtures/consumer/clientcontracts/contracts_test.go": "564f1d40776bcd8cdd1f081f9b88080f48fa44a1dc6b8885a42904a0dd86914d",
+    "tests/fixtures/consumer/clientcontracts/testdata/runtime.mjs": "3745c0104a19b060c5b1d31f82b7595024fbae8a3b115b715e0a4587a085d4b2",
+    "tests/fixtures/consumer/clientcontracts/testdata/types.ts": "fbf9534b42e78986245ac86038c9dd6b83d72ce19c71890910b4c62cab04a866",
+    "tests/fixtures/consumer/requestflow/forms.go": "153c95d7fb0d2e3e5ee9c4574bd5fdb2af5d0154c37dcfd475c761ad588889df",
+    "tests/fixtures/consumer/requestflow/forms_test.go": "eef35e2b0164e34cdf0726143694a6959b72df563f320fd2c3180fad7740cbe4",
+    "tests/fixtures/consumer/requestflow/json_submission_foundry.gen.go": "5341790608f82d5e4454299dcf4f329d94350ba335f8a13f5fd1be421598aefa",
+    "tests/fixtures/consumer/requestflow/multipart_submission_foundry.gen.go": "18c2226c35442c0a73a76b5ab590ff34b861e48bf27277833c4276889ffdabc7",
+    "tests/fixtures/consumer/requestflow/reply_foundry.gen.go": "5b3a45559a1a7104cbd1f983f0e8997b46d6cd43614c7347ea37dec2b3eb65b7",
+    "tests/fixtures/consumer/requestflow/submission_foundry.gen.go": "836cbde4891b170ceab215eac24738ce70ef9adaee86f2437745bca0fb9da93d",
+    "tests/fixtures/consumer/testdata/compilefail/form_actor/invalid.go": "d386d3f0a28d89ff1a99df2386a2e2dfa932c78f35df4f2717b491c975e25fae",
+    "tests/fixtures/consumer/testdata/compilefail/form_handler/invalid.go": "25dfb0a39eb8a05004eda5174fc06f23b23bec3794bf2b6ee9b2685f85b91f5b",
+    "tests/fixtures/consumer/testdata/compilefail/form_optional_actor/invalid.go": "70aae3b04da38bd292562f165972d5ef551f6f171f76c9d2d73d36091c489ac5",
+    "tests/fixtures/consumer/testdata/compilefail/form_prepare_input/invalid.go": "ccb084842623a5d34b81f3fad89b5843b45b94b2887e065fbabfd45eba2018fb",
+    "tests/fixtures/consumer/testdata/compilefail/form_prepare_output/invalid.go": "629795455da651c9b6790dbb5210482194a126e5efc9b7f32b7b4b4077eb3431",
+    "tests/fixtures/consumer/types_test.go": "24ef19b6d320caed925cf54465f5d6fa376d852be704a75b601a51327303c2cb",
+    "tests/fixtures/consumer/unions/payment_test.go": "84df2d2ecd79485341e719138c4a653e672439241a33cdfaa51ca2e5e3a9116c",
+    "typescript/render.go": "211661fe25baf0e948b907ddde8ea19ff2c47100673c4875d5b979ad803f76bd",
+    "typescript/runtime/http.ts": "9d5aff67bc18058a91d1b74dfae4dce72cdd03ba69e63b3297b90d313df5c3a6",
+    "validation/conditional.go": "8358d86ba5802c4a80db699f0218bce477f998c92f8bef648c8e2ccafa650548",
+    "validation/prohibitions_test.go": "a973f2b5d3cbf3cd439546882bcb5050dd18644714dbb879c657bfdb79e45788",
+    "validation/rule.go": "2e9da3f1360bc8646cd80c93f68bf4849380c72a8c4087dd8cbe887eb6a5f44c"
+  },
+  "fixes": [
+    "URL parser errors now carry one safe root issue so the shared HTTP adapter retains query/body source paths without reflecting input.",
+    "TypeScript URL scalars and form wire bytes/pairs are bounded independently of JSON body limits; supplied null form objects reject."
+  ],
+  "fuzz": {
+    "duration_seconds": 30,
+    "executions": 18159,
+    "scope": "Bounded smoke coverage, not exhaustive proof.",
+    "target": "FuzzFormEndpointBounds",
+    "workers": 2
+  },
+  "go": "go1.27.1 darwin/arm64",
+  "limits": [
+    "Go preparation remains server-owned. SDK structural validation stays active and business validation reports request_preparation skipped.",
+    "Prohibition predicates run independently against original and prepared values; arbitrary collection transforms have no element-provenance mapping.",
+    "T04\u2013T07, including integrated re-audit, remain outstanding."
+  ],
+  "milestone": "T03"
+}

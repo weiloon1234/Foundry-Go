@@ -1,0 +1,118 @@
+{
+  "date": "2026-09-25",
+  "status": "accepted",
+  "scope": "Automatic rotation and retention for configured file log sinks",
+  "defaults": {
+    "application_sink": "stderr",
+    "level": "INFO",
+    "file_max_bytes": 20971520,
+    "file_max_archives": 14,
+    "file_max_age_hours": 336,
+    "daily_rollover": "first nonempty write on a later UTC day"
+  },
+  "verification": {
+    "full_gate": {
+      "command": [
+        "make",
+        "GO=/usr/local/go/bin/go",
+        "verify"
+      ],
+      "exit": 0,
+      "seconds": 840.03,
+      "required": [
+        "PostgreSQL",
+        "Redis",
+        "TypeScript",
+        "gopls"
+      ]
+    },
+    "targeted_races": [
+      {
+        "cwd": ".",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-race",
+          "-count=1",
+          "./logging",
+          "./application"
+        ],
+        "exit": 0
+      },
+      {
+        "cwd": "tests/fixtures/consumer",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-race",
+          "-count=1",
+          "./configuredprofile"
+        ],
+        "exit": 0
+      }
+    ],
+    "linux": [
+      {
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-c",
+          "./logging",
+          "-o",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/logging-rotation-20260925/logging-linux-amd64.test"
+        ],
+        "exit": 0,
+        "seconds": 0.932,
+        "target": "linux/amd64",
+        "execution": "compile only"
+      },
+      {
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-c",
+          "./logging",
+          "-o",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/logging-rotation-20260925/logging-linux-arm64.test"
+        ],
+        "exit": 0,
+        "seconds": 1.036,
+        "target": "linux/arm64",
+        "execution": "compile only"
+      }
+    ],
+    "source_unchanged_during_full_gate": true,
+    "native_host": "macOS arm64",
+    "editor": "Real gopls completion, hover and definition include rotation fields and generated override keys",
+    "log": ".cache/logging-rotation-20260925/verify.log"
+  },
+  "review": [
+    "Zero file rotation limits resolve through one default policy; explicit disable preserves append-only behavior. File-only settings fail on streams/stacks.",
+    "Preparation does no filesystem I/O. Startup failure releases descriptors and the stable rotation lock. Shutdown serializes with writes and closes the active file before its lock.",
+    "Size and UTC-day rollovers preserve complete accepted records. Existing files append; oversized records reject before mutation. Replaced active paths reject rotation and recover after restoration.",
+    "Retention tests cover count, age, restart and ordinary-write cleanup. Only exact matching regular archive files are eligible; unrelated files, symlinks and directories survive.",
+    "Concurrent writers retain all records in the test budget. A second rotation owner fails; startup failures leave the file usable by a subsequent owner.",
+    "The independent configured application exercises TOML, environment settings, generated typed overrides, JSON record integrity, credential redaction and application shutdown.",
+    "No new dependencies or process-global services were introduced. Final source review required no corrections after the passing focused race tests."
+  ],
+  "limits": [
+    "Cleanup runs at startup, rollover, or the first write after an hour since cleanup; idle applications do not run a timer.",
+    "File rotation uses macOS/Linux locks and requires one owner, a local operator-controlled directory, and no external file mutation. Network filesystems are unsupported.",
+    "Retention counts archives separately from the active file and may retain less than fourteen days under high volume.",
+    "Synchronous logging is not a durable audit ledger. Standard slog Logger methods do not return handler failures.",
+    "Linux binaries were compiled, not executed. This change does not claim new live-provider or performance certification."
+  ],
+  "source_sha256": {
+    "logging/sink.go": "3852bd2427b597aa5f0ebeb7af07c860fc876482574c95d0c310efdfdbcf94b0",
+    "logging/channels.go": "31dd15d0d3e77b41658660cd9aef6b941bc89cad16ee1d4cdc31e76f3bc17cf8",
+    "logging/rotation_config.go": "da81e8cdb9ec8e8db6a1e413f4f47eac6d29026a14d6d44930442d24455e0e97",
+    "logging/rotating_file.go": "96ab9b8b78f89a852b59b62a076ee1f4803bb9c6efb19d9fff8a333d6953f7ee",
+    "logging/rotating_file_test.go": "ba6c0b0a1052744100fa45cf83f519980cbcb66d0faf293e87c3766b79de0ffc",
+    "logging/channel_settings_foundry.gen.go": "0fe1017e0c88338385a60a436262c012dc4d3ea6c9a73cc896a79e19c4815716",
+    "logging/.foundry-gen.json": "382b3f5fc2fe2207e0e80e0f219b3b4ffb22d3368f20e1dd98bf75fd183683de",
+    "tests/fixtures/consumer/configuredprofile/logging_test.go": "216df3b7f0b4b7de5541a9ca21bfd875d6909989b49e4a6680b6bc0b714b1ce3",
+    "internal/agent/gopls_acceptance_test.go": "56bf1b5e3abb320d1b55c1b973591abd4059a78bdc5946e16c0c5643b69540d9",
+    "go.mod": "a9bed05356085487b2754c36bbc73f0bba0899c4ee797d471698f35b8b071102",
+    "go.sum": "021bee3b4b6ff2caf3743a1e77065d8c38be1e3b6d061452fdc1ac7730f2f8b2"
+  }
+}

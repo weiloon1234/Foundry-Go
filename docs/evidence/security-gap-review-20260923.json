@@ -1,0 +1,669 @@
+{
+  "format": 1,
+  "status": "review-complete",
+  "review_date": "2026-09-23",
+  "objective": "Review current Foundry-Go for vulnerabilities and important missing features.",
+  "scope": {
+    "module_families": [
+      "(root)",
+      "application",
+      "attachments",
+      "attribution",
+      "audit",
+      "auth",
+      "cache",
+      "cli",
+      "clock",
+      "cloud",
+      "cmd",
+      "collection",
+      "config",
+      "contract",
+      "countries",
+      "database",
+      "datatable",
+      "decimal",
+      "diagnostics",
+      "email",
+      "encryption",
+      "enum",
+      "events",
+      "extensions",
+      "fault",
+      "foundation",
+      "health",
+      "http",
+      "httpclient",
+      "i18n",
+      "idempotency",
+      "imaging",
+      "infrastructure",
+      "inspection",
+      "internal",
+      "jobs",
+      "keyspace",
+      "lease",
+      "logging",
+      "maintenance",
+      "metadata",
+      "model",
+      "notifications",
+      "observability",
+      "openapi",
+      "outbox",
+      "plugin",
+      "pubsub",
+      "randomtoken",
+      "ratelimit",
+      "redis",
+      "sanitize",
+      "schedule",
+      "secret",
+      "settings",
+      "storage",
+      "temporal",
+      "testkit",
+      "tools",
+      "tracing",
+      "translations",
+      "typescript",
+      "validation",
+      "value",
+      "websocket"
+    ],
+    "family_count": 65,
+    "method": "Inventory all current families against the unchanged previous acceptance snapshot; fresh risk-focused source tracing, public-API probes, dependency scans and selected existing tests. Not an every-line review or deployment penetration test.",
+    "runtime_changes": false,
+    "source_inventory": {
+      "files": 3646,
+      "sha256": "3f345f89e869790329978c7db464045efb6071c5c4832d7b357a786f8bd598a2",
+      "private_record": ".cache/security-gap-review-20260923/source-reviewed.json",
+      "excludes": "Hidden directories, bin, node_modules, vendor; only .go/.ts/.mjs/.lua. Build/dependency inputs separately fingerprinted."
+    },
+    "previous_source_comparison": {
+      "record": ".cache/module-review-20260923/source-verified.json",
+      "record_sha256": "9e19f7e891dd191300d978d0f61c3596572a5b28410f723d3ffc07ba6ef1aab1",
+      "matching_entries": 3643,
+      "mismatches": [],
+      "current_files_outside_previous_inventory": [
+        "tools/release/main.go",
+        "tools/release/release_test.go",
+        "tools/release/source.go"
+      ],
+      "outside_inventory_disposition": "Three existing release-tool source files were not included in the previous runtime/generator/client snapshot; they are fingerprinted by this audit."
+    },
+    "build_and_dependency_inputs": {
+      "go.mod": "a9bed05356085487b2754c36bbc73f0bba0899c4ee797d471698f35b8b071102",
+      "go.sum": "021bee3b4b6ff2caf3743a1e77065d8c38be1e3b6d061452fdc1ac7730f2f8b2",
+      "Makefile": "b4b4db66f0ac6615a8d46a1935e530355cdca847fa3406668271dab3048912d0",
+      "tools/gopls.version": "ab2c60443d2725755fbadb07f40620c22214ef753f161f213097262de78d1cc7",
+      "tools/measure-release.py": "57c97db8fed07e53640474bc808a49dddba64f46a6329e8af7692f46cf5eada0",
+      "tools/release/go.mod": "ca961e121128fd67175182e38a53a9f617f0f0f24f030c97dfa5c78193f576ad",
+      "tools/release/go.sum": "2136556c30a61c428a360cbb7ed3558c970d89555b7b285be0e1ff426906b6cc",
+      "tools/typescript/package.json": "f709537d0d796c2ea46677407ccc0c95384dc8da99912be4d13f57db0ab3d4b5",
+      "tools/typescript/package-lock.json": "9b3b8e08941e984872918ef6570844e17d471b95db0367c8f73e1a072723e214",
+      "tests/fixtures/consumer/go.mod": "7478c05ca43f3cce4bab0457c3c9a57b951e9b1558679101bd3ffd5f995b59d7",
+      "tests/fixtures/consumer/go.sum": "021bee3b4b6ff2caf3743a1e77065d8c38be1e3b6d061452fdc1ac7730f2f8b2"
+    }
+  },
+  "findings": [
+    {
+      "id": "S01",
+      "priority": "P2",
+      "status": "open; confirmed safe-default gap",
+      "title": "Cookie authentication without BrowserSessions does not prevent caching of personalized responses",
+      "locations": [
+        "http/guard_binding.go:44",
+        "http/authentication.go:152",
+        "http/browser_sessions.go:149",
+        "tests/fixtures/consumer/bootstrap/auth.go:55"
+      ],
+      "evidence": "Raw and typed JSON handlers both return distinct account-specific 200 responses with no Cache-Control/Pragma and Vary only Sec-Fetch-Site and Origin. The raw handler also sets Last-Modified.",
+      "condition": "Disclosure requires an intermediary that caches these cookie requests/responses; no production proxy exploit was performed. BrowserSessions already sets no-store.",
+      "recommendation": "Apply the cookie-response cache policy in the shared authentication owner, covering required/optional paths and early failures; add regressions for both cookie entry points."
+    }
+  ],
+  "gaps": [
+    {
+      "id": "G01",
+      "priority": "before public releases",
+      "title": "Repository-owned CI/security checks and reporting policy",
+      "evidence": [
+        "Makefile:82",
+        "Makefile:96",
+        "tools/measure-release.py:312"
+      ],
+      "absence": "No checked-in .github/.circleci/.buildkite workflows, .gitlab-ci.yml, Jenkinsfile, azure-pipelines.yml or SECURITY.md found. External CI and hosting settings were not inspected.",
+      "acceptance": "Reuse native verification and required-backend/tool modes in automation; run scanner independently of cold package measurement, interpret actual findings, and document supported versions/private disclosure channel using confirmed maintainer details."
+    },
+    {
+      "id": "G02",
+      "priority": "before accepting user-controlled outbound URLs",
+      "title": "Opt-in typed outbound destination policy",
+      "evidence": [
+        "httpclient/url.go:47",
+        "internal/httptransport/transport.go:22",
+        "httpclient/config.go"
+      ],
+      "acceptance": "Validate permitted schemes/ports/hosts and actual resolved IPv4/IPv6 addresses at connection time, handle DNS changes and proxies explicitly, and test loopback/private/link-local rejection plus approved internal endpoints. Preserve ordinary internal-service clients.",
+      "classification": "Capability gap; generic loopback connectivity is intended and is not alone a framework SSRF vulnerability."
+    },
+    {
+      "id": "G03",
+      "priority": "before integrating inbound webhooks",
+      "title": "Reusable inbound webhook verification",
+      "evidence": [
+        "docs/guides/idempotent-operations.md:56",
+        "tests/fixtures/consumer/idempotenthttp/publication_test.go:54"
+      ],
+      "acceptance": "Bound and preserve original signed bytes, verify provider signatures with rotated secrets and timestamp tolerance, expose verified delivery/account identity, then reuse existing idempotency/outbox. Test tampering, expiry, duplicate valid delivery and tenant scoping."
+    },
+    {
+      "id": "G04",
+      "priority": "before low-downtime migrations on large live tables",
+      "title": "Explicit nontransactional PostgreSQL migrations",
+      "evidence": [
+        "database/migrate/postgres.go:235",
+        "docs/guides/migrations-and-seeding.md:27"
+      ],
+      "acceptance": "Add an explicit execution mode while retaining runner locking, failed/uncertain progress and reconciliation. Support CONCURRENTLY without pretending SQL and history are atomic; test interruption/recovery without automatic destructive cleanup."
+    }
+  ],
+  "already_present": [
+    "Typed handler-connected request/response/status/error contracts",
+    "Generics and tagged unions in shared schema/client contracts",
+    "Omitted/null/value PATCH semantics",
+    "Query/form/multipart preparation and validation",
+    "Named/nested/scoped model binding",
+    "Isolated PostgreSQL HTTP tests",
+    "Inbound idempotency with current authorization on replay",
+    "Durable transactional outbox",
+    "Password/session/token/reset/verification/MFA authentication",
+    "Trusted public host/origin policy"
+  ],
+  "probes": {
+    "command": [
+      "/usr/local/go/bin/go",
+      "test",
+      "-v",
+      "-count=1",
+      "-timeout=2m",
+      "./.cache/security-gap-review-20260923"
+    ],
+    "exit": 0,
+    "package_seconds": 0.635,
+    "source_sha256": "4885524230da6e6ce0abb065568f97b323dafea775fac480209f9603d26426ea",
+    "source": "package securityreview_test\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\tstdhttp \"net/http\"\n\t\"net/http/httptest\"\n\t\"strings\"\n\t\"testing\"\n\n\t\"github.com/weiloon1234/Foundry-Go/auth\"\n\t\"github.com/weiloon1234/Foundry-Go/contract\"\n\t\"github.com/weiloon1234/Foundry-Go/database/codec\"\n\thttp \"github.com/weiloon1234/Foundry-Go/http\"\n\t\"github.com/weiloon1234/Foundry-Go/httpclient\"\n\t\"github.com/weiloon1234/Foundry-Go/model\"\n\t\"github.com/weiloon1234/Foundry-Go/secret\"\n\t\"github.com/weiloon1234/Foundry-Go/value\"\n)\n\ntype Account struct{ ID int64 }\n\nfunc (a Account) reference() model.Reference[Account, int64] {\n\treturn model.NewReference[Account](\"audit_accounts\", a.ID, codec.Signed[int64]())\n}\nfunc (a Account) FoundryIdentity() (model.Identity, error) { return a.reference().Identity() }\nfunc TestAuditCookieAuthenticationCacheHeaders(t *testing.T) {\n\tprovider := auth.DefineProvider(\"audit.accounts\", (Account{}).reference(), func(_ context.Context, id int64) (value.Optional[Account], error) { return value.Set(Account{id}), nil }, func(context.Context, Account) (bool, error) { return true, nil })\n\tstrategy := auth.DefineStrategy(\"audit.cookie\", func(_ context.Context, s secret.String) (value.Optional[auth.Proof[Account, int64]], error) {\n\t\tvar id int64\n\t\tswitch s.Reveal() {\n\t\tcase \"alice-fixture\":\n\t\t\tid = 1\n\t\tcase \"bob-fixture\":\n\t\t\tid = 2\n\t\tdefault:\n\t\t\treturn value.Optional[auth.Proof[Account, int64]]{}, nil\n\t\t}\n\t\tproof, err := auth.NewProof(Account{id}.reference(), auth.Authenticated)\n\t\treturn value.Set(proof), err\n\t})\n\tguard := auth.DefineGuard(\"audit.web\", provider, strategy)\n\tregistry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration())\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tcookie := http.DefineCookie(\"audit_session\", http.SecretCookie(), http.DefaultCookieOptions())\n\ttransport, err := http.NewCookieAuthentication(registry, http.CSRFConfig{}, http.CookieCredential(\"audit.cookie\", cookie))\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\troute := http.DefineRoute(http.RouteSpec{ID: \"audit.profile\", Method: http.GET, Access: http.Guarded}, http.StaticPath(\"/profile\"))\n\tsecured := http.RequireRouteAuthentication(route, transport, guard)\n\trouter, err := http.NewRouter(secured.HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, a Account, _ http.NoPath) {\n\t\tw.Header().Set(\"Content-Type\", \"text/plain\")\n\t\tw.Header().Set(\"Last-Modified\", \"Tue, 01 Sep 2026 00:00:00 GMT\")\n\t\tfmt.Fprintf(w, \"account-%d\", a.ID)\n\t}))\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\ttypedRoute := http.DefineRoute(http.RouteSpec{ID: \"audit.typed_profile\", Method: http.GET, Access: http.Guarded}, http.StaticPath(\"/typed-profile\"))\n\tendpoint := http.DefineEndpoint(typedRoute, http.EmptyQuery(), http.EmptyBody(), http.JSONResponse(200, contract.StringJSON[string]()))\n\ttypedRouter, err := http.NewRouter(http.RequireAuthentication(endpoint, transport, guard).Handle(func(_ context.Context, a Account, _ http.Input[http.NoPath, http.NoQuery, http.NoBody]) (string, error) {\n\t\treturn fmt.Sprintf(\"account-%d\", a.ID), nil\n\t}))\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tfor _, transportCase := range []struct {\n\t\tname, path string\n\t\trouter     stdhttp.Handler\n\t\tjson       bool\n\t}{{\"raw\", \"/profile\", router, false}, {\"typed\", \"/typed-profile\", typedRouter, true}} {\n\t\tfor i, credential := range []string{\"alice-fixture\", \"bob-fixture\"} {\n\t\t\trequest := httptest.NewRequest(\"GET\", \"https://audit.example\"+transportCase.path, nil)\n\t\t\trequest.AddCookie(&stdhttp.Cookie{Name: \"audit_session\", Value: credential})\n\t\t\tresponse := httptest.NewRecorder()\n\t\t\ttransportCase.router.ServeHTTP(response, request)\n\t\t\texpected := fmt.Sprintf(\"account-%d\", i+1)\n\t\t\tif transportCase.json {\n\t\t\t\texpected = fmt.Sprintf(\"%q\", expected)\n\t\t\t}\n\t\t\tif response.Code != 200 || response.Body.String() != expected {\n\t\t\t\tt.Fatalf(\"actual authentication failed: status=%d\", response.Code)\n\t\t\t}\n\t\t\th := response.Header()\n\t\t\tif h.Get(\"Cache-Control\") != \"\" || h.Get(\"Pragma\") != \"\" || strings.Contains(strings.ToLower(strings.Join(h.Values(\"Vary\"), \",\")), \"cookie\") {\n\t\t\t\tt.Fatal(\"candidate cache-policy gap is not present\")\n\t\t\t}\n\t\t\tt.Logf(\"%s user %d: status=%d body=%q Cache-Control=%q Vary=%q Last-Modified=%q\", transportCase.name, i+1, response.Code, response.Body.String(), h.Get(\"Cache-Control\"), h.Values(\"Vary\"), h.Get(\"Last-Modified\"))\n\t\t}\n\t}\n}\nfunc TestAuditOutboundURLPolicy(t *testing.T) {\n\tvar calls int\n\tdestination := httptest.NewServer(stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) { calls++; fmt.Fprint(w, \"loopback reached\") }))\n\tdefer destination.Close()\n\tconfig := httpclient.DefaultConfig(\"audit.generic\")\n\tconfig.Retry = httpclient.NoRetries()\n\tclient, err := httpclient.New(config, nil)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tdefer client.Close(context.Background())\n\tresponse, err := client.Do(t.Context(), client.Get(destination.URL))\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\ttext, err := response.Text()\n\tif err != nil || text != \"loopback reached\" || calls != 1 {\n\t\tt.Fatal(\"loopback request was not executed\")\n\t}\n\tconfig.Name = \"audit.named\"\n\tconfig.BaseURL = destination.URL\n\tnamed, err := httpclient.New(config, nil)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tdefer named.Close(context.Background())\n\tif named.Get(\"http://untrusted.invalid/secret\").Validate() == nil {\n\t\tt.Fatal(\"named origin boundary unexpectedly allowed absolute URL\")\n\t}\n\tt.Log(\"generic absolute URL reaches loopback; named client rejects another absolute origin\")\n}\n",
+    "results": {
+      "TestAuditCookieAuthenticationCacheHeaders": {
+        "status": "pass (confirms gap)",
+        "responses": [
+          {
+            "identity": "fixture account 1",
+            "status": 200,
+            "body": "account-1",
+            "cache_control": "",
+            "vary": [
+              "Sec-Fetch-Site",
+              "Origin"
+            ],
+            "last_modified": "Tue, 01 Sep 2026 00:00:00 GMT",
+            "route_kind": "raw"
+          },
+          {
+            "identity": "fixture account 2",
+            "status": 200,
+            "body": "account-2",
+            "cache_control": "",
+            "vary": [
+              "Sec-Fetch-Site",
+              "Origin"
+            ],
+            "last_modified": "Tue, 01 Sep 2026 00:00:00 GMT",
+            "route_kind": "raw"
+          },
+          {
+            "identity": "fixture account 1",
+            "route_kind": "typed JSON",
+            "status": 200,
+            "body": "\"account-1\"",
+            "cache_control": "",
+            "vary": [
+              "Sec-Fetch-Site",
+              "Origin"
+            ],
+            "last_modified": ""
+          },
+          {
+            "identity": "fixture account 2",
+            "route_kind": "typed JSON",
+            "status": 200,
+            "body": "\"account-2\"",
+            "cache_control": "",
+            "vary": [
+              "Sec-Fetch-Site",
+              "Origin"
+            ],
+            "last_modified": ""
+          }
+        ]
+      },
+      "TestAuditOutboundURLPolicy": {
+        "status": "pass",
+        "observed": "Generic absolute URL reaches actual loopback test server; named BaseURL client rejects another absolute origin."
+      }
+    },
+    "seconds": 1.45,
+    "output": "=== RUN   TestAuditCookieAuthenticationCacheHeaders\n    boundary_probe_test.go:91: raw user 1: status=200 body=\"account-1\" Cache-Control=\"\" Vary=[\"Sec-Fetch-Site\" \"Origin\"] Last-Modified=\"Tue, 01 Sep 2026 00:00:00 GMT\"\n    boundary_probe_test.go:91: raw user 2: status=200 body=\"account-2\" Cache-Control=\"\" Vary=[\"Sec-Fetch-Site\" \"Origin\"] Last-Modified=\"Tue, 01 Sep 2026 00:00:00 GMT\"\n    boundary_probe_test.go:91: typed user 1: status=200 body=\"\\\"account-1\\\"\" Cache-Control=\"\" Vary=[\"Sec-Fetch-Site\" \"Origin\"] Last-Modified=\"\"\n    boundary_probe_test.go:91: typed user 2: status=200 body=\"\\\"account-2\\\"\" Cache-Control=\"\" Vary=[\"Sec-Fetch-Site\" \"Origin\"] Last-Modified=\"\"\n--- PASS: TestAuditCookieAuthenticationCacheHeaders (0.00s)\n=== RUN   TestAuditOutboundURLPolicy\n    boundary_probe_test.go:124: generic absolute URL reaches loopback; named client rejects another absolute origin\n--- PASS: TestAuditOutboundURLPolicy (0.00s)\nPASS\nok  \tgithub.com/weiloon1234/Foundry-Go/.cache/security-gap-review-20260923\t0.635s\n",
+    "log_sha256": "7ade3b9a245f7516cbba4780be2a0a6312db370f9aab8de8126eda1dc91d187e"
+  },
+  "verification": {
+    "environment": {
+      "go": "go1.27.1",
+      "platform": "native macOS",
+      "cache": "existing warm Go caches",
+      "services": "existing local PostgreSQL and Redis; no new services or destructive reset",
+      "private_configuration": "loaded privately; credentials omitted"
+    },
+    "batches": [
+      {
+        "command": [
+          "go",
+          "test",
+          "-json",
+          "-timeout=15m",
+          "./auth/...",
+          "./http/...",
+          "./httpclient/...",
+          "./storage/...",
+          "./websocket/...",
+          "./encryption",
+          "./randomtoken",
+          "./contract/...",
+          "./internal/jsonwire",
+          "./sanitize/...",
+          "./datatable/..."
+        ],
+        "exit": 0,
+        "seconds": 23.28,
+        "required": [
+          "PostgreSQL",
+          "Redis"
+        ],
+        "name": "security-tests",
+        "packages": {
+          "github.com/weiloon1234/Foundry-Go/auth/challenge/postgres": "skip",
+          "github.com/weiloon1234/Foundry-Go/auth/emailverification": "skip",
+          "github.com/weiloon1234/Foundry-Go/auth/mfa/postgres": "skip",
+          "github.com/weiloon1234/Foundry-Go/auth/passwordreset": "skip",
+          "github.com/weiloon1234/Foundry-Go/auth/challenge": "pass",
+          "github.com/weiloon1234/Foundry-Go/auth/lockout": "pass",
+          "github.com/weiloon1234/Foundry-Go/auth": "pass",
+          "github.com/weiloon1234/Foundry-Go/auth/lockout/memory": "pass",
+          "github.com/weiloon1234/Foundry-Go/auth/mfa": "pass",
+          "github.com/weiloon1234/Foundry-Go/auth/password": "pass",
+          "github.com/weiloon1234/Foundry-Go/auth/session": "pass",
+          "github.com/weiloon1234/Foundry-Go/auth/token": "pass",
+          "github.com/weiloon1234/Foundry-Go/auth/session/postgres": "pass",
+          "github.com/weiloon1234/Foundry-Go/auth/token/postgres": "pass",
+          "github.com/weiloon1234/Foundry-Go/storage/http": "pass",
+          "github.com/weiloon1234/Foundry-Go/httpclient": "pass",
+          "github.com/weiloon1234/Foundry-Go/http/pagination": "pass",
+          "github.com/weiloon1234/Foundry-Go/encryption": "pass",
+          "github.com/weiloon1234/Foundry-Go/storage": "pass",
+          "github.com/weiloon1234/Foundry-Go/http": "pass",
+          "github.com/weiloon1234/Foundry-Go/websocket": "pass",
+          "github.com/weiloon1234/Foundry-Go/http/modelbinding": "pass",
+          "github.com/weiloon1234/Foundry-Go/randomtoken": "pass",
+          "github.com/weiloon1234/Foundry-Go/storage/local": "pass",
+          "github.com/weiloon1234/Foundry-Go/contract": "pass",
+          "github.com/weiloon1234/Foundry-Go/contract/manifest": "pass",
+          "github.com/weiloon1234/Foundry-Go/internal/jsonwire": "pass",
+          "github.com/weiloon1234/Foundry-Go/sanitize": "pass",
+          "github.com/weiloon1234/Foundry-Go/datatable": "pass",
+          "github.com/weiloon1234/Foundry-Go/storage/s3": "pass"
+        },
+        "passing_test_records": 1996,
+        "failed_test_records": 0,
+        "skipped_tests": [
+          "TestRealAWSStorageContract",
+          "TestRealR2StorageContract"
+        ],
+        "cached_packages": [],
+        "log_sha256": "aab57930057029109bc0da681217f9d39b287fa3e3899de58ee2a6ac8c843650"
+      },
+      {
+        "command": [
+          "go",
+          "test",
+          "-json",
+          "-timeout=15m",
+          "./database/...",
+          "./redis/...",
+          "./cache/...",
+          "./lease/...",
+          "./ratelimit/...",
+          "./jobs/...",
+          "./events/...",
+          "./schedule/...",
+          "./idempotency/...",
+          "./outbox/...",
+          "./attachments/...",
+          "./notifications/..."
+        ],
+        "exit": 1,
+        "seconds": 13.66,
+        "required": [
+          "PostgreSQL",
+          "Redis"
+        ],
+        "name": "persistence-tests",
+        "packages": {
+          "github.com/weiloon1234/Foundry-Go/database/command": "skip",
+          "github.com/weiloon1234/Foundry-Go/database/lifecycle": "pass",
+          "github.com/weiloon1234/Foundry-Go/database/migrate": "pass",
+          "github.com/weiloon1234/Foundry-Go/database": "pass",
+          "github.com/weiloon1234/Foundry-Go/database/seed": "skip",
+          "github.com/weiloon1234/Foundry-Go/database/codec": "pass",
+          "github.com/weiloon1234/Foundry-Go/database/query": "pass",
+          "github.com/weiloon1234/Foundry-Go/redis/raw": "pass",
+          "github.com/weiloon1234/Foundry-Go/cache": "pass",
+          "github.com/weiloon1234/Foundry-Go/database/postgres": "pass",
+          "github.com/weiloon1234/Foundry-Go/outbox": "skip",
+          "github.com/weiloon1234/Foundry-Go/redis/data": "pass",
+          "github.com/weiloon1234/Foundry-Go/redis": "fail",
+          "github.com/weiloon1234/Foundry-Go/lease": "pass",
+          "github.com/weiloon1234/Foundry-Go/database/relation": "pass",
+          "github.com/weiloon1234/Foundry-Go/jobs": "pass",
+          "github.com/weiloon1234/Foundry-Go/lease/memory": "pass",
+          "github.com/weiloon1234/Foundry-Go/cache/memory": "pass",
+          "github.com/weiloon1234/Foundry-Go/cache/file": "pass",
+          "github.com/weiloon1234/Foundry-Go/ratelimit/memory": "pass",
+          "github.com/weiloon1234/Foundry-Go/cache/postgres": "pass",
+          "github.com/weiloon1234/Foundry-Go/ratelimit": "pass",
+          "github.com/weiloon1234/Foundry-Go/jobs/memory": "pass",
+          "github.com/weiloon1234/Foundry-Go/events": "pass",
+          "github.com/weiloon1234/Foundry-Go/idempotency": "pass",
+          "github.com/weiloon1234/Foundry-Go/schedule": "pass",
+          "github.com/weiloon1234/Foundry-Go/outbox/publisher": "pass",
+          "github.com/weiloon1234/Foundry-Go/attachments/command": "pass",
+          "github.com/weiloon1234/Foundry-Go/notifications": "pass",
+          "github.com/weiloon1234/Foundry-Go/attachments": "pass"
+        },
+        "passing_test_records": 1140,
+        "failed_test_records": 168,
+        "skipped_tests": [],
+        "cached_packages": [],
+        "log_sha256": "b1e7c524af7b2cfcf3e2e7f80f955c3a3278620d62ebe256ccb816d2a4509ee4"
+      },
+      {
+        "command": [
+          "go",
+          "test",
+          "-json",
+          "-timeout=15m",
+          "./redis/..."
+        ],
+        "exit": 0,
+        "seconds": 5.64,
+        "required": [
+          "Redis"
+        ],
+        "service": "existing loopback service observed listening; no service started",
+        "corrects": "persistence test batch missing FOUNDRY_TEST_REDIS_ADDR",
+        "name": "redis-tests",
+        "packages": {
+          "github.com/weiloon1234/Foundry-Go/redis/data": "pass",
+          "github.com/weiloon1234/Foundry-Go/redis/raw": "pass",
+          "github.com/weiloon1234/Foundry-Go/redis": "pass"
+        },
+        "passing_test_records": 252,
+        "failed_test_records": 0,
+        "skipped_tests": [],
+        "cached_packages": [
+          "github.com/weiloon1234/Foundry-Go/redis/data",
+          "github.com/weiloon1234/Foundry-Go/redis/raw"
+        ],
+        "log_sha256": "1e7a8bfe1d7fbee91095705db785b8f02fb549f7d41fd632665ada77e19328c4"
+      }
+    ],
+    "final_unique_package_results": {
+      "skip": 7,
+      "pass": 53
+    },
+    "failure_disposition": "Initial persistence batch failed only Redis due to missing FOUNDRY_TEST_REDIS_ADDR; observed the existing listener, selected it, and reran ./redis/... successfully. Redis/data and redis/raw were cached on correction. Package skips are packages with no tests; only actual test skips were unconfigured real AWS/R2 certification.",
+    "scans": [
+      {
+        "name": "framework-vulnerabilities",
+        "command": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/milestone24-production/security-tools/govulncheck",
+          "-json",
+          "./..."
+        ],
+        "cwd": ".",
+        "exit": 0,
+        "seconds": 2.66,
+        "config": [
+          {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-16T18:00:43Z",
+            "go_version": "go1.27.1",
+            "scan_level": "symbol",
+            "scan_mode": "source"
+          }
+        ],
+        "findings": [
+          {
+            "osv": "GO-2026-5932",
+            "trace": [
+              {
+                "module": "golang.org/x/crypto",
+                "version": "v0.57.0"
+              }
+            ]
+          }
+        ],
+        "log_sha256": "6f57c4e105f7aa3419db65f526a024662dcbcbec542cee3c45fb9af19498d325"
+      },
+      {
+        "name": "consumer-vulnerabilities",
+        "command": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/milestone24-production/security-tools/govulncheck",
+          "-json",
+          "./..."
+        ],
+        "cwd": "tests/fixtures/consumer",
+        "exit": 0,
+        "seconds": 2.28,
+        "config": [
+          {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-16T18:00:43Z",
+            "go_version": "go1.27.1",
+            "scan_level": "symbol",
+            "scan_mode": "source"
+          }
+        ],
+        "findings": [
+          {
+            "osv": "GO-2026-5932",
+            "trace": [
+              {
+                "module": "golang.org/x/crypto",
+                "version": "v0.57.0"
+              }
+            ]
+          }
+        ],
+        "log_sha256": "757ba290de69d51bcdd5f46e134e7b7502103a25a1c8e66a455280864963dccf"
+      },
+      {
+        "name": "release-tool-vulnerabilities",
+        "command": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/milestone24-production/security-tools/govulncheck",
+          "-json",
+          "./..."
+        ],
+        "cwd": "tools/release",
+        "exit": 0,
+        "seconds": 0.84,
+        "config": [
+          {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-16T18:00:43Z",
+            "go_version": "go1.27.1",
+            "scan_level": "symbol",
+            "scan_mode": "source"
+          }
+        ],
+        "findings": [],
+        "log_sha256": "f167c41e3fd66ee1b91eb5271e1ff5c573b780580fcf47948f8cb7abc375c1b6"
+      },
+      {
+        "name": "gopls-vulnerabilities",
+        "command": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/milestone24-production/security-tools/govulncheck",
+          "-mode=binary",
+          "-json",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls"
+        ],
+        "cwd": ".",
+        "exit": 0,
+        "seconds": 0.68,
+        "config": [
+          {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-16T18:00:43Z",
+            "scan_level": "symbol",
+            "scan_mode": "binary"
+          }
+        ],
+        "findings": [
+          {
+            "osv": "GO-2026-6179",
+            "fixed_version": "v0.40.0",
+            "trace": [
+              {
+                "module": "golang.org/x/mod",
+                "version": "v0.37.0"
+              }
+            ]
+          },
+          {
+            "osv": "GO-2026-6180",
+            "fixed_version": "v0.40.0",
+            "trace": [
+              {
+                "module": "golang.org/x/mod",
+                "version": "v0.37.0"
+              }
+            ]
+          },
+          {
+            "osv": "GO-2026-5970",
+            "fixed_version": "v0.39.0",
+            "trace": [
+              {
+                "module": "golang.org/x/text",
+                "version": "v0.38.0"
+              }
+            ]
+          }
+        ],
+        "log_sha256": "d2f04c8249374fd2bd85f7aa0c86d3e1f494456822674b3b163234b81bfabc28"
+      },
+      {
+        "name": "typescript-audit",
+        "command": [
+          "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/node",
+          "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/npm",
+          "audit",
+          "--package-lock-only",
+          "--ignore-scripts",
+          "--json"
+        ],
+        "cwd": "tools/typescript",
+        "exit": 0,
+        "seconds": 1.4,
+        "metadata": {
+          "vulnerabilities": {
+            "info": 0,
+            "low": 0,
+            "moderate": 0,
+            "high": 0,
+            "critical": 0,
+            "total": 0
+          },
+          "dependencies": {
+            "prod": 1,
+            "dev": 1,
+            "optional": 0,
+            "peer": 0,
+            "peerOptional": 0,
+            "total": 1
+          }
+        },
+        "log_sha256": "06c18d6ae5bb95560b3aaf924119c2ecbd29a69e9f4f8a67dc2bb1d7bc726c5e"
+      }
+    ],
+    "scanner_disposition": {
+      "framework_and_consumer": "Only module-level GO-2026-5932 for x/crypto; no affected package or function trace. The affected OpenPGP package is not used by the reviewed source.",
+      "release_tool": "No findings.",
+      "gopls": "Three module-level advisories; no affected symbols reported for scanned binary. Reassess when upgrading development tooling.",
+      "typescript": "Zero lockfile vulnerabilities.",
+      "qualification": "Dependency scans cover the reported database snapshot and reachable analysis, not unknown flaws, all reflection/plugin behavior or deployed configuration."
+    },
+    "documentation_check": {
+      "status": "passed",
+      "command": [
+        "make",
+        "GO=/usr/local/go/bin/go",
+        "docs-check"
+      ],
+      "exit": 0,
+      "output": "Documentation links, blueprint numbering, and fixture Go requirements are valid."
+    },
+    "final_source_check": {
+      "status": "passed",
+      "current_source_files": 3646,
+      "source_files_changed_added_or_removed": 0,
+      "build_or_dependency_inputs_changed": 0
+    }
+  },
+  "limitations": [
+    "No new full make verify, race, fuzz, gopls completion or TypeScript runtime run: unchanged runtime/generator/client hashes match the separate full acceptance baseline; this audit ran selected security/persistence tests and fresh scans.",
+    "Live AWS and R2 certification tests skipped because provider configuration is absent.",
+    "No production proxy, deployment secrets, external CI or hosted security-reporting settings were inspected.",
+    "No runtime fix or gap implementation performed; S01 and G01-G04 remain recommendations."
+  ],
+  "references": {
+    "cache_semantics": "https://www.rfc-editor.org/rfc/rfc9111.html",
+    "outbound_request_policy": "https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html",
+    "webhook_verification": "https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md",
+    "concurrent_indexes": "https://www.postgresql.org/docs/current/sql-createindex.html",
+    "scanner_semantics": "https://go.dev/doc/security/vuln/"
+  },
+  "completion_audit": {
+    "inventory_complete": true,
+    "baseline_matches": true,
+    "confirmed_findings_have_probe": true,
+    "conditional_gaps_separate_from_vulnerabilities": true,
+    "failed_check_disposition_recorded": true,
+    "documentation_checked": true,
+    "typed_and_raw_cookie_paths_confirmed": true,
+    "final_source_unchanged": true,
+    "open_recommendations_do_not_imply_implemented_features": true
+  }
+}

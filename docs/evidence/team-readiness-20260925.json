@@ -1,0 +1,2501 @@
+{
+  "format": 1,
+  "status": "accepted",
+  "date": "2026-09-25",
+  "objective": "Audit readiness for team dependency consumption and its own boilerplate; fix missing must-have adoption work and verify final source.",
+  "decision": "Ready for boilerplate development on the supported stack; operator selects and distributes an available pinned version.",
+  "scope": {
+    "method": "Reconcile current runtime/generator/client/test inputs with the accepted September 24 source; reuse identified coverage from the 65-family September 23 module review, recheck consumer/release entry points and run current verification. Not a fresh line-by-line reread of every unchanged implementation file.",
+    "retained_families": 65,
+    "baseline_source_files": 3661,
+    "verified_source_files": 3662,
+    "changed_existing_runtime_sources": [],
+    "added_sources": [
+      "tests/fixtures/consumer/pinned_tool_test.go"
+    ],
+    "input_change": "Consumer go.mod adds the framework CLI tool directive; runtime and third-party module versions unchanged.",
+    "manual_review": [
+      "application builder, settings, service ownership, HTTP/CSRF registration and migration targets",
+      "foundation construction, resolution, cancellation and shutdown",
+      "typed endpoint, guard and idempotent transaction paths",
+      "migration registry, immutable definitions and nontransactional progress",
+      "worker, scheduler, readiness and WebSocket owner paths",
+      "generator graph/scaffolds, doctor and package policies",
+      "consumer startup, typed workflow, module-pinned tooling, CI and operational guides"
+    ]
+  },
+  "changes": [
+    "Team adoption guide and entry-point links",
+    "Consumer CLI tool directive shares the selected runtime version",
+    "Real module-pinned doctor/generation test reuses existing bounded compiler process helpers",
+    "Four stale pending guide claims corrected",
+    "Fresh-package initialization prerequisite corrected after actual empty-module replay"
+  ],
+  "source": {
+    "source_manifest": ".cache/team-readiness-20260925/source-verified.json",
+    "source_manifest_sha256": "b35bc7a8d4f14cacf2a494d9493ab0d5d627659b647e466d64fdce1b3a983300",
+    "inputs_manifest": ".cache/team-readiness-20260925/inputs-verified.json",
+    "inputs_manifest_sha256": "240faf230743b0b40d910d6bfe47517783736ba0d8f8175737d4aaca48cb77c3",
+    "final_comparison": "Source and input hashes match final verification; later edits are documentation/evidence only."
+  },
+  "environment": {
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "go": {
+      "CGO_ENABLED": "1",
+      "GOARCH": "arm64",
+      "GOOS": "darwin",
+      "GOROOT": "/usr/local/go",
+      "GOVERSION": "go1.27.1"
+    },
+    "required": [
+      "FOUNDRY_TEST_POSTGRES_REQUIRED=1",
+      "FOUNDRY_TEST_REDIS_REQUIRED=1",
+      "FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1"
+    ],
+    "gopls": "Existing bin/gopls selected.",
+    "services": "Existing private PostgreSQL and local Redis; isolated retained test data. No reset, database/schema deletion, store flush or duplicate server.",
+    "cache": "Ordinary warm native cache reused; package measurements isolated; cleanup record retained."
+  },
+  "verification": {
+    "initial": {
+      "command": [
+        "make",
+        "GO=/usr/local/go/bin/go",
+        "verify"
+      ],
+      "exit": 0,
+      "seconds": 509.42,
+      "required_modes": [
+        "postgres",
+        "redis",
+        "typescript"
+      ],
+      "gopls": "bin/gopls"
+    },
+    "additional": [
+      {
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-race",
+          "-count=1",
+          "-timeout=15m",
+          "./tooling",
+          "./configuredprofile",
+          "./bootstrap",
+          "./teamworkflow",
+          "./idempotenthttp"
+        ],
+        "exit": 0,
+        "seconds": 27.192,
+        "execution_error": null,
+        "name": "consumer-race",
+        "cwd": "tests/fixtures/consumer"
+      },
+      {
+        "command": [
+          "make",
+          "GO=/usr/local/go/bin/go",
+          "SECURITY_OUTPUT=.cache/team-readiness-20260925/security",
+          "security-check"
+        ],
+        "exit": 0,
+        "seconds": 9.709,
+        "execution_error": null,
+        "name": "security",
+        "cwd": "."
+      },
+      {
+        "command": [
+          "/usr/local/go/bin/go",
+          "run",
+          ".",
+          "--root",
+          "../..",
+          "--out",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925",
+          "--version",
+          "v0.0.0-candidate.team.20260925"
+        ],
+        "exit": 0,
+        "seconds": 1.038,
+        "execution_error": null,
+        "name": "package",
+        "cwd": "tools/release"
+      }
+    ],
+    "final": [
+      {
+        "command": [
+          "make",
+          "GO=/usr/local/go/bin/go",
+          "verify"
+        ],
+        "exit": 0,
+        "seconds": 504.504,
+        "execution_error": null,
+        "name": "verify-final",
+        "cwd": "."
+      },
+      {
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-race",
+          "-count=1",
+          "-timeout=5m",
+          "-run=^TestModulePinnedFoundryTool$",
+          "."
+        ],
+        "exit": 0,
+        "seconds": 20.066,
+        "execution_error": null,
+        "name": "pinned-tool-race-final",
+        "cwd": "tests/fixtures/consumer"
+      },
+      {
+        "command": [
+          "/usr/local/go/bin/go",
+          "run",
+          ".",
+          "--root",
+          "../..",
+          "--out",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925-final",
+          "--version",
+          "v0.0.0-candidate.team.20260925.2"
+        ],
+        "exit": 0,
+        "seconds": 1.045,
+        "execution_error": null,
+        "name": "package-final",
+        "cwd": "tools/release"
+      }
+    ],
+    "final_packaged_commands": [
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "mod",
+          "download",
+          "all"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925-final/consumers/full",
+        "darwin_max_process_rss_bytes": 34717696,
+        "elapsed_seconds": 1.3497003330267034,
+        "exit": 0,
+        "name": "full-download",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 35913728,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "mod",
+          "download",
+          "all"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925-final/consumers/configured",
+        "darwin_max_process_rss_bytes": 26427392,
+        "elapsed_seconds": 0.2661065839929506,
+        "exit": 0,
+        "name": "configured-download",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 2686976,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "list",
+          "-m",
+          "-json",
+          "all"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925-final/consumers/full",
+        "darwin_max_process_rss_bytes": 24363008,
+        "elapsed_seconds": 0.27179762499872595,
+        "exit": 0,
+        "name": "final-module-graph",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 3031040,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "mod",
+          "verify"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925-final/consumers/full",
+        "darwin_max_process_rss_bytes": 36470784,
+        "elapsed_seconds": 0.5200617920490913,
+        "exit": 0,
+        "name": "final-module-integrity",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 37732352,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-count=1",
+          "-timeout=5m",
+          "-run=^TestModulePinnedFoundryTool$",
+          "."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925-final/consumers/full",
+        "darwin_max_process_rss_bytes": 3038691328,
+        "elapsed_seconds": 26.368924333015457,
+        "exit": 0,
+        "name": "final-pinned-tool",
+        "sampled_compiler_rss_bytes": 3038674944,
+        "sampled_tree_rss_bytes": 3090382848,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "tool",
+          "foundry",
+          "generate",
+          "--recursive",
+          "--check",
+          "--dir",
+          "."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925-final/consumers/full",
+        "darwin_max_process_rss_bytes": 2911420416,
+        "elapsed_seconds": 57.23511312500341,
+        "exit": 0,
+        "name": "final-generation",
+        "sampled_compiler_rss_bytes": 2911191040,
+        "sampled_tree_rss_bytes": 14578728960,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "run",
+          "./configuredprofile/cmd/profile"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925-final/consumers/configured",
+        "darwin_max_process_rss_bytes": 1472675840,
+        "elapsed_seconds": 7.0576857079868205,
+        "exit": 0,
+        "name": "final-configured-smoke",
+        "sampled_compiler_rss_bytes": 853835776,
+        "sampled_tree_rss_bytes": 1442709504,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "-o",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/consumption/profile-linux-amd64",
+          "./configuredprofile/cmd/profile"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925-final/consumers/configured",
+        "darwin_max_process_rss_bytes": 2213412864,
+        "elapsed_seconds": 22.206814709003083,
+        "exit": 0,
+        "name": "linux-amd64",
+        "sampled_compiler_rss_bytes": 2213412864,
+        "sampled_tree_rss_bytes": 6702301184,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/bin/file",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/consumption/profile-linux-amd64"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925-final/consumers/configured",
+        "darwin_max_process_rss_bytes": 3719168,
+        "elapsed_seconds": 0.25976174999959767,
+        "exit": 0,
+        "name": "linux-amd64-identity",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1409024,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "-o",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/consumption/profile-linux-arm64",
+          "./configuredprofile/cmd/profile"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925-final/consumers/configured",
+        "darwin_max_process_rss_bytes": 2201812992,
+        "elapsed_seconds": 22.330669709015638,
+        "exit": 0,
+        "name": "linux-arm64",
+        "sampled_compiler_rss_bytes": 2201780224,
+        "sampled_tree_rss_bytes": 6645841920,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/bin/file",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/consumption/profile-linux-arm64"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925-final/consumers/configured",
+        "darwin_max_process_rss_bytes": 3719168,
+        "elapsed_seconds": 0.27325695898616686,
+        "exit": 0,
+        "name": "linux-arm64-identity",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1458176,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "mod",
+          "init",
+          "example.com/team/service"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/consumption/new-application",
+        "darwin_max_process_rss_bytes": 15482880,
+        "elapsed_seconds": 0.27138237503822893,
+        "exit": 0,
+        "name": "new-module",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1409024,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "get",
+          "-tool",
+          "github.com/weiloon1234/Foundry-Go/cmd/foundry@v0.0.0-candidate.team.20260925.2"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/consumption/new-application",
+        "darwin_max_process_rss_bytes": 39092224,
+        "elapsed_seconds": 3.797552124946378,
+        "exit": 0,
+        "name": "install-pinned-tool",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 40304640,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "tool",
+          "foundry",
+          "doctor",
+          "--dir",
+          "."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/consumption/new-application",
+        "darwin_max_process_rss_bytes": 47284224,
+        "elapsed_seconds": 0.2764957919716835,
+        "exit": 0,
+        "name": "doctor",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1572864,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "tool",
+          "foundry",
+          "make",
+          "model",
+          "Widget",
+          "--table",
+          "widgets",
+          "--dir",
+          "./models"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/consumption/new-application",
+        "darwin_max_process_rss_bytes": 48168960,
+        "elapsed_seconds": 0.26517091697314754,
+        "exit": 1,
+        "name": "scaffold-model",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1425408,
+        "timed_out": false
+      }
+    ],
+    "corrected_onboarding": [
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "mod",
+          "init",
+          "example.com/team/service"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/onboarding-corrected/application",
+        "darwin_max_process_rss_bytes": 15204352,
+        "elapsed_seconds": 0.2542292909929529,
+        "exit": 0,
+        "name": "new-module",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1572864,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "get",
+          "-tool",
+          "github.com/weiloon1234/Foundry-Go/cmd/foundry@v0.0.0-candidate.team.20260925.2"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/onboarding-corrected/application",
+        "darwin_max_process_rss_bytes": 38699008,
+        "elapsed_seconds": 0.5439113340107724,
+        "exit": 0,
+        "name": "install-pinned-tool",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 39731200,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "tool",
+          "foundry",
+          "doctor",
+          "--dir",
+          "."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/onboarding-corrected/application",
+        "darwin_max_process_rss_bytes": 47824896,
+        "elapsed_seconds": 0.27755850000539795,
+        "exit": 0,
+        "name": "doctor",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1867776,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "tool",
+          "foundry",
+          "make",
+          "model",
+          "Widget",
+          "--table",
+          "widgets",
+          "--dir",
+          "./models"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/onboarding-corrected/application",
+        "darwin_max_process_rss_bytes": 47661056,
+        "elapsed_seconds": 0.5267086669919081,
+        "exit": 0,
+        "name": "scaffold-model",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 69713920,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "tool",
+          "foundry",
+          "make",
+          "dto",
+          "WidgetResponse",
+          "--dir",
+          "./transport"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/onboarding-corrected/application",
+        "darwin_max_process_rss_bytes": 47955968,
+        "elapsed_seconds": 0.5302368749980815,
+        "exit": 0,
+        "name": "scaffold-dto",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 68796416,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "tool",
+          "foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/onboarding-corrected/application",
+        "darwin_max_process_rss_bytes": 48168960,
+        "elapsed_seconds": 0.5292133339680731,
+        "exit": 0,
+        "name": "generate",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 84377600,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "mod",
+          "tidy"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/onboarding-corrected/application",
+        "darwin_max_process_rss_bytes": 43958272,
+        "elapsed_seconds": 2.682569791970309,
+        "exit": 0,
+        "name": "tidy",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 44974080,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "tool",
+          "foundry",
+          "generate",
+          "--recursive",
+          "--check",
+          "--dir",
+          "."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/onboarding-corrected/application",
+        "darwin_max_process_rss_bytes": 322420736,
+        "elapsed_seconds": 0.798481083009392,
+        "exit": 0,
+        "name": "generation-check",
+        "sampled_compiler_rss_bytes": 189005824,
+        "sampled_tree_rss_bytes": 300875776,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "vet",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/onboarding-corrected/application",
+        "darwin_max_process_rss_bytes": 110247936,
+        "elapsed_seconds": 0.5631356669473462,
+        "exit": 0,
+        "name": "vet",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 55902208,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "test",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/onboarding-corrected/application",
+        "darwin_max_process_rss_bytes": 328089600,
+        "elapsed_seconds": 1.588259166048374,
+        "exit": 0,
+        "name": "tests",
+        "sampled_compiler_rss_bytes": 290537472,
+        "sampled_tree_rss_bytes": 333545472,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-race",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/onboarding-corrected/application",
+        "darwin_max_process_rss_bytes": 310263808,
+        "elapsed_seconds": 5.201793500047643,
+        "exit": 0,
+        "name": "race",
+        "sampled_compiler_rss_bytes": 269598720,
+        "sampled_tree_rss_bytes": 313819136,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "mod",
+          "verify"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/onboarding-corrected/application",
+        "darwin_max_process_rss_bytes": 39239680,
+        "elapsed_seconds": 0.529249333019834,
+        "exit": 0,
+        "name": "integrity",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 40501248,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "list",
+          "-m",
+          "-json",
+          "all"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-20260925/onboarding-corrected/application",
+        "darwin_max_process_rss_bytes": 22593536,
+        "elapsed_seconds": 0.2641407080227509,
+        "exit": 0,
+        "name": "module-graph",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 2162688,
+        "timed_out": false
+      }
+    ],
+    "onboarding_acceptance": {
+      "status": "passed",
+      "version": "v0.0.0-candidate.team.20260925.2",
+      "replacements": false,
+      "steps": "Fresh module, go get -tool, doctor, explicit package initialization, scaffolds, handwritten fields, generation, tidy, freshness, vet, tests, races, module integrity."
+    }
+  },
+  "failures_and_corrections": [
+    {
+      "failure": "Fresh installation replay tried to scaffold into an absent models directory.",
+      "cause": "New guide omitted the existing-Go-package precondition; no runtime fault.",
+      "fix": "Document explicit package initialization, clarify tooling guide, then rerun in a distinct empty module.",
+      "result": "All corrected onboarding phases passed."
+    }
+  ],
+  "package": {
+    "measured_manifest_sha256": "b6e9e5bba3e7e066e7c180f79a7ddb710c1eecc67d4e5f01962cb4935301e6ba",
+    "final_manifest_sha256": "67f905ff6df8c6bd28f6fe691829a4c5fe1379b9431116d8f1a49238703388f9",
+    "final_artifacts": [
+      {
+        "path": "github.com/weiloon1234/Foundry-Go",
+        "version": "v0.0.0-candidate.team.20260925.2",
+        "sha256": "cc34fcd8a5e6bed6ee6887849e0bc0ccdd87115202d8f4c8605a1a88b0097205",
+        "sum": "h1:0qVTVw0JSbHpOUsRSAIeIg2g7rSHt0TauW9AgCSpijY="
+      },
+      {
+        "path": "foundry.test/pluginbase",
+        "version": "v0.0.0-candidate.team.20260925.2",
+        "sha256": "a625e3a8455b0df6550ce44686fc56b6ea4e70c5c857d1b18b27cc005102ae37",
+        "sum": "h1:H+YnWo6Z9g/nA/Cuw5HKCzaY0oSpBfeHw2u5cJXgfVA="
+      },
+      {
+        "path": "foundry.test/plugindep",
+        "version": "v0.0.0-candidate.team.20260925.2",
+        "sha256": "e7b973b9aebefef76a73b1db7c103c03ad59fe00ccd0d1ddd569fcc25a0457f6",
+        "sum": "h1:MlO3nCzSUNRBs/ZDhCV5SyQDhFUvDogKRPSQnfzvTFA="
+      }
+    ],
+    "module_replacements": false,
+    "module_integrity": "passed",
+    "final_runtime_acceptance": "Pinned tool, all consumer generation, configured startup, Linux amd64/arm64 cross-builds passed.",
+    "documentation_timing": "Final onboarding/reporting edits follow package preparation; runtime/generator/client source hashes unchanged.",
+    "measurement_commands": [
+      {
+        "argv": [
+          "/usr/sbin/sysctl",
+          "hw.model",
+          "hw.memsize",
+          "hw.physicalcpu",
+          "hw.logicalcpu"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full",
+        "darwin_max_process_rss_bytes": 1277952,
+        "elapsed_seconds": 0.25795562501298264,
+        "exit": 0,
+        "name": "hardware",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 2539520,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "env",
+          "-json",
+          "GOVERSION",
+          "GOOS",
+          "GOARCH",
+          "CGO_ENABLED",
+          "GOROOT"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full",
+        "darwin_max_process_rss_bytes": 14893056,
+        "elapsed_seconds": 0.2818890420021489,
+        "exit": 0,
+        "name": "toolchain",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 2293760,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "mod",
+          "download",
+          "all"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/configured",
+        "darwin_max_process_rss_bytes": 39485440,
+        "elapsed_seconds": 8.215676332998555,
+        "exit": 0,
+        "name": "configured-download",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 40714240,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "mod",
+          "download",
+          "all"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full",
+        "darwin_max_process_rss_bytes": 25952256,
+        "elapsed_seconds": 0.26348029100336134,
+        "exit": 0,
+        "name": "full-download",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1409024,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "mod",
+          "download",
+          "all"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/ordinary",
+        "darwin_max_process_rss_bytes": 25411584,
+        "elapsed_seconds": 0.2689891249756329,
+        "exit": 0,
+        "name": "ordinary-download",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1507328,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "list",
+          "-m",
+          "-json",
+          "all"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full",
+        "darwin_max_process_rss_bytes": 24428544,
+        "elapsed_seconds": 0.26179683301597834,
+        "exit": 0,
+        "name": "module-graph",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1556480,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "mod",
+          "verify"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full",
+        "darwin_max_process_rss_bytes": 50167808,
+        "elapsed_seconds": 0.2647014589747414,
+        "exit": 0,
+        "name": "module-integrity",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1638400,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "-o",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/foundry",
+          "github.com/weiloon1234/Foundry-Go/cmd/foundry"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full",
+        "darwin_max_process_rss_bytes": 1277902848,
+        "elapsed_seconds": 9.911813709011767,
+        "exit": 0,
+        "name": "generator-build",
+        "sampled_compiler_rss_bytes": 1219330048,
+        "sampled_tree_rss_bytes": 1631436800,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/ordinary"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/ordinary",
+        "darwin_max_process_rss_bytes": 560119808,
+        "elapsed_seconds": 5.439827708003577,
+        "exit": 0,
+        "name": "ordinary-generation-cold",
+        "sampled_compiler_rss_bytes": 558776320,
+        "sampled_tree_rss_bytes": 1102659584,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/ordinary"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/ordinary",
+        "darwin_max_process_rss_bytes": 44564480,
+        "elapsed_seconds": 0.2676611249917187,
+        "exit": 0,
+        "name": "ordinary-generation-unchanged",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 2064384,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/ordinary",
+        "darwin_max_process_rss_bytes": 619872256,
+        "elapsed_seconds": 3.733775583037641,
+        "exit": 0,
+        "name": "ordinary-build-cold",
+        "sampled_compiler_rss_bytes": 603930624,
+        "sampled_tree_rss_bytes": 644808704,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/ordinary",
+        "darwin_max_process_rss_bytes": 167968768,
+        "elapsed_seconds": 0.264598083042074,
+        "exit": 0,
+        "name": "ordinary-build-unchanged",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 2539520,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/ordinary"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/ordinary",
+        "darwin_max_process_rss_bytes": 609697792,
+        "elapsed_seconds": 1.5815824159653857,
+        "exit": 0,
+        "name": "ordinary-generation-edited",
+        "sampled_compiler_rss_bytes": 450723840,
+        "sampled_tree_rss_bytes": 670793728,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/ordinary",
+        "darwin_max_process_rss_bytes": 605749248,
+        "elapsed_seconds": 1.322284750000108,
+        "exit": 0,
+        "name": "ordinary-build-edited",
+        "sampled_compiler_rss_bytes": 511082496,
+        "sampled_tree_rss_bytes": 548716544,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/foundry",
+          "agent",
+          "complete",
+          "--workspace",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/ordinary",
+          "--file",
+          "productionprofile/queries.go",
+          "--line",
+          "16",
+          "--column",
+          "20",
+          "--gopls",
+          "${FOUNDRY_ROOT}/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/ordinary",
+        "darwin_max_process_rss_bytes": 304857088,
+        "elapsed_seconds": 1.8481040420010686,
+        "exit": 0,
+        "name": "ordinary-gopls-complete-1",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 387760128,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/foundry",
+          "agent",
+          "hover",
+          "--workspace",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/ordinary",
+          "--file",
+          "productionprofile/queries.go",
+          "--line",
+          "16",
+          "--column",
+          "21",
+          "--gopls",
+          "${FOUNDRY_ROOT}/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/ordinary",
+        "darwin_max_process_rss_bytes": 137166848,
+        "elapsed_seconds": 1.325162958004512,
+        "exit": 0,
+        "name": "ordinary-gopls-hover-1",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 184057856,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "list",
+          "-deps",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/ordinary",
+        "darwin_max_process_rss_bytes": 33734656,
+        "elapsed_seconds": 0.2616971670067869,
+        "exit": 0,
+        "name": "ordinary-imports",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1556480,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "-o",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/ordinary-profile",
+          "./productionprofile/cmd/profile"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/ordinary",
+        "darwin_max_process_rss_bytes": 168804352,
+        "elapsed_seconds": 0.2672717079985887,
+        "exit": 0,
+        "name": "ordinary-link",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1851392,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/ordinary-profile"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/ordinary",
+        "darwin_max_process_rss_bytes": 6406144,
+        "elapsed_seconds": 0.5268921660026535,
+        "exit": 0,
+        "name": "ordinary-linked-smoke",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1294336,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/configured"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/configured",
+        "darwin_max_process_rss_bytes": 2252111872,
+        "elapsed_seconds": 23.849374792014714,
+        "exit": 0,
+        "name": "configured-generation-cold",
+        "sampled_compiler_rss_bytes": 2252079104,
+        "sampled_tree_rss_bytes": 6363807744,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/configured"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/configured",
+        "darwin_max_process_rss_bytes": 57540608,
+        "elapsed_seconds": 0.5311914590420201,
+        "exit": 0,
+        "name": "configured-generation-unchanged",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 27885568,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/configured",
+        "darwin_max_process_rss_bytes": 2139291648,
+        "elapsed_seconds": 24.161247749987524,
+        "exit": 0,
+        "name": "configured-build-cold",
+        "sampled_compiler_rss_bytes": 2139291648,
+        "sampled_tree_rss_bytes": 6252789760,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/configured",
+        "darwin_max_process_rss_bytes": 1497841664,
+        "elapsed_seconds": 2.1161180830094963,
+        "exit": 0,
+        "name": "configured-build-unchanged",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1469710336,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/configured"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/configured",
+        "darwin_max_process_rss_bytes": 791625728,
+        "elapsed_seconds": 4.556456874997821,
+        "exit": 0,
+        "name": "configured-generation-edited",
+        "sampled_compiler_rss_bytes": 771735552,
+        "sampled_tree_rss_bytes": 847069184,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/configured",
+        "darwin_max_process_rss_bytes": 1497481216,
+        "elapsed_seconds": 5.344986958953086,
+        "exit": 0,
+        "name": "configured-build-edited",
+        "sampled_compiler_rss_bytes": 778616832,
+        "sampled_tree_rss_bytes": 1498333184,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/foundry",
+          "agent",
+          "complete",
+          "--workspace",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/configured",
+          "--file",
+          "configuredprofile/routes.go",
+          "--line",
+          "17",
+          "--column",
+          "25",
+          "--gopls",
+          "${FOUNDRY_ROOT}/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/configured",
+        "darwin_max_process_rss_bytes": 684687360,
+        "elapsed_seconds": 2.441402875003405,
+        "exit": 0,
+        "name": "configured-gopls-complete-1",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 768032768,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/foundry",
+          "agent",
+          "hover",
+          "--workspace",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/configured",
+          "--file",
+          "configuredprofile/routes.go",
+          "--line",
+          "17",
+          "--column",
+          "26",
+          "--gopls",
+          "${FOUNDRY_ROOT}/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/configured",
+        "darwin_max_process_rss_bytes": 271450112,
+        "elapsed_seconds": 1.8757932080188766,
+        "exit": 0,
+        "name": "configured-gopls-hover-1",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 316325888,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "list",
+          "-deps",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/configured",
+        "darwin_max_process_rss_bytes": 48300032,
+        "elapsed_seconds": 0.27787483303109184,
+        "exit": 0,
+        "name": "configured-imports",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1425408,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "-o",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/configured-profile",
+          "./configuredprofile/cmd/profile"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/configured",
+        "darwin_max_process_rss_bytes": 1497300992,
+        "elapsed_seconds": 1.3102152079809457,
+        "exit": 0,
+        "name": "configured-link",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1550434304,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/configured-profile"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/configured",
+        "darwin_max_process_rss_bytes": 24772608,
+        "elapsed_seconds": 0.7980385000118986,
+        "exit": 0,
+        "name": "configured-linked-smoke",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1294336,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-count=1",
+          "-run",
+          "^TestConfiguredProfile",
+          "./configuredprofile"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/configured",
+        "darwin_max_process_rss_bytes": 1511571456,
+        "elapsed_seconds": 5.05970508401515,
+        "exit": 0,
+        "name": "configured-consumer-test",
+        "sampled_compiler_rss_bytes": 1271021568,
+        "sampled_tree_rss_bytes": 1478721536,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-run",
+          "^$",
+          "-bench",
+          "Benchmark(Startup|Selection|HTTP)",
+          "-benchmem",
+          "-benchtime=1s",
+          "-count=3",
+          "./configuredprofile"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/configured",
+        "darwin_max_process_rss_bytes": 1504477184,
+        "elapsed_seconds": 26.617378083989024,
+        "exit": 0,
+        "name": "configured-runtime-benchmarks",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1562198016,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full",
+        "darwin_max_process_rss_bytes": 2929737728,
+        "elapsed_seconds": 67.79444945801515,
+        "exit": 0,
+        "name": "full-generation-cold",
+        "sampled_compiler_rss_bytes": 2929704960,
+        "sampled_tree_rss_bytes": 12663832576,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full",
+        "darwin_max_process_rss_bytes": 218628096,
+        "elapsed_seconds": 1.3113691660109907,
+        "exit": 0,
+        "name": "full-generation-unchanged",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 219856896,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full",
+        "darwin_max_process_rss_bytes": 2850095104,
+        "elapsed_seconds": 76.34787554095965,
+        "exit": 0,
+        "name": "full-build-cold",
+        "sampled_compiler_rss_bytes": 2850078720,
+        "sampled_tree_rss_bytes": 12044926976,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full",
+        "darwin_max_process_rss_bytes": 1581301760,
+        "elapsed_seconds": 2.8811120410100557,
+        "exit": 0,
+        "name": "full-build-unchanged",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 3102818304,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full",
+        "darwin_max_process_rss_bytes": 774602752,
+        "elapsed_seconds": 5.231196041975636,
+        "exit": 0,
+        "name": "full-generation-edited",
+        "sampled_compiler_rss_bytes": 767918080,
+        "sampled_tree_rss_bytes": 853491712,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full",
+        "darwin_max_process_rss_bytes": 1573765120,
+        "elapsed_seconds": 5.220175000024028,
+        "exit": 0,
+        "name": "full-build-edited",
+        "sampled_compiler_rss_bytes": 757563392,
+        "sampled_tree_rss_bytes": 2035761152,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/foundry",
+          "agent",
+          "complete",
+          "--workspace",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full",
+          "--file",
+          "catalog/product.go",
+          "--line",
+          "21",
+          "--column",
+          "78",
+          "--gopls",
+          "${FOUNDRY_ROOT}/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full",
+        "darwin_max_process_rss_bytes": 1416708096,
+        "elapsed_seconds": 2.7032485000090674,
+        "exit": 0,
+        "name": "full-gopls-complete-1",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1463418880,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/foundry",
+          "agent",
+          "hover",
+          "--workspace",
+          "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full",
+          "--file",
+          "catalog/product.go",
+          "--line",
+          "21",
+          "--column",
+          "79",
+          "--gopls",
+          "${FOUNDRY_ROOT}/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full",
+        "darwin_max_process_rss_bytes": 324714496,
+        "elapsed_seconds": 2.194871040992439,
+        "exit": 0,
+        "name": "full-gopls-hover-1",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 352141312,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "list",
+          "-deps",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full",
+        "darwin_max_process_rss_bytes": 55476224,
+        "elapsed_seconds": 0.2699076250428334,
+        "exit": 0,
+        "name": "full-imports",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1425408,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/milestone24-production/security-tools/govulncheck",
+          "-version"
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full",
+        "darwin_max_process_rss_bytes": 18382848,
+        "elapsed_seconds": 0.7855586250079796,
+        "exit": 0,
+        "name": "vulnerability-tool",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 32063488,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/milestone24-production/security-tools/govulncheck",
+          "-json",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/measurements/module-cache/github.com/weiloon1234/!foundry-!go@v0.0.0-candidate.team.20260925",
+        "darwin_max_process_rss_bytes": 2686304256,
+        "elapsed_seconds": 2.11008887499338,
+        "exit": 0,
+        "name": "framework-vulnerabilities",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 2699952128,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "${FOUNDRY_ROOT}/.cache/milestone24-production/security-tools/govulncheck",
+          "-json",
+          "./..."
+        ],
+        "cwd": "${FOUNDRY_ROOT}/.cache/team-readiness-candidate-20260925/consumers/full",
+        "darwin_max_process_rss_bytes": 3215392768,
+        "elapsed_seconds": 1.8461998749990016,
+        "exit": 0,
+        "name": "consumer-vulnerabilities",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 3022389248,
+        "timed_out": false
+      }
+    ],
+    "measured_profiles": [
+      {
+        "editor": [
+          {
+            "operation": "complete",
+            "round": 1,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 76270166,
+              "request_ns": 445729958
+            }
+          },
+          {
+            "operation": "hover",
+            "round": 1,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 34144750,
+              "request_ns": 205833209
+            }
+          }
+        ],
+        "generated_after": {
+          "bytes": 68111,
+          "files": 1,
+          "sha256": {
+            "productionprofile/record_foundry.gen.go": "ce1796e205afaa39dd186bfd9d3a4a18c55fec890ef6ca483f565a95a1fac0fd"
+          }
+        },
+        "generated_before": {
+          "bytes": 68111,
+          "files": 1,
+          "sha256": {
+            "productionprofile/record_foundry.gen.go": "ce1796e205afaa39dd186bfd9d3a4a18c55fec890ef6ca483f565a95a1fac0fd"
+          }
+        },
+        "generated_edited": {
+          "bytes": 71967,
+          "files": 1,
+          "sha256": {
+            "productionprofile/record_foundry.gen.go": "0f5deab0be38d905f8635f109587ef3cd1e099be4b3506d3e06a9395ce9c9e90"
+          }
+        },
+        "imported_packages": 175,
+        "linked_binary_bytes": 5328658,
+        "linked_binary_sha256": "7b4ebc8ecff382444561b63ef3271221baf2c47a3c23c59d6746a77259773988",
+        "source": "ordinary"
+      },
+      {
+        "editor": [
+          {
+            "operation": "complete",
+            "round": 1,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 99346167,
+              "request_ns": 1008891458
+            }
+          },
+          {
+            "operation": "hover",
+            "round": 1,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 38339875,
+              "request_ns": 548369667
+            }
+          }
+        ],
+        "generated_after": {
+          "bytes": 68111,
+          "files": 1,
+          "sha256": {
+            "productionprofile/record_foundry.gen.go": "ce1796e205afaa39dd186bfd9d3a4a18c55fec890ef6ca483f565a95a1fac0fd"
+          }
+        },
+        "generated_before": {
+          "bytes": 68111,
+          "files": 1,
+          "sha256": {
+            "productionprofile/record_foundry.gen.go": "ce1796e205afaa39dd186bfd9d3a4a18c55fec890ef6ca483f565a95a1fac0fd"
+          }
+        },
+        "generated_edited": {
+          "bytes": 71967,
+          "files": 1,
+          "sha256": {
+            "productionprofile/record_foundry.gen.go": "0f5deab0be38d905f8635f109587ef3cd1e099be4b3506d3e06a9395ce9c9e90"
+          }
+        },
+        "imported_packages": 553,
+        "linked_binary_bytes": 35553314,
+        "linked_binary_sha256": "a6ad99ba73523ef1179113048068195b5476f0466ffd16f2814030dbcf20135c",
+        "source": "configured"
+      },
+      {
+        "editor": [
+          {
+            "operation": "complete",
+            "round": 1,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 95013917,
+              "request_ns": 934552791
+            }
+          },
+          {
+            "operation": "hover",
+            "round": 1,
+            "server": {
+              "name": "gopls",
+              "version": "{\"GoVersion\":\"go1.27.1\",\"Path\":\"golang.org/x/tools/gopls\",\"Main\":{\"Path\":\"golang.org/x/tools/gopls\",\"Version\":\"v0.23.0\",\"Sum\":\"h1:Dn6mf9WXu9iLnTftDDMb9wV0c6Se7PjzEMqP0LEe08Y=\"},\"Deps\":[{\"Path\":\"github.com/BurntSushi/toml\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=\"},{\"Path\":\"github.com/fatih/camelcase\",\"Version\":\"v1.0.0\",\"Sum\":\"h1:hxNvNX/xYBp0ovncs8WyWZrOrpBNub/JfaMvbURyft8=\"},{\"Path\":\"github.com/fatih/gomodifytags\",\"Version\":\"v1.17.1-0.20250423142747-f3939df9aa3c\",\"Sum\":\"h1:dDSgAjoOMp8da3egfz0t2S+t8RGOpEmEXZubcGuc0Bg=\"},{\"Path\":\"github.com/fatih/structtag\",\"Version\":\"v1.2.0\",\"Sum\":\"h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=\"},{\"Path\":\"github.com/fsnotify/fsnotify\",\"Version\":\"v1.9.0\",\"Sum\":\"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\"},{\"Path\":\"github.com/google/jsonschema-go\",\"Version\":\"v0.4.3\",\"Sum\":\"h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=\"},{\"Path\":\"github.com/modelcontextprotocol/go-sdk\",\"Version\":\"v1.6.0\",\"Sum\":\"h1:PPLS3kn7WtOEnR+Af4X5H96SG0qSab8R/ZQT/HkhPkY=\"},{\"Path\":\"github.com/segmentio/asm\",\"Version\":\"v1.2.1\",\"Sum\":\"h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=\"},{\"Path\":\"github.com/segmentio/encoding\",\"Version\":\"v0.5.4\",\"Sum\":\"h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=\"},{\"Path\":\"github.com/yosida95/uritemplate/v3\",\"Version\":\"v3.0.2\",\"Sum\":\"h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=\"},{\"Path\":\"golang.org/x/exp/typeparams\",\"Version\":\"v0.0.0-20260611194520-c48552f49976\",\"Sum\":\"h1:GTD/WuaexTazIG/SxLOz4rEKZPDVilmVVC2nz4xhwfE=\"},{\"Path\":\"golang.org/x/mod\",\"Version\":\"v0.37.0\",\"Sum\":\"h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=\"},{\"Path\":\"golang.org/x/oauth2\",\"Version\":\"v0.36.0\",\"Sum\":\"h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\"},{\"Path\":\"golang.org/x/sync\",\"Version\":\"v0.21.0\",\"Sum\":\"h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=\"},{\"Path\":\"golang.org/x/sys\",\"Version\":\"v0.46.0\",\"Sum\":\"h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=\"},{\"Path\":\"golang.org/x/telemetry\",\"Version\":\"v0.0.0-20260625142307-59b4966ccb57\",\"Sum\":\"h1:nwGZBCt+FnXUrGsj5vjzAsEmkcaFvd82BbOjECiFYZc=\"},{\"Path\":\"golang.org/x/text\",\"Version\":\"v0.38.0\",\"Sum\":\"h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=\"},{\"Path\":\"golang.org/x/tools\",\"Version\":\"v0.47.1-0.20260707181000-a299dadba899\",\"Sum\":\"h1:5O28oLQxJ1jif5UNdi9OULXCd4g3rsy3xkECh96fnf8=\"},{\"Path\":\"golang.org/x/vuln\",\"Version\":\"v1.4.0\",\"Sum\":\"h1:FpmTZiV4PyqY3lFfuCkz1JftEXb/+8M2NEkjJM5TF4g=\"},{\"Path\":\"honnef.co/go/tools\",\"Version\":\"v0.8.0-rc.1\",\"Sum\":\"h1:wqMm2kjcEXMOr+6yau+pdKqJKe6l2N1aKPkpini+Kzk=\"},{\"Path\":\"mvdan.cc/gofumpt\",\"Version\":\"v0.10.0\",\"Sum\":\"h1:yGGpRS2pBN2OQIi7b21IXknJna7faPkFaVfHLrN6Euo=\"},{\"Path\":\"mvdan.cc/xurls/v2\",\"Version\":\"v2.6.0\",\"Sum\":\"h1:3NTZpeTxYVWNSokW3MKeyVkz/j7uYXYiMtXRUfmjbgI=\"}],\"Settings\":[{\"Key\":\"-buildmode\",\"Value\":\"exe\"},{\"Key\":\"-compiler\",\"Value\":\"gc\"},{\"Key\":\"DefaultGODEBUG\",\"Value\":\"tracebacklabels=0,x509sslcertoverrideplatform=0\"},{\"Key\":\"CGO_ENABLED\",\"Value\":\"1\"},{\"Key\":\"CGO_CFLAGS\"},{\"Key\":\"CGO_CPPFLAGS\"},{\"Key\":\"CGO_CXXFLAGS\"},{\"Key\":\"CGO_LDFLAGS\"},{\"Key\":\"GOARCH\",\"Value\":\"arm64\"},{\"Key\":\"GOOS\",\"Value\":\"darwin\"},{\"Key\":\"GOARM64\",\"Value\":\"v8.0\"}],\"Version\":\"v0.23.0\"}"
+            },
+            "timing": {
+              "initialize_ns": 34521292,
+              "request_ns": 771726083
+            }
+          }
+        ],
+        "generated_after": {
+          "bytes": 5150813,
+          "files": 196,
+          "sha256": {
+            "auditqueries/account_foundry.gen.go": "78de28d362fc35795b9ea10f3fd3bcf990087b77150097e3ea6367c5a749a9ac",
+            "auditqueries/label_foundry.gen.go": "4a739095446284edb161131aee7e7f553edbe042bdee70c8b33d6284bdf3fb91",
+            "binarymodels/record_foundry.gen.go": "3b5844def8c444a71989de297ca1d31bd9e956f958628134d2efc43caa22be37",
+            "binarymodels/view_foundry.gen.go": "c92a3c39fbfed4d72d2222eaf79d56ef0fd40843fd200aed2f8e73e347f06e10",
+            "bootstrap/member_foundry.gen.go": "c5fc360d5f2d4bad7b3d79963be1f6c80f3670311ba8e9e8f9b8ff387c93b78c",
+            "bootstrap/operator_foundry.gen.go": "241e33b4b6f9a75fc3571531538cff079d5d8afdc0ec934c21477a54d905f49a",
+            "bootstrap/profile_foundry.gen.go": "5a8261bc65a7cad182735a9d1d5083ac106dc9746bd22ee9a60a75e14dbf6c8a",
+            "bootstrap/settings_foundry.gen.go": "bbb1b3343cd7daf415dde7d9e10502ddbca8ea0ac7a40f8eaae51a5493eaffc2",
+            "bootstrap/upload_input_foundry.gen.go": "4b634521136e206e1bd95e108cf581d6c074f4e4695ad0da95fa46a1db8cabd0",
+            "bootstrap/upload_result_foundry.gen.go": "5441b796fa5165de1f5f56a29ce6d0302e695e876c0fff4afb55c6679f73add6",
+            "catalog/product_foundry.gen.go": "c5ae4826d509d4767009a99a5a46429135d3ace83356025c7652065508e7b264",
+            "catalog/status/status_foundry.gen.go": "d6b40a59538f91f7ee15c414a9054ae80e69d62df114785c5bdafecda6a5de39",
+            "clientcontracts/filters_foundry.gen.go": "a14c1f9b02145dbc7eb4e94da9498aac5b9f8db6a9619925809829afbaa9f528",
+            "clientcontracts/item_path_foundry.gen.go": "ec7ce734699e868edfae18310bc500e13d082ab22a6133a94e45d763dfbb2333",
+            "clientcontracts/member_foundry.gen.go": "a3441ba780d2246ed05da9fd72158985f92e114c4de673889eb68daf60db4469",
+            "clientcontracts/payload_foundry.gen.go": "f90cc3b047988e14d57821f6fdd700e50b58248e76c7d7fd882d742ebc2d0d88",
+            "configured/settings_foundry.gen.go": "fd21f0208a185e8a3e12b0648578c63b21d40ae91f7d86eed0e4c2c1d5988f66",
+            "eventqueries/event_link_foundry.gen.go": "be0f6958bf2d9a24c429020c57f362365cee8a16a67315f314eb5955dbbca48f",
+            "framequeries/sample_foundry.gen.go": "93be0effed5220b8c023c0c18fce63f11dded244e29befb284d5f88e69ee7ef2",
+            "genericdto/combined_foundry.gen.go": "b2f055b9d4352245929de0e09d7ebeaf692856dc4a8b81fbc96314b843d798b7",
+            "genericdto/envelope_foundry.gen.go": "f5cb5515359f15edc002a9c6e38b8314a79df987a1c883414d08bc1209243012",
+            "genericdto/project_dto_foundry.gen.go": "5625ea1bd51d81759623db665071c3218a13d2280d4f2b7cf7dda0e33ed39dc7",
+            "genericdto/user_dto_foundry.gen.go": "48e2b1e44bf6d81cec0a7f1904e0b6976217f0d145dcfea3e3f67492d508a32b",
+            "genericdto/user_envelope_foundry.gen.go": "d2bd0a391f61e981688afe18d80ffb11199f1f1fac0fdd81b0502877c57626de",
+            "hookqueries/log_foundry.gen.go": "e6efb08272e0a64b3f7b7dee95ce8d5f9307621b6752829a3a0aa43913e42092",
+            "hookqueries/member_foundry.gen.go": "900da3447c94868bf17b13e38d5b75ff48cc5fc4c8c80404fb0d7387fa46990d",
+            "httpdto/inventory_response_foundry.gen.go": "8534f59be0a390352633d606b2d5502534f007ca6abe5d8f16ae7a928232ff7f",
+            "httpdto/order_response_foundry.gen.go": "cc90e818122635f81c015eb2f5fc8f2e3b6862966fa7de981361c621df27a33c",
+            "httpdto/stream_response_foundry.gen.go": "97297497b931a1d0ee545d5a3c2d95e0bf6166c3d0d1e257e8c87ef22dc769b9",
+            "httpdto/tracking_response_foundry.gen.go": "f10849ac85fe82c97e1d41cde0541a12de9ffc535e97e3cefeeb2688dbaae77f",
+            "httpdto/update_user_foundry.gen.go": "99dd5341269ca5017a6dfd0a50184297f2096af99cf4471f00a814be91728bd8",
+            "httpdto/user_response_foundry.gen.go": "bfbcc812112c543e55150bd07f803844d9e5ec3b10e69245f92b4e478ff5c373",
+            "httpkernel/asset_path_foundry.gen.go": "4e61ce801b1a7b1933fe65703dfb9ed345a78942f053239fcfc22221eabbc004",
+            "httpkernel/user_feed_path_foundry.gen.go": "d3f4ff25960d0231bd0b5e5b83343c76da8ec3eaba1f922f14122de18c9d17eb",
+            "httpkernel/user_path_foundry.gen.go": "5dc7e69c6d2c4b2adf0b37a56db9d6e9ee9e930f55b0e51d641466d67519ae4f",
+            "httppagination/cmd/pagecontract/summary_foundry.gen.go": "4c241972bc427f2f7afe8ea45a6db36e7ed11ef170b2720712423f0d1286c49d",
+            "httppagination/member_filters_foundry.gen.go": "c0f426d5943a34d009637ef98371204e4fa653331e040c2fecffaced3fa61388",
+            "httppagination/member_response_foundry.gen.go": "0337eb8dafa4afaa92ea9bd7ef4c868f5a77fa324507d32b53c0f7fcdbb0a724",
+            "httpquery/nearby_input_foundry.gen.go": "1e6e9fc579c134633ff3c80e0268ab6596119e6a01a292c98a984b3a1e756db7",
+            "httpquery/position_path_foundry.gen.go": "d926cdfe226727df6b0f5a4e5ac974eac1ca822de84848da3a96c45ca6e8027d",
+            "httpquery/priority_path_foundry.gen.go": "0b4fff80b2f9db0c41d56578117238386898ce175557aeaee4e2443bd5c3a16e",
+            "httpquery/priority_query_foundry.gen.go": "be7cb41620ea58a32253082e11bd9ab7a247eddcfcc834b7fce3162e5a2e867a",
+            "httpquery/priority_response_foundry.gen.go": "db14b9b809bb11d737a3f5ca88b709d7e8372981e39bab816e5ee5bd7d817200",
+            "httpquery/search_input_foundry.gen.go": "5c9c3338d3aedc2142a823fd66b37944b6777aa454fd20cbf2f36f29449c35a1",
+            "httpuploads/profile_input_foundry.gen.go": "ccd39005bcb828386f0656e02d60724f625b73bfff147afe1beba9260b2878de",
+            "httpuploads/upload_reply_foundry.gen.go": "5baa4969119c9ccc0c480629af947f4b71e3fad63517ce21ca4cd51076998ae6",
+            "idempotenthttp/order_foundry.gen.go": "92b3e9cfdc09d03cf0dc1df9ee2e73a27dfed0b974592ab5ea4dfc93c7ccccbf",
+            "idempotenthttp/path_foundry.gen.go": "9d757a2ed57b26d33827b280f7ffb75355cca93c527284c3a1467a9e4bdad764",
+            "idempotenthttp/receipt_foundry.gen.go": "6580dbe9e17d092480565f33d07a29ef2c152bf24a4b0005b387adca79ed240c",
+            "idempotenthttp/submission_foundry.gen.go": "fe5dcd264484e22f5845fcc754cdd7b67c1c2422d2b8f6f9fe0fcccf2ff5b62b",
+            "idempotenthttp/workspace_foundry.gen.go": "ebc149fb3293a6aa20f438aafe2ee930ed8ac338ce245a08c9d9529436ec214d",
+            "inputqueries/member_foundry.gen.go": "9d830acefbacb5aa4a6fa290f2f6e090500b8d6587fa409ba242d8deabf10be8",
+            "intervalqueries/label_foundry.gen.go": "9dae3bf91c097c57f83c2d1ef438b6f619a1dc0f97dc8a628f94e9af780044cd",
+            "intervalqueries/link_foundry.gen.go": "1e4314fbe61015adfd615d67709750fa728e35cc3cf726a635c801cb52b5ec2b",
+            "intervalqueries/plan_foundry.gen.go": "7cc9a2644a7eac37e4541a94ab75ab6fa2d53c0b29269d92d4b56c5499bb9175",
+            "intervalqueries/sample_foundry.gen.go": "8d0c468ded8b1b1e2d6e408ff70d62587df8d35dac2c411ce267b84df53457f6",
+            "intervalqueries/summary_foundry.gen.go": "d9afda9c901614affb922cc66b07f031eb05acbf938bdc725aa8d0ad16ff2def",
+            "isolatedhttp/receipt_foundry.gen.go": "08eecd74807d598a1de44e68992d9c61088836977bd6e9963d8112d57928f7d5",
+            "isolatedhttp/record_foundry.gen.go": "c3feec2ce900caf2e6d28f0f47b6cf8ea7bdb0302d71efe0887fd61e35de6349",
+            "isolatedhttp/record_path_foundry.gen.go": "345e9d26a8a22817cef7ee7581169c4b7c7d0cfa6bb478cec59bacb706667cf0",
+            "isolatedhttp/submission_foundry.gen.go": "693605a0658bae4395782a6064275d5e1427450c443932746ecde4ff96b06dc2",
+            "jsonqueries/document_foundry.gen.go": "cb6cb7f4d5cd9088aab1c61a563e171e188d673d1d5f8278d38c4d92da753c48",
+            "jsonqueries/policy_foundry.gen.go": "493f384d8006b04a0095ef6a2e31fb3935d75bd79befb591763e82d5ae9b0bb6",
+            "jsonqueries/snapshot_foundry.gen.go": "7a72ee50e0bedfbce8a493457fe37d64ab65bacf6b615517ffa9420d8f870dfe",
+            "keyqueries/bucket_count_foundry.gen.go": "8192ced61d8031f4b51aa81e77e64941b752746beec4a95c8d23855aed7720b0",
+            "lateralqueries/ranked_order_foundry.gen.go": "08f20df623c989d55920e94512e399032a25c4137aa8eece48078ab33c908731",
+            "lateralqueries/user_order_foundry.gen.go": "3f8d9930e999c309c731ad71f06dc8e469cedd50e01c57bf231fc77945b2377a",
+            "linkqueries/archive_foundry.gen.go": "82ec26477ea28611ec3655043f5a53f0b3957792b1d56c1c93ac5677476dc47c",
+            "linkqueries/friendship_foundry.gen.go": "a2dd52db00e5b45b2bc2d640f86df99ed9670501bc1dffd4a47df6b96cf4af15",
+            "linkqueries/group_foundry.gen.go": "a0c973abd34552dd4f905aa1522a5ccab0c69dc6276cd26c7be6959a41f4059f",
+            "linkqueries/member_foundry.gen.go": "afff28a7a65abee0b6b354d621447b5e5e6c884f471c557874390f811bdcf926",
+            "linkqueries/membership_foundry.gen.go": "ba3f3452d6ed636f88012e6201900394aa31209ffd47ca62820313fb6e904176",
+            "linkqueries/natural_link_foundry.gen.go": "13d08ae87a02155bca416b1652cb52cae1545cf2b193cff2e1d09d0064323c56",
+            "linkqueries/nullable_link_foundry.gen.go": "717d4c07126d416769e21fb6bb51d35a6111d5a5e90884f476ba5f75195b6f3f",
+            "localization/cart_args_foundry.gen.go": "67fbbd54ca124b08fd4b017d8cae9ee714d9974a5c499c12f64bbb1632e8f62f",
+            "localization/literal_args_foundry.gen.go": "cd1c2f4ff51e92b4f4161aa70d56067fb3b4058ec7d29812cf23ea60a9445710",
+            "localization/manage_label_foundry.gen.go": "b123b125128a44fe81714d6a836e2c2c1500c64896f1a919629c675932158df8",
+            "localization/name_label_foundry.gen.go": "bd2e9d0f9ea79e9b610325be059cee829d2992795fd8dbc0e703df9aca75d225",
+            "localization/position_args_foundry.gen.go": "a2b0d0db413ca48a01c2ea4e5763e37197c7db2db8559dbcfa9e7a45d4f69c78",
+            "localization/status_foundry.gen.go": "050e34bd129eb53559667d1666eb3ee9e07e4fef4e78cb55f4ef5a6be5bf4d7c",
+            "localization/welcome_args_foundry.gen.go": "5a6caa3cb7078170d52a490a5a7825f39b37761885444e5eba3b9b2163bebc74",
+            "mailing/recipient_request_foundry.gen.go": "06ab1d9e28001fd695ace1f053bdf7c2d9ab2c00a3d93968187b85abdbb308b6",
+            "models/country_foundry.gen.go": "40115931e5bb64f6729b39e01bb045629fe3621d265daae2e4e0bf1e2d81f8fa",
+            "models/friendship_foundry.gen.go": "c400028ee926d2c04c5f55040d65ee28a3ac85d1cf5ec52933a3544c8debb2f3",
+            "models/group_foundry.gen.go": "f440fa6c4a7b49174e5edeb0ab82bb1f998e19d45dc55dc0ec61f87aaec55fc5",
+            "models/ledger_entry_foundry.gen.go": "f10cf56cdbd8e001c127fd49a636f5ef5d97ff76c8f199b3f07642cdda685362",
+            "models/level_foundry.gen.go": "b3f2e0c16fc34e6e2505ae6ec5949a38baf4883eef9333020384ff6c4d20d1dc",
+            "models/location_foundry.gen.go": "e1a05ec801f2212981c2060c7f68c108d42eb7cd907a5591bb9430461be5157f",
+            "models/measurement_foundry.gen.go": "84e0e60d98f08a11bc652a035c93dbd7595a9897a07a7daa5106c87b9e63f87b",
+            "models/membership_foundry.gen.go": "caa70c31f55d21df468165f32dd59f4504765ae48233f26ada564532d8fa5b63",
+            "models/order_foundry.gen.go": "235593453a466ad8a71014b5e02e5ec7e1f958f6e75f2eb76e4deb057401c08b",
+            "models/status_foundry.gen.go": "4d77be0af0612f5b4e15df31513723c80c3c5ba2172877aa312042fb919a8028",
+            "models/user_foundry.gen.go": "cf0f9a11143f98f2360e751b4b6b23eeb2b45469e2c09c2279afc8e1ae378538",
+            "models/write_record_foundry.gen.go": "fbbedb147e9c6d8146e1005da835c9a1b6430f558b62f395669ad58e113c2316",
+            "multifactor/account_foundry.gen.go": "0741d09e957510ace9a9f099efd189cf4f9314cf91eac66115d813c36fab46b1",
+            "multifactor/confirmation_request_foundry.gen.go": "aa93dada574b05490016f12348d1f80c0983a8bd7c0a710904d6a772032c16e4",
+            "multifactor/enrollment_request_foundry.gen.go": "3d0f8690f7bab053ffde51e7f45140eee730d38c6f5fcff587a6a22bc217288c",
+            "multifactor/recovery_request_foundry.gen.go": "b3bf829bacc346422b9d430a4af45e03cdb369d01ea624da4352e2eb3147cd27",
+            "multifactor/regeneration_request_foundry.gen.go": "3ff53e286f57a3c0d6f8b26750e4bc1d85cc76cece988b0d27992a06e5d379ce",
+            "multifactor/totp_request_foundry.gen.go": "4bbfbe70bd017c04e973de0a62dd26aabb4485f289f40466fcbd6e96df224ebb",
+            "mutatorqueries/member_foundry.gen.go": "3ced1497f66d80ea723b0acdf39ba57d246a8516548bab701540c9b5e2382b9a",
+            "mutatorqueries/state_foundry.gen.go": "a42f1797ddd72a1e6d8a7aceeb6cfc5d1420aa791763a0780f85864ac78d64a9",
+            "nestedbindings/path_foundry.gen.go": "1436db5b0dd7569ad4b2d04ba1edc46803e950f2ff9623cfcb5c5e21d5eba590",
+            "nestedbindings/project_foundry.gen.go": "ac4cb18f41a3df77f4093f3a634a79558c6be9018e3fc5c78cf9b5ca1360b38a",
+            "nestedbindings/reply_foundry.gen.go": "2bd564422af420b2e8c49a53bc20744804e03519d89a379203a462af0c24972e",
+            "nestedbindings/task_foundry.gen.go": "8545dac33f60b72a44c7f6042e4b177585333985d9cb2d17710c9fa04e213cd7",
+            "nestedbindings/team_foundry.gen.go": "042dffe831f6d1a008ecaa82cebb07e6b6b0059c051a6d28b85ab2cc57be4755",
+            "notifying/order_card_foundry.gen.go": "096c3369a76306ec85632e4b2830e390dac2a5339d4edb5fa7c835cf41cf0c0f",
+            "notifying/order_placed_foundry.gen.go": "a7ae2d3be3d1f7544248cd3fba2faf18a8be5eaaefa765555dc5d7d7e2a966bf",
+            "observerqueries/effect_foundry.gen.go": "ab7644dbb74ee84234ff2641526e9c228fd562ea2c68c5934e7c4f4bbf0ff5ef",
+            "observerqueries/plain_foundry.gen.go": "78b9bf5f5b12ea9f2987e668c52372e85515449234382d963a41ff9aba883a52",
+            "observerqueries/record_foundry.gen.go": "d6aba0c0d3502e3e963f2ab1825c7da3af4e4d83314eb11e63be98524d1e69f8",
+            "outgoing/account_receipt_foundry.gen.go": "1d9371c7863797c6a248a6ec3bd7b4ccbe3b616825ffc443cb40b9a9ea6ef036",
+            "outgoing/create_account_foundry.gen.go": "dbdebdef8155efd7fced5f482deeee08999c0c824487203cf89ae67b0ea54cb3",
+            "passwords/account_foundry.gen.go": "35fb0be210fd973e66af200565ba4dc70e65185c2e40e2d3a376d76e4e8d506d",
+            "passwords/credential_projection_foundry.gen.go": "7d6e9068e30b506de6c0b6244d91fcf194ad58c47446afec029d54ca679f0da4",
+            "passwords/login_request_foundry.gen.go": "c64e3a4b97ce114099a4c496f48bf5f2eee1cf0fd6f8f6f07e39198b3732ce6d",
+            "productionprofile/record_foundry.gen.go": "ce1796e205afaa39dd186bfd9d3a4a18c55fec890ef6ca483f565a95a1fac0fd",
+            "profiles/preferences_foundry.gen.go": "e7eac64dfeebf5c9a5eb1d100b11a113878de5fc04205c9b776d14a9175b91bf",
+            "profiles/profile_foundry.gen.go": "ae107f306e98d634b80a2466d4ff9d7daf50764dbacb9fcc1319ed55efb77a58",
+            "recovering/link_request_foundry.gen.go": "185c0ae3ab4df2fcda7863d61613749f2cc36d2da8c680d6fbf1837e8761712b",
+            "recovering/member_foundry.gen.go": "563b27d88b3097e1561b1000dbd487ae4bc77e5a5c7584e94aaa8a9dea6d5c43",
+            "recovering/reset_request_foundry.gen.go": "dfe5868095fd8939c2bead1562febd01e68313e74b33ba8b07d0ad2add2669eb",
+            "recovering/verification_request_foundry.gen.go": "a4ac8ec71c25ad8f7fa078d9bc4bc4f52609cbf9a2b87c5d227833c30b9b2215",
+            "recursivequeries/node_foundry.gen.go": "3e1db7aa658c44901bbd573aea607ad68dde0ce7ff823407f15da7d9f23ce488",
+            "reporting/export_members_foundry.gen.go": "7bbc5625f43413539cbbbd277783505ae33ba8fa42fe01eba443a0aa9a8724c0",
+            "reporting/member_foundry.gen.go": "624164d9daf84d811dbfbcf13bf4b4f726624fda17cdf12ac646e8517074d266",
+            "reporting/member_row_foundry.gen.go": "dc516388d701c866f039423ed7b816cb4767f9ff2c901635ef00dcb6d104664e",
+            "reporting/member_total_foundry.gen.go": "c2b327af0ae5bf17bcfdcc0711da38b851c8b1bd2b3b57cce0636ae9353d8de3",
+            "reporting/operator_foundry.gen.go": "630c6ce71b0d359b4e44e49347ec474f16a4a83991925de67fda330ec3b8e074",
+            "reporting/order_foundry.gen.go": "6472bc869b0787c9c0eb432aafd72e6646f204c0c942cc16742eb196d6ed5940",
+            "reporting/order_row_foundry.gen.go": "0dc5dbbd61d4a58d96ea86ab1c4424c380432be6dec8fc29fa83b5021f029bc8",
+            "reporting/state_foundry.gen.go": "cf381576748922b288390c5df72e9d50b6e9fca874722133321c8e35839e9f23",
+            "reports/buyer_totals_foundry.gen.go": "7eb35dff7d7ec039c8fa948807b74b15d5cc4d3dd77af9c52824ffc26a7e209a",
+            "reports/location_row_foundry.gen.go": "8aec0e3e5b8b907f2fcc24052cdb1d8b864a88d6077e75a4e44ae19a2b6a786b",
+            "reports/order_buyer_row_foundry.gen.go": "1b84dee99284e208eb64960a7a953b89dcac29ba8999d2c7bf188940107688c8",
+            "reports/order_summary_foundry.gen.go": "bddc538777f55c8cd380e868e6d35cd9e47e3a08d48bed1d770d11612b52b8a4",
+            "reports/referral_order_row_foundry.gen.go": "86fe923657be0810bcd2468431e261cbf9eab03023cf09e7f30d74b27bfa7910",
+            "reports/referral_row_foundry.gen.go": "7144d2d1f5c80dcfb2ecbdbb919f0f6bd2b28b6b3529bce1a849d9a0a8147eba",
+            "reports/scalar_report_foundry.gen.go": "00db9252fa0c5767782a4ca05fa038448f93f9d28aec0dfd06969d5971f7f1e8",
+            "reports/user_order_stats_foundry.gen.go": "8798f44875cfdfdfa16fa7ac85bbbd7ab0de12ec93fc02d4665296cca2dd1bf1",
+            "reports/user_pair_foundry.gen.go": "898393accb31e007b3449b175e38d4c6353e4447b06e4096b7373e7fb640fde9",
+            "reports/user_summary_foundry.gen.go": "dda093de510fbba3e7d4af3be9a50f48a174338ff06e02de2e1bcad1f4cd678a",
+            "requestflow/json_submission_foundry.gen.go": "5341790608f82d5e4454299dcf4f329d94350ba335f8a13f5fd1be421598aefa",
+            "requestflow/multipart_submission_foundry.gen.go": "18c2226c35442c0a73a76b5ab590ff34b861e48bf27277833c4276889ffdabc7",
+            "requestflow/reply_foundry.gen.go": "5b3a45559a1a7104cbd1f983f0e8997b46d6cd43614c7347ea37dec2b3eb65b7",
+            "requestflow/submission_foundry.gen.go": "836cbde4891b170ceab215eac24738ce70ef9adaee86f2437745bca0fb9da93d",
+            "retrievalqueries/group_foundry.gen.go": "0498650def09b576076a8d1f01dbdc1aa3434c17d10c5765b5d118f0f6874917",
+            "retrievalqueries/member_foundry.gen.go": "e648b4a0b94bbe027e5b9826ab732e0c72bab74caeb33214ef95fa6f0e0bbecb",
+            "retrievalqueries/member_label_foundry.gen.go": "2ee49103cdbf4578a654ee6ad4e08211fbf0bc0f431b0a070fe345ad80dc893a",
+            "retrievalqueries/membership_foundry.gen.go": "2431cc07f543959ae8154e7a64f4938e6945a132ea9bb8d0ea0ecc050122d87e",
+            "scalarqueries/calculation_foundry.gen.go": "5f5c174854027d445c83697fd176088c2aed84fab61085d20944aebf725ddb3a",
+            "scalarqueries/sample_foundry.gen.go": "c10ced2dfc8728b122be9c81ae93f96cfac119dfc76c360cdf4364b9931dd7a6",
+            "softqueries/group_foundry.gen.go": "6a304c2df1835dd9d5b290233c67b772685c2cfccdaa6aa3d54c54bd5f538c1f",
+            "softqueries/member_foundry.gen.go": "5d48fb556cbf53db12d688cd58b2a0529c3c20fed27256d0ae0f11b5b4e18f10",
+            "softqueries/member_label_foundry.gen.go": "88c596c40c092ec843122c747e937b3b0479e091c9d35732f4da33264e272adf",
+            "softqueries/membership_foundry.gen.go": "3a411b6c18dca83be2ff3d4e5ea4bd691ffd1bc5f4b18e75a2a8f25641b7a653",
+            "startupconfig/environment_foundry.gen.go": "3bc724aad30b64692ab707e5af5a989c186f1c7277f96a5a1bad7a0ade37732a",
+            "startupconfig/settings_foundry.gen.go": "cfe2895c4c80b83822b50fac910f26e94fa029e2c26698dcf18d6aa79f9f22d6",
+            "teamworkflow/action_foundry.gen.go": "da0ca643586eb431bf77840dfba4b48f1730d54b2c304f80965f294ae7021f4a",
+            "teamworkflow/catalogue_filters_foundry.gen.go": "b25d4a5a7fdd5b4c3ef78cfb5b48cb97e28c94a3ca29124ad2e4513c1a254f9f",
+            "teamworkflow/catalogue_item_foundry.gen.go": "ec42c85bfc14731adb52b10ee63095ec713399dc0ab974fa12de9b839c42d578",
+            "teamworkflow/form_input_foundry.gen.go": "cf347149a488aff7ea78621240fcbe20ae149b713a4cd53b5e95d0bbccc37c90",
+            "teamworkflow/multipart_input_foundry.gen.go": "66b1ef3cc8e46ce6a696b940962c86fd222e9d4dca1625067d6438f6b6a19cce",
+            "teamworkflow/patch_foundry.gen.go": "6492c4f1408983db6599458b90c36e08c38efe7023ca87b86c462df30f558c8f",
+            "teamworkflow/project_foundry.gen.go": "7d615e15985987818902cfa84d0e3b3b449361ef415e587ad16510caff47cd22",
+            "teamworkflow/project_path_foundry.gen.go": "1f216832550e1f4ba619ec616bbe7b37d31904c6f17aa156ef0138cc474e87e8",
+            "teamworkflow/project_view_foundry.gen.go": "285019e31f0e003654e30c4b8a9f15d6a2f5f0e8ff2ca222a71ae04fdf1f2831",
+            "teamworkflow/rule_reply_foundry.gen.go": "7155e6478039406004327c54de429efa4990b64c9c92f0c128a2cd5bb07fdd46",
+            "teamworkflow/submission_foundry.gen.go": "2372b5373ef0cf82862db0c32e87c8f879ae02812ca2e26cb16ecbf9cb19dce4",
+            "teamworkflow/submission_input_foundry.gen.go": "66465cc8ba7c5f462eb9e717cb7a4cdc020b3a7d8b962249e81bc4c8e8c9e56f",
+            "teamworkflow/submission_path_foundry.gen.go": "8173c462183372b60d151dcf745e9d2f2d4e94d5518aea751d2037dc7bf08640",
+            "teamworkflow/submission_view_foundry.gen.go": "f34104cc794a47fa9b7da4d820f132adff605ad3c32b9d8b62b89c1f6ad118ea",
+            "teamworkflow/team_foundry.gen.go": "90e769669158807b0752974a9b039f7698bb4964c0ac33a7051e801ce7a04b3f",
+            "temporalqueries/calendar_summary_foundry.gen.go": "1c5c254797e09ba5268b2b665a74497ad861802f0269cdccd3edf8cfb5708458",
+            "temporalqueries/sample_foundry.gen.go": "c21c2e3888d5913cf712168de347c5a18cc1cb6aed229763eff5a02c0f4c0d89",
+            "timequeries/manual_foundry.gen.go": "1d2c80b0e90dd3980836566d154554c34fedc095641c3868e9e7c3a53da46460",
+            "timequeries/member_foundry.gen.go": "e4ff0f0b069372c96c9b48cfddd3a6c0d1bcd52f69e80b4cd9bc8f992abe9efb",
+            "transactionqueries/pair_foundry.gen.go": "5d40a50a0a516e6426246d4d05746cab3bf0a8e5d56225e50eb74a2c03531c4b",
+            "transactionqueries/record_foundry.gen.go": "a9837b6f4a8b322484379a4490f85f2d7c31f6f1ec54c5dc83fd30214e19165c",
+            "transactionqueries/summary_foundry.gen.go": "4ef426ecb80d028d9f4c9b386a97a3c75a2cc2cccdb7b42d09498c33147b717d",
+            "transactionqueries/totals_foundry.gen.go": "c00a51de96df9f09d400da48f91a4228e476bf7be51968e020b5a0dfa7335343",
+            "unions/bank_dto_foundry.gen.go": "84252d6507f110986114c5abca62943f7e9cc2364f079b3be64071d5f8b95831",
+            "unions/card_dto_foundry.gen.go": "5748b3616e326e2ae5553b94fe3258425c6de1f02495e47b67c409cbf8b498e9",
+            "unions/delivery_foundry.gen.go": "40c29645467658d3e30f40c7f72453653197ea497cf64897cd59faaee983c915",
+            "unions/payment_method_foundry.gen.go": "c30020931055325e6be2824c2e606bbcef1601a55e29d07b9cf0908bbdd4c906",
+            "unions/payment_request_foundry.gen.go": "a3d4efc889d1d9e3cd8d5b8a5c82d1cb42590e72776f6fdd1e4dd2716013c53b",
+            "upsertqueries/excluded_record_foundry.gen.go": "945ed6e8d5392fc6f8e9a013e32210fd77dfc605866b1fccd6dc57323936f723",
+            "validationrules/availability_window_foundry.gen.go": "ba51f1b3990b62b8c6be03fba9bca61a0ad253c4e54739772a502f1d1b467d43",
+            "validationrules/organization_kind_foundry.gen.go": "4c5500b8257077f6f92206cfa9dbe2d03ff3bcbc285a1652f518615034162ff8",
+            "validationrules/presence_input_foundry.gen.go": "38726cb62b6e181d3b5664449800a00888091a6e40d8e3ba83534b6d051993bd",
+            "validationrules/profile_preferences_foundry.gen.go": "fb0cbde5561d22553ae8f16cdeeb3438d6fd62029d63c7f95d6949e2afbadc6c",
+            "validationrules/registration_foundry.gen.go": "1508fe8ddec85509109aee73bc2e6cfc8c1a09e70e4323c17dba99ed5517bd24",
+            "windowqueries/navigation_row_foundry.gen.go": "d8bde59068af57831856f44c122a2a640f4795dffddfa66d9641a57d58f3d894",
+            "windowqueries/ranking_row_foundry.gen.go": "f09ebc0a54f9073c58a76fcb19060419e0f229318fc32d18cb26c360e96326fe",
+            "windowqueries/window_total_foundry.gen.go": "2b93d1aabd019b3f64be340254514c0f62f4e63ae4598ff52db1dca3a6fed0bc"
+          }
+        },
+        "generated_before": {
+          "bytes": 5150813,
+          "files": 196,
+          "sha256": {
+            "auditqueries/account_foundry.gen.go": "78de28d362fc35795b9ea10f3fd3bcf990087b77150097e3ea6367c5a749a9ac",
+            "auditqueries/label_foundry.gen.go": "4a739095446284edb161131aee7e7f553edbe042bdee70c8b33d6284bdf3fb91",
+            "binarymodels/record_foundry.gen.go": "3b5844def8c444a71989de297ca1d31bd9e956f958628134d2efc43caa22be37",
+            "binarymodels/view_foundry.gen.go": "c92a3c39fbfed4d72d2222eaf79d56ef0fd40843fd200aed2f8e73e347f06e10",
+            "bootstrap/member_foundry.gen.go": "c5fc360d5f2d4bad7b3d79963be1f6c80f3670311ba8e9e8f9b8ff387c93b78c",
+            "bootstrap/operator_foundry.gen.go": "241e33b4b6f9a75fc3571531538cff079d5d8afdc0ec934c21477a54d905f49a",
+            "bootstrap/profile_foundry.gen.go": "5a8261bc65a7cad182735a9d1d5083ac106dc9746bd22ee9a60a75e14dbf6c8a",
+            "bootstrap/settings_foundry.gen.go": "bbb1b3343cd7daf415dde7d9e10502ddbca8ea0ac7a40f8eaae51a5493eaffc2",
+            "bootstrap/upload_input_foundry.gen.go": "4b634521136e206e1bd95e108cf581d6c074f4e4695ad0da95fa46a1db8cabd0",
+            "bootstrap/upload_result_foundry.gen.go": "5441b796fa5165de1f5f56a29ce6d0302e695e876c0fff4afb55c6679f73add6",
+            "catalog/product_foundry.gen.go": "c5ae4826d509d4767009a99a5a46429135d3ace83356025c7652065508e7b264",
+            "catalog/status/status_foundry.gen.go": "d6b40a59538f91f7ee15c414a9054ae80e69d62df114785c5bdafecda6a5de39",
+            "clientcontracts/filters_foundry.gen.go": "a14c1f9b02145dbc7eb4e94da9498aac5b9f8db6a9619925809829afbaa9f528",
+            "clientcontracts/item_path_foundry.gen.go": "ec7ce734699e868edfae18310bc500e13d082ab22a6133a94e45d763dfbb2333",
+            "clientcontracts/member_foundry.gen.go": "a3441ba780d2246ed05da9fd72158985f92e114c4de673889eb68daf60db4469",
+            "clientcontracts/payload_foundry.gen.go": "f90cc3b047988e14d57821f6fdd700e50b58248e76c7d7fd882d742ebc2d0d88",
+            "configured/settings_foundry.gen.go": "fd21f0208a185e8a3e12b0648578c63b21d40ae91f7d86eed0e4c2c1d5988f66",
+            "eventqueries/event_link_foundry.gen.go": "be0f6958bf2d9a24c429020c57f362365cee8a16a67315f314eb5955dbbca48f",
+            "framequeries/sample_foundry.gen.go": "93be0effed5220b8c023c0c18fce63f11dded244e29befb284d5f88e69ee7ef2",
+            "genericdto/combined_foundry.gen.go": "b2f055b9d4352245929de0e09d7ebeaf692856dc4a8b81fbc96314b843d798b7",
+            "genericdto/envelope_foundry.gen.go": "f5cb5515359f15edc002a9c6e38b8314a79df987a1c883414d08bc1209243012",
+            "genericdto/project_dto_foundry.gen.go": "5625ea1bd51d81759623db665071c3218a13d2280d4f2b7cf7dda0e33ed39dc7",
+            "genericdto/user_dto_foundry.gen.go": "48e2b1e44bf6d81cec0a7f1904e0b6976217f0d145dcfea3e3f67492d508a32b",
+            "genericdto/user_envelope_foundry.gen.go": "d2bd0a391f61e981688afe18d80ffb11199f1f1fac0fdd81b0502877c57626de",
+            "hookqueries/log_foundry.gen.go": "e6efb08272e0a64b3f7b7dee95ce8d5f9307621b6752829a3a0aa43913e42092",
+            "hookqueries/member_foundry.gen.go": "900da3447c94868bf17b13e38d5b75ff48cc5fc4c8c80404fb0d7387fa46990d",
+            "httpdto/inventory_response_foundry.gen.go": "8534f59be0a390352633d606b2d5502534f007ca6abe5d8f16ae7a928232ff7f",
+            "httpdto/order_response_foundry.gen.go": "cc90e818122635f81c015eb2f5fc8f2e3b6862966fa7de981361c621df27a33c",
+            "httpdto/stream_response_foundry.gen.go": "97297497b931a1d0ee545d5a3c2d95e0bf6166c3d0d1e257e8c87ef22dc769b9",
+            "httpdto/tracking_response_foundry.gen.go": "f10849ac85fe82c97e1d41cde0541a12de9ffc535e97e3cefeeb2688dbaae77f",
+            "httpdto/update_user_foundry.gen.go": "99dd5341269ca5017a6dfd0a50184297f2096af99cf4471f00a814be91728bd8",
+            "httpdto/user_response_foundry.gen.go": "bfbcc812112c543e55150bd07f803844d9e5ec3b10e69245f92b4e478ff5c373",
+            "httpkernel/asset_path_foundry.gen.go": "4e61ce801b1a7b1933fe65703dfb9ed345a78942f053239fcfc22221eabbc004",
+            "httpkernel/user_feed_path_foundry.gen.go": "d3f4ff25960d0231bd0b5e5b83343c76da8ec3eaba1f922f14122de18c9d17eb",
+            "httpkernel/user_path_foundry.gen.go": "5dc7e69c6d2c4b2adf0b37a56db9d6e9ee9e930f55b0e51d641466d67519ae4f",
+            "httppagination/cmd/pagecontract/summary_foundry.gen.go": "4c241972bc427f2f7afe8ea45a6db36e7ed11ef170b2720712423f0d1286c49d",
+            "httppagination/member_filters_foundry.gen.go": "c0f426d5943a34d009637ef98371204e4fa653331e040c2fecffaced3fa61388",
+            "httppagination/member_response_foundry.gen.go": "0337eb8dafa4afaa92ea9bd7ef4c868f5a77fa324507d32b53c0f7fcdbb0a724",
+            "httpquery/nearby_input_foundry.gen.go": "1e6e9fc579c134633ff3c80e0268ab6596119e6a01a292c98a984b3a1e756db7",
+            "httpquery/position_path_foundry.gen.go": "d926cdfe226727df6b0f5a4e5ac974eac1ca822de84848da3a96c45ca6e8027d",
+            "httpquery/priority_path_foundry.gen.go": "0b4fff80b2f9db0c41d56578117238386898ce175557aeaee4e2443bd5c3a16e",
+            "httpquery/priority_query_foundry.gen.go": "be7cb41620ea58a32253082e11bd9ab7a247eddcfcc834b7fce3162e5a2e867a",
+            "httpquery/priority_response_foundry.gen.go": "db14b9b809bb11d737a3f5ca88b709d7e8372981e39bab816e5ee5bd7d817200",
+            "httpquery/search_input_foundry.gen.go": "5c9c3338d3aedc2142a823fd66b37944b6777aa454fd20cbf2f36f29449c35a1",
+            "httpuploads/profile_input_foundry.gen.go": "ccd39005bcb828386f0656e02d60724f625b73bfff147afe1beba9260b2878de",
+            "httpuploads/upload_reply_foundry.gen.go": "5baa4969119c9ccc0c480629af947f4b71e3fad63517ce21ca4cd51076998ae6",
+            "idempotenthttp/order_foundry.gen.go": "92b3e9cfdc09d03cf0dc1df9ee2e73a27dfed0b974592ab5ea4dfc93c7ccccbf",
+            "idempotenthttp/path_foundry.gen.go": "9d757a2ed57b26d33827b280f7ffb75355cca93c527284c3a1467a9e4bdad764",
+            "idempotenthttp/receipt_foundry.gen.go": "6580dbe9e17d092480565f33d07a29ef2c152bf24a4b0005b387adca79ed240c",
+            "idempotenthttp/submission_foundry.gen.go": "fe5dcd264484e22f5845fcc754cdd7b67c1c2422d2b8f6f9fe0fcccf2ff5b62b",
+            "idempotenthttp/workspace_foundry.gen.go": "ebc149fb3293a6aa20f438aafe2ee930ed8ac338ce245a08c9d9529436ec214d",
+            "inputqueries/member_foundry.gen.go": "9d830acefbacb5aa4a6fa290f2f6e090500b8d6587fa409ba242d8deabf10be8",
+            "intervalqueries/label_foundry.gen.go": "9dae3bf91c097c57f83c2d1ef438b6f619a1dc0f97dc8a628f94e9af780044cd",
+            "intervalqueries/link_foundry.gen.go": "1e4314fbe61015adfd615d67709750fa728e35cc3cf726a635c801cb52b5ec2b",
+            "intervalqueries/plan_foundry.gen.go": "7cc9a2644a7eac37e4541a94ab75ab6fa2d53c0b29269d92d4b56c5499bb9175",
+            "intervalqueries/sample_foundry.gen.go": "8d0c468ded8b1b1e2d6e408ff70d62587df8d35dac2c411ce267b84df53457f6",
+            "intervalqueries/summary_foundry.gen.go": "d9afda9c901614affb922cc66b07f031eb05acbf938bdc725aa8d0ad16ff2def",
+            "isolatedhttp/receipt_foundry.gen.go": "08eecd74807d598a1de44e68992d9c61088836977bd6e9963d8112d57928f7d5",
+            "isolatedhttp/record_foundry.gen.go": "c3feec2ce900caf2e6d28f0f47b6cf8ea7bdb0302d71efe0887fd61e35de6349",
+            "isolatedhttp/record_path_foundry.gen.go": "345e9d26a8a22817cef7ee7581169c4b7c7d0cfa6bb478cec59bacb706667cf0",
+            "isolatedhttp/submission_foundry.gen.go": "693605a0658bae4395782a6064275d5e1427450c443932746ecde4ff96b06dc2",
+            "jsonqueries/document_foundry.gen.go": "cb6cb7f4d5cd9088aab1c61a563e171e188d673d1d5f8278d38c4d92da753c48",
+            "jsonqueries/policy_foundry.gen.go": "493f384d8006b04a0095ef6a2e31fb3935d75bd79befb591763e82d5ae9b0bb6",
+            "jsonqueries/snapshot_foundry.gen.go": "7a72ee50e0bedfbce8a493457fe37d64ab65bacf6b615517ffa9420d8f870dfe",
+            "keyqueries/bucket_count_foundry.gen.go": "8192ced61d8031f4b51aa81e77e64941b752746beec4a95c8d23855aed7720b0",
+            "lateralqueries/ranked_order_foundry.gen.go": "08f20df623c989d55920e94512e399032a25c4137aa8eece48078ab33c908731",
+            "lateralqueries/user_order_foundry.gen.go": "3f8d9930e999c309c731ad71f06dc8e469cedd50e01c57bf231fc77945b2377a",
+            "linkqueries/archive_foundry.gen.go": "82ec26477ea28611ec3655043f5a53f0b3957792b1d56c1c93ac5677476dc47c",
+            "linkqueries/friendship_foundry.gen.go": "a2dd52db00e5b45b2bc2d640f86df99ed9670501bc1dffd4a47df6b96cf4af15",
+            "linkqueries/group_foundry.gen.go": "a0c973abd34552dd4f905aa1522a5ccab0c69dc6276cd26c7be6959a41f4059f",
+            "linkqueries/member_foundry.gen.go": "afff28a7a65abee0b6b354d621447b5e5e6c884f471c557874390f811bdcf926",
+            "linkqueries/membership_foundry.gen.go": "ba3f3452d6ed636f88012e6201900394aa31209ffd47ca62820313fb6e904176",
+            "linkqueries/natural_link_foundry.gen.go": "13d08ae87a02155bca416b1652cb52cae1545cf2b193cff2e1d09d0064323c56",
+            "linkqueries/nullable_link_foundry.gen.go": "717d4c07126d416769e21fb6bb51d35a6111d5a5e90884f476ba5f75195b6f3f",
+            "localization/cart_args_foundry.gen.go": "67fbbd54ca124b08fd4b017d8cae9ee714d9974a5c499c12f64bbb1632e8f62f",
+            "localization/literal_args_foundry.gen.go": "cd1c2f4ff51e92b4f4161aa70d56067fb3b4058ec7d29812cf23ea60a9445710",
+            "localization/manage_label_foundry.gen.go": "b123b125128a44fe81714d6a836e2c2c1500c64896f1a919629c675932158df8",
+            "localization/name_label_foundry.gen.go": "bd2e9d0f9ea79e9b610325be059cee829d2992795fd8dbc0e703df9aca75d225",
+            "localization/position_args_foundry.gen.go": "a2b0d0db413ca48a01c2ea4e5763e37197c7db2db8559dbcfa9e7a45d4f69c78",
+            "localization/status_foundry.gen.go": "050e34bd129eb53559667d1666eb3ee9e07e4fef4e78cb55f4ef5a6be5bf4d7c",
+            "localization/welcome_args_foundry.gen.go": "5a6caa3cb7078170d52a490a5a7825f39b37761885444e5eba3b9b2163bebc74",
+            "mailing/recipient_request_foundry.gen.go": "06ab1d9e28001fd695ace1f053bdf7c2d9ab2c00a3d93968187b85abdbb308b6",
+            "models/country_foundry.gen.go": "40115931e5bb64f6729b39e01bb045629fe3621d265daae2e4e0bf1e2d81f8fa",
+            "models/friendship_foundry.gen.go": "c400028ee926d2c04c5f55040d65ee28a3ac85d1cf5ec52933a3544c8debb2f3",
+            "models/group_foundry.gen.go": "f440fa6c4a7b49174e5edeb0ab82bb1f998e19d45dc55dc0ec61f87aaec55fc5",
+            "models/ledger_entry_foundry.gen.go": "f10cf56cdbd8e001c127fd49a636f5ef5d97ff76c8f199b3f07642cdda685362",
+            "models/level_foundry.gen.go": "b3f2e0c16fc34e6e2505ae6ec5949a38baf4883eef9333020384ff6c4d20d1dc",
+            "models/location_foundry.gen.go": "e1a05ec801f2212981c2060c7f68c108d42eb7cd907a5591bb9430461be5157f",
+            "models/measurement_foundry.gen.go": "84e0e60d98f08a11bc652a035c93dbd7595a9897a07a7daa5106c87b9e63f87b",
+            "models/membership_foundry.gen.go": "caa70c31f55d21df468165f32dd59f4504765ae48233f26ada564532d8fa5b63",
+            "models/order_foundry.gen.go": "235593453a466ad8a71014b5e02e5ec7e1f958f6e75f2eb76e4deb057401c08b",
+            "models/status_foundry.gen.go": "4d77be0af0612f5b4e15df31513723c80c3c5ba2172877aa312042fb919a8028",
+            "models/user_foundry.gen.go": "cf0f9a11143f98f2360e751b4b6b23eeb2b45469e2c09c2279afc8e1ae378538",
+            "models/write_record_foundry.gen.go": "fbbedb147e9c6d8146e1005da835c9a1b6430f558b62f395669ad58e113c2316",
+            "multifactor/account_foundry.gen.go": "0741d09e957510ace9a9f099efd189cf4f9314cf91eac66115d813c36fab46b1",
+            "multifactor/confirmation_request_foundry.gen.go": "aa93dada574b05490016f12348d1f80c0983a8bd7c0a710904d6a772032c16e4",
+            "multifactor/enrollment_request_foundry.gen.go": "3d0f8690f7bab053ffde51e7f45140eee730d38c6f5fcff587a6a22bc217288c",
+            "multifactor/recovery_request_foundry.gen.go": "b3bf829bacc346422b9d430a4af45e03cdb369d01ea624da4352e2eb3147cd27",
+            "multifactor/regeneration_request_foundry.gen.go": "3ff53e286f57a3c0d6f8b26750e4bc1d85cc76cece988b0d27992a06e5d379ce",
+            "multifactor/totp_request_foundry.gen.go": "4bbfbe70bd017c04e973de0a62dd26aabb4485f289f40466fcbd6e96df224ebb",
+            "mutatorqueries/member_foundry.gen.go": "3ced1497f66d80ea723b0acdf39ba57d246a8516548bab701540c9b5e2382b9a",
+            "mutatorqueries/state_foundry.gen.go": "a42f1797ddd72a1e6d8a7aceeb6cfc5d1420aa791763a0780f85864ac78d64a9",
+            "nestedbindings/path_foundry.gen.go": "1436db5b0dd7569ad4b2d04ba1edc46803e950f2ff9623cfcb5c5e21d5eba590",
+            "nestedbindings/project_foundry.gen.go": "ac4cb18f41a3df77f4093f3a634a79558c6be9018e3fc5c78cf9b5ca1360b38a",
+            "nestedbindings/reply_foundry.gen.go": "2bd564422af420b2e8c49a53bc20744804e03519d89a379203a462af0c24972e",
+            "nestedbindings/task_foundry.gen.go": "8545dac33f60b72a44c7f6042e4b177585333985d9cb2d17710c9fa04e213cd7",
+            "nestedbindings/team_foundry.gen.go": "042dffe831f6d1a008ecaa82cebb07e6b6b0059c051a6d28b85ab2cc57be4755",
+            "notifying/order_card_foundry.gen.go": "096c3369a76306ec85632e4b2830e390dac2a5339d4edb5fa7c835cf41cf0c0f",
+            "notifying/order_placed_foundry.gen.go": "a7ae2d3be3d1f7544248cd3fba2faf18a8be5eaaefa765555dc5d7d7e2a966bf",
+            "observerqueries/effect_foundry.gen.go": "ab7644dbb74ee84234ff2641526e9c228fd562ea2c68c5934e7c4f4bbf0ff5ef",
+            "observerqueries/plain_foundry.gen.go": "78b9bf5f5b12ea9f2987e668c52372e85515449234382d963a41ff9aba883a52",
+            "observerqueries/record_foundry.gen.go": "d6aba0c0d3502e3e963f2ab1825c7da3af4e4d83314eb11e63be98524d1e69f8",
+            "outgoing/account_receipt_foundry.gen.go": "1d9371c7863797c6a248a6ec3bd7b4ccbe3b616825ffc443cb40b9a9ea6ef036",
+            "outgoing/create_account_foundry.gen.go": "dbdebdef8155efd7fced5f482deeee08999c0c824487203cf89ae67b0ea54cb3",
+            "passwords/account_foundry.gen.go": "35fb0be210fd973e66af200565ba4dc70e65185c2e40e2d3a376d76e4e8d506d",
+            "passwords/credential_projection_foundry.gen.go": "7d6e9068e30b506de6c0b6244d91fcf194ad58c47446afec029d54ca679f0da4",
+            "passwords/login_request_foundry.gen.go": "c64e3a4b97ce114099a4c496f48bf5f2eee1cf0fd6f8f6f07e39198b3732ce6d",
+            "productionprofile/record_foundry.gen.go": "ce1796e205afaa39dd186bfd9d3a4a18c55fec890ef6ca483f565a95a1fac0fd",
+            "profiles/preferences_foundry.gen.go": "e7eac64dfeebf5c9a5eb1d100b11a113878de5fc04205c9b776d14a9175b91bf",
+            "profiles/profile_foundry.gen.go": "ae107f306e98d634b80a2466d4ff9d7daf50764dbacb9fcc1319ed55efb77a58",
+            "recovering/link_request_foundry.gen.go": "185c0ae3ab4df2fcda7863d61613749f2cc36d2da8c680d6fbf1837e8761712b",
+            "recovering/member_foundry.gen.go": "563b27d88b3097e1561b1000dbd487ae4bc77e5a5c7584e94aaa8a9dea6d5c43",
+            "recovering/reset_request_foundry.gen.go": "dfe5868095fd8939c2bead1562febd01e68313e74b33ba8b07d0ad2add2669eb",
+            "recovering/verification_request_foundry.gen.go": "a4ac8ec71c25ad8f7fa078d9bc4bc4f52609cbf9a2b87c5d227833c30b9b2215",
+            "recursivequeries/node_foundry.gen.go": "3e1db7aa658c44901bbd573aea607ad68dde0ce7ff823407f15da7d9f23ce488",
+            "reporting/export_members_foundry.gen.go": "7bbc5625f43413539cbbbd277783505ae33ba8fa42fe01eba443a0aa9a8724c0",
+            "reporting/member_foundry.gen.go": "624164d9daf84d811dbfbcf13bf4b4f726624fda17cdf12ac646e8517074d266",
+            "reporting/member_row_foundry.gen.go": "dc516388d701c866f039423ed7b816cb4767f9ff2c901635ef00dcb6d104664e",
+            "reporting/member_total_foundry.gen.go": "c2b327af0ae5bf17bcfdcc0711da38b851c8b1bd2b3b57cce0636ae9353d8de3",
+            "reporting/operator_foundry.gen.go": "630c6ce71b0d359b4e44e49347ec474f16a4a83991925de67fda330ec3b8e074",
+            "reporting/order_foundry.gen.go": "6472bc869b0787c9c0eb432aafd72e6646f204c0c942cc16742eb196d6ed5940",
+            "reporting/order_row_foundry.gen.go": "0dc5dbbd61d4a58d96ea86ab1c4424c380432be6dec8fc29fa83b5021f029bc8",
+            "reporting/state_foundry.gen.go": "cf381576748922b288390c5df72e9d50b6e9fca874722133321c8e35839e9f23",
+            "reports/buyer_totals_foundry.gen.go": "7eb35dff7d7ec039c8fa948807b74b15d5cc4d3dd77af9c52824ffc26a7e209a",
+            "reports/location_row_foundry.gen.go": "8aec0e3e5b8b907f2fcc24052cdb1d8b864a88d6077e75a4e44ae19a2b6a786b",
+            "reports/order_buyer_row_foundry.gen.go": "1b84dee99284e208eb64960a7a953b89dcac29ba8999d2c7bf188940107688c8",
+            "reports/order_summary_foundry.gen.go": "bddc538777f55c8cd380e868e6d35cd9e47e3a08d48bed1d770d11612b52b8a4",
+            "reports/referral_order_row_foundry.gen.go": "86fe923657be0810bcd2468431e261cbf9eab03023cf09e7f30d74b27bfa7910",
+            "reports/referral_row_foundry.gen.go": "7144d2d1f5c80dcfb2ecbdbb919f0f6bd2b28b6b3529bce1a849d9a0a8147eba",
+            "reports/scalar_report_foundry.gen.go": "00db9252fa0c5767782a4ca05fa038448f93f9d28aec0dfd06969d5971f7f1e8",
+            "reports/user_order_stats_foundry.gen.go": "8798f44875cfdfdfa16fa7ac85bbbd7ab0de12ec93fc02d4665296cca2dd1bf1",
+            "reports/user_pair_foundry.gen.go": "898393accb31e007b3449b175e38d4c6353e4447b06e4096b7373e7fb640fde9",
+            "reports/user_summary_foundry.gen.go": "dda093de510fbba3e7d4af3be9a50f48a174338ff06e02de2e1bcad1f4cd678a",
+            "requestflow/json_submission_foundry.gen.go": "5341790608f82d5e4454299dcf4f329d94350ba335f8a13f5fd1be421598aefa",
+            "requestflow/multipart_submission_foundry.gen.go": "18c2226c35442c0a73a76b5ab590ff34b861e48bf27277833c4276889ffdabc7",
+            "requestflow/reply_foundry.gen.go": "5b3a45559a1a7104cbd1f983f0e8997b46d6cd43614c7347ea37dec2b3eb65b7",
+            "requestflow/submission_foundry.gen.go": "836cbde4891b170ceab215eac24738ce70ef9adaee86f2437745bca0fb9da93d",
+            "retrievalqueries/group_foundry.gen.go": "0498650def09b576076a8d1f01dbdc1aa3434c17d10c5765b5d118f0f6874917",
+            "retrievalqueries/member_foundry.gen.go": "e648b4a0b94bbe027e5b9826ab732e0c72bab74caeb33214ef95fa6f0e0bbecb",
+            "retrievalqueries/member_label_foundry.gen.go": "2ee49103cdbf4578a654ee6ad4e08211fbf0bc0f431b0a070fe345ad80dc893a",
+            "retrievalqueries/membership_foundry.gen.go": "2431cc07f543959ae8154e7a64f4938e6945a132ea9bb8d0ea0ecc050122d87e",
+            "scalarqueries/calculation_foundry.gen.go": "5f5c174854027d445c83697fd176088c2aed84fab61085d20944aebf725ddb3a",
+            "scalarqueries/sample_foundry.gen.go": "c10ced2dfc8728b122be9c81ae93f96cfac119dfc76c360cdf4364b9931dd7a6",
+            "softqueries/group_foundry.gen.go": "6a304c2df1835dd9d5b290233c67b772685c2cfccdaa6aa3d54c54bd5f538c1f",
+            "softqueries/member_foundry.gen.go": "5d48fb556cbf53db12d688cd58b2a0529c3c20fed27256d0ae0f11b5b4e18f10",
+            "softqueries/member_label_foundry.gen.go": "88c596c40c092ec843122c747e937b3b0479e091c9d35732f4da33264e272adf",
+            "softqueries/membership_foundry.gen.go": "3a411b6c18dca83be2ff3d4e5ea4bd691ffd1bc5f4b18e75a2a8f25641b7a653",
+            "startupconfig/environment_foundry.gen.go": "3bc724aad30b64692ab707e5af5a989c186f1c7277f96a5a1bad7a0ade37732a",
+            "startupconfig/settings_foundry.gen.go": "cfe2895c4c80b83822b50fac910f26e94fa029e2c26698dcf18d6aa79f9f22d6",
+            "teamworkflow/action_foundry.gen.go": "da0ca643586eb431bf77840dfba4b48f1730d54b2c304f80965f294ae7021f4a",
+            "teamworkflow/catalogue_filters_foundry.gen.go": "b25d4a5a7fdd5b4c3ef78cfb5b48cb97e28c94a3ca29124ad2e4513c1a254f9f",
+            "teamworkflow/catalogue_item_foundry.gen.go": "ec42c85bfc14731adb52b10ee63095ec713399dc0ab974fa12de9b839c42d578",
+            "teamworkflow/form_input_foundry.gen.go": "cf347149a488aff7ea78621240fcbe20ae149b713a4cd53b5e95d0bbccc37c90",
+            "teamworkflow/multipart_input_foundry.gen.go": "66b1ef3cc8e46ce6a696b940962c86fd222e9d4dca1625067d6438f6b6a19cce",
+            "teamworkflow/patch_foundry.gen.go": "6492c4f1408983db6599458b90c36e08c38efe7023ca87b86c462df30f558c8f",
+            "teamworkflow/project_foundry.gen.go": "7d615e15985987818902cfa84d0e3b3b449361ef415e587ad16510caff47cd22",
+            "teamworkflow/project_path_foundry.gen.go": "1f216832550e1f4ba619ec616bbe7b37d31904c6f17aa156ef0138cc474e87e8",
+            "teamworkflow/project_view_foundry.gen.go": "285019e31f0e003654e30c4b8a9f15d6a2f5f0e8ff2ca222a71ae04fdf1f2831",
+            "teamworkflow/rule_reply_foundry.gen.go": "7155e6478039406004327c54de429efa4990b64c9c92f0c128a2cd5bb07fdd46",
+            "teamworkflow/submission_foundry.gen.go": "2372b5373ef0cf82862db0c32e87c8f879ae02812ca2e26cb16ecbf9cb19dce4",
+            "teamworkflow/submission_input_foundry.gen.go": "66465cc8ba7c5f462eb9e717cb7a4cdc020b3a7d8b962249e81bc4c8e8c9e56f",
+            "teamworkflow/submission_path_foundry.gen.go": "8173c462183372b60d151dcf745e9d2f2d4e94d5518aea751d2037dc7bf08640",
+            "teamworkflow/submission_view_foundry.gen.go": "f34104cc794a47fa9b7da4d820f132adff605ad3c32b9d8b62b89c1f6ad118ea",
+            "teamworkflow/team_foundry.gen.go": "90e769669158807b0752974a9b039f7698bb4964c0ac33a7051e801ce7a04b3f",
+            "temporalqueries/calendar_summary_foundry.gen.go": "1c5c254797e09ba5268b2b665a74497ad861802f0269cdccd3edf8cfb5708458",
+            "temporalqueries/sample_foundry.gen.go": "c21c2e3888d5913cf712168de347c5a18cc1cb6aed229763eff5a02c0f4c0d89",
+            "timequeries/manual_foundry.gen.go": "1d2c80b0e90dd3980836566d154554c34fedc095641c3868e9e7c3a53da46460",
+            "timequeries/member_foundry.gen.go": "e4ff0f0b069372c96c9b48cfddd3a6c0d1bcd52f69e80b4cd9bc8f992abe9efb",
+            "transactionqueries/pair_foundry.gen.go": "5d40a50a0a516e6426246d4d05746cab3bf0a8e5d56225e50eb74a2c03531c4b",
+            "transactionqueries/record_foundry.gen.go": "a9837b6f4a8b322484379a4490f85f2d7c31f6f1ec54c5dc83fd30214e19165c",
+            "transactionqueries/summary_foundry.gen.go": "4ef426ecb80d028d9f4c9b386a97a3c75a2cc2cccdb7b42d09498c33147b717d",
+            "transactionqueries/totals_foundry.gen.go": "c00a51de96df9f09d400da48f91a4228e476bf7be51968e020b5a0dfa7335343",
+            "unions/bank_dto_foundry.gen.go": "84252d6507f110986114c5abca62943f7e9cc2364f079b3be64071d5f8b95831",
+            "unions/card_dto_foundry.gen.go": "5748b3616e326e2ae5553b94fe3258425c6de1f02495e47b67c409cbf8b498e9",
+            "unions/delivery_foundry.gen.go": "40c29645467658d3e30f40c7f72453653197ea497cf64897cd59faaee983c915",
+            "unions/payment_method_foundry.gen.go": "c30020931055325e6be2824c2e606bbcef1601a55e29d07b9cf0908bbdd4c906",
+            "unions/payment_request_foundry.gen.go": "a3d4efc889d1d9e3cd8d5b8a5c82d1cb42590e72776f6fdd1e4dd2716013c53b",
+            "upsertqueries/excluded_record_foundry.gen.go": "945ed6e8d5392fc6f8e9a013e32210fd77dfc605866b1fccd6dc57323936f723",
+            "validationrules/availability_window_foundry.gen.go": "ba51f1b3990b62b8c6be03fba9bca61a0ad253c4e54739772a502f1d1b467d43",
+            "validationrules/organization_kind_foundry.gen.go": "4c5500b8257077f6f92206cfa9dbe2d03ff3bcbc285a1652f518615034162ff8",
+            "validationrules/presence_input_foundry.gen.go": "38726cb62b6e181d3b5664449800a00888091a6e40d8e3ba83534b6d051993bd",
+            "validationrules/profile_preferences_foundry.gen.go": "fb0cbde5561d22553ae8f16cdeeb3438d6fd62029d63c7f95d6949e2afbadc6c",
+            "validationrules/registration_foundry.gen.go": "1508fe8ddec85509109aee73bc2e6cfc8c1a09e70e4323c17dba99ed5517bd24",
+            "windowqueries/navigation_row_foundry.gen.go": "d8bde59068af57831856f44c122a2a640f4795dffddfa66d9641a57d58f3d894",
+            "windowqueries/ranking_row_foundry.gen.go": "f09ebc0a54f9073c58a76fcb19060419e0f229318fc32d18cb26c360e96326fe",
+            "windowqueries/window_total_foundry.gen.go": "2b93d1aabd019b3f64be340254514c0f62f4e63ae4598ff52db1dca3a6fed0bc"
+          }
+        },
+        "generated_edited": {
+          "bytes": 5154669,
+          "files": 196,
+          "sha256": {
+            "auditqueries/account_foundry.gen.go": "78de28d362fc35795b9ea10f3fd3bcf990087b77150097e3ea6367c5a749a9ac",
+            "auditqueries/label_foundry.gen.go": "4a739095446284edb161131aee7e7f553edbe042bdee70c8b33d6284bdf3fb91",
+            "binarymodels/record_foundry.gen.go": "3b5844def8c444a71989de297ca1d31bd9e956f958628134d2efc43caa22be37",
+            "binarymodels/view_foundry.gen.go": "c92a3c39fbfed4d72d2222eaf79d56ef0fd40843fd200aed2f8e73e347f06e10",
+            "bootstrap/member_foundry.gen.go": "c5fc360d5f2d4bad7b3d79963be1f6c80f3670311ba8e9e8f9b8ff387c93b78c",
+            "bootstrap/operator_foundry.gen.go": "241e33b4b6f9a75fc3571531538cff079d5d8afdc0ec934c21477a54d905f49a",
+            "bootstrap/profile_foundry.gen.go": "5a8261bc65a7cad182735a9d1d5083ac106dc9746bd22ee9a60a75e14dbf6c8a",
+            "bootstrap/settings_foundry.gen.go": "bbb1b3343cd7daf415dde7d9e10502ddbca8ea0ac7a40f8eaae51a5493eaffc2",
+            "bootstrap/upload_input_foundry.gen.go": "4b634521136e206e1bd95e108cf581d6c074f4e4695ad0da95fa46a1db8cabd0",
+            "bootstrap/upload_result_foundry.gen.go": "5441b796fa5165de1f5f56a29ce6d0302e695e876c0fff4afb55c6679f73add6",
+            "catalog/product_foundry.gen.go": "c5ae4826d509d4767009a99a5a46429135d3ace83356025c7652065508e7b264",
+            "catalog/status/status_foundry.gen.go": "d6b40a59538f91f7ee15c414a9054ae80e69d62df114785c5bdafecda6a5de39",
+            "clientcontracts/filters_foundry.gen.go": "a14c1f9b02145dbc7eb4e94da9498aac5b9f8db6a9619925809829afbaa9f528",
+            "clientcontracts/item_path_foundry.gen.go": "ec7ce734699e868edfae18310bc500e13d082ab22a6133a94e45d763dfbb2333",
+            "clientcontracts/member_foundry.gen.go": "a3441ba780d2246ed05da9fd72158985f92e114c4de673889eb68daf60db4469",
+            "clientcontracts/payload_foundry.gen.go": "f90cc3b047988e14d57821f6fdd700e50b58248e76c7d7fd882d742ebc2d0d88",
+            "configured/settings_foundry.gen.go": "fd21f0208a185e8a3e12b0648578c63b21d40ae91f7d86eed0e4c2c1d5988f66",
+            "eventqueries/event_link_foundry.gen.go": "be0f6958bf2d9a24c429020c57f362365cee8a16a67315f314eb5955dbbca48f",
+            "framequeries/sample_foundry.gen.go": "93be0effed5220b8c023c0c18fce63f11dded244e29befb284d5f88e69ee7ef2",
+            "genericdto/combined_foundry.gen.go": "b2f055b9d4352245929de0e09d7ebeaf692856dc4a8b81fbc96314b843d798b7",
+            "genericdto/envelope_foundry.gen.go": "f5cb5515359f15edc002a9c6e38b8314a79df987a1c883414d08bc1209243012",
+            "genericdto/project_dto_foundry.gen.go": "5625ea1bd51d81759623db665071c3218a13d2280d4f2b7cf7dda0e33ed39dc7",
+            "genericdto/user_dto_foundry.gen.go": "48e2b1e44bf6d81cec0a7f1904e0b6976217f0d145dcfea3e3f67492d508a32b",
+            "genericdto/user_envelope_foundry.gen.go": "d2bd0a391f61e981688afe18d80ffb11199f1f1fac0fdd81b0502877c57626de",
+            "hookqueries/log_foundry.gen.go": "e6efb08272e0a64b3f7b7dee95ce8d5f9307621b6752829a3a0aa43913e42092",
+            "hookqueries/member_foundry.gen.go": "900da3447c94868bf17b13e38d5b75ff48cc5fc4c8c80404fb0d7387fa46990d",
+            "httpdto/inventory_response_foundry.gen.go": "8534f59be0a390352633d606b2d5502534f007ca6abe5d8f16ae7a928232ff7f",
+            "httpdto/order_response_foundry.gen.go": "cc90e818122635f81c015eb2f5fc8f2e3b6862966fa7de981361c621df27a33c",
+            "httpdto/stream_response_foundry.gen.go": "97297497b931a1d0ee545d5a3c2d95e0bf6166c3d0d1e257e8c87ef22dc769b9",
+            "httpdto/tracking_response_foundry.gen.go": "f10849ac85fe82c97e1d41cde0541a12de9ffc535e97e3cefeeb2688dbaae77f",
+            "httpdto/update_user_foundry.gen.go": "99dd5341269ca5017a6dfd0a50184297f2096af99cf4471f00a814be91728bd8",
+            "httpdto/user_response_foundry.gen.go": "bfbcc812112c543e55150bd07f803844d9e5ec3b10e69245f92b4e478ff5c373",
+            "httpkernel/asset_path_foundry.gen.go": "4e61ce801b1a7b1933fe65703dfb9ed345a78942f053239fcfc22221eabbc004",
+            "httpkernel/user_feed_path_foundry.gen.go": "d3f4ff25960d0231bd0b5e5b83343c76da8ec3eaba1f922f14122de18c9d17eb",
+            "httpkernel/user_path_foundry.gen.go": "5dc7e69c6d2c4b2adf0b37a56db9d6e9ee9e930f55b0e51d641466d67519ae4f",
+            "httppagination/cmd/pagecontract/summary_foundry.gen.go": "4c241972bc427f2f7afe8ea45a6db36e7ed11ef170b2720712423f0d1286c49d",
+            "httppagination/member_filters_foundry.gen.go": "c0f426d5943a34d009637ef98371204e4fa653331e040c2fecffaced3fa61388",
+            "httppagination/member_response_foundry.gen.go": "0337eb8dafa4afaa92ea9bd7ef4c868f5a77fa324507d32b53c0f7fcdbb0a724",
+            "httpquery/nearby_input_foundry.gen.go": "1e6e9fc579c134633ff3c80e0268ab6596119e6a01a292c98a984b3a1e756db7",
+            "httpquery/position_path_foundry.gen.go": "d926cdfe226727df6b0f5a4e5ac974eac1ca822de84848da3a96c45ca6e8027d",
+            "httpquery/priority_path_foundry.gen.go": "0b4fff80b2f9db0c41d56578117238386898ce175557aeaee4e2443bd5c3a16e",
+            "httpquery/priority_query_foundry.gen.go": "be7cb41620ea58a32253082e11bd9ab7a247eddcfcc834b7fce3162e5a2e867a",
+            "httpquery/priority_response_foundry.gen.go": "db14b9b809bb11d737a3f5ca88b709d7e8372981e39bab816e5ee5bd7d817200",
+            "httpquery/search_input_foundry.gen.go": "5c9c3338d3aedc2142a823fd66b37944b6777aa454fd20cbf2f36f29449c35a1",
+            "httpuploads/profile_input_foundry.gen.go": "ccd39005bcb828386f0656e02d60724f625b73bfff147afe1beba9260b2878de",
+            "httpuploads/upload_reply_foundry.gen.go": "5baa4969119c9ccc0c480629af947f4b71e3fad63517ce21ca4cd51076998ae6",
+            "idempotenthttp/order_foundry.gen.go": "92b3e9cfdc09d03cf0dc1df9ee2e73a27dfed0b974592ab5ea4dfc93c7ccccbf",
+            "idempotenthttp/path_foundry.gen.go": "9d757a2ed57b26d33827b280f7ffb75355cca93c527284c3a1467a9e4bdad764",
+            "idempotenthttp/receipt_foundry.gen.go": "6580dbe9e17d092480565f33d07a29ef2c152bf24a4b0005b387adca79ed240c",
+            "idempotenthttp/submission_foundry.gen.go": "fe5dcd264484e22f5845fcc754cdd7b67c1c2422d2b8f6f9fe0fcccf2ff5b62b",
+            "idempotenthttp/workspace_foundry.gen.go": "ebc149fb3293a6aa20f438aafe2ee930ed8ac338ce245a08c9d9529436ec214d",
+            "inputqueries/member_foundry.gen.go": "9d830acefbacb5aa4a6fa290f2f6e090500b8d6587fa409ba242d8deabf10be8",
+            "intervalqueries/label_foundry.gen.go": "9dae3bf91c097c57f83c2d1ef438b6f619a1dc0f97dc8a628f94e9af780044cd",
+            "intervalqueries/link_foundry.gen.go": "1e4314fbe61015adfd615d67709750fa728e35cc3cf726a635c801cb52b5ec2b",
+            "intervalqueries/plan_foundry.gen.go": "7cc9a2644a7eac37e4541a94ab75ab6fa2d53c0b29269d92d4b56c5499bb9175",
+            "intervalqueries/sample_foundry.gen.go": "8d0c468ded8b1b1e2d6e408ff70d62587df8d35dac2c411ce267b84df53457f6",
+            "intervalqueries/summary_foundry.gen.go": "d9afda9c901614affb922cc66b07f031eb05acbf938bdc725aa8d0ad16ff2def",
+            "isolatedhttp/receipt_foundry.gen.go": "08eecd74807d598a1de44e68992d9c61088836977bd6e9963d8112d57928f7d5",
+            "isolatedhttp/record_foundry.gen.go": "c3feec2ce900caf2e6d28f0f47b6cf8ea7bdb0302d71efe0887fd61e35de6349",
+            "isolatedhttp/record_path_foundry.gen.go": "345e9d26a8a22817cef7ee7581169c4b7c7d0cfa6bb478cec59bacb706667cf0",
+            "isolatedhttp/submission_foundry.gen.go": "693605a0658bae4395782a6064275d5e1427450c443932746ecde4ff96b06dc2",
+            "jsonqueries/document_foundry.gen.go": "cb6cb7f4d5cd9088aab1c61a563e171e188d673d1d5f8278d38c4d92da753c48",
+            "jsonqueries/policy_foundry.gen.go": "493f384d8006b04a0095ef6a2e31fb3935d75bd79befb591763e82d5ae9b0bb6",
+            "jsonqueries/snapshot_foundry.gen.go": "7a72ee50e0bedfbce8a493457fe37d64ab65bacf6b615517ffa9420d8f870dfe",
+            "keyqueries/bucket_count_foundry.gen.go": "8192ced61d8031f4b51aa81e77e64941b752746beec4a95c8d23855aed7720b0",
+            "lateralqueries/ranked_order_foundry.gen.go": "08f20df623c989d55920e94512e399032a25c4137aa8eece48078ab33c908731",
+            "lateralqueries/user_order_foundry.gen.go": "3f8d9930e999c309c731ad71f06dc8e469cedd50e01c57bf231fc77945b2377a",
+            "linkqueries/archive_foundry.gen.go": "82ec26477ea28611ec3655043f5a53f0b3957792b1d56c1c93ac5677476dc47c",
+            "linkqueries/friendship_foundry.gen.go": "a2dd52db00e5b45b2bc2d640f86df99ed9670501bc1dffd4a47df6b96cf4af15",
+            "linkqueries/group_foundry.gen.go": "a0c973abd34552dd4f905aa1522a5ccab0c69dc6276cd26c7be6959a41f4059f",
+            "linkqueries/member_foundry.gen.go": "afff28a7a65abee0b6b354d621447b5e5e6c884f471c557874390f811bdcf926",
+            "linkqueries/membership_foundry.gen.go": "ba3f3452d6ed636f88012e6201900394aa31209ffd47ca62820313fb6e904176",
+            "linkqueries/natural_link_foundry.gen.go": "13d08ae87a02155bca416b1652cb52cae1545cf2b193cff2e1d09d0064323c56",
+            "linkqueries/nullable_link_foundry.gen.go": "717d4c07126d416769e21fb6bb51d35a6111d5a5e90884f476ba5f75195b6f3f",
+            "localization/cart_args_foundry.gen.go": "67fbbd54ca124b08fd4b017d8cae9ee714d9974a5c499c12f64bbb1632e8f62f",
+            "localization/literal_args_foundry.gen.go": "cd1c2f4ff51e92b4f4161aa70d56067fb3b4058ec7d29812cf23ea60a9445710",
+            "localization/manage_label_foundry.gen.go": "b123b125128a44fe81714d6a836e2c2c1500c64896f1a919629c675932158df8",
+            "localization/name_label_foundry.gen.go": "bd2e9d0f9ea79e9b610325be059cee829d2992795fd8dbc0e703df9aca75d225",
+            "localization/position_args_foundry.gen.go": "a2b0d0db413ca48a01c2ea4e5763e37197c7db2db8559dbcfa9e7a45d4f69c78",
+            "localization/status_foundry.gen.go": "050e34bd129eb53559667d1666eb3ee9e07e4fef4e78cb55f4ef5a6be5bf4d7c",
+            "localization/welcome_args_foundry.gen.go": "5a6caa3cb7078170d52a490a5a7825f39b37761885444e5eba3b9b2163bebc74",
+            "mailing/recipient_request_foundry.gen.go": "06ab1d9e28001fd695ace1f053bdf7c2d9ab2c00a3d93968187b85abdbb308b6",
+            "models/country_foundry.gen.go": "40115931e5bb64f6729b39e01bb045629fe3621d265daae2e4e0bf1e2d81f8fa",
+            "models/friendship_foundry.gen.go": "c400028ee926d2c04c5f55040d65ee28a3ac85d1cf5ec52933a3544c8debb2f3",
+            "models/group_foundry.gen.go": "f440fa6c4a7b49174e5edeb0ab82bb1f998e19d45dc55dc0ec61f87aaec55fc5",
+            "models/ledger_entry_foundry.gen.go": "f10cf56cdbd8e001c127fd49a636f5ef5d97ff76c8f199b3f07642cdda685362",
+            "models/level_foundry.gen.go": "b3f2e0c16fc34e6e2505ae6ec5949a38baf4883eef9333020384ff6c4d20d1dc",
+            "models/location_foundry.gen.go": "e1a05ec801f2212981c2060c7f68c108d42eb7cd907a5591bb9430461be5157f",
+            "models/measurement_foundry.gen.go": "84e0e60d98f08a11bc652a035c93dbd7595a9897a07a7daa5106c87b9e63f87b",
+            "models/membership_foundry.gen.go": "caa70c31f55d21df468165f32dd59f4504765ae48233f26ada564532d8fa5b63",
+            "models/order_foundry.gen.go": "235593453a466ad8a71014b5e02e5ec7e1f958f6e75f2eb76e4deb057401c08b",
+            "models/status_foundry.gen.go": "4d77be0af0612f5b4e15df31513723c80c3c5ba2172877aa312042fb919a8028",
+            "models/user_foundry.gen.go": "cf0f9a11143f98f2360e751b4b6b23eeb2b45469e2c09c2279afc8e1ae378538",
+            "models/write_record_foundry.gen.go": "fbbedb147e9c6d8146e1005da835c9a1b6430f558b62f395669ad58e113c2316",
+            "multifactor/account_foundry.gen.go": "0741d09e957510ace9a9f099efd189cf4f9314cf91eac66115d813c36fab46b1",
+            "multifactor/confirmation_request_foundry.gen.go": "aa93dada574b05490016f12348d1f80c0983a8bd7c0a710904d6a772032c16e4",
+            "multifactor/enrollment_request_foundry.gen.go": "3d0f8690f7bab053ffde51e7f45140eee730d38c6f5fcff587a6a22bc217288c",
+            "multifactor/recovery_request_foundry.gen.go": "b3bf829bacc346422b9d430a4af45e03cdb369d01ea624da4352e2eb3147cd27",
+            "multifactor/regeneration_request_foundry.gen.go": "3ff53e286f57a3c0d6f8b26750e4bc1d85cc76cece988b0d27992a06e5d379ce",
+            "multifactor/totp_request_foundry.gen.go": "4bbfbe70bd017c04e973de0a62dd26aabb4485f289f40466fcbd6e96df224ebb",
+            "mutatorqueries/member_foundry.gen.go": "3ced1497f66d80ea723b0acdf39ba57d246a8516548bab701540c9b5e2382b9a",
+            "mutatorqueries/state_foundry.gen.go": "a42f1797ddd72a1e6d8a7aceeb6cfc5d1420aa791763a0780f85864ac78d64a9",
+            "nestedbindings/path_foundry.gen.go": "1436db5b0dd7569ad4b2d04ba1edc46803e950f2ff9623cfcb5c5e21d5eba590",
+            "nestedbindings/project_foundry.gen.go": "ac4cb18f41a3df77f4093f3a634a79558c6be9018e3fc5c78cf9b5ca1360b38a",
+            "nestedbindings/reply_foundry.gen.go": "2bd564422af420b2e8c49a53bc20744804e03519d89a379203a462af0c24972e",
+            "nestedbindings/task_foundry.gen.go": "8545dac33f60b72a44c7f6042e4b177585333985d9cb2d17710c9fa04e213cd7",
+            "nestedbindings/team_foundry.gen.go": "042dffe831f6d1a008ecaa82cebb07e6b6b0059c051a6d28b85ab2cc57be4755",
+            "notifying/order_card_foundry.gen.go": "096c3369a76306ec85632e4b2830e390dac2a5339d4edb5fa7c835cf41cf0c0f",
+            "notifying/order_placed_foundry.gen.go": "a7ae2d3be3d1f7544248cd3fba2faf18a8be5eaaefa765555dc5d7d7e2a966bf",
+            "observerqueries/effect_foundry.gen.go": "ab7644dbb74ee84234ff2641526e9c228fd562ea2c68c5934e7c4f4bbf0ff5ef",
+            "observerqueries/plain_foundry.gen.go": "78b9bf5f5b12ea9f2987e668c52372e85515449234382d963a41ff9aba883a52",
+            "observerqueries/record_foundry.gen.go": "d6aba0c0d3502e3e963f2ab1825c7da3af4e4d83314eb11e63be98524d1e69f8",
+            "outgoing/account_receipt_foundry.gen.go": "1d9371c7863797c6a248a6ec3bd7b4ccbe3b616825ffc443cb40b9a9ea6ef036",
+            "outgoing/create_account_foundry.gen.go": "dbdebdef8155efd7fced5f482deeee08999c0c824487203cf89ae67b0ea54cb3",
+            "passwords/account_foundry.gen.go": "35fb0be210fd973e66af200565ba4dc70e65185c2e40e2d3a376d76e4e8d506d",
+            "passwords/credential_projection_foundry.gen.go": "7d6e9068e30b506de6c0b6244d91fcf194ad58c47446afec029d54ca679f0da4",
+            "passwords/login_request_foundry.gen.go": "c64e3a4b97ce114099a4c496f48bf5f2eee1cf0fd6f8f6f07e39198b3732ce6d",
+            "productionprofile/record_foundry.gen.go": "0f5deab0be38d905f8635f109587ef3cd1e099be4b3506d3e06a9395ce9c9e90",
+            "profiles/preferences_foundry.gen.go": "e7eac64dfeebf5c9a5eb1d100b11a113878de5fc04205c9b776d14a9175b91bf",
+            "profiles/profile_foundry.gen.go": "ae107f306e98d634b80a2466d4ff9d7daf50764dbacb9fcc1319ed55efb77a58",
+            "recovering/link_request_foundry.gen.go": "185c0ae3ab4df2fcda7863d61613749f2cc36d2da8c680d6fbf1837e8761712b",
+            "recovering/member_foundry.gen.go": "563b27d88b3097e1561b1000dbd487ae4bc77e5a5c7584e94aaa8a9dea6d5c43",
+            "recovering/reset_request_foundry.gen.go": "dfe5868095fd8939c2bead1562febd01e68313e74b33ba8b07d0ad2add2669eb",
+            "recovering/verification_request_foundry.gen.go": "a4ac8ec71c25ad8f7fa078d9bc4bc4f52609cbf9a2b87c5d227833c30b9b2215",
+            "recursivequeries/node_foundry.gen.go": "3e1db7aa658c44901bbd573aea607ad68dde0ce7ff823407f15da7d9f23ce488",
+            "reporting/export_members_foundry.gen.go": "7bbc5625f43413539cbbbd277783505ae33ba8fa42fe01eba443a0aa9a8724c0",
+            "reporting/member_foundry.gen.go": "624164d9daf84d811dbfbcf13bf4b4f726624fda17cdf12ac646e8517074d266",
+            "reporting/member_row_foundry.gen.go": "dc516388d701c866f039423ed7b816cb4767f9ff2c901635ef00dcb6d104664e",
+            "reporting/member_total_foundry.gen.go": "c2b327af0ae5bf17bcfdcc0711da38b851c8b1bd2b3b57cce0636ae9353d8de3",
+            "reporting/operator_foundry.gen.go": "630c6ce71b0d359b4e44e49347ec474f16a4a83991925de67fda330ec3b8e074",
+            "reporting/order_foundry.gen.go": "6472bc869b0787c9c0eb432aafd72e6646f204c0c942cc16742eb196d6ed5940",
+            "reporting/order_row_foundry.gen.go": "0dc5dbbd61d4a58d96ea86ab1c4424c380432be6dec8fc29fa83b5021f029bc8",
+            "reporting/state_foundry.gen.go": "cf381576748922b288390c5df72e9d50b6e9fca874722133321c8e35839e9f23",
+            "reports/buyer_totals_foundry.gen.go": "7eb35dff7d7ec039c8fa948807b74b15d5cc4d3dd77af9c52824ffc26a7e209a",
+            "reports/location_row_foundry.gen.go": "8aec0e3e5b8b907f2fcc24052cdb1d8b864a88d6077e75a4e44ae19a2b6a786b",
+            "reports/order_buyer_row_foundry.gen.go": "1b84dee99284e208eb64960a7a953b89dcac29ba8999d2c7bf188940107688c8",
+            "reports/order_summary_foundry.gen.go": "bddc538777f55c8cd380e868e6d35cd9e47e3a08d48bed1d770d11612b52b8a4",
+            "reports/referral_order_row_foundry.gen.go": "86fe923657be0810bcd2468431e261cbf9eab03023cf09e7f30d74b27bfa7910",
+            "reports/referral_row_foundry.gen.go": "7144d2d1f5c80dcfb2ecbdbb919f0f6bd2b28b6b3529bce1a849d9a0a8147eba",
+            "reports/scalar_report_foundry.gen.go": "00db9252fa0c5767782a4ca05fa038448f93f9d28aec0dfd06969d5971f7f1e8",
+            "reports/user_order_stats_foundry.gen.go": "8798f44875cfdfdfa16fa7ac85bbbd7ab0de12ec93fc02d4665296cca2dd1bf1",
+            "reports/user_pair_foundry.gen.go": "898393accb31e007b3449b175e38d4c6353e4447b06e4096b7373e7fb640fde9",
+            "reports/user_summary_foundry.gen.go": "dda093de510fbba3e7d4af3be9a50f48a174338ff06e02de2e1bcad1f4cd678a",
+            "requestflow/json_submission_foundry.gen.go": "5341790608f82d5e4454299dcf4f329d94350ba335f8a13f5fd1be421598aefa",
+            "requestflow/multipart_submission_foundry.gen.go": "18c2226c35442c0a73a76b5ab590ff34b861e48bf27277833c4276889ffdabc7",
+            "requestflow/reply_foundry.gen.go": "5b3a45559a1a7104cbd1f983f0e8997b46d6cd43614c7347ea37dec2b3eb65b7",
+            "requestflow/submission_foundry.gen.go": "836cbde4891b170ceab215eac24738ce70ef9adaee86f2437745bca0fb9da93d",
+            "retrievalqueries/group_foundry.gen.go": "0498650def09b576076a8d1f01dbdc1aa3434c17d10c5765b5d118f0f6874917",
+            "retrievalqueries/member_foundry.gen.go": "e648b4a0b94bbe027e5b9826ab732e0c72bab74caeb33214ef95fa6f0e0bbecb",
+            "retrievalqueries/member_label_foundry.gen.go": "2ee49103cdbf4578a654ee6ad4e08211fbf0bc0f431b0a070fe345ad80dc893a",
+            "retrievalqueries/membership_foundry.gen.go": "2431cc07f543959ae8154e7a64f4938e6945a132ea9bb8d0ea0ecc050122d87e",
+            "scalarqueries/calculation_foundry.gen.go": "5f5c174854027d445c83697fd176088c2aed84fab61085d20944aebf725ddb3a",
+            "scalarqueries/sample_foundry.gen.go": "c10ced2dfc8728b122be9c81ae93f96cfac119dfc76c360cdf4364b9931dd7a6",
+            "softqueries/group_foundry.gen.go": "6a304c2df1835dd9d5b290233c67b772685c2cfccdaa6aa3d54c54bd5f538c1f",
+            "softqueries/member_foundry.gen.go": "5d48fb556cbf53db12d688cd58b2a0529c3c20fed27256d0ae0f11b5b4e18f10",
+            "softqueries/member_label_foundry.gen.go": "88c596c40c092ec843122c747e937b3b0479e091c9d35732f4da33264e272adf",
+            "softqueries/membership_foundry.gen.go": "3a411b6c18dca83be2ff3d4e5ea4bd691ffd1bc5f4b18e75a2a8f25641b7a653",
+            "startupconfig/environment_foundry.gen.go": "3bc724aad30b64692ab707e5af5a989c186f1c7277f96a5a1bad7a0ade37732a",
+            "startupconfig/settings_foundry.gen.go": "cfe2895c4c80b83822b50fac910f26e94fa029e2c26698dcf18d6aa79f9f22d6",
+            "teamworkflow/action_foundry.gen.go": "da0ca643586eb431bf77840dfba4b48f1730d54b2c304f80965f294ae7021f4a",
+            "teamworkflow/catalogue_filters_foundry.gen.go": "b25d4a5a7fdd5b4c3ef78cfb5b48cb97e28c94a3ca29124ad2e4513c1a254f9f",
+            "teamworkflow/catalogue_item_foundry.gen.go": "ec42c85bfc14731adb52b10ee63095ec713399dc0ab974fa12de9b839c42d578",
+            "teamworkflow/form_input_foundry.gen.go": "cf347149a488aff7ea78621240fcbe20ae149b713a4cd53b5e95d0bbccc37c90",
+            "teamworkflow/multipart_input_foundry.gen.go": "66b1ef3cc8e46ce6a696b940962c86fd222e9d4dca1625067d6438f6b6a19cce",
+            "teamworkflow/patch_foundry.gen.go": "6492c4f1408983db6599458b90c36e08c38efe7023ca87b86c462df30f558c8f",
+            "teamworkflow/project_foundry.gen.go": "7d615e15985987818902cfa84d0e3b3b449361ef415e587ad16510caff47cd22",
+            "teamworkflow/project_path_foundry.gen.go": "1f216832550e1f4ba619ec616bbe7b37d31904c6f17aa156ef0138cc474e87e8",
+            "teamworkflow/project_view_foundry.gen.go": "285019e31f0e003654e30c4b8a9f15d6a2f5f0e8ff2ca222a71ae04fdf1f2831",
+            "teamworkflow/rule_reply_foundry.gen.go": "7155e6478039406004327c54de429efa4990b64c9c92f0c128a2cd5bb07fdd46",
+            "teamworkflow/submission_foundry.gen.go": "2372b5373ef0cf82862db0c32e87c8f879ae02812ca2e26cb16ecbf9cb19dce4",
+            "teamworkflow/submission_input_foundry.gen.go": "66465cc8ba7c5f462eb9e717cb7a4cdc020b3a7d8b962249e81bc4c8e8c9e56f",
+            "teamworkflow/submission_path_foundry.gen.go": "8173c462183372b60d151dcf745e9d2f2d4e94d5518aea751d2037dc7bf08640",
+            "teamworkflow/submission_view_foundry.gen.go": "f34104cc794a47fa9b7da4d820f132adff605ad3c32b9d8b62b89c1f6ad118ea",
+            "teamworkflow/team_foundry.gen.go": "90e769669158807b0752974a9b039f7698bb4964c0ac33a7051e801ce7a04b3f",
+            "temporalqueries/calendar_summary_foundry.gen.go": "1c5c254797e09ba5268b2b665a74497ad861802f0269cdccd3edf8cfb5708458",
+            "temporalqueries/sample_foundry.gen.go": "c21c2e3888d5913cf712168de347c5a18cc1cb6aed229763eff5a02c0f4c0d89",
+            "timequeries/manual_foundry.gen.go": "1d2c80b0e90dd3980836566d154554c34fedc095641c3868e9e7c3a53da46460",
+            "timequeries/member_foundry.gen.go": "e4ff0f0b069372c96c9b48cfddd3a6c0d1bcd52f69e80b4cd9bc8f992abe9efb",
+            "transactionqueries/pair_foundry.gen.go": "5d40a50a0a516e6426246d4d05746cab3bf0a8e5d56225e50eb74a2c03531c4b",
+            "transactionqueries/record_foundry.gen.go": "a9837b6f4a8b322484379a4490f85f2d7c31f6f1ec54c5dc83fd30214e19165c",
+            "transactionqueries/summary_foundry.gen.go": "4ef426ecb80d028d9f4c9b386a97a3c75a2cc2cccdb7b42d09498c33147b717d",
+            "transactionqueries/totals_foundry.gen.go": "c00a51de96df9f09d400da48f91a4228e476bf7be51968e020b5a0dfa7335343",
+            "unions/bank_dto_foundry.gen.go": "84252d6507f110986114c5abca62943f7e9cc2364f079b3be64071d5f8b95831",
+            "unions/card_dto_foundry.gen.go": "5748b3616e326e2ae5553b94fe3258425c6de1f02495e47b67c409cbf8b498e9",
+            "unions/delivery_foundry.gen.go": "40c29645467658d3e30f40c7f72453653197ea497cf64897cd59faaee983c915",
+            "unions/payment_method_foundry.gen.go": "c30020931055325e6be2824c2e606bbcef1601a55e29d07b9cf0908bbdd4c906",
+            "unions/payment_request_foundry.gen.go": "a3d4efc889d1d9e3cd8d5b8a5c82d1cb42590e72776f6fdd1e4dd2716013c53b",
+            "upsertqueries/excluded_record_foundry.gen.go": "945ed6e8d5392fc6f8e9a013e32210fd77dfc605866b1fccd6dc57323936f723",
+            "validationrules/availability_window_foundry.gen.go": "ba51f1b3990b62b8c6be03fba9bca61a0ad253c4e54739772a502f1d1b467d43",
+            "validationrules/organization_kind_foundry.gen.go": "4c5500b8257077f6f92206cfa9dbe2d03ff3bcbc285a1652f518615034162ff8",
+            "validationrules/presence_input_foundry.gen.go": "38726cb62b6e181d3b5664449800a00888091a6e40d8e3ba83534b6d051993bd",
+            "validationrules/profile_preferences_foundry.gen.go": "fb0cbde5561d22553ae8f16cdeeb3438d6fd62029d63c7f95d6949e2afbadc6c",
+            "validationrules/registration_foundry.gen.go": "1508fe8ddec85509109aee73bc2e6cfc8c1a09e70e4323c17dba99ed5517bd24",
+            "windowqueries/navigation_row_foundry.gen.go": "d8bde59068af57831856f44c122a2a640f4795dffddfa66d9641a57d58f3d894",
+            "windowqueries/ranking_row_foundry.gen.go": "f09ebc0a54f9073c58a76fcb19060419e0f229318fc32d18cb26c360e96326fe",
+            "windowqueries/window_total_foundry.gen.go": "2b93d1aabd019b3f64be340254514c0f62f4e63ae4598ff52db1dca3a6fed0bc"
+          }
+        },
+        "imported_packages": 725,
+        "source": "full"
+      }
+    ],
+    "measurement_limits": "Existing harness; sequential native local profiles, one editor round, single cold/unchanged/edited samples, three configured runtime benchmark repetitions. No production SLA or Linux runtime claim.",
+    "integrity": {
+      "source_and_input_hashes_match": true,
+      "framework_package_differences_after_measurement": [
+        "docs/guides/team-adoption.md",
+        "docs/guides/team-readiness-20260925.md"
+      ],
+      "runtime_generator_client_sources_unchanged": true,
+      "final_archives": 3,
+      "final_archive_entries": 2317,
+      "configured_credentials_found": false,
+      "private_paths_found": false
+    }
+  },
+  "security": {
+    "status": "passed",
+    "checks": [
+      {
+        "name": "go-0",
+        "status": "passed",
+        "analysis": {
+          "config": {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-24T20:07:49Z",
+            "go_version": "go1.27.1",
+            "scan_level": "symbol",
+            "scan_mode": "source"
+          },
+          "findings": [
+            {
+              "osv": "GO-2026-5932",
+              "trace": [
+                {
+                  "module": "golang.org/x/crypto",
+                  "version": "v0.57.0"
+                }
+              ]
+            }
+          ],
+          "affected_function_findings": []
+        }
+      },
+      {
+        "name": "go-1",
+        "status": "passed",
+        "analysis": {
+          "config": {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-24T20:07:49Z",
+            "go_version": "go1.27.1",
+            "scan_level": "symbol",
+            "scan_mode": "source"
+          },
+          "findings": [],
+          "affected_function_findings": []
+        }
+      },
+      {
+        "name": "go-2",
+        "status": "passed",
+        "analysis": {
+          "config": {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-24T20:07:49Z",
+            "go_version": "go1.27.1",
+            "scan_level": "symbol",
+            "scan_mode": "source"
+          },
+          "findings": [
+            {
+              "osv": "GO-2026-5932",
+              "trace": [
+                {
+                  "module": "golang.org/x/crypto",
+                  "version": "v0.57.0"
+                }
+              ]
+            }
+          ],
+          "affected_function_findings": []
+        }
+      },
+      {
+        "name": "go-3",
+        "status": "passed",
+        "analysis": {
+          "config": {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-24T20:07:49Z",
+            "go_version": "go1.27.1",
+            "scan_level": "symbol",
+            "scan_mode": "source"
+          },
+          "findings": [
+            {
+              "osv": "GO-2026-5932",
+              "trace": [
+                {
+                  "module": "golang.org/x/crypto",
+                  "version": "v0.57.0"
+                }
+              ]
+            }
+          ],
+          "affected_function_findings": []
+        }
+      },
+      {
+        "name": "go-4",
+        "status": "passed",
+        "analysis": {
+          "config": {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-24T20:07:49Z",
+            "go_version": "go1.27.1",
+            "scan_level": "symbol",
+            "scan_mode": "source"
+          },
+          "findings": [
+            {
+              "osv": "GO-2026-5932",
+              "trace": [
+                {
+                  "module": "golang.org/x/crypto",
+                  "version": "v0.57.0"
+                }
+              ]
+            }
+          ],
+          "affected_function_findings": []
+        }
+      },
+      {
+        "name": "gopls",
+        "status": "passed",
+        "analysis": {
+          "config": {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-24T20:07:49Z",
+            "scan_level": "symbol",
+            "scan_mode": "binary"
+          },
+          "findings": [
+            {
+              "osv": "GO-2026-6179",
+              "fixed_version": "v0.40.0",
+              "trace": [
+                {
+                  "module": "golang.org/x/mod",
+                  "version": "v0.37.0"
+                }
+              ]
+            },
+            {
+              "osv": "GO-2026-6180",
+              "fixed_version": "v0.40.0",
+              "trace": [
+                {
+                  "module": "golang.org/x/mod",
+                  "version": "v0.37.0"
+                }
+              ]
+            },
+            {
+              "osv": "GO-2026-5970",
+              "fixed_version": "v0.39.0",
+              "trace": [
+                {
+                  "module": "golang.org/x/text",
+                  "version": "v0.38.0"
+                }
+              ]
+            }
+          ],
+          "affected_function_findings": []
+        }
+      },
+      {
+        "name": "typescript",
+        "status": "passed",
+        "analysis": {
+          "vulnerabilities": {
+            "info": 0,
+            "low": 0,
+            "moderate": 0,
+            "high": 0,
+            "critical": 0,
+            "total": 0
+          }
+        }
+      }
+    ],
+    "packaged_findings": [
+      {
+        "osv": "GO-2026-5932",
+        "trace": [
+          {
+            "module": "golang.org/x/crypto",
+            "version": "v0.57.0"
+          }
+        ]
+      },
+      {
+        "osv": "GO-2026-5932",
+        "trace": [
+          {
+            "module": "golang.org/x/crypto",
+            "version": "v0.57.0"
+          }
+        ]
+      }
+    ],
+    "dependency_comparison": {
+      "external_modules": 57,
+      "versions_and_license_hashes_match_previous_review": true,
+      "changed": [],
+      "missing": []
+    },
+    "known_private_configuration": {
+      "log_files_inspected": 171,
+      "url_checked": true,
+      "password_checked": true,
+      "found": false,
+      "limits": "Known configured values and archive paths only; not universal secret detection."
+    }
+  },
+  "limits": [
+    "No Git commit, push, merge, tag, publication or deployment performed.",
+    "Hosted CI not exercised on the local source.",
+    "PostgreSQL and explicit standalone Redis supported; no Cluster/Sentinel routing.",
+    "M25 MySQL/SQLite, Dart generation and durable realtime extensions remain deferred.",
+    "Native runtime verification is macOS arm64. Linux binaries cross-compiled only.",
+    "No new live email-provider sends or S3/R2 account certification. Unchanged adapter source retains historical provider evidence.",
+    "Full backend race/fuzz evidence retained from exact unchanged runtime; this round ran fresh consumer races and final pinned-tool race."
+  ],
+  "required_items_pending": [],
+  "cache_cleanup": {
+    "status": "complete",
+    "removed_task_owned_caches": [
+      ".cache/team-readiness-candidate-20260925/measurements/setup-cache",
+      ".cache/team-readiness-candidate-20260925/measurements/module-cache",
+      ".cache/team-readiness-candidate-20260925/measurements/ordinary-generation-cache",
+      ".cache/team-readiness-candidate-20260925/measurements/ordinary-build-cache",
+      ".cache/team-readiness-candidate-20260925/measurements/ordinary-gopls-cache",
+      ".cache/team-readiness-candidate-20260925/measurements/configured-generation-cache",
+      ".cache/team-readiness-candidate-20260925/measurements/configured-build-cache",
+      ".cache/team-readiness-candidate-20260925/measurements/configured-gopls-cache",
+      ".cache/team-readiness-candidate-20260925/measurements/full-generation-cache",
+      ".cache/team-readiness-candidate-20260925/measurements/full-build-cache",
+      ".cache/team-readiness-candidate-20260925/measurements/full-gopls-cache"
+    ],
+    "shared_caches_removed": false,
+    "kept": "Source copies, private module archives/proxies, binaries, generated-consumer sources, reports, notices and command logs.",
+    "free_disk_before_bytes": 372959674368,
+    "free_disk_after_bytes": 395494752256
+  },
+  "documentation_verification": {
+    "command": [
+      "make",
+      "GO=/usr/local/go/bin/go",
+      "docs-check"
+    ],
+    "exit": 0,
+    "result": "Documentation links, blueprint numbering, and fixture Go requirements are valid."
+  }
+}

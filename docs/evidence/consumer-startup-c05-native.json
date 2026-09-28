@@ -1,0 +1,1011 @@
+{
+  "measured_at_utc": "2026-09-17T16:07:32.013323+00:00",
+  "status": "measured and reviewed",
+  "candidate": "v0.0.0-candidate.startup.5",
+  "manifest_sha256": "94add64ea0933d0691d9d1ef6237a2cb5218aec4596889e1cd61f1549201584b",
+  "hardware": "hw.model: Mac16,5\nhw.memsize: 68719476736\nhw.physicalcpu: 16\nhw.logicalcpu: 16",
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "toolchain": {
+    "CGO_ENABLED": "1",
+    "GOARCH": "arm64",
+    "GOOS": "darwin",
+    "GOVERSION": "go1.27.1"
+  },
+  "gopls": "v0.23.0",
+  "conditions": {
+    "native": true,
+    "default_compiler_flags": true,
+    "isolated_empty_phase_caches": true,
+    "module_downloads_excluded_from_cold_phases": true,
+    "other_foundry_checks_running": false,
+    "background_power_thermal_state": "not controlled or instrumented",
+    "cold_incremental_samples_per_profile": 1,
+    "fresh_process_editor_rounds_per_operation": 3,
+    "runtime_samples_per_case": 3,
+    "runtime_benchtime": "1s",
+    "runtime_startup_scope": "Build, provider Start and Shutdown, two memory caches, prepared HTTP routes, typed model/query check, borrowed discard logger; listener excluded",
+    "runtime_handler_scope": "Same route/cache/security middleware through direct and configured routers, includes httptest response recorder",
+    "runtime_roundtrip_scope": "Actual HTTP kernel, client, loopback transport and response draining",
+    "memory_sampling_interval_ms": 200,
+    "memory_limits": "Sampled tree RSS can double-count shared pages and miss peaks; not exact physical memory",
+    "source_code_unchanged_after_gate_and_measurements": true,
+    "final_documentation_added_after_measurement": true
+  },
+  "profiles": [
+    {
+      "imported_packages": 174,
+      "linked_binary_bytes": 5346498,
+      "linked_binary_sha256": "7c55a02daa7eedf305b91de5e7d5a586bd731495f4fc94d212a0ae2071e0ef47",
+      "source": "ordinary",
+      "generated_before": {
+        "files": 1,
+        "bytes": 68111
+      },
+      "generated_edited": {
+        "files": 1,
+        "bytes": 71967
+      },
+      "generated_reproduced_exactly": true,
+      "editor": [
+        {
+          "operation": "complete",
+          "round": 1,
+          "timing": {
+            "initialize_ns": 36967041,
+            "request_ns": 387782458
+          }
+        },
+        {
+          "operation": "hover",
+          "round": 1,
+          "timing": {
+            "initialize_ns": 48226209,
+            "request_ns": 223592833
+          }
+        },
+        {
+          "operation": "complete",
+          "round": 2,
+          "timing": {
+            "initialize_ns": 42343875,
+            "request_ns": 292069417
+          }
+        },
+        {
+          "operation": "hover",
+          "round": 2,
+          "timing": {
+            "initialize_ns": 40635541,
+            "request_ns": 220798084
+          }
+        },
+        {
+          "operation": "complete",
+          "round": 3,
+          "timing": {
+            "initialize_ns": 42732625,
+            "request_ns": 290580708
+          }
+        },
+        {
+          "operation": "hover",
+          "round": 3,
+          "timing": {
+            "initialize_ns": 37618708,
+            "request_ns": 225493791
+          }
+        }
+      ]
+    },
+    {
+      "imported_packages": 548,
+      "linked_binary_bytes": 35281362,
+      "linked_binary_sha256": "ef8be16d164a1b65fa72e5741e18d5e2789efcdb6629c21f69109c409b0ba023",
+      "source": "configured",
+      "generated_before": {
+        "files": 1,
+        "bytes": 68111
+      },
+      "generated_edited": {
+        "files": 1,
+        "bytes": 71967
+      },
+      "generated_reproduced_exactly": true,
+      "editor": [
+        {
+          "operation": "complete",
+          "round": 1,
+          "timing": {
+            "initialize_ns": 41676042,
+            "request_ns": 1018532500
+          }
+        },
+        {
+          "operation": "hover",
+          "round": 1,
+          "timing": {
+            "initialize_ns": 35314208,
+            "request_ns": 589772167
+          }
+        },
+        {
+          "operation": "complete",
+          "round": 2,
+          "timing": {
+            "initialize_ns": 33323708,
+            "request_ns": 550965541
+          }
+        },
+        {
+          "operation": "hover",
+          "round": 2,
+          "timing": {
+            "initialize_ns": 35180709,
+            "request_ns": 575814875
+          }
+        },
+        {
+          "operation": "complete",
+          "round": 3,
+          "timing": {
+            "initialize_ns": 37626458,
+            "request_ns": 584054750
+          }
+        },
+        {
+          "operation": "hover",
+          "round": 3,
+          "timing": {
+            "initialize_ns": 32953250,
+            "request_ns": 584344667
+          }
+        }
+      ]
+    },
+    {
+      "imported_packages": 708,
+      "source": "full",
+      "generated_before": {
+        "files": 153,
+        "bytes": 4546152
+      },
+      "generated_edited": {
+        "files": 153,
+        "bytes": 4550008
+      },
+      "generated_reproduced_exactly": true,
+      "editor": [
+        {
+          "operation": "complete",
+          "round": 1,
+          "timing": {
+            "initialize_ns": 96258958,
+            "request_ns": 855929209
+          }
+        },
+        {
+          "operation": "hover",
+          "round": 1,
+          "timing": {
+            "initialize_ns": 37739708,
+            "request_ns": 817102667
+          }
+        },
+        {
+          "operation": "complete",
+          "round": 2,
+          "timing": {
+            "initialize_ns": 42379958,
+            "request_ns": 730128542
+          }
+        },
+        {
+          "operation": "hover",
+          "round": 2,
+          "timing": {
+            "initialize_ns": 35717416,
+            "request_ns": 708270250
+          }
+        },
+        {
+          "operation": "complete",
+          "round": 3,
+          "timing": {
+            "initialize_ns": 38655416,
+            "request_ns": 713704375
+          }
+        },
+        {
+          "operation": "hover",
+          "round": 3,
+          "timing": {
+            "initialize_ns": 42783625,
+            "request_ns": 693628417
+          }
+        }
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "name": "hardware",
+      "exit": 0,
+      "elapsed_seconds": 0.23900487500031886,
+      "darwin_max_process_rss_bytes": 1277952,
+      "sampled_tree_rss_bytes": 1409024,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "toolchain",
+      "exit": 0,
+      "elapsed_seconds": 0.2569614999993064,
+      "darwin_max_process_rss_bytes": 15056896,
+      "sampled_tree_rss_bytes": 1376256,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "configured-download",
+      "exit": 0,
+      "elapsed_seconds": 6.561984332998691,
+      "darwin_max_process_rss_bytes": 40763392,
+      "sampled_tree_rss_bytes": 41975808,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "full-download",
+      "exit": 0,
+      "elapsed_seconds": 0.2590139999992971,
+      "darwin_max_process_rss_bytes": 26034176,
+      "sampled_tree_rss_bytes": 1376256,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "ordinary-download",
+      "exit": 0,
+      "elapsed_seconds": 0.26160287500169943,
+      "darwin_max_process_rss_bytes": 25985024,
+      "sampled_tree_rss_bytes": 1425408,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "module-graph",
+      "exit": 0,
+      "elapsed_seconds": 0.26180454200039094,
+      "darwin_max_process_rss_bytes": 24035328,
+      "sampled_tree_rss_bytes": 1425408,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "module-integrity",
+      "exit": 0,
+      "elapsed_seconds": 0.4777790419993835,
+      "darwin_max_process_rss_bytes": 52379648,
+      "sampled_tree_rss_bytes": 53641216,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "generator-build",
+      "exit": 0,
+      "elapsed_seconds": 9.105275500000062,
+      "darwin_max_process_rss_bytes": 1322074112,
+      "sampled_tree_rss_bytes": 1888583680,
+      "sampled_compiler_rss_bytes": 1322074112,
+      "timed_out": false
+    },
+    {
+      "name": "ordinary-generation-cold",
+      "exit": 0,
+      "elapsed_seconds": 4.5653426659991965,
+      "darwin_max_process_rss_bytes": 525271040,
+      "sampled_tree_rss_bytes": 768999424,
+      "sampled_compiler_rss_bytes": 511688704,
+      "timed_out": false
+    },
+    {
+      "name": "ordinary-generation-unchanged",
+      "exit": 0,
+      "elapsed_seconds": 0.24895604099947377,
+      "darwin_max_process_rss_bytes": 44285952,
+      "sampled_tree_rss_bytes": 1392640,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "ordinary-build-cold",
+      "exit": 0,
+      "elapsed_seconds": 3.5416782079992117,
+      "darwin_max_process_rss_bytes": 606322688,
+      "sampled_tree_rss_bytes": 643219456,
+      "sampled_compiler_rss_bytes": 603160576,
+      "timed_out": false
+    },
+    {
+      "name": "ordinary-build-unchanged",
+      "exit": 0,
+      "elapsed_seconds": 0.24780012500013981,
+      "darwin_max_process_rss_bytes": 168280064,
+      "sampled_tree_rss_bytes": 1376256,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "ordinary-generation-edited",
+      "exit": 0,
+      "elapsed_seconds": 1.4127567499999714,
+      "darwin_max_process_rss_bytes": 580730880,
+      "sampled_tree_rss_bytes": 641351680,
+      "sampled_compiler_rss_bytes": 580501504,
+      "timed_out": false
+    },
+    {
+      "name": "ordinary-build-edited",
+      "exit": 0,
+      "elapsed_seconds": 1.2002212080005847,
+      "darwin_max_process_rss_bytes": 614219776,
+      "sampled_tree_rss_bytes": 652148736,
+      "sampled_compiler_rss_bytes": 614219776,
+      "timed_out": false
+    },
+    {
+      "name": "ordinary-gopls-complete-1",
+      "exit": 0,
+      "elapsed_seconds": 1.756393792000381,
+      "darwin_max_process_rss_bytes": 472940544,
+      "sampled_tree_rss_bytes": 652591104,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "ordinary-gopls-hover-1",
+      "exit": 0,
+      "elapsed_seconds": 1.5392123340006947,
+      "darwin_max_process_rss_bytes": 237535232,
+      "sampled_tree_rss_bytes": 383533056,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "ordinary-gopls-complete-2",
+      "exit": 0,
+      "elapsed_seconds": 1.5431199579998065,
+      "darwin_max_process_rss_bytes": 368066560,
+      "sampled_tree_rss_bytes": 414466048,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "ordinary-gopls-hover-2",
+      "exit": 0,
+      "elapsed_seconds": 1.5346397920002346,
+      "darwin_max_process_rss_bytes": 136986624,
+      "sampled_tree_rss_bytes": 282984448,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "ordinary-gopls-complete-3",
+      "exit": 0,
+      "elapsed_seconds": 1.4826483750002808,
+      "darwin_max_process_rss_bytes": 382582784,
+      "sampled_tree_rss_bytes": 428949504,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "ordinary-gopls-hover-3",
+      "exit": 0,
+      "elapsed_seconds": 1.5142741250001563,
+      "darwin_max_process_rss_bytes": 236503040,
+      "sampled_tree_rss_bytes": 382681088,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "ordinary-imports",
+      "exit": 0,
+      "elapsed_seconds": 0.2519691250017786,
+      "darwin_max_process_rss_bytes": 33505280,
+      "sampled_tree_rss_bytes": 1425408,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "ordinary-link",
+      "exit": 0,
+      "elapsed_seconds": 0.2585950419997971,
+      "darwin_max_process_rss_bytes": 168509440,
+      "sampled_tree_rss_bytes": 1425408,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "ordinary-linked-smoke",
+      "exit": 0,
+      "elapsed_seconds": 0.4822609580005519,
+      "darwin_max_process_rss_bytes": 6307840,
+      "sampled_tree_rss_bytes": 1294336,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "configured-generation-cold",
+      "exit": 0,
+      "elapsed_seconds": 20.950470959000086,
+      "darwin_max_process_rss_bytes": 2150727680,
+      "sampled_tree_rss_bytes": 6398689280,
+      "sampled_compiler_rss_bytes": 2150727680,
+      "timed_out": false
+    },
+    {
+      "name": "configured-generation-unchanged",
+      "exit": 0,
+      "elapsed_seconds": 0.47587920799924177,
+      "darwin_max_process_rss_bytes": 57491456,
+      "sampled_tree_rss_bytes": 72204288,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "configured-build-cold",
+      "exit": 0,
+      "elapsed_seconds": 20.953081625000777,
+      "darwin_max_process_rss_bytes": 2273820672,
+      "sampled_tree_rss_bytes": 6612172800,
+      "sampled_compiler_rss_bytes": 2273820672,
+      "timed_out": false
+    },
+    {
+      "name": "configured-build-unchanged",
+      "exit": 0,
+      "elapsed_seconds": 1.6495379580010194,
+      "darwin_max_process_rss_bytes": 1468809216,
+      "sampled_tree_rss_bytes": 1509638144,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "configured-generation-edited",
+      "exit": 0,
+      "elapsed_seconds": 4.248516292000204,
+      "darwin_max_process_rss_bytes": 777076736,
+      "sampled_tree_rss_bytes": 851230720,
+      "sampled_compiler_rss_bytes": 776929280,
+      "timed_out": false
+    },
+    {
+      "name": "configured-build-edited",
+      "exit": 0,
+      "elapsed_seconds": 4.9743601250011125,
+      "darwin_max_process_rss_bytes": 1471283200,
+      "sampled_tree_rss_bytes": 1524940800,
+      "sampled_compiler_rss_bytes": 757972992,
+      "timed_out": false
+    },
+    {
+      "name": "configured-gopls-complete-1",
+      "exit": 0,
+      "elapsed_seconds": 2.2622277089994896,
+      "darwin_max_process_rss_bytes": 589889536,
+      "sampled_tree_rss_bytes": 605569024,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "configured-gopls-hover-1",
+      "exit": 0,
+      "elapsed_seconds": 1.7805792500003008,
+      "darwin_max_process_rss_bytes": 260243456,
+      "sampled_tree_rss_bytes": 404553728,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "configured-gopls-complete-2",
+      "exit": 0,
+      "elapsed_seconds": 1.7706297500008077,
+      "darwin_max_process_rss_bytes": 246022144,
+      "sampled_tree_rss_bytes": 292536320,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "configured-gopls-hover-2",
+      "exit": 0,
+      "elapsed_seconds": 1.7632189169999037,
+      "darwin_max_process_rss_bytes": 326746112,
+      "sampled_tree_rss_bytes": 414973952,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "configured-gopls-complete-3",
+      "exit": 0,
+      "elapsed_seconds": 1.7608630830000038,
+      "darwin_max_process_rss_bytes": 402817024,
+      "sampled_tree_rss_bytes": 495321088,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "configured-gopls-hover-3",
+      "exit": 0,
+      "elapsed_seconds": 1.7730429580005875,
+      "darwin_max_process_rss_bytes": 259833856,
+      "sampled_tree_rss_bytes": 304906240,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "configured-imports",
+      "exit": 0,
+      "elapsed_seconds": 0.2446103749989561,
+      "darwin_max_process_rss_bytes": 48136192,
+      "sampled_tree_rss_bytes": 1425408,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "configured-link",
+      "exit": 0,
+      "elapsed_seconds": 1.1803872919990681,
+      "darwin_max_process_rss_bytes": 1470038016,
+      "sampled_tree_rss_bytes": 1460256768,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "configured-linked-smoke",
+      "exit": 0,
+      "elapsed_seconds": 0.7430538749995321,
+      "darwin_max_process_rss_bytes": 24543232,
+      "sampled_tree_rss_bytes": 1294336,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "configured-consumer-test",
+      "exit": 0,
+      "elapsed_seconds": 4.828164333001041,
+      "darwin_max_process_rss_bytes": 1478213632,
+      "sampled_tree_rss_bytes": 1477181440,
+      "sampled_compiler_rss_bytes": 1244856320,
+      "timed_out": false
+    },
+    {
+      "name": "configured-runtime-benchmarks",
+      "exit": 0,
+      "elapsed_seconds": 26.50511995799934,
+      "darwin_max_process_rss_bytes": 1479606272,
+      "sampled_tree_rss_bytes": 1467547648,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "full-generation-cold",
+      "exit": 0,
+      "elapsed_seconds": 56.214816290999806,
+      "darwin_max_process_rss_bytes": 2788884480,
+      "sampled_tree_rss_bytes": 12082216960,
+      "sampled_compiler_rss_bytes": 2788884480,
+      "timed_out": false
+    },
+    {
+      "name": "full-generation-unchanged",
+      "exit": 0,
+      "elapsed_seconds": 1.1687743339989538,
+      "darwin_max_process_rss_bytes": 211386368,
+      "sampled_tree_rss_bytes": 191217664,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "full-build-cold",
+      "exit": 0,
+      "elapsed_seconds": 66.21584458299913,
+      "darwin_max_process_rss_bytes": 2872590336,
+      "sampled_tree_rss_bytes": 11254628352,
+      "sampled_compiler_rss_bytes": 2872590336,
+      "timed_out": false
+    },
+    {
+      "name": "full-build-unchanged",
+      "exit": 0,
+      "elapsed_seconds": 2.83777604199895,
+      "darwin_max_process_rss_bytes": 1540554752,
+      "sampled_tree_rss_bytes": 2903113728,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "full-generation-edited",
+      "exit": 0,
+      "elapsed_seconds": 4.990374708000672,
+      "darwin_max_process_rss_bytes": 735805440,
+      "sampled_tree_rss_bytes": 811057152,
+      "sampled_compiler_rss_bytes": 726269952,
+      "timed_out": false
+    },
+    {
+      "name": "full-build-edited",
+      "exit": 0,
+      "elapsed_seconds": 5.238739625001472,
+      "darwin_max_process_rss_bytes": 1538850816,
+      "sampled_tree_rss_bytes": 2174402560,
+      "sampled_compiler_rss_bytes": 796098560,
+      "timed_out": false
+    },
+    {
+      "name": "full-gopls-complete-1",
+      "exit": 0,
+      "elapsed_seconds": 2.486285000000862,
+      "darwin_max_process_rss_bytes": 1353793536,
+      "sampled_tree_rss_bytes": 1200488448,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "full-gopls-hover-1",
+      "exit": 0,
+      "elapsed_seconds": 2.2413507080000272,
+      "darwin_max_process_rss_bytes": 441499648,
+      "sampled_tree_rss_bytes": 488095744,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "full-gopls-complete-2",
+      "exit": 0,
+      "elapsed_seconds": 2.0288700420005625,
+      "darwin_max_process_rss_bytes": 435552256,
+      "sampled_tree_rss_bytes": 566050816,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "full-gopls-hover-2",
+      "exit": 0,
+      "elapsed_seconds": 2.0265232080000715,
+      "darwin_max_process_rss_bytes": 531464192,
+      "sampled_tree_rss_bytes": 424787968,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "full-gopls-complete-3",
+      "exit": 0,
+      "elapsed_seconds": 2.0232022079999297,
+      "darwin_max_process_rss_bytes": 567508992,
+      "sampled_tree_rss_bytes": 708034560,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "full-gopls-hover-3",
+      "exit": 0,
+      "elapsed_seconds": 2.014976292000938,
+      "darwin_max_process_rss_bytes": 440467456,
+      "sampled_tree_rss_bytes": 429735936,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "full-imports",
+      "exit": 0,
+      "elapsed_seconds": 0.2419758339983673,
+      "darwin_max_process_rss_bytes": 54329344,
+      "sampled_tree_rss_bytes": 1392640,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "vulnerability-tool",
+      "exit": 0,
+      "elapsed_seconds": 0.758212958000513,
+      "darwin_max_process_rss_bytes": 18284544,
+      "sampled_tree_rss_bytes": 28491776,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "framework-vulnerabilities",
+      "exit": 0,
+      "elapsed_seconds": 1.9169698750010866,
+      "darwin_max_process_rss_bytes": 2902753280,
+      "sampled_tree_rss_bytes": 2916646912,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    },
+    {
+      "name": "consumer-vulnerabilities",
+      "exit": 0,
+      "elapsed_seconds": 1.6587355000010575,
+      "darwin_max_process_rss_bytes": 3383967744,
+      "sampled_tree_rss_bytes": 2511749120,
+      "sampled_compiler_rss_bytes": 0,
+      "timed_out": false
+    }
+  ],
+  "runtime_benchmarks": [
+    {
+      "name": "BenchmarkStartup",
+      "samples": [
+        {
+          "ns_per_op": 333159.0,
+          "bytes_per_op": 333323,
+          "allocations_per_op": 2654
+        },
+        {
+          "ns_per_op": 333085.0,
+          "bytes_per_op": 333303,
+          "allocations_per_op": 2654
+        },
+        {
+          "ns_per_op": 334745.0,
+          "bytes_per_op": 333302,
+          "allocations_per_op": 2654
+        }
+      ],
+      "median": {
+        "ns_per_op": 333159.0,
+        "bytes_per_op": 333303,
+        "allocations_per_op": 2654
+      }
+    },
+    {
+      "name": "BenchmarkSelection/retained",
+      "samples": [
+        {
+          "ns_per_op": 1.755,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "ns_per_op": 1.764,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "ns_per_op": 1.763,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        }
+      ],
+      "median": {
+        "ns_per_op": 1.763,
+        "bytes_per_op": 0,
+        "allocations_per_op": 0
+      }
+    },
+    {
+      "name": "BenchmarkSelection/default",
+      "samples": [
+        {
+          "ns_per_op": 91.28,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "ns_per_op": 92.35,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "ns_per_op": 91.53,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        }
+      ],
+      "median": {
+        "ns_per_op": 91.53,
+        "bytes_per_op": 0,
+        "allocations_per_op": 0
+      }
+    },
+    {
+      "name": "BenchmarkSelection/named",
+      "samples": [
+        {
+          "ns_per_op": 90.49,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "ns_per_op": 90.93,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        },
+        {
+          "ns_per_op": 90.51,
+          "bytes_per_op": 0,
+          "allocations_per_op": 0
+        }
+      ],
+      "median": {
+        "ns_per_op": 90.51,
+        "bytes_per_op": 0,
+        "allocations_per_op": 0
+      }
+    },
+    {
+      "name": "BenchmarkHTTPHandler/direct",
+      "samples": [
+        {
+          "ns_per_op": 6398.0,
+          "bytes_per_op": 5243,
+          "allocations_per_op": 74
+        },
+        {
+          "ns_per_op": 6354.0,
+          "bytes_per_op": 5243,
+          "allocations_per_op": 74
+        },
+        {
+          "ns_per_op": 6342.0,
+          "bytes_per_op": 5242,
+          "allocations_per_op": 74
+        }
+      ],
+      "median": {
+        "ns_per_op": 6354.0,
+        "bytes_per_op": 5243,
+        "allocations_per_op": 74
+      }
+    },
+    {
+      "name": "BenchmarkHTTPHandler/configured",
+      "samples": [
+        {
+          "ns_per_op": 6317.0,
+          "bytes_per_op": 5242,
+          "allocations_per_op": 74
+        },
+        {
+          "ns_per_op": 6373.0,
+          "bytes_per_op": 5242,
+          "allocations_per_op": 74
+        },
+        {
+          "ns_per_op": 6344.0,
+          "bytes_per_op": 5243,
+          "allocations_per_op": 74
+        }
+      ],
+      "median": {
+        "ns_per_op": 6344.0,
+        "bytes_per_op": 5242,
+        "allocations_per_op": 74
+      }
+    },
+    {
+      "name": "BenchmarkHTTPRoundTrip",
+      "samples": [
+        {
+          "ns_per_op": 47028.0,
+          "bytes_per_op": 16829,
+          "allocations_per_op": 197
+        },
+        {
+          "ns_per_op": 47972.0,
+          "bytes_per_op": 16862,
+          "allocations_per_op": 197
+        },
+        {
+          "ns_per_op": 47435.0,
+          "bytes_per_op": 16838,
+          "allocations_per_op": 197
+        }
+      ],
+      "median": {
+        "ns_per_op": 47435.0,
+        "bytes_per_op": 16838,
+        "allocations_per_op": 197
+      }
+    }
+  ],
+  "security_review": {
+    "status": "reviewed",
+    "scanner": "govulncheck v1.8.0",
+    "database": "https://vuln.go.dev",
+    "database_updated": "2026-09-15T18:39:25Z",
+    "scopes": [
+      "packaged framework",
+      "full packaged consumer"
+    ],
+    "affected_package_findings": 0,
+    "affected_function_findings": 0,
+    "module_only_findings": [
+      {
+        "osv": "GO-2026-5932",
+        "trace": [
+          {
+            "module": "golang.org/x/crypto",
+            "version": "v0.57.0"
+          }
+        ]
+      },
+      {
+        "osv": "GO-2026-5932",
+        "trace": [
+          {
+            "module": "golang.org/x/crypto",
+            "version": "v0.57.0"
+          }
+        ]
+      }
+    ],
+    "disposition": "Same advisory as accepted foundation: unused OpenPGP packages within x/crypto v0.57.0. No affected imports in any measured profile. No fixed version is listed; existing required non-OpenPGP cryptography remains.",
+    "advisory": "https://vuln.go.dev/ID/GO-2026-5932.json",
+    "external_module_versions_and_notices_unchanged": true,
+    "selected_modules_with_notices": 60,
+    "external_modules": 57
+  },
+  "command_signal_checks": [
+    {
+      "command": "configured",
+      "http_status": 200,
+      "signal": "SIGINT",
+      "exit": 0,
+      "shutdown_seconds": 0.001541416999316425,
+      "configured_shutdown_timeout_seconds": 2,
+      "binary_sha256": "ef8be16d164a1b65fa72e5741e18d5e2789efcdb6629c21f69109c409b0ba023"
+    },
+    {
+      "command": "bootstrap",
+      "http_status": 404,
+      "signal": "SIGINT",
+      "exit": 0,
+      "shutdown_seconds": 0.0015491659996769158,
+      "configured_shutdown_timeout_seconds": 2,
+      "binary_sha256": "12c156cd007c3cfd451c5594ea9449fffd2f0bb706fe14e865abac98617bcde0"
+    }
+  ],
+  "package_safety": {
+    "archive_entries_checked": 2165,
+    "logs_checked": 125,
+    "configured_credentials_found": false,
+    "excluded_paths_found": false
+  },
+  "disk_before": {
+    "free": 75957383168,
+    "total": 994662584320,
+    "used": 918705201152
+  },
+  "disk_after": {
+    "free": 55281025024,
+    "total": 994662584320,
+    "used": 939381559296
+  },
+  "artifacts": [
+    {
+      "path": "github.com/weiloon1234/Foundry-Go",
+      "version": "v0.0.0-candidate.startup.5",
+      "go": "1.27.1",
+      "sha256": "c549ab87783165400bd37b964066931c1841688a8e05f2c5ddc3ae063940c88a",
+      "sum": "h1:xqM2kJ+nPvjVq7cLXTeKfFVchQzFxgGCb3aJptW/rwE=",
+      "file_count": 2151
+    },
+    {
+      "path": "foundry.test/pluginbase",
+      "version": "v0.0.0-candidate.startup.5",
+      "go": "1.27.1",
+      "sha256": "27c8f755334f14f56c937b9a4fd3ef6b7781ee47cd0e3d6516d4f8674fd79e16",
+      "sum": "h1:PVadPPL0HGtjm5PcmrGg/HyjVJGn8CV4pvDs2f1dWQQ=",
+      "file_count": 7
+    },
+    {
+      "path": "foundry.test/plugindep",
+      "version": "v0.0.0-candidate.startup.5",
+      "go": "1.27.1",
+      "sha256": "e9a3b90319236d7e03a26694a1206af8926eaa5490291f13161c5cb2b8c47992",
+      "sum": "h1:oQz4Ds83zCbpR7kvxnzONWsc4JJL2WkJpAG59dSMc/g=",
+      "file_count": 7
+    }
+  ]
+}

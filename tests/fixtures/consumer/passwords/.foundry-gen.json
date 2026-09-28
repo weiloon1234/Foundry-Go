@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "files": {
+    "account_foundry.gen.go": "35fb0be210fd973e66af200565ba4dc70e65185c2e40e2d3a376d76e4e8d506d",
+    "credential_projection_foundry.gen.go": "7d6e9068e30b506de6c0b6244d91fcf194ad58c47446afec029d54ca679f0da4",
+    "login_request_foundry.gen.go": "c64e3a4b97ce114099a4c496f48bf5f2eee1cf0fd6f8f6f07e39198b3732ce6d"
+  }
+}

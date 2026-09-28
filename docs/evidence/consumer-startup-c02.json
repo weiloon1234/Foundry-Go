@@ -1,0 +1,122 @@
+{
+  "milestone": "C02",
+  "status": "accepted",
+  "platform": "native macOS",
+  "scope": "Configured named/default PostgreSQL, Redis, storage and cache; persistent cache adapters and shared cloud credentials",
+  "runs": [
+    {
+      "label": "c02-generate4",
+      "command": "go run ./cmd/foundry generate --recursive --dir <cloud/credentials, infrastructure, tests/fixtures/consumer/configured>",
+      "exit": 0,
+      "elapsed_seconds": 4.0
+    },
+    {
+      "label": "c02-race2",
+      "command": "go test -race ./config/... ./cache/... ./internal/namedservice ./cloud/credentials ./storage/local ./storage/s3 ./infrastructure -count=1 -timeout=10m",
+      "exit": 0,
+      "elapsed_seconds": 27.0
+    },
+    {
+      "label": "c02-race3",
+      "command": "go test -race ./cache/file ./cache/postgres ./infrastructure ./cloud/credentials -count=1 -timeout=10m",
+      "exit": 0,
+      "elapsed_seconds": 5.9
+    },
+    {
+      "label": "c02-race4",
+      "command": "go test -race ./cloud/credentials ./cache/file ./infrastructure ./storage/s3 ./email -count=1 -timeout=10m",
+      "exit": 0,
+      "elapsed_seconds": 11.3
+    },
+    {
+      "label": "c02-full2",
+      "command": "make GO=/usr/local/go/bin/go verify",
+      "exit": 0,
+      "elapsed_seconds": 686.3
+    }
+  ],
+  "checks": [
+    "Immutable typed registries: default/named identity, missing names and independent applications",
+    "Pure graph/configuration validation, failed-start rollback and reverse resource cleanup",
+    "Memory/Redis/file/PostgreSQL cache contracts, native service integration and file process concurrency",
+    "Credential rotation/redaction plus S3/R2/SES protocol tests through the framework credential boundary",
+    "Independent configured consumer, wrong-service-name compiler failures and real gopls selection/config completion",
+    "Full root and independent fixture tests/vet, deterministic generation, documentation and release-tool checks"
+  ],
+  "audit_fixes": [
+    "Centralized filesystem process locking and persistent cache atomic/capacity semantics",
+    "Streamed file metadata/integrity operations and PostgreSQL metadata-only expiry inspection",
+    "Cancellation during contended file startup and explicit invalid zero-value lifecycle",
+    "Redacted private credential-source and configuration-plan formatting"
+  ],
+  "changed_go_sources_sha256": {
+    "Makefile": "97cbd8a1c3730ee81c34e4fdcae357437771b1278974f6d103037d5f0e259270",
+    "cache/capabilities.go": "c54f16127aecc7a9f7443b5b205b79abada5c0538746cfb90e1ac8f0881cfb54",
+    "cache/file/backend.go": "7207e14287b5e918dcd442da343d8fe9a4bea3c7bc8000b757b6f7a278ac9a54",
+    "cache/file/backend_test.go": "28c565781b6a2da281bff5587d4e851aaa3053bc00649254c8607f6cfe708a0b",
+    "cache/file/record.go": "0cab8d12b0ffa885e3356b9778a0cae07961fa0c6cee292969251ed00a80c703",
+    "cache/named.go": "5783f6c5a007df57fc6385c0d475f06652a055f2791312c9a4fa14fccceca0db",
+    "cache/postgres/backend.go": "d2fa709ffd868f15b778f0b8ff56d646d57a2081aa3ee0c271add818bc23578e",
+    "cache/postgres/backend_test.go": "2732dc689dc2c88bf7be98450bb1f24002eb1cc99c535e0f4f01f534f276e943",
+    "cache/postgres/migrations.go": "dddd6f7a805b440f4d116e3681700b6ea94d0ec8abd18e5033bef024f6bfa5c6",
+    "cloud/credentials/provider.go": "8701a698797565ce8dd3ecf6816c72e2d7d930d5408e60f9f7922b6a856e6bf2",
+    "cloud/credentials/provider_test.go": "a7e3c71ae9d257019a9d02e27ab6bebf370fe9974ce791fc2f3e1c42061ad881",
+    "cloud/credentials/settings_foundry.gen.go": "ea5445185594c85a263c5d23f252fcc4731e45c9e0776fa4f64c0703ddfff8d3",
+    "config/table.go": "019c10f6534458a3df1b111d21da0d9c1a1bd7d29ca74919cea0abad67e9fd43",
+    "config/table_test.go": "b4a31141d0825b7cd283af96983e83a3ec9700518f128c9c67883330b36cddb5",
+    "config/toml/decode.go": "b41fdb3ec342e957dbd41fd4d79ff0421b62465b8f01e753ef1867b962e70441",
+    "database/named.go": "b65733817d651e883a33d8399d30223483d9df53b667fab3ac0bcfb22e8ea0a9",
+    "email/providers_test.go": "ae26254310fd04a0e1c5f3d10e80a79fc783dd95ca0428224350da82e46df28b",
+    "email/ses/credentials.go": "95c86167cf9fff1c9826c122e11f1a0a45e4d8ff2288d0f2e559c48801333454",
+    "infrastructure/cache_providers.go": "dc28980589ec610de8d0d4ee48ab766e767abab0fc30cc5d7da85ff05a6d22ae",
+    "infrastructure/cache_settings.go": "0d5ae5630e9a40c72017f7fbd7ddb69a850326657ee9341604783a059e7cd582",
+    "infrastructure/cache_settings_foundry.gen.go": "e162d5dda9291dddfd2e2a442ed06e3c1a32a67981532aaca8e8bd49fa6a70f9",
+    "infrastructure/connection_settings_foundry.gen.go": "4d2293903a7cb54540a975f3c20c86df6ad5059b149880e8f85cf529a7615139",
+    "infrastructure/database_settings.go": "3fef57b615fe4d6b341fe27354078fe6a58edb2886285eca7136a717e0725a79",
+    "infrastructure/disk_settings_foundry.gen.go": "16b2c7256c78b4a1a1fd18fad819816cd308bc3ca42f0997f8878f8d51a37432",
+    "infrastructure/infrastructure_test.go": "58595c744d9d803756b662d62915292717ff13f6a292d66e6481f16cef77b3b6",
+    "infrastructure/integration_test.go": "4ca9f3a025eaabbc1ff014d247e85221f5bcd8f11a6ada2014fa4bd7a1b56196",
+    "infrastructure/providers.go": "b4922fbf7df31bd9a881b46f9ccf30196b41a226fd3e47c55c85f08bb34a7993",
+    "infrastructure/redis_connection_settings_foundry.gen.go": "33630198e9c065b1b11820eb00fd9503a723acb19cd92b6cabbdd3b2b973c3c2",
+    "infrastructure/redis_settings.go": "7277cff401e09950cf2b73c346c01b67296fc653532b8d277bd2004752ce9b65",
+    "infrastructure/services.go": "7f828a3640513acc5dc798617f67f194ac27a4dd967ed8811bbbdc689a14dadf",
+    "infrastructure/settings.go": "ce991ef650cc6669cfa86548787c5e3aba4c96fb70727de74a54f225cd96d61c",
+    "infrastructure/settings_foundry.gen.go": "35c36191daef66e1b3709977023ba4a3700228fce621770c320428e83d554be4",
+    "infrastructure/storage_settings.go": "b2dcdf5d289bfcfd61c93ac85c71c17311701a0873f1f6f2197d78d055104dfe",
+    "internal/agent/gopls_acceptance_test.go": "b6508d9d686fbefd73d21eb5dbe253b6efbc0461445819d3cfc6c89be85fa52b",
+    "internal/awscredentials/provider.go": "17ff631d1cb0132d103e2b6d2eead1d121fb77989501cfcb4615871a79272431",
+    "internal/cacheatomic/backend.go": "4ce13dd35efa15ae5b7f8e52c3571044d077f7a091874fa4fd8034b4b7a7bd70",
+    "internal/cacheatomic/limits.go": "2ac02d251a94edba5a8cc03af54b61d94c0d468aa580d6f731a502723d59d6b1",
+    "internal/cachetest/basic_entries.go": "3ffd036dea1a86ca27091902724956950361884c0c7051d1052abc7d29e76422",
+    "internal/filelock/acquire.go": "0d1d6d7593f177b9b70f4387ef8e292e190c5e1ed76b35b2e1f3aaafdec2cc64",
+    "internal/filelock/lock_other.go": "d80e5cf68bcf9df6e4c1a8abb0ec87e063c3d1081055e8518b0c9790714d957b",
+    "internal/filelock/lock_unix.go": "77dac69c2a4dd7bb5472cb17f969fc1b93798a4688fe7a8aeebf96c4dab04e1b",
+    "internal/namedservice/registry.go": "880a35819e9e8f06a11d9fd2864dbe862310107a86772ea94317fb3174e9a598",
+    "internal/namedservice/registry_test.go": "dd4c44453fb4425d54ae3da6d737dd193e542fa36901a9d97cca0409285a18fb",
+    "redis/named.go": "1ec9ddcd4aa07b768e382a8c16d2d4a3aa456fb7bd3595fb3637ba23dfd96568",
+    "storage/local/backend.go": "8eeaf1db442c397798ed9ef9db9e853afb39f4ab21b03c19db3baa94e34f0712",
+    "storage/local/lock.go": "92a298c5c8194a7da54d65b629631cb10009d73bb1904e7eee1774fb1d1b389e",
+    "storage/registry.go": "8f47215f5352084f92e34117555a567f4dee3626601585f0e26353d4018121fd",
+    "storage/s3/credentials.go": "13d880f9d5fe3c5392087fccf6373ed450bc0ef05024f50da202418e5724de3c",
+    "storage/s3/module.go": "ef4841ffdfddaafa3f3dcf6d27b0e8ea3cbafd8bfd7e0699ebd8fd19384ad25f",
+    "storage/s3/transfer_test.go": "644805750130caa0c373caee7296095ff5e93388ae069e4fef83c5e6e611f575",
+    "storage/s3/url_test.go": "d2093af604c0a61d330cdd6fea47d81d885cf5045e82a546cc83fa39216c5673",
+    "tests/fixtures/consumer/configured/settings.go": "ba7f3a45b8a780976e382a3b4f378a948f165cc5756c05cb129ac0ce422bfe6e",
+    "tests/fixtures/consumer/configured/settings_foundry.gen.go": "2bc25d4f22733329660a1f999f79fe43df5c49488fd481737b7a4b1f6ead3715",
+    "tests/fixtures/consumer/configured/settings_test.go": "3020023c8a44f0879af74c7c90bb86b3b2810b23910745a73aaa7c595749b446",
+    "tests/fixtures/consumer/testdata/compilefail/named_cache_store/invalid.go": "fd949abad99b88d90d3b996003855c3b429cbda9d190a0cafcd40427d4c6696f",
+    "tests/fixtures/consumer/testdata/compilefail/named_config_collection/invalid.go": "8c53723e5cd08b98b9bf43634a314e54ddd01b19a06191b7f204bcb53b30b711",
+    "tests/fixtures/consumer/testdata/compilefail/named_database_connection/invalid.go": "434aa95e6a17c1b9a742f73839013ceefaa77fe8167aa68df84bef58cb5d4d0b",
+    "tests/fixtures/consumer/types_test.go": "4bcdf01cd9d1ad7ea9421079ea4333d647fc03447c0509782ab980910a9fa147"
+  },
+  "deleted_go_sources": [
+    "storage/local/lock_other.go",
+    "storage/local/lock_unix.go"
+  ],
+  "limitations": [
+    "The first full run was interrupted by a device restart; c02-full2 is the completed replacement.",
+    "Cloud checks use existing wire/protocol suites; this is not a new live-cloud certification.",
+    "File/PostgreSQL caches do not claim tags, atomic batches or distributed fill leases; their documented bounds and shared-storage constraints apply.",
+    "Application/HTTP assembly, remaining service families and the final framework-wide audit remain C03-C05 work."
+  ]
+}

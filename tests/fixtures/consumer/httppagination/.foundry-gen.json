@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "files": {
+    "member_filters_foundry.gen.go": "c0f426d5943a34d009637ef98371204e4fa653331e040c2fecffaced3fa61388",
+    "member_response_foundry.gen.go": "0337eb8dafa4afaa92ea9bd7ef4c868f5a77fa324507d32b53c0f7fcdbb0a724"
+  }
+}

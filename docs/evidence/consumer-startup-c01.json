@@ -1,0 +1,60 @@
+{
+  "milestone": "C01",
+  "status": "accepted",
+  "platform": "native macOS",
+  "scope": "Generated typed configuration, shared codecs and bounded TOML file loading",
+  "runs": [
+    {
+      "label": "c01-generate",
+      "command": "go run ./cmd/foundry generate --dir tests/fixtures/consumer/startupconfig",
+      "exit": 0,
+      "elapsed_seconds": 7.0
+    },
+    {
+      "label": "c01-race",
+      "command": "go test -race ./config/... ./internal/generate -run Test(Scalar|LoadFile|GeneratedConfiguration|InvalidConfiguration|ConfigurationGeneration|ConcurrentLoads) -count=1 -timeout=15m",
+      "exit": 0,
+      "elapsed_seconds": 13.4
+    },
+    {
+      "label": "c01-full",
+      "command": "make GO=/usr/local/go/bin/go verify",
+      "exit": 0,
+      "elapsed_seconds": 758.0
+    }
+  ],
+  "checks": [
+    "real gopls nested key and override completion/hover/definition",
+    "independent TOML/environment/typed-override consumer",
+    "wrong generated key owner/value compiler rejection",
+    "full existing native PostgreSQL/Redis consumer gate",
+    "deterministic generation and read-only stale checks",
+    "configuration and generator race checks"
+  ],
+  "changed_go_sources_sha256": {
+    "config/scalar.go": "7fa658e128aa60acc7c6a0785a207939293e0303458b200ca62df2cbbe120c30",
+    "config/scalar_test.go": "41ea56351aeeb113f36134719c3a0ce0d8bb76024d4d4c84b146cd5d186870ac",
+    "config/schema.go": "4fecfae541e7b9c7d3e955d576bac30120effb43ecfcad51d5189130d20aa09a",
+    "config/toml/file.go": "c3e069a7678434e819a9230e47e6a326c9d9f719b6fabbee32a9bb5ec5b154aa",
+    "config/toml/file_test.go": "89dde536e0b2462ddf7a0216e8f533525f620f73fcf35050346c3e8a6618b736",
+    "internal/agent/gopls_acceptance_test.go": "2280777aecbc7ee5fa91895d34e7c0aa1f078415bb1893690e4e81f7d9ab88e5",
+    "internal/generate/config_test.go": "0af22e95bd791e9b6beae34fd47e8083a8dfebbf53fb1fd09e7aff3893ebcb09",
+    "internal/generate/discover.go": "1d3ab03a6f8ca30412667c9d7e14f49cf01f44fa70f2058fd38cacc3e1c6f88d",
+    "internal/generate/discover_config.go": "4816d349727f2bc8e12cf59dd9a743fe083b4962c64a66a8b2dfdb24f3b40572",
+    "internal/generate/emit.go": "62c282ec50e5e4e492b2522af8c052ea85a14d91ff46a5146b21abb016971098",
+    "internal/generate/emit_config.go": "91f2e1ef7500b2da6d17825c68a2921deee0deb30c957df287d026882777cc67",
+    "internal/generate/field_documentation.go": "aab35002b11c6a8634c5d357e2f53ca92278d4571a997574a8130774277037fc",
+    "internal/generate/graph.go": "c737d56b718db8095f9ba5db13112a2fe1d3caca34a254ae238082b37be7995a",
+    "tests/fixtures/consumer/startupconfig/environment_foundry.gen.go": "3bc724aad30b64692ab707e5af5a989c186f1c7277f96a5a1bad7a0ade37732a",
+    "tests/fixtures/consumer/startupconfig/settings.go": "38e3d266a2ca32ea06c45f4413b1a75ee95bc69bb20cb7474fca37d9e27352f2",
+    "tests/fixtures/consumer/startupconfig/settings_foundry.gen.go": "cfe2895c4c80b83822b50fac910f26e94fa029e2c26698dcf18d6aa79f9f22d6",
+    "tests/fixtures/consumer/startupconfig/settings_test.go": "26d057aeeb907d1c7ad72c93bc3b0f33de7ae2a21c45ffd2d58d9935ace5669a",
+    "tests/fixtures/consumer/testdata/compilefail/generated_config_owner/invalid.go": "74f339cf978f96f9e1f682d80cdbd49d70d72ef1af804c9bce16c8f8f9565809",
+    "tests/fixtures/consumer/testdata/compilefail/generated_config_value/invalid.go": "8398dee7d3c8fbf1e884884e3bff054c41d00f9ca15792900d9c8285eb8cf3bf",
+    "tests/fixtures/consumer/types_test.go": "f98a516a3c0596ca6ed706ee4ee7b2d0dc4084563058580cb6af572b1f54d8ce"
+  },
+  "limitations": [
+    "Configured service assembly is C02-C04 work and is not accepted by this evidence.",
+    "Explicit JSON leaves retain the existing JSON codec representation."
+  ]
+}

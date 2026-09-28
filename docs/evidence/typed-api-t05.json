@@ -1,0 +1,202 @@
+{
+  "acceptance": {
+    "all_connections_reconnect_reset_no_public_fallback": [
+      "database/postgres/schema.go",
+      "database/postgres/schema_postgres_test.go"
+    ],
+    "cleanup_and_cancellation": [
+      "testkit/postgres/application/lifecycle.go",
+      "testkit/postgres/application/lifecycle_postgres_test.go",
+      "testkit/postgres/application/environment_test.go",
+      "database/postgres/schema_postgres_test.go"
+    ],
+    "compiler_and_real_editor": [
+      "tests/fixtures/consumer/types_test.go",
+      "internal/agent/gopls_acceptance_test.go"
+    ],
+    "named_default_read_scopes_and_bounds": [
+      "testkit/postgres/application/environment.go",
+      "testkit/postgres/application/environment_test.go",
+      "tests/fixtures/consumer/isolatedhttp/isolation_test.go"
+    ],
+    "real_http_commits_callbacks_outbox_and_retained_data": [
+      "tests/fixtures/consumer/isolatedhttp/application.go",
+      "tests/fixtures/consumer/isolatedhttp/isolation_test.go"
+    ],
+    "shared_feature_declarations_and_schema_conflicts": [
+      "application/persistence.go",
+      "application/database_scopes_test.go",
+      "testkit/postgres/application/lifecycle_postgres_test.go"
+    ]
+  },
+  "batched_fixes": [
+    "Matched the consumer generated query name to its table-derived public API.",
+    "Returned startup/cleanup failure once, without re-reporting an already-owned failure from test cleanup.",
+    "Awaited the production managed publisher instead of racing it with a manual publication.",
+    "Separated application helpers from lightweight testkit/postgres after full vet found low-level test import cycles."
+  ],
+  "checks": {
+    "t05-compiler-r3": {
+      "command": "consumer: go test . -run TestInvalidPublicContractsFailCompilation/scoped_ -count=1",
+      "elapsed_seconds": 8.2,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t05-compiler-r3/verify.log"
+    },
+    "t05-consumer-r3": {
+      "command": "consumer: go test -race ./isolatedhttp ./bootstrap -count=1 -v",
+      "elapsed_seconds": 20.9,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t05-consumer-r3/verify.log"
+    },
+    "t05-cost-r1": {
+      "command": "go test ./database/postgres -run ^$ -bench BenchmarkPostgresSchemaCheckout -benchtime=300ms -count=3",
+      "elapsed_seconds": 4.0,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t05-cost-r1/verify.log"
+    },
+    "t05-docs-r3": {
+      "command": "make docs-check",
+      "elapsed_seconds": 0.1,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t05-docs-r3/verify.log"
+    },
+    "t05-editor-r3": {
+      "command": "go test ./internal/agent -run TestRealGoplsConsumer/scoped- -count=1",
+      "elapsed_seconds": 3.1,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t05-editor-r3/verify.log"
+    },
+    "t05-full-r2": {
+      "command": "make verify",
+      "elapsed_seconds": 691.7,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t05-full-r2/verify.log"
+    },
+    "t05-generate-r2": {
+      "command": "make generate GENERATION_DIRS=infrastructure application tests/fixtures/consumer",
+      "elapsed_seconds": 3.3,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t05-generate-r2/verify.log"
+    },
+    "t05-runtime-r3": {
+      "command": "go test -race ./database/postgres ./application ./infrastructure ./testkit/postgres/... ./testkit/http -count=1",
+      "elapsed_seconds": 8.7,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t05-runtime-r3/verify.log"
+    }
+  },
+  "date": "2026-09-18",
+  "final_source_sha256": {
+    "application/database_scopes.go": "1a72da6208aaa2cc72d9b8bae5970035059fa31d388a3f5536ad24c6debe45c0",
+    "application/database_scopes_test.go": "0cf2023d7604b083af978dfb79a08d40004485d46f7e681f7ec8ff192724df63",
+    "application/feature_validation.go": "feddddfc57bba3c0a2cb72d595474c3f447be667e30b7465c28cd496aecbc6f6",
+    "application/migrations.go": "bf4a86c616791d97ee9479c9b5afbfeba77a0a0a25c04339601532672161b4e6",
+    "application/persistence.go": "510edad5822fec77ac4b3b6569e5e7eceb15ae6ad634268b2815ac389e02d27d",
+    "database/postgres/adapter.go": "698a23f36ab09e7af2ef3841fc91990a5f98e2d2e03e36c46060ebad3351c482",
+    "database/postgres/config.go": "074d00cde923ca085a9bdc7c1629f03cb97a49ddb28432a070923bc202d4061a",
+    "database/postgres/schema.go": "79cc53ce8695bf41d177d68263d235adf2955827273d1c11b6c764628303ceda",
+    "database/postgres/schema_postgres_test.go": "e81e67f6c364b9735f1280a5c9f564a9cb0ac397d7437b690eea27ef7e5958cb",
+    "database/postgres/schema_test.go": "1758babf8c96e1875bbf762202f54c3007fc4e3f3005c814f51641e088078fca",
+    "infrastructure/cache_providers.go": "d61643a9cf8a2e317945fe1cd64832896228a54f6702d7484a72ba8adca37e54",
+    "infrastructure/connection_settings_foundry.gen.go": "55e46c104e479e71b6564d8b6bd7790f07c8e6aea80f4ada8eccea85e78f368f",
+    "infrastructure/database_scopes.go": "86838b4dddbd47300e5128e0f7f33f73f3199d12df583aaf81f030a406b30351",
+    "infrastructure/database_settings.go": "29d084744360e5ef8f78a5604b2589ee84ecad0d6be1654d741ffe86383f0e7f",
+    "internal/agent/gopls_acceptance_test.go": "94f6a0c96b3af22abd4efd02423109f858dd4df6d3de335c3a591c5e6371d454",
+    "testkit/http/client.go": "1fc21d3750c4d6c15886927cbc6c8cbb8f9a7874e80f75d5f599136396f0191c",
+    "testkit/postgres/application/environment.go": "94841c920275806ce35dc6ffb50fc1a0b8ce21858f08399728f5a90e001414d1",
+    "testkit/postgres/application/environment_test.go": "0b2fd1ad36d4321c678478ddb87e7013deb0c270bdc791844f21236d56bd24e5",
+    "testkit/postgres/application/lifecycle.go": "456e4694e83bae33b3b616f4523d052436ba18bbeed87900a2a43f5b68a02203",
+    "testkit/postgres/application/lifecycle_postgres_test.go": "dfbdc11afaf6a60f32cd912ff8bdbfdc0680a79b8e32b62045a923e322292912",
+    "testkit/postgres/scope.go": "2b6a4904146773021b46cd718c8d9e601fb880a195832f7b3c4e8320a7b36336",
+    "tests/fixtures/consumer/isolatedhttp/application.go": "922d727009cc790f62e24fdefb66d3707853856bcd070ee6b6de117371b285d5",
+    "tests/fixtures/consumer/isolatedhttp/isolation_test.go": "419c61dd8346d1a33f28e5ca0c0c7cc1961e54d591ceacfa065e01dcb3b43f59",
+    "tests/fixtures/consumer/isolatedhttp/models.go": "997a45cbe6dc0fad3fd308d3458adbcf148aab701bb926d37dad9a6450761a2f",
+    "tests/fixtures/consumer/isolatedhttp/receipt_foundry.gen.go": "08eecd74807d598a1de44e68992d9c61088836977bd6e9963d8112d57928f7d5",
+    "tests/fixtures/consumer/isolatedhttp/record_foundry.gen.go": "c3feec2ce900caf2e6d28f0f47b6cf8ea7bdb0302d71efe0887fd61e35de6349",
+    "tests/fixtures/consumer/isolatedhttp/record_path_foundry.gen.go": "345e9d26a8a22817cef7ee7581169c4b7c7d0cfa6bb478cec59bacb706667cf0",
+    "tests/fixtures/consumer/isolatedhttp/submission_foundry.gen.go": "693605a0658bae4395782a6064275d5e1427450c443932746ecde4ff96b06dc2",
+    "tests/fixtures/consumer/testdata/compilefail/scoped_connection_name/invalid.go": "5ee8c76bf849e6e2a7a38e60602485d1a0db9a298002243da8d3096836bf33d4",
+    "tests/fixtures/consumer/testdata/compilefail/scoped_database_settings/invalid.go": "e52e57c9d9b7d3046d784fd44df7cdcf9e0511104cdddc884927d82da146586d",
+    "tests/fixtures/consumer/types_test.go": "2e740b71d59ba507428da8718b3af7878a3db73bb8bb64282c88f0672f8177b3"
+  },
+  "go": "go1.27.1 darwin/arm64",
+  "limits": [
+    "Schema isolation is not a security sandbox for fully qualified SQL or shared roles.",
+    "Every selected endpoint targets the opted-in test database; read selection does not simulate replica lag.",
+    "Each test endpoint has two connections; helpers retain the global ceiling.",
+    "Schema/UTC restore happens at checkout; custom session state such as advisory locks still uses Session.Discard.",
+    "Temporary session objects naturally expire when their connection closes; persistent schemas, history and data are retained.",
+    "Other resource families still need their explicit independent namespaces/test directories.",
+    "T06\u2013T07 and the integrated final audit remain outstanding."
+  ],
+  "milestone": "T05",
+  "native_cost": {
+    "checkout_medians": {
+      "Scoped": {
+        "allocs_per_op": 57,
+        "bytes_per_op": 3095,
+        "ns_per_op": 75070
+      },
+      "Unscoped": {
+        "allocs_per_op": 32,
+        "bytes_per_op": 1819,
+        "ns_per_op": 25487
+      }
+    },
+    "checkout_samples": {
+      "Scoped": [
+        {
+          "allocs_per_op": 57,
+          "bytes_per_op": 3095,
+          "ns_per_op": 74974
+        },
+        {
+          "allocs_per_op": 57,
+          "bytes_per_op": 3095,
+          "ns_per_op": 75547
+        },
+        {
+          "allocs_per_op": 57,
+          "bytes_per_op": 3095,
+          "ns_per_op": 75070
+        }
+      ],
+      "Unscoped": [
+        {
+          "allocs_per_op": 32,
+          "bytes_per_op": 1826,
+          "ns_per_op": 26962
+        },
+        {
+          "allocs_per_op": 32,
+          "bytes_per_op": 1819,
+          "ns_per_op": 25487
+        },
+        {
+          "allocs_per_op": 32,
+          "bytes_per_op": 1816,
+          "ns_per_op": 25409
+        }
+      ]
+    },
+    "configured_connections_per_app_ceiling": 10,
+    "migration_preparation_ms": [
+      38.372875,
+      38.681833
+    ],
+    "notes": [
+      "Three repeated native local SELECT 1 samples, including connection checkout and row scanning, without concurrent verification.",
+      "Scoped checkout adds one driver round trip; this is not a whole-application throughput comparison.",
+      "Two complete HTTP fixtures ran concurrently with independent retained schemas, real commits and managed publishers."
+    ],
+    "observed_connections_per_app": {
+      "archive": 1,
+      "main": 3,
+      "reporting": 2
+    },
+    "setup_ms": [
+      75.996959,
+      76.42275
+    ]
+  }
+}

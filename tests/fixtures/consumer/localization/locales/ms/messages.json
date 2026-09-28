@@ -1,0 +1,6 @@
+{
+  "welcome": "Helo {{name}}",
+  "cart": {"items": {"$plural": {"other": "{{name}} mempunyai {{count}} item"}}},
+  "fields": {"name": "Nama"},
+  "enum": {"localization": {"status": {"draft": "Draf", "ready": "Sedia"}}}
+}

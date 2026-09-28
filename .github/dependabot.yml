@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directories:
+      - '/'
+      - '/tools/release'
+      - '/tests/fixtures/consumer'
+      - '/tests/fixtures/plugin_base'
+      - '/tests/fixtures/plugin_dep'
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: '/tools/typescript'
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3

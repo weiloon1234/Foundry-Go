@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "files": {
+    "export_members_foundry.gen.go": "7bbc5625f43413539cbbbd277783505ae33ba8fa42fe01eba443a0aa9a8724c0",
+    "member_foundry.gen.go": "624164d9daf84d811dbfbcf13bf4b4f726624fda17cdf12ac646e8517074d266",
+    "member_row_foundry.gen.go": "dc516388d701c866f039423ed7b816cb4767f9ff2c901635ef00dcb6d104664e",
+    "member_total_foundry.gen.go": "c2b327af0ae5bf17bcfdcc0711da38b851c8b1bd2b3b57cce0636ae9353d8de3",
+    "operator_foundry.gen.go": "630c6ce71b0d359b4e44e49347ec474f16a4a83991925de67fda330ec3b8e074",
+    "order_foundry.gen.go": "6472bc869b0787c9c0eb432aafd72e6646f204c0c942cc16742eb196d6ed5940",
+    "order_row_foundry.gen.go": "0dc5dbbd61d4a58d96ea86ab1c4424c380432be6dec8fc29fa83b5021f029bc8",
+    "state_foundry.gen.go": "cf381576748922b288390c5df72e9d50b6e9fca874722133321c8e35839e9f23"
+  }
+}

@@ -1,0 +1,1471 @@
+{
+  "acceptance": {
+    "bounded_decoding_and_safe_failures": [
+      "contract/json_union_test.go::TestUnionWireRejectionsAndLimits",
+      "contract/json_union_test.go::TestUnionDepthIsBoundedBeforeNativeDecode",
+      "contract/json_union_test.go::TestUnionNestedCodecFailureRemainsInternal",
+      "contract/json_union_test.go::TestUnionDecodedPayloadStaysByteBounded",
+      "contract/json_union_test.go::FuzzUnionJSON",
+      "http/endpoint_response_test.go::TestTypedEndpointPreparesResponseBeforeCommit"
+    ],
+    "compiler_rejection_and_editor": [
+      "tests/fixtures/consumer/testdata/compilefail/union_constructor/invalid.go",
+      "tests/fixtures/consumer/testdata/compilefail/union_owner/invalid.go",
+      "tests/fixtures/consumer/testdata/compilefail/union_handler/invalid.go",
+      "tests/fixtures/consumer/testdata/compilefail/union_visitor/invalid.go",
+      "internal/agent/gopls_acceptance_test.go::TestRealGoplsConsumer/union-constructor",
+      "internal/agent/gopls_acceptance_test.go::TestRealGoplsConsumer/union-accessor",
+      "internal/agent/gopls_acceptance_test.go::TestRealGoplsConsumer/union-payload"
+    ],
+    "cost_and_variant_scaling": [
+      "contract/json_union_test.go::BenchmarkUnionDispatch",
+      "tests/fixtures/consumer/unions/payment_test.go::BenchmarkUnionLifecycle",
+      "cost.profiles",
+      "cost.commands"
+    ],
+    "full_existing_framework_consumer_and_plugin_regressions": [
+      "checks.t02-full-r4"
+    ],
+    "generation_schema_identity_and_recursion": [
+      "internal/generate/union_test.go::TestUnionFreshGenerationRecursionAndRecovery",
+      "internal/generate/union_test.go::TestUnionRejectsInvalidDeclarationsAndCalls",
+      "internal/generate/union_test.go::TestUnionExecutableIdentity",
+      "contract/json_union_test.go::TestUnionSchemaOwnershipAndRejections"
+    ],
+    "go_and_typescript_http_all_variants_nested_presence_and_generic_envelopes": [
+      "tests/fixtures/consumer/unions/payment_test.go::TestUnionRealHTTPAndExporters",
+      "tests/fixtures/consumer/clientcontracts/contracts_test.go::TestTypeScriptClientAgainstRealHTTPAndWebSocket",
+      "tests/fixtures/consumer/clientcontracts/testdata/runtime.mjs",
+      "tests/fixtures/consumer/clientcontracts/testdata/types.ts"
+    ],
+    "output_manifest_exporters_and_older_clients": [
+      "tests/fixtures/consumer/unions/payment_test.go::TestUnionRealHTTPAndExporters",
+      "tests/fixtures/consumer/clientcontracts/contracts_test.go",
+      "tests/fixtures/consumer/clientcontracts/testdata/runtime.mjs"
+    ],
+    "typed_union_api_and_ownership": [
+      "tests/fixtures/consumer/unions/payment.go",
+      "tests/fixtures/consumer/unions/payment_test.go::TestUnionConstructorsAccessorsAndVisitor",
+      "contract/json_union_test.go::TestUnionSchemaOwnershipAndRejections"
+    ]
+  },
+  "checks": {
+    "t02-consumer-r1": {
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-timeout=20m",
+        "./unions",
+        "./genericdto",
+        "./clientcontracts",
+        ".",
+        "-run",
+        "^(TestUnion.*|TestGenericHTTPContractAndSharedInstances|TestConsumerClientManifestKeepsRealFeatureBoundaries|TestTypeScriptClientAgainstRealHTTPAndWebSocket|TestInvalidPublicContractsFailCompilation)$/^union_"
+      ],
+      "elapsed_seconds": 36.4,
+      "exit": 0,
+      "location": "consumer",
+      "log_sha256": "b48f86fe554e07aa1e6feef8bc35125de12d3ce50be8ac6c52711aa452950539"
+    },
+    "t02-consumer-r2": {
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-timeout=20m",
+        "./unions",
+        "./genericdto",
+        "./clientcontracts"
+      ],
+      "elapsed_seconds": 39.0,
+      "exit": 0,
+      "location": "consumer",
+      "log_sha256": "5435c0f689175698ca254057947aa485f5b7b84cf7a52110537c7841cf5b3a23"
+    },
+    "t02-consumer-r3": {
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-timeout=20m",
+        "./unions",
+        "./genericdto",
+        "./clientcontracts"
+      ],
+      "elapsed_seconds": 33.0,
+      "exit": 0,
+      "location": "consumer",
+      "log_sha256": "a8cbc560fb56059a79f4dc668b6e01aef32c35dae272f7977b31ef0d33f35a73"
+    },
+    "t02-docs-r1": {
+      "argv": [
+        "go",
+        "run",
+        "./internal/cmd/checkdocs"
+      ],
+      "elapsed_seconds": 0.1,
+      "exit": 0,
+      "location": "root",
+      "log_sha256": "7c5550f7600584cc277927ecef05090b2aa199cba5628e71941a567a2afec09f"
+    },
+    "t02-editor-r1": {
+      "argv": [
+        "go",
+        "test",
+        "-timeout=20m",
+        "./internal/agent",
+        "-run",
+        "^TestRealGoplsConsumer$/^union-"
+      ],
+      "elapsed_seconds": 3.2,
+      "exit": 0,
+      "location": "root",
+      "log_sha256": "b6f99aeacb277dcc4ac11c109a363e9233d26d4e130ee7fc36994eb7c66ea0af"
+    },
+    "t02-full-r1": {
+      "argv": [
+        "make",
+        "verify"
+      ],
+      "elapsed_seconds": 33.4,
+      "exit": 2,
+      "location": "root",
+      "log_sha256": "e521ffa14d39c7b611e55d0674de7a09ba4977725de6f369bd3ac095a5db6eed"
+    },
+    "t02-full-r2": {
+      "argv": [
+        "make",
+        "verify"
+      ],
+      "exit": null,
+      "location": "root",
+      "log_sha256": "e2a47e9fcd3b6a080603ef7dffb1ba0d2ed7678d595fe7085881710ab1ca303f",
+      "status": "interrupted by user-requested cache cleanup; not a pass"
+    },
+    "t02-full-r3": {
+      "argv": [
+        "make",
+        "verify"
+      ],
+      "elapsed_seconds": 825.6,
+      "exit": 2,
+      "location": "root",
+      "log_sha256": "b74ebeed6b2e355c478bdac13cf066082b4eba2bb29841e9e87b2db41b894899"
+    },
+    "t02-full-r4": {
+      "argv": [
+        "make",
+        "verify"
+      ],
+      "elapsed_seconds": 471.4,
+      "exit": 0,
+      "location": "root",
+      "log_sha256": "00381a0c6fd9670407807b3617ea83ddef9610a248476f50b750fe15ba3a278e"
+    },
+    "t02-fuzz-r1": {
+      "argv": [
+        "go",
+        "test",
+        "-timeout=3m",
+        "./contract",
+        "-run",
+        "^$",
+        "-fuzz",
+        "^FuzzUnionJSON$",
+        "-fuzztime=30s",
+        "-parallel=4"
+      ],
+      "elapsed_seconds": 33.6,
+      "exit": 0,
+      "location": "root",
+      "log_sha256": "c2a82a9b4faba5ed14fa429be0246d1aa0be73763f84e8e41a65ece2af6a4a36"
+    },
+    "t02-fuzz-r2": {
+      "argv": [
+        "go",
+        "test",
+        "-timeout=3m",
+        "./contract",
+        "-run",
+        "^$",
+        "-fuzz",
+        "^FuzzUnionJSON$",
+        "-fuzztime=30s",
+        "-parallel=4"
+      ],
+      "elapsed_seconds": 33.3,
+      "exit": 0,
+      "location": "root",
+      "log_sha256": "372288db90f7ccde6b47c4efe68ce2db2f504d045b01aa39b73e3453eca8a92e"
+    },
+    "t02-generate-r1": {
+      "argv": [
+        "go",
+        "run",
+        "./cmd/foundry",
+        "generate",
+        "--recursive",
+        "--dir",
+        "tests/fixtures/consumer"
+      ],
+      "elapsed_seconds": 39.3,
+      "exit": 0,
+      "location": "root",
+      "log_sha256": "055419ce43749697332856922be4eabd60a933bd2273d18c1b433dcbd4bcb84e"
+    },
+    "t02-generate-r2": {
+      "argv": [
+        "go",
+        "run",
+        "./cmd/foundry",
+        "generate",
+        "--recursive",
+        "--dir",
+        "tests/fixtures/consumer"
+      ],
+      "elapsed_seconds": 1.2,
+      "exit": 0,
+      "location": "root",
+      "log_sha256": "055419ce43749697332856922be4eabd60a933bd2273d18c1b433dcbd4bcb84e"
+    },
+    "t02-runtime-r1": {
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-timeout=20m",
+        "./contract/...",
+        "./openapi",
+        "./typescript",
+        "./internal/generate",
+        "-run",
+        "Test(Union|Generic|JSON|Schema|Scalar|Manifest|Render)|FuzzUnionJSON"
+      ],
+      "elapsed_seconds": 31.9,
+      "exit": 0,
+      "location": "root",
+      "log_sha256": "656f72f80e39d05d5b2c0a33252ff0f9af721575233b2b5b1384ff154621d0cd"
+    },
+    "t02-runtime-r2": {
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-timeout=20m",
+        "./contract/...",
+        "./openapi",
+        "./typescript"
+      ],
+      "elapsed_seconds": 12.6,
+      "exit": 1,
+      "location": "root",
+      "log_sha256": "40a86cf397610d426300e280073e5813ec5c18e250582be351cb66fbb75fe49a"
+    },
+    "t02-runtime-r3": {
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-timeout=20m",
+        "./internal/callback",
+        "./contract/...",
+        "./openapi",
+        "./typescript"
+      ],
+      "elapsed_seconds": 19.2,
+      "exit": 0,
+      "location": "root",
+      "log_sha256": "9fc92ef8d3b06a2f2dd9e166349575cd061034d5d028f065b94c6355a6355d79"
+    },
+    "t02-runtime-r4": {
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-timeout=20m",
+        "./internal/callback",
+        "./contract/...",
+        "./openapi",
+        "./typescript"
+      ],
+      "elapsed_seconds": 13.1,
+      "exit": 0,
+      "location": "root",
+      "log_sha256": "edc0685eb2888ae597175015024df3efc38fb605bed275d6701f1dabc9489fec"
+    }
+  },
+  "cost": {
+    "benchmarks": {
+      "dispatch": "goos: darwin\ngoarch: arm64\npkg: github.com/weiloon1234/Foundry-Go/contract\ncpu: Apple M4 Max\nBenchmarkUnionDispatch/2/contract-16         \t 1431162\t       837.7 ns/op\t        27.00 wire-B\t    1192 B/op\t      27 allocs/op\nBenchmarkUnionDispatch/2/contract-16         \t 1452146\t       828.1 ns/op\t        27.00 wire-B\t    1192 B/op\t      27 allocs/op\nBenchmarkUnionDispatch/2/contract-16         \t 1439614\t       832.9 ns/op\t        27.00 wire-B\t    1192 B/op\t      27 allocs/op\nBenchmarkUnionDispatch/2/contract-16         \t 1452618\t       828.2 ns/op\t        27.00 wire-B\t    1192 B/op\t      27 allocs/op\nBenchmarkUnionDispatch/2/contract-16         \t 1427869\t       842.8 ns/op\t        27.00 wire-B\t    1192 B/op\t      27 allocs/op\nBenchmarkUnionDispatch/2/handwritten-16      \t 1824285\t       675.8 ns/op\t        27.00 wire-B\t    1176 B/op\t      25 allocs/op\nBenchmarkUnionDispatch/2/handwritten-16      \t 1853017\t       647.6 ns/op\t        27.00 wire-B\t    1176 B/op\t      25 allocs/op\nBenchmarkUnionDispatch/2/handwritten-16      \t 1858474\t       643.6 ns/op\t        27.00 wire-B\t    1176 B/op\t      25 allocs/op\nBenchmarkUnionDispatch/2/handwritten-16      \t 1851508\t       653.5 ns/op\t        27.00 wire-B\t    1176 B/op\t      25 allocs/op\nBenchmarkUnionDispatch/2/handwritten-16      \t 1871724\t       642.9 ns/op\t        27.00 wire-B\t    1176 B/op\t      25 allocs/op\nBenchmarkUnionDispatch/32/contract-16        \t 1404949\t       853.2 ns/op\t        28.00 wire-B\t    1192 B/op\t      28 allocs/op\nBenchmarkUnionDispatch/32/contract-16        \t 1396765\t       859.9 ns/op\t        28.00 wire-B\t    1192 B/op\t      28 allocs/op\nBenchmarkUnionDispatch/32/contract-16        \t 1404355\t       853.4 ns/op\t        28.00 wire-B\t    1192 B/op\t      28 allocs/op\nBenchmarkUnionDispatch/32/contract-16        \t 1399945\t       858.2 ns/op\t        28.00 wire-B\t    1192 B/op\t      28 allocs/op\nBenchmarkUnionDispatch/32/contract-16        \t 1403098\t       857.4 ns/op\t        28.00 wire-B\t    1192 B/op\t      28 allocs/op\nBenchmarkUnionDispatch/32/handwritten-16     \t 1813756\t       660.0 ns/op\t        28.00 wire-B\t    1176 B/op\t      26 allocs/op\nBenchmarkUnionDispatch/32/handwritten-16     \t 1836507\t       656.6 ns/op\t        28.00 wire-B\t    1176 B/op\t      26 allocs/op\nBenchmarkUnionDispatch/32/handwritten-16     \t 1818780\t       659.9 ns/op\t        28.00 wire-B\t    1176 B/op\t      26 allocs/op\nBenchmarkUnionDispatch/32/handwritten-16     \t 1804041\t       665.8 ns/op\t        28.00 wire-B\t    1176 B/op\t      26 allocs/op\nBenchmarkUnionDispatch/32/handwritten-16     \t 1824480\t       659.5 ns/op\t        28.00 wire-B\t    1176 B/op\t      26 allocs/op\nPASS\nok  \tgithub.com/weiloon1234/Foundry-Go/contract\t24.587s\n",
+      "lifecycle": "goos: darwin\ngoarch: arm64\npkg: foundry.test/consumer/unions\ncpu: Apple M4 Max\nBenchmarkUnionLifecycle/construct-16         \t  123170\t      9649 ns/op\t    6053 B/op\t     134 allocs/op\nBenchmarkUnionLifecycle/construct-16         \t  127808\t      9313 ns/op\t    6054 B/op\t     134 allocs/op\nBenchmarkUnionLifecycle/construct-16         \t  128432\t      9278 ns/op\t    6054 B/op\t     134 allocs/op\nBenchmarkUnionLifecycle/construct-16         \t  130629\t      9326 ns/op\t    6054 B/op\t     134 allocs/op\nBenchmarkUnionLifecycle/construct-16         \t  125742\t      9375 ns/op\t    6054 B/op\t     134 allocs/op\nBenchmarkUnionLifecycle/accessor-16          \t  595557\t      2005 ns/op\t    1389 B/op\t      19 allocs/op\nBenchmarkUnionLifecycle/accessor-16          \t  595510\t      1985 ns/op\t    1389 B/op\t      19 allocs/op\nBenchmarkUnionLifecycle/accessor-16          \t  604585\t      2005 ns/op\t    1389 B/op\t      19 allocs/op\nBenchmarkUnionLifecycle/accessor-16          \t  613842\t      1992 ns/op\t    1389 B/op\t      19 allocs/op\nBenchmarkUnionLifecycle/accessor-16          \t  610180\t      1990 ns/op\t    1389 B/op\t      19 allocs/op\nBenchmarkUnionLifecycle/encode-16            \t  290102\t      4115 ns/op\t    3524 B/op\t      89 allocs/op\nBenchmarkUnionLifecycle/encode-16            \t  283912\t      4176 ns/op\t    3524 B/op\t      89 allocs/op\nBenchmarkUnionLifecycle/encode-16            \t  291687\t      4128 ns/op\t    3524 B/op\t      89 allocs/op\nBenchmarkUnionLifecycle/encode-16            \t  302959\t      4125 ns/op\t    3524 B/op\t      89 allocs/op\nBenchmarkUnionLifecycle/encode-16            \t  281744\t      4182 ns/op\t    3524 B/op\t      89 allocs/op\nBenchmarkUnionLifecycle/decode-16            \t   99088\t     12454 ns/op\t    5815 B/op\t     130 allocs/op\nBenchmarkUnionLifecycle/decode-16            \t  101410\t     11950 ns/op\t    5814 B/op\t     130 allocs/op\nBenchmarkUnionLifecycle/decode-16            \t   99028\t     12077 ns/op\t    5815 B/op\t     130 allocs/op\nBenchmarkUnionLifecycle/decode-16            \t  101506\t     12043 ns/op\t    5815 B/op\t     130 allocs/op\nBenchmarkUnionLifecycle/decode-16            \t  100797\t     12014 ns/op\t    5815 B/op\t     130 allocs/op\nPASS\nok  \tfoundry.test/consumer/unions\t24.278s\n"
+    },
+    "benchmarks_parsed": {
+      "dispatch": {
+        "BenchmarkUnionDispatch/2/contract": {
+          "median": {
+            "B/op": 1192.0,
+            "allocs/op": 27.0,
+            "ns/op": 832.9,
+            "wire-B": 27.0
+          },
+          "samples": [
+            {
+              "B/op": 1192.0,
+              "allocs/op": 27.0,
+              "ns/op": 837.7,
+              "wire-B": 27.0
+            },
+            {
+              "B/op": 1192.0,
+              "allocs/op": 27.0,
+              "ns/op": 828.1,
+              "wire-B": 27.0
+            },
+            {
+              "B/op": 1192.0,
+              "allocs/op": 27.0,
+              "ns/op": 832.9,
+              "wire-B": 27.0
+            },
+            {
+              "B/op": 1192.0,
+              "allocs/op": 27.0,
+              "ns/op": 828.2,
+              "wire-B": 27.0
+            },
+            {
+              "B/op": 1192.0,
+              "allocs/op": 27.0,
+              "ns/op": 842.8,
+              "wire-B": 27.0
+            }
+          ]
+        },
+        "BenchmarkUnionDispatch/2/handwritten": {
+          "median": {
+            "B/op": 1176.0,
+            "allocs/op": 25.0,
+            "ns/op": 647.6,
+            "wire-B": 27.0
+          },
+          "samples": [
+            {
+              "B/op": 1176.0,
+              "allocs/op": 25.0,
+              "ns/op": 675.8,
+              "wire-B": 27.0
+            },
+            {
+              "B/op": 1176.0,
+              "allocs/op": 25.0,
+              "ns/op": 647.6,
+              "wire-B": 27.0
+            },
+            {
+              "B/op": 1176.0,
+              "allocs/op": 25.0,
+              "ns/op": 643.6,
+              "wire-B": 27.0
+            },
+            {
+              "B/op": 1176.0,
+              "allocs/op": 25.0,
+              "ns/op": 653.5,
+              "wire-B": 27.0
+            },
+            {
+              "B/op": 1176.0,
+              "allocs/op": 25.0,
+              "ns/op": 642.9,
+              "wire-B": 27.0
+            }
+          ]
+        },
+        "BenchmarkUnionDispatch/32/contract": {
+          "median": {
+            "B/op": 1192.0,
+            "allocs/op": 28.0,
+            "ns/op": 857.4,
+            "wire-B": 28.0
+          },
+          "samples": [
+            {
+              "B/op": 1192.0,
+              "allocs/op": 28.0,
+              "ns/op": 853.2,
+              "wire-B": 28.0
+            },
+            {
+              "B/op": 1192.0,
+              "allocs/op": 28.0,
+              "ns/op": 859.9,
+              "wire-B": 28.0
+            },
+            {
+              "B/op": 1192.0,
+              "allocs/op": 28.0,
+              "ns/op": 853.4,
+              "wire-B": 28.0
+            },
+            {
+              "B/op": 1192.0,
+              "allocs/op": 28.0,
+              "ns/op": 858.2,
+              "wire-B": 28.0
+            },
+            {
+              "B/op": 1192.0,
+              "allocs/op": 28.0,
+              "ns/op": 857.4,
+              "wire-B": 28.0
+            }
+          ]
+        },
+        "BenchmarkUnionDispatch/32/handwritten": {
+          "median": {
+            "B/op": 1176.0,
+            "allocs/op": 26.0,
+            "ns/op": 659.9,
+            "wire-B": 28.0
+          },
+          "samples": [
+            {
+              "B/op": 1176.0,
+              "allocs/op": 26.0,
+              "ns/op": 660.0,
+              "wire-B": 28.0
+            },
+            {
+              "B/op": 1176.0,
+              "allocs/op": 26.0,
+              "ns/op": 656.6,
+              "wire-B": 28.0
+            },
+            {
+              "B/op": 1176.0,
+              "allocs/op": 26.0,
+              "ns/op": 659.9,
+              "wire-B": 28.0
+            },
+            {
+              "B/op": 1176.0,
+              "allocs/op": 26.0,
+              "ns/op": 665.8,
+              "wire-B": 28.0
+            },
+            {
+              "B/op": 1176.0,
+              "allocs/op": 26.0,
+              "ns/op": 659.5,
+              "wire-B": 28.0
+            }
+          ]
+        }
+      },
+      "lifecycle": {
+        "BenchmarkUnionLifecycle/accessor": {
+          "median": {
+            "B/op": 1389.0,
+            "allocs/op": 19.0,
+            "ns/op": 1992.0
+          },
+          "samples": [
+            {
+              "B/op": 1389.0,
+              "allocs/op": 19.0,
+              "ns/op": 2005.0
+            },
+            {
+              "B/op": 1389.0,
+              "allocs/op": 19.0,
+              "ns/op": 1985.0
+            },
+            {
+              "B/op": 1389.0,
+              "allocs/op": 19.0,
+              "ns/op": 2005.0
+            },
+            {
+              "B/op": 1389.0,
+              "allocs/op": 19.0,
+              "ns/op": 1992.0
+            },
+            {
+              "B/op": 1389.0,
+              "allocs/op": 19.0,
+              "ns/op": 1990.0
+            }
+          ]
+        },
+        "BenchmarkUnionLifecycle/construct": {
+          "median": {
+            "B/op": 6054.0,
+            "allocs/op": 134.0,
+            "ns/op": 9326.0
+          },
+          "samples": [
+            {
+              "B/op": 6053.0,
+              "allocs/op": 134.0,
+              "ns/op": 9649.0
+            },
+            {
+              "B/op": 6054.0,
+              "allocs/op": 134.0,
+              "ns/op": 9313.0
+            },
+            {
+              "B/op": 6054.0,
+              "allocs/op": 134.0,
+              "ns/op": 9278.0
+            },
+            {
+              "B/op": 6054.0,
+              "allocs/op": 134.0,
+              "ns/op": 9326.0
+            },
+            {
+              "B/op": 6054.0,
+              "allocs/op": 134.0,
+              "ns/op": 9375.0
+            }
+          ]
+        },
+        "BenchmarkUnionLifecycle/decode": {
+          "median": {
+            "B/op": 5815.0,
+            "allocs/op": 130.0,
+            "ns/op": 12043.0
+          },
+          "samples": [
+            {
+              "B/op": 5815.0,
+              "allocs/op": 130.0,
+              "ns/op": 12454.0
+            },
+            {
+              "B/op": 5814.0,
+              "allocs/op": 130.0,
+              "ns/op": 11950.0
+            },
+            {
+              "B/op": 5815.0,
+              "allocs/op": 130.0,
+              "ns/op": 12077.0
+            },
+            {
+              "B/op": 5815.0,
+              "allocs/op": 130.0,
+              "ns/op": 12043.0
+            },
+            {
+              "B/op": 5815.0,
+              "allocs/op": 130.0,
+              "ns/op": 12014.0
+            }
+          ]
+        },
+        "BenchmarkUnionLifecycle/encode": {
+          "median": {
+            "B/op": 3524.0,
+            "allocs/op": 89.0,
+            "ns/op": 4128.0
+          },
+          "samples": [
+            {
+              "B/op": 3524.0,
+              "allocs/op": 89.0,
+              "ns/op": 4115.0
+            },
+            {
+              "B/op": 3524.0,
+              "allocs/op": 89.0,
+              "ns/op": 4176.0
+            },
+            {
+              "B/op": 3524.0,
+              "allocs/op": 89.0,
+              "ns/op": 4128.0
+            },
+            {
+              "B/op": 3524.0,
+              "allocs/op": 89.0,
+              "ns/op": 4125.0
+            },
+            {
+              "B/op": 3524.0,
+              "allocs/op": 89.0,
+              "ns/op": 4182.0
+            }
+          ]
+        }
+      }
+    },
+    "commands": [
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "-o",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/foundry",
+          "./cmd/foundry"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+        "darwin_max_process_rss_bytes": 481820672,
+        "elapsed_seconds": 0.6928142910037423,
+        "exit": 0,
+        "name": "prepare-generator",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 509263872,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-run",
+          "^$",
+          "-bench",
+          "^BenchmarkUnionDispatch$",
+          "-benchmem",
+          "-count=5",
+          "./contract"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+        "darwin_max_process_rss_bytes": 247824384,
+        "elapsed_seconds": 25.29557200000272,
+        "exit": 0,
+        "name": "dispatch-benchmarks",
+        "sampled_compiler_rss_bytes": 118030336,
+        "sampled_tree_rss_bytes": 156139520,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-run",
+          "^$",
+          "-bench",
+          "^BenchmarkUnionLifecycle$",
+          "-benchmem",
+          "-count=5",
+          "./unions"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/tests/fixtures/consumer",
+        "darwin_max_process_rss_bytes": 474677248,
+        "elapsed_seconds": 25.095328374998644,
+        "exit": 0,
+        "name": "lifecycle-benchmarks",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 162316288,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/gofmt",
+          "-w",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2/action.go"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2",
+        "darwin_max_process_rss_bytes": 5718016,
+        "elapsed_seconds": 0.23135191699839197,
+        "exit": 0,
+        "name": "2-format",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1409024,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2",
+        "darwin_max_process_rss_bytes": 299237376,
+        "elapsed_seconds": 4.492648125000414,
+        "exit": 0,
+        "name": "2-generation-cold",
+        "sampled_compiler_rss_bytes": 294109184,
+        "sampled_tree_rss_bytes": 795803648,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2",
+        "darwin_max_process_rss_bytes": 77692928,
+        "elapsed_seconds": 0.24211812499561347,
+        "exit": 0,
+        "name": "2-generation-unchanged",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1425408,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2",
+        "darwin_max_process_rss_bytes": 304627712,
+        "elapsed_seconds": 2.099388207992888,
+        "exit": 0,
+        "name": "2-build-cold",
+        "sampled_compiler_rss_bytes": 151207936,
+        "sampled_tree_rss_bytes": 315162624,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2",
+        "darwin_max_process_rss_bytes": 35536896,
+        "elapsed_seconds": 0.23477966598875355,
+        "exit": 0,
+        "name": "2-build-unchanged",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1376256,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/gofmt",
+          "-w",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2/action.go"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2",
+        "darwin_max_process_rss_bytes": 5619712,
+        "elapsed_seconds": 0.23819616599939764,
+        "exit": 0,
+        "name": "2-format-edit",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1425408,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2",
+        "darwin_max_process_rss_bytes": 77889536,
+        "elapsed_seconds": 0.4672193750011502,
+        "exit": 0,
+        "name": "2-generation-edited",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 23412736,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2",
+        "darwin_max_process_rss_bytes": 78282752,
+        "elapsed_seconds": 0.2422817080077948,
+        "exit": 0,
+        "name": "2-build-edited",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1425408,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/foundry",
+          "agent",
+          "complete",
+          "--workspace",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2",
+          "--file",
+          "action.go",
+          "--line",
+          "15",
+          "--column",
+          "37",
+          "--gopls",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2",
+        "darwin_max_process_rss_bytes": 314277888,
+        "elapsed_seconds": 1.7033924170100363,
+        "exit": 0,
+        "name": "2-gopls-complete-1",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 492077056,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/foundry",
+          "agent",
+          "hover",
+          "--workspace",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2",
+          "--file",
+          "action.go",
+          "--line",
+          "17",
+          "--column",
+          "24",
+          "--gopls",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2",
+        "darwin_max_process_rss_bytes": 98418688,
+        "elapsed_seconds": 1.403690542007098,
+        "exit": 0,
+        "name": "2-gopls-hover-1",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 244023296,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/foundry",
+          "agent",
+          "complete",
+          "--workspace",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2",
+          "--file",
+          "action.go",
+          "--line",
+          "15",
+          "--column",
+          "37",
+          "--gopls",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2",
+        "darwin_max_process_rss_bytes": 198967296,
+        "elapsed_seconds": 1.422272666997742,
+        "exit": 0,
+        "name": "2-gopls-complete-2",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 244531200,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/foundry",
+          "agent",
+          "hover",
+          "--workspace",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2",
+          "--file",
+          "action.go",
+          "--line",
+          "17",
+          "--column",
+          "24",
+          "--gopls",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2",
+        "darwin_max_process_rss_bytes": 97976320,
+        "elapsed_seconds": 1.4351618329965277,
+        "exit": 0,
+        "name": "2-gopls-hover-2",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 143720448,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/foundry",
+          "agent",
+          "complete",
+          "--workspace",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2",
+          "--file",
+          "action.go",
+          "--line",
+          "15",
+          "--column",
+          "37",
+          "--gopls",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2",
+        "darwin_max_process_rss_bytes": 99483648,
+        "elapsed_seconds": 1.4281370829994557,
+        "exit": 0,
+        "name": "2-gopls-complete-3",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 144965632,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/foundry",
+          "agent",
+          "hover",
+          "--workspace",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2",
+          "--file",
+          "action.go",
+          "--line",
+          "17",
+          "--column",
+          "24",
+          "--gopls",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-2",
+        "darwin_max_process_rss_bytes": 98287616,
+        "elapsed_seconds": 1.3928531670098891,
+        "exit": 0,
+        "name": "2-gopls-hover-3",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 244023296,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/gofmt",
+          "-w",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32/action.go"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32",
+        "darwin_max_process_rss_bytes": 5718016,
+        "elapsed_seconds": 0.23081941599957645,
+        "exit": 0,
+        "name": "32-format",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1818624,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32",
+        "darwin_max_process_rss_bytes": 306692096,
+        "elapsed_seconds": 4.0272975830012,
+        "exit": 0,
+        "name": "32-generation-cold",
+        "sampled_compiler_rss_bytes": 207732736,
+        "sampled_tree_rss_bytes": 504283136,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32",
+        "darwin_max_process_rss_bytes": 95371264,
+        "elapsed_seconds": 0.23746666600345634,
+        "exit": 0,
+        "name": "32-generation-unchanged",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1376256,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32",
+        "darwin_max_process_rss_bytes": 314195968,
+        "elapsed_seconds": 2.084863584008417,
+        "exit": 0,
+        "name": "32-build-cold",
+        "sampled_compiler_rss_bytes": 151207936,
+        "sampled_tree_rss_bytes": 287637504,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32",
+        "darwin_max_process_rss_bytes": 35241984,
+        "elapsed_seconds": 0.237100875005126,
+        "exit": 0,
+        "name": "32-build-unchanged",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1982464,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/gofmt",
+          "-w",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32/action.go"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32",
+        "darwin_max_process_rss_bytes": 5718016,
+        "elapsed_seconds": 0.23413941699254792,
+        "exit": 0,
+        "name": "32-format-edit",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1409024,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32",
+        "darwin_max_process_rss_bytes": 97206272,
+        "elapsed_seconds": 0.4769387080013985,
+        "exit": 0,
+        "name": "32-generation-edited",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 25706496,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32",
+        "darwin_max_process_rss_bytes": 99368960,
+        "elapsed_seconds": 0.24055575000238605,
+        "exit": 0,
+        "name": "32-build-edited",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1425408,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/foundry",
+          "agent",
+          "complete",
+          "--workspace",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32",
+          "--file",
+          "action.go",
+          "--line",
+          "45",
+          "--column",
+          "37",
+          "--gopls",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32",
+        "darwin_max_process_rss_bytes": 317341696,
+        "elapsed_seconds": 1.6755520419974346,
+        "exit": 0,
+        "name": "32-gopls-complete-1",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 396148736,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/foundry",
+          "agent",
+          "hover",
+          "--workspace",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32",
+          "--file",
+          "action.go",
+          "--line",
+          "47",
+          "--column",
+          "24",
+          "--gopls",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32",
+        "darwin_max_process_rss_bytes": 101056512,
+        "elapsed_seconds": 1.424373125002603,
+        "exit": 0,
+        "name": "32-gopls-hover-1",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 247119872,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/foundry",
+          "agent",
+          "complete",
+          "--workspace",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32",
+          "--file",
+          "action.go",
+          "--line",
+          "45",
+          "--column",
+          "37",
+          "--gopls",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32",
+        "darwin_max_process_rss_bytes": 202162176,
+        "elapsed_seconds": 1.4285320409981068,
+        "exit": 0,
+        "name": "32-gopls-complete-2",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 248446976,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/foundry",
+          "agent",
+          "hover",
+          "--workspace",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32",
+          "--file",
+          "action.go",
+          "--line",
+          "47",
+          "--column",
+          "24",
+          "--gopls",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32",
+        "darwin_max_process_rss_bytes": 100810752,
+        "elapsed_seconds": 1.4285362090013223,
+        "exit": 0,
+        "name": "32-gopls-hover-2",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 246579200,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/foundry",
+          "agent",
+          "complete",
+          "--workspace",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32",
+          "--file",
+          "action.go",
+          "--line",
+          "45",
+          "--column",
+          "37",
+          "--gopls",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32",
+        "darwin_max_process_rss_bytes": 202670080,
+        "elapsed_seconds": 1.4289910830120789,
+        "exit": 0,
+        "name": "32-gopls-complete-3",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 247906304,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/foundry",
+          "agent",
+          "hover",
+          "--workspace",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32",
+          "--file",
+          "action.go",
+          "--line",
+          "47",
+          "--column",
+          "24",
+          "--gopls",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+          "--timeout",
+          "120s"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t02/cost-r1/variants-32",
+        "darwin_max_process_rss_bytes": 201179136,
+        "elapsed_seconds": 1.4284950000001118,
+        "exit": 0,
+        "name": "32-gopls-hover-3",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 346750976,
+        "timed_out": false
+      }
+    ],
+    "profiles": {
+      "2": {
+        "disposable_build_cache_reclaimed_bytes": 284237824,
+        "edited_source": "package unioncost\n\n//foundry:dto\ntype Payload struct {\n\tRevision string `json:\"revision\"`\n\tValue    string `json:\"value\"`\n}\n\n//foundry:union name=Action discriminator=kind\ntype ActionVariants struct {\n\tVariant0 Payload `union:\"variant_0\"`\n\tVariant1 Payload `union:\"variant_1\"`\n}\n\nfunc New() (Action, error) { return ActionFromVariant0(Payload{Value: \"sample\"}) }\nfunc Inspect(input Action) string {\n\tpayload, ok := input.Variant0()\n\tif !ok {\n\t\treturn \"\"\n\t}\n\treturn payload.Value\n}\n",
+        "editor": [
+          {
+            "operation": "complete",
+            "round": 1,
+            "timing": {
+              "initialize_ns": 92044500,
+              "request_ns": 293053000
+            }
+          },
+          {
+            "operation": "hover",
+            "round": 1,
+            "timing": {
+              "initialize_ns": 38128958,
+              "request_ns": 191081125
+            }
+          },
+          {
+            "operation": "complete",
+            "round": 2,
+            "timing": {
+              "initialize_ns": 37090167,
+              "request_ns": 186690209
+            }
+          },
+          {
+            "operation": "hover",
+            "round": 2,
+            "timing": {
+              "initialize_ns": 37699792,
+              "request_ns": 194942875
+            }
+          },
+          {
+            "operation": "complete",
+            "round": 3,
+            "timing": {
+              "initialize_ns": 36351000,
+              "request_ns": 193212417
+            }
+          },
+          {
+            "operation": "hover",
+            "round": 3,
+            "timing": {
+              "initialize_ns": 38545750,
+              "request_ns": 190755584
+            }
+          }
+        ],
+        "generated_edited": {
+          "bytes": 6512,
+          "files": 2,
+          "sha256": {
+            "action_foundry.gen.go": "43973bc8aff9b54270fece8dae52c5aade2c37f5a4b693796d5ade322c6ee779",
+            "payload_foundry.gen.go": "ae265ed4ed8125ab47702a9eb6768e7c5236ebbf883367879a31930421c8637a"
+          }
+        },
+        "generated_imports": [
+          "github.com/weiloon1234/Foundry-Go/contract",
+          "github.com/weiloon1234/Foundry-Go/fault",
+          "github.com/weiloon1234/Foundry-Go/validation"
+        ],
+        "generated_initial": {
+          "bytes": 6172,
+          "files": 2,
+          "sha256": {
+            "action_foundry.gen.go": "b15c41f23a22bab76a5e5dc4ebcbc220868c04905436924f5015afe59b012989",
+            "payload_foundry.gen.go": "9f641d1b11ea87486c5e519e20e35a10f8577c835e13a3aebc38813d00e53306"
+          }
+        },
+        "initial_source": "package unioncost\n\n//foundry:dto\ntype Payload struct {\n\tValue string `json:\"value\"`\n}\n\n//foundry:union name=Action discriminator=kind\ntype ActionVariants struct {\n\tVariant0 Payload `union:\"variant_0\"`\n\tVariant1 Payload `union:\"variant_1\"`\n}\n\nfunc New() (Action, error) { return ActionFromVariant0(Payload{Value: \"sample\"}) }\nfunc Inspect(input Action) string {\n\tpayload, ok := input.Variant0()\n\tif !ok {\n\t\treturn \"\"\n\t}\n\treturn payload.Value\n}\n",
+        "variants": 2
+      },
+      "32": {
+        "disposable_build_cache_reclaimed_bytes": 285450240,
+        "edited_source": "package unioncost\n\n//foundry:dto\ntype Payload struct {\n\tRevision string `json:\"revision\"`\n\tValue    string `json:\"value\"`\n}\n\n//foundry:union name=Action discriminator=kind\ntype ActionVariants struct {\n\tVariant0  Payload `union:\"variant_0\"`\n\tVariant1  Payload `union:\"variant_1\"`\n\tVariant2  Payload `union:\"variant_2\"`\n\tVariant3  Payload `union:\"variant_3\"`\n\tVariant4  Payload `union:\"variant_4\"`\n\tVariant5  Payload `union:\"variant_5\"`\n\tVariant6  Payload `union:\"variant_6\"`\n\tVariant7  Payload `union:\"variant_7\"`\n\tVariant8  Payload `union:\"variant_8\"`\n\tVariant9  Payload `union:\"variant_9\"`\n\tVariant10 Payload `union:\"variant_10\"`\n\tVariant11 Payload `union:\"variant_11\"`\n\tVariant12 Payload `union:\"variant_12\"`\n\tVariant13 Payload `union:\"variant_13\"`\n\tVariant14 Payload `union:\"variant_14\"`\n\tVariant15 Payload `union:\"variant_15\"`\n\tVariant16 Payload `union:\"variant_16\"`\n\tVariant17 Payload `union:\"variant_17\"`\n\tVariant18 Payload `union:\"variant_18\"`\n\tVariant19 Payload `union:\"variant_19\"`\n\tVariant20 Payload `union:\"variant_20\"`\n\tVariant21 Payload `union:\"variant_21\"`\n\tVariant22 Payload `union:\"variant_22\"`\n\tVariant23 Payload `union:\"variant_23\"`\n\tVariant24 Payload `union:\"variant_24\"`\n\tVariant25 Payload `union:\"variant_25\"`\n\tVariant26 Payload `union:\"variant_26\"`\n\tVariant27 Payload `union:\"variant_27\"`\n\tVariant28 Payload `union:\"variant_28\"`\n\tVariant29 Payload `union:\"variant_29\"`\n\tVariant30 Payload `union:\"variant_30\"`\n\tVariant31 Payload `union:\"variant_31\"`\n}\n\nfunc New() (Action, error) { return ActionFromVariant0(Payload{Value: \"sample\"}) }\nfunc Inspect(input Action) string {\n\tpayload, ok := input.Variant0()\n\tif !ok {\n\t\treturn \"\"\n\t}\n\treturn payload.Value\n}\n",
+        "editor": [
+          {
+            "operation": "complete",
+            "round": 1,
+            "timing": {
+              "initialize_ns": 39615333,
+              "request_ns": 296703000
+            }
+          },
+          {
+            "operation": "hover",
+            "round": 1,
+            "timing": {
+              "initialize_ns": 38828500,
+              "request_ns": 186713291
+            }
+          },
+          {
+            "operation": "complete",
+            "round": 2,
+            "timing": {
+              "initialize_ns": 40860791,
+              "request_ns": 192911584
+            }
+          },
+          {
+            "operation": "hover",
+            "round": 2,
+            "timing": {
+              "initialize_ns": 36606250,
+              "request_ns": 189772875
+            }
+          },
+          {
+            "operation": "complete",
+            "round": 3,
+            "timing": {
+              "initialize_ns": 41988500,
+              "request_ns": 188352250
+            }
+          },
+          {
+            "operation": "hover",
+            "round": 3,
+            "timing": {
+              "initialize_ns": 40986833,
+              "request_ns": 177247833
+            }
+          }
+        ],
+        "generated_edited": {
+          "bytes": 39746,
+          "files": 2,
+          "sha256": {
+            "action_foundry.gen.go": "90c0d3dbc9df0e3f2e56d3295c9683e57408ff745c89dac9c82f5d7af7add133",
+            "payload_foundry.gen.go": "ae265ed4ed8125ab47702a9eb6768e7c5236ebbf883367879a31930421c8637a"
+          }
+        },
+        "generated_imports": [
+          "github.com/weiloon1234/Foundry-Go/contract",
+          "github.com/weiloon1234/Foundry-Go/fault",
+          "github.com/weiloon1234/Foundry-Go/validation"
+        ],
+        "generated_initial": {
+          "bytes": 39406,
+          "files": 2,
+          "sha256": {
+            "action_foundry.gen.go": "e97b2d6caa1395afc3acbb5c76544020126780c5629473f86f2e1d0b80eb679d",
+            "payload_foundry.gen.go": "9f641d1b11ea87486c5e519e20e35a10f8577c835e13a3aebc38813d00e53306"
+          }
+        },
+        "initial_source": "package unioncost\n\n//foundry:dto\ntype Payload struct {\n\tValue string `json:\"value\"`\n}\n\n//foundry:union name=Action discriminator=kind\ntype ActionVariants struct {\n\tVariant0  Payload `union:\"variant_0\"`\n\tVariant1  Payload `union:\"variant_1\"`\n\tVariant2  Payload `union:\"variant_2\"`\n\tVariant3  Payload `union:\"variant_3\"`\n\tVariant4  Payload `union:\"variant_4\"`\n\tVariant5  Payload `union:\"variant_5\"`\n\tVariant6  Payload `union:\"variant_6\"`\n\tVariant7  Payload `union:\"variant_7\"`\n\tVariant8  Payload `union:\"variant_8\"`\n\tVariant9  Payload `union:\"variant_9\"`\n\tVariant10 Payload `union:\"variant_10\"`\n\tVariant11 Payload `union:\"variant_11\"`\n\tVariant12 Payload `union:\"variant_12\"`\n\tVariant13 Payload `union:\"variant_13\"`\n\tVariant14 Payload `union:\"variant_14\"`\n\tVariant15 Payload `union:\"variant_15\"`\n\tVariant16 Payload `union:\"variant_16\"`\n\tVariant17 Payload `union:\"variant_17\"`\n\tVariant18 Payload `union:\"variant_18\"`\n\tVariant19 Payload `union:\"variant_19\"`\n\tVariant20 Payload `union:\"variant_20\"`\n\tVariant21 Payload `union:\"variant_21\"`\n\tVariant22 Payload `union:\"variant_22\"`\n\tVariant23 Payload `union:\"variant_23\"`\n\tVariant24 Payload `union:\"variant_24\"`\n\tVariant25 Payload `union:\"variant_25\"`\n\tVariant26 Payload `union:\"variant_26\"`\n\tVariant27 Payload `union:\"variant_27\"`\n\tVariant28 Payload `union:\"variant_28\"`\n\tVariant29 Payload `union:\"variant_29\"`\n\tVariant30 Payload `union:\"variant_30\"`\n\tVariant31 Payload `union:\"variant_31\"`\n}\n\nfunc New() (Action, error) { return ActionFromVariant0(Payload{Value: \"sample\"}) }\nfunc Inspect(input Action) string {\n\tpayload, ok := input.Variant0()\n\tif !ok {\n\t\treturn \"\"\n\t}\n\treturn payload.Value\n}\n",
+        "variants": 32
+      }
+    },
+    "scope": "Native local-checkout two/32-variant consumers, isolated build caches, existing module cache, one sequential sample per generation/build state, three fresh gopls sessions per operation, five runtime samples. Handwritten dispatch shares parser, strict shape and snapshot ownership; lifecycle costs are reported separately."
+  },
+  "date": "2026-09-18",
+  "final_source_sha256": {
+    "contract/json.go": "1e04afd792f3ffb0282039ad5859525937a2378cb8a30972bec6c94915d5c5c7",
+    "contract/json_field.go": "d783c0d09812cea29d12076cb77e9db392ea5130ba730256f8b191b78ff4922f",
+    "contract/json_generic.go": "e700e0d4112c3c1c2c44e55c12b488bd101dc739b41eb48cee6201258b7f58de",
+    "contract/json_union.go": "58268b2d22f0a8e1c8ee24b36007c4b082adb693087e8b541d7b53126f261cff",
+    "contract/json_union_test.go": "721fdcc1f4fb313ee17dbff9dd998291db45b87f6389dbf2f50bda4339f1c6f8",
+    "contract/manifest/document.go": "9872531949863483ad2de6c7ca26d7dad6a34da3a1f1b161c56316550c37bcb2",
+    "contract/schema.go": "181757f72fad978cf4bcec9a5dff6fb2177dbec4f431bc67bf27ea322f9f944c",
+    "contract/schema_compile.go": "decb9275234a3461817b6d2698e31328572882043491a3f264de19570776bd63",
+    "contract/schema_includes.go": "b613e44578e089faa63d9666eece91e5e9a64907dfbb2caab832284d2af43c64",
+    "contract/schema_test.go": "2ad63df6c85a5249df0eea59b699576de3ae087ff1b8f56ac7f42108450a76ec",
+    "contract/schema_validate.go": "79898a303a6918a7e5580acb7b5c0390595bbcd844eec8ade12755f98ac00e4e",
+    "internal/agent/gopls_acceptance_test.go": "14dbff307a1e28000f973aa127fd920d5b32a537a9d8c53c805bf3fbf47bb4b1",
+    "internal/callback/invoke.go": "c4e04f5b6917c2a6f2fadf0e797a03061a8ef06b52f71491a65282d03fb7733b",
+    "internal/callback/invoke_test.go": "754f2084d588d739cbcd4d0525164bc987195089d6f979b772c64d48c42e15d6",
+    "internal/generate/declarations.go": "7bc61379be4c3a4c5bc0259ec74b8b379dc3e3398544377d7dbece6355ed8028",
+    "internal/generate/discover.go": "f98985a15b2c44e2165d3937a82e1e82a024b0fa78f0ff3407b9b436b363b521",
+    "internal/generate/discover_dto.go": "556d89d1df0a4c7fa49d2c00088ad334718c9529c3e08d2c368e868704c9d372",
+    "internal/generate/discover_union.go": "08dec24615a2f701117930df974940700b9e7c76fd69c80088060767e26138ab",
+    "internal/generate/emit.go": "ac0994dc6af16697230ce012140ac451fab9e33dcd54d2f691918694c9c9ddd9",
+    "internal/generate/emit_dto.go": "0ed04d699df212e08982fef52f1c3f7e8deba4f5e16e01be9839b5d92cac7cd2",
+    "internal/generate/emit_union.go": "50b9c119cea613bac999ec6c4920b587df2ae124c99bfe62c7fc8f0f0901e866",
+    "internal/generate/load.go": "d1ce7c1f6a4b8df204e28dd8123a1593f5cf40caa39fac6dbeda07e0355aa61b",
+    "internal/generate/union_test.go": "db6ab85c2abb15d51be51cf9675b73829f424f09fcdcc094635c4dc9d84afcb4",
+    "openapi/openapi.go": "399cde611e071b3994e567e20cfcbd7a7044d858469f2b1b1b31ab18790a1ab0",
+    "openapi/schema.go": "3b9ba11b5ced2133df63249012b6ce9bdb68b37227d901fc31d05e9e5ac90ca6",
+    "tests/fixtures/consumer/clientcontracts/contracts.go": "4fca2308ee2de78c9087dbb90c9e463a8979718aed46de9ccd9463b710802992",
+    "tests/fixtures/consumer/clientcontracts/contracts_test.go": "a56f026d98963ba9d58c5ff73dd365f19e45d8c0a7f48f558309151ed7baecb7",
+    "tests/fixtures/consumer/clientcontracts/testdata/runtime.mjs": "dd0e7d1adfbca0b3e521ac3455fd21e9abb34c36eb083b0cec7c722eded3030e",
+    "tests/fixtures/consumer/clientcontracts/testdata/types.ts": "82b61169063f2317a584ad4e79b99b913d5b398468fcf449582d8e404ad1bcdd",
+    "tests/fixtures/consumer/testdata/compilefail/union_constructor/invalid.go": "a752389d2e54792e92c9873c24909b771311f1a2d4779bceee1e445a2ab31217",
+    "tests/fixtures/consumer/testdata/compilefail/union_handler/invalid.go": "ed63ef92419e8f7570c2872eeb6f1ba04cab74d6cc6dae75a42cd08171a1dbc6",
+    "tests/fixtures/consumer/testdata/compilefail/union_owner/invalid.go": "a7178791f6ba6a5cc10e39b99fedba3c4365bddeeed7b924ebfe3696a8b9d387",
+    "tests/fixtures/consumer/testdata/compilefail/union_visitor/invalid.go": "914f104899b64d2ea407a9c3f51ce1c25eb4ea13a69475b28454af48ca4feaca",
+    "tests/fixtures/consumer/types_test.go": "675cb6754f93facad9f7028e07b2a81e63339efd9c49c5684aec04a56b8e521c",
+    "tests/fixtures/consumer/unions/bank_dto_foundry.gen.go": "84252d6507f110986114c5abca62943f7e9cc2364f079b3be64071d5f8b95831",
+    "tests/fixtures/consumer/unions/card_dto_foundry.gen.go": "5748b3616e326e2ae5553b94fe3258425c6de1f02495e47b67c409cbf8b498e9",
+    "tests/fixtures/consumer/unions/delivery_foundry.gen.go": "40c29645467658d3e30f40c7f72453653197ea497cf64897cd59faaee983c915",
+    "tests/fixtures/consumer/unions/payment.go": "42d603b1a2710538c0ba942f79cda7804029e9c4d932ba4422426f024e2ca7ad",
+    "tests/fixtures/consumer/unions/payment_method_foundry.gen.go": "c30020931055325e6be2824c2e606bbcef1601a55e29d07b9cf0908bbdd4c906",
+    "tests/fixtures/consumer/unions/payment_request_foundry.gen.go": "a3d4efc889d1d9e3cd8d5b8a5c82d1cb42590e72776f6fdd1e4dd2716013c53b",
+    "tests/fixtures/consumer/unions/payment_test.go": "89bbaa0429cc23d6006b26e81a61d1ce683bddcc10177a485340ec05e118a0bf",
+    "typescript/render.go": "bd78cebd7cd3d543802f96f61f6d65eca5d6ffe9c406b73883d639474bffde58",
+    "typescript/runtime/wire.ts": "757c20b3f0675d868c3b5a84d5fbcb77ba112c2afcbffd8609b60f824f204b94"
+  },
+  "fixes": [
+    "Retain nested callback panic/Goexit classification at the shared callback boundary.",
+    "Bound re-encoded union payload bytes after JSON escaping.",
+    "Reject empty-name unknown properties in ordinary objects after sharing object validation.",
+    "Document manifest format 2 and strict older-client unknown-tag rejection.",
+    "Report benchmark wire size after b.Loop resets timing and custom metrics.",
+    "Refresh generated consumer output after earlier source position changes."
+  ],
+  "go": "go1.27.1 darwin/arm64",
+  "interruptions": [
+    "First full gate ran out of disk space during vet.",
+    "Second full gate was terminated for user-requested Go cache cleanup.",
+    "Third full gate passed framework and consumer tests but failed final consumer generation freshness; regeneration and the benchmark metrics fix precede the final gate."
+  ],
+  "limits": [
+    "Five runtime samples; one sequential sample per generation/build state and three fresh editor sessions per operation.",
+    "Local-checkout consumers use isolated build caches and existing module downloads; these are not packaged-release or application-throughput claims.",
+    "Native snapshot construction/access costs are reported separately from strict wire dispatch.",
+    "Temporary measurement compiler caches are cleared after each completed profile; evidence and source are retained.",
+    "T03\u2013T07 and the integrated final audit remain outstanding."
+  ],
+  "measurement_harnesses": {
+    "foundry-t02-cost.py": "from pathlib import Path\nimport importlib.util\nimport json\nimport os\nimport re\nimport subprocess\n\nos.umask(0o077)\nroot=Path('/Users/weiloon/Projects/rust-go/Foundry-Go')\noutput=root/'.cache/t-series/t02/cost-r1'\noutput.mkdir()\nspec=importlib.util.spec_from_file_location('release_measurement',root/'tools/measure-release.py')\nm=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\nrunner=m.Runner(output,600)\nenv={k:os.environ[k] for k in ('PATH','HOME','TMPDIR','LANG','LC_ALL') if k in os.environ}\nenv.update(GOENV='off',GOTOOLCHAIN='local',GOWORK='off',GOFLAGS='-mod=readonly',GOPROXY='off',DEVELOPER_DIR='/Library/Developer/CommandLineTools')\nenv['PATH']='/usr/local/go/bin:'+env['PATH']\ngo='/usr/local/go/bin/go';foundry=output/'foundry'\nrunner.run('prepare-generator',[go,'build','-o',foundry,'./cmd/foundry'],root,env)\nbenchmarks={}\nbenchmarks['dispatch']=runner.run('dispatch-benchmarks',[go,'test','-run','^$','-bench','^BenchmarkUnionDispatch$','-benchmem','-count=5','./contract'],root,env)\nbenchmarks['lifecycle']=runner.run('lifecycle-benchmarks',[go,'test','-run','^$','-bench','^BenchmarkUnionLifecycle$','-benchmem','-count=5','./unions'],root/'tests/fixtures/consumer',env)\nmodule=(root/'tests/fixtures/consumer/go.mod').read_text().replace('=> ../../..','=> '+str(root)).replace('=> ../plugin_base','=> '+str(root/'tests/fixtures/plugin_base')).replace('=> ../plugin_dep','=> '+str(root/'tests/fixtures/plugin_dep'))\nprofiles={}\nfor count in (2,32):\n name=str(count);consumer=output/('variants-'+name);consumer.mkdir()\n (consumer/'go.mod').write_text(module);(consumer/'go.sum').write_bytes((root/'tests/fixtures/consumer/go.sum').read_bytes())\n source=consumer/'action.go'\n text='''package unioncost\n//foundry:dto\ntype Payload struct {Value string `json:\"value\"`}\n//foundry:union name=Action discriminator=kind\ntype ActionVariants struct {\n'''+''.join(' Variant'+str(i)+' Payload `union:\"variant_'+str(i)+'\"`\\n' for i in range(count))+'''}\nfunc New()(Action,error){return ActionFromVariant0(Payload{Value:\"sample\"})}\nfunc Inspect(input Action)string{payload,ok:=input.Variant0();if !ok{return \"\"};return payload.Value}\n'''\n source.write_text(text)\n runner.run(name+'-format',['/usr/local/go/bin/gofmt','-w',source],consumer,env)\n original=source.read_text()\n generation_env=dict(env,GOCACHE=str(output/(name+'-generation-cache')))\n generate=[foundry,'generate','--recursive','--dir',consumer]\n runner.run(name+'-generation-cold',generate,consumer,generation_env)\n initial=m.generated_inventory(consumer)\n runner.run(name+'-generation-unchanged',generate,consumer,generation_env)\n if initial!=m.generated_inventory(consumer):raise ValueError('unchanged generation mutated output')\n build_env=dict(env,GOCACHE=str(output/(name+'-build-cache')))\n runner.run(name+'-build-cold',[go,'build','./...'],consumer,build_env)\n runner.run(name+'-build-unchanged',[go,'build','./...'],consumer,build_env)\n marker='type Payload struct {';assert original.count(marker)==1\n source.write_text(original.replace(marker,marker+'\\n Revision string `json:\"revision\"`'))\n runner.run(name+'-format-edit',['/usr/local/go/bin/gofmt','-w',source],consumer,env)\n runner.run(name+'-generation-edited',generate,consumer,generation_env)\n edited=m.generated_inventory(consumer)\n if initial==edited:raise ValueError('field edit did not reach metadata')\n runner.run(name+'-build-edited',[go,'build','./...'],consumer,build_env)\n editor=[];text=source.read_text();editor_env=dict(build_env,GOPLSCACHE=str(output/(name+'-gopls-cache')))\n for round_number in range(3):\n  for operation,prefix,symbol in (('complete','','ActionFromVariant0'),('hover','input.','Variant0')):\n   line,column=m.position(text,prefix,symbol,operation)\n   command=[foundry,'agent',operation,'--workspace',consumer,'--file','action.go','--line',str(line),'--column',str(column),'--gopls',root/'bin/gopls','--timeout','120s']\n   payload=json.loads(runner.run(name+'-gopls-'+operation+'-'+str(round_number+1),command,consumer,editor_env))\n   m.validate_editor(payload,operation,symbol)\n   editor.append(dict(operation=operation,round=round_number+1,timing=payload['timing']))\n if source.read_text()!=text:raise ValueError('editor modified source')\n profiles[name]=dict(variants=count,generated_initial=initial,generated_edited=edited,editor=editor,initial_source=original,edited_source=text)\n # Retain reproducible source/logs/results, then release disposable compiler caches.\n reclaimed=0\n for cache in (Path(generation_env['GOCACHE']),Path(build_env['GOCACHE'])):\n  if cache.is_symlink() or not (cache/'README').read_text().startswith('This directory holds cached build artifacts from the Go build system.'):\n   raise ValueError('unexpected measurement build cache')\n  before=int(subprocess.check_output(['du','-sk',str(cache)],text=True).split()[0])*1024\n  subprocess.run([go,'clean','-cache'],env=dict(env,GOCACHE=str(cache)),check=True)\n  after=int(subprocess.check_output(['du','-sk',str(cache)],text=True).split()[0])*1024\n  reclaimed+=before-after\n profiles[name]['disposable_build_cache_reclaimed_bytes']=reclaimed\nm.write_json(output/'report.json',dict(scope='Native local-checkout two/32-variant consumers, isolated build caches, existing module cache, one sequential sample per generation/build state, three fresh gopls sessions per operation, five runtime samples. Handwritten dispatch shares parser, strict shape and snapshot ownership; lifecycle costs are reported separately.',profiles=profiles,benchmarks=benchmarks,commands=runner.results))\nprint(json.dumps({'report':str(output/'report.json')}),flush=True)\n"
+  },
+  "milestone": "T02"
+}

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "files": {
+    "account_foundry.gen.go": "0741d09e957510ace9a9f099efd189cf4f9314cf91eac66115d813c36fab46b1",
+    "confirmation_request_foundry.gen.go": "aa93dada574b05490016f12348d1f80c0983a8bd7c0a710904d6a772032c16e4",
+    "enrollment_request_foundry.gen.go": "3d0f8690f7bab053ffde51e7f45140eee730d38c6f5fcff587a6a22bc217288c",
+    "recovery_request_foundry.gen.go": "b3bf829bacc346422b9d430a4af45e03cdb369d01ea624da4352e2eb3147cd27",
+    "regeneration_request_foundry.gen.go": "3ff53e286f57a3c0d6f8b26750e4bc1d85cc76cece988b0d27992a06e5d379ce",
+    "totp_request_foundry.gen.go": "4bbfbe70bd017c04e973de0a62dd26aabb4485f289f40466fcbd6e96df224ebb"
+  }
+}

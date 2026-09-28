@@ -1,0 +1,159 @@
+package i18n
+
+import (
+	"strings"
+
+	"golang.org/x/text/feature/plural"
+	"golang.org/x/text/language"
+)
+
+// Template is either plain text or a plural form set. A plural template must
+// include Other, and its registered message must declare the numeric parameter.
+// Text and Forms cannot be combined. Catalog construction copies all data.
+type Template struct {
+	Text  string
+	Forms map[PluralForm]string
+}
+type PluralForm string
+
+const (
+	Other PluralForm = "other"
+	Zero  PluralForm = "zero"
+	One   PluralForm = "one"
+	Two   PluralForm = "two"
+	Few   PluralForm = "few"
+	Many  PluralForm = "many"
+)
+
+type templatePart struct{ text, parameter string }
+type compiledTemplate map[PluralForm][]templatePart
+
+func compileTemplate(t Template, d MessageDefinition) (compiledTemplate, int, error) {
+	forms := t.Forms
+	if d.Plural == "" {
+		if len(forms) != 0 {
+			return nil, 0, invalidMessage()
+		}
+		forms = map[PluralForm]string{Other: t.Text}
+	} else {
+		if t.Text != "" || len(forms) == 0 || len(forms) > 6 {
+			return nil, 0, invalidMessage()
+		}
+		if _, ok := forms[Other]; !ok {
+			return nil, 0, invalidMessage()
+		}
+	}
+	parameters := make(map[string]bool, len(d.Parameters))
+	for _, p := range d.Parameters {
+		parameters[p.Name] = true
+	}
+	result := make(compiledTemplate, len(forms))
+	size := 0
+	for form, text := range forms {
+		switch form {
+		case Other, Zero, One, Two, Few, Many:
+		default:
+			return nil, 0, invalidMessage()
+		}
+		parts, err := parseTemplate(text, parameters)
+		if err != nil {
+			return nil, 0, err
+		}
+		size += len(text)
+		result[form] = parts
+	}
+	return result, size, nil
+}
+
+func parseTemplate(text string, parameters map[string]bool) ([]templatePart, error) {
+	if !validText(text) {
+		return nil, invalidMessage()
+	}
+	var result []templatePart
+	for len(text) > 0 {
+		start := strings.Index(text, "{{")
+		if start < 0 {
+			if strings.Contains(text, "}}") {
+				return nil, invalidMessage()
+			}
+			result = append(result, templatePart{text: text})
+			break
+		}
+		if strings.Contains(text[:start], "}}") {
+			return nil, invalidMessage()
+		}
+		if start > 0 {
+			result = append(result, templatePart{text: text[:start]})
+		}
+		text = text[start+2:]
+		end := strings.Index(text, "}}")
+		if end < 0 || !parameters[text[:end]] {
+			return nil, invalidMessage()
+		}
+		result = append(result, templatePart{parameter: text[:end]})
+		text = text[end+2:]
+	}
+	return result, nil
+}
+
+// Decimal operands use their canonical numeric scale, matching decimal.Decimal;
+// 1.0 and 1 are the same argument. No floating point conversion occurs.
+func pluralForm(locale LocaleID, kind PluralKind, number string) PluralForm {
+	number = strings.TrimPrefix(number, "-")
+	whole, fraction, _ := strings.Cut(number, ".")
+	tag, _ := language.Parse(string(locale))
+	rules := plural.Cardinal
+	if kind == Ordinal {
+		rules = plural.Ordinal
+	}
+	i, f, scale := pluralOperand(whole), pluralOperand(fraction), len(fraction)
+	switch rules.MatchPlural(tag, i, scale, scale, f, f) {
+	case plural.Zero:
+		return Zero
+	case plural.One:
+		return One
+	case plural.Two:
+		return Two
+	case plural.Few:
+		return Few
+	case plural.Many:
+		return Many
+	default:
+		return Other
+	}
+}
+
+// MatchPlural accepts large operands modulo 10,000,000. Keep an additional
+// multiple when reducing a large value so literal equality rules cannot mistake
+// it for a small number (or zero). This preserves all supported modulo rules and
+// avoids MatchDigits' saturation of large integers to 1,000,000. Canonical decimal
+// fractions have no trailing zeros, so v == w and f == t.
+func pluralOperand(digits string) int {
+	const modulus = 10_000_000
+	digits = strings.TrimLeft(digits, "0")
+	base := 0
+	if len(digits) > 7 {
+		base = modulus
+		digits = digits[len(digits)-7:]
+	}
+	value := 0
+	for i := range len(digits) {
+		value = value*10 + int(digits[i]-'0')
+	}
+	return base + value
+}
+
+func renderTemplate(parts []templatePart, args map[string]Argument) (string, error) {
+	var out strings.Builder
+	for _, part := range parts {
+		text := part.text
+		if part.parameter != "" {
+			text = args[part.parameter].text
+		}
+		if len(text) > MaxTextBytes-out.Len() {
+			return "", invalidMessage()
+		}
+		out.WriteString(text)
+	}
+	return out.String(), nil
+}

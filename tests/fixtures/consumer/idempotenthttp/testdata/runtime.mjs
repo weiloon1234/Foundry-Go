@@ -1,0 +1,24 @@
+import assert from "node:assert/strict";
+import { pathToFileURL } from "node:url";
+const sdk = await import(pathToFileURL(process.argv[2]).href);
+const baseURL = process.argv[3];
+let calls = 0;
+const transport = async request => {
+  calls++;
+  const response = await fetch(request.url, { method: request.method, headers: request.headers, body: request.body, signal: request.signal });
+  return { status: response.status, headers: Object.fromEntries(response.headers), body: new Uint8Array(await response.arrayBuffer()), close() {} };
+};
+const client = sdk.createClient(transport, { baseURL, headers: { Authorization: "Bearer alice" } });
+const key = sdk.idempotencyKey("typescript-submission-0001");
+const input = { path: { workspace: "1" }, body: { name: "typescript", memo: null }, idempotencyKey: key };
+const first = await client.ordersCreate(input);
+const second = await client.ordersCreate({ ...input, body: { memo: null, name: " typescript " } });
+assert.deepEqual(first, second);
+await assert.rejects(() => client.ordersCreate({ ...input, body: { name: "typescript" } }), error => error instanceof sdk.APIError && error.status === 409 && error.code === "idempotency_mismatch");
+const before = calls;
+for (const invalid of ["tiny", "contains spaces 0001", "typescript-submission-0001\n", "x".repeat(257)]) assert.throws(() => sdk.idempotencyKey(invalid), sdk.ContractError);
+await assert.rejects(() => client.ordersCreate({ path: input.path, body: input.body }), sdk.ContractError);
+await assert.rejects(() => client.ordersCreate(input, { headers: { "IDEMPOTENCY-KEY": key } }), sdk.ContractError);
+assert.equal(calls, before);
+assert.equal(sdk.manifestVersion, 4);
+console.log("typed idempotency keys, HTTP replay and mismatch passed");

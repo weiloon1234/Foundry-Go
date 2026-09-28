@@ -1,0 +1,720 @@
+{
+  "checks": {
+    "t01-consumer-r1": {
+      "elapsed_seconds": 32.6,
+      "exit": 1,
+      "log_sha256": "e17f6fdd2f8468fa5272588494f7f10c6257af89647a43c583311293f175b1c1"
+    },
+    "t01-consumer-r2": {
+      "elapsed_seconds": 34.0,
+      "exit": 0,
+      "log_sha256": "ed516d63fb22d7c49b315a9299c4df6bd0d1865dba7ca443e1f3b0ec471fba04"
+    },
+    "t01-docs-r1": {
+      "elapsed_seconds": 0.2,
+      "exit": 0,
+      "log_sha256": "fd85898d49c4c9b114d0251a950b2b369f7138485ca00565be369f6c6c8979fb"
+    },
+    "t01-editor-r1": {
+      "elapsed_seconds": 4.0,
+      "exit": 0,
+      "log_sha256": "b7c36b7f7cff5cbcf7fafe3584e36c92131a5117d0b325966c680cecb8751f82"
+    },
+    "t01-full-r1": {
+      "elapsed_seconds": 641.7,
+      "exit": 0,
+      "log_sha256": "f4ce1bccc27cf2f4a6f30083360fe4696cd5bac3c65699b5f02080fbf35532de"
+    },
+    "t01-generate-r1": {
+      "elapsed_seconds": 33.8,
+      "exit": 0,
+      "log_sha256": "055419ce43749697332856922be4eabd60a933bd2273d18c1b433dcbd4bcb84e"
+    },
+    "t01-runtime-r1": {
+      "elapsed_seconds": 42.1,
+      "exit": 1,
+      "log_sha256": "05f7901c0865850fc579e6c4be388709a03df244cac15f0c0167e7d4c93f523c"
+    },
+    "t01-runtime-r2": {
+      "elapsed_seconds": 44.7,
+      "exit": 0,
+      "log_sha256": "a86f4091f81f576d117073fa942ef8aaf14f6a82ff2336dea095a582c8f06302"
+    }
+  },
+  "cost": {
+    "benchmarks": "goos: darwin\ngoarch: arm64\npkg: foundry.test/consumer/genericdto\ncpu: Apple M4 Max\nBenchmarkGenericEnvelopeConstruction/generic-16         \t   91995\t     12570 ns/op\t   19324 B/op\t     119 allocs/op\nBenchmarkGenericEnvelopeConstruction/generic-16         \t   95468\t     13003 ns/op\t   19324 B/op\t     119 allocs/op\nBenchmarkGenericEnvelopeConstruction/generic-16         \t   95182\t     12712 ns/op\t   19324 B/op\t     119 allocs/op\nBenchmarkGenericEnvelopeConstruction/generic-16         \t   94272\t     12659 ns/op\t   19324 B/op\t     119 allocs/op\nBenchmarkGenericEnvelopeConstruction/generic-16         \t   94510\t     12792 ns/op\t   19324 B/op\t     119 allocs/op\nBenchmarkGenericEnvelopeConstruction/concrete-16        \t  205214\t      5753 ns/op\t   13812 B/op\t      83 allocs/op\nBenchmarkGenericEnvelopeConstruction/concrete-16        \t  208190\t      5695 ns/op\t   13812 B/op\t      83 allocs/op\nBenchmarkGenericEnvelopeConstruction/concrete-16        \t  214401\t      5693 ns/op\t   13812 B/op\t      83 allocs/op\nBenchmarkGenericEnvelopeConstruction/concrete-16        \t  214461\t      5737 ns/op\t   13812 B/op\t      83 allocs/op\nBenchmarkGenericEnvelopeConstruction/concrete-16        \t  212755\t      5702 ns/op\t   13812 B/op\t      83 allocs/op\nBenchmarkGenericEnvelopeEncoding/generic-16             \t  186607\t      6371 ns/op\t    5109 B/op\t     105 allocs/op\nBenchmarkGenericEnvelopeEncoding/generic-16             \t  188806\t      6409 ns/op\t    5108 B/op\t     105 allocs/op\nBenchmarkGenericEnvelopeEncoding/generic-16             \t  191714\t      6375 ns/op\t    5109 B/op\t     105 allocs/op\nBenchmarkGenericEnvelopeEncoding/generic-16             \t  189552\t      6390 ns/op\t    5108 B/op\t     105 allocs/op\nBenchmarkGenericEnvelopeEncoding/generic-16             \t  189421\t      6392 ns/op\t    5109 B/op\t     105 allocs/op\nBenchmarkGenericEnvelopeEncoding/concrete-16            \t  189840\t      6406 ns/op\t    5110 B/op\t     105 allocs/op\nBenchmarkGenericEnvelopeEncoding/concrete-16            \t  188088\t      6384 ns/op\t    5109 B/op\t     105 allocs/op\nBenchmarkGenericEnvelopeEncoding/concrete-16            \t  184782\t      6427 ns/op\t    5109 B/op\t     105 allocs/op\nBenchmarkGenericEnvelopeEncoding/concrete-16            \t  188725\t      6432 ns/op\t    5109 B/op\t     105 allocs/op\nBenchmarkGenericEnvelopeEncoding/concrete-16            \t  188898\t      6366 ns/op\t    5109 B/op\t     105 allocs/op\nPASS\nok  \tfoundry.test/consumer/genericdto\t24.358s\n",
+    "benchmarks_parsed": {
+      "BenchmarkGenericEnvelopeConstruction/concrete": {
+        "median": {
+          "allocations": 83,
+          "bytes": 13812,
+          "ns": 5702
+        },
+        "samples": [
+          {
+            "allocations": 83,
+            "bytes": 13812,
+            "ns": 5753
+          },
+          {
+            "allocations": 83,
+            "bytes": 13812,
+            "ns": 5695
+          },
+          {
+            "allocations": 83,
+            "bytes": 13812,
+            "ns": 5693
+          },
+          {
+            "allocations": 83,
+            "bytes": 13812,
+            "ns": 5737
+          },
+          {
+            "allocations": 83,
+            "bytes": 13812,
+            "ns": 5702
+          }
+        ]
+      },
+      "BenchmarkGenericEnvelopeConstruction/generic": {
+        "median": {
+          "allocations": 119,
+          "bytes": 19324,
+          "ns": 12712
+        },
+        "samples": [
+          {
+            "allocations": 119,
+            "bytes": 19324,
+            "ns": 12570
+          },
+          {
+            "allocations": 119,
+            "bytes": 19324,
+            "ns": 13003
+          },
+          {
+            "allocations": 119,
+            "bytes": 19324,
+            "ns": 12712
+          },
+          {
+            "allocations": 119,
+            "bytes": 19324,
+            "ns": 12659
+          },
+          {
+            "allocations": 119,
+            "bytes": 19324,
+            "ns": 12792
+          }
+        ]
+      },
+      "BenchmarkGenericEnvelopeEncoding/concrete": {
+        "median": {
+          "allocations": 105,
+          "bytes": 5109,
+          "ns": 6406
+        },
+        "samples": [
+          {
+            "allocations": 105,
+            "bytes": 5110,
+            "ns": 6406
+          },
+          {
+            "allocations": 105,
+            "bytes": 5109,
+            "ns": 6384
+          },
+          {
+            "allocations": 105,
+            "bytes": 5109,
+            "ns": 6427
+          },
+          {
+            "allocations": 105,
+            "bytes": 5109,
+            "ns": 6432
+          },
+          {
+            "allocations": 105,
+            "bytes": 5109,
+            "ns": 6366
+          }
+        ]
+      },
+      "BenchmarkGenericEnvelopeEncoding/generic": {
+        "median": {
+          "allocations": 105,
+          "bytes": 5109,
+          "ns": 6390
+        },
+        "samples": [
+          {
+            "allocations": 105,
+            "bytes": 5109,
+            "ns": 6371
+          },
+          {
+            "allocations": 105,
+            "bytes": 5108,
+            "ns": 6409
+          },
+          {
+            "allocations": 105,
+            "bytes": 5109,
+            "ns": 6375
+          },
+          {
+            "allocations": 105,
+            "bytes": 5108,
+            "ns": 6390
+          },
+          {
+            "allocations": 105,
+            "bytes": 5109,
+            "ns": 6392
+          }
+        ]
+      }
+    },
+    "commands": [
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "-o",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/foundry",
+          "./cmd/foundry"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+        "darwin_max_process_rss_bytes": 475594752,
+        "elapsed_seconds": 0.7073374999890802,
+        "exit": 0,
+        "name": "prepare-generator",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 499236864,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-run",
+          "^$",
+          "-bench",
+          "^BenchmarkGenericEnvelope",
+          "-benchmem",
+          "-count=5",
+          "./genericdto"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/tests/fixtures/consumer",
+        "darwin_max_process_rss_bytes": 468484096,
+        "elapsed_seconds": 24.969078416994307,
+        "exit": 0,
+        "name": "benchmarks",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 516096000,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/gofmt",
+          "-w",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/generic/genericdto/envelope.go"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/generic",
+        "darwin_max_process_rss_bytes": 5750784,
+        "elapsed_seconds": 0.23710025000036694,
+        "exit": 0,
+        "name": "generic-format",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1785856,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/generic"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/generic",
+        "darwin_max_process_rss_bytes": 303529984,
+        "elapsed_seconds": 4.523501625008066,
+        "exit": 0,
+        "name": "generic-generation-cold",
+        "sampled_compiler_rss_bytes": 298336256,
+        "sampled_tree_rss_bytes": 549584896,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/generic"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/generic",
+        "darwin_max_process_rss_bytes": 192921600,
+        "elapsed_seconds": 0.483651833012118,
+        "exit": 0,
+        "name": "generic-generation-unchanged",
+        "sampled_compiler_rss_bytes": 101679104,
+        "sampled_tree_rss_bytes": 162398208,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/generic",
+        "darwin_max_process_rss_bytes": 304332800,
+        "elapsed_seconds": 4.049853874996188,
+        "exit": 0,
+        "name": "generic-build-cold",
+        "sampled_compiler_rss_bytes": 288882688,
+        "sampled_tree_rss_bytes": 492371968,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/generic",
+        "darwin_max_process_rss_bytes": 43958272,
+        "elapsed_seconds": 0.23616095900069922,
+        "exit": 0,
+        "name": "generic-build-unchanged",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1376256,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/gofmt",
+          "-w",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/generic/genericdto/envelope.go"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/generic",
+        "darwin_max_process_rss_bytes": 5636096,
+        "elapsed_seconds": 0.23949104201165028,
+        "exit": 0,
+        "name": "generic-format-edit",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1425408,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/generic"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/generic",
+        "darwin_max_process_rss_bytes": 186286080,
+        "elapsed_seconds": 0.7261160000052769,
+        "exit": 0,
+        "name": "generic-generation-edited",
+        "sampled_compiler_rss_bytes": 114540544,
+        "sampled_tree_rss_bytes": 174358528,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/generic",
+        "darwin_max_process_rss_bytes": 191561728,
+        "elapsed_seconds": 0.4861027919978369,
+        "exit": 0,
+        "name": "generic-build-edited",
+        "sampled_compiler_rss_bytes": 107266048,
+        "sampled_tree_rss_bytes": 151781376,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/gofmt",
+          "-w",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/concrete/genericdto/envelope.go"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/concrete",
+        "darwin_max_process_rss_bytes": 5750784,
+        "elapsed_seconds": 0.233607000001939,
+        "exit": 0,
+        "name": "concrete-format",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1687552,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/concrete"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/concrete",
+        "darwin_max_process_rss_bytes": 296484864,
+        "elapsed_seconds": 4.063440458005061,
+        "exit": 0,
+        "name": "concrete-generation-cold",
+        "sampled_compiler_rss_bytes": 284262400,
+        "sampled_tree_rss_bytes": 411795456,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/concrete"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/concrete",
+        "darwin_max_process_rss_bytes": 179716096,
+        "elapsed_seconds": 0.47604870799113996,
+        "exit": 0,
+        "name": "concrete-generation-unchanged",
+        "sampled_compiler_rss_bytes": 98484224,
+        "sampled_tree_rss_bytes": 158744576,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/concrete",
+        "darwin_max_process_rss_bytes": 305709056,
+        "elapsed_seconds": 4.2893455419980455,
+        "exit": 0,
+        "name": "concrete-build-cold",
+        "sampled_compiler_rss_bytes": 305643520,
+        "sampled_tree_rss_bytes": 562282496,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/concrete",
+        "darwin_max_process_rss_bytes": 42926080,
+        "elapsed_seconds": 0.24587787500058766,
+        "exit": 0,
+        "name": "concrete-build-unchanged",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1392640,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/gofmt",
+          "-w",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/concrete/genericdto/envelope.go"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/concrete",
+        "darwin_max_process_rss_bytes": 5718016,
+        "elapsed_seconds": 0.23766162499669008,
+        "exit": 0,
+        "name": "concrete-format-edit",
+        "sampled_compiler_rss_bytes": 0,
+        "sampled_tree_rss_bytes": 1425408,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/foundry",
+          "generate",
+          "--recursive",
+          "--dir",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/concrete"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/concrete",
+        "darwin_max_process_rss_bytes": 184172544,
+        "elapsed_seconds": 0.49649387499084696,
+        "exit": 0,
+        "name": "concrete-generation-edited",
+        "sampled_compiler_rss_bytes": 130711552,
+        "sampled_tree_rss_bytes": 190627840,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "build",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/concrete",
+        "darwin_max_process_rss_bytes": 191086592,
+        "elapsed_seconds": 0.47871762499562465,
+        "exit": 0,
+        "name": "concrete-build-edited",
+        "sampled_compiler_rss_bytes": 131809280,
+        "sampled_tree_rss_bytes": 176685056,
+        "timed_out": false
+      }
+    ],
+    "profiles": {
+      "concrete": {
+        "generated_edited": {
+          "bytes": 12059,
+          "files": 4,
+          "sha256": {
+            "genericdto/project_dto_foundry.gen.go": "437040c42f64b36a0eb939c054cd7071440e2cbf8967d75652b24cab371eebc7",
+            "genericdto/project_envelope_foundry.gen.go": "7a8d33868a395093e9198075b842738b80b83cb724ce8235e0d5f9112198aa29",
+            "genericdto/user_dto_foundry.gen.go": "5d8219db70ffa1869ce6eb3117e3cb80bb23bfdc004a52a0565cb393f5b03c10",
+            "genericdto/user_envelope_foundry.gen.go": "c91f1317a7a5cecb3d14b222c9d84dbe4e9efdac7242bd79a2b505e355b334c3"
+          }
+        },
+        "generated_imports": [
+          "github.com/weiloon1234/Foundry-Go/contract",
+          "github.com/weiloon1234/Foundry-Go/model",
+          "github.com/weiloon1234/Foundry-Go/validation",
+          "github.com/weiloon1234/Foundry-Go/value"
+        ],
+        "generated_initial": {
+          "bytes": 11252,
+          "files": 4,
+          "sha256": {
+            "genericdto/project_dto_foundry.gen.go": "5625ea1bd51d81759623db665071c3218a13d2280d4f2b7cf7dda0e33ed39dc7",
+            "genericdto/project_envelope_foundry.gen.go": "f9f340542283c5b940e809c53b9bc78181f34efcbad310c545b6ee591b1cf484",
+            "genericdto/user_dto_foundry.gen.go": "48e2b1e44bf6d81cec0a7f1904e0b6976217f0d145dcfea3e3f67492d508a32b",
+            "genericdto/user_envelope_foundry.gen.go": "8bac538d10f0b2a893f31c608f9932a4e20ea5ed3020ea2650029752376eb1d3"
+          }
+        },
+        "source_sha256": "a155fb78e437bd95ca8e1a4e2cc2ed71daaf604a746d0cec1a817cbbfbf93698"
+      },
+      "generic": {
+        "generated_edited": {
+          "bytes": 8345,
+          "files": 3,
+          "sha256": {
+            "genericdto/envelope_foundry.gen.go": "98195e19928863599dc790a280aca2917af93f2ac7a184298c290bd43d8185a9",
+            "genericdto/project_dto_foundry.gen.go": "437040c42f64b36a0eb939c054cd7071440e2cbf8967d75652b24cab371eebc7",
+            "genericdto/user_dto_foundry.gen.go": "5d8219db70ffa1869ce6eb3117e3cb80bb23bfdc004a52a0565cb393f5b03c10"
+          }
+        },
+        "generated_imports": [
+          "github.com/weiloon1234/Foundry-Go/contract",
+          "github.com/weiloon1234/Foundry-Go/model",
+          "github.com/weiloon1234/Foundry-Go/validation",
+          "github.com/weiloon1234/Foundry-Go/value"
+        ],
+        "generated_initial": {
+          "bytes": 7796,
+          "files": 3,
+          "sha256": {
+            "genericdto/envelope_foundry.gen.go": "f5cb5515359f15edc002a9c6e38b8314a79df987a1c883414d08bc1209243012",
+            "genericdto/project_dto_foundry.gen.go": "5625ea1bd51d81759623db665071c3218a13d2280d4f2b7cf7dda0e33ed39dc7",
+            "genericdto/user_dto_foundry.gen.go": "48e2b1e44bf6d81cec0a7f1904e0b6976217f0d145dcfea3e3f67492d508a32b"
+          }
+        },
+        "source_sha256": "654dafb1ee0736c5717a11126d811574332d4eb960a9fe4a7e7375214b4236a2"
+      }
+    },
+    "scope": "Native local source checkout. Equivalent two-endpoint generic versus concrete envelope consumers; independent Go build caches, existing module cache, no downloaded packages. Single sequential cost sample per state; five steady-state benchmark samples. Private copies only."
+  },
+  "date": "2026-09-18",
+  "final_source_sha256": {
+    "contract/json.go": "c2f0de98ba9f9f9f4380530db3f95e386ed56f00da9828cead1f38d2ad3c0c3f",
+    "contract/json_bytes_composition_test.go": "2c1037157b9c7b58af8480801d58a8ffe86538fcba4efb42108820d332004180",
+    "contract/json_composition.go": "26e9bdf5c05db435c2cb6a7965b8b8916ec00c797c59cc27415f8327883a208b",
+    "contract/json_field.go": "78f660b87383ead340f7dc5f06dac879efb88d4d38f179326ba1d22c906f8025",
+    "contract/json_generic.go": "a341e3f2333b0ec4229989662ea9f4aba581d4bdb1e6f00bdc0f966c9cf631a9",
+    "contract/json_value.go": "53c6366f4693ea100bcbebb4913061949a9f1a34f51f2d8eebad3730923a8a35",
+    "contract/schema.go": "c692fc54153f9a9e7017e7febeeb241a2815c682c2769afc7da06859fc13720d",
+    "contract/schema_compile.go": "ec9cc3b69a6a9a5da20bdcb1bda7dc6569b6394f700c3c46c7037507c4ead819",
+    "contract/schema_includes.go": "69cacdaf4748818ab03b7d343c43ed6315fa7cd439f1061a50a1eacfd344796a",
+    "internal/agent/gopls_acceptance_test.go": "64d545d603d81b1ba63e04d65ea60e273e45a55cb6badf3b9152d8680a06dec0",
+    "internal/generate/discover.go": "aadd389100cabcb816b59fad6210641e54020f7aef24413c27521a48fd14636f",
+    "internal/generate/discover_dto.go": "f02a450fed46db3e30c543008d443684687c0dece7039215afc1caaef592b562",
+    "internal/generate/dto_generic_test.go": "8a54e97f10261fa2e493295d027f774f73979858ebf03813d8cdb2ebec0c39fa",
+    "internal/generate/dto_identity.go": "0cd33d90d5f0192e3f6b1d110429d4bb6d7fa67d747770c927f7768058e3655f",
+    "internal/generate/dto_instantiation.go": "d151a378e4ce2ff5b18b363a3c145abf78ddff2f5541a740cd87b292a87b342d",
+    "internal/generate/dto_map_key.go": "b7a756ca0d6289890aa5b433f5b918f8d00675e22b6d76a7a49a8f99f281b1a9",
+    "internal/generate/dto_test.go": "74857d2a706701d977d55e83a7188c7a077dd101fa50e2ac267c269cf31ee005",
+    "internal/generate/emit.go": "ff93e929f9909e45d57f90c666e132c0b96bbc7ac5949123aba8dbcfc4db713a",
+    "internal/generate/emit_dto.go": "546076702e17ee55851847b0bd485eca39f1cd9cca899647a06683b71623b7a7",
+    "internal/generate/emit_dto_generic.go": "4eaa990e49b859070f0eebc19086f8aa46394616038d714038cbaec1b24a84aa",
+    "internal/generate/emit_dto_validation.go": "81f0998ca8b5cd90c811a990e0e4ace513cfac5319d6bbcac150fc34bb19ae41",
+    "internal/gotype/identity.go": "667f4bf38c3b1f5c0424c6ce5f776e51bc8da629f1a3b85a8d2e979de7fb5427",
+    "internal/gotype/identity_test.go": "d3e46d71a0a578f9bf47be2d3420e4b3b78ebd9de2a14c0cffa309b7f8d6cc42",
+    "tests/fixtures/consumer/clientcontracts/contracts.go": "2c283d6e4f5d4bd2eeba1bfe52a402d193e8e1ae868f4dc9dde94885a2f50217",
+    "tests/fixtures/consumer/clientcontracts/contracts_test.go": "efaf656ab8035ed24a620261921496a642ffce2e8bc3075f9101e1921ae90fca",
+    "tests/fixtures/consumer/clientcontracts/testdata/runtime.mjs": "45bb2a0d9eba7518276c3d142664c7655e20c68fee70b6412eb25d060de1d016",
+    "tests/fixtures/consumer/clientcontracts/testdata/types.ts": "cf6ba52831a630f409167c5209b394055826f045805cbf590836abafad1d8d79",
+    "tests/fixtures/consumer/genericdto/combined_foundry.gen.go": "b2f055b9d4352245929de0e09d7ebeaf692856dc4a8b81fbc96314b843d798b7",
+    "tests/fixtures/consumer/genericdto/envelope.go": "ad56149e421b136871fe94e1d8ea1296432cd0b032538ebeedf9c2bc4036e14f",
+    "tests/fixtures/consumer/genericdto/envelope_foundry.gen.go": "f5cb5515359f15edc002a9c6e38b8314a79df987a1c883414d08bc1209243012",
+    "tests/fixtures/consumer/genericdto/envelope_test.go": "67d13a05093fbf43114bbc7a8fe07223178a3653629e520fbceaf49b64cd7e8d",
+    "tests/fixtures/consumer/genericdto/project_dto_foundry.gen.go": "5625ea1bd51d81759623db665071c3218a13d2280d4f2b7cf7dda0e33ed39dc7",
+    "tests/fixtures/consumer/genericdto/user_dto_foundry.gen.go": "48e2b1e44bf6d81cec0a7f1904e0b6976217f0d145dcfea3e3f67492d508a32b",
+    "tests/fixtures/consumer/genericdto/user_envelope_foundry.gen.go": "d2bd0a391f61e981688afe18d80ffb11199f1f1fac0fdd81b0502877c57626de",
+    "tests/fixtures/consumer/testdata/compilefail/generic_dto_argument/invalid.go": "04b165f35a3b3b57035c64ef9166102aa9dabc4b01163e5e4cb7061908ec3a49",
+    "tests/fixtures/consumer/testdata/compilefail/generic_dto_handler/invalid.go": "aa386ba8520f9b0f7af8a90e3bba2b972d7b5ae31e2fbdafbaf591de397ce7e3",
+    "tests/fixtures/consumer/testdata/compilefail/generic_dto_rule/invalid.go": "983566933aecc7507d6494842b14bd715391f99bbe937229d6b97c90ab2444f8",
+    "tests/fixtures/consumer/types_test.go": "eda4cc355b06df7e7895bc703487ddb30082c18fc8f58ccfa9d72fe1eb0446c9"
+  },
+  "fixes": [
+    "Preserve anonymous-struct field/type whitespace during source identity normalization.",
+    "Share native base64 byte-slice composition and reject element contracts incompatible with base64.",
+    "Make the existing TypeScript connection-close assertion relative to the request under test."
+  ],
+  "go": "go1.27.1 darwin/arm64",
+  "http_cost": {
+    "benchmarks_parsed": {
+      "concrete": {
+        "BenchmarkT01HTTP": {
+          "median": {
+            "allocations": 247,
+            "bytes": 19605,
+            "ns": 19483
+          },
+          "samples": [
+            {
+              "allocations": 247,
+              "bytes": 19602,
+              "ns": 19385
+            },
+            {
+              "allocations": 247,
+              "bytes": 19603,
+              "ns": 19369
+            },
+            {
+              "allocations": 247,
+              "bytes": 19607,
+              "ns": 19579
+            },
+            {
+              "allocations": 247,
+              "bytes": 19606,
+              "ns": 19483
+            },
+            {
+              "allocations": 247,
+              "bytes": 19605,
+              "ns": 19548
+            }
+          ]
+        }
+      },
+      "generic": {
+        "BenchmarkT01HTTP": {
+          "median": {
+            "allocations": 247,
+            "bytes": 19604,
+            "ns": 19657
+          },
+          "samples": [
+            {
+              "allocations": 247,
+              "bytes": 19600,
+              "ns": 19657
+            },
+            {
+              "allocations": 247,
+              "bytes": 19605,
+              "ns": 19733
+            },
+            {
+              "allocations": 247,
+              "bytes": 19604,
+              "ns": 19432
+            },
+            {
+              "allocations": 247,
+              "bytes": 19602,
+              "ns": 19673
+            },
+            {
+              "allocations": 247,
+              "bytes": 19605,
+              "ns": 19599
+            }
+          ]
+        }
+      }
+    },
+    "commands": [
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-run",
+          "^$",
+          "-bench",
+          "^BenchmarkT01HTTP$",
+          "-benchmem",
+          "-count=5",
+          "./genericdto"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/generic",
+        "darwin_max_process_rss_bytes": 212910080,
+        "elapsed_seconds": 7.916531665992807,
+        "exit": 0,
+        "name": "generic",
+        "sampled_compiler_rss_bytes": 93634560,
+        "sampled_tree_rss_bytes": 220037120,
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-run",
+          "^$",
+          "-bench",
+          "^BenchmarkT01HTTP$",
+          "-benchmem",
+          "-count=5",
+          "./genericdto"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/t-series/t01/cost-r1/concrete",
+        "darwin_max_process_rss_bytes": 203669504,
+        "elapsed_seconds": 7.691017832999933,
+        "exit": 0,
+        "name": "concrete",
+        "sampled_compiler_rss_bytes": 103989248,
+        "sampled_tree_rss_bytes": 318029824,
+        "timed_out": false
+      }
+    ],
+    "results": {
+      "concrete": "goos: darwin\ngoarch: arm64\npkg: foundry.test/consumer/genericdto\ncpu: Apple M4 Max\nBenchmarkT01HTTP-16    \t   60451\t     19385 ns/op\t   19602 B/op\t     247 allocs/op\nBenchmarkT01HTTP-16    \t   61861\t     19369 ns/op\t   19603 B/op\t     247 allocs/op\nBenchmarkT01HTTP-16    \t   61874\t     19579 ns/op\t   19607 B/op\t     247 allocs/op\nBenchmarkT01HTTP-16    \t   60825\t     19483 ns/op\t   19606 B/op\t     247 allocs/op\nBenchmarkT01HTTP-16    \t   62809\t     19548 ns/op\t   19605 B/op\t     247 allocs/op\nPASS\nok  \tfoundry.test/consumer/genericdto\t6.417s\n",
+      "generic": "goos: darwin\ngoarch: arm64\npkg: foundry.test/consumer/genericdto\ncpu: Apple M4 Max\nBenchmarkT01HTTP-16    \t   59366\t     19657 ns/op\t   19600 B/op\t     247 allocs/op\nBenchmarkT01HTTP-16    \t   60006\t     19733 ns/op\t   19605 B/op\t     247 allocs/op\nBenchmarkT01HTTP-16    \t   61735\t     19432 ns/op\t   19604 B/op\t     247 allocs/op\nBenchmarkT01HTTP-16    \t   61417\t     19673 ns/op\t   19602 B/op\t     247 allocs/op\nBenchmarkT01HTTP-16    \t   61980\t     19599 ns/op\t   19605 B/op\t     247 allocs/op\nPASS\nok  \tfoundry.test/consumer/genericdto\t6.488s\n"
+    },
+    "scope": "Full in-process typed HTTP echo, including httptest request/recorder allocation. Same private two-endpoint profiles as generation/build measurement, after identical optional field edit. Sequential, five samples each.",
+    "source": "package genericdto\nimport (\n \"net/http/httptest\"\n \"strings\"\n \"testing\"\n)\nfunc BenchmarkT01HTTP(b *testing.B) {\n router,err:=Router();if err!=nil{b.Fatal(err)}\n body:=`{\"id\":\"0193fd8c-2075-7000-8000-000000000001\",\"name\":\"typed\",\"note\":null,\"sequence\":9223372036854775807}`\n b.ReportAllocs()\n for b.Loop(){\n  request:=httptest.NewRequest(\"POST\",\"/generic/echo\",strings.NewReader(body))\n  request.Header.Set(\"Content-Type\",\"application/json\")\n  response:=httptest.NewRecorder()\n  router.ServeHTTP(response,request)\n  if response.Code!=200{b.Fatal(response.Code,response.Body.String())}\n }\n}\n"
+  },
+  "limits": [
+    "Single sequential timing sample per generation/build state, not a statistical speed claim.",
+    "Native local-checkout profiles with isolated Go build caches and existing module cache; not packaged-release evidence.",
+    "HTTP allocation measurements include httptest request and recorder creation.",
+    "T02\u2013T07 and the required final integrated audit remain outstanding."
+  ],
+  "measurement_harnesses": {
+    "foundry-t01-cost.py": "from pathlib import Path\nimport hashlib\nimport importlib.util\nimport json\nimport os\nimport re\nimport subprocess\n\nos.umask(0o077)\nroot = Path('/Users/weiloon/Projects/rust-go/Foundry-Go')\noutput = root / '.cache/t-series/t01/cost-r1'\noutput.mkdir()\nspec = importlib.util.spec_from_file_location('release_measurement', root / 'tools/measure-release.py')\nmeasurement = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(measurement)\nrunner = measurement.Runner(output, 600)\ngo = '/usr/local/go/bin/go'\nenv = {k: os.environ[k] for k in ('PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL') if k in os.environ}\nenv.update(GOENV='off', GOTOOLCHAIN='local', GOWORK='off', GOFLAGS='-mod=readonly', GOPROXY='off', DEVELOPER_DIR='/Library/Developer/CommandLineTools')\nenv['PATH'] = '/usr/local/go/bin:' + env['PATH']\nfoundry = output / 'foundry'\nrunner.run('prepare-generator', [go, 'build', '-o', foundry, './cmd/foundry'], root, env)\nbench = runner.run('benchmarks', [go, 'test', '-run', '^$', '-bench', '^BenchmarkGenericEnvelope', '-benchmem', '-count=5', './genericdto'], root / 'tests/fixtures/consumer', env)\n\nsource = (root / 'tests/fixtures/consumer/genericdto/envelope.go').read_text()\nsource = re.sub(r'//foundry:dto\\ntype UserEnvelope struct \\{.*?\\n\\}\\n\\n', '', source, flags=re.S)\nsource = re.sub(r'//foundry:dto\\ntype Combined struct \\{.*?\\n\\}\\n\\n', '', source, flags=re.S)\ngeneric_template = re.search(r'//foundry:dto\\ntype Envelope\\[T any\\] struct \\{.*?\\n\\}', source, flags=re.S).group()\nconcrete = source.replace(generic_template, generic_template.replace('Envelope[T any]', 'UserEnvelope').replace('Data  T ', 'Data  UserDTO ') + '\\n\\n' + generic_template.replace('Envelope[T any]', 'ProjectEnvelope').replace('Data  T ', 'Data  ProjectDTO '))\nfor t, descriptor in (('UserDTO', 'UserEnvelope'), ('ProjectDTO', 'ProjectEnvelope')):\n    concrete = concrete.replace('EnvelopeJSON(' + t + 'JSON())', descriptor + 'JSON()')\n    concrete = concrete.replace('Envelope[' + t + ']', descriptor)\n    concrete = concrete.replace('EnvelopeValidationFields[' + t + ']()', descriptor + 'ValidationFields()')\nmodule = (root / 'tests/fixtures/consumer/go.mod').read_text()\nmodule = module.replace('=> ../../..', '=> ' + str(root)).replace('=> ../plugin_base', '=> ' + str(root / 'tests/fixtures/plugin_base')).replace('=> ../plugin_dep', '=> ' + str(root / 'tests/fixtures/plugin_dep'))\nprofiles = {}\nfor name, text in (('generic', source), ('concrete', concrete)):\n    consumer = output / name\n    package = consumer / 'genericdto'\n    package.mkdir(parents=True)\n    (consumer / 'go.mod').write_text(module)\n    (consumer / 'go.sum').write_bytes((root / 'tests/fixtures/consumer/go.sum').read_bytes())\n    dto = package / 'envelope.go'\n    dto.write_text(text)\n    runner.run(name + '-format', ['/usr/local/go/bin/gofmt', '-w', dto], consumer, env)\n    original = dto.read_text()\n    generation_env = dict(env, GOCACHE=str(output / (name + '-generation-cache')))\n    generate = [foundry, 'generate', '--recursive', '--dir', consumer]\n    runner.run(name + '-generation-cold', generate, consumer, generation_env)\n    initial = measurement.generated_inventory(consumer)\n    runner.run(name + '-generation-unchanged', generate, consumer, generation_env)\n    if initial != measurement.generated_inventory(consumer):\n        raise ValueError('unchanged generation changed output')\n    build_env = dict(env, GOCACHE=str(output / (name + '-build-cache')))\n    runner.run(name + '-build-cold', [go, 'build', './...'], consumer, build_env)\n    runner.run(name + '-build-unchanged', [go, 'build', './...'], consumer, build_env)\n    marker = 'type UserDTO struct {'\n    assert original.count(marker) == 1\n    dto.write_text(original.replace(marker, marker + '\\n\\tMeasurement value.Optional[string] `json:\"measurement,omitzero\"`'))\n    runner.run(name + '-format-edit', ['/usr/local/go/bin/gofmt', '-w', dto], consumer, env)\n    runner.run(name + '-generation-edited', generate, consumer, generation_env)\n    edited = measurement.generated_inventory(consumer)\n    if initial == edited:\n        raise ValueError('DTO edit did not reach generated source')\n    runner.run(name + '-build-edited', [go, 'build', './...'], consumer, build_env)\n    generated = sorted(package.glob('*_foundry.gen.go'))\n    profiles[name] = dict(generated_initial=initial, generated_edited=edited,\n                          generated_imports=sorted(set(re.findall(r'\"(github.com/[^\"\\n]+)\"', '\\n'.join(p.read_text() for p in generated)))),\n                          source_sha256=hashlib.sha256(original.encode()).hexdigest())\n\nreport = dict(scope='Native local source checkout. Equivalent two-endpoint generic versus concrete envelope consumers; independent Go build caches, existing module cache, no downloaded packages. Single sequential cost sample per state; five steady-state benchmark samples. Private copies only.',\n              profiles=profiles, commands=runner.results, benchmarks=bench)\nmeasurement.write_json(output / 'report.json', report)\nprint(json.dumps({'report': str(output / 'report.json')}), flush=True)\n",
+    "foundry-t01-http-cost.py": "from pathlib import Path\nimport importlib.util\nimport json\nimport os\n\nos.umask(0o077)\nroot = Path('/Users/weiloon/Projects/rust-go/Foundry-Go')\noutput = root / '.cache/t-series/t01/cost-r1'\nspec = importlib.util.spec_from_file_location('release_measurement', root / 'tools/measure-release.py')\nmeasurement = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(measurement)\nstage = output / 'http-cost'\nstage.mkdir()\nrunner = measurement.Runner(stage, 300)\nenv = {k: os.environ[k] for k in ('PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL') if k in os.environ}\nenv.update(GOENV='off', GOTOOLCHAIN='local', GOWORK='off', GOFLAGS='-mod=readonly', GOPROXY='off', DEVELOPER_DIR='/Library/Developer/CommandLineTools')\nenv['PATH'] = '/usr/local/go/bin:' + env['PATH']\nsource = '''package genericdto\nimport (\n \"net/http/httptest\"\n \"strings\"\n \"testing\"\n)\nfunc BenchmarkT01HTTP(b *testing.B) {\n router,err:=Router();if err!=nil{b.Fatal(err)}\n body:=`{\"id\":\"0193fd8c-2075-7000-8000-000000000001\",\"name\":\"typed\",\"note\":null,\"sequence\":9223372036854775807}`\n b.ReportAllocs()\n for b.Loop(){\n  request:=httptest.NewRequest(\"POST\",\"/generic/echo\",strings.NewReader(body))\n  request.Header.Set(\"Content-Type\",\"application/json\")\n  response:=httptest.NewRecorder()\n  router.ServeHTTP(response,request)\n  if response.Code!=200{b.Fatal(response.Code,response.Body.String())}\n }\n}\n'''\nresults = {}\nfor name in ('generic', 'concrete'):\n    consumer = output / name\n    (consumer / 'genericdto/http_bench_test.go').write_text(source)\n    results[name] = runner.run(name, ['/usr/local/go/bin/go', 'test', '-run', '^$', '-bench', '^BenchmarkT01HTTP$', '-benchmem', '-count=5', './genericdto'], consumer, dict(env, GOCACHE=str(output / (name+'-build-cache'))))\nmeasurement.write_json(stage / 'report.json', dict(scope='Full in-process typed HTTP echo, including httptest request/recorder allocation. Same private two-endpoint profiles as generation/build measurement, after identical optional field edit. Sequential, five samples each.', source=source, results=results, commands=runner.results))\n"
+  },
+  "milestone": "T01"
+}

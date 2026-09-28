@@ -1,0 +1,13 @@
+package invalid
+
+import (
+	"context"
+	"foundry.test/consumer/coordination"
+	"foundry.test/consumer/mutatorqueries"
+	"github.com/weiloon1234/Foundry-Go/model"
+	"time"
+)
+
+func wrong(l coordination.MemberLeases, id model.ID[mutatorqueries.Member]) {
+	_, _ = l.With(context.Background(), id, time.Second, 0, func(string) error { return nil })
+}

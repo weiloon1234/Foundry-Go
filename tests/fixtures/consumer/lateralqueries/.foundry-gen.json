@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "files": {
+    "ranked_order_foundry.gen.go": "08f20df623c989d55920e94512e399032a25c4137aa8eece48078ab33c908731",
+    "user_order_foundry.gen.go": "3f8d9930e999c309c731ad71f06dc8e469cedd50e01c57bf231fc77945b2377a"
+  }
+}

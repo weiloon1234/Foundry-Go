@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "files": {
+    "group_foundry.gen.go": "0498650def09b576076a8d1f01dbdc1aa3434c17d10c5765b5d118f0f6874917",
+    "member_foundry.gen.go": "e648b4a0b94bbe027e5b9826ab732e0c72bab74caeb33214ef95fa6f0e0bbecb",
+    "member_label_foundry.gen.go": "2ee49103cdbf4578a654ee6ad4e08211fbf0bc0f431b0a070fe345ad80dc893a",
+    "membership_foundry.gen.go": "2431cc07f543959ae8154e7a64f4938e6945a132ea9bb8d0ea0ecc050122d87e"
+  }
+}

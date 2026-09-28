@@ -1,0 +1,54 @@
+[
+  {
+    "request": {
+      "v": 1,
+      "action": "subscribe",
+      "id": "join-1",
+      "channel": "chat",
+      "room": "1"
+    },
+    "response": {
+      "v": 1,
+      "type": "subscribed",
+      "id": "join-1",
+      "channel": "chat",
+      "room": "1"
+    }
+  },
+  {
+    "request": {
+      "v": 1,
+      "action": "message",
+      "id": "send-1",
+      "channel": "chat",
+      "room": "1",
+      "event": "send",
+      "payload": {
+        "text": "hello"
+      }
+    },
+    "response": {
+      "v": 1,
+      "type": "ack",
+      "id": "send-1",
+      "channel": "chat",
+      "room": "1"
+    }
+  },
+  {
+    "request": {
+      "v": 1,
+      "action": "unsubscribe",
+      "id": "leave-1",
+      "channel": "chat",
+      "room": "1"
+    },
+    "response": {
+      "v": 1,
+      "type": "unsubscribed",
+      "id": "leave-1",
+      "channel": "chat",
+      "room": "1"
+    }
+  }
+]

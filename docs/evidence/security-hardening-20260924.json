@@ -1,0 +1,803 @@
+{
+  "format": 1,
+  "status": "accepted",
+  "date": "2026-09-24",
+  "objective": "Implement S01 and G01-G04, verify the implementation, re-audit all five items, fix findings and verify the final source.",
+  "scope": [
+    "S01 cookie-response cache policy",
+    "G01 native CI, security scans and private reporting",
+    "G02 typed outbound destination restrictions",
+    "G03 typed inbound webhook verification",
+    "G04 journaled nontransactional PostgreSQL migrations"
+  ],
+  "source": {
+    "files": 3661,
+    "manifest": ".cache/security-hardening-20260924/source-verified.json",
+    "manifest_sha256": "e8166f0d574a899a15432640eb9f75d0bd05533077a325c407cfa67106cbc125",
+    "inputs_manifest": ".cache/security-hardening-20260924/inputs-verified.json",
+    "inputs_manifest_sha256": "6851c5995748293d6163e37f7e6b280ff8c5d39a83cea760083120c47f232734",
+    "added": [
+      "database/migrate/progress.go",
+      "database/postgres/nontransactional_migrations_test.go",
+      "http/cookie_response.go",
+      "http/cookie_response_test.go",
+      "http/webhook.go",
+      "http/webhook_test.go",
+      "httpclient/destination.go",
+      "httpclient/destination_test.go",
+      "tests/fixtures/consumer/security/configuration_test.go",
+      "tests/fixtures/consumer/security/contracts.go",
+      "tests/fixtures/consumer/security/contracts_test.go",
+      "tests/fixtures/consumer/testdata/compilefail/webhook_account/invalid.go",
+      "tests/fixtures/consumer/testdata/compilefail/webhook_verifier/invalid.go",
+      "webhook/verifier.go",
+      "webhook/verifier_test.go"
+    ],
+    "changed": [
+      "config/json_test.go",
+      "config/schema.go",
+      "database/migrate/history.go",
+      "database/migrate/postgres.go",
+      "database/migrate/registry.go",
+      "database/migrate/registry_test.go",
+      "database/migration_runner_test.go",
+      "http/authentication.go",
+      "http/browser_sessions.go",
+      "httpclient/client.go",
+      "httpclient/config.go",
+      "httpclient/request.go",
+      "infrastructure/http_client_settings_foundry.gen.go",
+      "internal/agent/gopls_acceptance_test.go",
+      "internal/generate/config_test.go",
+      "internal/generate/discover_config.go",
+      "tests/fixtures/consumer/idempotenthttp/publication_test.go",
+      "tests/fixtures/consumer/types_test.go"
+    ],
+    "removed": [],
+    "comparison": "Current source and build/dependency/generation/workflow inputs exactly match final candidate fingerprints."
+  },
+  "environment": {
+    "platform": "darwin/arm64",
+    "tools": {
+      "go": "go version go1.27.1 darwin/arm64",
+      "gopls": "golang.org/x/tools/gopls v0.23.0",
+      "node": "v24.21.0"
+    },
+    "required_modes": [
+      "FOUNDRY_TEST_POSTGRES_REQUIRED=1",
+      "FOUNDRY_TEST_REDIS_REQUIRED=1",
+      "FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1"
+    ],
+    "editor": "Existing native gopls selected through FOUNDRY_TEST_GOPLS; real probes run in make verify.",
+    "client": "Existing Node and TypeScript selected; actual HTTP/WebSocket client acceptance runs in make verify.",
+    "services": "Existing private PostgreSQL configuration and existing local Redis; retained isolated schemas/keys; no database reset, schema deletion or service duplication.",
+    "cache": "Sequential expensive gates using existing warm caches; no cold measurement or shared-cache purge.",
+    "free_disk_gib_at_final_batch_start": 449.1,
+    "free_disk_gib_after_runtime_verification": 396.0
+  },
+  "verification_finished": [
+    {
+      "name": "audit-fix-tests",
+      "command": [
+        "go",
+        "test",
+        "-json",
+        "-timeout=15m",
+        "./httpclient",
+        "./database/migrate",
+        "./database",
+        "./database/postgres"
+      ],
+      "cwd": ".",
+      "exit": 0,
+      "seconds": 4.96
+    },
+    {
+      "name": "docs-and-release-tools",
+      "command": [
+        "make",
+        "GO=/usr/local/go/bin/go",
+        "docs-check",
+        "release-tools-check"
+      ],
+      "cwd": ".",
+      "exit": 0,
+      "seconds": 1.18
+    },
+    {
+      "name": "security",
+      "command": [
+        "make",
+        "GO=/usr/local/go/bin/go",
+        "SECURITY_OUTPUT=.cache/security-hardening-20260924/security-check",
+        "security-check"
+      ],
+      "cwd": ".",
+      "exit": 0,
+      "seconds": 9.57
+    },
+    {
+      "name": "backends-race",
+      "command": [
+        "make",
+        "GO=/usr/local/go/bin/go",
+        "test-postgres",
+        "test-redis"
+      ],
+      "cwd": ".",
+      "exit": 0,
+      "seconds": 1464.05
+    },
+    {
+      "name": "affected-race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-timeout=15m",
+        "./config",
+        "./http",
+        "./httpclient",
+        "./webhook",
+        "./database/migrate",
+        "./database"
+      ],
+      "cwd": ".",
+      "exit": 0,
+      "seconds": 33.06
+    },
+    {
+      "name": "webhook-fuzz",
+      "command": [
+        "go",
+        "test",
+        "./webhook",
+        "-run=^$",
+        "-fuzz=^FuzzStandardHeaders$",
+        "-fuzztime=10s",
+        "-parallel=4"
+      ],
+      "cwd": ".",
+      "exit": 0,
+      "seconds": 12.33
+    },
+    {
+      "name": "verify-final",
+      "command": [
+        "make",
+        "GO=/usr/local/go/bin/go",
+        "verify"
+      ],
+      "cwd": ".",
+      "exit": 0,
+      "seconds": 646.45
+    },
+    {
+      "name": "protocol-race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-timeout=15m",
+        "./webhook",
+        "./http"
+      ],
+      "cwd": ".",
+      "exit": 0,
+      "seconds": 32.71
+    },
+    {
+      "name": "webhook-consumer-race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-timeout=15m",
+        "./idempotenthttp",
+        "./security"
+      ],
+      "cwd": "tests/fixtures/consumer",
+      "exit": 0,
+      "seconds": 24.69
+    },
+    {
+      "name": "stripe-fuzz",
+      "command": [
+        "go",
+        "test",
+        "./webhook",
+        "-run=^$",
+        "-fuzz=^FuzzStripeHeaders$",
+        "-fuzztime=10s",
+        "-parallel=4"
+      ],
+      "cwd": ".",
+      "exit": 0,
+      "seconds": 10.86
+    },
+    {
+      "name": "standard-fuzz-final",
+      "command": [
+        "go",
+        "test",
+        "./webhook",
+        "-run=^$",
+        "-fuzz=^FuzzStandardHeaders$",
+        "-fuzztime=10s",
+        "-parallel=4"
+      ],
+      "cwd": ".",
+      "exit": 0,
+      "seconds": 11.49
+    },
+    {
+      "name": "security-final",
+      "command": [
+        "make",
+        "GO=/usr/local/go/bin/go",
+        "SECURITY_OUTPUT=.cache/security-hardening-20260924/security-final",
+        "security-check"
+      ],
+      "cwd": ".",
+      "exit": 0,
+      "seconds": 9.74
+    },
+    {
+      "name": "verify-complete",
+      "command": [
+        "make",
+        "GO=/usr/local/go/bin/go",
+        "verify"
+      ],
+      "cwd": ".",
+      "exit": 0,
+      "seconds": 602.9
+    }
+  ],
+  "verification_pending": [],
+  "scan_before_redaction": {
+    "status": "passed",
+    "checks": [
+      {
+        "name": "go-0",
+        "module": ".",
+        "status": "passed",
+        "analysis": {
+          "config": {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-16T18:00:43Z",
+            "go_version": "go1.27.1",
+            "scan_level": "symbol",
+            "scan_mode": "source"
+          },
+          "findings": [
+            {
+              "osv": "GO-2026-5932",
+              "trace": [
+                {
+                  "module": "golang.org/x/crypto",
+                  "version": "v0.57.0"
+                }
+              ]
+            }
+          ],
+          "affected_function_findings": []
+        }
+      },
+      {
+        "name": "go-1",
+        "module": "tools/release",
+        "status": "passed",
+        "analysis": {
+          "config": {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-16T18:00:43Z",
+            "go_version": "go1.27.1",
+            "scan_level": "symbol",
+            "scan_mode": "source"
+          },
+          "findings": [],
+          "affected_function_findings": []
+        }
+      },
+      {
+        "name": "go-2",
+        "module": "tests/fixtures/plugin_base",
+        "status": "passed",
+        "analysis": {
+          "config": {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-16T18:00:43Z",
+            "go_version": "go1.27.1",
+            "scan_level": "symbol",
+            "scan_mode": "source"
+          },
+          "findings": [
+            {
+              "osv": "GO-2026-5932",
+              "trace": [
+                {
+                  "module": "golang.org/x/crypto",
+                  "version": "v0.57.0"
+                }
+              ]
+            }
+          ],
+          "affected_function_findings": []
+        }
+      },
+      {
+        "name": "go-3",
+        "module": "tests/fixtures/plugin_dep",
+        "status": "passed",
+        "analysis": {
+          "config": {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-16T18:00:43Z",
+            "go_version": "go1.27.1",
+            "scan_level": "symbol",
+            "scan_mode": "source"
+          },
+          "findings": [
+            {
+              "osv": "GO-2026-5932",
+              "trace": [
+                {
+                  "module": "golang.org/x/crypto",
+                  "version": "v0.57.0"
+                }
+              ]
+            }
+          ],
+          "affected_function_findings": []
+        }
+      },
+      {
+        "name": "go-4",
+        "module": "tests/fixtures/consumer",
+        "status": "passed",
+        "analysis": {
+          "config": {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-16T18:00:43Z",
+            "go_version": "go1.27.1",
+            "scan_level": "symbol",
+            "scan_mode": "source"
+          },
+          "findings": [
+            {
+              "osv": "GO-2026-5932",
+              "trace": [
+                {
+                  "module": "golang.org/x/crypto",
+                  "version": "v0.57.0"
+                }
+              ]
+            }
+          ],
+          "affected_function_findings": []
+        }
+      },
+      {
+        "name": "gopls",
+        "module": ".",
+        "status": "passed",
+        "analysis": {
+          "config": {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-16T18:00:43Z",
+            "scan_level": "symbol",
+            "scan_mode": "binary"
+          },
+          "findings": [
+            {
+              "osv": "GO-2026-6179",
+              "fixed_version": "v0.40.0",
+              "trace": [
+                {
+                  "module": "golang.org/x/mod",
+                  "version": "v0.37.0"
+                }
+              ]
+            },
+            {
+              "osv": "GO-2026-6180",
+              "fixed_version": "v0.40.0",
+              "trace": [
+                {
+                  "module": "golang.org/x/mod",
+                  "version": "v0.37.0"
+                }
+              ]
+            },
+            {
+              "osv": "GO-2026-5970",
+              "fixed_version": "v0.39.0",
+              "trace": [
+                {
+                  "module": "golang.org/x/text",
+                  "version": "v0.38.0"
+                }
+              ]
+            }
+          ],
+          "affected_function_findings": []
+        }
+      },
+      {
+        "name": "typescript",
+        "module": "tools/typescript",
+        "status": "passed",
+        "analysis": {
+          "vulnerabilities": {
+            "info": 0,
+            "low": 0,
+            "moderate": 0,
+            "high": 0,
+            "critical": 0,
+            "total": 0
+          }
+        }
+      }
+    ]
+  },
+  "security_reporting": {
+    "repository": "weiloon1234/Foundry-Go",
+    "private_reporting_enabled": true,
+    "verification": "Read back via GitHub REST API after enabling; confirmed again 2026-09-24.",
+    "workflow": "Pinned actions; native required backend/tool checks; independent warm-cache scans; read-only permissions; no persisted checkout credentials. YAML and embedded shell syntax passed locally.",
+    "hosted_execution": "Not run: repository changes were not committed or pushed."
+  },
+  "reaudit": {
+    "status": "complete; all corrections verified on final source",
+    "findings": [
+      {
+        "id": "R01",
+        "item": "G02",
+        "problem": "Azure platform virtual address 168.63.129.16 is globally unicast but is not an ordinary public destination; exclude it in the public-only policy. Explicit CIDR allowlists remain intentional opt-in.",
+        "source": "https://learn.microsoft.com/en-us/azure/virtual-network/what-is-ip-address-168-63-129-16",
+        "status": "corrected and verified"
+      },
+      {
+        "id": "R02",
+        "item": "G04",
+        "problem": "Incomplete migrations did not check for missing prerequisite history during status or reconciliation.",
+        "correction": "Shared prerequisite-history inspection blocks reconciliation and ready-step resume; protocol regression simulates history loss without touching real database data.",
+        "status": "corrected and verified"
+      },
+      {
+        "id": "R03",
+        "item": "G03",
+        "problem": "The verifier formatter originally redacted pointers only; formatting a copied value could expose decoded key bytes.",
+        "correction": "Value-receiver formatting protects both pointers and values; all ordinary formatting verbs are asserted to return only the fixed redacted label.",
+        "status": "corrected and verified"
+      },
+      {
+        "id": "R04",
+        "item": "G03",
+        "problem": "Stripe timestamp duplication was detected by nonempty value rather than presence, accepting a valid signature after an empty first t field.",
+        "correction": "Track timestamp presence independently; reject repeated timestamps including empty values. Add regression permutations and a Stripe parser fuzz target seeded with the valid-signature edge case.",
+        "status": "corrected and verified"
+      }
+    ],
+    "observations": [
+      "Cookie no-store defaults preserve existing downstream override ownership; ETag integration regression passes.",
+      "Webhook consumer scopes verified IDs by provider and concrete account; every replay verifies current original bytes.",
+      "Migration final history/progress bookkeeping is atomic while SQL effects remain individually committed; uncertain statements require an operator attestation.",
+      "make verify with required tool environment already executes real gopls and TypeScript transport checks; avoid repeating those standalone targets without a new failure."
+    ],
+    "improvements": [
+      "Reuse the already-read migration history instead of issuing duplicate history queries.",
+      "Remove redundant editor/client target runs from CI; mandatory make verify already covers them.",
+      "Move continuation blueprint into the established subdirectory layout; preserve milestone numbering."
+    ]
+  },
+  "fuzz": {
+    "status": "passed",
+    "requested_duration_per_target": "10s",
+    "workers_per_target": 4,
+    "executions": {
+      "stripe-fuzz": 1210097,
+      "standard-fuzz-final": 881648
+    },
+    "total_final_executions": 2091745
+  },
+  "stage_ownership": {
+    "record": ".cache/security-hardening-20260924/redaction-stage-boundary.json",
+    "backend_source_manifest": ".cache/security-hardening-20260924/source-backend-race.json",
+    "explanation": "Backend races finished before the copied-verifier redaction correction. Affected races and the complete native gate then passed. After the final Stripe timestamp correction, webhook/HTTP and independent durable consumers passed races, both protocol fuzzers passed, security scans passed, and the final complete make verify passed. Source changes occurred only between terminal test stages.",
+    "before_final_protocol_fix_manifest": ".cache/security-hardening-20260924/source-before-stripe-fix.json"
+  },
+  "correction_history": [
+    {
+      "phase": "initial generation",
+      "failure": "Native netip.Prefix configuration leaves were unsupported.",
+      "resolution": "Added the immutable standard-library value at the shared configuration snapshot/discovery owners, with owned typed regression and consumer coverage; regenerated owned output."
+    },
+    {
+      "phase": "scanner tool tests",
+      "failure": "Fast native child exit could race process-group cleanup.",
+      "resolution": "Check actual child state before signaling; retain timeout/exit assertions. Tool tests passed."
+    },
+    {
+      "phase": "initial full verification",
+      "failure": "Top-level blueprint continuation filename violated numbered-blueprint naming policy; all runtime/consumer/compiler/editor/generation checks had passed.",
+      "resolution": "Moved the new continuation into its own blueprint subdirectory and fixed links; documentation and release-tool checks passed."
+    }
+  ],
+  "limits": [
+    "Vulnerability analysis is bounded by the recorded advisory snapshot and static reachability; module-only findings remain recorded for review.",
+    "The workflow is authored and locally validated; hosted GitHub execution remains untested.",
+    "Provider webhook formats use local cryptographic vectors and real PostgreSQL idempotent effects, not live provider account certification.",
+    "Lost database responses use protocol fault injection; actual PostgreSQL verifies concurrent index durability and cancellation/reconciliation.",
+    "No new private package release, live AWS/R2/mail provider test, production deployment, Git commit, push or merge."
+  ],
+  "references": {
+    "requirements": "blueprint/security-hardening/README.md",
+    "webhooks": "https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md",
+    "stripe": "https://docs.stripe.com/webhooks/signature",
+    "postgres": "https://www.postgresql.org/docs/current/sql-createindex.html",
+    "azure_platform_address": "https://learn.microsoft.com/en-us/azure/virtual-network/what-is-ip-address-168-63-129-16"
+  },
+  "completed_at_utc": "2026-09-24T06:17:49.967017+00:00",
+  "final_security_scan": {
+    "status": "passed",
+    "record": ".cache/security-hardening-20260924/security-final/report.json",
+    "checks": [
+      {
+        "name": "go-0",
+        "module": ".",
+        "status": "passed",
+        "analysis": {
+          "config": {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-16T18:00:43Z",
+            "go_version": "go1.27.1",
+            "scan_level": "symbol",
+            "scan_mode": "source"
+          },
+          "findings": [
+            {
+              "osv": "GO-2026-5932",
+              "trace": [
+                {
+                  "module": "golang.org/x/crypto",
+                  "version": "v0.57.0"
+                }
+              ]
+            }
+          ],
+          "affected_function_findings": []
+        }
+      },
+      {
+        "name": "go-1",
+        "module": "tools/release",
+        "status": "passed",
+        "analysis": {
+          "config": {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-16T18:00:43Z",
+            "go_version": "go1.27.1",
+            "scan_level": "symbol",
+            "scan_mode": "source"
+          },
+          "findings": [],
+          "affected_function_findings": []
+        }
+      },
+      {
+        "name": "go-2",
+        "module": "tests/fixtures/plugin_base",
+        "status": "passed",
+        "analysis": {
+          "config": {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-16T18:00:43Z",
+            "go_version": "go1.27.1",
+            "scan_level": "symbol",
+            "scan_mode": "source"
+          },
+          "findings": [
+            {
+              "osv": "GO-2026-5932",
+              "trace": [
+                {
+                  "module": "golang.org/x/crypto",
+                  "version": "v0.57.0"
+                }
+              ]
+            }
+          ],
+          "affected_function_findings": []
+        }
+      },
+      {
+        "name": "go-3",
+        "module": "tests/fixtures/plugin_dep",
+        "status": "passed",
+        "analysis": {
+          "config": {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-16T18:00:43Z",
+            "go_version": "go1.27.1",
+            "scan_level": "symbol",
+            "scan_mode": "source"
+          },
+          "findings": [
+            {
+              "osv": "GO-2026-5932",
+              "trace": [
+                {
+                  "module": "golang.org/x/crypto",
+                  "version": "v0.57.0"
+                }
+              ]
+            }
+          ],
+          "affected_function_findings": []
+        }
+      },
+      {
+        "name": "go-4",
+        "module": "tests/fixtures/consumer",
+        "status": "passed",
+        "analysis": {
+          "config": {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-16T18:00:43Z",
+            "go_version": "go1.27.1",
+            "scan_level": "symbol",
+            "scan_mode": "source"
+          },
+          "findings": [
+            {
+              "osv": "GO-2026-5932",
+              "trace": [
+                {
+                  "module": "golang.org/x/crypto",
+                  "version": "v0.57.0"
+                }
+              ]
+            }
+          ],
+          "affected_function_findings": []
+        }
+      },
+      {
+        "name": "gopls",
+        "module": ".",
+        "status": "passed",
+        "analysis": {
+          "config": {
+            "protocol_version": "v1.0.0",
+            "scanner_name": "govulncheck",
+            "scanner_version": "v1.8.0",
+            "db": "https://vuln.go.dev",
+            "db_last_modified": "2026-09-16T18:00:43Z",
+            "scan_level": "symbol",
+            "scan_mode": "binary"
+          },
+          "findings": [
+            {
+              "osv": "GO-2026-6179",
+              "fixed_version": "v0.40.0",
+              "trace": [
+                {
+                  "module": "golang.org/x/mod",
+                  "version": "v0.37.0"
+                }
+              ]
+            },
+            {
+              "osv": "GO-2026-6180",
+              "fixed_version": "v0.40.0",
+              "trace": [
+                {
+                  "module": "golang.org/x/mod",
+                  "version": "v0.37.0"
+                }
+              ]
+            },
+            {
+              "osv": "GO-2026-5970",
+              "fixed_version": "v0.39.0",
+              "trace": [
+                {
+                  "module": "golang.org/x/text",
+                  "version": "v0.38.0"
+                }
+              ]
+            }
+          ],
+          "affected_function_findings": []
+        }
+      },
+      {
+        "name": "typescript",
+        "module": "tools/typescript",
+        "status": "passed",
+        "analysis": {
+          "vulnerabilities": {
+            "info": 0,
+            "low": 0,
+            "moderate": 0,
+            "high": 0,
+            "critical": 0,
+            "total": 0
+          }
+        }
+      }
+    ]
+  },
+  "scan_disposition": {
+    "framework_and_consumers": "GO-2026-5932 is module-level only, concerning the unmaintained OpenPGP packages; no affected imports/functions were reported in the scanned builds.",
+    "release_tool": "No findings.",
+    "gopls": "GO-2026-6179, GO-2026-6180 and GO-2026-5970 are module-level only in the selected binary; no affected symbols reported. Tool upgrade review remains separate from runtime dependency support.",
+    "npm": "Zero lockfile vulnerabilities.",
+    "advisory_snapshot": "2026-09-16T18:00:43Z; scan results do not prove absence of unknown defects."
+  },
+  "final_source_check": {
+    "status": "passed",
+    "runtime_files": 3661,
+    "build_input_files": 91,
+    "runtime_mismatches": 0,
+    "input_mismatches": 0
+  },
+  "reporting_documentation_check": {
+    "command": [
+      "make",
+      "GO=/usr/local/go/bin/go",
+      "docs-check"
+    ],
+    "exit": 0,
+    "seconds": 0.09,
+    "status": "passed"
+  },
+  "completion_audit": {
+    "all_five_requested_items_implemented": true,
+    "full_final_native_gate_passed": true,
+    "required_backends_and_relevant_final_races_passed": true,
+    "consumer_compiler_editor_client_and_generation_passed": true,
+    "both_protocol_fuzz_targets_passed": true,
+    "fresh_security_findings_reviewed": true,
+    "all_four_reaudit_findings_corrected_and_verified": true,
+    "source_and_build_inputs_match_verified_snapshot": true,
+    "final_reporting_links_checked": true,
+    "hosted_ci_and_provider_limits_recorded": true,
+    "outstanding_required_work": []
+  }
+}

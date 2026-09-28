@@ -1,0 +1,124 @@
+{
+  "milestone": "C03",
+  "status": "accepted",
+  "platform": "native macOS",
+  "scope": "Configured application and HTTP assembly, model-specific guard defaults, owned logging and completion hooks",
+  "runs": [
+    {
+      "label": "c03-generate",
+      "command": "go run ./cmd/foundry generate --recursive --dir <application, tests/fixtures/consumer/bootstrap>",
+      "exit": 0,
+      "elapsed_seconds": 11.2
+    },
+    {
+      "label": "c03-race",
+      "command": "go test -race ./application ./http ./logging ./observability ./foundation ./config/... -count=1 -timeout=10m",
+      "exit": 0,
+      "elapsed_seconds": 17.9
+    },
+    {
+      "label": "c03-consumer2",
+      "command": "go test -race ./bootstrap/... -count=1 -timeout=10m (independent consumer)",
+      "exit": 0,
+      "elapsed_seconds": 20.7
+    },
+    {
+      "label": "c03-race2",
+      "command": "go test -race ./application ./http ./foundation -count=1 -timeout=10m",
+      "exit": 0,
+      "elapsed_seconds": 18.1
+    },
+    {
+      "label": "c03-full",
+      "command": "make GO=/usr/local/go/bin/go verify (before audit batch)",
+      "exit": 0,
+      "elapsed_seconds": 734.2
+    },
+    {
+      "label": "c03-race3",
+      "command": "go test -race ./application ./logging -count=1 -timeout=10m (audit batch)",
+      "exit": 0,
+      "elapsed_seconds": 4.6
+    },
+    {
+      "label": "c03-full2",
+      "command": "make GO=/usr/local/go/bin/go verify (final source)",
+      "exit": 0,
+      "elapsed_seconds": 474.6
+    }
+  ],
+  "checks": [
+    "Pure Build, frozen settings, independent and parallel applications with different defaults and feature enablement",
+    "Default/named identity; closing one application leaves the other operational",
+    "Global middleware on matched and unmatched requests; ordinary and plugin routes merge with duplicate rejection",
+    "Cookie authentication always requires CSRF, including API routes; bearer-only actors stay stateless",
+    "HTTP completion attribution, bytes/outcomes, early rejection, panic/Goexit isolation and ownership through observer return",
+    "Owned append-only logging, startup rollback, closed writers and metadata-only automatic access records",
+    "Independent executable consumer: real PostgreSQL, two actor models, cache, multipart uploads, imaging and storage",
+    "Wrong-actor compiler rejection and real gopls actor/service/generated-key completion",
+    "Full native tests/vet for root and independent fixtures, PostgreSQL/Redis, TypeScript transport, deterministic generation, docs and release tools"
+  ],
+  "audit_fixes": [
+    "Pure joined cancellation is treated as normal shutdown while explicit faults and mixed real failures remain failures",
+    "Generated config snapshots accept zero-length model ID phantom arrays while rejecting real hidden mutable references",
+    "HTTP completion callbacks retain active/admission ownership until actual return, including early rejected requests",
+    "Separated application provider assembly from builder declarations and removed obsolete completion code",
+    "Added different-config parallel app isolation and ordinary/plugin route merge/collision regressions",
+    "Preserved an explicit error when an opened log destination is rejected without an underlying I/O error"
+  ],
+  "cost_evidence": "consumer-startup-c03-cost.json",
+  "changed_go_sources_sha256": {
+    "Makefile": "b6d7cb2b6ee826fd7658568e8306bb6e19394e261e975f11ebb1c1f8c6e300ea",
+    "application/builder.go": "56dae0964e71b553156a978442d164280387427369120a25e8ad177838172a69",
+    "application/builder_benchmark_test.go": "62d39f9bc7b86583c3074c85e890beb07c6f31bdb6cd59dc4bd7f83a809ead91",
+    "application/builder_test.go": "9dd8a5899edf84bdbae907ebfc3d5c070e7e24f5a2a6271491b6b5889a8da8d8",
+    "application/options.go": "29b9a3f626a9c5c5a4e5a18860ce8df16c32ff50cd96a3f6a15f9a7f084abea1",
+    "application/providers.go": "5a83cbd661ab817b9c576531fe8ffc77291f2b85c8ba5f764b0890927fb2d845",
+    "application/services.go": "93107d9bb4f00efba5ad8177535c24de89cbbaa854c8c1414292f376652c36ee",
+    "application/settings.go": "2d4055e6517e85f0c994bec5266f967ab3f0e8bf45f1e9b950bac034a48be7ed",
+    "application/settings_foundry.gen.go": "7a130d63c538abc463c2ba8c7074c4da335fef652b0b498d095d5b9a513a1561",
+    "config/schema.go": "dcf6c99dd64fda3022a3be6caa39d7150465d07197b339bf6a7ffbdafd5e42d9",
+    "config/schema_test.go": "d09b11988df5da0e13d80c3cfe9f83a0bc75bdd3d60623fd938cf069db530ace",
+    "foundation/cancellation_test.go": "0e5352066d7fb43a4c071138ed1c1b6fa3cb28e3cc3e7fa1074727dff8fe682e",
+    "foundation/runtime.go": "b39b84a1e17576e15c05a88a587ffa62ee00a34fd9a86efbc9568b0f45fdd76e",
+    "http/authentication.go": "3fc0b2d231ef8024e5b2798cd09efef3954583e5cab815e995c61a8a49b13dd0",
+    "http/contributions.go": "a070cbef910344e80121d2461a88fc8d8bcbf269a6236114f45c61d385a19eb0",
+    "http/guard_binding.go": "72cb65e778fd5e63d201fa8f29dc883bb1d08d7845cc747dcaee5716f01816a0",
+    "http/guard_binding_test.go": "8b73f83b8df5b9ed2a7b50cfb2e66242c6f76ff7eef32d7ba3444930b442e849",
+    "http/handler_lifetime.go": "e0e0d1725c6b14891d7e7cb4f1a23258186c38d59edd42be5696ab253613f8d4",
+    "http/module.go": "c123964a25b704b0cc9dd9c81d628894fc7d670e057f5b2e04e4c4e75123b2d4",
+    "http/observed_response.go": "42be9e9a88f23efda95866218b2e58d9164deeef374e499357abcca1bf2c3798",
+    "http/request_observation.go": "a208e71ecf9e51019ca2e8e185a133d942b555f6347160b6950f4bce9e3ee9f7",
+    "http/request_observer.go": "ab5b66d2c51d0aa741380c584bdef8575ebf6236a2c0bda2102398cb85babe10",
+    "http/request_observer_test.go": "ab563bac5b3ff921bfadb73e034d836d9f9e6534291194a46b9b93a6df69d4d0",
+    "http/router.go": "38c9bf34befb03ab65b37f10afd2c6519564312a5bad57700be2aa734eef26c6",
+    "http/server.go": "f082515777d1c8739369fca1a0804e2e9b446d2d36c0838bd592438b7101551a",
+    "http/server_config.go": "8cd49bdd8a7c245758eed3317cd701b12e719e9445fedfc0d1ce94a6aaffb30d",
+    "http/spa.go": "fb9b22e256f9d37bd9596901191408681fac7f948d48bc5213f035eac1b5e52b",
+    "internal/agent/gopls_acceptance_test.go": "d43650d2582ce6c1810a215ad8ce080fc7599b68f6765937b7ad48a80113e5ff",
+    "logging/sink.go": "51794febc406219deff8b26712e0ae4167347303d471f9d992215186b61bc07b",
+    "logging/sink_test.go": "3beea858b361c34cf5c6f9c0b8edc370b2e363c8c105c55e1d3e511f76ad3e34",
+    "observability/contracts.go": "83aaa66b7dd0c36838d9f209a1c392d538ae6814f43a347dcf1cbdc71be1c5ba",
+    "tests/fixtures/consumer/bootstrap/auth.go": "bd8c1faf1651201c4fea8134d105e4a1de597691a921890fad92a2d9d705f622",
+    "tests/fixtures/consumer/bootstrap/bootstrap_test.go": "1966f494c54e7beef4baa83ca994d5987647d734ccc28bdb47ddb777b5cdff74",
+    "tests/fixtures/consumer/bootstrap/cmd/serve/main.go": "5e00abb3d69c7942c9b684b8f2599d9f0ade879f7564adf423ea9e3f2047d137",
+    "tests/fixtures/consumer/bootstrap/member_foundry.gen.go": "c5fc360d5f2d4bad7b3d79963be1f6c80f3670311ba8e9e8f9b8ff387c93b78c",
+    "tests/fixtures/consumer/bootstrap/models.go": "a9eb03d94fc592fcc70336b74c61f3621c91d768b18d4d671ff64452e7653b37",
+    "tests/fixtures/consumer/bootstrap/operator_foundry.gen.go": "241e33b4b6f9a75fc3571531538cff079d5d8afdc0ec934c21477a54d905f49a",
+    "tests/fixtures/consumer/bootstrap/profile_foundry.gen.go": "5a8261bc65a7cad182735a9d1d5083ac106dc9746bd22ee9a60a75e14dbf6c8a",
+    "tests/fixtures/consumer/bootstrap/routes.go": "09b6d5aa3137b8386287380d1d0442fd42200e726c16e35275d96a2b500e6cbf",
+    "tests/fixtures/consumer/bootstrap/settings.go": "dc50ce9d26316463e1f229e44da43d59457dbaa2e5a7ff4b3df08e82c6967ffa",
+    "tests/fixtures/consumer/bootstrap/settings_foundry.gen.go": "09bea31dc331da8d78f7bf92849481e219f6a940845950839f88cbbf985cd19c",
+    "tests/fixtures/consumer/bootstrap/upload_input_foundry.gen.go": "4b634521136e206e1bd95e108cf581d6c074f4e4695ad0da95fa46a1db8cabd0",
+    "tests/fixtures/consumer/bootstrap/upload_result_foundry.gen.go": "5441b796fa5165de1f5f56a29ce6d0302e695e876c0fff4afb55c6679f73add6",
+    "tests/fixtures/consumer/testdata/compilefail/bootstrap_actor_binding/invalid.go": "5c0be77539c36f29e3850cf8abede465be9dcaebf227a7816c8d00b01b5b701f",
+    "tests/fixtures/consumer/testdata/compilefail/bootstrap_actor_handler/invalid.go": "84661d09dae105a85a4e3061a53db861362a499fc7c71fadf800e5df2239adc6",
+    "tests/fixtures/consumer/types_test.go": "e78467f88754bd038166f2c4b916a7bd514e63d12a71192525d70f4877a816de"
+  },
+  "deleted_go_sources": [],
+  "limitations": [
+    "Configured assembly imports supported adapters even when deployment settings disable them; measured build/binary costs are documented separately.",
+    "The bootstrap static-proof verifier is an acceptance fixture, not a production credential-verification implementation.",
+    "Supporting service integration and final packaged-consumer/performance/framework-wide re-audit remain C04-C05."
+  ]
+}

@@ -1,0 +1,257 @@
+{
+  "date": "2026-09-26",
+  "status": "accepted",
+  "scope": "Common typed validation rules, bounded concurrent validation, and batched scoped model existence in Foundry-Go",
+  "verification": {
+    "full_gate": {
+      "command": [
+        "make",
+        "GO=/usr/local/go/bin/go",
+        "verify"
+      ],
+      "exit_code": 0,
+      "seconds": 788.42,
+      "source_inputs": 3766,
+      "source_unchanged": true,
+      "required": [
+        "postgres",
+        "redis",
+        "typescript"
+      ],
+      "tools": [
+        "gopls",
+        "node",
+        "typescript"
+      ],
+      "go": "go version go1.27.1 darwin/arm64"
+    },
+    "focused": [
+      {
+        "name": "focused-root",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-timeout=3m",
+          "./validation/...",
+          "./database/query"
+        ],
+        "exit_code": 0,
+        "seconds": 23.46
+      },
+      {
+        "name": "focused-consumer",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-timeout=3m",
+          "./validationrules",
+          "./httpvalidation",
+          "./modelvalidation",
+          "-count=1"
+        ],
+        "exit_code": 0,
+        "seconds": 18.06
+      },
+      {
+        "name": "focused-postgres",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-timeout=3m",
+          "-run",
+          "TestPostgresTypedModelValidation|TestModelValidationRejectsInvalidSourcesWithoutIO",
+          "."
+        ],
+        "exit_code": 0,
+        "seconds": 9.97
+      },
+      {
+        "name": "focused-editor",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-timeout=3m",
+          "./internal/agent",
+          "-run",
+          "TestRealGoplsConsumer/(validation-parallel|validation-batch-model|validation-password-value)$",
+          "-count=1"
+        ],
+        "exit_code": 0,
+        "seconds": 4.05
+      }
+    ],
+    "races": [
+      {
+        "name": "root-races",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-race",
+          "-timeout=5m",
+          "./validation/...",
+          "./database/query",
+          "./http"
+        ],
+        "exit_code": 0,
+        "seconds": 67.69
+      },
+      {
+        "name": "consumer-races",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-race",
+          "-timeout=5m",
+          "./validationrules",
+          "./httpvalidation",
+          "./modelvalidation"
+        ],
+        "exit_code": 0,
+        "seconds": 45.87
+      },
+      {
+        "name": "postgres-races",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-race",
+          "-timeout=5m",
+          "-run",
+          "TestPostgresTypedModelValidation|TestModelValidationRejectsInvalidSourcesWithoutIO",
+          "."
+        ],
+        "exit_code": 0,
+        "seconds": 25.19
+      }
+    ],
+    "raw_logs": ".cache/validation-expanded-20260926/",
+    "final_documentation_check": {
+      "command": [
+        "make",
+        "GO=/usr/local/go/bin/go",
+        "docs-check"
+      ],
+      "exit_code": 0
+    }
+  },
+  "coverage": [
+    {
+      "contract": "Common text/format/numeric/consent/comparison/collection/password rules; exact wide integers, Unicode, invalid declarations, byte/work bounds, secret safety and owned declarations",
+      "tests": [
+        "validation/expanded_rules_test.go"
+      ]
+    },
+    {
+      "contract": "Default four overlapping branches, bounded nested concurrency, ordered labels/paths, shared checks and issue cap, fault precedence, cancellation drain, reusable capacity, preflight and Bail",
+      "tests": [
+        "validation/parallel_test.go"
+      ]
+    },
+    {
+      "contract": "Generic batched lookup ownership, empty-input no-I/O and closed failure behavior",
+      "tests": [
+        "validation/batch_lookup_test.go"
+      ]
+    },
+    {
+      "contract": "130 values use three statements; tenant/domain predicate and soft-delete visibility, duplicate values, exact decimals, no writes, cancellation/bounds before I/O and usable transaction afterward",
+      "tests": [
+        "tests/fixtures/consumer/model_validation_postgres_test.go"
+      ]
+    },
+    {
+      "contract": "Generated typed fields, conditional presence, concrete redacted passwords and cheap validation before remote work",
+      "tests": [
+        "tests/fixtures/consumer/validationrules/expanded.go",
+        "tests/fixtures/consumer/validationrules/expanded_test.go"
+      ]
+    },
+    {
+      "contract": "Actual request lifecycle preserves 422 paths/codes, hides upstream errors, and admits subsequent valid requests",
+      "tests": [
+        "tests/fixtures/consumer/httpvalidation/async_test.go"
+      ]
+    },
+    {
+      "contract": "Compiler rejects foreign model IDs, mixed rule values, floating modulo and different confirmation owners",
+      "tests": [
+        "tests/fixtures/consumer/types_test.go",
+        "tests/fixtures/consumer/testdata/compilefail/validation_batch_id/invalid.go",
+        "tests/fixtures/consumer/testdata/compilefail/validation_parallel_value/invalid.go",
+        "tests/fixtures/consumer/testdata/compilefail/validation_multiple_float/invalid.go",
+        "tests/fixtures/consumer/testdata/compilefail/validation_confirmed_owner/invalid.go"
+      ]
+    },
+    {
+      "contract": "Real completion/hover/definition for Parallel, ExistsAll and PasswordValue",
+      "tests": [
+        "internal/agent/gopls_acceptance_test.go"
+      ]
+    },
+    {
+      "contract": "Strict TypeScript/runtime uses shared descriptors; server-only uppercase is explicitly skipped locally and enforced by HTTP server",
+      "tests": [
+        "tests/fixtures/consumer/clientcontracts/contracts_test.go",
+        "tests/fixtures/consumer/clientcontracts/testdata/runtime.mjs"
+      ]
+    }
+  ],
+  "review": {
+    "result": "No unresolved findings; current-source full gate and relevant race checks passed. No runtime source changes after verification.",
+    "shared_owners": [
+      "All/Bail/rule metadata and field selectors",
+      "OneOf membership declaration validation",
+      "existing text byte checks and regexp compilation",
+      "callback.Isolated with actual-exit ownership",
+      "query.Lookup and typed SQL AST/compiler/executor",
+      "existing HTTP issue mapping and generated client descriptors"
+    ],
+    "compatibility": "Existing All/Bail remain sequential. Parallel is explicit with a useful default concurrency. No new wire composition kind; new leaf rules are server-only. No dependencies added."
+  },
+  "limits": [
+    "Model observations remain advisory and do not replace constraints or authorization.",
+    "Callbacks must honor context and retain concurrency-safe dependencies.",
+    "New leaf rules do not yet execute in the browser; clients report incomplete validation.",
+    "Request-locale message translation is a separate proposal, not implemented by this milestone."
+  ],
+  "source": {
+    "files": 3766,
+    "current_hashes_rechecked": true,
+    "complete_fingerprint_file": ".cache/validation-expanded-20260926/source-after.json",
+    "fingerprint_sha256": "59144e5cf759022a11eb198799f5e59f6138f6baf807b518093c4edb4eec3da2",
+    "changed_inputs": {
+      "database/query/lookup.go": "7598aae78200e92e038fda9d9a338b4a959ed3edee1a99212ca75902696e0b84",
+      "internal/agent/gopls_acceptance_test.go": "cbf4b8e430bf9dce2becaca9ad7d40821e42d960fcaf4ede53b49d42e25c1e8e",
+      "tests/fixtures/consumer/clientcontracts/contracts.go": "1d330b9cbcc94e7c1496cca299530e14a39fa67f32b6cc57893bb1cc181759f9",
+      "tests/fixtures/consumer/clientcontracts/testdata/runtime.mjs": "b02ef3510c72e7de665ec9aa8a5e4763c2e46719b7f6a2927e07381beb58dfa4",
+      "tests/fixtures/consumer/httpvalidation/async.go": "fec93a7333911c5d67c564a50098ca5bf37656bbfe4722c4dcf96c7153ecf0ae",
+      "tests/fixtures/consumer/httpvalidation/async_test.go": "7c7549c8ec952dece2c00c5d698ca52161fd68a918a73609260b372d17524962",
+      "tests/fixtures/consumer/idempotenthttp/testdata/runtime.mjs": "0c7f2462f35ef128683bb5169e26d86bb65aa410cbd1a2546163349ef78e7347",
+      "tests/fixtures/consumer/model_validation_postgres_test.go": "428b045f746250a0e63d2aac14d69387bab05d7b27be9af837ad19270a24ce33",
+      "tests/fixtures/consumer/modelvalidation/rules.go": "28110cbc21f5d967e22ace772c0bdeab631abae4d7d33cbf7b5665c5a3c19975",
+      "tests/fixtures/consumer/teamworkflow/testdata/runtime.mjs": "54a06c42f8cea87cf7628eaf5223fb89ab178d091c295b35bca07715ac2db7fd",
+      "tests/fixtures/consumer/testdata/compilefail/validation_batch_id/invalid.go": "99a2a441a2b0b5b759d0dce524a92e605ccd70b12b63667ce374319213eee2a4",
+      "tests/fixtures/consumer/testdata/compilefail/validation_confirmed_owner/invalid.go": "ce1dd8e8b24f3900c7aa681f226ca7470f38d76674c374f50f192c2d5e3560aa",
+      "tests/fixtures/consumer/testdata/compilefail/validation_multiple_float/invalid.go": "b1a7ad5d8b7532b31aea11258762c2f758d083b373acdba308a2e3c3ef75de2a",
+      "tests/fixtures/consumer/testdata/compilefail/validation_parallel_value/invalid.go": "4d503658bc21f0719a824742c17fec58232b99f2f19835ef671f58fcc36ef12e",
+      "tests/fixtures/consumer/types_test.go": "18c8f08ea0d326947ae02c5b22e59d4869aa284891846417f9c7df40e1410bab",
+      "tests/fixtures/consumer/validationrules/expanded.go": "a258018e49c9f1972101f6b4dfa96b5772078ecf6f3612e1a4235586bfb1c4df",
+      "tests/fixtures/consumer/validationrules/expanded_test.go": "8d8fa89a4e59db63885686266b9973cb66e781c077cd0c61f3f5cf37fc13ad29",
+      "validation/batch_lookup_test.go": "0a33610d6ab86e4fc376b3227cd867b466a89422227037fa7597f63cfa203007",
+      "validation/collection.go": "37cf1b3ac34417805e38d12a20de555cb581f0442e3a108d48db3ccd6cd23635",
+      "validation/collection_extra.go": "44b6ceb2b88a5ab1fe4119a69c228776c7230575c9ca5b28ede1d773b1874731",
+      "validation/conditional.go": "5f60e995b65ab69c50404cb976c51e2efdda00e586dd3f4ec39bede939fc26fd",
+      "validation/database/lookup.go": "faa3dcd446c8fcc138263c44c2666c7bb1472ce106ff68cfd6e2fa171d133edf",
+      "validation/expanded_rules_test.go": "f8677251f4eb76a498b3ea8be146bc3d076424aead241bf56764d034c906b030",
+      "validation/lookup.go": "be2973218d3a54d472d12cb61b3a44349f63c518143dff697c7707b29903996e",
+      "validation/number_extra.go": "d7d559b505553bcf7d92c96fb4e258ca2a522344b8d195e028fb886a08797f6e",
+      "validation/parallel.go": "79857d2fe7102f2d2d439e4877bf3f31027c8fd2c8d30614baafc6e7ff558600",
+      "validation/parallel_test.go": "ae357365a25792861a22325343eded7b3a374463a7148f2b9850303d21d4548f",
+      "validation/password.go": "f7ef5a1cf22bb030751a28f3d7f80767b42b1ec0ed26332d36d23da35cb943a5",
+      "validation/rule.go": "985a8a02d41d76232c8bbadffaede58d5a6cabeffe5f63fcea81beb415512f48",
+      "validation/text.go": "58a9b7ae13da9f2365ac8ffff525e4f35e96487522cb94dbb59b69dc4b03776c",
+      "validation/text_extra.go": "226c727b25720977af03eb0ac3f72b411a135a4290d993aa97b433df28154b00"
+    }
+  },
+  "operations": "No commit, push, merge, publication, dependency installation, database reset or destructive cleanup."
+}

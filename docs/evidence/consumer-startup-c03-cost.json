@@ -1,0 +1,201 @@
+{
+  "bootstrap_benchmark": [
+    "BenchmarkConfiguredBuildAndShutdown-16    \t   14494\t     82530 ns/op\t   63523 B/op\t     709 allocs/op",
+    "BenchmarkConfiguredBuildAndShutdown-16    \t   14576\t     82793 ns/op\t   63512 B/op\t     709 allocs/op",
+    "BenchmarkConfiguredBuildAndShutdown-16    \t   14505\t     82596 ns/op\t   63513 B/op\t     709 allocs/op"
+  ],
+  "commands": [
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "list",
+        "-deps",
+        "-json",
+        "./productionprofile/cmd/profile"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/consumer-startup/c03-build-cost/ordinary-consumer",
+      "darwin_max_process_rss_bytes": 38043648,
+      "elapsed_seconds": 0.47696612499976254,
+      "exit": 0,
+      "name": "ordinary-imports",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 36847616,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-o",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/consumer-startup/c03-build-cost/ordinary-binary",
+        "./productionprofile/cmd/profile"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/consumer-startup/c03-build-cost/ordinary-consumer",
+      "darwin_max_process_rss_bytes": 622198784,
+      "elapsed_seconds": 3.3094509580000704,
+      "exit": 0,
+      "name": "ordinary-build-cold",
+      "sampled_compiler_rss_bytes": 509181952,
+      "sampled_tree_rss_bytes": 546979840,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-o",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/consumer-startup/c03-build-cost/ordinary-binary",
+        "./productionprofile/cmd/profile"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/consumer-startup/c03-build-cost/ordinary-consumer",
+      "darwin_max_process_rss_bytes": 34766848,
+      "elapsed_seconds": 0.23916470800031675,
+      "exit": 0,
+      "name": "ordinary-build-unchanged",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1392640,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-o",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/consumer-startup/c03-build-cost/ordinary-binary",
+        "./productionprofile/cmd/profile"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/consumer-startup/c03-build-cost/ordinary-consumer",
+      "darwin_max_process_rss_bytes": 159219712,
+      "elapsed_seconds": 0.24306462499998815,
+      "exit": 0,
+      "name": "ordinary-build-edited",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1392640,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "list",
+        "-deps",
+        "-json",
+        "./bootstrap/cmd/serve"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/consumer-startup/c03-build-cost/configured-consumer",
+      "darwin_max_process_rss_bytes": 64634880,
+      "elapsed_seconds": 0.7060506669999995,
+      "exit": 0,
+      "name": "configured-imports",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 65568768,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-o",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/consumer-startup/c03-build-cost/configured-binary",
+        "./bootstrap/cmd/serve"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/consumer-startup/c03-build-cost/configured-consumer",
+      "darwin_max_process_rss_bytes": 1043480576,
+      "elapsed_seconds": 9.968042708000212,
+      "exit": 0,
+      "name": "configured-build-cold",
+      "sampled_compiler_rss_bytes": 1036304384,
+      "sampled_tree_rss_bytes": 1933033472,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-o",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/consumer-startup/c03-build-cost/configured-binary",
+        "./bootstrap/cmd/serve"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/consumer-startup/c03-build-cost/configured-consumer",
+      "darwin_max_process_rss_bytes": 56115200,
+      "elapsed_seconds": 0.24403625000013562,
+      "exit": 0,
+      "name": "configured-build-unchanged",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1392640,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-o",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/consumer-startup/c03-build-cost/configured-binary",
+        "./bootstrap/cmd/serve"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/consumer-startup/c03-build-cost/configured-consumer",
+      "darwin_max_process_rss_bytes": 689111040,
+      "elapsed_seconds": 1.4106520000000273,
+      "exit": 0,
+      "name": "configured-build-edited",
+      "sampled_compiler_rss_bytes": 161562624,
+      "sampled_tree_rss_bytes": 674545664,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "./application",
+        "-run",
+        "^$",
+        "-bench",
+        "^BenchmarkConfiguredBuildAndShutdown$",
+        "-benchmem",
+        "-benchtime=1s",
+        "-count=3"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 529956864,
+      "elapsed_seconds": 6.179144749999978,
+      "exit": 0,
+      "name": "configured-bootstrap-benchmark",
+      "sampled_compiler_rss_bytes": 6029312,
+      "sampled_tree_rss_bytes": 726351872,
+      "timed_out": false
+    }
+  ],
+  "conditions": {
+    "bootstrap_benchmark_scope": "One configured in-memory cache; HTTP, database and image disabled; borrowed discard logger",
+    "comparison": "Different capability profiles; one cold build sample each; isolated caches; 200ms process sampling",
+    "configured_dependency": "current local checkout; packaged acceptance remains C05",
+    "incremental_edit": "one ordinary main-package function; no schema generation",
+    "independent_empty_build_caches": true,
+    "module_downloads": "excluded; existing approved cache; proxy disabled",
+    "other_foundry_gates_running": false,
+    "power_and_background_load": "not controlled"
+  },
+  "platform": "native macOS",
+  "profiles": [
+    {
+      "binary_bytes": 5071650,
+      "imported_packages": {
+        "all": 159,
+        "external": 1,
+        "framework": 31,
+        "standard": 125
+      },
+      "name": "ordinary"
+    },
+    {
+      "binary_bytes": 35335426,
+      "imported_packages": {
+        "all": 502,
+        "external": 178,
+        "framework": 91,
+        "standard": 231
+      },
+      "name": "configured"
+    }
+  ],
+  "status": "measured"
+}

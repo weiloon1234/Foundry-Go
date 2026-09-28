@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "files": {
+    "document_foundry.gen.go": "cb6cb7f4d5cd9088aab1c61a563e171e188d673d1d5f8278d38c4d92da753c48",
+    "policy_foundry.gen.go": "493f384d8006b04a0095ef6a2e31fb3935d75bd79befb591763e82d5ae9b0bb6",
+    "snapshot_foundry.gen.go": "7a72ee50e0bedfbce8a493457fe37d64ab65bacf6b615517ffa9420d8f870dfe"
+  }
+}

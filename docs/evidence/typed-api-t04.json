@@ -1,0 +1,145 @@
+{
+  "acceptance": {
+    "compiler_and_editor": [
+      "tests/fixtures/consumer/types_test.go",
+      "internal/agent/gopls_acceptance_test.go"
+    ],
+    "no_partial_or_cross_request_models_and_owned_cancellation": [
+      "http/modelbinding/nested_test.go"
+    ],
+    "one_parent_lookup_hooks_eager_loads_executor": [
+      "tests/fixtures/consumer/nestedbindings/bindings_postgres_test.go"
+    ],
+    "request_before_lookup_resource_after_binding": [
+      "tests/fixtures/consumer/nestedbindings/bindings_postgres_test.go",
+      "http/nested_authorization_test.go"
+    ],
+    "safe_descriptor_diagnostics": [
+      "database/query/unique_lookup_test.go"
+    ],
+    "three_levels_parent_scoping_missing_duplicate_soft_delete": [
+      "tests/fixtures/consumer/nestedbindings/models.go",
+      "tests/fixtures/consumer/nestedbindings/bindings.go",
+      "tests/fixtures/consumer/nestedbindings/bindings_postgres_test.go"
+    ],
+    "unique_alternate_field_and_parameterization": [
+      "database/query/unique_lookup_test.go",
+      "tests/fixtures/consumer/nestedbindings/bindings_postgres_test.go"
+    ]
+  },
+  "checks": {
+    "t04-compiler-r1": {
+      "command": "consumer: go test . -run TestInvalidPublicContractsFailCompilation/nested_ -count=1",
+      "elapsed_seconds": 9.3,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t04-compiler-r1/verify.log"
+    },
+    "t04-consumer-r1": {
+      "command": "consumer: go test -race ./nestedbindings ./httpmodels -count=1",
+      "elapsed_seconds": 46.9,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t04-consumer-r1/verify.log"
+    },
+    "t04-consumer-r2": {
+      "command": "consumer: go test -race ./nestedbindings ./httpmodels -count=1",
+      "elapsed_seconds": 46.9,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t04-consumer-r2/verify.log"
+    },
+    "t04-docs-r1": {
+      "command": "make docs-check",
+      "elapsed_seconds": 0.1,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t04-docs-r1/verify.log"
+    },
+    "t04-editor-r1": {
+      "command": "go test ./internal/agent -run TestRealGoplsConsumer/nested- -count=1",
+      "elapsed_seconds": 3.4,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t04-editor-r1/verify.log"
+    },
+    "t04-freshness-r1": {
+      "command": "go run ./cmd/foundry generate --recursive --dir tests/fixtures/consumer --check",
+      "elapsed_seconds": 1.4,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t04-freshness-r1/verify.log"
+    },
+    "t04-full-r1": {
+      "command": "make verify",
+      "elapsed_seconds": 761.1,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t04-full-r1/verify.log"
+    },
+    "t04-generate-r1": {
+      "command": "go run ./cmd/foundry generate --recursive --dir tests/fixtures/consumer",
+      "elapsed_seconds": 51.2,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t04-generate-r1/verify.log"
+    },
+    "t04-runtime-r1": {
+      "command": "go test -race ./database/query ./http/modelbinding ./http -run Test(UniqueLookup|Nested|BoundResource|SignedTypedResource) -count=1",
+      "elapsed_seconds": 62.5,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t04-runtime-r1/verify.log"
+    },
+    "t04-runtime-r2": {
+      "command": "go test -race ./database/query ./http/modelbinding ./http -run Test(UniqueLookup|LookupDiagnostics|Nested|BoundResource|SignedTypedResource) -count=1",
+      "elapsed_seconds": 62.1,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t04-runtime-r2/verify.log"
+    }
+  },
+  "date": "2026-09-18",
+  "final_source_sha256": {
+    "database/query/relation_direct.go": "923933c37410b9dd9a68ffee5c49e9ce0ece068b6a9a9e9febac74c79842a4fb",
+    "database/query/relation_lookup.go": "7d150ec1a665931301cb43fb31256dadc3d2f1826182abe93333595b4632cb0e",
+    "database/query/unique_lookup.go": "97e8e33e4cc057d40cedb80a74a506ebaa6f63d5c91f8705ed83ae82c5d1aeea",
+    "database/query/unique_lookup_test.go": "0b25d0cc2cc050610653e4fcd4a8d7e3b7a9de95628b64d534f25bd7550be7a5",
+    "http/modelbinding/authenticated_endpoint.go": "ffb6de99663cf54b32242ecfd0cdc943e1eafea1bbeb0a7a2425d1d474490550",
+    "http/modelbinding/authorization.go": "fb4427830340a1d411ad33b72bc16904c9536515b6b7a8b2440295bf5d9be85a",
+    "http/modelbinding/endpoint.go": "772c2d4a4b9d57b5adb4d8505301ea1dd160a460759d02d7b0febfa15c875a37",
+    "http/modelbinding/field.go": "d9d8ece5c102e3c53d6298df31dd8841327470b1e1065c1077cc7204a0f8fde4",
+    "http/modelbinding/key.go": "0989415c040983a8ec111d3117784654e804ffbc5dcc2d4d941ffdd30382521c",
+    "http/modelbinding/nested.go": "5660923def85e7bd9ca14d6fcde183019d832dc8e49b7d8978101ba7910a5f1d",
+    "http/modelbinding/nested_test.go": "6b261d354403cfb7892b2db9edce7970f4cc4295b96dd9d3d7f32398415849f3",
+    "http/nested_authorization_test.go": "12bc793dd5c844c1826855ec016f7d1dcc9162fa32c3eb5fe12a963dc702cf13",
+    "internal/agent/gopls_acceptance_test.go": "b9b08f1f1c6d51d33122fe4e76d47638608b294bfef25647877b89987d9ada6b",
+    "tests/fixtures/consumer/nestedbindings/bindings.go": "a04a656e9156bc1f8dd51d95a378b36042b095b098dc89fac5917f13539bf09b",
+    "tests/fixtures/consumer/nestedbindings/bindings_postgres_test.go": "fef4912b21cc174405be7ae61c2349bb9d3a38ee3b116c2e22834c00e56bad09",
+    "tests/fixtures/consumer/nestedbindings/models.go": "a47ef00c86accc14ba05fc838c8c5afdba789f95eae2971a0071d380b2a7fdc6",
+    "tests/fixtures/consumer/nestedbindings/path_foundry.gen.go": "1436db5b0dd7569ad4b2d04ba1edc46803e950f2ff9623cfcb5c5e21d5eba590",
+    "tests/fixtures/consumer/nestedbindings/project_foundry.gen.go": "ac4cb18f41a3df77f4093f3a634a79558c6be9018e3fc5c78cf9b5ca1360b38a",
+    "tests/fixtures/consumer/nestedbindings/reply_foundry.gen.go": "2bd564422af420b2e8c49a53bc20744804e03519d89a379203a462af0c24972e",
+    "tests/fixtures/consumer/nestedbindings/task_foundry.gen.go": "8545dac33f60b72a44c7f6042e4b177585333985d9cb2d17710c9fa04e213cd7",
+    "tests/fixtures/consumer/nestedbindings/team_foundry.gen.go": "042dffe831f6d1a008ecaa82cebb07e6b6b0059c051a6d28b85ab2cc57be4755",
+    "tests/fixtures/consumer/testdata/compilefail/nested_bundle_handler/invalid.go": "13af270ec309d61b7a92a7bfc0b605ca8e14d3858890f7a85e085d0beabe5bde",
+    "tests/fixtures/consumer/testdata/compilefail/nested_field_owner/invalid.go": "aa44e32338198d19e9483d10e8dcc784b40cc7def9493e65f5358483f340f201",
+    "tests/fixtures/consumer/testdata/compilefail/nested_locked_source/invalid.go": "d535e7c22ad6eae9ee9ffa9710b345d496fa4520329b5f720b6626bbab973ab6",
+    "tests/fixtures/consumer/testdata/compilefail/nested_path_value/invalid.go": "560d1b6567c4960416b15dd86b5dee3e2b88a69b60d5b21a51af9865e5fc9512",
+    "tests/fixtures/consumer/testdata/compilefail/nested_policy_actor/invalid.go": "b5f7c899ffc7bb816074ea2d14ac702b249272d44b7440984c663480c6d9ac1b",
+    "tests/fixtures/consumer/testdata/compilefail/nested_relation_owner/invalid.go": "a0ccd66c4420c636891df0eb3789f9968a7c4593d67a51f053bfdfa7c20a812a",
+    "tests/fixtures/consumer/types_test.go": "617a160ecb2694e14a3d0d89f0668580a372deec21a21c127ff4b7f80ac1e9a6"
+  },
+  "go": "go1.27.1 darwin/arm64",
+  "improvements": [
+    "Scoped lookup descriptors redact captured query values when formatted.",
+    "Native integration explicitly proves a disabled child cannot escape the relation filter."
+  ],
+  "limits": [
+    "Direct generated BelongsTo/HasOne/HasMany relationships are supported; pivot-specific resolution remains explicit through Then.",
+    "Duplicate detection uses one SELECT capped at two rows. It neither installs a database unique constraint nor reserves the key.",
+    "Caller transactions are supported; no implicit transaction or row lock is introduced. Locked query types cannot enter ordinary model scopes.",
+    "Test schemas/data are retained under the existing non-destructive fixture policy.",
+    "T05\u2013T07 and the integrated final audit remain outstanding."
+  ],
+  "milestone": "T04",
+  "query_counts": {
+    "accepted_three_level_route": 3,
+    "missing_or_filtered_project": 2,
+    "missing_parent": 1,
+    "missing_task": 3,
+    "related_project_with_explicit_team_eager_load": 2,
+    "request_policy_denial": 0,
+    "resource_policy_denial": 3
+  }
+}

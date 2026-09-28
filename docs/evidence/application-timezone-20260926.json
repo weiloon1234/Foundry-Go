@@ -1,0 +1,197 @@
+{
+  "date": "2026-09-26",
+  "status": "accepted",
+  "scope": "Application-owned timezone defaults and date helpers in Foundry-Go",
+  "default_timezone": "UTC",
+  "surfaces": [
+    "temporal.Service through application.Services.Time",
+    "schedule.Calendar through application.Services.Calendar",
+    "owned JSON log timestamps and daily file rotation",
+    "datatable export presentation"
+  ],
+  "verification": {
+    "native_host": "macOS arm64",
+    "go": "go1.27.1",
+    "generation": {
+      "command": [
+        "make",
+        "GO=/usr/local/go/bin/go",
+        "generate"
+      ],
+      "exit": 0
+    },
+    "full_gate": {
+      "command": [
+        "make",
+        "GO=/usr/local/go/bin/go",
+        "verify"
+      ],
+      "exit": 0,
+      "seconds": 796.38,
+      "source_unchanged": true,
+      "source_files": 3747,
+      "required": [
+        "PostgreSQL",
+        "Redis",
+        "TypeScript",
+        "gopls"
+      ]
+    },
+    "targeted_races": [
+      {
+        "name": "root-races",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-race",
+          "-count=1",
+          "-timeout=20m",
+          "./temporal",
+          "./schedule",
+          "./logging",
+          "./application",
+          "./datatable"
+        ],
+        "cwd": ".",
+        "exit": 0,
+        "seconds": 38.02
+      },
+      {
+        "name": "consumer-races",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-race",
+          "-count=1",
+          "-timeout=20m",
+          "./configuredprofile"
+        ],
+        "cwd": "tests/fixtures/consumer",
+        "exit": 0,
+        "seconds": 14.99
+      }
+    ],
+    "linux": [
+      {
+        "package": "logging",
+        "target": "linux/amd64",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-c",
+          "./logging",
+          "-o",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/application-timezone-20260926/logging-linux-amd64.test"
+        ],
+        "exit": 0,
+        "seconds": 0.62,
+        "execution": "compile only"
+      },
+      {
+        "package": "application",
+        "target": "linux/amd64",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-c",
+          "./application",
+          "-o",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/application-timezone-20260926/application-linux-amd64.test"
+        ],
+        "exit": 0,
+        "seconds": 18.28,
+        "execution": "compile only"
+      },
+      {
+        "package": "logging",
+        "target": "linux/arm64",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-c",
+          "./logging",
+          "-o",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/application-timezone-20260926/logging-linux-arm64.test"
+        ],
+        "exit": 0,
+        "seconds": 0.64,
+        "execution": "compile only"
+      },
+      {
+        "package": "application",
+        "target": "linux/arm64",
+        "command": [
+          "/usr/local/go/bin/go",
+          "test",
+          "-c",
+          "./application",
+          "-o",
+          "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/application-timezone-20260926/application-linux-arm64.test"
+        ],
+        "exit": 0,
+        "seconds": 19.41,
+        "execution": "compile only"
+      }
+    ],
+    "full_gate_log": ".cache/application-timezone-20260926/verify.log",
+    "source_snapshot_sha256": "79d5a5037f9f62620a286c0482d4051287de6e856a14f5b8c285eae911b60cb9",
+    "private_configuration_absent_from_retained_logs": true
+  },
+  "review": [
+    "One typed Settings.TimeZone default is resolved before application resource acquisition; generated TOML/environment/typed overrides are exercised by an independent consumer.",
+    "Clock validation is reused at the temporal owner; no dependency from temporal into database/application credential infrastructure was introduced.",
+    "Calendar helpers delegate existing immutable temporal and scheduler policies. DST gaps/overlaps remain explicit, while calendar AddDays spans 23/25 elapsed hours when appropriate.",
+    "Services and standard locations are snapshotted; concurrent applications and explicit overrides remain isolated without mutating time.Local.",
+    "Log leaves inherit the application zone unless explicit. Both JSON timestamps and rollover use that zone. Archive filenames stay UTC; retention ages remain elapsed durations.",
+    "Restart rollover derives the local date from file modification time. Existing size/count/age limits and file ownership guarantees remain covered by the logging race suite.",
+    "Application report preparation passes the resolved Config into datatable.New; actual PostgreSQL CSV exports prove default and per-export timezone presentation. Configuration and export share one timezone length bound.",
+    "Two compiler rejection fixtures preserve timezone/value types; three real gopls scenarios cover helpers, calendar declarations and generated override keys.",
+    "All frozen runtime, generator, consumer, client and build inputs still match after verification; subsequent changes are documentation/evidence only."
+  ],
+  "compatibility": {
+    "utc_instants_and_json": "unchanged",
+    "duration_expiry_and_intervals": "unchanged",
+    "third_party_dependencies_added": false,
+    "timezone_data": "standard-library time/tzdata fallback",
+    "direct_json_logger_default": "UTC; Options.Location supplies an explicit override"
+  },
+  "limits": [
+    "Raw Go time calls, explicitly zoned SQL calendar operations and borrowed/custom loggers retain their own policies.",
+    "Linux checks compile test binaries for amd64 and arm64; Linux execution was not performed.",
+    "No publication, deployment or Git commit/push/merge was performed."
+  ],
+  "changed_source_fingerprints": {
+    "temporal/timezone.go": "bc485eb6a60f57faae28aa7d6b20e221615bc58744f6e7ac0cde51d9a11d63b4",
+    "temporal/service.go": "8551adceea803ebaa5ec9589b7756ba57bbe154a2f0554a34139bffc642bf750",
+    "temporal/helpers.go": "3f4e6a90900a2b8189bc35cda2903656289b04c535cc66c0159a34b9c00dd436",
+    "temporal/service_test.go": "12d20a5159c1f6b0bd33981f2cfb053e23a929de43565587e5172eb1097c5a48",
+    "schedule/calendar.go": "82c90e09b9828ebd4206cfa6ef6f56daf537a3b105dd36b8b8ec4aa5e4fb701a",
+    "schedule/calendar_test.go": "fee1155bb1dfe52bf09dd51beba271e8f233e49df92ac2166d532784db304374",
+    "application/settings.go": "e29448368c3cd8974bb18dd8346572a5fdc45ef60a383f9caac94a45c67fd7b1",
+    "application/settings_foundry.gen.go": "eb62c5bb0e91b4789e93e333e33eaa596429fd894f5e4b7a894d3a564e7a79f0",
+    "application/services.go": "53f7a971a3ace2f5ccf7a30fbe112ba5669265387d1ca1811d36192799aebb56",
+    "application/providers.go": "a68105d77bba626dbafc9665ea1b9d8f92f4d9c1e8d1ab3546b712b1fed0f80a",
+    "application/builder.go": "43f5c84be0dd6579808a8521ad451739f72c12afdf840bc1728d13e13c0efddd",
+    "application/logging_settings.go": "766ff91178c1ee7a73915505342f885f703f44b8749ca1ccaecc6afbf021b5e3",
+    "application/feature_validation.go": "e3cb2d3ec950d062ce172825e8b1192eb69929c3990fcd549f009f6e234b26ef",
+    "application/timezone_test.go": "8499f6b8d22c5ea277e36bb7874d99fcd485bf79a410037194a4de1e78f0cd62",
+    "logging/logger.go": "946ca9870132cecae7378f96f43b266a2875f68edba2f4f7c2fa25a4c548ad6f",
+    "logging/logger_test.go": "5aa6682d694c5c47439e37a841add9147b87bbd4aca7625f0797f4b5b2c469b9",
+    "logging/sink.go": "98f1f76c7650a21c83177cc76662b05fe98c41e4b4bf67e598b45d93c5fed8ea",
+    "logging/channels.go": "ddbd88df7ecbdc91a7ad0ca83d973b119c193c7ad989267351b8700856c72637",
+    "logging/rotation_config.go": "ca6be43e71354f9b56abffaef51525f75919c75df38c1ca3c98d384a624c8321",
+    "logging/rotating_file.go": "9e12385a459024972a3d56c4599b29ec6f397a17e53115a4a70f5eab6680427c",
+    "logging/rotation_timezone_test.go": "79ebef226395de92f6c645f51ce34ab2c9e257956756dfd7de9759cadaa90948",
+    "logging/rotating_file_test.go": "4330bc2baf21d19eb015b578c404ce6e4bc640468d63363327b746c203f3f67e",
+    "datatable/manager.go": "6755d7fcfda43a28e88a6797092d04a794d74faedd4a1a9938f28ad7cb55a03d",
+    "datatable/export.go": "ecccaf6801fbf3f86100f64a3db20418a0d2f039336e20b53361addd3fca1857",
+    "datatable/datatable_postgres_test.go": "08e80788b5c7183216d05704ff344b3d2f2d4c2e54da45ae2382b40a82746724",
+    "internal/agent/gopls_acceptance_test.go": "3db3784dc3c55f97c3c0fef292465e4d8dadc0032775b51c90a9ad3fb9054c30",
+    "tests/fixtures/consumer/configuredprofile/timezone_test.go": "a5cc66e553122fa6a29906ef9956d45053b15107f1ae40cf2121ca16cd374a69",
+    "tests/fixtures/consumer/types_test.go": "8f45a2176169b53390e8e95e626e5babd7c62fed0dc2eee29cb9a404eef56fb9",
+    "tests/fixtures/consumer/testdata/compilefail/application_timezone/invalid.go": "ff0b84b46338ee07b9dbac7f5fa92f2e66ffcc67969c9c0b8db53a2897118281",
+    "tests/fixtures/consumer/testdata/compilefail/temporal_service_instant/invalid.go": "73453c0b3a9b6d8b4b488464cffdd5163f27de57670d528550ba7e1d931d1750",
+    "tests/fixtures/consumer/bootstrap/settings_foundry.gen.go": "2935ce63ddde0ec7bc248b0880ea965991db25f27c6c20b9f0399677500a0fff",
+    "logging/channel_settings_foundry.gen.go": "d290000db316c92ebad83afd6fa5d3cb3e424c64d38fa284d80e02f745245494"
+  }
+}

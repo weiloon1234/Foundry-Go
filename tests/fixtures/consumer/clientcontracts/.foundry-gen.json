@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "files": {
+    "filters_foundry.gen.go": "a14c1f9b02145dbc7eb4e94da9498aac5b9f8db6a9619925809829afbaa9f528",
+    "item_path_foundry.gen.go": "ec7ce734699e868edfae18310bc500e13d082ab22a6133a94e45d763dfbb2333",
+    "member_foundry.gen.go": "a3441ba780d2246ed05da9fd72158985f92e114c4de673889eb68daf60db4469",
+    "payload_foundry.gen.go": "f90cc3b047988e14d57821f6fdd700e50b58248e76c7d7fd882d742ebc2d0d88"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "welcome": "Hello {{name}}",
+  "cart": {"items": {"$plural": {"one": "{{name}} has one item", "other": "{{name}} has {{count}} items"}}},
+  "position": {"$plural": {"one": "{{position}}st", "two": "{{position}}nd", "few": "{{position}}rd", "other": "{{position}}th"}},
+  "wire": {"literals": "{{text}} {{enabled}}"},
+  "fields": {"name": "Name"},
+  "permissions": {"manage": "Manage accounts"},
+  "enum": {"localization": {"status": {"draft": "Draft", "ready": "Ready"}}}
+}

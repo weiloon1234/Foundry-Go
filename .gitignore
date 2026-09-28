@@ -1,0 +1,17 @@
+.DS_Store
+/.cache/
+.env
+.env.*
+!.env.example
+!.env.*.example
+/bin/
+/tools/typescript/node_modules/
+/coverage/
+/coverage.out
+*.test
+go.work
+go.work.sum
+.foundry-generate.lock/
+.foundry-generate.guard
+.foundry-generate.guard-directory/
+.foundry-generate.finished-*/

@@ -1,0 +1,3 @@
+{
+  "cart": {"items": {"$plural": {"zero": "zero {{count}}", "one": "one {{count}}", "two": "two {{count}}", "few": "few {{count}}", "many": "many {{count}}", "other": "other {{count}}"}}}
+}

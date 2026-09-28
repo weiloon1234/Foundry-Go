@@ -1,0 +1,366 @@
+{
+  "acceptance": {
+    "actual_process_death_before_and_after_commit": [
+      "tests/fixtures/consumer/idempotenthttp/process_test.go"
+    ],
+    "atomic_claim_business_outbox_and_concurrent_http": [
+      "idempotency/operation.go",
+      "idempotency/operation_postgres_test.go",
+      "tests/fixtures/consumer/idempotenthttp/concurrency_test.go"
+    ],
+    "canonical_presence_limits_scope_namespace_and_version": [
+      "internal/jsonwire/canonical_test.go",
+      "idempotency/identity_test.go",
+      "idempotency/operation_postgres_test.go",
+      "idempotency/restore_test.go"
+    ],
+    "compiler_and_editor": [
+      "tests/fixtures/consumer/types_test.go",
+      "internal/agent/gopls_acceptance_test.go"
+    ],
+    "configured_persistence_and_lifecycle": [
+      "application/idempotency.go",
+      "application/database_scopes_test.go",
+      "idempotency/module.go",
+      "idempotency/operation_postgres_test.go"
+    ],
+    "socket_failure_webhook_and_current_authorization": [
+      "tests/fixtures/consumer/idempotenthttp/publication_test.go",
+      "tests/fixtures/consumer/idempotenthttp/concurrency_test.go"
+    ],
+    "typed_manifest_openapi_typescript_real_http": [
+      "tests/fixtures/consumer/idempotenthttp/client_test.go",
+      "tests/fixtures/consumer/idempotenthttp/testdata/types.ts",
+      "tests/fixtures/consumer/idempotenthttp/testdata/runtime.mjs"
+    ],
+    "unknown_commit_and_no_immediate_retry": [
+      "idempotency/commit_ack_postgres_test.go"
+    ]
+  },
+  "batched_fixes": [
+    "Bootstrapped the new private generated persistence from the current generator, then regenerated through the normal CLI and added its directory to the generation gate.",
+    "Supplied the explicit TCP host required by the declaration-only PostgreSQL adapter fixture.",
+    "Preserved response preparation failure classification so cancellation cannot mask an already-contained codec panic; the existing regression now passes.",
+    "Prune reports an affected count only for confirmed commits; unknown/rolled-back outcomes report zero plus their error.",
+    "Added direct operation-version and application-namespace isolation assertions.",
+    "Changed the existing TypeScript client fixture to compare metadata with the generated SDK version constant instead of a stale duplicated format-3 literal.",
+    "Corrected repeated benchmark samples to use fresh retained keys and bounded the contention barrier; discarded the invalid first measurements."
+  ],
+  "checks": {
+    "t06-compiler-r1": {
+      "command": "consumer: go test . -run TestInvalidPublicContractsFailCompilation/idempotency_ -count=1",
+      "elapsed_seconds": 11.6,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t06-compiler-r1/verify.log"
+    },
+    "t06-consumer-r1": {
+      "command": "consumer: go test -race -timeout=6m -count=1 -v ./idempotenthttp",
+      "elapsed_seconds": 20.1,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t06-consumer-r1/verify.log"
+    },
+    "t06-consumer-r2": {
+      "command": "consumer: go test -race -timeout=6m -count=1 ./idempotenthttp",
+      "elapsed_seconds": 27.0,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t06-consumer-r2/verify.log"
+    },
+    "t06-cost-r2": {
+      "command": "go test ./idempotency -timeout=2m -run=^$ -bench=BenchmarkIdempotentPostgres -benchtime=300ms -count=3",
+      "elapsed_seconds": 4.5,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t06-cost-r2/verify.log"
+    },
+    "t06-editor-r1": {
+      "command": "go test ./internal/agent -run TestRealGoplsConsumer/idempotency- -count=1",
+      "elapsed_seconds": 4.6,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t06-editor-r1/verify.log"
+    },
+    "t06-full-r2": {
+      "command": "make verify",
+      "elapsed_seconds": 177.4,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t06-full-r2/verify.log"
+    },
+    "t06-fuzz-canonical-r1": {
+      "command": "go test ./internal/jsonwire -run=^$ -fuzz=FuzzCanonicalJSON -fuzztime=10s -parallel=2",
+      "elapsed_seconds": 12.3,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t06-fuzz-canonical-r1/verify.log"
+    },
+    "t06-fuzz-key-r1": {
+      "command": "go test ./idempotency -run=^$ -fuzz=FuzzKey -fuzztime=10s -parallel=2",
+      "elapsed_seconds": 17.7,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t06-fuzz-key-r1/verify.log"
+    },
+    "t06-fuzz-stored-r1": {
+      "command": "go test ./idempotency -run=^$ -fuzz=FuzzStoredRepresentation -fuzztime=10s -parallel=2",
+      "elapsed_seconds": 11.7,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t06-fuzz-stored-r1/verify.log"
+    },
+    "t06-generate-r2": {
+      "command": "make generate GENERATION_DIRS=internal/idempotencystore application tests/fixtures/consumer",
+      "elapsed_seconds": 71.4,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t06-generate-r2/verify.log"
+    },
+    "t06-json-r1": {
+      "command": "go test -race ./internal/jsonwire -count=1",
+      "elapsed_seconds": 2.0,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t06-json-r1/verify.log"
+    },
+    "t06-runtime-r2": {
+      "command": "go test -race -timeout=8m ./idempotency ./http/... ./application ./contract/manifest ./openapi ./typescript",
+      "elapsed_seconds": 38.5,
+      "exit": 0,
+      "log": ".cache/consumer-startup/t06-runtime-r2/verify.log"
+    }
+  },
+  "date": "2026-09-18",
+  "final_source_sha256": {
+    "Makefile": "b4b4db66f0ac6615a8d46a1935e530355cdca847fa3406668271dab3048912d0",
+    "application/database_scopes_test.go": "554174d16850652da035134bfd009390280dc9b82396aa4721258f84dea090a2",
+    "application/feature_providers.go": "170746c8836dea60c1ff8cfa24c1d4c1b696979950efe90d9e134c100b542cfe",
+    "application/feature_settings.go": "d3d96674341da3ac4a6e90a8c7b1e8c85fca0c839ae0a5650566cad462e61dff",
+    "application/feature_validation.go": "f177e8395edf542b53b401d4cd984f9dd0249f8a5199ab0de6a21a108fccd732",
+    "application/idempotency.go": "83d9a4dc4720d38bd7ec40d1d665cdd4cc6ab85568941e918c9a88bf62d25a58",
+    "application/persistence.go": "d7a41d54a5143aa94903fab27c883be537af8e88f8b98ae25f8e13fbc5b26f26",
+    "application/settings_foundry.gen.go": "82d96bd3533bda992f4b94c6d286f6bafe2cbd7bdd4c695820a81beb49a1f985",
+    "contract/manifest/build.go": "1a8bcbf6ce42ff2ad7ee84f75104203a28a27b0672bb60547d05f85c7e959904",
+    "contract/manifest/document.go": "d5675c22c37e214f8b67dd69c1fbf33fd3c04386fbbe42c441210f349dc2aff5",
+    "contract/manifest/normalize_http.go": "af5bafec72d00d22803e4982ce6bfb5d0615b440db5c51a5164267113deb5a7c",
+    "http/authentication.go": "46287f3569c5bdb8df3a0ecf64d6a3b71bb4027a558e7e8e730589fc60e4dff2",
+    "http/browser_sessions.go": "c10ab5eb19cbf8b3d4e8f896f8424f2c96bb5c0d90dbf4ca5344f8bf1eb9b85b",
+    "http/compression.go": "a56438f1638e9511a04d886b91cff99965d37cdd093f6445f0027945e2cd5d89",
+    "http/contribution_contract.go": "f8d883a23bf6279650a5f96cf6661c7008a03c4a1d495578a4c195e961cd36a8",
+    "http/cors.go": "90ff23c4a8adb020b80105c7260082c43abfd546adc22effda56edc9e6f305e9",
+    "http/credential_requests.go": "5a766ab42bf8407a6b79cb00aba0af843b5c8c1436603a99cd8f52421c085885",
+    "http/csp.go": "af0da98beb27c3c6239879c193a01aa10554f8d7c3c4cd4a6fbe8c3e7615fa7d",
+    "http/csrf.go": "dd4dced84f09c0d7a0c9532a187a3db237926677f888876cf5aea40cbcb8fbe5",
+    "http/endpoint.go": "e134d7a11edf39ad4cee57108074901b7d469b5ee5da6e6af89338a61853a84a",
+    "http/endpoint_cleanup.go": "5b9b47b4847739db426b6cfc014d8285b92b3bfbfe2fa3a0572c1c6b6443926b",
+    "http/endpoint_metadata.go": "65155f9e69493385b138909c349f07af56ac0a5a44b718cde29d9974bccc4df3",
+    "http/endpoint_response.go": "61c2a1b410439219c49477c6b1f08787f5c7e3e459dca61a9dd431f3bf99b554",
+    "http/errors.go": "0fb7e0a3ff71545025991ed57c1ec8ebcbfd558a4a376523258f7e095517929c",
+    "http/etag.go": "52a6012a4b2b11d60188889055d0e6df11392a7e1f6cd6e7ef6c787f8aa68b33",
+    "http/idempotency.go": "a9515780c7a453ca3c481faafc3bee7b8125fa2905a3c78854f8e63803f2bfe6",
+    "http/idempotency_authentication.go": "8bcb2e54b21b4777fecb99e5ed0bf3549255db51028f0feb353ce48e7f35fc51",
+    "http/idempotency_encoding.go": "3aba34b81a72978a85932470b0a7e1fef97533c013da9366866f4ae93f8d0847",
+    "http/idempotency_metadata.go": "181eaedb4526d1ed0255771ce0d16d4972df1330d0f8c70a2a0f6bb08f3286c0",
+    "http/idempotency_middleware.go": "a8a484e3f5e85beec249e17a193451b7d3be8dc64a464221bca4d04aec1d8ee2",
+    "http/idempotency_test.go": "18c17e7a287031e5bf870f15195d4cfcba3266b9e80ee20f3ce2f7b582a61f08",
+    "http/locale.go": "ddc67a013ea8081c8f9267f21befdf6d22952efdf4d36b5de2c967e4c9cb6b01",
+    "http/middleware.go": "6665d63cb51017bfa4af3888265bb440c23281ed5dc574e6b730d3a8f50a8384",
+    "http/modelbinding/idempotency.go": "8adcfbdfd233ccf08428759876510eeea6b6fd619009f108ab985a12f71bcca1",
+    "http/public_url.go": "9406a8a00db8ac1d830eec05ec50ae5281c73c7497f991c58b580ab1c7d5dafa",
+    "http/rate_limit.go": "0ee222fbd6b7de7b9bd6052287702e65a2fb7c3e68374490a755236830c655c7",
+    "http/security_headers.go": "88ab9661f468a3276947b012d40ff3d74be2ed2cffa9c3bc3d792ba30e60be7d",
+    "http/trusted_proxy.go": "f66cc6604dc8ad6ba39fde22efd53e08c7508c379545fbe389b71a63e85554c4",
+    "idempotency/benchmark_postgres_test.go": "e3bad438010e2586504ccc43a2154a13ff6482958e93b0133979c4f9c92e94ea",
+    "idempotency/commit_ack_postgres_test.go": "3b41882bdfc20a4106eea153d8463bb3805cf3d6fb3bd9608667226bc7ae038d",
+    "idempotency/config.go": "408fecb55a0575c5c6853c979ad4d4bcff6cb5b1892a6da91f556c51abb6ddc0",
+    "idempotency/encoding.go": "cbd073b52d9af90c16a81157b63e897914ab15c6b2cb8bcad3e02bf2c1065f16",
+    "idempotency/errors.go": "cd259f704018d84f0366ff064af4b9e5cdf51a63c3aee63accc7e091e5a6c1f3",
+    "idempotency/identity.go": "d4af00d82478b1bdc241ab3add0bfafe8d1469372690f0fa2392816b9db50fce",
+    "idempotency/identity_test.go": "584a2d88180983258f4ae2ade55c7357805adb7e30f274ebdc4b097d7cf49691",
+    "idempotency/migrations.go": "3014a5f4ea24b5995643b0bafcc9aa1e109f7b10d38325a3c6652cdc1f58c21d",
+    "idempotency/module.go": "099bef81619f5681d15dec3759a1b4bda95af416edc72d80cfb8bd7b73c7b8ec",
+    "idempotency/operation.go": "356ac6dcb2b9aa1306707efeda1406aae7c076ec2147212f3991a6fbce6b151d",
+    "idempotency/operation_postgres_test.go": "1deceb2a85fae2ddbbe39753e4eeb68502688b11d65ef128d491e75c9e44f6dc",
+    "idempotency/prune.go": "e2b97ad95592485fe1e99e8c788033b26316550c3d4b77508de5c97245bf8a7a",
+    "idempotency/restore_test.go": "9f3735ed109fac86f2698d3949b90a5f0ba14d8148e972d800cb7b58ec52e07d",
+    "idempotency/store.go": "d489d756aab334b46b73d0c7c25c1439c6f1b5d7d0963d2045e7281400c95738",
+    "internal/agent/gopls_acceptance_test.go": "7b9e9c73cb68c022dc2559c27a7bf59af6c6d4bc1bc38478802cf494512778de",
+    "internal/idempotencystore/record.go": "737b43cb8eb3a2a63125055df8b2685616132119e43d44e00153832bf8476077",
+    "internal/idempotencystore/record_foundry.gen.go": "760381012fcdfd5668f63dff4ea18ffbf3aaf56f8bb8f356ef7133c1b83859ed",
+    "internal/idempotencystore/store.go": "e672a5021ca93a2772fe256d489f3f656ae0fa8f70a051e96255388cc3d212d9",
+    "internal/jsonwire/canonical_test.go": "85e254c19ef13c95ecfd50c90d05ffeb424a09f96904b8acada1f666c6942682",
+    "internal/jsonwire/parse.go": "f9693c283ac119c7bfb782d2ccff6c67ef87fc7b9bafd49c554d626d9c9c6676",
+    "openapi/openapi.go": "705a861ceb71170f503912e1ae9f56302929ab77c10ed004272bf75b92a7d2ff",
+    "tests/fixtures/consumer/bootstrap/settings_foundry.gen.go": "bbb1b3343cd7daf415dde7d9e10502ddbca8ea0ac7a40f8eaae51a5493eaffc2",
+    "tests/fixtures/consumer/clientcontracts/testdata/runtime.mjs": "353bcb3faf6e37ecfc4c1a165d59386e3008329ecbbaa2ae547b19a236ddef34",
+    "tests/fixtures/consumer/idempotenthttp/application.go": "87d73bca51997bfbfeb0f98322bb075c8d92070fb9cda646d69fe61a5d54e93d",
+    "tests/fixtures/consumer/idempotenthttp/authentication.go": "26da776b5e346b4f4b5bd82aa4e3c6d11263988f28b54cf5950a1cd706934c04",
+    "tests/fixtures/consumer/idempotenthttp/client_test.go": "a0228f8147fa1339b92bdfd0e33c653d07bb5d41619cce468b7106b189bae382",
+    "tests/fixtures/consumer/idempotenthttp/concurrency_test.go": "acfaf0c1620037017006d0abf9c88c46f02cd39c492932d9d1caa1889078ee4e",
+    "tests/fixtures/consumer/idempotenthttp/fixture_test.go": "4ea77de8ce330c2fa7619220f8dbf68d532ca673f808b45abd5ce340bf612501",
+    "tests/fixtures/consumer/idempotenthttp/models.go": "710de5b180e818f31fd264c020a893620c8b30d5a399417b07061187364a88c7",
+    "tests/fixtures/consumer/idempotenthttp/operation.go": "876fa3843221a11b3dcd810e5471ae1aaa307ccbf5303c0f891fcd1f9ef06080",
+    "tests/fixtures/consumer/idempotenthttp/order_foundry.gen.go": "92b3e9cfdc09d03cf0dc1df9ee2e73a27dfed0b974592ab5ea4dfc93c7ccccbf",
+    "tests/fixtures/consumer/idempotenthttp/path_foundry.gen.go": "9d757a2ed57b26d33827b280f7ffb75355cca93c527284c3a1467a9e4bdad764",
+    "tests/fixtures/consumer/idempotenthttp/process_test.go": "0b784635a961a48200ecb65e3e7ae26bdab4b827e85e4270bc31f518b80e1a1d",
+    "tests/fixtures/consumer/idempotenthttp/publication_test.go": "ffac92cf42d9bdda00975d7f8b6f4be640def5cc1ba7076443ffb1ed4d826cb2",
+    "tests/fixtures/consumer/idempotenthttp/receipt_foundry.gen.go": "6580dbe9e17d092480565f33d07a29ef2c152bf24a4b0005b387adca79ed240c",
+    "tests/fixtures/consumer/idempotenthttp/submission_foundry.gen.go": "fe5dcd264484e22f5845fcc754cdd7b67c1c2422d2b8f6f9fe0fcccf2ff5b62b",
+    "tests/fixtures/consumer/idempotenthttp/testdata/runtime.mjs": "0c7f2462f35ef128683bb5169e26d86bb65aa410cbd1a2546163349ef78e7347",
+    "tests/fixtures/consumer/idempotenthttp/testdata/types.ts": "ee0ce392165049feb060b9bc03c58b005515a337c2755e39f916336b3441bfd7",
+    "tests/fixtures/consumer/idempotenthttp/workspace_foundry.gen.go": "ebc149fb3293a6aa20f438aafe2ee930ed8ac338ce245a08c9d9529436ec214d",
+    "tests/fixtures/consumer/testdata/compilefail/idempotency_actor/invalid.go": "1277ce8cac51fa55fc33017ea2d637f7abfc54856dd54c14ddcb0ff299e0213b",
+    "tests/fixtures/consumer/testdata/compilefail/idempotency_input/invalid.go": "4cd433f269ec07b852d4fbc49804b1f13c52c4eefaefdd45a7b7f3704c97e775",
+    "tests/fixtures/consumer/testdata/compilefail/idempotency_key/invalid.go": "148981e0ede9ddf742650d3ddcee5645e51d088fe6b42b4a1900243af1102b20",
+    "tests/fixtures/consumer/testdata/compilefail/idempotency_result/invalid.go": "5f0f884f181e39b6eb8521d7d06a63b0817c6d7dfef4334e935b5d1e80ce34f6",
+    "tests/fixtures/consumer/testdata/compilefail/idempotency_scope/invalid.go": "4d2a3d378cc5d2e950c6131d109b9fc55e2b575498b1c93d8251ebd1e08e17eb",
+    "tests/fixtures/consumer/testdata/compilefail/idempotency_transaction/invalid.go": "468fe865cb34fe7fd4b17dcf797225d9df56316c2a9e90689032a037731d5ac7",
+    "tests/fixtures/consumer/types_test.go": "fac0010afbe37e2f28a064a72f3473f7cd07449ad591b1cd4772fffa8de1d254",
+    "typescript/render.go": "a4c6daa735e9f47cbdb0f1b9ef130b7f4e9564fce85b714f1d39bfbd4a14ae70",
+    "typescript/runtime/http.ts": "37d79078c3ffaa96f308993e5f5b5620ed54816dc563e11a188deb9b1abb1d55"
+  },
+  "fuzz_executions": {
+    "t06-fuzz-canonical-r1": 107188,
+    "t06-fuzz-key-r1": 295985,
+    "t06-fuzz-stored-r1": 32075
+  },
+  "go": "go1.27.1 darwin/arm64",
+  "limits": [
+    "One committed local outcome per retained scoped key; external side effects and exactly-once network delivery are outside the guarantee.",
+    "Retention pruning is explicit production maintenance. Tests never call destructive pruning and retain schemas/data.",
+    "Optional-authentication and incompatible credential/file/stream/multipart modes do not acquire an implicit replay contract.",
+    "Custom middleware explicitly attests response preservation; arbitrary wrappers outside Foundry assembly remain caller-owned.",
+    "The subprocess helper intentionally skips in the parent process and runs in owned subprocesses during the process-termination test.",
+    "T07 integrated proof, complete changed-code audit, improvements and final verification remain outstanding."
+  ],
+  "milestone": "T06",
+  "native_cost": {
+    "medians": {
+      "Contended": {
+        "B/op": 193436.0,
+        "SQL-commands/request": 17.0,
+        "allocs/op": 3098.0,
+        "checkouts/request": 1.0,
+        "ns/op": 3021407.0,
+        "requests/op": 2.0,
+        "stored-B/result": 15.0,
+        "transaction-us/request": 2282.0
+      },
+      "New": {
+        "B/op": 112502.0,
+        "SQL-commands/request": 22.0,
+        "allocs/op": 1822.0,
+        "checkouts/request": 1.0,
+        "ns/op": 1007125.0,
+        "requests/op": 1.0,
+        "stored-B/result": 15.0,
+        "transaction-us/request": 933.5
+      },
+      "Replay": {
+        "B/op": 79199.0,
+        "SQL-commands/request": 12.0,
+        "allocs/op": 1260.0,
+        "checkouts/request": 1.0,
+        "ns/op": 581270.0,
+        "requests/op": 1.0,
+        "stored-B/result": 15.0,
+        "transaction-us/request": 509.6
+      }
+    },
+    "notes": [
+      "Three repeated samples with distinct key namespaces, native local PostgreSQL, no concurrent compile/test workload.",
+      "Runner microbenchmark with one local INSERT and a 15-byte stored result; not a whole HTTP application throughput claim.",
+      "Contended ns/op, bytes/op and allocations/op describe a pair of requests and include a deliberate one-millisecond winner hold. SQL/checkouts/transaction metrics are per request.",
+      "Driver SQL command counts are not packet-level measurements. Scoped checkout adds the adapter reset/validation round trip; BEGIN/COMMIT and savepoint/schema management are included in command counts.",
+      "Outer transaction residence includes claim waits, callback and completion; it bounds claim-lock lifetime rather than measuring only PostgreSQL lock occupancy."
+    ],
+    "samples": {
+      "Contended": [
+        {
+          "B/op": 193436.0,
+          "SQL-commands/request": 17.0,
+          "allocs/op": 3098.0,
+          "checkouts/request": 0.9963,
+          "ns/op": 2690394.0,
+          "requests/op": 2.0,
+          "stored-B/result": 15.0,
+          "transaction-us/request": 2101.0
+        },
+        {
+          "B/op": 193644.0,
+          "SQL-commands/request": 17.0,
+          "allocs/op": 3098.0,
+          "checkouts/request": 1.0,
+          "ns/op": 3021407.0,
+          "requests/op": 2.0,
+          "stored-B/result": 15.0,
+          "transaction-us/request": 2282.0
+        },
+        {
+          "B/op": 193211.0,
+          "SQL-commands/request": 17.0,
+          "allocs/op": 3097.0,
+          "checkouts/request": 1.0,
+          "ns/op": 4049522.0,
+          "requests/op": 2.0,
+          "stored-B/result": 15.0,
+          "transaction-us/request": 2843.0
+        }
+      ],
+      "New": [
+        {
+          "B/op": 112502.0,
+          "SQL-commands/request": 22.0,
+          "allocs/op": 1822.0,
+          "checkouts/request": 1.0,
+          "ns/op": 1052181.0,
+          "requests/op": 1.0,
+          "stored-B/result": 15.0,
+          "transaction-us/request": 970.5
+        },
+        {
+          "B/op": 112301.0,
+          "SQL-commands/request": 22.0,
+          "allocs/op": 1822.0,
+          "checkouts/request": 1.0,
+          "ns/op": 976207.0,
+          "requests/op": 1.0,
+          "stored-B/result": 15.0,
+          "transaction-us/request": 902.9
+        },
+        {
+          "B/op": 112605.0,
+          "SQL-commands/request": 22.0,
+          "allocs/op": 1823.0,
+          "checkouts/request": 1.0,
+          "ns/op": 1007125.0,
+          "requests/op": 1.0,
+          "stored-B/result": 15.0,
+          "transaction-us/request": 933.5
+        }
+      ],
+      "Replay": [
+        {
+          "B/op": 79199.0,
+          "SQL-commands/request": 12.0,
+          "allocs/op": 1260.0,
+          "checkouts/request": 1.0,
+          "ns/op": 581270.0,
+          "requests/op": 1.0,
+          "stored-B/result": 15.0,
+          "transaction-us/request": 509.6
+        },
+        {
+          "B/op": 79277.0,
+          "SQL-commands/request": 12.0,
+          "allocs/op": 1260.0,
+          "checkouts/request": 1.0,
+          "ns/op": 583787.0,
+          "requests/op": 1.0,
+          "stored-B/result": 15.0,
+          "transaction-us/request": 512.6
+        },
+        {
+          "B/op": 79174.0,
+          "SQL-commands/request": 12.0,
+          "allocs/op": 1259.0,
+          "checkouts/request": 1.0,
+          "ns/op": 575088.0,
+          "requests/op": 1.0,
+          "stored-B/result": 15.0,
+          "transaction-us/request": 505.7
+        }
+      ]
+    }
+  }
+}

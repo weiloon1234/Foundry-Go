@@ -1,0 +1,132 @@
+{
+  "format": 1,
+  "date": "2026-09-28",
+  "status": "accepted",
+  "scope": "B05: framework-owned authenticated numbered, simple and cursor HTTP pagination",
+  "verification_environment": {
+    "native": "macOS arm64, Go toolchain selected by root go.mod",
+    "required": [
+      "existing PostgreSQL",
+      "existing Redis",
+      "native Node/TypeScript",
+      "real gopls"
+    ],
+    "data": "Existing test isolation helpers; no reset/drop/flush or duplicate database servers."
+  },
+  "checks": {
+    "focused-consumer": {
+      "command": [
+        "go",
+        "test",
+        "-count=1",
+        "./httppagination",
+        "./clientcontracts"
+      ],
+      "directory": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "seconds": 10.42,
+      "log_sha256": "06be9879f8235aedf8a61eecfff7331ddc85b56d643ddfb6238710775b4db09f"
+    },
+    "focused-compiler": {
+      "command": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestInvalidPublicContractsFailCompilation/http_pagination_auth",
+        "."
+      ],
+      "directory": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "seconds": 6.83,
+      "log_sha256": "02bebd1d973a5e12058f48dba0cf0c783eec78d9aed825423a4d3a1a0abc7efd"
+    },
+    "focused-editor": {
+      "command": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestRealGoplsConsumer/typed-authenticated-pagination",
+        "./internal/agent"
+      ],
+      "directory": ".",
+      "exit_code": 0,
+      "seconds": 3.0,
+      "log_sha256": "a5a07d3e2cf1ab3410ed31fe7ba123ce086daf0f948c7dc9384f40012b0f61a3"
+    },
+    "focused-race": {
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-count=1",
+        "./http/...",
+        "./auth/..."
+      ],
+      "directory": ".",
+      "exit_code": 0,
+      "seconds": 17.0,
+      "log_sha256": "329114caaf38951b97a2947a52bc1480fef1d51675669155de4efc7691f0c396"
+    },
+    "consumer-race": {
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-count=1",
+        "./httppagination",
+        "./clientcontracts"
+      ],
+      "directory": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "seconds": 26.62,
+      "log_sha256": "b015a51d54923a401a44a418f49b3c0059e799d90023ae2894a5e5575b6e799a"
+    },
+    "verify-final": {
+      "command": [
+        "make",
+        "verify"
+      ],
+      "directory": ".",
+      "exit_code": 0,
+      "seconds": 539.71,
+      "log_sha256": "fd6c7c78f6ae059f9f64e10d2c094dda7397d16f8dcd40366bcc6da1293606a6"
+    }
+  },
+  "initial_failure": {
+    "check": "make verify",
+    "finding": "The new gopls probe selected pagination.AuthenticatedNumberedEndpoint in a return type because it shared the constructor prefix.",
+    "correction": "Target the return pagination.Authenticated call context; retain constructor completion, hover and definition requirements.",
+    "recheck": "Focused real-editor probes and final full make verify passed."
+  },
+  "review": [
+    "No new authentication engine: credential admission, scope/permission checks, authorization isolation and security metadata use http.Authenticated.",
+    "Public and guarded adapters share request conversion and completion: cursor classification, cancellation, page validation, navigation and safe errors.",
+    "Concrete actor, cursor source and DTO types remain separate; six new compiler rejection cases and two new real-editor scenarios cover the public API.",
+    "Actual generated TypeScript client requests exercise all three guarded page modes; actual descriptors/manifest/OpenAPI preserve security and DTO privacy.",
+    "Manual simplification retained one completion path and existing typed registries/codecs; no generator/schema or application service duplication."
+  ],
+  "limits": [
+    "This accepts the framework adapter. Starter Project route registration, client regeneration and authenticated cross-owner application acceptance remain starter work.",
+    "No framework version was published and no dependency pin, deployment or SDK design decision was made."
+  ],
+  "source_sha256": {
+    "http/pagination/authenticated_endpoint.go": "8cc82692c493abad015df0f292f7dd6635e343e06a9f66ec92b33e545c5d175c",
+    "http/pagination/endpoint.go": "c4331adec8aac3bbf318475dc5f9cec5fc6cc3077bbd74becef4544a07379c29",
+    "http/pagination/authenticated_endpoint_test.go": "dade8f17e027ff2ef0d7e1bb30d38211fd244f50b1fe28eb2a706657bc302588",
+    "tests/fixtures/consumer/httppagination/authenticated.go": "c501bb5a44fdbf09d42b1908b368525a0beb4c870912c640044b0375de5ede11",
+    "tests/fixtures/consumer/testdata/compilefail/http_pagination_auth_numbered/invalid.go": "dd7abdf241a5886f012426c86bc84767fb6b4f0d940b4ae20bd259ecf1eb0dd9",
+    "tests/fixtures/consumer/testdata/compilefail/http_pagination_auth_simple/invalid.go": "aa2d9951bf8b7fa4dd2de6c1aceed8e7faa284bce9082bf5f71b82de54fe262a",
+    "tests/fixtures/consumer/testdata/compilefail/http_pagination_auth_cursor/invalid.go": "9a038c160d1909cc80afa08484476268d95cbc4b596e70bcaea4e59aab3de6d2",
+    "tests/fixtures/consumer/testdata/compilefail/http_pagination_auth_permission/invalid.go": "b6e9c07f67b5000d0c724f29845f2581cbf78a7fca2b0607979ab04e60c4bedb",
+    "tests/fixtures/consumer/testdata/compilefail/http_pagination_auth_scopes/invalid.go": "7472f0e2fc0280b0c8765333263db127dda28c12aea7f72c9beb4fb98fc2fdb7",
+    "tests/fixtures/consumer/testdata/compilefail/http_pagination_auth_authorization/invalid.go": "6fdec6eb97c8c7479b78fe77a4cd43b3749f9bbf5189174d5ff613cc88ae573d",
+    "tests/fixtures/consumer/types_test.go": "62316ca1398f5ef2869e1aa938aa9f2aa7f0168cf5d8d95ecd24f7189ee1301f",
+    "internal/agent/gopls_acceptance_test.go": "70ebae89e143cc47ffbed3fa358418cbb320bd80108d91aaac88267bf69f49c7",
+    "tests/fixtures/consumer/clientcontracts/contracts.go": "4749be1a7d5fe91c51fb9fc696ec14c80f3f1150ba509b67919fcf50a98e0c50",
+    "tests/fixtures/consumer/clientcontracts/contracts_test.go": "d796e8fd66071187700bd973d1e7262923b9e7f64e462a22d16ed8d580f4a7f3",
+    "tests/fixtures/consumer/clientcontracts/testdata/runtime.mjs": "a4c10a5730cfede4a8f63f4b8db4e7b78e41de84a0ca9cd22b1f814596e7586b",
+    "tests/fixtures/consumer/clientcontracts/testdata/types.ts": "d55659bd21dbda05ccc1b13aad5fda2f293f72a438de510f46ff429af97141b4"
+  }
+}

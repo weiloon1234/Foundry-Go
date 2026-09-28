@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "files": {
+    "buyer_totals_foundry.gen.go": "7eb35dff7d7ec039c8fa948807b74b15d5cc4d3dd77af9c52824ffc26a7e209a",
+    "location_row_foundry.gen.go": "8aec0e3e5b8b907f2fcc24052cdb1d8b864a88d6077e75a4e44ae19a2b6a786b",
+    "order_buyer_row_foundry.gen.go": "1b84dee99284e208eb64960a7a953b89dcac29ba8999d2c7bf188940107688c8",
+    "order_summary_foundry.gen.go": "bddc538777f55c8cd380e868e6d35cd9e47e3a08d48bed1d770d11612b52b8a4",
+    "referral_order_row_foundry.gen.go": "86fe923657be0810bcd2468431e261cbf9eab03023cf09e7f30d74b27bfa7910",
+    "referral_row_foundry.gen.go": "7144d2d1f5c80dcfb2ecbdbb919f0f6bd2b28b6b3529bce1a849d9a0a8147eba",
+    "scalar_report_foundry.gen.go": "00db9252fa0c5767782a4ca05fa038448f93f9d28aec0dfd06969d5971f7f1e8",
+    "user_order_stats_foundry.gen.go": "8798f44875cfdfdfa16fa7ac85bbbd7ab0de12ec93fc02d4665296cca2dd1bf1",
+    "user_pair_foundry.gen.go": "898393accb31e007b3449b175e38d4c6353e4447b06e4096b7373e7fb640fde9",
+    "user_summary_foundry.gen.go": "dda093de510fbba3e7d4af3be9a50f48a174338ff06e02de2e1bcad1f4cd678a"
+  }
+}

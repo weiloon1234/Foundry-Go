@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "files": {
+    "action_foundry.gen.go": "da0ca643586eb431bf77840dfba4b48f1730d54b2c304f80965f294ae7021f4a",
+    "catalogue_filters_foundry.gen.go": "b25d4a5a7fdd5b4c3ef78cfb5b48cb97e28c94a3ca29124ad2e4513c1a254f9f",
+    "catalogue_item_foundry.gen.go": "ec42c85bfc14731adb52b10ee63095ec713399dc0ab974fa12de9b839c42d578",
+    "form_input_foundry.gen.go": "cf347149a488aff7ea78621240fcbe20ae149b713a4cd53b5e95d0bbccc37c90",
+    "multipart_input_foundry.gen.go": "66b1ef3cc8e46ce6a696b940962c86fd222e9d4dca1625067d6438f6b6a19cce",
+    "patch_foundry.gen.go": "6492c4f1408983db6599458b90c36e08c38efe7023ca87b86c462df30f558c8f",
+    "project_foundry.gen.go": "7d615e15985987818902cfa84d0e3b3b449361ef415e587ad16510caff47cd22",
+    "project_path_foundry.gen.go": "1f216832550e1f4ba619ec616bbe7b37d31904c6f17aa156ef0138cc474e87e8",
+    "project_view_foundry.gen.go": "285019e31f0e003654e30c4b8a9f15d6a2f5f0e8ff2ca222a71ae04fdf1f2831",
+    "rule_reply_foundry.gen.go": "7155e6478039406004327c54de429efa4990b64c9c92f0c128a2cd5bb07fdd46",
+    "submission_foundry.gen.go": "2372b5373ef0cf82862db0c32e87c8f879ae02812ca2e26cb16ecbf9cb19dce4",
+    "submission_input_foundry.gen.go": "66465cc8ba7c5f462eb9e717cb7a4cdc020b3a7d8b962249e81bc4c8e8c9e56f",
+    "submission_path_foundry.gen.go": "8173c462183372b60d151dcf745e9d2f2d4e94d5518aea751d2037dc7bf08640",
+    "submission_view_foundry.gen.go": "f34104cc794a47fa9b7da4d820f132adff605ad3c32b9d8b62b89c1f6ad118ea",
+    "team_foundry.gen.go": "90e769669158807b0752974a9b039f7698bb4964c0ac33a7051e801ce7a04b3f"
+  }
+}
