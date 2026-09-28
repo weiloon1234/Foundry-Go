@@ -1,0 +1,212 @@
+{
+  "format": 1,
+  "date": "2026-09-28",
+  "status": "framework-verified",
+  "gap": "B06",
+  "gap_status": "open pending starter macOS and Linux acceptance against an available fixed revision",
+  "scope": "Normalize publisher-owned SQL timestamp boundaries while preserving strict caller-value codecs, generic nanosecond clocks, retry deadlines and transaction/deduplication behavior",
+  "reported_framework_version": "v0.0.0-20260928063817-2cc081284687",
+  "working_tree_base": "44e6b05fd8518aaa2e2d5aaff104236d7b5b3eb0",
+  "distribution": "Local changes only; no commit, push, tag, publication or starter dependency update performed",
+  "verification_environment": {
+    "native": "go version go1.27.1 darwin/arm64",
+    "modules": "GOWORK=off; GOTOOLCHAIN=local; existing native warm caches",
+    "required_modes": {
+      "FOUNDRY_TEST_POSTGRES_REQUIRED": "1",
+      "FOUNDRY_TEST_REDIS_REQUIRED": "1",
+      "FOUNDRY_TEST_TYPESCRIPT_REQUIRED": "1"
+    },
+    "tools": "Existing real gopls, native Node and project TypeScript compiler selected through the existing test variables",
+    "data": "Existing private test configuration and retained isolated schemas/Redis namespaces; no database reset/drop, shared-store flush or new database server",
+    "logs": ".cache/outbox-timestamp-b06-20260928/<check>/{stdout,stderr}.log"
+  },
+  "checks": {
+    "runtime-race-fixed": {
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-count=1",
+        "./outbox/...",
+        "./jobs/...",
+        "./events/...",
+        "./redis",
+        "./database/codec"
+      ],
+      "directory": ".",
+      "exit_code": 0,
+      "seconds": 9.52,
+      "timed_out": false,
+      "stdout_sha256": "f54607ba42b7140a0366ed57c0e26895804f6e37e1295f64e3366717a4537917",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_integrity": {
+        "inputs": 4103,
+        "unchanged": true
+      }
+    },
+    "consumer-race": {
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-count=1",
+        "./eventqueries",
+        "./idempotenthttp",
+        "./background"
+      ],
+      "directory": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "seconds": 32.52,
+      "timed_out": false,
+      "stdout_sha256": "480ed792e28377270df67ff2ffe66db1453a0344dc3b98a3e6dfb4f6504cffb6",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_integrity": {
+        "inputs": 4103,
+        "unchanged": true
+      }
+    },
+    "verify-final": {
+      "command": [
+        "make",
+        "verify"
+      ],
+      "directory": ".",
+      "exit_code": 0,
+      "seconds": 629.18,
+      "timed_out": false,
+      "stdout_sha256": "5f6c70d94c16d4b45880c3efec1505ef8395c65be5036881e8579438aae5b7e1",
+      "stderr_sha256": "603e986e2657f081db253aa015d1a0729047a3893264cb8eeb79acb16360da93",
+      "source_integrity": {
+        "inputs": 4103,
+        "unchanged": true
+      }
+    }
+  },
+  "reproduction": {
+    "command": [
+      "go",
+      "test",
+      "-overlay",
+      ".cache/outbox-timestamp-b06-20260928/before-overlay.json",
+      "-count=1",
+      "-run",
+      "^TestPostgresPublisherNanosecondClock$",
+      "./outbox/publisher"
+    ],
+    "directory": ".",
+    "exit_code": 1,
+    "seconds": 1.64,
+    "timed_out": false,
+    "stdout_sha256": "2b91b56cad08eff3670f7f480595c896ea2353aa503321c7f12c284335ee8ca1",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source_integrity": {
+      "inputs": 4103,
+      "unchanged": true
+    },
+    "expected_exit": 1,
+    "method": "Go build overlay substitutes only the unchanged original publisher implementation; the deterministic regression test and repository source remain present",
+    "original_source_matches_reported_commit": true,
+    "original_publisher_sha256": "cd184ef10d5ddc062f509db3ac66c6e65d256df3448925d22c931599ef86e868",
+    "observed_failure": "empty nanosecond poll failed database transaction: query_failed"
+  },
+  "verification_correction": {
+    "command": [
+      "go",
+      "test",
+      "-race",
+      "-count=1",
+      "./outbox/...",
+      "./jobs/...",
+      "./events/...",
+      "./redis",
+      "./database/codec"
+    ],
+    "directory": ".",
+    "exit_code": 1,
+    "seconds": 25.15,
+    "timed_out": false,
+    "stdout_sha256": "475b756ef438f6174930fb043b4e0e43b650a6d0715243bc678e581eaccb029e",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source_integrity": {
+      "inputs": 4103,
+      "unchanged": true
+    },
+    "finding": "The new retry test compared the returned failure directly to its original error; the existing callback boundary wraps ordinary errors.",
+    "correction": "Use errors.Is for the known native sentinel. Keep committed state, attempts, persisted deadlines, no-early-publication and wrapped identity assertions.",
+    "recheck": "Runtime/consumer races and the full gate passed; runtime implementation required no correction."
+  },
+  "source_integrity": {
+    "final_gate_and_final_races_same_inputs": true,
+    "input_files": 4103,
+    "full_input_manifest_sha256": "efae9b096699ec44f727e97e63df51da8eb84feba50fd85a39dd5b0616e977d9",
+    "manifest_encoding": "UTF-8 JSON, sorted keys, separators comma/colon, no trailing newline",
+    "local_manifest": ".cache/outbox-timestamp-b06-20260928/verify-final-source-after.json",
+    "runtime_generator_consumer_source_unchanged_after_gate": true,
+    "reporting_only_edits_after_gate": [
+      "docs/guides/outbox-timestamp-b06.md",
+      "docs/guides/outbox.md",
+      "docs/evidence/outbox-timestamp-b06-20260928.json"
+    ]
+  },
+  "review": [
+    "Eligibility instants round down so comparison cannot select a persisted deadline early. Empty polls exercise the real PostgreSQL query codec with a fixed nanosecond clock.",
+    "Successful publication persists a microsecond-aligned completion instant while the injected application clock retains its original nanoseconds.",
+    "Retry delay is added to the original completion sample before rounding up. Tests cover whole and fractional microseconds, one-nanosecond delay, aligned deadlines and second rollover.",
+    "Each retry test reloads the committed record, rejects polling before the exact original and stored deadlines, then accepts at the stored deadline with the same publication ID and next attempt.",
+    "Cancellation rolls back publication changes and leaves the database/row/capacity reusable. Existing post-commit observation, failure classification and locking tests remain green.",
+    "The existing job outbox rollback/lost-response test now forces a nanosecond clock and still requires a single accepted queue identity after reconciliation. Existing Redis integration and public consumer cases also pass.",
+    "Both strict time.Time and temporal.DateTime SQL codecs still reject explicit sub-microsecond caller values. Generic temporal construction preserves the same nanoseconds; clock and codec implementations are unchanged.",
+    "The change adds no API, dependency, schema migration, generated setting or alternate timestamp subsystem. Publisher timing policy remains at its SQL boundary; framework model timestamps keep their existing owner.",
+    "The full gate includes vet, package/consumer tests, real editor and client checks, deterministic generation checks, documentation checks and release-helper tests. The phase=failure exit=7 stdout item is an intentional passing runner unit test; make and the Python suite both pass."
+  ],
+  "evidence_sources": {
+    "precision_and_cancellation": "outbox/publisher/timestamp_postgres_test.go",
+    "ambiguous_publication_deduplication": "jobs/outbox_postgres_test.go",
+    "strict_codecs_and_generic_temporal_precision": "database/codec/codec_test.go",
+    "classification_and_postcommit_cancellation": "outbox/publisher/failure_postgres_test.go",
+    "real_redis_publication": "redis/attachments_integration_test.go",
+    "handoff": "docs/guides/outbox-timestamp-b06.md"
+  },
+  "remaining_acceptance": [
+    "Repository owner makes the reviewed fixed revision available; this work does not publish it.",
+    "Starter agent updates its one runtime/tool framework requirement with matching tooling and retains ordinary application clocks.",
+    "Run unchanged scripts/verify.py --independent --require-integrations on both macOS and Linux against that revision, including original failing application tests and the final compiled-console stage.",
+    "Keep B06 open until both complete terminal application gates pass. Deterministic native framework coverage does not claim Linux application acceptance."
+  ],
+  "source_sha256": {
+    "outbox/publisher/publisher.go": "6fc7a5dcd65bb1a817ebd53ce2e7ef9e2398b6a9f43824a0ac157afd5e1e3396",
+    "outbox/publisher/timestamp_postgres_test.go": "49e9b98671f15bbffa7efcf081ebb6bb08442034b22db7eaba041f5418c2327c",
+    "outbox/publisher/failure_postgres_test.go": "c4dc17f8594bfd66bd875aba22d6cf13c5c1bfd1d473f90215f575e0527b2b75",
+    "jobs/outbox_postgres_test.go": "24a745b5cf9f883de20a609f310fef8c22a91a59cf72971277e49c15b2f42550",
+    "database/codec/codec_test.go": "39981b5f50a53b4fe17d39cee381ceb897b250819afc3d146c39e488ddd3eabe",
+    "database/codec/temporal.go": "4a5a7728eadd55ab2ed185b8f8e5e9b6125e89224ef9188947655fae350478ab",
+    "database/query/model_timestamps.go": "9935ddebbc5246c3eb56b1a5ce5bf3135ccb9ece5ed83006208eec325702c2c7",
+    "temporal/datetime.go": "a2a23dc6d7d9c87e364207c2c0a25d3331a259d5bb0645116e53b110d82dca2b",
+    "clock/clock.go": "384a6519fb9f1379709b854b1ba85cd9568bd7ce7e6885689ff5e2b758011cb7",
+    "internal/outboxtest/fixture.go": "ac673b44f900719744f1e41ad29b379be9beaaa6e85bbc6ea040ca41cb3ef73c",
+    "go.mod": "a9bed05356085487b2754c36bbc73f0bba0899c4ee797d471698f35b8b071102",
+    "go.sum": "021bee3b4b6ff2caf3743a1e77065d8c38be1e3b6d061452fdc1ac7730f2f8b2",
+    "Makefile": "d8f9e067e5b10f45bb940b6a06826074c7225ca9ced86b1eb92621186dc19f3e"
+  },
+  "documentation_checks": [
+    {
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "directory": ".",
+      "exit_code": 0,
+      "result": "Documentation links, blueprint numbering, and fixture Go requirements are valid."
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "directory": ".",
+      "exit_code": 0,
+      "result": "No whitespace errors."
+    }
+  ]
+}

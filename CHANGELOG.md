@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Outbox publishers normalize their own SQL timestamps to microseconds, including
+  empty eligibility polls and successful completion. Retry deadlines round up
+  after adding the full delay to the original clock sample, preventing early
+  retries with nanosecond clocks or fractional-microsecond delays. Generic clocks,
+  temporal values and strict caller-value SQL codecs retain their contracts.
+
 - Workers log safe structured failure metadata through the configured logger by
   default. Typed `application.JobWith` adds middleware/admission to ordinary
   assembly. Failed-job commands inspect metadata and explicitly retry independent

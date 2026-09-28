@@ -106,7 +106,7 @@ func TestPostgresPublicationFailureInspectionReleasesRowAndRetainsRetry(t *testi
 				t.Fatal(err)
 			}
 			failure = nil
-			clock.Advance(config.RetryDelay)
+			clock.Advance(config.RetryDelay + time.Microsecond)
 			retry, err := p.PublishOne(t.Context())
 			if err != nil {
 				t.Fatal(err)

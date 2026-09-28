@@ -164,6 +164,13 @@ func TestTemporalMeaningPrecisionAndFailedScans(t *testing.T) {
 	if _, err := codec.Time().Bind(instant.Add(time.Nanosecond)); err == nil {
 		t.Fatal("sub-microsecond instant silently truncated")
 	}
+	nanosecond, err := temporal.NewDateTime(instant.Add(time.Nanosecond))
+	if err != nil || !nanosecond.UTC().Equal(instant.Add(time.Nanosecond)) {
+		t.Fatal("temporal instant lost nanosecond precision", err)
+	}
+	if _, err := codec.DateTime().Bind(nanosecond); err == nil {
+		t.Fatal("sub-microsecond DateTime silently truncated")
+	}
 	if _, err := codec.Date().Decode(instant); err == nil {
 		t.Fatal("time silently discarded from calendar date")
 	}

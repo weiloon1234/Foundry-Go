@@ -157,7 +157,9 @@ func (p *Publisher) PublishOne(ctx context.Context) (Result, error) {
 	defer func() { <-p.slots }()
 	operation, cancel := context.WithTimeout(ctx, p.config.OperationTimeout)
 	defer cancel()
-	now, err := temporal.NewDateTime(p.config.Clock.Now())
+	// SQL instants have microsecond precision. Rounding eligibility down must
+	// never select a row before its persisted publication deadline.
+	now, err := temporal.NewDateTime(p.config.Clock.Now().Truncate(time.Microsecond))
 	if err != nil {
 		return Result{}, err
 	}
@@ -196,7 +198,8 @@ func (p *Publisher) PublishOne(ctx context.Context) (Result, error) {
 					result.State = outbox.Pending
 				}
 			}
-			finished, err := temporal.NewDateTime(p.config.Clock.Now())
+			finishedAt := p.config.Clock.Now()
+			finished, err := temporal.NewDateTime(finishedAt.Truncate(time.Microsecond))
 			if err != nil {
 				return err
 			}
@@ -205,7 +208,13 @@ func (p *Publisher) PublishOne(ctx context.Context) (Result, error) {
 			case outbox.Published:
 				draft = draft.SetPublishedAt(finished).SetPublishReason("")
 			case outbox.Pending:
-				next, err := finished.Add(p.config.RetryDelay)
+				// Add the delay to the original sample, then round the deadline
+				// up. Truncating either operand could publish a retry early.
+				deadline := finishedAt.Add(p.config.RetryDelay)
+				if remainder := deadline.Nanosecond() % int(time.Microsecond); remainder != 0 {
+					deadline = deadline.Add(time.Microsecond - time.Duration(remainder))
+				}
+				next, err := temporal.NewDateTime(deadline)
 				if err != nil {
 					return err
 				}

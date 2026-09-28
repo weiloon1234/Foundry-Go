@@ -103,6 +103,20 @@ history. Polling, queue acceptance and event delivery are covered in the
 
 ## Publication failure classification
 
+Publisher-owned SQL timestamps use microsecond precision regardless of the
+application clock's precision. Eligibility reads and successful completion times
+round down. A retry deadline adds `RetryDelay` to the original completion clock
+sample, then rounds up to the next representable microsecond if needed. This
+never makes a retry eligible before its intended deadline; rounding can add less
+than one microsecond. Polling cadence can add further latency.
+
+The generic clock and temporal values still retain nanoseconds. Explicit caller
+values still pass through strict SQL codecs, which reject sub-microsecond data.
+No application clock workaround, configuration change or schema migration is
+required for this publisher correction.
+The [B06 handoff and verification status](outbox-timestamp-b06.md) separates the
+framework regression evidence from the remaining starter macOS/Linux acceptance.
+
 The publisher treats wrapped `fault.Invalid` and `fault.Missing` errors as
 permanent failures. Other failures retry under the configured attempt limit.
 Inspection is bounded and isolates custom error methods: cyclic, excessively

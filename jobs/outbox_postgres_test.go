@@ -71,7 +71,7 @@ func TestJobOutboxRollbackAndAmbiguousPublication(t *testing.T) {
 		t.Fatal(err)
 	}
 	config := publisher.DefaultConfig()
-	clock := testkit.NewClock(time.Now().Add(time.Second))
+	clock := testkit.NewClock(time.Now().Add(time.Second).Truncate(time.Microsecond).Add(175 * time.Nanosecond))
 	config.Clock = clock
 	publisher, err := publisher.New(writer, config, route)
 	if err != nil {
@@ -109,7 +109,9 @@ func TestJobOutboxRollbackAndAmbiguousPublication(t *testing.T) {
 	if err != nil || !first.Committed || first.State != outbox.Pending || first.Failure == nil {
 		t.Fatal(first, err)
 	}
-	clock.Advance(config.RetryDelay)
+	// Publication deadlines round up to SQL precision, never before the full
+	// delay measured from the original nanosecond clock sample.
+	clock.Advance(config.RetryDelay + time.Microsecond)
 	second, err := publisher.PublishOne(t.Context())
 	if err != nil || !second.Committed || second.State != outbox.Published || second.ID != first.ID || second.Attempts != 2 {
 		t.Fatal(second, err)
