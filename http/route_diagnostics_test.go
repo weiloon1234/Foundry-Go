@@ -34,7 +34,8 @@ func TestPathFailureKeepsInjectedLoggerAndCorrelation(t *testing.T) {
 		Request     string `json:"request_id"`
 		Error       string `json:"error"`
 	}
-	if err := json.Unmarshal(output.Bytes(), &entry); err != nil {
+	// The first record is the path failure; the server-failure summary follows.
+	if err := json.NewDecoder(bytes.NewReader(output.Bytes())).Decode(&entry); err != nil {
 		t.Fatal(err)
 	}
 	if entry.Application != "consumer" || entry.Route != "members.show" || entry.Request != string(failure.RequestID) || entry.Message != "HTTP path decoding failed" || !strings.Contains(entry.Error, "panicked") {

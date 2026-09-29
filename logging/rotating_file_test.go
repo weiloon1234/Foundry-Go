@@ -20,7 +20,7 @@ func rotationTime() time.Time { return time.Date(2026, 9, 25, 12, 0, 0, 0, time.
 func testRotatingFile(t *testing.T, policy RotationConfig) (*rotatingFile, string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "app.jsonl")
-	f, err := openRotatingFile(path, policy, rotationTime(), time.UTC)
+	f, err := openRotatingFile(path, policy, rotationTime(), time.UTC, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,6 +99,7 @@ func TestFileRetentionCountAgeAndRestart(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		writeLogAt(t, f, fmt.Sprintf("%04d", i), now.Add(time.Duration(i)*time.Second))
 	}
+	f.awaitCleanup()
 	archives := logArchives(t, f)
 	if len(archives) != 2 {
 		t.Fatal("archive count was not enforced")
@@ -129,7 +130,7 @@ func TestFileRetentionCountAgeAndRestart(t *testing.T) {
 	if err := f.Close(); err != nil {
 		t.Fatal(err)
 	}
-	fresh, err := openRotatingFile(path, policy, now.Add(72*time.Hour), time.UTC)
+	fresh, err := openRotatingFile(path, policy, now.Add(72*time.Hour), time.UTC, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,6 +158,7 @@ func TestFileRetentionRunsOnOrdinaryWrites(t *testing.T) {
 		t.Fatal("missing initial archive")
 	}
 	writeLogAt(t, f, "c", now.Add(time.Hour))
+	f.awaitCleanup()
 	if len(logArchives(t, f)) != 0 {
 		t.Fatal("ordinary write did not expire old archive")
 	}
@@ -171,7 +173,7 @@ func TestFileRotationRestartRollsOldActiveDay(t *testing.T) {
 	if err := os.Chtimes(path, now.Add(-24*time.Hour), now.Add(-24*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	f, err := openRotatingFile(path, RotationConfig{}, now, time.UTC)
+	f, err := openRotatingFile(path, RotationConfig{}, now, time.UTC, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +186,7 @@ func TestFileRotationRestartRollsOldActiveDay(t *testing.T) {
 
 func TestRotationOwnershipFailureCleanupAndExplicitDisable(t *testing.T) {
 	f, path := testRotatingFile(t, RotationConfig{})
-	if _, err := openRotatingFile(path, RotationConfig{}, rotationTime(), time.UTC); !errors.Is(err, fault.Conflict) {
+	if _, err := openRotatingFile(path, RotationConfig{}, rotationTime(), time.UTC, nil); !errors.Is(err, fault.Conflict) {
 		t.Fatal("second owner acquired rotating file", err)
 	}
 	if err := f.Close(); err != nil {
@@ -200,13 +202,13 @@ func TestRotationOwnershipFailureCleanupAndExplicitDisable(t *testing.T) {
 	if err := os.Symlink(outside, path); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := openRotatingFile(path, RotationConfig{}, rotationTime(), time.UTC); !errors.Is(err, fault.Invalid) {
+	if _, err := openRotatingFile(path, RotationConfig{}, rotationTime(), time.UTC, nil); !errors.Is(err, fault.Invalid) {
 		t.Fatal("symlink accepted", err)
 	}
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := openRotatingFile(path, RotationConfig{}, rotationTime(), time.UTC)
+	reopened, err := openRotatingFile(path, RotationConfig{}, rotationTime(), time.UTC, nil)
 	if err != nil {
 		t.Fatal("failed startup retained lock", err)
 	}
@@ -283,7 +285,14 @@ func TestRotatingSinkConcurrentRecordsAndClose(t *testing.T) {
 }
 
 func TestRotationRefusesReplacedActiveFileAndRecovers(t *testing.T) {
-	f, path := testRotatingFile(t, RotationConfig{MaxBytes: 4})
+	path := filepath.Join(t.TempDir(), "app.jsonl")
+	var notices bytes.Buffer
+	events := newSinkEvents(File, &notices)
+	f, err := openRotatingFile(path, RotationConfig{MaxBytes: 4}, rotationTime(), time.UTC, events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
 	now := rotationTime()
 	writeLogAt(t, f, "kept", now)
 	if err := os.Rename(path, path+".saved"); err != nil {
@@ -292,12 +301,19 @@ func TestRotationRefusesReplacedActiveFileAndRecovers(t *testing.T) {
 	if err := os.WriteFile(path, []byte("external replacement"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.writeAt([]byte("next"), now); !errors.Is(err, fault.Invalid) {
-		t.Fatal("rotation accepted a substituted active path", err)
-	}
+	// Refusing the substituted path is a rotation failure, not a lost record:
+	// the record stays on the owned descriptor and rotation backs off.
+	writeLogAt(t, f, "next", now)
+	writeLogAt(t, f, "more", now.Add(30*time.Second))
 	data, err := os.ReadFile(path)
 	if err != nil || string(data) != "external replacement" || len(logArchives(t, f)) != 0 {
 		t.Fatal("failed rotation changed unrelated file", err)
+	}
+	if saved, err := os.ReadFile(path + ".saved"); err != nil || string(saved) != "keptnextmore" {
+		t.Fatal("rotation failure lost records", string(saved), err)
+	}
+	if stats := events.snapshot(); stats.RotationFailures != 1 || strings.Count(notices.String(), "log rotation failed") != 1 || strings.Contains(notices.String(), path) {
+		t.Fatal("rotation failure was not counted once with a safe notice", stats, notices.String())
 	}
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
@@ -305,9 +321,83 @@ func TestRotationRefusesReplacedActiveFileAndRecovers(t *testing.T) {
 	if err := os.Rename(path+".saved", path); err != nil {
 		t.Fatal(err)
 	}
-	writeLogAt(t, f, "next", now)
-	if len(logArchives(t, f)) != 1 {
+	writeLogAt(t, f, "wait", now.Add(59*time.Second))
+	if len(logArchives(t, f)) != 0 {
+		t.Fatal("rotation retried before its backoff")
+	}
+	writeLogAt(t, f, "next", now.Add(time.Minute))
+	if len(logArchives(t, f)) != 1 || events.snapshot().RotationFailures != 1 {
 		t.Fatal("rotation failed to recover")
+	}
+	if data, err := os.ReadFile(path); err != nil || string(data) != "next" {
+		t.Fatal("recovered rotation lost the active record", err)
+	}
+}
+
+func TestPersistentPruneFailureNeverDropsRecords(t *testing.T) {
+	dir := t.TempDir()
+	var notices bytes.Buffer
+	events := newSinkEvents(File, &notices)
+	path := filepath.Join(dir, "app.jsonl")
+	now := rotationTime()
+	f, err := openRotatingFile(path, RotationConfig{}, now, time.UTC, events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	// A write/search-only directory still permits appending, creating and
+	// renaming log files, but every cleanup scan fails to list it.
+	if err := os.Chmod(dir, 0300); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0700) })
+	written := 0
+	write := func(at time.Time) {
+		writeLogAt(t, f, "rec", at)
+		f.awaitCleanup()
+		written++
+	}
+	failures := func() uint64 { return events.snapshot().PruneFailures }
+	start := now.Add(pruneInterval) // the first hourly cleanup after startup
+	write(start)
+	if failures() != 1 {
+		t.Fatal("cleanup failure was not counted", failures())
+	}
+	// Writes before the backoff neither rescan nor fail.
+	for i := 1; i < 60; i++ {
+		write(start.Add(time.Duration(i) * time.Second))
+	}
+	if failures() != 1 {
+		t.Fatal("cleanup retried on every write", failures())
+	}
+	// Each due retry runs off the write path and doubles its delay.
+	for _, offset := range []time.Duration{time.Minute, 3 * time.Minute, 7 * time.Minute} {
+		write(start.Add(offset))
+	}
+	if failures() != 4 {
+		t.Fatal("cleanup did not back off exponentially", failures())
+	}
+	write(start.Add(8 * time.Minute))
+	if failures() != 4 {
+		t.Fatal("cleanup retried before its backoff", failures())
+	}
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || strings.Count(string(data), "rec") != written {
+		t.Fatal("cleanup failure dropped records", written, err)
+	}
+	if strings.Count(notices.String(), "log retention cleanup failed") != 1 {
+		t.Fatal("cleanup notice was not emitted exactly once", notices.String())
+	}
+}
+
+func TestRetryDelayIsBounded(t *testing.T) {
+	for failures, want := range map[int]time.Duration{1: time.Minute, 2: 2 * time.Minute, 3: 4 * time.Minute, 7: time.Hour, 100: time.Hour} {
+		if got := retryDelay(failures); got != want {
+			t.Fatal("unexpected retry delay", failures, got)
+		}
 	}
 }
 

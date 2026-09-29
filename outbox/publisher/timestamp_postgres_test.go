@@ -126,7 +126,7 @@ func TestPostgresPublisherRetryDeadlinePrecision(t *testing.T) {
 			failure := errors.New("transient publication failure")
 			calls := 0
 			config := publisher.DefaultConfig()
-			config.Clock, config.RetryDelay = source, test.delay
+			config.Clock, config.RetryDelay, config.Jitter = source, test.delay, 0
 			p, err := publisher.New(writer, config, publisher.Route{Kind: address.Kind, Destination: address.Destination, Publish: func(context.Context, publisher.Message) error {
 				calls++
 				if calls == 1 {

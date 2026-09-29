@@ -50,6 +50,11 @@ func transportServer(t *testing.T, command func(net.Conn, []string, <-chan struc
 						io.WriteString(conn, "*0\r\n")
 						continue
 					}
+					if strings.EqualFold(args[0], "evalsha") {
+						// Scripts start with EVALSHA; an uncached script falls back to EVAL.
+						io.WriteString(conn, "-NOSCRIPT No matching script. Please use EVAL.\r\n")
+						continue
+					}
 					command(conn, args, done)
 				}
 			})
@@ -183,13 +188,23 @@ func TestOperationCapacityAndCloseDrain(t *testing.T) {
 	operation := make(chan error, 1)
 	go func() { operation <- client.Ping(t.Context()) }()
 	<-entered
-	if err := client.Ping(t.Context()); !errors.Is(err, fault.Conflict) {
+	// A full bound queues for a bounded time, then reports retryable overload.
+	bounded, stop := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	err := client.Ping(bounded)
+	stop()
+	if !errors.Is(err, fault.Overloaded) || !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("operation bound ignored", err)
 	}
+	waiting := make(chan error, 1)
+	go func() { waiting <- client.Ping(t.Context()) }()
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
 	if err := client.Close(canceled); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
+	}
+	// Shutdown stops queued admission instead of starting new commands.
+	if err := <-waiting; !errors.Is(err, fault.Closed) {
+		t.Fatal("queued operation survived shutdown", err)
 	}
 	select {
 	case <-client.Done():

@@ -107,22 +107,31 @@ the current locked model during issuance, so a changed address is taken from
 `issued.Subject()` when constructing delivery.
 
 Recipient quota is charged before lookup for present and absent accounts alike.
-Denial acknowledges without lookup or replacing a live token. Once admitted,
-missing/ineligible accounts, lookup/issuance/delivery errors, callback panic or
-abnormal exit, and server-side dispatch timeout all receive the same successful
-return while the caller context remains active. Operational failures have
+Denial acknowledges without lookup or replacing a live token. Once admitted, the
+request returns immediately: lookup, issuance and delivery run in a bounded
+background dispatch owned by the requester, so response latency no longer depends
+on whether the account exists or how long delivery takes. Missing/ineligible
+accounts, lookup/issuance/delivery errors, callback panic or abnormal exit, and
+dispatch timeout all happen after the acknowledgement. Operational failures have
 best-effort diagnostics containing purpose and a safe error summary, without the
 submitted address or token. A failing logger cannot change an account-dependent
 failure into a public error. This is not a constant-time or crash-durability claim.
-Caller cancellation/deadline still propagates. Rate-authority errors and capacity
-exhaustion happen before account lookup and remain errors. Issuer error inspection
+Caller cancellation/deadline before admission still propagates; a dispatch keeps
+the request's values (attribution, locale) but not its cancellation. Rate-authority
+errors, dispatch capacity (`fault.Overloaded` after a short bounded wait) and a
+closed requester are reported before any lookup, so they never depend on account
+existence. Issuer error inspection
 is bounded to 256 nodes and 64 wrapping levels. Incomplete inspection retains a
 safe operational diagnostic and the same admitted acknowledgment; it never
 suppresses a possible committed or unknown outcome as ordinary ineligibility.
 
-Callbacks execute synchronously under a bounded operation; uncooperative work
-keeps its slot until it exits. Nothing is detached or retried automatically.
-Delivery runs after issuance commits and releases its locks. A failed/lost
+Each dispatch runs under a bounded operation (`auth.Config.Timeout`) and holds
+one of `auth.Config.MaxConcurrent` slots; uncooperative work keeps its slot until
+it exits. Nothing is retried automatically. Register `requests.Close(ctx)` with
+the application's shutdown hooks: it stops accepting requests and waits for
+owned dispatches, canceling the rest when ctx ends. `requests.Wait(ctx)` waits
+for the dispatches admitted so far, for tests and maintenance tools. Delivery
+runs after issuance commits and releases its locks. A failed/lost
 publication may leave an undisclosed active link; the next permitted request
 replaces it. An email/outbox adapter must supply durable delivery separately.
 Milestone 16 supplies the email drivers; this coordinator is usable with an
@@ -158,8 +167,18 @@ Both flows reuse `auth.Provider[M,K]` for current eligibility. Its new
 `CheckModel` method validates an already locked model without another lookup.
 This is a model check, not credential verification or an authenticated proof.
 Recovery eligibility must permit unverified members when appropriate while still
-rejecting disabled members. Apply email-verification requirements separately to
-routes that need them; otherwise verification would reject its own subjects.
+rejecting disabled members. When the login provider requires a verified address,
+set the flow's optional `Eligible(ctx, model)` callback on `passwordreset.Model`
+or `emailverification.Model`: it replaces provider eligibility for that flow
+(identity checks remain), so verification reaches not-yet-verified members while
+still rejecting disabled ones. False rejects like a stale link.
+
+`passwordreset.WithLockout(reset, throttle, func(m M) LoginKey)` returns a reset
+that clears the login lockout of the reset account after each committed reset,
+using the same login key as `PasswordLogin`: the account ceiling and the
+resetting client's window. Clearing is best effort; it never undoes the committed
+reset, and a lockout backend failure leaves the old windows to expire. Both flows
+also offer `WithObserver` for `auth.EventPasswordReset` and `auth.EventVerified`.
 
 Constructors perform no I/O. Password hashing uses the existing shared bounded
 hasher. Reset validates the link and locks the model before doing expensive

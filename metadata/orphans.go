@@ -82,3 +82,70 @@ func orphanTable() extensionmaintenance.Table[store.MetaIndex] {
 		},
 	}
 }
+
+// StaleRow is one metadata row recorded under an earlier scope of its owner and
+// its key in the owner's current scope. RescopePage lists rows inspected or
+// moved; Conflicts are stale rows whose current-scope key already exists.
+type StaleRow = extensionmaintenance.Stale
+type RescopePage = extensionmaintenance.RescopePage
+
+// InspectStale lists, without writing, rows whose owner column names this
+// registered owner but whose scope is not the owner's current scope. They are
+// invisible to ordinary reads, typically after an owner table was renamed
+// without declaring extensions.OwnerOptions.StorageModel; declare the old name
+// in OwnerOptions.PreviousModels to adopt them. Conflicts, Missing subjects and
+// Undeclared models are reported and left in place.
+func InspectStale(ctx context.Context, m *Manager, owner extensions.OwnerName, cursor Cursor, limit int) (RescopePage, error) {
+	if err := m.Validate(); err != nil {
+		return RescopePage{}, err
+	}
+	return extensionmaintenance.Rescope(ctx, m.store, owner, cursor, limit, false, rescopeTable())
+}
+
+// Rescope moves one bounded page of stale rows into the owner's current scope,
+// preserving name, version, value and creation time. Each row is verified and
+// locked first; a conflicting current-scope row is never overwritten.
+func Rescope(ctx context.Context, m *Manager, owner extensions.OwnerName, cursor Cursor, limit int) (RescopePage, error) {
+	if err := m.Validate(); err != nil {
+		return RescopePage{}, err
+	}
+	return extensionmaintenance.Rescope(ctx, m.store, owner, cursor, limit, true, rescopeTable())
+}
+func rescopeTable() extensionmaintenance.RescopeTable[store.MetaIndex] {
+	return extensionmaintenance.RescopeTable[store.MetaIndex]{
+		Name: "metadata.rescope",
+		Scan: func(ctx context.Context, tx *database.Tx, owner extensions.OwnerName, current, after string, limit int, lock bool) ([]store.MetaIndex, error) {
+			f := store.MetaFields()
+			q := store.QueryFoundryModelMetadata().Where(f.Owner.Eq(string(owner)), f.Scope.Ne(current)).OrderBy(f.Key.Asc()).Limit(limit)
+			if after != "" {
+				q = q.Where(f.Key.Gt(after))
+			}
+			if lock {
+				return store.MetadataIndex(q).ForUpdate().All(ctx, tx)
+			}
+			return store.MetadataIndex(q).All(ctx, tx)
+		},
+		Row: func(row store.MetaIndex) (extensionrow.Identity, []string) {
+			return extensionrow.Identity{Key: row.Key, Owner: row.Owner, Scope: row.Scope, SubjectKey: row.SubjectKey, Identity: row.Identity}, []string{row.Name}
+		},
+		Exists: func(ctx context.Context, tx *database.Tx, key string) (bool, error) {
+			f := store.MetaFields()
+			return store.QueryFoundryModelMetadata().Where(f.Key.Eq(key)).Exists(ctx, tx)
+		},
+		Move: func(ctx context.Context, tx *database.Tx, row store.MetaIndex, subject extensions.Subject, key string) error {
+			if !identifier.Semantic(row.Name) || row.Version == 0 {
+				return invalid()
+			}
+			q := store.QueryFoundryModelMetadata()
+			stored, err := q.RequireFind(ctx, tx, row.Key)
+			if err != nil {
+				return err
+			}
+			if _, err := q.Delete(ctx, tx, row.Key); err != nil {
+				return err
+			}
+			_, err = q.Create(ctx, tx, store.MetaDraft{}.SetKey(key).SetOwner(row.Owner).SetScope(subject.Scope).SetSubjectKey(subject.Key).SetIdentity(subject.Identity).SetName(stored.Name).SetVersion(stored.Version).SetValue(stored.Value).SetCreatedAt(stored.CreatedAt).SetUpdatedAt(stored.UpdatedAt))
+			return err
+		},
+	}
+}

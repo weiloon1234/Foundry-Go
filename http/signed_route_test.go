@@ -205,3 +205,65 @@ func TestSignedURLUsesTrustedPublicOriginBehindProxy(t *testing.T) {
 		}
 	}
 }
+
+func TestSignedRouteLinkFormsThroughTransport(t *testing.T) {
+	now := testkit.NewClock(urlTestTime)
+	signed := textRoute("/files/{text}").Signed(urlTestSigner(t, now)).WithPermanentLinks().WithIgnoredParameters("utm_source")
+	handler := signedTestHandler(t, signed.HandleRaw(func(w http.ResponseWriter, r *http.Request, p textPath) { w.WriteHeader(204) }))
+	permanent, err := signed.PermanentURL(t.Context(), urlTestOrigin, textPath{Text: "a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	relative, err := signed.RelativeURL(t.Context(), textPath{Text: "b"}, urlTestTime.Add(time.Minute))
+	if err != nil || !strings.HasPrefix(relative, "/files/b?") {
+		t.Fatalf("relative=%q %v", relative, err)
+	}
+	now.Advance(30 * time.Second)
+	for _, location := range []string{permanent + "&utm_source=mail", "https://alias.example.test" + relative} {
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest("GET", location, nil))
+		if w.Code != 204 {
+			t.Fatalf("%s: %d", location, w.Code)
+		}
+	}
+	plain := textRoute("/files/{text}").Signed(urlTestSigner(t, now))
+	if _, err := plain.PermanentURL(t.Context(), urlTestOrigin, textPath{Text: "a"}); err == nil {
+		t.Fatal("permanent URL generated without opt-in")
+	}
+	if textRoute("/files/{text}").Signed(urlTestSigner(t, now)).WithIgnoredParameters("expires").Validate() == nil {
+		t.Fatal("reserved ignored parameter accepted")
+	}
+}
+
+// Route inspection exports the link policy clients need to accept permanent,
+// relative and decorated links; decoded metadata is validated.
+func TestSignedURLInfoExportsLinkPolicy(t *testing.T) {
+	now := testkit.NewClock(urlTestTime)
+	signed := textRoute("/files/{text}").Signed(urlTestSigner(t, now)).WithPermanentLinks().WithIgnoredParameters("utm_source", "fbclid")
+	router, err := NewRouter(signed.HandleRaw(func(w http.ResponseWriter, _ *http.Request, _ textPath) { w.WriteHeader(204) }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	info := router.Routes()[0].SignedURL
+	if info == nil || !info.Permanent || !info.Relative || strings.Join(info.IgnoredParameters, ",") != "fbclid,utm_source" || info.Validate() != nil {
+		t.Fatalf("signed link policy: %+v", info)
+	}
+	info.IgnoredParameters[0] = "changed"
+	if router.Routes()[0].SignedURL.IgnoredParameters[0] != "fbclid" {
+		t.Fatal("route inspection shares ignored parameters")
+	}
+	plain := signedURLInfo(signedURLPolicy{})
+	if plain.Permanent || len(plain.IgnoredParameters) != 0 || plain.Validate() != nil {
+		t.Fatal("default signed link policy", plain)
+	}
+	for _, invalid := range []SignedURLInfo{
+		{Version: plain.Version, Algorithm: plain.Algorithm, ExpiresParameter: plain.ExpiresParameter, SignatureParameter: plain.SignatureParameter},
+		{Version: plain.Version, Algorithm: plain.Algorithm, ExpiresParameter: plain.ExpiresParameter, SignatureParameter: plain.SignatureParameter, Relative: true, IgnoredParameters: []string{"b", "a"}},
+		{Version: plain.Version, Algorithm: plain.Algorithm, ExpiresParameter: plain.ExpiresParameter, SignatureParameter: plain.SignatureParameter, Relative: true, IgnoredParameters: []string{"expires"}},
+		{Version: "v9", Algorithm: plain.Algorithm, ExpiresParameter: plain.ExpiresParameter, SignatureParameter: plain.SignatureParameter, Relative: true},
+	} {
+		if invalid.Validate() == nil {
+			t.Fatalf("invalid signed metadata accepted: %+v", invalid)
+		}
+	}
+}

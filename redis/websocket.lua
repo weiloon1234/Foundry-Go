@@ -37,9 +37,21 @@ local now = tonumber(clock[1]) * 1000 + math.floor(tonumber(clock[2]) / 1000)
 local last = unsigned(redis.call('HGET', metadata, 'time') or '0', max_time)
 local revision = unsigned(redis.call('HGET', metadata, 'revision') or '0', max_revision)
 if bad then return {-1} end
-if not integer(now, 0, max_time - limits.retention) or now < last then return {-5} end
+if not integer(now, 0, max_time - limits.retention) then return {-5} end
+-- Authority time never moves backwards: a server clock stepped back by at most
+-- the retention window is clamped to the last committed time instead of
+-- failing every operation. A larger gap is corrupt or unrecoverable state.
+if now < last then
+    if last - now > limits.retention then return {-5} end
+    now = last
+end
 local expiry = now + limits.ttl
+local changed = not previous
+-- Metadata and expiry refresh are skipped while nothing changed and the last
+-- commit is recent, so frequent lease renewals avoid rewriting one shared key.
+local refresh = math.min(1000, math.floor(limits.ttl / 4))
 local function commit_metadata()
+    if not changed and now - last < refresh then return end
     redis.call('HSET', metadata, 'policy', policy, 'limits', ARGV[3], 'time', string.format('%.0f', now), 'revision', string.format('%.0f', revision))
     redis.call('PEXPIRE', metadata, limits.retention)
     redis.call('PEXPIRE', connections, 2 * limits.ttl)
@@ -47,6 +59,7 @@ end
 local function next_revision()
     if revision >= max_revision then return nil end
     revision = revision + 1
+    changed = true
     return revision
 end
 local function connection_key(id) return base .. ':connection:' .. id end
@@ -97,6 +110,15 @@ local function prune_subject(subject)
     end
     return key
 end
+-- Lua string comparison follows the server's collation locale; identity order
+-- must be bytewise so every Redis selects the same representative record.
+local function byte_less(a, b)
+    for i = 1, math.min(#a, #b) do
+        local x, y = a:byte(i), b:byte(i)
+        if x ~= y then return x < y end
+    end
+    return #a < #b
+end
 local function load_presence(scope)
     local leases, data = presence_keys(scope)
     if not kind(leases, 'zset') or not kind(data, 'hash') then return nil end
@@ -104,12 +126,13 @@ local function load_presence(scope)
     if count > limits.connections or redis.call('HLEN', data) ~= count then bad = true; return nil end
     local rows, members = redis.call('ZRANGE', leases, 0, -1, 'WITHSCORES'), {}
     local records = {}
-    local subject_count = 0
+    local subject_count, pruned = 0, false
     for i = 1, #rows, 2 do
         local id, deadline = rows[i], tonumber(rows[i+1])
         if not identity(id) or not integer(deadline, 0, max_time) then bad = true; return nil end
         if deadline <= now or not live(id) then
             redis.call('ZREM', leases, id); redis.call('HDEL', data, id)
+            pruned = true
         else
             if redis.call('HSTRLEN', data, id) > 6 * limits.member_bytes + 512 then bad = true; return nil end
             local record = member_record(redis.call('HGET', data, id))
@@ -123,22 +146,24 @@ local function load_presence(scope)
                 members[record.subject] = member
             end
             member.connections = member.connections + 1
-            if id > member.selected then member.data=record.data; member.selected=id end
+            if byte_less(member.selected, id) then member.data=record.data; member.selected=id end
         end
     end
-    return {leases=leases, data=data, members=members, count=subject_count,records=records}
+    return {leases=leases, data=data, members=members, count=subject_count,records=records,pruned=pruned}
 end
-local function presence_snapshot(group)
-    local ordered = {}
-    for id, _ in pairs(group.members) do table.insert(ordered, id) end
-    table.sort(ordered)
+-- Every presence change (join, leave, close, restored or expired entries)
+-- advances the revision; an unchanged read reuses it and rewrites no state.
+local function presence_snapshot(group, changed_scope)
+    -- Members are returned unordered; the adapter sorts them by bytes.
     local members = {}
-    for _, id in ipairs(ordered) do
-        local member = group.members[id]
+    for _, member in pairs(group.members) do
         table.insert(members, {id=member.id, data=member.data, connections=member.connections})
     end
-    local current = next_revision()
-    if not current then return nil end
+    local current = revision
+    if changed_scope or group.pruned or revision == 0 then
+        current = next_revision()
+        if not current then return nil end
+    end
     commit_metadata()
     -- Empty arrays are explicit: cjson encodes an empty Lua table as an object.
     local text = #members == 0 and '[]' or cjson.encode(members)
@@ -221,7 +246,7 @@ if request.op == 'append' or request.op == 'history' then return history_command
 if request.op == 'members' then
     local group = load_presence(request.scope)
     if bad then return {-1} end
-    local snapshot = presence_snapshot(group)
+    local snapshot = presence_snapshot(group, false)
     if not snapshot then return {-5} end
     return {0,snapshot}
 end
@@ -233,6 +258,8 @@ if request.op == 'open' then
     redis.call('HSET', connection_key(request.connection), 'owner', request.instance)
     redis.call('PEXPIRE', connection_key(request.connection), limits.ttl)
     redis.call('ZADD', connections, expiry, request.connection)
+    -- The first open may create the connections set; always refresh expiry.
+    changed = true
     commit_metadata();return {0}
 end
 local present = live(request.connection)
@@ -242,6 +269,37 @@ if not record or not present then
     return {-4}
 end
 if record.owner ~= request.instance then return {-4} end
+if request.op == 'touch' then
+    -- Renewal touches only this connection's own entries instead of loading
+    -- every member of each presence scope. A missing entry (for example an
+    -- evicted key) is restored from the connection record.
+    local renewals, restored = {}, false
+    for scope, member in pairs(record.records) do
+        if member.subject ~= '' then
+            local key = subject_key(member.subject)
+            if not kind(key, 'zset') then return {-1} end
+            table.insert(renewals, key)
+        end
+        if member.presence then
+            local leases, data = presence_keys(scope)
+            if not kind(leases, 'zset') or not kind(data, 'hash') then return {-1} end
+            local stored = redis.call('HGET', data, request.connection)
+            if stored then
+                local found = member_record(stored)
+                if bad or found.subject ~= member.subject or found.data ~= member.data then return {-1} end
+            else
+                redis.call('HSET', data, request.connection, cjson.encode({subject=member.subject,presence=member.presence,data=member.data}))
+                restored = true
+            end
+            table.insert(renewals, leases)
+            redis.call('PEXPIRE', data, 2*limits.ttl)
+        end
+    end
+    for _, key in ipairs(renewals) do redis.call('ZADD', key, expiry, request.connection);redis.call('PEXPIRE', key, 2*limits.ttl) end
+    redis.call('PEXPIRE', record.key, limits.ttl);redis.call('ZADD', connections, expiry, request.connection)
+    if restored then next_revision() end
+    commit_metadata();return {0}
+end
 local groups, subjects = {}, {}
 -- Validate every referenced structure before mutating a live connection.
 for scope, member in pairs(record.records) do
@@ -256,22 +314,22 @@ for scope, member in pairs(record.records) do
     end
 end
 if bad then return {-1} end
-if request.op == 'touch' then
-    for _, key in pairs(subjects) do redis.call('ZADD', key, expiry, request.connection);redis.call('PEXPIRE', key, 2*limits.ttl) end
-    for _, group in pairs(groups) do redis.call('ZADD', group.leases, expiry, request.connection);redis.call('PEXPIRE', group.leases, 2*limits.ttl);redis.call('PEXPIRE', group.data, 2*limits.ttl) end
-    redis.call('PEXPIRE', record.key, limits.ttl);redis.call('ZADD', connections, expiry, request.connection)
-    commit_metadata();return {0}
-end
 if request.op == 'close' then
+    if next(groups) and revision >= max_revision then return {-5} end
     for _, key in pairs(subjects) do redis.call('ZREM', key, request.connection) end
     for scope, _ in pairs(groups) do remove_presence(scope,request.connection) end
+    if next(groups) then next_revision() end
     redis.call('DEL', record.key);redis.call('ZREM', connections,request.connection)
     commit_metadata();return {0}
 end
 if request.op == 'leave' then
     local prior = record.records[request.scope]
     if prior then
-        if prior.presence then remove_presence(request.scope,request.connection) end
+        if prior.presence then
+            if revision >= max_revision then return {-5} end
+            remove_presence(request.scope,request.connection)
+            next_revision()
+        end
         if prior.subject ~= '' then
             local remaining = false
             for scope, member in pairs(record.records) do if scope ~= request.scope and member.subject == prior.subject then remaining=true;break end end
@@ -283,7 +341,9 @@ if request.op == 'leave' then
 end
 if request.op == 'join' then
     local prior = record.records[request.scope]
-    if prior and (prior.subject ~= request.subject or prior.presence ~= request.presence or prior.data ~= request.data) then return {-2} end
+    -- A retained record from a failed leave is a per-connection mismatch, not a
+    -- namespace policy conflict: the hub releases it and joins again.
+    if prior and (prior.subject ~= request.subject or prior.presence ~= request.presence or prior.data ~= request.data) then return {-6} end
     if not prior and record.count >= limits.subscriptions then return {-3} end
     local subject
     if request.subject ~= '' then
@@ -309,7 +369,7 @@ if request.op == 'join' then
         redis.call('PEXPIRE',group.leases,2*limits.ttl);redis.call('PEXPIRE',group.data,2*limits.ttl)
         group=load_presence(request.scope)
         if bad then return {-1} end
-        local snapshot=presence_snapshot(group)
+        local snapshot=presence_snapshot(group, true)
         if not snapshot then return {-5} end
         return {0,snapshot}
     end

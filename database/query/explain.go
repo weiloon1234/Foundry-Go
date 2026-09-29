@@ -80,7 +80,7 @@ func explain(ctx context.Context, executor database.Executor, source planSource,
 	}
 	var result Plan
 	err := callback.Isolated("inspect query plan", func() error {
-		statement, err := source.Compile()
+		statement, err := compileSource(ctx, source)
 		if err != nil {
 			return err
 		}

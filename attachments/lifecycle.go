@@ -33,7 +33,7 @@ func Cleanup[M any, K comparable](ctx context.Context, tx *database.Tx, m *Manag
 			return err
 		}
 	}
-	return m.calls.Run(ctx, "attachment owner cleanup", func(ctx context.Context) error {
+	return m.owners.Run(ctx, "attachment owner cleanup", func(ctx context.Context) error {
 		return m.store.Join(ctx, tx, func(ctx context.Context, child *database.Tx) error {
 			subject, err := owner.Subject(reference)
 			if err != nil {
@@ -90,7 +90,7 @@ func (m *Manager) afterCommitCleanup(ctx context.Context, ids []model.ID[store.F
 	if len(ids) == 0 {
 		return nil
 	}
-	return m.calls.Run(ctx, "attachment committed cleanup", func(ctx context.Context) error {
+	return m.owners.Run(ctx, "attachment committed cleanup", func(ctx context.Context) error {
 		cleanupCtx, cancel := m.cleanupContext(ctx)
 		defer cancel()
 		_, err := m.cleanupMany(cleanupCtx, ids)

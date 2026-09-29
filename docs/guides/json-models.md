@@ -73,6 +73,8 @@ documents, err := jsonqueries.QueryJsonDocuments().Where(
 
 Nested objects use another `Properties()` call. For example, `prefs.Profile.Properties().Next.Properties().Name.Scalar()` retains the same document scope through a recursive pointer. Map keys use the declared Go key type: `prefs.Profile.Properties().Attributes.At(2)` takes an `int`, whereas `Labels.At("lang")` takes a string. Array indices are `int32`; zero selects the first element and negative indices count from the end. An absent key, out-of-range index or missing ancestor yields SQL NULL. [PostgreSQL JSON extraction](https://www.postgresql.org/docs/18/functions-json.html)
 
+Any path also offers `Length()`, the element count of a JSON array (SQL NULL when the path is missing or holds another kind, never an error), and `Contains(fragment)`, JSONB containment of a typed fragment at that path. `JSONField.Length()` measures a whole array document.
+
 `Scalar()` returns a nullable expression with the declared scalar type, including named values and exact decimals. Text supplies `Like` and literal `Contains`; ordered values supply comparisons such as `Gt`. These convenience comparisons accept a present value while `.Value()` retains `value.Nullable[T]` in projections. Boolean, model-ID and enum scalar expressions use the ordinary row-expression comparison contract, such as `.Eq(value.Of(status))`.
 
 `JSON()` selects the typed child snapshot, `Kind()` inspects its JSON kind, `Exists()` includes a present JSON null, and `IsMissing()` tests SQL NULL. `IsJSONNull()` tests a present JSON null. Scalar extraction combines missing values, SQL-null ancestors and JSON null into SQL NULL; use the path predicates or snapshot when the distinction matters. Inspect the original nullable field as well when SQL-null ancestors must be distinguished from a missing descendant.
@@ -113,3 +115,15 @@ The parser rejects invalid UTF-8, unpaired UTF-16 surrogates and NUL. It bounds 
 Custom JSON or text methods own their internal schema, encoding work and concurrency behavior. They must preserve inputs and return independently owned decoded values. Their resulting representation still passes the wire limits; those limits do not bound memory allocated inside a custom callback. Foundry uses Go's codecs after strict shape checks, including exact property names and fixed-array lengths. Composite fields marked `,string` are rejected because Go otherwise ignores that option for composites. [Go JSON encoding contracts](https://pkg.go.dev/encoding/json)
 
 Whole-document and generated path operations share the query AST, expression limits and SQL compiler. Query-time extraction does not mutate a document; construct a new typed snapshot and use the generated draft to update it.
+
+## Indexing JSON paths
+
+Declared property names are compiled as escaped SQL literals, while array indices, map keys and compared values stay bind parameters. A scalar directly below a property compiles to `->>`, so `prefs.Profile.Properties().Name.Scalar().Eq("Ada")` filters on `((settings -> 'profile') ->> 'name')`, and an expression index on exactly that path is usable even under the generic plans PostgreSQL chooses for cached prepared statements:
+
+```sql
+CREATE INDEX users_settings_profile_name ON users (((settings -> 'profile') ->> 'name'));
+-- A non-text scalar compares through its cast; index the same expression:
+CREATE INDEX users_settings_profile_age ON users ((CAST((settings -> 'profile') ->> 'age' AS bigint)));
+```
+
+Each ancestor adds one `->`; the final scalar uses `->>`. Whole-document and path containment (`Contains`) use `@>`, which a GIN index on the column serves (`CREATE INDEX ... USING gin (settings)` or `jsonb_path_ops`). Check a plan with [typed plan inspection](query-plans.md); [PostgreSQL JSON indexing](https://www.postgresql.org/docs/18/datatype-json.html#JSON-INDEXING) describes the operator classes.

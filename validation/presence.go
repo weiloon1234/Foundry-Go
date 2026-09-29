@@ -12,9 +12,9 @@ func Absent[T any]() Rule[value.Optional[T]] {
 // wire presence: an ordinary pointer can represent both omission and null.
 func Pointer[T any](rules ...Rule[T]) Rule[*T] {
 	child := All(rules...)
-	return lift(Description{Kind: PointerKind}, child, func(s *execution, input *T, path string, depth int) {
+	return lift(Description{Kind: PointerKind}, child, func(s *execution, input *T, depth int) {
 		if input != nil {
-			child.run(s, *input, path, depth+1)
+			child.run(s, *input, depth+1)
 		}
 	})
 }

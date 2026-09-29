@@ -16,8 +16,14 @@ lockout throttle and `mfa.Model[M,K]`. Domain callbacks lock the current model b
 flag, update it through normal generated model writes, provide the account label,
 enforce required-factor policy and invalidate credentials in the supplied
 transaction. Pass `auth.Revocations.Invalidate` for all registered session/token
-guards. `PasswordLogin.RequiresMFA` must include both the stored enabled flag and
-any domain requirement, such as mandatory MFA for administrators.
+guards.
+
+Link the factors to login with `login.WithSecondFactor(factors)`. Login and the
+issuance recheck then require a second factor whenever `RequiresMFA` or the
+stored enabled flag says so, so an enrolled account can never bypass MFA because
+a `RequiresMFA` callback forgot the flag. `RequiresMFA` remains the place for
+domain requirements, such as mandatory MFA for administrators. `mfa.Factors`
+implements `auth.EnrolledFactors`, which reads only the model's enabled flag.
 
 The [consumer model and binding](../../tests/fixtures/consumer/multifactor/account.go)
 show the actual Go API. Foundry owns model rechecking, encrypted storage, factor
@@ -242,6 +248,29 @@ The [consumer recheck](../../tests/fixtures/consumer/recovering/credentials.go)
 shows the typed boundary. Zero results and different provider declarations are
 rejected before a model lock; changed or disabled models, errors, panic, abnormal
 callback exit and cancellation return no model.
+
+## Key rotation
+
+With `Features.Auth.MFA` enabled, `application.New` constructs the store from
+the configured database, schema and the [application key ring](encryption.md#application-key-ring);
+`Services.MFA()` returns it and `mfa.Config.Issuer` defaults to the application
+name. Enabling MFA without application encryption keys fails the build.
+
+`store.ReencryptStale(ctx, cursor, limit)` re-encrypts up to 256 stored factors
+per call under the active key, across every model and provider sharing the store,
+without any user's password or domain model. Each replacement is conditional on
+the factor's generation and envelope, so it is safe alongside logins and factor
+management; the secret, replay step and recovery hashes are unchanged and no
+credential is revoked. Factors that changed concurrently are skipped and picked
+up by a later run; envelopes whose key is no longer retained are reported as
+failed. The PostgreSQL adapter implements the `mfa.RotationBackend` contract
+(`StaleCiphertexts`, `ReplaceCiphertext`).
+
+Register `application.MFACommand()` and run
+`mfa reencrypt [--batch 128] [--max-batches 10000] [--format text|json]` after
+making a new key active. It reports `reencrypted`, `changed`, `failed` and
+`complete`, and fails when a factor uses a key that is no longer retained.
+Remove the previous key only after a run reports complete with no failures.
 
 ## Acceptance coverage
 

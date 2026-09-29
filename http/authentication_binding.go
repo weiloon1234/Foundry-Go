@@ -15,7 +15,24 @@ type authenticationBinding[M any] struct {
 	guard               auth.Guard[M]
 	requiredScopes      *auth.AccessScopes[M]
 	requiredPermissions []auth.Permission[M]
+	actorMiddleware     []Middleware
 	requirementError    error
+}
+
+// withActorMiddleware appends middleware that runs after authentication and its
+// scope/permission requirements, inside the authenticated request scope.
+func (b authenticationBinding[M]) withActorMiddleware(middlewares ...Middleware) authenticationBinding[M] {
+	if len(middlewares) == 0 {
+		b.requirementError = fault.New(fault.Invalid, "HTTP actor middleware requires a declaration")
+		return b
+	}
+	b.actorMiddleware = append(slices.Clone(b.actorMiddleware), middlewares...)
+	return b
+}
+
+// chain is the authentication middleware followed by the actor stage.
+func (b authenticationBinding[M]) chain(optional bool) []Middleware {
+	return append([]Middleware{b.middleware(optional)}, b.actorMiddleware...)
 }
 
 func (b authenticationBinding[M]) withScopes(required auth.AccessScopes[M]) authenticationBinding[M] {

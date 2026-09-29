@@ -16,6 +16,8 @@ type readResult[R any] struct {
 	err         error
 	transaction bool
 	lifecycle   *readLifecycle[R]
+	// scopeContext resolves context global scopes of model sources.
+	scopeContext context.Context
 }
 
 func (q readResult[R]) Compile() (Statement, error) {
@@ -25,7 +27,7 @@ func (q readResult[R]) Compile() (Statement, error) {
 	if q.scan == nil {
 		return Statement{}, fault.New(fault.Invalid, "query requires a complete result decoder")
 	}
-	c := compiler{allowLocks: q.transaction}
+	c := compiler{allowLocks: q.transaction, scopeContext: q.scopeContext}
 	sql, err := c.compileSelect(q.node)
 	if err != nil {
 		return Statement{}, err
@@ -36,6 +38,7 @@ func (q readResult[P]) Each(ctx context.Context, executor database.Executor, yie
 	if err := executionContext(ctx, executor); err != nil {
 		return err
 	}
+	q.scopeContext = ctx
 	if yield == nil {
 		return fault.New(fault.Invalid, "query iteration requires a callback")
 	}
@@ -52,6 +55,7 @@ func (q readResult[P]) All(ctx context.Context, executor database.Executor) ([]P
 	if err := executionContext(ctx, executor); err != nil {
 		return nil, err
 	}
+	q.scopeContext = ctx
 	s, err := q.Compile()
 	if err != nil {
 		return nil, err
@@ -79,14 +83,17 @@ func (q readResult[P]) RequireFirst(ctx context.Context, executor database.Execu
 	if p, ok := row.Get(); ok {
 		return p, nil
 	}
-	return *new(P), database.NotFound
+	return *new(P), database.NewError("query first", database.NotFound)
 }
 
 // Count counts the selected result window, including grouped rows and pagination.
+// An outer ORDER BY is omitted unless DISTINCT ON or a Limit/Offset window uses it.
 func (q readResult[P]) Count(ctx context.Context, executor database.Executor) (int64, error) {
 	if err := executionContext(ctx, executor); err != nil {
 		return 0, err
 	}
+	q.scopeContext = ctx
+	q.node = countNode(q.node)
 	s, err := q.Compile()
 	if err != nil {
 		return 0, err
@@ -99,6 +106,7 @@ func (q readResult[P]) Exists(ctx context.Context, executor database.Executor) (
 	if err := executionContext(ctx, executor); err != nil {
 		return false, err
 	}
+	q.scopeContext = ctx
 	if n, set := q.node.limit.Get(); !set || n > 1 {
 		q.node.limit = value.Set(1)
 	}

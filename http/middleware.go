@@ -21,6 +21,8 @@ type Middleware struct {
 	id         MiddlewareID
 	idempotent bool
 	construct  func(stdhttp.Handler) (stdhttp.Handler, error)
+	// proxy is the compiled TrustedProxy policy, reused by server admission.
+	proxy *proxyPolicy
 }
 
 // DefineMiddleware accepts a native net/http wrapper and its typed identity.
@@ -95,6 +97,9 @@ func ApplyMiddleware(handler stdhttp.Handler, middlewares ...Middleware) (stdhtt
 	if err != nil {
 		return nil, err
 	}
+	if err := validateRequestEdgePolicies(handler, owned); err != nil {
+		return nil, err
+	}
 	protected := requiresIdempotentMiddleware(handler)
 	if protected {
 		if err := validateIdempotentMiddlewares(owned); err != nil {
@@ -120,6 +125,9 @@ func ApplyMiddleware(handler stdhttp.Handler, middlewares ...Middleware) (stdhtt
 	}
 	if protected {
 		current = idempotentHTTPHandler{current}
+	}
+	if ceiling := routeBodyCeiling(handler); ceiling > 0 {
+		current = routedHandler{current, ceiling}
 	}
 	return current, nil
 }

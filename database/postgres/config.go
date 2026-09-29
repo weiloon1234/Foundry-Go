@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -42,7 +43,18 @@ type Config struct {
 	Pool                    database.PoolConfig
 	StatementCacheCapacity  int
 	MaxProtocolMessageBytes int
+	// Server-side session limits, set once per connection in whole
+	// milliseconds. Zero keeps the server default. StatementTimeout cancels a
+	// statement (QueryCanceled), LockTimeout bounds lock waits
+	// (LockNotAvailable) and IdleInTransactionSessionTimeout terminates a
+	// session left idle inside an open transaction.
+	StatementTimeout                time.Duration
+	LockTimeout                     time.Duration
+	IdleInTransactionSessionTimeout time.Duration
 }
+
+// maxSessionTimeout is PostgreSQL's integer millisecond GUC upper bound.
+const maxSessionTimeout = time.Duration(1<<31-1) * time.Millisecond
 
 // DefaultConfig requires an explicit endpoint and user. It verifies TLS peers,
 // sets UTC session time, and bounds both statement caching and protocol messages.
@@ -61,6 +73,11 @@ func (c Config) Validate() error {
 	}
 	if c.StatementCacheCapacity < 0 || c.StatementCacheCapacity > 65536 || c.MaxProtocolMessageBytes < 1024 || c.MaxProtocolMessageBytes > 1<<30 {
 		return fault.New(fault.Invalid, "invalid PostgreSQL statement cache or protocol message bound")
+	}
+	for _, limit := range []time.Duration{c.StatementTimeout, c.LockTimeout, c.IdleInTransactionSessionTimeout} {
+		if limit < 0 || limit%time.Millisecond != 0 || limit > maxSessionTimeout {
+			return fault.New(fault.Invalid, "PostgreSQL session timeouts must be whole non-negative milliseconds within the server bound")
+		}
 	}
 	switch c.TLS {
 	case VerifyFull, RequireTLS:

@@ -40,16 +40,42 @@ func (e AuthenticatedEndpoint[P, Q, B, S, M, R]) Handle(handler func(context.Con
 	if handler == nil {
 		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "authenticated model binding requires a handler"))
 	}
-	return e.transport.Handle(func(ctx context.Context, subject S, in foundryhttp.Input[P, Q, B]) (R, error) {
+	resolve := func(ctx context.Context, subject S, in foundryhttp.Input[P, Q, B]) (Input[P, Q, B, M], error) {
 		bound, err := resolveInput(ctx, e.resolver, in)
 		if err != nil {
-			return *new(R), err
+			return Input[P, Q, B, M]{}, err
 		}
 		if e.authorization != nil {
 			if err := authorizeResource(ctx, func() error { return (*e.authorization)(ctx, subject, bound) }); err != nil {
-				return *new(R), err
+				return Input[P, Q, B, M]{}, err
 			}
+		}
+		return bound, nil
+	}
+	// Framework transports resolve at their binding stage, before validation;
+	// see Bind.
+	if staged, ok := e.transport.(boundAuthenticatedTransport[P, Q, B, S, R]); ok {
+		return staged.HandleBound(func(ctx context.Context, subject S, in foundryhttp.Input[P, Q, B]) (func(context.Context, S, foundryhttp.Input[P, Q, B]) (R, error), error) {
+			bound, err := resolve(ctx, subject, in)
+			if err != nil {
+				return nil, err
+			}
+			return func(ctx context.Context, subject S, in foundryhttp.Input[P, Q, B]) (R, error) {
+				return handler(ctx, subject, Input[P, Q, B, M]{Request: in, Model: bound.Model})
+			}, nil
+		})
+	}
+	return e.transport.Handle(func(ctx context.Context, subject S, in foundryhttp.Input[P, Q, B]) (R, error) {
+		bound, err := resolve(ctx, subject, in)
+		if err != nil {
+			return *new(R), err
 		}
 		return handler(ctx, subject, bound)
 	})
+}
+
+// boundAuthenticatedTransport is the optional binding capability of framework
+// authenticated endpoints.
+type boundAuthenticatedTransport[P, Q, B, S, R any] interface {
+	HandleBound(foundryhttp.AuthenticatedBinding[P, Q, B, S, R]) foundryhttp.RouteRegistration
 }

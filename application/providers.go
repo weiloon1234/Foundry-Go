@@ -2,6 +2,7 @@ package application
 
 import (
 	"github.com/weiloon1234/Foundry-Go/clock"
+	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/http"
@@ -38,7 +39,24 @@ func registerResources(builder *foundation.Builder, image ImageSettings, logger 
 	}})
 
 }
-func registerHTTP(builder *foundation.Builder, settings HTTPSettings, localesEnabled bool, routes []Routes, middleware []http.Middleware, observers []http.RequestObserver) {
+
+// StickyReadsMiddlewareID identifies the database.StickyReadsHandler that the
+// configured HTTP kernel installs outermost when a database connection with a
+// read pool sets sticky_read_window.
+const StickyReadsMiddlewareID http.MiddlewareID = "foundry.database.sticky_reads"
+
+// stickyReadsConfigured reports whether any connection routes reads to a
+// replica with a sticky window; without one the handler would have no effect.
+func stickyReadsConfigured(s infrastructure.DatabaseSettings) bool {
+	for _, connection := range s.Connections {
+		if connection.ReadEnabled && connection.StickyReadWindow > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func registerHTTP(builder *foundation.Builder, settings HTTPSettings, localesEnabled, stickyReads bool, routes []Routes, middleware []http.Middleware, observers []http.RequestObserver) {
 	if settings.Enabled {
 		builder.Register(foundation.Module{Name: RouterProvider, Requires: []foundation.ProviderID{Provider}, OnRegister: func(r *foundation.Registrar) error {
 			return http.RegisterRouterWithRoutes(r, RouterKey, func(r foundation.Resolver) ([]http.RouteRegistration, error) {
@@ -61,9 +79,23 @@ func registerHTTP(builder *foundation.Builder, settings HTTPSettings, localesEna
 		if settings.SecurityHeaders {
 			global = append([]http.Middleware{http.SecurityHeaders(http.DefaultSecurityHeadersConfig())}, global...)
 		}
-		serverOptions := make([]http.ServerOption, 0, len(observers))
+		if stickyReads {
+			// Outermost, so every route handler and middleware write shares
+			// the request's read-your-writes scope.
+			global = append([]http.Middleware{http.DefineMiddleware(StickyReadsMiddlewareID, func(next stdhttp.Handler) (stdhttp.Handler, error) {
+				return database.StickyReadsHandler(next), nil
+			})}, global...)
+		}
+		serverOptions := make([]http.ServerOption, 0, len(observers)+1)
 		for _, observer := range observers {
 			serverOptions = append(serverOptions, http.WithRequestObserver(observer))
+		}
+		// Maintenance admission runs before the chain; reuse the global
+		// TrustedProxy so allow networks match the real client address.
+		for _, m := range global {
+			if m.ID() == http.TrustedProxyMiddlewareID {
+				serverOptions = append(serverOptions, http.WithAdmissionProxy(m))
+			}
 		}
 		module := http.Module(HTTPProvider, HTTPKey, settings.Server, func(r foundation.Resolver) (stdhttp.Handler, error) {
 			router, err := foundation.Resolve(r, RouterKey)

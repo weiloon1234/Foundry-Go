@@ -63,6 +63,11 @@ func TestGeneratedAudit(t *testing.T){
  stored,present:=emailValue.Get();if !present||stored!=after.Email{t.Fatal("getter or presentation replaced storage")}
  password,present:=fields.PasswordHash.Get();if !present||password.After().State()!=record.Redacted{t.Fatal("credential was not redacted")}
  if fields.Note.IsSet(){t.Fatal("excluded field remained")}
+ // Updates record only assigned or changed fields; untouched Note is omitted without exclusion.
+ automatic,err:=changes.Audit(MemberAuditPolicy{});if err!=nil{t.Fatal(err)}
+ automaticFields,err:=MemberAuditFields(automatic);if err!=nil{t.Fatal(err)}
+ if automaticFields.Note.IsSet()||!automaticFields.Key.IsSet()||!automaticFields.Email.IsSet(){t.Fatal("update audit did not keep only touched fields and the key")}
+ if automatic.Entry().Redaction()!=record.CurrentRedaction{t.Fatal("audit omitted its redaction policy")}
  payload,err:=history.Entry().Payload();if err!=nil||strings.Contains(payload,"secret")||strings.Contains(payload,"private-note"){t.Fatal("audit exposed excluded/sensitive data",err)}
  restored,err:=record.RestoreModel((Member{}).FoundryReference(),history.Entry());if err!=nil{t.Fatal(err)}
  if _,err:=MemberAuditFields(restored);err!=nil{t.Fatal(err)}

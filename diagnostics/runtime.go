@@ -13,7 +13,12 @@ import (
 	"github.com/weiloon1234/Foundry-Go/observability"
 )
 
-type Config struct{ MaxConcurrent int }
+// Config bounds diagnostics requests. Profiling additionally enables the
+// Profile endpoint; it stays disabled unless explicitly configured.
+type Config struct {
+	MaxConcurrent int
+	Profiling     bool
+}
 
 func DefaultConfig() Config { return Config{MaxConcurrent: 8} }
 func (c Config) Validate() error {
@@ -26,11 +31,14 @@ func (c Config) Validate() error {
 // Runtime borrows its application recorder and readiness registry. Their owners
 // must outlive admitted diagnostics requests. Do not copy a Runtime.
 type Runtime struct {
-	mu       sync.Mutex
-	state    func() foundation.State
-	recorder *observability.Recorder
-	probes   *health.Registry
-	slots    chan struct{}
+	mu        sync.Mutex
+	state     func() foundation.State
+	recorder  *observability.Recorder
+	gate      *maintenance.Gate
+	probes    *health.Registry
+	slots     chan struct{}
+	profiling bool
+	profile   chan struct{}
 }
 
 func prepare(config Config, probes *health.Registry) (*Runtime, error) {
@@ -40,7 +48,7 @@ func prepare(config Config, probes *health.Registry) (*Runtime, error) {
 	if probes == nil {
 		return nil, fault.New(fault.Invalid, "diagnostics requires an explicit readiness registry")
 	}
-	return &Runtime{probes: probes, slots: make(chan struct{}, config.MaxConcurrent)}, nil
+	return &Runtime{probes: probes, slots: make(chan struct{}, config.MaxConcurrent), profiling: config.Profiling, profile: make(chan struct{}, 1)}, nil
 }
 
 // New binds an already built app. Module supports ordinary service resolution
@@ -53,18 +61,21 @@ func New(app *foundation.App, probes *health.Registry, config Config) (*Runtime,
 	if err != nil {
 		return nil, err
 	}
-	runtime.state, runtime.recorder = app.State, app.Observability()
+	runtime.state, runtime.recorder, runtime.gate = app.State, app.Observability(), app.Maintenance()
 	return runtime, nil
 }
 
-func (r *Runtime) source() (foundation.State, *observability.Recorder) {
+func (r *Runtime) source() (foundation.State, *observability.Recorder, *maintenance.Gate) {
 	r.mu.Lock()
-	state, recorder := r.state, r.recorder
+	state, recorder, gate := r.state, r.recorder, r.gate
 	r.mu.Unlock()
-	if state == nil {
-		return foundation.Prepared, recorder
+	if gate == nil {
+		gate = recorder.Gate()
 	}
-	return state(), recorder
+	if state == nil {
+		return foundation.Prepared, recorder, gate
+	}
+	return state(), recorder, gate
 }
 
 type LivenessReport struct {
@@ -85,15 +96,15 @@ type Snapshot struct {
 // Liveness reads lifecycle state only. Dependency failures and reversible
 // maintenance never cause a restart signal. A stopped app is no longer live.
 func (r *Runtime) Liveness() LivenessReport {
-	state, _ := r.source()
+	state, _, _ := r.source()
 	return LivenessReport{Live: state != foundation.Stopped, State: state}
 }
 
 // Readiness checks dependencies only while the app can admit new work. A
 // shutdown/maintenance transition during the check is reflected in the result.
 func (r *Runtime) Readiness(ctx context.Context) (ReadinessReport, error) {
-	state, recorder := r.source()
-	report := ReadinessReport{State: state, Mode: recorder.Gate().Mode(), Dependencies: health.Report{Results: []health.Result{}}}
+	state, _, gate := r.source()
+	report := ReadinessReport{State: state, Mode: gate.Mode(), Dependencies: health.Report{Results: []health.Result{}}}
 	if ctx == nil {
 		return report, fault.New(fault.Invalid, "readiness requires a context")
 	}
@@ -105,13 +116,16 @@ func (r *Runtime) Readiness(ctx context.Context) (ReadinessReport, error) {
 	}
 	dependencies, err := r.probes.Check(ctx)
 	report.Dependencies = dependencies
-	report.State, recorder = r.source()
-	report.Mode = recorder.Gate().Mode()
+	report.State, _, gate = r.source()
+	report.Mode = gate.Mode()
 	report.Ready = err == nil && dependencies.Ready && report.State == foundation.Running && report.Mode == maintenance.Serving
 	return report, err
 }
 
 func (r *Runtime) Snapshot() Snapshot {
-	state, recorder := r.source()
-	return Snapshot{State: state, Observations: recorder.Snapshot()}
+	state, recorder, gate := r.source()
+	observations := recorder.Snapshot()
+	// Report the application's gate even when observability is disabled.
+	observations.Mode = gate.Mode()
+	return Snapshot{State: state, Observations: observations}
 }

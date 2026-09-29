@@ -28,7 +28,7 @@ func (h lostEntryAcknowledgement) ProcessPipelineHook(next driver.ProcessPipelin
 func (h lostEntryAcknowledgement) ProcessHook(next driver.ProcessHook) driver.ProcessHook {
 	return func(ctx context.Context, cmd driver.Cmder) error {
 		args := cmd.Args()
-		matched := len(args) > 1 && args[0] == "eval" && args[1] == h.script
+		matched := runsScript(args, h.script)
 		err := next(ctx, cmd)
 		if matched {
 			h.calls.Add(1)

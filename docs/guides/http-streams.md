@@ -60,9 +60,90 @@ reuse download filename/media validation. Media must be declared by the
 response descriptor. A Stream cannot be implicitly JSON-serialized. Endpoint
 metadata reports declared media and `Seekable: false`; it invents no JSON schema.
 
-Streams use ordinary net/http buffering and are finite byte responses. They are
-not a server-sent-event protocol or an infinite publisher. Storage-backed
-adapters belong to milestone 11; realtime protocols belong to 14–15.
+Streams use ordinary net/http buffering and are finite byte responses. For
+incremental output, such as a long export or a log tail, `StreamFrom(source).Progressive()`
+flushes each chunk once it has been accepted against the declared length and
+byte limit; a flushed prefix can still be aborted by a later failure, never
+completed early. Declare the route's `WithTimeout` (see
+[typed endpoints](http-endpoints.md)) for streams that outlive the kernel
+`RequestTimeout`. Storage-backed adapters belong to milestone 11; realtime
+protocols belong to 14–15.
+
+## Server-sent events
+
+A raw route can publish typed server-sent events (`text/event-stream`) with
+`ServeEvents`. Each event's data is encoded by a declared `contract.JSON[T]`,
+so the payload type and wire checks match typed responses:
+
+```go
+route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{
+    ID: "orders.events", Method: foundryhttp.GET, Access: foundryhttp.Public,
+}, foundryhttp.StaticPath("/orders/events")).WithTimeout(time.Hour)
+
+registration := route.HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ foundryhttp.NoPath) {
+    err := foundryhttp.ServeEvents(w, r, OrderEventJSON(), foundryhttp.DefaultEventStreamConfig(),
+        func(ctx context.Context, sink *foundryhttp.EventSink[OrderEvent]) error {
+            for update := range orders.Watch(ctx, r.Header.Get("Last-Event-ID")) {
+                if err := sink.Send(ctx, foundryhttp.Event[OrderEvent]{ID: update.Cursor, Name: "order", Data: update.Event}); err != nil {
+                    return err
+                }
+            }
+            return nil
+        })
+    _ = err // The stream is committed; log a redacted diagnostic if needed.
+})
+```
+
+`ServeEvents` commits 200 with `Cache-Control: no-store`, then writes and flushes
+each queued event and a `: keep-alive` comment after `Heartbeat` (default 15
+seconds; zero disables it) without events. HEAD receives headers only. `Send`
+validates single-line `ID`/`Name` text and a non-negative `Retry`, and waits while
+the bounded queue (default 64) is full, so a slow client slows its producer. The
+producer's context ends with the request (client disconnect, forced shutdown or
+the route deadline) or a failed write; `ServeEvents` waits for the producer's
+actual return and contains its panics and Goexit. Events accepted before a
+producer returns normally are all written. An event whose data violates its
+contract or `EventStreamConfig.Data` ends the stream without a partial event.
+Compression and automatic ETags pass event streams through. Declare the route's
+`WithTimeout` for the longest stream lifetime; the kernel `RequestTimeout` and
+`WriteTimeout` otherwise end it. Raw-route event streams appear in route
+inspection, not in generated clients.
+
+### Typed event stream endpoints
+
+`EventStreamResponse(descriptor)` makes the same stream a typed endpoint
+response, described in the manifest, OpenAPI (`text/event-stream` with
+`x-foundry-event-data`) and the TypeScript client. The handler validates the
+request as usual and returns `EventsFrom(producer)`; the stream starts only after
+the handler succeeded:
+
+```go
+var OrderEvents = foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(),
+    foundryhttp.EventStreamResponse(OrderEventJSON())).WithTimeout(time.Hour)
+
+registration := OrderEvents.Handle(func(ctx context.Context, in Request) (foundryhttp.Events[OrderEvent], error) {
+    return foundryhttp.EventsFrom(func(ctx context.Context, sink *foundryhttp.EventSink[OrderEvent]) error {
+        after, _ := foundryhttp.LastEventID(ctx) // Set when the client resumes.
+        for update := range orders.Watch(ctx, after) {
+            if err := sink.Send(ctx, foundryhttp.Event[OrderEvent]{ID: update.Cursor, Data: update.Event}); err != nil {
+                return err
+            }
+        }
+        return nil
+    }), nil
+})
+```
+
+Each event's data is bounded by `EndpointLimits.Response`, which clients receive;
+`Events.WithConfig` changes the queue and heartbeat. `LastEventID(ctx)` returns a
+single valid `Last-Event-ID` header (at most 1 KiB, no line breaks or NUL). A
+typed stream whose handler completed after its deadline is a reported 503, never
+an empty 200. A client disconnect or the route deadline ends the stream normally; a producer
+error, a contained panic or an invalid event aborts the connection, which is
+logged with a redacted diagnostic. The TypeScript client returns an
+`EventStreamResult<T>`: iterate it once with `for await`, receiving frozen
+`{ id?, name, data, retry? }` events whose data is decoded tolerantly, or call
+`close()`; pass `Last-Event-ID` in the call headers to resume.
 
 Focused canonical acceptance passed: HTTP and consumer races, compiler rejection
 cases, actual gopls, fuzzing, bounded-copy benchmarks, vet and documentation checks.

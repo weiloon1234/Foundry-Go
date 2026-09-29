@@ -7,12 +7,14 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 type throughOrder struct {
 	value             valueExpression
 	descending, pivot bool
+	nulls             nullPlacement
 }
 
 // ThroughRelation loads complete targets and their concrete pivot models. The
@@ -23,9 +25,11 @@ type ThroughRelation[M, N, P any] struct {
 	pivotLocal, pivotForeign fieldRef
 	orders                   []throughOrder
 	writeLimit               value.Optional[int]
-	get                      func(M) relation.Through[N, P]
-	set                      func(M, relation.Through[N, P]) M
-	fetch                    func(context.Context, database.Executor, ThroughRelation[M, N, P], []M, *relationLoadState, int) ([][]relation.Link[N, P], error)
+	// pivotFixed values, such as a morph name, fill every created pivot.
+	pivotFixed []pivotAssignment
+	get        func(M) relation.Through[N, P]
+	set        func(M, relation.Through[N, P]) M
+	fetch      func(context.Context, database.Executor, ThroughRelation[M, N, P], []M, *relationLoadState, int) ([][]relation.Link[N, P], error)
 }
 
 // ManyToMany connects source -> pivot -> target using compatible generated keys.
@@ -73,7 +77,7 @@ func (r ThroughRelation[M, N, P]) WherePivot(predicates ...Predicate[P]) Through
 func (r ThroughRelation[M, N, P]) OrderBy(orders ...Order[N]) ThroughRelation[M, N, P] {
 	r.orders = slices.Clone(r.orders)
 	for _, o := range orders {
-		r.orders = append(r.orders, throughOrder{value: o.value(), descending: o.descending})
+		r.orders = append(r.orders, throughOrder{value: o.value(), descending: o.descending, nulls: o.nulls})
 	}
 	return r
 }
@@ -82,7 +86,7 @@ func (r ThroughRelation[M, N, P]) OrderBy(orders ...Order[N]) ThroughRelation[M,
 func (r ThroughRelation[M, N, P]) OrderByPivot(orders ...Order[P]) ThroughRelation[M, N, P] {
 	r.orders = slices.Clone(r.orders)
 	for _, o := range orders {
-		r.orders = append(r.orders, throughOrder{value: o.value(), descending: o.descending, pivot: true})
+		r.orders = append(r.orders, throughOrder{value: o.value(), descending: o.descending, nulls: o.nulls, pivot: true})
 	}
 	return r
 }
@@ -109,7 +113,7 @@ func (r ThroughRelation[M, N, P]) validateRelation(source string, depth int, lim
 	}
 	// Validate the combined SELECT, including alias scope and shared expression
 	// limits, before a parent query or any relation branch performs I/O.
-	_, err := r.compileThrough(nil, 1)
+	_, err := r.compileThrough(nil, nil, 1)
 	return err
 }
 func (r ThroughRelation[M, N, P]) validateMetadata(source string, depth int, limits RelationLimits) error {
@@ -169,7 +173,7 @@ func (r ThroughRelation[M, N, P]) loadRelation(ctx context.Context, executor dat
 	if err != nil {
 		return nil, err
 	}
-	result := slices.Clone(parents)
+	result := parents // owned by loadRelations, which copied the caller slice once
 	for i, group := range groups {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -179,7 +183,7 @@ func (r ThroughRelation[M, N, P]) loadRelation(ctx context.Context, executor dat
 			return nil, err
 		}
 		index := indices[i]
-		result[index] = r.set(result[index], relation.Linked(group))
+		result[index] = r.set(result[index], relation.FoundryLinked(sqlowner.Seal{}, group))
 	}
 	return result, nil
 }

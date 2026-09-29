@@ -34,12 +34,18 @@ var decoderMessages = [...]struct {
 func MessageDefinitions() []i18n.MessageDefinition {
 	result := make([]i18n.MessageDefinition, 0, len(errorDefinitions)+len(decoderMessages))
 	for _, d := range errorDefinitions {
-		result = append(result, i18n.MessageDefinition{Key: i18n.MessageKey("http.error." + string(d.Code))})
+		result = append(result, i18n.MessageDefinition{Key: errorMessageKey(d.Code)})
 	}
 	for _, d := range decoderMessages {
 		result = append(result, i18n.MessageDefinition{Key: i18n.MessageKey("http.input." + string(d.code))})
 	}
 	return result
+}
+
+// errorMessageKey is the catalog key shared by built-in envelopes and declared
+// application errors.
+func errorMessageKey(code ErrorCode) i18n.MessageKey {
+	return i18n.MessageKey("http.error." + string(code))
 }
 
 type errorPresenter struct {
@@ -59,9 +65,10 @@ func (p *errorPresenter) text(ctx context.Context, key i18n.MessageKey, fallback
 	return result.Text
 }
 func (p *errorPresenter) present(ctx context.Context, payload *ErrorResponse) {
-	if _, builtin := payload.Code.definition(); builtin {
-		payload.Message = p.text(ctx, i18n.MessageKey("http.error."+string(payload.Code)), payload.Message)
-	}
+	// A declared application error is localized only when the catalog defines
+	// its parameter-free key (see ErrorDeclaration.MessageDefinition); its
+	// declared message remains the fallback. The code and status never change.
+	payload.Message = p.text(ctx, errorMessageKey(payload.Code), payload.Message)
 	if payload.Code != BadRequest {
 		return
 	}
@@ -103,7 +110,7 @@ func (w *localizedResponseWriter) enableFullDuplexResponse() error {
 }
 func findErrorPresenter(w stdhttp.ResponseWriter) (*errorPresenter, error) {
 	var result *errorPresenter
-	err := callback.Isolated("HTTP message presenter lookup", func() error {
+	err := callback.Invoke("HTTP message presenter lookup", func() error {
 		for range 64 {
 			candidate := w
 			if controller, ok := w.(responseController); ok {

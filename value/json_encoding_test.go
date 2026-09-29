@@ -138,7 +138,7 @@ func (v EncodingCodec) MarshalJSON() ([]byte, error) {
 
 func TestEncodeJSONContainsCodecFailures(t *testing.T) {
 	defer func() { encodingCodecCancel = nil }()
-	for _, mode := range []string{"panic", "goexit", "error", "cancelpanic", "cancelgoexit", "utf8", "duplicate"} {
+	for _, mode := range []string{"panic", "error", "cancelpanic", "utf8", "duplicate"} {
 		ctx, cancel := context.WithCancel(context.Background())
 		encodingCodecCancel = cancel
 		data, err := value.EncodeJSON(ctx, EncodingCodec{mode}, encodingLimits())
@@ -146,7 +146,7 @@ func TestEncodeJSONContainsCodecFailures(t *testing.T) {
 		if err == nil || data != nil || strings.Contains(err.Error(), "private") {
 			t.Fatal("codec failure exposed output or details")
 		}
-		if strings.Contains(mode, "panic") || strings.Contains(mode, "goexit") {
+		if strings.Contains(mode, "panic") {
 			if !errors.Is(err, fault.Panicked) || !errors.Is(err, fault.Internal) {
 				t.Fatalf("codec failure was lost: %v", err)
 			}
@@ -154,6 +154,27 @@ func TestEncodeJSONContainsCodecFailures(t *testing.T) {
 		if mode == "error" && !errors.Is(err, encodingCodecCause) {
 			t.Fatal("codec cause was lost")
 		}
+	}
+}
+
+// Codecs run on the caller's goroutine: Goexit ends that goroutine, like any
+// other Go call, instead of being converted into an error.
+func TestEncodeJSONCodecGoexitEndsCallerGoroutine(t *testing.T) {
+	defer func() { encodingCodecCancel = nil }()
+	for _, mode := range []string{"goexit", "cancelgoexit"} {
+		ctx, cancel := context.WithCancel(context.Background())
+		encodingCodecCancel = cancel
+		returned := make(chan bool, 1)
+		go func() {
+			completed := false
+			defer func() { returned <- completed }()
+			_, _ = value.EncodeJSON(ctx, EncodingCodec{mode}, encodingLimits())
+			completed = true
+		}()
+		if <-returned {
+			t.Fatalf("%s: codec Goexit was converted into a return", mode)
+		}
+		cancel()
 	}
 }
 

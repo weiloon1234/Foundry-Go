@@ -19,9 +19,11 @@ TCP peer and user agent through the existing bounded attribution contract.
 Forwarding headers are ignored until an explicit trusted-proxy adapter is applied.
 Request IDs are correlation metadata, never authentication credentials.
 
-The user agent must satisfy the shared attribution bounds and text validation.
-Invalid metadata returns `BadRequest` with the generated ID still present. Outside
-an attributed operation, `RequestID` returns the empty ID. Background operations
+The user agent is sanitized into the shared attribution bounds with
+`attribution.SanitizeUserAgent`: invalid UTF-8 becomes U+FFFD, control characters
+(including TAB and CR/LF) are removed and the text is truncated at 4,096 bytes on
+a rune boundary. User-agent text never rejects a request, including health
+checks. Outside an attributed operation, `RequestID` returns the empty ID. Background operations
 can retain request provenance through the existing
 [attribution contracts](model-references.md).
 

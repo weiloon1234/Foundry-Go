@@ -144,6 +144,12 @@ func TestManifestRejectsForgedTransportContracts(t *testing.T) {
 		"signed version":  func(op *manifest.Operation) { op.Route.SignedURL = &foundryhttp.SignedURLInfo{Version: "future"} },
 		"query name":      func(op *manifest.Operation) { op.Query = []manifest.Parameter{{Name: "bad&key", Type: "string"}} },
 		"bodyless status": func(op *manifest.Operation) { op.Status = 204 },
+		"documentation": func(op *manifest.Operation) {
+			op.Route.Documentation = &foundryhttp.RouteDocumentation{Summary: "two\nlines"}
+		},
+		"example media": func(op *manifest.Operation) {
+			op.Response = &manifest.Payload{File: &foundryhttp.FileResponseInfo{MediaTypes: []foundryhttp.MediaType{"text/plain"}}, Example: json.RawMessage(`"text"`)}
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			document, err := source.Snapshot()

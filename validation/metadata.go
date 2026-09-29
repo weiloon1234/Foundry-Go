@@ -33,6 +33,9 @@ const (
 	WhenKind     Kind = "when"
 	UnlessKind   Kind = "unless"
 	PointerKind  Kind = "pointer"
+	// EachKeyKind and EachValueKind visit map entries in ascending key order.
+	EachKeyKind   Kind = "each_key"
+	EachValueKind Kind = "each_value"
 )
 
 // Parameter is declaration metadata, never a received field value. Values are

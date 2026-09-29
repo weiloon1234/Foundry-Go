@@ -85,7 +85,14 @@ The trusted password/MFA login flow will issue its own verified session proof.
 
 ## Delivery boundary
 
-The [token runtime and PostgreSQL adapter](tokens.md) retain refresh generations
+The [token runtime and PostgreSQL adapter](tokens.md) retain refresh digests
 to detect reuse and commit family revocation. Typed storage, HTTP delivery and
 account-security flows passed milestone 10 acceptance. Current policies cannot
 expand a credential's immutable scope ceiling.
+
+A token binding applies its current declared ceiling to stored grants with
+`AccessScopes.Intersect`: removing a scope from the declaration withdraws it from
+existing tokens at verification, listing and refresh, without making them unusable.
+To mint a token from an authenticated request, use `tokens.CurrentProof(ctx)`: it
+retains the presented credential's grants, so the new token can only narrow them.
+`auth.NewProof` remains an unrestricted trusted-adapter boundary.

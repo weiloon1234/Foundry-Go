@@ -10,11 +10,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -26,19 +28,71 @@ type declarationID struct{ nonzero byte }
 // Reuse this exact declaration across attachments, metadata and translations.
 type Owner[M any, K comparable] struct{ definition *ownerDefinition[M, K] }
 type ownerDefinition[M any, K comparable] struct {
-	name   OwnerName
-	source query.ModelIdentity[M, K]
-	id     *declarationID
+	name     OwnerName
+	source   query.ModelIdentity[M, K]
+	storage  string
+	previous []string
+	id       *declarationID
+}
+
+// OwnerOptions declares the owner's persisted identity. StorageModel is the
+// model name recorded in the owner scope, so every stored extension row,
+// registration key and attachment object path depends on the declared owner
+// identity rather than the current table name. Empty uses the generated table
+// name, which is the historical, compatible scope. Declare the previous table
+// name here before renaming an owner table; stored identities attributed to it
+// are then accepted and decoded through the current key codec.
+//
+// PreviousModels lists model names this owner's rows were recorded under before
+// an undeclared rename. Only rows whose recorded scope and identity name one of
+// these, the current model or the storage model are adopted by the explicit
+// re-scope maintenance commands; rows of any other earlier model are reported,
+// never moved.
+type OwnerOptions struct {
+	StorageModel   string
+	PreviousModels []string
 }
 
 func DefineOwner[M any, K comparable](name OwnerName, source query.ModelIdentity[M, K]) Owner[M, K] {
-	return Owner[M, K]{definition: &ownerDefinition[M, K]{name: name, source: source, id: &declarationID{}}}
+	return DefineOwnerWith(name, source, OwnerOptions{})
+}
+
+// DefineOwnerWith declares an owner with an explicit persisted identity. Keep
+// StorageModel unchanged for the lifetime of the stored data.
+func DefineOwnerWith[M any, K comparable](name OwnerName, source query.ModelIdentity[M, K], options OwnerOptions) Owner[M, K] {
+	return Owner[M, K]{definition: &ownerDefinition[M, K]{name: name, source: source, storage: options.StorageModel, previous: slices.Clone(options.PreviousModels), id: &declarationID{}}}
 }
 func (o Owner[M, K]) Validate() error {
 	if o.definition == nil || !identifier.Semantic(string(o.definition.name)) || reflect.TypeFor[M]().Kind() != reflect.Struct {
 		return invalid("invalid model extension owner")
 	}
+	if o.definition.storage != "" && !sqlname.Table(o.definition.storage) {
+		return invalid("invalid model extension owner storage model")
+	}
+	if len(o.definition.previous) > maxPreviousModels {
+		return invalid("too many previous model extension owner models")
+	}
+	for i, previous := range o.definition.previous {
+		if !sqlname.Table(previous) || previous == o.ModelName() || previous == o.StorageModel() || slices.Contains(o.definition.previous[:i], previous) {
+			return invalid("invalid previous model extension owner model")
+		}
+	}
 	return o.definition.source.Validate()
+}
+
+const maxPreviousModels = 16
+
+// RecordedModels lists every model name persisted identities of this owner may
+// carry: the current model, the storage model and declared previous models.
+func (o Owner[M, K]) RecordedModels() []string {
+	if o.definition == nil {
+		return nil
+	}
+	models := []string{o.ModelName()}
+	if storage := o.StorageModel(); storage != models[0] {
+		models = append(models, storage)
+	}
+	return append(models, o.definition.previous...)
 }
 func (o Owner[M, K]) Name() OwnerName {
 	if o.definition == nil {
@@ -52,16 +106,43 @@ func (o Owner[M, K]) ModelName() string {
 	}
 	return o.definition.source.ModelName()
 }
-func (o Owner[M, K]) Scope() string { return Digest(string(o.Name()), o.ModelName()) }
+
+// StorageModel is the declared model name of the persisted owner scope. It
+// equals ModelName unless OwnerOptions declared a stable storage identity.
+func (o Owner[M, K]) StorageModel() string {
+	if o.definition == nil {
+		return ""
+	}
+	if o.definition.storage != "" {
+		return o.definition.storage
+	}
+	return o.definition.source.ModelName()
+}
+
+// Scope is the opaque persisted owner namespace. It depends only on the owner
+// name and declared storage model, so a pinned storage model survives renames.
+func (o Owner[M, K]) Scope() string { return Digest(string(o.Name()), o.StorageModel()) }
 func (o Owner[M, K]) Reference(key K) model.Reference[M, K] {
 	if o.definition == nil {
 		return model.Reference[M, K]{}
 	}
 	return o.definition.source.Reference(key)
 }
+
+// Parse restores a typed reference from a serialized identity. An identity
+// attributed to the declared storage model is accepted as this owner's model:
+// persisted rows written before a table rename keep their original attribution,
+// while the key must still round trip through the current key codec.
 func (o Owner[M, K]) Parse(identity model.Identity) (model.Reference[M, K], error) {
 	if err := o.Validate(); err != nil {
 		return model.Reference[M, K]{}, err
+	}
+	if current := o.ModelName(); identity.ModelName() != current && identity.ModelName() == o.StorageModel() {
+		renamed, err := identity.WithModelName(current)
+		if err != nil {
+			return model.Reference[M, K]{}, err
+		}
+		identity = renamed
 	}
 	return o.definition.source.Parse(identity)
 }

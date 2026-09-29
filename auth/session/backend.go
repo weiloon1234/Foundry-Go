@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -39,6 +40,13 @@ type TransactionalBackend interface {
 	RevokeAllIn(context.Context, *database.Tx, Address, model.Identity) (uint64, error)
 }
 
+// DeadlineBackend performs checked creation and rechecks an existing
+// credential's deadline before commit. Expiry rolls back all joined writes.
+type DeadlineBackend interface {
+	CheckedBackend
+	CreateBefore(context.Context, Address, Creation, temporal.DateTime, func(context.Context, *database.Tx) error) (Record, error)
+}
+
 // CompletionBackend can replace a pending-MFA credential in checked creation.
 // ConsumePendingIn joins the supplied transaction, locks and revalidates the
 // exact pending record/hash/identity/expiry, and deletes it provisionally. It
@@ -46,7 +54,33 @@ type TransactionalBackend interface {
 // ordinary creation path, then rechecks the pending deadline before commit.
 // Both methods preserve rollback, never retry, and return no secret on failure.
 type CompletionBackend interface {
-	CheckedBackend
+	DeadlineBackend
 	ConsumePendingIn(context.Context, *database.Tx, Address, Record) error
-	CreateBefore(context.Context, Address, Creation, temporal.DateTime, func(context.Context, *database.Tx) error) (Record, error)
+}
+
+// ResumptionBackend returns to the original actor's session after
+// impersonation. ResumeActor runs check first, then, in the same transaction
+// and under the subject lock, locks the exact live, fully authenticated,
+// unimpersonated record (same hash, ID, subject, creation time and absolute
+// expiry) and replaces its secret hash with next, recording activity. The ID,
+// creation time, absolute expiry and remember policy never change. A revoked,
+// rotated, expired or impersonated record returns an omitted value and
+// changes nothing. It never retries.
+type ResumptionBackend interface {
+	ResumeActor(context.Context, Address, Record, Digest, func(context.Context, *database.Tx) error) (value.Optional[Record], error)
+}
+
+// SelectiveBackend revokes every session of a subject in this address except
+// keep, under the same subject lock as creation. It returns the removed count.
+type SelectiveBackend interface {
+	RevokeOthers(context.Context, Address, model.Identity, model.ID[Record]) (uint64, error)
+}
+
+// ConfirmationBackend stamps ConfirmedAt on one live, fully authenticated
+// session of the subject and returns the updated record, or omits it when the
+// session is gone. ConfirmedWithin reports whether that live session confirmed
+// within the duration of the backend's current time. Both sample its clock.
+type ConfirmationBackend interface {
+	Confirm(context.Context, Address, model.Identity, model.ID[Record]) (value.Optional[Record], error)
+	ConfirmedWithin(context.Context, Address, model.Identity, model.ID[Record], time.Duration) (bool, error)
 }

@@ -60,11 +60,37 @@ context and releases its timer without canceling its parent.
 Cooperative handlers, database operations and outbound calls receive the same
 context. Its expiry does not kill Go computations or release application
 resources while code is still using them. Native I/O deadlines and connection
-shutdown own blocked network operations. Raw handlers own their timeout response;
-typed endpoint adapters map observed request cancellation to the shared timeout
-error before committing a response. A timeout does not undo committed domain work.
+shutdown own blocked network operations. Raw handlers own their timeout response.
+Typed endpoints return 408 only when the deadline expires while the request is
+still being read or decoded; a later deadline is the server's own budget and
+returns 503, and a handler's completed success or returned error is never
+replaced by a timeout (see [typed endpoints](http-endpoints.md)). A timeout does
+not undo committed domain work.
 [Request-body limits, attribution and typed error responses](http-requests.md)
 apply independently of the context deadline.
+
+The kernel applies `RequestTimeout` and `MaxBodyBytes` as defaults. A route
+declared with `WithTimeout` or `WithBodyLimit` replaces them after route matching:
+a longer route deadline starts at admission, keeps request values, client
+disconnect and forced-shutdown cancellation, and extends the native connection
+read/write deadlines by the same slack the kernel configuration has. A router
+that declares larger body limits raises only the kernel's early declared-length
+check; every other route still rejects bodies above `MaxBodyBytes` with 413
+before its handler runs. `ApplyMiddleware` retains this router ceiling.
+
+Global response wrappers such as `Compression`, `ETags` and `BrowserSessions` run
+outside the router but observe the matched route's effective budget: while the
+route runs, its own deadline (for example a `WithTimeout` event stream or long
+download) applies instead of the kernel `RequestTimeout`; once a typed handler
+succeeded, an error response is being written (`WriteError`) or a route's
+handler returned, only client disconnect and forced shutdown end the delivery. Work after an expired deadline, such as opening a
+download source, keeps that real cancellation.
+
+Every 5xx response is logged with a redacted diagnostic except admission
+rejections: capacity exhaustion (`fault.Overloaded`), a closing server
+(`fault.Closed`) and the bare unavailable response for draining and maintenance
+are counted as rejected request outcomes but are neither described nor logged per
+request, which would amplify load while the server is saturated.
 
 For an operating-system-assigned port use `127.0.0.1:0`. Resolve the module's
 server key and call `server.Ready(ctx)` to await the actual bound address or the
@@ -107,10 +133,14 @@ to 4,096 accepted connections and reserves capacity before native Accept, includ
 slow header readers. Additional peers wait in the OS listen backlog. Hijacks keep
 their connection permit until their explicit owner closes them. The listener's
 closure stops admission without claiming those transferred connections have ended.
-`MaxConcurrentRequests` defaults to 1,024 live handlers; exhaustion returns 503.
+`MaxConcurrentRequests` defaults to 1,024 live handlers. A request that finds no
+free slot waits in arrival order for at most min(`RequestTimeout`, 5s); if none
+frees, or its context ends first, it returns 503 `unavailable` (with
+`Retry-After: 1` for an exhausted wait). Shutdown ends waits immediately.
 Cancelled handlers retain their slot until actual return. Zero on either new field
 selects its default; both have a maximum of 1,048,576. These are configurable
-resource ceilings, not a claim that every maximum fits every host.
+resource ceilings, not a claim that every maximum fits every host. Handler
+admission and drain tracking use atomic counters rather than a shared lock.
 
 Server configuration snapshots its maintenance-path slice. Read-only operational
 exceptions, trace trust and shared metrics are described in

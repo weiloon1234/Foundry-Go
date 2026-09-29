@@ -22,7 +22,10 @@ type Encoding[T any] struct {
 }
 
 // DefineEncoding is the explicit adapter boundary. identity is a versioned wire
-// contract digest; changing it prevents replay through an incompatible codec.
+// contract digest recorded with each outcome. An outcome stored under another
+// identity replays only when decode accepts its exact representation, so decode
+// must reject anything the current contract does not describe (unknown fields,
+// missing required values); an incompatible outcome stays unavailable.
 // Encoded values must be complete JSON documents, checked by the shared parser.
 func DefineEncoding[T any](identity string, encode func(context.Context, T, int) ([]byte, error), decode func(context.Context, []byte, int) (T, error)) Encoding[T] {
 	e := Encoding[T]{identity: identity, encode: encode, decode: decode}

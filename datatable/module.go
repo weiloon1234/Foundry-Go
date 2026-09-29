@@ -8,8 +8,11 @@ import (
 	"github.com/weiloon1234/Foundry-Go/foundation"
 )
 
-// Module retains borrowed providers until query callbacks and exported files
-// actually close. Export workers must declare this module as their dependency.
+// Module retains borrowed providers until query and export-generation callbacks
+// actually exit. Completed artifacts use no borrowed provider: shutdown closes
+// any still open instead of waiting for their owners, so the remaining wait is
+// bounded by callbacks honoring cancellation. Export workers must declare this
+// module as their dependency so their deliveries finish first.
 func Module(name foundation.ProviderID, key foundation.Key[*Manager], requires []foundation.ProviderID, construct func(foundation.Resolver) (*Manager, error)) foundation.Module {
 	return foundation.Module{Name: name, Requires: slices.Clone(requires), OnRegister: func(r *foundation.Registrar) error {
 		if construct == nil {

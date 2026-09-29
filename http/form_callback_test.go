@@ -43,7 +43,8 @@ func TestFormScalarCallbacksStayOwned(t *testing.T) {
 			req := httptest.NewRequest("POST", "/form", strings.NewReader("name=ok")).WithContext(ctx)
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			res := httptest.NewRecorder()
-			go func() { defer close(done); router.ServeHTTP(res, req) }()
+			returned := false
+			go func() { defer close(done); router.ServeHTTP(res, req); returned = true }()
 			if mode == "cancel" {
 				<-entered
 				cancel()
@@ -55,6 +56,13 @@ func TestFormScalarCallbacksStayOwned(t *testing.T) {
 				close(release)
 			}
 			<-done
+			if mode == "goexit" {
+				// Scalar codecs run on the request goroutine (callback.Invoke).
+				if returned || res.Body.Len() != 0 {
+					t.Fatal("codec Goexit was converted into a response")
+				}
+				return
+			}
 			want := 500
 			if mode == "cancel" {
 				want = 408

@@ -1,7 +1,7 @@
 GO ?= go
 TEST_PACKAGE_BATCH_SIZE ?= 6
 TEST_TIMEOUT ?= 20m
-GENERATION_DIRS := logging cloud/credentials infrastructure application internal/outboxstore internal/idempotencystore internal/auditstore internal/sessionstore internal/tokenstore internal/challengestore internal/mfastore internal/notificationstore internal/authtransport internal/extensionstore internal/attachmentstore countries datatable tests/fixtures/consumer
+GENERATION_DIRS := logging cloud/credentials infrastructure application internal/outboxstore internal/idempotencystore internal/auditstore internal/sessionstore internal/tokenstore internal/challengestore internal/mfastore internal/notificationstore internal/authtransport internal/extensionstore internal/attachmentstore internal/jobarchive internal/webhookstore countries datatable tests/fixtures/consumer
 FIXTURE_DIRS := tests/fixtures/plugin_base tests/fixtures/plugin_dep tests/fixtures/consumer
 export GOWORK := off
 
@@ -25,9 +25,10 @@ endef
 
 # Framework-owned generated models precede consumer generation so a fresh
 # checkout can bootstrap their metadata without relying on existing output.
+# The repository opts into managed field notes, which its editor tests inspect.
 define generate_packages
 set -eu; for task_generate_dir in $(GENERATION_DIRS); do \
-	$(GO) run ./cmd/foundry generate --recursive $(1) --dir "$$task_generate_dir"; \
+	$(GO) run ./cmd/foundry generate --recursive --field-docs $(1) --dir "$$task_generate_dir"; \
 done
 endef
 

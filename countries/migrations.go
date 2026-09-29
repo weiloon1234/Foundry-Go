@@ -3,11 +3,15 @@ package countries
 import "github.com/weiloon1234/Foundry-Go/database/migrate"
 
 const (
-	MigrationOrigin migrate.Origin  = "foundry.countries"
-	CreateCountries migrate.ID      = "000001_create_countries"
-	Introduced      migrate.Version = "v0.1.0"
+	MigrationOrigin      migrate.Origin  = "foundry.countries"
+	CreateCountries      migrate.ID      = "000001_create_countries"
+	SingleDefaultCountry migrate.ID      = "000002_single_default_country"
+	Introduced           migrate.Version = "v0.1.0"
 )
 
+// Migrations returns the country table history. The second migration allows at
+// most one default country. It refuses to guess when existing data already has
+// several defaults: clear the extra is_default flags, then run it again.
 func Migrations() []migrate.Definition {
 	return []migrate.Definition{{Key: migrate.Key{Origin: MigrationOrigin, ID: CreateCountries}, Version: Introduced, SQL: []string{`CREATE TABLE foundry_countries (
 iso2 text PRIMARY KEY CHECK (iso2 ~ '^[A-Z]{2}$'),
@@ -36,5 +40,15 @@ is_default boolean NOT NULL,
 reference_version text NOT NULL,
 created_at timestamptz NOT NULL CHECK (isfinite(created_at)),
 updated_at timestamptz NOT NULL CHECK (isfinite(updated_at))
-)`, `CREATE INDEX foundry_countries_status ON foundry_countries (status,name,iso2)`}}}
+)`, `CREATE INDEX foundry_countries_status ON foundry_countries (status,name,iso2)`}}, {
+		Key: migrate.Key{Origin: MigrationOrigin, ID: SingleDefaultCountry}, Version: Introduced,
+		SQL: []string{`DO $$
+BEGIN
+IF (SELECT count(*) FROM foundry_countries WHERE is_default) > 1 THEN
+RAISE EXCEPTION 'foundry_countries has more than one default country'
+USING ERRCODE = 'unique_violation', HINT = 'Set is_default=false on all but one country, then rerun the migration.';
+END IF;
+END
+$$`, `CREATE UNIQUE INDEX foundry_countries_single_default ON foundry_countries (is_default) WHERE is_default`},
+	}}
 }

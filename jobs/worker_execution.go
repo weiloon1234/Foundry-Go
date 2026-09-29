@@ -3,12 +3,12 @@ package jobs
 import (
 	"context"
 	"errors"
-	"math/rand/v2"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/observability"
@@ -18,99 +18,147 @@ import (
 func idFromExecution[P any](id ExecutionID) ID[P] {
 	return model.IDFromBytes[ExecutionOf[P]](id.Bytes())
 }
-func (w *Worker) process(parent context.Context, key Key, reservation Reservation) (processErr error) {
+
+// attemptState collects what one reservation produced so logging and
+// observation happen once, after finalization, from the same facts.
+type attemptState struct {
+	number     uint32
+	completion Result
+	finalized  bool
+	requested  bool
+	failure    error
+}
+
+// process owns one reservation until finalization. It returns false when a
+// backend or adapter failure occurred, so the calling loop backs off before
+// reserving again. It never stops the worker.
+func (w *Worker) process(run workerRun, key Key, reservation Reservation, reservedAt time.Time) bool {
 	envelope := reservation.Envelope
 	if err := ValidateEnqueue(context.Background(), key, envelope); err != nil {
-		return err
+		w.logBackendFailure(run.work, "reserve", key, err)
+		return false
 	}
 	if err := reservation.Ownership.Validate(); err != nil {
-		return err
+		w.logBackendFailure(run.work, "reserve", key, err)
+		return false
 	}
 	if reservation.Ownership.ID() != envelope.ID() {
-		return fault.New(fault.Internal, "backend returned mismatched job ownership")
+		w.logBackendFailure(run.work, "reserve", key, fault.New(fault.Internal, "backend returned mismatched job ownership"))
+		return false
 	}
-	parent, processErr = attribution.WithContext(parent, envelope.Origin())
-	if processErr != nil {
-		return processErr
-	}
-	parent = tracing.WithoutContext(parent)
-	if trace, present := envelope.Trace().Get(); present {
-		parent, processErr = tracing.WithContext(parent, trace)
-		if processErr != nil {
-			return processErr
+	parent := tracing.WithoutContext(run.work)
+	parent, originErr := attribution.WithContext(parent, envelope.Origin())
+	if originErr == nil {
+		if trace, present := envelope.Trace().Get(); present {
+			parent, originErr = tracing.WithContext(parent, trace)
 		}
+	}
+	if originErr != nil {
+		parent = run.work
 	}
 	observed, span, _ := observability.FromContext(parent).Start(parent, observability.Operation{Kind: observability.Job, Name: observability.Name(envelope.Name())})
 	if observed != nil {
 		parent = observed
 	}
+	state := attemptState{number: reservation.Attempts}
 	outcome := observability.Panicked
-	attemptNumber := reservation.Attempts
-	var completion Result
-	finalized := false
 	defer func() {
-		if processErr != nil {
-			w.stop()
-			outcome = observability.OutcomeFor(processErr)
+		// Describe only when a reporter or failure log can receive it; error
+		// inspection runs extension methods, so skip it when nothing listens.
+		var diagnostic fault.Diagnostic
+		if state.failure != nil && (span != nil || state.requested && w.logger != nil && w.config.FailureLog) {
+			diagnostic = errordiag.Describe(state.failure)
 		}
-		span.End(observability.Result{Outcome: outcome})
-		if completion.State != "" || processErr != nil {
-			w.logAttempt(parent, envelope, attemptNumber, reservation.Retries, completion, finalized)
+		span.EndWithDiagnostic(observability.Result{Outcome: outcome}, diagnostic)
+		if state.requested {
+			w.logAttempt(parent, envelope, state.number, reservation.Retries, state.completion, state.finalized, diagnostic)
+		}
+		if state.requested && state.finalized && state.completion.State == Failed && len(w.sinks) > 0 {
+			exceptions := reservation.Exceptions
+			if state.completion.Reason.exception() {
+				exceptions++
+			}
+			w.recordFailure(parent, key, FailedJob{Queue: key.Queue(), Envelope: envelope, Reason: state.completion.Reason, Attempts: state.number, Exceptions: exceptions, Retries: reservation.Retries, FailedAt: time.Now().UTC()})
 		}
 	}()
-	if parent.Err() != nil {
+	validUntil := reservedAt.Add(w.config.LeaseDuration)
+	// finish records one requested transition. Unconfirmed acknowledgement is a
+	// backend failure: the lease expires and the job is redelivered.
+	finish := func(result Result, failure error) bool {
+		state.completion, state.requested, state.failure = result, true, failure
+		outcome = jobOutcome(result)
+		err := w.finalize(key, reservation.Ownership, result, validUntil)
+		state.finalized = err == nil
+		// finalize returns the sentinel itself; never traverse a backend error.
+		if err != nil && err != ErrOwnershipLost {
+			state.failure = errors.Join(failure, err)
+			return false
+		}
+		return true
+	}
+	if originErr != nil {
+		return finish(Result{State: Failed, Reason: PayloadInvalid}, originErr)
+	}
+	if run.reserve.Err() != nil {
+		// Draining began before this reservation was admitted; nothing started.
 		outcome = observability.Cancelled
-		return w.finish(key, reservation.Ownership, Result{State: Waiting, Reason: WorkerStopped})
+		return finish(Result{State: Waiting, Reason: WorkerStopped}, nil)
+	}
+	if deadline := envelope.Policy().RetryUntil; !deadline.IsZero() && !time.Now().Before(deadline) {
+		// Past its retry deadline the job is not started again.
+		return finish(Result{State: Failed, Reason: RetryExpired}, nil)
 	}
 	entry, err := w.registry.lookup(jobKey{envelope.Name(), envelope.Version()})
 	if err != nil || entry.prepare == nil {
-		outcome = observability.Failed
-		completion = Result{State: Failed, Reason: Unregistered}
-		processErr = w.finish(key, reservation.Ownership, completion)
-		finalized = processErr == nil
-		return processErr
+		return w.unregistered(key, reservation, envelope, &state, finish)
 	}
 	work, cancel := context.WithCancelCause(parent)
 	defer cancel(context.Canceled)
-	stopHeartbeat := make(chan struct{})
-	heartbeatDone := make(chan error, 1)
-	go func() { heartbeatDone <- w.heartbeat(key, reservation.Ownership, cancel, stopHeartbeat) }()
+	beat := &heartbeat{stop: make(chan struct{}), done: make(chan struct{}), renewed: reservedAt}
+	go w.heartbeat(parent, key, reservation.Ownership, cancel, beat)
 	// Finalization begins only after all preparation, handler and middleware
 	// callbacks exit. Heartbeats therefore also cover context-ignoring admission.
-	finish := func(result Result) error {
-		completion = result
-		outcome = jobOutcome(result)
-		close(stopHeartbeat)
-		if err := <-heartbeatDone; err != nil {
-			return err
+	complete := func(result Result, failure error) bool {
+		close(beat.stop)
+		<-beat.done
+		validUntil = beat.renewed.Add(w.config.LeaseDuration)
+		if beat.err != nil {
+			state.completion, state.requested, state.failure = result, true, errors.Join(failure, beat.err)
+			outcome = jobOutcome(result)
+			return true
 		}
-		err := w.finish(key, reservation.Ownership, result)
-		finalized = err == nil
-		return err
+		return finish(result, failure)
 	}
 	invocation, stopTimeout := context.WithTimeout(work, envelope.Policy().Timeout)
 	defer stopTimeout()
 	frame := &executionFrame{worker: w, typ: entry.typ}
 	frame.active.Store(true)
 	prepareContext := context.WithValue(invocation, executionKey{}, frame)
-	var invoke func(context.Context) error
-	var delay time.Duration
+	var prepared preparedJob
 	var invalidPayload bool
 	prepareErr := callback.Isolated("prepare job", func() error {
 		var err error
-		invoke, delay, err = entry.prepare(prepareContext, envelope.PayloadJSON())
+		prepared, err = entry.prepare(prepareContext, envelope)
 		invalidPayload = errorgraph.Has[*payloadError](err)
 		return err
 	})
 	frame.active.Store(false)
+	// A resource held since preparation (an overlap lease) is freed even when
+	// the attempt never starts; after invocation this is a no-op.
+	if prepared.release != nil {
+		defer func() {
+			_ = callback.Isolated("release job preparation", func() error { prepared.release(); return nil })
+		}()
+	}
+	invoke, delay := prepared.invoke, prepared.delay
 	if invalidPayload {
-		return finish(Result{State: Failed, Reason: PayloadInvalid})
+		return complete(Result{State: Failed, Reason: PayloadInvalid}, prepareErr)
 	}
 	if delay > 0 && prepareErr == nil && invocation.Err() == nil {
-		return finish(Result{State: Waiting, Delay: delay, Reason: RateLimited})
+		return complete(Result{State: Waiting, Delay: delay, Reason: RateLimited}, nil)
 	}
-	if parent.Err() != nil || errors.Is(context.Cause(invocation), ErrCancelled) || errors.Is(context.Cause(invocation), ErrOwnershipLost) {
-		return finish(Result{State: Waiting, Reason: WorkerStopped})
+	if parent.Err() != nil || run.reserve.Err() != nil || errors.Is(context.Cause(invocation), ErrCancelled) || errors.Is(context.Cause(invocation), ErrOwnershipLost) {
+		return complete(Result{State: Waiting, Reason: WorkerStopped}, nil)
 	}
 	operation, stopOperation := context.WithTimeout(work, w.config.OperationTimeout)
 	var attempt uint32
@@ -124,17 +172,25 @@ func (w *Worker) process(parent context.Context, key Key, reservation Reservatio
 	stopOperation()
 	if startErr != nil {
 		if cancelRequested || parent.Err() != nil {
-			return finish(Result{State: Waiting, Reason: WorkerStopped})
+			// The start may have applied before its reply was lost: refund it.
+			// Backends ignore the refund for a record that is still reserved.
+			return complete(Result{State: Waiting, Reason: WorkerStopped, Refund: true}, nil)
 		}
-		close(stopHeartbeat)
-		heartbeatErr := <-heartbeatDone
-		return errors.Join(startErr, heartbeatErr)
+		// Start may or may not have applied. Refund keeps an unstarted handler
+		// from consuming budget; the backend ignores it for a reserved record.
+		w.logBackendFailure(parent, "start", key, startErr)
+		complete(Result{State: Waiting, Reason: WorkerStopped, Refund: true}, nil)
+		outcome, state.failure, state.requested = observability.Failed, startErr, false
+		return false
 	}
 	if attempt == 0 || attempt > envelope.Policy().Attempts || attempt != reservation.Attempts+1 {
-		close(stopHeartbeat)
-		return errors.Join(fault.New(fault.Internal, "backend returned an invalid job attempt"), <-heartbeatDone)
+		invalid := fault.New(fault.Internal, "backend returned an invalid job attempt")
+		w.logBackendFailure(parent, "start", key, invalid)
+		complete(Result{State: Waiting, Reason: WorkerStopped, Refund: true}, nil)
+		outcome, state.failure, state.requested = observability.Failed, invalid, false
+		return false
 	}
-	attemptNumber = attempt
+	state.number = attempt
 	frame = &executionFrame{worker: w, typ: entry.typ, attempt: Attempt{ID: envelope.ID(), Name: envelope.Name(), Version: envelope.Version(), Queue: envelope.Queue(), Number: attempt, Retry: reservation.Retries}}
 	frame.active.Store(true)
 	handlerContext := context.WithValue(invocation, executionKey{}, frame)
@@ -147,79 +203,164 @@ func (w *Worker) process(parent context.Context, key Key, reservation Reservatio
 		}
 	}
 	cause := context.Cause(invocation)
-	result := safeExecutionResult(envelope.Policy(), attempt, handlerErr, cause, parent.Err() != nil)
+	result := safeExecutionResult(envelope.Policy(), attempt, reservation.Exceptions, handlerErr, cause, parent.Err() != nil)
 	if frame.noRetry.Load() && result.State == Waiting && result.Reason != CancelRequested {
-		result.State, result.Delay = Failed, 0
+		result.State, result.Delay, result.Refund = Failed, 0, false
 	}
 	frame.active.Store(false)
-	return finish(result)
+	return complete(result, handlerErr)
 }
 
-func (w *Worker) heartbeat(key Key, proof Ownership, cancel context.CancelCauseFunc, stop <-chan struct{}) error {
+// unregistered handles a name/version this process does not declare. During a
+// rolling deploy another replica may know it, so the default policy consumes
+// attempts with the envelope's own backoff before retaining it as a failure.
+func (w *Worker) unregistered(key Key, reservation Reservation, envelope Envelope, state *attemptState, finish func(Result, error) bool) bool {
+	missing := fault.New(fault.Missing, "job name or version is not registered")
+	if !w.config.RetryUnregistered {
+		return finish(Result{State: Failed, Reason: Unregistered}, missing)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), w.config.OperationTimeout)
+	var attempt uint32
+	err := callback.Isolated("start job", func() error {
+		var err error
+		attempt, err = w.backend.JobStart(ctx, key, reservation.Ownership)
+		return err
+	})
+	cancel()
+	if err != nil {
+		return finish(Result{State: Waiting, Reason: Unregistered, Refund: true}, errors.Join(missing, err))
+	}
+	state.number = attempt
+	policy := envelope.Policy()
+	if attempt >= policy.Attempts {
+		return finish(Result{State: Failed, Reason: Unregistered}, missing)
+	}
+	delay, err := policy.RetryDelay(attempt)
+	if err != nil {
+		return finish(Result{State: Failed, Reason: Unregistered}, errors.Join(missing, err))
+	}
+	return finish(Result{State: Waiting, Reason: Unregistered, Delay: policy.jittered(delay)}, missing)
+}
+
+// heartbeat renews one reservation. A failed renewal leaves ownership unknown,
+// so it keeps retrying until the lease would really have expired; only then is
+// the handler cancelled. Loss affects this job only, never other reservations.
+type heartbeat struct {
+	stop    chan struct{}
+	done    chan struct{}
+	renewed time.Time
+	err     error
+}
+
+func (w *Worker) heartbeat(ctx context.Context, key Key, proof Ownership, cancel context.CancelCauseFunc, beat *heartbeat) {
+	defer close(beat.done)
 	ticker := time.NewTicker(w.config.HeartbeatInterval)
 	defer ticker.Stop()
+	failing := false
 	for {
 		select {
-		case <-stop:
-			return nil
+		case <-beat.stop:
+			return
 		case <-ticker.C:
-			ctx, done := context.WithTimeout(context.Background(), w.config.OperationTimeout)
-			var status LeaseStatus
-			err := callback.Isolated("renew job reservation", func() error {
-				var err error
-				status, err = w.backend.JobRenew(ctx, key, proof, w.config.LeaseDuration)
-				return err
-			})
-			done()
-			if err != nil {
-				cancel(ErrOwnershipLost)
-				w.stop()
-				return err
-			}
-			if !status.Owned {
-				cancel(ErrOwnershipLost)
-				w.stop()
-				return ErrOwnershipLost
-			}
+		}
+		started := time.Now()
+		operation, done := context.WithTimeout(context.Background(), w.config.OperationTimeout)
+		var status LeaseStatus
+		err := callback.Isolated("renew job reservation", func() error {
+			var err error
+			status, err = w.backend.JobRenew(operation, key, proof, w.config.LeaseDuration)
+			return err
+		})
+		done()
+		switch {
+		case err == nil && !status.Owned:
+			beat.err = ErrOwnershipLost
+			cancel(ErrOwnershipLost)
+			return
+		case err == nil:
+			beat.renewed, failing = started, false
 			if status.CancellationRequested {
 				cancel(ErrCancelled)
+			}
+		default:
+			if !failing {
+				w.logBackendFailure(ctx, "renew", key, err)
+				failing = true
+			}
+			if time.Since(beat.renewed) >= w.config.LeaseDuration {
+				beat.err = ErrOwnershipLost
+				cancel(ErrOwnershipLost)
+				return
 			}
 		}
 	}
 }
-func (w *Worker) finish(key Key, proof Ownership, result Result) error {
-	ctx, cancel := context.WithTimeout(context.Background(), w.config.OperationTimeout)
-	defer cancel()
-	var owned bool
-	err := callback.Isolated("finish job", func() error {
-		var err error
-		owned, err = w.backend.JobFinish(ctx, key, proof, result)
-		return err
-	})
-	if err != nil {
-		return err
+
+// finalize retries an unconfirmed acknowledgement with jittered backoff while
+// the reservation can still be valid. A retry after an applied-but-lost reply
+// reports ErrOwnershipLost, which the caller logs as unconfirmed.
+func (w *Worker) finalize(key Key, proof Ownership, result Result, validUntil time.Time) error {
+	margin := w.config.OperationTimeout
+	for failures := 1; ; failures++ {
+		ctx, cancel := context.WithTimeout(context.Background(), w.config.OperationTimeout)
+		var owned bool
+		err := callback.Isolated("finish job", func() error {
+			var err error
+			owned, err = w.backend.JobFinish(ctx, key, proof, result)
+			return err
+		})
+		cancel()
+		if err == nil {
+			if !owned {
+				return ErrOwnershipLost
+			}
+			return nil
+		}
+		delay := w.failureDelay(failures)
+		if time.Now().Add(delay + margin).After(validUntil) {
+			return err
+		}
+		time.Sleep(delay)
 	}
-	if !owned {
-		return ErrOwnershipLost
-	}
-	return nil
 }
 
 // Error Is/As/Unwrap are extension callbacks too. Keep the execution frame and
 // heartbeat alive until classification actually returns, including Goexit.
-func safeExecutionResult(policy Policy, attempt uint32, err, cause error, stopping bool) Result {
+func safeExecutionResult(policy Policy, attempt, exceptions uint32, err, cause error, stopping bool) Result {
 	var result Result
 	failed := callback.Isolated("classify job outcome", func() error {
-		result = executionResult(policy, attempt, err, cause, stopping)
+		result = limitExceptions(policy, exceptions, executionResult(policy, attempt, err, cause, stopping))
 		return nil
 	})
 	if failed != nil {
-		return executionResult(policy, attempt, fault.New(fault.Panicked, "job outcome classifier failed"), nil, stopping)
+		return limitExceptions(policy, exceptions, executionResult(policy, attempt, fault.New(fault.Panicked, "job outcome classifier failed"), nil, stopping))
 	}
 	return result
 }
+
+// limitExceptions applies Policy.MaxExceptions and Policy.RetryUntil to a
+// classified attempt. exceptions counts earlier exception attempts.
+func limitExceptions(policy Policy, exceptions uint32, result Result) Result {
+	if result.State != Waiting || result.Refund {
+		return result
+	}
+	if policy.MaxExceptions > 0 && result.Reason.exception() && exceptions+1 >= policy.MaxExceptions {
+		return Result{State: Failed, Reason: ExceptionLimit}
+	}
+	if !policy.RetryUntil.IsZero() && time.Now().Add(result.Delay).After(policy.RetryUntil) {
+		return Result{State: Failed, Reason: RetryExpired}
+	}
+	return result
+}
+
+// executionResult classifies only failures: a handler that returned nil
+// succeeded, even if the worker began stopping or the deadline passed after its
+// side effects. An interrupted attempt during shutdown is released and refunded.
 func executionResult(policy Policy, attempt uint32, err, cause error, stopping bool) Result {
-	reason := NoReason
+	if err == nil {
+		return Result{State: Succeeded}
+	}
+	reason := HandlerFailed
 	switch {
 	case errors.Is(cause, ErrCancelled):
 		reason = CancelRequested
@@ -228,23 +369,15 @@ func executionResult(policy Policy, attempt uint32, err, cause error, stopping b
 	case errors.Is(cause, context.DeadlineExceeded):
 		reason = TimedOut
 	case stopping:
-		reason = WorkerStopped
+		return Result{State: Waiting, Reason: WorkerStopped, Refund: true}
 	case errorgraph.Has[*payloadError](err):
 		return Result{State: Failed, Reason: PayloadInvalid}
 	case errorgraph.Is(err, fault.Panicked):
 		reason = HandlerPanicked
-	case err != nil:
-		reason = HandlerFailed
-	}
-	if reason == NoReason {
-		return Result{State: Succeeded}
 	}
 	if attempt >= policy.Attempts {
 		return Result{State: Failed, Reason: reason}
 	}
 	delay, _ := policy.RetryDelay(attempt)
-	if policy.Jitter > 0 {
-		delay += rand.N(policy.Jitter + 1)
-	}
-	return Result{State: Waiting, Reason: reason, Delay: delay}
+	return Result{State: Waiting, Reason: reason, Delay: policy.jittered(delay)}
 }

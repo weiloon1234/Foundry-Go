@@ -28,9 +28,14 @@ func Claim(ctx context.Context, tx *database.Tx, a Address, fingerprint string) 
 func Find(ctx context.Context, tx *database.Tx, a Address) (value.Optional[Record], error) {
 	return matching(a).First(ctx, tx)
 }
-func CountCaller(ctx context.Context, tx *database.Tx, a Address) (int64, error) {
+
+// CountRetained counts the caller's committed outcomes that are unexpired at
+// now, stopping at limit. Uncommitted claims of other transactions are not
+// visible; the caller's own claim has no expiry and is not counted. The index
+// on (namespace, scope_digest, expires_at) bounds the read to limit rows.
+func CountRetained(ctx context.Context, tx *database.Tx, a Address, now temporal.DateTime, limit int) (int64, error) {
 	f := RecordFields()
-	return QueryFoundryIdempotency().Where(f.Namespace.Eq(a.Namespace), f.ScopeDigest.Eq(a.Scope)).Count(ctx, tx)
+	return QueryFoundryIdempotency().Where(f.Namespace.Eq(a.Namespace), f.ScopeDigest.Eq(a.Scope), f.ExpiresAt.Gt(now)).Limit(limit).Count(ctx, tx)
 }
 func Complete(ctx context.Context, tx *database.Tx, row Record, schema, hash string, data []byte, completed, expires temporal.DateTime) error {
 	_, err := QueryFoundryIdempotency().Update(ctx, tx, row.ID, RecordDraft{}.SetResultSchema(schema).SetResultHash(hash).SetRepresentation(data).SetCompletedAt(completed).SetExpiresAt(expires))

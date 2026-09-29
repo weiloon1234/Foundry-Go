@@ -80,7 +80,7 @@ func (q *QueuedOutbox) Declaration() (jobs.Declaration, error) {
 		frame.active.Store(true)
 		defer frame.active.Store(false)
 		operation = context.WithValue(operation, outboxContextKey{}, frame)
-		return dispatch(operation, entry, captured)
+		return dispatch(operation, producer.bus, entry, captured)
 	})
 }
 func (q *QueuedOutbox) PublicationRoute(destination outbox.Destination, dispatcher *jobs.Dispatcher) (publisher.Route, error) {

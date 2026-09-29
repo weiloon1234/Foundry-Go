@@ -181,6 +181,20 @@ func (r *correlationRenamer) expression(e expression, depth int) expression {
 	case binaryComparison:
 		e.left, e.right = r.value(e.left, depth+1), r.value(e.right, depth+1)
 		return e
+	case rowComparison:
+		operands := make([]valueExpression, len(e.operands))
+		for i, operand := range e.operands {
+			operands[i] = r.value(operand, depth+1)
+		}
+		e.operands = operands
+		return e
+	case scopeNode:
+		from, to := r.from, r.to
+		return e.rewrite(func(resolved expression) (expression, error) {
+			renamer := correlationRenamer{from: from, to: to}
+			renamed := renamer.expression(resolved, depth+1)
+			return renamed, renamer.err
+		})
 	case subqueryPredicate:
 		if e.operand != nil {
 			e.operand = r.value(e.operand, depth+1)

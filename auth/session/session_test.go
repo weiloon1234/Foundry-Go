@@ -86,7 +86,7 @@ func creation(t *testing.T) (Address, Creation) {
 		t.Fatal(err)
 	}
 	a := Address{Namespace: settings().Namespace, Guard: "web", Provider: "members", Model: "members"}
-	return a, Creation{ID: id, Subject: p.Identity(), Hash: hash, Assurance: auth.Authenticated, Lifetime: Lifetime{Idle: 10 * time.Minute, Absolute: 20 * time.Minute, Sliding: true}, Maximum: 2}
+	return a, Creation{ID: id, Subject: p.Identity(), Hash: hash, Assurance: auth.Authenticated, Lifetime: Lifetime{Idle: 10 * time.Minute, Absolute: 20 * time.Minute, Sliding: true}, Maximum: 2, PendingMaximum: 1, Limit: auth.EvictOldest}
 }
 
 func TestCanonicalSecretAndSafeFormatting(t *testing.T) {
@@ -200,7 +200,10 @@ func TestInvalidConfigAndTypedNilBackend(t *testing.T) {
 	if _, err := NewStore((*fakeBackend)(nil), settings()); err == nil {
 		t.Fatal("typed nil backend")
 	}
-	for _, change := range []func(*Config){func(c *Config) { c.Regular.Idle = 0 }, func(c *Config) { c.Regular.Idle = time.Millisecond + 1 }, func(c *Config) { c.Regular.Absolute = MaxLifetime + time.Second }, func(c *Config) { c.Pending.Sliding = true }, func(c *Config) { c.MaxPerSubject = MaxSessions + 1 }, func(c *Config) { c.MaxConcurrent = 0 }, func(c *Config) { c.Timeout = 0 }} {
+	for _, change := range []func(*Config){func(c *Config) { c.Regular.Idle = 0 }, func(c *Config) { c.Regular.Idle = time.Millisecond + 1 }, func(c *Config) { c.Regular.Absolute = MaxLifetime + time.Second }, func(c *Config) { c.Pending.Sliding = true }, func(c *Config) { c.MaxPerSubject = MaxSessions + 1 }, func(c *Config) {
+		// Full, pending-MFA and impersonation sessions are three classes.
+		c.MaxPerSubject, c.MaxPendingPerSubject = MaxSessions-10, 6
+	}, func(c *Config) { c.MaxConcurrent = 0 }, func(c *Config) { c.Timeout = 0 }} {
 		c := settings()
 		change(&c)
 		if c.Validate() == nil {
@@ -208,7 +211,11 @@ func TestInvalidConfigAndTypedNilBackend(t *testing.T) {
 		}
 	}
 }
-func TestIssueOwnsCanceledCallbackAndDiscardsLateCredential(t *testing.T) {
+
+// A canceled issuance keeps its capacity until the callback actually exits, so
+// other callers queue and then report fault.Overloaded. A backend that still
+// committed reports its result: a committed credential is never silently lost.
+func TestIssueOwnsCanceledCallbackUntilExitAndKeepsCommittedResult(t *testing.T) {
 	entered, release := make(chan struct{}), make(chan struct{})
 	defer func() {
 		select {
@@ -227,6 +234,7 @@ func TestIssueOwnsCanceledCallbackAndDiscardsLateCredential(t *testing.T) {
 	}}
 	config := settings()
 	config.MaxConcurrent = 1
+	config.Timeout = 100 * time.Millisecond // Also bounds the queued admission wait.
 	s := binding(t, b, config)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -234,14 +242,14 @@ func TestIssueOwnsCanceledCallbackAndDiscardsLateCredential(t *testing.T) {
 	p := proof(t)
 	go func() {
 		got, err := s.Issue(ctx, p, IssueOptions{})
-		if !got.Secret().IsZero() {
-			t.Error("canceled operation published secret")
+		if err == nil && got.Secret().IsZero() {
+			t.Error("committed session lost its secret")
 		}
 		done <- err
 	}()
 	<-entered
 	cancel()
-	if got, err := s.Issue(t.Context(), p, IssueOptions{}); !errors.Is(err, fault.Conflict) || !got.Secret().IsZero() {
+	if got, err := s.Issue(t.Context(), p, IssueOptions{}); !errors.Is(err, fault.Overloaded) || !got.Secret().IsZero() {
 		t.Fatal("released owned callback slot", err)
 	}
 	select {
@@ -250,8 +258,8 @@ func TestIssueOwnsCanceledCallbackAndDiscardsLateCredential(t *testing.T) {
 	case <-time.After(10 * time.Millisecond):
 	}
 	close(release)
-	if err := <-done; !errors.Is(err, context.Canceled) {
-		t.Fatal(err)
+	if err := <-done; err != nil {
+		t.Fatal("committed result was discarded", err)
 	}
 	if _, err := s.Issue(t.Context(), p, IssueOptions{}); err != nil {
 		t.Fatal("slot not released on actual exit", err)
@@ -346,5 +354,40 @@ func TestScopedProofCannotBecomeAnUnscopedSession(t *testing.T) {
 	}
 	if calls.Load() != 0 {
 		t.Fatal("scoped proof reached session storage")
+	}
+}
+
+// Activity writes are throttled, but never for as long as the idle window: a
+// short idle lifetime still slides for an active user.
+func TestTouchIntervalStaysWithinTheIdleWindow(t *testing.T) {
+	for _, c := range []struct{ idle, want time.Duration }{
+		{time.Minute, 30 * time.Second},
+		{90 * time.Second, 45 * time.Second},
+		{10 * time.Minute, time.Minute},
+		{2 * time.Hour, 6 * time.Minute},
+	} {
+		if got := (Lifetime{Idle: c.idle, Absolute: 24 * time.Hour, Sliding: true}).TouchInterval(); got != c.want {
+			t.Fatal("touch interval", c.idle, got)
+		}
+	}
+	a, create := creation(t)
+	create.Lifetime = Lifetime{Idle: time.Minute, Absolute: time.Hour, Sliding: true}
+	record, err := create.At(a, instant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A request every 40 seconds keeps a 60-second idle session alive.
+	for step := 1; step <= 5; step++ {
+		now := instant.Add(time.Duration(step) * 40 * time.Second)
+		if !record.Live(now) {
+			t.Fatal("active session idled out at step", step)
+		}
+		if record.NeedsTouch(now) {
+			next, live, err := record.Touch(now)
+			if err != nil || !live {
+				t.Fatal(err)
+			}
+			record = next
+		}
 	}
 }

@@ -144,7 +144,7 @@ func TestAssetShutdownRetainsCanceledStatUntilItsCallbackReturns(t *testing.T) {
 	release()
 	select {
 	case err := <-done:
-		if !errors.Is(err, RequestTimeout) {
+		if !errors.Is(err, Unavailable) {
 			t.Fatal("cancellation lost", err)
 		}
 	case <-time.After(time.Second):

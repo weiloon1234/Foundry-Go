@@ -2,7 +2,7 @@ package http
 
 import (
 	stdhttp "net/http"
-	"net/url"
+	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
@@ -58,7 +58,7 @@ func CSRF(config CSRFConfig) Middleware {
 			return nil, err
 		}
 		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-			csrfVary(w.Header())
+			csrfVary(w.Header(), r)
 			if err := policy.check(r); err != nil {
 				writeRoutingError(w, r, err)
 				return
@@ -67,7 +67,14 @@ func CSRF(config CSRFConfig) Middleware {
 		}), nil
 	})
 }
-func csrfVary(header stdhttp.Header) { appendVary(header, "Sec-Fetch-Site", "Origin") }
+
+// csrfVary records the request fields that decided an unsafe request. Safe
+// methods are never checked, so their cacheable responses do not vary on them.
+func csrfVary(header stdhttp.Header, r *stdhttp.Request) {
+	if r != nil && !safeBrowserMethod(r.Method) {
+		appendVary(header, "Sec-Fetch-Site", "Origin")
+	}
+}
 func (p csrfPolicy) check(r *stdhttp.Request) error {
 	if r == nil || p.native == nil {
 		return fault.New(fault.Invalid, "CSRF requires a policy and request")
@@ -111,13 +118,17 @@ func (p csrfPolicy) check(r *stdhttp.Request) error {
 	if origin != "" && origin != target && !p.trusted[origin] {
 		return Forbidden
 	}
+	// The native check reads only these fields; a minimal header avoids cloning
+	// every request header on each unsafe request.
 	request := *r
-	request.Header = r.Header.Clone()
-	if origin != "" {
-		request.Header.Set("Origin", string(origin))
+	request.Header = make(stdhttp.Header, 2)
+	if site != "" {
+		request.Header["Sec-Fetch-Site"] = []string{site}
 	}
-	public, _ := url.Parse(string(target))
-	request.Host = public.Host
+	if origin != "" {
+		request.Header["Origin"] = []string{string(origin)}
+	}
+	_, request.Host, _ = strings.Cut(string(target), "://")
 	if err := p.native.Check(&request); err != nil {
 		return Forbidden.WithCause(err)
 	}

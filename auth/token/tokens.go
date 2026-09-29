@@ -23,6 +23,8 @@ type Tokens[M model.Identifiable, K any] struct {
 	address  Address
 	allowed  auth.AccessScopes[M]
 	guard    auth.Guard[M]
+	current  auth.CredentialSlot[Info[M, K]]
+	observer auth.Observer
 }
 
 func New[M model.Identifiable, K any](store *Store, name auth.GuardName, provider auth.Provider[M, K], source auth.CredentialName, allowed auth.AccessScopes[M]) (*Tokens[M, K], error) {
@@ -36,7 +38,7 @@ func New[M model.Identifiable, K any](store *Store, name auth.GuardName, provide
 	if err := address.Validate(); err != nil {
 		return nil, err
 	}
-	tokens := &Tokens[M, K]{store: store, provider: provider, address: address, allowed: allowed}
+	tokens := &Tokens[M, K]{store: store, provider: provider, address: address, allowed: allowed, current: auth.NewCredentialSlot[Info[M, K]]()}
 	tokens.guard = auth.DefineGuard(name, provider, auth.DefineStrategy(source, tokens.verify))
 	if err := tokens.guard.Validate(); err != nil {
 		return nil, err
@@ -70,10 +72,11 @@ func (t *Tokens[M, K]) info(record Record) (Info[M, K], error) {
 	if err != nil {
 		return Info[M, K]{}, err
 	}
-	if !t.allowed.ContainsAll(scopes) {
-		return Info[M, K]{}, auth.Unauthenticated
-	}
-	return Info[M, K]{id: ID[M]{value: record.ID}, subject: reference, name: record.Name, scopes: scopes, mode: record.Mode, assurance: record.Assurance, generation: record.Generation, created: record.CreatedAt, issued: record.IssuedAt, lastSeen: record.LastSeenAt, accessExpires: record.AccessExpiresAt, refreshExpires: record.RefreshExpiresAt, expires: record.ExpiresAt}, nil
+	// The binding's current ceiling always applies: a scope removed from the
+	// declaration is withdrawn from stored tokens without making them unusable,
+	// unlistable or unrefreshable. The stored grant itself is never widened.
+	scopes = scopes.Intersect(t.allowed)
+	return Info[M, K]{id: ID[M]{value: record.ID}, subject: reference, name: record.Name, scopes: scopes, mode: record.Mode, assurance: record.Assurance, generation: record.Generation, created: record.CreatedAt, issued: record.IssuedAt, lastSeen: record.LastSeenAt, accessExpires: record.AccessExpiresAt, refreshExpires: record.RefreshExpiresAt, expires: record.ExpiresAt, device: record.Device}, nil
 }
 func (t *Tokens[M, K]) verify(ctx context.Context, raw secret.String) (value.Optional[auth.Proof[M, K]], error) {
 	hash, err := HashSecret(raw)
@@ -82,7 +85,15 @@ func (t *Tokens[M, K]) verify(ctx context.Context, raw secret.String) (value.Opt
 	}
 	var result value.Optional[auth.Proof[M, K]]
 	err = t.store.execute(ctx, func(op context.Context) error {
-		found, err := t.store.backend.Lookup(op, t.address, hash, false)
+		var found value.Optional[Record]
+		var err error
+		// A refreshed family's previous access token stays valid for the grace
+		// period, so requests already in flight with it do not fail.
+		if backend, ok := t.store.backend.(GraceBackend); ok && t.store.config.AccessGrace > 0 {
+			found, err = backend.LookupWithin(op, t.address, hash, t.store.config.AccessGrace)
+		} else {
+			found, err = t.store.backend.Lookup(op, t.address, hash, false)
+		}
 		if err != nil {
 			return err
 		}
@@ -93,11 +104,18 @@ func (t *Tokens[M, K]) verify(ctx context.Context, raw secret.String) (value.Opt
 		if !record.AccessHash.Equal(hash) {
 			return fault.New(fault.Invalid, "token backend returned a different access credential")
 		}
+		if record.SupersededAt.IsSet() && t.store.config.AccessGrace == 0 {
+			return fault.New(fault.Invalid, "token backend accepted a superseded generation without grace")
+		}
 		info, err := t.info(record)
 		if err != nil {
 			return err
 		}
 		proof, err := auth.NewScopedProof(info.Subject(), info.Assurance(), info.Scopes())
+		if err != nil {
+			return err
+		}
+		proof, err = auth.AttachCredential(proof, t.current, info)
 		if err != nil {
 			return err
 		}
@@ -126,7 +144,44 @@ func (t *Tokens[M, K]) Issue(ctx context.Context, proof auth.Proof[M, K], option
 	if err != nil {
 		return Issued[M, K]{}, err
 	}
+	t.issued(ctx, result)
 	return result, nil
+}
+
+// issued reports a completed full login after the backend committed it.
+func (t *Tokens[M, K]) issued(ctx context.Context, result Issued[M, K]) {
+	if t.observer == nil || result.info.assurance != auth.Authenticated {
+		return
+	}
+	t.notify(ctx, auth.EventLogin, result.info.subject, 0)
+}
+func (t *Tokens[M, K]) notify(ctx context.Context, kind auth.EventKind, subject model.Reference[M, K], count uint64) {
+	if t.observer == nil {
+		return
+	}
+	identity, err := subject.Identity()
+	if err != nil {
+		return
+	}
+	auth.Notify(ctx, t.observer, auth.Event{Kind: kind, Guard: t.address.Guard, Provider: t.address.Provider, Subject: value.Set(identity), Count: count})
+}
+
+// WithObserver returns a binding sharing this guard that reports EventLogin
+// for full issuance (including MFA completion), EventLogout for Logout and
+// RevokeCurrent, and EventOtherDevicesLoggedOut for RevokeOthers.
+func (t *Tokens[M, K]) WithObserver(observer auth.Observer) (*Tokens[M, K], error) {
+	if err := t.Validate(); err != nil {
+		return nil, err
+	}
+	if observer == nil {
+		return nil, fault.New(fault.Invalid, "token observer is nil")
+	}
+	if t.observer != nil {
+		return nil, fault.New(fault.Duplicate, "token observer already configured")
+	}
+	next := *t
+	next.observer = observer
+	return &next, nil
 }
 
 func (t *Tokens[M, K]) issue(ctx context.Context, proof auth.Proof[M, K], options IssueOptions[M], deadline value.Optional[temporal.DateTime]) (Issued[M, K], error) {
@@ -168,7 +223,8 @@ func (t *Tokens[M, K]) issue(ctx context.Context, proof auth.Proof[M, K], option
 		if err != nil {
 			return err
 		}
-		access, accessHash, err := newSecret()
+		prefix := t.store.config.Prefix
+		access, accessHash, err := newSecret(prefix)
 		if err != nil {
 			return err
 		}
@@ -176,7 +232,7 @@ func (t *Tokens[M, K]) issue(ctx context.Context, proof auth.Proof[M, K], option
 		var refreshHash value.Optional[Digest]
 		var limit uint32
 		if mode == Renewable {
-			raw, hash, err := newSecret()
+			raw, hash, err := newSecret(prefix)
 			if err != nil {
 				return err
 			}
@@ -184,7 +240,8 @@ func (t *Tokens[M, K]) issue(ctx context.Context, proof auth.Proof[M, K], option
 			refreshHash = value.Set(hash)
 			limit = uint32(t.store.config.MaxRotations)
 		}
-		request := Creation{ID: id, Subject: proof.Identity(), Name: options.Name, Scopes: options.Scopes.Names(), Mode: mode, Assurance: proof.Assurance(), AccessHash: accessHash, RefreshHash: refreshHash, Lifetime: policy, RotationLimit: limit, Maximum: t.store.config.MaxPerSubject}
+		config := t.store.config
+		request := Creation{ID: id, Subject: proof.Identity(), Name: options.Name, Scopes: options.Scopes.Names(), Mode: mode, Assurance: proof.Assurance(), AccessHash: accessHash, RefreshHash: refreshHash, Lifetime: policy, RotationLimit: limit, Maximum: config.MaxPerSubject, PendingMaximum: config.MaxPendingPerSubject, Limit: config.Limit, Device: auth.DeviceFrom(op)}
 		if err := request.Validate(t.address); err != nil {
 			return err
 		}
@@ -212,7 +269,7 @@ func (t *Tokens[M, K]) issue(ctx context.Context, proof auth.Proof[M, K], option
 		}
 		expectedRefresh, hasRefresh := refreshHash.Get()
 		actualRefresh, actualHasRefresh := record.RefreshHash.Get()
-		if record.ID != id || record.Subject != request.Subject || record.Name != request.Name || !slices.Equal(record.Scopes, options.Scopes.Names()) || record.Mode != request.Mode || record.Assurance != request.Assurance || record.Lifetime != request.Lifetime || record.RotationLimit != request.RotationLimit || record.Generation != 0 || !record.AccessHash.Equal(accessHash) || hasRefresh != actualHasRefresh || (hasRefresh && !actualRefresh.Equal(expectedRefresh)) {
+		if record.ID != id || record.Subject != request.Subject || record.Name != request.Name || !slices.Equal(record.Scopes, options.Scopes.Names()) || record.Mode != request.Mode || record.Assurance != request.Assurance || record.Lifetime != request.Lifetime || record.RotationLimit != request.RotationLimit || record.Device != request.Device || record.Generation != 0 || !record.AccessHash.Equal(accessHash) || hasRefresh != actualHasRefresh || (hasRefresh && !actualRefresh.Equal(expectedRefresh)) {
 			return fault.New(fault.Invalid, "token backend changed issued credential metadata")
 		}
 		info, err := t.info(record)
@@ -242,11 +299,11 @@ func (t *Tokens[M, K]) Refresh(ctx context.Context, raw secret.String) (Issued[M
 	}
 	var result Issued[M, K]
 	err = t.store.execute(ctx, func(op context.Context) error {
-		access, accessHash, err := newSecret()
+		access, accessHash, err := newSecret(t.store.config.Prefix)
 		if err != nil {
 			return err
 		}
-		refresh, refreshHash, err := newSecret()
+		refresh, refreshHash, err := newSecret(t.store.config.Prefix)
 		if err != nil {
 			return err
 		}

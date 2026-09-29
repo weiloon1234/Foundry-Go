@@ -115,28 +115,46 @@ func (c *connectionState) deliverPublicationLocked(response Response, data []byt
 	}
 	c.seen[response.MessageID] = true
 	if metric := c.hub.metrics[response.Channel]; metric != nil {
-		metric.Delivered++
+		metric.delivered.Add(1)
 		if replayed {
-			metric.Replayed++
+			metric.replayed.Add(1)
 		}
 	}
 	return true
 }
-func (h *Hub) routePublicationLocked(response Response, data []byte) {
-	for _, connection := range h.connections {
-		matched := false
-		for subscription := range connection.subscriptions {
-			if reaches(response, subscription) {
+
+// routePublicationLocked visits only indexed subscribers of the publication's
+// exact room, or of every key in its channel for a broadcast. A generation mark
+// delivers once per connection despite overlapping whole-channel/room keys.
+func (h *Hub) routePublicationLocked(response Response, data []byte, except ConnectionID) {
+	h.routeGeneration++
+	generation := h.routeGeneration
+	if excluded := h.connections[except]; excluded != nil {
+		excluded.routeGeneration = generation
+	}
+	deliver := func(key subscriptionKey) {
+		for connection := range h.subscribers[key] {
+			if connection.routeGeneration != generation {
+				connection.routeGeneration = generation
 				connection.deliverPublicationLocked(response, data, false)
-				matched = true
-				break
 			}
 		}
-		if matched {
+	}
+	if response.Room == nil {
+		for key := range h.channelKeys[response.Channel] {
+			deliver(key)
+		}
+	} else {
+		deliver(subscriptionKey{channel: response.Channel, room: *response.Room, hasRoom: true})
+	}
+	// Pending admissions are transient; buffer for connections not already
+	// reached through an active subscription.
+	for key, connections := range h.pendingSubscribers {
+		if !reaches(response, key) {
 			continue
 		}
-		for key, pending := range connection.pending {
-			if reaches(response, key) {
+		for connection, pending := range connections {
+			if connection.routeGeneration != generation {
 				connection.bufferPendingLocked(pending, response, data)
 			}
 		}

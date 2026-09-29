@@ -32,6 +32,8 @@ const (
 	Missed             Reason = "missed"
 	BacklogLimited     Reason = "backlog_limited"
 	ClockFailed        Reason = "clock_failed"
+	// Filtered records an occurrence whose Options.When predicate declined it.
+	Filtered Reason = "filtered"
 )
 
 // Record is bounded process-local operational history, not a durable ledger.

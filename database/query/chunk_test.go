@@ -28,8 +28,9 @@ func TestChunkPlanPreservesWindowAndOwnsProgress(t *testing.T) {
 	if err != nil || !more || p.take() != 1 {
 		t.Fatal("lost total limit", err)
 	}
+	// Later batches continue after the last delivered key, not by OFFSET.
 	s, err = p.window().Compile()
-	if err != nil || !reflect.DeepEqual(s.Arguments(), []any{int64(1), int64(7)}) {
+	if err != nil || !reflect.DeepEqual(s.Arguments(), []any{int64(7), int64(1)}) || strings.Contains(s.SQL(), "OFFSET") || !strings.Contains(s.SQL(), `"records"."id" > $1`) {
 		t.Fatal("wrong second chunk", s, err)
 	}
 	if more, err := p.advance([]cursorRecord{{ID: 8}}); err != nil || more {
@@ -84,7 +85,8 @@ func TestChunkValidationAndProgressFailures(t *testing.T) {
 			t.Fatal("invalid size accepted")
 		}
 	}
-	overflow, err := base.Offset(math.MaxInt).chunkPlan(1, false)
+	// Explicit NULL placement cannot be keyed, so it advances by offset.
+	overflow, err := base.OrderBy(rank.Asc().NullsFirst()).Offset(math.MaxInt).chunkPlan(1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,10 +99,10 @@ func TestChunkValidationAndProgressFailures(t *testing.T) {
 	}
 	stop := errors.New("key encoding failed")
 	for _, key := range []ModelField[cursorRecord]{
-		{get: func(cursorRecord) (driver.Value, error) { return nil, stop }},
-		{get: func(cursorRecord) (driver.Value, error) { return nil, nil }},
+		{column: "id", get: func(cursorRecord) (driver.Value, error) { return nil, stop }},
+		{column: "id", get: func(cursorRecord) (driver.Value, error) { return nil, nil }},
 	} {
-		p.key = key
+		p.keys = []ModelField[cursorRecord]{key}
 		if _, err := p.advance([]cursorRecord{{}}); err == nil {
 			t.Fatal("invalid next key published")
 		}
@@ -149,7 +151,7 @@ func TestChunkCallbacksAndContextBeforeExecution(t *testing.T) {
 	}
 	// Exhausting a declared limit avoids demanding an unused next key.
 	p, _ := cursorQuery().Limit(1).chunkPlan(1, true)
-	p.key = ModelField[cursorRecord]{}
+	p.keys = []ModelField[cursorRecord]{{}}
 	if more, err := p.advance([]cursorRecord{{}}); err != nil || more || p.remaining != value.Set(0) {
 		t.Fatal("limited final batch advanced")
 	}

@@ -9,7 +9,6 @@ import (
 
 	driver "github.com/redis/go-redis/v9"
 	"github.com/weiloon1234/Foundry-Go/cache"
-	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/cachetest"
 )
 
@@ -44,8 +43,9 @@ func TestDistributedRememberNamespaceRotationSeparatesOwners(t *testing.T) {
 				t.Fatal("new generation joined old distributed lease", value, err)
 			}
 			close(release)
-			if got := <-result; !errors.Is(got.err, fault.Conflict) || got.value != "" {
-				t.Fatal("stale owner published", got)
+			// The stale caller keeps its loaded value; its publication is rejected.
+			if got := <-result; got.err != nil || got.value != "old" {
+				t.Fatal("stale owner result", got)
 			}
 			if value, hit, err := f.values[0].Get(t.Context(), "profile"); err != nil || !hit || value != "new" {
 				t.Fatal(value, hit, err)
@@ -66,7 +66,7 @@ func (h lostNamespaceAcknowledgement) ProcessPipelineHook(next driver.ProcessPip
 func (h lostNamespaceAcknowledgement) ProcessHook(next driver.ProcessHook) driver.ProcessHook {
 	return func(ctx context.Context, cmd driver.Cmder) error {
 		args := cmd.Args()
-		matches := len(args) > 6 && args[0] == "eval" && args[1] == tagVersionsScript && args[6] == "1"
+		matches := len(args) > 6 && runsScript(args, tagVersionsScript) && args[6] == "1"
 		err := next(ctx, cmd)
 		if matches {
 			h.calls.Add(1)

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/weiloon1234/Foundry-Go/testkit"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -234,4 +235,95 @@ func FuzzPublicURLRemainsOnDeclaredOrigin(f *testing.F) {
 			t.Fatalf("origin/response injection %q", result)
 		}
 	})
+}
+
+func TestPublicURLsExemptProbesAndWildcardTenantHosts(t *testing.T) {
+	config := PublicURLConfig{AllowedOrigins: []Origin{"https://app.example.test"}, AllowedPatterns: []OriginPattern{"https://*.tenants.example.test"}, ExemptPaths: []string{"/healthz", "/readyz"}}
+	var bound []Origin
+	handler, err := ApplyMiddleware(stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		origin, _ := PublicOrigin(r.Context())
+		bound = append(bound, origin)
+		w.WriteHeader(204)
+	}), PublicURLs(config))
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.ExemptPaths[0] = "/changed"
+	for _, test := range []struct {
+		target, host string
+		status       int
+		origin       Origin
+	}{
+		{"https://x/healthz", "10.1.2.3:8080", 204, ""},
+		{"https://x/readyz", "10.1.2.3", 204, ""},
+		{"https://x/healthz/extra", "10.1.2.3", 400, ""},
+		{"https://x/users", "10.1.2.3", 400, ""},
+		{"https://x/users", "acme.tenants.example.test", 204, "https://acme.tenants.example.test"},
+		{"https://x/users", "a.b.tenants.example.test", 204, "https://a.b.tenants.example.test"},
+		{"https://x/users", "tenants.example.test", 400, ""},
+		{"https://x/users", "acme.tenants.example.test:8443", 400, ""},
+		{"https://x/users", "app.example.test", 204, "https://app.example.test"},
+	} {
+		bound = nil
+		r := httptest.NewRequest("GET", test.target, nil)
+		r.Host = test.host
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, r)
+		if response.Code != test.status || test.status == 204 && (len(bound) != 1 || bound[0] != test.origin) {
+			t.Errorf("%s host=%s: %d %v", test.target, test.host, response.Code, bound)
+		}
+	}
+	for _, invalid := range []PublicURLConfig{
+		{AllowedPatterns: []OriginPattern{"capacitor://localhost"}}, {AllowedPatterns: []OriginPattern{"https://*.com"}},
+		{AllowedPatterns: []OriginPattern{"https://*.a.test", "https://*.A.test"}},
+		{AllowedOrigins: []Origin{"https://a.test"}, ExemptPaths: []string{"healthz"}},
+		{AllowedOrigins: []Origin{"https://a.test"}, ExemptPaths: []string{"/healthz", "/healthz"}},
+		{AllowedOrigins: []Origin{"https://a.test"}, ExemptPaths: []string{"/a/../b"}},
+		{AllowedOrigins: []Origin{"https://a.test"}, ExemptPaths: []string{"/probe?x=1"}},
+		{AllowedPatterns: []OriginPattern{"https://*.a.test"}, Canonical: value.Set(Origin("https://b.test"))},
+	} {
+		if invalid.Validate() == nil {
+			t.Errorf("invalid config accepted: %+v", invalid)
+		}
+	}
+	if err := (PublicURLConfig{AllowedPatterns: []OriginPattern{"https://*.a.test"}, Canonical: value.Set(Origin("https://www.a.test"))}).Validate(); err != nil {
+		t.Fatal("canonical matching a pattern rejected", err)
+	}
+}
+
+func TestSignedURLsWorkOnWildcardTenantHosts(t *testing.T) {
+	signed := textRoute("/files/{text}").Signed(urlTestSigner(t, testkit.NewClock(urlTestTime)))
+	router, err := NewRouter(signed.HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, p textPath) {
+		origin, ok := PublicOrigin(r.Context())
+		if !ok || origin != "https://acme.tenants.example.test" {
+			t.Errorf("tenant origin=%q", origin)
+		}
+		w.WriteHeader(204)
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ApplyMiddleware(router); err == nil || !strings.Contains(err.Error(), "PublicURLs") {
+		t.Fatalf("signed router assembled without PublicURLs: %v", err)
+	}
+	handler, err := ApplyMiddleware(router, PublicURLs(PublicURLConfig{AllowedPatterns: []OriginPattern{"https://*.tenants.example.test"}}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	location, err := signed.URL(t.Context(), "https://acme.tenants.example.test", textPath{Text: "report"}, urlTestTime.Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest("GET", location, nil))
+	if response.Code != 204 {
+		t.Fatalf("tenant signed URL: %d %s", response.Code, response.Body.String())
+	}
+	// The signature binds the tenant origin: another tenant cannot replay it.
+	other := strings.Replace(location, "acme.", "other.", 1)
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest("GET", other, nil))
+	if response.Code != 403 {
+		t.Fatalf("cross-tenant replay: %d", response.Code)
+	}
 }

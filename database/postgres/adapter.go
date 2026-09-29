@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"net"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -21,7 +23,7 @@ func New(config Config) (database.Adapter, error) {
 	if err != nil {
 		return database.Adapter{}, err
 	}
-	return database.Adapter{Connector: stdlib.GetConnector(*parsed, schemaOptions(config.Schema)...), Classify: classify}, nil
+	return database.Adapter{Connector: stdlib.GetConnector(*parsed, connectionOptions(config.Schema, config.Pool.MaxLifetime)...), Classify: classify}, nil
 }
 
 func Open(ctx context.Context, config Config, options ...database.Option) (*database.DB, error) {
@@ -64,7 +66,12 @@ func connectionConfig(config Config) (*pgx.ConnConfig, error) {
 	parsed.Fallbacks = nil
 	parsed.RuntimeParams = map[string]string{"application_name": config.ApplicationName, "timezone": "UTC"}
 	if config.Schema != "" {
-		parsed.RuntimeParams["search_path"] = `"` + config.Schema + `"`
+		parsed.RuntimeParams["search_path"] = schemaPath(config.Schema)
+	}
+	for name, limit := range map[string]time.Duration{"statement_timeout": config.StatementTimeout, "lock_timeout": config.LockTimeout, "idle_in_transaction_session_timeout": config.IdleInTransactionSessionTimeout} {
+		if limit > 0 {
+			parsed.RuntimeParams[name] = strconv.FormatInt(limit.Milliseconds(), 10)
+		}
 	}
 	parsed.SSLNegotiation = "postgres"
 	parsed.MaxProtocolMessageBodyLen = config.MaxProtocolMessageBytes

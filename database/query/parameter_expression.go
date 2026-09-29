@@ -11,6 +11,11 @@ type parameterNode struct {
 	kind  codec.ParameterType
 	value driver.Value
 	err   error
+	// literal renders a generated declaration constant, such as a JSON
+	// property name, inline as an escaped schema literal instead of a bind
+	// parameter, so expression indexes on the same path can match. Values
+	// supplied at run time always remain bind parameters.
+	literal bool
 }
 
 func (parameterNode) valueNode() {}
@@ -62,6 +67,10 @@ func (c *compiler) parameterSQL(p parameterNode) (string, error) {
 		return "", err
 	}
 	typeName, _ := parameterSQLType(p.kind)
+	if p.literal {
+		text, err := c.schemaLiteral(p.value)
+		return "CAST(" + text + " AS " + typeName + ")", err
+	}
 	placeholder, err := c.parameter(p.value)
 	return "CAST(" + placeholder + " AS " + typeName + ")", err
 }

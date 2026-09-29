@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
-	"time"
 )
 
 // Handler executes one freshly decoded payload. Attempt metadata is available
@@ -20,6 +20,7 @@ type Definition[P any] struct {
 	name    Name
 	version Version
 	policy  Policy
+	keyring *encryption.Keyring
 }
 
 func Define[P any](name Name, version Version, policy Policy) Definition[P] {
@@ -59,7 +60,7 @@ type Declaration struct {
 	key     jobKey
 	typ     reflect.Type
 	policy  Policy
-	prepare func(context.Context, string) (func(context.Context) error, time.Duration, error)
+	prepare func(context.Context, Envelope) (preparedJob, error)
 }
 
 func (Declaration) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("job declaration")) }

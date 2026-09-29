@@ -134,3 +134,83 @@ func FuzzTransportJSONLosslessTree(f *testing.F) {
 		}
 	})
 }
+
+// Measure is Decode's bound accounting without the tree, for encoder output:
+// every document Decode accepts must measure identically, and bounds are named.
+func TestMeasureMatchesDecodeBoundsWithoutBuildingATree(t *testing.T) {
+	inputs := []string{
+		`{"x":1}`, `[1,2]`, `{}`, `[]`, `"ab"`, `0`, `-1.5e+3`, `true`, `null`, `[1]`, `[[]]`, `[{}]`, `{"a":[]}`,
+		`{"a":{"b":[1,{"c":"d"}]},"e":[true,false,null]}`, `{"q\"u":"a\\\"b","n":"x,y]z"}`,
+		`{"emoji":"\ud83d\ude00"}`, "  [1, 2]  ", "{\"a\" : 1 , \"b\" :[ 1 , 2 ] }",
+	}
+	limits := []Limits{
+		{Bytes: 4096, Depth: MaxDepth, Nodes: MaxNodes}, {Bytes: 32, Depth: 1, Nodes: 3}, {Bytes: 32, Depth: 0, Nodes: 1},
+		{Bytes: 4, Depth: 0, Nodes: 1}, {Bytes: 64, Depth: 2, Nodes: 8}, {Bytes: 64, Depth: 3, Nodes: 5}, {Bytes: 128, Depth: 1, Nodes: 6},
+	}
+	for _, input := range inputs {
+		if _, err := Decode([]byte(input), Limits{Bytes: 4096, Depth: MaxDepth, Nodes: MaxNodes}); err != nil {
+			t.Fatalf("fixture %q is not valid JSON: %v", input, err)
+		}
+		for _, limit := range limits {
+			_, decoded := Decode([]byte(input), limit)
+			measured := Measure([]byte(input), limit)
+			if (decoded == nil) != (measured == nil) {
+				t.Fatalf("%q %+v: Decode=%v Measure=%v", input, limit, decoded, measured)
+			}
+			if measured != nil && !errors.Is(measured, fault.Invalid) {
+				t.Fatalf("%q: Measure lost classification: %v", input, measured)
+			}
+		}
+	}
+	for _, test := range []struct {
+		input   string
+		limits  Limits
+		message string
+	}{
+		{`"abc"`, Limits{Bytes: 3, Depth: 0, Nodes: 1}, "byte bound"},
+		{`[[1]]`, Limits{Bytes: 32, Depth: 1, Nodes: 8}, "depth bound"},
+		{`[1,2,3]`, Limits{Bytes: 32, Depth: 1, Nodes: 3}, "node bound"},
+	} {
+		for _, err := range []error{Measure([]byte(test.input), test.limits), func() error { _, err := Decode([]byte(test.input), test.limits); return err }()} {
+			var failure *fault.Error
+			if !errors.As(err, &failure) || !strings.Contains(failure.Message(), test.message) {
+				t.Fatalf("%q: bound was not named: %v", test.input, err)
+			}
+		}
+	}
+	for _, input := range []string{"", "\"\xff\"", `"\ud800"`, `[`, `]`} {
+		if Measure([]byte(input), Limits{Bytes: 64, Depth: 4, Nodes: 16}) == nil {
+			t.Fatalf("Measure accepted %q", input)
+		}
+	}
+}
+
+func BenchmarkTransportDecodeAndCheck(b *testing.B) {
+	var builder strings.Builder
+	builder.WriteString(`{"items":[`)
+	for i := range 100 {
+		if i > 0 {
+			builder.WriteByte(',')
+		}
+		builder.WriteString(`{"id":"item-1","name":"Example item","count":1234,"active":true}`)
+	}
+	builder.WriteString(`],"total":100}`)
+	data := []byte(builder.String())
+	limits := Limits{Bytes: len(data), Depth: 8, Nodes: 4096}
+	b.Run("Decode", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			if _, err := Decode(data, limits); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("Measure", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			if err := Measure(data, limits); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}

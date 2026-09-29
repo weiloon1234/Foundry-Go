@@ -19,6 +19,8 @@ type RecipientLookup func(context.Context, string) (value.Optional[model.Referen
 
 // Delivery callbacks must address issued.Subject().Email. The submitted lookup
 // string is deliberately absent from the delivery callback's parameters.
+// Lookup and delivery run in the requester's owned background dispatch; close
+// the requester at shutdown (Close drains it).
 func NewResetRequests(reset *Reset, limiter ratelimit.Limiter[string], lookup RecipientLookup, deliver func(context.Context, passwordreset.Issued[Member]) error, logger *slog.Logger) (*ResetRequests, error) {
 	return challenge.NewRequests(reset, limiter, challenge.RequestCallbacks[Member, model.ID[Member], string, challenge.PasswordReset]{Lookup: lookup, Deliver: deliver}, logger, auth.DefaultConfig())
 }

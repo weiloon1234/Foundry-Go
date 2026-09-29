@@ -5,6 +5,8 @@ import (
 	"cmp"
 	"context"
 	"slices"
+	"sync"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
@@ -50,8 +52,7 @@ func (h *Hub) clusterMembers(ctx context.Context, key subscriptionKey) (Presence
 	})
 	return result, err
 }
-func (h *Hub) refreshClusterPresence(ctx context.Context, scope Scope) error {
-	key := scope.key()
+func (h *Hub) refreshClusterPresence(ctx context.Context, key subscriptionKey) error {
 	h.mu.Lock()
 	_, active := h.clusterPresence[key]
 	h.mu.Unlock()
@@ -68,6 +69,91 @@ func (h *Hub) refreshClusterPresence(ctx context.Context, scope Scope) error {
 		h.applyPresenceLocked(key, snapshot)
 	}
 	return nil
+}
+
+// markPresenceLocked queues an active scope for the presence worker. Inactive
+// scopes are ignored, so the queue never exceeds MaxPresenceScopes.
+func (h *Hub) markPresenceLocked(key subscriptionKey) bool {
+	if _, active := h.clusterPresence[key]; !active {
+		return false
+	}
+	h.cluster.dirty[key] = struct{}{}
+	return true
+}
+func (h *Hub) wakePresence() {
+	select {
+	case h.cluster.wake <- struct{}{}:
+	default:
+	}
+}
+
+// presenceDebounce coalesces bursts of presence changes for one refresh.
+const presenceDebounce = 20 * time.Millisecond
+const presenceConcurrency = 4
+
+// startPresenceWorker owns authority refreshes outside the receive loop. It
+// refreshes queued scopes after a short debounce and reconciles every active
+// scope once per heartbeat period, covering missed changes and expired leases.
+func (h *Hub) startPresenceWorker(ctx context.Context) {
+	h.mu.Lock()
+	if h.closing {
+		h.mu.Unlock()
+		return
+	}
+	h.background++
+	h.mu.Unlock()
+	go func() {
+		defer func() {
+			h.mu.Lock()
+			h.background--
+			h.completeLocked()
+			h.mu.Unlock()
+		}()
+		reconcile := time.NewTicker(h.cluster.config.ConnectionTTL / 3)
+		defer reconcile.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-reconcile.C:
+				h.mu.Lock()
+				for key := range h.clusterPresence {
+					h.cluster.dirty[key] = struct{}{}
+				}
+				h.mu.Unlock()
+			case <-h.cluster.wake:
+				debounce := time.NewTimer(presenceDebounce)
+				select {
+				case <-ctx.Done():
+					debounce.Stop()
+					return
+				case <-debounce.C:
+				}
+			}
+			h.mu.Lock()
+			keys := make([]subscriptionKey, 0, len(h.cluster.dirty))
+			for key := range h.cluster.dirty {
+				keys = append(keys, key)
+			}
+			clear(h.cluster.dirty)
+			h.mu.Unlock()
+			slots := make(chan struct{}, presenceConcurrency)
+			var refreshes sync.WaitGroup
+			for _, key := range keys {
+				if ctx.Err() != nil {
+					break
+				}
+				slots <- struct{}{}
+				refreshes.Go(func() {
+					defer func() { <-slots }()
+					// Failures are counted by clusterCall; the next change or
+					// reconcile retries, so one slow scope never blocks others.
+					_ = h.refreshClusterPresence(ctx, key)
+				})
+			}
+			refreshes.Wait()
+		}
+	}()
 }
 func (h *Hub) applyPresenceLocked(key subscriptionKey, snapshot PresenceSnapshot) {
 	current := h.clusterPresence[key]

@@ -89,7 +89,7 @@ type User struct {
 func(u User)AccessDeletedAt()(bool,error){return !u.DeletedAt.IsNull(),nil}
 func(User)MutateDeletedAt(v time.Time)(time.Time,error){return v,nil}
 `)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := Generate(t.Context(), Options{Dir: dir, FieldDocumentation: true}); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, "models.go")
@@ -101,10 +101,10 @@ func(User)MutateDeletedAt(v time.Time)(time.Time,error){return v,nil}
 		t.Fatal("actual field lacks deletion notice")
 	}
 	write(t, dir, "models.go", strings.Replace(string(first), "table=users primary=ID", "table=users primary=ID soft_deletes=false", 1))
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err == nil {
+	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true, FieldDocumentation: true}); err == nil {
 		t.Fatal("opt-out did not invalidate generated behavior")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := Generate(t.Context(), Options{Dir: dir, FieldDocumentation: true}); err != nil {
 		t.Fatal(err)
 	}
 	after, err := os.ReadFile(path)
@@ -119,7 +119,7 @@ func(User)MutateDeletedAt(v time.Time)(time.Time,error){return v,nil}
 			t.Fatal("opt-out removed unrelated field documentation", want)
 		}
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true, FieldDocumentation: true}); err != nil {
 		t.Fatal(err)
 	}
 }

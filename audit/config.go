@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/weiloon1234/Foundry-Go/audit/record"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 )
@@ -21,15 +22,44 @@ func (a Area) Validate() error {
 	return nil
 }
 
+// DefaultMaxValueBytes is the per-value threshold used when Config leaves
+// MaxValueBytes zero. ValueBytesFloor and ValueBytesCeiling bound explicit settings.
+const (
+	DefaultMaxValueBytes = 64 << 10
+	ValueBytesFloor      = 256
+	ValueBytesCeiling    = record.MaxCapturedValueBytes
+)
+
 // Config is immutable after recorder construction. Zero RetentionDays disables
-// configured pruning. Nothing runs retention automatically.
+// configured pruning. Nothing runs retention automatically. A captured value
+// larger than MaxValueBytes (zero selects DefaultMaxValueBytes) is stored as a
+// size and SHA-256 digest marker instead of failing the business write.
 type Config struct {
 	Area          Area
 	RetentionDays uint16
+	MaxValueBytes int
 }
 
-func DefaultConfig() Config      { return Config{Area: "application"} }
-func (c Config) Validate() error { return c.Area.Validate() }
+func DefaultConfig() Config {
+	return Config{Area: "application", MaxValueBytes: DefaultMaxValueBytes}
+}
+
+func (c Config) Validate() error {
+	if err := c.Area.Validate(); err != nil {
+		return err
+	}
+	if c.MaxValueBytes != 0 && (c.MaxValueBytes < ValueBytesFloor || c.MaxValueBytes > ValueBytesCeiling) {
+		return fault.New(fault.Invalid, "audit value limit is outside its supported bounds")
+	}
+	return nil
+}
+
+func (c Config) valueLimit() int {
+	if c.MaxValueBytes == 0 {
+		return DefaultMaxValueBytes
+	}
+	return c.MaxValueBytes
+}
 
 // Recorder has no independent resource lifetime or database pool. Its methods
 // use caller-owned executors/transactions and are safe for concurrent operations.

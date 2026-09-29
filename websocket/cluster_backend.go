@@ -62,7 +62,7 @@ func (l ClusterLimits) Validate() error {
 	if !validPresenceBounds(l.PresenceMembers, l.MemberBytes, l.FrameBytes) {
 		return fault.New(fault.Invalid, "cluster presence cannot fit its bounded frame")
 	}
-	if l.Connections < 1 || l.Connections > 4096 || l.ConnectionsPerSubject < 1 || l.ConnectionsPerSubject > l.Connections || l.Subscriptions < 1 || l.Subscriptions > 1024 || l.PresenceMembers < 1 || l.PresenceMembers > 4096 || l.MemberBytes < 2 || l.MemberBytes > 1<<20 || l.FrameBytes < 4096 || l.FrameBytes > 1<<20 || l.ConnectionTTL < 100*time.Millisecond || l.ConnectionTTL > 5*time.Minute || l.ConnectionTTL%time.Millisecond != 0 || l.Retention < 2*l.ConnectionTTL || l.Retention > 24*time.Hour || l.Retention%time.Millisecond != 0 {
+	if l.Connections < 1 || l.Connections > 1<<20 || l.ConnectionsPerSubject < 1 || l.ConnectionsPerSubject > l.Connections || l.Subscriptions < 1 || l.Subscriptions > 1024 || l.PresenceMembers < 1 || l.PresenceMembers > 4096 || l.MemberBytes < 2 || l.MemberBytes > 1<<20 || l.FrameBytes < 4096 || l.FrameBytes > 1<<20 || l.ConnectionTTL < 100*time.Millisecond || l.ConnectionTTL > 5*time.Minute || l.ConnectionTTL%time.Millisecond != 0 || l.Retention < 2*l.ConnectionTTL || l.Retention > 24*time.Hour || l.Retention%time.Millisecond != 0 {
 		return fault.New(fault.Invalid, "invalid WebSocket cluster authority bounds")
 	}
 	return nil

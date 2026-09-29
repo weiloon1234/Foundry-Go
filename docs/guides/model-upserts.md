@@ -21,6 +21,8 @@ The example's migration owns a unique index on email and level. Go checks model 
 
 `Upsert` returns `(value.Optional[User], error)`. A present result is a completely hydrated inserted or updated model. An omitted result means the policy skipped that input. It never fabricates the existing model after `DO NOTHING` or reports whether a returned row was inserted versus updated.
 
+A model's active [global scopes](model-global-scopes.md) join the `DO UPDATE` condition, so a conflicting row outside them (another tenant's, say) is never changed. An update without its own `Where`/`WhereRows` condition that skips such a row fails with `fault.Conflict` rather than returning an omitted result; the insert rolls back with it.
+
 `Update(fields...)` copies those fields from PostgreSQL's proposed `EXCLUDED` row. Other stored fields remain unchanged. An explicitly selected incoming field that was omitted from the draft copies its database default or NULL. This makes the selected update list significant; omission alone does not preserve a field you explicitly selected for incoming replacement.
 
 Models with [managed timestamps](model-timestamps.md) always copy their proposed `UpdatedAt` on an update action, replacing an explicit assignment for that field. The proposed value has already passed its Go mutator; it is not transformed twice. The convention does not automatically replace `CreatedAt` on conflict.

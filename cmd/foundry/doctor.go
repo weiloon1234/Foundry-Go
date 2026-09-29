@@ -11,12 +11,13 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/cli"
 	"github.com/weiloon1234/Foundry-Go/internal/doctor"
+	"github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
 )
 
 func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("doctor", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	var options doctor.Options
+	options := doctor.Options{Framework: frameworkinfo.CurrentBuild()}
 	flags.StringVar(&options.Dir, "dir", ".", "existing consumer module directory")
 	flags.StringVar(&options.Go, "go", "go", "installed Go executable")
 	flags.StringVar(&options.Gopls, "gopls", "gopls", "installed gopls executable")
@@ -33,7 +34,11 @@ func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	if *format == "json" {
 		return errors.Join(inspectErr, json.NewEncoder(stdout).Encode(report))
 	}
-	if _, err := fmt.Fprintf(stdout, "Foundry plugin API %s\n", report.FrameworkAPI); err != nil {
+	module := report.FrameworkModule
+	if module == "" {
+		module = "development build"
+	}
+	if _, err := fmt.Fprintf(stdout, "Foundry plugin API %s (framework module %s)\n", report.FrameworkAPI, module); err != nil {
 		return errors.Join(inspectErr, err)
 	}
 	for _, check := range report.Checks {

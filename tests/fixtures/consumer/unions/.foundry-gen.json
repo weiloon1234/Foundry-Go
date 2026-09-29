@@ -1,10 +1,10 @@
 {
   "version": 1,
   "files": {
-    "bank_dto_foundry.gen.go": "84252d6507f110986114c5abca62943f7e9cc2364f079b3be64071d5f8b95831",
-    "card_dto_foundry.gen.go": "5748b3616e326e2ae5553b94fe3258425c6de1f02495e47b67c409cbf8b498e9",
-    "delivery_foundry.gen.go": "40c29645467658d3e30f40c7f72453653197ea497cf64897cd59faaee983c915",
-    "payment_method_foundry.gen.go": "c30020931055325e6be2824c2e606bbcef1601a55e29d07b9cf0908bbdd4c906",
-    "payment_request_foundry.gen.go": "a3d4efc889d1d9e3cd8d5b8a5c82d1cb42590e72776f6fdd1e4dd2716013c53b"
+    "bank_dto_foundry.gen.go": "6e117ff95ddb3e9805e3cd702f5ba20a499e974e4c3869f1dbfc1169dc90f0bf",
+    "card_dto_foundry.gen.go": "939308023ca8ce1a730ed3996ba40f2528a44de7a0dc6479616acd907177105a",
+    "delivery_foundry.gen.go": "c90536ee8c10f87420d93592259512301fee046366f09e7d91926dedcd3a10c1",
+    "payment_method_foundry.gen.go": "dddf5bed7bcba8cf9581914de2221e9d8fc9f62cba0f10b3865ffe057c4d83d6",
+    "payment_request_foundry.gen.go": "d5470a3e0d167d2bff63f477b8aa0f98a92ab49d26a3a611d86782f3f763badb"
   }
 }

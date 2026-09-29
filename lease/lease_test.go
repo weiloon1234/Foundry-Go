@@ -244,7 +244,8 @@ func TestCloseRetainsNoncooperativeCallbackAndCapacity(t *testing.T) {
 			result <- err
 		}()
 		<-started
-		if _, ok, err := l.TryAcquire(t.Context(), "b", time.Second); ok || !errors.Is(err, fault.Conflict) {
+		// A full manager queues briefly, then reports retryable overload.
+		if _, ok, err := l.TryAcquire(t.Context(), "b", time.Second); ok || !errors.Is(err, fault.Overloaded) {
 			t.Fatal(ok, err)
 		}
 		canceled, cancel := context.WithCancel(t.Context())

@@ -51,6 +51,14 @@ Duplicate prefixes and route IDs are rejected. A SPA fallback already serves
 existing files under its prefix, so a root catch-all asset mount is unnecessary
 and would consume misses before fallback selection.
 
+Successful asset lookups are cached for one second (at most 4,096 entries), so a
+replaced file in a directory source is observed within that window; misses are
+never cached. Files that report no modification time, such as `embed.FS`
+entries, receive a strong SHA-256 content `ETag` computed once per file and
+reused (a size change recomputes it), so `If-None-Match` revalidation of an
+embedded SPA shell returns 304. Directory assets transfer through the native
+`sendfile` path described in [downloads](http-downloads.md).
+
 A SPA entry must resolve to a regular file; a directory cannot cause repeated
 redirects. Asset metadata includes file media, prefix, index and fallback
 exclusions, without exposing local paths or fabricating a JSON DTO. Download

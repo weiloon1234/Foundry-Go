@@ -2,7 +2,6 @@ package query
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -60,6 +59,7 @@ func (p sourceMutation[S, M]) exec(ctx context.Context, writer database.Transact
 	if err := p.validateExecution(ctx, writer); err != nil {
 		return 0, err
 	}
+	p.destination = p.destination.inContext(ctx)
 	return executeModelStatement(ctx, writer, p.needsPreparation(), p.prepare(false), func(ctx context.Context, tx *database.Tx, statement Statement) (int64, error) {
 		if len(p.mappings) == 0 {
 			result, err := tx.Exec(ctx, statement.sql, statement.arguments...)
@@ -77,13 +77,14 @@ func (p sourceMutation[S, M]) exec(ctx context.Context, writer database.Transact
 }
 
 func ambiguousSourceMatch() error {
-	return fmt.Errorf("SQL-mapped update matched multiple source rows for one model: %w", database.TooManyRows)
+	return database.NewError("SQL-mapped update matched multiple source rows for one model", database.TooManyRows)
 }
 
 func (p sourceMutation[S, M]) returning(ctx context.Context, writer database.Transactor, limit int) ([]M, error) {
 	if limit <= 0 || limit > MaxInsertRows {
 		return nil, fault.New(fault.Invalid, "source write returning requires a positive bounded result limit")
 	}
+	p.destination = p.destination.inContext(ctx)
 	if err := p.validateExecution(ctx, writer); err != nil {
 		return nil, err
 	}

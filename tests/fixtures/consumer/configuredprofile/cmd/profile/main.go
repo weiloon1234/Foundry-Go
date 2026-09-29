@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"foundry.test/consumer/configuredprofile"
@@ -33,13 +32,9 @@ func run() error {
 		return err
 	}
 	if *serve {
-		err := app.Run(ctx, foundation.HTTP)
-		if errors.Is(err, context.Canceled) {
-			cleanup, cancel := context.WithTimeout(context.Background(), app.ShutdownTimeout())
-			defer cancel()
-			return app.Shutdown(cleanup)
-		}
-		return err
+		// A signal is a graceful stop: Run drains within the shutdown budget
+		// and returns nil, or the task/cleanup failures it observed.
+		return app.Run(ctx, foundation.HTTP)
 	}
 	return configuredprofile.Smoke(ctx, app)
 }

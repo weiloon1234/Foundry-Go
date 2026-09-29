@@ -43,10 +43,21 @@ type Policy struct {
 	Accepted       []storage.MediaType
 	AnyMedia       bool
 	Image          value.Optional[imaging.Plan]
+	// Variants are named derived images (for example thumbnails) generated
+	// from each ready original and stored beside it. They require image input:
+	// an Image plan or an Accepted list of decodable image types.
+	Variants []Variant
+	// InlineActiveContent allows public URLs and inline signed links for
+	// script-capable files (SVG, HTML, XML, JavaScript). By default public URLs
+	// are refused and signed links force a download disposition, because such
+	// files served inline run scripts in the serving origin (stored XSS). Only
+	// set it when that origin is isolated and cookie-less.
+	InlineActiveContent bool
 }
 
 func (p Policy) normalized() Policy {
 	p.Accepted = slices.Clone(p.Accepted)
+	p.Variants = slices.Clone(p.Variants)
 	if p.MaxBytes == 0 {
 		p.MaxBytes = 8 << 20
 	}
@@ -87,7 +98,7 @@ func (p Policy) Validate() error {
 		}
 		seen[media] = true
 	}
-	return nil
+	return p.validateVariants()
 }
 
 // BeforeContext contains detected metadata, not the caller-owned reader or a
@@ -108,9 +119,10 @@ type Hook[M any, K comparable] struct {
 }
 type declarationID struct{ nonzero byte }
 type Collection[M any, K comparable] struct {
-	definition *definition[M, K]
-	locale     value.Optional[i18n.LocaleID]
-	queue      *Queue
+	definition   *definition[M, K]
+	locale       value.Optional[i18n.LocaleID]
+	queue        *Queue
+	variantQueue *VariantQueue
 }
 type definition[M any, K comparable] struct {
 	owner  extensions.Owner[M, K]
@@ -151,6 +163,14 @@ func (c Collection[M, K]) Validate() error {
 			return err
 		}
 	}
+	if c.variantQueue != nil {
+		if err := c.variantQueue.Validate(); err != nil {
+			return err
+		}
+		if len(c.definition.policy.Variants) == 0 {
+			return invalid()
+		}
+	}
 	return c.definition.policy.Validate()
 }
 func (c Collection[M, K]) ForLocale(locale i18n.LocaleID) Collection[M, K] {
@@ -177,6 +197,8 @@ func (c Collection[M, K]) registrationKey() string {
 type Registration struct {
 	key      string
 	id       *declarationID
+	owner    extensions.OwnerName
+	name     Name
 	policy   Policy
 	validate func(*extensions.Registry) error
 }
@@ -185,7 +207,7 @@ func (c Collection[M, K]) Registration() Registration {
 	if c.definition == nil || c.locale.IsSet() {
 		return Registration{}
 	}
-	return Registration{key: c.registrationKey(), id: c.definition.id, policy: c.definition.policy, validate: func(r *extensions.Registry) error {
+	return Registration{key: c.registrationKey(), id: c.definition.id, owner: c.definition.owner.Name(), name: c.Name(), policy: c.definition.policy, validate: func(r *extensions.Registry) error {
 		if err := c.Validate(); err != nil {
 			return err
 		}

@@ -72,5 +72,6 @@ func (s *Sessions[M, K]) CompleteMFA(ctx context.Context, raw secret.String, fac
 	if err != nil {
 		return Issued[M, K]{}, err
 	}
+	s.issued(ctx, result)
 	return result, nil
 }

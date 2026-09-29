@@ -14,9 +14,11 @@ import (
 // The handler always runs the table's Export authorization and row scope again.
 // Reuse auth.Provider.Resolve for fresh eligibility, then apply current policy.
 //
-// Deliver receives only a complete artifact, after its database snapshot closes.
-// The handler owns and closes it even when delivery fails, panics or Goexits.
-// Its context retains job values and the export's deadline/ownership frame.
+// Deliver receives only a complete artifact, after its database snapshot closes
+// and its generation slot is released. The handler owns and closes it even when
+// delivery fails, panics or Goexits. Its context retains job values and the
+// export's deadline, ends at manager shutdown, and rejects closing the same
+// manager from inside delivery as a cycle.
 // Jobs remain at-least-once: use jobs.Current's execution ID for an idempotent
 // destination. Locale/timezone/actor references belong in P's existing job
 // contract; this adapter creates neither another queue nor implicit email sends.
@@ -45,7 +47,8 @@ func ExportHandler[P, S, R, A any](table Table[S, R, A], manager *Manager, resol
 			}
 			defer func() { err = errors.Join(err, artifact.Close()) }()
 			// Isolation lets the ownership defer run on normal return after Goexit too.
-			deliveryContext := artifact.lease.Context()
+			deliveryContext, stop := manager.deliveryContext(ctx, artifact)
+			defer stop()
 			return callback.Isolated("deliver datatable export", func() error {
 				return errors.Join(deliver(deliveryContext, payload, artifact), deliveryContext.Err())
 			})

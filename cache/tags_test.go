@@ -112,10 +112,15 @@ func TestTaggedRememberSeparatesGenerationsAndRejectsStaleWriters(t *testing.T) 
 			t.Fatal("new generation joined old loader", fresh, err)
 		}
 		close(release)
+		// Callers that started before invalidation receive their loaded value,
+		// but the stale publication is rejected and only reported.
 		for _, ch := range []<-chan rememberResult{old, follower} {
-			if got := <-ch; !errors.Is(got.err, fault.Conflict) {
-				t.Fatal("stale loader succeeded", got)
+			if got := <-ch; got.err != nil || got.value.Name != "old" {
+				t.Fatal("stale loader result", got)
 			}
+		}
+		if stats := s.Stats(); stats.WriteFailures != 1 {
+			t.Fatal("stale publication was not rejected", stats)
 		}
 		fresh.Scores[0] = 9
 		got, found, err := view.Get(t.Context(), "key")

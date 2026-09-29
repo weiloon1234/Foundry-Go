@@ -185,13 +185,20 @@ func TestCatchUpHasWindowAndCountBounds(t *testing.T) {
 	if len(occurrences) != 2 {
 		t.Fatal("catch-up count was not bounded")
 	}
-	for range 2 {
-		invocation := <-occurrences
-		if invocation.IntendedAt.Before(f.clock.Now().Add(-10*time.Minute)) || invocation.IntendedAt.After(f.clock.Now()) {
-			t.Fatal("catch-up escaped window")
-		}
+	// A backlog beyond Max runs the most recent occurrences, not the oldest.
+	now := f.clock.Now()
+	first, second := (<-occurrences).IntendedAt, (<-occurrences).IntendedAt
+	if first.After(second) {
+		first, second = second, first
 	}
-	if f.scheduler.Snapshot().History[2].Reason != schedule.BacklogLimited {
+	if !first.Equal(now.Add(-time.Minute)) || !second.Equal(now) {
+		t.Fatal("catch-up did not select the most recent occurrences", first, second)
+	}
+	limited := false
+	for _, record := range f.scheduler.Snapshot().History {
+		limited = limited || record.Reason == schedule.BacklogLimited && record.Invocation.IntendedAt.Equal(now.Add(-10*time.Minute))
+	}
+	if !limited {
 		t.Fatal("discarded backlog not inspected")
 	}
 }

@@ -133,7 +133,7 @@ func (q LockedQuery[M]) RequireFirst(ctx context.Context, tx *database.Tx) (M, e
 	if result, ok := item.Get(); ok {
 		return result, nil
 	}
-	return *new(M), database.NotFound
+	return *new(M), database.NewError("locked model", database.NotFound)
 }
 
 // Each streams locked models. It requires no eager-loading clauses; use All for

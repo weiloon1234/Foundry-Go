@@ -12,7 +12,7 @@ func TestEveryBuiltinMessageHasAValidOwnedRecipe(t *testing.T) {
 			t.Fatal("duplicate message", m.id)
 		}
 		seen[m.id] = true
-		spec := Spec{ID: m.id, Parameters: []Parameter{parameter("min", 1), parameter("max", 1), parameter("bytes", 1), parameter("value", "2026-01-01"), parameter("divisor", 2)}}
+		spec := Spec{ID: m.id, Parameters: []Parameter{parameter("min", 1), parameter("max", 1), parameter("bytes", 1), parameter("value", "2026-01-01"), parameter("divisor", 2), parameter("places", 2), parameter("format", "2006-01-02")}}
 		prepared, err := builtinPrepared(spec)
 		if err != nil {
 			t.Fatal(m.id, err)

@@ -64,6 +64,9 @@ func prepareFeatureSettings(s Settings, source clock.Clock) (FeatureSettings, er
 			cookies[id] = true
 		}
 	}
+	if err := prepareMFA(&f.Auth.MFA, s, source); err != nil {
+		return f, err
+	}
 	if f.Auth.Tokens.Enabled {
 		c := &f.Auth.Tokens
 		if c.Config.Namespace == (keyspace.Namespace{}) {

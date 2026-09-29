@@ -46,13 +46,16 @@ never restores authentication or authorizes a worker.
 Run maintenance against explicitly configured stores and their existing pool.
 Each call is bounded and cancellable; repeat on later scheduled runs when a full
 batch is returned. A zero count can mean competing workers hold the eligible rows;
-it is not a globally consistent proof that nothing remains. Scheduler registration
-belongs to milestone 13; no background timer is installed by these constructors.
+it is not a globally consistent proof that nothing remains. No background timer is
+installed by these constructors. `Sessions.PruneExpired(ctx, batch, maxBatches)`
+and `Tokens.PruneExpired(ctx, batch, maxBatches)` repeat `Prune` until a short
+batch or `maxBatches` and report the removed count; call them from a scheduled
+handler or let the configured housekeeping schedule run them.
 
 | API | Batch limit | Eligible state |
 |---|---|---|
-| `Sessions.Prune` | `session.MaxPageSize` (1024) | Expired sessions within this guard/address |
-| `Tokens.Prune` | `token.MaxPruneFamilies` (16) | Expired families and their bounded generation history |
+| `Sessions.Prune` | `session.MaxPageSize` (1024) | Expired sessions within this guard/address, one set-based statement |
+| `Tokens.Prune` | `token.MaxPruneFamilies` (1024) | Expired families with their generations and consumed refresh digests, one set-based statement |
 | Reset/verification `Prune` | `challenge.MaxPrune` (128) | Expired links for this provider/purpose |
 | `Factors.Prune` | `mfa.MaxPrune` (128) | Expired **unconfirmed** enrollments only |
 

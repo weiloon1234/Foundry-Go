@@ -5,6 +5,7 @@ import "github.com/weiloon1234/Foundry-Go/database/migrate"
 const (
 	MigrationOrigin     migrate.Origin  = "foundry.notifications"
 	CreateNotifications migrate.ID      = "000001_create_notifications"
+	AddInboxPruneIndex  migrate.ID      = "000002_add_inbox_prune_index"
 	Introduced          migrate.Version = "v0.1.0"
 )
 
@@ -52,5 +53,10 @@ FOREIGN KEY (id, scope, subject_key) REFERENCES foundry_notifications (id, scope
 		`CREATE INDEX foundry_notification_inbox_subject ON foundry_notification_inbox (scope, subject_key, created_at, id)`,
 		`CREATE INDEX foundry_notification_inbox_unread ON foundry_notification_inbox (scope, subject_key, created_at, id) WHERE read_at IS NULL`,
 		`CREATE INDEX foundry_notification_delivery_state ON foundry_notification_deliveries (state, updated_at, key)`,
-	}}}
+	}}, {
+		// Serves Manager.PruneInbox across recipients, oldest first. IF NOT
+		// EXISTS lets operators of a large inbox build it CONCURRENTLY first.
+		Key: migrate.Key{Origin: MigrationOrigin, ID: AddInboxPruneIndex}, Version: Introduced,
+		SQL: []string{`CREATE INDEX IF NOT EXISTS foundry_notification_inbox_created ON foundry_notification_inbox (created_at, id)`},
+	}}
 }

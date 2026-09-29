@@ -58,7 +58,10 @@ func (b Binding[M, K, P]) Capture(ctx context.Context, recipient model.Reference
 		if err != nil {
 			return err
 		}
-		if _, err := b.recipient.provider.Parse(identity); err != nil {
+		if b.parse == nil {
+			return invalid()
+		}
+		if err := b.parse(identity); err != nil {
 			return err
 		}
 		data, err := b.definition.payload.Encode(ctx, input, payloadLimits())
@@ -147,8 +150,23 @@ func (m *Manager) persist(ctx context.Context, tx *database.Tx, captured *captur
 	if err != nil {
 		return store.Envelope{}, err
 	}
-	if row.Fingerprint != captured.fingerprint || row.Scope != r.scope || row.SubjectKey != captured.subject {
+	if row.Scope != r.scope || row.SubjectKey != captured.subject {
 		return store.Envelope{}, fault.New(fault.Conflict, "notification identity already has different input")
+	}
+	if row.Fingerprint != captured.fingerprint {
+		// A notification captured before its binding's channel set changed keeps
+		// its original channels. Compare the input against the stored channel
+		// list; a differing input is still a conflict.
+		deliveries, err := store.QueryFoundryNotificationDeliveries().Where(store.DeliveryFields().NotificationID.Eq(captured.id)).Limit(MaxChannels+1).All(ctx, tx)
+		if err != nil {
+			return store.Envelope{}, err
+		}
+		identity, _ := captured.identity.Text()
+		payload, _ := captured.input.Text()
+		if len(deliveries) == 0 || fingerprintWith(r, identity, payload, storedChannels(deliveries)) != row.Fingerprint {
+			return store.Envelope{}, fault.New(fault.Conflict, "notification identity already has different input")
+		}
+		return row, nil
 	}
 	empty, err := value.ParseJSON[json.RawMessage]("null")
 	if err != nil {
@@ -168,13 +186,28 @@ func deliveryKey(id model.ID[store.Envelope], channel ChannelID) string {
 	return digest(id.String(), string(channel))
 }
 
-// requestFingerprint is shared by capture and persisted-input restoration.
+// requestFingerprint is shared by capture and persisted-input restoration. It
+// covers the channel selection current at capture time.
 func requestFingerprint(r *registration, identity, payload string) string {
-	parts := []string{r.scope, identity, string(r.key.name), stringVersion(r.key.version), payload}
 	channels := make([]string, 0, len(r.channels))
 	for _, channel := range r.channels {
 		channels = append(channels, string(channel.id)+":"+channel.kind)
 	}
+	return fingerprintWith(r, identity, payload, channels)
+}
+
+// fingerprintWith verifies a stored notification against the channel list it
+// was captured with (its delivery rows), so later binding changes stay readable.
+func fingerprintWith(r *registration, identity, payload string, channels []string) string {
+	parts := []string{r.scope, identity, string(r.key.name), stringVersion(r.key.version), payload}
+	channels = append([]string(nil), channels...)
 	sort.Strings(channels)
 	return digest(append(parts, channels...)...)
+}
+func storedChannels(deliveries []store.Delivery) []string {
+	channels := make([]string, 0, len(deliveries))
+	for _, delivery := range deliveries {
+		channels = append(channels, delivery.Channel+":"+delivery.Kind)
+	}
+	return channels
 }

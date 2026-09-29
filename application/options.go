@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/logging"
 	"github.com/weiloon1234/Foundry-Go/observability"
 	"log/slog"
 )
@@ -17,9 +18,25 @@ type options struct {
 	recorder       *observability.Recorder
 	reporters      []observability.Reporter
 	exporters      []observability.TraceExporter
+	batchExporters []observability.TraceBatchExporter
 	infrastructure []infrastructure.Option
+	logHandlers    []logging.ChannelOption
 }
 type Option func(*options) error
+
+// WithLogHandler binds a typed slog.Handler to a named log channel. The channel
+// may be configured with the custom driver (selecting its minimum level) or be
+// absent, in which case it is added at the default INFO minimum. The handler is
+// borrowed: the application never closes it. See logging.WithHandler.
+func WithLogHandler(name logging.ChannelName, handler slog.Handler) Option {
+	return func(o *options) error {
+		if credential.IsNil(handler) {
+			return fault.New(fault.Invalid, "application log handler is nil")
+		}
+		o.logHandlers = append(o.logHandlers, logging.WithHandler(name, handler))
+		return nil
+	}
+}
 
 func WithClock(c clock.Clock) Option {
 	return func(o *options) error {

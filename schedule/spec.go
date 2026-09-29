@@ -76,6 +76,15 @@ func (s Spec) Validate() error {
 	return nil
 }
 func (s Spec) String() string { return s.source }
+
+// location is the zone calendar filters evaluate in: the calendar's own zone,
+// or UTC for elapsed-time intervals.
+func (s Spec) location() *time.Location {
+	if s.calendar != nil {
+		return s.calendar.Location
+	}
+	return time.UTC
+}
 func (s Spec) TimeZone() string {
 	if s.calendar != nil {
 		return s.calendar.Location.String()

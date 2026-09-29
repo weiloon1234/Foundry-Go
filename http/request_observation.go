@@ -1,26 +1,32 @@
 package http
 
 import (
+	"context"
 	stdhttp "net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/observability"
 	"github.com/weiloon1234/Foundry-Go/tracing"
 )
 
 type requestObservation struct {
-	started    time.Time
-	routeMu    sync.Mutex
-	route      RouteID
-	span       *observability.Span
-	outcome    observability.Outcome
-	contextErr error
-	returned   bool
+	started time.Time
+	// route is published by the matched route's handler goroutine and read
+	// after the handler returns; the pointer is immutable per-route state.
+	route        atomic.Pointer[matchedRoute]
+	diagnosticMu sync.Mutex
+	diagnostic   fault.Diagnostic
+	span         *observability.Span
+	outcome      observability.Outcome
+	contextErr   error
+	returned     bool
 }
 
-func beginRequestObservation(request *stdhttp.Request, trust bool) (*stdhttp.Request, *requestObservation) {
+func beginRequestObservation(request *stdhttp.Request, trust bool) (context.Context, *requestObservation) {
 	ctx := tracing.WithoutContext(request.Context())
 	if trust {
 		parents := request.Header.Values(tracing.ParentHeader)
@@ -43,13 +49,13 @@ func beginRequestObservation(request *stdhttp.Request, trust bool) (*stdhttp.Req
 	}
 	recorder := observability.FromContext(ctx)
 	if recorder == nil {
-		return request.WithContext(ctx), nil
+		return ctx, nil
 	}
 	work, span, err := recorder.Start(ctx, observability.Operation{Kind: observability.HTTP, Name: "request"})
 	if err != nil {
-		return request.WithContext(ctx), nil
+		return ctx, nil
 	}
-	return request.WithContext(work), &requestObservation{span: span, returned: true}
+	return work, &requestObservation{span: span, returned: true}
 }
 
 func (o *requestObservation) result(response *observedResponse) observability.Result {

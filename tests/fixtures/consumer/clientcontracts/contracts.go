@@ -64,6 +64,7 @@ type Fixture struct {
 	Guard          auth.Guard[Account]
 	Notifications  *notifications.Registry
 	Tables         *datatable.Registry
+	signer         foundryhttp.URLSigner
 }
 
 // NewFixture binds all exported descriptors to real handlers. The sample
@@ -103,7 +104,7 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 		return result, err
 	}
 	cookie := foundryhttp.DefineCookie("fixture_session", foundryhttp.SecretCookie(), foundryhttp.DefaultCookieOptions())
-	transport, err := foundryhttp.NewAuthentication(registry, foundryhttp.CookieCredential("client_cookie", cookie))
+	transport, err := foundryhttp.NewAuthentication(registry, foundryhttp.CookieCredential("client_cookie", cookie).WithoutOriginProtection())
 	if err != nil {
 		return result, err
 	}
@@ -117,7 +118,7 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 	if err != nil {
 		return result, err
 	}
-	secure := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "account.show", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/account")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, MemberJSON()))
+	secure := foundryhttp.DefineEndpoint(AccountRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, MemberJSON()))
 	broken := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "failure", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/failure")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, contract.StringJSON[string]())).WithErrors(Changed)
 	form := httpuploads.ProfileInputDescriptor().WithTempDirectory(temporary)
 	upload := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "uploads.profile", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/upload")), foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(form), foundryhttp.JSONResponse(201, httpuploads.UploadReplyJSON()))
@@ -127,7 +128,11 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 	if err != nil {
 		return result, err
 	}
-	router, err := foundryhttp.NewRouter(append(pluralRoutes,
+	signer, err := signingFixture()
+	if err != nil {
+		return result, err
+	}
+	router, err := foundryhttp.NewRouter(append(append(pluralRoutes, transportRoutes(signer)...),
 		requestflow.Submit.Handle(requestflow.Handle),
 		unions.Echo.Handle(unions.Handle),
 		genericdto.Echo.Handle(genericdto.HandleEcho),
@@ -172,7 +177,7 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 	}
 	config := websocket.DefaultConfig()
 	config.AllowOriginless = true
-	return Fixture{Router: router, Registry: channels, Authentication: transport, Config: config, Guard: guard, Notifications: notices, Tables: tables}, nil
+	return Fixture{Router: router, Registry: channels, Authentication: transport, Config: config, Guard: guard, Notifications: notices, Tables: tables, signer: signer}, nil
 }
 
 func (f Fixture) Manifest(ctx context.Context) (*manifest.Manifest, error) {

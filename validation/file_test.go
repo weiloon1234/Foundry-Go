@@ -140,9 +140,15 @@ func TestFileDeclarationMetadataIsBoundedOwnedAndDeterministic(t *testing.T) {
 }
 
 func TestFileMetadataFailureAndCancellationStayOwned(t *testing.T) {
+	// Metadata methods run inline; an application callback in the tree makes
+	// the check own a goroutine that also contains Goexit.
+	owned := Custom(Spec{ID: "app.file", Message: "File."}, func(context.Context, fileMetadata) (bool, error) { return true, nil })
 	rule := FilePresent[fileMetadata]()
-	for _, input := range []fileMetadata{{panicMethod: true}, {exitMethod: true}} {
-		err := rule.Check(t.Context(), input, DefaultLimits())
+	for _, tc := range []struct {
+		rule  Rule[fileMetadata]
+		input fileMetadata
+	}{{rule, fileMetadata{panicMethod: true}}, {All(owned, rule), fileMetadata{exitMethod: true}}} {
+		err := tc.rule.Check(t.Context(), tc.input, DefaultLimits())
 		if !errors.Is(err, fault.Internal) {
 			t.Fatalf("metadata callback escaped ownership: %v", err)
 		}

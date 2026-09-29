@@ -84,6 +84,7 @@ type preparedFile struct {
 	modified     time.Time
 	tag          EntityTag
 	stream       bool
+	flush        bool
 	length       value.Optional[int64]
 	limit        int64
 	cacheControl HeaderValue
@@ -120,9 +121,12 @@ func (f *fileResponse) prepareDownload(ctx context.Context, download Download, l
 	prepared.tag = content.EntityTag
 	return prepared, nil
 }
+
+// File sources are read after the handler succeeded: an expired deadline is
+// the server's own budget (503), never a slow-client 408.
 func fileReadError(ctx context.Context, cause error) error {
-	if cause == ctx.Err() && cause != nil {
-		return RequestTimeout.WithCause(cause)
+	if cause != nil && (cause == ctx.Err() || cause == context.DeadlineExceeded || cause == context.Canceled) {
+		return Unavailable.WithCause(cause)
 	}
 	return InternalError.WithCause(cause)
 }

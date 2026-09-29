@@ -126,7 +126,7 @@ func TestPubSubIdleHeartbeatAndClientShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Subscribe(t.Context(), []pubsub.Channel{channel("overflow")}, pubsub.DefaultLimits()); !errors.Is(err, fault.Conflict) {
+	if _, err := c.Subscribe(t.Context(), []pubsub.Channel{channel("overflow")}, pubsub.DefaultLimits()); !errors.Is(err, fault.Overloaded) {
 		t.Fatal(err)
 	}
 	// Exercise several real PING/PONG cycles without a publication.
@@ -195,5 +195,103 @@ func TestPubSubAppliedPublicationWithLostAcknowledgement(t *testing.T) {
 	}
 	if message := readPublication(t, s); string(message.Data) != "applied" {
 		t.Fatal(message)
+	}
+}
+
+func TestPubSubStreamsShareOneConnection(t *testing.T) {
+	c, channel := pubsubFixture(t, nil)
+	a, b := channel("shared-a"), channel("shared-b")
+	first, err := c.Subscribe(t.Context(), []pubsub.Channel{a}, pubsub.DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := c.Subscribe(t.Context(), []pubsub.Channel{a, b}, pubsub.DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	third, err := c.Subscribe(t.Context(), []pubsub.Channel{b}, pubsub.DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats := c.Stats(); stats.Subscriptions != 3 || stats.SubscriptionConnections != 1 {
+		t.Fatal("subscriptions were not multiplexed", stats)
+	}
+	if n, err := c.Publish(t.Context(), a, []byte("to-a")); err != nil || n != 1 {
+		t.Fatal("one server subscription serves every stream", n, err)
+	}
+	for _, s := range []pubsub.Stream{first, second} {
+		if m := readPublication(t, s); m.Channel != a || string(m.Data) != "to-a" {
+			t.Fatal(m)
+		}
+	}
+	// Leaving keeps channels other streams still need.
+	if err := first.Close(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Publish(t.Context(), a, []byte("still")); err != nil {
+		t.Fatal(err)
+	}
+	if m := readPublication(t, second); string(m.Data) != "still" {
+		t.Fatal(m)
+	}
+	// An overflowing stream ends alone; its neighbours keep receiving.
+	limits := pubsub.DefaultLimits()
+	limits.Messages = 1
+	slow, err := c.Subscribe(t.Context(), []pubsub.Channel{b}, limits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range []string{"one", "two"} {
+		if _, err := c.Publish(t.Context(), b, []byte(text)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	awaitSubscription(t, slow)
+	if !errors.Is(slow.Err(), pubsub.ErrOverflow) {
+		t.Fatal(slow.Err())
+	}
+	for _, s := range []pubsub.Stream{second, third} {
+		if m := readPublication(t, s); string(m.Data) != "one" {
+			t.Fatal(m)
+		}
+		if m := readPublication(t, s); string(m.Data) != "two" {
+			t.Fatal(m)
+		}
+	}
+	for _, s := range []pubsub.Stream{second, third} {
+		if err := s.Close(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if stats := c.Stats(); stats.Subscriptions != 0 || stats.SubscriptionConnections != 0 {
+		t.Fatal("idle shared connection was retained", stats)
+	}
+}
+
+func TestPubSubResubscribesAfterPendingUnsubscribe(t *testing.T) {
+	c, channel := pubsubFixture(t, nil)
+	a := channel("churn")
+	keep, err := c.Subscribe(t.Context(), []pubsub.Channel{channel("anchor")}, pubsub.DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { keep.Close(context.Background()) })
+	for range 20 {
+		s, err := c.Subscribe(t.Context(), []pubsub.Channel{a}, pubsub.DefaultLimits())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n, err := c.Publish(t.Context(), a, []byte("ready")); err != nil || n != 1 {
+			t.Fatal("confirmed stream was not subscribed", n, err)
+		}
+		if m := readPublication(t, s); string(m.Data) != "ready" {
+			t.Fatal(m)
+		}
+		if err := s.Close(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if keep.Err() != nil {
+		t.Fatal("channel churn interrupted the shared connection", keep.Err())
 	}
 }

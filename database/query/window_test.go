@@ -159,8 +159,7 @@ func TestWindowDepthAndParameterBudgets(t *testing.T) {
 	id := scopedID(base.Scope())
 	w := WindowFor(base)
 	q := SelectValue(base, LagOr(id.Value(), 1, int64(2), w))
-	values := make([]int64, MaxParameters)
-	if _, err := q.Where(id.In(values...)).Compile(); !errors.Is(err, fault.Invalid) {
+	if _, err := q.Where(wideScoped(base.Scope(), MaxParameters)).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("window arguments bypassed parameter budget", err)
 	}
 	var n windowNode

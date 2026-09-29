@@ -15,7 +15,7 @@ func TestBoundCredentialMetadataUsesActualHTTPSource(t *testing.T) {
 		want := "Authorization"
 		if kind == foundryhttp.CookieCredentialKind {
 			want = "app_session"
-			source = foundryhttp.CookieCredential("credential", foundryhttp.DefineCookie(foundryhttp.CookieName(want), foundryhttp.SecretCookie(), foundryhttp.DefaultCookieOptions()))
+			source = foundryhttp.CookieCredential("credential", foundryhttp.DefineCookie(foundryhttp.CookieName(want), foundryhttp.SecretCookie(), foundryhttp.DefaultCookieOptions())).WithoutOriginProtection()
 		}
 		transport, err := foundryhttp.NewAuthentication(registry, source)
 		if err != nil {

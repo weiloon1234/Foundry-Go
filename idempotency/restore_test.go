@@ -34,7 +34,20 @@ func TestPersistedOutcomeCorruptionAndSchemaMismatch(t *testing.T) {
 	if _, err := op.restore(t.Context(), row, "different"); !errors.Is(err, Mismatch) {
 		t.Fatal("different payload was restored", err)
 	}
-	for _, change := range []func(*idempotencystore.Record){func(r *idempotencystore.Record) { r.ResultSchema = "future" }, func(r *idempotencystore.Record) { r.ResultHash = "changed" }, func(r *idempotencystore.Record) { r.CompletedAt = value.Null[temporal.DateTime]() }, func(r *idempotencystore.Record) { r.ExpiresAt = r.CompletedAt }, func(r *idempotencystore.Record) { r.Representation = []byte(strings.Repeat("x", 5000)) }, func(r *idempotencystore.Record) {
+	// A changed result contract replays when the current codec still accepts
+	// the exact stored representation (compatible schema evolution).
+	evolved := row
+	evolved.ResultSchema = "previous-contract"
+	if result, err := op.restore(t.Context(), evolved, "fingerprint"); err != nil || !result.Replayed() || result.Value().Text != "private stored body" || string(result.Encoded()) != string(row.Representation) {
+		t.Fatal("compatible schema evolution did not replay the stored outcome", err)
+	}
+	for _, change := range []func(*idempotencystore.Record){func(r *idempotencystore.Record) {
+		// An incompatible stored representation under a changed contract is
+		// never re-executed or coerced; it remains unavailable.
+		r.ResultSchema = "previous-contract"
+		r.Representation = []byte(`{"text":7}`)
+		r.ResultHash = digest("foundry.idempotency.result.v1", string(r.Representation))
+	}, func(r *idempotencystore.Record) { r.ResultSchema = "" }, func(r *idempotencystore.Record) { r.ResultHash = "changed" }, func(r *idempotencystore.Record) { r.CompletedAt = value.Null[temporal.DateTime]() }, func(r *idempotencystore.Record) { r.ExpiresAt = r.CompletedAt }, func(r *idempotencystore.Record) { r.Representation = []byte(strings.Repeat("x", 5000)) }, func(r *idempotencystore.Record) {
 		r.Representation = []byte(`{"text":`)
 		r.ResultHash = digest("foundry.idempotency.result.v1", string(r.Representation))
 	}} {

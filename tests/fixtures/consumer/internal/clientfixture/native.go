@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -73,5 +74,5 @@ func (tools Toolchain) Check(t testing.TB, source *manifest.Manifest, baseURL, f
 		}
 	}
 	run(tools.compiler, "--project", filepath.Join(dir, "tsconfig.json"))
-	run(filepath.Join(dir, "runtime.mjs"), filepath.Join(dir, "dist", "contracts_foundry.gen.js"), baseURL)
+	run(filepath.Join(dir, "runtime.mjs"), filepath.Join(dir, "dist", "contracts_foundry.gen.js"), baseURL, strconv.Itoa(manifest.Version))
 }

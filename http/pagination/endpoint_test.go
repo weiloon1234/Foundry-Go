@@ -234,6 +234,165 @@ func TestPaginationPublicLinksUseApprovedOrigin(t *testing.T) {
 		t.Fatal(err)
 	}
 	var _ stdhttp.Handler = router
+	// Global assembly without PublicURLs fails before serving any request.
+	bare, err := foundryhttp.NewRouter(endpoint.Handle(handler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := foundryhttp.ApplyMiddleware(bare); err == nil || !strings.Contains(err.Error(), "PublicURLs") {
+		t.Fatalf("missing PublicURLs policy assembled: %v", err)
+	}
+	global, err := foundryhttp.ApplyMiddleware(bare, middleware)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	global.ServeHTTP(response, httptest.NewRequest("GET", "http://app.example/items", nil))
+	if next, _ := decodeNumbered(t, response).Links.Next.Get(); !strings.HasPrefix(next, "https://app.example/items?") {
+		t.Fatalf("global public link=%s", next)
+	}
+	// Relative links need no public origin policy.
+	relative, err := foundryhttp.NewRouter(numbered(pagination.DefaultConfig()).Handle(handler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := foundryhttp.ApplyMiddleware(relative); err != nil {
+		t.Fatal(err)
+	}
+}
+func TestNumberedPaginationBoundsOffsetDepth(t *testing.T) {
+	t.Parallel()
+	config := pagination.DefaultConfig()
+	config.MaximumPage = 3
+	endpoint := numbered(config)
+	registration := endpoint.Handle(func(_ context.Context, in pageInput) (query.Page[Item], error) {
+		return query.Page[Item]{Number: in.Page.Number, Size: in.Page.Size, Total: 1000, Pages: 50}, nil
+	})
+	if response := serve(t, registration, "/items?page=4"); response.Code != 422 || !strings.Contains(response.Body.String(), "/query/page") {
+		t.Fatalf("deep page accepted: %d %s", response.Code, response.Body.String())
+	}
+	got := decodeNumbered(t, serve(t, registration, "/items?page=3"))
+	if !got.Links.Next.IsNull() || got.Links.Previous.IsNull() {
+		t.Fatalf("navigation beyond maximum page: %+v", got.Links)
+	}
+	if _, err := endpoint.URL(t.Context(), foundryhttp.NoPath{}, filters{}, query.PageRequest{Number: 4, Size: 20}); err == nil {
+		t.Fatal("URL generated beyond maximum page")
+	}
+	for _, maximum := range []int{-1, math.MaxInt} {
+		invalid := pagination.DefaultConfig()
+		invalid.MaximumPage = maximum
+		if invalid.Validate() == nil {
+			t.Fatalf("maximum page %d accepted", maximum)
+		}
+	}
+	zero := pagination.DefaultConfig()
+	zero.MaximumPage = 0
+	if zero.Validate() != nil {
+		t.Fatal("zero maximum page must select the default")
+	}
+	if response := serve(t, numbered(zero).Handle(func(_ context.Context, in pageInput) (query.Page[Item], error) {
+		return query.Page[Item]{Number: in.Page.Number, Size: in.Page.Size}, nil
+	}), "/items?page="+strconv.Itoa(pagination.DefaultMaximumPage+1)); response.Code != 422 {
+		t.Fatalf("default maximum page not enforced: %d", response.Code)
+	}
+}
+func TestNumberedEdgeLinksAndPageWindow(t *testing.T) {
+	t.Parallel()
+	pageOf := func(t *testing.T, location string) int {
+		t.Helper()
+		parsed, err := url.Parse(location)
+		if err != nil || parsed.Query().Get("q") != "term" {
+			t.Fatalf("link lost filters: %q %v", location, err)
+		}
+		number, err := strconv.Atoi(parsed.Query().Get("page"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return number
+	}
+	handler := func(pages int64) func(context.Context, pageInput) (query.Page[Item], error) {
+		return func(_ context.Context, in pageInput) (query.Page[Item], error) {
+			return query.Page[Item]{Number: in.Page.Number, Size: in.Page.Size, Total: pages * int64(in.Page.Size), Pages: pages}, nil
+		}
+	}
+	// Disabled by default: the wire shape is unchanged.
+	plain := serve(t, numbered(pagination.DefaultConfig()).Handle(handler(9)), "/items?page=5&q=term")
+	if body := plain.Body.String(); strings.Contains(body, `"first"`) || strings.Contains(body, `"last"`) || strings.Contains(body, `"window"`) {
+		t.Fatalf("navigation links emitted without opt-in: %s", body)
+	}
+	config := pagination.DefaultConfig()
+	config.EdgeLinks = true
+	config.PageWindow = 2
+	got := decodeNumbered(t, serve(t, numbered(config).Handle(handler(9)), "/items?page=5&q=term"))
+	first, hasFirst := got.Links.First.Get()
+	last, hasLast := got.Links.Last.Get()
+	if !hasFirst || !hasLast || pageOf(t, first) != 1 || pageOf(t, last) != 9 {
+		t.Fatalf("edge links=%+v", got.Links)
+	}
+	var window []int
+	for _, link := range got.Links.Window {
+		if pageOf(t, link.URL) != link.Number {
+			t.Fatalf("window link mismatch: %+v", link)
+		}
+		window = append(window, link.Number)
+	}
+	if !reflect.DeepEqual(window, []int{3, 4, 5, 6, 7}) {
+		t.Fatalf("window=%v", window)
+	}
+	// Windows clip at both ends; an empty result still links its single page.
+	for _, tc := range []struct {
+		target string
+		pages  int64
+		window []int
+		last   int
+	}{
+		{"/items?page=1&q=term", 9, []int{1, 2, 3}, 9},
+		{"/items?page=9&q=term", 9, []int{7, 8, 9}, 9},
+		{"/items?page=1&q=term", 0, []int{1}, 1},
+		{"/items?page=7&q=term", 2, []int{}, 2},
+	} {
+		got := decodeNumbered(t, serve(t, numbered(config).Handle(handler(tc.pages)), tc.target))
+		window = []int{}
+		for _, link := range got.Links.Window {
+			window = append(window, link.Number)
+		}
+		last, _ := got.Links.Last.Get()
+		if !reflect.DeepEqual(window, tc.window) || pageOf(t, last) != tc.last {
+			t.Fatalf("%s pages=%d: window=%v last=%q", tc.target, tc.pages, window, last)
+		}
+	}
+	// Links never point beyond MaximumPage.
+	config.MaximumPage = 6
+	got = decodeNumbered(t, serve(t, numbered(config).Handle(handler(50)), "/items?page=5&q=term"))
+	window = nil
+	for _, link := range got.Links.Window {
+		window = append(window, link.Number)
+	}
+	if got.Links.Last.IsSet() || !reflect.DeepEqual(window, []int{3, 4, 5, 6}) {
+		t.Fatalf("links beyond maximum page: last=%v window=%v", got.Links.Last, window)
+	}
+	// Simple pages have no count: only the first link applies.
+	simple := pagination.DefineSimple(route(), filterQuery(), itemJSON(), config)
+	response := serve(t, simple.Handle(func(_ context.Context, in pageInput) (query.SimplePage[Item], error) {
+		return query.SimplePage[Item]{Items: []Item{{Label: "A"}}, Number: in.Page.Number, Size: in.Page.Size, HasMore: true}, nil
+	}), "/items?page=2&per_page=1&q=term")
+	var simpleGot pagination.SimpleResponse[Item]
+	if err := json.Unmarshal(response.Body.Bytes(), &simpleGot); err != nil || response.Code != 200 {
+		t.Fatalf("status=%d err=%v", response.Code, err)
+	}
+	if first, ok := simpleGot.Links.First.Get(); !ok || pageOf(t, first) != 1 || simpleGot.Links.Last.IsSet() || simpleGot.Links.Window != nil {
+		t.Fatalf("simple navigation=%+v", simpleGot.Links)
+	}
+	if _, err := pagination.SimpleJSON(itemJSON()).Decode(t.Context(), response.Body.Bytes(), foundryhttp.DefaultEndpointLimits().Response); err != nil {
+		t.Fatal(err)
+	}
+	for _, size := range []int{-1, pagination.MaximumPageWindow + 1} {
+		invalid := pagination.DefaultConfig()
+		invalid.PageWindow = size
+		if invalid.Validate() == nil {
+			t.Fatalf("page window %d accepted", size)
+		}
+	}
 }
 func TestInvalidPaginationDeclarationsFailAssembly(t *testing.T) {
 	t.Parallel()

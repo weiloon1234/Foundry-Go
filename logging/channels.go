@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"reflect"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -16,6 +18,10 @@ import (
 
 // Stack is valid only in ChannelSettings, not as an individual file/stream sink.
 const Stack SinkDriver = "stack"
+
+// Custom selects a typed slog.Handler supplied by Go code through WithHandler.
+// Deployment settings choose only its minimum Level.
+const Custom SinkDriver = "custom"
 
 // ChannelSettings composes existing JSON sinks. Stack children are named channels;
 // repeated leaves are written once per record, in declaration order.
@@ -28,13 +34,23 @@ type ChannelSettings struct {
 
 func DefaultChannelSettings() ChannelSettings { return ChannelSettings{Sink: DefaultSinkConfig()} }
 func (s ChannelSettings) Validate() error {
+	if s.Sink.Driver == Custom {
+		sink := s.Sink
+		if len(s.Stack) != 0 || sink.Path != "" || sink.AddSource || sink.Rotation != (RotationConfig{}) || sink.TimeZone != "" || sink.Async != (AsyncConfig{}) || sink.Syslog != (SyslogConfig{}) {
+			return fault.New(fault.Invalid, "custom log channel selects only its level")
+		}
+		if sink.Level < slog.LevelDebug || sink.Level > slog.LevelError {
+			return fault.New(fault.Invalid, "invalid logging level")
+		}
+		return nil
+	}
 	if s.Sink.Driver != Stack {
 		if len(s.Stack) != 0 {
 			return fault.New(fault.Invalid, "sink channel cannot have stack children")
 		}
 		return s.Sink.Validate()
 	}
-	if len(s.Stack) < 1 || len(s.Stack) > 16 || s.Sink.Path != "" || s.Sink.Level != 0 || s.Sink.AddSource || s.Sink.Rotation != (RotationConfig{}) || s.Sink.TimeZone != "" {
+	if len(s.Stack) < 1 || len(s.Stack) > 16 || s.Sink.Path != "" || s.Sink.Level != 0 || s.Sink.AddSource || s.Sink.Rotation != (RotationConfig{}) || s.Sink.TimeZone != "" || s.Sink.Async != (AsyncConfig{}) || s.Sink.Syslog != (SyslogConfig{}) {
 		return fault.New(fault.Invalid, "logging stack requires bounded children and leaf-owned sink options")
 	}
 	seen := make(map[ChannelName]bool, len(s.Stack))
@@ -58,13 +74,85 @@ type channelSetState struct {
 	mu              sync.Mutex
 	channels        *Channels
 	sinks           []*Sink
+	leaves          []channelLeaf
 	started, closed bool
 	closeErr        error
 }
 
-func PrepareChannels(selected ChannelName, settings map[ChannelName]ChannelSettings, borrowedDefault *slog.Logger) (*ChannelSet, error) {
+// channelLeaf records an owned sink or custom handler for Stats.
+type channelLeaf struct {
+	name   ChannelName
+	sink   *Sink
+	custom *sinkEvents
+}
+
+// ChannelStats reports one owned leaf channel. Stacks report through their
+// leaves; a borrowed default logger belongs to its owner and is not reported.
+type ChannelStats struct {
+	Channel ChannelName `json:"channel"`
+	Sink    SinkStats   `json:"sink"`
+}
+
+// ChannelOption supplies typed Go values for configured channels.
+type ChannelOption func(*channelOptions) error
+type channelOptions struct{ handlers map[ChannelName]slog.Handler }
+
+// WithHandler binds a custom slog.Handler to a channel. A channel absent from
+// settings is added with the custom driver; a configured channel must select
+// the custom driver, whose Level is applied as a minimum before the handler.
+// The handler keeps its own ownership and receives records unchanged; wrap it
+// with Correlate to add correlation and context fields.
+func WithHandler(name ChannelName, handler slog.Handler) ChannelOption {
+	return func(o *channelOptions) error {
+		if err := name.Validate(); err != nil {
+			return err
+		}
+		if nilHandler(handler) {
+			return fault.New(fault.Invalid, "custom log handler is nil")
+		}
+		if _, exists := o.handlers[name]; exists {
+			return fault.New(fault.Duplicate, "custom log handler is already bound")
+		}
+		o.handlers[name] = handler
+		return nil
+	}
+}
+
+func nilHandler(handler slog.Handler) bool {
+	if handler == nil {
+		return true
+	}
+	value := reflect.ValueOf(handler)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	}
+	return false
+}
+
+func PrepareChannels(selected ChannelName, settings map[ChannelName]ChannelSettings, borrowedDefault *slog.Logger, options ...ChannelOption) (*ChannelSet, error) {
 	if err := selected.Validate(); err != nil {
 		return nil, err
+	}
+	configured := channelOptions{handlers: make(map[ChannelName]slog.Handler)}
+	for _, option := range options {
+		if option == nil {
+			return nil, fault.New(fault.Invalid, "nil logging channel option")
+		}
+		if err := option(&configured); err != nil {
+			return nil, err
+		}
+	}
+	settings = maps.Clone(settings)
+	if settings == nil {
+		settings = make(map[ChannelName]ChannelSettings)
+	}
+	for name := range configured.handlers {
+		if item, exists := settings[name]; !exists {
+			settings[name] = ChannelSettings{Sink: SinkConfig{Driver: Custom}}
+		} else if item.Sink.Driver != Custom {
+			return nil, fault.New(fault.Invalid, "custom log handler requires a custom channel")
+		}
 	}
 	if len(settings) == 0 || len(settings) > namedservice.MaxEntries {
 		return nil, fault.New(fault.Invalid, "logging requires bounded named channels")
@@ -72,7 +160,6 @@ func PrepareChannels(selected ChannelName, settings map[ChannelName]ChannelSetti
 	if _, ok := settings[selected]; !ok {
 		return nil, fault.New(fault.Missing, "default log channel is not configured")
 	}
-	settings = maps.Clone(settings)
 	names := slices.Sorted(maps.Keys(settings))
 	for _, name := range names {
 		if err := name.Validate(); err != nil {
@@ -102,12 +189,24 @@ func PrepareChannels(selected ChannelName, settings map[ChannelName]ChannelSetti
 			leaves[name] = []ChannelName{name}
 			continue
 		}
+		if item.Sink.Driver == Custom {
+			handler, ok := configured.handlers[name]
+			if !ok {
+				return nil, fault.New(fault.Missing, "custom log channel has no handler")
+			}
+			events := newSinkEvents(Custom, nil)
+			state.leaves = append(state.leaves, channelLeaf{name: name, custom: events})
+			values[name] = slog.New(customHandler{next: handler, level: item.Sink.Level, events: events})
+			leaves[name] = []ChannelName{name}
+			continue
+		}
 		if item.Sink.Driver != Stack {
 			sink, err := PrepareSink(item.Sink)
 			if err != nil {
 				return nil, err
 			}
 			state.sinks = append(state.sinks, sink)
+			state.leaves = append(state.leaves, channelLeaf{name: name, sink: sink})
 			values[name] = sink.Logger()
 			leaves[name] = []ChannelName{name}
 			continue
@@ -143,6 +242,25 @@ func (s *ChannelSet) Channels() *Channels {
 	}
 	return s.state.channels
 }
+
+// Stats reports owned leaf channels in name order. Counters remain readable
+// after Close.
+func (s *ChannelSet) Stats() []ChannelStats {
+	if s == nil || s.state == nil {
+		return nil
+	}
+	result := make([]ChannelStats, 0, len(s.state.leaves))
+	for _, leaf := range s.state.leaves {
+		stats := leaf.custom.snapshot()
+		if leaf.sink != nil {
+			stats = leaf.sink.Stats()
+		}
+		result = append(result, ChannelStats{Channel: leaf.name, Sink: stats})
+	}
+	slices.SortFunc(result, func(a, b ChannelStats) int { return strings.Compare(string(a.Channel), string(b.Channel)) })
+	return result
+}
+
 func (s *ChannelSet) Start(ctx context.Context) error {
 	if s == nil || s.state == nil || ctx == nil {
 		return fault.New(fault.Invalid, "logging channels require an owner and context")
@@ -203,6 +321,9 @@ func (h stackHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	}
 	return false
 }
+
+// Handle always offers the record to every enabled child. A failing child is
+// counted by its own leaf and never prevents delivery to the others.
 func (h stackHandler) Handle(ctx context.Context, record slog.Record) error {
 	var result error
 	for _, child := range h.handlers {
@@ -225,4 +346,33 @@ func (h stackHandler) WithGroup(name string) slog.Handler {
 		children[i] = child.WithGroup(name)
 	}
 	return stackHandler{children}
+}
+
+// customHandler applies a channel's minimum level and counts delivery outcomes
+// of an application-supplied handler. The handler receives records unchanged.
+type customHandler struct {
+	next   slog.Handler
+	level  slog.Level
+	events *sinkEvents
+}
+
+func (h customHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return level >= h.level && h.next.Enabled(ctx, level)
+}
+func (h customHandler) Handle(ctx context.Context, record slog.Record) error {
+	if err := h.next.Handle(ctx, record); err != nil {
+		h.events.failures.Add(1)
+		h.events.dropped.Add(1)
+		return err
+	}
+	h.events.records.Add(1)
+	return nil
+}
+func (h customHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	h.next = h.next.WithAttrs(slices.Clone(attrs))
+	return h
+}
+func (h customHandler) WithGroup(name string) slog.Handler {
+	h.next = h.next.WithGroup(name)
+	return h
 }

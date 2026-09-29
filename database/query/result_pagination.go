@@ -32,6 +32,7 @@ func (q readResult[R]) Paginate(ctx context.Context, executor database.Executor,
 	if err := executionContext(ctx, executor); err != nil {
 		return Page[R]{}, err
 	}
+	q.scopeContext = ctx
 	window, err := q.pageWindow(request, false)
 	if err != nil {
 		return Page[R]{}, err
@@ -46,6 +47,7 @@ func (q readResult[R]) SimplePaginate(ctx context.Context, executor database.Exe
 	if err := executionContext(ctx, executor); err != nil {
 		return SimplePage[R]{}, err
 	}
+	q.scopeContext = ctx
 	window, err := q.pageWindow(request, true)
 	if err != nil {
 		return SimplePage[R]{}, err

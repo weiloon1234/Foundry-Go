@@ -129,6 +129,30 @@ func TestAdmissionDenialsDoNotConsumeAttempts(t *testing.T) {
 		t.Fatalf("attempts=%d admissions=%d", record.Attempts, admissions.Load())
 	}
 }
+func TestSkipPredicateCompletesWithoutMiddlewareOrHandler(t *testing.T) {
+	var handled, before atomic.Int32
+	f := newWorkerFixture(t, jobs.DefaultPolicy("default"), func(context.Context, payload) error { handled.Add(1); return nil }, jobs.HandlerOptions[payload]{
+		Middleware: []jobs.Middleware[payload]{{Before: func(context.Context, payload) error { before.Add(1); return nil }}},
+		Skip:       func(_ context.Context, p payload) (bool, error) { return p.Labels["obsolete"] == "yes", nil },
+	})
+	skipped, err := f.definition.Dispatch(t.Context(), f.dispatcher, payload{Labels: map[string]string{"obsolete": "yes"}}, jobs.Options[payload]{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept, err := f.definition.Dispatch(t.Context(), f.dispatcher, payload{Labels: map[string]string{}}, jobs.Options[payload]{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runWorker(t, f)
+	waitRecord(t, f, skipped.ID, jobs.Succeeded)
+	waitRecord(t, f, kept.ID, jobs.Succeeded)
+	if handled.Load() != 1 || before.Load() != 1 {
+		t.Fatal("skipped job ran middleware or handler", handled.Load(), before.Load())
+	}
+	if _, err := f.definition.DeclareWith(nil, jobs.HandlerOptions[payload]{Skip: func(context.Context, payload) (bool, error) { return true, nil }}); err == nil {
+		t.Fatal("producer-only declaration accepted a skip predicate")
+	}
+}
 func TestAdmissionTimeoutConsumesRetryBudget(t *testing.T) {
 	policy := jobs.DefaultPolicy("default")
 	policy.Attempts = 1
@@ -174,11 +198,31 @@ func TestMiddlewareUnwindsFailuresAndIsolatesCallbacks(t *testing.T) {
 	}
 }
 
+// An unknown name/version is transient by default (another replica may know it
+// during a rolling deploy): it consumes attempts with the envelope's backoff
+// before failing as unregistered. RetryUnregistered=false fails it at once.
+// Invalid payloads always fail without retry.
 func TestWorkerRejectsUnknownVersionsAndInvalidPayloads(t *testing.T) {
-	for _, kind := range []string{"unknown-version", "invalid-payload"} {
+	for _, kind := range []string{"unknown-version", "unknown-version-terminal", "invalid-payload"} {
 		t.Run(kind, func(t *testing.T) {
 			policy := jobs.DefaultPolicy("default")
+			policy.Attempts, policy.Backoff, policy.Jitter = 2, []time.Duration{time.Millisecond}, 0
 			f := newWorkerFixture(t, policy, func(context.Context, payload) error { t.Error("invalid delivery invoked handler"); return nil })
+			if kind == "unknown-version-terminal" {
+				declaration, err := f.definition.Declare(func(context.Context, payload) error { return nil })
+				if err != nil {
+					t.Fatal(err)
+				}
+				registry, err := jobs.NewRegistry(declaration)
+				if err != nil {
+					t.Fatal(err)
+				}
+				config := jobs.DefaultWorkerConfig(f.key.Namespace(), f.key.Queue())
+				config.Concurrency, config.PollInterval, config.RetryUnregistered = 1, time.Millisecond, false
+				if f.worker, err = jobs.NewWorker(f.backend, registry, config); err != nil {
+					t.Fatal(err)
+				}
+			}
 			pending, err := f.definition.Capture(t.Context(), payload{Labels: map[string]string{}}, jobs.Options[payload]{})
 			if err != nil {
 				t.Fatal(err)
@@ -191,10 +235,14 @@ func TestWorkerRejectsUnknownVersionsAndInvalidPayloads(t *testing.T) {
 			if err := json.Unmarshal(data, &wire); err != nil {
 				t.Fatal(err)
 			}
-			reason := jobs.Unregistered
-			if kind == "unknown-version" {
+			reason, attempts := jobs.Unregistered, uint32(2)
+			if kind == "unknown-version-terminal" {
+				attempts = 0
+			}
+			if kind != "invalid-payload" {
 				wire["version"] = json.RawMessage("2")
 			} else {
+				attempts = 0
 				wire["payload"] = json.RawMessage(`{"unexpected":true}`)
 				reason = jobs.PayloadInvalid
 			}
@@ -217,8 +265,8 @@ func TestWorkerRejectsUnknownVersionsAndInvalidPayloads(t *testing.T) {
 					t.Fatal(err)
 				}
 				if r, ok := found.Get(); ok && r.State == jobs.Failed {
-					if r.History[len(r.History)-1].Reason != reason {
-						t.Fatal(r.History)
+					if r.History[len(r.History)-1].Reason != reason || r.Attempts != attempts {
+						t.Fatal(r.History, r.Attempts)
 					}
 					return
 				}

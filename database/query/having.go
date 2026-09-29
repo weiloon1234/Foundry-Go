@@ -16,12 +16,14 @@ func (p HavingPredicate[S]) Not() HavingPredicate[S] {
 	return HavingPredicate[S]{expression: negation{p.expression}}
 }
 
-// HavingAnd requires all group predicates to match. An empty operand list is invalid.
+// HavingAnd requires all group predicates to match. An empty operand list is
+// TRUE, like And, so dynamically built group filters may be empty.
 func HavingAnd[S any](predicates ...HavingPredicate[S]) HavingPredicate[S] {
 	return combineHaving(false, predicates)
 }
 
-// HavingOr requires at least one group predicate to match. An empty operand list is invalid.
+// HavingOr requires at least one group predicate to match. An empty operand
+// list is FALSE, like Or.
 func HavingOr[S any](predicates ...HavingPredicate[S]) HavingPredicate[S] {
 	return combineHaving(true, predicates)
 }

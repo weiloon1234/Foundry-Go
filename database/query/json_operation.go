@@ -17,6 +17,8 @@ func jsonOperationSpec(op scalarOperation) (operationSpec, bool) {
 		return operationSpec{"->", 2, 2, true}, true
 	case jsonScalarOperation, jsonUnquoteOperation:
 		return operationSpec{"", 1, 1, false}, true
+	case jsonArrayLengthOperation:
+		return operationSpec{"JSONB_ARRAY_LENGTH", 1, 1, false}, true
 	default:
 		return operationSpec{}, false
 	}
@@ -42,6 +44,9 @@ func (n operationNode) validateJSON() error {
 	if n.kind == jsonPropertyOperation || n.kind == jsonIndexOperation || n.kind == jsonUnquoteOperation {
 		want = codec.TypeJSON
 	}
+	if n.kind == jsonArrayLengthOperation {
+		want = codec.TypeInteger
+	}
 	if n.kind == jsonScalarOperation {
 		if n.result == codec.TypeJSON || n.result == codec.TypeBytes {
 			return fault.New(fault.Invalid, "JSON scalar extraction requires a scalar codec")
@@ -58,6 +63,10 @@ func jsonOperationSQL(n operationNode, args []string) (string, error) {
 	if n.kind == jsonScalarOperation {
 		target, _ := parameterSQLType(n.result)
 		return "CAST((" + args[0] + " #>> '{}') AS " + target + ")", nil
+	}
+	if n.kind == jsonArrayLengthOperation {
+		// JSONB_ARRAY_LENGTH fails on non-arrays; any other kind is SQL NULL.
+		return "CAST(CASE WHEN JSONB_TYPEOF(" + args[0] + ") = 'array' THEN JSONB_ARRAY_LENGTH(" + args[0] + ") END AS bigint)", nil
 	}
 	if n.kind == jsonUnquoteOperation {
 		// Keep explicit JSON null when decoding a declared ,string property.

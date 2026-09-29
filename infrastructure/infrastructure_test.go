@@ -204,6 +204,13 @@ func TestConfigurationRejectsInvalidGraphBeforeIO(t *testing.T) {
 			s.Cache.Stores["default"] = c
 		},
 		func(s *infrastructure.Settings) {
+			c := s.Cache.Stores["default"]
+			c.Driver = infrastructure.FileCache
+			c.File.Root = t.TempDir()
+			c.File.PruneInterval = time.Millisecond
+			s.Cache.Stores["default"] = c
+		},
+		func(s *infrastructure.Settings) {
 			c := infrastructure.DefaultConnectionSettings()
 			c.Primary.Host = "localhost"
 			c.Primary.Database = "test"

@@ -1,8 +1,5 @@
 # Trusted proxy client addresses
 
-**Full verification passed.** Complete repository acceptance supplements focused
-runtime/consumer races, bounded fuzzing and compiler/editor checks.
-
 The HTTP kernel initially attributes a request to its socket peer. Apply
 `TrustedProxy` through [global middleware](http-middleware.md) before rate limits,
 guards or domain services consume client attribution:
@@ -29,24 +26,35 @@ when the middleware is declared, and `TrustedProxyConfig.Validate` performs a
 separate configuration check without I/O.
 
 `ForwardedHeader()` reads RFC 7239 `for` parameters. `XForwardedForHeader()` reads
-a comma-separated chain of bare IP addresses. `ClientIPHeader("CF-Connecting-IP")`
-or `ClientIPHeader("X-Real-IP")` reads exactly one address, which a trusted peer
-must overwrite. Custom single-address headers use the same typed constructor.
-Chain headers require their corresponding chain descriptor.
+a comma-separated chain of IP addresses; entries may carry a port, as some load
+balancers append (`203.0.113.9:51234`, `[2001:db8::9]:443`), and bare IPv6 is
+accepted. `ClientIPHeader("CF-Connecting-IP")` or `ClientIPHeader("X-Real-IP")`
+reads exactly one address, which a trusted peer must overwrite. Custom
+single-address headers use the same typed constructor. Chain headers require
+their corresponding chain descriptor.
 
 The first present declared source wins. A missing header moves to the next
-source; malformed input in a present source returns the shared 400 response and
-does not fall back. Headers from an untrusted or unknown socket peer are ignored,
-including malformed values. Hostnames are never resolved to establish trust.
+source; a present source never falls back to a lower-priority header. Headers
+from an untrusted or unknown socket peer are ignored. Hostnames are never
+resolved to establish trust. Client-address data never rejects a request.
 
 Chain traversal starts with the socket peer and works right to left. It accepts
 the previous address only while the current address belongs to an explicitly
 trusted network. The first untrusted address becomes the resolved client IP;
-earlier values cannot override it. `Forwarded` elements with missing, unknown or
-obfuscated `for` addresses stop traversal. Such a request retains the nearest
-known address, which may be a proxy; it does not claim an unknowable original IP.
+earlier values cannot override it. Entries are parsed only as the walk consumes
+them, so client-supplied prefixes beyond the trust boundary (`unknown`, garbage,
+oversized values, empty list slots) are never inspected. An unknown, obfuscated,
+missing or malformed entry that the walk does consume stops traversal: the
+request retains the nearest trusted address, which may be a proxy, and does not
+claim an unknowable original IP. An empty `X-Forwarded-For` resolves to the peer.
+A repeated or unparseable single-address header also resolves to the peer.
 Proxy configuration must ensure that trusted peers append reliable chain entries
 or replace single-address headers.
+
+Middleware that reads the resolved address or public origin must run inside
+`TrustedProxy`: `ApplyMiddleware` rejects a chain in which rate limits, CSRF,
+`PublicURLs`, browser sessions or credential-request checks precede it, and a
+router whose route installs `TrustedProxy` beneath such a global policy.
 
 ```go
 client := foundryhttp.ClientIP(ctx) // netip.Addr from the service's context
@@ -63,21 +71,25 @@ person or grant authorization.
 `RemoteAddr`, `Host`, URL, TLS, headers, response-writer capabilities and request
 cancellation. Explicit `OriginHeaders` now capture validated public scheme and
 authority in context; native transport fields remain unchanged. See
-[public URLs and HTTPS behind proxies](http-public-urls.md). This integration
-passed focused and combined transport full regression checks.
+[public URLs and HTTPS behind proxies](http-public-urls.md).
 [Signed URLs](http-signed-urls.md) use the explicit public-origin policy.
 
 IPv4-mapped addresses are normalized to IPv4. IPv4 and IPv6 networks are explicit;
 an IPv6 range does not implicitly trust IPv4. Native socket interface zones are
-removed from attribution; forwarded addresses with zones are rejected. RFC 7239
-quoted IPv6 nodes and numeric/obfuscated ports are understood, while attribution
-retains only the IP. Duplicate parameter names and malformed quoting are rejected.
+removed from attribution; forwarded addresses with zones are unusable hops. RFC
+7239 quoted IPv6 nodes and numeric/obfuscated ports are understood, while
+attribution retains only the IP. A `Forwarded` element with repeated parameters
+or malformed quoting is an unusable hop. Each header line is tokenized
+separately, and elements split at every comma, even inside quotes: no `for`,
+`by`, `proto` or `host` value contains one, so an unterminated client quote
+cannot swallow a hop that a trusted proxy appended to the same or a later line.
+A quoted comma only produces malformed halves, which stop the trusted walk.
 
-Bounds are 256 configured networks, eight ordered header sources, 64 header lines
-or forwarding hops and 8,192 bytes for the selected header list. Parameter names
-reuse the existing typed HTTP token validator and its 256-byte name bound.
-Unknown extension values are parsed within the same total byte budget. Parsing
-and malformed-input errors do not expose submitted values in public responses.
+Bounds are 256 configured networks, eight ordered header sources, 64 consumed
+forwarding hops and 256 bytes per consumed hop address. Parameter names reuse the
+existing typed HTTP token validator. Parsing never exposes submitted values in
+public responses. Origin headers (`OriginHeaders`) remain strict: malformed
+scheme/authority data at the trusted boundary returns the shared 400 response.
 
 This preserves Rust Foundry's configurable header sources while changing its
 default CDN trust and leftmost-XFF selection to explicit peers and chain-aware

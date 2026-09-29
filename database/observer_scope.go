@@ -91,15 +91,17 @@ func (o observerOwner) retain(ctx context.Context) (context.Context, func(), err
 }
 
 func (db *DB) retainObserverOwner() (func(), error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 	// The still-open originating stream already owns a resource. Do not reject
 	// its continuation merely because Close has started draining existing work.
-	if !db.ready || db.active == 0 {
-		return nil, failure("model observer scope", Closed)
+	for {
+		current := db.owners.Load()
+		if current&ownerReady == 0 || current&ownerCount == 0 || current&ownerCount == ownerCount {
+			return nil, failure("model observer scope", Closed)
+		}
+		if db.owners.CompareAndSwap(current, current+1) {
+			return db.release, nil
+		}
 	}
-	db.active++
-	return db.release, nil
 }
 
 func (s *operationScope) retainObserverOwner() (func(), error) {

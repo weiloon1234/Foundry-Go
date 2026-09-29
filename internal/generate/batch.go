@@ -216,12 +216,12 @@ func readWithin(root, name string) (oldFile, error) {
 	if !info.Mode().IsRegular() {
 		return oldFile{}, fmt.Errorf("refusing non-regular generation target %s", name)
 	}
-	data, err := io.ReadAll(io.LimitReader(file, (8<<20)+1))
+	data, err := io.ReadAll(io.LimitReader(file, MaxArtifactBytes+1))
 	if err != nil {
 		return oldFile{}, err
 	}
-	if len(data) > 8<<20 {
-		return oldFile{}, fmt.Errorf("generation target exceeds 8 MiB: %s", name)
+	if len(data) > MaxArtifactBytes {
+		return oldFile{}, fmt.Errorf("generation target exceeds %d MiB: %s", MaxArtifactBytes>>20, name)
 	}
 	return oldFile{true, data, info.Mode().Perm()}, nil
 }

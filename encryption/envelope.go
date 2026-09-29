@@ -42,6 +42,17 @@ func ParseCiphertext(encoded string) (Ciphertext, error) {
 	}
 	return Ciphertext{encoded: encoded, id: KeyID(parts[1])}, nil
 }
+
+// EnvelopePrefix returns the text every envelope encrypted under id starts
+// with. Storage adapters use it to select records that still use another key
+// during rotation; it is not secret and never authenticates anything.
+func EnvelopePrefix(id KeyID) (string, error) {
+	if !identifier.Semantic(string(id)) {
+		return "", fault.New(fault.Invalid, "invalid encryption key ID")
+	}
+	return version + ":" + string(id) + ":", nil
+}
+
 func (c Ciphertext) Encoded() string            { return c.encoded }
 func (c Ciphertext) KeyID() KeyID               { return c.id }
 func (c Ciphertext) IsZero() bool               { return c.encoded == "" }

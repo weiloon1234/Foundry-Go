@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -32,8 +33,11 @@ func (d Definition[M]) WithRetrievalHooks(factory func(context.Context, lifecycl
 // a model declaration. The ordered decoder remains the source of stored values.
 type readLifecycle[R any] struct {
 	primaryIndex int
-	needed       func(lifecycle.Observers) bool
-	prepare      func(context.Context, lifecycle.Observers) (func(context.Context, database.Executor, R) error, error)
+	// primaryKey reads the generated primary-key getter, when declared, so
+	// retrieval batches can continue by key instead of by offset.
+	primaryKey func(R) (driver.Value, error)
+	needed     func(lifecycle.Observers) bool
+	prepare    func(context.Context, lifecycle.Observers) (func(context.Context, database.Executor, R) error, error)
 }
 
 func (d *Definition[M]) retrieval() *readLifecycle[M] {
@@ -44,8 +48,13 @@ func (d *Definition[M]) retrieval() *readLifecycle[M] {
 			break
 		}
 	}
+	var key func(M) (driver.Value, error)
+	if field, ok := d.modelField(d.primary); ok && field.get != nil {
+		key = field.get
+	}
 	return &readLifecycle[M]{
 		primaryIndex: index,
+		primaryKey:   key,
 		needed: func(set lifecycle.Observers) bool {
 			return d.hasReadHooks || lifecycle.HasRetrievalObservers[M](set)
 		},
@@ -65,11 +74,7 @@ func (r *readLifecycle[R]) mayRun(executor database.Executor) bool {
 	if r == nil {
 		return false
 	}
-	writer, ok := executor.(database.Transactor)
-	if !ok {
-		return true
-	}
-	set, known := writerObservers(writer)
+	set, known := writerObservers(executor)
 	return !known || r.needed(set)
 }
 

@@ -36,7 +36,7 @@ func (r AuthenticatedRoute[P, M]) validate(optional bool) error {
 func (r AuthenticatedRoute[P, M]) bound(optional bool) Route[P] {
 	route := r.route
 	route.authentication = r.authenticationBinding.info(optional)
-	return route.WithMiddleware(r.authenticationBinding.middleware(optional))
+	return route.WithMiddleware(r.authenticationBinding.chain(optional)...)
 }
 func (r AuthenticatedRoute[P, M]) description(optional bool) (RouteInfo, error) {
 	if err := r.validate(optional); err != nil {

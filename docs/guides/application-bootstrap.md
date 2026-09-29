@@ -18,6 +18,17 @@ if err != nil { return err }
 return app.Run(ctx, foundation.HTTP)
 ```
 
+A signal cancels `ctx`; `Run` then drains within `Settings.ShutdownTimeout` and
+returns nil for a clean graceful stop, so the executable needs no second
+`Shutdown` call. `ShutdownTimeout` (default 25s) is the whole budget: the optional
+`StopDelay` lame-duck period (readiness fails while listeners keep serving), the
+HTTP `Server.ShutdownTimeout` grace (default 10s) and every cleanup share it.
+Build rejects a budget where `StopDelay` plus an enabled listener's grace (plus the
+WebSocket drain for a dedicated realtime listener) is not shorter than
+`ShutdownTimeout`. `StartupTimeout` optionally bounds provider boot. Lifecycle
+events (starting, ready, shutdown started, cleanup failures, stopped) are logged
+through the default logger with redacted diagnostics.
+
 Its [Build function](../../tests/fixtures/consumer/bootstrap/settings.go) calls
 `application.New(settings.App).HTTP(...)`. The HTTP callback constructs domain
 handlers from `application.Services`; it contains no pool, router/server, adapter
@@ -49,6 +60,12 @@ configured defaults. Named alternatives remain under `.Databases`, `.Caches`,
 is the explicit escape hatch for a registered domain service. Custom application
 settings remain concrete constructor arguments, as `bootstrap.Routes` demonstrates.
 
+Operational features (probes, fleet maintenance, housekeeping schedules, sticky
+reads, the failed-job archive, queued listeners, MFA and encryption keys, metrics
+and logging sinks) are enabled from settings alone; see the
+[configured operational features](supporting-services.md#configured-operational-features)
+reference.
+
 Handlers receive `context.Context` for cancellation and attribution, their typed
 input, and their concrete authenticated model. Shared config/services enter the
 constructor. There is no mutable `ctx.global` or dynamic `ctx.session.actor` bag.
@@ -59,7 +76,9 @@ constructor. There is no mutable `ctx.global` or dynamic `ctx.session.actor` bag
 The standard security headers are on by default. `.Use` wraps the whole router,
 including 404/405 responses; custom middleware runs in declaration order. The
 server establishes request identity, observation, admission and body/context
-limits outside that chain. Default security headers precede custom middleware;
+limits outside that chain. When a database connection with a read pool sets
+`sticky_read_window`, `database.StickyReadsHandler` wraps the whole chain so each
+request reads its own writes. Default security headers precede custom middleware;
 put an explicitly configured trusted-proxy policy before CORS/browser policies
 when operating behind a trusted edge. No forwarding headers are trusted by default.
 
@@ -88,6 +107,24 @@ Bearer-only `http.NewAuthentication` needs no browser-session state or Origin on
 unsafe calls. CORS does not grant CSRF trust. The executable fixture's explicit
 static credential verifier is acceptance-only; use persistent token/session
 services for production authentication.
+
+## Realtime assembly
+
+`Realtime.Enabled` constructs the hub from `.Realtime(...)` declarations. By default
+it owns a dedicated listener (`Realtime.HTTP`) and the WebSocket kernel. Set
+`Realtime.Shared` to serve upgrades at `Realtime.Path` on the application HTTP
+listener instead: boot confirms the distributed subscription, `foundation.HTTP`
+serves both, `App.RealtimeReady` reports the HTTP address, and sockets drain when
+the application lifetime ends. Sockets then hold HTTP request/connection capacity
+for their lifetime, so size `HTTP.Server.MaxConcurrentRequests`/`MaxConnections`
+accordingly. `App.RunKernels(ctx, foundation.HTTP, foundation.Worker)` adds a
+worker to the same process.
+
+`Services.RealtimePublisher()` returns a `websocket.PublisherSource` for HTTP
+handlers and jobs: the hub in a realtime process, or, with `Realtime.Publisher`
+enabled (and `Realtime.Enabled` off, for example in a worker), a managed
+cross-process publisher built from the same declarations and cluster connection
+and closed at shutdown. A local realtime connection cannot publish across processes.
 
 ## Access logging and completion hooks
 

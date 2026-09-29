@@ -110,6 +110,9 @@ func TestPublicationCrashHelper(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Field-note publications share this crash path; fixtures without notes
+	// publish only generated outputs.
+	g.fieldDocumentation = true
 	writes, err := g.prepare(t.Context())
 	if err != nil {
 		t.Fatal(err)

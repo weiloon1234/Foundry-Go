@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	stdhttp "net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -91,7 +92,9 @@ func TestRequestDeadlineRetainsHandlerOwnershipUntilExit(t *testing.T) {
 	}
 }
 
-func TestTypedEndpointUsesKernelRequestDeadline(t *testing.T) {
+// A handler's completed success is authoritative: a deadline that expired
+// before it returned never replaces the success with a timeout.
+func TestTypedEndpointPublishesSuccessCompletedAfterKernelDeadline(t *testing.T) {
 	t.Parallel()
 	e := DefineEndpoint(DefineRoute(RouteSpec{ID: "timeout", Method: GET, Access: Public}, StaticPath("/")), EmptyQuery(), EmptyBody(), JSONResponse(200, endpointReplyJSON()))
 	router, err := NewRouter(e.Handle(func(ctx context.Context, _ Input[NoPath, NoQuery, NoBody]) (EndpointReply, error) {
@@ -103,7 +106,7 @@ func TestTypedEndpointUsesKernelRequestDeadline(t *testing.T) {
 	}
 	w := httptest.NewRecorder()
 	deadlineBoundary(newHandlerLifetime(), router, 10*time.Millisecond).ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
-	if w.Code != 408 || decodeFailure(t, w).Code != RequestTimeout {
-		t.Fatal("typed endpoint emitted success after its deadline")
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "expired success") {
+		t.Fatal("typed endpoint replaced its completed success after the deadline", w.Code, w.Body.String())
 	}
 }

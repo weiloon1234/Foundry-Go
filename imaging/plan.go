@@ -2,6 +2,7 @@ package imaging
 
 import (
 	"image"
+	"image/color"
 	"math"
 	"slices"
 )
@@ -65,6 +66,9 @@ type Plan struct {
 	steps       []step
 	output      Format
 	quality     int
+	avifQuality int
+	background  color.NRGBA
+	flatten     bool
 	orientation Orientation
 	frames      Frames
 	metadata    Metadata
@@ -72,10 +76,19 @@ type Plan struct {
 
 const MaxTransforms = 32
 
-func NewPlan() Plan                           { return Plan{} }
-func (p Plan) append(s step) Plan             { p.steps = append(slices.Clone(p.steps), s); return p }
-func (p Plan) Format(f Format) Plan           { p.output = f; return p }
-func (p Plan) JPEGQuality(q int) Plan         { p.quality = q; return p }
+func NewPlan() Plan                   { return Plan{} }
+func (p Plan) append(s step) Plan     { p.steps = append(slices.Clone(p.steps), s); return p }
+func (p Plan) Format(f Format) Plan   { p.output = f; return p }
+func (p Plan) JPEGQuality(q int) Plan { p.quality = q; return p }
+
+// AVIFQuality selects AVIF quality 1..100 (100 is lossless); it requires an
+// explicit AVIF output. The default is DefaultAVIFQuality.
+func (p Plan) AVIFQuality(q int) Plan { p.avifQuality = q; return p }
+
+// Background flattens the result over an opaque color before encoding, so a
+// format without alpha (JPEG) does not render transparent pixels as black.
+// It applies to every output format when set.
+func (p Plan) Background(c color.NRGBA) Plan  { p.background, p.flatten = c, true; return p }
 func (p Plan) Orientation(o Orientation) Plan { p.orientation = o; return p }
 func (p Plan) Frames(f Frames) Plan           { p.frames = f; return p }
 func (p Plan) Metadata(m Metadata) Plan       { p.metadata = m; return p }
@@ -107,8 +120,14 @@ func (p Plan) Brightness(offset int) Plan {
 func (p Plan) Contrast(value float64) Plan { return p.append(step{kind: contrast, number: value}) }
 
 func (p Plan) Validate() error {
-	if len(p.steps) > MaxTransforms || p.quality < 0 || p.quality > 100 || p.orientation > IgnoreOrientation || p.frames > FirstFrame || p.metadata != StripMetadata {
+	if len(p.steps) > MaxTransforms || p.quality < 0 || p.quality > 100 || p.avifQuality < 0 || p.avifQuality > 100 || p.orientation > IgnoreOrientation || p.frames > FirstFrame || p.metadata != StripMetadata {
 		return invalid("invalid image plan")
+	}
+	if p.avifQuality != 0 && p.output != AVIF {
+		return invalid("AVIF quality requires explicit AVIF output")
+	}
+	if p.flatten && p.background.A != 255 {
+		return invalid("image background must be opaque")
 	}
 	if p.output != "" {
 		if err := p.output.Validate(); err != nil {
@@ -149,6 +168,17 @@ func (p Plan) Validate() error {
 		}
 	}
 	return nil
+}
+
+// scratch is this transform's intermediate working bytes per peak-canvas
+// pixel beyond its input and output images.
+func (s step) scratch() int64 {
+	switch s.kind {
+	case resizeExact, resizeFit, resizeFill, blur:
+		return scratchBytes
+	default:
+		return 0
+	}
 }
 
 // dimensions validates intermediate resize canvases as well as final output.

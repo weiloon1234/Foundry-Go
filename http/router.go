@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"slices"
 
+	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 )
@@ -16,10 +17,35 @@ import (
 // into a shared/global ServeMux. Registration order does not resolve ambiguity.
 type Router struct {
 	spas      []*spaFallback
+	fallback  *routeFallback
 	mux       *stdhttp.ServeMux
 	routes    []RouteInfo
 	endpoints map[RouteID]func() EndpointInfo
 	errors    []ErrorDefinition
+	// bodyCeiling is the largest declared route body limit; see WithBodyLimit.
+	bodyCeiling int64
+}
+
+// matchedRoute is the immutable per-route state published to a matched
+// request. It is built once at registration, so matching allocates no metadata.
+type matchedRoute struct {
+	info   RouteInfo
+	errors []ErrorDefinition
+	typed  bool
+	budget routeBudget
+}
+
+// matchedContext publishes a matched route to the request: its observation
+// label, MatchedRoute metadata and audit attribution (never the raw URL).
+func matchedContext(ctx context.Context, state *matchedRoute) context.Context {
+	if scope := requestScopeFrom(ctx); scope != nil && scope.observation != nil {
+		scope.observation.route.Store(state)
+	}
+	ctx = context.WithValue(ctx, matchedRouteKey{}, state)
+	if attributed, err := attribution.WithRoute(ctx, attribution.Route{Method: string(state.info.Method), Name: string(state.info.ID)}); err == nil {
+		ctx = attributed
+	}
+	return ctx
 }
 
 // NewRouter rejects duplicate IDs, invalid bindings and ambiguous native routing
@@ -58,14 +84,28 @@ func NewRouter(registrations ...RouteRegistration) (*Router, error) {
 			}
 			errorCatalog[definition.Code] = definition
 		}
-		typedEndpoint := registration.endpoint != nil
+		state := &matchedRoute{info: info, errors: declaredErrors, typed: registration.endpoint != nil, budget: routeBudget{timeout: info.Timeout, bodyBytes: info.MaxBodyBytes}}
+		router.bodyCeiling = max(router.bodyCeiling, info.MaxBodyBytes)
 		matched := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, request *stdhttp.Request) {
-			recordMatchedRoute(request.Context(), info.ID)
-			ctx := context.WithValue(request.Context(), matchedRouteKey{}, info)
-			if typedEndpoint {
-				ctx = context.WithValue(ctx, endpointErrorsKey{}, declaredErrors)
+			// The native mux received the router's fallback probe. A matched
+			// route continues with the original writer and its capabilities.
+			if probe, ok := w.(*routingResponse); ok {
+				probe.matched = true
+				w = probe.native
 			}
+			var kernel *requestBudget
+			if scope := requestScopeFrom(request.Context()); scope != nil {
+				kernel = scope.budget
+			}
+			ctx, release := state.budget.context(matchedContext(request.Context(), state), w, kernel)
+			defer release()
+			// Wrappers outside the router observe this route's effective
+			// context, not the kernel deadline it may have replaced.
+			defer publishRoute(ctx)()
 			request = request.WithContext(ctx)
+			if !state.budget.body(w, request, kernel) {
+				return
+			}
 			handler.ServeHTTP(w, request)
 		})
 		if err := callback.Invoke("HTTP route registration", func() error {
@@ -108,21 +148,18 @@ func (r *Router) ServeHTTP(w stdhttp.ResponseWriter, request *stdhttp.Request) {
 		writeRoutingError(w, request, BadRequest)
 		return
 	}
-	handler, pattern := r.mux.Handler(request)
-	if pattern != "" {
-		// ServeHTTP populates PathValue and Request.Pattern; Handler alone does
-		// not. The original ResponseWriter retains native optional capabilities.
-		r.mux.ServeHTTP(w, request)
+	// Match once. A registered route unwraps this probe and continues with the
+	// original writer. Otherwise the native fallback retains its method
+	// matching/Allow source of truth: 404 and 405 become Foundry's shared error,
+	// and a native canonical redirect passes through unchanged.
+	probe := &routingResponse{native: w}
+	r.mux.ServeHTTP(probe, request)
+	if probe.matched || probe.passthrough {
 		return
 	}
-	// Empty pattern means a native fallback. Inspect only that native handler
-	// to retain its method matching/Allow source of truth, then encode Foundry's
-	// shared error. No application callback can run through this probe writer.
-	probe := &routingResponse{header: make(stdhttp.Header)}
-	handler.ServeHTTP(probe, request)
 	switch probe.status {
 	case stdhttp.StatusNotFound:
-		if r.serveSPA(w, request) {
+		if r.serveSPA(w, request) || r.fallback.serve(w, request) {
 			return
 		}
 		writeRoutingError(w, request, NotFound)
@@ -130,9 +167,7 @@ func (r *Router) ServeHTTP(w stdhttp.ResponseWriter, request *stdhttp.Request) {
 		w.Header().Set("Allow", probe.header.Get("Allow"))
 		writeRoutingError(w, request, MethodNotAllowed)
 	default:
-		// The native router can also canonicalize a path without a matching
-		// endpoint. Preserve its relative redirect and method semantics.
-		handler.ServeHTTP(w, request)
+		writeRoutingError(w, request, NotFound)
 	}
 }
 
@@ -143,22 +178,57 @@ func writeRoutingError(w stdhttp.ResponseWriter, r *stdhttp.Request, err error) 
 	}
 }
 
+// routingResponse receives only the native mux's own fallback responses. A
+// matched route replaces it with the original writer before any application
+// code runs. Missing-route and method errors are held for Foundry's shared error;
+// any other native response, such as a canonical redirect, passes through.
 type routingResponse struct {
-	header stdhttp.Header
-	status int
+	native      stdhttp.ResponseWriter
+	header      stdhttp.Header
+	status      int
+	matched     bool
+	passthrough bool
 }
 
-func (r *routingResponse) Header() stdhttp.Header { return r.header }
-func (r *routingResponse) WriteHeader(status int) {
-	if r.status == 0 {
-		r.status = status
+func (r *routingResponse) Header() stdhttp.Header {
+	if r.passthrough {
+		return r.native.Header()
 	}
+	if r.header == nil {
+		r.header = make(stdhttp.Header)
+	}
+	return r.header
+}
+func (r *routingResponse) WriteHeader(status int) {
+	if r.status != 0 {
+		return
+	}
+	r.status = status
+	if status == stdhttp.StatusNotFound || status == stdhttp.StatusMethodNotAllowed {
+		return
+	}
+	r.passthrough = true
+	header := r.native.Header()
+	for name, values := range r.header {
+		header[name] = values
+	}
+	r.native.WriteHeader(status)
 }
 func (r *routingResponse) Write(body []byte) (int, error) {
 	if r.status == 0 {
-		r.status = stdhttp.StatusOK
+		r.WriteHeader(stdhttp.StatusOK)
 	}
-	return len(body), nil
+	if !r.passthrough {
+		return len(body), nil
+	}
+	return r.native.Write(body)
+}
+
+func (r *Router) routeBodyCeiling() int64 {
+	if r == nil {
+		return 0
+	}
+	return r.bodyCeiling
 }
 
 func nativeRoutingAvailable() bool {

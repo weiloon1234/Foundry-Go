@@ -1,6 +1,7 @@
 package validation_test
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"runtime"
@@ -28,15 +29,17 @@ func TestEmbeddedValidationKeepsWirePathsAndFailures(t *testing.T) {
 	if validation.Embed[outer](inner, nil).Validate() == nil {
 		t.Fatal("nil selector accepted")
 	}
-	for _, goexit := range []bool{false, true} {
-		rule := validation.Embed(inner, func(outer) Patch {
-			if goexit {
-				runtime.Goexit()
-			}
-			panic("private")
-		})
-		if err := rule.Check(t.Context(), outer{}, validation.DefaultLimits()); err == nil || errors.Is(err, fault.Invalid) {
-			t.Fatalf("selector failure classified as user input: %v", err)
-		}
+	rule := validation.Embed(inner, func(outer) Patch { panic("private") })
+	if err := rule.Check(t.Context(), outer{}, validation.DefaultLimits()); err == nil || errors.Is(err, fault.Invalid) {
+		t.Fatalf("selector failure classified as user input: %v", err)
+	}
+	// With an application callback in the tree the check owns its goroutine, so
+	// a selector Goexit is also an internal failure.
+	exiting := validation.All(
+		validation.Custom(validation.Spec{ID: "app.embedded", Message: "Embedded."}, func(context.Context, outer) (bool, error) { return true, nil }),
+		validation.Embed(inner, func(outer) Patch { runtime.Goexit(); return Patch{} }),
+	)
+	if err := exiting.Check(t.Context(), outer{}, validation.DefaultLimits()); err == nil || errors.Is(err, fault.Invalid) {
+		t.Fatalf("selector exit classified as user input: %v", err)
 	}
 }

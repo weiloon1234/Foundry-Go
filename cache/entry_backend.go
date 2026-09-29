@@ -35,3 +35,25 @@ type BatchBackend interface {
 type TaggedBatchBackend interface {
 	ForgetManyTagged(context.Context, []TaggedKey) (uint64, error)
 }
+
+// BatchValue is one adapter batch-read result. Found distinguishes a miss from a
+// present empty payload; Data is owned by the caller.
+type BatchValue struct {
+	Data  []byte
+	Found bool
+}
+
+// BatchReadBackend reads a bounded canonical batch (see ValidateBatchKeys) in one
+// operation, returning results in input order. Missing, expired or unusable
+// entries are misses. Size bounds follow Get; nothing is mutated except removal
+// of unusable storage.
+type BatchReadBackend interface {
+	GetMany(context.Context, []EntryKey) ([]BatchValue, error)
+}
+
+// TaggedBatchReadBackend reads a canonical batch sharing one tag snapshot (see
+// ValidateTaggedBatch) atomically with its validation. A changed or missing
+// snapshot returns Conflict; obsolete payloads are misses and may be reclaimed.
+type TaggedBatchReadBackend interface {
+	GetManyTagged(context.Context, []TaggedKey) ([]BatchValue, error)
+}

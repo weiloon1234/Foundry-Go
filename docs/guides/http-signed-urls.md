@@ -1,8 +1,5 @@
 # Typed temporary URLs
 
-**Status: signed route and endpoint APIs passed focused acceptance.**
-Their combined transport full regression passed.
-
 Create a URL signer from the same immutable `SigningKeys` rotation set used by
 [cookies](http-cookies.md), with an injected application clock. No key is inferred
 from an application name or environment global. Ordinary formatting redacts key
@@ -62,6 +59,40 @@ GET signatures also permit HEAD through Go's GET routing semantics. A separately
 declared HEAD route has its own signing scope. Other methods remain exact. TRACE
 cannot declare a signed URL.
 
+## Relative, permanent and decorated links
+
+`RelativeURL(ctx, path[, query], expires)` signs an origin-relative link. Its
+envelope version is `r1` and its MAC purpose differs from absolute links, so a
+relative signature never verifies as an absolute one. It is **not** bound to an
+origin: it verifies on every origin `PublicURLs` admits for the route. Use `URL`
+when a link must stay on one host or tenant.
+
+Links without expiry require an explicit opt-in on the signed descriptor:
+
+```go
+avatar := AvatarRoute.Signed(signer).WithPermanentLinks()
+link, err := avatar.PermanentURL(ctx, publicOrigin, path)
+```
+
+A permanent link omits `expires` and uses its own MAC purpose, so removing the
+expiry from an expiring link invalidates it. It stays valid until its signing
+key leaves the rotation set; prefer expiring links. A descriptor without the
+opt-in rejects permanent links during both generation and verification.
+
+`WithIgnoredParameters("utm_source", "fbclid")` declares query parameters that
+mail clients or trackers may append. Verification removes them (including
+percent-encoded name aliases) before authenticating; they never reach typed query
+decoding, cannot be signed into a link, and cannot collide with a signed
+endpoint's declared query fields or the reserved signing parameters. At most 32
+names are declared. The authenticated signed route/endpoint adapters expose the
+same options.
+
+Route inspection, the client manifest and OpenAPI (`x-foundry-signed-url`) export
+this policy in `SignedURLInfo`: `relative` (always true), `permanent` and the
+sorted `ignored_parameters`. The TypeScript client uses it to accept absolute
+links on its origin, relative links (sent to its `baseURL`), permanent links when
+the route permits them, and links decorated with declared ignored parameters.
+
 ## Wire and failure contract
 
 Foundry appends two reserved parameters in this order:
@@ -74,7 +105,7 @@ An existing application query precedes these parameters with `&`. The signature
 is always last. Declaring `expires` or `signature` as a signed endpoint's domain
 query field fails registration, including optional fields that happen to be absent.
 
-Expiry is required and measured in whole Unix seconds. Generation rejects an
+Expiry is required unless the descriptor opts into permanent links, and is measured in whole Unix seconds. Generation rejects an
 expiry at or before the current second, or outside the supported 1970–9999 range.
 Verification rejects at `now >= expires`. Removing a previous key invalidates
 its links; a rotation set signs new links with its active key and verifies retained
@@ -104,16 +135,6 @@ Keep secrets out of query parameters and use separate domain state when consumin
 an action exactly once. A URL may protect a download or preview while the handler
 still applies its normal authorization and validation rules.
 
-## Verified coverage
-
-Focused checks include HTTP races, native HTTP consumer requests, bounded
-verification fuzzing, shared cookie regressions, exact expiry, key rotation,
-purpose separation, query/path tampering, duplicate aliases, proxy origins,
-native transport ownership and metadata snapshots. Four compiler-rejection
-cases preserve model IDs, query types, handler types and origins; two real-gopls
-probes inspect the concrete signed APIs. No provider integration is required.
-
-
 ## Authenticated signatures (milestone 10)
 
 Required and optional typed authentication endpoints and native route adapters
@@ -122,4 +143,3 @@ expiry and key rules; authentication still requires its own live credentials.
 An authenticated signed endpoint can also use `modelbinding.BindAuthenticated`
 without losing its subject type, resource type or DTO contracts. See
 [authentication](authentication.md#signed-endpoints-and-bound-resources).
-The integration tests passed milestone 10 acceptance.

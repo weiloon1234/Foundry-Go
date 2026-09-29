@@ -18,9 +18,17 @@ membership, err := selected.FirstOrCreate(ctx, db, create)
 
 The existing branch returns the first matching model in primary-key ascending order. It does not prepare the creation draft, allocate its UUID, invoke its setters, or run write hooks. Multiple matches intentionally use the same first-row ordering as an ordinary `First`; the helper does not prove that the lookup is unique.
 
-The missing branch prepares the creation draft and runs ordinary creation. Query predicates retain stored value types, while creation setters retain their declared mutation input types. Foundry does not reverse-engineer arbitrary predicates into draft fields. Supply the required creation inputs explicitly; normal before hooks may fill omissions.
+The missing branch prepares the creation draft and runs ordinary creation. Like Laravel's merged `firstOrCreate` attributes, omitted draft fields default from the query's top-level equality filters (`Eq` combined with `And` or separate `Where` calls) and from active [global scopes](model-global-scopes.md), including context scopes resolved for this call. Explicit draft inputs always win. Other predicates (ranges, `Or`, `In`), conflicting equalities on one field and fields with custom mutators supply no default, because a stored value is not a mutator input. Normal before hooks may still fill omissions.
 
 After creation, Foundry checks that the stored identity satisfies the original predicates and visibility. If normalization, a hook, a database default or a supplied value produces a model outside that scope, the operation fails and rolls back its creation and queued after-commit work. This postcondition does not automatically create a physical unique constraint.
+
+## Create first, then fall back to the existing model
+
+```go
+membership, err := selected.CreateOrFirst(ctx, db, create)
+```
+
+`CreateOrFirst` reverses the order: it prepares the draft and runs ordinary creation in its own savepoint first. If a unique constraint rejects the insert, only that savepoint rolls back and the first primary-ordered model matching the query is returned instead. A concurrent request creating the same unique key is therefore resolved rather than reported, because the competing row is already committed (or the insert waited for it) when it is read. This relies on READ COMMITTED visibility; under REPEATABLE READ or SERIALIZABLE a competitor committed after the snapshot is invisible and the unique violation is returned. The query must select the row that holds the conflicting key: if nothing matches (for example the draft conflicts on a different unique key), the unique violation is returned. Only the model's own `INSERT` failing on a unique index of the model's table is resolved this way; a unique violation raised by a hook or observer (including its own writes), an error that merely claims to be one, or a violation from a trigger writing another table is returned unchanged ([acceptance](../../tests/fixtures/consumer/pivothooks/create_or_first_postgres_test.go)). A created model must satisfy the query, as with `FirstOrCreate`. Prefer `CreateOrFirst` when creation is the common case and a physical unique constraint backs the lookup; prefer `FirstOrCreate` when the row usually exists.
 
 ## Update an existing model or create one
 

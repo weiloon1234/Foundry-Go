@@ -113,6 +113,7 @@ func DeclaredModule(name foundation.ProviderID, key foundation.Key[*Hub], config
 			if err != nil {
 				return nil, err
 			}
+			hub.logger.CompareAndSwap(nil, runtime.Logger())
 			hub.mu.Lock()
 			if hub.server != nil || hub.closing {
 				hub.mu.Unlock()
@@ -147,6 +148,78 @@ func DeclaredModule(name foundation.ProviderID, key foundation.Key[*Hub], config
 		}
 		return nil
 	}}
+}
+
+// SharedModule constructs a Hub served by an existing HTTP kernel instead of a
+// dedicated listener: mount Route on that kernel's router; Ready reports that
+// server's address. Boot confirms the
+// distributed subscription before the listener starts; the hub drains its
+// sockets when the application lifetime ends (after any stop delay), inside the
+// HTTP shutdown grace. Upgrade sockets hold HTTP request and connection
+// capacity for their lifetime, so size those limits for realtime load.
+func SharedModule(name foundation.ProviderID, key foundation.Key[*Hub], server foundation.Key[*foundryhttp.Server], requires []foundation.ProviderID, construct func(foundation.Resolver) (*Hub, error)) foundation.Module {
+	return foundation.Module{Name: name, Requires: slices.Clone(requires), OnRegister: func(r *foundation.Registrar) error {
+		if construct == nil {
+			return fault.New(fault.Invalid, "WebSocket module requires a hub factory")
+		}
+		return foundation.Factory(r, key, func(resolver foundation.Resolver) (*Hub, error) {
+			hub, err := construct(resolver)
+			if err != nil {
+				return nil, err
+			}
+			if hub == nil || hub.done == nil {
+				return nil, fault.New(fault.Invalid, "WebSocket factory returned no hub")
+			}
+			return hub, nil
+		})
+	}, OnBoot: func(ctx context.Context, r *foundation.Runtime) error {
+		hub, err := foundation.Resolve(r.Services(), key)
+		if err != nil {
+			return err
+		}
+		hub.logger.CompareAndSwap(nil, r.Logger())
+		listener, err := foundation.Resolve(r.Services(), server)
+		if err != nil {
+			return err
+		}
+		hub.mu.Lock()
+		if hub.server != nil || hub.closing {
+			hub.mu.Unlock()
+			return fault.New(fault.Conflict, "WebSocket hub already belongs to a server or is stopping")
+		}
+		hub.server = listener
+		close(hub.serverSelected)
+		hub.mu.Unlock()
+		if err := r.OnShutdown("hub", func(ctx context.Context) error {
+			err := hub.Stop(ctx)
+			<-hub.Done()
+			return errors.Join(err, hub.Stop(context.Background()))
+		}); err != nil {
+			return errors.Join(err, hub.Stop(ctx))
+		}
+		context.AfterFunc(r.Context(), hub.beginStop)
+		return hub.Start(ctx)
+	}}
+}
+
+// Route serves this Hub's upgrades on an application router at an exact static
+// path. Middleware wraps only the upgrade; router-wide middleware also applies.
+func Route(hub *Hub, path string, middleware ...foundryhttp.Middleware) foundryhttp.RouteRegistration {
+	if hub == nil || hub.done == nil {
+		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "WebSocket route requires a hub"))
+	}
+	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "foundry.websocket", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath(path))
+	var handler stdhttp.Handler = stdhttp.HandlerFunc(hub.ServeHTTP)
+	if len(middleware) > 0 {
+		wrapped, err := foundryhttp.ApplyMiddleware(handler, slices.Clone(middleware)...)
+		if err != nil {
+			return foundryhttp.InvalidRouteRegistration(err)
+		}
+		handler = wrapped
+	}
+	return route.HandleRaw(func(w stdhttp.ResponseWriter, request *stdhttp.Request, _ foundryhttp.NoPath) {
+		handler.ServeHTTP(w, request)
+	})
 }
 
 // Ready waits for this Hub's Module-selected listener and returns its bound

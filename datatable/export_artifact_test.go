@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -20,6 +21,7 @@ func artifactManager(t *testing.T) *Manager {
 	t.Helper()
 	config := DefaultConfig()
 	config.MaxExports = 1
+	config.MaxArtifacts = 1
 	config.TempDir = t.TempDir()
 	// These lifecycle tests never query the borrowed database.
 	manager, err := New(Dependencies{Database: new(database.DB)}, config)
@@ -34,18 +36,20 @@ func artifactManager(t *testing.T) *Manager {
 	return manager
 }
 
+// openedArtifact publishes a completed file through the same retention and
+// publication path Export uses, without a database.
 func openedArtifact(t *testing.T, manager *Manager, ctx context.Context) *Artifact {
 	t.Helper()
-	lease, err := manager.beginExport(ctx)
+	release, err := manager.beginArtifact(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	file, err := os.CreateTemp(manager.config.TempDir, "foundry-report-*")
 	if err != nil {
-		lease.Release()
+		release()
 		t.Fatal(err)
 	}
-	artifact := &Artifact{file: file, path: file.Name(), lease: lease, manager: manager, name: "report.csv", media: exportMedia(CSV)}
+	artifact := &Artifact{file: file, path: file.Name(), release: release, manager: manager, name: "report.csv", media: exportMedia(CSV)}
 	t.Cleanup(func() {
 		if err := artifact.Close(); err != nil {
 			t.Error(err)
@@ -57,19 +61,35 @@ func openedArtifact(t *testing.T, manager *Manager, ctx context.Context) *Artifa
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		t.Fatal(err)
 	}
+	if err := manager.publish(artifact); err != nil {
+		t.Fatal(err)
+	}
 	return artifact
 }
 
-func TestArtifactRetainsCapacityUntilCloseAndRemovesPrivateFile(t *testing.T) {
+func shortWait(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	t.Cleanup(cancel)
+	return ctx
+}
+
+func TestArtifactRetainsOnlyItsRetentionSlotUntilClose(t *testing.T) {
 	manager := artifactManager(t)
 	artifact := openedArtifact(t, manager, t.Context())
 	info, err := os.Stat(artifact.path)
 	if err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatal("export file is not private", err)
 	}
-	if lease, err := manager.beginExport(t.Context()); lease != nil || !errors.Is(err, fault.Conflict) {
-		t.Fatal("completed artifact released capacity too early", err)
+	if release, err := manager.beginArtifact(shortWait(t)); release != nil || !errors.Is(err, fault.Overloaded) {
+		t.Fatal("completed artifact released its retention slot too early", err)
 	}
+	// Generation capacity is not held for delivery.
+	lease, err := manager.exports.Begin(t.Context())
+	if err != nil {
+		t.Fatal("completed artifact retained generation capacity", err)
+	}
+	lease.Release()
 	data, err := io.ReadAll(artifact)
 	if err != nil || string(data) != "complete\n" {
 		t.Fatal("artifact could not be streamed", err)
@@ -92,39 +112,41 @@ func TestArtifactRetainsCapacityUntilCloseAndRemovesPrivateFile(t *testing.T) {
 	if _, err := artifact.Read(make([]byte, 1)); !errors.Is(err, fault.Closed) {
 		t.Fatal("closed artifact remained readable", err)
 	}
-	lease, err := manager.beginExport(t.Context())
+	release, err := manager.beginArtifact(t.Context())
 	if err != nil {
 		t.Fatal("close did not release capacity", err)
 	}
-	lease.Release()
+	release()
+	release()
+	if manager.retained.Active() != 0 {
+		t.Fatal("repeated release changed accounting")
+	}
 }
 
-func TestArtifactCancellationAndShutdownWaitForActualOwnership(t *testing.T) {
+func TestManagerShutdownClosesOpenArtifactsWithoutWaitingForOwners(t *testing.T) {
 	manager := artifactManager(t)
 	artifact := openedArtifact(t, manager, t.Context())
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if err := manager.Close(canceled); !errors.Is(err, context.Canceled) {
-		t.Fatal("shutdown claimed actual ownership ended", err)
+	if err := manager.Close(canceled); err != nil {
+		t.Fatal("shutdown waited for an artifact owner", err)
 	}
-	if _, err := artifact.Read(make([]byte, 1)); !errors.Is(err, context.Canceled) {
+	if _, err := artifact.Read(make([]byte, 1)); !errors.Is(err, fault.Closed) {
 		t.Fatal("shutdown did not invalidate reads", err)
 	}
+	if _, err := os.Stat(artifact.path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("shutdown left an open artifact's file", err)
+	}
 	select {
 	case <-manager.DoneExports():
-		t.Fatal("shutdown abandoned the open file")
 	default:
+		t.Fatal("completed artifacts held generation shutdown")
 	}
 	if err := artifact.Close(); err != nil {
-		t.Fatal(err)
+		t.Fatal("owner close after shutdown failed", err)
 	}
-	if err := manager.Close(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case <-manager.DoneExports():
-	default:
-		t.Fatal("shutdown did not complete after close")
+	if release, err := manager.beginArtifact(t.Context()); release != nil || !errors.Is(err, fault.Closed) {
+		t.Fatal("closed manager admitted an export", err)
 	}
 }
 
@@ -150,10 +172,10 @@ func TestArtifactFailedRemovalRemainsOwnedAndBlocksNewExports(t *testing.T) {
 	if err := artifact.Close(); err == nil {
 		t.Fatal("native removal failure was hidden")
 	}
-	if !artifact.closed || artifact.removed || len(manager.pendingCleanup) != 1 {
+	if !artifact.closed || artifact.removed || len(manager.pendingCleanup) != 1 || len(manager.open) != 0 {
 		t.Fatal("failed cleanup lost manager ownership")
 	}
-	if lease, err := manager.beginExport(t.Context()); err == nil || lease != nil {
+	if release, err := manager.beginArtifact(t.Context()); err == nil || release != nil {
 		t.Fatal("new file admitted while cleanup remained broken")
 	}
 	if err := os.Remove(blocker); err != nil {
@@ -162,11 +184,11 @@ func TestArtifactFailedRemovalRemainsOwnedAndBlocksNewExports(t *testing.T) {
 	if err := os.Remove(artifact.path); err != nil {
 		t.Fatal(err)
 	}
-	lease, err := manager.beginExport(t.Context())
+	release, err := manager.beginArtifact(t.Context())
 	if err != nil {
 		t.Fatal("next export did not retry recovered cleanup", err)
 	}
-	lease.Release()
+	release()
 	if len(manager.pendingCleanup) != 0 || !artifact.removed {
 		t.Fatal("successful cleanup retained stale ownership")
 	}
@@ -204,14 +226,35 @@ func TestArtifactShutdownReportsPendingCleanupWithoutLosingIt(t *testing.T) {
 	default:
 		t.Fatal("closed file retained an unreachable active lease")
 	}
-	if len(manager.pendingCleanup) != 1 {
-		t.Fatal("shutdown forgot failed removal")
+	if len(manager.pendingCleanup) != 1 || manager.retained.Active() != 0 {
+		t.Fatal("shutdown forgot failed removal or retained its slot")
 	}
 	if err := os.Remove(blocker); err != nil {
 		t.Fatal(err)
 	}
 	if err := manager.Close(t.Context()); err != nil {
 		t.Fatal("shutdown retry did not remove repaired path", err)
+	}
+}
+
+func TestDeliveryContextRejectsSelfShutdownAndEndsWithManager(t *testing.T) {
+	manager := artifactManager(t)
+	artifact := openedArtifact(t, manager, t.Context())
+	artifact.deadline = time.Now().Add(time.Minute)
+	type key struct{}
+	delivery, stop := manager.deliveryContext(context.WithValue(t.Context(), key{}, "job"), artifact)
+	defer stop()
+	if deadline, ok := delivery.Deadline(); !ok || !deadline.Equal(artifact.deadline) || delivery.Value(key{}) != "job" {
+		t.Fatal("delivery lost the export deadline or caller values")
+	}
+	if err := manager.Close(delivery); !errors.Is(err, fault.Cycle) {
+		t.Fatal("delivery closed its own manager", err)
+	}
+	if err := manager.Close(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if !errors.Is(delivery.Err(), context.Canceled) {
+		t.Fatal("manager shutdown did not end delivery", delivery.Err())
 	}
 }
 
@@ -261,7 +304,7 @@ func TestExportNamesAndMediaTypesRemainSafeAndFormatSpecific(t *testing.T) {
 		t.Fatal("incorrect download media type")
 	}
 	var absent *Artifact
-	if absent.Name() != "" || absent.Size() != 0 || absent.Rows() != 0 || absent.SHA256() != "" || absent.Close() != nil {
+	if absent.Name() != "" || absent.Size() != 0 || absent.Rows() != 0 || absent.SHA256() != "" || !absent.Modified().IsZero() || absent.EntityTag() != "" || absent.Close() != nil {
 		t.Fatal("nil artifact access changed")
 	}
 }

@@ -76,6 +76,29 @@ func TestRedisLeaseCorruptionPreservesData(t *testing.T) {
 		})
 	}
 }
+func TestRedisForceReleaseRepairsPersistentLease(t *testing.T) {
+	c, key := leaseFixture(t)
+	k := key("persistent-repair")
+	if err := c.raw.Set(t.Context(), k.String(), strings.Repeat("a", lease.OwnerBytes), 0).Err(); err != nil {
+		t.Fatal(err)
+	}
+	owner, _ := lease.NewOwner()
+	if ok, err := c.LeaseAcquire(t.Context(), k, owner, time.Minute); ok || !errors.Is(err, fault.Invalid) {
+		t.Fatal("persistent lease was not reported corrupt", ok, err)
+	}
+	if removed, err := c.LeaseForceRelease(t.Context(), k); err != nil || !removed {
+		t.Fatal(removed, err)
+	}
+	if ok, err := c.LeaseAcquire(t.Context(), k, owner, time.Minute); err != nil || !ok {
+		t.Fatal("repaired lease could not be acquired", ok, err)
+	}
+	if removed, err := c.LeaseForceRelease(t.Context(), k); err != nil || !removed {
+		t.Fatal(removed, err)
+	}
+	if removed, err := c.LeaseForceRelease(t.Context(), k); err != nil || removed {
+		t.Fatal(removed, err)
+	}
+}
 func TestRedisTypedLeaseAcrossClients(t *testing.T) {
 	first, namespace, track := integrationAddresses(t, nil)
 	second, err := Open(t.Context(), integrationConfig(t))
@@ -129,5 +152,65 @@ func TestRedisTypedLeaseAcrossClients(t *testing.T) {
 	}
 	if present := first.raw.Exists(t.Context(), key.String()).Val(); present != 0 {
 		t.Fatal("scope cleanup left key")
+	}
+}
+
+// An exported token restores exactly once across clients: the restore swaps the
+// owner secret atomically, so a redelivered token gets ErrLost.
+func TestRedisRestoredLeaseTokenIsSingleUse(t *testing.T) {
+	first, namespace, track := integrationAddresses(t, nil)
+	second, err := Open(t.Context(), integrationConfig(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { second.Close(context.Background()) })
+	decl := lease.Define("exported-job", keyspace.StringKeys[string]())
+	key, err := lease.NewKey(namespace, decl.Name(), "job-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	track(key.String())
+	config := lease.DefaultConfig(namespace)
+	a, err := lease.NewManager(first, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { a.Close(context.Background()) })
+	b, err := lease.NewManager(second, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { b.Close(context.Background()) })
+	exporter, _ := decl.Bind(a)
+	importer, _ := decl.Bind(b)
+	g, ok, err := exporter.TryAcquire(t.Context(), "job-1", time.Minute)
+	if err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	token, err := exporter.Export(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := first.raw.Get(t.Context(), key.String()).Val()
+	restored, err := importer.Restore(t.Context(), token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after := first.raw.Get(t.Context(), key.String()).Val(); after == before || len(after) != lease.OwnerBytes {
+		t.Fatal("restore did not rotate the owner secret")
+	}
+	for _, retry := range []lease.Leases[string]{importer, exporter} {
+		if _, err := retry.Restore(t.Context(), token); !errors.Is(err, lease.ErrLost) {
+			t.Fatal("token restored twice", err)
+		}
+	}
+	if err := restored.Renew(t.Context()); err != nil {
+		t.Fatal("rotated owner lost its lease", err)
+	}
+	if err := restored.Release(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if exists := first.raw.Exists(t.Context(), key.String()).Val(); exists != 0 {
+		t.Fatal("restored guard did not release the lease")
 	}
 }

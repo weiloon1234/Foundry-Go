@@ -9,7 +9,7 @@ func (e *emitter) emitModelLocking(m model, primary field) {
 		e.line("// %s derives a transaction-scoped row-locking query; locks last until transaction end.", method)
 		e.line("func(q %sQuery)%s()%sLockedQuery{return %sLockedQuery{q.Query.%s()}}", m.name, method, m.name, m.name, method)
 	}
-	methods := append(modelQueryMethods(query, m.name), queryMethod{"NoWait", "", ""}, queryMethod{"SkipLocked", "", ""}, queryMethod{"Wait", "", ""})
+	methods := append(modelQueryMethods(query, context, m.name), queryMethod{"NoWait", "", ""}, queryMethod{"SkipLocked", "", ""}, queryMethod{"Wait", "", ""})
 	for _, method := range methods {
 		e.line("// %s derives a locked %s query without changing its source.", method.name, m.name)
 		e.line("func(q %sLockedQuery)%s(%s)%sLockedQuery{q.LockedQuery=q.LockedQuery.%s(%s);return q}", m.name, method.name, method.argument, m.name, method.name, method.forward)

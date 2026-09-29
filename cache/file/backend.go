@@ -1,6 +1,7 @@
 // Package file implements a bounded persistent cache under an owned os.Root.
-// Atomic operations serialize across local processes; network filesystems are
-// unsupported. Tags, batch deletion and distributed fill leases are not supplied.
+// Atomic operations serialize across local processes per key shard; network
+// filesystems are unsupported. Tags, batch deletion and distributed fill leases
+// are not supplied. Store.Invalidate physically removes a namespace's records.
 package file
 
 import (
@@ -11,11 +12,14 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/clock"
@@ -23,16 +27,30 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/cacheatomic"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
 	"github.com/weiloon1234/Foundry-Go/internal/filelock"
+	"github.com/weiloon1234/Foundry-Go/internal/frameworkadapter"
 )
 
 const marker = ".foundry-cache"
-const lockName = ".foundry-cache.lock"
-const magic = "FOUNDRY-CACHE-1\n"
-const MaxPrune = 256
 
-// Config bounds physical entries and bytes (including record envelopes). Expired
-// files count until explicitly pruned. Roots must be existing trusted directories.
-// Every process sharing a root must use the same bounds and synchronized clocks.
+// lockName serializes root initialization only. Entry operations use one of
+// lockShards shard locks selected by the record's address digest.
+const lockName = ".foundry-cache.lock"
+const shardLockPrefix = lockName + "."
+const lockShards = 32
+const pendingPrefix = ".pending-"
+const magic = "FOUNDRY-CACHE-1\n"
+const MaxPrune = cacheatomic.MaxPrune
+
+// PruneResult reports one bounded prune pass, including skipped corrupt records.
+type PruneResult = cacheatomic.PruneResult
+
+// Config bounds physical record files and bytes (including record envelopes).
+// A write never fails because of expired records: at capacity the backend first
+// reclaims up to MaxPrune expired records, then rejects only if still full.
+// Usage is an estimate maintained by this process and recounted by every prune
+// pass, so processes sharing a root can briefly overshoot between passes.
+// Roots must be existing trusted directories. Every process sharing a root must
+// use the same bounds, synchronized clocks and the same Foundry version.
 type Config struct {
 	Root          string
 	MaxEntries    int
@@ -40,28 +58,40 @@ type Config struct {
 	MaxValueBytes int
 	Sync          bool
 	Clock         clock.Clock
+	// PruneInterval runs automatic reclamation of expired records while the
+	// backend is started. Zero disables it; otherwise 1s to 24h.
+	PruneInterval time.Duration
+	// Logger optionally receives redacted automatic-prune failures.
+	Logger *slog.Logger
 }
 
 func DefaultConfig(root string) Config {
 	limits := cacheatomic.DefaultLimits()
-	return Config{Root: root, MaxEntries: limits.MaxEntries, MaxBytes: limits.MaxBytes, MaxValueBytes: limits.MaxValueBytes, Sync: true, Clock: clock.System{}}
+	return Config{Root: root, MaxEntries: limits.MaxEntries, MaxBytes: limits.MaxBytes, MaxValueBytes: limits.MaxValueBytes, Sync: true, Clock: clock.System{}, PruneInterval: cacheatomic.DefaultPruneInterval}
 }
 func (c Config) Validate() error {
-	if err := (cacheatomic.Limits{MaxEntries: c.MaxEntries, MaxBytes: c.MaxBytes, MaxValueBytes: c.MaxValueBytes}).Validate(); err != nil {
+	if err := c.limits().Validate(); err != nil {
 		return err
 	}
-	if !filepath.IsAbs(c.Root) || strings.ContainsRune(c.Root, 0) || credential.IsNil(c.Clock) || (runtime.GOOS != "darwin" && runtime.GOOS != "linux") {
+	if !filepath.IsAbs(c.Root) || strings.ContainsRune(c.Root, 0) || credential.IsNil(c.Clock) || !cacheatomic.ValidPruneInterval(c.PruneInterval) || (runtime.GOOS != "darwin" && runtime.GOOS != "linux") {
 		return fault.New(fault.Invalid, "invalid file cache configuration")
 	}
 	return nil
 }
+func (c Config) limits() cacheatomic.Limits {
+	return cacheatomic.Limits{MaxEntries: c.MaxEntries, MaxBytes: c.MaxBytes, MaxValueBytes: c.MaxValueBytes}
+}
 
 // Backend's embedded implementation supplies only the capabilities it supports.
-// Close prevents new operations and waits for active filesystem work. Filesystem
-// syscalls cannot be interrupted, but contention observes the caller's context.
+// Close prevents new operations, stops the pruner and waits for active
+// filesystem work. Filesystem syscalls cannot be interrupted, but contention
+// observes the caller's context. Reads take no lock: records are published by
+// atomic rename, so a reader sees either the old or the new complete record.
 type Backend struct {
 	*cacheatomic.Backend
 	config      Config
+	usage       cacheatomic.Usage
+	shards      [lockShards]chan struct{}
 	mu          sync.Mutex
 	root        *os.Root
 	active      int
@@ -70,15 +100,24 @@ type Backend struct {
 	closeErr    error
 	starting    bool
 	startCancel context.CancelFunc
+	stopPruner  context.CancelFunc
 }
+
+var _ cache.FlushBackend = (*Backend)(nil)
+
+// FoundryAdapter marks the backend as framework-owned adapter I/O.
+func (*Backend) FoundryAdapter(frameworkadapter.Seal) {}
 
 func Prepare(config Config) (*Backend, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
 	b := &Backend{config: config, done: make(chan struct{})}
+	for i := range b.shards {
+		b.shards[i] = make(chan struct{}, 1)
+	}
 	var err error
-	b.Backend, err = cacheatomic.New(b, config.Clock, config.MaxValueBytes)
+	b.Backend, err = cacheatomic.New(b, config.MaxValueBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -95,6 +134,9 @@ func Open(ctx context.Context, config Config) (*Backend, error) {
 	}
 	return b, nil
 }
+
+// Start opens and initializes the root, counts its records and, when
+// PruneInterval is positive, starts the owned background pruner.
 func (b *Backend) Start(ctx context.Context) error {
 	if b == nil || b.done == nil || ctx == nil {
 		return fault.New(fault.Invalid, "file cache needs a backend and context")
@@ -124,6 +166,9 @@ func (b *Backend) Start(ctx context.Context) error {
 	if err == nil {
 		err = initialize(operation, root)
 	}
+	if err == nil {
+		_, err = b.sweep(operation, root, 0, "")
+	}
 	if err != nil && root != nil {
 		err = errors.Join(err, root.Close())
 		root = nil
@@ -138,6 +183,17 @@ func (b *Backend) Start(ctx context.Context) error {
 	b.root = root
 	b.starting = false
 	b.startCancel = nil
+	if root != nil && b.config.PruneInterval > 0 {
+		lifetime, stop := context.WithCancel(context.Background())
+		b.stopPruner = stop
+		b.active++
+		go func() {
+			defer b.leave()
+			cacheatomic.RunPruner(lifetime, b.config.PruneInterval, b.config.Logger, "file", func(ctx context.Context) (PruneResult, error) {
+				return b.Sweep(ctx, MaxPrune)
+			})
+		}()
+	}
 	b.active--
 	b.finish()
 	return safe(err)
@@ -193,7 +249,7 @@ func initialize(ctx context.Context, root *os.Root) error {
 		if string(data) != magic {
 			return fault.New(fault.Invalid, "invalid file cache marker")
 		}
-		return nil
+		return createShardLocks(root)
 	}
 	if !errors.Is(err, fs.ErrNotExist) {
 		return safe(err)
@@ -206,7 +262,26 @@ func initialize(ctx context.Context, root *os.Root) error {
 		return safe(err)
 	}
 	_, err = f.WriteString(magic)
-	return safe(errors.Join(err, f.Sync(), f.Close()))
+	if err = safe(errors.Join(err, f.Sync(), f.Close())); err != nil {
+		return err
+	}
+	return createShardLocks(root)
+}
+
+// createShardLocks creates every shard lock file under the initialization lock.
+// Entry operations then only open existing lock files: concurrent O_CREAT of one
+// new file by several processes can fail spuriously on some filesystems.
+func createShardLocks(root *os.Root) error {
+	for shard := range lockShards {
+		f, err := root.OpenFile(shardLock(shard), os.O_RDWR|os.O_CREATE, 0600)
+		if err != nil {
+			return safe(err)
+		}
+		if err = f.Close(); err != nil {
+			return safe(err)
+		}
+	}
+	return nil
 }
 func (b *Backend) enter(ctx context.Context) (*os.Root, func(), error) {
 	if b == nil || b.done == nil || ctx == nil {
@@ -224,7 +299,13 @@ func (b *Backend) enter(ctx context.Context) (*os.Root, func(), error) {
 		return nil, nil, fault.New(fault.Invalid, "file cache has not started")
 	}
 	b.active++
-	return b.root, func() { b.mu.Lock(); defer b.mu.Unlock(); b.active--; b.finish() }, nil
+	return b.root, b.leave, nil
+}
+func (b *Backend) leave() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.active--
+	b.finish()
 }
 func (b *Backend) finish() {
 	if b.closed && b.active == 0 {
@@ -249,6 +330,9 @@ func (b *Backend) Close(ctx context.Context) error {
 	if b.startCancel != nil {
 		b.startCancel()
 	}
+	if b.stopPruner != nil {
+		b.stopPruner()
+	}
 	b.finish()
 	done := b.done
 	b.mu.Unlock()
@@ -267,165 +351,326 @@ func filename(key cache.EntryKey) string {
 	return hex.EncodeToString(digest[:]) + ".cache"
 }
 
-func (b *Backend) Access(ctx context.Context, key cache.EntryKey, change cacheatomic.Change) error {
+// shardOf maps a record file name to its lock shard from the address digest.
+func shardOf(name string) int {
+	value, err := strconv.ParseUint(name[:2], 16, 8)
+	if err != nil {
+		return 0
+	}
+	return int(value) % lockShards
+}
+func isRecord(name string) bool {
+	if len(name) != 2*sha256.Size+len(".cache") || !strings.HasSuffix(name, ".cache") {
+		return false
+	}
+	_, err := hex.DecodeString(name[:2*sha256.Size])
+	return err == nil
+}
+func shardLock(shard int) string { return shardLockPrefix + hex.EncodeToString([]byte{byte(shard)}) }
+func isShardLock(name string) bool {
+	suffix, ok := strings.CutPrefix(name, shardLockPrefix)
+	if !ok || len(suffix) != 2 {
+		return false
+	}
+	value, err := strconv.ParseUint(suffix, 16, 8)
+	return err == nil && value < lockShards
+}
+
+// pendingShard recovers the shard of an in-flight publication. Legacy names
+// without a shard belong to shard zero; mixing versions on one root is unsupported.
+func pendingShard(name string) int {
+	rest := strings.TrimPrefix(name, pendingPrefix)
+	if len(rest) > 3 && rest[2] == '-' {
+		if value, err := strconv.ParseUint(rest[:2], 16, 8); err == nil && value < lockShards {
+			return int(value)
+		}
+	}
+	return 0
+}
+
+// lockShard serializes one address shard: an in-process slot first, so local
+// goroutines queue without polling, then the shard's file lock across processes.
+func (b *Backend) lockShard(ctx context.Context, root *os.Root, shard int) (func(), error) {
+	select {
+	case b.shards[shard] <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	release, err := filelock.Acquire(ctx, root, shardLock(shard))
+	if err != nil {
+		<-b.shards[shard]
+		return nil, safe(err)
+	}
+	return func() { release(); <-b.shards[shard] }, nil
+}
+
+// Read observes one record without a lock. Corrupt and over-bound records are
+// misses. The returned time is the configured clock after the read.
+func (b *Backend) Read(ctx context.Context, key cache.EntryKey, data bool) (*cacheatomic.Record, time.Time, error) {
+	root, leave, err := b.enter(ctx)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	defer leave()
+	current, err := b.load(ctx, root, filename(key), key.String(), cacheatomic.Payload, data)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	return current, b.config.Clock.Now(), nil
+}
+
+// Access runs one atomic change under the key's shard lock. A write that does
+// not fit first reclaims expired records (at most once per second per backend)
+// and then retries; only a cache still full of live records rejects it.
+func (b *Backend) Access(ctx context.Context, key cache.EntryKey, mode cacheatomic.Mode, change cacheatomic.Change) error {
 	root, leave, err := b.enter(ctx)
 	if err != nil {
 		return err
 	}
 	defer leave()
-	release, err := filelock.Acquire(ctx, root, lockName)
-	if err != nil {
-		return safe(err)
-	}
-	defer release()
 	name := filename(key)
-	old, err := b.read(ctx, root, name, key.String())
-	if err != nil {
-		return err
+	shard := shardOf(name)
+	for reclaimed := false; ; reclaimed = true {
+		unlock, err := b.lockShard(ctx, root, shard)
+		if err != nil {
+			return err
+		}
+		full, err := b.accessLocked(ctx, root, name, key.String(), shard, mode, change)
+		unlock()
+		if err != nil || !full {
+			return err
+		}
+		if reclaimed || !b.usage.ReconcileDue() {
+			return cacheatomic.CapacityError("file cache")
+		}
+		result, err := b.sweep(ctx, root, MaxPrune, "")
+		if err != nil {
+			return err
+		}
+		b.usage.Reclaimed(result)
 	}
-	next, update, err := change(old)
+}
+func (b *Backend) accessLocked(ctx context.Context, root *os.Root, name, key string, shard int, mode cacheatomic.Mode, change cacheatomic.Change) (bool, error) {
+	previous := int64(-1)
+	info, err := root.Lstat(name)
+	switch {
+	case err == nil && info.Mode().IsRegular():
+		previous = info.Size()
+	case err == nil:
+		return false, fault.New(fault.Invalid, "invalid file cache record")
+	case !errors.Is(err, fs.ErrNotExist):
+		return false, safe(err)
+	}
+	var old *cacheatomic.Record
+	if previous >= 0 {
+		if old, err = b.load(ctx, root, name, key, mode, true); err != nil {
+			return false, err
+		}
+	}
+	next, update, err := change(b.config.Clock.Now(), old)
 	if err != nil || !update {
-		return err
+		return false, err
 	}
 	if err = ctx.Err(); err != nil {
-		return err
+		return false, err
 	}
 	if next == nil {
-		err = root.Remove(name)
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil
+		if previous < 0 {
+			return false, nil
 		}
-		if err == nil && b.config.Sync {
-			return syncRoot(root)
+		if err = root.Remove(name); errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		} else if err != nil {
+			return false, safe(err)
 		}
-		return safe(err)
+		b.usage.Add(-1, -previous)
+		if b.config.Sync {
+			return false, syncRoot(root)
+		}
+		return false, nil
 	}
-	size := int64(recordHeaderBytes + len(key.String()) + len(next.Data))
-	if err = b.budget(ctx, root, name, size); err != nil {
-		return err
+	size := int64(recordHeaderBytes + len(key) + len(next.Data))
+	if !b.usage.Fits(b.config.limits(), previous, size) {
+		return true, nil
 	}
-	return b.publish(ctx, root, name, key.String(), next.Expires, int64(len(next.Data)), bytes.NewReader(next.Data))
+	if err = b.publish(ctx, root, name, key, shard, next.Expires, int64(len(next.Data)), bytes.NewReader(next.Data)); err != nil {
+		return false, err
+	}
+	if previous < 0 {
+		b.usage.Add(1, size)
+	} else {
+		b.usage.Add(0, size-previous)
+	}
+	return false, nil
 }
 
-func (b *Backend) budget(ctx context.Context, root *os.Root, replace string, size int64) error {
-	dir, err := root.Open(".")
-	if err != nil {
-		return safe(err)
-	}
-	defer dir.Close()
-	count, total := 0, size
-	scanned := 0
-	for {
-		entries, readErr := dir.ReadDir(128)
-		for _, entry := range entries {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			scanned++
-			if scanned > b.config.MaxEntries+MaxPrune+3 {
-				return fault.New(fault.Invalid, "file cache scan limit reached; prune required")
-			}
-			name := entry.Name()
-			if name == marker || name == lockName {
-				continue
-			}
-			pending := strings.HasPrefix(name, ".pending-")
-			if (!pending && (len(name) != 70 || !strings.HasSuffix(name, ".cache"))) || !entry.Type().IsRegular() {
-				return fault.New(fault.Invalid, "unrecognized file in cache root")
-			}
-			if name == replace {
-				continue
-			}
-			info, err := entry.Info()
-			if err != nil {
-				return safe(err)
-			}
-			if !pending {
-				count++
-			}
-			if info.Size() > b.config.MaxBytes-total {
-				return fault.New(fault.Invalid, "file cache capacity reached; prune required")
-			}
-			total += info.Size()
-			if count >= b.config.MaxEntries || total > b.config.MaxBytes {
-				return fault.New(fault.Invalid, "file cache capacity reached; prune required")
-			}
-		}
-		if errors.Is(readErr, io.EOF) {
-			break
-		}
-		if readErr != nil {
-			return safe(readErr)
-		}
-	}
-	if total > b.config.MaxBytes {
-		return fault.New(fault.Invalid, "file cache capacity reached")
-	}
-	return nil
-}
-
-// Prune scans at most MaxEntries+MaxPrune+3 entries and deletes at most limit
-// expired records/orphan publications. A live writer holds the same process lock.
+// Prune deletes at most limit expired records and orphan publications.
 func (b *Backend) Prune(ctx context.Context, limit int) (int, error) {
+	result, err := b.Sweep(ctx, limit)
+	return result.Removed, err
+}
+
+// Sweep deletes at most limit expired records and orphan publications, skipping
+// (and counting) corrupt records and foreign files instead of stopping. It
+// locks one shard at a time, never the whole root. A complete pass recounts the
+// usage estimate. The scan is bounded by twice MaxEntries plus MaxPrune files.
+func (b *Backend) Sweep(ctx context.Context, limit int) (PruneResult, error) {
 	if limit < 1 || limit > MaxPrune {
-		return 0, fault.New(fault.Invalid, "invalid cache prune limit")
+		return PruneResult{}, fault.New(fault.Invalid, "invalid cache prune limit")
+	}
+	root, leave, err := b.enter(ctx)
+	if err != nil {
+		return PruneResult{}, err
+	}
+	defer leave()
+	return b.sweep(ctx, root, limit, "")
+}
+
+// FlushNamespace physically removes every readable record of namespace. It
+// locks one shard at a time, so it is not a fence against concurrent writers.
+func (b *Backend) FlushNamespace(ctx context.Context, namespace cache.Namespace) (uint64, error) {
+	prefix, err := cacheatomic.NamespacePrefix(namespace)
+	if err != nil {
+		return 0, err
 	}
 	root, leave, err := b.enter(ctx)
 	if err != nil {
 		return 0, err
 	}
 	defer leave()
-	release, err := filelock.Acquire(ctx, root, lockName)
+	result, err := b.sweep(ctx, root, 0, prefix)
+	return uint64(result.Removed), err
+}
+
+// sweep scans the root once. With flush empty it removes expired records and
+// orphan publications up to limit; with flush set it removes every readable
+// record whose address starts with flush. Both count what remains.
+func (b *Backend) sweep(ctx context.Context, root *os.Root, limit int, flush string) (PruneResult, error) {
+	var result PruneResult
+	names, complete, err := b.list(ctx, root)
 	if err != nil {
-		return 0, safe(err)
+		return result, err
 	}
-	defer release()
+	var groups [lockShards][]string
+	for _, name := range names {
+		switch {
+		case name == marker || name == lockName || isShardLock(name):
+		case strings.HasPrefix(name, pendingPrefix):
+			groups[pendingShard(name)] = append(groups[pendingShard(name)], name)
+		case isRecord(name):
+			groups[shardOf(name)] = append(groups[shardOf(name)], name)
+		default:
+			result.Unrecognized++
+		}
+	}
+	for shard, group := range groups {
+		if len(group) == 0 {
+			continue
+		}
+		if err := b.sweepShard(ctx, root, shard, group, limit, flush, &result); err != nil {
+			return result, err
+		}
+	}
+	// An incomplete pass is a lower bound near or above capacity, so later
+	// writes keep reclaiming until a pass sees the whole root.
+	result.Complete = complete
+	b.usage.Reconcile(result.Entries, result.Bytes)
+	return result, nil
+}
+func (b *Backend) sweepShard(ctx context.Context, root *os.Root, shard int, names []string, limit int, flush string, result *PruneResult) error {
+	unlock, err := b.lockShard(ctx, root, shard)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	now := b.config.Clock.Now()
+	removed := false
+	remove := func(name string) error {
+		if err := root.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return safe(err)
+		}
+		result.Removed++
+		removed = true
+		return nil
+	}
+	for _, name := range names {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if strings.HasPrefix(name, pendingPrefix) {
+			// Publication renames its pending file while holding this lock,
+			// so any pending file seen here is an orphan.
+			if flush == "" && result.Removed < limit {
+				if err := remove(name); err != nil {
+					return err
+				}
+			}
+			continue
+		}
+		info, err := root.Lstat(name)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return safe(err)
+		}
+		r, err := b.openRecord(root, name, "")
+		if errors.Is(err, errCorrupt) {
+			result.Corrupt++
+			result.Entries++
+			result.Bytes += info.Size()
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if r == nil {
+			continue
+		}
+		_ = r.file.Close()
+		drop := strings.HasPrefix(r.address, flush) && flush != "" ||
+			flush == "" && result.Removed < limit && !r.expires.IsZero() && !now.Before(r.expires)
+		if drop {
+			if err := remove(name); err != nil {
+				return err
+			}
+			continue
+		}
+		result.Entries++
+		result.Bytes += info.Size()
+	}
+	if removed && b.config.Sync {
+		return syncRoot(root)
+	}
+	return nil
+}
+
+// list returns at most a bounded number of directory names; complete is false
+// when the root holds more files than one pass may inspect.
+func (b *Backend) list(ctx context.Context, root *os.Root) ([]string, bool, error) {
 	dir, err := root.Open(".")
 	if err != nil {
-		return 0, safe(err)
+		return nil, false, safe(err)
 	}
 	defer dir.Close()
-	removed, scanned := 0, 0
-	for removed < limit && scanned < b.config.MaxEntries+MaxPrune+3 {
+	bound := 2*b.config.MaxEntries + MaxPrune + lockShards + 3
+	var names []string
+	for len(names) <= bound {
+		if err := ctx.Err(); err != nil {
+			return nil, false, err
+		}
 		entries, readErr := dir.ReadDir(128)
 		for _, entry := range entries {
-			if err := ctx.Err(); err != nil {
-				return removed, err
-			}
-			scanned++
-			if removed == limit || scanned > b.config.MaxEntries+MaxPrune+3 {
-				return removed, nil
-			}
-			name := entry.Name()
-			remove := strings.HasPrefix(name, ".pending-") && entry.Type().IsRegular()
-			if len(name) == 70 && strings.HasSuffix(name, ".cache") {
-				record, err := b.openRecord(root, name, "")
-				if err != nil {
-					return removed, err
-				}
-				if record != nil {
-					err = errors.Join(record.verify(ctx, io.Discard), record.file.Close())
-					if err != nil {
-						return removed, err
-					}
-					remove = !record.expires.IsZero() && !b.config.Clock.Now().Before(record.expires)
-				}
-			}
-			if remove {
-				if err := root.Remove(name); err != nil {
-					return removed, safe(err)
-				}
-				removed++
-			}
+			names = append(names, entry.Name())
 		}
 		if errors.Is(readErr, io.EOF) {
-			break
+			return names, len(names) <= bound, nil
 		}
 		if readErr != nil {
-			return removed, safe(readErr)
+			return nil, false, safe(readErr)
 		}
 	}
-	return removed, nil
+	return names[:bound], false, nil
 }
 func safe(err error) error {
 	if err == nil {

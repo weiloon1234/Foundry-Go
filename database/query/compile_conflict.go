@@ -55,7 +55,11 @@ func (p Conflict[M]) validate(q Query[M], c *compiler) error {
 	return p.validateRows(c)
 }
 
-func (p Conflict[M]) compile(c *compiler, table, alias string) (string, error) {
+// compile renders the conflict clause. scopes are the destination's active
+// global scope predicates: DO UPDATE never changes a conflicting row outside
+// them, so a tenant cannot overwrite another tenant's row through a globally
+// unique key.
+func (p Conflict[M]) compile(c *compiler, table, alias string, scopes []expression) (string, error) {
 	var sql strings.Builder
 	sql.WriteString(" ON CONFLICT")
 	target, err := p.targetSQL(c, table)
@@ -82,6 +86,9 @@ func (p Conflict[M]) compile(c *compiler, table, alias string) (string, error) {
 	}
 	for _, predicate := range p.rowCondition {
 		conditions = append(conditions, rename.expression(predicate, 0))
+	}
+	for _, predicate := range scopes {
+		conditions = append(conditions, requalify(predicate, alias))
 	}
 	if rename.err != nil {
 		return "", rename.err

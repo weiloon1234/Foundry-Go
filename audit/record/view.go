@@ -31,6 +31,9 @@ func (v FieldValue[V]) Get() (value.Optional[V], error) {
 	if v.snapshot.state == Absent {
 		return value.Optional[V]{}, nil
 	}
+	if v.snapshot.state == Oversized {
+		return value.Optional[V]{}, fault.New(fault.Missing, "audit value exceeded its bound; only its digest was retained")
+	}
 	if v.snapshot.state != Disclosed {
 		return value.Optional[V]{}, fault.New(fault.Missing, "audit value is redacted")
 	}
@@ -67,11 +70,12 @@ func (FieldChange[V]) Format(state fmt.State, _ rune) {
 
 // View indexes an immutable model audit once for generated typed field readers.
 // Its map is private and owned; reading many fields does not repeatedly decode
-// the entire payload. A zero view is invalid.
+// the entire payload. A zero view is invalid. A field missing from an update
+// record was neither assigned nor changed by that operation.
 type View[M, K any] struct {
 	_      [0]*M
 	_      [0]*K
-	fields map[string]fieldWire
+	fields map[string]capturedField
 }
 
 func (View[M, K]) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("audit view")) }
@@ -80,13 +84,10 @@ func Inspect[M, K any](record Model[M, K]) (View[M, K], error) {
 	if err := record.entry.Validate(); err != nil {
 		return View[M, K]{}, err
 	}
-	data, err := record.entry.data.Decode()
-	if err != nil {
-		return View[M, K]{}, err
-	}
-	view := View[M, K]{fields: make(map[string]fieldWire, len(data.Fields))}
-	for _, field := range data.Fields {
-		view.fields[field.Name] = field
+	fields := record.entry.data.fields
+	view := View[M, K]{fields: make(map[string]capturedField, len(fields))}
+	for _, field := range fields {
+		view.fields[field.name] = field
 	}
 	return view, nil
 }
@@ -98,11 +99,11 @@ func ReadField[M, K, V any](view View[M, K], name string, c codec.Codec[V]) (val
 		return value.Optional[FieldChange[V]]{}, fault.New(fault.Invalid, "audit view is not initialized")
 	}
 	if field, present := view.fields[name]; present {
-		if field.Type != c.ParameterType() {
+		if field.typ != c.ParameterType() {
 			return value.Optional[FieldChange[V]]{}, fault.New(fault.Invalid, "audit field codec does not match its stored representation")
 		}
-		return value.Set(FieldChange[V]{before: FieldValue[V]{snapshot: field.Before, codec: c},
-			after: FieldValue[V]{snapshot: field.After, codec: c}, assigned: field.Assigned, changed: field.Changed}), nil
+		return value.Set(FieldChange[V]{before: FieldValue[V]{snapshot: field.before, codec: c},
+			after: FieldValue[V]{snapshot: field.after, codec: c}, assigned: field.assigned, changed: field.changed}), nil
 	}
 	return value.Optional[FieldChange[V]]{}, nil
 }

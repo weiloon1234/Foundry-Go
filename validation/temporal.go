@@ -15,7 +15,8 @@ type Temporal interface {
 
 // Before requires a temporal value strictly before its declared bound. Dates
 // and local values compare in calendar order; instants compare in UTC without
-// monotonic readings. No host timezone or current clock is consulted.
+// monotonic readings. No host timezone or current clock is consulted; use the
+// relative BeforeNow/BeforeToday family for bounds read at check time.
 func Before[T Temporal](bound T) Rule[T] {
 	return temporalBound(bound, "foundry.before", -1, false)
 }
@@ -75,6 +76,144 @@ func temporalPair[T Temporal](id RuleID, direction int, equal bool) Rule[Pair[T]
 		right, rightValid := temporalInstant(pair.Right)
 		return leftValid && rightValid && temporalOrder(left.Compare(right), direction, equal), nil
 	})
+}
+
+// NowTemporal values compare with the current time: instants directly and
+// local date-times with the current wall time in the service's timezone.
+type NowTemporal interface {
+	time.Time | temporal.DateTime | temporal.LocalDateTime
+	String() string
+}
+
+// TodayTemporal values compare by calendar date with today in the service's
+// timezone. Instants are first converted to their date in that timezone.
+type TodayTemporal interface {
+	time.Time | temporal.DateTime | temporal.Date | temporal.LocalDateTime
+	String() string
+}
+
+// AfterNow requires a value strictly after the current time. The clock is read
+// at every check, never at construction. Pass the application's temporal service
+// (application Services.Time) so frozen test clocks and the configured timezone
+// apply; a zero Service makes the declaration invalid. Metadata is server-only.
+func AfterNow[T NowTemporal](service temporal.Service) Rule[T] {
+	return relativeNow[T](service, "foundry.after_now", 1, false)
+}
+
+// AfterOrEqualNow accepts the current time or later.
+func AfterOrEqualNow[T NowTemporal](service temporal.Service) Rule[T] {
+	return relativeNow[T](service, "foundry.after_or_equal_now", 1, true)
+}
+
+// BeforeNow requires a value strictly before the current time.
+func BeforeNow[T NowTemporal](service temporal.Service) Rule[T] {
+	return relativeNow[T](service, "foundry.before_now", -1, false)
+}
+
+// BeforeOrEqualNow accepts the current time or earlier.
+func BeforeOrEqualNow[T NowTemporal](service temporal.Service) Rule[T] {
+	return relativeNow[T](service, "foundry.before_or_equal_now", -1, true)
+}
+
+// AfterToday requires a calendar date after today in the service's timezone,
+// read at check time. Absent dates and out-of-range instants reject.
+func AfterToday[T TodayTemporal](service temporal.Service) Rule[T] {
+	return relativeToday[T](service, "foundry.after_today", 1, false)
+}
+
+// AfterOrEqualToday accepts today or a later date.
+func AfterOrEqualToday[T TodayTemporal](service temporal.Service) Rule[T] {
+	return relativeToday[T](service, "foundry.after_or_equal_today", 1, true)
+}
+
+// BeforeToday requires a date before today.
+func BeforeToday[T TodayTemporal](service temporal.Service) Rule[T] {
+	return relativeToday[T](service, "foundry.before_today", -1, false)
+}
+
+// BeforeOrEqualToday accepts today or an earlier date.
+func BeforeOrEqualToday[T TodayTemporal](service temporal.Service) Rule[T] {
+	return relativeToday[T](service, "foundry.before_or_equal_today", -1, true)
+}
+
+// relativeService rejects a zero service instead of silently choosing the host
+// clock or UTC, which would ignore the application's clock and timezone.
+func relativeService(service temporal.Service) (temporal.Service, error) {
+	if service.TimeZone() == "" {
+		return temporal.Service{}, invalid("relative temporal rules require a temporal service")
+	}
+	return service, nil
+}
+
+func relativeNow[T NowTemporal](service temporal.Service, id RuleID, direction int, equal bool) Rule[T] {
+	current, err := relativeService(service)
+	if err != nil {
+		return failed[T](err)
+	}
+	return valueRule(Spec{ID: id, Parameters: []Parameter{parameter("type", temporalType[T]())}}, true, func(_ *execution, input T) (bool, error) {
+		instant, valid := temporalInstant(input)
+		if !valid {
+			return false, nil
+		}
+		now, err := current.Now()
+		if err != nil {
+			return false, err
+		}
+		reference := now.UTC()
+		if _, local := any(input).(temporal.LocalDateTime); local {
+			wall, err := current.Local(now)
+			if err != nil {
+				return false, err
+			}
+			reference, _ = temporalInstant(wall)
+		}
+		return temporalOrder(instant.Compare(reference), direction, equal), nil
+	})
+}
+
+func relativeToday[T TodayTemporal](service temporal.Service, id RuleID, direction int, equal bool) Rule[T] {
+	current, err := relativeService(service)
+	if err != nil {
+		return failed[T](err)
+	}
+	return valueRule(Spec{ID: id, Parameters: []Parameter{parameter("type", temporalType[T]())}}, true, func(_ *execution, input T) (bool, error) {
+		date, valid, err := calendarDate(current, input)
+		if err != nil || !valid {
+			return false, err
+		}
+		today, err := current.Today()
+		if err != nil {
+			return false, err
+		}
+		left, _ := temporalInstant(date)
+		right, _ := temporalInstant(today)
+		return temporalOrder(left.Compare(right), direction, equal), nil
+	})
+}
+
+// calendarDate converts instants into the service's timezone; calendar values
+// keep their own date. An absent or out-of-range value is not valid input.
+func calendarDate[T TodayTemporal](service temporal.Service, input T) (temporal.Date, bool, error) {
+	var instant temporal.DateTime
+	switch v := any(input).(type) {
+	case temporal.Date:
+		return v, !v.IsZero(), nil
+	case temporal.LocalDateTime:
+		return v.Date(), !v.IsZero(), nil
+	case temporal.DateTime:
+		instant = v
+	case time.Time:
+		converted, err := temporal.NewDateTime(v)
+		if err != nil {
+			return temporal.Date{}, false, nil
+		}
+		instant = converted
+	}
+	date, err := service.Date(instant)
+	if err != nil {
+		return temporal.Date{}, false, nil
+	}
+	return date, true, nil
 }
 
 func temporalOrder(order, direction int, equal bool) bool {

@@ -171,8 +171,10 @@ func TestEndpointValidationCancellationWaitsForRule(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("rule did not finish")
 	}
-	if response.Code != 408 {
-		t.Fatal("canceled validation lost request timeout")
+	// Validation runs after decoding: an ended request context is the server
+	// phase (503), never the slow-client 408.
+	if response.Code != 503 {
+		t.Fatal("canceled validation lost its unavailable classification", response.Code)
 	}
 }
 

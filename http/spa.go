@@ -15,6 +15,7 @@ type spaFallback struct {
 	config SPAConfig
 	prefix string
 	info   RouteInfo
+	state  *matchedRoute
 }
 
 // WithSPA returns an independent router view sharing the immutable native route
@@ -52,7 +53,7 @@ func (r *Router) WithSPA(id RouteID, assets *Assets, config SPAConfig) (*Router,
 	result := *r
 	result.routes = append(slices.Clone(r.routes), info.clone())
 	slices.SortFunc(result.routes, func(a, b RouteInfo) int { return cmp.Compare(a.ID, b.ID) })
-	result.spas = append(slices.Clone(r.spas), &spaFallback{assets: assets, config: config.snapshot(), prefix: mount.prefix, info: info})
+	result.spas = append(slices.Clone(r.spas), &spaFallback{assets: assets, config: config.snapshot(), prefix: mount.prefix, info: info, state: &matchedRoute{info: info}})
 	slices.SortFunc(result.spas, func(a, b *spaFallback) int {
 		if depth := cmp.Compare(len(b.prefix), len(a.prefix)); depth != 0 {
 			return depth
@@ -70,8 +71,10 @@ func (s *spaFallback) serve(w stdhttp.ResponseWriter, r *stdhttp.Request) bool {
 			return false
 		}
 	}
-	recordMatchedRoute(r.Context(), s.info.ID)
-	matched := r.WithContext(context.WithValue(r.Context(), matchedRouteKey{}, s.info.clone()))
+	if scope := requestScopeFrom(r.Context()); scope != nil && scope.observation != nil {
+		scope.observation.route.Store(s.state)
+	}
+	matched := r.WithContext(context.WithValue(r.Context(), matchedRouteKey{}, s.state))
 	if err := s.assets.config.Limits.checkRange(r.Header.Values("Range")); err != nil {
 		writeRoutingError(w, matched, err)
 		return true

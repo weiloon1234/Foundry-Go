@@ -72,5 +72,6 @@ func (t *Tokens[M, K]) CompleteMFA(ctx context.Context, raw secret.String, facto
 	if err != nil {
 		return Issued[M, K]{}, err
 	}
+	t.issued(ctx, result)
 	return result, nil
 }

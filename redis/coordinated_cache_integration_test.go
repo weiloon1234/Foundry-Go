@@ -241,9 +241,13 @@ func TestDistributedRememberRejectsSupersededPublication(t *testing.T) {
 				t.Fatal("test lost its remote-only loss condition", err)
 			}
 			close(finish)
+			// The superseded caller keeps its loaded value; publication is rejected.
 			result := <-old
-			if result.value != "" || !errors.Is(result.err, lease.ErrLost) {
+			if result.value != "old" || result.err != nil {
 				t.Fatal(result)
+			}
+			if stats := f.stores[0].Stats(); stats.WriteFailures != 1 {
+				t.Fatal("superseded publication was not rejected", stats)
 			}
 			value, found, err := f.values[1].Get(t.Context(), "profile")
 			if err != nil || !found || value != "new" {
@@ -298,7 +302,7 @@ func TestDistributedRememberTagInvalidationDuringLoad(t *testing.T) {
 		t.Fatal(value, err)
 	}
 	close(finish)
-	if result := <-old; result.value != "" || !errors.Is(result.err, fault.Conflict) {
+	if result := <-old; result.value != "old-tag" || result.err != nil {
 		t.Fatal(result)
 	}
 	if value, found, err := f.values[1].Get(t.Context(), "profile"); err != nil || !found || value != "new-tag" {
@@ -376,8 +380,8 @@ func (h lostFillAcknowledgement) ProcessHook(next driver.ProcessHook) driver.Pro
 	return func(ctx context.Context, cmd driver.Cmder) error {
 		args := cmd.Args()
 		matches := false
-		if len(args) > 4 && args[0] == "eval" {
-			matches = h.operation == "write" && (args[1] == cacheLeasedScript || args[1] == taggedLeasedScript) || h.operation == "release" && args[1] == leaseScript && args[4] == "release"
+		if len(args) > 4 {
+			matches = h.operation == "write" && (runsScript(args, cacheLeasedScript) || runsScript(args, taggedLeasedScript)) || h.operation == "release" && runsScript(args, leaseScript) && args[4] == "release"
 		}
 		err := next(ctx, cmd)
 		if matches {
@@ -389,6 +393,10 @@ func (h lostFillAcknowledgement) ProcessHook(next driver.ProcessHook) driver.Pro
 		return err
 	}
 }
+
+// A lost publication or lease-release acknowledgement is a cache failure, not a
+// request failure: the caller receives its loaded value, the mutation is never
+// retried, the failure is counted, and the manager keeps the cleanup error.
 func TestDistributedRememberAcknowledgementFailureIsNotSuccessOrRetry(t *testing.T) {
 	for _, operation := range []string{"write", "release"} {
 		t.Run(operation, func(t *testing.T) {
@@ -397,8 +405,12 @@ func TestDistributedRememberAcknowledgementFailureIsNotSuccessOrRetry(t *testing
 			var calls atomic.Int32
 			f.clients[0].raw.AddHook(lostFillAcknowledgement{operation: operation, failure: failure, calls: &calls})
 			value, err := f.values[0].Remember(t.Context(), "profile", cache.For(time.Minute), func(context.Context) (string, error) { return "applied", nil })
-			if value != "" || !errors.Is(err, failure) || calls.Load() != 1 {
+			if value != "applied" || err != nil || calls.Load() != 1 {
 				t.Fatal(value, err, calls.Load())
+			}
+			stats := f.stores[0].Stats()
+			if operation == "write" && (stats.WriteFailures != 1 || stats.Writes != 0) || operation == "release" && (stats.WriteFailures != 0 || stats.Writes != 1) {
+				t.Fatal("acknowledgement failure was not recorded as a cache failure", stats)
 			}
 			value, found, err := f.values[1].Get(t.Context(), "profile")
 			if err != nil || !found || value != "applied" {

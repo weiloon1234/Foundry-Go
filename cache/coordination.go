@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"math/rand/v2"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -9,8 +10,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/lease"
 )
 
-// CoordinationConfig sets the renewable fill lease and maximum contention wait.
-// Cache Config.Timeout still bounds the entire Remember call, including loading.
+// CoordinationConfig sets the renewable fill lease and the maximum time a miss
+// waits while another instance fills (polling both the lease and the cache at
+// the lease manager's PollInterval). Loaders are bounded by LoadTimeout.
 type CoordinationConfig struct{ LeaseDuration, Wait time.Duration }
 
 func DefaultCoordinationConfig() CoordinationConfig {
@@ -20,6 +22,7 @@ func DefaultCoordinationConfig() CoordinationConfig {
 type coordinator struct {
 	leases lease.Leases[EntryKey]
 	config CoordinationConfig
+	poll   time.Duration
 }
 
 // One declaration identity is reused by every coordinated store sharing a manager.
@@ -36,7 +39,7 @@ func fillText(key EntryKey) (string, error) {
 // The borrowed manager supplies both lease and cache capabilities from the SAME
 // adapter/namespace. It performs no I/O and never falls back to an ordinary store.
 // Close the lease manager before its adapter. Existing Cache methods remain typed.
-func NewCoordinatedStore(manager *lease.Manager, config Config, coordination CoordinationConfig) (*Store, error) {
+func NewCoordinatedStore(manager *lease.Manager, config Config, coordination CoordinationConfig, options ...StoreOption) (*Store, error) {
 	if err := manager.ValidateScope(coordination.LeaseDuration, coordination.Wait); err != nil {
 		return nil, err
 	}
@@ -47,7 +50,7 @@ func NewCoordinatedStore(manager *lease.Manager, config Config, coordination Coo
 	if !ok {
 		return nil, fault.New(fault.Invalid, "lease authority does not support coordinated cache publication")
 	}
-	store, err := NewStore(backend, config)
+	store, err := NewStore(backend, config, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -60,27 +63,17 @@ func NewCoordinatedStore(manager *lease.Manager, config Config, coordination Coo
 	if err != nil {
 		return nil, err
 	}
-	store.coordination = &coordinator{leases: locks, config: coordination}
+	store.coordination = &coordinator{leases: locks, config: coordination, poll: manager.PollInterval()}
 	return store, nil
 }
-func (c Cache[K, V]) loadFill(ctx context.Context, access entryAccess, ttl TTL, loader func(context.Context) (V, error)) ([]byte, error) {
-	load := func(ctx context.Context, publish func(context.Context, []byte, TTL) error) ([]byte, error) {
-		data, found, err := c.read(ctx, access)
-		if err != nil || found {
-			return data, err
-		}
-		loaded, err := loader(ctx)
-		if err != nil {
-			return nil, err
-		}
-		data, err = c.encode(ctx, loaded, ttl)
-		if err != nil {
-			return nil, err
-		}
-		return data, publish(ctx, data, ttl)
-	}
+
+// fill publishes through the store's protection. A coordinated store takes the
+// distributed fill lease; while another instance owns it, the fill re-reads the
+// cache between lease polls, so a value published elsewhere is returned as soon
+// as it appears instead of waiting for the lease or failing on a slow loader.
+func (c Cache[K, V]) fill(ctx, owner context.Context, access entryAccess, ttl TTL, loader func(context.Context) (V, error), settings rememberSettings, outcome *fillOutcome) ([]byte, error) {
 	if c.store.coordination == nil {
-		return load(ctx, func(ctx context.Context, data []byte, ttl TTL) error {
+		return c.load(ctx, owner, access, ttl, loader, settings, outcome, func(ctx context.Context, data []byte, ttl TTL) error {
 			return access.backend.Put(ctx, access.key, data, ttl)
 		})
 	}
@@ -88,19 +81,51 @@ func (c Cache[K, V]) loadFill(ctx context.Context, access entryAccess, ttl TTL, 
 	if !ok {
 		return nil, fault.New(fault.Invalid, "cache view does not support coordinated publication")
 	}
-	owner := c.store.coordination
-	var data []byte
-	ran, err := owner.leases.WithProof(ctx, access.fillKey, owner.config.LeaseDuration, owner.config.Wait, func(ctx context.Context, proof lease.Proof) error {
-		var err error
-		data, err = load(ctx, func(ctx context.Context, data []byte, ttl TTL) error {
-			return backend.PutLeased(ctx, access.key, data, ttl, proof)
+	coordination := c.store.coordination
+	deadline := time.Now().Add(coordination.config.Wait)
+	for {
+		var data []byte
+		loaded := false
+		ran, err := coordination.leases.WithProof(ctx, access.fillKey, coordination.config.LeaseDuration, 0, func(ctx context.Context, proof lease.Proof) error {
+			var err error
+			data, err = c.load(ctx, owner, access, ttl, loader, settings, outcome, func(ctx context.Context, data []byte, ttl TTL) error {
+				return backend.PutLeased(ctx, access.key, data, ttl, proof)
+			})
+			loaded = err == nil
+			return err
 		})
-		return err
-	})
-	if err == nil && !ran {
-		err = fault.New(fault.Conflict, "cache fill lease is contended")
+		if loaded {
+			// The value is correct for this call even if losing or releasing the
+			// fill lease failed afterwards; the manager retains cleanup errors.
+			if err != nil {
+				c.store.recordFailure(ctx, "cache fill lease release failed", c.definition.name, err)
+			}
+			return data, nil
+		}
+		if err != nil || ran {
+			return data, err
+		}
+		// Another instance is filling: observe its publication directly.
+		data, found, err := c.current(ctx, access, settings)
+		if err != nil || found {
+			return data, err
+		}
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			if coordination.config.Wait == 0 {
+				return nil, fault.New(fault.Conflict, "cache fill lease is contended")
+			}
+			return nil, fault.Wrap(fault.Timeout, "cache fill lease wait expired", context.DeadlineExceeded)
+		}
+		delay := coordination.poll/2 + time.Duration(rand.Int64N(int64(coordination.poll-coordination.poll/2)))
+		timer := time.NewTimer(min(delay, remaining))
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
 	}
-	return data, err
 }
 
 // FillLeaseKey is the adapter address for a fill identity. Tagged callers use

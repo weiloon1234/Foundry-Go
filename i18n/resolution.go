@@ -32,35 +32,67 @@ func RequestLocale(ctx context.Context) (LocaleID, bool) {
 // back to a supported parent; unrelated sibling locales are never selected.
 // Malformed/zero-quality candidates are ignored. This is locale selection,
 // not HTTP 406 negotiation; absence of an acceptable candidate uses the default.
+// LocaleResolver composes the same steps with typed stored preferences.
 func (c *Catalog) Resolve(preferred string, acceptLanguage string) (LocaleID, error) {
 	if err := c.Validate(); err != nil {
 		return "", err
 	}
-	if locale, ok := c.resolveTag(preferred); ok {
+	if locale, ok := c.locales.MatchTag(preferred); ok {
 		return locale, nil
 	}
-	if len(acceptLanguage) > 8192 {
-		return c.locales.Default(), nil
+	if locale, ok := c.locales.MatchAcceptLanguage(acceptLanguage); ok {
+		return locale, nil
+	}
+	return c.locales.Default(), nil
+}
+
+// MatchTag parses external BCP 47 text and applies Match. Malformed or
+// unsupported text reports false rather than an error.
+func (s LocaleSet) MatchTag(text string) (LocaleID, bool) {
+	if text == "" {
+		return "", false
+	}
+	id, err := ParseLocale(text)
+	if err != nil {
+		return "", false
+	}
+	return s.Match(id)
+}
+
+// MaxAcceptLanguageBytes and MaxAcceptLanguageCandidates bound header parsing.
+const (
+	MaxAcceptLanguageBytes      = 8192
+	MaxAcceptLanguageCandidates = 64
+)
+
+// MatchAcceptLanguage selects the first supported locale (or supported parent)
+// from quality-sorted Accept-Language candidates. "*" selects the default.
+// Oversized headers, malformed and zero-quality candidates are ignored; ties
+// keep header order. It reports false when nothing matches.
+func (s LocaleSet) MatchAcceptLanguage(header string) (LocaleID, bool) {
+	if header == "" || len(header) > MaxAcceptLanguageBytes || s.Validate() != nil {
+		return "", false
 	}
 	type preference struct {
 		tag     string
 		quality int
 	}
-	var choices []preference
+	var buffer [8]preference
+	choices := buffer[:0]
 	candidates := 0
-	for candidate := range strings.SplitSeq(acceptLanguage, ",") {
-		if candidates >= 64 {
+	for candidate := range strings.SplitSeq(header, ",") {
+		if candidates >= MaxAcceptLanguageCandidates {
 			break
 		}
 		candidates++
-		parts := strings.Split(candidate, ";")
-		if len(parts) > 2 {
-			continue
-		}
-		tag := strings.TrimSpace(parts[0])
+		tag, parameters, hasParameters := strings.Cut(candidate, ";")
+		tag = strings.TrimSpace(tag)
 		q := 1000
-		if len(parts) == 2 {
-			name, value, ok := strings.Cut(strings.TrimSpace(parts[1]), "=")
+		if hasParameters {
+			if strings.Contains(parameters, ";") {
+				continue
+			}
+			name, value, ok := strings.Cut(strings.TrimSpace(parameters), "=")
 			if !ok || !strings.EqualFold(name, "q") {
 				continue
 			}
@@ -73,29 +105,13 @@ func (c *Catalog) Resolve(preferred string, acceptLanguage string) (LocaleID, er
 	slices.SortStableFunc(choices, func(a, b preference) int { return b.quality - a.quality })
 	for _, choice := range choices {
 		if choice.tag == "*" {
-			return c.locales.Default(), nil
+			return s.defaultLocale, true
 		}
-		if locale, ok := c.resolveTag(choice.tag); ok {
-			return locale, nil
+		if locale, ok := s.MatchTag(choice.tag); ok {
+			return locale, true
 		}
 	}
-	return c.locales.Default(), nil
-}
-func (c *Catalog) resolveTag(text string) (LocaleID, bool) {
-	id, err := ParseLocale(text)
-	if err != nil {
-		return "", false
-	}
-	for {
-		if c.locales.Contains(id) {
-			return id, true
-		}
-		end := strings.LastIndexByte(string(id), '-')
-		if end < 0 {
-			return "", false
-		}
-		id = id[:end]
-	}
+	return "", false
 }
 func parseQuality(s string) int {
 	if s == "1" || s == "1.0" || s == "1.00" || s == "1.000" {

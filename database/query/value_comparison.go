@@ -5,7 +5,7 @@ import "github.com/weiloon1234/Foundry-Go/value"
 // binaryOperator shares SQL tokens with literal comparisons. Contains belongs
 // only to literal binding, where wildcard escaping is explicit.
 func binaryOperator(op operator) (string, bool) {
-	if op == contains || op == insensitiveContains {
+	if escapedPattern(op) || op == notIn {
 		return "", false
 	}
 	return comparisonOperator(op)

@@ -52,7 +52,7 @@ func serve(handler http.Handler, url string) *httptest.ResponseRecorder {
 	return w
 }
 
-func TestBoundEndpointResolvesOnceAfterValidation(t *testing.T) {
+func TestBoundEndpointResolvesOncePerAcceptedPath(t *testing.T) {
 	var resolved, handled int
 	resolver := modelbinding.Define(func(ctx context.Context, p path) (value.Optional[member], error) {
 		resolved++
@@ -89,7 +89,9 @@ func TestBoundEndpointResolvesOnceAfterValidation(t *testing.T) {
 			t.Fatalf("%s: %d %s", test.url, w.Code, w.Body.String())
 		}
 	}
-	if resolved != 1 || handled != 1 {
+	// Binding precedes validation: the decoded /members/0 is looked up before
+	// its rule reports 422; the accepted request is looked up exactly once.
+	if resolved != 2 || handled != 1 {
 		t.Fatalf("lookup/handler counts %d/%d", resolved, handled)
 	}
 	if len(r.Endpoints()) != 1 || r.Endpoints()[0].Route.ID != after.Route.ID {

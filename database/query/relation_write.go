@@ -77,7 +77,7 @@ func (r ThroughRelation[M, N, P]) Attach(ctx context.Context, writer database.Tr
 		// Creation has no read filters. The postcondition below evaluates all
 		// relation filters on the actual stored result inside this transaction.
 		pivot := ForModel(*scoped.pivot.definition)
-		created, err := pivot.Insert(ctx, tx, mutation)
+		created, err := pivot.Insert(ctx, enclosingTransaction{tx}, mutation)
 		if err != nil {
 			return *new(P), err
 		}

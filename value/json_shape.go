@@ -163,6 +163,8 @@ type jsonField struct {
 	typ              reflect.Type
 	optional, quoted bool
 	index            []int
+	// tag is the declaring field's json tag, cached for encoding inspection.
+	tag string
 }
 type jsonFieldResult struct {
 	fields map[string]jsonField
@@ -215,7 +217,7 @@ func collectJSONFields(typ reflect.Type) (map[string]jsonField, error) {
 	}
 	fields := make(map[string]jsonField, len(properties))
 	for _, p := range properties {
-		fields[p.Name] = jsonField{typ: p.Type, optional: p.Optional, quoted: p.Quoted, index: p.Index}
+		fields[p.Name] = jsonField{typ: p.Type, optional: p.Optional, quoted: p.Quoted, index: p.Index, tag: typ.FieldByIndex(p.Index).Tag.Get("json")}
 	}
 	return fields, nil
 }

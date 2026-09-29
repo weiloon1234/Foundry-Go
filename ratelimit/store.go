@@ -1,14 +1,18 @@
 package ratelimit
 
 import (
-	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"sync"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/admission"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
 // Config bounds declaration count, logical key bytes and entire active operations,
-// including key resolvers/codecs. Timeout uses real context deadlines.
+// including key resolvers/codecs. Timeout uses real context deadlines. A burst
+// beyond MaxConcurrent waits in FIFO order for at most admission.Wait(Timeout),
+// within that same deadline, and then fails with fault.Overloaded.
 type Config struct {
 	Namespace                                   keyspace.Namespace
 	MaxKeyBytes, MaxDeclarations, MaxConcurrent int
@@ -34,7 +38,7 @@ func (c Config) Validate() error {
 type Store struct {
 	backend      Backend
 	config       Config
-	slots        chan struct{}
+	slots        *admission.Semaphore
 	mu           sync.Mutex
 	declarations map[Name]*declarationID
 }
@@ -46,6 +50,6 @@ func NewStore(backend Backend, config Config) (*Store, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
-	return &Store{backend: backend, config: config, slots: make(chan struct{}, config.MaxConcurrent), declarations: make(map[Name]*declarationID)}, nil
+	return &Store{backend: backend, config: config, slots: admission.New(config.MaxConcurrent), declarations: make(map[Name]*declarationID)}, nil
 }
 func (s *Store) Namespace() keyspace.Namespace { return s.config.Namespace }

@@ -5,8 +5,10 @@ import (
 	stdhttp "net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/admission"
 )
 
 type compressionMode uint8
@@ -27,10 +29,12 @@ type compressionResponse struct {
 	mode           compressionMode
 	config         CompressionConfig
 	preferences    compressionPreferences
-	permits        chan struct{}
+	permits        *admission.Semaphore
+	pools          *compressionPools
 	acquired       bool
 	buffer         []byte
 	stream         compressionStream
+	releaseStream  func()
 	err            error
 	written        int64
 	declaredLength int64
@@ -70,7 +74,7 @@ func (w *compressionResponse) Write(data []byte) (int, error) {
 	if w.err != nil {
 		return 0, w.err
 	}
-	if err := w.request.Context().Err(); err != nil {
+	if err := transportErr(w.request); err != nil {
 		w.err = err
 		return 0, err
 	}
@@ -134,7 +138,7 @@ func (w *compressionResponse) writeData(data []byte) (int, error) {
 	}
 	total := 0
 	for len(data) != 0 {
-		if err := w.request.Context().Err(); err != nil {
+		if err := transportErr(w.request); err != nil {
 			w.err = err
 			return total, err
 		}
@@ -163,7 +167,7 @@ func (w *compressionResponse) commit(compress bool) {
 	if w.mode != compressionPending || w.err != nil {
 		return
 	}
-	if err := w.request.Context().Err(); err != nil {
+	if err := transportErr(w.request); err != nil {
 		w.err = err
 		return
 	}
@@ -183,24 +187,28 @@ func (w *compressionResponse) commit(compress bool) {
 		} else if compress {
 			encoder, ok := w.preferences.choose(w.config.Encoders)
 			if ok {
-				select {
-				case w.permits <- struct{}{}:
+				acquired := w.permits.TryAcquire()
+				if !acquired && w.preferences.quality("identity") == 0 {
+					// Identity is refused, so a short bounded wait for an encoder
+					// is the only way to serve this request.
+					if err := w.permits.Acquire(transportParent(w.request), compressionEncoderWait, nil); err != nil {
+						w.reject(Unavailable.WithCause(err))
+						return
+					}
+					acquired = true
+				}
+				if acquired {
 					w.acquired = true
-					stream, err := encoder.writer(w.underlying)
+					stream, release, err := w.pools.acquire(encoder, w.underlying)
 					if err != nil {
 						w.err = err
 						return
 					}
-					w.stream = stream
+					w.stream, w.releaseStream = stream, release
 					w.mode = compressionEncoded
 					w.final.Set("Content-Encoding", string(encoder.encoding))
 					w.final.Del("Content-Length")
 					invalidateCompressedIntegrity(w.final)
-				default:
-					if w.preferences.quality("identity") == 0 {
-						w.reject(Unavailable)
-						return
-					}
 				}
 			}
 		}
@@ -238,17 +246,17 @@ func (w *compressionResponse) acceptsExistingCoding() bool {
 	}
 	return count > 0
 }
-func (w *compressionResponse) reject(code ErrorCode) {
+func (w *compressionResponse) reject(err error) {
 	w.mode = compressionRejected
 	w.buffer = nil
 	copyResponseHeaders(w.underlying.Header(), w.final)
-	writeRoutingError(w.underlying, w.request, code)
+	writeRoutingError(w.underlying, w.request, err)
 }
 func (w *compressionResponse) finish() error {
 	if w.hijacked {
 		return nil
 	}
-	if err := w.request.Context().Err(); err != nil {
+	if err := transportErr(w.request); err != nil {
 		return err
 	}
 	if w.mode == compressionRejected {
@@ -288,7 +296,7 @@ func (w *compressionResponse) finish() error {
 		return nil
 	}
 	if w.stream != nil {
-		if err := w.request.Context().Err(); err != nil {
+		if err := transportErr(w.request); err != nil {
 			return err
 		}
 		if err := w.stream.Close(); err != nil {
@@ -300,13 +308,22 @@ func (w *compressionResponse) finish() error {
 	return nil
 }
 func (w *compressionResponse) release() {
+	if w.releaseStream != nil {
+		w.releaseStream()
+		w.releaseStream = nil
+	}
 	if w.acquired {
-		<-w.permits
+		w.permits.Release()
 		w.acquired = false
 	}
 }
+
+// compressionEncoderWait bounds how long a request that refuses identity waits
+// for encoder capacity before a retryable 503.
+const compressionEncoderWait = 250 * time.Millisecond
+
 func (w *compressionResponse) flush() error {
-	if err := w.request.Context().Err(); err != nil {
+	if err := transportErr(w.request); err != nil {
 		return err
 	}
 	if !responseFlushSupported(w.underlying) {
@@ -362,7 +379,7 @@ func (w *compressionResponse) ReadFrom(reader io.Reader) (int64, error) {
 	var total int64
 	emptyReads := 0
 	for {
-		if err := w.request.Context().Err(); err != nil {
+		if err := transportErr(w.request); err != nil {
 			w.err = err
 			return total, err
 		}

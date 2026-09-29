@@ -15,6 +15,8 @@ type Relation[M any] interface {
 	relationName() string
 	copyRelation() Relation[M]
 	validateRelation(string, int, RelationLimits) error
+	// loadRelation attaches loaded slots in place: loadRelations passes a
+	// slice it owns, copied once from the caller, so branches never re-copy it.
 	loadRelation(context.Context, database.Executor, []M, *relationLoadState, int, bool) ([]M, error)
 }
 
@@ -129,6 +131,7 @@ func (q Query[M]) load(ctx context.Context, executor database.Executor, parents 
 	if err := executionContext(ctx, executor); err != nil {
 		return nil, err
 	}
+	q = q.inContext(ctx)
 	if err := q.Validate(); err != nil {
 		return nil, err
 	}

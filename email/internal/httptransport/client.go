@@ -8,8 +8,10 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/email"
@@ -23,6 +25,9 @@ type Client struct {
 	base   string
 	client *http.Client
 	owned  *http.Transport
+	// traced is true for net/http transports, which report connection progress
+	// through httptrace. Other borrowed round trippers stay conservative.
+	traced bool
 }
 
 func New(config email.HTTPConfig, endpoint string) (*Client, error) {
@@ -47,7 +52,8 @@ func New(config email.HTTPConfig, endpoint string) (*Client, error) {
 		owned = sharedtransport.New(sharedtransport.Config{ConnectTimeout: config.Timeout, RequestTimeout: config.Timeout, MaxIdleConnections: 16, MaxIdlePerHost: 16, MaxResponseHeaderBytes: MaxResponseBytes})
 		transport = owned
 	}
-	return &Client{base: strings.TrimRight(u.String(), "/"), client: &http.Client{Transport: transport, Timeout: config.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, owned: owned}, nil
+	_, standard := transport.(*http.Transport)
+	return &Client{base: strings.TrimRight(u.String(), "/"), client: &http.Client{Transport: transport, Timeout: config.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, owned: owned, traced: standard}, nil
 }
 func (c *Client) Close() {
 	if c != nil && c.owned != nil {
@@ -72,13 +78,24 @@ func (c *Client) Request(ctx context.Context, path, contentType string, data []b
 	r.Header.Set("Accept", "application/json")
 	return r, nil
 }
+
+// Do sends the request once. With a net/http transport, a failure before a
+// connection was obtained (DNS resolution, dial or TLS handshake) wrote no
+// request bytes, so it is a known non-acceptance and Transient. Any later
+// failure, or any failure of another round tripper, is Ambiguous.
 func (c *Client) Do(request *http.Request) (int, []byte, error) {
 	if request.Context().Err() != nil {
 		return 0, nil, email.Transient
 	}
+	var connected atomic.Bool
+	trace := &httptrace.ClientTrace{GotConn: func(httptrace.GotConnInfo) { connected.Store(true) }}
+	request = request.WithContext(httptrace.WithClientTrace(request.Context(), trace))
 	r, err := c.client.Do(request)
 	if r != nil && r.Body != nil {
 		defer r.Body.Close()
+	}
+	if err != nil && c.traced && !connected.Load() {
+		return 0, nil, email.Transient
 	}
 	if err != nil || r == nil || r.Body == nil {
 		return 0, nil, email.Ambiguous

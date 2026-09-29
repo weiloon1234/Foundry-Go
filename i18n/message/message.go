@@ -24,6 +24,9 @@ type Options struct {
 type Message[A any] struct {
 	definition i18n.MessageDefinition
 	arguments  contract.JSON[A]
+	// properties are resolved once at Define, aligned with definition.Parameters,
+	// so formatting does not rediscover the argument wire graph per call.
+	properties []contract.ScalarProperty
 	err        error
 }
 
@@ -65,7 +68,8 @@ func Describe(key i18n.MessageKey, schema contract.Schema, options Options) (i18
 	return result, nil
 }
 
-// Define is the construction boundary emitted by foundry generate.
+// Define is the construction boundary emitted by foundry generate. The message
+// signature and per-parameter wire metadata are validated once here.
 func Define[A any](key i18n.MessageKey, arguments contract.JSON[A], options Options) Message[A] {
 	result := Message[A]{arguments: arguments}
 	schema, err := arguments.Description()
@@ -74,6 +78,15 @@ func Define[A any](key i18n.MessageKey, arguments contract.JSON[A], options Opti
 		return result
 	}
 	result.definition, result.err = Describe(key, schema, options)
+	if result.err != nil {
+		return result
+	}
+	result.properties = make([]contract.ScalarProperty, len(result.definition.Parameters))
+	for i, parameter := range result.definition.Parameters {
+		if result.properties[i], result.err = arguments.DescribeScalarProperty(parameter.Name); result.err != nil {
+			return result
+		}
+	}
 	return result
 }
 func (m Message[A]) Validate() error {
@@ -83,7 +96,10 @@ func (m Message[A]) Validate() error {
 	if err := m.arguments.Validate(); err != nil {
 		return err
 	}
-	return m.definition.Validate()
+	if m.properties == nil || len(m.properties) != len(m.definition.Parameters) {
+		return invalid()
+	}
+	return nil
 }
 func (m Message[A]) Key() i18n.MessageKey { return m.definition.Key }
 func (m Message[A]) Definition() (i18n.MessageDefinition, error) {
@@ -144,8 +160,11 @@ func (m Message[A]) Format(ctx context.Context, catalog *i18n.Catalog, locale i1
 	if err := m.Validate(); err != nil {
 		return i18n.Result{}, err
 	}
-	if ctx == nil || catalog.Accepts(m.definition) != nil {
+	if ctx == nil {
 		return i18n.Result{}, invalid()
+	}
+	if err := catalog.Accepts(m.definition); err != nil {
+		return i18n.Result{}, err
 	}
 	locales, err := catalog.Snapshot(ctx)
 	if err != nil {
@@ -192,6 +211,9 @@ func (m Message[A]) BindLiteral(ctx context.Context, args A, text string) (i18n.
 	return i18n.PrepareLiteralMessage(m.definition, values, text)
 }
 
+// bindArguments encodes through the declaration's typed JSON descriptor, the
+// single source of truth for wire names, custom codecs and quoting, then reads
+// the validated top-level scalars using metadata resolved at Define.
 func (m Message[A]) bindArguments(ctx context.Context, args A) (map[string]i18n.Argument, error) {
 	limits := contract.JSONLimits{Bytes: i18n.MaxTextBytes, Depth: 8, Nodes: 512, Steps: 1024, Issues: 1}
 	encoded, err := m.arguments.Encode(ctx, args, limits)
@@ -207,12 +229,9 @@ func (m Message[A]) bindArguments(ctx context.Context, args A) (map[string]i18n.
 		return nil, invalid()
 	}
 	values := make(map[string]i18n.Argument, len(m.definition.Parameters))
-	for _, parameter := range m.definition.Parameters {
+	for index, parameter := range m.definition.Parameters {
 		value := object[parameter.Name]
-		info, err := m.arguments.DescribeScalarProperty(parameter.Name)
-		if err != nil {
-			return nil, err
-		}
+		info := m.properties[index]
 		if info.Quoted {
 			text, ok := value.(string)
 			if !ok {

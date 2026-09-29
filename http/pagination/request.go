@@ -45,7 +45,7 @@ func pageRules[F any](config Config) validation.Rule[Parameters[F]] {
 	number := validation.DefineField(config.NumberParam, func(request query.PageRequest) int { return request.Number })
 	size := validation.DefineField(config.SizeParam, func(request query.PageRequest) int { return request.Size })
 	rule := validation.Bail(
-		number.Rules(validation.Min(1)),
+		number.Rules(validation.Min(1), validation.Max(config.maximumPage())),
 		size.Rules(validation.Min(1), validation.Max(config.MaximumSize)),
 		validPageRequest,
 	)

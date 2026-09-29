@@ -207,7 +207,7 @@ func (q CursorQuery[R]) Paginate(ctx context.Context, executor database.Executor
 	if err != nil {
 		return CursorPage[R]{}, err
 	}
-	statement, err := q.reader().Compile()
+	statement, err := q.reader().compileIn(ctx)
 	if err != nil {
 		return CursorPage[R]{}, err
 	}
@@ -223,10 +223,13 @@ func (q CursorQuery[R]) Paginate(ctx context.Context, executor database.Executor
 	if err != nil {
 		return CursorPage[R]{}, err
 	}
+	if err := validateKeysetOrders(q.orders); err != nil {
+		return CursorPage[R]{}, err
+	}
 	orders := cursorOrders(q.orders, navigation.backward)
 	q.node.orders = orderNodes(orders)
 	if navigation.present {
-		q.node.predicates = append(slices.Clone(q.node.predicates), cursorPredicate(orders, navigation.keys).expression)
+		q.node.predicates = append(slices.Clone(q.node.predicates), cursorPredicate(orders, navigation.keys, anyNullable[CursorScope[R]]).expression)
 	}
 	q.node.limit = value.Set(request.Size + 1)
 	items, err := q.reader().All(ctx, executor)

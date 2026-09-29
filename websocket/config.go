@@ -13,12 +13,23 @@ import (
 )
 
 type Config struct {
-	MaxPresenceScopes        int
-	MaxConnections           int
-	MaxSubscriptions         int
-	MaxFrameBytes            int
-	InboundQueue             int
-	OutboundQueue            int
+	MaxPresenceScopes int
+	MaxConnections    int
+	MaxSubscriptions  int
+	MaxFrameBytes     int
+	// InboundQueue bounds frames read but not yet processed. Generated clients
+	// limit their in-flight operations to it; overflowing it closes the socket.
+	InboundQueue int
+	// OutboundQueue bounds queued frames per connection. MaxQueuedBytes bounds
+	// their actual bytes, including inbound frames and pending-admission
+	// buffers; MaxTotalQueuedBytes bounds all connections together. Exceeding
+	// either disconnects the slow connection instead of blocking publishers.
+	OutboundQueue       int
+	MaxQueuedBytes      int
+	MaxTotalQueuedBytes int64
+	// MaxOperations bounds concurrent trusted publication, presence and
+	// disconnect operations. Callers wait briefly, then receive fault.Overloaded.
+	MaxOperations            int
 	MaxPresenceMembers       int
 	MaxMemberBytes           int
 	OperationTimeout         time.Duration
@@ -40,8 +51,9 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{MaxPresenceScopes: 256, MaxConnections: 256, MaxSubscriptions: 64, MaxFrameBytes: 64 << 10,
-		InboundQueue: 4, OutboundQueue: 16, MaxPresenceMembers: 64, MaxMemberBytes: 512, OperationTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second,
+	return Config{MaxPresenceScopes: 256, MaxConnections: 10000, MaxSubscriptions: 64, MaxFrameBytes: 64 << 10,
+		InboundQueue: 64, OutboundQueue: 256, MaxQueuedBytes: 1 << 20, MaxTotalQueuedBytes: 256 << 20, MaxOperations: 1024,
+		MaxPresenceMembers: 64, MaxMemberBytes: 512, OperationTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second,
 		HeartbeatInterval: 15 * time.Second, PongTimeout: 5 * time.Second, AuthRefreshInterval: 30 * time.Second, DrainTimeout: time.Second,
 		MaxConnectionsPerIP: 64, MaxConnectionsPerSubject: 8, DeduplicationEntries: 256, MessageRate: ratelimit.Limit{Requests: 128, Window: time.Second},
 		Payload: contract.JSONLimits{Bytes: 32 << 10, Depth: 32, Nodes: 8192, Steps: 32768, Issues: 16}}
@@ -57,11 +69,13 @@ func (c Config) Validate() error {
 	if err := c.MessageRate.Validate(); err != nil {
 		return err
 	}
-	if c.MaxConnections < 1 || c.MaxConnections > 65536 || c.MaxSubscriptions < 1 || c.MaxSubscriptions > 1024 || c.MaxFrameBytes < 4096 || c.MaxFrameBytes > 1<<20 || c.InboundQueue < 1 || c.InboundQueue > 1024 || c.OutboundQueue < 1 || c.OutboundQueue > 1024 || c.OperationTimeout <= 0 || c.OperationTimeout > time.Minute || c.WriteTimeout <= 0 || c.WriteTimeout > time.Minute {
+	if c.MaxConnections < 1 || c.MaxConnections > 1<<20 || c.MaxSubscriptions < 1 || c.MaxSubscriptions > 1024 || c.MaxFrameBytes < 4096 || c.MaxFrameBytes > 1<<20 || c.InboundQueue < 1 || c.InboundQueue > 1024 || c.OutboundQueue < 1 || c.OutboundQueue > 4096 || c.MaxOperations < 1 || c.MaxOperations > 65536 || c.OperationTimeout <= 0 || c.OperationTimeout > time.Minute || c.WriteTimeout <= 0 || c.WriteTimeout > time.Minute {
 		return fault.New(fault.Invalid, "invalid WebSocket runtime bounds")
 	}
-	if int64(c.MaxConnections)*int64(c.InboundQueue+2*c.OutboundQueue)*int64(c.MaxFrameBytes) > 1<<30 {
-		return fault.New(fault.Invalid, "WebSocket configured queue budget exceeds one GiB")
+	// Queued bytes are enforced when frames are queued, so the budget is the
+	// actual retained data rather than a worst-case per-connection product.
+	if c.MaxQueuedBytes < c.MaxFrameBytes || c.MaxQueuedBytes > 64<<20 || c.MaxTotalQueuedBytes < int64(c.MaxQueuedBytes) || c.MaxTotalQueuedBytes > 16<<30 {
+		return fault.New(fault.Invalid, "invalid WebSocket queued byte budget")
 	}
 	if err := c.Payload.Validate(); err != nil {
 		return err

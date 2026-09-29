@@ -99,7 +99,7 @@ func (b *Backend) ListUploads(ctx context.Context, options storage.ListOptions) 
 	if err := options.Validate(); err != nil {
 		return UploadPage{}, err
 	}
-	if err := validateKeyText(b.config.Provider, b.config.Namespace.String()+options.Prefix.String()); err != nil {
+	if err := validateKeyText(b.config.requiresNFC(), b.config.Namespace.String()+options.Prefix.String()); err != nil {
 		return UploadPage{}, err
 	}
 	input := &awss3.ListMultipartUploadsInput{Bucket: aws.String(b.config.Bucket), Prefix: aws.String(b.config.Namespace.String() + options.Prefix.String()), MaxUploads: aws.Int32(int32(options.Limit)), EncodingType: types.EncodingTypeUrl}
@@ -114,13 +114,13 @@ func (b *Backend) ListUploads(ctx context.Context, options storage.ListOptions) 
 		if _, err := storage.ParseKey(cursor.Key); err != nil {
 			return UploadPage{}, err
 		}
-		if err := validateKeyText(b.config.Provider, cursor.Key); err != nil {
+		if err := validateKeyText(b.config.requiresNFC(), cursor.Key); err != nil {
 			return UploadPage{}, err
 		}
 		input.KeyMarker = aws.String(cursor.Key)
 		input.UploadIdMarker = aws.String(cursor.Upload)
 	}
-	result, err := b.client.ListMultipartUploads(ctx, input, safeRetry(b.config.ReadAttempts))
+	result, err := b.client.ListMultipartUploads(ctx, input, b.readRetry)
 	if err != nil {
 		return UploadPage{}, failure(storage.ListOperation, storage.NotApplicable, err)
 	}
@@ -134,7 +134,7 @@ func (b *Backend) ListUploads(ctx context.Context, options storage.ListOptions) 
 		if err != nil || !strings.HasPrefix(full, aws.ToString(input.Prefix)) {
 			return UploadPage{}, storage.Failure(storage.IntegrityFailed, storage.ListOperation, storage.NotApplicable, err)
 		}
-		if err := validateKeyText(b.config.Provider, full); err != nil {
+		if err := validateKeyText(b.config.requiresNFC(), full); err != nil {
 			return UploadPage{}, err
 		}
 		key, err := storage.ParseKey(strings.TrimPrefix(full, b.config.Namespace.String()))
@@ -209,14 +209,14 @@ func (b *Backend) trackWrite(key storage.ObjectKey, active bool) {
 // Absence/empty parts prove cleanup only after the owner stops issuing new parts.
 func (b *Backend) abort(ctx context.Context, full, upload string) error {
 	for round := 0; round < 3; round++ {
-		_, err := b.client.AbortMultipartUpload(ctx, &awss3.AbortMultipartUploadInput{Bucket: aws.String(b.config.Bucket), Key: aws.String(full), UploadId: aws.String(upload)}, safeRetry(b.config.PartAttempts))
+		_, err := b.client.AbortMultipartUpload(ctx, &awss3.AbortMultipartUploadInput{Bucket: aws.String(b.config.Bucket), Key: aws.String(full), UploadId: aws.String(upload)}, b.partRetry)
 		if noSuchUpload(err) {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
-		remaining, err := b.client.ListParts(ctx, &awss3.ListPartsInput{Bucket: aws.String(b.config.Bucket), Key: aws.String(full), UploadId: aws.String(upload), MaxParts: aws.Int32(1)}, safeRetry(b.config.ReadAttempts))
+		remaining, err := b.client.ListParts(ctx, &awss3.ListPartsInput{Bucket: aws.String(b.config.Bucket), Key: aws.String(full), UploadId: aws.String(upload), MaxParts: aws.Int32(1)}, b.readRetry)
 		if noSuchUpload(err) {
 			return nil
 		}

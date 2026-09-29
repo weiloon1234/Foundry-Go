@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -159,5 +160,65 @@ func TestRedisWebSocketRejectsCorruptMetadataAndPolicyWithoutResettingIt(t *test
 				t.Fatal("corrupt state silently reset")
 			}
 		})
+	}
+}
+func TestRedisWebSocketClampsABackwardClockStepWithinRetention(t *testing.T) {
+	client, backend, key, _ := websocketAuthority(t)
+	ctx := t.Context()
+	websocketOK(t, backend.WebSocketCheck(ctx, key))
+	current, err := client.raw.Time(ctx).Result()
+	websocketOK(t, err)
+	// The authority last committed one second ahead of Redis TIME: a server
+	// clock stepped back within the two-second retention window.
+	ahead := strconv.FormatInt(current.Add(time.Second).UnixMilli(), 10)
+	address := key.String() + ":metadata"
+	websocketOK(t, client.raw.HSet(ctx, address, "time", ahead).Err())
+	websocketOK(t, backend.WebSocketCheck(ctx, key))
+	connection := websocketID[ws.Connection](t)
+	websocketOK(t, backend.WebSocketOpen(ctx, key, websocketID[ws.Instance](t), connection))
+	stored, err := strconv.ParseInt(client.raw.HGet(ctx, address, "time").Val(), 10, 64)
+	websocketOK(t, err)
+	if want, _ := strconv.ParseInt(ahead, 10, 64); stored < want {
+		t.Fatal("authority time moved backwards", stored, want)
+	}
+}
+
+func TestRedisWebSocketRevisionsTrackPresenceChangesOnly(t *testing.T) {
+	_, backend, key, track := websocketAuthority(t)
+	ctx := t.Context()
+	instance := websocketID[ws.Instance](t)
+	one, two := websocketID[ws.Connection](t), websocketID[ws.Connection](t)
+	scope := ws.Scope{Channel: "members", Room: "9", HasRoom: true}
+	track(key.String() + ":presence:" + scope.Hash() + ":leases")
+	track(key.String() + ":presence:" + scope.Hash() + ":data")
+	// Subject digests whose byte order differs from common locale collation
+	// orders ('0' < 'a' < 'f' bytewise) must come back in byte order.
+	low, high := ws.MemberID(strings.Repeat("0", 63)+"f"), ws.MemberID("a"+strings.Repeat("0", 63))
+	for id, subject := range map[ws.ConnectionID]ws.MemberID{one: high, two: low} {
+		track(key.String() + ":connection:" + id.String())
+		track(key.String() + ":subject:" + string(subject))
+		websocketOK(t, backend.WebSocketOpen(ctx, key, instance, id))
+		_, err := backend.WebSocketJoin(ctx, key, instance, id, ws.ClusterMembership{Scope: scope, Subject: subject, Presence: true, Data: json.RawMessage(`{"n":1}`)})
+		websocketOK(t, err)
+	}
+	first, err := backend.WebSocketMembers(ctx, key, scope)
+	websocketOK(t, err)
+	if len(first.Members) != 2 || first.Members[0].ID != low || first.Members[1].ID != high {
+		t.Fatal("presence members were not in byte order", first.Members)
+	}
+	again, err := backend.WebSocketMembers(ctx, key, scope)
+	websocketOK(t, err)
+	if again.Revision != first.Revision {
+		t.Fatal("an unchanged presence read advanced the revision")
+	}
+	// A different re-join is a per-connection conflict, never a policy one.
+	if _, err := backend.WebSocketJoin(ctx, key, instance, one, ws.ClusterMembership{Scope: scope, Subject: high, Presence: true, Data: json.RawMessage(`{"n":2}`)}); !errors.Is(err, ws.MembershipConflict) || errors.Is(err, ws.PolicyConflict) {
+		t.Fatal("membership mismatch was not a membership conflict", err)
+	}
+	websocketOK(t, backend.WebSocketLeave(ctx, key, instance, one, scope))
+	left, err := backend.WebSocketMembers(ctx, key, scope)
+	websocketOK(t, err)
+	if left.Revision <= again.Revision || len(left.Members) != 1 {
+		t.Fatal("a presence leave did not advance the revision", left.Revision, again.Revision)
 	}
 }

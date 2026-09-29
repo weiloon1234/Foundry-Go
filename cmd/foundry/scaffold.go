@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/cli"
@@ -12,16 +13,19 @@ import (
 )
 
 func runMake(ctx context.Context, args []string, stdout, stderr io.Writer) error {
-	const usage = "usage: foundry make model|dto|job|command|migration|seeder <GoName> --dir package [kind-specific flags]"
+	kinds := generate.ScaffoldKinds()
+	names := make([]string, len(kinds))
+	for i, kind := range kinds {
+		names[i] = string(kind)
+	}
+	usage := "usage: foundry make " + strings.Join(names, "|") + " <GoName> --dir package [kind-specific flags]"
 	if handled, err := subcommandHelp(args, stdout, usage); handled {
 		return err
 	}
 	if len(args) == 0 {
 		return cli.Usage(usage)
 	}
-	switch generate.ScaffoldKind(args[0]) {
-	case generate.MigrationScaffold, generate.SeederScaffold, generate.ModelScaffold, generate.DTOScaffold, generate.JobScaffold, generate.CommandScaffold:
-	default:
+	if !slices.Contains(kinds, generate.ScaffoldKind(args[0])) {
 		return cli.Usage(usage)
 	}
 	var positional string
@@ -34,7 +38,7 @@ func runMake(ctx context.Context, args []string, stdout, stderr io.Writer) error
 	flags.SetOutput(stderr)
 	flags.StringVar(&options.Dir, "dir", ".", "existing consumer Go package directory")
 	flags.StringVar(&options.Name, "name", "", "exported Go declaration name")
-	if options.Kind != generate.ModelScaffold && options.Kind != generate.DTOScaffold {
+	if options.Kind != generate.ModelScaffold && options.Kind != generate.DTOScaffold && options.Kind != generate.EnumScaffold {
 		flags.StringVar(&options.ID, "id", "", "stable semantic declaration ID")
 	}
 	if options.Kind == generate.ModelScaffold {
@@ -46,6 +50,20 @@ func runMake(ctx context.Context, args []string, stdout, stderr io.Writer) error
 	if options.Kind == generate.MigrationScaffold {
 		flags.StringVar(&options.Origin, "origin", "", "migration owner, such as app or a plugin namespace")
 		flags.StringVar(&options.Version, "version", "", "release introducing this historical migration")
+		flags.StringVar(&options.Create, "create", "", "start from a CREATE TABLE statement for this table")
+	}
+	var cases string
+	switch options.Kind {
+	case generate.EndpointScaffold:
+		flags.StringVar(&options.Method, "method", "POST", "HTTP method: GET, POST, PUT, PATCH or DELETE")
+		flags.StringVar(&options.Path, "path", "", "static route path, such as /notes")
+	case generate.EnumScaffold:
+		flags.StringVar(&cases, "cases", "", "comma-separated lower_snake_case values")
+	case generate.ListenerScaffold:
+		flags.StringVar(&options.Event, "event", "", "exported event payload type of this package")
+	case generate.PolicyScaffold:
+		flags.StringVar(&options.Subject, "subject", "", "exported authenticated model type of this package")
+		flags.StringVar(&options.Resource, "resource", "", "exported resource type of this package")
 	}
 	if err := cli.ParseFlags(flags, args[1:]); err != nil {
 		return err
@@ -61,6 +79,9 @@ func runMake(ctx context.Context, args []string, stdout, stderr io.Writer) error
 		}
 		options.Name = positional
 	}
+	if cases != "" {
+		options.Cases = strings.Split(cases, ",")
+	}
 	if err := generate.ValidateScaffold(options); err != nil {
 		return cli.InvalidArguments(err)
 	}
@@ -69,8 +90,13 @@ func runMake(ctx context.Context, args []string, stdout, stderr io.Writer) error
 		return err
 	}
 	message := "Implement its domain work, then register its definition explicitly."
-	if options.Kind == generate.ModelScaffold || options.Kind == generate.DTOScaffold {
+	switch options.Kind {
+	case generate.ModelScaffold, generate.DTOScaffold:
 		message = "Add domain fields, then run foundry generate for this package."
+	case generate.EnumScaffold:
+		message = "Run foundry generate for this package to create its codecs."
+	case generate.EndpointScaffold, generate.NotificationScaffold:
+		message = "Its DTOs and generated codecs were created too; add their fields, run foundry generate, then register it."
 	}
 	if _, err := fmt.Fprintf(stdout, "Created %s. %s\n", path, message); err != nil {
 		return fmt.Errorf("scaffold was created at %s but its output could not be written: %w", path, err)

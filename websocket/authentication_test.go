@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/auth"
@@ -68,7 +69,7 @@ func authentication(t *testing.T) authFixture {
 		t.Fatal(err)
 	}
 	adminCookie := foundryhttp.DefineCookie("admin_session", foundryhttp.SecretCookie(), foundryhttp.DefaultCookieOptions())
-	adapter, err := foundryhttp.NewAuthentication(r, foundryhttp.BearerCredential("bearer"), foundryhttp.CookieCredential("admin-cookie", adminCookie))
+	adapter, err := foundryhttp.NewAuthentication(r, foundryhttp.BearerCredential("bearer"), foundryhttp.CookieCredential("admin-cookie", adminCookie).WithoutOriginProtection())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,6 +79,9 @@ func userHeaders() http.Header { return http.Header{"Authorization": []string{"B
 
 func TestPrivateRoomsBindIdentityGuardAndFreshAuthorization(t *testing.T) {
 	a := authentication(t)
+	refreshing := ws.DefaultConfig()
+	refreshing.AuthRefreshInterval = 150 * time.Millisecond
+	refreshing.OperationTimeout = time.Second
 	users := ws.OwnedRooms[AccountChannel]("accounts", ws.DefineRooms(foundryhttp.IntegerPath[int64]()), a.users, (Account{}).FoundryReference())
 	admins := ws.OwnedRooms[AdminChannel]("admins", ws.DefineRooms(foundryhttp.IntegerPath[int64]()), a.admins, (Account{}).FoundryReference())
 	var handled atomic.Int32
@@ -95,7 +99,7 @@ func TestPrivateRoomsBindIdentityGuardAndFreshAuthorization(t *testing.T) {
 		handled.Add(1)
 		saved <- ctx
 		return nil
-	})), ws.Register(admins)), a.transport, ws.DefaultConfig())
+	})), ws.Register(admins)), a.transport, refreshing)
 	peer := f.dial(t, userHeaders())
 	for _, request := range []ws.Request{{Action: ws.Subscribe, ID: "whole", Channel: "accounts"}, {Action: ws.Subscribe, ID: "wrong-room", Channel: "accounts", Room: room("8")}} {
 		send(t, peer, request)
@@ -112,23 +116,34 @@ func TestPrivateRoomsBindIdentityGuardAndFreshAuthorization(t *testing.T) {
 	if receive(t, peer, ws.ErrorResponse).Code != ws.Forbidden {
 		t.Fatal("event policy not applied")
 	}
-	before := a.loads.Load()
 	send(t, peer, ws.Request{Action: ws.Message, ID: "allowed-event", Channel: users.ID(), Room: room("7"), Event: "edit", Payload: json.RawMessage(`{"text":"allowed"}`)})
 	receive(t, peer, ws.Acknowledged)
-	if a.loads.Load() != before+1 || handled.Load() != 1 {
-		t.Fatal("message did not refresh subject exactly once")
-	}
 	retained := <-saved
 	if _, err := a.users.Require(retained); err == nil {
 		t.Fatal("completed operation kept an authentication scope")
 	}
+	// Messages reuse the connection's authorization freshness window instead of
+	// loading the subject again for every frame.
+	before := a.loads.Load()
+	send(t, peer, ws.Request{Action: ws.Message, ID: "cached-event", Channel: users.ID(), Room: room("7"), Event: "edit", Payload: json.RawMessage(`{"text":"allowed"}`)})
+	receive(t, peer, ws.Acknowledged)
+	<-saved
+	if a.loads.Load() != before || handled.Load() != 2 {
+		t.Fatal("message repeated credential lookup inside the freshness window")
+	}
+	// The periodic refresh remains the revocation backstop: it disconnects the
+	// revoked subject within one refresh interval.
 	a.disabled.Store(true)
-	send(t, peer, ws.Request{Action: ws.Message, ID: "revoked", Channel: users.ID(), Room: room("7"), Event: "edit", Payload: json.RawMessage(`{"text":"allowed"}`)})
-	if receive(t, peer, ws.ErrorResponse).Code != ws.Unauthenticated || handled.Load() != 1 {
+	deadline := time.Now().Add(3 * time.Second)
+	for f.hub.Snapshot().Connections != 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("revoked subject was not disconnected by refresh")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if handled.Load() != 2 {
 		t.Fatal("revoked subject invoked handler")
 	}
-	send(t, peer, ws.Request{Action: ws.Unsubscribe, ID: "cleanup", Channel: users.ID(), Room: room("7")})
-	receive(t, peer, ws.Unsubscribed)
 }
 
 func TestPresenceOnlyExportsSafeDTOAndCountsConnections(t *testing.T) {

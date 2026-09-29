@@ -9,8 +9,9 @@ import (
 // MaxWindow bounds live policy retention and retry durations.
 const MaxWindow = 24 * time.Hour
 
-// Limit admits Requests units per epoch-aligned Window. A fixed window permits
-// bursts on both sides of a boundary; it is not a sliding-window guarantee.
+// Limit admits Requests units per fixed Window. Each key's windows are shifted by
+// its Key.WindowOffset, so many keys do not reset at the same instant. A fixed
+// window permits bursts on both sides of a boundary; it is not a sliding window.
 type Limit struct {
 	Requests uint32
 	Window   time.Duration
@@ -53,6 +54,20 @@ func (d Decision) Validate(limit Limit, cost uint32) error {
 		(d.Allowed && (d.RetryAfter != 0 || d.Remaining > limit.Requests-cost)) ||
 		(!d.Allowed && (d.RetryAfter != d.ResetAfter || d.Remaining >= cost)) {
 		return fault.New(fault.Internal, "invalid rate limit decision")
+	}
+	return nil
+}
+
+// ValidatePeek checks non-consuming adapter output: Remaining is the capacity
+// left now, Allowed reports whether cost fits it, and RetryAfter is zero when
+// allowed or equals ResetAfter when not.
+func (d Decision) ValidatePeek(limit Limit, cost uint32) error {
+	if err := limit.ValidateCost(cost); err != nil {
+		return err
+	}
+	if d.Limit != limit.Requests || d.Remaining > limit.Requests || d.ResetAfter <= 0 || d.ResetAfter > limit.Window || d.ResetAfter%time.Millisecond != 0 ||
+		d.Allowed != (cost <= d.Remaining) || (d.Allowed && d.RetryAfter != 0) || (!d.Allowed && d.RetryAfter != d.ResetAfter) {
+		return fault.New(fault.Internal, "invalid rate limit inspection")
 	}
 	return nil
 }

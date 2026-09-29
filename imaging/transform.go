@@ -3,7 +3,6 @@ package imaging
 import (
 	"context"
 	"image"
-	"image/color"
 	"math"
 
 	"github.com/disintegration/gift"
@@ -89,31 +88,52 @@ func drawFilter(ctx context.Context, img image.Image, filter gift.Filter, l Limi
 	return out, nil
 }
 
+// adjustPixels applies brightness, contrast or grayscale directly to 8-bit
+// NRGBA pixel rows. Pipeline-owned NRGBA images are adjusted in place; other
+// decoded models are converted once. Brightness and contrast are per-channel
+// lookup tables with the same rounding as the per-pixel formulas.
 func adjustPixels(ctx context.Context, img image.Image, s step) (image.Image, error) {
-	b := img.Bounds()
-	out := image.NewNRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	out := ownedNRGBA(img)
+	var table [256]uint8
 	factor := math.Pow((100+s.number)/100, 2)
+	for v := range table {
+		switch s.kind {
+		case brightness:
+			table[v] = clamp(float64(v) + s.number)
+		case contrast:
+			table[v] = clamp(((float64(v)/255-0.5)*factor + 0.5) * 255)
+		}
+	}
+	b := out.Bounds()
+	width := b.Dx() * 4
 	for y := range b.Dy() {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		for x := range b.Dx() {
-			c := color.NRGBAModel.Convert(img.At(x+b.Min.X, y+b.Min.Y)).(color.NRGBA)
-			switch s.kind {
-			case brightness:
-				c.R = clamp(float64(c.R) + s.number)
-				c.G = clamp(float64(c.G) + s.number)
-				c.B = clamp(float64(c.B) + s.number)
-			case contrast:
-				adjust := func(v uint8) uint8 { return clamp(((float64(v)/255-0.5)*factor + 0.5) * 255) }
-				c.R, c.G, c.B = adjust(c.R), adjust(c.G), adjust(c.B)
-			case grayscale:
-				v := uint8((uint32(c.R)*2126 + uint32(c.G)*7152 + uint32(c.B)*722) / 10000)
-				c.R, c.G, c.B = v, v, v
+		row := out.Pix[y*out.Stride : y*out.Stride+width]
+		for i := 0; i < len(row); i += 4 {
+			if s.kind == grayscale {
+				v := uint8((uint32(row[i])*2126 + uint32(row[i+1])*7152 + uint32(row[i+2])*722) / 10000)
+				row[i], row[i+1], row[i+2] = v, v, v
+				continue
 			}
-			out.SetNRGBA(x, y, c)
+			row[i], row[i+1], row[i+2] = table[row[i]], table[row[i+1]], table[row[i+2]]
 		}
 	}
 	return out, nil
+}
+
+// ownedNRGBA returns img when it already is NRGBA (every decoded or
+// transformed image is owned by the pipeline) or converts it once.
+func ownedNRGBA(img image.Image) *image.NRGBA {
+	if nrgba, ok := img.(*image.NRGBA); ok {
+		return nrgba
+	}
+	b := img.Bounds()
+	out := image.NewNRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	converter := gift.New()
+	converter.SetParallelization(false)
+	converter.Draw(out, img)
+	return out
 }
 func clamp(v float64) uint8 { return uint8(math.Max(0, math.Min(255, v))) }

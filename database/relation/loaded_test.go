@@ -69,3 +69,29 @@ func TestLoadedStatesAndOwnedContainers(t *testing.T) {
 		t.Fatal("empty collection is not loaded")
 	}
 }
+
+func TestCollectionsIterateWithoutCopying(t *testing.T) {
+	var missing relation.Many[user]
+	for range missing.All() {
+		t.Fatal("unloaded collection yielded items")
+	}
+	loaded := relation.Collection([]user{{ID: 1}, {ID: 2}})
+	var seen []int
+	for i, item := range loaded.All() {
+		item.ID = 9 // yielded by value; the stored collection is unchanged
+		seen = append(seen, i)
+	}
+	if loaded.Len() != 2 || len(seen) != 2 || missing.Len() != 0 {
+		t.Fatal("collection length or iteration changed")
+	}
+	if items, _ := loaded.Get(); items[0].ID != 1 {
+		t.Fatal("iteration mutated stored collection")
+	}
+	type pivot struct{ ID int }
+	links := relation.Linked([]relation.Link[user, pivot]{{Model: user{ID: 1}, Pivot: pivot{ID: 2}}})
+	for _, link := range links.All() {
+		if links.Len() != 1 || link.Pivot.ID != 2 {
+			t.Fatal("link iteration lost pivot data")
+		}
+	}
+}

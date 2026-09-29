@@ -2,12 +2,17 @@ package http
 
 import (
 	"bufio"
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"io"
 	"net"
 	stdhttp "net/http"
 	"strconv"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/admission"
 )
 
 type etagResponse struct {
@@ -17,10 +22,14 @@ type etagResponse struct {
 	status                        int
 	declared                      int64
 	buffer                        responseBuffer
-	permits                       chan struct{}
+	slots                         *admission.Semaphore
+	wait                          time.Duration
 	acquired, committed, hijacked bool
-	err                           error
-	passthrough                   bool
+	// finalized records a complete declared body validated directly from the
+	// handler's single write, without copying it into capture pages.
+	finalized   bool
+	err         error
+	passthrough bool
 }
 
 func (w *etagResponse) Header() stdhttp.Header                   { return w.header }
@@ -69,7 +78,7 @@ func (w *etagResponse) Write(data []byte) (int, error) {
 	if w.err != nil {
 		return 0, w.err
 	}
-	if err := w.request.Context().Err(); err != nil {
+	if err := transportErr(w.request); err != nil {
 		w.err = err
 		return 0, err
 	}
@@ -78,6 +87,14 @@ func (w *etagResponse) Write(data []byte) (int, error) {
 	}
 	if w.err != nil {
 		return 0, w.err
+	}
+	if w.finalized {
+		if len(data) == 0 {
+			return 0, nil
+		}
+		// The complete declared body was already validated and served. Like the
+		// native writer, report the excess without failing the finished response.
+		return 0, stdhttp.ErrContentLength
 	}
 	if w.committed {
 		return w.writeThrough(data)
@@ -90,6 +107,30 @@ func (w *etagResponse) Write(data []byte) (int, error) {
 		if _, explicit := w.final["Content-Type"]; !explicit && w.final.Get("Content-Encoding") == "" {
 			w.final.Set("Content-Type", stdhttp.DetectContentType(data[:min(len(data), 512)]))
 		}
+	}
+	// Typed JSON and other in-memory bodies declare their length and arrive in
+	// one write. Validate that complete body directly: no capture copy and no
+	// shared capacity slot are needed because it is never retained.
+	if w.declared > 0 && w.buffer.size == 0 && int64(len(data)) == w.declared && !hasResponseTrailers(w.header) {
+		sum := sha256.Sum256(data)
+		w.finalized = true
+		w.release()
+		if err := w.serveValidated(bytes.NewReader(data), EntityTag("\""+hex.EncodeToString(sum[:])+"\""), w.declared); err != nil {
+			w.err = err
+			return 0, err
+		}
+		return len(data), nil
+	}
+	// Small captures need no shared slot; memory is bounded by request
+	// concurrency. Larger captures wait briefly for capacity, then pass through.
+	if !w.acquired && w.buffer.size+int64(len(data)) > responseBufferPageBytes && w.slots != nil {
+		if err := w.slots.Acquire(transportParent(w.request), w.wait, nil); err != nil {
+			if err := w.commit(); err != nil {
+				return 0, err
+			}
+			return w.writeThrough(data)
+		}
+		w.acquired = true
 	}
 	if w.buffer.append(data) {
 		return len(data), nil
@@ -115,7 +156,7 @@ func (w *etagResponse) commit() error {
 	if w.committed {
 		return w.err
 	}
-	if err := w.request.Context().Err(); err != nil {
+	if err := transportErr(w.request); err != nil {
 		w.err = err
 		return err
 	}
@@ -142,7 +183,7 @@ func (w *etagResponse) writeThrough(data []byte) (int, error) {
 	}
 	total := 0
 	for len(data) != 0 {
-		if err := w.request.Context().Err(); err != nil {
+		if err := transportErr(w.request); err != nil {
 			w.err = err
 			return total, err
 		}
@@ -168,7 +209,7 @@ func (w *etagResponse) writeThrough(data []byte) (int, error) {
 func (w *etagResponse) release() {
 	w.buffer.reset()
 	if w.acquired {
-		<-w.permits
+		w.slots.Release()
 		w.acquired = false
 	}
 }
@@ -197,7 +238,7 @@ func (w *etagResponse) hijackResponse() (net.Conn, *bufio.ReadWriter, error) {
 	if w.err != nil {
 		return nil, nil, w.err
 	}
-	if err := w.request.Context().Err(); err != nil {
+	if err := transportErr(w.request); err != nil {
 		return nil, nil, err
 	}
 	if w.buffer.size != 0 || w.status != 0 && !w.committed {
@@ -224,7 +265,7 @@ func (w *etagResponse) ReadFrom(reader io.Reader) (int64, error) {
 	var total int64
 	empty := 0
 	for {
-		if err := w.request.Context().Err(); err != nil {
+		if err := transportErr(w.request); err != nil {
 			w.err = err
 			return total, err
 		}
@@ -267,7 +308,7 @@ func (w *etagResponse) enableFullDuplexResponse() error {
 	if w.err != nil {
 		return w.err
 	}
-	if err := w.request.Context().Err(); err != nil {
+	if err := transportErr(w.request); err != nil {
 		return err
 	}
 	if err := stdhttp.NewResponseController(w.native).EnableFullDuplex(); err != nil {

@@ -14,6 +14,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
+// Config bounds the shared store. MaxActive admits that many concurrent
+// operations; a burst beyond it queues in FIFO order for a short bounded wait
+// before failing with fault.Overloaded, so latency spikes delay reads instead of
+// rejecting them. Timeout bounds each admitted operation.
 type Config struct {
 	Schema    string
 	Clock     clock.Clock
@@ -22,7 +26,7 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{Schema: "public", Clock: clock.System{}, MaxActive: 32, Timeout: time.Minute}
+	return Config{Schema: "public", Clock: clock.System{}, MaxActive: 64, Timeout: time.Minute}
 }
 func (c Config) Validate() error {
 	if !sqlname.Valid(c.Schema) || c.Clock == nil || c.MaxActive < 1 || c.MaxActive > 1024 || c.Timeout <= 0 || c.Timeout > 10*time.Minute {
@@ -86,6 +90,15 @@ func (s *Store) Schema() string {
 		return ""
 	}
 	return s.config.Schema
+}
+
+// Clock is the store's configured time source. Feature caches use it for
+// expiry so tests and applications share one injected clock.
+func (s *Store) Clock() clock.Clock {
+	if s == nil {
+		return nil
+	}
+	return s.config.Clock
 }
 func (s *Store) Now() (temporal.DateTime, error) {
 	if err := s.Validate(); err != nil {

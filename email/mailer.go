@@ -2,15 +2,18 @@ package email
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
@@ -22,10 +25,13 @@ type Config struct {
 	From                                           Address
 	MaxActive, MaxMessageBytes, MaxAttachmentBytes int
 	Timeout                                        time.Duration
+	// MessageIDDomain is the right-hand side of generated Message-ID headers.
+	// Empty uses each message's sender domain.
+	MessageIDDomain string
 }
 
 func DefaultConfig() Config {
-	return Config{MaxActive: 16, MaxMessageBytes: 10 << 20, MaxAttachmentBytes: 5 << 20, Timeout: 30 * time.Second}
+	return Config{MaxActive: 64, MaxMessageBytes: 10 << 20, MaxAttachmentBytes: 5 << 20, Timeout: 30 * time.Second}
 }
 func (c Config) Validate() error {
 	if c.From != (Address{}) && c.From.Validate() != nil {
@@ -34,7 +40,23 @@ func (c Config) Validate() error {
 	if c.MaxActive < 1 || c.MaxActive > 1024 || c.MaxMessageBytes < 1024 || c.MaxMessageBytes > 32<<20 || c.MaxAttachmentBytes < 1 || c.MaxAttachmentBytes > c.MaxMessageBytes || c.Timeout <= 0 || c.Timeout > 10*time.Minute {
 		return Construction
 	}
+	if c.MessageIDDomain != "" && !messageIDDomain(c.MessageIDDomain) {
+		return Construction
+	}
 	return nil
+}
+
+// messageIDDomain accepts a dot-atom domain for the Message-ID right-hand side.
+func messageIDDomain(domain string) bool {
+	if len(domain) > 253 || strings.HasPrefix(domain, ".") || strings.HasSuffix(domain, ".") || strings.Contains(domain, "..") {
+		return false
+	}
+	for _, c := range domain {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '.') {
+			return false
+		}
+	}
+	return true
 }
 
 type Stage string
@@ -66,8 +88,10 @@ type Mailer struct {
 	observer    Observer
 	ctx         context.Context
 	cancel      context.CancelFunc
+	slots       *admission.Semaphore
 	mu          sync.Mutex
 	diagnostics Diagnostics
+	waiting     int
 	done        chan struct{}
 }
 type sendFrame struct {
@@ -90,8 +114,13 @@ func New(driver Driver, disks *storage.Registry, config Config, observer Observe
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Mailer{driver: driver, storage: disks, config: config, observer: observer, ctx: ctx, cancel: cancel, done: make(chan struct{})}, nil
+	return &Mailer{driver: driver, storage: disks, config: config, observer: observer, ctx: ctx, cancel: cancel, slots: admission.New(config.MaxActive), done: make(chan struct{})}, nil
 }
+
+// begin admits one send. A burst beyond MaxActive waits briefly for a slot and
+// then fails with fault.Overloaded joined with Transient, so job handlers retry
+// and HTTP callers receive a retryable 503. Waiters keep Done open until they
+// give up or finish, and Close releases them promptly.
 func (m *Mailer) begin(ctx context.Context) (context.Context, func(), error) {
 	if m == nil || m.done == nil || ctx == nil {
 		return nil, nil, Construction
@@ -100,9 +129,35 @@ func (m *Mailer) begin(ctx context.Context) (context.Context, func(), error) {
 		return nil, nil, Transient
 	}
 	m.mu.Lock()
-	if m.diagnostics.Closing || m.diagnostics.Active >= m.config.MaxActive {
+	if m.diagnostics.Closing {
 		m.mu.Unlock()
 		return nil, nil, Transient
+	}
+	m.waiting++
+	m.mu.Unlock()
+	nested := false
+	for frame, _ := ctx.Value(sendKey{}).(*sendFrame); frame != nil; frame = frame.parent {
+		nested = nested || frame.mailer == m && frame.active.Load()
+	}
+	wait := admission.Wait(m.config.Timeout)
+	if nested {
+		wait = 0
+	}
+	err := m.slots.Acquire(ctx, wait, m.ctx.Done())
+	m.mu.Lock()
+	m.waiting--
+	if err != nil || m.diagnostics.Closing {
+		if err == nil {
+			m.slots.Release()
+		}
+		if m.diagnostics.Closing && m.diagnostics.Active == 0 && m.waiting == 0 {
+			close(m.done)
+		}
+		m.mu.Unlock()
+		if err == nil || errors.Is(err, fault.Closed) {
+			return nil, nil, Transient
+		}
+		return nil, nil, errors.Join(Transient, err)
 	}
 	m.diagnostics.Active++
 	m.diagnostics.Calls++
@@ -117,10 +172,11 @@ func (m *Mailer) begin(ctx context.Context) (context.Context, func(), error) {
 		frame.active.Store(false)
 		cancel()
 		unlink()
+		m.slots.Release()
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		m.diagnostics.Active--
-		if m.diagnostics.Closing && m.diagnostics.Active == 0 {
+		if m.diagnostics.Closing && m.diagnostics.Active == 0 && m.waiting == 0 {
 			close(m.done)
 		}
 	}, nil
@@ -217,11 +273,34 @@ func (m *Mailer) prepare(ctx context.Context, message Message, options SendOptio
 		remaining -= len(attachment.data)
 		attachments = append(attachments, attachment)
 	}
-	wire, err := buildMIME(message, attachments, m.config.MaxMessageBytes)
+	for _, item := range message.data {
+		if len(item.data) > min(m.config.MaxAttachmentBytes, remaining) {
+			return Outbound{}, Construction
+		}
+		remaining -= len(item.data)
+		attachments = append(attachments, ResolvedAttachment{reference: item.metadata, data: item.data})
+	}
+	if structured, ok := m.driver.(StructuredDriver); ok && structured.StructuredSubmission() {
+		// Provider APIs submit native fields; skip MIME rendering but keep the
+		// same budget, estimating base64 expansion of attachments.
+		size := len(message.text) + len(message.html)
+		for _, attachment := range attachments {
+			size += (len(attachment.data) + 2) / 3 * 4
+		}
+		if size > m.config.MaxMessageBytes {
+			return Outbound{}, Construction
+		}
+		return Outbound{message: message, attachments: attachments, size: max(size, 1), structured: true, key: options.IdempotencyKey}, nil
+	}
+	id, err := messageID(message, options.IdempotencyKey, m.config.MessageIDDomain)
+	if err != nil {
+		return Outbound{}, err
+	}
+	wire, err := buildMIME(message, attachments, m.config.MaxMessageBytes, id)
 	if err != nil {
 		return Outbound{}, Construction
 	}
-	return Outbound{message: message, attachments: attachments, mime: wire, key: options.IdempotencyKey}, nil
+	return Outbound{message: message, attachments: attachments, mime: wire, size: len(wire), key: options.IdempotencyKey}, nil
 }
 func loadAttachment(ctx context.Context, disk *storage.Disk, reference Attachment, limit int) (result ResolvedAttachment, err error) {
 	body, info, err := disk.Open(ctx, reference.Key, storage.ReadOptions{Version: reference.Version, IfMatch: reference.IfMatch})
@@ -303,7 +382,7 @@ func (m *Mailer) Close(ctx context.Context) error {
 	if !m.diagnostics.Closing {
 		m.diagnostics.Closing = true
 		m.cancel()
-		if m.diagnostics.Active == 0 {
+		if m.diagnostics.Active == 0 && m.waiting == 0 {
 			close(m.done)
 		}
 	}

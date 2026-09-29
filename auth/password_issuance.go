@@ -31,7 +31,7 @@ func (l *PasswordLogin[M, K, I]) checkedResult(subject M, proof Proof[M, K]) (Pa
 		if err := l.provider.checkEligibility(ctx, current); err != nil {
 			return *new(M), err
 		}
-		required, err := l.model.RequiresMFA(ctx, current)
+		required, err := l.requiresMFA(ctx, current)
 		if err != nil {
 			return *new(M), err
 		}

@@ -15,3 +15,13 @@ type Backend interface {
 	Add(context.Context, EntryKey, []byte, TTL) (bool, error)
 	Forget(context.Context, EntryKey) (bool, error)
 }
+
+// FlushBackend physically removes every entry of one cache namespace. Adapters
+// without tag metadata (file and PostgreSQL) implement it so Store.Invalidate
+// works for every store type. It must not remove other namespaces' entries and
+// must serialize with the adapter's single-entry operations, but it is not a
+// fence: a Remember fill that started earlier can publish afterwards. It returns
+// the number of removed entries; a remote error may hide a partial removal.
+type FlushBackend interface {
+	FlushNamespace(context.Context, Namespace) (uint64, error)
+}

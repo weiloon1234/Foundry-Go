@@ -13,12 +13,15 @@ type Version uint32
 type Kind string
 
 const (
-	HashKind Kind = "hash"
-	SetKind  Kind = "set"
+	HashKind      Kind = "hash"
+	SetKind       Kind = "set"
+	SortedSetKind Kind = "zset"
+	ListKind      Kind = "list"
 )
 
 // Key is an opaque adapter address, separate from cache and other feature keys.
-// Application calls preserve their concrete resource types through Hash or Set.
+// Application calls preserve their concrete resource types through Hash, Set,
+// SortedSet or List. The kind is part of the address and matches Redis TYPE.
 type Key struct {
 	address keyaddress.Address
 	version Version
@@ -34,7 +37,7 @@ func NewKey(namespace keyspace.Namespace, name Name, version Version, kind Kind,
 	return k, k.Validate()
 }
 func (k Key) Validate() error {
-	if k.version == 0 || k.kind != HashKind && k.kind != SetKind {
+	if k.version == 0 || k.kind != HashKind && k.kind != SetKind && k.kind != SortedSetKind && k.kind != ListKind {
 		return fault.New(fault.Invalid, "invalid Redis data key kind or version")
 	}
 	return k.address.Validate()

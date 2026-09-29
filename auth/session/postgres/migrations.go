@@ -5,6 +5,9 @@ import "github.com/weiloon1234/Foundry-Go/database/migrate"
 const (
 	MigrationOrigin migrate.Origin  = "foundry.sessions"
 	CreateSessions  migrate.ID      = "000001_create_sessions"
+	AddSessionState migrate.ID      = "000002_session_device_confirmation"
+	AddImpersonator migrate.ID      = "000003_session_impersonation"
+	ValidateState   migrate.ID      = "000004_validate_session_state"
 	Introduced      migrate.Version = "v0.1.0"
 )
 
@@ -42,5 +45,31 @@ CHECK (assurance <> 1 OR (NOT remember AND NOT sliding))
 		`CREATE INDEX foundry_sessions_subject_order ON foundry_sessions (scope, subject_key, created_at, id)`,
 		`CREATE INDEX foundry_sessions_idle_expiry ON foundry_sessions (scope, idle_expires_at, id)`,
 		`CREATE INDEX foundry_sessions_absolute_expiry ON foundry_sessions (scope, expires_at, id)`,
+	}}, {Key: migrate.Key{Origin: MigrationOrigin, ID: AddSessionState}, Version: Introduced, Requires: []migrate.Key{{Origin: MigrationOrigin, ID: CreateSessions}}, SQL: []string{
+		// Nullable columns without defaults are metadata-only additions. Their
+		// checks are added NOT VALID (no scan under the ACCESS EXCLUSIVE lock) and
+		// validated by 000004 in its own transaction, which blocks no reads or writes.
+		`ALTER TABLE foundry_sessions ADD COLUMN client_ip text`,
+		`ALTER TABLE foundry_sessions ADD COLUMN user_agent text`,
+		`ALTER TABLE foundry_sessions ADD COLUMN confirmed_at timestamptz`,
+		`ALTER TABLE foundry_sessions ADD CONSTRAINT foundry_sessions_client_ip CHECK (client_ip IS NULL OR octet_length(client_ip) BETWEEN 1 AND 64) NOT VALID`,
+		`ALTER TABLE foundry_sessions ADD CONSTRAINT foundry_sessions_user_agent CHECK (user_agent IS NULL OR octet_length(user_agent) BETWEEN 1 AND 512) NOT VALID`,
+		`ALTER TABLE foundry_sessions ADD CONSTRAINT foundry_sessions_confirmed_at CHECK (confirmed_at IS NULL OR (isfinite(confirmed_at) AND confirmed_at >= created_at AND assurance = 2)) NOT VALID`,
+	}}, {Key: migrate.Key{Origin: MigrationOrigin, ID: AddImpersonator}, Version: Introduced, Requires: []migrate.Key{{Origin: MigrationOrigin, ID: AddSessionState}}, SQL: []string{
+		`ALTER TABLE foundry_sessions ADD COLUMN impersonator_identity text`,
+		`ALTER TABLE foundry_sessions ADD COLUMN impersonator_guard text`,
+		`ALTER TABLE foundry_sessions ADD COLUMN impersonator_session uuid`,
+		`ALTER TABLE foundry_sessions ADD CONSTRAINT foundry_sessions_impersonator_identity CHECK (impersonator_identity IS NULL OR octet_length(impersonator_identity) BETWEEN 2 AND 8192) NOT VALID`,
+		`ALTER TABLE foundry_sessions ADD CONSTRAINT foundry_sessions_impersonator_guard CHECK (impersonator_guard IS NULL OR octet_length(impersonator_guard) BETWEEN 1 AND 128) NOT VALID`,
+		`ALTER TABLE foundry_sessions ADD CONSTRAINT foundry_sessions_impersonation CHECK ((impersonator_identity IS NULL AND impersonator_guard IS NULL AND impersonator_session IS NULL) OR (impersonator_identity IS NOT NULL AND impersonator_guard IS NOT NULL AND impersonator_session IS NOT NULL AND assurance = 2 AND NOT remember AND confirmed_at IS NULL)) NOT VALID`,
+	}}, {Key: migrate.Key{Origin: MigrationOrigin, ID: ValidateState}, Version: Introduced, Requires: []migrate.Key{{Origin: MigrationOrigin, ID: AddImpersonator}}, SQL: []string{
+		// VALIDATE takes SHARE UPDATE EXCLUSIVE: sessions keep being read and
+		// written while existing rows are checked.
+		`ALTER TABLE foundry_sessions VALIDATE CONSTRAINT foundry_sessions_client_ip`,
+		`ALTER TABLE foundry_sessions VALIDATE CONSTRAINT foundry_sessions_user_agent`,
+		`ALTER TABLE foundry_sessions VALIDATE CONSTRAINT foundry_sessions_confirmed_at`,
+		`ALTER TABLE foundry_sessions VALIDATE CONSTRAINT foundry_sessions_impersonator_identity`,
+		`ALTER TABLE foundry_sessions VALIDATE CONSTRAINT foundry_sessions_impersonator_guard`,
+		`ALTER TABLE foundry_sessions VALIDATE CONSTRAINT foundry_sessions_impersonation`,
 	}}}
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
@@ -94,8 +95,16 @@ func (c *transactionControl) failure() error { c.mu.Lock(); defer c.mu.Unlock();
 
 // Transaction runs one callback exactly once. Options may contain at most one
 // value. Callback failure, panic or Goexit rolls back; no user callback is retried.
-// The begin context owns transaction lifetime. The callback runs in an owned
+// The begin context owns the callback phase. The callback runs in an owned
 // goroutine so Goexit cannot bypass rollback. Cancellation is cooperative.
+//
+// Once the callback succeeds, COMMIT runs detached from caller cancellation and
+// is bounded by PoolConfig.CommitTimeout, so a client disconnect cannot turn a
+// committing transaction into an unknown outcome. ROLLBACK is bounded likewise.
+//
+// A callback error that contains no database failure is returned with its own
+// identity and formatting after a confirmed rollback. Database failures are
+// *Error values carrying the transaction Outcome.
 //
 // Successful commit releases the connection before after-commit callbacks run.
 // An Error with Outcome()==Committed means persistence succeeded despite a
@@ -112,49 +121,92 @@ func (db *DB) Transaction(ctx context.Context, fn func(*Tx) error, options ...Tx
 		return err
 	}
 	defer db.release()
+	if sqlOptions == nil || !sqlOptions.ReadOnly {
+		db.markWrite(ctx)
+	}
 	conn, release, err := db.acquire(ctx)
 	if err != nil {
 		return err
 	}
-	return runTransaction(ctx, conn, db, db.classify, db.Observers(), db.Clock(), release, fn, sqlOptions)
+	return runTransaction(ctx, conn, db, db.classify, db.Observers(), db.Clock(), db.config.CommitTimeout, release, fn, sqlOptions)
 }
 
-func runTransaction(ctx context.Context, conn *sql.Conn, owner *DB, classify classifier, observers lifecycle.Observers, source clock.Clock, release func() error, fn func(*Tx) error, options *sql.TxOptions) (err error) {
+func runTransaction(ctx context.Context, conn *sql.Conn, owner *DB, classify classifier, observers lifecycle.Observers, source clock.Clock, completion time.Duration, release func() error, fn func(*Tx) error, options *sql.TxOptions) (err error) {
 	released := false
 	defer func() {
 		if !released {
-			err = errors.Join(err, release())
+			if releaseErr := release(); releaseErr != nil {
+				err = errors.Join(err, releaseErr)
+			}
 		}
 	}()
 	lifetime, cancel := context.WithCancel(ctx)
 	defer cancel()
-	raw, err := conn.BeginTx(lifetime, options)
+	// database/sql and the driver bind COMMIT/ROLLBACK to the BEGIN context.
+	// Derive it without caller cancellation, then link the caller only for the
+	// callback phase; completion is bounded by its own timer below.
+	transaction, stop := context.WithCancel(context.WithoutCancel(ctx))
+	defer stop()
+	unlink := context.AfterFunc(lifetime, stop)
+	raw, err := conn.BeginTx(transaction, options)
 	if err != nil {
+		unlink()
 		return classify.wrap("begin", err)
 	}
 	tx := &Tx{owner: owner, raw: raw, scope: &operationScope{ctx: lifetime, cancel: cancel}, classify: classify, state: TxActive, control: &transactionControl{cancel: cancel}, observers: observers, timeSource: source}
 	// Defensive cleanup also covers a framework panic after BEGIN. SQL rollback
 	// is harmless after an already terminal commit/rollback.
 	defer raw.Rollback()
-	err = callback.Isolated("transaction callback", func() error { return fn(tx) })
-	err = errors.Join(err, tx.finishScope(), tx.control.failure())
-	if err == nil {
-		err = lifetime.Err()
+	err = invokeScope("transaction callback", func() error { return fn(tx) })
+	// Join only when scope cleanup also failed so a lone callback error keeps
+	// its exact identity.
+	if scopeErr := errors.Join(tx.finishScope(), tx.control.failure()); scopeErr != nil {
+		err = errors.Join(err, scopeErr)
 	}
+	if err == nil {
+		err = classify.wrap("transaction", lifetime.Err())
+	}
+	// A false result means caller cancellation already ended the transaction
+	// context; database/sql then owns the automatic rollback.
+	if !unlink() && err == nil {
+		err = classify.wrap("transaction", lifetime.Err())
+	}
+	timer := time.AfterFunc(completion, stop)
+	defer timer.Stop()
 	if err != nil {
 		rollbackErr := raw.Rollback()
 		confirmed := rollbackErr == nil
 		if rollbackErr == sql.ErrTxDone {
 			rollbackErr = nil
 		} // begin-context auto rollback owns cleanup; its result is unavailable
-		classified := classify.wrap("transaction", err).(*Error)
+		classified, application := classify.scope("transaction", err)
 		if confirmed {
 			tx.setState(TxRolledBack)
-			classified.outcome = RolledBack
 		} else {
 			tx.setState(TxUnknown)
-			classified.outcome = NoCommit
 			rollbackErr = errors.Join(rollbackErr, discardConnection(conn))
+		}
+		if classified == nil {
+			// Application failures keep their identity. An unconfirmed rollback
+			// still reports that no commit occurred through a database error.
+			if confirmed {
+				return application
+			}
+			cause := rollbackErr
+			if cause == nil {
+				cause = lifetime.Err()
+			}
+			rollback, _ := classify.wrap("rollback", cause).(*Error)
+			if rollback == nil {
+				rollback = &Error{operation: "rollback", detail: Detail{Code: QueryFailed}}
+			}
+			rollback.outcome = NoCommit
+			return errors.Join(application, rollback)
+		}
+		if confirmed {
+			classified.outcome = RolledBack
+		} else {
+			classified.outcome = NoCommit
 		}
 		return errors.Join(classified, classify.wrap("rollback", rollbackErr))
 	}
@@ -167,11 +219,21 @@ func runTransaction(ctx context.Context, conn *sql.Conn, owner *DB, classify cla
 			classified.outcome = Unknown
 			classified.detail.Code = CommitUnknown
 			tx.setState(TxUnknown)
+			// The commit may have happened: keep reads on the primary.
+			if options == nil || !options.ReadOnly {
+				owner.markWrite(ctx)
+			}
 			return errors.Join(classified, classify.wrap("discard uncertain commit", discardConnection(conn)))
 		}
 		return classified
 	}
+	timer.Stop()
 	tx.setState(TxCommitted)
+	// Mark on COMMIT too, so a long transaction does not consume its own
+	// read-your-writes window.
+	if options == nil || !options.ReadOnly {
+		owner.markWrite(ctx)
+	}
 	var failures []error
 	released = true
 	if err := release(); err != nil {
@@ -226,11 +288,11 @@ func (tx *Tx) AfterCommit(fn func(context.Context) error) error {
 }
 
 func (tx *Tx) Exec(ctx context.Context, statement string, arguments ...any) (result Result, err error) {
-	return tx.scope.exec(ctx, tx.raw, tx.classify, statement, arguments)
+	return tx.scope.exec(ctx, tx.raw, tx.classify, tx.owner.instrumented(PrimaryPool), statement, arguments)
 }
 
 func (tx *Tx) Query(ctx context.Context, statement string, arguments ...any) (*Rows, error) {
-	return tx.scope.query(ctx, tx.raw, tx.classify, tx.observers, statement, arguments)
+	return tx.scope.query(ctx, tx.raw, tx.classify, tx.owner.instrumented(PrimaryPool), tx.observers, statement, arguments)
 }
 
 // An operation may have a tighter context, but it cannot outlive the transaction

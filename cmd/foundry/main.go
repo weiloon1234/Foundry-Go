@@ -15,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cli"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/internal/agent"
+	"github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
 	"github.com/weiloon1234/Foundry-Go/internal/generate"
 )
 
@@ -70,6 +71,7 @@ func runGenerate(ctx context.Context, args []string, stdout, stderr io.Writer) e
 	check := flags.Bool("check", false, "fail on stale output without rewriting files")
 	recursive := flags.Bool("recursive", false, "generate all Go packages below --dir, in dependency order")
 	recover := flags.Bool("recover", false, "recover an interrupted publication in this package")
+	fieldDocs := flags.Bool("field-docs", false, "also maintain managed field behavior notes in handwritten model files")
 	if err := cli.ParseFlags(flags, args); err != nil {
 		return err
 	}
@@ -80,8 +82,8 @@ func runGenerate(ctx context.Context, args []string, stdout, stderr io.Writer) e
 		if *check {
 			return cli.Usage("--recover and --check cannot be combined")
 		}
-		if *recursive {
-			return cli.Usage("--recover uses the journal's recorded package scope; omit --recursive")
+		if *recursive || *fieldDocs {
+			return cli.Usage("--recover uses the journal's recorded package scope; omit --recursive and --field-docs")
 		}
 		report, err := generate.Recover(ctx, *dir)
 		if err != nil {
@@ -98,7 +100,7 @@ func runGenerate(ctx context.Context, args []string, stdout, stderr io.Writer) e
 		}
 		return err
 	}
-	report, err := generate.Generate(ctx, generate.Options{Dir: *dir, Check: *check, Recursive: *recursive})
+	report, err := generate.Generate(ctx, generate.Options{Dir: *dir, Check: *check, Recursive: *recursive, FieldDocumentation: *fieldDocs, Framework: frameworkinfo.CurrentBuild()})
 	if err != nil {
 		return err
 	}

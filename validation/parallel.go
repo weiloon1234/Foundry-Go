@@ -27,15 +27,15 @@ func ParallelLimit[T any](concurrency int, rules ...Rule[T]) Rule[T] {
 	if concurrency < 1 || concurrency > maxConcurrency {
 		return failed[T](invalid("validation concurrency must be between 1 and 64"))
 	}
-	if base.Validate() != nil {
+	if base.validateStructure() != nil {
 		return base
 	}
 	owned := slices.Clone(rules)
 	base.info.ServerOnly = true
 	sequential := base.apply
-	base.apply = func(s *execution, input T, path string, depth int) {
+	base.apply = func(s *execution, input T, depth int) {
 		if s.parallel || concurrency == 1 {
-			sequential(s, input, path, depth)
+			sequential(s, input, depth)
 			return
 		}
 		for start := 0; start < len(owned); start += concurrency {
@@ -54,19 +54,26 @@ func ParallelLimit[T any](concurrency int, rules ...Rule[T]) Rule[T] {
 			states := make([]execution, end-start)
 			var workers sync.WaitGroup
 			for i := range states {
-				states[i] = execution{ctx: s.ctx, limits: s.limits, work: s.work, parallel: true,
-					label: s.label, labelKey: s.labelKey, field: s.field, otherField: s.otherField, otherLabel: s.otherLabel, otherLabelKey: s.otherLabelKey, prohibitionsOnly: s.prohibitionsOnly}
-				states[i].limits.Issues -= len(s.issues)
+				states[i] = s.branch()
 				workers.Add(1)
 				go func(i int) {
 					defer workers.Done()
 					child := &states[i]
-					if err := callback.Isolated("parallel validation", func() error {
-						owned[start+i].run(child, input, path, depth+1)
+					// The branch goroutine is owned here: a Goexit from a selector
+					// or callback unwinds through this check and is never success.
+					returned := false
+					defer func() {
+						if !returned {
+							child.err = fault.Wrap(fault.Internal, "validation callback failed", fault.New(fault.Panicked, "parallel validation exited without returning"))
+						}
+					}()
+					if err := callback.Invoke("parallel validation", func() error {
+						owned[start+i].run(child, input, depth+1)
 						return nil
 					}); err != nil {
 						child.err = fault.Wrap(fault.Internal, "validation callback failed", err)
 					}
+					returned = true
 				}(i)
 			}
 			workers.Wait()

@@ -38,6 +38,7 @@ settings, report, err := toml.LoadFile(
     "config/app.toml", schema, Defaults(),
     config.Inputs[Settings]{
         Environment: os.LookupEnv,
+        Environ: os.Environ, // optional: per-entry named-collection overrides
         Prefix: "APP",
         Overrides: []config.Override[Settings]{
             keys.HTTP.Timeout.Set(5 * time.Second),
@@ -51,7 +52,12 @@ settings, report, err := toml.LoadFile(
 `Defaults` and `Validate` are ordinary application Go functions. There is no
 second handwritten schema or string-encoded business validation. Precedence is
 defaults, file layers, environment, typed overrides. `APP__HTTP__TIMEOUT` targets
-`http.timeout`. File loading owns close, bounds input and uses the safe default
+`http.timeout`. `APP__HTTP__TIMEOUT_FILE` instead names a regular file (such as a
+mounted secret) whose content is the value: at most 1 MiB, with one trailing
+newline removed. Setting both names is an error, and declarations whose
+environment names differ only by a `_FILE` suffix are rejected. Provenance
+reports `environment-file:APP__HTTP__TIMEOUT` without the path or value.
+File loading owns close, bounds input and uses the safe default
 source label `configuration`. It requires a regular operator-controlled file;
 it does not load `.env` implicitly or promise cancellation of arbitrary filesystem
 I/O. Supply `Options.Name` only with a trusted credential-free label.

@@ -50,8 +50,13 @@ type Config struct {
 	MaxValueBytes int
 }
 
+// DefaultConfig sizes the pool like go-redis's own default (10 connections per
+// CPU) on a typical 4–8 core host, with a fixed value so configuration
+// validation stays deterministic across machines. MaxOperations bounds admitted
+// commands, including those waiting for a pooled connection; a burst beyond it
+// queues briefly and then reports fault.Overloaded.
 func DefaultConfig() Config {
-	return Config{Port: 6379, TLS: VerifyTLS, MaxConnections: 16, MaxOperations: 128, MaxSubscriptions: 64,
+	return Config{Port: 6379, TLS: VerifyTLS, MaxConnections: 64, MaxOperations: 1024, MaxSubscriptions: 64,
 		ConnectTimeout: 5 * time.Second, OperationTimeout: 5 * time.Second, PoolTimeout: 5 * time.Second,
 		MaxIdleTime: 5 * time.Minute, MaxLifetime: 30 * time.Minute, MaxValueBytes: 1 << 20}
 }

@@ -39,6 +39,30 @@ func (e SignedAuthenticatedEndpoint[P, Q, B, S, R]) URL(ctx context.Context, ori
 	}
 	return e.signed.URL(ctx, origin, path, query, expires)
 }
+
+// WithPermanentLinks explicitly permits links without expiry; see SignedRoute.
+func (e SignedAuthenticatedEndpoint[P, Q, B, S, R]) WithPermanentLinks() SignedAuthenticatedEndpoint[P, Q, B, S, R] {
+	e.signed = e.signed.WithPermanentLinks()
+	return e
+}
+
+// WithIgnoredParameters declares unauthenticated query parameters; see SignedEndpoint.
+func (e SignedAuthenticatedEndpoint[P, Q, B, S, R]) WithIgnoredParameters(names ...string) SignedAuthenticatedEndpoint[P, Q, B, S, R] {
+	e.signed = e.signed.WithIgnoredParameters(names...)
+	return e
+}
+func (e SignedAuthenticatedEndpoint[P, Q, B, S, R]) PermanentURL(ctx context.Context, origin Origin, path P, query Q) (string, error) {
+	if err := e.Validate(); err != nil {
+		return "", err
+	}
+	return e.signed.PermanentURL(ctx, origin, path, query)
+}
+func (e SignedAuthenticatedEndpoint[P, Q, B, S, R]) RelativeURL(ctx context.Context, path P, query Q, expires time.Time) (string, error) {
+	if err := e.Validate(); err != nil {
+		return "", err
+	}
+	return e.signed.RelativeURL(ctx, path, query, expires)
+}
 func (e SignedAuthenticatedEndpoint[P, Q, B, S, R]) Description() (EndpointInfo, error) {
 	if err := e.Validate(); err != nil {
 		return EndpointInfo{}, err
@@ -47,8 +71,21 @@ func (e SignedAuthenticatedEndpoint[P, Q, B, S, R]) Description() (EndpointInfo,
 	if err != nil {
 		return EndpointInfo{}, err
 	}
-	info.Route.SignedURL = signedURLInfo()
+	info.Route.SignedURL = signedURLInfo(e.signed.signer.policy)
 	return info, nil
+}
+
+// HandleBound verifies the URL like Handle, then runs the binding stage. The
+// wrapped transport must be a framework authenticated endpoint.
+func (e SignedAuthenticatedEndpoint[P, Q, B, S, R]) HandleBound(bind AuthenticatedBinding[P, Q, B, S, R]) RouteRegistration {
+	if err := e.Validate(); err != nil {
+		return InvalidRouteRegistration(err)
+	}
+	bound, ok := e.transport.(boundAuthenticatedTransport[P, Q, B, S, R])
+	if !ok {
+		return InvalidRouteRegistration(fault.New(fault.Invalid, "signed authenticated transport does not support binding"))
+	}
+	return signedRegistration(bound.HandleBound(bind), e.signed.signer, e.signed.endpoint.route.spec, e.Pattern(), true)
 }
 func (e SignedAuthenticatedEndpoint[P, Q, B, S, R]) Handle(handler func(context.Context, S, Input[P, Q, B]) (R, error)) RouteRegistration {
 	if err := e.Validate(); err != nil {

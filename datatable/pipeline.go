@@ -157,54 +157,71 @@ func (d *tableDefinition[S, R, A]) buildFilter(filter Filter) (condition[S], err
 	}
 	return combineConditions(filter.Op, children)
 }
+
+// combineConditions builds AND/OR/NOT groups. NOT uses the null-aware
+// complement of its child, so rows where a NULL operand makes the child unknown
+// are included: De Morgan pushes the negation down to each declared comparison.
 func combineConditions[S any](op Operator, children []condition[S]) (condition[S], error) {
-	var result condition[S]
-	for _, c := range children {
-		result.where = append(result.where, c.where...)
-		result.having = append(result.having, c.having...)
-	}
+	result := allOf(children)
 	if op == All {
+		result.complement = func() condition[S] { return negateEach(children, anyOf[S], result) }
 		return result, nil
 	}
 	if len(result.where) != 0 && len(result.having) != 0 {
 		return condition[S]{}, invalid("OR and NOT cannot mix WHERE and HAVING phases")
 	}
 	if op == Not {
-		return result.not(), nil
-	}
-	if len(result.where) > 0 {
-		parts := make([]query.Predicate[S], len(children))
-		for i, c := range children {
-			parts[i] = query.And(c.where...)
+		if len(children) != 1 || children[0].complement == nil {
+			return condition[S]{}, invalid("invalid datatable filter group")
 		}
-		return rowCondition(query.Or(parts...)), nil
+		return children[0].complement(), nil
 	}
-	parts := make([]query.HavingPredicate[S], len(children))
-	for i, c := range children {
-		parts[i] = query.HavingAnd(c.having...)
-	}
-	return groupCondition(query.HavingOr(parts...)), nil
+	result = anyOf(children)
+	result.complement = func() condition[S] { return negateEach(children, allOf[S], result) }
+	return result, nil
 }
-func (d *tableDefinition[S, R, A]) scoped(ctx context.Context, subject A, action Action, p prepared[S]) (query.ProjectionQuery[S, R], error) {
+
+// negateEach combines the complements of children and restores original as the
+// complement of that result. NOT validates single-phase input before calling it.
+func negateEach[S any](children []condition[S], combine func([]condition[S]) condition[S], original condition[S]) condition[S] {
+	complements := make([]condition[S], len(children))
+	for i, child := range children {
+		complements[i] = child.complement()
+	}
+	negated := combine(complements)
+	negated.complement = func() condition[S] { return original }
+	return negated
+}
+
+// scopedSource is the authorized, filtered source. count omits the table's
+// ordering: sorting cannot change a total and only costs the database work.
+type scopedSource[S, R any] struct {
+	rows, count query.ProjectionQuery[S, R]
+}
+
+func (d *tableDefinition[S, R, A]) scoped(ctx context.Context, subject A, action Action, p prepared[S]) (scopedSource[S, R], error) {
 	if err := ctx.Err(); err != nil {
-		return query.ProjectionQuery[S, R]{}, err
+		return scopedSource[S, R]{}, err
 	}
 	if err := d.spec.Authorize(ctx, subject, action); err != nil {
-		return query.ProjectionQuery[S, R]{}, err
+		return scopedSource[S, R]{}, err
 	}
 	if err := ctx.Err(); err != nil {
-		return query.ProjectionQuery[S, R]{}, err
+		return scopedSource[S, R]{}, err
 	}
 	q, err := d.spec.Source(ctx, subject)
 	if err != nil {
-		return query.ProjectionQuery[S, R]{}, err
+		return scopedSource[S, R]{}, err
 	}
-	q = q.Where(p.condition.where...).Having(p.condition.having...).ReorderUnwindowed(p.orders...)
-	if _, err := q.Compile(); err != nil {
-		return query.ProjectionQuery[S, R]{}, err
+	filtered := q.Where(p.condition.where...).Having(p.condition.having...)
+	result := scopedSource[S, R]{rows: filtered.ReorderUnwindowed(p.orders...), count: filtered}
+	// Compiling the ordered result also rejects windowed/DISTINCT ON sources
+	// before the unordered count can run.
+	if _, err := result.rows.Compile(); err != nil {
+		return scopedSource[S, R]{}, err
 	}
 	if err := ctx.Err(); err != nil {
-		return query.ProjectionQuery[S, R]{}, err
+		return scopedSource[S, R]{}, err
 	}
-	return q, nil
+	return result, nil
 }

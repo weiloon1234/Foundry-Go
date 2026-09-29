@@ -12,8 +12,10 @@ import (
 // alongside an error so endpoint cleanup can close it before releasing inputs.
 func openFileSource[T any](ctx context.Context, operation string, source func(context.Context) (T, error), body func(T) io.ReadCloser) (T, *preparedFile, error) {
 	var content T
+	// Sources open after the handler succeeded: an expired deadline here is
+	// the server's own budget, not a slow client.
 	if err := ctx.Err(); err != nil {
-		return content, nil, RequestTimeout.WithCause(err)
+		return content, nil, Unavailable.WithCause(err)
 	}
 	var returned error
 	owned := callback.Isolated(operation, func() error { content, returned = source(ctx); return nil })
@@ -32,7 +34,7 @@ func openFileSource[T any](ctx context.Context, operation string, source func(co
 		return content, prepared, returned
 	}
 	if err := ctx.Err(); err != nil {
-		return content, prepared, RequestTimeout.WithCause(err)
+		return content, prepared, Unavailable.WithCause(err)
 	}
 	if prepared.reader == nil {
 		return content, prepared, InternalError.WithCause(fault.New(fault.Internal, "file source returned no body"))

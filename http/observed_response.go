@@ -41,9 +41,21 @@ func (w *observedResponse) Write(data []byte) (int, error) {
 	return n, err
 }
 
+// ReadFrom delegates to the native writer's ReaderFrom when it has one, so a
+// local file can reach the kernel's sendfile path; the byte count is recorded
+// from its result. Otherwise Write is used, hiding ReaderFrom to avoid recursion.
 func (w *observedResponse) ReadFrom(source io.Reader) (int64, error) {
-	// Hiding ReaderFrom prevents io.Copy from recursing or bypassing Write.
-	n, err := io.Copy(struct{ io.Writer }{w}, source)
+	if !w.hijacked && w.status == 0 {
+		w.status = stdhttp.StatusOK
+	}
+	var n int64
+	var err error
+	if native, ok := w.native.(io.ReaderFrom); ok {
+		n, err = native.ReadFrom(source)
+	} else {
+		n, err = io.Copy(struct{ io.Writer }{w.native}, source)
+	}
+	w.bytes += n
 	if err != nil {
 		w.err = err
 	}

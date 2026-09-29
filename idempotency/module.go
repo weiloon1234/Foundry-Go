@@ -8,7 +8,9 @@ import (
 )
 
 // Module owns admission and drains active operations before its borrowed database
-// provider shuts down. It does not automatically prune retained outcomes.
+// provider shuts down. It starts the store's expiry pruner (Config.PruneInterval)
+// after registering cleanup, logging failures through the application logger
+// unless the store was constructed WithLogger.
 func Module(name foundation.ProviderID, key foundation.Key[*Store], requires []foundation.ProviderID, construct func(foundation.Resolver) (*Store, error)) foundation.Module {
 	return foundation.Module{Name: name, Requires: slices.Clone(requires), OnRegister: func(r *foundation.Registrar) error {
 		if construct == nil {
@@ -36,6 +38,6 @@ func Module(name foundation.ProviderID, key foundation.Key[*Store], requires []f
 		}); err != nil {
 			return errors.Join(err, store.Close(ctx))
 		}
-		return nil
+		return store.start(ctx, r.Logger())
 	}}
 }

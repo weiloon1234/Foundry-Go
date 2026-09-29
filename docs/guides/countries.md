@@ -35,6 +35,14 @@ preserving existing `Status`, `ConversionRate`, `IsDefault` and creation time.
 Conversion rates use the framework's exact decimal type. A failed upsert leaves
 no partial batch; failed parent transactions roll back the seeder as well.
 
+At most one country can be the default: the `000002_single_default_country`
+migration adds a partial unique index on `is_default`. It refuses to run when
+existing data already marks several defaults, rather than choosing one; clear the
+extra `is_default` flags and run the migration again. `countries.Default` returns
+the default, if any, and `countries.SetDefault(ctx, store, code)` moves the flag
+in one transaction, clearing the previous default first. A missing code returns
+`database.NotFound` and leaves the current default unchanged.
+
 `Find`, `Exists`, `All` and `Enabled` borrow the store. `All` and `Enabled` sort by
 name and code and are bounded to 1000 rows. Generated `QueryFoundryCountries`,
 `CountryFields` and `CountryDraft` provide normal typed queries and administrative

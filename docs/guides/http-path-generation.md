@@ -89,6 +89,14 @@ matching, scopes, escaping, reserved slash-only values and route inspection.
 Generated bindings use these same contracts. There is no second URL encoder or
 router in the generator.
 
+`DefinePath` parses and validates the pattern once; route and endpoint copies,
+`Within` and every `URL` call reuse that parsed grammar. `Route.URL` validates
+the route identity and path, and `Endpoint.URL` additionally the query
+declaration it encodes; handler registration still validates the complete
+declaration, including middleware. Path and query codecs run on the caller's
+goroutine: a panic becomes an internal fault, while `runtime.Goexit` ends the
+goroutine as any Go call does.
+
 Invalid declarations fail before publication. The complete generated package is
 type-checked before any output is replaced; stale checks do not write files.
 Bindings are emitted in pattern order, independent of struct-field order.

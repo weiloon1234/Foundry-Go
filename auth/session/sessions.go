@@ -21,6 +21,8 @@ type Sessions[M model.Identifiable, K any] struct {
 	provider auth.Provider[M, K]
 	address  Address
 	guard    auth.Guard[M]
+	current  auth.CredentialSlot[Info[M, K]]
+	observer auth.Observer
 }
 
 func New[M model.Identifiable, K any](store *Store, name auth.GuardName, provider auth.Provider[M, K], source auth.CredentialName) (*Sessions[M, K], error) {
@@ -34,7 +36,7 @@ func New[M model.Identifiable, K any](store *Store, name auth.GuardName, provide
 	if err := address.Validate(); err != nil {
 		return nil, err
 	}
-	sessions := &Sessions[M, K]{store: store, provider: provider, address: address}
+	sessions := &Sessions[M, K]{store: store, provider: provider, address: address, current: auth.NewCredentialSlot[Info[M, K]]()}
 	strategy := auth.DefineStrategy(source, sessions.verify)
 	sessions.guard = auth.DefineGuard(name, provider, strategy)
 	if err := sessions.guard.Validate(); err != nil {
@@ -65,7 +67,7 @@ func (s *Sessions[M, K]) info(record Record) (Info[M, K], error) {
 	if err != nil {
 		return Info[M, K]{}, err
 	}
-	return Info[M, K]{id: ID[M]{value: record.ID}, subject: reference, assurance: record.Assurance, remembered: record.Remember, created: record.CreatedAt, lastSeen: record.LastSeenAt, idleExpires: record.IdleExpiresAt, expires: record.ExpiresAt}, nil
+	return Info[M, K]{id: ID[M]{value: record.ID}, subject: reference, assurance: record.Assurance, remembered: record.Remember, created: record.CreatedAt, lastSeen: record.LastSeenAt, idleExpires: record.IdleExpiresAt, expires: record.ExpiresAt, device: record.Device, confirmed: record.ConfirmedAt, impersonator: record.Impersonator}, nil
 }
 func (s *Sessions[M, K]) verify(ctx context.Context, credential secret.String) (value.Optional[auth.Proof[M, K]], error) {
 	hash, err := HashSecret(credential)
@@ -90,6 +92,18 @@ func (s *Sessions[M, K]) verify(ctx context.Context, credential secret.String) (
 			return err
 		}
 		verified, err := auth.NewProof(info.Subject(), info.Assurance())
+		if err != nil {
+			return err
+		}
+		// Handlers read this session's metadata through Current without a
+		// second lookup; the attachment is scoped to this verification. An
+		// impersonation session can act as its subject but never mint another
+		// credential for it (auth.CurrentProof refuses it).
+		if info.Impersonated() {
+			verified, err = auth.AttachImpersonatedCredential(verified, s.current, info)
+		} else {
+			verified, err = auth.AttachCredential(verified, s.current, info)
+		}
 		if err != nil {
 			return err
 		}
@@ -118,15 +132,69 @@ func (s *Sessions[M, K]) Issue(ctx context.Context, proof auth.Proof[M, K], opti
 	if err != nil {
 		return Issued[M, K]{}, err
 	}
+	s.issued(ctx, result)
 	return result, nil
 }
 
+// issued reports a completed full login after the backend committed it.
+func (s *Sessions[M, K]) issued(ctx context.Context, result Issued[M, K]) {
+	if s.observer == nil || result.info.assurance != auth.Authenticated {
+		return
+	}
+	s.notify(ctx, auth.EventLogin, result.info, 0)
+}
+
+// notify reports an event about info's session, naming the original actor when
+// the session is an impersonation.
+func (s *Sessions[M, K]) notify(ctx context.Context, kind auth.EventKind, info Info[M, K], count uint64) {
+	if s.observer == nil {
+		return
+	}
+	identity, err := info.subject.Identity()
+	if err != nil {
+		return
+	}
+	event := auth.Event{Kind: kind, Guard: s.address.Guard, Provider: s.address.Provider, Subject: value.Set(identity), Count: count}
+	if impersonator, present := info.impersonator.Get(); present {
+		event.Impersonator = value.Set(impersonator.Subject)
+	}
+	auth.Notify(ctx, s.observer, event)
+}
+
+// WithObserver returns a binding sharing this guard that reports EventLogin
+// for full issuance (including MFA completion), EventLogout for Logout and
+// RevokeCurrent, and EventOtherDevicesLoggedOut for RevokeOthers.
+func (s *Sessions[M, K]) WithObserver(observer auth.Observer) (*Sessions[M, K], error) {
+	if err := s.Validate(); err != nil {
+		return nil, err
+	}
+	if observer == nil {
+		return nil, fault.New(fault.Invalid, "session observer is nil")
+	}
+	if s.observer != nil {
+		return nil, fault.New(fault.Duplicate, "session observer already configured")
+	}
+	next := *s
+	next.observer = observer
+	return &next, nil
+}
+
 func (s *Sessions[M, K]) issue(ctx context.Context, proof auth.Proof[M, K], options IssueOptions, deadline value.Optional[temporal.DateTime]) (Issued[M, K], error) {
+	return s.issueWith(ctx, proof, options, deadline, value.Optional[impersonationGrant]{})
+}
+
+// impersonationGrant marks an impersonation session and fixes its bounded lifetime.
+type impersonationGrant struct {
+	impersonator Impersonator
+	lifetime     Lifetime
+}
+
+func (s *Sessions[M, K]) issueWith(ctx context.Context, proof auth.Proof[M, K], options IssueOptions, deadline value.Optional[temporal.DateTime], grant value.Optional[impersonationGrant]) (Issued[M, K], error) {
 	if err := s.Validate(); err != nil {
 		return Issued[M, K]{}, err
 	}
 	if deadline.IsSet() && !proof.HasIssuanceCheck() {
-		return Issued[M, K]{}, fault.New(fault.Invalid, "MFA creation deadline requires a transactional proof check")
+		return Issued[M, K]{}, fault.New(fault.Invalid, "credential creation deadline requires a transactional proof check")
 	}
 
 	var result Issued[M, K]
@@ -150,6 +218,13 @@ func (s *Sessions[M, K]) issue(ctx context.Context, proof auth.Proof[M, K], opti
 			}
 			policy = s.store.config.Pending
 		}
+		var impersonator value.Optional[Impersonator]
+		if granted, present := grant.Get(); present {
+			if options.Remember || proof.Assurance() != auth.Authenticated || proof.HasIssuanceCheck() {
+				return fault.New(fault.Invalid, "impersonation sessions are fully authenticated, unchecked and never remembered")
+			}
+			policy, impersonator = granted.lifetime, value.Set(granted.impersonator)
+		}
 		id, err := model.NewID[Record]()
 		if err != nil {
 			return err
@@ -158,7 +233,8 @@ func (s *Sessions[M, K]) issue(ctx context.Context, proof auth.Proof[M, K], opti
 		if err != nil {
 			return err
 		}
-		request := Creation{ID: id, Subject: proof.Identity(), Hash: hash, Assurance: proof.Assurance(), Remember: options.Remember, Lifetime: policy, Maximum: s.store.config.MaxPerSubject}
+		config := s.store.config
+		request := Creation{ID: id, Subject: proof.Identity(), Hash: hash, Assurance: proof.Assurance(), Remember: options.Remember, Lifetime: policy, Maximum: config.MaxPerSubject, PendingMaximum: config.MaxPendingPerSubject, Limit: config.Limit, Device: auth.DeviceFrom(op), Impersonator: impersonator}
 		var record Record
 		if proof.HasIssuanceCheck() {
 			backend, ok := s.store.backend.(CheckedBackend)
@@ -167,9 +243,9 @@ func (s *Sessions[M, K]) issue(ctx context.Context, proof auth.Proof[M, K], opti
 			}
 			record, err = credentialcore.CheckCreation(op, proof.CheckIssuance, func(check func(context.Context, *database.Tx) error) (Record, error) {
 				if until, present := deadline.Get(); present {
-					completing, ok := s.store.backend.(CompletionBackend)
+					completing, ok := s.store.backend.(DeadlineBackend)
 					if !ok {
-						return Record{}, fault.New(fault.Invalid, "credential backend cannot complete MFA")
+						return Record{}, fault.New(fault.Invalid, "credential backend cannot enforce a creation deadline")
 					}
 					return completing.CreateBefore(op, s.address, request, until, check)
 				}
@@ -181,7 +257,7 @@ func (s *Sessions[M, K]) issue(ctx context.Context, proof auth.Proof[M, K], opti
 		if err != nil {
 			return err
 		}
-		if record.ID != id || record.Subject != request.Subject || !record.Hash.Equal(hash) || record.Assurance != request.Assurance || record.Remember != request.Remember || record.Lifetime != request.Lifetime {
+		if record.ID != id || record.Subject != request.Subject || !record.Hash.Equal(hash) || record.Assurance != request.Assurance || record.Remember != request.Remember || record.Lifetime != request.Lifetime || record.Device != request.Device || record.Impersonator != request.Impersonator {
 			return fault.New(fault.Invalid, "session backend changed issued credential metadata")
 		}
 		info, err := s.info(record)
@@ -297,10 +373,8 @@ func (s *Sessions[M, K]) RevokeAll(ctx context.Context, reference model.Referenc
 		if _, err := s.provider.Parse(identity); err != nil {
 			return err
 		}
+		// The revocation has committed; its count is reported as returned.
 		count, err = s.store.backend.RevokeAll(op, s.address, identity)
-		if err == nil && count > MaxSessions {
-			return fault.New(fault.Invalid, "session backend exceeded subject capacity")
-		}
 		return err
 	})
 	if err != nil {

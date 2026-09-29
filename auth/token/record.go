@@ -66,9 +66,24 @@ type Record struct {
 	AccessExpiresAt  temporal.DateTime
 	RefreshExpiresAt value.Optional[temporal.DateTime]
 	ExpiresAt        temporal.DateTime
+	Device           auth.Device
+	// SupersededAt is set only when Lookup returns the generation immediately
+	// before the family's current one: the successor's issue time. Its access
+	// secret authenticates only within Config.AccessGrace of that time.
+	SupersededAt value.Optional[temporal.DateTime] `json:",omitzero"`
 }
 
 func (Record) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("token record")) }
+
+// LiveAccessWithin reports access validity, allowing a superseded generation
+// only until grace after its successor was issued (never past its own expiry).
+func (r Record) LiveAccessWithin(now time.Time, grace time.Duration) bool {
+	if !r.LiveAccess(now) {
+		return false
+	}
+	superseded, present := r.SupersededAt.Get()
+	return !present || now.Before(superseded.UTC().Add(grace))
+}
 func (r Record) validateMetadata(address Address) error {
 	if err := address.Validate(); err != nil {
 		return err
@@ -126,7 +141,10 @@ func (r Record) Validate(address Address) error {
 	} else if hasExpiry || !issued.Equal(created) {
 		return fault.New(fault.Invalid, "nonrenewable token has refresh times")
 	}
-	return nil
+	if superseded, present := r.SupersededAt.Get(); present && (r.Mode != Renewable || superseded.UTC().Before(issued)) {
+		return fault.New(fault.Invalid, "invalid superseded token generation")
+	}
+	return r.Device.Validate()
 }
 func boundedExpiry(now time.Time, duration time.Duration, absolute time.Time) time.Time {
 	expiry := now.Add(duration)
@@ -164,6 +182,7 @@ func (r Record) Refreshed(now time.Time, access, refresh Digest) (Record, bool, 
 	}
 	next := r
 	next.Scopes = slices.Clone(r.Scopes)
+	next.SupersededAt = value.Optional[temporal.DateTime]{}
 	next.Generation++
 	next.AccessHash = access
 	next.RefreshHash = value.Set(refresh)
@@ -187,27 +206,39 @@ func (r Record) Refreshed(now time.Time, access, refresh Digest) (Record, bool, 
 }
 
 // Creation is a trusted, bounded issuance request. Backend.Create enforces
-// Maximum live families while holding the stable subject lock.
+// Maximum live personal/renewable families and PendingMaximum live challenge
+// families, each counting only its own kind, while holding the stable subject
+// lock. Limit selects rejection or eviction for full families; challenges
+// always evict their oldest. Expired families never count.
 type Creation struct {
-	ID            model.ID[Record]
-	Subject       model.Identity
-	Name          string
-	Scopes        []auth.AccessScopeName
-	Mode          Mode
-	Assurance     auth.Assurance
-	AccessHash    Digest
-	RefreshHash   value.Optional[Digest]
-	Lifetime      Lifetime
-	RotationLimit uint32
-	Maximum       int
+	ID             model.ID[Record]
+	Subject        model.Identity
+	Name           string
+	Scopes         []auth.AccessScopeName
+	Mode           Mode
+	Assurance      auth.Assurance
+	AccessHash     Digest
+	RefreshHash    value.Optional[Digest]
+	Lifetime       Lifetime
+	RotationLimit  uint32
+	Maximum        int
+	PendingMaximum int
+	Limit          auth.LimitPolicy
+	Device         auth.Device
 }
 
 func (c Creation) metadata(address Address) Record {
-	return Record{ID: c.ID, Address: address, Subject: c.Subject, Name: c.Name, Scopes: c.Scopes, Mode: c.Mode, Assurance: c.Assurance, AccessHash: c.AccessHash, RefreshHash: c.RefreshHash, Lifetime: c.Lifetime, RotationLimit: c.RotationLimit}
+	return Record{ID: c.ID, Address: address, Subject: c.Subject, Name: c.Name, Scopes: c.Scopes, Mode: c.Mode, Assurance: c.Assurance, AccessHash: c.AccessHash, RefreshHash: c.RefreshHash, Lifetime: c.Lifetime, RotationLimit: c.RotationLimit, Device: c.Device}
 }
 func (c Creation) Validate(address Address) error {
-	if c.Maximum < 1 || c.Maximum > MaxTokens {
+	if c.Maximum < 1 || c.PendingMaximum < 1 || c.Maximum+c.PendingMaximum > MaxTokens {
 		return fault.New(fault.Invalid, "invalid token subject capacity")
+	}
+	if err := c.Limit.Validate(); err != nil {
+		return err
+	}
+	if err := c.Device.Validate(); err != nil {
+		return err
 	}
 	return c.metadata(address).validateMetadata(address)
 }

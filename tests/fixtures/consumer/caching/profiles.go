@@ -51,6 +51,19 @@ func RememberProfile(ctx context.Context, profiles Profiles, id model.ID[mutator
 	})
 }
 
+// FlexibleProfile serves a snapshot younger than a minute directly and an older
+// one (up to ten more minutes) immediately while Foundry refreshes it in the
+// background. The application only chooses its freshness policy and loader.
+func FlexibleProfile(ctx context.Context, profiles Profiles, id model.ID[mutatorqueries.Member], load func(context.Context, model.ID[mutatorqueries.Member]) (mutatorqueries.Member, error)) (Profile, error) {
+	return profiles.Flexible(ctx, id, time.Minute, 10*time.Minute, func(ctx context.Context) (Profile, error) {
+		member, err := load(ctx, id)
+		if err != nil {
+			return Profile{}, err
+		}
+		return profileSnapshot(member)
+	})
+}
+
 func ReadProfile(ctx context.Context, profiles Profiles, id model.ID[mutatorqueries.Member]) (Profile, bool, error) {
 	return profiles.Get(ctx, id)
 }

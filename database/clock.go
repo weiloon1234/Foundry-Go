@@ -1,6 +1,9 @@
 package database
 
 import (
+	"log/slog"
+	"time"
+
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
@@ -14,6 +17,10 @@ type poolSettings struct {
 	clockSet        bool
 	read            *readPoolSettings
 	connectionLimit int
+	queryObserver   QueryObserver
+	slowLogger      *slog.Logger
+	slowThreshold   time.Duration
+	stickyWindow    time.Duration
 }
 
 // WithClock injects model lifecycle time. Direct Open/Prepare calls default to
@@ -65,6 +72,9 @@ func (db *DB) bindRuntimeClock(source clock.Clock) error {
 // its application source during boot; after Start it never replaces that source.
 // Reading the clock does not acquire a connection or extend resource ownership.
 func (db *DB) Clock() clock.Clock {
+	if db.frozen.Load() {
+		return db.timeSource
+	}
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	return db.timeSource

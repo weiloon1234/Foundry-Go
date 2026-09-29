@@ -5,7 +5,9 @@ import "github.com/weiloon1234/Foundry-Go/health"
 // ReadinessProbes contributes separate configured endpoint checks to the shared
 // health registry. IDs belong to the application's declared health scope; the
 // optional read ID is used only when that endpoint exists. These callbacks
-// never execute migrations or inspect domain tables.
+// never execute migrations or inspect domain tables. Each endpoint is checked
+// through one dedicated probe connection outside MaxOpen, so a saturated
+// application pool cannot make every replica unready at once.
 func (db *DB) ReadinessProbes(primary, read health.ProbeID) []health.Probe {
 	probes := []health.Probe{{ID: primary, Check: db.PingPrimary}}
 	if db.HasReadPool() {

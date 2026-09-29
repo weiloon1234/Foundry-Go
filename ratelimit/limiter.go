@@ -2,7 +2,10 @@ package ratelimit
 
 import (
 	"context"
+	"time"
+
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 )
 
@@ -30,27 +33,138 @@ func (l Limiter[K]) Take(ctx context.Context, key K, cost uint32) (Decision, err
 // and admission. It catches panic/Goexit and waits for callback exit. The resolver
 // must honor cancellation; no callback or uncertain command is automatically retried.
 func (l Limiter[K]) TakeWith(ctx context.Context, cost uint32, resolve func(context.Context) (K, error)) (Decision, error) {
-	if err := l.Validate(); err != nil {
+	if err := l.validateCost(cost); err != nil {
 		return Decision{}, err
+	}
+	var decision Decision
+	err := l.run(ctx, resolve, func(ctx context.Context, address Key) error {
+		var err error
+		decision, err = l.store.backend.RateLimit(ctx, address, l.Limit(), cost)
+		if err != nil {
+			return err
+		}
+		return decision.Validate(l.Limit(), cost)
+	})
+	if err != nil {
+		return Decision{}, err
+	}
+	return decision, nil
+}
+
+// Attempt takes cost and runs fn only when admitted, returning fn's error. A
+// denial returns the decision without calling fn; an admission error returns
+// it without calling fn. fn runs in the caller's goroutine after the bounded
+// admission operation has finished, with the caller's context. Consumed capacity
+// is not refunded when fn fails, and nothing is retried.
+func (l Limiter[K]) Attempt(ctx context.Context, key K, cost uint32, fn func(context.Context) error) (Decision, error) {
+	if fn == nil {
+		return Decision{}, fault.New(fault.Invalid, "rate limit attempt requires a callback")
+	}
+	decision, err := l.Take(ctx, key, cost)
+	if err != nil || !decision.Allowed {
+		return decision, err
+	}
+	return decision, fn(ctx)
+}
+
+// Peek reports the decision cost would receive now without consuming capacity
+// or changing the bucket's expiry. Remaining is the capacity left now. It is an
+// observation, not a reservation: a later Take can be denied. The backend must
+// implement InspectBackend; otherwise Peek fails with fault.Invalid.
+func (l Limiter[K]) Peek(ctx context.Context, key K, cost uint32) (Decision, error) {
+	if err := l.validateCost(cost); err != nil {
+		return Decision{}, err
+	}
+	var decision Decision
+	err := l.inspect(ctx, key, func(ctx context.Context, backend InspectBackend, address Key) error {
+		var err error
+		decision, err = backend.PeekRateLimit(ctx, address, l.Limit(), cost)
+		if err != nil {
+			return err
+		}
+		return decision.ValidatePeek(l.Limit(), cost)
+	})
+	if err != nil {
+		return Decision{}, err
+	}
+	return decision, nil
+}
+
+// Remaining reports the capacity left in the key's current window without
+// consuming it. A missing or expired bucket reports the full capacity.
+func (l Limiter[K]) Remaining(ctx context.Context, key K) (uint32, error) {
+	decision, err := l.Peek(ctx, key, 1)
+	if err != nil {
+		return 0, err
+	}
+	return decision.Remaining, nil
+}
+
+// AvailableIn reports how long until cost could be admitted: zero when it fits
+// now, otherwise the time until the current window resets. It consumes nothing.
+func (l Limiter[K]) AvailableIn(ctx context.Context, key K, cost uint32) (time.Duration, error) {
+	decision, err := l.Peek(ctx, key, cost)
+	if err != nil {
+		return 0, err
+	}
+	return decision.RetryAfter, nil
+}
+
+// Clear removes the key's bucket so its next request starts a fresh window with
+// full capacity. True means stored state existed. It also removes unreadable
+// state at the key's address. Clearing grants new quota; use it deliberately
+// (for example after a successful verification), never as error recovery.
+func (l Limiter[K]) Clear(ctx context.Context, key K) (bool, error) {
+	var cleared bool
+	err := l.inspect(ctx, key, func(ctx context.Context, backend InspectBackend, address Key) error {
+		var err error
+		cleared, err = backend.ClearRateLimit(ctx, address)
+		return err
+	})
+	if err != nil {
+		return false, err
+	}
+	return cleared, nil
+}
+
+func (l Limiter[K]) validateCost(cost uint32) error {
+	if err := l.Validate(); err != nil {
+		return err
+	}
+	return l.Limit().ValidateCost(cost)
+}
+func (l Limiter[K]) inspect(ctx context.Context, key K, fn func(context.Context, InspectBackend, Key) error) error {
+	if err := l.Validate(); err != nil {
+		return err
+	}
+	backend, ok := l.store.backend.(InspectBackend)
+	if !ok {
+		return fault.New(fault.Invalid, "rate limit backend does not support inspection")
+	}
+	return l.run(ctx, func(context.Context) (K, error) { return key, nil }, func(ctx context.Context, address Key) error {
+		return fn(ctx, backend, address)
+	})
+}
+
+// run owns one bounded operation: deadline, queued admission, key resolution,
+// encoding and the adapter call all execute inside one isolated callback that
+// retains its slot until it actually exits.
+func (l Limiter[K]) run(ctx context.Context, resolve func(context.Context) (K, error), fn func(context.Context, Key) error) error {
+	if err := l.Validate(); err != nil {
+		return err
 	}
 	if ctx == nil || resolve == nil {
-		return Decision{}, fault.New(fault.Invalid, "rate limiting requires context and key resolver")
-	}
-	if err := l.Limit().ValidateCost(cost); err != nil {
-		return Decision{}, err
+		return fault.New(fault.Invalid, "rate limiting requires context and key resolver")
 	}
 	operation, cancel := context.WithTimeout(ctx, l.store.config.Timeout)
 	defer cancel()
 	if err := operation.Err(); err != nil {
-		return Decision{}, err
+		return err
 	}
-	select {
-	case l.store.slots <- struct{}{}:
-	default:
-		return Decision{}, fault.New(fault.Conflict, "rate limit operation capacity reached")
+	if err := l.store.slots.Acquire(operation, admission.Wait(l.store.config.Timeout), nil); err != nil {
+		return err
 	}
-	defer func() { <-l.store.slots }()
-	var decision Decision
+	defer l.store.slots.Release()
 	err := callback.Isolated("rate limit operation", func() error {
 		if err := operation.Err(); err != nil {
 			return err
@@ -76,17 +190,10 @@ func (l Limiter[K]) TakeWith(ctx context.Context, cost uint32, resolve func(cont
 		if err := operation.Err(); err != nil {
 			return err
 		}
-		decision, err = l.store.backend.RateLimit(operation, address, l.Limit(), cost)
-		if err != nil {
-			return err
-		}
-		return decision.Validate(l.Limit(), cost)
+		return fn(operation, address)
 	})
 	if err != nil {
-		return Decision{}, err
+		return err
 	}
-	if err := operation.Err(); err != nil {
-		return Decision{}, err
-	}
-	return decision, nil
+	return operation.Err()
 }

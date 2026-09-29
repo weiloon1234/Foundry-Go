@@ -131,6 +131,7 @@ func compilerCases() []compilerCase {
 		{"datatable_having_phase", "cannot use"},
 		{"datatable_group_filter_value", "cannot use"},
 		{"datatable_id", "cannot use"},
+		{"importer_column_row", "cannot use"},
 		{"query_icontains_value", "cannot use"},
 		{"query_icontains_nullable", "cannot use"},
 

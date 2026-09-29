@@ -2,11 +2,13 @@ package http_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 
+	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/auth/session"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
@@ -75,9 +77,18 @@ func TestBrowserCaptureReusesSecureCookieAndRefreshesPersistentSession(t *testin
 	if _, err := adapter.CaptureCredentials(insecure); err == nil {
 		t.Fatal("secure browser cookie accepted on insecure request")
 	}
+	// Repeated cookies of one name read as absent: path ordering is not identity.
 	request.Header.Add("Cookie", request.Header.Get("Cookie"))
-	if _, err := adapter.CaptureCredentials(request); err == nil {
-		t.Fatal("duplicate browser cookie accepted")
+	if duplicated, err := adapter.CaptureCredentials(request); err != nil {
+		t.Fatal(err)
+	} else if scope, err := adapter.Registry().NewScope(t.Context(), duplicated); err != nil {
+		t.Fatal(err)
+	} else {
+		_, err := s.web.Guard().Require(scope.Context())
+		scope.Close()
+		if !errors.Is(err, auth.Unauthenticated) {
+			t.Fatal("duplicate browser cookie accepted", err)
+		}
 	}
 	if _, err := s.sessions.Revoke(t.Context(), issued.Secret()); err != nil {
 		t.Fatal(err)

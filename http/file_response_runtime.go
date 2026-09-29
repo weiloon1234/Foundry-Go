@@ -15,7 +15,7 @@ func (p *preparedFile) write(w stdhttp.ResponseWriter, r *stdhttp.Request) error
 	}
 	var writer *fileResponseWriter
 	owned := callback.Isolated("HTTP download response", func() error {
-		writer = newFileResponseWriter(r.Context(), w)
+		writer = newFileResponseWriter(p.reader.ctx, w)
 		header := writer.Header()
 		p.headers(header)
 		if p.tag != "" {

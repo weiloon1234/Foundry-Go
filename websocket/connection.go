@@ -14,7 +14,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
-	"github.com/weiloon1234/Foundry-Go/ratelimit"
 )
 
 type subscriptionKey struct {
@@ -47,6 +46,11 @@ type subscriptionState struct {
 	origin        attribution.Origin
 	member        MemberID
 	subjectID     MemberID
+	// access is the last fresh authorization of this subscription, refreshed
+	// with the connection's credentials. Incoming messages reuse it within the
+	// freshness window instead of repeating credential lookup and policy checks.
+	// Protected by hub.mu; its context field is never retained.
+	access accessResult
 }
 type connectionState struct {
 	clusterOpened    bool
@@ -58,37 +62,52 @@ type connectionState struct {
 	cancel           context.CancelFunc
 	operationCancel  context.CancelFunc
 	transportContext context.Context
-	rate             ratelimit.Limiter[ConnectionID]
-	authFreshUntil   atomic.Int64
-	queuedBytes      int
-	drainTimer       *time.Timer
-	seen             map[MessageID]bool
-	seenOrder        []MessageID
-	seenNext         int
-	socket           *transport.Conn
-	credentials      auth.Credentials
-	inbound          chan []byte
-	outbound         chan []byte
-	// Subscriptions are protected by hub.mu, even though inbound work is serial.
-	subscriptions map[subscriptionKey]*subscriptionState
+	// rate is owned by the serial inbound loop.
+	rate           tokenBucket
+	authFreshUntil atomic.Int64
+	authTimer      *time.Timer
+	// Byte accounting is atomic so writers and readers never take hub.mu.
+	queuedBytes atomic.Int64
+	closeStatus atomic.Int32
+	// The fields below are protected by hub.mu.
+	drainTimer      *time.Timer
+	seen            map[MessageID]bool
+	seenOrder       []MessageID
+	seenNext        int
+	routeGeneration uint64
+	subscriptions   map[subscriptionKey]*subscriptionState
+	// scope is the connection's current authentication scope for incoming
+	// messages, replaced by each successful authorization refresh.
+	scopeMu     sync.RWMutex
+	scope       *auth.Scope
+	socket      *transport.Conn
+	credentials auth.Credentials
+	leaseUntil  time.Time
+	inbound     chan []byte
+	outbound    chan []byte
 }
 
 func (c *connectionState) run() {
 	var loops sync.WaitGroup
 	loops.Go(c.read)
 	loops.Go(c.write)
-	loops.Go(c.heartbeat)
-	loops.Go(c.refreshAuthorization)
+	loops.Go(c.maintain)
 	defer func() { c.operationCancel(); loops.Wait(); c.cancel(); _ = c.socket.CloseNow() }()
+	c.rate = newTokenBucket(c.hub.config.MessageRate, time.Now())
 	for {
 		select {
 		case <-c.ctx.Done():
 			return
 		case data := <-c.inbound:
+			c.release(len(data))
 			if c.ctx.Err() != nil {
 				return
 			}
-			if !c.allowMessage() {
+			// Rate limiting precedes decoding, so a flood costs a token check
+			// and a scan of its leading members for the request ID.
+			if !c.rate.allow(time.Now()) {
+				c.hub.counters.rateRejected.Add(1)
+				c.respond(Response{Type: ErrorResponse, ID: leadingRequestID(data), Code: RateLimited})
 				continue
 			}
 			request, err := DecodeRequest(data, c.hub.config.MaxFrameBytes)
@@ -111,15 +130,20 @@ func (c *connectionState) read() {
 		if err != nil {
 			return
 		}
-		if kind != transport.MessageText {
+		if kind != transport.MessageText || !c.reserve(len(data)) {
+			c.hub.counters.slowConsumers.Add(1)
 			_ = c.socket.CloseNow()
 			return
 		}
 		select {
 		case c.inbound <- data:
 		case <-c.ctx.Done():
+			c.release(len(data))
 			return
 		default:
+			// The client exceeded the exported inbound queue.
+			c.release(len(data))
+			c.hub.counters.slowConsumers.Add(1)
 			_ = c.socket.CloseNow()
 			return
 		}
@@ -131,15 +155,12 @@ func (c *connectionState) write() {
 	for {
 		select {
 		case <-c.ctx.Done():
-			c.hub.mu.Lock()
-			stopping := c.hub.closing
-			c.hub.mu.Unlock()
-			if stopping && c.transportContext.Err() == nil {
-				c.drain()
+			if status := transport.StatusCode(c.closeStatus.Load()); status != 0 && c.transportContext.Err() == nil {
+				c.drain(status)
 			}
 			return
 		case data := <-c.outbound:
-			c.dequeued(data)
+			c.release(len(data))
 			ctx, cancel := context.WithTimeout(c.transportContext, c.hub.config.WriteTimeout)
 			err := c.socket.Write(ctx, transport.MessageText, data)
 			cancel()
@@ -167,18 +188,94 @@ func (c *connectionState) respond(response Response) bool {
 	defer c.hub.mu.Unlock()
 	return c.enqueueLocked(data)
 }
+
+// reserveResult says which budget, if any, refused a frame.
+type reserveResult uint8
+
+const (
+	reserved reserveResult = iota
+	connectionBudgetFull
+	hubBudgetFull
+)
+
+// reserve admits bytes against both the connection and hub budgets. Frames
+// shared by several connections count once per connection.
+func (c *connectionState) reserve(bytes int) bool { return c.tryReserve(bytes) == reserved }
+func (c *connectionState) tryReserve(bytes int) reserveResult {
+	n := int64(bytes)
+	if c.queuedBytes.Add(n) > int64(c.hub.config.MaxQueuedBytes) {
+		c.queuedBytes.Add(-n)
+		return connectionBudgetFull
+	}
+	if c.hub.queuedBytes.Add(n) > c.hub.config.MaxTotalQueuedBytes {
+		c.hub.queuedBytes.Add(-n)
+		c.queuedBytes.Add(-n)
+		return hubBudgetFull
+	}
+	return reserved
+}
+func (c *connectionState) release(bytes int) {
+	c.queuedBytes.Add(-int64(bytes))
+	c.hub.queuedBytes.Add(-int64(bytes))
+}
+
 func (c *connectionState) enqueueLocked(data []byte) bool {
 	if c.ctx.Err() != nil || c.hub.closing {
 		return false
 	}
-	select {
-	case c.outbound <- data:
-		c.queuedBytes += len(data)
-		return true
-	default:
-		c.hub.slowConsumers++
-		c.cancel()
+	result := c.tryReserve(len(data))
+	// An exhausted hub budget disconnects the connections actually holding it
+	// (the largest queues) before this one, unless this one holds the most.
+	for result == hubBudgetFull && c.hub.evictLargestLocked(c) {
+		result = c.tryReserve(len(data))
+	}
+	if result == reserved {
+		select {
+		case c.outbound <- data:
+			return true
+		default:
+			c.release(len(data))
+		}
+	}
+	c.hub.counters.slowConsumers.Add(1)
+	c.cancel()
+	return false
+}
+
+// evictLargestLocked disconnects the connection with the most queued bytes
+// when it holds more than current, releasing its queues immediately so the
+// hub budget recovers. It reports false when current is itself the largest.
+func (h *Hub) evictLargestLocked(current *connectionState) bool {
+	var victim *connectionState
+	largest := current.queuedBytes.Load()
+	for _, connection := range h.connections {
+		if held := connection.queuedBytes.Load(); held > largest && connection.ctx.Err() == nil {
+			victim, largest = connection, held
+		}
+	}
+	if victim == nil {
 		return false
+	}
+	h.counters.slowConsumers.Add(1)
+	victim.cancel()
+	// The victim's loops exit on cancellation; frames taken here are simply
+	// never written. Receiving from its channels is safe concurrently.
+	victim.releaseQueues()
+	return true
+}
+
+// releaseQueues returns bytes still queued after every loop exited and the
+// connection left all hub indexes, so no producer can reach it any more.
+func (c *connectionState) releaseQueues() {
+	for {
+		select {
+		case data := <-c.outbound:
+			c.release(len(data))
+		case data := <-c.inbound:
+			c.release(len(data))
+		default:
+			return
+		}
 	}
 }
 func (c *connectionState) cleanup() {
@@ -191,11 +288,21 @@ func (c *connectionState) cleanup() {
 		c.removeLocked(subscription)
 		removed = append(removed, subscription)
 	}
+	for key := range c.pending {
+		c.dropPendingLocked(key)
+	}
 	c.hub.mu.Unlock()
 	c.closeCluster(removed)
 	for _, subscription := range removed {
 		subscription.clusterJoined = false
 		c.leave(subscription)
+	}
+	c.scopeMu.Lock()
+	scope := c.scope
+	c.scope = nil
+	c.scopeMu.Unlock()
+	if scope != nil {
+		_ = scope.Close()
 	}
 	c.credentials = auth.Credentials{}
 }
@@ -214,9 +321,7 @@ func (c *connectionState) leave(subscription *subscriptionState) error {
 		return errors.Join(remote, local)
 	})
 	if err != nil || ctx.Err() != nil {
-		c.hub.mu.Lock()
-		c.hub.failures++
-		c.hub.mu.Unlock()
+		c.hub.counters.failures.Add(1)
 		if err == nil {
 			return ctx.Err()
 		}

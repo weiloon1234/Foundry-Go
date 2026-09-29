@@ -146,8 +146,9 @@ func TestPostgresTransactionsSavepointsAndAfterCommit(t *testing.T) {
 		}
 		return cause
 	})
+	// A confirmed rollback returns the application failure unchanged.
 	var detail *database.Error
-	if !errors.Is(err, cause) || !errors.As(err, &detail) || detail.Outcome() != database.RolledBack || called || countRows(t, db, table) != 0 {
+	if err != cause || errors.As(err, &detail) || called || countRows(t, db, table) != 0 {
 		t.Fatalf("rollback: %v", err)
 	}
 	var callbacks []string

@@ -4,7 +4,9 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 )
 
 type operationKey struct{}
@@ -23,6 +25,17 @@ func recursive(ctx context.Context, s *Scope, id *declarationID) bool {
 	}
 	return false
 }
+
+// nestedIn reports whether a frame of this scope already holds a slot.
+func nestedIn(frame *operationFrame, s *Scope) bool {
+	for ; frame != nil; frame = frame.parent {
+		if frame.scope == s {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Scope) check(ctx context.Context) error {
 	if s == nil || s.registry == nil || s.ctx == nil || ctx == nil {
 		return fault.New(fault.Invalid, "authentication requires a scope and context")
@@ -43,22 +56,31 @@ func (s *Scope) check(ctx context.Context) error {
 func (s *Scope) execute(ctx context.Context, id *declarationID, fn func(context.Context) error) error {
 	parent, _ := ctx.Value(operationKey{}).(*operationFrame)
 	ctx = context.WithValue(ctx, operationKey{}, &operationFrame{scope: s, id: id, parent: parent})
+	if err := s.ctx.Err(); err != nil {
+		return err
+	}
+	// A nested evaluation (a policy or guard called from another callback of
+	// this scope) runs synchronously inside the parent's slot and reuses it:
+	// queueing again while the parent holds a slot would stall or deadlock a
+	// saturated registry. Only outermost operations are admitted.
+	if !nestedIn(parent, s) {
+		// Queue before the operation budget starts, so waiting cannot consume it. A
+		// closed scope ends the wait; an unsatisfied wait reports fault.Overloaded.
+		if err := s.registry.slots.Acquire(ctx, admission.Wait(s.registry.config.Timeout), s.ctx.Done()); err != nil {
+			if canceled := s.ctx.Err(); canceled != nil {
+				return canceled
+			}
+			return err
+		}
+		defer s.registry.slots.Release()
+	}
 	op, cancel := context.WithTimeout(ctx, s.registry.config.Timeout)
 	stop := context.AfterFunc(s.ctx, cancel)
 	defer stop()
 	defer cancel()
-	if err := s.ctx.Err(); err != nil {
-		return err
-	}
 	if err := op.Err(); err != nil {
 		return err
 	}
-	select {
-	case s.registry.slots <- struct{}{}:
-	default:
-		return fault.New(fault.Conflict, "authentication operation capacity reached")
-	}
-	defer func() { <-s.registry.slots }()
 	err := callback.Isolated("authentication callback", func() error {
 		if err := op.Err(); err != nil {
 			return err
@@ -127,6 +149,15 @@ func (s *Scope) evaluate(ctx context.Context, id *declarationID, fn func(context
 	if !s.registry.policies[id] {
 		return fault.New(fault.Missing, "authentication policy is not registered in this scope")
 	}
+	return s.run(ctx, id, fn)
+}
+
+// run executes a registered policy or hook callback with recursion protection,
+// scope ownership, bounded admission and isolation.
+func (s *Scope) run(ctx context.Context, id *declarationID, fn func(context.Context) error) error {
+	if err := s.check(ctx); err != nil {
+		return err
+	}
 	if recursive(ctx, s, id) {
 		return fault.New(fault.Cycle, "recursive authentication policy evaluation")
 	}
@@ -138,5 +169,20 @@ func (s *Scope) evaluate(ctx context.Context, id *declarationID, fn func(context
 	s.active.Add(1)
 	s.mu.Unlock()
 	defer s.active.Done()
-	return s.execute(ctx, id, fn)
+	var denial *Denial
+	err := s.execute(ctx, id, func(op context.Context) error {
+		err := fn(op)
+		if found, present, complete := errorgraph.As[*Denial](err); complete && present && found != nil {
+			denial = found
+			return nil
+		}
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	if denial != nil {
+		return denial
+	}
+	return nil
 }

@@ -10,18 +10,24 @@ engine and the application's configured logger, connections and CLI lifecycle.
 | --- | --- |
 | Execution attempts per cycle | 5 total |
 | Backoff after failures | 5 seconds, 30 seconds, 1 minute, 5 minutes |
-| Additive jitter | Uniformly selected from 0 to 1 second |
+| Additive jitter | Uniformly selected from 0 to max(1 second, delay/5) |
 | Attempt timeout | 5 minutes, including preparation and middleware |
 | Concurrent jobs per worker | 4 |
 | Reservation lease / heartbeat | 30 seconds / 5 seconds |
-| Idle polling | 100 milliseconds |
+| Idle polling | 100 milliseconds, doubling to 1 second while idle |
+| Graceful drain on shutdown | 5 seconds |
+| Backend failure backoff cap | 30 seconds |
 | Retained terminal jobs | 7 days |
 | History | Last 64 transitions per job |
 
 `jobs.DefaultPolicy(queue)`, `DefaultWorkerConfig` and `DefaultQueueConfig` own
 these defaults. Retry delays beyond the backoff slice reuse its last delay.
-Queue capacity defaults to 4,096 retained jobs and 64 MiB of accounted envelope
-storage; configure it for the workload. Unfinished jobs are never evicted.
+Queue capacity defaults to 4,096 live (unfinished) jobs and 64 MiB of accounted
+envelope storage; a full queue returns the retryable `jobs.ErrQueueFull`
+(`fault.Overloaded`). Terminal records are retained separately, up to 65,536
+(`MaxRetained`) with the oldest evicted first, so retained successes and failures
+never block new work. Configure both for the workload. Unfinished jobs are never
+evicted.
 
 Each worker runs a bounded number of goroutine reservation loops. Active work has
 a heartbeat goroutine; channels coordinate its completion and cancellation.
@@ -31,10 +37,17 @@ Redis durability depends on its persistence/failover configuration.
 
 Timeouts cancel context; they cannot terminate a handler that ignores cancellation.
 Its slot and owned dependencies remain live until actual exit. Backend failures
-stop admission and drain the worker. The deployment's process supervisor owns
-restarts; the framework does not silently switch backends or restart the process.
-Lease loss or a renewal error cancels all reservation loops immediately, even
-while the affected handler is still draining after cancellation.
+(including Redis client overload) never stop the worker: each is logged with a
+redacted diagnostic, the loop backs off with jitter up to `FailureBackoff` and
+retries. The framework does not silently switch backends. A renewal error keeps
+retrying until the lease would really have expired; a lost lease cancels only its
+own handler while the other reservation loops keep running.
+
+On shutdown the worker drains: it stops reserving, lets admitted handlers finish
+within `DrainTimeout` while their heartbeats continue, then cancels the rest and
+releases them with a refunded attempt. Keep `DrainTimeout + OperationTimeout`
+within the application's `ShutdownTimeout - StopDelay`; assembly rejects a
+configuration that does not fit.
 
 ## Failure logging and hooks
 
@@ -47,8 +60,11 @@ another logging policy. Standalone `jobs.NewWorker` accepts
 An ordinary failed attempt emits WARN when requesting a retry, or ERROR when
 requesting terminal failure. Backend/finalization failures emit ERROR. Successful
 work, ordinary rate-limit release and normal cancellation are not failure logs.
-If shutdown exhausts the attempt budget, the terminal failure is logged at ERROR
-and counted as a failed observation; a release with attempts remaining stays quiet.
+An attempt interrupted by shutdown is released with a refund and stays quiet;
+its handler never observed completion, so it is not counted as a failure.
+A backend operation the worker survives logs `job backend operation failed` at
+ERROR with `operation` (reserve, start, renew or finish), `queue` and a redacted
+`diagnostic` (Go type names and framework fault codes, never error text).
 Fields include job ID/name/version, queue, attempt/max attempts, manual retry cycle,
 safe reason, requested state, retry delay and whether finalization was acknowledged.
 `requested_state` describes the worker's requested transition: a concurrent cancel
@@ -140,6 +156,11 @@ For an application binary exposing this declaration:
 ./service jobs failed --connection background --queue communications --format json
 ./service jobs inspect --connection background --queue communications --id JOB_ID --format json
 ./service jobs retry --connection background --queue communications --id JOB_ID --token RETRY_TOKEN --format json
+./service jobs stats --connection background --queue communications --format json
+./service jobs retry-failed --connection background --queue communications --confirm [--name welcome --version 1]
+./service jobs flush-failed --connection background --queue communications --confirm
+./service jobs forget --connection background --queue communications --id JOB_ID
+./service jobs clear --connection background --queue communications --confirm
 ```
 
 Use the actual ID and `retry_token` returned by inspection. Connection and queue
@@ -147,17 +168,104 @@ may be omitted to select their configured defaults. Unknown explicit names fail;
 they do not fall back. `failed` returns one bounded page (default 20, maximum 100).
 Pass its `next` cursor with `--after`; filtered pages can be empty while a next
 cursor exists. `inspect` includes bounded history. Output never includes payloads,
-raw errors, secrets or reservation owners. Commands do not clear/delete queues.
+raw errors, secrets or reservation owners.
+
+`stats` reports queue depth (`waiting`, `delayed`, `blocked`, `leased`, `failed`,
+`retained`) from indexes and counters without reading payloads
+(`Dispatcher.Stats`, optional `jobs.StatsBackend`). The bulk operations walk the
+whole queue in bounded pages and require `--confirm`; `--name`/`--version`
+narrow them to one job schema. `retry-failed` (`Dispatcher.RetryFailed`) retries
+each independent failed job with the token of the failure it observed, so a
+concurrent change is skipped, never overwritten; workflow members, jobs at their
+manual retry cap and names this binary does not register are skipped.
+`flush-failed` (`Dispatcher.FlushFailed`) and `forget` (`Dispatcher.Forget`,
+optional `jobs.ForgetBackend`) remove retained terminal independent records and
+their deduplication identity, so a later dispatch or outbox republication of that
+ID is accepted as new work. `clear` (`Dispatcher.Clear`) requests cancellation of
+every unfinished job: waiting and blocked jobs end as cancelled immediately and
+running handlers receive cancellation; records stay retained and inspectable.
+Each page's changes are confirmed independently; an error leaves earlier pages
+applied. Built-in memory and Redis backends implement both optional interfaces.
 
 Retry output reports `acceptance=confirmed` only when the backend confirms the
 operation, including a deduplicated retry. An output failure may follow successful
 mutation. Operator permissions, shell access and audit of who approved replay
 belong to the application's deployment; tokens are concurrency guards only.
 
+## Queue depth metrics
+
+`jobs.NewDepthMonitor(interval, targets...)` samples `Dispatcher.Stats` for each
+`jobs.DepthTarget{Connection, Queue, Dispatcher}` in the background (`Run`) and
+serves the latest `jobs.QueueDepth` readings without I/O (`Snapshot`): the
+connection, queue, `QueueStats`, sample time and whether the last sample
+succeeded. Configured applications with observability enabled run one monitor
+for each job connection's default queue and export it as the `foundry.jobs`
+collector (see [observability](observability.md)). Only processes running the
+worker or scheduler kernel (or started without selecting a kernel) sample, so
+HTTP replicas and CLI commands add no queue-authority load.
+
+## Durable failed-job archive
+
+`jobs/archive` keeps terminal failures beyond queue retention. `archive.New(db,
+schema, clock)` is a `jobs.FailureSink`: attach it with `jobs.WithFailureSink`
+(standalone workers) or `jobs.RegisterFailureSink` (every worker of a dispatcher),
+or enable `worker.archive.enabled` with `worker.archive.database` and
+`worker.archive.schema` in a configured application. Apply `archive.Migrations()`
+(table `foundry_failed_jobs`) to that schema; `000002_store_original_envelopes`
+stores each envelope as its original transport bytes (bounded by
+`jobs.MaxEnvelopeBytes` before writing), so `Store.Retry` decodes exactly what
+the queue carried. After the queue confirms a terminal
+failure the worker records the complete envelope (payload included), queue,
+reason, attempts, exceptions and manual-retry cycle; one entry per execution and
+cycle. Recording is bounded by `OperationTimeout`, logged as a backend failure
+when it fails and never changes the job's outcome; a crash between finalization
+and recording can miss an entry.
+
+`Store.List` pages entries newest first by `(failed_at, id)` (safe metadata,
+never payloads). `Page.Next` is an `archive.Cursor` carrying the last entry's
+position, so continuing never repeats or skips entries even when that entry was
+pruned meanwhile; pass it as `ListOptions.After` with the same `Name` filter
+(`archive.ParseCursor` restores a printed cursor).
+`Store.Retry` re-dispatches an entry as a new job through
+`Dispatcher.Redispatch` (fresh execution ID, immediate availability, no
+uniqueness window or retry deadline) and records `RetriedAt`, and `Store.Prune` deletes entries
+older than a cutoff in bounded batches. Register
+`jobs/archive/command.Declaration` for the `failed-jobs list|retry|prune`
+commands; configured applications resolve the store with
+`services.JobArchive()`, include `archive.Migrations()` in `app.Migrations()`, and
+can prune it on a schedule through the [housekeeping schedule](production-operations.md#housekeeping-schedule).
+
+## Redis queue layout upgrade
+
+This release stores Redis queues in layout 2. It never migrates a queue written
+by the previous release (layout 1) implicitly: every operation on such a queue
+returns `jobs.ErrLegacyLayout` ("stop or drain every process of the previous
+release, then run `jobs migrate-layout`") and changes nothing, so the previous
+release keeps working on it. The previous release cannot read a migrated queue,
+so migrate each queue explicitly:
+
+1. Stop or drain every worker, dispatcher and operator tool of the previous
+   release that uses the queue (drain: stop dispatching, let workers finish,
+   then stop them).
+2. Take a Redis snapshot (for example `BGSAVE`) if you may need to roll back.
+3. Run `./service jobs migrate-layout --connection NAME --queue QUEUE --confirm`
+   (or `Dispatcher.MigrateLayout`). It is one atomic script that keeps every
+   record's ID, state and history; `migrated=false` means the queue was already
+   migrated or empty, and repeating is safe.
+4. Start the new release.
+
+Rollback to the previous release requires restoring the pre-migration snapshot,
+or draining the migrated queue completely (no unfinished or retained jobs you
+still need) before the previous release uses it. New queues are created in
+layout 2 directly.
+
 ## Rollout and limits
 
-The envelope format and queue configuration identity are unchanged. Stored records
-gain optional retry metadata; readers treat older records as cycle zero. Upgrade
+The envelope format is unchanged unless a job opts into the format-3 fields. The
+Redis queue configuration identity now includes `MaxRetained`, and existing
+queues need the explicit layout upgrade above. Stored records gain optional
+retry metadata; readers treat older
+records as cycle zero. Upgrade
 workers and operator tools together before enabling manual retries so all history
 writers preserve cycle metadata. Regenerate configuration with the selected
 framework version to obtain the new logging key.

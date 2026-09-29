@@ -72,20 +72,29 @@ func (s Scope) Within(parent Scope) Scope {
 
 // Within returns a route whose path and name include the scope. Store and reuse
 // this returned descriptor so named URLs and registration share the full prefix.
+// An empty route pattern, such as StaticPath(""), denotes the scope root itself:
+// within /api it matches exactly /api, while "/" matches exactly /api/. An empty
+// pattern is invalid outside a nonempty path scope.
 func (r Route[P]) Within(scope Scope) Route[P] {
 	if r.err != nil {
 		return r
 	}
-	if err := r.Validate(); err != nil {
-		r.err = err
-		return r
+	root := r.path.pattern == "" && scope.prefix != ""
+	if !root {
+		if err := r.Validate(); err != nil {
+			r.err = err
+			return r
+		}
 	}
 	if scope.err != nil {
 		r.err = scope.err
 		return r
 	}
 	r.spec.ID = scopedName(scope.name, r.spec.ID)
-	r.path.pattern = scope.prefix + r.path.pattern
+	r.path = r.path.prefixed(scope.prefix)
 	r.middlewares, r.err = appendMiddlewares(scope.middlewares, r.middlewares)
+	if r.err == nil && root {
+		r.err = r.Validate()
+	}
 	return r
 }

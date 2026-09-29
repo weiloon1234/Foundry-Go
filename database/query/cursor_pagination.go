@@ -43,6 +43,9 @@ func (q Query[M]) cursorPlan(request CursorRequest[M]) (cursorPlan[M], error) {
 	if len(q.orders) > MaxCursorFields {
 		return cursorPlan[M]{}, fault.New(fault.Invalid, "cursor ordering exceeds its field bound")
 	}
+	if err := validateKeysetOrders(q.orders); err != nil {
+		return cursorPlan[M]{}, err
+	}
 	byName := make(map[string]ModelField[M], len(q.definition.modelFields))
 	for _, field := range q.definition.modelFields {
 		byName[field.column] = field
@@ -72,14 +75,29 @@ func (q Query[M]) cursorPlan(request CursorRequest[M]) (cursorPlan[M], error) {
 	}
 	q.orders = cursorOrders(q.orders, navigation.backward)
 	if navigation.present {
-		q = q.Where(cursorPredicate(q.orders, navigation.keys))
+		q = q.Where(cursorPredicate(q.orders, navigation.keys, q.definition.nullableOrder))
 	}
 	return cursorPlan[M]{query: q.Limit(request.Size + 1), fields: fields, scope: scope, backward: navigation.backward, boundary: navigation.present}, nil
 }
 
 // cursorPredicate expands lexicographic comparison with explicit SQL NULL
 // semantics. DESC defaults NULLS FIRST, ASC NULLS LAST, including reversed pages.
-func cursorPredicate[M any](orders []Order[M], keys []driver.Value) Predicate[M] {
+// nullable reports whether an order key can be NULL; NOT NULL keys never add an
+// IS NULL alternative. When every key is NOT NULL and all keys share one
+// direction, the equivalent row comparison (a, id) > ($1, $2) is emitted so
+// PostgreSQL can use one composite index range.
+func cursorPredicate[M any](orders []Order[M], keys []driver.Value, nullable func(Order[M]) bool) Predicate[M] {
+	if rowKeyset(orders, keys, nullable) {
+		operands := make([]valueExpression, len(orders))
+		for i, order := range orders {
+			operands[i] = order.field
+		}
+		op := greater
+		if orders[0].descending {
+			op = less
+		}
+		return Predicate[M]{expression: rowComparison{operands: operands, operator: op, values: slices.Clone(keys)}}
+	}
 	var alternatives []Predicate[M]
 	var prefix []Predicate[M]
 	for i, order := range orders {
@@ -103,7 +121,7 @@ func cursorPredicate[M any](orders []Order[M], keys []driver.Value) Predicate[M]
 				op = less
 			}
 			after = compare(op)
-			if !order.descending {
+			if !order.descending && nullable(order) {
 				after = Or(after, compare(isNull))
 			}
 		}
@@ -125,6 +143,48 @@ func cursorPredicate[M any](orders []Order[M], keys []driver.Value) Predicate[M]
 	return Or(alternatives...)
 }
 
+// rowKeyset allows a row comparison only for two or more plain NOT NULL keys
+// with present values, one shared direction and default NULL placement.
+func rowKeyset[M any](orders []Order[M], keys []driver.Value, nullable func(Order[M]) bool) bool {
+	if len(orders) < 2 || len(orders) != len(keys) {
+		return false
+	}
+	for i, order := range orders {
+		if order.computed != nil || order.nulls != nullsDefault || order.descending != orders[0].descending || keys[i] == nil || nullable(order) {
+			return false
+		}
+	}
+	return true
+}
+
+// nullableOrder reports whether a model order key may be NULL. Computed keys
+// and undeclared columns are treated as nullable.
+func (d *Definition[M]) nullableOrder(order Order[M]) bool {
+	if d == nil || order.computed != nil {
+		return true
+	}
+	for _, column := range d.columns {
+		if column.Name == order.field.column {
+			return column.Nullable
+		}
+	}
+	return true
+}
+
+// anyNullable is the conservative nullability used by result cursors.
+func anyNullable[M any](Order[M]) bool { return true }
+
+// validateKeysetOrders rejects explicit NULL placement, which the shared
+// keyset predicates do not model.
+func validateKeysetOrders[M any](orders []Order[M]) error {
+	for _, order := range orders {
+		if order.nulls != nullsDefault {
+			return fault.New(fault.Invalid, "cursor and keyset ordering cannot use explicit NULLS FIRST/LAST")
+		}
+	}
+	return nil
+}
+
 // CursorPaginate performs one limit-plus-one query, preserving filters and
 // supporting mixed directions, nullable sorts and a primary-key tie-breaker.
 // Tokens bind to the model, selection, filters and canonical ordering. They do
@@ -133,6 +193,7 @@ func (q Query[M]) CursorPaginate(ctx context.Context, executor database.Executor
 	if err := executionContext(ctx, executor); err != nil {
 		return CursorPage[M]{}, err
 	}
+	q = q.inContext(ctx)
 	plan, err := q.cursorPlan(request)
 	if err != nil {
 		return CursorPage[M]{}, err

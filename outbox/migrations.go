@@ -6,6 +6,7 @@ const (
 	MigrationOrigin migrate.Origin  = "foundry.outbox"
 	CreateMessages  migrate.ID      = "000001_create_messages"
 	AddPublication  migrate.ID      = "000002_add_publication"
+	AddClaimIndexes migrate.ID      = "000003_add_claim_indexes"
 	Introduced      migrate.Version = "v0.1.0"
 )
 
@@ -42,6 +43,16 @@ ADD COLUMN publish_after timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
 ADD COLUMN published_at timestamptz NULL,
 ADD COLUMN publish_reason text NOT NULL DEFAULT '' CHECK (publish_reason IN ('','transient','permanent','attempt_limit'))`,
 			`CREATE INDEX foundry_outbox_publication ON foundry_outbox (kind, destination, publish_after, created_at, id) WHERE publish_state = 'pending'`,
+		},
+	}, {
+		// The pending index serves the multi-route claim ordered by creation;
+		// the published index serves bounded retention pruning. IF NOT EXISTS
+		// lets operators of a very large existing table build both with CREATE
+		// INDEX CONCURRENTLY beforehand instead of holding a write lock here.
+		Key: migrate.Key{Origin: MigrationOrigin, ID: AddClaimIndexes}, Version: Introduced,
+		SQL: []string{
+			`CREATE INDEX IF NOT EXISTS foundry_outbox_pending_claim ON foundry_outbox (created_at, id) WHERE publish_state = 'pending'`,
+			`CREATE INDEX IF NOT EXISTS foundry_outbox_published_prune ON foundry_outbox (published_at, id) WHERE publish_state = 'published'`,
 		},
 	}}
 }

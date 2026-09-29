@@ -13,7 +13,8 @@ func emitMultipart(p *packageInput, declaration multipartDeclaration) ([]byte, e
 	e.line("// %sDescriptor binds multipart parts to concrete %s fields.", declaration.name, declaration.name)
 	e.line("// Files are request-owned; Optional preserves omission and slices retain part order.")
 	e.line("// Structured JSON parts use explicit contracts; models are not transport DTOs.")
-	e.line("func %sDescriptor()%s.Multipart[%s]{", declaration.name, http, declaration.name)
+	e.line("func %sDescriptor()%s.Multipart[%s]{return foundry%sDescriptor()}", declaration.name, http, declaration.name, declaration.name)
+	e.line("var foundry%sDescriptor=%s.OnceValue(func()%s.Multipart[%s]{", declaration.name, e.use("sync"), http, declaration.name)
 	e.line("return %s.DefineMultipart[%s](", http, declaration.name)
 	for _, field := range declaration.fields {
 		switch field.kind {
@@ -46,7 +47,7 @@ func emitMultipart(p *packageInput, declaration multipartDeclaration) ([]byte, e
 			e.line(",func(%s *%s)*%s{return &%s.%s}),", input, declaration.name, e.typeName(field.typ), input, field.name)
 		}
 	}
-	e.line(")}")
+	e.line(")})")
 	e.emitTransportValidation(declaration.name, declaration.typ, declaration.position, declaration.validationProperties(), "multipart", "part")
-	return e.finish(declaration.position.Filename, declaration.position.Line)
+	return e.finish(declaration.position.Filename)
 }

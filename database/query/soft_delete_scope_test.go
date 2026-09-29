@@ -158,7 +158,7 @@ func TestSoftDeleteRelationsScopeTargetsAndPivotsIndependently(t *testing.T) {
 		{softOne().aggregateInput(), 1, 0}, {softOne().OnlyTrashed().aggregateInput(), 0, 1},
 		{softThrough().aggregateInput(), 2, 0}, {softThrough().WithTrashed().OnlyTrashedPivot().aggregateInput(), 0, 1},
 	} {
-		statement, err := compileRelationAggregate(test.input, Count[softRecord]().node, []driver.Value{int64(3)}, 5)
+		statement, err := compileRelationAggregate(t.Context(), test.input, Count[softRecord]().node, []driver.Value{int64(3)}, 5)
 		if err != nil {
 			t.Fatal(err)
 		}

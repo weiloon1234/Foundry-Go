@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
+	"go/token"
 	"go/types"
 	"path"
 	"path/filepath"
@@ -67,12 +68,15 @@ func (e *emitter) typeName(typ types.Type) string {
 	})
 }
 func (e *emitter) line(pattern string, args ...any) { fmt.Fprintf(&e.body, pattern+"\n", args...) }
-func (e *emitter) finish(source string, line int) ([]byte, error) {
+
+// finish names the declaration's source file without a line number, so edits
+// above a declaration do not rewrite every generated file below it.
+func (e *emitter) finish(source string) ([]byte, error) {
 	if e.err != nil {
 		return nil, e.err
 	}
 	var out bytes.Buffer
-	fmt.Fprintf(&out, "%s\n// Source: %s:%d.\n\npackage %s\n\n", generatedHeader, filepath.Base(source), line, e.pkg.name)
+	fmt.Fprintf(&out, "%s\n// Source: %s.\n\npackage %s\n\n", generatedHeader, path.Base(filepath.ToSlash(source)), e.pkg.name)
 	if len(e.imports) > 0 {
 		out.WriteString("import (\n")
 		for _, p := range sortedNames(e.imports) {
@@ -88,44 +92,54 @@ func (e *emitter) finish(source string, line int) ([]byte, error) {
 	return formatted, nil
 }
 
-func emit(p *packageInput, metadata metadata) (map[string][]byte, error) {
+// emit renders each declaration's owned file and records the declaration
+// position that produced it for collision diagnostics.
+func emit(p *packageInput, metadata metadata) (map[string][]byte, map[string]token.Position, error) {
 	outputs := make(map[string][]byte)
+	origins := make(map[string]token.Position)
+	var position token.Position
 	add := func(name string, data []byte, err error) error {
 		if err != nil {
 			return err
 		}
 		file := snake(name) + "_foundry.gen.go"
-		if _, exists := outputs[file]; exists {
-			return fmt.Errorf("multiple declarations produce %s", file)
+		if previous, exists := origins[file]; exists {
+			return fmt.Errorf("%s: declaration %s produces %s, which the declaration at %s already produces; rename one declaration", position, name, file, previous)
 		}
 		outputs[file] = data
+		origins[file] = position
 		return nil
 	}
 	for _, declaration := range metadata.unions {
+		position = declaration.position
 		data, err := emitUnion(p, declaration)
 		if err := add(declaration.name, data, err); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	for _, declaration := range metadata.configs {
+		position = declaration.position
 		data, err := emitConfig(p, declaration)
 		if err := add(declaration.name, data, err); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	for _, m := range metadata.models {
+		position = m.position
 		data, err := emitModel(p, m)
 		if err := add(m.name, data, err); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	for _, enum := range metadata.enums {
+		position = enum.position
 		data, err := emitEnum(p, enum)
 		if err := add(enum.name, data, err); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	for _, projection := range metadata.projections {
+		position = projection.position
 		var dto *dtoDeclaration
 		for i := range metadata.dtos {
 			if metadata.dtos[i].projected && metadata.dtos[i].name == projection.name {
@@ -135,37 +149,41 @@ func emit(p *packageInput, metadata metadata) (map[string][]byte, error) {
 		}
 		data, err := emitProjection(p, projection, dto)
 		if err := add(projection.name, data, err); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	for _, declaration := range metadata.paths {
+		position = declaration.position
 		data, err := emitPath(p, declaration)
 		if err := add(declaration.name, data, err); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	for _, declaration := range metadata.queries {
+		position = declaration.position
 		data, err := emitQuery(p, declaration)
 		if err := add(declaration.name, data, err); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	for _, declaration := range metadata.multipart {
+		position = declaration.position
 		data, err := emitMultipart(p, declaration)
 		if err := add(declaration.name, data, err); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	for _, declaration := range metadata.dtos {
 		if declaration.projected {
 			continue
 		}
+		position = declaration.position
 		data, err := emitDTO(p, declaration)
 		if err := add(declaration.name, data, err); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-	return outputs, nil
+	return outputs, origins, nil
 }
 
 func emitModel(p *packageInput, m model) ([]byte, error) {
@@ -212,7 +230,7 @@ func emitModel(p *packageInput, m model) ([]byte, error) {
 	e.emitModelHooks(m)
 	e.emitModelRetrievalHooks(m)
 	e.emitModelAudit(m)
-	return e.finish(m.position.Filename, m.position.Line)
+	return e.finish(m.position.Filename)
 }
 func fieldClass(f field) string {
 	if f.nullable {
@@ -236,7 +254,8 @@ func emitEnum(p *packageInput, enum enum) ([]byte, error) {
 	}
 	e.line("func %sValues()[]%s{return []%s{%s}}", enum.name, enum.name, enum.name, strings.Join(names, ","))
 	e.line("// EnumDescriptor describes this enum type independently of the receiver's value.")
-	e.line("func(%s)EnumDescriptor()%s.Descriptor[%s]{return %s.Describe(%q,%q,", enum.name, enumPackage, enum.name, enumPackage, p.path, enum.name)
+	e.line("func(%s)EnumDescriptor()%s.Descriptor[%s]{return foundry%sEnumDescriptor()}", enum.name, enumPackage, enum.name, enum.name)
+	e.line("var foundry%sEnumDescriptor=%s.OnceValue(func()%s.Descriptor[%s]{return %s.Describe(%q,%q,", enum.name, e.use("sync"), enumPackage, enum.name, enumPackage, p.path, enum.name)
 	for _, v := range enum.values {
 		label := ""
 		if enum.labels != "" {
@@ -248,7 +267,7 @@ func emitEnum(p *packageInput, enum enum) ([]byte, error) {
 		}
 		e.line("%s.Case[%s]{Name:%q,Value:%s%s},", enumPackage, enum.name, v.name, v.name, suffix)
 	}
-	e.line(")}")
+	e.line(")})")
 	e.line("// IsValid checks membership; a Go cast alone does not validate external values.")
 	e.line("func(v %s)IsValid()bool{switch v{case %s:return true};return false}", enum.name, strings.Join(names, ","))
 	e.line("// Validate reports invalid values without formatting the input.")
@@ -281,7 +300,7 @@ func emitEnum(p *packageInput, enum enum) ([]byte, error) {
 	e.line("func(v %s)Value()(%s.Value,error){return %sCodec().Bind(v)}", enum.name, driver, enum.name)
 	e.line("// Scan changes the receiver only after successful decoding. SQL NULL is rejected.")
 	e.line("func(v *%s)Scan(source any)error{return %sCodec().Scan(v).Scan(source)}", enum.name, enum.name)
-	return e.finish(enum.position.Filename, enum.position.Line)
+	return e.finish(enum.position.Filename)
 }
 func integerBits(base *types.Basic, strconv string) string {
 	switch base.Kind() {

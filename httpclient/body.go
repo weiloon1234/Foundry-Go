@@ -41,6 +41,7 @@ func streamBody(length int64, open func(context.Context) (io.ReadCloser, error),
 	return Body{open: open, length: length, replay: replay}
 }
 func (b Body) replayable() bool { return b.open == nil || b.replay }
+func (b Body) empty() bool      { return b.open == nil && len(b.data) == 0 }
 func (b Body) reader(ctx context.Context) (io.ReadCloser, error) {
 	if b.open != nil {
 		return b.open(ctx)

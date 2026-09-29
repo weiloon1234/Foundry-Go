@@ -46,12 +46,26 @@ func TestConfigBounds(t *testing.T) {
 	if err := base.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	for _, change := range []func(*Config){func(c *Config) { c.MaxActive = 0 }, func(c *Config) { c.MaxRetainedPerCaller = 0 }, func(c *Config) { c.MaxKeyBytes = 257 }, func(c *Config) { c.MaxInputBytes = 1 << 21 }, func(c *Config) { c.MaxResultBytes = 0 }, func(c *Config) { c.DuplicateWait = c.Timeout + time.Second }, func(c *Config) { c.Timeout = 0 }, func(c *Config) { c.Retention = 0 }, func(c *Config) { c.Schema = "a.b" }} {
+	for _, change := range []func(*Config){func(c *Config) { c.MaxActive = 0 }, func(c *Config) { c.MaxRetainedPerCaller = 0 }, func(c *Config) { c.MaxKeyBytes = 257 }, func(c *Config) { c.MaxInputBytes = 1 << 21 }, func(c *Config) { c.MaxResultBytes = 0 }, func(c *Config) { c.DuplicateWait = c.Timeout + time.Second }, func(c *Config) { c.Timeout = 0 }, func(c *Config) { c.Retention = 0 }, func(c *Config) { c.Schema = "a.b" }, func(c *Config) { c.PruneInterval = time.Millisecond }, func(c *Config) { c.PruneInterval = -time.Second }, func(c *Config) { c.PruneBatch = 0 }, func(c *Config) { c.PruneBatch = MaxPrune + 1 }, func(c *Config) { c.PruneInterval = 0; c.PruneBatch = -1 }} {
 		c := base
 		change(&c)
 		if c.Validate() == nil {
 			t.Fatal("invalid bounds accepted")
 		}
+	}
+}
+func TestPruningCanBeDisabledExplicitly(t *testing.T) {
+	c := DefaultConfig()
+	if c.PruneInterval <= 0 || c.PruneBatch < 1 || c.PruneBatch > MaxPrune {
+		t.Fatal("default pruning is not enabled and bounded", c.PruneInterval, c.PruneBatch)
+	}
+	c.PruneInterval = 0
+	if err := c.Validate(); err != nil {
+		t.Fatal("disabled pruning rejected", err)
+	}
+	c.PruneBatch = 0
+	if err := c.Validate(); err != nil {
+		t.Fatal("disabled pruning requires a batch", err)
 	}
 }
 func FuzzKey(f *testing.F) {

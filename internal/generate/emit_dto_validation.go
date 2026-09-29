@@ -66,9 +66,15 @@ func (e *emitter) emitTransportValidation(name string, root types.Type, position
 		e.line("%s %s.Field[%s,%s]", field.name, validation, rootName, field.typ)
 	}
 	e.line("}")
-	e.line("// %sValidationFields returns independent typed field descriptors.", name)
+	e.line("// %sValidationFields returns typed field descriptors.", name)
 	e.line("// Compose rules with these fields; %s names and selectors are generated.", wireLabel)
-	e.line("func %sValidationFields%s()%sValidationFieldSet%s{return %sValidationFieldSet%s{", name, params, name, args, name, args)
+	if params == "" {
+		// Field descriptors are immutable values; build them once and return copies.
+		e.line("func %sValidationFields()%sValidationFieldSet{return foundry%sValidationFields()}", name, name, name)
+		e.line("var foundry%sValidationFields=%s.OnceValue(func()%sValidationFieldSet{return %sValidationFieldSet{", name, e.use("sync"), name, name)
+	} else {
+		e.line("func %sValidationFields%s()%sValidationFieldSet%s{return %sValidationFieldSet%s{", name, params, name, args, name, args)
+	}
 	for _, field := range fields {
 		e.line("%s:%s.DefineField(%q,func(%s %s)%s{", field.name, validation, field.wire, input, rootName, field.typ)
 		for _, guard := range field.guards {
@@ -81,7 +87,11 @@ func (e *emitter) emitTransportValidation(name string, root types.Type, position
 		}
 		e.line("}),")
 	}
-	e.line("}}")
+	if params == "" {
+		e.line("}})")
+	} else {
+		e.line("}}")
+	}
 }
 
 // dtoFieldAccess follows jsonshape's winning field index, not a guessed promoted

@@ -130,7 +130,7 @@ func (c *Client) ExpireRaw(ctx context.Context, key raw.Key, ttl cache.TTL) (boo
 		return false, err
 	}
 	result, err := c.execute(ctx, func(ctx context.Context, client *driver.Client) (any, error) {
-		return client.Eval(ctx, rawExpiryScript, []string{key.String()}, expiry).Result()
+		return evalScript(ctx, client, rawExpiryScript, []string{key.String()}, expiry).Result()
 	})
 	if err != nil {
 		return false, err

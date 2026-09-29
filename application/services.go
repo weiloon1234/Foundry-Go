@@ -10,7 +10,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/imaging"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/logging"
-	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/observability"
 	"github.com/weiloon1234/Foundry-Go/schedule"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -99,9 +98,3 @@ func (a *App) Migrations() []infrastructure.MigrationTarget {
 func (Services) Format(s fmt.State, _ rune)               { _, _ = s.Write([]byte("application services")) }
 func (Services) LogValue() slog.Value                     { return slog.StringValue("application services") }
 func (s Services) Observability() *observability.Recorder { return s.recorder }
-func (s Services) Maintenance() (*maintenance.Gate, error) {
-	if s.recorder == nil {
-		return nil, fault.New(fault.Missing, "observability is not configured")
-	}
-	return s.recorder.Gate(), nil
-}

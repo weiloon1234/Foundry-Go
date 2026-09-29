@@ -40,7 +40,8 @@ replaces a model subject with a semantic system identifier, and clears the guard
 `WithRequest` records a typed request ID, parsed `netip.Addr` and user agent.
 The HTTP adapter determines trusted client addresses before capture. Request IDs
 are limited to 128 bytes and user agents to 4096 bytes; control characters and
-local IP interface zones are rejected.
+local IP interface zones are rejected. Transport adapters capture untrusted user
+agents through `attribution.SanitizeUserAgent`, which always yields valid metadata.
 
 Changing the original model or creating another context later cannot change a
 captured origin. No credentials, permissions, full authenticated model or database

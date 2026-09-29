@@ -243,8 +243,14 @@ func TestAcquisitionDeadlineDoesNotShortenStatementContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer rows.Close()
-	if _, err := db.Exec(t.Context(), "select 1"); !errors.Is(err, database.DeadlineExceeded) {
+	if _, err := db.Exec(t.Context(), "select 1"); !errors.Is(err, database.DeadlineExceeded) || !errors.Is(err, fault.Overloaded) {
 		t.Fatalf("pool exhaustion: %v", err)
+	}
+	// A caller deadline that ends first is the caller's timeout, not overload.
+	short, cancel := context.WithTimeout(t.Context(), time.Millisecond)
+	defer cancel()
+	if _, err := db.Exec(short, "select 1"); errors.Is(err, fault.Overloaded) {
+		t.Fatalf("caller deadline reported as pool overload: %v", err)
 	}
 	if db.Stats().Owners != 1 {
 		t.Fatal("failed acquisition leaked owner")

@@ -96,7 +96,11 @@ schema. Browser policies have named guards and a default. Each browser policy ow
 its cookie and CSRF policy. `application.NewBrowserGuard(services, name, provider,
 source)` returns typed `Sessions`, `Browser` and `Binding`; empty name selects the
 browser default. `NewTokenGuard` similarly returns typed `Tokens`, transport and
-binding with an explicit model-owned access-scope ceiling.
+binding with an explicit model-owned access-scope ceiling. Both guards extend the
+application-owned `application.AuthorizationKey` registry, so policies,
+permissions and hooks contributed with `application.Authorization(id,
+application.Authorize(...))` or `auth.RegisterAuthorization` are available to
+their routes and `WithPermissions`.
 
 Apply `browser.Browser.Middleware()` to the browser endpoint/group and pass
 `browser.Binding` to `http.Authenticated`. Separate actor models receive separate
@@ -135,6 +139,31 @@ Health can include configured database/Redis probes plus domain probes.
 Observability and maintenance state belong to each application. No administration
 endpoint is exposed automatically. Existing `Register`/`RegisterPlugin` remain
 available for custom modules and plugin contributions.
+
+## Configured operational features
+
+Each row is reachable from `application.Settings` alone; the linked guide owns
+details and defaults.
+
+| Settings | Configured assembly adds | Guide |
+| --- | --- | --- |
+| `stop_delay`, `startup_timeout`, `shutdown_timeout` | Lame-duck period, bounded boot and one shutdown budget | [Application bootstrap](application-bootstrap.md) |
+| `http.probes.liveness`, `readiness` | Public `/up` and `/ready` routes | [Diagnostics](production-diagnostics.md#public-probes) |
+| `maintenance.store`, `poll_interval`, `exempt`, `allow` | Fleet-wide maintenance mode; register `application.MaintenanceCommands()` | [Production operations](production-operations.md#maintenance-and-rolling-termination) |
+| `features.maintenance.*` | Leader-only housekeeping schedules; `FeatureDeclarations.Pruning` adds guards, prunable models and other stores | [Housekeeping schedule](production-operations.md#housekeeping-schedule) |
+| `services.database.connections.<name>.sticky_read_window` with `read_enabled` | Outermost `database.StickyReadsHandler` on the HTTP kernel | [Read-your-writes](database-routing.md#read-your-writes) |
+| `worker.archive.*` | Failed-job archive sink, `services.JobArchive()` and its migrations | [Failed-job archive](jobs-operations.md#durable-failed-job-archive) |
+| `features.events.queued_listeners`, `listener_connection`, `listener_queue` | Jobs for `application.ListenQueued` listeners | [Events](events.md#queued-listeners-subscribers-and-test-fakes) |
+| `features.outbox.kernels` | Kernels that run the outbox publisher (all when empty) | [Outbox](outbox.md#publisher-throughput-backoff-and-deployment) |
+| `encryption.key_id`, `key`, `previous`; `features.auth.mfa.*` | `services.Encryption()`, `CookieEncrypter()`, `MFA()` and `application.MFACommand()` | [Encryption](encryption.md#application-key-ring), [MFA](mfa.md) |
+| `features.health.configured_connections`, `configured_storage`, `configured_mail` | Database/Redis/realtime, disk and mailer readiness probes | [Readiness](readiness-and-maintenance.md) |
+| `features.observability.trace_sample_ratio`, `trace_batch_size`, `error_log.*` | Ratio sampling, batch export (`application.WithTraceBatchExporter`) and the structured error reporter; pool, queue, realtime and log metrics | [Observability](observability.md) |
+| `log.channels.<name>.sink.async`, `syslog`, `custom` driver | Asynchronous and syslog sinks; `application.WithLogHandler` binds custom handlers | [Logging](logging.md) |
+| `realtime.shared`, `realtime.publisher` | Upgrades on the HTTP listener; managed publisher for processes without a hub | [Realtime assembly](application-bootstrap.md#realtime-assembly) |
+
+`application.AboutCommand(name, settings)` prints the framework and Go versions,
+platform, namespace, kernels and configured drivers without hosts or credentials,
+and `application.AuditCommand()` declares `audit prune`.
 
 ## Logging and ownership
 

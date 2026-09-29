@@ -5,12 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sort"
 	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/observability"
 )
 
@@ -27,6 +30,7 @@ type runtimeState struct {
 	logger        *slog.Logger
 	clock         clock.Clock
 	observability *observability.Recorder
+	maintenance   *maintenance.Gate
 	app           *App
 	tasks         *taskGroup
 	mu            sync.Mutex
@@ -57,10 +61,10 @@ type cleanup struct {
 	observation observability.Name
 }
 
-func newRuntime(ctx context.Context, services *Services, logger *slog.Logger, source clock.Clock, recorder *observability.Recorder, app *App) *runtimeState {
-	ctx = observability.WithContext(ctx, recorder)
+func newRuntime(ctx context.Context, services *Services, logger *slog.Logger, source clock.Clock, recorder *observability.Recorder, gate *maintenance.Gate, app *App) *runtimeState {
+	ctx = maintenance.WithContext(observability.WithContext(ctx, recorder), gate)
 	lifetime, cancel := context.WithCancelCause(ctx)
-	return &runtimeState{ctx: lifetime, cancel: cancel, services: services, logger: logger, clock: source, observability: recorder, app: app,
+	return &runtimeState{ctx: lifetime, cancel: cancel, services: services, logger: logger, clock: source, observability: recorder, maintenance: gate, app: app,
 		tasks: newTaskGroup(lifetime, cancel), resourceNames: make(map[resourceName]struct{})}
 }
 
@@ -70,9 +74,18 @@ func (r *Runtime) Logger() *slog.Logger     { return r.core.logger.With("provide
 func (r *Runtime) Owner() ProviderID        { return r.owner }
 func (r *Runtime) Clock() clock.Clock       { return r.core.clock }
 
+// Maintenance returns the application's admission gate, also carried by Context.
+func (r *Runtime) Maintenance() *maintenance.Gate { return r.core.maintenance }
+
 // State reports the owning application's synchronized lifecycle state. It
 // does not infer readiness from individual dependency availability.
 func (r *Runtime) State() State { return r.core.app.State() }
+
+// SelectedKernels reports the kernels this process runs. Run and RunKernels
+// select them before providers boot, so OnBoot hooks can start optional
+// background work only beside particular kernels. It is empty when the
+// application was started without selecting a kernel.
+func (r *Runtime) SelectedKernels() []KernelKind { return r.core.app.selectedKernels() }
 
 // Go starts a tracked critical task. Any non-cancellation error initiates
 // application shutdown. Use jobs for durable work, not unmanaged goroutines.
@@ -134,6 +147,16 @@ func newTaskGroup(ctx context.Context, cancel context.CancelCauseFunc) *taskGrou
 	return &taskGroup{ctx: ctx, cancel: cancel, active: make(map[taskName]struct{}), done: make(chan struct{})}
 }
 func (g *taskGroup) start(name taskName, run func(context.Context) error) error {
+	return g.launch(name, run, true)
+}
+
+// startReported runs a task whose result its caller reports directly. A failure
+// still cancels the shared lifetime but is not recorded a second time.
+func (g *taskGroup) startReported(name taskName, run func(context.Context) error) error {
+	return g.launch(name, run, false)
+}
+
+func (g *taskGroup) launch(name taskName, run func(context.Context) error, record bool) error {
 	if run == nil {
 		return fault.New(fault.Invalid, "nil managed task")
 	}
@@ -150,7 +173,7 @@ func (g *taskGroup) start(name taskName, run func(context.Context) error) error 
 	g.mu.Unlock()
 	go func() {
 		var err error = fault.New(fault.Panicked, "task "+name.String()+" exited without returning")
-		defer func() { g.finish(name, err) }()
+		defer func() { g.finish(name, err, record) }()
 		err = invoke("task "+name.String(), func() error {
 			err := run(g.ctx)
 			if g.ctx.Err() != nil && cancellationOnly(err) {
@@ -162,10 +185,12 @@ func (g *taskGroup) start(name taskName, run func(context.Context) error) error 
 	return nil
 }
 
-func (g *taskGroup) finish(name taskName, err error) {
+func (g *taskGroup) finish(name taskName, err error, record bool) {
 	g.mu.Lock()
 	if err != nil {
-		g.failures = append(g.failures, err)
+		if record {
+			g.failures = append(g.failures, err)
+		}
 		g.cancel(err)
 	}
 	delete(g.active, name)
@@ -198,55 +223,45 @@ func (g *taskGroup) pending() []string {
 func (g *taskGroup) err() error { g.mu.Lock(); defer g.mu.Unlock(); return errors.Join(g.failures...) }
 
 // Only suppress an error when every leaf is ordinary cancellation. Joining a
-// real failure with cancellation must retain that failure. Bound traversal so a
-// cyclic or excessively deep error graph cannot strand normal shutdown.
+// real failure with cancellation must retain that failure. The shared bounded
+// walker keeps a cyclic or excessively deep graph from stranding shutdown.
 func cancellationOnly(err error) bool {
 	if err == nil {
 		return false
 	}
-	cancelled := false
+	cancelled, other := false, false
 	inspected := callback.Isolated("classify lifecycle cancellation", func() error {
-		remaining := 256
-		var visit func(error, int) bool
-		visit = func(err error, depth int) bool {
-			remaining--
-			if err == nil || depth > 64 || remaining < 0 {
-				return false
-			}
-			if err == context.Canceled || err == context.DeadlineExceeded {
+		complete := errorgraph.Walk(err, func(current error) bool {
+			if current == context.Canceled || current == context.DeadlineExceeded {
+				cancelled = true
 				return true
 			}
 			// A classified framework failure (for example an expired HTTP
 			// shutdown grace) remains a failure even when its cause is a
 			// context deadline. Plain wrapping/joining adds no classification.
-			if _, classified := err.(*fault.Error); classified {
+			if _, classified := current.(*fault.Error); classified {
+				other = true
 				return false
 			}
-			switch e := err.(type) {
+			switch wrapped := current.(type) {
 			case interface{ Unwrap() []error }:
-				children := e.Unwrap()
-				if len(children) == 0 || len(children) > remaining {
+				if !slices.ContainsFunc(wrapped.Unwrap(), func(child error) bool { return child != nil }) {
+					other = true
 					return false
 				}
-				seen := false
-				for _, child := range children {
-					if child == nil {
-						continue
-					}
-					seen = true
-					if !visit(child, depth+1) {
-						return false
-					}
-				}
-				return seen
 			case interface{ Unwrap() error }:
-				return visit(e.Unwrap(), depth+1)
+				if wrapped.Unwrap() == nil {
+					other = true
+					return false
+				}
 			default:
+				other = true
 				return false
 			}
-		}
-		cancelled = visit(err, 0)
+			return true
+		})
+		other = other || !complete
 		return nil
 	})
-	return inspected == nil && cancelled
+	return inspected == nil && cancelled && !other
 }

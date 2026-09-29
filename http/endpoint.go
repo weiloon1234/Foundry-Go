@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
@@ -22,6 +23,14 @@ type Input[P, Q, B any] struct {
 // Handler receives decoded input and returns a declared response value. It owns
 // domain operations and their transaction boundaries; it never receives a writer.
 type Handler[P, Q, B, R any] func(context.Context, Input[P, Q, B]) (R, error)
+
+// Binding is a typed stage that runs after request authorization and before
+// validation. It resolves request state, such as a route model, and returns the
+// handler that completes the request, closing over that state so the handler
+// never repeats the work. Model binding (http/modelbinding) uses it, so a
+// missing bound resource is a 404, or a resource policy denial a 403, before
+// body validation can report 422. A returned error is published as returned.
+type Binding[P, Q, B, R any] func(context.Context, Input[P, Q, B]) (Handler[P, Q, B, R], error)
 
 // NoQuery is the concrete type of an endpoint that accepts no query parameters.
 type NoQuery struct{}
@@ -41,7 +50,9 @@ type Endpoint[P, Q, B, R any] struct {
 	errors        []ErrorDeclaration
 	preparation   *Preparation[P, Q, B]
 	authorization *RequestAuthorization[P, Q, B]
+	headers       *ResponseHeaders[R]
 	idempotency   *IdempotencyInfo
+	examples      endpointExamples
 }
 
 func DefineEndpoint[P, Q, B, R any](route Route[P], query Query[Q], body Body[B], response Response[R]) Endpoint[P, Q, B, R] {
@@ -70,8 +81,16 @@ func (e Endpoint[P, Q, B, R]) Validate() error {
 			return err
 		}
 	}
+	if e.body.kind == payloadRaw {
+		if err := e.limits.Raw.Validate(); err != nil {
+			return err
+		}
+	}
 	if e.preparation != nil && *e.preparation == nil || e.authorization != nil && *e.authorization == nil {
 		return fault.New(fault.Invalid, "request lifecycle callback is missing")
+	}
+	if e.examples.err != nil {
+		return e.examples.err
 	}
 	for _, err := range []error{e.route.Validate(), e.query.Validate(), e.body.Validate(), e.response.Validate(), e.limits.Validate()} {
 		if err != nil {
@@ -84,6 +103,9 @@ func (e Endpoint[P, Q, B, R]) Validate() error {
 		}
 	}
 	if _, err := e.errorDefinitions(); err != nil {
+		return err
+	}
+	if err := e.validateHeaders(); err != nil {
 		return err
 	}
 	if e.response.credentials && e.route.Method() != POST {
@@ -99,9 +121,14 @@ func (e Endpoint[P, Q, B, R]) Validate() error {
 }
 
 // URL generates a relative path and query from their concrete declarations.
-// Neither an incoming host nor an arbitrary query string participates.
+// Neither an incoming host nor an arbitrary query string participates. Only
+// the route and query declarations it uses are validated here, so link
+// generation stays cheap; Handle validates the complete endpoint.
 func (e Endpoint[P, Q, B, R]) URL(ctx context.Context, path P, query Q) (string, error) {
-	if err := e.Validate(); err != nil {
+	if err := e.query.Validate(); err != nil {
+		return "", err
+	}
+	if err := e.limits.Query.Validate(); err != nil {
 		return "", err
 	}
 	location, err := e.route.URL(path)
@@ -121,29 +148,74 @@ func (e Endpoint[P, Q, B, R]) URL(ctx context.Context, path P, query Q) (string,
 // Handle binds a handler with exactly these path/query/body/response types.
 // Parsing, codec execution and handler callbacks finish before a response is
 // committed. Cancellation never abandons an active callback or its resources.
+//
+// A handler's outcome is authoritative. A returned error, including a declared
+// application error, is published as returned. A successful result is prepared
+// and written even if the request deadline expired after the handler returned;
+// only an actual write failure can then prevent delivery.
 func (e Endpoint[P, Q, B, R]) Handle(handler Handler[P, Q, B, R]) RouteRegistration {
 	if handler == nil {
 		return InvalidRouteRegistration(fault.New(fault.Invalid, "endpoint requires a handler"))
 	}
-	return e.handlePrepared(func(ctx context.Context, input Input[P, Q, B]) (preparedResponse, error) {
-		result, err := handler(ctx, input)
-		if canceled := ctx.Err(); canceled != nil {
-			return preparedResponse{}, RequestTimeout.WithCause(canceled)
+	return e.handlePrepared(e.complete(handler))
+}
+
+// HandleBound runs bind after request authorization and before validation, then
+// the handler it returned. The lifecycle is otherwise that of Handle: decode,
+// prohibited-input check, preparation, request authorization, binding,
+// validation, handler.
+func (e Endpoint[P, Q, B, R]) HandleBound(bind Binding[P, Q, B, R]) RouteRegistration {
+	if bind == nil {
+		return InvalidRouteRegistration(fault.New(fault.Invalid, "endpoint requires a binding"))
+	}
+	return e.handleStaged(func(ctx context.Context, input Input[P, Q, B]) (func(context.Context, Input[P, Q, B]) (preparedResponse, error), error) {
+		handler, err := bind(ctx, input)
+		if err != nil {
+			return nil, err
 		}
+		if handler == nil {
+			return nil, InternalError.WithCause(fault.New(fault.Internal, "endpoint binding returned no handler"))
+		}
+		return e.complete(handler), nil
+	})
+}
+
+// complete runs a typed handler and prepares its response.
+func (e Endpoint[P, Q, B, R]) complete(handler Handler[P, Q, B, R]) func(context.Context, Input[P, Q, B]) (preparedResponse, error) {
+	return func(ctx context.Context, input Input[P, Q, B]) (preparedResponse, error) {
+		result, err := handler(ctx, input)
 		if err != nil {
 			return preparedResponse{}, err
 		}
-		return e.response.prepare(ctx, result, e.limits)
-	})
+		// Headers are derived before encoding, so a failure opens no source.
+		headers, err := e.responseHeaders(ctx, result)
+		if err != nil {
+			return preparedResponse{}, err
+		}
+		prepared, err := e.response.prepare(ctx, result, e.limits)
+		prepared.headers = headers
+		return prepared, err
+	}
 }
 
 // handlePrepared shares all decoding, lifecycle, callback ownership and response
 // publication. Transaction adapters prepare their result before outer commit.
 func (e Endpoint[P, Q, B, R]) handlePrepared(handler func(context.Context, Input[P, Q, B]) (preparedResponse, error)) RouteRegistration {
+	return e.register(nil, handler)
+}
+
+// handleStaged selects the completing handler at the binding stage.
+func (e Endpoint[P, Q, B, R]) handleStaged(stage preparedStage[P, Q, B]) RouteRegistration {
+	return e.register(stage, nil)
+}
+
+type preparedStage[P, Q, B any] func(context.Context, Input[P, Q, B]) (func(context.Context, Input[P, Q, B]) (preparedResponse, error), error)
+
+func (e Endpoint[P, Q, B, R]) register(stage preparedStage[P, Q, B], handler func(context.Context, Input[P, Q, B]) (preparedResponse, error)) RouteRegistration {
 	if err := e.Validate(); err != nil {
 		return InvalidRouteRegistration(err)
 	}
-	registration := e.route.handle(func(w stdhttp.ResponseWriter, r *stdhttp.Request, path P) { e.serve(w, r, path, handler) }, false)
+	registration := e.route.handle(func(w stdhttp.ResponseWriter, r *stdhttp.Request, path P) { e.serve(w, r, path, stage, handler) }, false)
 	registration.contract = e.contributionContract()
 	info := registration.info.clone()
 	registration.endpoint = func() EndpointInfo { return e.snapshot(info) }
@@ -154,12 +226,15 @@ func (e Endpoint[P, Q, B, R]) handlePrepared(handler func(context.Context, Input
 	return registration
 }
 
-func (e Endpoint[P, Q, B, R]) serve(w stdhttp.ResponseWriter, r *stdhttp.Request, path P, handler func(context.Context, Input[P, Q, B]) (preparedResponse, error)) {
+func (e Endpoint[P, Q, B, R]) serve(w stdhttp.ResponseWriter, r *stdhttp.Request, path P, stage preparedStage[P, Q, B], handler func(context.Context, Input[P, Q, B]) (preparedResponse, error)) {
+	if e.response.kind == payloadEvents {
+		r = withLastEventID(r)
+	}
 	ctx := r.Context()
 	if e.response.credentials && !checkCredentialRequest(w, r) {
 		return
 	}
-	if err := bindBrowserResponse(ctx, e.idempotency == nil && (e.response.kind == payloadJSON || e.response.kind == payloadEmpty)); err != nil {
+	if err := bindBrowserResponse(ctx, e.idempotency == nil && (e.response.kind == payloadJSON || e.response.kind == payloadEmpty || e.response.kind == payloadRedirect)); err != nil {
 		writeRoutingError(w, r, err)
 		return
 	}
@@ -173,7 +248,7 @@ func (e Endpoint[P, Q, B, R]) serve(w stdhttp.ResponseWriter, r *stdhttp.Request
 	if verified, ok := ctx.Value(signedEndpointQueryKey{}).(string); ok {
 		rawQuery = verified
 	}
-	query, err := e.query.Decode(ctx, rawQuery, e.limits.Query)
+	query, err := e.query.Decode(ctx, e.query.withoutConsumed(ctx, rawQuery), e.limits.Query)
 	if err != nil {
 		writeRoutingError(w, r, endpointInputError(ctx, "query", err))
 		return
@@ -184,6 +259,8 @@ func (e Endpoint[P, Q, B, R]) serve(w stdhttp.ResponseWriter, r *stdhttp.Request
 		writeRoutingError(w, r, err)
 		return
 	}
+	// A deadline while the request was still being read or decoded means the
+	// client was too slow: 408. Later deadlines are the server's own budget.
 	if err := ctx.Err(); err != nil {
 		writeRoutingError(w, r, RequestTimeout.WithCause(err))
 		return
@@ -211,15 +288,29 @@ func (e Endpoint[P, Q, B, R]) serve(w stdhttp.ResponseWriter, r *stdhttp.Request
 		}
 		input.Query, input.Body = preparedQuery, preparedBody
 	}
-	if e.validation != nil {
-		if err := e.validation.Check(ctx, input, e.limits.Validation); err != nil {
-			writeRoutingError(w, r, endpointValidationError(ctx, err))
-			return
-		}
-	}
+	// Authorization precedes validation, as in a Laravel FormRequest: a denied
+	// caller never reaches rules that query the database (Unique, Exists).
 	if e.authorization != nil {
 		if err := requestHook(ctx, "HTTP request authorization", func() error { return (*e.authorization)(ctx, input) }); err != nil {
 			writeRoutingError(w, r, err)
+			return
+		}
+	}
+	// The binding stage resolves request state (for example a route model)
+	// before validation, so a missing resource is 404 rather than 422.
+	if stage != nil {
+		if err := requestHook(ctx, "HTTP request binding", func() error {
+			var returned error
+			handler, returned = stage(ctx, input)
+			return returned
+		}); err != nil {
+			writeRoutingError(w, r, err)
+			return
+		}
+	}
+	if e.validation != nil {
+		if err := e.validation.Check(ctx, input, e.limits.Validation); err != nil {
+			writeRoutingError(w, r, endpointValidationError(ctx, err))
 			return
 		}
 	}
@@ -232,6 +323,11 @@ func (e Endpoint[P, Q, B, R]) serve(w stdhttp.ResponseWriter, r *stdhttp.Request
 		ctx = context.WithValue(ctx, idempotencyKeyContext{}, key)
 		r = r.WithContext(ctx)
 	}
+	// Isolation rule: the application handler and application-supplied hooks
+	// run through callback.Isolated, which also contains runtime.Goexit.
+	// Framework hot paths (codecs, body reads, file chunks, URL generation and
+	// error classification) use callback.Invoke: same goroutine, panics
+	// contained with their frames, no per-call goroutine.
 	callbackErr := callback.Isolated("HTTP endpoint handler", func() error {
 		data, returned = handler(ctx, input)
 		return nil
@@ -247,19 +343,24 @@ func (e Endpoint[P, Q, B, R]) serve(w stdhttp.ResponseWriter, r *stdhttp.Request
 	}
 	// Preparation owns classification of codec/file-source failures. In particular,
 	// cancellation must not mask a panic already contained by that boundary.
+	// A returned error is authoritative: a later deadline never replaces it.
 	if returned != nil {
 		writeRoutingError(w, r, returned)
 		return
 	}
-	if err := ctx.Err(); err != nil {
-		writeRoutingError(w, r, RequestTimeout.WithCause(err))
-		return
-	}
-	if err := publishBrowserSession(ctx, w, e.response.status); err != nil {
+	// The handler succeeded and its response is prepared. A deadline that
+	// expired afterwards does not turn completed work into a timeout, but a
+	// browser-session credential is never published after the request ended.
+	// Wrappers outside the router now deliver it unless the client left.
+	completeRoute(ctx)
+	if err := publishBrowserSession(ctx, w, data.statusOr(e.response.status)); err != nil {
 		writeRoutingError(w, r, authenticationError(err))
 		return
 	}
 	if err := e.response.write(w, r, data); err != nil {
+		// The response is committed, so no error document can replace it. The
+		// failure still reaches the request observation as a redacted diagnostic.
+		recordRequestDiagnostic(r.Context(), errordiag.Describe(err))
 		logRouteFailure(r, "HTTP endpoint response failed", err)
 		panic(stdhttp.ErrAbortHandler)
 	}

@@ -224,8 +224,10 @@ func RunNamespace(t *testing.T, setup func(*testing.T) NamespaceFixture) {
 			t.Fatal("joined old fill", value, err)
 		}
 		close(release)
-		if err := <-result; !errors.Is(err, fault.Conflict) {
-			t.Fatal("old fill publication succeeded", err)
+		// The old caller keeps its loaded value; its stale publication is
+		// rejected (and reported) instead of failing the request.
+		if err := <-result; err != nil {
+			t.Fatal("old fill failed its caller", err)
 		}
 		if value, hit, err := handle.Get(t.Context(), "key"); err != nil || !hit || value != "new" {
 			t.Fatal(value, hit, err)

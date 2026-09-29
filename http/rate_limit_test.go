@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
@@ -226,5 +227,81 @@ func TestRateLimitRouteScopes(t *testing.T) {
 				t.Fatal(path, w.Code)
 			}
 		}
+	}
+}
+func TestRateLimitByIPGroupsIPv6NetworksAndIsConfigurable(t *testing.T) {
+	next := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, _ *stdhttp.Request) { w.WriteHeader(204) })
+	serve := func(h stdhttp.Handler, peer string) int {
+		r := httptest.NewRequest("GET", "/", nil)
+		r.RemoteAddr = peer
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Code
+	}
+	l, err := ratelimit.Define("ipv6-default", keyspace.TextKeys[netip.Addr](), ratelimit.PerSecond(1)).Bind(rateStore(t, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := ApplyMiddleware(next, RateLimitByIP(l))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Two addresses in one /64 share a quota; another /64 does not.
+	for i, peer := range []string{"[2001:db8:1:2::1]:80", "[2001:db8:1:2:ffff::9]:80", "[2001:db8:1:3::1]:80"} {
+		want := []int{204, 429, 204}[i]
+		if got := serve(h, peer); got != want {
+			t.Fatalf("%s: %d; want %d", peer, got, want)
+		}
+	}
+	exact, err := ratelimit.Define("ipv6-exact", keyspace.TextKeys[netip.Addr](), ratelimit.PerSecond(1)).Bind(rateStore(t, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err = ApplyMiddleware(next, RateLimitByIPWith(exact, IPRateLimitOptions{IPv6Prefix: 128}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if serve(h, "[2001:db8:1:2::1]:80") != 204 || serve(h, "[2001:db8:1:2::2]:80") != 204 {
+		t.Fatal("configured /128 keys grouped distinct addresses")
+	}
+	for _, options := range []IPRateLimitOptions{{IPv4Prefix: 33}, {IPv6Prefix: 129}, {IPv4Prefix: -1}} {
+		if options.Validate() == nil {
+			t.Fatalf("invalid options accepted: %+v", options)
+		}
+		if _, err := ApplyMiddleware(next, RateLimitByIPWith(exact, options)); !errors.Is(err, fault.Invalid) {
+			t.Fatalf("invalid options assembled: %v", err)
+		}
+	}
+}
+
+func TestHandlerRateLimitExceededCarriesRetryHeaders(t *testing.T) {
+	l, err := ratelimit.Define("handler", keyspace.StringKeys[string](), ratelimit.PerSecond(1)).Bind(rateStore(t, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		for {
+			decision, err := l.Allow(r.Context(), "member")
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if !decision.Allowed {
+				_ = WriteError(w, r, fmt.Errorf("export quota: %w", RateLimitExceeded(decision)))
+				return
+			}
+		}
+	})
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
+	var body ErrorResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil || w.Code != 429 || body.Code != RateLimited {
+		t.Fatalf("handler rejection: %d %s", w.Code, w.Body.String())
+	}
+	if w.Header().Get("Retry-After") == "" || w.Header().Get("Retry-After") == "0" || w.Header().Get("X-RateLimit-Limit") != "1" || w.Header().Get("X-RateLimit-Remaining") != "0" {
+		t.Fatalf("retry metadata missing: %v", w.Header())
+	}
+	if err := RateLimitExceeded(ratelimit.Decision{Allowed: true, Limit: 1, Remaining: 1}); errors.Is(err, RateLimited) || !errors.Is(err, InternalError) {
+		t.Fatal("allowed decision reported as a quota rejection", err)
 	}
 }

@@ -23,6 +23,7 @@ func (f *fileResponse) prepareStream(ctx context.Context, stream Stream, limits 
 		return prepared, err
 	}
 	prepared.stream = true
+	prepared.flush = stream.progressive
 	prepared.limit = limits.Bytes
 	prepared.length = content.Length
 	if length, ok := content.Length.Get(); ok && (length < 0 || length > limits.Bytes) {

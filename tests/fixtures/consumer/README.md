@@ -26,6 +26,8 @@ projections, typed table columns, scoped authorization, joined/grouped reports,
 HTTP downloads and an ordinary export job. Its public PostgreSQL/auth/HTTP,
 worker retry/local-storage, race, sixteen compiler-rejection and six real-editor
 checks passed milestone 19 acceptance; see the [guide](../../../docs/guides/datatable.md).
+[Member imports](reporting/member_import.go) stream CSV/XLSX uploads into a typed
+row with declared heading codecs, per-row validation and row-numbered failures.
 
 The [WebSocket consumer](realtime/orders.go) binds model-owned rooms, generated
 DTOs, typed event handlers and an injected domain service. Its native middleware
@@ -158,6 +160,12 @@ Normal tests skip real PostgreSQL acceptance when no test URL is supplied. Root 
 
 The [soft-delete models](softqueries/models.go), [lifecycle acceptance](softqueries/lifecycle_postgres_test.go) and [visibility acceptance](softqueries/visibility_postgres_test.go) cover automatic deletion timestamps, typed restore/force-delete hooks, operation-aware changes, rollback, and independent target/pivot scopes across eager loading, aggregates and advanced query sources.
 
+The [tenant models](tenantqueries/models.go) and their [PostgreSQL acceptance](tenantqueries/tenant_postgres_test.go) cover a context tenant scope and a static published scope across reads, pagination, chunking, `WhereHas` and eager loading; set-based `UpdateAll`, `Increment`/`Decrement`, `DeleteAll` and `ForceDeleteAll`; lookup defaults from filters and scopes; and `Sync`, `SyncWithoutDetaching`, `Toggle`, `AttachMany`, `DetachMany`, `DetachAll` and `UpdateExistingPivot` change sets; [concurrent pivot synchronization](tenantqueries/pivot_concurrency_postgres_test.go) serialized per source; an [upsert](tenantqueries/upsert_scope_postgres_test.go) whose `DO UPDATE` stays within the scopes; and [bounded pruning](tenantqueries/prune_postgres_test.go) in mass and lifecycle modes through the `prune run` command. See the [global-scope guide](../../../docs/guides/model-global-scopes.md).
+
+The [pivot-hook models](pivothooks/models.go) and their [PostgreSQL acceptance](pivothooks/pivot_hooks_postgres_test.go) run `Sync`, `SyncWithoutDetaching`, `Toggle`, `AttachMany`, `DetachMany`, `DetachAll` and `UpdateExistingPivot` through a pivot with local hooks and a registered provider observer: each changed link runs its lifecycle exactly once with its before/after state, unchanged links run none, returned changes match the stored links, and a hook failure at any step rolls back the whole operation without after-commit work. Its [`CreateOrFirst` acceptance](pivothooks/create_or_first_postgres_test.go) resolves only the model insert's own unique conflict, returning hook, hook-write and trigger violations.
+
+The [office models](officequeries/models.go) and their [PostgreSQL acceptance](officequeries/office_postgres_test.go) cover `HasManyThrough`/`HasOneThrough` loading, intermediate soft deletion and `WhereHas`, `LatestOfMany`/`OfMany` choices with filters (including `HasOneThrough(...).OfMany` per parent), polymorphic relationships, and `RelatedValue` ordering, filtering and `WithValue` pairs. Its [desk acceptance](officequeries/desk_scope_postgres_test.go) covers a global scope declared with a relation-existence predicate.
+
 The [relation-write models](linkqueries/models.go) and their lifecycle, key and concurrency acceptance cover derived pivot keys, ordinary hooks/mutators/timestamps, bounded atomic soft/force deletion, stale/nullable/natural keys, endpoint locking, unique conflicts and rollback. See the [relation-write guide](../../../docs/guides/model-relation-writes.md) and master roadmap for current verification status.
 
 
@@ -227,7 +235,9 @@ and files; committed force deletion schedules conditional object cleanup.
 The [localization fixture](localization/messages.go) declares typed message
 arguments and enum labels and composes validation, permission and HTTP locale
 APIs. Milestone 20 generation, public consumer/race, compiler/editor checks and
-the full native acceptance gate passed.
+the full native acceptance gate passed. Its [locale preference test](localization/locale_preference_test.go)
+resolves a subject's locale from the request, a stored preference and
+`Accept-Language` through `i18n.LocaleResolver`.
 
 The [outgoing HTTP fixture](outgoing/client.go) wraps one named client, generated
 request/response DTOs, callback-scoped streaming and the bounded fake transport.

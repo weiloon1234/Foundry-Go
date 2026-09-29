@@ -22,12 +22,17 @@ The handler still runs once on each request, including revalidation. This is
 response validation, not a response cache: domain checks and current DTO
 production are not skipped. Body changes change the validator.
 
-Start with `DefaultETagConfig`. `MaxBytes` bounds each captured body;
-`MaxConcurrent` bounds active captures for that assembled middleware.
+Start with `DefaultETagConfig` (10 MiB `MaxBytes`, 64 `MaxConcurrent`, 100 ms
+`AdmissionWait`). `MaxBytes` bounds each captured body. A body written once with
+its declared `Content-Length` — typed JSON responses — is hashed in place and
+served without a capture copy or a capture slot. Captures up to one 32 KiB page
+need no slot either. Larger captures need one of `MaxConcurrent` slots per
+assembled middleware; a request waits up to `AdmissionWait` (0–5 s, also ended
+by the request context) and then follows the normal handler path without a
+validator. Worst-case large-capture memory is `MaxConcurrent × MaxBytes`.
 Memory is acquired in bounded pages as bytes arrive. When the byte ceiling is
 exceeded, Foundry sends the complete captured prefix followed by later bytes.
-When all capture slots are occupied, the response follows the normal handler
-path. Neither case silently truncates the body or waits for a free slot.
+Neither case silently truncates the body.
 
 HEAD does not compute a hash for an unseen GET body and never executes a second
 GET handler. Unsafe methods, range-bearing requests, redirects, error responses,
@@ -57,10 +62,38 @@ to cancellation. Foundry does not start detached reader goroutines.
 semantics. Explicit file validators allow native file preconditions before
 reading the complete body; automatic hashing requires producing the bytes.
 
-Focused runtime/consumer races, compiler and actual-gopls checks, fuzzing, resource
-benchmarks, vet, formatting, generation freshness and documentation checks passed.
-The [master acceptance record](../../blueprint/00-master-architecture-and-parity.md#milestone-08-automatic-etag-focused-acceptance)
-records focused verification. The subsequent
-[full canonical regression](../../blueprint/00-master-architecture-and-parity.md#milestone-08-automatic-etag-full-acceptance)
-also passed. Compression composition subsequently passed its focused and full
-regression checks; see the [milestone completion review](../../blueprint/00-master-architecture-and-parity.md#milestone-08-completion-review).
+## Cache-Control policy
+
+`CacheControl(policy)` declares a typed `Cache-Control` for GET and HEAD
+responses and composes with ETags, so clients revalidate cheaply with 304:
+
+```go
+policy := foundryhttp.CachePolicy{
+    Visibility:           foundryhttp.CachePublic,
+    MaxAge:               time.Minute,
+    SharedMaxAge:         value.Set(5 * time.Minute), // s-maxage
+    StaleWhileRevalidate: 30 * time.Second,
+}
+handler, err := foundryhttp.ApplyMiddleware(router,
+    foundryhttp.CacheControl(policy),
+    foundryhttp.ETags(foundryhttp.DefaultETagConfig()),
+)
+```
+
+`CachePrivate` limits storage to the requesting browser; `CachePublic` also
+admits shared caches. Durations are whole seconds from zero through one year.
+`SharedMaxAge` requires public visibility. `NoCache` stores but revalidates each
+use, `MustRevalidate` forbids serving stale content after expiry, and `Immutable`
+requires a positive `MaxAge` without `NoCache`. `NoStoreCachePolicy()` forbids
+storage and cannot be combined with any other directive. `ExpiresFrom` adds an
+`Expires` date of now plus `MaxAge` from that application clock for HTTP/1.0
+caches. Invalid policies fail assembly.
+
+The policy is set before the next handler runs. It never replaces a
+`Cache-Control` value an outer middleware already chose (such as a browser
+session's `no-store`); a handler may still override it, and shared error
+responses replace it with `no-store`. A public policy is downgraded to private
+for requests that carry an `Authorization` header, so shared caches never store
+credentialed responses. Other methods are unchanged, and 304 responses keep the
+declared policy. Install it per route or scope with `WithMiddleware` when
+different endpoints need different lifetimes.

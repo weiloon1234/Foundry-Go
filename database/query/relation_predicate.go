@@ -1,5 +1,7 @@
 package query
 
+import "database/sql/driver"
+
 // ExistenceRelation is a declared relationship that can filter its parent by
 // matching rows. Computed aggregate slots are not existence relationships.
 type ExistenceRelation[M any] interface {
@@ -81,9 +83,23 @@ func (s relationSpec[M, N]) exists() Predicate[M] {
 	for _, predicate := range s.target.effectivePredicates() {
 		node.predicates = append(node.predicates, requalify(predicate, alias))
 	}
+	if s.hop != nil {
+		// Through an intermediate: target -> intermediate.second, and the
+		// intermediate's first key correlates with the outer source key.
+		node = s.hop.join(node, alias, s.foreign)
+		node.predicates = append(node.predicates, binaryComparison{
+			left: fieldRef{hopAlias, s.hop.first.column}, right: s.local, operator: equal,
+		})
+		return s.existencePredicate(node)
+	}
 	node.predicates = append(node.predicates, binaryComparison{
 		left: fieldRef{alias, s.foreign.column}, right: s.local, operator: equal,
 	})
+	if s.morph != nil {
+		// The outer row must also store this target type's morph name.
+		node.predicates = append(node.predicates, comparison{operand: fieldRef{s.source.table, s.morph.kind.column}, operator: equal,
+			values: []any{string(s.morph.name)}, bind: func(v any) (driver.Value, error) { return v, nil }})
+	}
 	return s.existencePredicate(node)
 }
 func (s relationSpec[M, N]) existencePredicate(node selectNode) Predicate[M] {

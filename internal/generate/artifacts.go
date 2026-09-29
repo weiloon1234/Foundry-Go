@@ -18,16 +18,24 @@ import (
 // by the versioned ownership manifest and digest, without invalid JSON comments.
 const ArtifactHeader = generatedHeader
 
+// MaxArtifactBytes bounds one published client artifact. A client embeds a
+// manifest of up to 16 MiB plus its declarations, so it exceeds the Go limit.
+const MaxArtifactBytes = 48 << 20
+
+// maxGoOutputBytes bounds one generated Go file.
+const maxGoOutputBytes = 8 << 20
+
 type outputPolicy struct {
 	version      int
 	name         func(string) bool
 	content      func(string, []byte) bool
+	maxBytes     int
 	distribution *pluginmanifest.Distribution
 }
 
 var artifactName = regexp.MustCompile(`^[a-zA-Z0-9_]+_foundry\.gen\.(ts|json)$`)
-var goOutputPolicy = outputPolicy{version: 1, name: outputName.MatchString, content: func(_ string, data []byte) bool { return bytes.HasPrefix(data, []byte(generatedHeader+"\n")) }}
-var artifactOutputPolicy = outputPolicy{version: 2, name: artifactName.MatchString, content: func(name string, data []byte) bool {
+var goOutputPolicy = outputPolicy{version: 1, name: outputName.MatchString, maxBytes: maxGoOutputBytes, content: func(_ string, data []byte) bool { return bytes.HasPrefix(data, []byte(generatedHeader+"\n")) }}
+var artifactOutputPolicy = outputPolicy{version: 2, name: artifactName.MatchString, maxBytes: MaxArtifactBytes, content: func(name string, data []byte) bool {
 	if strings.HasSuffix(name, ".json") {
 		return json.Valid(data)
 	}

@@ -12,20 +12,26 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/dependency"
 	"github.com/weiloon1234/Foundry-Go/logging"
+	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/observability"
 )
 
-// DefaultShutdownTimeout bounds automatic shutdown waits, not the lifetime of
-// a goroutine ignoring cancellation. Such work remains tracked until it exits.
-const DefaultShutdownTimeout = 10 * time.Second
+// DefaultShutdownTimeout is the whole shutdown budget: stop delay, kernel drain
+// and every cleanup. It exceeds the default HTTP shutdown grace and fits a common
+// 30-second orchestrator termination period. It bounds waits, not the lifetime
+// of a goroutine ignoring cancellation; such work remains tracked until it exits.
+const DefaultShutdownTimeout = 25 * time.Second
 
 // Option configures an application builder.
 type Option func(*settings) error
 type settings struct {
 	logger          *slog.Logger
 	shutdownTimeout time.Duration
+	stopDelay       time.Duration
+	startupTimeout  time.Duration
 	clock           clock.Clock
 	observability   *observability.Recorder
+	maintenance     *maintenance.Gate
 }
 
 // WithClock injects application time without changing lifecycle deadlines.
@@ -50,14 +56,59 @@ func WithLogger(logger *slog.Logger) Option {
 	}
 }
 
-// WithShutdownTimeout sets the automatic wait and individual cleanup deadlines.
-// Manual Shutdown calls also respect the deadline on the caller's context.
+// WithShutdownTimeout sets the whole shutdown budget. It starts when shutdown
+// begins and covers the stop delay, kernel drain and all cleanups, which share
+// its remaining deadline. Run waits for this budget; manual Shutdown calls also
+// respect the deadline on the caller's context. Configure kernel drain periods
+// (for example the HTTP shutdown grace) below it.
 func WithShutdownTimeout(timeout time.Duration) Option {
 	return func(s *settings) error {
 		if timeout <= 0 {
 			return fault.New(fault.Invalid, "shutdown timeout must be positive")
 		}
 		s.shutdownTimeout = timeout
+		return nil
+	}
+}
+
+// WithStopDelay configures a lame-duck period for requested shutdown of a
+// running application. State reports Stopping (so readiness fails) while
+// kernels keep serving; afterwards admission closes and kernels drain. Kernel
+// completion or failure stops immediately. The delay is part of the shutdown
+// budget and must be shorter than it. Zero, the default, disables the delay.
+func WithStopDelay(delay time.Duration) Option {
+	return func(s *settings) error {
+		if delay < 0 {
+			return fault.New(fault.Invalid, "stop delay cannot be negative")
+		}
+		s.stopDelay = delay
+		return nil
+	}
+}
+
+// WithStartupTimeout bounds provider boot. Expiry cancels the application
+// lifetime and Start reports fault.Timeout; boot callbacks remain owned until
+// they return. Zero, the default, leaves startup bounded only by its context.
+func WithStartupTimeout(timeout time.Duration) Option {
+	return func(s *settings) error {
+		if timeout < 0 {
+			return fault.New(fault.Invalid, "startup timeout cannot be negative")
+		}
+		s.startupTimeout = timeout
+		return nil
+	}
+}
+
+// WithMaintenance supplies the application's admission gate, for example one
+// shared with a fleet-wide maintenance store. Without it the application uses
+// its recorder's gate, or a fresh gate when observability is not configured.
+// A recorder configured with a different gate is rejected at Build.
+func WithMaintenance(gate *maintenance.Gate) Option {
+	return func(s *settings) error {
+		if gate == nil {
+			return fault.New(fault.Invalid, "maintenance gate cannot be nil")
+		}
+		s.maintenance = gate
 		return nil
 	}
 }
@@ -187,6 +238,19 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	b.mu.Unlock()
 	if buildErr != nil {
 		return nil, buildErr
+	}
+	if settings.stopDelay >= settings.shutdownTimeout {
+		return nil, fault.New(fault.Invalid, "stop delay must be shorter than the shutdown timeout")
+	}
+	if recorder := settings.observability; recorder != nil {
+		if settings.maintenance == nil {
+			settings.maintenance = recorder.Gate()
+		} else if settings.maintenance != recorder.Gate() {
+			return nil, fault.New(fault.Invalid, "maintenance gate differs from the observation recorder's gate")
+		}
+	}
+	if settings.maintenance == nil {
+		settings.maintenance = &maintenance.Gate{}
 	}
 	ordered, registry, err := registerProviders(ctx, entries, overrides)
 	if err != nil {

@@ -40,6 +40,11 @@ func TestMemoryHelperUsesNormalMailerAndOwnsPrivateDataCleanup(t *testing.T) {
 		}
 		emailtest.AssertCount(t, retained, 1)
 		emailtest.AssertRecipientCount(t, retained, to, 1)
+		subject := func(m email.Message) bool { return m.Subject() == "Private subject" }
+		emailtest.AssertSent(t, retained, subject)
+		emailtest.AssertSentCount(t, retained, subject, 1)
+		emailtest.AssertNotSent(t, retained, func(m email.Message) bool { return m.Subject() == "Other" })
+		emailtest.AssertNotSent(t, other, nil)
 		emailtest.AssertCount(t, other, 0)
 	})
 	if len(retained.Messages()) != 0 {

@@ -265,45 +265,69 @@ func TestSessionConcurrentRotationHasOneWinner(t *testing.T) {
 	}
 }
 
+// Concurrent logins never exceed the cap. RejectNew fails the excess with the
+// typed auth.CredentialLimit (HTTP 409) instead of an internal conflict;
+// EvictOldest (the default) admits every login and keeps only the newest.
 func TestSessionConcurrentCreationEnforcesSubjectCapacity(t *testing.T) {
-	s := prepare(t)
-	proof, err := auth.NewProof(member{ID: 7}.reference(), auth.Authenticated)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var successes atomic.Int32
-	var wg sync.WaitGroup
-	start := make(chan struct{})
-	failures := make(chan error, 8)
-	for range 8 {
-		wg.Go(func() {
-			<-start
-			_, err := s.sessions.Issue(t.Context(), proof, session.IssueOptions{})
-			if err == nil {
-				successes.Add(1)
-			} else {
-				failures <- err
+	for _, policy := range []auth.LimitPolicy{auth.RejectNew, auth.EvictOldest} {
+		t.Run(string(policy), func(t *testing.T) {
+			s := prepare(t)
+			config := s.config
+			config.Limit = policy
+			store, err := session.NewStore(s.backend, config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sessions, err := session.New(store, "members.web", s.provider, "web.session")
+			if err != nil {
+				t.Fatal(err)
+			}
+			proof, err := auth.NewProof(member{ID: 7}.reference(), auth.Authenticated)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var successes atomic.Int32
+			var wg sync.WaitGroup
+			start := make(chan struct{})
+			failures := make(chan error, 8)
+			for range 8 {
+				wg.Go(func() {
+					<-start
+					_, err := sessions.Issue(t.Context(), proof, session.IssueOptions{})
+					if err == nil {
+						successes.Add(1)
+					} else {
+						failures <- err
+					}
+				})
+			}
+			close(start)
+			wg.Wait()
+			close(failures)
+			expected := int32(2)
+			if policy == auth.EvictOldest {
+				expected = 8
+			}
+			if successes.Load() != expected {
+				for err := range failures {
+					t.Log(err, errors.Unwrap(err))
+				}
+				t.Fatal("session capacity was raced", successes.Load())
+			}
+			for err := range failures {
+				if !errors.Is(err, auth.CredentialLimit) {
+					t.Fatal(err)
+				}
+			}
+			if len(stored(t, s)) != 2 {
+				t.Fatal("subject exceeded its session cap")
+			}
+			s.clock.Advance(21 * time.Minute)
+			issue(t, sessions, 7, auth.Authenticated, false)
+			if len(stored(t, s)) != 1 {
+				t.Fatal("expired sessions did not free capacity")
 			}
 		})
-	}
-	close(start)
-	wg.Wait()
-	close(failures)
-	if successes.Load() != 2 {
-		t.Fatal("session capacity was raced", successes.Load())
-	}
-	for err := range failures {
-		if !errors.Is(err, fault.Conflict) {
-			t.Fatal(err)
-		}
-	}
-	if len(stored(t, s)) != 2 {
-		t.Fatal("failed creation persisted credentials")
-	}
-	s.clock.Advance(21 * time.Minute)
-	issue(t, s.sessions, 7, auth.Authenticated, false)
-	if len(stored(t, s)) != 1 {
-		t.Fatal("expired sessions did not free capacity")
 	}
 }
 
@@ -532,7 +556,10 @@ func TestSessionCorruptSubjectFailsClosed(t *testing.T) {
 
 // Hold the same generated subject lock as the backend. Time advances while the
 // request waits; its pre-lock lifetime must never authorize a post-expiry lookup.
-func TestSessionExpiryIsCheckedAfterAcquiringSubjectLock(t *testing.T) {
+// Request authentication reads without a transaction or row lock, so it never
+// waits for issuance, listing, pruning or revocation holding the subject lock.
+// Expiry is still checked against the clock sampled after the read.
+func TestSessionLookupDoesNotWaitForSubjectLock(t *testing.T) {
 	s := prepare(t)
 	original := issue(t, s.sessions, 7, auth.Authenticated, false)
 	row := stored(t, s)[0]
@@ -567,16 +594,19 @@ func TestSessionExpiryIsCheckedAfterAcquiringSubjectLock(t *testing.T) {
 	go func() { _, err := authenticate(t, s.sessions, original.Secret()); done <- err }()
 	select {
 	case err := <-done:
-		t.Fatal("lookup escaped subject lock", err)
-	case <-time.After(20 * time.Millisecond):
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("request authentication waited for the subject lock")
 	}
 	s.clock.Advance(11 * time.Minute)
+	if _, err := authenticate(t, s.sessions, original.Secret()); !errors.Is(err, auth.Unauthenticated) {
+		t.Fatal("expired credential authenticated", err)
+	}
 	close(release)
 	if err := <-held; err != nil {
 		t.Fatal(err)
-	}
-	if err := <-done; !errors.Is(err, auth.Unauthenticated) {
-		t.Fatal("expired credential authenticated after wait", err)
 	}
 }
 

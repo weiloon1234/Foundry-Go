@@ -91,7 +91,7 @@ func TestDownloadCleansUpWhenCanceledAfterSourceReturns(t *testing.T) {
 	})
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequestWithContext(ctx, "GET", "/file", nil))
-	if recorder.Code != 408 || closes.Load() != 1 || recorder.Header().Get("Content-Disposition") != "" {
+	if recorder.Code != 503 || closes.Load() != 1 || recorder.Header().Get("Content-Disposition") != "" {
 		t.Fatal("canceled preparation retained body", recorder.Code, closes.Load())
 	}
 }
@@ -123,7 +123,8 @@ func TestDownloadNeverOpensSourceAfterHandlerFailure(t *testing.T) {
 				expected = 404
 			}
 			if mode == "canceled" {
-				expected = 408
+				// The client left after a successful handler: no source opens.
+				expected = 503
 			}
 			if recorder.Code != expected || opens.Load() != 0 || strings.Contains(recorder.Body.String(), "private") {
 				t.Fatal("failed handler reached source", recorder.Code, opens.Load())

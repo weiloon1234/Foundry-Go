@@ -53,6 +53,13 @@ func MemberIDField() query.ExactField[Member, int64] {
 }
 
 var Members = extensions.DefineOwner("members", query.IdentityOf(MemberQuery(), MemberIDField()))
+
+// MemberIdentity describes the member fixture model stored in table. Rename
+// scenarios declare the same owner over a renamed table with it.
+func MemberIdentity(table string) query.ModelIdentity[Member, int64] {
+	return source(table, func(m Member) int64 { return m.ID }, func(m Member) value.Nullable[temporal.DateTime] { return m.DeletedAt })
+}
+
 var Others = extensions.DefineOwner("others", source("extension_others", func(m Other) int64 { return m.ID }, func(m Other) value.Nullable[temporal.DateTime] { return m.DeletedAt }))
 
 type Fixture struct {

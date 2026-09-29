@@ -123,6 +123,7 @@ func (q Query[M]) Paginate(ctx context.Context, executor database.Executor, requ
 	if err := executionContext(ctx, executor); err != nil {
 		return Page[M]{}, err
 	}
+	q = q.inContext(ctx)
 	offset, err := request.offset()
 	if err != nil {
 		return Page[M]{}, err
@@ -167,6 +168,7 @@ func (q Query[M]) SimplePaginate(ctx context.Context, executor database.Executor
 	if err := executionContext(ctx, executor); err != nil {
 		return SimplePage[M]{}, err
 	}
+	q = q.inContext(ctx)
 	offset, err := request.offset()
 	if err != nil {
 		return SimplePage[M]{}, err

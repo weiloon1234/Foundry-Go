@@ -87,6 +87,7 @@ type joinNode struct {
 type orderNode struct {
 	expression valueExpression
 	descending bool
+	nulls      nullPlacement
 }
 type selectNode struct {
 	locks      []lockSpec
@@ -105,7 +106,7 @@ type selectNode struct {
 func orderNodes[M any](orders []Order[M]) []orderNode {
 	result := make([]orderNode, len(orders))
 	for i, o := range orders {
-		result[i] = orderNode{o.value(), o.descending}
+		result[i] = orderNode{o.value(), o.descending, o.nulls}
 	}
 	return result
 }
@@ -360,11 +361,7 @@ func (c *compiler) selectSQLWithOuter(s selectNode, outer *outerScope) (string, 
 			sql.WriteString(", ")
 		}
 		sql.WriteString(text)
-		if order.descending {
-			sql.WriteString(" DESC")
-		} else {
-			sql.WriteString(" ASC")
-		}
+		sql.WriteString(orderDirection(order))
 	}
 	if limit, set := s.limit.Get(); set {
 		p, err := c.parameter(int64(limit))
@@ -431,6 +428,15 @@ func requalify(e expression, alias string) expression {
 	case binaryComparison:
 		e.left, e.right = requalifyValue(e.left, alias), requalifyValue(e.right, alias)
 		return e
+	case rowComparison:
+		operands := make([]valueExpression, len(e.operands))
+		for i, operand := range e.operands {
+			operands[i] = requalifyValue(operand, alias)
+		}
+		e.operands = operands
+		return e
+	case scopeNode:
+		return e.rewrite(func(resolved expression) (expression, error) { return requalify(resolved, alias), nil })
 	case junction:
 		children := make([]expression, len(e.children))
 		for i, child := range e.children {

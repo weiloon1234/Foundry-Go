@@ -6,12 +6,17 @@ import (
 	"context"
 	"crypto/sha256"
 	"io"
+	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
 const BufferBytes = 32 << 10
+
+// buffers reuses transfer buffers across copies; each copy owns one buffer
+// until it returns.
+var buffers = sync.Pool{New: func() any { return new([BufferBytes]byte) }}
 
 // Copy reads at most maximum+1 source bytes and never writes beyond the bound.
 // It does not close either stream or use ReaderFrom/WriterTo fast paths that could
@@ -21,8 +26,10 @@ func Copy(ctx context.Context, dst io.Writer, source io.Reader, maximum int64) (
 		return 0, digest, storage.Failure(storage.Invalid, storage.PutOperation, storage.Unchanged, nil)
 	}
 	hash := sha256.New()
+	pooled := buffers.Get().(*[BufferBytes]byte)
+	defer buffers.Put(pooled)
 	err = callback.Isolated("storage byte transfer", func() error {
-		buffer := make([]byte, BufferBytes)
+		buffer := pooled[:]
 		empty := 0
 		for {
 			if err := ctx.Err(); err != nil {

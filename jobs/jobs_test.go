@@ -286,9 +286,11 @@ func TestUncooperativeHandlerRetainsLeaseAndShutdownOwnership(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("worker did not drain")
 	}
-	record := waitRecord(t, f, id, jobs.Failed)
-	if record.History[len(record.History)-1].Reason != jobs.TimedOut {
-		t.Fatalf("timeout reason: %+v", record.History)
+	// The handler returned nil after its deadline and the stop request: its
+	// side effects completed, so the attempt succeeded rather than timing out.
+	record := waitRecord(t, f, id, jobs.Succeeded)
+	if record.History[len(record.History)-1].Reason != jobs.NoReason {
+		t.Fatalf("completed attempt reason: %+v", record.History)
 	}
 }
 func TestDefinitionAndPolicyCopiesAreOwned(t *testing.T) {

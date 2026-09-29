@@ -73,7 +73,11 @@ func (g *graph) payload(input *foundryhttp.PayloadInfo) *Payload {
 	if input == nil {
 		return nil
 	}
-	result := &Payload{MediaType: input.MediaType, File: input.File}
+	result := &Payload{MediaType: input.MediaType, File: input.File, Example: slices.Clone(input.Example)}
+	if input.Raw != nil {
+		result.Raw = &foundryhttp.RawBodyInfo{MediaTypes: slices.Clone(input.Raw.MediaTypes)}
+		return result
+	}
 	switch {
 	case input.MediaType == "application/x-www-form-urlencoded":
 		for _, field := range input.Form {
@@ -134,7 +138,7 @@ func Build(ctx context.Context, sources Sources) (*Manifest, error) {
 			if err != nil {
 				return nil, err
 			}
-			operation := Operation{Route: endpoint.Route, Name: name, Status: endpoint.Status, Limits: endpoint.Limits, Preparation: endpoint.Preparation, Idempotency: endpoint.Idempotency, Validation: endpoint.Validation, Body: g.payload(endpoint.Body), Response: g.payload(endpoint.Response)}
+			operation := Operation{Route: endpoint.Route, Name: name, Status: endpoint.Status, Statuses: slices.Clone(endpoint.Statuses), Redirect: endpoint.Redirect, Limits: endpoint.Limits, Preparation: endpoint.Preparation, Idempotency: endpoint.Idempotency, Validation: endpoint.Validation, Body: g.payload(endpoint.Body), Response: g.payload(endpoint.Response)}
 			if operation.Response != nil && operation.Response.File != nil {
 				operation.FileTransferBytes, err = operation.Response.File.TransferBytes(operation.Limits.Files)
 				if err != nil {

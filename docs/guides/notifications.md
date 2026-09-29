@@ -41,8 +41,13 @@ report, err := pending.Send(ctx, manager)
 ```
 
 The zero ID generates a UUIDv7. An explicit ID is a transport/retry boundary, not
-authorization. Reusing an ID with different input, recipient or channel selection
-returns a conflict. The first stored capture also freezes provenance; later
+authorization. Reusing an ID with different input or recipient returns a
+conflict. A stored notification keeps the channel selection it was captured with:
+adding, removing or retiring a channel in a later deployment's binding does not
+make older notifications unreadable. Their delivery rows record the captured
+channels; a channel added later is not attempted for them, a retired channel's
+row is left untouched, and recapturing the same ID with the same input stays
+idempotent. The first stored capture also freezes provenance; later
 enqueue attempts reuse it even when called from a different request context.
 Provenance is metadata and never authentication evidence. Capture validates and snapshots data without loading a model
 or contacting any service. It rejects live model payloads through the shared DTO
@@ -76,6 +81,14 @@ adds the stable notification ID, name and version to the output schema without
 repeating the DTO's fields. Whole-channel and foreign-room subscriptions fail.
 Publication success means local admission/distributed publication attempt, not
 receipt by every user device. Reuse the existing replay/TTL policies as needed.
+A publication failure that provably happened before anything was published
+(`websocket.NotPublished`: local admission refused, a closing hub, encoding)
+leaves the channel `Prepared` so the notification job retries it; a declaration
+mismatch (`fault.Invalid`) is `Rejected`. Any other failure, such as a
+distributed publish that may have partially fanned out or written history, is
+`Uncertain` and is never retried automatically; resolve it with
+`ResolveDelivery`. Every message carries the stable notification ID, so clients
+should ignore an ID they already handled.
 
 `Custom(id, OutputJSON(), renderer, transport)` accepts a focused
 `Transport[D].Deliver(ctx, DeliveryID, D)` implementation. Put custom routing data
@@ -110,8 +123,46 @@ collide. Parsing or retyping an ID cannot grant access.
 Decode a record through its database channel and build the application's declared
 HTTP response DTO; records do not implicitly serialize their private payload.
 `MarkRead`/`MarkUnread` return false for both absent and foreign IDs. Repeating
-`MarkRead` preserves the original read instant. Pagination count and rows use
+`MarkRead` preserves the original read instant. `MarkAllRead(ctx)` marks every
+unread record of the current recipient read in bounded transactions (500 rows
+each) and returns the number changed; already-read records keep their instant.
+`Delete(ctx, id)` removes one of the current recipient's records (false for
+absent or foreign IDs); the notification and its delivery states are kept, so a
+retry never recreates it. Pagination count and rows use
 separate read-committed queries, so concurrent changes may affect their snapshots.
+
+## On-demand routes and bulk notification
+
+`notifications.BindOnDemand(definition, channels...)` binds a notification to
+on-demand routes instead of a recipient model. A `notifications.Route` holds an
+email address and/or an opaque address for custom channels (for example a phone
+number); channel renderers receive the route as their model (for example
+`Email` addressing `route.Email`). Capture or send with `route.Reference()`.
+Routes are stored as the notification's identity (private data) and have no
+inbox, preferences or eligibility check; database channels are rejected.
+Storage, retries, delivery jobs and operator resolution work as for recipients.
+
+`binding.EnqueueMany(ctx, manager, job, producer, recipients, input, batch)`
+notifies up to 10,000 recipients with the same input: each recipient gets its
+own notification and delivery job, and each batch (default 100, at most 500)
+is stored together with its delivery-job outbox rows in one transaction of its
+own. Every recipient is captured before the first batch is stored. On a
+failed batch, `BulkResult` lists every ID in recipient order: `Stored`
+(committed batches), `Unconfirmed` (the failed batch, whose commit outcome may
+be unknown) and `NotAttempted` (later recipients). Reconcile the unconfirmed
+IDs, or supply the IDs yourself with
+`binding.EnqueueManyWithIDs(ctx, manager, job, producer, recipients, ids, input, batch)`
+(one per recipient) and rerun it with the same IDs and input: each
+notification is stored at most once, and its delivery job ID is derived from it.
+
+`Manager.PruneInbox(ctx, cutoff, readOnly, limit)` deletes up to `limit` (at
+most 10,000) inbox records created before `cutoff` across recipients, oldest
+first, optionally only read ones; repeat until fewer than `limit` are deleted.
+Notifications and delivery states are kept, so retries never recreate a pruned
+record. Migration `000002_add_inbox_prune_index` adds the supporting
+`(created_at, id)` index with `CREATE INDEX IF NOT EXISTS`, so a large inbox can
+be indexed `CONCURRENTLY` beforehand. Configured applications can run it on a
+schedule through the [housekeeping schedule](production-operations.md#housekeeping-schedule) (read records older than 90 days by default).
 
 ## Queued and transactional delivery
 
@@ -160,7 +211,32 @@ and uncertain outcomes against the provider before deciding on a new send; this
 API does not claim exactly-once external delivery or automatically repair unknown
 results. Finite provider idempotency retention does not change that policy.
 
-Manager admission and contexts are bounded. Callbacks own their actual lifetime;
+`Manager.Deliveries(ctx, state, limit, after)` lists up to 100 deliveries in a
+state, oldest update first, as safe metadata (delivery ID, notification ID,
+channel, kind, state, attempts, update time; never payload, route or rendered
+content). Continue with the last returned ID as `after`; when that delivery was
+since resolved, pruned or otherwise left the state, the call returns
+`notifications.ErrDeliveryAnchorMoved` (a `Conflict`) rather than silently
+restarting, so restart the listing from a zero `after`. `Manager.ResolveDelivery(ctx, id, expected, resolution)` records an
+operator decision for a `Running` or `Uncertain` delivery only while it is still
+in the observed state: `ResolveDelivered` (confirmed acceptance),
+`ResolveRejected` (confirmed non-acceptance, no resend) or `ResolveResend`
+(returns the frozen output to `Prepared`). It also invalidates the running claim,
+so a process that was still active cannot overwrite the decision. Resolve
+`Running` only after confirming its process is gone; resending risks a duplicate
+if the provider did accept. `Manager.Deliver(ctx, notificationID)` then attempts
+every retryable channel now, as the delivery job does. Register
+`notifications/command.Declaration` in the application's CLI registry:
+
+```sh
+./service notifications deliveries --state uncertain --limit 20
+./service notifications resolve --id DELIVERY_ID --expect uncertain --as resend
+./service notifications deliver --notification NOTIFICATION_ID
+```
+
+Manager admission and contexts are bounded: beyond `MaxActive` (default 128)
+an operation waits briefly for a slot and then fails with `fault.Overloaded`; a
+nested operation from an active one never waits. Callbacks own their actual lifetime;
 panic/Goexit are contained, but an uncooperative callback is not abandoned.
 Completion/status persistence has a separate five-second cleanup bound after an
 operation deadline. `Close` cancels admission/work; its context bounds the caller's

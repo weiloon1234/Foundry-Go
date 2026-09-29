@@ -183,7 +183,8 @@ func TestTypedDataCallbackFailureAndActualOwnership(t *testing.T) {
 			t.Fatal("abandoned callback", err)
 		default:
 		}
-		if _, err := set.Exists(t.Context(), "other"); !errors.Is(err, fault.Conflict) {
+		// A held slot makes the next operation queue briefly, then report overload.
+		if _, err := set.Exists(t.Context(), "other"); !errors.Is(err, fault.Overloaded) {
 			t.Fatal(err)
 		}
 		close(release)

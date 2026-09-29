@@ -3,7 +3,6 @@ package query
 import (
 	"context"
 	"database/sql/driver"
-	"fmt"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
@@ -11,7 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-func compileRelationAggregate[M, N any](input aggregateInput[M, N], measure aggregateNode, keys []driver.Value, limit int) (Statement, error) {
+func compileRelationAggregate[M, N any](ctx context.Context, input aggregateInput[M, N], measure aggregateNode, keys []driver.Value, limit int) (Statement, error) {
 	field := func(f fieldRef) error { return f.validate(input.inputTable) }
 	if err := measure.validate(field); err != nil {
 		return Statement{}, err
@@ -47,7 +46,7 @@ func compileRelationAggregate[M, N any](input aggregateInput[M, N], measure aggr
 			return v, nil
 		}})
 	}
-	var c compiler
+	c := compiler{scopeContext: ctx, scopeShapeOnly: ctx == nil}
 	sql, err := c.compileSelect(node)
 	if err != nil {
 		return Statement{}, err
@@ -99,7 +98,7 @@ func fetchRelationAggregate[M, N, V any](ctx context.Context, executor database.
 	results := make(map[cursorValue]V, len(keys))
 	for offset := 0; offset < len(keys); offset += state.limits.BatchSize {
 		end := min(offset+state.limits.BatchSize, len(keys))
-		statement, err := compileRelationAggregate(input, aggregate.node, keys[offset:end], state.remaining+1)
+		statement, err := compileRelationAggregate(ctx, input, aggregate.node, keys[offset:end], state.remaining+1)
 		if err != nil {
 			return nil, err
 		}
@@ -118,7 +117,7 @@ func fetchRelationAggregate[M, N, V any](ctx context.Context, executor database.
 				return groupedAggregate[V]{}, err
 			}
 			if (input.singular && count > 1) || (input.unique != (fieldRef{}) && count != distinct) {
-				return groupedAggregate[V]{}, fmt.Errorf("aggregate relation cardinality: %w", database.TooManyRows)
+				return groupedAggregate[V]{}, database.NewError("aggregate relation cardinality", database.TooManyRows)
 			}
 			key, err := metadata.decode(raw)
 			if err != nil {

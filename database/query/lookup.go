@@ -90,6 +90,32 @@ func (l ValueLookup[M, V]) AllExist(ctx context.Context, executor database.Execu
 	return true, nil
 }
 
+// AnyExist reports whether any value matches, with one parameterized IN
+// predicate of at most 64 values per statement and the field's SQL equality.
+// It stops at the first matching batch. Empty input performs no I/O.
+func (l ValueLookup[M, V]) AnyExist(ctx context.Context, executor database.Executor, input []V) (bool, error) {
+	if err := l.Validate(); err != nil {
+		return false, err
+	}
+	if ctx == nil {
+		return false, fault.New(fault.Invalid, "model lookup requires a context")
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	const batchSize = 64
+	for start := 0; start < len(input); start += batchSize {
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
+		found, err := l.source.Where(l.field.In(input[start:min(start+batchSize, len(input))]...)).Exists(ctx, executor)
+		if err != nil || found {
+			return found, err
+		}
+	}
+	return false, nil
+}
+
 func (ValueLookup[M, V]) Format(state fmt.State, _ rune) {
 	_, _ = state.Write([]byte("model value lookup"))
 }

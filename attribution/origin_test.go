@@ -105,6 +105,15 @@ func TestOriginValidatesBoundariesAndPreservesExistingValueOnDecodeFailure(t *te
 	if _, err := (attribution.Origin{}).WithRequest(attribution.Request{UserAgent: strings.Repeat("x", attribution.MaxUserAgentBytes+1)}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("unbounded request metadata accepted", err)
 	}
+	for _, raw := range []string{strings.Repeat("é", attribution.MaxUserAgentBytes), "a\tb\r\nc\x00\u0085d", "bad\xff\xfeutf8", "plain agent"} {
+		sanitized := attribution.SanitizeUserAgent(raw)
+		if _, err := (attribution.Origin{}).WithRequest(attribution.Request{UserAgent: sanitized}); err != nil || len(sanitized) > attribution.MaxUserAgentBytes {
+			t.Fatalf("sanitized agent %q remains invalid: %v", sanitized, err)
+		}
+	}
+	if attribution.SanitizeUserAgent("a\tb\u0085c") != "abc" || attribution.SanitizeUserAgent("x\xffy") != "x\uFFFDy" || attribution.SanitizeUserAgent("plain agent") != "plain agent" {
+		t.Fatal("sanitization changed meaning")
+	}
 	var nilMember *member
 	if _, err := (attribution.Origin{}).WithModel(nilMember); !errors.Is(err, fault.Invalid) {
 		t.Fatal("typed nil subject accepted", err)

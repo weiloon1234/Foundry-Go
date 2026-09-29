@@ -47,6 +47,7 @@ type Factory[M Model[M], D query.CreateDraft[M]] struct {
 	query    query.Query[M]
 	build    Build[D]
 	states   []State[D]
+	after    []AfterCreate[M]
 	sequence *sequence
 }
 
@@ -147,18 +148,40 @@ func (f *Factory[M, D]) mutation(ctx context.Context) (query.Mutation[M], error)
 }
 
 // Create uses normal generated defaults/UUID preparation, field transformations,
-// model observers, timestamps and the caller's actual transaction owner.
+// model observers, timestamps and the caller's actual transaction owner. With
+// AfterCreating hooks, the insert and every hook share one transaction (a
+// savepoint inside the caller's transaction), so a failing hook leaves no row.
 func (f *Factory[M, D]) Create(ctx context.Context, writer database.Transactor) (M, error) {
 	mutation, err := f.mutation(ctx)
 	if err != nil {
 		return *new(M), err
 	}
-	return f.query.Insert(ctx, writer, mutation)
+	if len(f.after) == 0 {
+		return f.query.Insert(ctx, writer, mutation)
+	}
+	if writer == nil {
+		return *new(M), fault.New(fault.Invalid, "factory requires a database writer")
+	}
+	var created M
+	err = writer.Transaction(ctx, func(tx *database.Tx) error {
+		inserted, err := f.query.Insert(ctx, tx, mutation)
+		if err != nil {
+			return err
+		}
+		created, err = f.afterCreate(ctx, tx, inserted)
+		return err
+	})
+	if err != nil {
+		return *new(M), err
+	}
+	return created, nil
 }
 
 // CreateMany is atomic, bounded and ordered. Every input executes its normal
-// model hooks through InsertEach. A later failure rolls back the whole batch and
-// its after-commit work; factories never switch to the hook-free bulk API.
+// model hooks through InsertEach, and AfterCreating hooks run in the same
+// transaction (a savepoint inside the caller's transaction). A later failure,
+// including a failing hook, rolls back the whole batch and its after-commit
+// work; factories never switch to the hook-free bulk API.
 func (f *Factory[M, D]) CreateMany(ctx context.Context, writer database.Transactor, count int) ([]M, error) {
 	if err := f.valid(); err != nil {
 		return nil, err
@@ -180,5 +203,28 @@ func (f *Factory[M, D]) CreateMany(ctx context.Context, writer database.Transact
 		}
 		mutations[i] = mutation
 	}
-	return f.query.InsertEach(ctx, writer, mutations)
+	if len(f.after) == 0 {
+		return f.query.InsertEach(ctx, writer, mutations)
+	}
+	if writer == nil {
+		return nil, fault.New(fault.Invalid, "factory requires a database writer")
+	}
+	var created []M
+	err := writer.Transaction(ctx, func(tx *database.Tx) error {
+		inserted, err := f.query.InsertEach(ctx, tx, mutations)
+		if err != nil {
+			return err
+		}
+		for i := range inserted {
+			if inserted[i], err = f.afterCreate(ctx, tx, inserted[i]); err != nil {
+				return err
+			}
+		}
+		created = inserted
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return created, nil
 }

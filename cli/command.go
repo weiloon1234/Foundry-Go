@@ -19,6 +19,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/observability"
 )
 
@@ -27,6 +28,11 @@ type Name string
 const MaxCommands = 1024
 const MaxArguments = 256
 const MaxArgumentBytes = 1 << 20
+
+// DuringMaintenance is the explicit operator flag, placed before the command
+// name, that runs one invocation while application maintenance is paused.
+// Draining (shutdown) still rejects every invocation.
+const DuringMaintenance = "--during-maintenance"
 
 // Decoder performs pure argument parsing. It must return an owned value and
 // leave resource acquisition to the command handler. Help returns flag.ErrHelp.
@@ -48,6 +54,8 @@ type Description struct {
 	Name      Name   `json:"name"`
 	Summary   string `json:"summary"`
 	Arguments string `json:"arguments"`
+	// Maintenance reports that the command runs while maintenance is paused.
+	Maintenance bool `json:"maintenance,omitempty"`
 }
 type Command[A any] struct {
 	description Description
@@ -60,6 +68,15 @@ func Define[A any](name Name, summary string, decode Decoder[A]) Command[A] {
 	return Command[A]{description: Description{Name: name, Summary: summary, Arguments: reflect.TypeFor[A]().String()}, decode: decode}
 }
 func (c Command[A]) Name() Name { return c.description.Name }
+
+// AllowDuringMaintenance declares an operational command, such as a migration
+// or the maintenance toggles themselves, that runs while maintenance is paused.
+// Draining (shutdown) still rejects it. Other commands require the explicit
+// DuringMaintenance flag for one invocation.
+func (c Command[A]) AllowDuringMaintenance() Command[A] {
+	c.description.Maintenance = true
+	return c
+}
 func (c Command[A]) Validate() error {
 	if !identifier.Semantic(string(c.Name())) || len(c.description.Summary) > 4096 || !utf8.ValidString(c.description.Summary) || strings.IndexFunc(c.description.Summary, unicode.IsControl) >= 0 || c.decode == nil {
 		return fault.New(fault.Invalid, "command requires a semantic name, single-line summary and typed decoder")
@@ -174,6 +191,10 @@ func (r *Registry) Parse(args []string, help io.Writer) (Invocation, error) {
 		}
 		return Invocation{}, flag.ErrHelp
 	}
+	bypass := len(args) > 0 && args[0] == DuringMaintenance
+	if bypass {
+		args = args[1:]
+	}
 	if len(args) == 0 {
 		return Invocation{}, Usage("expected a command; use --help")
 	}
@@ -193,14 +214,15 @@ func (r *Registry) Parse(args []string, help io.Writer) (Invocation, error) {
 	if invoke == nil {
 		return Invocation{}, fault.New(fault.Internal, "command parser returned no invocation")
 	}
-	return Invocation{state: &invocation{registry: r, name: d.description.Name, run: invoke}}, nil
+	return Invocation{state: &invocation{registry: r, name: d.description.Name, maintenance: bypass || d.description.Maintenance, run: invoke}}, nil
 }
 
 type invocation struct {
-	registry *Registry
-	name     Name
-	claimed  atomic.Bool
-	run      func(context.Context, foundation.Resolver, Streams) error
+	registry    *Registry
+	name        Name
+	maintenance bool
+	claimed     atomic.Bool
+	run         func(context.Context, foundation.Resolver, Streams) error
 }
 
 // Invocation owns one parsed command. Copies share its execution claim: an
@@ -231,7 +253,12 @@ func (i Invocation) Run(ctx context.Context, resolver foundation.Resolver, strea
 		return fault.New(fault.Closed, "CLI invocation already ran")
 	}
 	return observability.Observe(ctx, observability.Operation{Kind: observability.CLI, Name: observability.Name(i.Name())}, func(ctx context.Context) error {
-		if err := observability.FromContext(ctx).Gate().Admit(); err != nil {
+		gate := maintenance.FromContext(ctx)
+		if gate == nil {
+			// Manual compositions may attach only an observation recorder.
+			gate = observability.FromContext(ctx).Gate()
+		}
+		if err := gate.Admit(); err != nil && (!i.state.maintenance || err != maintenance.ErrMaintenance) {
 			return err
 		}
 		var outcome error

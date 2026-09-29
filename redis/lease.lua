@@ -13,6 +13,10 @@ elseif op == 'renew' then
     redis.call('PEXPIRE', key, ttl)
 elseif op == 'release' then
     redis.call('DEL', key)
+elseif op == 'transfer' then
+    -- Single-use token restore: the next owner replaces the current one.
+    if #ARGV[5] ~= size or ARGV[5] == string.rep(string.char(0), size) then return -1 end
+    redis.call('SET', key, ARGV[5], 'XX', 'PX', ttl)
 else
     return -1
 end

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	transport "github.com/coder/websocket"
+	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/observability"
 	"github.com/weiloon1234/Foundry-Go/tracing"
 	ws "github.com/weiloon1234/Foundry-Go/websocket"
@@ -39,7 +40,7 @@ func TestSocketMaintenanceAndTraceFollowConnectionOwnership(t *testing.T) {
 	}))
 	f := serveWith(t, registry(t, registration), nil, ws.DefaultConfig(), func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx, err := tracing.WithContext(observability.WithContext(r.Context(), recorder), parent)
+			ctx, err := tracing.WithContext(maintenance.WithContext(observability.WithContext(r.Context(), recorder), recorder.Gate()), parent)
 			if err != nil {
 				t.Error(err)
 				return

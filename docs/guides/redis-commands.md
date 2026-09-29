@@ -1,7 +1,7 @@
 # Scoped Redis commands, pipelines and scripts
 
 `redis/raw` is Foundry's explicit boundary for Redis capabilities outside the normal
-[typed cache](caching.md), [hash/set](redis-data.md), [lease](leases.md),
+[typed cache](caching.md), [hash/set/sorted-set/list](redis-data.md), [lease](leases.md),
 [rate-limit](rate-limiting.md) and [pub/sub](pubsub.md) APIs. The
 [independent consumer](../../tests/fixtures/consumer/rediscommands/commands.go)
 contains compiling examples of scoped model keys, typed command/script results and
@@ -31,7 +31,7 @@ metadata. `Key.String` is an explicit adapter address; logical suffixes are not
 retained. To select another authorized namespace, construct a separate configured
 store. One invocation or pipeline rejects mixed namespaces.
 
-For an advanced operation on an existing typed hash/set, use
+For an advanced operation on an existing typed data structure, use
 `profiles.AdapterKey(ctx, member.ID)` followed by `raw.FromDataKey`. This reuses its
 actual declaration and key codec. Preserve the data contract when extending it;
 raw writes must not introduce invalid JSON or violate collection bounds.
@@ -152,7 +152,9 @@ must impose appropriate server-side work and response limits; client deadlines d
 not roll back server work or forcibly stop Lua execution.
 
 Store defaults bound 128 active operations, 256 declarations, 1024 logical key bytes
-and five seconds per operation. Context cancellation can shorten the deadline.
+and five seconds per operation. When every operation slot is busy, a call queues in
+FIFO order for at most the operation timeout (capped at five seconds) and its own
+deadline, then returns retryable `fault.Overloaded` rather than failing immediately. Context cancellation can shorten the deadline.
 Key and decoder callbacks receive owned execution: panics/Goexit become errors,
 and canceled callbacks retain their slot until they actually exit. Custom decoders
 must honor context, preserve inputs and return owned results. Command failures and

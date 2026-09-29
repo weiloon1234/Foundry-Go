@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,29 +18,44 @@ type leaseAdmissionBackend struct {
 	idle, cancelled chan struct{}
 	entered, exited sync.Once
 	failure         error
+	renewals        atomic.Int32
+	handed          atomic.Bool
 }
 
 func (b *leaseAdmissionBackend) JobReserve(ctx context.Context, key jobs.Key, owner lease.Owner, ttl time.Duration) (value.Optional[jobs.Reservation], error) {
-	found, err := b.Backend.JobReserve(ctx, key, owner, ttl)
-	if err != nil || found.IsSet() {
-		return found, err
+	// Hand out the single job once. After its lease really expires the queue
+	// could legitimately redeliver it; this fixture keeps other loops idle.
+	if !b.handed.Load() {
+		found, err := b.Backend.JobReserve(ctx, key, owner, ttl)
+		if err != nil || found.IsSet() {
+			b.handed.Store(found.IsSet())
+			return found, err
+		}
 	}
 	b.entered.Do(func() { close(b.idle) })
 	<-ctx.Done()
-	b.exited.Do(func() { close(b.cancelled) })
+	// Each reservation is bounded by OperationTimeout; only cancellation by the
+	// worker itself means the loop was stopped.
+	if errors.Is(ctx.Err(), context.Canceled) {
+		b.exited.Do(func() { close(b.cancelled) })
+	}
 	return value.Optional[jobs.Reservation]{}, ctx.Err()
 }
 
 func (b *leaseAdmissionBackend) JobRenew(ctx context.Context, _ jobs.Key, _ jobs.Ownership, _ time.Duration) (jobs.LeaseStatus, error) {
 	select {
 	case <-b.idle:
+		b.renewals.Add(1)
 		return jobs.LeaseStatus{}, b.failure
 	case <-ctx.Done():
 		return jobs.LeaseStatus{}, ctx.Err()
 	}
 }
 
-func TestLeaseLossStopsOtherReservationsBeforeUncooperativeHandlerExits(t *testing.T) {
+// Lease loss cancels only the affected handler. A renewal error leaves
+// ownership unknown, so the heartbeat keeps retrying until the lease would
+// really have expired. Other reservation loops keep running throughout.
+func TestLeaseLossCancelsOnlyItsHandlerAndKeepsOtherLoops(t *testing.T) {
 	for _, scenario := range []struct {
 		name    string
 		failure error
@@ -53,8 +69,10 @@ func checkLeaseLossAdmission(t *testing.T, failure error) {
 	f := newWorkerFixture(t, jobs.DefaultPolicy("default"), nil)
 	cancelled, release := make(chan struct{}), make(chan struct{})
 	defer close(release)
+	var cancelledAt atomic.Int64
 	declaration, err := f.definition.Declare(func(ctx context.Context, _ payload) error {
 		<-ctx.Done()
+		cancelledAt.Store(time.Now().UnixNano())
 		close(cancelled)
 		<-release
 		return nil
@@ -67,19 +85,15 @@ func checkLeaseLossAdmission(t *testing.T, failure error) {
 		t.Fatal(err)
 	}
 	backend := &leaseAdmissionBackend{Backend: f.backend, idle: make(chan struct{}), cancelled: make(chan struct{}), failure: failure}
-	want := failure
-	if want == nil {
-		want = jobs.ErrOwnershipLost
-	}
 	config := jobs.DefaultWorkerConfig(f.key.Namespace(), f.key.Queue())
 	config.Concurrency = 2
-	config.OperationTimeout = 2 * time.Second
-	config.HeartbeatInterval = time.Millisecond
+	config.LeaseDuration, config.HeartbeatInterval, config.OperationTimeout = 300*time.Millisecond, 5*time.Millisecond, 50*time.Millisecond
 	worker, err := jobs.NewWorker(backend, registry, config)
 	if err != nil {
 		t.Fatal(err)
 	}
 	f.enqueue(t)
+	started := time.Now()
 	done := make(chan error, 1)
 	go func() { done <- worker.Run(t.Context()) }()
 	t.Cleanup(func() {
@@ -91,8 +105,8 @@ func checkLeaseLossAdmission(t *testing.T, failure error) {
 		}
 		select {
 		case err := <-done:
-			if !errors.Is(err, want) {
-				t.Error("lost lease outcome missing", err)
+			if err != nil {
+				t.Error("stopped worker reported a failure", err)
 			}
 		case <-ctx.Done():
 			t.Error("worker did not finish")
@@ -103,10 +117,14 @@ func checkLeaseLossAdmission(t *testing.T, failure error) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("lease loss did not cancel handler")
 	}
+	elapsed := time.Duration(cancelledAt.Load() - started.UnixNano())
+	if failure != nil && (elapsed < config.LeaseDuration || backend.renewals.Load() < 2) {
+		t.Fatal("renewal error cancelled the handler before the lease could expire", elapsed, backend.renewals.Load())
+	}
 	select {
 	case <-backend.cancelled:
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("lease loss left another reservation loop running until the handler exited")
+		t.Fatal("lease loss stopped another reservation loop")
+	case <-time.After(50 * time.Millisecond):
 	}
 	if worker.Active() != 1 {
 		t.Fatal("lease loss released a live handler")

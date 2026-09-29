@@ -3,14 +3,33 @@ package websocket
 import (
 	"context"
 
+	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/auth"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/observability"
 )
 
 func (c *connectionState) process(request Request) {
-	ctx, cancel := context.WithTimeout(c.ctx, c.hub.config.OperationTimeout)
+	base := c.ctx
+	if request.Action == Message {
+		// Messages reuse the connection's current authentication scope and each
+		// subscription's cached authorization within the freshness window.
+		scope, release, err := c.messageScope()
+		if err != nil {
+			c.hub.counters.failures.Add(1)
+			c.respond(Response{Type: ErrorResponse, ID: request.ID, Channel: request.Channel, Room: request.Room, Code: Unauthenticated})
+			c.revoke()
+			return
+		}
+		defer release()
+		if scope != nil {
+			base = scope.Context()
+		}
+	}
+	ctx, cancel := context.WithTimeout(base, c.hub.config.OperationTimeout)
 	defer cancel()
 	name := observability.Name("unknown")
 	if c.hub.registry.channels[request.Channel] != nil {
@@ -24,15 +43,14 @@ func (c *connectionState) process(request Request) {
 	defer func() { span.End(observability.Result{Outcome: outcome}) }()
 	ctx, finish := ownedContext(ctx, c.hub)
 	defer finish()
-	c.hub.mu.Lock()
-	if metric := c.hub.metrics[request.Channel]; metric != nil {
-		metric.Incoming++
+	metric := c.hub.metrics[request.Channel]
+	if metric != nil {
+		metric.incoming.Add(1)
 	}
-	c.hub.mu.Unlock()
 	var response Response
 	var code Code
 	failed := callback.Isolated("WebSocket operation", func() error {
-		if request.Action != Unsubscribe && observability.FromContext(ctx).Gate().Admit() != nil {
+		if request.Action != Unsubscribe && maintenance.FromContext(ctx).Admit() != nil {
 			code = Stopping
 			return nil
 		}
@@ -56,18 +74,14 @@ func (c *connectionState) process(request Request) {
 		outcome = observability.OutcomeFor(ctx.Err())
 	}
 	if code != "" {
-		c.hub.mu.Lock()
-		c.hub.failures++
-		if metric := c.hub.metrics[request.Channel]; metric != nil {
-			metric.Failures++
+		c.hub.counters.failures.Add(1)
+		if metric != nil {
+			metric.failures.Add(1)
 		}
-		c.hub.mu.Unlock()
 		response = Response{Type: ErrorResponse, Code: code}
 	}
-	if response.Type == Acknowledged {
-		c.hub.mu.Lock()
-		c.hub.metrics[request.Channel].Completed++
-		c.hub.mu.Unlock()
+	if response.Type == Acknowledged && metric != nil {
+		metric.completed.Add(1)
 	}
 	response.ID = request.ID
 	response.Channel = request.Channel
@@ -105,6 +119,7 @@ func operationCode(err error) Code {
 		{Unauthenticated, Unauthenticated}, {Forbidden, Forbidden},
 		{NotSubscribed, NotSubscribed}, {AlreadySubscribed, AlreadySubscribed},
 		{InvalidPayload, InvalidPayload}, {CapacityExceeded, CapacityExceeded},
+		{Unavailable, Unavailable}, {fault.Overloaded, Unavailable},
 		{OperationFailed, OperationFailed}, {OperationTimedOut, OperationTimedOut},
 		{Stopping, Stopping}, {auth.Unauthenticated, Unauthenticated},
 		{auth.MFARequired, Unauthenticated}, {auth.Forbidden, Forbidden},
@@ -146,33 +161,40 @@ func (c *connectionState) dispatch(ctx context.Context, request Request) (Respon
 		}
 		return Response{Type: Unsubscribed}, nil
 	}
-	var reply Response
-	err := c.withFreshScope(ctx, func(ctx context.Context) error {
-		var err error
-		reply, err = c.dispatchAuthorized(ctx, request, key, channel)
-		return err
-	})
-	return reply, err
-}
-func (c *connectionState) dispatchAuthorized(ctx context.Context, request Request, key subscriptionKey, channel *channelDefinition) (Response, error) {
-	access, err := channel.check(ctx, request.Room)
-	if err != nil {
-		return Response{}, err
-	}
-	ctx = access.context
 	if request.Action == Subscribe {
-		return c.subscribe(ctx, request, key, channel, access)
+		// Admission always authorizes with freshly resolved credentials.
+		var reply Response
+		err := c.withFreshScope(ctx, func(ctx context.Context) error {
+			access, err := channel.check(ctx, request.Room)
+			if err != nil {
+				return err
+			}
+			reply, err = c.subscribe(access.context, request, key, channel, access)
+			return err
+		})
+		return reply, err
 	}
 	c.hub.mu.Lock()
-	subscribed := c.subscriptions[key] != nil
+	subscription := c.subscriptions[key]
 	closing := c.hub.closing
+	var access accessResult
+	if subscription != nil {
+		access = subscription.access
+	}
 	c.hub.mu.Unlock()
 	if closing {
 		return Response{}, Stopping
 	}
-	if !subscribed {
+	if subscription == nil {
 		return Response{}, NotSubscribed
 	}
+	if channel.private {
+		var err error
+		if ctx, err = attribution.WithContext(ctx, access.origin); err != nil {
+			return Response{}, err
+		}
+	}
+	access.context = ctx
 	event := channel.events[request.Event]
 	if event == nil {
 		return Response{}, UnknownEvent
@@ -183,9 +205,7 @@ func (c *connectionState) dispatchAuthorized(ctx context.Context, request Reques
 	if err := event.invoke(ctx, c.hub, c.id, access, request.Payload, c.hub.config.Payload, func() bool {
 		accepted := c.respond(Response{Type: Accepted, ID: request.ID, Channel: request.Channel, Room: request.Room})
 		if accepted {
-			c.hub.mu.Lock()
-			c.hub.metrics[request.Channel].Accepted++
-			c.hub.mu.Unlock()
+			c.hub.metrics[request.Channel].accepted.Add(1)
 		}
 		return accepted
 	}); err != nil {

@@ -8,21 +8,27 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
 )
 
-// Group has nonblocking admission and no background goroutine or owned dependency.
-// Run retains its slot until the isolated callback actually exits, even when the
-// caller or Close cancels. Never copy a Group. Construct it with New.
+// Group has bounded, queued admission and no background goroutine or owned
+// dependency. A burst waits in FIFO order for at most admission.Wait(timeout)
+// (and the caller's deadline); an unsatisfied wait is fault.Overloaded. Nested
+// admission into the same group never waits, so an operation cannot deadlock
+// on capacity held by its own callers. Run retains its slot until the isolated
+// callback actually exits, even when the caller or Close cancels. Never copy a
+// Group. Construct it with New.
 type Group struct {
-	mu              sync.Mutex
-	active, maximum int
-	timeout         time.Duration
-	closing         bool
-	ctx             context.Context
-	cancel          context.CancelFunc
-	done            chan struct{}
+	mu      sync.Mutex
+	active  int
+	slots   *admission.Semaphore
+	timeout time.Duration
+	closing bool
+	ctx     context.Context
+	cancel  context.CancelFunc
+	done    chan struct{}
 }
 
 func New(maximum int, timeout time.Duration) (*Group, error) {
@@ -30,7 +36,7 @@ func New(maximum int, timeout time.Duration) (*Group, error) {
 		return nil, fault.New(fault.Invalid, "invalid operation scope")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Group{maximum: maximum, timeout: timeout, ctx: ctx, cancel: cancel, done: make(chan struct{})}, nil
+	return &Group{slots: admission.New(maximum), timeout: timeout, ctx: ctx, cancel: cancel, done: make(chan struct{})}, nil
 }
 
 type frameKey struct{}
@@ -66,9 +72,23 @@ func (g *Group) Begin(ctx context.Context) (*Lease, error) {
 		return nil, err
 	}
 	g.mu.Lock()
-	if g.closing || g.active >= g.maximum {
+	closing := g.closing
+	g.mu.Unlock()
+	if closing {
+		return nil, fault.New(fault.Closed, "operation scope is closed")
+	}
+	if g.nested(ctx) {
+		if !g.slots.TryAcquire() {
+			return nil, fault.New(fault.Overloaded, "service has no available operation capacity")
+		}
+	} else if err := g.slots.Acquire(ctx, admission.Wait(g.timeout), g.ctx.Done()); err != nil {
+		return nil, err
+	}
+	g.mu.Lock()
+	if g.closing {
 		g.mu.Unlock()
-		return nil, fault.New(fault.Conflict, "service has no available operation capacity")
+		g.slots.Release()
+		return nil, fault.New(fault.Closed, "operation scope is closed")
 	}
 	g.active++
 	g.mu.Unlock()
@@ -87,10 +107,21 @@ func (g *Group) Begin(ctx context.Context) (*Lease, error) {
 		g.mu.Lock()
 		defer g.mu.Unlock()
 		g.active--
+		g.slots.Release()
 		if g.closing && g.active == 0 {
 			close(g.done)
 		}
 	}}, nil
+}
+
+// nested reports whether ctx already holds an active admission of this group.
+func (g *Group) nested(ctx context.Context) bool {
+	for f, _ := ctx.Value(frameKey{}).(*frame); f != nil; f = f.parent {
+		if f.group == g && f.active.Load() {
+			return true
+		}
+	}
+	return false
 }
 
 func (g *Group) Run(ctx context.Context, name string, fn func(context.Context) error) error {

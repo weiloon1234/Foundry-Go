@@ -142,7 +142,9 @@ func TestDatabaseModuleConstructsIndependentPoolsDuringBuild(t *testing.T) {
 		}
 		previous = db
 	}
-	if state.connected.Load() != 2 || state.closed.Load() != 2 {
+	// Each application opens one pool connection at Start and one dedicated
+	// readiness probe connection for Ping; shutdown closes both.
+	if state.connected.Load() != 4 || state.closed.Load() != 4 {
 		t.Fatal("application pool ownership mismatch")
 	}
 }

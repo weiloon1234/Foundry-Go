@@ -4,6 +4,7 @@ import (
 	"context"
 	stdhttp "net/http"
 	"slices"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
@@ -61,6 +62,8 @@ type Route[P any] struct {
 	path           Path[P]
 	middlewares    []Middleware
 	authentication *AuthenticationInfo
+	budget         routeBudget
+	documentation  *RouteDocumentation
 	err            error
 }
 
@@ -73,11 +76,8 @@ func (r Route[P]) Method() Method  { return r.spec.Method }
 func (r Route[P]) Pattern() string { return r.path.Pattern() }
 
 func (r Route[P]) validate() ([]pathSegment, error) {
-	if r.err != nil {
-		return nil, r.err
-	}
-	if !identifier.Semantic(string(r.spec.ID)) || !r.spec.Method.valid() || (r.spec.Access != Public && r.spec.Access != Guarded) {
-		return nil, fault.New(fault.Invalid, "route requires a semantic ID, supported method and explicit access declaration")
+	if err := r.validateIdentity(); err != nil {
+		return nil, err
 	}
 	if err := validateMiddlewares(r.middlewares); err != nil {
 		return nil, err
@@ -85,12 +85,25 @@ func (r Route[P]) validate() ([]pathSegment, error) {
 	return r.path.validate()
 }
 
+func (r Route[P]) validateIdentity() error {
+	if r.err != nil {
+		return r.err
+	}
+	if !identifier.Semantic(string(r.spec.ID)) || !r.spec.Method.valid() || (r.spec.Access != Public && r.spec.Access != Guarded) {
+		return fault.New(fault.Invalid, "route requires a semantic ID, supported method and explicit access declaration")
+	}
+	return nil
+}
+
 // Validate checks the declaration without starting I/O or running a handler.
 func (r Route[P]) Validate() error { _, err := r.validate(); return err }
 
-// URL generates this route's relative URL from its concrete path type.
+// URL generates this route's relative URL from its concrete path type. It
+// validates the route identity and reuses the path grammar parsed once by
+// DefinePath; middleware declarations do not affect URLs and are validated at
+// registration.
 func (r Route[P]) URL(parameters P) (string, error) {
-	if err := r.Validate(); err != nil {
+	if err := r.validateIdentity(); err != nil {
 		return "", err
 	}
 	return r.path.URL(parameters)
@@ -145,6 +158,16 @@ type RouteInfo struct {
 	Assets         *AssetRouteInfo     `json:"assets,omitempty"`
 	SignedURL      *SignedURLInfo      `json:"signed_url,omitempty"`
 	Authentication *AuthenticationInfo `json:"authentication,omitempty"`
+	// Documentation is exported API documentation; see WithDocumentation.
+	Documentation *RouteDocumentation `json:"documentation,omitempty"`
+	// Timeout and MaxBodyBytes report a route's own replacement for the kernel
+	// RequestTimeout and MaxBodyBytes. Zero inherits the kernel configuration.
+	// They are server policy, not client contract metadata.
+	Timeout      time.Duration `json:"-"`
+	MaxBodyBytes int64         `json:"-"`
+	// Fallback marks the router's WithFallback handler for unmatched GET/HEAD
+	// requests. It is inspection metadata only, like Timeout.
+	Fallback bool `json:"-"`
 }
 
 func (i RouteInfo) clone() RouteInfo {
@@ -162,8 +185,10 @@ func (i RouteInfo) clone() RouteInfo {
 	}
 	if i.SignedURL != nil {
 		signed := *i.SignedURL
+		signed.IgnoredParameters = slices.Clone(signed.IgnoredParameters)
 		i.SignedURL = &signed
 	}
+	i.Documentation = i.Documentation.clone()
 	return i
 }
 
@@ -176,8 +201,11 @@ func MatchedRoute(ctx context.Context) (RouteInfo, bool) {
 	if ctx == nil {
 		return RouteInfo{}, false
 	}
-	info, ok := ctx.Value(matchedRouteKey{}).(RouteInfo)
-	return info.clone(), ok
+	state, ok := ctx.Value(matchedRouteKey{}).(*matchedRoute)
+	if !ok || state == nil {
+		return RouteInfo{}, false
+	}
+	return state.info.clone(), true
 }
 
 // RouteRegistration is the heterogeneous assembly boundary. Construct it from a
@@ -200,5 +228,5 @@ func (r Route[P]) info(segments []pathSegment, raw bool) RouteInfo {
 			parameters = append(parameters, segment.Name)
 		}
 	}
-	return RouteInfo{ID: r.spec.ID, Method: r.spec.Method, Path: r.path.pattern, Parameters: parameters, Access: r.spec.Access, Raw: raw, Middlewares: middlewareIDs(r.middlewares), Authentication: r.authentication}.clone()
+	return RouteInfo{ID: r.spec.ID, Method: r.spec.Method, Path: r.path.pattern, Parameters: parameters, Access: r.spec.Access, Raw: raw, Middlewares: middlewareIDs(r.middlewares), Authentication: r.authentication, Documentation: r.documentation, Timeout: r.budget.timeout, MaxBodyBytes: r.budget.bodyBytes}.clone()
 }

@@ -49,3 +49,24 @@ func TestFallbackIsStableAndEmptyTextIsPresent(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveTriesRegionalParentBeforeDefault(t *testing.T) {
+	locales, err := i18n.NewLocaleSet("ms", "ms", "en", "en-GB", "zh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := Values{locales: locales, values: map[i18n.LocaleID]string{"en": "Color", "ms": "Warna", "zh": "颜色"}}
+	for requested, want := range map[i18n.LocaleID]i18n.LocaleID{"en-GB": "en", "en": "en", "zh": "zh", "ms": "ms"} {
+		result, err := values.Resolve(requested)
+		got, ok := result.Get()
+		if err != nil || !ok || got.Locale != want {
+			t.Fatal(requested, got, err)
+		}
+	}
+	parentless := Values{locales: locales, values: map[i18n.LocaleID]string{"ms": "Warna", "zh": "颜色"}}
+	result, err := parentless.Resolve("en-GB")
+	got, ok := result.Get()
+	if err != nil || !ok || got.Locale != "ms" {
+		t.Fatal("default after missing parent", got, err)
+	}
+}

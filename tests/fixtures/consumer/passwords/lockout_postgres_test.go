@@ -3,11 +3,13 @@ package passwords_test
 import (
 	"context"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
 
 	"foundry.test/consumer/passwords"
+	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/auth/lockout"
 	lockmemory "github.com/weiloon1234/Foundry-Go/auth/lockout/memory"
 	"github.com/weiloon1234/Foundry-Go/auth/password"
@@ -85,22 +87,34 @@ func TestConsumerPasswordLockoutAndRequestRateComposition(t *testing.T) {
 				t.Fatalf("password failure %d: status %d", i, w.Code)
 			}
 		}
-		w := call("member@example.test", "correct input", "192.0.2.2:9000")
-		if w.Code != 429 || w.Header().Get("Retry-After") != "900" {
-			t.Fatal("account lock bypassed from another IP", w.Code, w.Header())
+		if w := call("member@example.test", "correct input", "192.0.2.1:9000"); w.Code != 429 || w.Header().Get("Retry-After") != "900" {
+			t.Fatal("locked client reached password verification", w.Code, w.Header())
+		}
+		// Client-aware lockout: failures from one source cannot lock the account
+		// for everyone. The account-wide and per-IP ceilings still apply.
+		if w := call("member@example.test", "correct input", "192.0.2.2:9000"); w.Code != 204 {
+			t.Fatal("one client locked the account for another", w.Code)
 		}
 		throttle, err := passwords.PasswordAttempts.Bind(store)
 		if err != nil {
 			return err
 		}
-		if _, err := passwords.ClearPasswordFailures(t.Context(), throttle, "member@example.test"); err != nil {
+		origin, err := (attribution.Origin{}).WithRequest(attribution.Request{IP: netip.MustParseAddr("192.0.2.1")})
+		if err != nil {
 			return err
 		}
-		if w := call("member@example.test", "correct input", "192.0.2.2:9000"); w.Code != 204 {
+		locked, err := attribution.WithContext(t.Context(), origin)
+		if err != nil {
+			return err
+		}
+		if _, err := passwords.ClearPasswordFailures(locked, throttle, "member@example.test"); err != nil {
+			return err
+		}
+		if w := call("member@example.test", "correct input", "192.0.2.1:9000"); w.Code != 204 {
 			t.Fatal("reset did not restore admission", w.Code)
 		}
 		// Every attempt still consumes the IP quota, including successful passwords.
-		for range 8 {
+		for range 9 {
 			if w := call("member@example.test", "correct input", "192.0.2.2:9000"); w.Code != 204 {
 				t.Fatal("unexpected quota exhaustion", w.Code)
 			}

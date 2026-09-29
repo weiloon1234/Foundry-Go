@@ -71,7 +71,13 @@ use fencing or transactions where they require stale-process exclusion.
 `lease.NewManager(backend, lease.DefaultConfig(namespace))` borrows a focused
 `lease.Backend`. Config bounds active acquisitions, waiters, guards and callback
 scopes together, plus declarations, key bytes, command timeouts and waiting.
-Contention polling uses bounded jitter. Each live guard has at most one renewal
+When `MaxActive` is exhausted a new operation queues in FIFO order for at most the
+operation timeout (capped at five seconds) and its own deadline, then returns
+retryable `fault.Overloaded` (HTTP 503); `Close` ends queued waits with
+`fault.Closed`. Backend failures keep their framework classification through the
+lease wrapper (for example `Overloaded` or `Timeout` rather than `Internal`).
+Contention polling uses bounded jitter; `Manager.PollInterval` exposes the
+configured interval to integrations. Each live guard has at most one renewal
 in flight; concurrent manual renewal fails instead of accumulating a queue.
 
 `lease.Module` resolves a backend and installs shutdown ownership. List the backend
@@ -82,8 +88,11 @@ and cleanup. A canceled caller only stops waiting. `Done` signals actual drainin
 calling Close synchronously from its own callback would wait on that callback.
 
 The explicit `lease/memory` adapter uses a bounded map and never evicts a live
-owner to admit another. It provides single-process behavior, with no background
-server or automatic fallback from Redis. Close managers before their adapter.
+owner to admit another. Operations check only their own key; a new key reclaims
+expired owners from an expiry heap in deadline order before checking capacity, so
+no operation scans the whole table. It provides single-process behavior, with no
+background server or automatic fallback from Redis. Close managers before their
+adapter.
 
 The existing `redis.Client` implements atomic acquire, compare-renew and
 compare-release with one bounded Lua command. It validates stored type, owner size
@@ -111,6 +120,39 @@ Full native verification passed on 1945 matching source inputs with local Postgr
 
 [Distributed cache Remember](distributed-cache.md) also passed full native acceptance.
 Rate limiting and pub/sub remain milestone 09 work.
+
+## Administration, hand-off and concurrency limits
+
+`locks.ForceRelease(ctx, id)` removes a lease whatever its owner and reports
+whether one existed. Use it to repair metadata that ordinary operations reject as
+corrupt (for example a Redis lease key without expiry, left by manual intervention)
+or to break ownership after confirming the owning process is gone. The current
+holder is not notified; it loses ownership at its next renewal or protected write.
+Backends opt in through `lease.ForceBackend`; memory and Redis implement it.
+
+`locks.Export(guard)` hands a live explicit guard to another process as a typed
+`lease.Token[K]`. The guard stops renewing and ends with `lease.ErrExported`
+**without** releasing the authority key. `MarshalText`/`UnmarshalText` transfer the
+token; it contains the owner secret, so formatting redacts it and it must be
+treated as a credential. Tokens are **single-use**: `locks.Restore(ctx, token)`
+atomically replaces the token's owner secret with a fresh one at the authority and
+renews the lease, then returns an explicit guard for the new owner. Restoring the
+same token again (an at-least-once job retry or a redelivered message) returns
+`lease.ErrLost` instead of creating a second holder, as does an expired, released
+or replaced lease. If the restore's reply is lost, the fresh owner is released
+once and the token stays consumed. A token cannot be restored into another
+family. Backends opt in through `lease.TransferBackend`; memory and Redis
+implement it.
+
+`lease.DefineSemaphore(name, codec, slots)` bounds concurrent holders of each
+typed resource key across every process sharing the authority. Each holder owns one
+ordinary lease (`name` plus a slot number), so expiry, renewal, loss and cleanup
+follow the lease contract. `Acquire` and `With` first try every slot once in
+random order; a zero wait stops there and contention returns `false`. A waiting
+call then polls with jitter, trying at most eight random slots per poll (so a busy
+semaphore costs a few authority commands per interval), until the wait expires
+(`context.DeadlineExceeded`). Blocking acquisition of a single
+lease remains `Acquire(ctx, id, ttl, wait)`.
 
 ## Conditional feature writes
 

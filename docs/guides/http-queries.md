@@ -117,8 +117,9 @@ up to three times its native byte length.
 Codecs and field selectors must be deterministic, safe for concurrent calls on
 independent inputs, and return owned values. Their internal work and allocations
 remain their responsibility. Cancellation is checked around bounded work and
-after a custom method returns. The framework waits for actual callback exit;
-panics and `runtime.Goexit` become internal failures. Inputs must remain unchanged
+after a custom method returns. Codecs run on the caller's goroutine: panics
+become internal failures, and `runtime.Goexit` ends that goroutine as any Go
+call does. Inputs must remain unchanged
 until encoding returns.
 
 [Typed endpoints](http-endpoints.md), [validation](validation.md),

@@ -8,6 +8,6 @@ import (
 
 // Use the stable writer API, with an explicit window. Experimental WriterV2 is
 // intentionally outside this adapter's contract.
-func newBrotliStream(dst io.Writer, quality, window int) compressionStream {
+func newBrotliStream(dst io.Writer, quality, window int) *brotli.Writer {
 	return brotli.NewWriterOptions(dst, brotli.WriterOptions{Quality: quality, LGWin: window})
 }

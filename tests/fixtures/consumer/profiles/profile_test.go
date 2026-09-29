@@ -171,7 +171,10 @@ func TestPublicModelExtensionConsumerAndGeneratedLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	if size, err := services.DefaultPageSize(t.Context()); err != nil || size != 40 {
-		t.Fatal("persisted setting", err)
+		t.Fatal("cached setting was not invalidated by its write", err)
+	}
+	if report, err := settings.Reconcile(t.Context(), services.Settings); err != nil || len(report.Incompatible)+len(report.Upgraded)+len(report.Presented) != 0 {
+		t.Fatal("startup settings reconciliation", report, err)
 	}
 	if result, err := countries.Seed(t.Context(), store); err != nil || result.Rows != countries.BuiltinCount {
 		t.Fatal("explicit country seed", err)

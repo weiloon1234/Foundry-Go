@@ -1,9 +1,11 @@
 package enum_test
 
 import (
+	"encoding/json"
+	"testing"
+
 	"github.com/weiloon1234/Foundry-Go/enum"
 	"github.com/weiloon1234/Foundry-Go/i18n"
-	"testing"
 )
 
 func TestEnumLabelsReuseExactCaseMetadata(t *testing.T) {
@@ -55,5 +57,56 @@ func TestEnumCasesCanShareOneCatalogLabel(t *testing.T) {
 	wire, err := d.Definition()
 	if err != nil || len(wire.Cases) != 2 || wire.Cases[0].LabelKey != wire.Cases[1].LabelKey {
 		t.Fatal(wire, err)
+	}
+}
+
+type counted int
+
+var countedMarshals int
+
+func (c counted) MarshalJSON() ([]byte, error) {
+	countedMarshals++
+	return json.Marshal(int(c))
+}
+
+type panicking int
+
+func (panicking) MarshalJSON() ([]byte, error) { panic("custom marshaler failed") }
+
+func TestRetainedDescriptorValidatesOnce(t *testing.T) {
+	countedMarshals = 0
+	d := enum.Describe("example.test/domain", "Counted", enum.Case[counted]{Name: "One", Value: 1, LabelKey: "enum.counted.one"}, enum.Case[counted]{Name: "Two", Value: 2})
+	for range 5 {
+		if key, err := d.LabelKey(1); err != nil || key != "enum.counted.one" {
+			t.Fatal(key, err)
+		}
+	}
+	shared := d
+	if err := shared.Validate(); err != nil || countedMarshals != 2 {
+		t.Fatal("descriptor copies must reuse one validation", countedMarshals, err)
+	}
+	if allocations := testing.AllocsPerRun(100, func() { _, _ = d.LabelKey(1) }); allocations != 0 {
+		t.Fatal("cached label lookup allocated", allocations)
+	}
+	if _, err := d.LabelKey(2); err == nil {
+		t.Fatal("unlabeled case got a label")
+	}
+}
+
+func TestPanickingValidationFailsClosed(t *testing.T) {
+	d := enum.Describe("example.test/domain", "Panicking", enum.Case[panicking]{Name: "One", Value: 1, LabelKey: "enum.one"})
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Fatal("custom marshaler panic was hidden")
+			}
+		}()
+		_ = d.Validate()
+	}()
+	if err := d.Validate(); err == nil {
+		t.Fatal("interrupted validation reported success")
+	}
+	if _, err := d.LabelKey(1); err == nil {
+		t.Fatal("interrupted validation allowed a label")
 	}
 }

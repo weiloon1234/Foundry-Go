@@ -139,7 +139,11 @@ func TestDispatchCapacityAndShutdownRetainActualCallbackOwnership(t *testing.T) 
 	case <-time.After(3 * time.Second):
 		t.Fatal("listener did not start")
 	}
-	if err := topic.Dispatch(t.Context(), bus, 2); !errors.Is(err, fault.Conflict) {
+	// A burst beyond MaxInFlight waits briefly, then fails as retryable overload.
+	short, stop := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	err := topic.Dispatch(short, bus, 2)
+	stop()
+	if !errors.Is(err, fault.Overloaded) {
 		t.Fatal("over-capacity dispatch was admitted", err)
 	}
 	wait, cancel := context.WithCancel(t.Context())
@@ -163,6 +167,44 @@ func TestDispatchCapacityAndShutdownRetainActualCallbackOwnership(t *testing.T) 
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("dispatch did not release")
+	}
+	if err := bus.Close(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDispatchBeyondCapacityQueuesUntilASlotFrees(t *testing.T) {
+	topic := events.Define[int]("test.queued", 1)
+	entered, unblock := make(chan struct{}, 2), make(chan struct{})
+	config := events.DefaultConfig()
+	config.MaxInFlight = 1
+	bus := startedBus(t, config, declaration(t, topic, events.Listen("queued", func(ctx context.Context, input int) error {
+		entered <- struct{}{}
+		if input == 1 {
+			<-unblock
+		}
+		return nil
+	})))
+	first := make(chan error, 1)
+	go func() { first <- topic.Dispatch(t.Context(), bus, 1) }()
+	<-entered
+	second := make(chan error, 1)
+	go func() { second <- topic.Dispatch(t.Context(), bus, 2) }()
+	select {
+	case <-entered:
+		t.Fatal("dispatch exceeded MaxInFlight")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(unblock)
+	for _, result := range []chan error{first, second} {
+		select {
+		case err := <-result:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("queued dispatch was not admitted")
+		}
 	}
 	if err := bus.Close(t.Context()); err != nil {
 		t.Fatal(err)

@@ -1,7 +1,8 @@
 {
   "version": 1,
   "files": {
-    "browser_guard_settings_foundry.gen.go": "32251cc2a4093b2c14fff927035cf6158b89b24d65009d43cc06428f06d2e861",
-    "settings_foundry.gen.go": "ecd8bcbb99f237b7261deab0a7328ce68fbaa5dd56e72f28230ac3e1ffbaddbb"
+    "browser_guard_settings_foundry.gen.go": "00d83c504ccde3bd8c0f7aa9f65231c07dfaecb632b65ca53a042c52cd027ca1",
+    "encryption_key_settings_foundry.gen.go": "c72070f0fdb60495ea17f14707f112b928dcf1b98d4d7848e18e4deedd63fc99",
+    "settings_foundry.gen.go": "93a1d2b8ad4395b5940d990942eb5c8b22eeae57d594301eff709bd598c52eb5"
   }
 }

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	cloudcredentials "github.com/weiloon1234/Foundry-Go/cloud/credentials"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/storage/s3"
@@ -248,6 +249,16 @@ func TestMultipartFailuresAbortWithIndependentContextAndPreserveOutcomes(t *test
 				source = io.MultiReader(source, failed)
 			}
 			result, err := disk.Put(ctx, objectKey(t), source, storage.PutOptions{})
+			if mode == "post-head" {
+				// A refused verification read (write-only credentials) leaves the
+				// acknowledged publication applied and unverified, not uncertain.
+				peer.mu.Lock()
+				defer peer.mu.Unlock()
+				if err != nil || result.Object.ETag != `"published"` || result.Object.Modified.IsZero() || peer.aborts != 0 || peer.published == 0 {
+					t.Fatal("acknowledged publication was reported as failed", err)
+				}
+				return
+			}
 			var failure *storage.Error
 			if err == nil || !result.Object.Key.IsZero() || !errors.As(err, &failure) {
 				t.Fatal("failed upload returned publication", result, err)
@@ -255,9 +266,6 @@ func TestMultipartFailuresAbortWithIndependentContextAndPreserveOutcomes(t *test
 			expected := storage.Unchanged
 			if mode == "complete" {
 				expected = storage.Unknown
-			}
-			if mode == "post-head" {
-				expected = storage.Applied
 			}
 			if failure.Outcome() != expected {
 				t.Fatal("mutation outcome", failure.Outcome(), expected, err)
@@ -273,11 +281,7 @@ func TestMultipartFailuresAbortWithIndependentContextAndPreserveOutcomes(t *test
 			}
 			peer.mu.Lock()
 			defer peer.mu.Unlock()
-			if mode == "post-head" {
-				if peer.aborts != 0 || peer.published == 0 {
-					t.Fatal("published object was aborted")
-				}
-			} else if peer.aborts == 0 {
+			if peer.aborts == 0 {
 				t.Fatal("multipart state was abandoned")
 			}
 			if mode == "complete" && peer.completes != 1 {
@@ -340,7 +344,9 @@ func TestSharedUploadAdmissionRemainsOwnedUntilBlockedSourceExits(t *testing.T) 
 	done := make(chan error, 1)
 	go func() { _, err := disk.Put(t.Context(), objectKey(t), input, storage.PutOptions{}); done <- err }()
 	<-input.entered
-	if _, err := other.PutBytes(t.Context(), objectKey(t), []byte("capacity"), storage.PutOptions{}); !errors.Is(err, storage.LimitExceeded) {
+	busy, cancelBusy := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer cancelBusy()
+	if _, err := other.PutBytes(busy, objectKey(t), []byte("capacity"), storage.PutOptions{}); !errors.Is(err, fault.Overloaded) {
 		t.Fatal("shared upload budget ignored", err)
 	}
 	stop, cancel := context.WithCancel(context.Background())

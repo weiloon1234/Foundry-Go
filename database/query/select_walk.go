@@ -233,6 +233,12 @@ func (w *selectWalk) expression(e expression, depth int) {
 	case binaryComparison:
 		w.value(e.left, depth+1)
 		w.value(e.right, depth+1)
+	case rowComparison:
+		for _, operand := range e.operands {
+			w.value(operand, depth+1)
+		}
+	case scopeNode:
+		// A context scope references only its own validated model table.
 	case subqueryPredicate:
 		if e.operand != nil {
 			w.value(e.operand, depth+1)

@@ -5,10 +5,13 @@ package tracing
 import (
 	"context"
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	mathrand "math/rand/v2"
+	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
@@ -86,11 +89,33 @@ func (c Context) Validate() error {
 	return nil
 }
 
+// generators caches ChaCha8 streams, each seeded from the operating system's
+// cryptographic source. ChaCha8 is cryptographically strong; pooling avoids a
+// serialized system call per span on platforms whose random source locks.
+var generators = sync.Pool{New: func() any {
+	var seed [32]byte
+	if _, err := rand.Read(seed[:]); err != nil {
+		return nil
+	}
+	return mathrand.NewChaCha8(seed)
+}}
+
+func fill(bytes []byte) error {
+	generator, _ := generators.Get().(*mathrand.ChaCha8)
+	if generator == nil {
+		_, err := rand.Read(bytes)
+		return err
+	}
+	_, err := generator.Read(bytes)
+	generators.Put(generator)
+	return err
+}
+
 func randomID(bytes []byte) error {
 	// An all-zero value is forbidden by the propagation format. Bound the
 	// astronomically unlikely retry instead of silently manufacturing an ID.
 	for range 4 {
-		if _, err := rand.Read(bytes); err != nil {
+		if err := fill(bytes); err != nil {
 			return fault.Wrap(fault.Internal, "cannot create trace identity", err)
 		}
 		for _, b := range bytes {
@@ -221,26 +246,60 @@ func WithContext(ctx context.Context, value Context) (context.Context, error) {
 
 // Start derives one child operation, or starts a new root when the context has
 // no trace. It preserves the caller's cancellation, deadlines and other values.
+// An already-cancelled context still receives trace identity: the operation's
+// cancellation remains the caller's concern and its observation is not dropped.
 func Start(ctx context.Context, sampled bool) (context.Context, Context, error) {
+	return start(ctx, func(TraceID) bool { return sampled })
+}
+
+// Sampler makes the local sampling decision for a new span from its trace ID.
+// Deciding from the trace ID lets every span of one trace agree.
+type Sampler func(TraceID) bool
+
+// StartSampled is Start with a trace-ID based local sampling policy, such as
+// RatioSampler. Incoming sampled flags never override the local decision.
+func StartSampled(ctx context.Context, sampler Sampler) (context.Context, Context, error) {
+	if sampler == nil {
+		return nil, Context{}, fault.New(fault.Invalid, "trace start requires a sampler")
+	}
+	return start(ctx, sampler)
+}
+
+func start(ctx context.Context, sample Sampler) (context.Context, Context, error) {
 	if ctx == nil {
 		return nil, Context{}, fault.New(fault.Invalid, "trace start requires a context")
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, Context{}, err
 	}
 	parent := FromContext(ctx)
 	var next Context
 	var err error
 	if parent.IsZero() {
-		next, err = New(sampled)
+		next, err = New(false)
 	} else {
-		next, err = parent.Child(sampled)
+		next, err = parent.Child(false)
 	}
 	if err != nil {
 		return nil, Context{}, err
 	}
+	next.sampled = sample(next.trace)
 	attached, err := WithContext(ctx, next)
 	return attached, next, err
+}
+
+// RatioSampler samples the given fraction of traces deterministically by the
+// random low 64 bits of the trace ID, so all processes using the same ratio
+// agree for one trace. Zero samples nothing and one samples every trace.
+func RatioSampler(ratio float64) (Sampler, error) {
+	if !(ratio >= 0 && ratio <= 1) {
+		return nil, fault.New(fault.Invalid, "trace sampling ratio must be between 0 and 1")
+	}
+	switch ratio {
+	case 0:
+		return func(TraceID) bool { return false }, nil
+	case 1:
+		return func(TraceID) bool { return true }, nil
+	}
+	threshold := uint64(ratio * (1 << 64))
+	return func(id TraceID) bool { return binary.BigEndian.Uint64(id[8:]) < threshold }, nil
 }
 
 type wireContext struct {

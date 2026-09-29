@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"container/list"
 	"context"
 	"crypto/sha256"
 	"slices"
@@ -23,30 +24,32 @@ func (b *Backend) GetTagged(ctx context.Context, key cache.TaggedKey) ([]byte, b
 	if err := b.validateTagged(ctx, key); err != nil {
 		return nil, false, err
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.mu.RLock()
 	if err := b.active(ctx); err != nil {
+		b.mu.RUnlock()
 		return nil, false, err
 	}
 	now := b.clock.Now()
 	state, err := b.checkTags(key, now)
 	if err != nil {
+		b.mu.RUnlock()
 		return nil, false, err
 	}
-	b.protectTags(state)
+	b.referenceTags(state)
 	element, found, err := b.inspectStored(key.DataKey(), state, now)
-	if err != nil {
+	if err != nil || !found {
+		b.mu.RUnlock()
+		if element != nil {
+			// Expired, obsolete or unusable storage is a miss that is reclaimed.
+			b.reclaim([]cache.EntryKey{key.DataKey()}, []*list.Element{element}, true)
+		}
 		return nil, false, err
 	}
-	if !found {
-		if element != nil {
-			b.remove(element)
-		}
-		return nil, false, nil
-	}
-	item := element.Value.(*entry)
-	b.order.MoveToFront(element)
-	return slices.Clone(item.data), true, nil
+	touch(element)
+	data := element.Value.(*entry).data
+	b.mu.RUnlock()
+	// Retained data is immutable, so the owned copy is made outside the lock.
+	return slices.Clone(data), true, nil
 }
 func (b *Backend) PutTagged(ctx context.Context, key cache.TaggedKey, data []byte, ttl cache.TTL) error {
 	_, err := b.writeTagged(ctx, key, data, ttl, false)
@@ -79,12 +82,10 @@ func (b *Backend) writeTagged(ctx context.Context, key cache.TaggedKey, data []b
 	if err := b.tagBudget(state, cost); err != nil {
 		return false, err
 	}
+	// An entry of another kind at this address is unusable and is replaced.
 	if previous := b.lookup(key.DataKey(), now); previous != nil {
 		item := previous.Value.(*entry)
-		if item.kind != taggedEntry {
-			return false, fault.New(fault.Invalid, "tagged cache entry is corrupt")
-		}
-		if onlyAbsent && item.fingerprint == key.Fingerprint() {
+		if onlyAbsent && item.kind == taggedEntry && item.fingerprint == key.Fingerprint() {
 			return false, nil
 		}
 	}
@@ -118,10 +119,7 @@ func (b *Backend) ForgetTagged(ctx context.Context, key cache.TaggedKey) (bool, 
 		return false, nil
 	}
 	item := element.Value.(*entry)
-	if item.kind != taggedEntry {
-		return false, fault.New(fault.Invalid, "tagged cache entry is corrupt")
-	}
-	found := item.fingerprint == key.Fingerprint()
+	found := item.kind == taggedEntry && item.fingerprint == key.Fingerprint()
 	b.remove(element)
 	return found, nil
 }

@@ -4,8 +4,9 @@ func (e *emitter) emitModelFields(m model) {
 	query := e.use(framework + "/database/query")
 	e.line("// %sFieldSet exposes fields owned by the unaliased model.", m.name)
 	e.line("type %sFieldSet = %sScopedFieldSet[%s]", m.name, m.name, m.name)
-	e.line("// %sFields returns independent immutable field descriptors.", m.name)
-	e.line("func %sFields()%sFieldSet{return %sFieldsAt(%s.DeclareModelScope[%s](%q))}", m.name, m.name, m.name, query, m.name, m.table)
+	e.line("var foundry%sFields %s.Memo[%sFieldSet]", m.name, query, m.name)
+	e.line("// %sFields returns immutable field descriptors, built once per process.", m.name)
+	e.line("func %sFields()%sFieldSet{return foundry%sFields.Get(func()%sFieldSet{return %sFieldsAt(%s.DeclareModelScope[%s](%q))})}", m.name, m.name, m.name, m.name, m.name, query, m.name, m.table)
 	e.emitScopedFields(m.name, m.fields, m.table, "ModelScope", "NullableModelScope")
 }
 

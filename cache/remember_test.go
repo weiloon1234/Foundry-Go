@@ -1,8 +1,10 @@
 package cache_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"reflect"
 	"runtime"
 	"strings"
@@ -80,20 +82,29 @@ func TestRememberCoalescesMissesAndOwnsEverySnapshot(t *testing.T) {
 
 func TestRememberBoundsAndCanceledFollowersReleaseTheirSlots(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		c := boundProfiles(t, func(c *cache.Config) { c.MaxFills = 1; c.MaxFillWaiters = 1 })
+		s, _, _ := store(t, func(c *cache.Config) { c.MaxFills = 1; c.MaxFillWaiters = 1 })
+		c, err := profiles.Bind(s)
+		if err != nil {
+			t.Fatal(err)
+		}
 		release := make(chan struct{})
 		owner := asyncRemember(c, t.Context(), "owner", func(context.Context) (profile, error) {
 			<-release
 			return profile{Name: "complete"}, nil
 		})
 		synctest.Wait()
-		if _, err := c.Remember(t.Context(), "other", cache.Forever(), noLoad); !errors.Is(err, fault.Conflict) {
-			t.Fatal("fill limit", err)
+		// A full fill registry loads directly instead of failing the caller.
+		direct, err := c.Remember(t.Context(), "other", cache.Forever(), func(context.Context) (profile, error) { return profile{Name: "direct"}, nil })
+		if err != nil || direct.Name != "direct" {
+			t.Fatal("fill limit", direct, err)
+		}
+		if stats := s.Stats(); stats.Uncoalesced != 1 || stats.Loads != 2 {
+			t.Fatal("uncoalesced load not counted", stats)
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		follower := asyncRemember(c, ctx, "owner", noLoad)
 		synctest.Wait()
-		if _, err := c.Remember(t.Context(), "owner", cache.Forever(), noLoad); !errors.Is(err, fault.Conflict) {
+		if _, err := c.Remember(t.Context(), "owner", cache.Forever(), noLoad); !errors.Is(err, fault.Overloaded) {
 			t.Fatal("waiter limit", err)
 		}
 		cancel()
@@ -109,8 +120,11 @@ func TestRememberBoundsAndCanceledFollowersReleaseTheirSlots(t *testing.T) {
 		if result := <-replacement; result.err != nil || result.value.Name != "complete" {
 			t.Fatal(result)
 		}
-		if _, err := c.Remember(t.Context(), "other", cache.Forever(), func(context.Context) (profile, error) { return profile{}, nil }); err != nil {
+		if _, err := c.Remember(t.Context(), "third", cache.Forever(), func(context.Context) (profile, error) { return profile{}, nil }); err != nil {
 			t.Fatal("slot leaked", err)
+		}
+		if stats := s.Stats(); stats.Uncoalesced != 1 {
+			t.Fatal("released slot was not reused", stats)
 		}
 	})
 }
@@ -173,35 +187,90 @@ func TestRememberFailureReachesFollowersAndPermitsFreshAttempt(t *testing.T) {
 	}
 }
 
-func TestRememberOwnerCancellationWaitsForLoaderExit(t *testing.T) {
+func TestRememberOwnerCancellationDoesNotFailFollowers(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		c := boundProfiles(t, nil)
 		ctx, cancel := context.WithCancel(t.Context())
 		release := make(chan struct{})
-		owner := asyncRemember(c, ctx, "key", func(ctx context.Context) (profile, error) { <-ctx.Done(); <-release; return profile{Name: "late"}, nil })
+		loaderCanceled := make(chan bool, 1)
+		type traced struct{}
+		owner := asyncRemember(c, context.WithValue(ctx, traced{}, "request"), "key", func(ctx context.Context) (profile, error) {
+			<-release
+			if ctx.Value(traced{}) != "request" {
+				return profile{}, errors.New("loader lost request values")
+			}
+			loaderCanceled <- ctx.Err() != nil
+			return profile{Name: "late"}, nil
+		})
 		synctest.Wait()
 		follower := asyncRemember(c, t.Context(), "key", noLoad)
 		synctest.Wait()
 		cancel()
-		synctest.Wait()
-		select {
-		case result := <-owner:
-			t.Fatal("abandoned loader", result)
-		default:
+		// The canceled owner stops waiting; its detached loader keeps running.
+		if got := <-owner; !errors.Is(got.err, context.Canceled) {
+			t.Fatal(got)
 		}
 		select {
 		case result := <-follower:
-			t.Fatal("published before loader exit", result)
+			t.Fatal("follower failed with its owner", result)
 		default:
 		}
 		close(release)
-		for _, result := range []<-chan rememberResult{owner, follower} {
-			if got := <-result; !errors.Is(got.err, context.Canceled) {
-				t.Fatal(got)
+		if <-loaderCanceled {
+			t.Fatal("loader inherited owner cancellation")
+		}
+		if got := <-follower; got.err != nil || got.value.Name != "late" {
+			t.Fatal(got)
+		}
+		if got, found, err := c.Get(t.Context(), "key"); err != nil || !found || got.Name != "late" {
+			t.Fatal("detached fill was not published", got, found, err)
+		}
+	})
+}
+
+func TestRememberFollowersReelectWhenLoaderUsesOwnerContext(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		c := boundProfiles(t, nil)
+		request, cancel := context.WithCancel(t.Context())
+		// This loader ignores its supplied context and waits on the request.
+		owner := asyncRemember(c, request, "key", func(context.Context) (profile, error) {
+			<-request.Done()
+			return profile{}, request.Err()
+		})
+		synctest.Wait()
+		follower := asyncRemember(c, t.Context(), "key", func(context.Context) (profile, error) { return profile{Name: "reelected"}, nil })
+		synctest.Wait()
+		cancel()
+		if got := <-owner; !errors.Is(got.err, context.Canceled) {
+			t.Fatal(got)
+		}
+		if got := <-follower; got.err != nil || got.value.Name != "reelected" {
+			t.Fatal("follower inherited the owner's cancellation", got)
+		}
+	})
+}
+
+func TestRememberLoadTimeoutIsIndependentOfOperationTimeout(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		c := boundProfiles(t, func(c *cache.Config) { c.Timeout = time.Second; c.LoadTimeout = 3 * time.Second })
+		slow := func(ctx context.Context) (profile, error) {
+			select {
+			case <-time.After(2 * time.Second):
+				return profile{Name: "slow"}, nil
+			case <-ctx.Done():
+				return profile{}, ctx.Err()
 			}
 		}
-		if _, found, err := c.Get(t.Context(), "key"); err != nil || found {
-			t.Fatal("canceled value cached", found, err)
+		if got, err := c.Remember(t.Context(), "slow", cache.Forever(), slow); err != nil || got.Name != "slow" {
+			t.Fatal("store timeout capped the loader", got, err)
+		}
+		if _, err := c.Remember(t.Context(), "narrow", cache.Forever(), slow, cache.WithLoadTimeout(time.Second)); !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatal("per-call load timeout ignored", err)
+		}
+		for _, invalid := range []time.Duration{0, -time.Second, cache.MaxLoadTimeout + 1} {
+			if _, err := c.Remember(t.Context(), "invalid", cache.Forever(), slow, cache.WithLoadTimeout(invalid)); !errors.Is(err, fault.Invalid) {
+				t.Fatal(invalid, err)
+			}
 		}
 	})
 }
@@ -265,6 +334,9 @@ func TestRememberRechecksStorageAndValidatesBeforeLoading(t *testing.T) {
 	if got, err := c.Remember(t.Context(), "key", cache.Forever(), noLoad); err != nil || got.Name != "already filled" || wrapper.reads != 2 {
 		t.Fatal(got, err, wrapper.reads)
 	}
+	if stats := s.Stats(); stats.Loads != 0 || stats.Writes != 0 {
+		t.Fatal("a successful recheck counted a loader or publication that never ran", stats)
+	}
 	if _, err := c.Remember(t.Context(), "key", cache.TTL{}, noLoad); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
@@ -316,7 +388,7 @@ type writeBackend struct {
 func (b writeBackend) Put(ctx context.Context, key cache.EntryKey, data []byte, ttl cache.TTL) error {
 	return b.write(ctx, key, data, ttl)
 }
-func TestRememberBackendWriteFailuresReleaseTheFlight(t *testing.T) {
+func TestRememberPublicationFailureReturnsLoadedValue(t *testing.T) {
 	cause := errors.New("private write detail")
 	for _, test := range []struct {
 		name   string
@@ -337,7 +409,8 @@ func TestRememberBackendWriteFailuresReleaseTheFlight(t *testing.T) {
 					}
 					return backend.Put(ctx, key, data, ttl)
 				}}
-				s, err := cache.NewStore(wrapped, cache.DefaultConfig(namespace))
+				var logs bytes.Buffer
+				s, err := cache.NewStore(wrapped, cache.DefaultConfig(namespace), cache.WithLogger(slog.New(slog.NewJSONHandler(&logs, nil))))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -346,18 +419,29 @@ func TestRememberBackendWriteFailuresReleaseTheFlight(t *testing.T) {
 					t.Fatal(err)
 				}
 				release := make(chan struct{})
-				owner := asyncRemember(c, t.Context(), "key", func(context.Context) (profile, error) { <-release; return profile{}, nil })
+				owner := asyncRemember(c, t.Context(), "key", func(context.Context) (profile, error) { <-release; return profile{Name: "loaded"}, nil })
 				synctest.Wait()
 				follower := asyncRemember(c, t.Context(), "key", noLoad)
 				synctest.Wait()
 				close(release)
+				// A cache write failure never fails callers that have a correct value.
 				for _, result := range []<-chan rememberResult{owner, follower} {
-					if got := <-result; !errors.Is(got.err, test.target) || strings.Contains(got.err.Error(), "private") {
+					if got := <-result; got.err != nil || got.value.Name != "loaded" {
 						t.Fatal(got)
 					}
 				}
 				if writes.Load() != 1 {
 					t.Fatal("implicitly retried write", writes.Load())
+				}
+				if stats := s.Stats(); stats.WriteFailures != 1 || stats.Writes != 0 {
+					t.Fatal("publication failure not recorded", stats)
+				}
+				record := logs.String()
+				if !strings.Contains(record, "cache fill publication failed") || !strings.Contains(record, `"cache":"profiles"`) || strings.Contains(record, "private") {
+					t.Fatal("unsafe or missing failure record", record)
+				}
+				if _, found, err := c.Get(t.Context(), "key"); err != nil || found {
+					t.Fatal("failed publication became visible", found, err)
 				}
 				if _, err := c.Remember(t.Context(), "key", cache.Forever(), func(context.Context) (profile, error) { return profile{}, nil }); err != nil {
 					t.Fatal("write flight leaked", err)

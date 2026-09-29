@@ -14,7 +14,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
-	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/tokenstore"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -148,6 +147,9 @@ func authenticate(t *testing.T, s *setup, raw secret.String) error {
 	return err
 }
 
+// Refresh keeps the current and previous generations; older refresh digests
+// move to the compact consumed set. The previous access token stays valid only
+// within AccessGrace, and reusing any consumed refresh token revokes the family.
 func TestPostgresTokenRotationRetainsHistoryAndReuseRevokesFamily(t *testing.T) {
 	s := prepare(t)
 	first := issue(t, s, 7, true)
@@ -162,11 +164,22 @@ func TestPostgresTokenRotationRetainsHistoryAndReuseRevokesFamily(t *testing.T) 
 	if rotated.Info().ID() != first.Info().ID() || rotated.Info().ExpiresAt() != first.Info().ExpiresAt() || rotated.Info().Generation() != 1 {
 		t.Fatal("rotation reset family")
 	}
+	if err := authenticate(t, s, first.AccessSecret()); err != nil {
+		t.Fatal("in-flight access token failed within the refresh grace", err)
+	}
+	s.clock.Advance(s.config.AccessGrace)
 	if err := authenticate(t, s, first.AccessSecret()); !errors.Is(err, auth.Unauthenticated) {
-		t.Fatal("old access survived", err)
+		t.Fatal("old access survived its grace", err)
 	}
 	if err := authenticate(t, s, rotated.AccessSecret()); err != nil {
 		t.Fatal(err)
+	}
+	latest, err := s.tokens.Refresh(t.Context(), refreshSecret(t, rotated))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := authenticate(t, s, first.AccessSecret()); !errors.Is(err, auth.Unauthenticated) {
+		t.Fatal("generation before the previous one authenticated", err)
 	}
 	within(t, s, func(tx *database.Tx) error {
 		rows, err := tokenstore.QueryFoundryTokenGenerations().All(t.Context(), tx)
@@ -174,7 +187,7 @@ func TestPostgresTokenRotationRetainsHistoryAndReuseRevokesFamily(t *testing.T) 
 			return err
 		}
 		if len(rows) != 3 {
-			t.Error("consumed generation not retained", len(rows))
+			t.Error("refresh did not retire old generations", len(rows))
 		}
 		for _, row := range rows {
 			if row.AccessHash == first.AccessSecret().Reveal() {
@@ -184,12 +197,20 @@ func TestPostgresTokenRotationRetainsHistoryAndReuseRevokesFamily(t *testing.T) 
 				t.Error("stored raw refresh secret")
 			}
 		}
-		return nil
+		var consumed []string
+		err = database.ForEach(t.Context(), tx, `SELECT refresh_hash FROM foundry_token_consumed_refreshes`, nil, func(row database.Row) (string, error) {
+			var hash string
+			return hash, row.Scan(&hash)
+		}, func(hash string) error { consumed = append(consumed, hash); return nil })
+		if len(consumed) != 1 || consumed[0] == refreshSecret(t, first).Reveal() {
+			t.Error("consumed refresh digest was not retained compactly", consumed)
+		}
+		return err
 	})
 	if rejected, err := s.tokens.Refresh(t.Context(), refreshSecret(t, first)); !errors.Is(err, auth.Unauthenticated) || !rejected.AccessSecret().IsZero() {
 		t.Fatal("consumed refresh reused", err)
 	}
-	if err := authenticate(t, s, rotated.AccessSecret()); !errors.Is(err, auth.Unauthenticated) {
+	if err := authenticate(t, s, latest.AccessSecret()); !errors.Is(err, auth.Unauthenticated) {
 		t.Fatal("replay revocation rolled back", err)
 	}
 	if err := authenticate(t, s, independent.AccessSecret()); err != nil {
@@ -199,6 +220,13 @@ func TestPostgresTokenRotationRetainsHistoryAndReuseRevokesFamily(t *testing.T) 
 		n, err := tokenstore.QueryFoundryTokenGenerations().Count(t.Context(), tx)
 		if n != 1 {
 			t.Error("family history orphaned", n)
+		}
+		var consumed int64
+		if err := database.ScanOne(t.Context(), tx, `SELECT count(*) FROM foundry_token_consumed_refreshes`, nil, &consumed); err != nil {
+			return err
+		}
+		if consumed != 0 {
+			t.Error("consumed digests orphaned", consumed)
 		}
 		return err
 	})
@@ -300,7 +328,7 @@ func TestConcurrentIssueCapacityAndSubjectRevocation(t *testing.T) {
 	for err := range results {
 		if err == nil {
 			successes++
-		} else if !errors.Is(err, fault.Conflict) {
+		} else if !errors.Is(err, auth.CredentialLimit) {
 			t.Fatal(err)
 		}
 	}

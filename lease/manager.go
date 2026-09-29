@@ -2,10 +2,12 @@ package lease
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -17,6 +19,7 @@ type Manager struct {
 	config       Config
 	ctx          context.Context
 	cancel       context.CancelFunc
+	slots        *admission.Semaphore
 	mu           sync.Mutex
 	declarations map[Name]*declarationID
 	active       int
@@ -33,8 +36,12 @@ func NewManager(backend Backend, config Config) (*Manager, error) {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Manager{backend: backend, config: config, ctx: ctx, cancel: cancel, done: make(chan struct{}), declarations: make(map[Name]*declarationID)}, nil
+	return &Manager{backend: backend, config: config, ctx: ctx, cancel: cancel, slots: admission.New(config.MaxActive), done: make(chan struct{}), declarations: make(map[Name]*declarationID)}, nil
 }
+
+// begin reserves one MaxActive slot. A full manager queues in FIFO order for
+// at most admission.Wait(OperationTimeout) and the caller's deadline, then
+// returns retryable fault.Overloaded; Close ends waits with fault.Closed.
 func (m *Manager) begin(ctx context.Context) error {
 	if m == nil || m.done == nil || ctx == nil {
 		return fault.New(fault.Invalid, "lease requires an initialized manager and context")
@@ -43,12 +50,22 @@ func (m *Manager) begin(ctx context.Context) error {
 		return err
 	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.closing {
+	closing := m.closing
+	m.mu.Unlock()
+	if closing {
 		return fault.New(fault.Closed, "lease manager is closed")
 	}
-	if m.active >= m.config.MaxActive {
-		return fault.New(fault.Conflict, "lease capacity reached")
+	if err := m.slots.Acquire(ctx, admission.Wait(m.config.OperationTimeout), m.ctx.Done()); err != nil {
+		if errors.Is(err, fault.Closed) {
+			return fault.Wrap(fault.Closed, "lease manager is closed", err)
+		}
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closing {
+		m.slots.Release()
+		return fault.New(fault.Closed, "lease manager is closed")
 	}
 	m.active++
 	return nil
@@ -57,6 +74,7 @@ func (m *Manager) end() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.active--
+	m.slots.Release()
 	if m.closing && m.active == 0 {
 		close(m.done)
 	}
@@ -128,6 +146,15 @@ func (m *Manager) Namespace() keyspace.Namespace {
 		return keyspace.Namespace{}
 	}
 	return m.config.Namespace
+}
+
+// PollInterval is the configured contention poll interval, shared by features
+// that wait on this manager's leases (for example coordinated cache fills).
+func (m *Manager) PollInterval() time.Duration {
+	if m == nil {
+		return 0
+	}
+	return m.config.PollInterval
 }
 
 // BorrowedBackend lets another framework feature use the SAME authority. It does

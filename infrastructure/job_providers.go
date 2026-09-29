@@ -5,6 +5,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/jobs"
+	"github.com/weiloon1234/Foundry-Go/jobs/inline"
 	"github.com/weiloon1234/Foundry-Go/jobs/memory"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/redis"
@@ -29,6 +30,13 @@ func (p *Plan) jobConnection(name jobs.ConnectionName, s JobConnectionSettings) 
 				return nil, err
 			}
 			return &ownedAdapter[jobs.Backend]{value: backend}, nil
+		}
+		if s.Driver == SyncJobs {
+			backend, err := inline.New(memory.Config{QueueConfig: s.Queue, Clock: p.options.clock})
+			if err != nil {
+				return nil, err
+			}
+			return &ownedAdapter[jobs.Backend]{value: backend, close: func(context.Context) error { return backend.Close() }}, nil
 		}
 		backend, err := memory.New(memory.Config{QueueConfig: s.Queue, Clock: p.options.clock})
 		if err != nil {

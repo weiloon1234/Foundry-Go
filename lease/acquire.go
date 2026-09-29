@@ -9,6 +9,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
+	"github.com/weiloon1234/Foundry-Go/internal/faultwrap"
+	"github.com/weiloon1234/Foundry-Go/internal/frameworkadapter"
 )
 
 // TryAcquire attempts once. Contention returns (nil,false,nil). A returned guard
@@ -24,10 +26,16 @@ func (l Leases[K]) Acquire(ctx context.Context, key K, ttl, wait time.Duration) 
 	if err := l.begin(ctx, ttl, wait); err != nil {
 		return nil, false, err
 	}
+	// The guard owns the admission slot once handed off. Deferred release keeps
+	// the slot from leaking even if an adapter exits the goroutine.
+	handedOff := false
+	defer func() {
+		if !handedOff {
+			l.manager.end()
+		}
+	}()
 	g, ok, err := l.acquire(ctx, key, ttl, wait, false, l.manager.end)
-	if !ok {
-		l.manager.end()
-	}
+	handedOff = ok
 	return g, ok, err
 }
 
@@ -95,21 +103,7 @@ func (l Leases[K]) acquire(ctx context.Context, key K, ttl, wait time.Duration, 
 	}
 	attempt, cancel := context.WithTimeout(parent, budget)
 	defer cancel()
-	var address Key
-	err := callback.Isolated("lease key codec", func() error {
-		if err := attempt.Err(); err != nil {
-			return err
-		}
-		logical, err := l.definition.codec.Encode(key)
-		if err != nil {
-			return err
-		}
-		if len(logical) > l.manager.config.MaxKeyBytes {
-			return fault.New(fault.Invalid, "lease key exceeds its limit")
-		}
-		address, err = NewKey(l.manager.config.Namespace, l.definition.name, logical)
-		return err
-	})
+	address, err := l.address(attempt, key)
 	if err != nil {
 		return nil, false, err
 	}
@@ -155,6 +149,26 @@ func (l Leases[K]) acquire(ctx context.Context, key K, ttl, wait time.Duration, 
 		}
 	}
 }
+
+// address runs the application key codec under isolation and bounds its result.
+func (l Leases[K]) address(ctx context.Context, key K) (Key, error) {
+	var address Key
+	err := callback.Isolated("lease key codec", func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		logical, err := l.definition.codec.Encode(key)
+		if err != nil {
+			return err
+		}
+		if len(logical) > l.manager.config.MaxKeyBytes {
+			return fault.New(fault.Invalid, "lease key exceeds its limit")
+		}
+		address, err = NewKey(l.manager.config.Namespace, l.definition.name, logical)
+		return err
+	})
+	return address, err
+}
 func (m *Manager) command(ctx context.Context, fn func(context.Context) (bool, error)) (bool, error) {
 	command, cancel := context.WithTimeout(ctx, m.config.OperationTimeout)
 	defer cancel()
@@ -162,12 +176,14 @@ func (m *Manager) command(ctx context.Context, fn func(context.Context) (bool, e
 		return false, err
 	}
 	var ok bool
-	err := callback.Isolated("lease backend", func() error { var err error; ok, err = fn(command); return err })
+	// Framework adapters run in place; application adapters stay isolated.
+	err := frameworkadapter.Call(m.backend, "lease backend", func() error { var err error; ok, err = fn(command); return err })
 	if err == nil {
 		err = command.Err()
 	}
 	if err != nil {
-		return false, fault.Wrap(fault.Internal, "lease operation failed", err)
+		// Keep Overloaded/Timeout/Closed/Invalid classification of the cause.
+		return false, faultwrap.Wrap("lease operation failed", err)
 	}
 	return ok, nil
 }

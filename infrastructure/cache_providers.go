@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	cachefile "github.com/weiloon1234/Foundry-Go/cache/file"
 	"github.com/weiloon1234/Foundry-Go/cache/memory"
+	cachenull "github.com/weiloon1234/Foundry-Go/cache/null"
 	cachepg "github.com/weiloon1234/Foundry-Go/cache/postgres"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
@@ -27,6 +28,8 @@ func (p *Plan) cache(name cache.StoreName, settings CacheSettings) {
 	p.providers = append(p.providers, adapterModule(owner, key, dependencies, func(r foundation.Resolver) (*ownedAdapter[cache.Backend], error) {
 		result := &ownedAdapter[cache.Backend]{}
 		switch settings.Driver {
+		case NullCache:
+			result.value = cachenull.New()
 		case MemoryCache:
 			backend, err := memory.New(settings.Memory, p.options.clock)
 			if err != nil {
@@ -35,7 +38,7 @@ func (p *Plan) cache(name cache.StoreName, settings CacheSettings) {
 			result.value = backend
 			result.close = backend.Close
 		case FileCache:
-			backend, err := cachefile.Prepare(settings.fileConfig(p.options.clock))
+			backend, err := cachefile.Prepare(settings.fileConfig(p.options.clock, p.options.logger))
 			if err != nil {
 				return nil, err
 			}
@@ -51,11 +54,19 @@ func (p *Plan) cache(name cache.StoreName, settings CacheSettings) {
 			if err != nil {
 				return nil, err
 			}
-			backend, err := cachepg.New(db, settings.postgresConfig(p.options.clock))
+			backend, err := cachepg.New(db, settings.postgresConfig(p.options.clock, p.options.logger))
 			if err != nil {
 				return nil, err
 			}
+			// Start only launches the owned pruner; Close drains it before the
+			// database provider shuts down.
 			result.value = backend
+			result.start = backend.Start
+			result.close = func(ctx context.Context) error {
+				err := backend.Close(ctx)
+				<-backend.Done()
+				return errors.Join(err, backend.Close(context.Background()))
+			}
 		case RedisCache:
 			client, err := foundation.Resolve(r, RedisKey(settings.Redis))
 			if err != nil {
@@ -74,7 +85,18 @@ func (p *Plan) cache(name cache.StoreName, settings CacheSettings) {
 			return foundation.Resolve(r, RedisKey(settings.Redis))
 		}))
 	}
-	p.providers = append(p.providers, foundation.Module{Name: CacheProvider(name), Requires: requires, OnRegister: func(r *foundation.Registrar) error {
+	p.providers = append(p.providers, foundation.Module{Name: CacheProvider(name), Requires: requires, OnBoot: func(ctx context.Context, r *foundation.Runtime) error {
+		// The store drains its running fills (detached Remember loaders and
+		// Flexible refreshes) before the backend and lease providers close.
+		store, err := foundation.Resolve(r.Services(), CacheKey(name))
+		if err != nil {
+			return err
+		}
+		if err := r.OnShutdown("store", store.Close); err != nil {
+			return errors.Join(err, store.Close(ctx))
+		}
+		return nil
+	}, OnRegister: func(r *foundation.Registrar) error {
 		return foundation.Factory(r, CacheKey(name), func(r foundation.Resolver) (*cache.Store, error) {
 			var store *cache.Store
 			var err error
@@ -83,13 +105,13 @@ func (p *Plan) cache(name cache.StoreName, settings CacheSettings) {
 				if e != nil {
 					return nil, e
 				}
-				store, err = cache.NewCoordinatedStore(m, settings.Config, settings.Coordination)
+				store, err = cache.NewCoordinatedStore(m, settings.Config, settings.Coordination, cache.WithLogger(p.options.logger))
 			} else {
 				b, e := foundation.Resolve(r, key)
 				if e != nil {
 					return nil, e
 				}
-				store, err = cache.NewStore(b.value, settings.Config)
+				store, err = cache.NewStore(b.value, settings.Config, cache.WithLogger(p.options.logger))
 			}
 			if err != nil {
 				return nil, err

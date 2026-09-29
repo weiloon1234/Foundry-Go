@@ -61,6 +61,8 @@ func (r *runtimeState) startObservability() error {
 		err := r.observability.Run(context.Background())
 		finished <- err
 		if err != nil {
+			// The cleanup below reports this failure once; cancellation only
+			// begins shutdown.
 			r.cancel(err)
 		}
 	}()
@@ -77,7 +79,7 @@ func (a *App) stopPreparedObservability(recorder *observability.Recorder, timeou
 	<-recorder.Done()
 	cancel()
 	a.mu.Lock()
-	a.shutdownErr = err
+	a.cleanupErr, a.shutdownErr = err, err
 	a.state = Stopped
 	close(a.done)
 	a.mu.Unlock()

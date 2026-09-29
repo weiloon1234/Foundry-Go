@@ -3,7 +3,6 @@ package query
 import (
 	"context"
 	"errors"
-	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
@@ -40,7 +39,7 @@ func Related[M, N, V any](source AggregateSource[M, N], computation AggregateExp
 			if err := input.validate(depth, limits); err != nil {
 				return err
 			}
-			_, err := compileRelationAggregate(input, aggregate.node, nil, 1)
+			_, err := compileRelationAggregate(nil, input, aggregate.node, nil, 1)
 			return err
 		},
 		fetch: func(ctx context.Context, executor database.Executor, parents []M, state *relationLoadState) ([]V, error) {
@@ -92,7 +91,7 @@ func (r AggregateRelation[M, V]) loadRelation(ctx context.Context, executor data
 	if err := state.attach(len(results)); err != nil {
 		return nil, err
 	}
-	result := slices.Clone(parents)
+	result := parents // owned by loadRelations, which copied the caller slice once
 	for i, v := range results {
 		if err := ctx.Err(); err != nil {
 			return nil, err

@@ -52,7 +52,7 @@ func (d Description) Normalize() (Description, error) {
 			if info.Field == "" || len(info.Children) != 1 || info.Kind == CompareKind && info.OtherField == "" {
 				return bad()
 			}
-		case OptionalKind, NullableKind, EachKind, PointerKind:
+		case OptionalKind, NullableKind, EachKind, PointerKind, EachKeyKind, EachValueKind:
 			if len(info.Children) != 1 {
 				return bad()
 			}

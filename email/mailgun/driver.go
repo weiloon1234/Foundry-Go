@@ -53,6 +53,10 @@ func (d *Driver) Close() {
 	}
 }
 func (Driver) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("Mailgun driver")) }
+
+// StructuredSubmission reports that this provider API sends native fields, so
+// the mailer skips MIME rendering.
+func (*Driver) StructuredSubmission() bool { return true }
 func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, error) {
 	if d == nil || d.client == nil || out.Validate() != nil {
 		return email.Receipt{}, email.Construction

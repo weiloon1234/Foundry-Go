@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -18,27 +19,46 @@ import (
 const archiveTimeFormat = "20060102T150405.000000000Z"
 const maxLogDirectoryEntries = 10000
 
-// rotatingFile is serialized by its owning sink. The stable lock is held across
-// renames and released only after the active descriptor closes. Never unlink it.
+// pruneInterval separates ordinary write-triggered retention cleanups.
+const pruneInterval = time.Hour
+
+// rotatingFile writes are serialized by its owning sink. Retention cleanup runs
+// in one owned worker, off the record write path; os.Root is safe for that
+// concurrent directory access. The stable lock is held across renames and
+// released only after the active descriptor closes and the worker exits.
+// Never unlink the lock.
 type rotatingFile struct {
-	root      *os.Root
-	lock      *os.File
-	file      *os.File
-	name      string
-	policy    RotationConfig
-	size      int64
-	day       int
-	zone      *time.Location
-	lastPrune time.Time
+	root   *os.Root
+	lock   *os.File
+	file   *os.File
+	name   string
+	policy RotationConfig
+	size   int64
+	day    int
+	zone   *time.Location
+	events *sinkEvents
+	// Rotation retry state is owned by the serialized writer.
+	rotateAfter    time.Time
+	rotateFailures int
+	// nextPrune and retryAfter (Unix nanoseconds) are shared with the cleanup
+	// worker. Writes request cleanup at or after nextPrune; rollover requests it
+	// immediately unless a failed cleanup is still inside its retry backoff.
+	nextPrune     atomic.Int64
+	retryAfter    atomic.Int64
+	pruneFailures int
+	cleanup       chan time.Time
+	barrier       chan chan struct{}
+	stop          chan struct{}
+	stopped       chan struct{}
 }
 
-func openRotatingFile(path string, policy RotationConfig, now time.Time, zone *time.Location) (_ *rotatingFile, result error) {
+func openRotatingFile(path string, policy RotationConfig, now time.Time, zone *time.Location, events *sinkEvents) (_ *rotatingFile, result error) {
 	root, err := os.OpenRoot(filepath.Dir(path))
 	if err != nil {
 		return nil, fault.Wrap(fault.Invalid, "cannot open log directory", err)
 	}
 	ownedZone := *zone
-	f := &rotatingFile{root: root, name: filepath.Base(path), policy: policy.resolved(), zone: &ownedZone}
+	f := &rotatingFile{root: root, name: filepath.Base(path), policy: policy.resolved(), zone: &ownedZone, events: events}
 	defer func() {
 		if result != nil {
 			result = errors.Join(result, f.Close())
@@ -68,9 +88,12 @@ func openRotatingFile(path string, policy RotationConfig, now time.Time, zone *t
 		return nil, fault.Wrap(fault.Invalid, "cannot inspect active log", err)
 	}
 	f.size, f.day = info.Size(), calendarDay(info.ModTime(), f.zone)
-	if err := f.prune(now); err != nil {
-		return nil, err
-	}
+	// Startup cleanup is synchronous but never prevents logging; a failure is
+	// counted and retried with backoff by the worker.
+	f.pruneCompleted(now, f.prune(now))
+	f.cleanup, f.barrier = make(chan time.Time, 1), make(chan chan struct{})
+	f.stop, f.stopped = make(chan struct{}), make(chan struct{})
+	go f.cleanupLoop()
 	return f, nil
 }
 
@@ -105,6 +128,9 @@ func calendarDay(now time.Time, zone *time.Location) int {
 
 func (f *rotatingFile) Write(data []byte) (int, error) { return f.writeAt(data, time.Now()) }
 
+// writeAt never drops a record because of rotation or retention. A failed
+// rollover keeps appending to the current descriptor and retries after a
+// bounded backoff; only an absent active file that cannot be reopened fails.
 func (f *rotatingFile) writeAt(data []byte, now time.Time) (int, error) {
 	if len(data) == 0 {
 		return 0, nil
@@ -119,15 +145,22 @@ func (f *rotatingFile) writeAt(data []byte, now time.Time) (int, error) {
 			return 0, err
 		}
 	}
-	if f.size > 0 && (int64(len(data)) > f.policy.MaxBytes-f.size || calendarDay(now, f.zone) > f.day) {
+	if f.size > 0 && (int64(len(data)) > f.policy.MaxBytes-f.size || calendarDay(now, f.zone) > f.day) && !now.Before(f.rotateAfter) {
 		if err := f.rotate(now); err != nil {
-			return 0, err
+			f.rotateFailures++
+			f.rotateAfter = now.Add(retryDelay(f.rotateFailures))
+			f.events.rotationFailed(err)
+			if f.file == nil {
+				if err := f.openActive(now); err != nil {
+					return 0, err
+				}
+			}
+		} else {
+			f.rotateFailures, f.rotateAfter = 0, time.Time{}
 		}
 	}
-	if f.lastPrune.IsZero() || now.Sub(f.lastPrune) >= time.Hour {
-		if err := f.prune(now); err != nil {
-			return 0, err
-		}
+	if now.UnixNano() >= f.nextPrune.Load() {
+		f.requestCleanup(now)
 	}
 	if f.size == 0 {
 		f.day = calendarDay(now, f.zone)
@@ -135,6 +168,63 @@ func (f *rotatingFile) writeAt(data []byte, now time.Time) (int, error) {
 	n, err := f.file.Write(data)
 	f.size += int64(n)
 	return n, err
+}
+
+// requestCleanup signals the worker without blocking a record write. A pending
+// request already covers this one.
+func (f *rotatingFile) requestCleanup(now time.Time) {
+	f.nextPrune.Store(now.Add(pruneInterval).UnixNano())
+	select {
+	case f.cleanup <- now:
+	default:
+	}
+}
+
+func (f *rotatingFile) cleanupLoop() {
+	defer close(f.stopped)
+	for {
+		select {
+		case <-f.stop:
+			return
+		case done := <-f.barrier:
+			// Complete a request queued before the barrier; select alone
+			// does not order simultaneously ready cases.
+			select {
+			case now := <-f.cleanup:
+				f.pruneCompleted(now, f.prune(now))
+			default:
+			}
+			close(done)
+		case now := <-f.cleanup:
+			f.pruneCompleted(now, f.prune(now))
+		}
+	}
+}
+
+// pruneCompleted runs on the worker (or before it starts). A failure is counted
+// and rescheduled with backoff instead of failing a record write.
+func (f *rotatingFile) pruneCompleted(now time.Time, err error) {
+	if err == nil {
+		f.pruneFailures = 0
+		f.retryAfter.Store(0)
+		f.nextPrune.Store(now.Add(pruneInterval).UnixNano())
+		return
+	}
+	f.pruneFailures++
+	retry := now.Add(retryDelay(f.pruneFailures)).UnixNano()
+	f.retryAfter.Store(retry)
+	f.nextPrune.Store(retry)
+	f.events.pruneFailed(err)
+}
+
+// awaitCleanup waits until every cleanup requested before the call completed.
+func (f *rotatingFile) awaitCleanup() {
+	done := make(chan struct{})
+	select {
+	case f.barrier <- done:
+		<-done
+	case <-f.stopped:
+	}
 }
 
 func (f *rotatingFile) openActive(now time.Time) error {
@@ -171,11 +261,13 @@ func (f *rotatingFile) rotate(now time.Time) error {
 	}
 	closeErr := f.file.Close()
 	f.file = nil
-	f.lastPrune = time.Time{}
 	if err := errors.Join(closeErr, f.openActive(now)); err != nil {
 		return fault.Wrap(fault.Internal, "cannot replace active log", err)
 	}
-	return f.prune(now)
+	if now.UnixNano() >= f.retryAfter.Load() {
+		f.requestCleanup(now)
+	}
+	return nil
 }
 
 type logArchive struct {
@@ -213,7 +305,6 @@ func (f *rotatingFile) prune(now time.Time) error {
 			return fault.Wrap(fault.Internal, "cannot remove expired log archive", err)
 		}
 	}
-	f.lastPrune = now
 	return nil
 }
 
@@ -242,6 +333,11 @@ func (f *rotatingFile) readArchives(dir *os.File) ([]logArchive, error) {
 }
 
 func (f *rotatingFile) Close() error {
+	if f.stop != nil {
+		close(f.stop)
+		<-f.stopped
+		f.stop = nil
+	}
 	var result error
 	if f.file != nil {
 		result = f.file.Close()

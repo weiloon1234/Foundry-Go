@@ -17,7 +17,7 @@ func (c Collection[M, K]) Matching(ctx context.Context, m *Manager) (query.Predi
 		return query.Predicate[M]{}, err
 	}
 	var keys []K
-	err := m.calls.Run(ctx, "attachment owner scope", func(ctx context.Context) error {
+	err := m.reads.Run(ctx, "attachment owner scope", func(ctx context.Context) error {
 		return m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 			locale, err := c.localeName(ctx, m)
 			if err != nil {

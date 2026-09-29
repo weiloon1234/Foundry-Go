@@ -2,6 +2,8 @@ package redis
 
 import (
 	"errors"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -86,7 +88,7 @@ func TestRedisExpiryChangesAndCounterRetention(t *testing.T) {
 		})
 	}
 }
-func TestRedisBatchLaterPlainCorruptionDoesNotDeleteEarlierKeys(t *testing.T) {
+func TestRedisBatchRemovesUnusablePlainEntriesWithoutCountingThem(t *testing.T) {
 	c, key := integrationClient(t, nil)
 	keys := []cache.EntryKey{key("one"), key("two")}
 	if keys[0].String() > keys[1].String() {
@@ -98,16 +100,74 @@ func TestRedisBatchLaterPlainCorruptionDoesNotDeleteEarlierKeys(t *testing.T) {
 	if err := c.raw.LPush(t.Context(), keys[1].String(), "wrong type").Err(); err != nil {
 		t.Fatal(err)
 	}
-	if count, err := c.ForgetMany(t.Context(), keys); count != 0 || !errors.Is(err, fault.Invalid) {
+	if count, err := c.ForgetMany(t.Context(), keys); count != 1 || err != nil {
 		t.Fatal(count, err)
 	}
-	if data, hit, err := c.Get(t.Context(), keys[0]); err != nil || !hit || string(data) != "live" {
-		t.Fatal("earlier key deleted", string(data), hit, err)
+	if exists := c.raw.Exists(t.Context(), keys[0].String(), keys[1].String()).Val(); exists != 0 {
+		t.Fatal("batch left entries", exists)
 	}
-	if _, err := c.Exists(t.Context(), keys[1]); !errors.Is(err, fault.Invalid) {
+	if err := c.raw.LPush(t.Context(), keys[1].String(), "wrong type").Err(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Expire(t.Context(), keys[1], cache.Forever()); !errors.Is(err, fault.Invalid) {
+	if found, err := c.Exists(t.Context(), keys[1]); err != nil || found {
+		t.Fatal(found, err)
+	}
+	if changed, err := c.Expire(t.Context(), keys[1], cache.Forever()); err != nil || changed {
+		t.Fatal(changed, err)
+	}
+	if err := c.Put(t.Context(), keys[1], []byte("replacement"), cache.Forever()); err != nil {
+		t.Fatal("wrong-type entry could not be replaced", err)
+	}
+	if data, hit, err := c.Get(t.Context(), keys[1]); err != nil || !hit || string(data) != "replacement" {
+		t.Fatal(string(data), hit, err)
+	}
+}
+func TestRedisBatchReadsPlainAndTaggedEntries(t *testing.T) {
+	c, key, track := integrationTracked(t, nil)
+	keys := []cache.EntryKey{key("read-a"), key("read-b"), key("read-c")}
+	slices.SortFunc(keys, func(a, b cache.EntryKey) int { return strings.Compare(a.String(), b.String()) })
+	if err := c.Put(t.Context(), keys[0], []byte("zero"), cache.Forever()); err != nil {
 		t.Fatal(err)
+	}
+	if err := c.raw.LPush(t.Context(), keys[2].String(), "wrong type").Err(); err != nil {
+		t.Fatal(err)
+	}
+	values, err := c.GetMany(t.Context(), keys)
+	if err != nil || len(values) != 3 || !values[0].Found || string(values[0].Data) != "zero" || values[1].Found || values[2].Found {
+		t.Fatal(values, err)
+	}
+	if _, err := c.GetMany(t.Context(), []cache.EntryKey{keys[1], keys[0]}); !errors.Is(err, fault.Invalid) {
+		t.Fatal("non-canonical batch accepted", err)
+	}
+
+	fixture := cachetest.TaggedFixture{Backend: c, Track: track}
+	first := fixture.Snapshot(t, key("tagged-a"), key("batch-tag"))
+	second, err := cache.NewTaggedKey(key("tagged-b"), first.Stamps())
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch := []cache.TaggedKey{first, second}
+	slices.SortFunc(batch, func(a, b cache.TaggedKey) int { return strings.Compare(a.DataKey().String(), b.DataKey().String()) })
+	for _, k := range batch {
+		track(k.DataKey())
+	}
+	if err := c.PutTagged(t.Context(), first, []byte("tagged"), cache.Forever()); err != nil {
+		t.Fatal(err)
+	}
+	read, err := c.GetManyTagged(t.Context(), batch)
+	if err != nil || len(read) != 2 {
+		t.Fatal(read, err)
+	}
+	for i, k := range batch {
+		want := k.DataKey().String() == first.DataKey().String()
+		if read[i].Found != want || want && string(read[i].Data) != "tagged" {
+			t.Fatal("tagged batch result mismatch", i, read[i])
+		}
+	}
+	if err := c.InvalidateTags(t.Context(), []cache.EntryKey{key("batch-tag")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.GetManyTagged(t.Context(), batch); !errors.Is(err, fault.Conflict) {
+		t.Fatal("stale snapshot batch read did not conflict", err)
 	}
 }

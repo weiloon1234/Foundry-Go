@@ -27,6 +27,8 @@ func (p *packageInput) declarationFiles() ([]*ast.File, error) {
 	declarationMethods := make(map[string][]int)
 	modelFieldMethods := make(map[string][]int)
 	p.defined = make(map[string]bool)
+	p.definedAt = make(map[string]token.Pos)
+	p.methods = make(map[string]map[string]token.Pos)
 	add := func(unit declarationUnit) {
 		for _, name := range unit.names {
 			index[name] = len(units)
@@ -36,15 +38,17 @@ func (p *packageInput) declarationFiles() ([]*ast.File, error) {
 	}
 	for fileIndex, file := range p.files {
 		for _, decl := range file.syntax.Decls {
+			p.recordHandwritten(decl)
 			switch decl := decl.(type) {
 			case *ast.FuncDecl:
 				if decl.Recv == nil {
 					copy := *decl
 					copy.Body = nil
 					add(declarationUnit{file: fileIndex, decl: &copy, names: []string{decl.Name.Name}, refs: references(decl.Type)})
-				} else if (declarationMethod(decl.Name.Name) || fieldMethodPrefix(decl.Name.Name) != "") && len(decl.Recv.List) == 1 {
-					// Codec, contract and field-method discovery need signatures on a
-					// fresh checkout. Bodies may reference generated declarations.
+				} else if (declarationMethod(decl.Name.Name) || fieldMethodPrefix(decl.Name.Name) != "" || decl.Name.Name == globalScopeSourceMethod) && len(decl.Recv.List) == 1 {
+					// Codec, contract, field-method and global-scope-source discovery
+					// need signatures on a fresh checkout. Bodies may reference
+					// generated declarations.
 					owner := receiverTypeName(decl.Recv.List[0].Type)
 					copy := *decl
 					copy.Body = nil
@@ -202,6 +206,45 @@ func (p *packageInput) declarationFiles() ([]*ast.File, error) {
 		files = append(files, &ast.File{Name: ast.NewIdent(p.name), Decls: unionStubs})
 	}
 	return files, nil
+}
+
+// recordHandwritten locates package-level names and methods, including those
+// omitted from declaration analysis, for generated-symbol collision reports.
+func (p *packageInput) recordHandwritten(decl ast.Decl) {
+	record := func(name *ast.Ident) {
+		if name.Name == "_" || name.Name == "init" {
+			return
+		}
+		if _, exists := p.definedAt[name.Name]; !exists {
+			p.definedAt[name.Name] = name.Pos()
+		}
+	}
+	switch decl := decl.(type) {
+	case *ast.FuncDecl:
+		if decl.Recv == nil {
+			record(decl.Name)
+			return
+		}
+		if len(decl.Recv.List) != 1 {
+			return
+		}
+		owner := receiverTypeName(decl.Recv.List[0].Type)
+		if p.methods[owner] == nil {
+			p.methods[owner] = make(map[string]token.Pos)
+		}
+		p.methods[owner][decl.Name.Name] = decl.Name.Pos()
+	case *ast.GenDecl:
+		for _, spec := range decl.Specs {
+			switch spec := spec.(type) {
+			case *ast.TypeSpec:
+				record(spec.Name)
+			case *ast.ValueSpec:
+				for _, name := range spec.Names {
+					record(name)
+				}
+			}
+		}
+	}
 }
 
 // declarationMethod identifies signatures needed before generated output exists.

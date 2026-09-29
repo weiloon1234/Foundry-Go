@@ -17,13 +17,13 @@ func TestStructuredSettingsUseSameDecoderAcrossSources(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, raw := range []string{`{"team":["framework"]}`, `{"team":["framework"]} `} {
-		loaded, _, err := s.Load(settings{}, config.Inputs[settings]{Environment: func(string) (string, bool) { return raw, true }})
+		loaded, _, err := s.Load(settings{}, config.Inputs[settings]{Environment: func(name string) (string, bool) { return raw, name == "APP__LABELS" }})
 		if err != nil || !reflect.DeepEqual(loaded.Labels, map[string][]string{"team": {"framework"}}) {
 			t.Fatalf("JSON setting: %+v %v", loaded, err)
 		}
 	}
 	for _, raw := range []string{`{"team":[1]}`, `{"team":["x"]} {}`, `{"team":["x"]} broken`} {
-		loaded, _, err := s.Load(settings{}, config.Inputs[settings]{Environment: func(string) (string, bool) { return raw, true }})
+		loaded, _, err := s.Load(settings{}, config.Inputs[settings]{Environment: func(name string) (string, bool) { return raw, name == "APP__LABELS" }})
 		if !errors.Is(err, fault.Invalid) || !reflect.DeepEqual(loaded, settings{}) {
 			t.Fatal("invalid structured setting accepted")
 		}

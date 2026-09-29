@@ -54,6 +54,12 @@ copies. Invalid builders retain an error and fail before opening a body or invok
 a transport. Requests cannot cross client instances. `URL()` explicitly exposes the
 complete URL; ordinary formatting omits it and all header/body values.
 
+`Form(url.Values)` sends an `application/x-www-form-urlencoded` replayable body.
+`Multipart(httpclient.Field(name, value), httpclient.File(name, filename,
+contentType, data)...)` encodes a replayable `multipart/form-data` body once,
+within the request byte limit, and sets its boundary. `BasicAuth(user,
+secret.String)` sets RFC 7617 credentials; the user ID cannot contain a colon.
+
 A configured base URL accepts relative request paths beneath its prefix. Absolute
 or network-path references, dot-segment escapes, URL user information and fragments
 are rejected; default credentials cannot silently move to another origin.
@@ -73,16 +79,24 @@ are enforced; failed reads cannot be hidden by a custom transport.
 
 The default retry policy makes at most three total framework transport attempts
 for GET, HEAD and OPTIONS, with replayable bodies. Retryable statuses are 408, 429,
-500, 502, 503 and 504. Transport failures before response consumption may retry;
-body/consumer failures do not. Backoff starts at 100 ms and is capped at 2 seconds.
+500, 502, 503 and 504; a nonempty `RetryPolicy.Statuses` replaces that set (4xx/5xx
+only). Transport failures before response consumption may retry;
+body/consumer failures do not. Backoff starts at 100 ms and is capped at 2 seconds;
+with `Jitter` (the default) each wait is drawn uniformly between zero and that
+cap ("full jitter") so synchronized clients spread out. A `Retry-After` header
+(seconds or HTTP date) on a retryable response sets the wait instead; a value
+beyond `MaxBackoff` ends retrying and returns that response to the caller.
 `NoRetries()` permits one attempt. `RetryPolicy.Mode = IdempotentOperation` is an
 explicit assertion that a mutation is safe to repeat, typically using an upstream
 idempotency key; supplying that header alone does not enable mutation retries.
 Attempts are bounded to 1–10 and backoff to one minute.
 
-The framework owns retries. Native requests keep `GetBody` unset and retain an
-owned reader even for empty bodies, preventing standard-library idempotency-key
-POST replay from bypassing this policy. A failed attempt closes its request and
+The framework owns retries. Native requests keep `GetBody` unset. An empty body
+is sent as `http.NoBody`, so the transport sends `Content-Length: 0` (never a
+chunked empty body, which strict servers reject with 411) and starts no body
+probe goroutine. A non-GET request carrying `Idempotency-Key` keeps an owned empty
+reader instead, preventing standard-library idempotency-key POST replay from
+bypassing this policy. A failed attempt closes its request and
 response streams before another opener runs. Small rejection bodies are drained
 up to 64 KiB for connection reuse; larger ones are closed. The standard transport
 can still perform connection establishment/protocol recovery that sends no
@@ -111,12 +125,31 @@ occupied until the callback and underlying reads/close calls actually return.
 An uncooperative borrowed transport cannot be forcibly terminated; the client
 continues to account for its lifetime.
 
+`Download(ctx, request, destination, maximum)` streams a successful (2xx)
+response into a borrowed `io.Writer` under its own byte limit (up to
+`MaxDownloadBytes`), for files larger than `ResponseBytes`; other statuses fail as
+`StatusFailed` without writing. A failed download can leave a partial write, so
+write to a temporary file and publish it only on success. `DoAll(ctx, requests,
+concurrency)` runs up to 4,096 requests with at most `concurrency` (no more than
+`Concurrency`) in flight and returns outcomes in request order; each request keeps
+its own admission, deadlines and retry policy.
+
 Defaults are 64 concurrent operations, 10 seconds to connect, 30 seconds per
 attempt, one minute per complete operation, 4 MiB request and response bodies,
 and 64 KiB response/request header metadata. Configuration can reduce these or
 increase them within explicit caps: 4,096 operations, one-hour deadlines, 64 MiB
 bodies and 1 MiB headers. A caller context can impose a shorter deadline. Response
 limits apply to decompressed bytes. Header entry/value counts are also bounded.
+Operations beyond `Concurrency` wait in FIFO order for at most `min(Timeout, 5s)`
+and then fail as a `*httpclient.Error` of kind `Overloaded` (it also matches
+`fault.Overloaded`); no request was sent.
+
+`Config.TLS` customizes the owned transport: `CertificateAuthorities` (PEM)
+replaces the system roots unless `AppendSystemRoots` is set, `Certificate` and
+`PrivateKey` (PEM secrets, set together) present a client certificate, and
+`ServerName` overrides verification of the URL host. TLS options cannot combine
+with a caller-supplied transport. `Module` snapshots header, destination and
+retry-status slices when it is called.
 
 `Snapshot()` reports admitted requests, transport attempts and failures without
 retaining input data. Errors expose stable kinds, client name, method, attempt and
@@ -129,7 +162,15 @@ error text. Internal causes remain available through explicit error inspection.
 outcomes and implements `http.RoundTripper`. It owns copied outcomes and recorded
 requests, never falls through to the network and reports exhaustion explicitly.
 `Requests`, `Sent` and `Pending` inspect behavior; request accessors explicitly
-reveal test data while formatting stays redacted.
+reveal test data while formatting stays redacted. A request is recorded only
+after its complete body was read.
+
+`NewRoutes(On(method, pattern, outcomes...)...)` answers each request from the
+first matching route instead of arrival order. Patterns use `path.Match` syntax
+against `host/path` (for example `api.example.com/v1/users/*`); an empty method
+matches any method. An unmatched request fails with `Unmatched`, an exhausted
+route with `Exhausted`. `AssertSent(t, match)`, `AssertNotSent` and
+`AssertSentCount(t, n, match)` check recorded requests with a predicate.
 
 The fake caps requests/outcomes at 1,024, a body at 1 MiB and retained request or
 outcome data at 16 MiB, URLs at 16 KiB, and header metadata at 64 KiB. Runtime clients use their own independent limits.
@@ -168,6 +209,10 @@ continues to verify the original hostname. The public-only policy also excludes 
 [platform WireServer address](https://learn.microsoft.com/en-us/azure/virtual-network/what-is-ip-address-168-63-129-16),
 which uses a globally unicast address. Network routing/NAT and the service itself
 remain deployment trust boundaries.
+
+`client.RestrictsDestinations()` reports whether a client enforces such a policy;
+framework features that fetch untrusted URLs, such as attachment
+`AddFromURL`, require it.
 
 Denied requests match `httpclient.DestinationDenied` through `errors.Is`, including
 wrapped transport failures. A denied URL is rejected before its body factory runs;

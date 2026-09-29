@@ -16,7 +16,7 @@ func (e AuthenticatedEndpoint[P, Q, B, M, R]) Idempotent(store *idempotency.Stor
 	if err := e.Validate(); err != nil {
 		return AuthenticatedIdempotentEndpoint[P, Q, B, M, R]{source: e, endpoint: IdempotentEndpoint[P, Q, B, R]{err: err}}
 	}
-	return AuthenticatedIdempotentEndpoint[P, Q, B, M, R]{source: e, endpoint: e.bound(false).Idempotent(store, definition)}
+	return AuthenticatedIdempotentEndpoint[P, Q, B, M, R]{source: e, endpoint: e.authorized().Idempotent(store, definition)}
 }
 func (e AuthenticatedIdempotentEndpoint[P, Q, B, M, R]) Validate() error {
 	if err := e.source.Validate(); err != nil {
@@ -63,11 +63,8 @@ func (e AuthenticatedIdempotentEndpoint[P, Q, B, M, R]) Prepare(prepare func(con
 		if err != nil {
 			return idempotency.Scope{}, nil, authenticationError(err)
 		}
-		if e.source.authorization != nil {
-			if err := requestHook(ctx, "HTTP actor request authorization", func() error { return (*e.source.authorization)(ctx, actor, in) }); err != nil {
-				return idempotency.Scope{}, nil, authenticationError(err)
-			}
-		}
+		// Actor authorization already ran as the endpoint's request authorization
+		// stage, before validation, on new requests and replays alike.
 		scope, handler, err := prepare(ctx, actor, in)
 		if err != nil {
 			return idempotency.Scope{}, nil, authenticationError(err)

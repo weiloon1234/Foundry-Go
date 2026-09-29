@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/storage"
@@ -92,5 +93,50 @@ func TestStorageStreamAndMissingObject(t *testing.T) {
 	router.ServeHTTP(response, httptest.NewRequest("GET", "/file", nil))
 	if response.Code != 404 || disk.Stats().Active != 0 {
 		t.Fatal(response.Code, response.Body.String())
+	}
+}
+
+func TestStorageCapacityExhaustionIsServiceUnavailable(t *testing.T) {
+	backend, err := local.Open(t.Context(), local.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The object is written through an ordinary disk; the serving disk has one
+	// stream slot and a short admission wait, independent of fsync latency.
+	writer, err := storage.NewDisk("writer", backend, storage.DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := storage.DefaultConfig()
+	config.MaxStreams, config.Timeout = 1, 200*time.Millisecond
+	disk, err := storage.NewDisk("files", backend, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = disk.Close(context.Background())
+		_ = writer.Close(context.Background())
+		_ = backend.Close()
+	})
+	key, _ := storage.ParseKey("reports/file.txt")
+	if _, err := writer.PutBytes(t.Context(), key, []byte("abc"), storage.PutOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	held, _, err := disk.Open(t.Context(), key, storage.ReadOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Close()
+	endpoint := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "files.busy", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/file")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.StreamResponse("text/plain; charset=utf-8"))
+	router, err := foundryhttp.NewRouter(endpoint.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.Stream, error) {
+		return storagehttp.Stream(disk, key, storage.ReadOptions{}), nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest("GET", "/file", nil))
+	if response.Code != 503 || response.Header().Get("Retry-After") == "" {
+		t.Fatal("capacity exhaustion was not a retryable 503", response.Code, response.Body.String())
 	}
 }

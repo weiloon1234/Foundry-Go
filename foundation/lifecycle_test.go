@@ -357,7 +357,8 @@ func TestKernelsShareLifecycleAndCancelCleanly(t *testing.T) {
 			t.Fatal(err)
 		}
 		cancel()
-		if err := await(t, result); !errors.Is(err, context.Canceled) {
+		// A cooperative service kernel stopping on request is a graceful stop.
+		if err := await(t, result); err != nil {
 			t.Fatal(err)
 		}
 		if err := stop(t, app); err != nil {

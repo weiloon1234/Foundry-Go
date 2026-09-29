@@ -14,7 +14,14 @@ func signingTime(applicationClock clock.Clock, operation string) (time.Time, err
 		return time.Time{}, fault.New(fault.Invalid, "signing requires an application clock")
 	}
 	var now time.Time
-	err := callback.Isolated(operation, func() error { now = applicationClock.Now().UTC(); return nil })
+	read := func() error { now = applicationClock.Now().UTC(); return nil }
+	var err error
+	if _, system := applicationClock.(clock.System); system {
+		// The framework system clock cannot Goexit; avoid a goroutine per read.
+		err = callback.Invoke(operation, read)
+	} else {
+		err = callback.Isolated(operation, read)
+	}
 	if err != nil {
 		return time.Time{}, err
 	}

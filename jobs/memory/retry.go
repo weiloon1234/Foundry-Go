@@ -29,8 +29,11 @@ func (b *Backend) JobRetry(ctx context.Context, key jobs.Key, request jobs.Retry
 	item.record.Retries++
 	item.record.LastRetry = request.Token
 	item.record.Attempts = 0
+	item.record.Exceptions = 0
 	item.record.FinishedAt = time.Time{}
 	item.record.AvailableAt = now
+	item.abandoned = 0
 	b.transition(item, jobs.Waiting, jobs.ManuallyRetried, now)
+	b.signal(key)
 	return true, nil
 }

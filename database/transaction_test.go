@@ -75,9 +75,19 @@ func TestTransactionCallbackFailuresRollbackAndSuppressAfterCommit(t *testing.T)
 			if err == nil || state.rolledBack.Load() != 1 || state.committed.Load() != 0 || db.Stats().Owners != 0 || escaped.State() != database.TxRolledBack {
 				t.Fatalf("rollback behavior: %v", err)
 			}
-			if name == "error" && !errors.Is(err, cause) || name != "error" && !errors.Is(err, fault.Panicked) {
-				t.Fatal("failure identity lost")
+			if name == "error" && err != cause || name != "error" && !errors.Is(err, fault.Panicked) {
+				t.Fatal("failure identity lost", err)
 			}
+			var relabeled *database.Error
+			if name == "error" {
+				// An application failure is returned unchanged after a confirmed
+				// rollback; its formatting belongs to the application.
+				if errors.As(err, &relabeled) {
+					t.Fatal("application callback failure was relabeled as a database failure")
+				}
+				return
+			}
+			// Contained panic payloads are never formatted.
 			for _, format := range []string{"%v", "%+v", "%#v"} {
 				if strings.Contains(fmt.Sprintf(format, err), "private-credential") {
 					t.Fatal("callback failure leaked secret")

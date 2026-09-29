@@ -5,6 +5,7 @@ package postgres
 
 import (
 	"context"
+	"net/netip"
 	"reflect"
 	"time"
 
@@ -166,24 +167,31 @@ func record(address session.Address, subject sessionstore.Subject, row sessionst
 	if err != nil {
 		return session.Record{}, err
 	}
-	result := session.Record{ID: model.IDFromBytes[session.Record](row.ID.Bytes()), Address: address, Subject: identity, Hash: hash, Assurance: auth.Assurance(row.Assurance), Remember: row.Remember, Lifetime: session.Lifetime{Idle: time.Duration(row.IdleNanos), Absolute: row.ExpiresAt.UTC().Sub(row.CreatedAt.UTC()), Sliding: row.Sliding}, CreatedAt: row.CreatedAt, LastSeenAt: row.LastSeenAt, IdleExpiresAt: row.IdleExpiresAt, ExpiresAt: row.ExpiresAt}
+	var device auth.Device
+	if text, present := row.ClientIP.Get(); present {
+		if device.ClientIP, err = netip.ParseAddr(text); err != nil {
+			return session.Record{}, fault.New(fault.Invalid, "stored session client address is invalid")
+		}
+	}
+	device.UserAgent, _ = row.UserAgent.Get()
+	var confirmed value.Optional[temporal.DateTime]
+	if at, present := row.ConfirmedAt.Get(); present {
+		confirmed = value.Set(at)
+	}
+	var impersonator value.Optional[session.Impersonator]
+	if text, present := row.ImpersonatorIdentity.Get(); present {
+		actor, err := value.ParseJSON[model.Identity](text)
+		if err != nil {
+			return session.Record{}, err
+		}
+		subject, err := actor.Decode()
+		if err != nil {
+			return session.Record{}, err
+		}
+		guard, _ := row.ImpersonatorGuard.Get()
+		id, _ := row.ImpersonatorSession.Get()
+		impersonator = value.Set(session.Impersonator{Subject: subject, Guard: auth.GuardName(guard), Session: model.IDFromBytes[session.Record](id.Bytes())})
+	}
+	result := session.Record{ID: model.IDFromBytes[session.Record](row.ID.Bytes()), Address: address, Subject: identity, Hash: hash, Assurance: auth.Assurance(row.Assurance), Remember: row.Remember, Lifetime: session.Lifetime{Idle: time.Duration(row.IdleNanos), Absolute: row.ExpiresAt.UTC().Sub(row.CreatedAt.UTC()), Sliding: row.Sliding}, CreatedAt: row.CreatedAt, LastSeenAt: row.LastSeenAt, IdleExpiresAt: row.IdleExpiresAt, ExpiresAt: row.ExpiresAt, Device: device, ConfirmedAt: confirmed, Impersonator: impersonator}
 	return result, result.Validate(address)
-}
-func entryDraft(r session.Record, scope, subject string) sessionstore.EntryDraft {
-	return sessionstore.EntryDraft{}.
-		SetID(model.IDFromBytes[sessionstore.Entry](r.ID.Bytes())).SetScope(scope).SetSubjectKey(subject).
-		SetSecretHash(r.Hash.Hex()).SetAssurance(uint8(r.Assurance)).SetRemember(r.Remember).
-		SetSliding(r.Lifetime.Sliding).SetIdleNanos(int64(r.Lifetime.Idle)).
-		SetCreatedAt(r.CreatedAt).SetLastSeenAt(r.LastSeenAt).SetIdleExpiresAt(r.IdleExpiresAt).SetExpiresAt(r.ExpiresAt)
-}
-func subjectRows(ctx context.Context, tx *database.Tx, scope, subject string) ([]sessionstore.Entry, error) {
-	f := sessionstore.EntryFields()
-	rows, err := entries(scope, subject).OrderBy(f.CreatedAt.Asc(), f.ID.Asc()).Limit(session.MaxSessions+1).All(ctx, tx)
-	if err != nil {
-		return nil, err
-	}
-	if len(rows) > session.MaxSessions {
-		return nil, fault.New(fault.Invalid, "stored session subject exceeds capacity")
-	}
-	return rows, nil
 }

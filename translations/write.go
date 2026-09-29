@@ -82,12 +82,12 @@ func set[M any, K comparable](ctx context.Context, outer *database.Tx, m *Manage
 			return err
 		}
 		q, f := store.QueryFoundryModelTranslations(), store.TranslationFields()
-		existing, err := q.Where(f.Key.In(keys...)).All(ctx, tx)
+		existing, err := store.TranslationsIndex(q.Where(f.Key.In(keys...))).All(ctx, tx)
 		if err != nil {
 			return err
 		}
 		for _, row := range existing {
-			if err := validateOwnerRow(owner, row); err != nil {
+			if err := validateOwnerIndex(owner, row); err != nil {
 				return err
 			}
 		}
@@ -102,13 +102,14 @@ func set[M any, K comparable](ctx context.Context, outer *database.Tx, m *Manage
 		if err != nil {
 			return err
 		}
+		// One set-based INSERT ... ON CONFLICT for every assignment
+		// (MaxAssignments is below query.MaxInsertRows).
+		drafts := make([]store.TranslationDraft, len(assignments))
 		for i, a := range assignments {
-			draft := store.TranslationDraft{}.SetKey(keys[i]).SetOwner(string(owner.Name())).SetScope(subject.Scope).SetSubjectKey(subject.Key).SetIdentity(subject.Identity).SetField(string(a.field.Name())).SetLocale(string(a.locale)).SetValue(a.text).SetCreatedAt(now).SetUpdatedAt(now)
-			if _, err := q.Upsert(ctx, tx, draft, query.OnConflict(f.Key).Update(f.Value, f.UpdatedAt)); err != nil {
-				return err
-			}
+			drafts[i] = store.TranslationDraft{}.SetKey(keys[i]).SetOwner(string(owner.Name())).SetScope(subject.Scope).SetSubjectKey(subject.Key).SetIdentity(subject.Identity).SetField(string(a.field.Name())).SetLocale(string(a.locale)).SetValue(a.text).SetCreatedAt(now).SetUpdatedAt(now)
 		}
-		return nil
+		_, err = q.UpsertMany(ctx, tx, drafts, query.OnConflict(f.Key).Update(f.Value, f.UpdatedAt))
+		return err
 	}
 	if outer != nil {
 		return m.store.Join(ctx, outer, run)

@@ -20,6 +20,12 @@ type joinedPair struct{ Left, Right value.Nullable[int64] }
 func scopedID[S any](scope ModelScope[S, cursorRecord]) ScalarField[S, int64] {
 	return NewScalarField[S, int64](scope.Table(), "id", codec.Signed[int64]())
 }
+
+// wideScoped binds one parameter per value: float codecs never collapse into
+// one array parameter, so it exercises the shared parameter budget.
+func wideScoped[S any](scope ModelScope[S, cursorRecord], n int) Predicate[S] {
+	return NewScalarField[S, float64](scope.Table(), "id", codec.Float[float64]()).In(make([]float64, n)...)
+}
 func nullableScopedID[S any](scope NullableModelScope[S, cursorRecord]) NullableField[S, int64] {
 	return NewNullableField[S, int64](scope.Table(), "id", codec.Signed[int64]())
 }

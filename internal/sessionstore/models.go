@@ -37,6 +37,16 @@ type Entry struct {
 	LastSeenAt    temporal.DateTime
 	IdleExpiresAt temporal.DateTime
 	ExpiresAt     temporal.DateTime
+	// ClientIP and UserAgent are display-only device metadata from issuance.
+	ClientIP  value.Nullable[string]
+	UserAgent value.Nullable[string]
+	// ConfirmedAt is the last password confirmation within this session.
+	ConfirmedAt value.Nullable[temporal.DateTime]
+	// ImpersonatorIdentity (identity JSON), ImpersonatorGuard and
+	// ImpersonatorSession mark an impersonation session with its original actor.
+	ImpersonatorIdentity value.Nullable[string]
+	ImpersonatorGuard    value.Nullable[string]
+	ImpersonatorSession  value.Nullable[model.ID[Entry]]
 }
 
 func (Subject) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("session subject")) }

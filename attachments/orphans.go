@@ -32,7 +32,7 @@ func (m *Manager) InspectOrphans(ctx context.Context, owner extensions.OwnerName
 		return OrphanPage{}, err
 	}
 	var result OrphanPage
-	err := m.calls.Run(ctx, "attachment orphan inspection", func(ctx context.Context) error {
+	err := m.reads.Run(ctx, "attachment orphan inspection", func(ctx context.Context) error {
 		page, err := extensionmaintenance.Inspect(ctx, m.store, owner, cursor, limit, m.orphanTable(nil, nil))
 		if err != nil {
 			return err

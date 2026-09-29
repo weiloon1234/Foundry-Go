@@ -59,10 +59,15 @@ func TestTypedEndpointPreparesResponseBeforeCommit(t *testing.T) {
 				t.Fatal(err)
 			}
 			router.ServeHTTP(w, httptest.NewRequestWithContext(ctx, "GET", "/", nil))
-			want := 500
 			if mode == "cancel" {
-				want = 408
+				// Encoding after a successful handler is detached from
+				// cancellation: the completed success is published.
+				if w.Code != 201 {
+					t.Fatalf("completed success replaced after cancellation: %d %s", w.Code, w.Body.String())
+				}
+				return
 			}
+			want := 500
 			failure := decodeFailure(t, w)
 			if w.Code != want || len(failure.Issues) != 0 || strings.Contains(w.Body.String(), "private") {
 				t.Fatalf("invalid response escaped: %d %s", w.Code, w.Body.String())

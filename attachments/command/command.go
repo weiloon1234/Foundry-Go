@@ -1,4 +1,5 @@
-// Package command provides read-only attachment owner-orphan inspection.
+// Package command provides read-only attachment owner-orphan inspection and
+// bounded regeneration of declared image variants.
 package command
 
 import (

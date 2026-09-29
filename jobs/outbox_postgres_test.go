@@ -111,7 +111,8 @@ func TestJobOutboxRollbackAndAmbiguousPublication(t *testing.T) {
 	}
 	// Publication deadlines round up to SQL precision, never before the full
 	// delay measured from the original nanosecond clock sample.
-	clock.Advance(config.RetryDelay + time.Microsecond)
+	// The retry delay includes up to Jitter of additive spread.
+	clock.Advance(config.RetryDelay + config.Jitter + time.Microsecond)
 	second, err := publisher.PublishOne(t.Context())
 	if err != nil || !second.Committed || second.State != outbox.Published || second.ID != first.ID || second.Attempts != 2 {
 		t.Fatal(second, err)
@@ -205,5 +206,86 @@ func TestConcurrentOutboxPublishersSkipLockedRows(t *testing.T) {
 	group.Wait()
 	if published.Load() != 8 || peer.accepted.Load() != 8 {
 		t.Fatal("publication concurrency lost or duplicated work", published.Load(), peer.accepted.Load())
+	}
+}
+
+func TestWorkflowOutboxPublishesCommittedGroupAtomically(t *testing.T) {
+	writer := outboxtest.Open(t)
+	backend, err := memory.New(memory.DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+	peer := &durablePeer{Backend: backend}
+	definition := jobs.Define[payload]("outbox.workflow.step", 1, jobs.DefaultPolicy("default"))
+	declaration, err := definition.Declare(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := jobs.NewRegistry(declaration)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dispatcher, err := jobs.NewDispatcher(peer, registry, jobs.DefaultDispatchConfig(keyspace.Namespace{Application: "publication", Environment: "test"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	producer, err := jobs.PrepareOutbox("jobs", dispatcher)
+	if err != nil {
+		t.Fatal(err)
+	}
+	route, err := producer.PublicationRoute()
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := publisher.DefaultConfig()
+	config.Clock = testkit.NewClock(time.Now().Add(time.Second))
+	p, err := publisher.New(writer, config, route)
+	if err != nil {
+		t.Fatal(err)
+	}
+	build := func() jobs.Workflow {
+		var steps []jobs.Step
+		for range 2 {
+			pending, err := definition.Capture(t.Context(), payload{Labels: map[string]string{}}, jobs.Options[payload]{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			steps = append(steps, pending.Step())
+		}
+		group, err := jobs.NewChain(steps...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return group
+	}
+	rolledBack, committed := build(), build()
+	rollback := errors.New("rollback")
+	if err := writer.Transaction(t.Context(), func(tx *database.Tx) error {
+		if _, err := rolledBack.Enqueue(t.Context(), tx, producer); err != nil {
+			return err
+		}
+		return rollback
+	}); !errors.Is(err, rollback) {
+		t.Fatal(err)
+	}
+	if err := writer.Transaction(t.Context(), func(tx *database.Tx) error {
+		_, err := committed.Enqueue(t.Context(), tx, producer)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	result, err := p.PublishOne(t.Context())
+	if err != nil || !result.Committed || result.State != outbox.Published {
+		t.Fatal("workflow row not published", result, err)
+	}
+	if found, err := committed.Status(t.Context(), dispatcher); err != nil || !found.IsSet() {
+		t.Fatal("committed workflow not accepted", err)
+	}
+	if found, err := rolledBack.Status(t.Context(), dispatcher); err != nil || found.IsSet() {
+		t.Fatal("rolled-back workflow was published", err)
+	}
+	if result, err := p.PublishOne(t.Context()); err != nil || result.Found {
+		t.Fatal("rolled-back workflow row existed", err)
 	}
 }

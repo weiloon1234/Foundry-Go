@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func Run(t *testing.T, factory func(*testing.T) (ratelimit.Backend, func(string) ratelimit.Key)) {
@@ -42,7 +43,9 @@ func Run(t *testing.T, factory func(*testing.T) (ratelimit.Backend, func(string)
 		if d, err := b.RateLimit(t.Context(), k, limit, math.MaxUint32-1); err != nil || !d.Allowed || d.Remaining != 1 {
 			t.Fatal(d, err)
 		}
-		if d, err := b.RateLimit(t.Context(), k, ratelimit.PerHour(2), 1); !errors.Is(err, fault.Conflict) || d != (ratelimit.Decision{}) {
+		// A changed policy converts the live bucket instead of failing; admitted
+		// usage still counts (capped), and a denial persists no conversion.
+		if d, err := b.RateLimit(t.Context(), k, ratelimit.PerHour(2), 1); err != nil || d.Allowed || d.Remaining != 0 || d.RetryAfter != d.ResetAfter {
 			t.Fatal(d, err)
 		}
 		if d, err := b.RateLimit(t.Context(), k, limit, math.MaxUint32); err != nil || d.Allowed || d.Remaining != 1 {
@@ -50,6 +53,61 @@ func Run(t *testing.T, factory func(*testing.T) (ratelimit.Backend, func(string)
 		}
 		if d, err := b.RateLimit(t.Context(), k, limit, 1); err != nil || !d.Allowed || d.Remaining != 0 {
 			t.Fatal(d, err)
+		}
+		converted := ratelimit.PerMinute(math.MaxUint32)
+		d, err := b.RateLimit(t.Context(), k, converted, 1)
+		if err != nil || d.Allowed || d.Remaining != 0 || d.ResetAfter > time.Minute {
+			t.Fatal("converted bucket reopened quota or kept the old window", d, err)
+		}
+		if err := d.Validate(converted, 1); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("peek-and-clear", func(t *testing.T) {
+		b, key := factory(t)
+		inspect, ok := b.(ratelimit.InspectBackend)
+		if !ok {
+			t.Skip("backend does not implement inspection")
+		}
+		k := key("inspected")
+		limit := ratelimit.PerHour(5)
+		d, err := inspect.PeekRateLimit(t.Context(), k, limit, 5)
+		if err != nil || !d.Allowed || d.Remaining != 5 || d.RetryAfter != 0 || d.ValidatePeek(limit, 5) != nil {
+			t.Fatal("empty bucket", d, err)
+		}
+		if d, err := b.RateLimit(t.Context(), k, limit, 3); err != nil || !d.Allowed || d.Remaining != 2 {
+			t.Fatal(d, err)
+		}
+		for range 2 {
+			d, err := inspect.PeekRateLimit(t.Context(), k, limit, 2)
+			if err != nil || !d.Allowed || d.Remaining != 2 || d.ValidatePeek(limit, 2) != nil {
+				t.Fatal("peek consumed or misreported capacity", d, err)
+			}
+		}
+		d, err = inspect.PeekRateLimit(t.Context(), k, limit, 3)
+		if err != nil || d.Allowed || d.Remaining != 2 || d.RetryAfter != d.ResetAfter || d.ValidatePeek(limit, 3) != nil {
+			t.Fatal(d, err)
+		}
+		if d, err := b.RateLimit(t.Context(), k, limit, 2); err != nil || !d.Allowed || d.Remaining != 0 {
+			t.Fatal("peek changed usage", d, err)
+		}
+		if cleared, err := inspect.ClearRateLimit(t.Context(), k); err != nil || !cleared {
+			t.Fatal(cleared, err)
+		}
+		if cleared, err := inspect.ClearRateLimit(t.Context(), k); err != nil || cleared {
+			t.Fatal("clear of an absent bucket", cleared, err)
+		}
+		if d, err := b.RateLimit(t.Context(), k, limit, 5); err != nil || !d.Allowed || d.Remaining != 0 {
+			t.Fatal("cleared bucket kept usage", d, err)
+		}
+		if _, err := inspect.PeekRateLimit(t.Context(), k, limit, 0); !errors.Is(err, fault.Invalid) {
+			t.Fatal(err)
+		}
+		if _, err := inspect.ClearRateLimit(nil, k); !errors.Is(err, fault.Invalid) {
+			t.Fatal(err)
+		}
+		if _, err := inspect.ClearRateLimit(t.Context(), ratelimit.Key{}); !errors.Is(err, fault.Invalid) {
+			t.Fatal(err)
 		}
 	})
 	t.Run("atomic-contention", func(t *testing.T) {

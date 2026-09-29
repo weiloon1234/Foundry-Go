@@ -94,15 +94,29 @@ tag sets remain separate. Counter.WithTags retains typed atomic counter operatio
 when the adapter implements TaggedCounterBackend.
 
 Reads may initialize missing tag metadata with fresh random versions. Recreating
-missing or evicted metadata never restores an earlier/default version. Tagged data
+missing or evicted metadata never restores an earlier/default version.
+Redis tag and namespace metadata expires after 30 days without use (every read or
+write refreshes it) and never before a finite tagged entry written under it; an
+idle expiry therefore only turns old entries into misses. Namespace rotation
+reuses one metadata key, so it does not accumulate keys. Tagged data
 uses stable storage addresses plus stored version fingerprints, so repeated
 invalidation does not create a new persistent key per generation. Stale data is
 reclaimed lazily on read or replaced at its existing key. Forever remains persistent;
 normal backend capacity eviction still applies.
 
-Writes and cleanup compare their captured tag snapshot atomically. An operation
-crossing invalidation or metadata eviction may return `fault.Conflict`; it does not
-silently retry a loader or overwrite/delete a newer result. Remember coalescing also
+Writes and cleanup compare their captured tag snapshot atomically. A write crossing
+invalidation or metadata eviction may return `fault.Conflict`; it does not silently
+retry or overwrite/delete a newer result. Pure reads (`Get`, `Exists` and the lookup
+inside `Remember`) never return `Conflict`: they re-resolve the snapshot up to three
+times and otherwise report a miss. Adapters implementing `cache.SnapshotReadBackend`
+(Redis) resolve metadata and read the entry in one atomic round trip. Adapters
+implementing `cache.SnapshotWriteBackend` (Redis) also resolve metadata inside each
+direct `Put`, `Add`, `Forget`, `Increment` and `Expire`, so these cost one round
+trip and apply to the snapshot current at that instant instead of returning
+`Conflict`; Remember publications keep the snapshot they read. A Remember
+whose loader finished after an invalidation still returns its loaded value to the
+callers that started before it, but its stale publication is rejected and reported
+as a write failure, never stored. Remember coalescing also
 includes the captured versions, so calls after invalidation do not join an obsolete
 fill. Backend errors, corruption and callback failures remain explicit errors.
 Invalid TTLs and nil Remember loaders fail before tag metadata I/O.
@@ -140,9 +154,11 @@ This stamp is separate from application declarations and their maximum of 64 tag
 Construction remains pure; even a read may initialize missing metadata. A payload
 codec failure can leave initialized metadata, but never a partially encoded payload.
 
-Invalidation atomically replaces this one version. An operation with an older
-snapshot fails with `fault.Conflict` when it next accesses storage. A loader that
-was already running remains owned until it exits; its stale publication fails.
+Invalidation atomically replaces this one version. A write with an older snapshot
+fails with `fault.Conflict` when it next accesses storage (a snapshot-write adapter
+resolves the current version inside the write instead); reads re-resolve.
+A loader that was already running remains owned until it exits; its stale
+publication is rejected and reported (see Remember).
 Calls resolving the new version use a separate local/distributed fill identity.
 There is no automatic retry. Reads that completed before rotation may still return
 the snapshot they already obtained; invalidation cannot recall caller-owned values.
@@ -157,9 +173,11 @@ metadata creates a fresh version and cannot resurrect retained old payloads.
 The reserved stamp and fingerprint count against memory storage limits. Even an
 untagged entry must fit one metadata entry plus its payload (at least two entries).
 Custom adapters implementing `TaggedBackend` receive the same automatic protection.
-Basic `Backend` adapters still support ordinary typed cache operations, but
-`Invalidate` returns `fault.Invalid`; Foundry does not claim namespace invalidation
-for them. Counter and coordinated adapters must also implement their corresponding
+Adapters without tags that implement `cache.FlushBackend` (the file and PostgreSQL
+stores) invalidate by physically removing the namespace's entries; a flush is not a
+fence, so a fill that started earlier may still publish afterwards. Other basic
+`Backend` adapters support ordinary typed cache operations, but `Invalidate`
+returns `fault.Invalid`; Foundry does not claim namespace invalidation for them. Counter and coordinated adapters must also implement their corresponding
 tagged capability so they cannot bypass namespace protection.
 
 The native typed-store storage layout now includes the namespace stamp for both
@@ -269,6 +287,25 @@ A Store operation owns key/adapter callbacks until they actually return, includi
 cancellation and panic/Goexit handling. Keys backed by mutable references must stay
 unchanged while the operation runs.
 
+`GetMany(ctx, keys...)` returns `([]cache.Lookup[V], error)` in input order; a
+repeated key repeats its result and each `Lookup` decodes its own copy. `Found`
+distinguishes a miss from a stored zero value. The same `MaxBatchEntries` bound
+applies and one namespace/tag snapshot covers the batch; a snapshot replaced by a
+concurrent invalidation is re-resolved like `Get` and otherwise every key is a
+miss. Adapters implementing `cache.BatchReadBackend`/`TaggedBatchReadBackend`
+(memory and Redis) read the whole batch in one operation (one Redis script);
+other adapters read each distinct key in turn. Missing, expired, over-bound and
+unusable entries are misses. `Pull(ctx, key)` reads and then forgets one entry. It
+is not atomic: a concurrent writer can replace the value between the read and the
+removal, so use it for single-consumer values such as one-time notices.
+
+`PutMany(ctx, ttl, entries...)` writes up to `MaxBatchEntries` typed
+`cache.Entry[K, V]{Key, Value}` pairs with one TTL. Every key and value is encoded
+before the first write, so a codec failure writes nothing. Entries are then written
+in input order under one snapshot (a repeated key keeps its last value); the batch
+is not atomic, the first failure stops the remaining writes and earlier entries
+stay stored. `Config.Timeout` bounds the whole batch and no write is retried.
+
 As with Forget, an overlapping Remember may later repopulate removed entries.
 Use tag or namespace invalidation when old fills must be rejected. Batch atomicity
 does not make cache changes part of a database transaction or recall values that
@@ -305,22 +342,37 @@ this model-to-snapshot mapping with a typed loader. Foundry owns cache operation
 and coalescing; the application supplies its domain lookup. The loader must be
 non-nil and TTL valid even when the entry already exists.
 
-A new fill rechecks storage before running the loader. Failed reads, loaders,
-encoding and writes remain errors. There is no implicit retry. Owner failure
-reaches existing followers; a later call can attempt a fresh fill. A failed remote
-write might still have been applied. Decoding failures never return partial values.
-Each caller decodes separately, so a decoder failure is local to that caller.
+A new fill rechecks storage before running the loader. Failed reads, loaders and
+encoding remain errors. There is no implicit retry. Loader failure reaches existing
+followers; a later call can attempt a fresh fill. Decoding failures never return
+partial values. Each caller decodes separately, so a decoder failure is local to
+that caller.
 
-Canceling a follower only ends its own wait. The owner remains responsible for its
-loader until the callback actually exits. Owner cancellation propagates to its
-loader and makes the fill fail; an uncooperative loader can delay owner completion.
-The operation timeout includes waiting, loading, encoding and backend access.
+A failed publication of a successfully loaded value does **not** fail the call:
+the owner and its followers receive the value, the write is not retried, and the
+failure is counted (`Stats().WriteFailures`) and logged through `cache.WithLogger`
+with the cache family and a redacted diagnostic (never keys, values or error text).
+Application assembly passes its configured logger automatically. A failed remote
+write might still have been applied.
 
-`Config.MaxFills` bounds active fills across the store; `MaxFillWaiters` bounds the
-followers for each fill. Defaults are 128 fills and 256 followers per fill. A full
-limit returns `fault.Conflict` and does not run another loader. Finished fills and
-canceled followers release their slots. These limits bound active registry state,
-not arbitrary allocations in loaders or values retained by callers after return.
+The loader runs in a fill owned by the store, under a context that keeps the
+caller's values but not its cancellation. Canceling any caller, owner or follower,
+only ends that caller's wait; the fill finishes for everyone else and keeps its
+`MaxFills` slot until the loader actually exits. If a loader fails only because it
+ignored its supplied context and waited on the owner's own ended request context,
+followers elect a new owner (up to three attempts) instead of inheriting the
+owner's cancellation. `Config.LoadTimeout` (default 30 seconds, at most 24 hours)
+bounds each loader; `cache.WithLoadTimeout(d)` narrows one call.
+`Config.Timeout` bounds each backend step (read, publish, metadata) and every
+other operation, but never caps a loader.
+
+`Config.MaxFills` bounds active coalesced fills across the store; `MaxFillWaiters`
+bounds the followers for each fill. Defaults are 128 fills and 256 followers per
+fill. When `MaxFills` is exhausted a new miss loads directly without coalescing
+rather than failing; a full `MaxFillWaiters` returns retryable `fault.Overloaded`
+(HTTP 503 with `Retry-After`). Finished fills and canceled followers release their
+slots. These limits bound active registry state, not arbitrary allocations in
+loaders or values retained by callers after return.
 
 Nested loads must propagate the provided callback context. Detected self or ancestor
 fill cycles return `fault.Cycle`; dependency cycles across unrelated contexts are
@@ -332,6 +384,48 @@ in-flight fill may overwrite a concurrent write or repopulate a forgotten entry.
 Use it for cacheable snapshots whose concurrency semantics permit that behavior.
 Use [NewCoordinatedStore](distributed-cache.md) to add distributed lease ownership
 and atomic conditional publication.
+
+### Stale-while-revalidate with Flexible
+
+`Flexible(ctx, key, fresh, stale, loader, options...)` is `Remember` that keeps
+serving an aging value while it is refreshed:
+
+```go
+profile, err := profiles.Flexible(ctx, memberID, time.Minute, 10*time.Minute, loadProfile)
+```
+
+The [consumer's `FlexibleProfile`](../../tests/fixtures/consumer/caching/profiles.go)
+wraps this with its own model loader.
+
+A value younger than `fresh` is returned as is. An older value (up to
+`fresh+stale`) is returned immediately while one store-owned background fill,
+coalesced with every other fill of the key, loads and publishes a replacement. The
+refresh keeps the caller's context values but not its cancellation, is bounded by
+`LoadTimeout`, and its failure is only logged (`cache.WithLogger`); the next
+stale read tries again. A missing or expired value is loaded exactly like `Remember` and
+stored for `fresh+stale`. Freshness is a reserved marker entry written after the
+value with TTL `fresh` and read together with it in one batch, so no clock
+comparison is involved and invalidation removes both. The marker is an ordinary
+stored entry, so it counts toward adapter capacity (`max_entries`/`max_bytes` of
+file and PostgreSQL stores, the memory budget and Redis memory). The value remains
+an ordinary entry of the family (`Get`, `Forget` and invalidation apply). `Put`,
+`PutMany`, `Add`, `Increment` and `Expire` leave the marker unchanged: a value
+written while a marker lives counts as fresh until that marker expires, and one
+written without a marker is served stale and refreshed by the next `Flexible`.
+
+### Request memoization
+
+`cache.WithMemo(ctx)` returns a context whose typed reads are memoized for its
+lifetime, typically one request. The first `Get`, `GetMany`, `Exists` or
+`Remember` of a key reads the store; later reads of that key through the same
+context return the memoized result without I/O, even if another request or process
+has changed the entry since. `Remember` still consults the store after a memoized
+miss because a fill needs its snapshot. Writes through the context (`Put`,
+`PutMany`, `Add`, `Forget`, `ForgetMany`, counter `Increment`, `Expire`) forget
+the key's memoized results, and `Store.Invalidate`/`InvalidateTags` through it
+forget the whole store's. A memo records at most `cache.MaxMemoEntries` (256)
+results and `cache.MaxMemoBytes` (1 MiB) of payload; further reads are simply not
+memoized. Each result still decodes its own copy. `Flexible` is not memoized.
 
 ## Store and memory adapter
 
@@ -352,9 +446,35 @@ if err != nil {
 }
 ```
 
+`store.Stats()` returns lock-free totals since construction: hits and misses of
+`Get`/`Remember`, successful writes, Remember publication failures, loader runs,
+coalesced followers, uncoalesced loads and snapshot re-resolutions. Optional
+collaborators are passed at construction, for example
+`cache.NewStore(backend, config, cache.WithLogger(logger))`.
+
+`cache.WithObserver(func(ctx context.Context, event cache.Event))` receives every
+completed typed call synchronously for metrics or tracing: the declaration name
+(`Family`, empty for store-wide invalidation), the `Operation` (its `String` is a
+stable label such as `get_many`), key `Hits`/`Misses` of reads, `Loaded` and
+`Unpublished` for Remember and Flexible misses, `Stale` for a Flexible value served
+while it refreshes, the `Duration` and, on failure, the framework fault `Code`. Keys, values and error text are never exposed. The observer must be
+fast and must not use the cache; a panic is contained and never changes the result.
+One observer is allowed per Store.
+
+`cache/null` is a backend that retains nothing (every read misses, writes succeed
+without storing, `Remember` always loads). It implements every capability, so a
+store can be disabled without changing declarations; configured applications
+select it with the `null` driver.
+
 The caller owns backend lifecycle and eventually calls `backend.Close(ctx)` after
 its use. The store borrows the cache capability, so constructing or binding another
-store does not close a shared adapter. Memory construction starts no goroutines.
+store does not close a shared adapter. `store.Close(ctx)` must run first: it
+rejects new operations with `fault.Closed`, cancels the contexts of the store's
+running fills (Remember loaders whose callers have gone, uncoalesced loads and
+Flexible background refreshes) and waits until they have exited, bounded by `ctx`;
+`store.Done()` closes once they have. A canceled fill publishes nothing.
+Configured applications close every cache store during shutdown before its
+backend, lease manager or database closes. Memory construction starts no goroutines.
 Close serializes with backend operations, rejects future access and releases the
 entry map. It does not manage application callbacks that already hold copied data.
 [Redis provider registration](redis.md#application-ownership) integrates connection
@@ -362,9 +482,17 @@ ownership with application startup and shutdown.
 
 Memory limits include entry count and the sum of physical-key/payload bytes.
 Map/list overhead is bounded by entry count; Stats.Bytes is not process RSS.
-Expired entries are reclaimed lazily, before live entries are evicted for capacity.
-Reads update LRU order. An entry that cannot fit the total byte budget is rejected
-before replacing existing data. Successful capacity eviction is normal cache behavior.
+Expired entries are reclaimed lazily, earliest deadline first from an expiry heap
+(no whole-table sweep), before live entries are evicted for capacity. Reads
+(`Get`, tagged reads, batch reads, `Exists` and tag resolution of existing
+metadata) share a read lock and do not reorder storage: they mark the entry as
+referenced, and capacity eviction gives a referenced entry a second chance
+(recency order, approximately LRU) instead of removing it. An expired or obsolete
+entry a read meets is a miss that the read then reclaims under the exclusive
+lock. Hits copy their bytes after releasing the lock. Writes, expiry changes,
+counters and tag creation or invalidation take the exclusive lock. An entry that
+cannot fit the total byte budget is rejected before replacing existing data.
+Successful capacity eviction is normal cache behavior.
 
 Inject `testkit.NewClock` for deterministic expiry, including exact TTL boundaries.
 Request deadlines remain real context deadlines. Supply a concurrent-safe clock
@@ -402,7 +530,12 @@ so a timeout never abandons an owned codec goroutine.
 ## Failure and verification boundaries
 
 Errors preserve context and original cause identity for errors.Is/errors.As while
-normal formatting hides codec/backend payloads. Panic and runtime.Goexit become
+normal formatting hides codec/backend payloads. The safe cache wrapper keeps the
+cause's framework classification: an `Overloaded`, `Invalid`, `Timeout`, `Closed`
+or `Conflict` cause is reported with that code (not `Internal`), so HTTP maps
+capacity exhaustion to 503. A stored value larger than the current `MaxValueBytes`
+(written under an earlier, larger bound) or a Redis entry of the wrong type or
+shape is a miss that a later write replaces and `Forget` removes. Panic and runtime.Goexit become
 safe callback failures. A failed mutating remote operation may have reached its
 backend; the cache facade performs no automatic retry and does not promise rollback.
 Consumers decide explicitly whether a cache error permits a domain fallback.

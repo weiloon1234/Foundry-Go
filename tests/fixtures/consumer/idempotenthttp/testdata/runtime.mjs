@@ -20,5 +20,5 @@ for (const invalid of ["tiny", "contains spaces 0001", "typescript-submission-00
 await assert.rejects(() => client.ordersCreate({ path: input.path, body: input.body }), sdk.ContractError);
 await assert.rejects(() => client.ordersCreate(input, { headers: { "IDEMPOTENCY-KEY": key } }), sdk.ContractError);
 assert.equal(calls, before);
-assert.equal(sdk.manifestVersion, 4);
+assert.equal(sdk.manifestVersion, Number(process.argv[4]));
 console.log("typed idempotency keys, HTTP replay and mismatch passed");

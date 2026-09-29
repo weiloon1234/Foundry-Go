@@ -101,6 +101,37 @@ func TestSanitizationAttackInputsAndImmutablePolicy(t *testing.T) {
 	}
 	wg.Wait()
 }
+func TestStripTagsReusesOnePolicyConcurrently(t *testing.T) {
+	var wg sync.WaitGroup
+	for range 32 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			out, err := sanitize.StripTags(t.Context(), `<p>a &amp; <i>b</i></p><style>x</style>`)
+			if err != nil || out != "a &amp; b" {
+				t.Error(out, err)
+			}
+		}()
+	}
+	wg.Wait()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if out, err := sanitize.StripTags(ctx, "<b>x</b>"); !errors.Is(err, context.Canceled) || out != "" {
+		t.Fatal(out, err)
+	}
+	if _, err := sanitize.StripTags(t.Context(), strings.Repeat("x", sanitize.MaxInputBytes+1)); err == nil {
+		t.Fatal("default input bound ignored")
+	}
+}
+
+func BenchmarkStripTags(b *testing.B) {
+	for b.Loop() {
+		if _, err := sanitize.StripTags(b.Context(), `<p>Hello <b>world</b></p>`); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestSanitizerBoundsAndCancellationNeverReturnPartialOutput(t *testing.T) {
 	config := sanitize.DefaultConfig()
 	config.InputBytes = 32

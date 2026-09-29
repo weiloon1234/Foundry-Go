@@ -1,7 +1,8 @@
 // Package collection provides focused transformations over ordinary Go slices.
 // Inputs remain unchanged; callbacks run synchronously. Result containers are
 // independent, while pointer/map/slice elements retain ordinary Go aliasing.
-// Use slices/maps/iter for sorting, reversing, cloning and iteration.
+// Use slices/maps/iter for in-place sorting, reversing, cloning and iteration;
+// SortBy/SortByDesc return new slices ordered by an extracted key.
 package collection
 
 func Map[S ~[]T, T, U any](input S, transform func(T) U) []U {

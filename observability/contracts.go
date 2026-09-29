@@ -104,8 +104,12 @@ type Entry struct {
 	RequestID attribution.RequestID `json:"request_id,omitempty"`
 }
 
+// ErrorReport describes one failed operation. Diagnostic is a redacted summary
+// (type names, framework fault notes and attributes, contained-panic frames);
+// it never contains error text, payloads or credentials.
 type ErrorReport struct {
-	Entry Entry `json:"entry"`
+	Entry      Entry            `json:"entry"`
+	Diagnostic fault.Diagnostic `json:"diagnostic,omitzero"`
 }
 
 // Reporter receives owned metadata in a bounded worker. It must honor context
@@ -118,6 +122,15 @@ type Reporter func(context.Context, ErrorReport) error
 // error reports. Each callback must own its I/O until it returns.
 type TraceExporter func(context.Context, Entry) error
 
+// TraceBatchExporter receives up to Config.TraceBatchSize sampled spans that
+// were already queued together, in queue order. A trace worker never waits to
+// fill a batch, so light traffic exports promptly in small batches. The slice
+// is owned by the callback. One failed call counts one export failure.
+type TraceBatchExporter func(context.Context, []Entry) error
+
+// DefaultTraceBatchSize bounds one TraceBatchExporter call when unset.
+const DefaultTraceBatchSize = 64
+
 type Config struct {
 	MaxSeries           int
 	MaxRecent           int
@@ -125,29 +138,63 @@ type Config struct {
 	ErrorQueue          int
 	ReporterConcurrency int
 	ReporterTimeout     time.Duration
+	// SampleTraces enables local trace sampling. TraceSampleRatio then selects
+	// the sampled fraction of traces, deterministically by trace ID; zero
+	// selects 1 (every trace). Disable sampling with SampleTraces=false.
 	SampleTraces        bool
+	TraceSampleRatio    float64
 	TraceExporters      []TraceExporter
-	TraceQueue          int
-	TraceConcurrency    int
-	TraceTimeout        time.Duration
-	Maintenance         *maintenance.Gate
+	TraceBatchExporters []TraceBatchExporter
+	// TraceBatchSize bounds one batch exporter call; zero selects 64.
+	TraceBatchSize   int
+	TraceQueue       int
+	TraceConcurrency int
+	TraceTimeout     time.Duration
+	Maintenance      *maintenance.Gate
 }
 
 func DefaultConfig() Config {
-	return Config{MaxSeries: 512, MaxRecent: 128, MaxActive: 65536, ErrorQueue: 128, ReporterConcurrency: 2, ReporterTimeout: 3 * time.Second, SampleTraces: true, TraceQueue: 512, TraceConcurrency: 2, TraceTimeout: 3 * time.Second}
+	return Config{MaxSeries: 512, MaxRecent: 128, MaxActive: 65536, ErrorQueue: 128, ReporterConcurrency: 2, ReporterTimeout: 3 * time.Second, SampleTraces: true, TraceSampleRatio: 1, TraceBatchSize: DefaultTraceBatchSize, TraceQueue: 512, TraceConcurrency: 2, TraceTimeout: 3 * time.Second}
 }
 
 func (c Config) Validate() error {
 	if c.MaxSeries < 1 || c.MaxSeries > 4096 || c.MaxRecent < 0 || c.MaxRecent > 4096 || c.MaxActive < 1 || c.MaxActive > 1<<20 || c.ErrorQueue < 1 || c.ErrorQueue > 4096 || c.ReporterConcurrency < 1 || c.ReporterConcurrency > 16 || c.ReporterTimeout <= 0 || c.ReporterTimeout > time.Minute {
 		return fault.New(fault.Invalid, "invalid observability resource bounds")
 	}
-	if c.TraceQueue < 1 || c.TraceQueue > 4096 || c.TraceConcurrency < 1 || c.TraceConcurrency > 16 || c.TraceTimeout <= 0 || c.TraceTimeout > time.Minute || len(c.TraceExporters) > 16 {
+	if c.TraceQueue < 1 || c.TraceQueue > 4096 || c.TraceConcurrency < 1 || c.TraceConcurrency > 16 || c.TraceTimeout <= 0 || c.TraceTimeout > time.Minute || len(c.TraceExporters)+len(c.TraceBatchExporters) > 16 || c.TraceBatchSize < 0 || c.TraceBatchSize > 512 {
 		return fault.New(fault.Invalid, "invalid trace export resource bounds")
+	}
+	if !(c.TraceSampleRatio >= 0 && c.TraceSampleRatio <= 1) {
+		return fault.New(fault.Invalid, "trace sampling ratio must be between 0 and 1")
 	}
 	for _, exporter := range c.TraceExporters {
 		if exporter == nil {
 			return fault.New(fault.Invalid, "trace exporter cannot be nil")
 		}
 	}
+	for _, exporter := range c.TraceBatchExporters {
+		if exporter == nil {
+			return fault.New(fault.Invalid, "trace batch exporter cannot be nil")
+		}
+	}
 	return nil
+}
+
+// sampler resolves the local sampling policy. Zero ratio selects every trace.
+func (c Config) sampler() tracing.Sampler {
+	ratio := c.TraceSampleRatio
+	if !c.SampleTraces {
+		ratio = 0
+	} else if ratio == 0 {
+		ratio = 1
+	}
+	sampler, _ := tracing.RatioSampler(ratio)
+	return sampler
+}
+
+func (c Config) batchSize() int {
+	if c.TraceBatchSize == 0 {
+		return DefaultTraceBatchSize
+	}
+	return c.TraceBatchSize
 }

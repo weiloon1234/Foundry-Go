@@ -50,7 +50,7 @@ func TestResultCursorCanonicalOrderAndBoundary(t *testing.T) {
 	orders := cursorOrders(canonical.orders, navigation.backward)
 	read := canonical.reader()
 	read.node.orders = orderNodes(orders)
-	read.node.predicates = []expression{cursorPredicate(orders, navigation.keys).expression}
+	read.node.predicates = []expression{cursorPredicate(orders, navigation.keys, anyNullable[CursorScope[cursorRecord]]).expression}
 	back, err := read.Compile()
 	if err != nil {
 		t.Fatal(err)
@@ -131,7 +131,7 @@ func TestNullableCursorTerminalBoundaryCompilesFalse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	q.node.predicates = []expression{cursorPredicate(q.orders, []driver.Value{nil}).expression}
+	q.node.predicates = []expression{cursorPredicate(q.orders, []driver.Value{nil}, anyNullable[CursorScope[value.Nullable[int64]]]).expression}
 	s, err := q.reader().Compile()
 	if err != nil || !strings.Contains(s.SQL(), "WHERE FALSE") || len(s.Arguments()) != 0 {
 		t.Fatal("all-NULL terminal boundary not empty", s.SQL(), err)

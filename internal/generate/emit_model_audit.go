@@ -30,15 +30,16 @@ func (e *emitter) emitModelAudit(m model) {
 	}
 	e.line("}")
 	e.line("// Audit captures this operation's existing stored changes without getters, mutators or additional database work.")
+	e.line("// Updates, soft deletes and restorations record assigned or changed fields plus the key; create and delete record every field.")
 	e.line("// Standalone Compare results have no captured operation and cannot become lifecycle audit records.")
 	e.line("func(%s %sChanges)Audit(%s %sAuditPolicy)(%s,error){", changes, m.name, policy, m.name, modelType)
 	e.line("%s,%s:=%s.operation.Get();if !%s{return %s{},%s.New(%s.Missing,\"audit requires captured model changes\")}", operation, present, changes, present, modelType, fault, fault)
 	e.line("%s,%s:=%s.after.Get();if !%s{%s,%s=%s.before.Get()};if !%s{return %s{},%s.New(%s.Missing,\"audit requires a stored model snapshot\")}", item, present, changes, present, item, present, changes, present, modelType, fault, fault)
 	e.line("%s,%s:=%s.NewBuilder(%s.FoundryReference(),%s,%q,%s.%s);if %s!=nil{return %s{},%s}", builder, errName, record, item, operation, primary.column, policy, primary.name, errName, modelType, errName)
-	e.line("var %s %s.Field[%s]", captured, record, m.name)
+	// Capture skips unassigned, unchanged fields of existing-model operations
+	// before invoking their codec, so updates store only what they touched.
 	for _, f := range m.fields {
-		e.line("%s,%s=%s.CaptureField[%s](%q,%s,%s.fields.%s,%s.%s);if %s!=nil{return %s{},%s}", captured, errName, record, m.name, f.column, e.fieldCodec(f, true), changes, f.name, policy, f.name, errName, modelType, errName)
-		e.line("if %s=%s.Add(%s);%s!=nil{return %s{},%s}", errName, builder, captured, errName, modelType, errName)
+		e.line("if %s=%s.Capture(%s,%q,%s,%s.fields.%s,%s.%s);%s!=nil{return %s{},%s}", errName, record, builder, f.column, e.fieldCodec(f, true), changes, f.name, policy, f.name, errName, modelType, errName)
 	}
 	e.line("return %s.Build()}", builder)
 

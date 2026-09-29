@@ -1,11 +1,13 @@
 package observability
 
 import (
+	"cmp"
 	"context"
+	"hash/maphash"
 	"math"
 	"slices"
-	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/attribution"
@@ -45,29 +47,83 @@ type Snapshot struct {
 	DroppedTraces       uint64           `json:"dropped_traces"`
 	TraceExportFailures uint64           `json:"trace_export_failures"`
 	PendingTraces       int              `json:"pending_traces"`
+	CollectorFailures   uint64           `json:"collector_failures"`
 	Metrics             []Metric         `json:"metrics"`
 	Recent              []Entry          `json:"recent"`
+}
+
+// closingBit marks sealed admission in Recorder.state; the low bits count
+// admitted, unfinished spans. MaxActive stays far below this bit.
+const closingBit = uint64(1) << 62
+
+// metricShards spreads series lookup across independent locks. A series is
+// created once under its shard lock; later observations only use atomics.
+const metricShards = 16
+
+type metricShard struct {
+	mu     sync.RWMutex
+	series map[metricKey]*series
+}
+
+// series stores non-cumulative bucket counts. Updates increment Count before
+// the bucket and snapshots read buckets before Count, so an exported
+// cumulative bucket never exceeds its histogram count.
+type series struct {
+	count   atomic.Uint64
+	nanos   atomic.Uint64
+	buckets [len(durationBounds)]atomic.Uint64
+}
+
+type recentSlot struct {
+	mu    sync.Mutex
+	seq   uint64
+	entry Entry
 }
 
 // Recorder is application-owned. New performs no I/O and starts no goroutines.
 // Run owns reporter workers; Close rejects new spans and drains accepted spans
 // and reporter callbacks. No global logger/provider is modified. Do not copy it.
+// Span admission and completion use atomics and per-series shards; they never
+// wait for snapshot formatting, collectors or exporter callbacks.
 type Recorder struct {
-	config                                                                             Config
-	reporters                                                                          []Reporter
-	gate                                                                               *maintenance.Gate
-	mu                                                                                 sync.Mutex
-	closing, running, queueClosed, claimed                                             bool
-	active                                                                             int
-	completed, failures, droppedSeries, droppedSpans, droppedReports, reporterFailures uint64
-	droppedTraces, traceExportFailures                                                 uint64
-	metrics                                                                            map[metricKey]Metric
-	recent                                                                             []Entry
-	recentNext                                                                         int
-	queue                                                                              chan ErrorReport
-	traces                                                                             chan Entry
-	done                                                                               chan struct{}
-	ready                                                                              chan struct{}
+	config    Config
+	reporters []Reporter
+	gate      *maintenance.Gate
+	sampler   tracing.Sampler
+	exporting bool
+	seed      maphash.Seed
+
+	// state packs the closing flag with the admitted span count.
+	state    atomic.Uint64
+	finished sync.Once
+
+	// life protects the reporter runtime lifecycle and done/ready closure.
+	life              sync.Mutex
+	running, claimed  bool
+	completed         atomic.Uint64
+	failures          atomic.Uint64
+	droppedSeries     atomic.Uint64
+	droppedSpans      atomic.Uint64
+	droppedReports    atomic.Uint64
+	reporterFailures  atomic.Uint64
+	droppedTraces     atomic.Uint64
+	traceFailures     atomic.Uint64
+	collectorFailures atomic.Uint64
+	seriesCount       atomic.Int64
+	shards            [metricShards]metricShard
+
+	// recent is a ring of individually locked slots; writers claim a slot by
+	// sequence number so concurrent spans never wait on one shared lock.
+	recent     []recentSlot
+	recentNext atomic.Uint64
+
+	collectorsMu sync.Mutex
+	collectors   []namedCollector
+
+	queue  chan ErrorReport
+	traces chan Entry
+	done   chan struct{}
+	ready  chan struct{}
 }
 
 func New(config Config, reporters ...Reporter) (*Recorder, error) {
@@ -87,12 +143,28 @@ func New(config Config, reporters ...Reporter) (*Recorder, error) {
 		gate = &maintenance.Gate{}
 	}
 	config.TraceExporters = slices.Clone(config.TraceExporters)
-	return &Recorder{config: config, reporters: slices.Clone(reporters), gate: gate, metrics: make(map[metricKey]Metric), queue: make(chan ErrorReport, config.ErrorQueue), traces: make(chan Entry, config.TraceQueue), done: make(chan struct{}), ready: make(chan struct{})}, nil
+	config.TraceBatchExporters = slices.Clone(config.TraceBatchExporters)
+	r := &Recorder{config: config, reporters: slices.Clone(reporters), gate: gate, sampler: config.sampler(), exporting: len(config.TraceExporters)+len(config.TraceBatchExporters) > 0, seed: maphash.MakeSeed(), queue: make(chan ErrorReport, config.ErrorQueue), traces: make(chan Entry, config.TraceQueue), done: make(chan struct{}), ready: make(chan struct{})}
+	for i := range r.shards {
+		r.shards[i].series = make(map[metricKey]*series)
+	}
+	r.recent = make([]recentSlot, config.MaxRecent)
+	return r, nil
 }
 
-func increment(value *uint64) {
-	if *value < math.MaxUint64 {
-		*value = *value + 1
+// increment saturates instead of wrapping so overflow can never report a
+// smaller total than was actually observed.
+func increment(value *atomic.Uint64) { add(value, 1) }
+func add(value *atomic.Uint64, delta uint64) {
+	for {
+		current := value.Load()
+		next := current + delta
+		if next < current {
+			next = math.MaxUint64
+		}
+		if current == next || value.CompareAndSwap(current, next) {
+			return
+		}
 	}
 }
 
@@ -104,12 +176,36 @@ type Span struct {
 	recorder *Recorder
 	entry    Entry
 	started  time.Time
+	sampled  bool
+}
+
+func (r *Recorder) admit() error {
+	for {
+		current := r.state.Load()
+		if current&closingBit != 0 {
+			return fault.New(fault.Closed, "observation admission is closed")
+		}
+		if current >= uint64(r.config.MaxActive) {
+			return fault.New(fault.Conflict, "observation admission exceeds its bound")
+		}
+		if r.state.CompareAndSwap(current, current+1) {
+			return nil
+		}
+	}
+}
+
+// release ends one admission. The last span after sealing closes the queues.
+func (r *Recorder) release() {
+	if r.state.Add(^uint64(0)) == closingBit {
+		r.finishAdmission()
+	}
 }
 
 // Start captures one operation and derives a trace child. A nil optional
 // recorder preserves the input context and returns a nil span. Resource limits
 // return an error and increment dropped-span accounting; instrumentation callers
-// may continue their business operation without a span.
+// may continue their business operation without a span. An already-cancelled
+// context is still observed: cancellation is the operation's outcome to report.
 func (r *Recorder) Start(ctx context.Context, operation Operation) (context.Context, *Span, error) {
 	if r == nil {
 		return ctx, nil, nil
@@ -118,99 +214,75 @@ func (r *Recorder) Start(ctx context.Context, operation Operation) (context.Cont
 		return ctx, nil, fault.New(fault.Invalid, "observation requires a recorder and context")
 	}
 	if err := operation.Validate(); err != nil {
-		r.mu.Lock()
 		increment(&r.droppedSpans)
-		r.mu.Unlock()
 		return ctx, nil, err
 	}
-	r.mu.Lock()
-	if r.closing {
+	if err := r.admit(); err != nil {
 		increment(&r.droppedSpans)
-		r.mu.Unlock()
-		return ctx, nil, fault.New(fault.Closed, "observation admission is closed")
+		return ctx, nil, err
 	}
-	if r.active >= r.config.MaxActive {
-		increment(&r.droppedSpans)
-		r.mu.Unlock()
-		return ctx, nil, fault.New(fault.Conflict, "observation admission exceeds its bound")
-	}
-	r.active++
-	r.mu.Unlock()
 	parent := tracing.FromContext(ctx)
-	work, trace, err := tracing.Start(ctx, r.config.SampleTraces)
+	work, trace, err := tracing.StartSampled(ctx, r.sampler)
 	if err != nil {
-		r.mu.Lock()
-		r.active--
 		increment(&r.droppedSpans)
-		r.finishAdmissionLocked()
-		r.mu.Unlock()
+		r.release()
 		return ctx, nil, err
 	}
 	started := time.Now()
 	entry := Entry{Operation: operation, Started: started.UTC(), TraceID: trace.TraceID(), SpanID: trace.SpanID(), ParentID: parent.SpanID(), RequestID: attribution.FromContext(ctx).Request().ID}
-	return WithContext(work, r), &Span{recorder: r, entry: entry, started: started}, nil
+	return WithContext(work, r), &Span{recorder: r, entry: entry, started: started, sampled: trace.Sampled()}, nil
 }
 
-func (s *Span) End(result Result) {
+func (s *Span) End(result Result) { s.EndWithDiagnostic(result, fault.Diagnostic{}) }
+
+// EndWithDiagnostic completes the span and attaches a redacted failure summary
+// to the error report produced for a failed, panicked or timed-out result.
+func (s *Span) EndWithDiagnostic(result Result, diagnostic fault.Diagnostic) {
 	if s == nil || s.recorder == nil {
 		return
 	}
 	s.once.Do(func() {
 		r := s.recorder
+		// Queue admission happens before release: the queues close only once
+		// the last admitted span has released after sealing.
+		defer r.release()
 		entry := s.entry
 		entry.Duration = max(time.Duration(0), time.Since(s.started))
 		normalized, err := result.normalize(entry.Operation.Kind)
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		r.active--
 		if err != nil {
 			increment(&r.droppedSpans)
-			r.finishAdmissionLocked()
 			return
 		}
 		entry.Result = normalized
-		r.recordLocked(entry)
-		r.finishAdmissionLocked()
+		r.record(entry, diagnostic, s.sampled)
 	})
 }
 
-func (r *Recorder) recordLocked(entry Entry) {
+func (r *Recorder) record(entry Entry, diagnostic fault.Diagnostic, sampled bool) {
 	increment(&r.completed)
 	failed := entry.Result.Outcome == Failed || entry.Result.Outcome == Panicked || entry.Result.Outcome == TimedOut
 	if failed {
 		increment(&r.failures)
 	}
-	key := metricKey{Operation: entry.Operation, Result: entry.Result}
-	metric, exists := r.metrics[key]
-	if exists || len(r.metrics) < r.config.MaxSeries {
-		metric.Operation, metric.Result = entry.Operation, entry.Result
-		increment(&metric.Count)
-		metric.Seconds = min(math.MaxFloat64, metric.Seconds+entry.Duration.Seconds())
-		for i, bound := range durationBounds {
-			if entry.Duration <= bound {
-				increment(&metric.Buckets[i])
-			}
+	r.observe(metricKey{Operation: entry.Operation, Result: entry.Result}, entry.Duration)
+	if len(r.recent) > 0 {
+		seq := r.recentNext.Add(1)
+		slot := &r.recent[(seq-1)%uint64(len(r.recent))]
+		slot.mu.Lock()
+		// A delayed writer never replaces a newer entry in its slot.
+		if seq > slot.seq {
+			slot.seq, slot.entry = seq, entry
 		}
-		r.metrics[key] = metric
-	} else {
-		increment(&r.droppedSeries)
-	}
-	if r.config.MaxRecent > 0 {
-		if len(r.recent) < r.config.MaxRecent {
-			r.recent = append(r.recent, entry)
-		} else {
-			r.recent[r.recentNext] = entry
-			r.recentNext = (r.recentNext + 1) % len(r.recent)
-		}
+		slot.mu.Unlock()
 	}
 	if failed && len(r.reporters) > 0 {
 		select {
-		case r.queue <- ErrorReport{Entry: entry}:
+		case r.queue <- ErrorReport{Entry: entry, Diagnostic: diagnostic.Clone()}:
 		default:
 			increment(&r.droppedReports)
 		}
 	}
-	if r.config.SampleTraces && len(r.config.TraceExporters) > 0 {
+	if sampled && r.exporting {
 		select {
 		case r.traces <- entry:
 		default:
@@ -219,33 +291,96 @@ func (r *Recorder) recordLocked(entry Entry) {
 	}
 }
 
+func (r *Recorder) observe(key metricKey, duration time.Duration) {
+	shard := &r.shards[maphash.Comparable(r.seed, key)%metricShards]
+	shard.mu.RLock()
+	item := shard.series[key]
+	shard.mu.RUnlock()
+	if item == nil {
+		shard.mu.Lock()
+		if item = shard.series[key]; item == nil {
+			if !r.reserveSeries() {
+				shard.mu.Unlock()
+				increment(&r.droppedSeries)
+				return
+			}
+			item = &series{}
+			shard.series[key] = item
+		}
+		shard.mu.Unlock()
+	}
+	increment(&item.count)
+	add(&item.nanos, uint64(duration))
+	for i, bound := range durationBounds {
+		if duration <= bound {
+			increment(&item.buckets[i])
+			break
+		}
+	}
+}
+
+func (r *Recorder) reserveSeries() bool {
+	for {
+		current := r.seriesCount.Load()
+		if current >= int64(r.config.MaxSeries) {
+			return false
+		}
+		if r.seriesCount.CompareAndSwap(current, current+1) {
+			return true
+		}
+	}
+}
+
 func (r *Recorder) Snapshot() Snapshot {
 	if r == nil {
 		return Snapshot{Mode: maintenance.Serving, Metrics: []Metric{}, Recent: []Entry{}}
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	result := Snapshot{Closing: r.closing, Mode: r.gate.Mode(), Active: r.active, Completed: r.completed, Failures: r.failures, DroppedSeries: r.droppedSeries, DroppedSpans: r.droppedSpans, DroppedReports: r.droppedReports, ReporterFailures: r.reporterFailures, PendingReports: len(r.queue), Metrics: make([]Metric, 0, len(r.metrics)), Recent: make([]Entry, 0, len(r.recent))}
-	result.DroppedTraces, result.TraceExportFailures, result.PendingTraces = r.droppedTraces, r.traceExportFailures, len(r.traces)
-	for _, metric := range r.metrics {
-		result.Metrics = append(result.Metrics, metric)
+	state := r.state.Load()
+	result := Snapshot{Closing: state&closingBit != 0, Mode: r.gate.Mode(), Active: int(state &^ closingBit), Completed: r.completed.Load(), Failures: r.failures.Load(), DroppedSeries: r.droppedSeries.Load(), DroppedSpans: r.droppedSpans.Load(), DroppedReports: r.droppedReports.Load(), ReporterFailures: r.reporterFailures.Load(), PendingReports: len(r.queue), DroppedTraces: r.droppedTraces.Load(), TraceExportFailures: r.traceFailures.Load(), PendingTraces: len(r.traces), CollectorFailures: r.collectorFailures.Load()}
+	result.Metrics = make([]Metric, 0, r.seriesCount.Load())
+	for i := range r.shards {
+		shard := &r.shards[i]
+		shard.mu.RLock()
+		for key, item := range shard.series {
+			result.Metrics = append(result.Metrics, item.snapshot(key))
+		}
+		shard.mu.RUnlock()
 	}
-	sort.Slice(result.Metrics, func(i, j int) bool {
-		a, b := result.Metrics[i], result.Metrics[j]
-		if a.Operation.Kind != b.Operation.Kind {
-			return a.Operation.Kind < b.Operation.Kind
+	type ordered struct {
+		seq   uint64
+		entry Entry
+	}
+	recent := make([]ordered, 0, len(r.recent))
+	for i := range r.recent {
+		slot := &r.recent[i]
+		slot.mu.Lock()
+		if slot.seq != 0 {
+			recent = append(recent, ordered{slot.seq, slot.entry})
 		}
-		if a.Operation.Name != b.Operation.Name {
-			return a.Operation.Name < b.Operation.Name
-		}
-		if a.Result.Outcome != b.Result.Outcome {
-			return a.Result.Outcome < b.Result.Outcome
-		}
-		return a.Result.Status < b.Result.Status
+		slot.mu.Unlock()
+	}
+	// Sorting runs outside every recorder lock; recent entries are oldest first.
+	slices.SortFunc(recent, func(a, b ordered) int { return cmp.Compare(a.seq, b.seq) })
+	result.Recent = make([]Entry, len(recent))
+	for i, item := range recent {
+		result.Recent[i] = item.entry
+	}
+	slices.SortFunc(result.Metrics, func(a, b Metric) int {
+		return cmp.Or(cmp.Compare(a.Operation.Kind, b.Operation.Kind), cmp.Compare(a.Operation.Name, b.Operation.Name), cmp.Compare(a.Result.Outcome, b.Result.Outcome), cmp.Compare(a.Result.Status, b.Result.Status))
 	})
-	result.Recent = append(result.Recent, r.recent[r.recentNext:]...)
-	result.Recent = append(result.Recent, r.recent[:r.recentNext]...)
 	return result
+}
+
+func (s *series) snapshot(key metricKey) Metric {
+	metric := Metric{Operation: key.Operation, Result: key.Result}
+	var cumulative uint64
+	for i := range s.buckets {
+		cumulative += s.buckets[i].Load()
+		metric.Buckets[i] = cumulative
+	}
+	metric.Count = s.count.Load()
+	metric.Seconds = float64(s.nanos.Load()) / float64(time.Second)
+	return metric
 }
 
 func (r *Recorder) Gate() *maintenance.Gate {
@@ -263,14 +398,16 @@ func (r *Recorder) Claim() error {
 	if r == nil || r.done == nil {
 		return fault.New(fault.Invalid, "observation ownership requires an initialized recorder")
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.claimed || r.running || r.closing {
+	r.life.Lock()
+	defer r.life.Unlock()
+	if r.claimed || r.running || r.closing() {
 		return fault.New(fault.Conflict, "observation recorder is already owned, started or closed")
 	}
 	r.claimed = true
 	return nil
 }
+
+func (r *Recorder) closing() bool { return r.state.Load()&closingBit != 0 }
 
 type recorderKey struct{}
 

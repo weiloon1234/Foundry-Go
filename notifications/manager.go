@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -23,7 +24,7 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{Schema: "public", Clock: clock.System{}, MaxActive: 32, Timeout: time.Minute}
+	return Config{Schema: "public", Clock: clock.System{}, MaxActive: 128, Timeout: time.Minute}
 }
 func (c Config) Validate() error {
 	if !sqlname.Valid(c.Schema) || nilInterface(c.Clock) || c.MaxActive < 1 || c.MaxActive > 1024 || c.Timeout <= 0 || c.Timeout > 10*time.Minute {
@@ -41,6 +42,7 @@ type Manager struct {
 	config   Config
 	ctx      context.Context
 	cancel   context.CancelFunc
+	slots    *admission.Semaphore
 	mu       sync.Mutex
 	active   int
 	closing  bool
@@ -55,7 +57,7 @@ func New(db *database.DB, registry *Registry, config Config) (*Manager, error) {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Manager{db: db, registry: registry, config: config, ctx: ctx, cancel: cancel, done: make(chan struct{})}, nil
+	return &Manager{db: db, registry: registry, config: config, ctx: ctx, cancel: cancel, slots: admission.New(config.MaxActive), done: make(chan struct{})}, nil
 }
 
 type operationKey struct{}
@@ -73,12 +75,25 @@ func (m *Manager) begin(ctx context.Context) (context.Context, func(), error) {
 		return nil, nil, err
 	}
 	m.mu.Lock()
-	if m.closing || m.active >= m.config.MaxActive {
+	if m.closing {
 		m.mu.Unlock()
-		return nil, nil, fault.New(fault.Conflict, "notification manager is unavailable")
+		return nil, nil, fault.New(fault.Closed, "notification manager is closing")
 	}
+	// Waiters count as active so Done stays open until they are admitted or leave.
 	m.active++
 	m.mu.Unlock()
+	nested := false
+	for frame, _ := ctx.Value(operationKey{}).(*operationFrame); frame != nil; frame = frame.parent {
+		nested = nested || frame.manager == m && frame.active.Load()
+	}
+	wait := admission.Wait(m.config.Timeout)
+	if nested {
+		wait = 0
+	}
+	if err := m.slots.Acquire(ctx, wait, m.ctx.Done()); err != nil {
+		m.leave()
+		return nil, nil, err
+	}
 	ctx, unlink := contextlink.Link(ctx, m.ctx)
 	ctx, cancel := context.WithTimeout(ctx, m.config.Timeout)
 	parent, _ := ctx.Value(operationKey{}).(*operationFrame)
@@ -89,13 +104,17 @@ func (m *Manager) begin(ctx context.Context) (context.Context, func(), error) {
 		frame.active.Store(false)
 		cancel()
 		unlink()
-		m.mu.Lock()
-		defer m.mu.Unlock()
-		m.active--
-		if m.closing && m.active == 0 {
-			close(m.done)
-		}
+		m.slots.Release()
+		m.leave()
 	}, nil
+}
+func (m *Manager) leave() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.active--
+	if m.closing && m.active == 0 {
+		close(m.done)
+	}
 }
 func (m *Manager) Done() <-chan struct{} {
 	if m == nil || m.done == nil {

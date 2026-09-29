@@ -84,15 +84,22 @@ func (q Query[M]) validateSoftDeleteScope() error {
 
 // effectivePredicates is the sole source of automatic model visibility. Keep
 // explicit filters separate so replacing the implicit scope never removes one.
+// Model global scopes join here too, so every read, write, relation and
+// subquery path that honors soft deletion honors them identically.
 func (q Query[M]) effectivePredicates() []expression {
-	if !q.hasSoftDeletes() || q.softDeleteScope == allRecords {
+	scopes := q.scopePredicates()
+	if (!q.hasSoftDeletes() || q.softDeleteScope == allRecords) && len(scopes) == 0 {
 		return q.predicates
+	}
+	result := append(slices.Clone(q.predicates), scopes...)
+	if !q.hasSoftDeletes() || q.softDeleteScope == allRecords {
+		return result
 	}
 	op := isNull
 	if q.softDeleteScope == trashedRecords {
 		op = isNotNull
 	}
-	return append(slices.Clone(q.predicates), q.deletionPredicate(op))
+	return append(result, q.deletionPredicate(op))
 }
 
 func (q Query[M]) deletionPredicate(op operator) expression {

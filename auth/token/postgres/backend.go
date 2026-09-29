@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"net/netip"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/auth"
@@ -33,9 +34,10 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// Backend borrows a pool and owns each operation's read-committed transaction.
-// Explicit In methods join verified caller transactions; ordinary methods own
-// theirs. It never retries writes or connects at construction.
+// Backend borrows a pool. Mutations own a read-committed transaction; request
+// verification and listing are single statements without one. Explicit In
+// methods join verified caller transactions. It never retries writes or
+// connects at construction.
 type Backend struct {
 	db     *database.DB
 	config Config
@@ -61,8 +63,8 @@ func (b *Backend) within(ctx context.Context, fn func(*database.Tx) error) error
 		return err
 	}
 	return b.db.Transaction(ctx, func(tx *database.Tx) error {
-		// Only schema control is SQL infrastructure; all credential reads/writes use
-		// generated model queries. Schema passed the shared identifier validator.
+		// Generated model queries resolve through this schema; set-based and hot-path
+		// statements qualify it explicitly. Schema passed the identifier validator.
 		if _, err := tx.Exec(ctx, `SET LOCAL search_path TO "`+b.config.Schema+`", pg_temp`); err != nil {
 			return err
 		}
@@ -197,7 +199,14 @@ func record(address token.Address, subject tokenstore.Subject, family tokenstore
 	if expiry, present := entry.RefreshExpiresAt.Get(); present {
 		refreshExpiry = value.Set(expiry)
 	}
-	result := token.Record{ID: model.IDFromBytes[token.Record](family.ID.Bytes()), Address: address, Subject: identity, Name: family.Name, Scopes: names, Mode: token.Mode(family.Mode), Assurance: auth.Assurance(family.Assurance), AccessHash: access, RefreshHash: refresh, Lifetime: token.Lifetime{Access: time.Duration(family.AccessNanos), RefreshIdle: time.Duration(family.RefreshIdleNanos), Absolute: family.ExpiresAt.UTC().Sub(family.CreatedAt.UTC())}, RotationLimit: family.RotationLimit, Generation: entry.Generation, CreatedAt: family.CreatedAt, IssuedAt: entry.IssuedAt, LastSeenAt: entry.LastSeenAt, AccessExpiresAt: entry.AccessExpiresAt, RefreshExpiresAt: refreshExpiry, ExpiresAt: family.ExpiresAt}
+	var device auth.Device
+	if text, present := family.ClientIP.Get(); present {
+		if device.ClientIP, err = netip.ParseAddr(text); err != nil {
+			return token.Record{}, fault.New(fault.Invalid, "stored token client address is invalid")
+		}
+	}
+	device.UserAgent, _ = family.UserAgent.Get()
+	result := token.Record{ID: model.IDFromBytes[token.Record](family.ID.Bytes()), Address: address, Subject: identity, Name: family.Name, Scopes: names, Mode: token.Mode(family.Mode), Assurance: auth.Assurance(family.Assurance), AccessHash: access, RefreshHash: refresh, Lifetime: token.Lifetime{Access: time.Duration(family.AccessNanos), RefreshIdle: time.Duration(family.RefreshIdleNanos), Absolute: family.ExpiresAt.UTC().Sub(family.CreatedAt.UTC())}, RotationLimit: family.RotationLimit, Generation: entry.Generation, CreatedAt: family.CreatedAt, IssuedAt: entry.IssuedAt, LastSeenAt: entry.LastSeenAt, AccessExpiresAt: entry.AccessExpiresAt, RefreshExpiresAt: refreshExpiry, ExpiresAt: family.ExpiresAt, Device: device}
 	return result, result.Validate(address)
 }
 func currentRecord(ctx context.Context, tx *database.Tx, address token.Address, subject tokenstore.Subject, family tokenstore.Family) (token.Record, error) {
@@ -211,17 +220,6 @@ func currentRecord(ctx context.Context, tx *database.Tx, address token.Address, 
 	}
 	return record(address, subject, family, row)
 }
-func subjectFamilies(ctx context.Context, tx *database.Tx, subject tokenstore.Subject) ([]tokenstore.Family, error) {
-	f := tokenstore.FamilyFields()
-	rows, err := families(subject.Scope, subject.Key).OrderBy(f.CreatedAt.Asc(), f.ID.Asc()).Limit(token.MaxTokens+1).All(ctx, tx)
-	if err != nil {
-		return nil, err
-	}
-	if len(rows) > token.MaxTokens {
-		return nil, fault.New(fault.Invalid, "stored token subject exceeds capacity")
-	}
-	return rows, nil
-}
 func familyDraft(r token.Record, scope, subject string) (tokenstore.FamilyDraft, error) {
 	// Persist an empty JSON array rather than null for a deliberate empty grant.
 	names := append([]auth.AccessScopeName{}, r.Scopes...)
@@ -229,9 +227,18 @@ func familyDraft(r token.Record, scope, subject string) (tokenstore.FamilyDraft,
 	if err != nil {
 		return tokenstore.FamilyDraft{}, err
 	}
-	return tokenstore.FamilyDraft{}.SetID(model.IDFromBytes[tokenstore.Family](r.ID.Bytes())).SetScope(scope).SetSubjectKey(subject).
+	draft := tokenstore.FamilyDraft{}.SetID(model.IDFromBytes[tokenstore.Family](r.ID.Bytes())).SetScope(scope).SetSubjectKey(subject).
 		SetName(r.Name).SetScopes(scopes).SetMode(uint8(r.Mode)).SetAssurance(uint8(r.Assurance)).SetAccessNanos(int64(r.Lifetime.Access)).
-		SetRefreshIdleNanos(int64(r.Lifetime.RefreshIdle)).SetRotationLimit(r.RotationLimit).SetGeneration(r.Generation).SetCreatedAt(r.CreatedAt).SetExpiresAt(r.ExpiresAt), nil
+		SetRefreshIdleNanos(int64(r.Lifetime.RefreshIdle)).SetRotationLimit(r.RotationLimit).SetGeneration(r.Generation).SetCreatedAt(r.CreatedAt).SetExpiresAt(r.ExpiresAt).
+		ClearClientIP().ClearUserAgent()
+	// Zero device metadata is stored as NULL.
+	if r.Device.ClientIP.IsValid() {
+		draft = draft.SetClientIP(r.Device.ClientIP.String())
+	}
+	if r.Device.UserAgent != "" {
+		draft = draft.SetUserAgent(r.Device.UserAgent)
+	}
+	return draft, nil
 }
 func entryDraft(r token.Record, scope string) (tokenstore.EntryDraft, error) {
 	id, err := model.NewID[tokenstore.Entry]()

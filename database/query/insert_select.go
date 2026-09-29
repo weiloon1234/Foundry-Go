@@ -54,6 +54,7 @@ func (p InsertSelect[S, M]) Values(values Mutation[M]) InsertSelect[S, M] {
 // Exec inserts the complete selected window and returns its affected row count
 // without collecting models. Context cancellation and database constraints apply.
 func (p InsertSelect[S, M]) Exec(ctx context.Context, writer database.Transactor) (int64, error) {
+	p.destination = p.destination.inContext(ctx)
 	if err := p.validateExecution(ctx, writer); err != nil {
 		return 0, err
 	}
@@ -68,6 +69,7 @@ func (p InsertSelect[S, M]) Exec(ctx context.Context, writer database.Transactor
 // The bound limits retained models, not SQL work or individual field sizes;
 // it never silently truncates the source. RETURNING order is not source order.
 func (p InsertSelect[S, M]) Returning(ctx context.Context, writer database.Transactor, limit int) ([]M, error) {
+	p.destination = p.destination.inContext(ctx)
 	if limit <= 0 || limit > MaxInsertRows {
 		return nil, fault.New(fault.Invalid, "insert returning requires a positive bounded result limit")
 	}

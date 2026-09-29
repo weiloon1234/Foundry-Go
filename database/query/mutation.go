@@ -78,4 +78,13 @@ type mutationPlan[M any] struct {
 	query    Query[M]
 	kind     mutationKind
 	mutation Mutation[M]
+	// setBased writes every row matching the query's effective predicates
+	// in one statement: no primary-key predicate is required. countOnly omits
+	// RETURNING; adjust adds column = column +/- delta.
+	setBased  bool
+	countOnly bool
+	adjust    *adjustment
+	// statementFailure, when set, receives the failure of the plan's own
+	// statement, so InsertOrFirst can tell it from errors raised by hooks.
+	statementFailure *error
 }

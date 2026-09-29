@@ -253,7 +253,8 @@ func TestRawCallbackFailureAndCancellationOwnership(t *testing.T) {
 			t.Fatal("decoder abandoned", err)
 		default:
 		}
-		if _, err := NewCommand("GET", DecodeInt64()).Key(key).Run(t.Context(), store); !errors.Is(err, fault.Conflict) {
+		// A held slot makes the next operation queue briefly, then report overload.
+		if _, err := NewCommand("GET", DecodeInt64()).Key(key).Run(t.Context(), store); !errors.Is(err, fault.Overloaded) {
 			t.Fatal(err)
 		}
 		close(release)

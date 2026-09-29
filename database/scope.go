@@ -90,7 +90,7 @@ func operationContext(ctx context.Context, parents ...context.Context) (context.
 	return contextlink.Link(ctx, parents...)
 }
 
-func (s *operationScope) exec(ctx context.Context, executor sqlExecutor, classify classifier, statement string, arguments []any) (Result, error) {
+func (s *operationScope) exec(ctx context.Context, executor sqlExecutor, classify classifier, instrument statementProbe, statement string, arguments []any) (Result, error) {
 	release, err := s.enter()
 	if err != nil {
 		return Result{}, err
@@ -98,16 +98,16 @@ func (s *operationScope) exec(ctx context.Context, executor sqlExecutor, classif
 	defer release()
 	operation, cancel := s.context(ctx)
 	defer cancel()
-	return execute(operation, executor, classify, statement, arguments)
+	return execute(operation, executor, classify, instrument, statement, arguments)
 }
 
-func (s *operationScope) query(ctx context.Context, executor sqlExecutor, classify classifier, observers lifecycle.Observers, statement string, arguments []any) (*Rows, error) {
+func (s *operationScope) query(ctx context.Context, executor sqlExecutor, classify classifier, instrument statementProbe, observers lifecycle.Observers, statement string, arguments []any) (*Rows, error) {
 	release, err := s.enter()
 	if err != nil {
 		return nil, err
 	}
 	operation, cancel := s.context(ctx)
-	rows, err := query(operation, executor, classify, observers, observerOwner{scope: s, ctx: ctx}, func() error { cancel(); return release() }, statement, arguments)
+	rows, err := query(operation, executor, classify, instrument, observers, observerOwner{scope: s, ctx: ctx}, func() error { cancel(); return release() }, statement, arguments)
 	if err != nil {
 		return nil, err
 	}

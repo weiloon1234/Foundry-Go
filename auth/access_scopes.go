@@ -88,6 +88,20 @@ func (s AccessScopes[M]) ContainsAll(required AccessScopes[M]) bool {
 	return true
 }
 
+// Intersect returns the scopes present in both sets. Credential adapters use
+// it to apply a binding's current ceiling to stored grants: removing a scope
+// from the ceiling withdraws it from existing credentials without making them
+// unreadable. The result is never larger than either input.
+func (s AccessScopes[M]) Intersect(other AccessScopes[M]) AccessScopes[M] {
+	names := make([]AccessScopeName, 0, min(s.Len(), other.Len()))
+	for _, name := range s.names() {
+		if _, found := slices.BinarySearch(other.names(), name); found {
+			names = append(names, name)
+		}
+	}
+	return AccessScopes[M]{grant: &accessGrant{names: names}}
+}
+
 // NewScopedProof is a trusted strategy boundary after credential verification.
 // The immutable grants came from the authoritative credential store, never from
 // unverified request scope names. Empty grants remain an explicitly scoped proof.

@@ -4,6 +4,7 @@
 package decimal
 
 import (
+	"cmp"
 	"math/big"
 	"strconv"
 	"strings"
@@ -68,6 +69,15 @@ func FromInt64(value int64) Decimal {
 	return Decimal{text: strconv.FormatInt(value, 10)}
 }
 
+// Scaled returns coefficient × 10^-scale exactly, for example Scaled(1234, 2)
+// is 12.34. It is the exact bridge from integer minor units.
+func Scaled(coefficient int64, scale int) (Decimal, error) {
+	if scale < 0 || scale > MaxDigits {
+		return Decimal{}, invalidScale()
+	}
+	return fromCoefficient(big.NewInt(coefficient), scale)
+}
+
 func (d Decimal) IsZero() bool { return d.text == "" }
 func (d Decimal) String() string {
 	if d.IsZero() {
@@ -101,10 +111,88 @@ func aligned(a, b Decimal) (*big.Int, *big.Int, int) {
 
 func power(n int) *big.Int { return new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(n)), nil) }
 
-// Cmp compares numeric values, returning -1, 0 or 1.
+// Cmp compares numeric values, returning -1, 0 or 1. It compares canonical
+// digits directly and does not allocate.
 func (d Decimal) Cmp(other Decimal) int {
-	x, y, _ := aligned(d, other)
-	return x.Cmp(y)
+	sign, otherSign := d.Sign(), other.Sign()
+	if sign != otherSign {
+		return cmp.Compare(sign, otherSign)
+	}
+	if sign == 0 {
+		return 0
+	}
+	magnitude := compareMagnitude(strings.TrimPrefix(d.text, "-"), strings.TrimPrefix(other.text, "-"))
+	if sign < 0 {
+		return -magnitude
+	}
+	return magnitude
+}
+
+// compareMagnitude orders unsigned canonical text. Whole parts have no leading
+// zeros except a lone "0", and fractions have no trailing zeros, so length then
+// lexical order decide the whole part and lexical order decides the fraction.
+func compareMagnitude(a, b string) int {
+	aWhole, aFraction, _ := strings.Cut(a, ".")
+	bWhole, bFraction, _ := strings.Cut(b, ".")
+	if len(aWhole) != len(bWhole) {
+		return cmp.Compare(len(aWhole), len(bWhole))
+	}
+	if result := strings.Compare(aWhole, bWhole); result != 0 {
+		return result
+	}
+	return strings.Compare(aFraction, bFraction)
+}
+
+// Sign returns -1, 0 or 1.
+func (d Decimal) Sign() int {
+	switch {
+	case d.text == "":
+		return 0
+	case d.text[0] == '-':
+		return -1
+	}
+	return 1
+}
+
+// Neg returns the additive inverse. Negating zero returns zero.
+func (d Decimal) Neg() Decimal {
+	switch d.Sign() {
+	case 0:
+		return d
+	case -1:
+		return Decimal{text: d.text[1:]}
+	}
+	return Decimal{text: "-" + d.text}
+}
+
+// Abs returns the magnitude.
+func (d Decimal) Abs() Decimal {
+	if d.Sign() < 0 {
+		return Decimal{text: d.text[1:]}
+	}
+	return d
+}
+
+// Min returns the numerically smallest value, preferring the earliest on ties.
+func Min(first Decimal, others ...Decimal) Decimal {
+	result := first
+	for _, value := range others {
+		if value.Cmp(result) < 0 {
+			result = value
+		}
+	}
+	return result
+}
+
+// Max returns the numerically largest value, preferring the earliest on ties.
+func Max(first Decimal, others ...Decimal) Decimal {
+	result := first
+	for _, value := range others {
+		if value.Cmp(result) > 0 {
+			result = value
+		}
+	}
+	return result
 }
 
 // Add returns an exact sum or a digit-bound error. Receivers never change.
@@ -119,11 +207,32 @@ func (d Decimal) Sub(other Decimal) (Decimal, error) {
 	return fromCoefficient(x.Sub(x, y), scale)
 }
 
-// Mul returns an exact product or a digit-bound error. Division is deliberately
-// absent until a caller-selected scale and rounding contract is provided.
+// Mul returns an exact product or a digit-bound error. Division requires an
+// explicit result scale and rounding mode; see Div.
 func (d Decimal) Mul(other Decimal) (Decimal, error) {
 	x, y := d.coefficient(), other.coefficient()
 	return fromCoefficient(x.Mul(x, y), d.Scale()+other.Scale())
+}
+
+// Sum returns the exact total of values, or zero for no values. Intermediate
+// values use one aligned coefficient; only the final result is digit bounded.
+func Sum(values ...Decimal) (Decimal, error) {
+	scale := 0
+	for _, value := range values {
+		scale = max(scale, value.Scale())
+	}
+	total := new(big.Int)
+	for _, value := range values {
+		if value.IsZero() {
+			continue
+		}
+		coefficient := value.coefficient()
+		if n := scale - value.Scale(); n > 0 {
+			coefficient.Mul(coefficient, power(n))
+		}
+		total.Add(total, coefficient)
+	}
+	return fromCoefficient(total, scale)
 }
 
 func fromCoefficient(coefficient *big.Int, scale int) (Decimal, error) {

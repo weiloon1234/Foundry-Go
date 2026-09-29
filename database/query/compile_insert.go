@@ -119,7 +119,7 @@ func (p insertPlan[M]) compileRows(c compiler, rows []map[string]Assignment[M], 
 	conflictSQL := ""
 	if p.conflict != nil {
 		c.sources[conflictProposedTable] = c.columns
-		conflictSQL, err = p.conflict.compile(&c, q.table, alias)
+		conflictSQL, err = p.conflict.compile(&c, q.table, alias, q.scopePredicates())
 		if err != nil {
 			return Statement{}, err
 		}

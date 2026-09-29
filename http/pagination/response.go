@@ -20,9 +20,22 @@ type SimpleMeta struct {
 
 // Links contains optional next/previous URLs. A link is a navigation hint, not
 // a guarantee that data will still exist when another request is executed.
+// First, Last and Window are opt-in (Config.EdgeLinks, Config.PageWindow) and
+// omitted from the wire when disabled; cursor pages never carry them. Last and
+// Window need a count, so only numbered pages carry them. No link points beyond
+// Config.MaximumPage.
 type Links struct {
 	Next     value.Nullable[string] `json:"next"`
 	Previous value.Nullable[string] `json:"prev"`
+	First    value.Optional[string] `json:"first,omitzero"`
+	Last     value.Optional[string] `json:"last,omitzero"`
+	Window   []PageLink             `json:"window,omitzero"`
+}
+
+// PageLink is one numbered page around the current page, in ascending order.
+type PageLink struct {
+	Number int    `json:"page"`
+	URL    string `json:"url"`
 }
 
 // NumberedResponse contains explicit DTO values and shared page metadata.

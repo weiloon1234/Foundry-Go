@@ -47,6 +47,17 @@ func TestPathCallbackPanicAndGoexitAreInternal(t *testing.T) {
 				t.Fatal(err)
 			}
 			response := httptest.NewRecorder()
+			if strings.HasSuffix(mode, "goexit") {
+				// Codecs run on the request goroutine (callback.Invoke): Goexit
+				// ends it like any Go call; the kernel still releases ownership.
+				if !exitsGoroutine(func() { router.ServeHTTP(response, httptest.NewRequestWithContext(ctx, "GET", "/value", nil)) }) {
+					t.Fatal("path codec Goexit was converted into a response")
+				}
+				if !exitsGoroutine(func() { _, _ = route.URL(textPath{Text: "value"}) }) {
+					t.Fatal("URL codec Goexit was converted into a return")
+				}
+				return
+			}
 			router.ServeHTTP(response, httptest.NewRequestWithContext(ctx, "GET", "/value", nil))
 			if failure := decodeFailure(t, response); failure.Code != InternalError || strings.Contains(response.Body.String(), "private") {
 				t.Fatalf("path callback response: %+v", failure)
@@ -57,6 +68,20 @@ func TestPathCallbackPanicAndGoexitAreInternal(t *testing.T) {
 			}
 		})
 	}
+}
+
+// exitsGoroutine runs fn on its own goroutine and reports whether it ended by
+// runtime.Goexit rather than returning. Framework hot paths use callback.Invoke,
+// so a codec's Goexit ends the calling goroutine instead of becoming an error.
+func exitsGoroutine(fn func()) bool {
+	returned := make(chan bool, 1)
+	go func() {
+		completed := false
+		defer func() { returned <- completed }()
+		fn()
+		completed = true
+	}()
+	return !<-returned
 }
 
 type pathHostileError struct{ calls atomic.Int32 }

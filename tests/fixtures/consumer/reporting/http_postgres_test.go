@@ -48,6 +48,12 @@ func TestPublicReportHTTPAuthorizationRangesAndArtifactOwnership(t *testing.T) {
 	rangeRequest := httptest.NewRequest("GET", "/reports/members.csv", nil)
 	rangeRequest.Header.Set("Authorization", "Bearer report-fixture")
 	rangeRequest.Header.Set("Range", "bytes=0-15")
+	// The content validator lets a resume prove it continues the same bytes.
+	tag := response.Header().Get("ETag")
+	if !strings.HasPrefix(tag, `"sha256-`) || response.Header().Get("Last-Modified") == "" {
+		t.Fatal("report download lacks content validators", response.Header())
+	}
+	rangeRequest.Header.Set("If-Range", tag)
 	ranged := httptest.NewRecorder()
 	router.ServeHTTP(ranged, rangeRequest)
 	if ranged.Code != 206 || !bytes.Equal(ranged.Body.Bytes(), response.Body.Bytes()[:16]) {

@@ -41,6 +41,7 @@ func (c Counter[K]) Increment(ctx context.Context, key K, delta int64, initialTT
 	if err := initialTTL.Validate(); err != nil {
 		return 0, err
 	}
+	started := c.cache.startedAt()
 	var value int64
 	err := c.cache.execute(ctx, key, func(ctx context.Context, access entryAccess) error {
 		if c.backend == nil {
@@ -54,6 +55,7 @@ func (c Counter[K]) Increment(ctx context.Context, key K, delta int64, initialTT
 		value, err = backend.Increment(ctx, access.key, delta, initialTTL)
 		return err
 	})
+	c.cache.report(ctx, Event{Operation: OperationIncrement}, started, err)
 	if err != nil {
 		return 0, err
 	}

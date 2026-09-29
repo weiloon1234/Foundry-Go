@@ -3,7 +3,10 @@
 package relation
 
 import (
+	"iter"
 	"slices"
+
+	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -44,4 +47,21 @@ type Many[M any] struct {
 
 func Collection[M any](items []M) Many[M] { return Many[M]{items: slices.Clone(items), loaded: true} }
 func (r Many[M]) IsLoaded() bool          { return r.loaded }
-func (r Many[M]) Get() ([]M, bool)        { return slices.Clone(r.items), r.loaded }
+
+// Get returns a caller-owned copy and whether the collection was loaded. Use
+// Len and All to read a large collection without copying it.
+func (r Many[M]) Get() ([]M, bool) { return slices.Clone(r.items), r.loaded }
+
+// Len reports the number of loaded items; it is zero when not loaded.
+func (r Many[M]) Len() int { return len(r.items) }
+
+// All yields each loaded item by value without copying the collection.
+// Nothing is yielded when the relation is not loaded.
+func (r Many[M]) All() iter.Seq2[int, M] { return slices.All(r.items) }
+
+// FoundryCollection adopts a freshly built, unshared slice as a loaded
+// collection without copying it. Only framework loaders can name the seal;
+// application code uses Collection, which copies its input.
+func FoundryCollection[M any](_ sqlowner.Seal, items []M) Many[M] {
+	return Many[M]{items: slices.Clip(items), loaded: true}
+}

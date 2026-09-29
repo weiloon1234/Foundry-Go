@@ -25,11 +25,11 @@ func TestCompilerBindsValuesQuotesNamesAndPreservesPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := `SELECT "public"."users"."id", "public"."users"."name", "public"."users"."age" FROM "public"."users" WHERE (NOT (("public"."users"."name" LIKE $1 ESCAPE '!') OR ("public"."users"."age" IN ($2, $3)))) AND ("public"."users"."age" >= $4) ORDER BY "public"."users"."name" DESC LIMIT $5 OFFSET $6`
+	expected := `SELECT "public"."users"."id", "public"."users"."name", "public"."users"."age" FROM "public"."users" WHERE (NOT (("public"."users"."name" LIKE $1 ESCAPE '!') OR ("public"."users"."age" = ANY($2)))) AND ("public"."users"."age" >= $3) ORDER BY "public"."users"."name" DESC LIMIT $4 OFFSET $5`
 	if compiled.SQL() != expected {
 		t.Fatalf("unexpected SQL:\n%s", compiled.SQL())
 	}
-	if !reflect.DeepEqual(compiled.Arguments(), []any{"%a!_!%!!'%", int64(18), int64(21), int64(1), int64(10), int64(2)}) {
+	if !reflect.DeepEqual(compiled.Arguments(), []any{"%a!_!%!!'%", "{18,21}", int64(1), int64(10), int64(2)}) {
 		t.Fatal("binding order/escaping changed")
 	}
 	for _, format := range []string{"%v", "%+v", "%#v"} {
@@ -63,7 +63,7 @@ func TestCompilerRejectsInvalidBoundariesAndResources(t *testing.T) {
 		"undeclared order":    modelQuery().OrderBy(NewScalarField[user, int]("public.users", "typo", codec.Signed[int]()).Asc()),
 		"invalid binding":     modelQuery().Where(NewTextField[user, string]("public.users", "name", badCodec).Eq("invalid")),
 		"deep predicate":      modelQuery().Where(deep),
-		"too many parameters": modelQuery().Where(age.In(make([]int, MaxParameters)...)).Limit(1),
+		"too many parameters": modelQuery().Where(NewScalarField[user, float64]("public.users", "age", codec.Float[float64]()).In(make([]float64, MaxParameters)...)).Limit(1),
 		"undeclared codec":    modelQuery().Where(NewScalarField[user, int]("public.users", "age", codec.Codec[int]{}).Eq(1)),
 	} {
 		t.Run(name, func(t *testing.T) {

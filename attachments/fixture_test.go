@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/imaging"
 	store "github.com/weiloon1234/Foundry-Go/internal/attachmentstore"
@@ -73,12 +74,29 @@ func openAttachments(t *testing.T, extra ...Registration) attachmentFixture {
 }
 func openAttachmentsWithConnector(t *testing.T, wrap func(driver.Connector) driver.Connector, extra ...Registration) attachmentFixture {
 	t.Helper()
-	f := attachmentFixture{Fixture: extensiontest.OpenWithConnector(t, Migrations(), wrap)}
+	return openAttachmentsOn(t, wrap, nil, extra...)
+}
+
+// openAttachmentsOn optionally wraps the real local adapter, for example to
+// emulate provider capabilities such as retained object versions.
+func openAttachmentsOn(t *testing.T, wrap func(driver.Connector) driver.Connector, adapter func(storage.Backend) storage.Backend, extra ...Registration) attachmentFixture {
+	t.Helper()
+	return openAttachmentsWith(t, Migrations(), wrap, adapter, extra...)
+}
+
+// openAttachmentsWith also applies additional migrations, such as the outbox.
+func openAttachmentsWith(t *testing.T, migrations []migrate.Definition, wrap func(driver.Connector) driver.Connector, adapter func(storage.Backend) storage.Backend, extra ...Registration) attachmentFixture {
+	t.Helper()
+	f := attachmentFixture{Fixture: extensiontest.OpenWithConnector(t, migrations, wrap)}
 	backend, err := local.Open(t.Context(), local.DefaultConfig(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.backend = &controlledBackend{Backend: backend}
+	var provider storage.Backend = backend
+	if adapter != nil {
+		provider = adapter(backend)
+	}
+	f.backend = &controlledBackend{Backend: provider}
 	f.disk, err = testDisk.Bind(f.backend, storage.DefaultConfig())
 	if err != nil {
 		t.Fatal(err)

@@ -6,6 +6,7 @@ package profiles
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/attachments"
 	"github.com/weiloon1234/Foundry-Go/contract"
@@ -37,7 +38,9 @@ type Preferences struct {
 	Tags []string `json:"tags"`
 }
 
-var Owners = extensions.DefineOwner("profiles", query.IdentityOf(QueryProfiles().Query, ProfileFields().ID))
+// StorageModel pins the persisted owner identity, so renaming the profiles table
+// later keeps its metadata, translations and attachments.
+var Owners = extensions.DefineOwnerWith("profiles", query.IdentityOf(QueryProfiles().Query, ProfileFields().ID), extensions.OwnerOptions{StorageModel: "profiles"})
 var Files = storage.DefineDisk("profile-files")
 var Avatar = attachments.Define(Owners, "avatar", attachments.Policy{Disk: Files, Cardinality: attachments.Single, Accepted: []storage.MediaType{"image/png", "image/jpeg"}, Image: value.Set(imaging.NewPlan().Fill(32, 32, false).Format(imaging.PNG))})
 var Documents = attachments.Define(Owners, "documents", attachments.Policy{Disk: Files, Cardinality: attachments.Multiple, MaxFiles: 4, Accepted: []storage.MediaType{"text/plain"}})
@@ -62,7 +65,7 @@ func New(store *extensions.Store, disks *storage.Registry, image *imaging.Engine
 	if s.Translations, err = translations.New(store, locales, Label.Registration()); err != nil {
 		return Services{}, err
 	}
-	if s.Settings, err = settings.New(store, PageSize.Registration()); err != nil {
+	if s.Settings, err = settings.New(store, PageSize.RegistrationWith(settings.Options[uint32]{Cache: time.Minute})); err != nil {
 		return Services{}, err
 	}
 	s.Attachments, err = attachments.New(attachments.Dependencies{Store: store, Disks: disks, Image: image, Locales: locales}, attachments.DefaultConfig(), Avatar.Registration(), Documents.Registration(), Localized.Registration())

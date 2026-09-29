@@ -2,9 +2,12 @@ package s3_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -16,6 +19,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/storage/s3"
+	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 type noNetwork struct{ calls int }
@@ -158,5 +162,93 @@ func TestS3MoveRejectsNamespaceAliasesBeforeIO(t *testing.T) {
 	to, _ := storage.ParseKey("folder/object")
 	if _, err := source.MoveTo(t.Context(), from, target, to, storage.CopyOptions{}); !errors.Is(err, storage.Invalid) || transport.calls != 0 {
 		t.Fatal("aliased move reached provider", err)
+	}
+}
+
+func presignDisk(t *testing.T, configure func(*s3.Config)) *storage.Disk {
+	t.Helper()
+	config := s3.DefaultConfig("fixture-bucket", "us-east-1")
+	config.HTTPClient = &noNetwork{}
+	config = config.WithCredentials(cloudcredentials.ProviderFunc(func(context.Context) (cloudcredentials.Value, error) {
+		return cloudcredentials.Value{AccessKey: secret.New("fixture-key"), SecretKey: secret.New("fixture-secret")}, nil
+	}))
+	if configure != nil {
+		configure(&config)
+	}
+	backend, err := s3.Open(t.Context(), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disk, err := storage.NewDisk("uploads", backend, storage.DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = disk.Close(context.Background())
+		_ = backend.Close()
+	})
+	return disk
+}
+
+func TestPresignedUploadSignsExactSizeTypeChecksumAndCondition(t *testing.T) {
+	disk := presignDisk(t, nil)
+	digest := storage.SHA256(sha256.Sum256([]byte("fixture")))
+	link, err := disk.TemporaryUploadURL(t.Context(), objectKey(t), storage.UploadLinkOptions{ExpiresIn: 10 * time.Minute, ContentType: "image/png", Size: 42, Checksum: value.Set(digest), Condition: storage.IfAbsent()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(link.URL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	signed := strings.Split(parsed.Query().Get("X-Amz-SignedHeaders"), ";")
+	for _, name := range []string{"content-length", "content-type", "if-none-match", "x-amz-meta-foundry-sha256"} {
+		if !slices.Contains(signed, name) {
+			t.Fatal("upload constraint is not signed", name, signed)
+		}
+	}
+	headers := link.Headers()
+	if link.Method() != "PUT" || parsed.Query().Get("X-Amz-Expires") != "600" || headers.Get("Content-Type") != "image/png" || headers.Get("If-None-Match") != "*" || headers.Get("X-Amz-Meta-Foundry-Sha256") != digest.String() || headers.Get("Host") != "" || headers.Get("Content-Length") != "" {
+		t.Fatal("presigned upload request changed", link.Method(), headers)
+	}
+	if link.ExpiresAt().Before(time.Now().Add(9*time.Minute)) || strings.Contains(fmt.Sprint(link), "X-Amz-Signature") {
+		t.Fatal("upload link lifetime or redaction changed")
+	}
+	replace, err := storage.IfMatch(`"one"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, options := range []storage.UploadLinkOptions{
+		{ExpiresIn: time.Minute, ContentType: "image/png", Size: s3.MaxSingleUploadBytes + 1},
+		{ExpiresIn: time.Minute, Size: 1},
+		{ExpiresIn: storage.MaxLinkLifetime + time.Second, ContentType: "image/png", Size: 1},
+		{ExpiresIn: time.Minute, ContentType: "image/png", Size: 1, Condition: replace},
+		// A zero Content-Length is not signed, so the link would accept any size.
+		{ExpiresIn: time.Minute, ContentType: "image/png", Size: 0},
+	} {
+		if _, err := disk.TemporaryUploadURL(t.Context(), objectKey(t), options); err == nil {
+			t.Fatal("unbounded or unsupported upload link accepted", options.Size)
+		}
+	}
+}
+
+func TestPresignedReadSignsResponseOverridesAndKeepsLifetimeForRotatingCredentials(t *testing.T) {
+	disk := presignDisk(t, nil)
+	link, err := disk.TemporaryURL(t.Context(), objectKey(t), storage.LinkOptions{ExpiresIn: time.Hour, ResponseContentType: "application/pdf", ResponseContentDisposition: `attachment; filename="report.pdf"`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(link.URL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := parsed.Query()
+	if q.Get("response-content-type") != "application/pdf" || q.Get("response-content-disposition") != `attachment; filename="report.pdf"` {
+		t.Fatal("response overrides were not signed into the link", q)
+	}
+	// Credentials without a known expiry get a synthetic cache refresh deadline;
+	// it must not shorten a requested link lifetime.
+	if q.Get("X-Amz-Expires") != "3600" {
+		t.Fatal("refresh interval was treated as credential expiry", q.Get("X-Amz-Expires"))
 	}
 }

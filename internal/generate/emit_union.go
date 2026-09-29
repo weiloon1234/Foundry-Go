@@ -64,5 +64,5 @@ func emitUnion(p *packageInput, d unionDeclaration) ([]byte, error) {
 	}
 	e.line("}")
 	e.line("return *new(R),%s.New(%s.Invalid,\"invalid union value\")}", fault, fault)
-	return e.finish(d.position.Filename, d.position.Line)
+	return e.finish(d.position.Filename)
 }

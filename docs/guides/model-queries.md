@@ -15,7 +15,7 @@ users, err := models.QueryUsers().
 
 `QueryUsers()` returns a generated `UserQuery` wrapping `query.Query[User]`. Its fluent `Where`, `OrderBy`, `Limit` and `Offset` methods preserve the model-specific wrapper. Queries can be derived and compiled concurrently without changing their source. Execution uses an explicit `database.Executor`, so the same query works with a pool, transaction or connection session. Keep operations on a particular transaction/session sequential.
 
-`All` returns a slice of complete models, empty on a successful no-match result. It discards the entire collected result on failure. `Each(ctx, executor, func(User) error)` streams one complete model at a time without eager clauses; with eager loading it uses bounded batches. Rows close on early callback return, error or panic. A callback may already have performed work when a later row or batch fails; these side effects are not rolled back automatically. See [bounded model iteration](model-chunks.md) for `Chunk`, `ChunkByID`, `EachChunked` and `EachByID`.
+`All` returns a slice of complete models, empty on a successful no-match result. It discards the entire collected result on failure. `Each(ctx, executor, func(User) error)` streams one complete model at a time when nothing runs per model; with eager loading, retrieval hooks/observers or an executor that cannot prove observers absent it uses bounded keyset batches. Rows close on early callback return, error or panic. A callback may already have performed work when a later row or batch fails; these side effects are not rolled back automatically. See [bounded model iteration](model-chunks.md) for `Chunk`, `ChunkByID`, `EachChunked` and `EachByID`.
 
 The normal Go collection result is `[]User`, usable with `range` and standard slice utilities. A query builder remains separate from the model and its slice of results. `Where` and `OrderBy` only derive a query; execution happens at terminal methods such as `All`, `First` and `RequireFirst`. `First` is optional, while `RequireFirst` returns a concrete model or an error. Plain model field access performs no database operation.
 
@@ -46,7 +46,7 @@ Laravel distinguishes `Model::all()` from a constructed query's `get()`; both re
 
 ## First rows and typed identities
 
-`First` returns `value.Optional[User]`. An omitted result means no row matched; a zero model is never used as a missing-record sentinel. `RequireFirst` returns `database.NotFound` when the result is absent, discoverable with `errors.Is`.
+`First` returns `value.Optional[User]`. An omitted result means no row matched; a zero model is never used as a missing-record sentinel. `RequireFirst` returns a `*database.Error` with code `database.NotFound` when the result is absent, discoverable with `errors.Is` and `errors.As`.
 
 Generated `Find(ctx, executor, model.ID[User])` and `RequireFind` apply the concrete primary-key type. A natural-key model uses its declared key type, such as `models.CountryCode`. The methods remain available after fluent query derivation and preserve its filters and pagination. A matching primary key outside the selected window is therefore absent.
 
@@ -56,7 +56,11 @@ Generated `Find(ctx, executor, model.ID[User])` and `RequireFind` apply the conc
 
 Model fields preserve both model owner and value type. Predicates and orderings from another model fail compilation. Numeric and decimal fields expose range operations; text fields add `Like` and `Contains`; nullable fields expose `IsNull`/`IsNotNull`. `Eq` accepts the concrete non-null type. Generated field constructors attach the same [typed codecs](database-codecs.md) used for hydration, so malformed enum casts, integer overflow and invalid temporal precision fail before SQL execution.
 
-`query.And`, `query.Or` and `Predicate.Not` preserve grouping. Empty logical junctions are invalid. `In()` with no values matches nothing, and its negation matches everything. SQL NULL semantics remain SQL's three-valued logic: use explicit null predicates when null rows must match.
+`query.And`, `query.Or` and `Predicate.Not` preserve grouping. For dynamically built filters, an empty `And()` (and `query.True[M]()`) is TRUE and an empty `Or()` (and `query.False[M]()`) is FALSE; `HavingAnd`/`HavingOr` behave the same. `In()` with no values matches nothing, and its negation matches everything. `NotIn(values...)` excludes values (an empty list matches everything); like SQL `NOT IN`, a NULL operand never matches, so combine it with `IsNull` when NULL rows must be included. SQL NULL semantics remain SQL's three-valued logic: use explicit null predicates when null rows must match.
+
+On a column, `In` and `NotIn` bind the whole list as one array parameter — `col = ANY($1)` and `col <> ALL($1)` — for integer, text, boolean, UUID, numeric, date and timestamptz codecs. PostgreSQL infers the element type from the column, so enum, domain and `citext` columns keep their own equality, the statement text no longer changes with list length (the driver's statement cache is reused) and lists are not limited by the protocol's 65,535 parameters (`query.MaxMembershipValues` bounds one list). Other codecs and computed operands keep one parameter per value. Relation eager loading uses the same path.
+
+Ordered fields add `Between(low, high)` (inclusive). Text fields add `StartsWith`, `EndsWith`, their case-insensitive `IStartsWith`/`IEndsWith` (all escaping `%`, `_` and `!` like `Contains`) and `ILike` for a raw case-insensitive pattern. `Order.NullsFirst()` and `Order.NullsLast()` place SQL NULL explicitly; keyset chunking and cursor pagination accept only PostgreSQL's default placement.
 
 [Conditional row values](conditional-expressions.md) add typed CASE, COALESCE and NULLIF expressions. Their comparisons remain model-owned row predicates, and `Value()` promotes a computed value for selection into a declared projection or scalar result. Selected aggregate/window counterparts retain their separate evaluation boundary.
 
@@ -75,11 +79,11 @@ Use `Like("john%")` for a prefix pattern and `Like("%@example.com")` for a suffi
 
 `Compile()` produces a `query.Statement` without connecting. `SQL()` and `Arguments()` are explicit inspection/adapter boundaries; argument slices are copied, and ordinary statement formatting omits bindings. Treat an explicitly retrieved argument list as application data. Table and column identifiers are validated and quoted, and predicates/orderings must reference declared columns. PostgreSQL's default 63-byte identifier bound is enforced before generation/compilation instead of accepting names the server would truncate. [PostgreSQL identifier rules](https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS)
 
-Expression depth, expression count, ordering count and parameter count are bounded by the query package's documented constants. The compiler uses one shared AST for every generated model. No string field lookup is needed in normal consumer queries.
+Expression depth, expression count, ordering count and parameter count are bounded by the query package's documented constants. A model declaration is validated once per generated query value rather than on every compiled statement, and generated `QueryUsers()`, `UserFields()`, `UserRelations()` and `UserAggregates()` build their immutable metadata and codecs once per process (`query.Memo`) instead of on every call. The compiler uses one shared AST for every generated model. No string field lookup is needed in normal consumer queries.
 
 ## Aggregates and complete hydration
 
-`Count` and `Exists` query the selected window, including `Limit` and `Offset`, without hydrating models. Derive a count from the unpaginated base when a total matching count is needed. `Exists` asks for at most one row. Separate aggregate and model queries do not promise a common snapshot; use an explicit transaction/isolation level when that consistency matters.
+`Count` and `Exists` query the selected window, including `Limit` and `Offset`, without hydrating models. A count omits the query's ORDER BY unless `DISTINCT ON` or a `Limit`/`Offset` window depends on it; projection, set and value counts follow the same rule. Derive a count from the unpaginated base when a total matching count is needed. `Exists` asks for at most one row. Separate aggregate and model queries do not promise a common snapshot; use an explicit transaction/isolation level when that consistency matters.
 
 [Typed relation aggregates](model-aggregates.md) compute per-parent counts and numeric summaries in generated loaded slots, without hydrating related models. [Declared projections](model-projections.md) execute scalar summaries and grouped reports into separate complete result types.
 

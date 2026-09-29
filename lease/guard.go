@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -29,6 +30,9 @@ type Guard struct {
 	gate       chan struct{}
 	done       chan struct{}
 	cleanupErr error
+	// exported ends local management without releasing the authority key,
+	// which another process now owns through a restored Token.
+	exported atomic.Bool
 }
 
 func newGuard(m *Manager, parent context.Context, unlink context.CancelFunc, key Key, owner Owner, ttl time.Duration, until time.Time, heartbeat bool, finish func()) *Guard {
@@ -135,7 +139,9 @@ func (g *Guard) run(heartbeat bool, finish func()) {
 	g.mu.Lock()
 	g.timer.Stop()
 	g.mu.Unlock()
-	g.cleanupErr = g.manager.releaseOwner(g.key, g.owner)
+	if !g.exported.Load() {
+		g.cleanupErr = g.manager.releaseOwner(g.key, g.owner)
+	}
 	g.unlink()
 	if finish != nil {
 		finish()

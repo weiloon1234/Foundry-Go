@@ -24,18 +24,21 @@ func NewClusterConnection(backend ClusterBackend, cluster ClusterConfig) (*Backe
 	}
 	return &BackendConnection{backend: backend, cluster: cluster}, nil
 }
-func (c *BackendConnection) NewHub(registry *Registry, authentication *foundryhttp.Authentication, config Config) (*Hub, error) {
+func (c *BackendConnection) NewHub(registry *Registry, authentication *foundryhttp.Authentication, config Config, opts ...Option) (*Hub, error) {
 	if c == nil {
 		return nil, fault.New(fault.Invalid, "realtime connection is missing")
 	}
 	if c.local {
-		return New(registry, authentication, config)
+		return New(registry, authentication, config, opts...)
 	}
-	return NewDistributed(registry, authentication, config, c.backend, c.cluster)
+	return NewDistributed(registry, authentication, config, c.backend, c.cluster, opts...)
 }
-func (c *BackendConnection) NewPublisher(registry *Registry, config Config) (*Publisher, error) {
+func (c *BackendConnection) NewPublisher(registry *Registry, config Config, opts ...Option) (*Publisher, error) {
 	if c == nil || c.local {
 		return nil, fault.New(fault.Invalid, "standalone realtime publication requires a cluster connection")
 	}
-	return NewPublisher(registry, config, c.backend, c.cluster)
+	return NewPublisher(registry, config, c.backend, c.cluster, opts...)
 }
+
+// Local reports a process-local connection that cannot publish across processes.
+func (c *BackendConnection) Local() bool { return c != nil && c.local }

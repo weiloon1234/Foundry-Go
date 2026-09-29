@@ -32,11 +32,22 @@ ownership, generated enum validation, exact decimals and temporal text methods.
 `CookieCodec[V]` is that same scalar interface. There is no duplicate model codec.
 
 Read returns `value.Optional[V]`: missing differs from a present empty string
-or false value. Malformed Cookie fields and repeated occurrences of the selected
-name are rejected, including identical duplicates. Names are case-sensitive.
-Custom codecs must be deterministic, bounded and concurrency-safe; the framework
-catches panic/Goexit, waits for callback exit and preserves request cancellation.
-The complete request-cookie input is bounded to 16 KiB, 32 fields and 128 pairs.
+or false value. Names are case-sensitive. The Cookie header is scanned pair by
+pair: cookies owned by other applications or scripts (JSON or quoted values,
+non-ASCII bytes, nameless pairs, trailing separators) are ignored and never reject
+the request. Only the selected name's own value must satisfy the native cookie
+grammar; a malformed value of that name is a BadRequest. Repeated occurrences of
+the selected name, including identical values, read as **absent**: the server
+cannot tell which path or domain set each copy (for example a cookie "tossed" by
+a sibling subdomain). Prefer a `__Host-` name for credentials, because browsers
+refuse `__Host-` cookies set by other hosts or with a narrower path.
+
+Built-in scalar and credential codecs run under a cheap in-goroutine panic
+boundary. Custom, text and enum codecs must be deterministic, bounded and
+concurrency-safe; the framework runs them isolated, catches panic/Goexit, waits
+for callback exit and preserves request cancellation. The complete request-cookie
+input is bounded to 64 KiB, 256 fields and 2,048 pairs; only input beyond those
+generous bounds is rejected.
 
 ## Scope, lifetime and native HTTP
 
@@ -110,6 +121,38 @@ Malformed, tampered, expired and retired-key values share
 for transport handling. A missing signed cookie remains optional. Signed values
 are encoded but readable: signing does not encrypt, prevent pre-expiry replay,
 authenticate a user or replace an authorization check.
+
+## Encrypted cookies
+
+When a browser must not read the value, encrypt it with the application's
+[encryption keyring](../../encryption/doc.go) instead of signing it:
+
+```go
+encrypter, err := foundryhttp.NewCookieEncrypter(keyring, applicationClock)
+if err != nil {
+    return err
+}
+private := remember.Encrypted(encrypter)
+if err := private.Set(ctx, writer, true); err != nil {
+    return err
+}
+```
+
+`EncryptedCookie[V]` keeps V through Read and Set. The encoded value, its
+MaxAge/Expires deadline and a version marker are sealed with AES-256-GCM under a
+dedicated `foundry.cookie.v1` purpose; the cookie name, domain, path and security
+flags are the authenticated binding, so a value cannot be replayed under another
+cookie or scope. New values use the keyring's active key; retained keys decrypt
+existing values, so rotating the active key keeps cookies readable until the old
+key is removed. Each Set consumes one encryption from the active key's bounded
+budget, so rotate keys as the [keyring](../../encryption/key.go) describes.
+
+The wire value is the keyring's canonical envelope, which adds about 40 bytes
+plus one third for base64url encoding; the complete field must still fit 4,096
+bytes. Malformed, tampered, expired, rescoped and retired-key values share
+`ErrInvalidEncryptedCookie`, which Read wraps as BadRequest; the value decoder
+runs only after decryption succeeds. Like signing, encryption does not revoke
+values, prevent replay before expiry or authenticate a user.
 
 The [independent TLS consumer](../../tests/fixtures/consumer/httpcookies/cookies.go)
 uses a model-owned selected-user ID, a named locale and a generated enum as

@@ -147,6 +147,11 @@ func TestConfiguredWorkerLogsAndCommandsRetrySelectedConnection(t *testing.T) {
 	if !strings.Contains(run(retryArgs...), `"changed":false`) {
 		t.Fatal("repeated command replayed work")
 	}
+	// Operators read queue depth without payloads; the retried job is retained.
+	var depth jobs.QueueStats
+	if err := json.Unmarshal([]byte(run("jobs", "stats", "--connection", "background", "--queue", "communications", "--format", "json")), &depth); err != nil || depth.Retained != 1 || depth.Failed != 0 || depth.Waiting != 0 {
+		t.Fatalf("queue stats: %+v %v", depth, err)
+	}
 	cancel()
 	// Wait for the application rather than merely observing queue completion;
 	// finalization logging and logger ownership are part of shutdown.

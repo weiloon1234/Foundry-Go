@@ -18,19 +18,20 @@ func conditional[T any](kind Kind, condition Rule[T], rules []Rule[T]) Rule[T] {
 	node := composeNode(Description{Kind: kind}, []ruleNode{condition.ruleNode, branch.ruleNode})
 	// A condition is a predicate, not a prohibition applied to the input.
 	node.prohibitions = branch.prohibitions
-	return Rule[T]{ruleNode: node, apply: func(s *execution, input T, path string, depth int) {
+	return Rule[T]{ruleNode: node, apply: func(s *execution, input T, depth int) {
 		// Share the work budget and context, while short-circuiting condition
 		// rejection at its first issue without consuming public issue capacity.
-		probe := execution{ctx: s.ctx, limits: s.limits, work: s.work, parallel: s.parallel}
+		// The probe borrows path steps; this branch is sequential.
+		probe := execution{ctx: s.ctx, limits: s.limits, work: s.work, parallel: s.parallel, segments: s.segments}
 		probe.limits.Issues = 1
-		condition.run(&probe, input, path, depth+1)
+		condition.run(&probe, input, depth+1)
 		if probe.err != nil {
 			s.err = probe.err
 			return
 		}
 		matched := len(probe.issues) == 0
 		if matched == (kind == WhenKind) {
-			branch.run(s, input, path, depth+1)
+			branch.run(s, input, depth+1)
 		}
 	}}
 }

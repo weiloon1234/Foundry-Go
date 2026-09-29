@@ -1,7 +1,5 @@
 package validation
 
-import "github.com/weiloon1234/Foundry-Go/internal/jsonpointer"
-
 // Pair retains both values' concrete type for reusable comparison rules.
 type Pair[V any] struct{ Left, Right V }
 
@@ -34,7 +32,7 @@ func Compare[T, V any](field, other Field[T, V], comparator Rule[Pair[V]]) Rule[
 	if err := other.Validate(); err != nil {
 		return failed[T](err)
 	}
-	return lift(Description{Kind: CompareKind, Field: field.name, OtherField: other.name, Label: field.label, OtherLabel: other.label, LabelKey: field.labelKey, OtherLabelKey: other.labelKey}, comparator, func(s *execution, input T, path string, depth int) {
+	return lift(Description{Kind: CompareKind, Field: field.name, OtherField: other.name, Label: field.label, OtherLabel: other.label, LabelKey: field.labelKey, OtherLabelKey: other.labelKey}, comparator, func(s *execution, input T, depth int) {
 		left := field.selectValue(input)
 		if !s.take(depth + 1) {
 			return
@@ -45,7 +43,8 @@ func Compare[T, V any](field, other Field[T, V], comparator Rule[Pair[V]]) Rule[
 		s.otherField, s.otherLabel, s.otherLabelKey = other.name, other.label, other.labelKey
 		defer func() { s.otherField, s.otherLabel, s.otherLabelKey = oldOther, oldOtherLabel, oldOtherKey }()
 		s.label, s.labelKey, s.field = field.label, field.labelKey, field.name
-		defer func() { s.label, s.labelKey, s.field = previous, previousKey, previousField }()
-		comparator.run(s, Pair[V]{Left: left, Right: right}, jsonpointer.Append(path, field.name), depth+1)
+		s.enter(field.name)
+		defer func() { s.leave(); s.label, s.labelKey, s.field = previous, previousKey, previousField }()
+		comparator.run(s, Pair[V]{Left: left, Right: right}, depth+1)
 	})
 }

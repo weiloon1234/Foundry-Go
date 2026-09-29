@@ -105,6 +105,15 @@ func (i ObjectInfo) Validate() error {
 	return nil
 }
 
+// ValidateListed checks a listing entry. A listing may not report the media
+// type; a zero ContentType is accepted there and nowhere else.
+func (i ObjectInfo) ValidateListed() error {
+	if i.ContentType == "" {
+		i.ContentType = Binary
+	}
+	return i.Validate()
+}
+
 type StoredObject struct {
 	Disk   DiskID
 	Object ObjectInfo
@@ -114,4 +123,84 @@ type StoredObject struct {
 type ReadInfo struct {
 	Object         ObjectInfo
 	Offset, Length int64
+}
+
+// StorageClass is a provider storage tier such as STANDARD or STANDARD_IA.
+// It is passed to the provider verbatim; zero selects the bucket default.
+type StorageClass string
+
+const (
+	MaxCustomMetadataBytes = 2 << 10
+	maxMetadataValueBytes  = 1024
+)
+
+// ObjectMetadata is optional per-object provider metadata. Header values are
+// printable ASCII; use RFC 8187 encoding for non-ASCII Content-Disposition
+// filenames. Custom names are lowercase letters, digits and '-' and must not use
+// the reserved "foundry-" prefix. EncryptionKey selects a provider-managed
+// SSE-KMS key identifier; it is an identifier, never key material. Metadata is
+// written with the object; listings and Stat do not echo it back.
+type ObjectMetadata struct {
+	CacheControl       string
+	ContentDisposition string
+	ContentEncoding    string
+	StorageClass       StorageClass
+	EncryptionKey      string
+	Custom             map[string]string
+}
+
+func (m ObjectMetadata) IsZero() bool {
+	return m.CacheControl == "" && m.ContentDisposition == "" && m.ContentEncoding == "" && m.StorageClass == "" && m.EncryptionKey == "" && len(m.Custom) == 0
+}
+
+// Clone returns metadata that shares no mutable state with the caller.
+func (m ObjectMetadata) Clone() ObjectMetadata {
+	if m.Custom != nil {
+		custom := make(map[string]string, len(m.Custom))
+		for name, value := range m.Custom {
+			custom[name] = value
+		}
+		m.Custom = custom
+	}
+	return m
+}
+func (m ObjectMetadata) Validate() error {
+	invalid := func() error { return Failure(Invalid, PutOperation, Unchanged, nil) }
+	for _, text := range []string{m.CacheControl, m.ContentDisposition, m.ContentEncoding, m.EncryptionKey} {
+		if !headerText(text) {
+			return invalid()
+		}
+	}
+	for _, c := range []byte(m.StorageClass) {
+		if !(c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_') {
+			return invalid()
+		}
+	}
+	if len(m.StorageClass) > 64 || len(m.Custom) > 64 {
+		return invalid()
+	}
+	total := 0
+	for name, value := range m.Custom {
+		total += len(name) + len(value)
+		if name == "" || len(name) > 128 || strings.HasPrefix(name, "foundry-") || !headerText(value) || total > MaxCustomMetadataBytes {
+			return invalid()
+		}
+		for _, c := range []byte(name) {
+			if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-') {
+				return invalid()
+			}
+		}
+	}
+	return nil
+}
+func headerText(text string) bool {
+	if len(text) > maxMetadataValueBytes {
+		return false
+	}
+	for _, c := range []byte(text) {
+		if c < 0x20 || c > 0x7e {
+			return false
+		}
+	}
+	return true
 }

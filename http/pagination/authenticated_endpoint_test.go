@@ -96,9 +96,8 @@ func TestAuthenticatedPagesPreserveAuthorityBeforePageReads(t *testing.T) {
 		if actor.ID == 3 {
 			return auth.Forbidden
 		}
-		if in.Page.Number != 1 || in.Page.Size != 20 {
-			t.Error("unvalidated request reached policy")
-		}
+		// Request authorization precedes validation (as in a FormRequest), so a
+		// decoded but invalid page may reach the policy; it never reaches a read.
 		return nil
 	})
 	registration := endpoint.Handle(func(ctx context.Context, actor pageActor, in pageInput) (query.Page[Item], error) {
@@ -133,7 +132,7 @@ func TestAuthenticatedPagesPreserveAuthorityBeforePageReads(t *testing.T) {
 			}
 		}
 	}
-	if reads != 1 || policies != 2 {
+	if reads != 1 || policies != 4 {
 		t.Fatal("denied/invalid request reached page read", reads, policies)
 	}
 	location, err := endpoint.URL(t.Context(), foundryhttp.NoPath{}, filters{}, query.PageRequest{Number: 2, Size: 20})

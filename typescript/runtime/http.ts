@@ -1,14 +1,15 @@
 interface URLParameter { readonly name: string; readonly type: string; readonly syntax: string; readonly required: boolean; readonly repeated: boolean; readonly catch_all?: boolean; readonly default_url?: string }
 interface MultipartPart extends URLParameter { readonly kind: string }
-interface Payload { readonly type?: string; readonly media_type?: string; readonly fields?: readonly URLParameter[]; readonly parts?: readonly MultipartPart[]; readonly file?: { readonly media_types: readonly string[]; readonly seekable: boolean } }
+interface Payload { readonly type?: string; readonly media_type?: string; readonly fields?: readonly URLParameter[]; readonly parts?: readonly MultipartPart[]; readonly file?: { readonly media_types: readonly string[]; readonly seekable: boolean }; readonly raw?: { readonly media_types: readonly string[] } }
+interface SignedURLPolicy { readonly expires_parameter: string; readonly signature_parameter: string; readonly relative: boolean; readonly permanent?: boolean; readonly ignored_parameters?: readonly string[] }
 interface IdempotencyPolicy { readonly header: string; readonly key_pattern: string; readonly max_key_bytes: number; readonly min_key_bytes: number; readonly duplicate_wait_ms: number }
 interface Operation {
-  readonly name: string; readonly route: { readonly id: string; readonly method: string; readonly path: string; readonly authentication?: { readonly credential: { readonly kind: string; readonly name: string; readonly origin_protection: boolean } }; readonly signed_url?: { readonly expires_parameter: string; readonly signature_parameter: string } };
+  readonly name: string; readonly route: { readonly id: string; readonly method: string; readonly path: string; readonly authentication?: { readonly credential: { readonly kind: string; readonly name: string; readonly origin_protection: boolean } }; readonly signed_url?: SignedURLPolicy };
   readonly path: readonly URLParameter[]; readonly query: readonly URLParameter[]; readonly body?: Payload; readonly response?: Payload;
-  readonly idempotency?: IdempotencyPolicy; readonly status: number; readonly file_transfer_bytes?: number; readonly preparation?: boolean; readonly validation?: RuleDescription; readonly errors: readonly string[];
+  readonly idempotency?: IdempotencyPolicy; readonly status: number; readonly statuses?: readonly number[]; readonly redirect?: boolean; readonly file_transfer_bytes?: number; readonly preparation?: boolean; readonly validation?: RuleDescription; readonly errors: readonly string[];
   readonly limits: { readonly Body: JSONLimits; readonly Response: JSONLimits; readonly Query: { readonly Bytes: number; readonly Pairs: number; readonly Issues: number }; readonly Form: { readonly Bytes: number; readonly Pairs: number; readonly Issues: number }; readonly Validation: ValidationLimits;
     readonly Multipart: { readonly Bytes: number; readonly FileBytes: number; readonly Parts: number; readonly Files: number; readonly HeaderBytes: number; readonly FieldBytes: number; readonly FieldsBytes: number };
-    readonly Files: { readonly Bytes: number } };
+    readonly Files: { readonly Bytes: number }; readonly Raw?: { readonly Bytes: number } };
 }
 interface RuntimeDocument {
   readonly version: number; readonly types: readonly WireType[]; readonly http: readonly Operation[]; readonly error_type: string;
@@ -24,17 +25,42 @@ export function idempotencyKey(value: string): IdempotencyKey {
 export type IdempotencyErrorCode = "idempotency_bad_key" | "idempotency_mismatch" | "idempotency_in_progress" | "idempotency_capacity" | "idempotency_unavailable";
 export interface CallOptions { readonly signal?: AbortSignal; readonly headers?: Readonly<Record<string, string>> }
 export interface Upload { readonly data: Blob; readonly filename: string }
+/** Raw request body data; a stream is bounded while it is sent. */
+export type RawData = Blob | ArrayBuffer | ArrayBufferView | ReadableStream<Uint8Array>;
+/**
+ * A transport forwards every field to its native client. redirect is "manual" for
+ * redirect operations, whose Location is returned rather than followed; duplex
+ * is "half" for a streamed request body (required by fetch for ReadableStream).
+ */
 export interface HTTPRequest {
   readonly method: string; readonly url: string; readonly headers: Readonly<Record<string, string>>;
-  readonly body?: string | Blob; readonly signal?: AbortSignal; readonly credentials: RequestCredentials;
+  readonly body?: string | Blob | ReadableStream<Uint8Array>; readonly signal?: AbortSignal; readonly credentials: RequestCredentials;
+  readonly redirect: "follow" | "manual"; readonly duplex?: "half";
   /** Includes the framework-owned multipart framing. */
   readonly maxBodyBytes: number;
 }
 export type ResponseBody = string | Uint8Array | AsyncIterable<Uint8Array>;
 export interface HTTPResponse { readonly status: number; readonly headers: Readonly<Record<string, string>>; readonly body: ResponseBody; close(): void | Promise<void> }
 export type HTTPTransport = (request: HTTPRequest) => Promise<HTTPResponse>;
-export interface ClientOptions extends CodecOptions { readonly validationMessages?: ValidationMessages; readonly baseURL?: string; readonly credentials?: RequestCredentials; readonly headers?: Readonly<Record<string, string>> }
+/**
+ * Responses decode tolerantly by default: unknown properties are ignored and unknown
+ * enum values become UnknownEnumValue, so additive server changes reach deployed
+ * clients. Set strictResponses to reject them. Requests are always strict.
+ */
+export interface ClientOptions extends CodecOptions { readonly validationMessages?: ValidationMessages; readonly baseURL?: string; readonly credentials?: RequestCredentials; readonly headers?: Readonly<Record<string, string>>; readonly strictResponses?: boolean }
 export interface FileResult { readonly status: number; readonly headers: Readonly<Record<string, string>>; readonly body: AsyncIterable<Uint8Array>; close(): Promise<void> }
+/** A response whose operation declares several success statuses. */
+export interface StatusResult<S extends number, T> { readonly status: S; readonly body: T }
+/** A redirect operation's relative target on the server's origin; it is not followed. */
+export interface RedirectResult<S extends number> { readonly status: S; readonly location: string }
+/** One server-sent event. id is the last event ID the stream set; name defaults to "message". */
+export interface ServerEvent<T> { readonly id?: string; readonly name: string; readonly data: T; readonly retry?: number }
+/**
+ * A typed server-sent event stream. Iterate it once; the response closes when
+ * iteration ends. Call close() to stop early. Pass Last-Event-ID in call headers
+ * to resume after reconnecting.
+ */
+export interface EventStreamResult<T> extends AsyncIterable<ServerEvent<T>> { readonly status: number; readonly headers: Readonly<Record<string, string>>; close(): Promise<void> }
 export class APIError<T = unknown> extends Error {
   constructor(readonly status: number, readonly code: string, readonly response: T | undefined, readonly retryAfterSeconds?: number) { super("API request failed"); this.name = "APIError"; }
 }
@@ -155,8 +181,75 @@ function multipartBody(codec: WireCodec, payload: Payload, value: unknown, opera
   const end = "--" + boundary + "--\r\n"; if (bytes + textBytes(end) > limits.Bytes) reject("/body", "limit"); chunks.push(end);
   return new Blob(chunks, { type: "multipart/form-data; boundary=" + boundary });
 }
+function rawBody(payload: Payload, value: unknown, max: number): { body: Blob | ReadableStream<Uint8Array>; media: string; stream: boolean } {
+  const declared = payload.raw!.media_types, input = ownInput(value, ["data", "mediaType"], "/body");
+  const media = input.mediaType ?? (declared.length === 1 ? declared[0] : undefined);
+  if (typeof media !== "string" || !declared.includes(media)) reject("/body/mediaType", "media_type");
+  const data = input.data;
+  if (data instanceof Blob) { if (data.size > max) reject("/body", "limit"); return { body: data, media, stream: false }; }
+  if (data instanceof ArrayBuffer || ArrayBuffer.isView(data)) {
+    const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    if (bytes.byteLength > max) reject("/body", "limit");
+    return { body: new Blob([bytes.slice()]), media, stream: false };
+  }
+  if (data instanceof ReadableStream) {
+    // The server bound is enforced again as the stream is sent.
+    let count = 0;
+    const bounded = data.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({ transform(chunk, controller) {
+      if (!(chunk instanceof Uint8Array) || chunk.byteLength > max - count) { controller.error(new ContractError([{ path: "/body", code: "limit" }])); return; }
+      count += chunk.byteLength; controller.enqueue(chunk);
+    } }));
+    return { body: bounded, media, stream: true };
+  }
+  reject("/body/data", "raw");
+}
+// Parses text/event-stream framing: CR, LF or CRLF line ends, comments, and the
+// data/event/id/retry fields. Each event's data text is bounded before decoding;
+// an unterminated final event is discarded, as in EventSource.
+async function* serverEvents(body: ResponseBody, decode: (data: string) => unknown, max: number, signal?: AbortSignal): AsyncIterable<ServerEvent<unknown>> {
+  const text = new TextDecoder("utf-8", { fatal: true });
+  const source = typeof body === "string" ? [encoder.encode(body)] : body instanceof Uint8Array ? [body] : body;
+  let buffer = "", data: string[] = [], size = 0, name = "", id: string | undefined, retry: number | undefined, first = true;
+  const line = (value: string): ServerEvent<unknown> | undefined => {
+    if (value === "") {
+      if (!data.length) { name = ""; return undefined; }
+      const event = Object.freeze({ ...(id === undefined ? {} : { id }), name: name || "message", data: decode(data.join("\n")), ...(retry === undefined ? {} : { retry }) });
+      data = []; size = 0; name = ""; return event;
+    }
+    if (value.startsWith(":")) return undefined;
+    const colon = value.indexOf(":"), field = colon < 0 ? value : value.slice(0, colon);
+    let content = colon < 0 ? "" : value.slice(colon + 1); if (content.startsWith(" ")) content = content.slice(1);
+    if (field === "data") { size += textBytes(content) + 1; if (size > max) reject("", "limit"); data.push(content); }
+    else if (field === "event") name = content;
+    else if (field === "id") { if (!content.includes("\0")) id = content; }
+    else if (field === "retry") { if (/^[0-9]{1,9}$/.test(content)) retry = Number(content); }
+    return undefined;
+  };
+  for await (const chunk of source) {
+    checkAbort(signal); if (!(chunk instanceof Uint8Array)) reject("", "event_stream");
+    try { buffer += text.decode(chunk, { stream: true }); } catch { reject("", "event_stream"); }
+    if (first && buffer.length) { if (buffer.startsWith("\ufeff")) buffer = buffer.slice(1); first = false; }
+    for (;;) {
+      const cr = buffer.indexOf("\r"), lf = buffer.indexOf("\n"), end = cr < 0 ? lf : lf < 0 ? cr : Math.min(cr, lf);
+      if (end < 0) break;
+      if (buffer[end] === "\r" && end + 1 === buffer.length) break; // A following LF may be in the next chunk.
+      const next = buffer[end] === "\r" && buffer[end + 1] === "\n" ? end + 2 : end + 1;
+      const event = line(buffer.slice(0, end)); buffer = buffer.slice(next);
+      if (event) yield event;
+    }
+    // A UTF-16 length never exceeds the UTF-8 size, so this cheap check bounds
+    // an unterminated line without re-encoding the buffer for every chunk.
+    if (buffer.length > max + 64) reject("", "limit");
+  }
+  checkAbort(signal);
+}
+function redirectLocation(value: string | undefined): string {
+  // Only relative targets on the same origin are accepted, as the server emits.
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\") || /[\x00-\x20\x7f-\uffff\\]/.test(value) || value.length > 8192) reject("", "location");
+  return value;
+}
 function createHTTPInvoker(document: RuntimeDocument, transport: HTTPTransport, options: ClientOptions) {
-  const codec = new WireCodec(document.types), operations = new Map(document.http.map(operation => [operation.name, operation]));
+  const codec = new WireCodec(document.types), operations = new Map(document.http.map(operation => [operation.name, operation])), tolerant = options.strictResponses !== true;
   let base = options.baseURL ?? "";
   if (base) { const parsed = new URL(base); if (!/^https?:$/.test(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) reject("", "base_url"); base = parsed.href.replace(/\/$/, ""); }
   const prepare = (name: string, request: unknown, call: CallOptions) => {
@@ -179,7 +272,7 @@ function createHTTPInvoker(document: RuntimeDocument, transport: HTTPTransport, 
       headers[name] = idempotencyKey(input.idempotencyKey);
     }
     if (headers["content-type"] !== undefined) reject("", "content_type_owned_by_client");
-    let body: string | Blob | undefined, formValues: Record<string, unknown> | undefined;
+    let body: string | Blob | ReadableStream<Uint8Array> | undefined, formValues: Record<string, unknown> | undefined, streamed = false;
     if (operation.body) {
       if (!Object.hasOwn(input, "body")) reject("/body", "required");
       if (operation.body.media_type === "application/x-www-form-urlencoded") {
@@ -191,16 +284,23 @@ function createHTTPInvoker(document: RuntimeDocument, transport: HTTPTransport, 
         if (form.pairs.length > operation.limits.Form.Pairs || textBytes(body) > operation.limits.Form.Bytes) reject("/body", "limit");
         headers["content-type"] = operation.body.media_type;
       }
+      else if (operation.body.raw) {
+        const raw = rawBody(operation.body, input.body, operation.limits.Raw?.Bytes ?? 0);
+        body = raw.body; streamed = raw.stream; headers["content-type"] = raw.media;
+      }
       else if (operation.body.type) { body = codec.encode(operation.body.type, input.body, operation.limits.Body); headers["content-type"] = "application/json"; }
-      else { body = multipartBody(codec, operation.body, input.body, operation, options); headers["content-type"] = body.type; }
+      else { const multipart = multipartBody(codec, operation.body, input.body, operation, options); body = multipart; headers["content-type"] = multipart.type; }
     } else if (Object.hasOwn(input, "body")) reject("/body", "unknown");
     const semanticPath: Record<string, unknown> = Object.create(null);
     for (const parameter of operation.path) semanticPath[parameter.name] = codec.semantic(parameter.type, path[parameter.name], operation.limits.Body);
     const semanticBody = operation.validation && operation.body?.type ? codec.semantic(operation.body.type, input.body, operation.limits.Body) : formValues ?? input.body;
-    const validation = operation.preparation ? { issues: [], complete: false, skipped: ["request_preparation"] } satisfies ValidationReport : validateRules(operation.validation, { ...input, path: semanticPath, query: query.values, body: semanticBody }, operation.limits.Validation, options.validationMessages);
+    // A raw body is opaque to client validation; the server checks it.
+    const rawSkipped = operation.body?.raw !== undefined && operation.validation !== undefined;
+    const validation = operation.preparation ? { issues: [], complete: false, skipped: ["request_preparation"] } satisfies ValidationReport : rawSkipped ? { issues: [], complete: false, skipped: ["raw_body"] } satisfies ValidationReport : validateRules(operation.validation, { ...input, path: semanticPath, query: query.values, body: semanticBody }, operation.limits.Validation, options.validationMessages);
     let target = base + url + (search ? "?" + search : "");
-    if (operation.route.signed_url) target = signedTarget(input.signedURL, target, operation.route.signed_url, base !== "");
-    return { operation, validation, request: { method: operation.route.method, url: target, headers, ...(body === undefined ? {} : { body }), ...(call.signal ? { signal: call.signal } : {}), credentials: options.credentials ?? "same-origin", maxBodyBytes: operation.body?.media_type === "application/x-www-form-urlencoded" ? operation.limits.Form.Bytes : operation.body?.parts ? operation.limits.Multipart.Bytes : operation.limits.Body.Bytes } satisfies HTTPRequest };
+    if (operation.route.signed_url) target = signedTarget(input.signedURL, target, operation.route.signed_url, base);
+    const maxBodyBytes = operation.body?.media_type === "application/x-www-form-urlencoded" ? operation.limits.Form.Bytes : operation.body?.parts ? operation.limits.Multipart.Bytes : operation.body?.raw ? operation.limits.Raw?.Bytes ?? 0 : operation.limits.Body.Bytes;
+    return { operation, validation, request: { method: operation.route.method, url: target, headers, ...(body === undefined ? {} : { body }), ...(streamed ? { duplex: "half" as const } : {}), ...(call.signal ? { signal: call.signal } : {}), credentials: options.credentials ?? "same-origin", redirect: operation.redirect ? "manual" as const : "follow" as const, maxBodyBytes } satisfies HTTPRequest };
   };
   return {
     validate(name: string, request: unknown): ValidationReport { return prepare(name, request, {}).validation; },
@@ -216,6 +316,8 @@ function createHTTPInvoker(document: RuntimeDocument, transport: HTTPTransport, 
       };
       try {
       checkAbort(call.signal);
+      // Browser fetch hides a manual redirect (opaqueredirect, status 0).
+      if (operation.redirect && response.status === 0) reject("", "opaque_redirect");
       if (!Number.isInteger(response.status) || response.status < 100 || response.status > 599) reject("", "status");
       const headers = mergeHeaders(response.headers);
       if (response.status >= 400) {
@@ -223,7 +325,7 @@ function createHTTPInvoker(document: RuntimeDocument, transport: HTTPTransport, 
         if (!allowed.length) reject("", "status");
         if (operation.route.method === "HEAD") { await collectBody(response.body, 0, call.signal); throw new APIError(response.status, "http_error", undefined); }
         requireJSON(headers); const bytes = await collectBody(response.body, operation.limits.Response.Bytes, call.signal);
-        const decoded = codec.decode(document.error_type, bytes, operation.limits.Response), record = object(decoded);
+        const decoded = codec.decode(document.error_type, bytes, operation.limits.Response, tolerant), record = object(decoded);
         if (String(record.status) !== String(response.status) || typeof record.error_code !== "string" || !allowed.some(error => error.error_code === record.error_code)) reject("", "error_envelope");
         const retryText = headers["retry-after"], retry = retryText && /^[0-9]{1,3}$/.test(retryText) ? Number(retryText) : undefined;
         throw new APIError(response.status, record.error_code, decoded, retry !== undefined && retry >= 1 && retry <= 300 ? retry : undefined);
@@ -243,22 +345,51 @@ function createHTTPInvoker(document: RuntimeDocument, transport: HTTPTransport, 
         };
         transferred = true; return { status: response.status, headers, body: stream(), close } satisfies FileResult;
       }
-      if (response.status !== operation.status) reject("", "status");
+      if (operation.response?.media_type === "text/event-stream") {
+        if (response.status !== operation.status) reject("", "status");
+        if (operation.route.method !== "HEAD" && mediaType(headers["content-type"]) !== "text/event-stream") reject("", "content_type");
+        const type = operation.response.type!;
+        let consumed = false;
+        const events = async function* (): AsyncIterable<ServerEvent<unknown>> {
+          if (consumed || closed) reject("", "response_consumed"); consumed = true; let failed = false;
+          try { if (operation.route.method !== "HEAD") yield* serverEvents(response.body, data => codec.decode(type, data, operation.limits.Response, tolerant), operation.limits.Response.Bytes, call.signal); }
+          catch (error) { failed = true; throw error; }
+          finally { await finish(failed); }
+        };
+        transferred = true;
+        return Object.freeze({ status: response.status, headers, [Symbol.asyncIterator]: () => events()[Symbol.asyncIterator](), close }) satisfies EventStreamResult<unknown>;
+      }
+      if (operation.redirect) {
+        if (response.status !== operation.status) reject("", "status");
+        const location = redirectLocation(headers["location"]); await collectBody(response.body, 0, call.signal);
+        return Object.freeze({ status: response.status, location }) satisfies RedirectResult<number>;
+      }
+      const statuses = operation.statuses ?? [operation.status];
+      if (!statuses.includes(response.status)) reject("", "status");
       if (!operation.response || operation.route.method === "HEAD") { await collectBody(response.body, 0, call.signal); return undefined; }
-      requireJSON(headers); return codec.decode(operation.response.type!, await collectBody(response.body, operation.limits.Response.Bytes, call.signal), operation.limits.Response);
+      requireJSON(headers); const decoded = codec.decode(operation.response.type!, await collectBody(response.body, operation.limits.Response.Bytes, call.signal), operation.limits.Response, tolerant);
+      return operation.statuses ? Object.freeze({ status: response.status, body: decoded }) satisfies StatusResult<number, unknown> : decoded;
       } catch (error) { failed = true; throw error; }
       finally { if (!transferred) await finish(failed); }
     },
   };
 }
-function signedTarget(input: unknown, expected: string, names: { readonly expires_parameter: string; readonly signature_parameter: string }, absolute: boolean): string {
-  if (typeof input !== "string" || !validUnicode(input) || /[\x00-\x20\x7f]/.test(input) || !absolute && (!input.startsWith("/") || input.startsWith("//"))) reject("", "signed_url");
-  const origin = "https://foundry.invalid", actual = new URL(input, origin), target = new URL(expected, origin);
+// signedTarget accepts the links the route verifies: absolute links on the
+// client's origin, origin-relative links (sent to the base URL), permanent links
+// without an expiry when the route permits them, and declared ignored parameters.
+// The signed path and query bytes are sent unchanged.
+function signedTarget(input: unknown, expected: string, policy: SignedURLPolicy, base: string): string {
+  if (typeof input !== "string" || !validUnicode(input) || /[\x00-\x20\x7f]/.test(input)) reject("", "signed_url");
+  const relative = input.startsWith("/") && !input.startsWith("//") && !input.startsWith("/\\");
+  if (!relative && !base || relative && !policy.relative) reject("", "signed_url");
+  const origin = base || "https://foundry.invalid", actual = new URL(input, origin), target = new URL(expected, origin);
   if (actual.origin !== target.origin || actual.username || actual.password || actual.hash) reject("", "signed_url");
   const segments = (path: string): string[] => path.split("/").map(segment => decodeURIComponent(segment));
   if (JSON.stringify(segments(actual.pathname)) !== JSON.stringify(segments(target.pathname))) reject("", "signed_url");
-  for (const name of [names.expires_parameter, names.signature_parameter]) { if (actual.searchParams.getAll(name).length !== 1 || !actual.searchParams.get(name)) reject("", "signed_url"); actual.searchParams.delete(name); }
+  const signature = actual.searchParams.getAll(policy.signature_parameter), expires = actual.searchParams.getAll(policy.expires_parameter);
+  if (signature.length !== 1 || !signature[0] || expires.length > 1 || expires.length === 1 && !expires[0] || expires.length === 0 && !policy.permanent) reject("", "signed_url");
+  for (const name of [policy.expires_parameter, policy.signature_parameter, ...(policy.ignored_parameters ?? [])]) actual.searchParams.delete(name);
   const canonical = (query: URLSearchParams): string => JSON.stringify([...query.keys()].filter((key, i, keys) => keys.indexOf(key) === i).sort().map(key => [key, query.getAll(key)]));
   if (canonical(actual.searchParams) !== canonical(target.searchParams)) reject("", "signed_url");
-  return input;
+  return relative && base ? base + input : input;
 }

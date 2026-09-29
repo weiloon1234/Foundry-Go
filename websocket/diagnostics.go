@@ -2,13 +2,16 @@ package websocket
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 )
 
-type channelCounters struct{ Incoming, Accepted, Completed, Failures, Published, Delivered, Replayed uint64 }
+type channelCounters struct {
+	incoming, accepted, completed, failures, published, delivered, replayed atomic.Uint64
+}
 type ChannelSnapshot struct {
 	ID                                                                      ChannelID
 	Subscriptions                                                           int
@@ -18,7 +21,10 @@ type Diagnostics struct {
 	Runtime                                                         Snapshot
 	QueuedFrames, QueuedBytes                                       int
 	HeartbeatFailures, RateRejected, Revocations, ForcedDisconnects uint64
-	Channels                                                        []ChannelSnapshot
+	// CleanupFailures counts cluster membership releases or stream closes that
+	// failed; leases expire by TTL and presence is reconciled.
+	CleanupFailures uint64
+	Channels        []ChannelSnapshot
 }
 
 // Diagnose requires both a typed authenticated guard and explicit management
@@ -50,23 +56,25 @@ func Diagnose[M any](ctx context.Context, hub *Hub, guard auth.Guard[M], authori
 }
 func (h *Hub) diagnostics() Diagnostics {
 	h.mu.Lock()
-	defer h.mu.Unlock()
-	result := Diagnostics{Runtime: h.snapshotLocked(), HeartbeatFailures: h.heartbeatFailures, RateRejected: h.rateRejected, Revocations: h.revocations, ForcedDisconnects: h.forcedDisconnects, Channels: make([]ChannelSnapshot, 0, len(h.registry.ordered))}
+	result := Diagnostics{Runtime: h.snapshotLocked(), Channels: make([]ChannelSnapshot, 0, len(h.registry.ordered))}
 	subscriptions := make(map[ChannelID]int, len(h.registry.channels))
+	for key, connections := range h.subscribers {
+		subscriptions[key.channel] += len(connections)
+	}
 	for _, connection := range h.connections {
 		result.QueuedFrames += len(connection.outbound)
-		result.QueuedBytes += connection.queuedBytes
 		for _, pending := range connection.pending {
 			result.QueuedFrames += len(pending.frames)
-			result.QueuedBytes += pending.bytes
-		}
-		for key := range connection.subscriptions {
-			subscriptions[key.channel]++
 		}
 	}
+	h.mu.Unlock()
+	result.QueuedBytes = int(h.queuedBytes.Load())
+	result.HeartbeatFailures, result.RateRejected = h.counters.heartbeatFailures.Load(), h.counters.rateRejected.Load()
+	result.Revocations, result.ForcedDisconnects = h.counters.revocations.Load(), h.counters.forcedDisconnects.Load()
+	result.CleanupFailures = h.counters.cleanupFailures.Load()
 	for _, channel := range h.registry.ordered {
 		metric := h.metrics[channel.id]
-		result.Channels = append(result.Channels, ChannelSnapshot{ID: channel.id, Subscriptions: subscriptions[channel.id], Incoming: metric.Incoming, Accepted: metric.Accepted, Completed: metric.Completed, Failures: metric.Failures, Published: metric.Published, Delivered: metric.Delivered, Replayed: metric.Replayed})
+		result.Channels = append(result.Channels, ChannelSnapshot{ID: channel.id, Subscriptions: subscriptions[channel.id], Incoming: metric.incoming.Load(), Accepted: metric.accepted.Load(), Completed: metric.completed.Load(), Failures: metric.failures.Load(), Published: metric.published.Load(), Delivered: metric.delivered.Load(), Replayed: metric.replayed.Load()})
 	}
 	return result
 }

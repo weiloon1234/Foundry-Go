@@ -102,6 +102,7 @@ func (d *tableDefinition[S, R, A]) initialize() error {
 	}
 	d.info = Description{ID: spec.ID, Row: row, Request: request, DefaultSort: slices.Clone(spec.DefaultSort), Exports: spec.Exports}
 	exports := 0
+	var searchPhase FilterPhase
 	for _, registration := range spec.Columns {
 		c := registration.declaration
 		if c.err != nil {
@@ -140,6 +141,12 @@ func (d *tableDefinition[S, R, A]) initialize() error {
 			if info.SearchOperator == "" {
 				return invalid("searchable columns require a declared contains filter")
 			}
+			// Global search ORs every searchable column; one OR cannot span
+			// the WHERE and HAVING phases, so reject the table, not a request.
+			if searchPhase != "" && searchPhase != c.filter.info.Phase {
+				return invalid("searchable columns cannot mix WHERE and HAVING phases")
+			}
+			searchPhase = c.filter.info.Phase
 		}
 		if c.cell != nil {
 			if c.cellInfo == nil || !sameScalar(scalar.Value, *c.cellInfo) {

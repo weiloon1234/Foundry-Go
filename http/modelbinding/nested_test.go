@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/database"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/modelbinding"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -155,5 +156,76 @@ func TestBoundResourceAuthorizationBeforeHandler(t *testing.T) {
 				t.Fatal("resource policy stage lost", res.Code, resolved, authorized, handled)
 			}
 		})
+	}
+}
+
+type countedQuery struct{ validations *atomic.Int32 }
+
+func (q countedQuery) Validate() error { q.validations.Add(1); return nil }
+func (q countedQuery) Find(_ context.Context, _ database.Executor, key memberKey) (value.Optional[member], error) {
+	return value.Set(member{ID: key}), nil
+}
+
+func TestNestedBindingValidatesOnceAtRegistration(t *testing.T) {
+	var validations atomic.Int32
+	resolver := modelbinding.ByKey(&neverExecutor{}, countedQuery{&validations}, func(p path) memberKey { return p.Member })
+	nested := modelbinding.Then(resolver, func(_ context.Context, p path, m member) (value.Optional[string], error) {
+		return value.Set(fmt.Sprint(m.ID)), nil
+	})
+	deeper := modelbinding.Then(nested, func(_ context.Context, p path, previous modelbinding.Models[member, string]) (value.Optional[int64], error) {
+		return value.Set(int64(previous.Parent.ID)), nil
+	})
+	type deepInput = modelbinding.Input[path, foundryhttp.NoQuery, foundryhttp.NoBody, modelbinding.Models[modelbinding.Models[member, string], int64]]
+	r := router(t, modelbinding.Bind(endpoint(), deeper).Handle(func(context.Context, deepInput) (foundryhttp.NoContent, error) {
+		return foundryhttp.NoContent{}, nil
+	}))
+	registered := validations.Load()
+	if registered == 0 {
+		t.Fatal("registration did not validate the key query")
+	}
+	for range 5 {
+		if w := serve(r, "/members/7"); w.Code != 204 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+	}
+	if validations.Load() != registered {
+		t.Fatalf("requests revalidated nested declarations: %d -> %d", registered, validations.Load())
+	}
+	// Direct Resolve validates each ancestor once per call, not once per level.
+	if _, err := deeper.Resolve(t.Context(), path{7}); err != nil || validations.Load() != registered+1 {
+		t.Fatalf("direct resolve validations=%d err=%v", validations.Load()-registered, err)
+	}
+}
+
+func TestMissingHandlerCustomizesAbsentModels(t *testing.T) {
+	gone := errors.New("member gone")
+	resolver := modelbinding.Define(func(_ context.Context, p path) (value.Optional[member], error) {
+		if p.Member == 404 {
+			return value.Optional[member]{}, nil
+		}
+		return value.Set(member{ID: p.Member}), nil
+	})
+	custom := resolver.WithMissing(func(_ context.Context, p path) error {
+		if p.Member != 404 {
+			t.Error("missing handler received another path")
+		}
+		return foundryhttp.Conflict.WithCause(gone)
+	})
+	if _, err := custom.Resolve(t.Context(), path{404}); !errors.Is(err, foundryhttp.Conflict) || !errors.Is(err, gone) {
+		t.Fatal("custom missing error lost", err)
+	}
+	if got, err := custom.Resolve(t.Context(), path{5}); err != nil || got.ID != 5 {
+		t.Fatal("present model changed", err)
+	}
+	fallback := resolver.WithMissing(func(context.Context, path) error { return nil })
+	if _, err := fallback.Resolve(t.Context(), path{404}); !errors.Is(err, foundryhttp.NotFound) {
+		t.Fatal("nil missing result did not remain 404", err)
+	}
+	panicking := resolver.WithMissing(func(context.Context, path) error { panic("private") })
+	if _, err := panicking.Resolve(t.Context(), path{404}); !errors.Is(err, foundryhttp.InternalError) {
+		t.Fatal("missing handler panic escaped", err)
+	}
+	if resolver.WithMissing(nil).Validate() == nil {
+		t.Fatal("nil missing handler accepted")
 	}
 }

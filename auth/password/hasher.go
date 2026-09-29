@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
+	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
 	"golang.org/x/crypto/argon2"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Hasher owns bounded CPU/memory admission. Share one instance across the
@@ -74,11 +76,16 @@ func (h *Hasher) Check(ctx context.Context, plain Plaintext, hash Hash) (bool, e
 	if err := plain.Validate(); err != nil {
 		return false, err
 	}
-	parsed, err := parse(hash.encoded.Reveal())
+	encoded := hash.encoded.Reveal()
+	parsed, err := parse(encoded)
 	if err != nil {
 		return false, err
 	}
-	if !parsed.parameters.within(h.config.VerifyLimit) {
+	if parsed.algorithm == bcryptHash {
+		if parsed.bcryptCost > h.config.MaxBcryptCost {
+			return false, fault.New(fault.Invalid, "stored password hash exceeds verification policy")
+		}
+	} else if !parsed.parameters.within(h.config.VerifyLimit) {
 		return false, fault.New(fault.Invalid, "stored password hash exceeds verification policy")
 	}
 	matched := false
@@ -88,8 +95,22 @@ func (h *Hasher) Check(ctx context.Context, plain Plaintext, hash Hash) (bool, e
 		}
 		input := []byte(plain.value.Reveal())
 		defer clear(input)
+		if parsed.algorithm == bcryptHash {
+			// bcrypt only uses the first 72 bytes; matching the originating
+			// verifier (for example PHP password_verify) keeps imports usable.
+			err := bcrypt.CompareHashAndPassword([]byte(encoded), input[:min(len(input), 72)])
+			matched = err == nil
+			if err != nil && !errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
+				return fault.New(fault.Invalid, "invalid or unsupported password hash")
+			}
+			return nil
+		}
 		p := parsed.parameters
-		key := argon2.IDKey(input, parsed.salt, p.Iterations, p.MemoryKiB, p.Parallelism, uint32(len(parsed.key)))
+		derive := argon2.IDKey
+		if parsed.algorithm == argon2i {
+			derive = argon2.Key
+		}
+		key := derive(input, parsed.salt, p.Iterations, p.MemoryKiB, p.Parallelism, uint32(len(parsed.key)))
 		defer clear(key)
 		matched = subtle.ConstantTimeCompare(key, parsed.key) == 1
 		return nil
@@ -112,5 +133,5 @@ func (h *Hasher) NeedsRehash(hash Hash) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return parsed.parameters != h.config.Parameters || len(parsed.salt) != SaltBytes || len(parsed.key) != KeyBytes, nil
+	return parsed.algorithm != argon2id || parsed.parameters != h.config.Parameters || len(parsed.salt) != SaltBytes || len(parsed.key) != KeyBytes, nil
 }

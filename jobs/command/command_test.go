@@ -30,6 +30,9 @@ func TestCommandValidatesBeforeServiceStartup(t *testing.T) {
 		{"jobs", "failed", "--queue", ""}, {"jobs", "failed", "--format", "xml"},
 		{"jobs", "failed", "unexpected"}, {"jobs", "failed", "--connection", "not a name"},
 		{"jobs", "inspect", "--id", "bad"}, {"jobs", "retry", "--token", "bad"},
+		{"jobs", "retry-failed"}, {"jobs", "flush-failed"}, {"jobs", "clear"}, {"jobs", "forget"},
+		{"jobs", "retry-failed", "--confirm", "--name", "work"}, {"jobs", "stats", "--id", "bad"},
+		{"jobs", "migrate-layout"},
 	} {
 		if _, err := jobcommand.Parse(args, io.Discard); err == nil {
 			t.Fatal("invalid arguments accepted", args)
@@ -140,5 +143,113 @@ func TestCommandRetryReconcilesOutputFailureAndNeverEmitsPayload(t *testing.T) {
 	}
 	if _, err := jobcommand.Parse([]string{"jobs", "retry", "--id", receipt.ID.String()}, io.Discard); err == nil {
 		t.Fatal("missing retry token accepted")
+	}
+}
+
+func TestBulkQueueOperationsRetryFlushAndReportDepth(t *testing.T) {
+	d := jobs.Define[payload]("commands.bulk", 1, jobs.DefaultPolicy("work"))
+	declaration, err := d.Declare(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := jobtest.New(t, clock.System{}, declaration)
+	connection, err := jobs.NewConnection(h.Dispatcher, "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	connections, err := jobs.NewConnections("primary", jobs.NamedConnection{Name: "primary", Value: connection})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, err := d.On(connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := jobs.NewKey(h.Namespace, "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fail := func() {
+		t.Helper()
+		if _, err := bound.Dispatch(t.Context(), payload{Secret: "do-not-emit"}, jobs.Options[payload]{}); err != nil {
+			t.Fatal(err)
+		}
+		owner, err := lease.NewOwner()
+		if err != nil {
+			t.Fatal(err)
+		}
+		found, err := h.Backend.JobReserve(t.Context(), key, owner, time.Minute)
+		claim, ok := found.Get()
+		if err != nil || !ok {
+			t.Fatal("job not reserved", err)
+		}
+		if _, err := h.Backend.JobStart(t.Context(), key, claim.Ownership); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := h.Backend.JobFinish(t.Context(), key, claim.Ownership, jobs.Result{State: jobs.Failed, Reason: jobs.HandlerFailed}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run := func(args ...string) string {
+		t.Helper()
+		c, err := jobcommand.Parse(args, io.Discard)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var output bytes.Buffer
+		if err := c.Run(t.Context(), connections, &output); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(output.String(), "do-not-emit") {
+			t.Fatal("command emitted a payload")
+		}
+		return output.String()
+	}
+	fail()
+	fail()
+	var depth jobs.QueueStats
+	if err := json.Unmarshal([]byte(run("jobs", "stats", "--format", "json")), &depth); err != nil || depth != (jobs.QueueStats{Failed: 2, Retained: 2}) {
+		t.Fatalf("stats: %+v %v", depth, err)
+	}
+	if out := run("jobs", "retry-failed", "--confirm", "--format", "json"); !strings.Contains(out, `"matched":2`) || !strings.Contains(out, `"changed":2`) {
+		t.Fatal("retry-failed", out)
+	}
+	if err := json.Unmarshal([]byte(run("jobs", "stats", "--format", "json")), &depth); err != nil || depth.Waiting != 2 || depth.Failed != 0 {
+		t.Fatalf("retried jobs not waiting: %+v %v", depth, err)
+	}
+	if out := run("jobs", "clear", "--confirm", "--format", "json"); !strings.Contains(out, `"changed":2`) {
+		t.Fatal("clear", out)
+	}
+	fail()
+	if out := run("jobs", "flush-failed", "--confirm", "--format", "json"); !strings.Contains(out, `"changed":1`) {
+		t.Fatal("flush-failed", out)
+	}
+	if err := json.Unmarshal([]byte(run("jobs", "stats", "--format", "json")), &depth); err != nil || depth.Failed != 0 || depth.Retained != 2 {
+		t.Fatalf("flushed failures still retained: %+v %v", depth, err)
+	}
+}
+
+func TestMigrateLayoutReportsNothingToMigrateForLayoutFreeBackends(t *testing.T) {
+	d := jobs.Define[payload]("commands.layout", 1, jobs.DefaultPolicy("work"))
+	declaration, err := d.Declare(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := jobtest.New(t, clock.System{}, declaration)
+	connection, err := jobs.NewConnection(h.Dispatcher, "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	connections, err := jobs.NewConnections("primary", jobs.NamedConnection{Name: "primary", Value: connection})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := jobcommand.Parse([]string{"jobs", "migrate-layout", "--confirm", "--format", "json"}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if err := c.Run(t.Context(), connections, &output); err != nil || !strings.Contains(output.String(), `"migrated":false`) {
+		t.Fatal("migrate-layout", output.String(), err)
 	}
 }

@@ -17,7 +17,12 @@ func (c Code) Error() string { return string(c) }
 type Rejection struct {
 	retryAfter time.Duration
 	cause      error
+	triggered  bool
 }
+
+// Triggered reports whether this attempt's failure started the lock, rather
+// than being denied by an existing lock.
+func (e *Rejection) Triggered() bool { return e != nil && e.triggered }
 
 func (e *Rejection) Unwrap() error {
 	if e == nil {
@@ -42,7 +47,7 @@ func (e *unavailable) Unwrap() error        { return e.cause }
 func decisionError(d Decision) error {
 	switch d.Status {
 	case StatusLocked:
-		return &Rejection{retryAfter: d.RetryAfter}
+		return &Rejection{retryAfter: d.RetryAfter, triggered: d.Triggered}
 	case StatusExpired:
 		return Expired
 	}

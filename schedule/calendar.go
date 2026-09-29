@@ -35,3 +35,21 @@ func (c Calendar) Weekly(id ID, handler Handler) (Declaration, error) {
 func (c Calendar) Monthly(id ID, handler Handler) (Declaration, error) {
 	return Monthly(id, c.zone, handler)
 }
+func (c Calendar) EveryMinute(id ID, handler Handler) (Declaration, error) {
+	return EveryMinute(id, c.zone, handler)
+}
+func (c Calendar) EveryFiveMinutes(id ID, handler Handler) (Declaration, error) {
+	return EveryFiveMinutes(id, c.zone, handler)
+}
+func (c Calendar) EveryTenMinutes(id ID, handler Handler) (Declaration, error) {
+	return EveryTenMinutes(id, c.zone, handler)
+}
+func (c Calendar) EveryFifteenMinutes(id ID, handler Handler) (Declaration, error) {
+	return EveryFifteenMinutes(id, c.zone, handler)
+}
+func (c Calendar) EveryThirtyMinutes(id ID, handler Handler) (Declaration, error) {
+	return EveryThirtyMinutes(id, c.zone, handler)
+}
+func (c Calendar) LastDayOfMonthAt(id ID, text string, handler Handler) (Declaration, error) {
+	return LastDayOfMonthAt(id, text, c.zone, handler)
+}

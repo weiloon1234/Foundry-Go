@@ -22,6 +22,11 @@ import (
 type Model[M model.Identifiable, K any] struct {
 	Lock    func(context.Context, *database.Tx, K) (value.Optional[M], error)
 	Binding func(M) (Binding, error)
+	// Eligible optionally replaces the provider's login eligibility for this
+	// flow, for example so email verification works before a provider that
+	// requires verified addresses admits the account. Identity checks remain.
+	// False rejects like a stale link. Omit it to reuse provider eligibility.
+	Eligible func(context.Context, M) (bool, error)
 }
 
 type Flow[M model.Identifiable, K any, P Purpose] struct {
@@ -81,11 +86,7 @@ func (f *Flow[M, K, P]) locked(ctx context.Context, tx *database.Tx, identity mo
 	if !present {
 		return *new(M), Binding{}, auth.Unauthenticated
 	}
-	actual, err := f.provider.CheckModel(ctx, subject)
-	if err != nil {
-		return *new(M), Binding{}, err
-	}
-	got, err := actual.Identity()
+	got, err := f.eligible(ctx, subject)
 	if err != nil {
 		return *new(M), Binding{}, err
 	}
@@ -100,6 +101,39 @@ func (f *Flow[M, K, P]) locked(ctx context.Context, tx *database.Tx, identity mo
 		return *new(M), Binding{}, fault.New(fault.Invalid, "challenge model returned an empty binding")
 	}
 	return subject, binding, nil
+}
+
+// eligible checks the locked model's identity and the flow's eligibility rule.
+func (f *Flow[M, K, P]) eligible(ctx context.Context, subject M) (model.Identity, error) {
+	if f.model.Eligible == nil {
+		actual, err := f.provider.CheckModel(ctx, subject)
+		if err != nil {
+			return model.Identity{}, err
+		}
+		return actual.Identity()
+	}
+	identity, err := subject.FoundryIdentity()
+	if err != nil {
+		return model.Identity{}, err
+	}
+	if _, err := f.provider.Parse(identity); err != nil {
+		return model.Identity{}, err
+	}
+	allowed := false
+	if err := callback.Isolated("challenge eligibility", func() error {
+		var err error
+		allowed, err = f.model.Eligible(ctx, subject)
+		return err
+	}); err != nil {
+		return model.Identity{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return model.Identity{}, err
+	}
+	if !allowed {
+		return model.Identity{}, auth.Unauthenticated
+	}
+	return identity, nil
 }
 
 // Issue replaces the previous link for this model/provider/purpose. The reference

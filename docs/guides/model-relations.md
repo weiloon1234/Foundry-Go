@@ -38,9 +38,66 @@ users, err := models.QueryUsers().
 
 `With` preserves the generated query wrapper, so typed `Find`, `RequireFind`, `First`, pagination and other collection reads remain available. Relations load after parent rows are closed, allowing the same executor to be a single-connection transaction. Count/Exists do not execute eager loads. Model writes reject eager-loading clauses.
 
-For `One[T]`, `Get()` returns `(value.Optional[T], bool)`: the boolean reports loaded state, and the optional reports whether a related model exists. Thus not loaded, loaded empty and loaded present remain distinct. `Many[T].Get()` returns `([]T, bool)` with the same loaded flag, including for empty collections. Both expose `IsLoaded()`. Ordinary Go field access and these getters perform no I/O.
+For `One[T]`, `Get()` returns `(value.Optional[T], bool)`: the boolean reports loaded state, and the optional reports whether a related model exists. Thus not loaded, loaded empty and loaded present remain distinct. `Many[T].Get()` returns `([]T, bool)` with the same loaded flag, including for empty collections; the slice is a caller-owned copy. `Len()` and `All()` (an `iter.Seq2[int, T]` yielding each model by value) read a large collection without copying it, and `Through` offers the same pair for links. Both expose `IsLoaded()`. Ordinary Go field access and these getters perform no I/O.
+
+Eager loading copies the caller's parent slice once per load, attaches each relation branch in place on that copy, and adopts freshly loaded groups without re-copying them. The whole relation tree is validated once before the parent read, not again for every nested level and key batch.
 
 `query.HasOne` and `BelongsTo` require at most one matching target for each key. Multiple matching rows report `database.TooManyRows` and discard the entire result. Foundry never chooses an arbitrary first match. Enforce physical uniqueness where the domain requires it. `HasMany` retains the target query's order and appends its primary key as a tie-breaker when absent.
+
+## One of many
+
+When a parent has many targets but a slot needs one of them, declare the choice explicitly, like Laravel's `latestOfMany`/`ofMany`:
+
+```go
+o, e := OfficeFields(), EmployeeFields()
+return OfficeRelationSet{
+    Newest:    query.HasOne(o.ID, e.OfficeID).LatestOfMany(),        // highest primary key
+    Earliest:  query.HasOne(o.ID, e.OfficeID).OfMany(e.HiredAt.Asc()),
+    TopEarner: query.HasOne(o.ID, e.OfficeID).OfMany(e.Salary.Desc()),
+}
+```
+
+Each parent loads the first target in that order (the target primary key breaks ties; `OldestOfMany` uses the lowest key), in one `DISTINCT ON` query per key batch. The relationship's filters and scopes take part in the choice: `TopEarner.Where(e.Salary.Lt(25))` loads the best-paid employee under 25. `WhereHas` therefore matches when any filtered target exists. Relation aggregates over a one-of-many relationship are rejected; aggregate its `HasMany` form. The [office consumer](../../tests/fixtures/consumer/officequeries/office_postgres_test.go) exercises these relationships.
+
+## Through an intermediate model
+
+`HasManyThrough` and `HasOneThrough` reach targets through an intermediate model, like Laravel's `hasManyThrough`/`hasOneThrough`:
+
+```go
+r, o, e := RegionFields(), OfficeFields(), EmployeeFields()
+Employees: query.HasManyThrough(r.ID, o.RegionID, o.ID, e.OfficeID) // Region -> Office -> Employee
+Region:    query.HasOneThrough(e.OfficeID, o.ID, o.RegionID, r.ID)   // Employee -> Office -> Region
+```
+
+The arguments pair the source key with the intermediate's first key, then the intermediate's second key with the target key; the compiler checks both key types and all three models. The slots are ordinary `relation.Many`/`relation.One` fields. Targets load in one joined query per key batch, the intermediate's soft deletion and [global scopes](model-global-scopes.md) apply, and a target reachable through several intermediate rows appears once per path. `WhereHas`, relation aggregates and `query.RelatedValue` use the same join. The intermediate is any generated model (`query.ModelQuery`); it needs no relation slot of its own. A one-of-many choice over `HasOneThrough` is made per parent across all its intermediate rows: `HasOneThrough(r.ID, o.RegionID, o.ID, e.OfficeID).OfMany(e.HiredAt.Desc())` loads each region's latest hire from any of its offices.
+
+## Polymorphic relationships
+
+A model that takes part in polymorphic relationships declares its stored discriminator once; this method is the typed morph map, so call sites never pass type strings:
+
+```go
+func (Office) MorphName() query.MorphName { return "office" }
+func (Region) MorphName() query.MorphName { return "region" }
+
+//foundry:model table=office_notes
+type Note struct {
+    ID          model.ID[Note]
+    SubjectType query.MorphName
+    SubjectID   string
+    Body        string
+    Region      relation.One[Region]
+    Office      relation.One[Office]
+}
+```
+
+| Constructor | Relationship |
+| --- | --- |
+| `MorphMany(o.Code, n.SubjectID, n.SubjectType)` / `MorphOne` | targets storing the parent's key and morph name |
+| `MorphTo(n.SubjectID, n.SubjectType, o.Code)` | the parent of one type; declare one slot per possible parent type |
+| `MorphToMany(o.Code, p.LabelableID, p.LabelableType, p.LabelID, l.ID)` | many-to-many through a pivot storing the source's morph name |
+| `MorphedByMany(l.ID, p.LabelID, p.LabelableType, p.LabelableID, o.Code)` | its inverse for one morphable target type |
+
+Every morph target shares one key type (here a unique `Code`), because one stored id column references them all. Instead of an untyped "any parent" slot, `MorphTo` gives each possible parent type its own typed `relation.One` slot: loading a note fills the slot matching its stored morph name and loads the others empty, and `WhereHas(r.Office)` matches only notes of offices. `MorphToMany` pivot writes (`Attach`, `Sync`, ...) fill the morph name automatically. Aggregates over `MorphTo` are rejected. A `MorphName` outside the identifier grammar (letters, digits and underscores; for example a namespaced `App\Models\Post` or `blog-post`) makes every query, load and write through that relationship fail validation, including after generated binding. The [office consumer](../../tests/fixtures/consumer/officequeries/office_postgres_test.go) exercises all four forms.
 
 ## Scopes and nested loading
 

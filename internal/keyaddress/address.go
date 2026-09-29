@@ -33,6 +33,18 @@ func New(namespace keyspace.Namespace, name, logical string) (Address, error) {
 	}
 	return Address{Namespace: keyspace.Namespace{Application: strings.Clone(namespace.Application), Environment: strings.Clone(namespace.Environment)}, Name: strings.Clone(name), Hash: sha256.Sum256([]byte(logical)), valid: true}, nil
 }
+
+// FromHash restores an address from its validated parts and logical-key hash,
+// for adapters that persist or transfer an address without its logical key.
+func FromHash(namespace keyspace.Namespace, name string, hash [sha256.Size]byte) (Address, error) {
+	if err := namespace.Validate(); err != nil {
+		return Address{}, err
+	}
+	if !keyspace.ValidName(name) {
+		return Address{}, fault.New(fault.Invalid, "invalid family name")
+	}
+	return Address{Namespace: keyspace.Namespace{Application: strings.Clone(namespace.Application), Environment: strings.Clone(namespace.Environment)}, Name: strings.Clone(name), Hash: hash, valid: true}, nil
+}
 func (a Address) Validate() error {
 	if !a.valid {
 		return fault.New(fault.Invalid, "key is not initialized")

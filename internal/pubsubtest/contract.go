@@ -27,7 +27,9 @@ func Run(t *testing.T, factory func(*testing.T) (pubsub.Backend, func(string) pu
 		}
 		t.Cleanup(func() { one.Close(context.Background()) })
 		data := []byte("original")
-		if n, err := b.Publish(t.Context(), a, data); err != nil || n != 2 {
+		// The count is the authority's: memory counts subscriptions, while Redis
+		// counts subscribed connections and one client multiplexes its streams.
+		if n, err := b.Publish(t.Context(), a, data); err != nil || n == 0 || n > 2 {
 			t.Fatal(n, err)
 		}
 		data[0] = 'X'

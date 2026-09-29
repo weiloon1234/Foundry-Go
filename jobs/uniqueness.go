@@ -25,19 +25,28 @@ func (UniqueKey[P]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("job uni
 // Unique suppresses other dispatch identities for the same name, version, queue
 // and key for a fixed window from successful enqueue. Completion does not release
 // that window. It is admission deduplication, not exactly-once execution.
+// UntilProcessing releases the window as soon as the job's first attempt
+// starts, so a new job with the same key can be queued while this one runs; the
+// window still bounds how long a job that never starts suppresses others. It
+// requires ExtendedEnvelope readers.
 type Unique[P any] struct {
-	Key UniqueKey[P]
-	For time.Duration
+	Key             UniqueKey[P]
+	For             time.Duration
+	UntilProcessing bool
 }
 
 // Uniqueness is the immutable heterogeneous adapter contract.
 type Uniqueness struct {
-	Digest string        `json:"digest"`
-	For    time.Duration `json:"for"`
+	Digest          string        `json:"digest"`
+	For             time.Duration `json:"for"`
+	UntilProcessing bool          `json:"until_processing,omitzero"`
 }
 
 func (u Uniqueness) Validate() error {
 	if u.Digest == "" && u.For == 0 {
+		if u.UntilProcessing {
+			return fault.New(fault.Invalid, "until-processing uniqueness requires a key")
+		}
 		return nil
 	}
 	data, err := hex.DecodeString(u.Digest)
@@ -47,14 +56,14 @@ func (u Uniqueness) Validate() error {
 	return nil
 }
 func (u Unique[P]) capture(name Name, version Version) (Uniqueness, error) {
-	if u.Key.text == "" && u.For == 0 {
+	if u.Key.text == "" && u.For == 0 && !u.UntilProcessing {
 		return Uniqueness{}, nil
 	}
 	if u.Key.text == "" {
 		return Uniqueness{}, fault.New(fault.Invalid, "job uniqueness requires a key")
 	}
 	digest := sha256.Sum256([]byte(string(name) + "\x00" + strconv.FormatUint(uint64(version), 10) + "\x00" + u.Key.text))
-	result := Uniqueness{Digest: hex.EncodeToString(digest[:]), For: u.For}
+	result := Uniqueness{Digest: hex.EncodeToString(digest[:]), For: u.For, UntilProcessing: u.UntilProcessing}
 	return result, result.Validate()
 }
 

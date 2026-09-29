@@ -30,6 +30,7 @@ type envelopeWire struct {
 	AvailableAt     time.Time                       `json:"available_at,omitzero"`
 	Origin          attribution.Origin              `json:"origin"`
 	Unique          Uniqueness                      `json:"unique,omitzero"`
+	Encrypted       bool                            `json:"encrypted,omitzero"`
 	Payload         json.RawMessage                 `json:"payload"`
 }
 
@@ -43,14 +44,29 @@ func (e Envelope) Policy() Policy             { return e.wire.Policy.snapshot() 
 func (e Envelope) AvailableAt() time.Time     { return e.wire.AvailableAt }
 func (e Envelope) Origin() attribution.Origin { return e.wire.Origin }
 
+// Encrypted reports a sealed payload: PayloadJSON is then a JSON string of
+// ciphertext, decrypted by the definition (Definition.Payload).
+func (e Envelope) Encrypted() bool { return e.wire.Encrypted }
+
 // EnvelopeVersion identifies the transport format independently of a job's
 // payload Version. LegacyEnvelope omits new fields for older strict readers.
+// ExtendedEnvelope (3) is selected automatically when an envelope uses a field
+// older readers reject: Policy.MaxExceptions, Policy.RetryUntil,
+// Unique.UntilProcessing or payload encryption. Its trace is optional. Envelopes
+// without those fields keep the legacy or traced format. Upgrade every worker,
+// publisher and inspection tool before dispatching extended envelopes.
 type EnvelopeVersion uint8
 
 const (
-	LegacyEnvelope EnvelopeVersion = 1
-	TracedEnvelope EnvelopeVersion = 2
+	LegacyEnvelope   EnvelopeVersion = 1
+	TracedEnvelope   EnvelopeVersion = 2
+	ExtendedEnvelope EnvelopeVersion = 3
 )
+
+// extended reports whether the envelope carries fields that need format 3.
+func (w envelopeWire) extended() bool {
+	return w.Policy.extended() || w.Unique.UntilProcessing || w.Encrypted
+}
 
 func (e Envelope) WireVersion() EnvelopeVersion {
 	if e.wire.EnvelopeVersion == 0 {
@@ -65,20 +81,29 @@ func (e Envelope) Trace() value.Optional[tracing.Context] { return e.wire.Trace 
 func (e Envelope) PayloadJSON() string      { return e.payload }
 func (Envelope) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("job envelope")) }
 func (e Envelope) Validate() error {
-	if e.wire.EnvelopeVersion == 0 {
+	switch e.wire.EnvelopeVersion {
+	case 0:
 		if e.wire.Trace.IsSet() {
 			return fault.New(fault.Invalid, "legacy job envelope cannot contain trace context")
 		}
-	} else if e.wire.EnvelopeVersion == TracedEnvelope {
-		trace, present := e.wire.Trace.Get()
-		if !present {
+	case TracedEnvelope:
+		if !e.wire.Trace.IsSet() {
 			return fault.New(fault.Invalid, "traced job envelope requires trace context")
 		}
+	case ExtendedEnvelope:
+		if !e.wire.extended() {
+			return fault.New(fault.Invalid, "extended job envelope carries no extended field")
+		}
+	default:
+		return fault.New(fault.Invalid, "unsupported job envelope transport version")
+	}
+	if e.wire.EnvelopeVersion != ExtendedEnvelope && e.wire.extended() {
+		return fault.New(fault.Invalid, "job envelope fields require the extended transport format")
+	}
+	if trace, present := e.wire.Trace.Get(); present {
 		if err := trace.Validate(); err != nil {
 			return err
 		}
-	} else {
-		return fault.New(fault.Invalid, "unsupported job envelope transport version")
 	}
 	if e.ID().IsZero() || !identifier.Semantic(string(e.Name())) || e.Version() == 0 || len(e.payload) == 0 || len(e.payload) > MaxPayloadBytes {
 		return fault.New(fault.Invalid, "invalid job envelope identity or payload bounds")

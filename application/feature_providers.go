@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/health"
+	"github.com/weiloon1234/Foundry-Go/health/checks"
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
@@ -47,6 +48,9 @@ func registerFeatures(ctx context.Context, builder *foundation.Builder, settings
 	builder.Register(foundation.Module{Name: FeatureDeclarationsProvider, Requires: []foundation.ProviderID{Provider}, OnRegister: func(r *foundation.Registrar) error {
 		return foundation.Factory(r, featureDeclarationsKey, func(r foundation.Resolver) (FeatureDeclarations, error) { return mergeFeatures(r, s, constructors) })
 	}})
+	if err := registerEncryption(builder, settings.Encryption); err != nil {
+		return err
+	}
 	registerAuth(builder, s.Auth, source)
 	registerIdempotency(builder, s.Idempotency, settings.Services.Namespace)
 	if s.Locales.Enabled {
@@ -161,7 +165,12 @@ func registerFeatures(ctx context.Context, builder *foundation.Builder, settings
 		}))
 	}
 	if s.Health.Enabled {
-		builder.Register(health.Module(HealthProvider, HealthKey, s.Health.Config, []foundation.ProviderID{FeatureDeclarationsProvider, Provider}, func(r foundation.Resolver) ([]health.Probe, error) {
+		requires := []foundation.ProviderID{FeatureDeclarationsProvider, Provider}
+		realtime := settings.Realtime.Enabled && s.Health.ConfiguredConnections
+		if realtime {
+			requires = append(requires, RealtimeProvider)
+		}
+		builder.Register(health.Module(HealthProvider, HealthKey, s.Health.Config, requires, func(r foundation.Resolver) ([]health.Probe, error) {
 			d, err := foundation.Resolve(r, featureDeclarationsKey)
 			if err != nil {
 				return nil, err
@@ -189,6 +198,39 @@ func registerFeatures(ctx context.Context, builder *foundation.Builder, settings
 						}
 						probes = append(probes, health.Probe{ID: health.ProbeID("redis." + string(name)), Check: client.Ping})
 					}
+				}
+				if realtime {
+					hub, err := services.RealtimeHub()
+					if err != nil {
+						return nil, err
+					}
+					probes = append(probes, health.Probe{ID: "realtime", Check: hub.Probe})
+				}
+			}
+			if s.Health.ConfiguredStorage && services.Storage != nil {
+				for _, id := range services.Storage.Disks() {
+					disk, err := services.Storage.Disk(id)
+					if err != nil {
+						return nil, err
+					}
+					probe, err := checks.Disk(health.ProbeID("storage."+string(id)), disk, checks.DiskProbeKey())
+					if err != nil {
+						return nil, err
+					}
+					probes = append(probes, probe)
+				}
+			}
+			if s.Health.ConfiguredMail && services.Mailers != nil {
+				for _, name := range services.Mailers.Names() {
+					mailer, err := services.Mailers.Mailer(name)
+					if err != nil {
+						return nil, err
+					}
+					probe, err := checks.Mailer(health.ProbeID("mail."+string(name)), mailer)
+					if err != nil {
+						return nil, err
+					}
+					probes = append(probes, probe)
 				}
 			}
 			return probes, nil

@@ -1,15 +1,15 @@
 {
   "version": 1,
   "files": {
-    "buyer_totals_foundry.gen.go": "7eb35dff7d7ec039c8fa948807b74b15d5cc4d3dd77af9c52824ffc26a7e209a",
-    "location_row_foundry.gen.go": "8aec0e3e5b8b907f2fcc24052cdb1d8b864a88d6077e75a4e44ae19a2b6a786b",
-    "order_buyer_row_foundry.gen.go": "1b84dee99284e208eb64960a7a953b89dcac29ba8999d2c7bf188940107688c8",
-    "order_summary_foundry.gen.go": "bddc538777f55c8cd380e868e6d35cd9e47e3a08d48bed1d770d11612b52b8a4",
-    "referral_order_row_foundry.gen.go": "86fe923657be0810bcd2468431e261cbf9eab03023cf09e7f30d74b27bfa7910",
-    "referral_row_foundry.gen.go": "7144d2d1f5c80dcfb2ecbdbb919f0f6bd2b28b6b3529bce1a849d9a0a8147eba",
-    "scalar_report_foundry.gen.go": "00db9252fa0c5767782a4ca05fa038448f93f9d28aec0dfd06969d5971f7f1e8",
-    "user_order_stats_foundry.gen.go": "8798f44875cfdfdfa16fa7ac85bbbd7ab0de12ec93fc02d4665296cca2dd1bf1",
-    "user_pair_foundry.gen.go": "898393accb31e007b3449b175e38d4c6353e4447b06e4096b7373e7fb640fde9",
-    "user_summary_foundry.gen.go": "dda093de510fbba3e7d4af3be9a50f48a174338ff06e02de2e1bcad1f4cd678a"
+    "buyer_totals_foundry.gen.go": "d8a7b28c9ad21545d2b383785e9323eec3357a5c650f0f78b8bc2bf7172d8c9e",
+    "location_row_foundry.gen.go": "003dcae94c2e34341529921323542e48c0edd19d3d9cc56eebef5c6d9fba57be",
+    "order_buyer_row_foundry.gen.go": "0707079b1d902632e023927aa887306ffd21aa42268a75758dd30182e880cc4c",
+    "order_summary_foundry.gen.go": "38d924a96ff325f152dce4a3993107bac441b46af2b8f1e1d595c9faaf4df3a2",
+    "referral_order_row_foundry.gen.go": "85d8e3fc01b9c08fa17f4a16d98d03d1c5fb6b1f5f4b168291408773aab25925",
+    "referral_row_foundry.gen.go": "80fcf77629b6529d0aa211e3a13845f729e2be59d7f6537c72fdcdd554b1279a",
+    "scalar_report_foundry.gen.go": "d6f845eed93a25cbf0659601bbc4d5788d6565c3e39c8b01fa79b22c58d7269e",
+    "user_order_stats_foundry.gen.go": "64915d67f7823c1885e795f25941c8953255c79e4cd393142924c57c245ff623",
+    "user_pair_foundry.gen.go": "eac250beda37cdf430decbc566e89f00016b1a38a8555abd51f5798d827e2636",
+    "user_summary_foundry.gen.go": "a75b1cf858625bbdf6f292743b943ff1c34bb5a823deaf4ec28d98f386384987"
   }
 }

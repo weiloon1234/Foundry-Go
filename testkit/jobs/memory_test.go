@@ -2,6 +2,8 @@ package jobs_test
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,5 +57,39 @@ func TestMemoryHarnessKeepsTypedRegistrationDeduplicationAndIsolation(t *testing
 	})
 	if _, err := definition.Inspect(t.Context(), retained.Dispatcher, id, ""); !errors.Is(err, fault.Closed) {
 		t.Fatal("cleanup did not close backend", err)
+	}
+}
+
+// failures records assertion failures instead of failing the enclosing test.
+type failures struct {
+	testing.TB
+	messages []string
+}
+
+func (f *failures) Errorf(format string, args ...any) {
+	f.messages = append(f.messages, fmt.Sprintf(format, args...))
+}
+
+func TestPushedAssertionsMatchTypedPayloadsWithoutPrintingThem(t *testing.T) {
+	definition := jobs.Define[Work]("test.pushed", 1, jobs.DefaultPolicy("default"))
+	declaration, err := definition.Declare(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := jobstest.New(t, testkit.NewClock(time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)), declaration)
+	for _, number := range []int{41, 42} {
+		if _, err := definition.Dispatch(t.Context(), h.Dispatcher, Work{Number: number}, jobs.Options[Work]{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	answer := func(w Work) bool { return w.Number == 42 }
+	jobstest.AssertPushed(t, h.Dispatcher, definition, "", answer)
+	jobstest.AssertNotPushed(t, h.Dispatcher, definition, "", func(w Work) bool { return w.Number == 7 })
+	jobstest.AssertPushedCount(t, h.Dispatcher, definition, "", nil, 2)
+	recorded := &failures{TB: t}
+	jobstest.AssertNotPushed(recorded, h.Dispatcher, definition, "", answer)
+	jobstest.AssertPushedCount(recorded, h.Dispatcher, definition, "", answer, 2)
+	if len(recorded.messages) != 2 || strings.Contains(strings.Join(recorded.messages, " "), "42") {
+		t.Fatal("assertion failures missing or exposed a payload", recorded.messages)
 	}
 }

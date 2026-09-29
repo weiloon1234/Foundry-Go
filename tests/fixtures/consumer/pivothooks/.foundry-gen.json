@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "files": {
+    "assignment_foundry.gen.go": "d5d2d2b6c22242d5c0a7b59f20ca1fab130f4df188fd893c3add5b4bf3247eea",
+    "person_foundry.gen.go": "853a793075d9c222aa70db345683d635557e3113a6ad0f576caff7c1e2ca05a5",
+    "project_foundry.gen.go": "17c8c1621eb2a5990bccb206a6d388fd7a6f92dc453c1c27a4a1ea0214c6da18"
+  }
+}

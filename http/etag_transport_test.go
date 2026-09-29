@@ -196,8 +196,10 @@ func TestETagNativeTransferFailureCannotLookComplete(t *testing.T) {
 func TestETagFailureReleasesCaptureAndDoesNotReadAgain(t *testing.T) {
 	config := DefaultETagConfig()
 	config.MaxConcurrent = 1
+	config.AdmissionWait = 0
 	handler := etagTestHandler(t, config, func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-		_, _ = io.WriteString(w, "captured")
+		// Exceed one page so the capture holds the single large-capture slot.
+		_, _ = io.WriteString(w, strings.Repeat("c", responseBufferPageBytes+1))
 		if r.URL.Path == "/panic" {
 			panic("fixture")
 		}

@@ -68,15 +68,34 @@ func TestPostgresSchemaEveryConnectionResetAndReconnect(t *testing.T) {
 	if countRows(t, db, "records") != 1 {
 		t.Fatal("prepared/cached reads lost scoped data")
 	}
-	// Session tables must not shadow a later borrower's ordinary model table.
+	// Session tables must not shadow a later borrower's ordinary model table,
+	// and the session that created them is not lent again: its temporary
+	// namespace (even after DROP) would carry state into another borrower.
+	var creator int32
 	if err := db.Session(t.Context(), func(s *database.Session) error {
-		_, err := s.Exec(t.Context(), "CREATE TEMP TABLE records(id bigint)")
+		if err := database.ScanOne(t.Context(), s, "SELECT pg_backend_pid()", nil, &creator); err != nil {
+			return err
+		}
+		if _, err := s.Exec(t.Context(), "CREATE TEMP TABLE records(id bigint)"); err != nil {
+			return err
+		}
+		_, err := s.Exec(t.Context(), "CREATE TEMP TABLE scratch(id bigint)")
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if countRows(t, db, "records") != 1 {
 		t.Fatal("temporary table escaped session ownership")
+	}
+	for range 4 {
+		var pid int32
+		var leaked bool
+		if err := database.ScanOne(t.Context(), db, "SELECT pg_backend_pid(), to_regclass('pg_temp.scratch') IS NOT NULL", nil, &pid, &leaked); err != nil {
+			t.Fatal(err)
+		}
+		if pid == creator || leaked {
+			t.Fatal("a session with temporary objects was lent to another borrower")
+		}
 	}
 	if db.Stats().Open > 2 || db.Stats().Owners != 0 {
 		t.Fatal("connection bounds/ownership changed")

@@ -195,9 +195,32 @@ func TestPasswordLoginRehashValidatesCASResultAndPreservesFailures(t *testing.T)
 	}
 	original := passwordSubject{ID: 7, Digest: old, Enabled: true}
 	failure := errors.New("private uncertain write")
-	for _, mode := range []string{"updated", "lost", "identity", "hash", "disabled", "error"} {
+	winner, err := h.Hash(t.Context(), plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replaced, err := h.Hash(t.Context(), loginPlain(t, "reset password"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"updated", "lost", "changed", "identity", "hash", "disabled", "error"} {
 		t.Run(mode, func(t *testing.T) {
 			b := loginBinding(original)
+			lookups := 0
+			b.Lookup = func(_ context.Context, key loginEmail) (value.Optional[passwordSubject], error) {
+				lookups++
+				if lookups == 1 {
+					return value.Set(original), nil
+				}
+				// The compare-and-swap was lost: another login rehashed the same
+				// password, or a reset replaced it.
+				current := original
+				current.Digest = winner
+				if mode == "changed" {
+					current.Digest = replaced
+				}
+				return value.Set(current), nil
+			}
 			writes := 0
 			b.Rehash = func(ctx context.Context, s passwordSubject, expected, next password.Hash) (value.Optional[passwordSubject], error) {
 				writes++
@@ -206,7 +229,7 @@ func TestPasswordLoginRehashValidatesCASResultAndPreservesFailures(t *testing.T)
 				}
 				s.Digest = next
 				switch mode {
-				case "lost":
+				case "lost", "changed":
 					return value.Optional[passwordSubject]{}, nil
 				case "identity":
 					s.ID++
@@ -231,7 +254,13 @@ func TestPasswordLoginRehashValidatesCASResultAndPreservesFailures(t *testing.T)
 				if needs, err := h.NeedsRehash(result.Subject().Digest); err != nil || needs {
 					t.Fatal("rehash did not apply issuance policy", err)
 				}
-			case "lost", "disabled":
+			case "lost":
+				// Losing the CAS to a parallel login's rehash of the same password
+				// is not a failure: the winning hash verifies and login continues.
+				if err != nil || result.Subject().Digest != winner || lookups != 2 {
+					t.Fatal("lost rehash rejected a correct password", err)
+				}
+			case "changed", "disabled":
 				if !errors.Is(err, auth.Unauthenticated) {
 					t.Fatal("stale or disabled model accepted", err)
 				}
@@ -287,6 +316,7 @@ func TestPasswordLoginCallbackFailuresAndCapacity(t *testing.T) {
 	}
 	config := auth.DefaultConfig()
 	config.MaxConcurrent = 1
+	config.Timeout = 100 * time.Millisecond // Also bounds the queued admission wait.
 	l := loginInstance(t, h, b, config)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -301,7 +331,7 @@ func TestPasswordLoginCallbackFailuresAndCapacity(t *testing.T) {
 	<-entered
 	cancel()
 	result, err := l.Authenticate(t.Context(), "another@example.test", plain)
-	if !errors.Is(err, fault.Conflict) {
+	if !errors.Is(err, fault.Overloaded) {
 		t.Error("active canceled lookup released its slot", err)
 	}
 	assertNoPasswordAuthority(t, result)

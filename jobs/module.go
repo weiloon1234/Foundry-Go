@@ -98,6 +98,14 @@ func registerWorker(r *foundation.Registrar, key foundation.Key[*Dispatcher], co
 		if err := validateWorkerDispatcher(dispatcher, config); err != nil {
 			return nil, err
 		}
-		return NewWorker(dispatcher.backend, dispatcher.registry, config, WithWorkerLogger(runtime.Logger()))
+		options := []WorkerOption{WithWorkerLogger(runtime.Logger())}
+		sinks, err := foundation.Contributions(runtime.Services(), failureSinks(key))
+		if err != nil {
+			return nil, err
+		}
+		for _, contribution := range sinks {
+			options = append(options, WithFailureSink(contribution.sink))
+		}
+		return NewWorker(dispatcher.backend, dispatcher.registry, config, options...)
 	})
 }

@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/frameworkadapter"
 	"github.com/weiloon1234/Foundry-Go/internal/pubsubstream"
 	"github.com/weiloon1234/Foundry-Go/pubsub"
 )
@@ -27,6 +28,9 @@ func New(maxSubscriptions int) (*Backend, error) {
 }
 
 var _ pubsub.Backend = (*Backend)(nil)
+
+// FoundryAdapter marks the backend as framework-owned adapter I/O.
+func (*Backend) FoundryAdapter(frameworkadapter.Seal) {}
 
 func (b *Backend) Publish(ctx context.Context, channel pubsub.Channel, data []byte) (uint64, error) {
 	if err := pubsub.ValidatePublish(ctx, channel, data); err != nil {
@@ -70,8 +74,9 @@ func (b *Backend) Subscribe(ctx context.Context, channels []pubsub.Channel, limi
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	// A live-subscription bound fails fast; it is retryable once one closes.
 	if len(b.streams) >= b.capacity {
-		return nil, fault.New(fault.Conflict, "memory pub/sub subscription capacity reached")
+		return nil, fault.New(fault.Overloaded, "memory pub/sub subscription capacity reached")
 	}
 	buffer, err := pubsubstream.New(limits)
 	if err != nil {
@@ -103,6 +108,9 @@ type stream struct {
 	buffer   *pubsubstream.Buffer
 	channels map[pubsub.Channel]bool
 }
+
+// FoundryAdapter marks the stream as framework-owned adapter I/O.
+func (*stream) FoundryAdapter(frameworkadapter.Seal) {}
 
 func (s *stream) Next(ctx context.Context) (pubsub.Message, error) { return s.buffer.Next(ctx) }
 func (s *stream) Done() <-chan struct{}                            { return s.buffer.Done() }

@@ -1,6 +1,7 @@
 package attachments
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -88,6 +89,40 @@ func TestUploadUsesBytesAndBoundsWithoutClosingBorrowedSource(t *testing.T) {
 	cancel()
 	if _, err := prepare(ctx, nil, testSingle.definition.policy, Upload{Source: strings.NewReader("x")}); !errors.Is(err, context.Canceled) {
 		t.Fatal("canceled reader accepted", err)
+	}
+}
+func TestUploadDetectsDocumentsAndOnlyAcceptedTextSpecializations(t *testing.T) {
+	var document bytes.Buffer
+	writer := zip.NewWriter(&document)
+	for _, name := range []string{"[Content_Types].xml", "word/document.xml"} {
+		part, err := writer.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = part.Write([]byte("<x/>"))
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	const docx = storage.MediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+	policy := testSingle.definition.policy
+	policy.Accepted = []storage.MediaType{docx, "text/csv", "text/plain"}
+	result, err := prepare(t.Context(), nil, policy, Upload{Source: bytes.NewReader(document.Bytes()), OriginalName: "invoice\xe2\x80\xaefdp.docx", ContentType: "application/zip"})
+	if err != nil || result.info.MediaType != docx || result.info.OriginalName != "invoicefdp.docx" {
+		t.Fatal("office document or display name misclassified", err, result.info.MediaType)
+	}
+	result, err = prepare(t.Context(), nil, policy, Upload{Source: strings.NewReader("a,b\n1,2\n"), OriginalName: "rows.csv", ContentType: "text/csv"})
+	if err != nil || result.info.MediaType != "text/csv" {
+		t.Fatal("accepted text specialization ignored", err, result.info.MediaType)
+	}
+	// A collection accepting only text/plain keeps accepting CSV bytes.
+	result, err = prepare(t.Context(), nil, testSingle.definition.policy, Upload{Source: strings.NewReader("a,b\n1,2\n"), OriginalName: "rows.csv", ContentType: "text/csv"})
+	if err != nil || result.info.MediaType != "text/plain" {
+		t.Fatal("unaccepted specialization rejected plain text", err, result.info.MediaType)
+	}
+	// A declared type never overrides detected binary content.
+	if _, err := prepare(t.Context(), nil, policy, Upload{Source: bytes.NewReader([]byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")), OriginalName: "rows.csv", ContentType: "text/csv"}); err == nil {
+		t.Fatal("client-declared type accepted unaccepted bytes")
 	}
 }
 func TestPropertiesAreExplicitBoundedObjects(t *testing.T) {

@@ -66,11 +66,44 @@ a login through these helpers. Configure normal transport middleware to preserve
 the typed endpoint's ownership of its response.
 
 `Login` issues a fresh credential and then revokes the supplied previous cookie
-before staging its replacement. Issuance still counts against the active-session
-limit; it does not silently evict other devices. `Rotate` invalidates the old
+before staging its replacement. Issuance counts against the active-session limit:
+with the default `auth.EvictOldest` policy the subject's oldest session is revoked
+when the cap is reached, and with `auth.RejectNew` the login fails with
+`auth.CredentialLimit` (HTTP 409). Pending-MFA sessions have their own cap. `Rotate` invalidates the old
 secret while preserving the session identity and absolute deadline. `Logout`
 revokes the credential before staging an exact-scope cookie removal. Missing
 credentials may still be logged out; malformed cookie input is rejected earlier.
+
+Sensitive routes can require a recent password confirmation on the current
+session. A confirmation route re-verifies the password with
+`login.Confirm(ctx, user, password)` and then calls `sessions.ConfirmCurrent(ctx)`.
+The confirmation route must be throttled, or a stolen session cookie can
+brute-force the password there: configure the login with
+`login.WithConfirmationLockout(throttle)`, a per-subject declaration such as
+`lockout.Define("accounts.confirm", auth.ConfirmationKeys(), lockout.DefaultPolicy())`
+(a locked subject gets 429 before any hashing), and add an HTTP rate limit.
+Protected routes add the actor-stage middleware:
+
+```go
+route := http.RequireAuthentication(endpoint, browser.Authentication(), browser.Guard()).
+    WithActorMiddleware(browser.RequirePasswordConfirmation(15 * time.Minute))
+```
+
+Without a confirmation within the window, checked against the session store's
+clock, the request fails with `auth.ConfirmationRequired` (HTTP 403 `forbidden`)
+before decoding. See [sessions](sessions.md#the-current-session).
+
+Impersonation within one browser guard uses the session binding's
+[impersonation](sessions.md#impersonation) and swaps the cookie:
+`browser.Impersonate(ctx, support, target, duration)` stages the impersonation
+session cookie without revoking the actor's session, and
+`browser.StopImpersonating(ctx, support)` ends it and stages the actor's own
+session again under a fresh secret, with its original expiry (clearing the cookie
+when the actor's session has ended). Add
+`WithActorMiddleware(browser.RefuseImpersonation())` to routes that change
+credentials, email, MFA factors or the account, or that mint tokens; they then
+reject impersonation sessions with 403 before decoding (minting through
+`CurrentProof` is refused regardless). Impersonation cookies are never persistent.
 
 A regular session uses a nonpersistent browser cookie. Remembered cookies expire
 at the session's absolute server deadline. Sliding idle expiry remains enforced
@@ -81,7 +114,12 @@ Pending-MFA sessions cannot be remembered or become fully authenticated by rotat
 
 Only a successful handler and successfully prepared response can publish the staged
 cookie. Handler errors, invalid DTO encoding, panic, Goexit, cancellation and expiry
-before publication withhold it. The native writer is preserved; no response body is
+before publication withhold it. Only a credential-bearing publication (a staged
+login, rotation or logout cookie) is withheld once the request context ended; an
+ordinary response completed after its deadline is still delivered. Session work
+ends on client disconnect or forced shutdown, while the handler's own context
+carries its route's deadline, so a route with `WithTimeout` can log in after the
+kernel `RequestTimeout`. The native writer is preserved; no response body is
 buffered by this integration. Public handlers returning auth errors use the same
 HTTP 401/403/MFA contracts as guarded handlers. Explicit domain HTTP errors retain
 their declared status and message even when they wrap an auth error.
@@ -123,8 +161,11 @@ CORS controls response sharing and does not imply CSRF trust. Configure it separ
 for deliberate cross-origin clients. Native/bearer API routes should use their own
 authentication transport, rather than weakening browser-session checks. Standalone
 `http.CSRF(http.CSRFConfig{...})` supplies the same origin policy for other browser
-routes and preserves the native writer. Policy responses vary on `Sec-Fetch-Site`
-and `Origin`. No token/header compatibility with Rust or Laravel is implied.
+routes and preserves the native writer. Responses to unsafe methods vary on
+`Sec-Fetch-Site` and `Origin`; cacheable safe-method responses do not, because
+their decision never depends on those fields. The check reads only those two
+fields, without copying other request headers. No token/header compatibility
+with Rust or Laravel is implied.
 
 ## Complete a pending MFA cookie
 

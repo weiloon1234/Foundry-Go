@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/internal/callback"
 )
 
 const savepointCleanupTimeout = 5 * time.Second
@@ -30,11 +29,11 @@ func (tx *Tx) Savepoint(ctx context.Context, fn func(*Tx) error) error {
 	scope, cancel := tx.operationContext(ctx)
 	defer cancel()
 	name := "foundry_sp_" + strconv.FormatUint(tx.control.sequence.Add(1), 10)
-	if _, err := execute(scope, tx.raw, tx.classify, "SAVEPOINT "+name, nil); err != nil {
+	if _, err := execute(scope, tx.raw, tx.classify, tx.owner.instrumented(PrimaryPool), "SAVEPOINT "+name, nil); err != nil {
 		return err
 	}
 	child := &Tx{owner: tx.owner, raw: tx.raw, scope: &operationScope{ctx: scope, cancel: tx.control.cancel}, classify: tx.classify, control: tx.control, state: TxActive, observers: tx.observers, timeSource: tx.timeSource}
-	err = callback.Isolated("savepoint callback", func() error { return fn(child) })
+	err = invokeScope("savepoint callback", func() error { return fn(child) })
 	err = errors.Join(err, child.finishScope())
 	if err == nil {
 		err = scope.Err()
@@ -47,9 +46,9 @@ func (tx *Tx) Savepoint(ctx context.Context, fn func(*Tx) error) error {
 			child.setState(TxUnknown)
 			tx.control.poison(cleanupErr)
 		}
-		return errors.Join(tx.classify.wrap("savepoint", err), cleanupErr)
+		return errors.Join(tx.classify.scoped("savepoint", err), cleanupErr)
 	}
-	if _, err := execute(scope, tx.raw, tx.classify, "RELEASE SAVEPOINT "+name, nil); err != nil {
+	if _, err := execute(scope, tx.raw, tx.classify, tx.owner.instrumented(PrimaryPool), "RELEASE SAVEPOINT "+name, nil); err != nil {
 		child.setState(TxUnknown)
 		tx.control.poison(err)
 		return err
@@ -64,9 +63,9 @@ func (tx *Tx) Savepoint(ctx context.Context, fn func(*Tx) error) error {
 func (tx *Tx) rollbackSavepoint(ctx context.Context, name string) error {
 	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), savepointCleanupTimeout)
 	defer cancel()
-	if _, err := execute(cleanup, tx.raw, tx.classify, "ROLLBACK TO SAVEPOINT "+name, nil); err != nil {
+	if _, err := execute(cleanup, tx.raw, tx.classify, tx.owner.instrumented(PrimaryPool), "ROLLBACK TO SAVEPOINT "+name, nil); err != nil {
 		return err
 	}
-	_, err := execute(cleanup, tx.raw, tx.classify, "RELEASE SAVEPOINT "+name, nil)
+	_, err := execute(cleanup, tx.raw, tx.classify, tx.owner.instrumented(PrimaryPool), "RELEASE SAVEPOINT "+name, nil)
 	return err
 }

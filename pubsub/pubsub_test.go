@@ -196,7 +196,7 @@ func TestSubscriptionCapacityAndConcurrentShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := topic.Subscribe(t.Context(), 2); !errors.Is(err, fault.Conflict) {
+	if _, err := topic.Subscribe(t.Context(), 2); !errors.Is(err, fault.Overloaded) {
 		t.Fatal(err)
 	}
 	var wg sync.WaitGroup

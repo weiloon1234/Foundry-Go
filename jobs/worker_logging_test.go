@@ -207,28 +207,55 @@ func TestJobFinalizationFailureIsLoggedAsUnconfirmed(t *testing.T) {
 	}
 	config := jobs.DefaultWorkerConfig(f.key.Namespace(), f.key.Queue())
 	config.Concurrency = 1
-	var output bytes.Buffer
+	config.LeaseDuration, config.HeartbeatInterval, config.OperationTimeout, config.FailureBackoff = time.Second, 100*time.Millisecond, 300*time.Millisecond, 10*time.Millisecond
+	logs := &lockedBuffer{}
 	backend := failingWorkerBackend{Backend: f.backend, operation: "finish", failure: unformattableJobError{}}
-	worker, err := jobs.NewWorker(backend, registry, config, jobs.WithWorkerLogger(slog.New(slog.NewJSONHandler(&output, nil))))
+	worker, err := jobs.NewWorker(backend, registry, config, jobs.WithWorkerLogger(slog.New(slog.NewJSONHandler(logs, nil))))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := worker.Run(t.Context()); err == nil {
-		t.Fatal("failed acknowledgement accepted")
+	done := make(chan error, 1)
+	go func() { done <- worker.Run(t.Context()) }()
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(logs.String(), `"msg":"job completion unconfirmed"`) && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
 	}
 	if err := worker.Stop(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	text := output.String()
-	if !strings.Contains(text, `"msg":"job completion unconfirmed"`) || !strings.Contains(text, `"finalized":false`) || strings.Contains(text, "private") {
+	if err := <-done; err != nil {
+		t.Fatal("a failed acknowledgement stopped the worker", err)
+	}
+	text := logs.String()
+	if !strings.Contains(text, `"msg":"job completion unconfirmed"`) || !strings.Contains(text, `"finalized":false`) || !strings.Contains(text, `"diagnostic"`) || strings.Contains(text, "private") {
 		t.Fatal("unknown completion was misreported")
 	}
 	waitRecord(t, f, id, jobs.Running)
 }
 
-func TestWorkerShutdownReportsExhaustedAttemptsButNotOrdinaryRelease(t *testing.T) {
+// lockedBuffer lets a test read logs while the worker is still writing them.
+type lockedBuffer struct {
+	mu     sync.Mutex
+	buffer bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(data []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buffer.Write(data)
+}
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buffer.String()
+}
+
+// Stop interrupts a running handler: the attempt is released without consuming
+// the retry budget, even on the final attempt, and is neither logged nor
+// observed as a failure.
+func TestWorkerStopReleasesInterruptedAttemptWithoutConsumingBudget(t *testing.T) {
 	for _, attempts := range []uint32{1, 2} {
-		t.Run(map[uint32]string{1: "exhausted", 2: "retryable"}[attempts], func(t *testing.T) {
+		t.Run(map[uint32]string{1: "final-attempt", 2: "retryable"}[attempts], func(t *testing.T) {
 			policy := jobs.DefaultPolicy("default")
 			policy.Attempts = attempts
 			entered := make(chan struct{})
@@ -250,22 +277,6 @@ func TestWorkerShutdownReportsExhaustedAttemptsButNotOrdinaryRelease(t *testing.
 			id := f.enqueue(t)
 			done := make(chan error, 1)
 			go func() { done <- f.worker.Run(observability.WithContext(t.Context(), recorder)) }()
-			t.Cleanup(func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-				defer cancel()
-				if err := f.worker.Stop(ctx); err != nil {
-					t.Error(err)
-					return
-				}
-				select {
-				case err := <-done:
-					if err != nil {
-						t.Error(err)
-					}
-				case <-ctx.Done():
-					t.Error("worker did not drain")
-				}
-			})
 			select {
 			case <-entered:
 			case <-time.After(3 * time.Second):
@@ -274,17 +285,14 @@ func TestWorkerShutdownReportsExhaustedAttemptsButNotOrdinaryRelease(t *testing.
 			if err := f.worker.Stop(t.Context()); err != nil {
 				t.Fatal(err)
 			}
-			state := jobs.Waiting
-			if attempts == 1 {
-				state = jobs.Failed
+			if err := <-done; err != nil {
+				t.Fatal(err)
 			}
-			waitRecord(t, f, id, state)
-			snapshot := recorder.Snapshot()
-			if attempts == 1 {
-				if !strings.Contains(output.String(), `"level":"ERROR"`) || !strings.Contains(output.String(), `"reason":"worker_stopped"`) || snapshot.Failures != 1 {
-					t.Fatal("terminal shutdown failure was hidden")
-				}
-			} else if output.Len() != 0 || snapshot.Failures != 0 {
+			record := waitRecord(t, f, id, jobs.Waiting)
+			if record.Attempts != 0 || record.History[len(record.History)-1].Reason != jobs.WorkerStopped {
+				t.Fatal("interrupted attempt consumed its budget", record.Attempts)
+			}
+			if output.Len() != 0 || recorder.Snapshot().Failures != 0 {
 				t.Fatal("ordinary shutdown release reported as failure")
 			}
 		})

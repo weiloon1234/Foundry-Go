@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -191,24 +192,72 @@ func Run(t *testing.T, b ws.ClusterBackend, namespace keyspace.Namespace) {
 		}
 		peer.barrier(t, channel.ID(), room("1"))
 	})
-	t.Run("transport_gap_is_terminal", func(t *testing.T) {
+	t.Run("transport_gap_resubscribes", func(t *testing.T) {
 		channel := ws.Public[RoomOwner]("gap", ws.DefineRooms(foundryhttp.IntegerPath[int64]()))
+		out := ws.DefineOutgoing(channel, "updated", textContract[Payload]())
 		gap := &gapBackend{ClusterBackend: b, fail: make(chan struct{})}
-		first := serve(t, registry(t, ws.Register(channel)), nil, gap, config("gap"))
+		first := serve(t, registry(t, ws.Register(channel, out.Registration())), nil, gap, config("gap"))
 		peer := first.dial(t, false)
 		peer.subscribe(t, "join", channel.ID(), room("1"), nil)
 		close(gap.fail)
-		eventually(t, func() bool { return first.hub.Snapshot().Degraded && first.hub.Snapshot().Connections == 0 })
-		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
-		defer cancel()
-		if err := first.hub.Stop(ctx); err == nil {
-			t.Fatal("transport gap hidden")
+		// Sockets that may have missed events close with a retryable status;
+		// the hub itself (and so the process) keeps running and resubscribes.
+		eventually(t, func() bool { s := first.hub.Snapshot(); return s.Gaps == 1 && s.Connections == 0 })
+		select {
+		case <-peer.done:
+		case <-time.After(3 * time.Second):
+			t.Fatal("gapped socket stayed open")
 		}
-		if err := first.hub.Start(ctx); !errors.Is(err, ws.Stopping) {
-			t.Fatal("gapped hub silently restarted")
+		eventually(t, func() bool {
+			s := first.hub.Snapshot()
+			return s.Streaming && !s.Degraded && !s.Stopping && s.Resubscriptions == 1
+		})
+		again := first.dial(t, false)
+		again.subscribe(t, "rejoin", channel.ID(), room("1"), nil)
+		id, err := ws.Publish(t.Context(), first.hub, channel, int64(1), out, Payload{"after-gap"})
+		must(t, err)
+		if again.next(t, ws.EventResponse).MessageID != id {
+			t.Fatal("resubscribed stream did not deliver")
+		}
+		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+		defer cancel()
+		if err := first.hub.Stop(ctx); err != nil {
+			t.Fatal("recovered gap reported as terminal", err)
 		}
 		if first.hub.Snapshot().BackgroundTasks != 0 {
-			t.Fatal("bridge leaked after terminal gap")
+			t.Fatal("bridge leaked after recovery")
+		}
+	})
+	t.Run("transient_failure_fails_only_the_operation", func(t *testing.T) {
+		channel := ws.Public[RoomOwner]("transient", ws.DefineRooms(foundryhttp.IntegerPath[int64]()))
+		flaky := &flakyJoinBackend{ClusterBackend: b}
+		flaky.failures.Store(1)
+		first := serve(t, registry(t, ws.Register(channel)), nil, flaky, config("transient"))
+		peer := first.dial(t, false)
+		peer.send(t, ws.Request{Action: ws.Subscribe, ID: "blip", Channel: channel.ID(), Room: room("1")})
+		if code := peer.next(t, ws.ErrorResponse).Code; code != ws.Unavailable {
+			t.Fatal("transient authority failure was not retryable", code)
+		}
+		if s := first.hub.Snapshot(); s.Stopping || s.Failures == 0 {
+			t.Fatal("transient failure terminated or was not counted", s)
+		}
+		peer.subscribe(t, "retry", channel.ID(), room("1"), nil)
+		if s := first.hub.Snapshot(); s.Degraded || s.Stopping {
+			t.Fatal("successful retry did not clear degradation", s)
+		}
+	})
+	t.Run("policy_conflict_is_terminal", func(t *testing.T) {
+		channel := ws.Public[RoomOwner]("conflict", ws.DefineRooms(foundryhttp.IntegerPath[int64]()))
+		conflict := &flakyJoinBackend{ClusterBackend: b, conflict: true}
+		conflict.failures.Store(1)
+		first := serve(t, registry(t, ws.Register(channel)), nil, conflict, config("conflict"))
+		peer := first.dial(t, false)
+		peer.send(t, ws.Request{Action: ws.Subscribe, ID: "conflict", Channel: channel.ID(), Room: room("1")})
+		eventually(t, func() bool { return first.hub.Snapshot().Stopping })
+		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+		defer cancel()
+		if err := first.hub.Stop(ctx); !errors.Is(err, ws.PolicyConflict) {
+			t.Fatal("policy conflict was not terminal", err)
 		}
 	})
 	t.Run("backend_callback_cannot_wait_for_its_hub", func(t *testing.T) {
@@ -232,6 +281,15 @@ func Run(t *testing.T, b ws.ClusterBackend, namespace keyspace.Namespace) {
 			}
 		case <-ctx.Done():
 			t.Fatal("backend waited on its own connection")
+		}
+		// A failed operation rejects only its upgrade; the hub keeps running and
+		// its owned work still drains on Stop.
+		eventually(t, func() bool { return server.hub.Snapshot().Connections == 0 })
+		if server.hub.Snapshot().Stopping {
+			t.Fatal("per-operation failure stopped the hub")
+		}
+		if err := server.hub.Stop(ctx); err != nil {
+			t.Fatal(err)
 		}
 		select {
 		case <-server.hub.Done():
@@ -329,17 +387,37 @@ func (b *historyBarrier) WebSocketHistory(ctx context.Context, k ws.ClusterKey, 
 	}
 }
 
+// gapBackend interrupts only its first stream, like a transient disconnect.
 type gapBackend struct {
 	ws.ClusterBackend
-	fail chan struct{}
+	fail          chan struct{}
+	subscriptions atomic.Int32
 }
 
 func (b *gapBackend) Subscribe(ctx context.Context, channels []pubsub.Channel, limits pubsub.Limits) (pubsub.Stream, error) {
 	s, err := b.ClusterBackend.Subscribe(ctx, channels, limits)
-	if err != nil {
-		return nil, err
+	if err != nil || b.subscriptions.Add(1) > 1 {
+		return s, err
 	}
 	return &gapStream{Stream: s, fail: b.fail}, nil
+}
+
+// flakyJoinBackend fails a bounded number of joins with a transient error or a
+// policy conflict, then behaves normally.
+type flakyJoinBackend struct {
+	ws.ClusterBackend
+	failures atomic.Int32
+	conflict bool
+}
+
+func (b *flakyJoinBackend) WebSocketJoin(ctx context.Context, k ws.ClusterKey, instance ws.InstanceID, id ws.ConnectionID, membership ws.ClusterMembership) (ws.PresenceSnapshot, error) {
+	if b.failures.Add(-1) >= 0 {
+		if b.conflict {
+			return ws.PresenceSnapshot{}, ws.PolicyConflict
+		}
+		return ws.PresenceSnapshot{}, fault.New(fault.Timeout, "simulated authority latency spike")
+	}
+	return b.ClusterBackend.WebSocketJoin(ctx, k, instance, id, membership)
 }
 
 type gapStream struct {

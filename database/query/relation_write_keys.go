@@ -41,6 +41,11 @@ func (r ThroughRelation[M, N, P]) writeKeys(source M, target N) (relationWriteKe
 	if err != nil {
 		return relationWriteKeys[P]{}, err
 	}
+	for _, fixed := range r.pivotFixed {
+		if defaults, err = r.pivot.withModelValue(defaults, fixed.column, fixed.raw); err != nil {
+			return relationWriteKeys[P]{}, err
+		}
+	}
 	return relationWriteKeys[P]{defaults: defaults, predicates: []Predicate[P]{lp, rp}}, nil
 }
 

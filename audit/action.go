@@ -12,7 +12,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/auditstore"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/model"
-	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -91,7 +90,7 @@ func (a Action[P]) record(ctx context.Context, tx *database.Tx, recorder *Record
 	if err != nil {
 		return ActionID[P]{}, err
 	}
-	draft, err := capturedDraft(area, origin, text, subject)
+	draft, err := capturedDraft(ctx, area, text, subject, captured.Redaction())
 	if err != nil {
 		return ActionID[P]{}, err
 	}
@@ -104,40 +103,34 @@ func (a Action[P]) record(ctx context.Context, tx *database.Tx, recorder *Record
 
 // ActionRecord is immutable persisted domain history. Document.Decode returns a
 // fresh DTO only when the stored representation is complete and unredacted.
+// Its embedded metadata supplies Sequence, Area, Origin, Correlation, Route and
+// CreatedAt.
 type ActionRecord[P any] struct {
-	id        ActionID[P]
-	document  record.Document[P]
-	subject   value.Nullable[model.Identity]
-	area      Area
-	origin    attribution.Origin
-	createdAt temporal.DateTime
+	metadata
+	id       ActionID[P]
+	document record.Document[P]
+	subject  value.Nullable[model.Identity]
 }
 
 func (r ActionRecord[P]) ID() ActionID[P]                         { return r.id }
 func (r ActionRecord[P]) Document() record.Document[P]            { return r.document }
 func (r ActionRecord[P]) Subject() value.Nullable[model.Identity] { return r.subject }
-func (r ActionRecord[P]) Area() Area                              { return r.area }
-func (r ActionRecord[P]) Origin() attribution.Origin              { return r.origin }
-func (r ActionRecord[P]) CreatedAt() temporal.DateTime            { return r.createdAt }
 func (ActionRecord[P]) Format(state fmt.State, _ rune) {
 	_, _ = state.Write([]byte("domain audit record"))
 }
 
 // Find selects only this action schema and area. It validates persisted DTO and
-// redaction metadata again; a foreign action/version/area is absent.
+// redaction metadata again under the row's own redaction policy; a foreign
+// action/version/area is absent.
 func (a Action[P]) Find(ctx context.Context, executor database.Executor, recorder *Recorder, id ActionID[P]) (value.Optional[ActionRecord[P]], error) {
-	area, err := recorder.area(ctx)
+	q, err := a.history(ctx, recorder)
 	if err != nil {
-		return value.Optional[ActionRecord[P]]{}, err
-	}
-	if err := a.Validate(); err != nil {
 		return value.Optional[ActionRecord[P]]{}, err
 	}
 	if id.IsZero() {
 		return value.Optional[ActionRecord[P]]{}, fault.New(fault.Invalid, "audit lookup requires a nonzero ID")
 	}
-	f := auditstore.EntryFields()
-	selected, err := auditstore.QueryFoundryAudit().Where(f.Area.Eq(string(area)), f.Action.Eq(string(a.name)), f.Version.Eq(uint32(a.version)), f.Operation.Eq(0)).Find(ctx, executor, model.IDFromBytes[auditstore.Entry](id.Bytes()))
+	selected, err := q.Find(ctx, executor, model.IDFromBytes[auditstore.Entry](id.Bytes()))
 	if err != nil {
 		return value.Optional[ActionRecord[P]]{}, err
 	}
@@ -145,34 +138,74 @@ func (a Action[P]) Find(ctx context.Context, executor database.Executor, recorde
 	if !present {
 		return value.Optional[ActionRecord[P]]{}, nil
 	}
+	result, err := restoreAction[P](row)
+	if err != nil {
+		return value.Optional[ActionRecord[P]]{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return value.Optional[ActionRecord[P]]{}, err
+	}
+	return value.Set(result), nil
+}
+
+// Timeline lists this action name/version in the selected area, newest first.
+func (a Action[P]) Timeline(ctx context.Context, executor database.Executor, recorder *Recorder, request TimelineRequest) (Timeline[ActionRecord[P]], error) {
+	q, err := a.history(ctx, recorder)
+	if err != nil {
+		return Timeline[ActionRecord[P]]{}, err
+	}
+	return readTimeline(ctx, executor, q, request, restoreAction[P])
+}
+
+// ActionTimelineFor lists this action's records about one subject, newest
+// first, using the indexed subject key and an exact identity comparison.
+func ActionTimelineFor[M, K, P any](ctx context.Context, executor database.Executor, recorder *Recorder, action Action[P], subject model.Reference[M, K], request TimelineRequest) (Timeline[ActionRecord[P]], error) {
+	if err := action.Validate(); err != nil {
+		return Timeline[ActionRecord[P]]{}, err
+	}
+	q, err := subjectHistory(ctx, recorder, subject)
+	if err != nil {
+		return Timeline[ActionRecord[P]]{}, err
+	}
+	f := auditstore.EntryFields()
+	return readTimeline(ctx, executor, q.Where(f.Action.Eq(string(action.name)), f.Version.Eq(uint32(action.version)), f.Operation.Eq(0)), request, restoreAction[P])
+}
+
+func (a Action[P]) history(ctx context.Context, recorder *Recorder) (auditstore.EntryQuery, error) {
+	area, err := recorder.area(ctx)
+	if err != nil {
+		return auditstore.EntryQuery{}, err
+	}
+	if err := a.Validate(); err != nil {
+		return auditstore.EntryQuery{}, err
+	}
+	f := auditstore.EntryFields()
+	return auditstore.QueryFoundryAudit().Where(f.Area.Eq(string(area)), f.Action.Eq(string(a.name)), f.Version.Eq(uint32(a.version)), f.Operation.Eq(0)), nil
+}
+
+func restoreAction[P any](row auditstore.Entry) (ActionRecord[P], error) {
 	text, err := row.Payload.Text()
 	if err != nil {
-		return value.Optional[ActionRecord[P]]{}, err
+		return ActionRecord[P]{}, err
 	}
-	document, err := record.ParseDocument[P](text, row.Redacted)
+	document, err := record.ParseDocumentWith[P](record.Redaction(row.Redaction), text, row.Redacted)
 	if err != nil {
-		return value.Optional[ActionRecord[P]]{}, err
+		return ActionRecord[P]{}, err
 	}
-	origin, err := row.Origin.Decode()
+	meta, err := entryMetadata(row)
 	if err != nil {
-		return value.Optional[ActionRecord[P]]{}, err
-	}
-	if err := origin.Validate(); err != nil {
-		return value.Optional[ActionRecord[P]]{}, err
+		return ActionRecord[P]{}, err
 	}
 	var subject value.Nullable[model.Identity]
 	if captured, present := row.Subject.Get(); present {
 		identity, err := captured.Decode()
 		if err != nil {
-			return value.Optional[ActionRecord[P]]{}, err
+			return ActionRecord[P]{}, err
 		}
 		if err := identity.Validate(); err != nil {
-			return value.Optional[ActionRecord[P]]{}, err
+			return ActionRecord[P]{}, err
 		}
 		subject = value.Of(identity)
 	}
-	if err := ctx.Err(); err != nil {
-		return value.Optional[ActionRecord[P]]{}, err
-	}
-	return value.Set(ActionRecord[P]{id: id, document: document, subject: subject, area: area, origin: origin, createdAt: row.CreatedAt}), nil
+	return ActionRecord[P]{metadata: meta, id: model.IDFromBytes[ActionEntry[P]](row.ID.Bytes()), document: document, subject: subject}, nil
 }

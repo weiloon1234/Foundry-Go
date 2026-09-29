@@ -2,10 +2,13 @@ package http
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"io/fs"
 	"sync"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
@@ -13,6 +16,50 @@ import (
 )
 
 type assetStat struct{ mode fs.FileMode }
+
+// assetStatTTL bounds how long a successful lookup is reused. Directory sources
+// observe replaced files within this window; misses are never cached, so a new
+// file is visible immediately.
+const (
+	assetStatTTL     = time.Second
+	assetStatEntries = 4096
+)
+
+type assetStatEntry struct {
+	stat    assetStat
+	expires time.Time
+}
+
+type assetStatCache struct {
+	mu      sync.RWMutex
+	entries map[string]assetStatEntry
+}
+
+func (c *assetStatCache) get(name string, now time.Time) (assetStat, bool) {
+	c.mu.RLock()
+	entry, ok := c.entries[name]
+	c.mu.RUnlock()
+	if !ok || !now.Before(entry.expires) {
+		return assetStat{}, false
+	}
+	return entry.stat, true
+}
+
+func (c *assetStatCache) put(name string, stat assetStat, now time.Time) {
+	c.mu.Lock()
+	if c.entries == nil || len(c.entries) >= assetStatEntries {
+		c.entries = make(map[string]assetStatEntry)
+	}
+	c.entries[name] = assetStatEntry{stat: stat, expires: now.Add(assetStatTTL)}
+	c.mu.Unlock()
+}
+
+// assetTag is a strong content validator for a file without a modification
+// time. The recorded size detects a replaced file in a mutable filesystem.
+type assetTag struct {
+	size int64
+	tag  EntityTag
+}
 
 func assetSourceError(ctx context.Context, err error) error {
 	if err == nil {
@@ -22,7 +69,7 @@ func assetSourceError(ctx context.Context, err error) error {
 	owned := callback.Isolated("HTTP asset error classification", func() error {
 		switch {
 		case ctx.Err() != nil && errorgraph.Is(err, ctx.Err()):
-			result = RequestTimeout.WithCause(err)
+			result = Unavailable.WithCause(err)
 		case errorgraph.Is(err, fs.ErrNotExist):
 			result = NotFound.WithCause(err)
 		case errorgraph.Is(err, fs.ErrPermission):
@@ -41,6 +88,10 @@ func (a *Assets) stat(ctx context.Context, name string) (assetStat, error) {
 		return assetStat{}, err
 	}
 	defer release()
+	now := time.Now()
+	if cached, ok := a.stats.get(name, now); ok {
+		return cached, nil
+	}
 	var result assetStat
 	var returned error
 	owned := callback.Isolated("HTTP asset stat", func() error {
@@ -64,6 +115,9 @@ func (a *Assets) stat(ctx context.Context, name string) (assetStat, error) {
 	}
 	if returned == nil {
 		returned = ctx.Err()
+	}
+	if returned == nil {
+		a.stats.put(name, result, now)
 	}
 	return result, assetSourceError(ctx, returned)
 }
@@ -140,6 +194,9 @@ func (a *Assets) open(ctx context.Context, name string) (content DownloadContent
 	} else {
 		content, err = openFilesystemAsset(a.config.Source.filesystem, name)
 		body = content.Body
+		if err == nil && content.Modified.IsZero() {
+			content.EntityTag, err = a.contentTag(name, body)
+		}
 	}
 	if err == nil {
 		err = ctx.Err()
@@ -154,6 +211,42 @@ func (a *Assets) open(ctx context.Context, name string) (content DownloadContent
 	transferred = true
 	return content, nil
 }
+
+// contentTag returns a cached strong validator for a file that reports no
+// modification time (embed.FS entries report none), hashing its contents once.
+// Without it such files could never produce a 304. The body is rewound.
+func (a *Assets) contentTag(name string, body io.ReadSeeker) (EntityTag, error) {
+	size, err := body.Seek(0, io.SeekEnd)
+	if err != nil {
+		return "", err
+	}
+	if cached, ok := a.tags.Load(name); ok && cached.(assetTag).size == size {
+		_, err := body.Seek(0, io.SeekStart)
+		return cached.(assetTag).tag, err
+	}
+	if size > a.config.Limits.Bytes {
+		_, err := body.Seek(0, io.SeekStart)
+		return "", err
+	}
+	if _, err := body.Seek(0, io.SeekStart); err != nil {
+		return "", err
+	}
+	hash := sha256.New()
+	hashed, err := io.Copy(hash, body)
+	if err != nil {
+		return "", err
+	}
+	if _, err := body.Seek(0, io.SeekStart); err != nil {
+		return "", err
+	}
+	if hashed != size {
+		return "", nil
+	}
+	tag := EntityTag("\"" + hex.EncodeToString(hash.Sum(nil)) + "\"")
+	a.tags.Store(name, assetTag{size: size, tag: tag})
+	return tag, nil
+}
+
 func openFilesystemAsset(source fs.FS, name string) (content DownloadContent, err error) {
 	file, err := source.Open(name)
 	transferred := false

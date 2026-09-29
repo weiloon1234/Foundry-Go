@@ -1,8 +1,8 @@
 {
   "version": 1,
   "files": {
-    "delivery_foundry.gen.go": "2801915e797d2354dc5d34a48312d21254e5925a315236ecc239768536cc7d6d",
-    "envelope_foundry.gen.go": "71ccc0b469bce1974a39ec84c3b8daf983bfbbda2d96d4517b22fc5b932ffd7d",
-    "inbox_foundry.gen.go": "0aef7a08309f925038f74254748c4939e7aba77a8619286fd077b648982e661c"
+    "delivery_foundry.gen.go": "ad06f355eee5c459625f13d387ddc4b08c32c2afada416a71a3ca82dd98888e8",
+    "envelope_foundry.gen.go": "d80dc64589ea080ff6a3e2f94d02709c84c10e548b1128b7ac8b8975aea7fceb",
+    "inbox_foundry.gen.go": "b824b8c9f16837277af8b4ba5efedace3550a762ae30431ce411da8e867e6ac8"
   }
 }

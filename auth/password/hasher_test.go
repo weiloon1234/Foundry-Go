@@ -112,7 +112,8 @@ func TestPHCParserRejectsMalformedAndUnboundedParameters(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, bad := range []string{
-		"", strings.Repeat("a", MaxEncodedBytes+1), strings.Replace(valid, "argon2id", "argon2i", 1),
+		// Argon2i is accepted for imported hashes (see legacy_test.go); other variants are not.
+		"", strings.Repeat("a", MaxEncodedBytes+1), strings.Replace(valid, "argon2id", "argon2d", 1),
 		strings.Replace(valid, "v=19", "v=16", 1), strings.Replace(valid, "m=65536", "m=4294967295", 1),
 		strings.Replace(valid, "m=65536", "m=065536", 1), strings.Replace(valid, "m=65536", "m=+65536", 1),
 		strings.Replace(valid, "t=3", "t=0", 1), strings.Replace(valid, "p=4", "p=0", 1), strings.Replace(valid, "p=4", "p=256", 1),
@@ -151,6 +152,7 @@ func TestCanceledAndOverloadedHasherReturnsNoHash(t *testing.T) {
 	config := DefaultConfig()
 	config.Parameters = h.config.Parameters
 	config.MaxConcurrent = 1
+	config.Timeout = 50 * time.Millisecond // Also bounds the queued admission wait.
 	h, err := New(config)
 	if err != nil {
 		t.Fatal(err)
@@ -163,11 +165,19 @@ func TestCanceledAndOverloadedHasherReturnsNoHash(t *testing.T) {
 	<-entered
 	hash, err := h.Hash(t.Context(), plaintext(t, "test"))
 	close(release)
-	if !errors.Is(err, fault.Conflict) || !hash.Encoded().IsZero() {
+	if !errors.Is(err, fault.Overloaded) || !hash.Encoded().IsZero() {
 		t.Error("overloaded hasher admitted work", err)
 	}
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+func TestDefaultHasherCapacityBoundsConcurrentKDFMemory(t *testing.T) {
+	c := DefaultConfig()
+	// Four concurrent default hashes need about 256 MiB; the verification
+	// ceiling bounds the worst case for stored legacy costs at 512 MiB.
+	if c.MaxConcurrent != 4 || uint64(c.MaxConcurrent)*uint64(c.VerifyLimit.MemoryKiB) > 512*1024 {
+		t.Fatal("unexpected default password hashing capacity", c.MaxConcurrent)
 	}
 }
 func TestInvalidHashPolicyRejectedAtConstruction(t *testing.T) {

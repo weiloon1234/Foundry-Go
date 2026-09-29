@@ -3,8 +3,10 @@
 package query
 
 import (
+	"context"
 	"database/sql/driver"
 
+	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -39,14 +41,45 @@ const (
 	isDistinctFrom
 	isNotDistinctFrom
 	insensitiveContains
+	notIn
+	startsWith
+	endsWith
+	insensitiveStartsWith
+	insensitiveEndsWith
+	insensitiveLike
 )
 
+// escapedPattern reports operators whose literal text the compiler escapes.
+func escapedPattern(op operator) bool {
+	switch op {
+	case contains, insensitiveContains, startsWith, endsWith, insensitiveStartsWith, insensitiveEndsWith:
+		return true
+	}
+	return false
+}
+
 type expression interface{ expressionNode() }
+
+// rowComparison is a lexicographic row-value comparison such as
+// (a, id) > ($1, $2). Keyset traversal uses it only for NOT NULL keys sorted
+// in one direction, where it matches the expanded predicate and lets
+// PostgreSQL use one composite index range.
+type rowComparison struct {
+	operands []valueExpression
+	operator operator
+	values   []driver.Value
+}
+
+func (rowComparison) expressionNode() {}
+
 type comparison struct {
 	operand  valueExpression
 	operator operator
 	values   []any
 	bind     func(any) (driver.Value, error)
+	// kind is the operand codec's scalar representation. Membership tests over
+	// supported scalar kinds bind one array parameter instead of one per value.
+	kind codec.ParameterType
 }
 
 func (comparison) expressionNode() {}
@@ -77,11 +110,18 @@ type Predicate[M any] struct {
 	expression expression
 }
 
-// And requires all predicates to match. An empty conjunction is invalid.
+// And requires all predicates to match. An empty conjunction is TRUE, so a
+// dynamically built filter list may be empty.
 func And[M any](predicates ...Predicate[M]) Predicate[M] { return combine(false, predicates) }
 
-// Or requires at least one predicate to match. An empty disjunction is invalid.
+// Or requires at least one predicate to match. An empty disjunction is FALSE.
 func Or[M any](predicates ...Predicate[M]) Predicate[M] { return combine(true, predicates) }
+
+// True is the neutral predicate for composing dynamic filters with And.
+func True[M any]() Predicate[M] { return Predicate[M]{expression: junction{}} }
+
+// False matches no rows; it is the neutral predicate for Or.
+func False[M any]() Predicate[M] { return Predicate[M]{expression: junction{any: true}} }
 func combine[M any](any bool, predicates []Predicate[M]) Predicate[M] {
 	children := make([]expression, len(predicates))
 	for i, p := range predicates {
@@ -100,6 +140,7 @@ type Order[M any] struct {
 	field      fieldRef
 	computed   *computedOrder
 	descending bool
+	nulls      nullPlacement
 }
 
 type computedOrder struct{ expression valueExpression }
@@ -132,6 +173,15 @@ type Query[M any] struct {
 	relations       []Relation[M]
 	relationLimits  *RelationLimits
 	softDeleteScope softDeleteScope
+	// Global scope options: removed scopes, all scopes removed, and the
+	// context that resolves context scopes (see WithScopeContext).
+	withoutScopes []GlobalScopeName
+	allScopesOff  bool
+	scopeContext  context.Context
+	// skipModelHooks acknowledges hook-free set-based writes only.
+	skipModelHooks bool
+	// distinctOnKey is set only by one-of-many relation loading.
+	distinctOnKey *fieldRef
 }
 
 // For describes a table without model metadata. It supports composition and
@@ -163,6 +213,9 @@ func (q Query[M]) validateCore() error {
 	if err := q.validateSoftDeleteScope(); err != nil {
 		return err
 	}
+	if err := q.validateScopeOptions(); err != nil {
+		return err
+	}
 	if !sqlname.Table(q.table) {
 		return fault.New(fault.Invalid, "query has an invalid table declaration")
 	}
@@ -184,7 +237,7 @@ func (q Query[M]) validateCore() error {
 		}
 	}
 	if q.definition != nil {
-		return q.definition.Validate()
+		return q.definition.validated()
 	}
 	return nil
 }
@@ -194,6 +247,10 @@ const (
 	MaxExpressionDepth = 128
 	MaxExpressionNodes = 10000
 	MaxParameters      = 65535
+	// MaxMembershipValues bounds one In/NotIn list. Supported scalar codecs bind
+	// the whole list as one array parameter, so it is not limited by
+	// MaxParameters; other codecs still bind one parameter per value.
+	MaxMembershipValues = 1 << 20
 	// MaxScalarSQLBytes bounds expanded scalar SQL during one compilation.
 	// Encoded parameter contents are separate from this SQL-text work budget.
 	MaxScalarSQLBytes = 1 << 20
@@ -224,11 +281,11 @@ func validateExpressionValues(e expression, operand func(valueExpression) error,
 			if len(e.values) == 0 {
 				return nil
 			}
-		case in:
-			if len(e.values) <= MaxParameters && e.bind != nil {
+		case in, notIn:
+			if len(e.values) <= MaxMembershipValues && e.bind != nil {
 				return nil
 			}
-		case equal, notEqual, less, lessOrEqual, greater, greaterOrEqual, like, contains, insensitiveContains:
+		case equal, notEqual, less, lessOrEqual, greater, greaterOrEqual, like, contains, insensitiveContains, startsWith, endsWith, insensitiveStartsWith, insensitiveEndsWith, insensitiveLike:
 			if len(e.values) == 1 && e.bind != nil {
 				return nil
 			}
@@ -249,10 +306,20 @@ func validateExpressionValues(e expression, operand func(valueExpression) error,
 			return operand(e.operand)
 		}
 		return nil
-	case junction:
-		if len(e.children) == 0 {
-			return fault.New(fault.Invalid, "predicate junction requires at least one operand")
+	case rowComparison:
+		if (e.operator != less && e.operator != greater) || len(e.operands) < 2 || len(e.operands) != len(e.values) || len(e.operands) > MaxCursorFields {
+			return fault.New(fault.Invalid, "invalid row comparison")
 		}
+		for i, item := range e.operands {
+			if !driver.IsValue(e.values[i]) || e.values[i] == nil {
+				return fault.New(fault.Invalid, "row comparison requires non-NULL database values")
+			}
+			if err := operand(item); err != nil {
+				return err
+			}
+		}
+		return nil
+	case junction:
 		for _, child := range e.children {
 			if err := validateExpressionValues(child, operand, depth+1, nodes); err != nil {
 				return err
@@ -261,6 +328,9 @@ func validateExpressionValues(e expression, operand func(valueExpression) error,
 		return nil
 	case negation:
 		return validateExpressionValues(e.child, operand, depth+1, nodes)
+	case scopeNode:
+		// Validated against its model table when resolved during compilation.
+		return nil
 	}
 	return fault.New(fault.Invalid, "query contains an invalid predicate declaration")
 }

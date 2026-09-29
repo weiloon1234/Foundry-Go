@@ -39,6 +39,29 @@ type Request struct {
 	UserAgent string     `json:"user_agent,omitzero"`
 }
 
+// SanitizeUserAgent converts untrusted transport text into valid attribution
+// metadata. Invalid UTF-8 becomes U+FFFD, control characters (including TAB,
+// CR/LF, DEL and C1 controls) are removed, and the result is truncated at
+// MaxUserAgentBytes on a rune boundary. It never fails: a user agent describes a
+// request, it does not authorize or reject it.
+func SanitizeUserAgent(raw string) string {
+	if len(raw) <= MaxUserAgentBytes && utf8.ValidString(raw) && strings.IndexFunc(raw, unicode.IsControl) < 0 {
+		return raw
+	}
+	var sanitized strings.Builder
+	sanitized.Grow(min(len(raw), MaxUserAgentBytes))
+	for _, r := range strings.ToValidUTF8(raw, string(utf8.RuneError)) {
+		if unicode.IsControl(r) {
+			continue
+		}
+		if sanitized.Len()+utf8.RuneLen(r) > MaxUserAgentBytes {
+			break
+		}
+		sanitized.WriteRune(r)
+	}
+	return sanitized.String()
+}
+
 func (r Request) Validate() error {
 	id := string(r.ID)
 	if len(id) > MaxRequestIDBytes || !utf8.ValidString(id) || strings.TrimSpace(id) != id || strings.IndexFunc(id, unicode.IsControl) >= 0 {

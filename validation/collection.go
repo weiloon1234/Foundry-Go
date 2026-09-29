@@ -1,5 +1,7 @@
 package validation
 
+import "golang.org/x/text/cases"
+
 // MinItems and MaxItems validate ordinary or named slices. Nil and empty slices
 // both have zero items; omitted/null transport states use their own wrappers.
 func MinItems[S ~[]T, T any](minimum int) Rule[S] {
@@ -28,6 +30,29 @@ func Distinct[S ~[]T, T Scalar]() Rule[S] {
 				return false, nil
 			}
 			seen[item] = struct{}{}
+		}
+		return true, nil
+	})
+}
+
+// DistinctIgnoringCase checks text elements for duplicates after Unicode case
+// folding, so "Tag" and "tag" collide. Values are not modified. Folding follows
+// the server's Unicode tables, so metadata is server-only.
+func DistinctIgnoringCase[S ~[]T, T ~string]() Rule[S] {
+	spec := Spec{ID: "foundry.distinct", Parameters: []Parameter{parameter("ignore_case", true)}}
+	return valueRule(spec, true, func(s *execution, input S) (bool, error) {
+		seen := make(map[string]struct{}, min(len(input), s.remainingChecks()))
+		folder := cases.Fold()
+		for _, item := range input {
+			text := string(item)
+			if !s.take(0) || !textValue(s, text) {
+				return false, nil
+			}
+			key := folder.String(text)
+			if _, found := seen[key]; found {
+				return false, nil
+			}
+			seen[key] = struct{}{}
 		}
 		return true, nil
 	})

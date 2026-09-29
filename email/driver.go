@@ -42,24 +42,39 @@ func (ResolvedAttachment) Format(s fmt.State, _ rune) {
 
 // Outbound can only be constructed by Mailer after validation and resolution.
 // Driver implementations receive this immutable submission snapshot.
+// A structured submission (see StructuredDriver) carries no MIME document.
 type Outbound struct {
 	message     Message
 	attachments []ResolvedAttachment
 	mime        []byte
+	size        int
+	structured  bool
 	key         IdempotencyKey
 }
 
 func (o Outbound) Message() Message                  { return o.message }
 func (o Outbound) Attachments() []ResolvedAttachment { return slices.Clone(o.attachments) }
 func (o Outbound) MIME() []byte                      { return slices.Clone(o.mime) }
-func (o Outbound) Size() int                         { return len(o.mime) }
-func (o Outbound) IdempotencyKey() IdempotencyKey    { return o.key }
+
+// Size is the encoded MIME size, or the estimated encoded size of bodies and
+// attachments for a structured submission.
+func (o Outbound) Size() int                      { return o.size }
+func (o Outbound) IdempotencyKey() IdempotencyKey { return o.key }
 func (o Outbound) Validate() error {
-	if len(o.mime) == 0 {
+	if len(o.mime) == 0 && !o.structured || o.size <= 0 {
 		return Construction
 	}
 	return nil
 }
+
+// StructuredDriver is optional. A provider API that submits native fields
+// (bodies, headers, attachments) rather than the rendered MIME document
+// reports true, so Mailer skips MIME rendering; Outbound.MIME is then empty.
+// SMTP, SES, memory and log drivers receive the full MIME document.
+type StructuredDriver interface {
+	StructuredSubmission() bool
+}
+
 func (Outbound) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("outbound email")) }
 
 // Receipt means provider acceptance, never inbox delivery. SMTP may have no ID.

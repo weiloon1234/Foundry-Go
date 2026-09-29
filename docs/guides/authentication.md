@@ -67,6 +67,23 @@ ctx = scope.Context()
 user, err := api.Require(ctx)
 ```
 
+With configured `application.New` assembly, contribute policies, permissions and
+hooks to the application-owned registry instead of building one:
+
+```go
+app, err := application.New(settings).Register(application.Authorization("app.authorization",
+    application.Authorize(ViewAccount), application.Authorize(readOrder),
+)).Build(ctx)
+```
+
+`application.NewBrowserGuard` and `application.NewTokenGuard` derive their
+registry from `application.AuthorizationKey` with `Registry.With`, so every
+contributed declaration (including `auth.RegisterAuthorization` contributions
+from plugins) is available to their routes, `WithPermissions` and handlers. A
+derived registry shares its parent's configuration and callback capacity, rejects
+duplicate names, and never modifies the parent. `Services.Authorization()`
+returns the shared registry.
+
 HTTP adapters own this setup and cleanup automatically. Manual scopes are for an
 explicit authorization boundary, not a process-global user or a WebSocket
 connection lifetime. A new scope verifies credentials and resolves current state.
@@ -81,11 +98,15 @@ scope's current model snapshot. Revocation and account/permission changes are
 observed by a new scope, not continuously during the current request.
 
 The default registry permits 128 concurrent callbacks and gives each operation
-five seconds. Configure both explicitly through `auth.Config`. A callback that
-ignores cancellation retains its slot until actual exit; timeout never publishes
+five seconds. Configure both explicitly through `auth.Config`. A burst queues for
+at most min(`Timeout`, 5s) before its budget starts, then fails with
+`fault.Overloaded` (HTTP 503). A callback that ignores cancellation retains its
+slot until actual exit; timeout never publishes
 its late model. An initiating caller's cancellation is cached as a failure; other
 waiters can cancel independently. No implicit verification retry occurs. Recursive
-same-guard resolution fails instead of deadlocking.
+same-guard resolution fails instead of deadlocking. A policy or guard evaluated
+from within another callback of the same scope runs inside that callback's slot
+instead of queueing again, so nested evaluation never waits for its own parent.
 
 Models are Go struct values. Treat maps, slices, pointers and other reference-valued
 fields returned from a scope as read-only; clone such fields before modifying them.
@@ -107,6 +128,45 @@ The policy model must match the guard, and its resource type must match the
 supplied value. Callers cannot substitute an unauthenticated user model.
 `Allows` returns `(bool, error)`; `Authorize` converts false to `auth.Forbidden`.
 Neither method caches decisions or restores authority from token claims.
+
+A policy can explain a denial by returning `(false, auth.NewDenial(code,
+message))` with a stable application code and a message safe for the caller.
+`Inspect` returns an `auth.Decision` whose `Denial()` exposes it; `Authorize`
+returns the `*auth.Denial`, which still matches `errors.Is(err, auth.Forbidden)`
+and maps to HTTP 403. To publish the code, wrap it in a declared endpoint error.
+
+Hooks run around every policy and permission for their model type in a registry
+that contains them:
+
+```go
+superAdmin := auth.DefineBefore("users.super_admin",
+    func(ctx context.Context, user User, policy auth.PolicyName) (auth.Verdict, error) {
+        if user.SuperAdmin {
+            return auth.Allow, nil
+        }
+        return auth.Abstain, nil
+    })
+readOnly := auth.DefineAfter("users.read_only",
+    func(ctx context.Context, user User, policy auth.PolicyName) (auth.Verdict, error) {
+        if readOnlyMode.Load() && policy != "orders.read" {
+            return auth.Deny, nil
+        }
+        return auth.Abstain, nil
+    })
+```
+
+`Before` hooks run in registration order; the first `Allow` or `Deny` decides
+and the policy callback does not run. `After` hooks run after every allow,
+including one granted by a `Before` hook, so a global kill-switch (read-only
+mode, a suspension) also stops super-administrators; they can veto with `Deny`
+but never turn a denial into an allow. Hooks receive
+the current model and the policy name, never the resource. A hook error denies;
+it never grants. Hooks share the policy registry's bounds and isolation.
+
+`auth.DefineGuestPolicy` evaluates `value.Optional[M]`: an anonymous request
+receives an omitted model instead of `auth.Unauthenticated`, while invalid,
+revoked or pending credentials still fail. Hooks apply only when a model is
+present.
 
 ```go
 transport, err := http.NewAuthentication(registry, http.BearerCredential("api.bearer"))
@@ -141,14 +201,23 @@ Bearer sources reject repeated headers, malformed token grammar and oversized
 values. Rejected bearer credentials return a `WWW-Authenticate: Bearer` challenge;
 token syntax follows [RFC 6750](https://www.rfc-editor.org/rfc/rfc6750.html#section-2.1). Tokens in query strings are never used. `CookieCredential` reuses an
 existing `Cookie[secret.String]` with `SecretCookie()` as its codec; parsing alone
-does not implement a secure session or CSRF protection. An adapter snapshots all
-its configured sources, so malformed configured inputs fail the request. Use
+does not implement a secure session or CSRF protection. Browsers attach cookies
+to cross-site requests, so `NewAuthentication` rejects a cookie source unless
+`NewCookieAuthentication` (or the browser-session adapter) supplies origin/CSRF
+protection, or the source explicitly opts out with
+`CookieCredential(...).WithoutOriginProtection()`, for example when another layer
+validates the WebSocket `Origin` or the routes never change state. An adapter
+snapshots all its configured sources, so malformed configured inputs fail the request. Use
 separate adapters sharing the same registry when routes select different input
 sets. The [browser session adapter](browser-sessions.md) supplies the session/cookie/CSRF
 policy as one typed integration.
 
 HTTP maps auth failures into its shared `unauthenticated`, `forbidden` and
-`mfa_required` contracts. Internal causes remain available to `errors.Is/As` but
+`mfa_required` contracts. `auth.CredentialLimit` (a subject reached its session or
+token cap under `RejectNew`) maps to 409 `conflict`, and
+`auth.ConfirmationRequired` and `auth.ImpersonationForbidden` to 403 `forbidden`. Capacity exhaustion
+(`fault.Overloaded`) and an unclassified deadline or cancellation map to 503
+`unavailable`. Internal causes remain available to `errors.Is/As` but
 never become response text. Ordinary domain HTTP errors are preserved. Typed ordinary, signed, model-bound and native/raw authentication adapters are
 verified through independent consumer and transport tests.
 
@@ -324,6 +393,83 @@ router; a standalone Router's host owns that outer request boundary. Regardless
 of inherited identity metadata, an absent optional guard clears model/system/guard
 attribution and preserves only request metadata. This never turns metadata into
 authentication. The composition examples and tests passed milestone 10 acceptance.
+
+## Middleware after authentication
+
+Middleware added with `WithMiddleware` runs before authentication. Use
+`WithActorMiddleware` on `RequireAuthentication`, `OptionalAuthentication` and
+their native route forms for middleware that needs the actor. It runs after the
+guard, access scopes and permissions, inside the request's auth scope, and reads
+the concrete model with `guard.Require(r.Context())` (or `Optional`) from the
+scope cache, without another provider lookup:
+
+```go
+tenant := http.DefineMiddleware("app.tenant", func(next stdhttp.Handler) (stdhttp.Handler, error) {
+    return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+        user, err := api.Require(r.Context())
+        if err != nil {
+            _ = http.WriteError(w, r, err)
+            return
+        }
+        next.ServeHTTP(w, r.WithContext(tenancy.With(r.Context(), user.TenantID)))
+    }), nil
+})
+limiter, err := ratelimit.Define("api.users", http.ActorKeys(), ratelimit.PerMinute(120)).Bind(store)
+// Check err.
+route := http.RequireAuthentication(endpoint, transport, api).
+    WithActorMiddleware(http.RateLimitByActor(limiter, api), tenant)
+```
+
+`RateLimitByActor` keys a quota by a digest of the authenticated model identity,
+so users behind one address do not share a budget. On optional routes, anonymous
+requests fall back to the client IP (IPv4 per address, IPv6 per /64;
+`RateLimitByActorWith` changes the grouping). Installed with `WithMiddleware`,
+before authentication, it fails the request instead of silently limiting by IP.
+`tenancy.With` above stands for the application's typed request metadata.
+
+## The current credential
+
+Handlers read the verified credential through its store binding, without a second
+lookup: `sessions.Current(ctx)` / `tokens.Current(ctx)` return its `Info` (ID,
+expiry, device metadata and, for tokens, effective scopes). The same bindings
+offer `RevokeCurrent` (API logout), `RevokeOthers` ("log out other devices") and
+`CurrentProof`, which keeps the request's scope grants when minting a new token.
+Credential adapters implement this with `auth.CredentialSlot`,
+`auth.AttachCredential` and `auth.CurrentCredential`; attached metadata is never
+a claim or authority. See [sessions](sessions.md#the-current-session) and
+[tokens](tokens.md#the-current-token).
+
+## Lifecycle events
+
+`auth.Observer` receives an `auth.Event` after a transition finished (after
+commit for persisted changes):
+
+| Kind | Reported by |
+| --- | --- |
+| `EventLogin` | `sessions`/`tokens` `.WithObserver`: full issuance and MFA completion |
+| `EventLogout` | `Logout`, `RevokeCurrent` |
+| `EventOtherDevicesLoggedOut` | `RevokeOthers` (`Count` holds the revoked total) |
+| `EventFailed` | `PasswordLogin.WithObserver`; `Subject` only when an account matched |
+| `EventLockout` | `PasswordLogin.WithObserver` when a failure starts a lock |
+| `EventPasswordReset` | `passwordreset.Reset.WithObserver` |
+| `EventVerified` | `emailverification.Verification.WithObserver` |
+| `EventImpersonationStarted`, `EventImpersonationStopped` | `session.Impersonation.WithObserver`; `Impersonator` holds the original actor |
+
+Events carry the guard/provider names, the affected stored identity when known,
+the original actor in `Impersonator` for impersonation events and for events a
+session binding emits from an impersonation session (such as `EventLogout`), and
+the trusted request metadata; never a password, secret, hash, submitted login
+key or model snapshot. Observers run in process and cannot veto or undo the
+change; panics are contained. They are not durable delivery: publish an
+application event through the [transactional outbox](outbox.md) from the owning
+domain transaction when processing must survive a crash.
+
+## Social login
+
+`auth/oauth` adds "Sign in with Google/GitHub": the authorization-code flow with
+PKCE, state and nonce, OpenID Connect ID-token verification and a typed profile
+that the application maps to its own user before issuing a session or token.
+See [social login](social-login.md).
 
 ## Security events and operations
 

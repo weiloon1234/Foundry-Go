@@ -53,8 +53,10 @@ so a custom representation does not silently change between transports.
 ## Callback failures and cancellation
 
 Path descriptors own codec and field-selector execution until it finishes.
-Panic and `runtime.Goexit` produce internal errors, with no partial URL or model
-value returned. Ordinary codec errors remain private causes and are classified
+They run on the caller's goroutine without a per-call goroutine: a panic
+produces an internal error, with no partial URL or model value returned, while
+`runtime.Goexit` ends the calling goroutine as any Go call does (the kernel still
+releases the request's ownership). Ordinary codec errors remain private causes and are classified
 without invoking their `Error`, `Is`, `As` or `Unwrap` methods. A nil field selector
 result is an internal error. Direct calls to a custom codec do not add a path
 descriptor's recovery boundary.
@@ -66,9 +68,9 @@ its internal classification. Custom codecs must terminate, respect ownership and
 be safe for concurrent calls; Foundry does not abandon an active callback.
 
 `WriteError` preserves Go wrapped/joined error classification. It inspects custom
-error methods in an owned callback before writing headers or body. A panic or
-`Goexit` there produces a safe 500 response and an injected-logger diagnostic
-without exposing panic payloads. Error methods must terminate and support
+error methods on the caller's goroutine before writing headers or body. A panic
+there produces a safe 500 response and an injected-logger diagnostic without
+exposing panic payloads; `runtime.Goexit` ends the calling goroutine. Error methods must terminate and support
 concurrent classification. [Bounded traversal](http-requests.md#typed-public-errors)
 prevents cyclic error chains from trapping classification. The native response
 writer stays outside the callback.

@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 	stdhttp "net/http"
 	"reflect"
+	"strings"
 	"time"
 )
 
@@ -16,6 +17,7 @@ type Cookie[V any] struct {
 	name    CookieName
 	codec   CookieCodec[V]
 	options CookieOptions
+	owned   bool
 	err     error
 }
 
@@ -27,7 +29,15 @@ func DefineCookie[V any](name CookieName, codec CookieCodec[V], options CookieOp
 	if err == nil && nilCookieValue(codec) {
 		err = fault.New(fault.Invalid, "cookie requires a codec")
 	}
-	return Cookie[V]{name: name, codec: codec, options: owned, err: err}
+	return Cookie[V]{name: name, codec: codec, options: owned, owned: err == nil && cookieCodecOwned(codec), err: err}
+}
+
+// invoke runs codec work under the cheapest boundary containing its failures.
+func (c Cookie[V]) invoke(operation string, fn func() error) error {
+	if c.owned {
+		return callback.Invoke(operation, fn)
+	}
+	return callback.Isolated(operation, fn)
 }
 func (c Cookie[V]) Name() CookieName       { return c.name }
 func (c Cookie[V]) Options() CookieOptions { return c.options }
@@ -44,9 +54,10 @@ func (c Cookie[V]) Validate() error {
 	return err
 }
 
-// Read distinguishes absent from present-empty. The bounded native Cookie parser
-// rejects malformed fields, and duplicate occurrences of this name are errors,
-// including cookies with identical values. Browser path ordering is not identity.
+// Read distinguishes absent from present-empty. Unrelated malformed cookies are
+// ignored; only this name's own malformed value is a BadRequest. Repeated
+// occurrences of this name, including identical values, read as absent because
+// browser path ordering is not identity. Prefer __Host- names for credentials.
 func (c Cookie[V]) Read(r *stdhttp.Request) (value.Optional[V], error) {
 	text, present, err := c.readText(r)
 	if err != nil || !present {
@@ -87,7 +98,17 @@ func (c Cookie[V]) readText(r *stdhttp.Request) (string, bool, error) {
 	if err := r.Context().Err(); err != nil {
 		return "", false, err
 	}
-	lines := r.Header.Values("Cookie")
+	return findRequestCookie(r.Header.Values("Cookie"), c.name)
+}
+
+// findRequestCookie scans Cookie fields pair by pair without allocating for
+// unrelated cookies. Browsers send cookies owned by other applications and
+// scripts (JSON, quotes, non-ASCII, nameless pairs, trailing separators); none of
+// them can reject a request. Only this name's own wire value must satisfy the
+// native cookie grammar. Repeated occurrences are indistinguishable scopes, e.g.
+// a sibling domain's tossed cookie, so the value is treated as absent. Use a
+// __Host- name to prevent other hosts from supplying a same-name cookie.
+func findRequestCookie(lines []string, name CookieName) (string, bool, error) {
 	if len(lines) > maxCookieRequestFields {
 		return "", false, BadRequest
 	}
@@ -99,29 +120,51 @@ func (c Cookie[V]) readText(r *stdhttp.Request) (string, bool, error) {
 		size += len(line)
 	}
 	var found string
-	present := false
-	count := 0
+	present, repeated := false, false
+	pairs := 0
 	for _, line := range lines {
-		cookies, err := stdhttp.ParseCookie(line)
-		if err != nil {
-			return "", false, BadRequest.WithCause(err)
-		}
-		count += len(cookies)
-		if count > maxCookieRequestPairs {
-			return "", false, BadRequest
-		}
-		for _, cookie := range cookies {
-			if cookie.Name != string(c.name) {
+		for rest := line; rest != ""; {
+			var pair string
+			pair, rest, _ = strings.Cut(rest, ";")
+			pair = strings.Trim(pair, " \t")
+			if pair == "" {
 				continue
 			}
-			if present || len(cookie.Value) > MaxCookieBytes {
+			if pairs++; pairs > maxCookieRequestPairs {
 				return "", false, BadRequest
 			}
-			found = cookie.Value
-			present = true
+			key, text, hasValue := strings.Cut(pair, "=")
+			if !hasValue || strings.Trim(key, " \t") != string(name) {
+				continue
+			}
+			if present {
+				repeated = true
+				continue
+			}
+			value, err := nativeCookieValue(name, strings.Trim(text, " \t"))
+			if err != nil {
+				return "", false, err
+			}
+			found, present = value, true
 		}
 	}
+	if repeated {
+		return "", false, nil
+	}
 	return found, present, nil
+}
+
+// nativeCookieValue applies Go's cookie-value grammar, including optional
+// surrounding quotes, to exactly one requested pair.
+func nativeCookieValue(name CookieName, text string) (string, error) {
+	if len(text) > MaxCookieBytes {
+		return "", BadRequest
+	}
+	cookies, err := stdhttp.ParseCookie(string(name) + "=" + text)
+	if err != nil || len(cookies) != 1 {
+		return "", BadRequest.WithCause(err)
+	}
+	return cookies[0].Value, nil
 }
 func (c Cookie[V]) decode(ctx context.Context, text string) (V, error) {
 	var result V
@@ -129,7 +172,7 @@ func (c Cookie[V]) decode(ctx context.Context, text string) (V, error) {
 		return result, err
 	}
 	var failed error
-	err := callback.Isolated("cookie decoder", func() error { result, failed = c.codec.Parse(text); return nil })
+	err := c.invoke("cookie decoder", func() error { result, failed = c.codec.Parse(text); return nil })
 	if err != nil {
 		var zero V
 		return zero, fault.Wrap(fault.Internal, "cookie decoder callback failed", err)
@@ -156,7 +199,7 @@ func (c Cookie[V]) format(ctx context.Context, v V) (string, error) {
 	}
 	var text string
 	var failed error
-	err := callback.Isolated("cookie encoder", func() error { text, failed = c.codec.Format(v); return nil })
+	err := c.invoke("cookie encoder", func() error { text, failed = c.codec.Format(v); return nil })
 	if err != nil {
 		return "", fault.Wrap(fault.Internal, "cookie encoder callback failed", err)
 	}

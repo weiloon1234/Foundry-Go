@@ -139,13 +139,13 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	if s.ShutdownTimeout <= 0 {
-		return nil, fault.New(fault.Invalid, "application shutdown timeout must be positive")
+	if err := validateShutdownBudget(s); err != nil {
+		return nil, err
 	}
 	if !s.HTTP.Enabled && (len(routes) > 0 || len(middleware) > 0 || len(observers) > 0) {
 		return nil, fault.New(fault.Invalid, "HTTP declarations require HTTP to be enabled")
 	}
-	channels, err := logging.PrepareChannels(s.Log.Default, s.Log.inTimeZone(s.TimeZone), configured.logger)
+	channels, err := logging.PrepareChannels(s.Log.Default, s.Log.inTimeZone(s.TimeZone), configured.logger, configured.logHandlers...)
 	if err != nil {
 		return nil, err
 	}
@@ -157,19 +157,27 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	if s.Worker.Archive, err = prepareJobArchive(s); err != nil {
+		return nil, err
+	}
 	plan, err := infrastructure.Configure(s.Services, append(slices.Clone(configured.infrastructure), infrastructure.WithClock(configured.clock), infrastructure.WithLogger(logger))...)
 	if err != nil {
 		return nil, err
 	}
-	options := []foundation.Option{foundation.WithClock(configured.clock), foundation.WithLogger(logger), foundation.WithShutdownTimeout(s.ShutdownTimeout)}
-	recorder, err := prepareObservation(s.Features.Observability, configured)
+	options := []foundation.Option{foundation.WithClock(configured.clock), foundation.WithLogger(logger), foundation.WithShutdownTimeout(s.ShutdownTimeout), foundation.WithStopDelay(s.StopDelay), foundation.WithStartupTimeout(s.StartupTimeout)}
+	gate, err := prepareMaintenance(s, configured)
+	if err != nil {
+		return nil, err
+	}
+	options = append(options, foundation.WithMaintenance(gate))
+	recorder, err := prepareObservation(s.Features.Observability, configured, logger, gate)
 	if err != nil {
 		return nil, err
 	}
 	if recorder != nil {
 		options = append(options, foundation.WithObservability(recorder))
 	}
-	migrations, err := featureMigrations(plan, s.Features)
+	migrations, err := featureMigrations(plan, s.Features, s.Worker.Archive)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +197,17 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if err := registerKernelDeclarations(builder, plan, s, configured.clock, jobDeclarations, eventDeclarations, schedules, realtime); err != nil {
 		return nil, err
 	}
-	registerHTTP(builder, s.HTTP, s.Features.Locales.Enabled, routes, middleware, observers)
+	registerMaintenance(builder, s.Maintenance, gate, logger)
+	if probes, err := registerProbes(builder, s); err != nil {
+		return nil, err
+	} else if probes != nil {
+		routes = append(routes, probes)
+	}
+	if mount := realtimeRoutes(s); mount != nil {
+		routes = append(routes, mount)
+	}
+	registerHTTP(builder, s.HTTP, s.Features.Locales.Enabled, stickyReadsConfigured(s.Services.Database), routes, middleware, observers)
+	registerMetricsCollectors(builder, recorder, channels, s.Realtime.Enabled)
 	app, err := builder.Build(ctx)
 	if err != nil {
 		return nil, err
@@ -206,3 +224,21 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 }
 func (Builder) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("application builder")) }
 func (Builder) LogValue() slog.Value       { return slog.StringValue("application builder") }
+
+// validateShutdownBudget keeps each enabled listener's drain inside the single
+// application budget so cleanup always receives part of it.
+func validateShutdownBudget(s Settings) error {
+	if s.ShutdownTimeout <= 0 || s.StopDelay < 0 || s.StartupTimeout < 0 {
+		return fault.New(fault.Invalid, "application shutdown/startup timeouts must be positive and the stop delay non-negative")
+	}
+	if s.HTTP.Enabled && s.StopDelay+s.HTTP.Server.ShutdownTimeout >= s.ShutdownTimeout {
+		return fault.New(fault.Invalid, "HTTP shutdown grace plus stop delay must be shorter than the application shutdown timeout")
+	}
+	if s.Realtime.Enabled && !s.Realtime.Shared && s.StopDelay+s.Realtime.HTTP.ShutdownTimeout+s.Realtime.Config.DrainTimeout >= s.ShutdownTimeout {
+		return fault.New(fault.Invalid, "realtime shutdown grace plus stop delay must be shorter than the application shutdown timeout")
+	}
+	if s.StopDelay >= s.ShutdownTimeout {
+		return fault.New(fault.Invalid, "stop delay must be shorter than the application shutdown timeout")
+	}
+	return nil
+}

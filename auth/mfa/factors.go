@@ -16,7 +16,8 @@ import (
 // SetEnabled returns the complete updated model and must preserve identity.
 // Invalidate joins tx (for example auth.Revocations.Invalidate) and revokes every
 // registered credential guard. CanDisable enforces required-factor domain policy.
-// PasswordLogin.RequiresMFA must include this Enabled state as well as policy.
+// Link the factors to login with PasswordLogin.WithSecondFactor(factors): an
+// enrolled model then always requires MFA, whatever RequiresMFA returns.
 // Callbacks must not commit, retry, send external messages or acquire other pools.
 type Model[M model.Identifiable, K any] struct {
 	Lock         func(context.Context, *database.Tx, K) (value.Optional[M], error)
@@ -52,6 +53,15 @@ func New[M model.Identifiable, K any](store *Store, provider auth.Provider[M, K]
 		return nil, err
 	}
 	return &Factors[M, K]{store: store, provider: provider, model: binding, attempts: attempts, address: address}, nil
+}
+
+// HasEnrolledFactor reports the model's stored enabled state. It implements
+// auth.EnrolledFactors for PasswordLogin.WithSecondFactor and performs no I/O.
+func (f *Factors[M, K]) HasEnrolledFactor(_ context.Context, subject M) (bool, error) {
+	if err := f.Validate(); err != nil {
+		return false, err
+	}
+	return f.model.Enabled(subject), nil
 }
 func (f *Factors[M, K]) Validate() error {
 	if f == nil {

@@ -47,6 +47,40 @@ func Validate[M any, K comparable](owner extensions.Owner[M, K], row Identity, p
 	}
 	return row.matches(owner.Name(), subject, parts...)
 }
+
+// Adopt verifies a row recorded under an earlier scope of its registered owner
+// and returns the owner's current subject for it. The row's own key must match
+// its recorded scope and subject key, and the stored key must round trip
+// through the current codec to the same subject key; inconsistent rows fail
+// closed. A row is adopted only when both its recorded scope and its identity's
+// model name belong to models the owner declares (see Registry.DeclaresModel);
+// any other row is reported as not declared (false) and left in place.
+func Adopt(registry *extensions.Registry, owner extensions.OwnerName, row Identity, parts ...string) (extensions.Subject, bool, error) {
+	if row.Owner != string(owner) || !ValidKey(row.Scope) || !ValidKey(row.SubjectKey) {
+		return extensions.Subject{}, false, invalid()
+	}
+	input := make([]string, 0, 2+len(parts))
+	input = append(input, row.Scope, row.SubjectKey)
+	input = append(input, parts...)
+	if row.Key != extensions.Digest(input...) {
+		return extensions.Subject{}, false, invalid()
+	}
+	identity, err := row.Identity.Decode()
+	if err != nil {
+		return extensions.Subject{}, false, err
+	}
+	if !registry.DeclaresModel(owner, identity.ModelName()) || !registry.DeclaresScope(owner, row.Scope) {
+		return extensions.Subject{}, false, nil
+	}
+	subject, err := registry.AdoptSubject(owner, identity)
+	if err != nil {
+		return extensions.Subject{}, false, err
+	}
+	if subject.Key != row.SubjectKey {
+		return extensions.Subject{}, false, invalid()
+	}
+	return subject, true, nil
+}
 func Restore(registry *extensions.Registry, owner extensions.OwnerName, scope string, row Identity, parts ...string) (model.Identity, error) {
 	identity, err := row.Identity.Decode()
 	if err != nil {

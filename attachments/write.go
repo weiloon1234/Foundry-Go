@@ -108,6 +108,19 @@ func (c Collection[M, K]) write(ctx context.Context, m *Manager, owner model.Ref
 		pending, nextErr := m.cleanupMany(cleanupCtx, old)
 		result.PendingCleanup = append(result.PendingCleanup, pending...)
 		cleanupErr = errors.Join(cleanupErr, nextErr)
+		if len(c.definition.policy.Variants) > 0 {
+			// Queued variants were enqueued by the publication transaction.
+			// Otherwise generate them now; a failure never unpublishes.
+			result.PendingVariants = c.variantQueue != nil
+			if c.variantQueue == nil {
+				if variantErr := m.generate(ctx, id, false); variantErr != nil {
+					result.PendingVariants = true
+					cleanupErr = errors.Join(cleanupErr, variantErr)
+				} else if refreshed, err := c.withVariants(ctx, m, attachment); err == nil {
+					result.Attachment = value.Set(refreshed)
+				}
+			}
+		}
 		return cleanupErr
 	})
 	return result, err
@@ -309,6 +322,11 @@ func (c Collection[M, K]) publish(ctx context.Context, m *Manager, id model.ID[s
 		// exact acknowledged bytes before claiming a ready attachment.
 		if final.Scope != row.Scope || final.SubjectKey != row.SubjectKey || final.Disk != row.Disk || final.ObjectKey != row.ObjectKey || final.ETag != row.ETag || final.ObjectVersion != row.ObjectVersion || final.Digest != row.Digest || final.Size != row.Size || final.WriterID != row.WriterID || final.Single != row.Single || final.ContentType != row.ContentType || final.OriginalName != row.OriginalName || final.Width != row.Width || final.Height != row.Height {
 			return invalid()
+		}
+		if len(c.definition.policy.Variants) > 0 {
+			if err := c.variantQueue.enqueue(ctx, tx, operationID(id)); err != nil {
+				return err
+			}
 		}
 		result, err = c.attachment(m, final)
 		return err

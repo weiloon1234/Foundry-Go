@@ -30,7 +30,7 @@ func (c *Client) PutLeased(ctx context.Context, key cache.EntryKey, data []byte,
 		return err
 	}
 	value, err := c.execute(ctx, func(ctx context.Context, raw *driver.Client) (any, error) {
-		return raw.Eval(ctx, cacheLeasedScript, []string{key.String(), proof.Key().String()}, "put", bound, string(data), expiry, string(proof.Owner().Bytes()), lease.OwnerBytes).Result()
+		return evalScript(ctx, raw, cacheLeasedScript, []string{key.String(), proof.Key().String()}, "put", bound, string(data), expiry, string(proof.Owner().Bytes()), lease.OwnerBytes).Result()
 	})
 	if err != nil {
 		return err
@@ -56,7 +56,7 @@ func (c *Client) PutTaggedLeased(ctx context.Context, key cache.TaggedKey, data 
 	addresses = append(addresses, proof.Key().String())
 	args = append(args, string(proof.Owner().Bytes()), lease.OwnerBytes)
 	value, err := c.execute(ctx, func(ctx context.Context, raw *driver.Client) (any, error) {
-		return raw.Eval(ctx, taggedLeasedScript, addresses, args...).Result()
+		return evalScript(ctx, raw, taggedLeasedScript, addresses, args...).Result()
 	})
 	if err != nil {
 		return err

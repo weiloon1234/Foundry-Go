@@ -143,8 +143,9 @@ func TestRedisCorruptionAndBoundsPreserveStoredData(t *testing.T) {
 	if err := c.raw.Set(t.Context(), k.String(), private, time.Minute).Err(); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := c.Get(t.Context(), k); !errors.Is(err, fault.Invalid) || strings.Contains(err.Error(), "private") {
-		t.Fatal(err)
+	// Data written under a larger bound is a miss, never a failure.
+	if _, hit, err := c.Get(t.Context(), k); err != nil || hit {
+		t.Fatal(hit, err)
 	}
 	if err := c.Put(t.Context(), key("write-bound"), []byte(private), cache.Forever()); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
@@ -156,11 +157,20 @@ func TestRedisCorruptionAndBoundsPreserveStoredData(t *testing.T) {
 	if err := c.raw.LPush(t.Context(), wrong.String(), "private").Err(); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := c.Get(t.Context(), wrong); !errors.Is(err, fault.Invalid) {
-		t.Fatal(err)
+	if _, hit, err := c.Get(t.Context(), wrong); err != nil || hit {
+		t.Fatal(hit, err)
 	}
 	if got := c.raw.LLen(t.Context(), wrong.String()).Val(); got != 1 {
-		t.Fatal("wrong type changed")
+		t.Fatal("wrong type changed by a read")
+	}
+	if removed, err := c.Forget(t.Context(), wrong); err != nil || removed {
+		t.Fatal(removed, err)
+	}
+	if exists := c.raw.Exists(t.Context(), wrong.String()).Val(); exists != 0 {
+		t.Fatal("unusable entry was not forgotten")
+	}
+	if err := c.Put(t.Context(), k, []byte("small"), cache.Forever()); err != nil {
+		t.Fatal("over-bound entry could not be replaced", err)
 	}
 }
 func TestRedisWrongCredentialsFailStartupAndClose(t *testing.T) {

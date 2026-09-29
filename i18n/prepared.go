@@ -1,13 +1,16 @@
 package i18n
 
 import (
-	"cmp"
 	"context"
 	"maps"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/decimal"
+	"golang.org/x/text/language"
 )
+
+// englishTag selects the plural rules of every prepared English fallback.
+var englishTag = language.English
 
 // MessageArgument is a serialized declaration argument, never an input capture.
 // Numbers retain decimal text instead of passing through float64.
@@ -38,11 +41,14 @@ type PreparedMessage struct {
 // PrepareMessage is the explicit dynamic construction boundary. It snapshots
 // its inputs and rejects incomplete signatures and invalid fallback templates.
 func PrepareMessage(definition MessageDefinition, args map[string]Argument, fallback Template) (PreparedMessage, error) {
-	if definition.Validate() != nil || len(args) != len(definition.Parameters) {
-		return PreparedMessage{}, invalidMessage()
+	if err := definition.Validate(); err != nil {
+		return PreparedMessage{}, err
+	}
+	if len(args) != len(definition.Parameters) {
+		return PreparedMessage{}, argumentError(definition.Key, "", "the argument count differs from the declaration")
 	}
 	owned := cloneDefinition(definition)
-	slices.SortFunc(owned.Parameters, func(a, b Parameter) int { return cmp.Compare(a.Name, b.Name) })
+	slices.SortFunc(owned.Parameters, compareParameters)
 	recipe := MessageRecipe{Definition: owned, Fallback: maps.Clone(fallback.Forms)}
 	if definition.Plural == "" {
 		recipe.Fallback = map[PluralForm]string{Other: fallback.Text}
@@ -51,20 +57,20 @@ func PrepareMessage(definition MessageDefinition, args map[string]Argument, fall
 	for _, p := range owned.Parameters {
 		value := args[p.Name]
 		if !value.valid(p.Kind) {
-			return PreparedMessage{}, invalidMessage()
+			return PreparedMessage{}, argumentError(definition.Key, p.Name, "missing, wrong kind or oversized")
 		}
 		total += len(value.text)
 		if total > MaxTextBytes {
-			return PreparedMessage{}, invalidMessage()
+			return PreparedMessage{}, argumentError(definition.Key, p.Name, "arguments exceed 64 KiB")
 		}
 		recipe.Arguments = append(recipe.Arguments, MessageArgument{Name: p.Name, Kind: p.Kind, Value: value.text})
 	}
-	compiled, size, err := compileTemplate(fallback, owned)
-	if err != nil {
-		return PreparedMessage{}, err
+	compiled, size, problem := compileTemplate(fallback, owned)
+	if problem != "" {
+		return PreparedMessage{}, definitionError(definition.Key, "English fallback: "+string(problem))
 	}
 	if size > MaxTextBytes {
-		return PreparedMessage{}, invalidMessage()
+		return PreparedMessage{}, definitionError(definition.Key, "English fallback exceeds 64 KiB")
 	}
 	return PreparedMessage{recipe: recipe, args: maps.Clone(args), fallback: compiled}, nil
 }
@@ -125,6 +131,7 @@ func (m PreparedMessage) Description() MessageRecipe {
 
 // WithText replaces an existing text argument in a new message. Missing names
 // are ignored, letting a presenter supply optional standard label arguments.
+// The immutable definition and fallback are shared; only arguments are copied.
 func (m PreparedMessage) WithText(name, value string) (PreparedMessage, error) {
 	if m.Validate() != nil || !validText(value) {
 		return PreparedMessage{}, invalidMessage()
@@ -134,7 +141,7 @@ func (m PreparedMessage) WithText(name, value string) (PreparedMessage, error) {
 		return m, nil
 	}
 	if current.kind != TextParameter {
-		return PreparedMessage{}, invalidMessage()
+		return PreparedMessage{}, argumentError(m.recipe.Definition.Key, name, "only text arguments can be replaced")
 	}
 	total := len(value)
 	for key, arg := range m.args {
@@ -143,11 +150,11 @@ func (m PreparedMessage) WithText(name, value string) (PreparedMessage, error) {
 		}
 	}
 	if total > MaxTextBytes {
-		return PreparedMessage{}, invalidMessage()
+		return PreparedMessage{}, argumentError(m.recipe.Definition.Key, name, "arguments exceed 64 KiB")
 	}
 	m.args = maps.Clone(m.args)
 	m.args[name] = Text(value)
-	m.recipe = m.Description()
+	m.recipe.Arguments = slices.Clone(m.recipe.Arguments)
 	for i := range m.recipe.Arguments {
 		if m.recipe.Arguments[i].Name == name {
 			m.recipe.Arguments[i].Value = value
@@ -156,9 +163,11 @@ func (m PreparedMessage) WithText(name, value string) (PreparedMessage, error) {
 	return m, nil
 }
 
-// Format tries the supplied catalog, then its configured fallback, then this
-// message's English fallback. An unregistered key also uses the English fallback;
-// a conflicting registered signature is an error. Nil catalog selects English.
+// Format tries the supplied catalog (requested locale, supported parents, then
+// its configured fallback), then this message's English fallback. An
+// unregistered key also uses the English fallback; a conflicting registered
+// signature is an error. Nil catalog selects English. Arguments were validated
+// at preparation, so formatting only checks the catalog signature once.
 func (m PreparedMessage) Format(ctx context.Context, catalog *Catalog, locale LocaleID) (Result, error) {
 	if m.Validate() != nil || ctx == nil {
 		return Result{}, invalidMessage()
@@ -171,10 +180,10 @@ func (m PreparedMessage) Format(ctx context.Context, catalog *Catalog, locale Lo
 			return Result{}, invalidMessage()
 		}
 		if _, exists := catalog.definitions[m.recipe.Definition.Key]; exists {
-			if err := catalog.Accepts(m.recipe.Definition); err != nil {
+			if err := catalog.acceptsSorted(m.recipe.Definition); err != nil {
 				return Result{}, err
 			}
-			result, err := catalog.FormatDynamic(ctx, locale, m.recipe.Definition.Key, m.args)
+			result, err := catalog.format(ctx, locale, m.recipe.Definition, m.args)
 			if err != nil || !result.Missing {
 				return result, err
 			}
@@ -182,14 +191,17 @@ func (m PreparedMessage) Format(ctx context.Context, catalog *Catalog, locale Lo
 	}
 	form := Other
 	if m.recipe.Definition.Plural != "" {
-		form = pluralForm("en", m.recipe.Definition.Kind, m.args[m.recipe.Definition.Plural].text)
+		form = pluralForm(englishTag, m.recipe.Definition.Kind, m.args[m.recipe.Definition.Plural].text)
 	}
 	parts, exists := m.fallback[form]
 	if !exists {
 		parts = m.fallback[Other]
 	}
 	text, err := renderTemplate(parts, m.args)
-	return Result{Text: text, Locale: "en", Fallback: locale != "" && locale != "en"}, err
+	if err != nil {
+		return Result{}, argumentError(m.recipe.Definition.Key, "", "the rendered message exceeds 64 KiB")
+	}
+	return Result{Text: text, Locale: "en", Fallback: locale != "" && locale != "en"}, nil
 }
 
 // Definition returns an owned signature and whether it is registered.

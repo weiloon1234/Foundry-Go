@@ -40,6 +40,8 @@ type migrationServer struct {
 	contended             chan struct{}
 	startOnce             sync.Once
 	contentionOnce        sync.Once
+	// limits records per-session migration limit statements and their values.
+	limits [][]any
 }
 
 func newMigrationServer() *migrationServer {
@@ -100,6 +102,14 @@ func (s *migrationServer) state(owner int) *driverState {
 					s.table = true
 				}
 			}
+			return driver.RowsAffected(0), nil
+		}
+		if strings.HasPrefix(statement, "SELECT pg_catalog.set_config('lock_timeout'") || strings.HasPrefix(statement, "RESET ") {
+			values := []any{statement}
+			for _, arg := range args {
+				values = append(values, arg.Value)
+			}
+			s.limits = append(s.limits, values)
 			return driver.RowsAffected(0), nil
 		}
 		if strings.HasPrefix(statement, "DELETE FROM") && strings.Contains(statement, "_progress_") {
@@ -309,6 +319,13 @@ func TestMigrationFailureRetainsEarlierCommitsAndRetriesOnlyPending(t *testing.T
 	if err == nil || len(result.Applied) != 1 || result.Interrupted == nil || result.Interrupted.ID != "0002_second" || len(server.history) != 1 || state.rolledBack.Load() != 1 || len(server.locks) != 0 {
 		t.Fatalf("partial run: %+v %v", result, err)
 	}
+	// The failure names the migration and outcome instead of a generic session code.
+	if !errors.Is(err, fault.Invalid) || !errors.Is(err, database.QueryFailed) || !strings.Contains(err.Error(), "migration app/0002_second failed and was not committed (query_failed)") || strings.Contains(err.Error(), "injected") {
+		t.Fatalf("migration failure is not actionable or leaked its cause: %v", err)
+	}
+	if len(server.limits) != 3 || server.limits[0][1] != "10000" || server.limits[0][2] != "0" || server.limits[1][0] != "RESET lock_timeout" || server.limits[2][0] != "RESET statement_timeout" {
+		t.Fatalf("migration session limits were not applied and restored: %v", server.limits)
+	}
 	result, err = runner.Up(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -350,6 +367,8 @@ func TestMigrationDriftAndHistoryLimitsPreventFurtherWrites(t *testing.T) {
 	}
 	if result, err := runner.Up(t.Context()); !errors.Is(err, fault.Conflict) || len(result.Applied) != 0 || len(server.committedSQL) != 2 {
 		t.Fatal("drift allowed migration writes")
+	} else if relabeled := new(database.Error); errors.As(err, &relabeled) || !strings.HasPrefix(err.Error(), "conflict: migration history has 1 conflict(s)") {
+		t.Fatalf("checksum drift was relabeled as a database failure: %v", err)
 	}
 	limited, _ := migrationRunner(t, server, 3, migrationDefinitions(), func(c *migrate.PostgresConfig) { c.MaxHistory = 1 })
 	if _, err := limited.Status(t.Context()); !errors.Is(err, fault.Invalid) {

@@ -9,8 +9,9 @@ if op == 'expire' then
  return {1}
 end
 local capacity, value_bound = tonumber(ARGV[3]), tonumber(ARGV[5])
-local count_command = expected == 'hash' and 'HLEN' or 'SCARD'
-local count = redis.call(count_command,key)
+local count_commands = {hash='HLEN', set='SCARD', zset='ZCARD', list='LLEN'}
+if not count_commands[expected] then return {-1} end
+local count = redis.call(count_commands[expected],key)
 if count > capacity then return {-1} end
 if op == 'count' then return {1,count} end
 if expected == 'hash' then
@@ -41,7 +42,8 @@ for _,value in ipairs(members) do
  if #value > value_bound or #value == 0 or #value > remaining then return {-1} end
  remaining = remaining - #value
 end
-table.sort(members)
+-- Unordered: Lua string order follows the server's locale (strcoll), so the
+-- Go adapter sorts members by bytes instead.
 local result = {1}
 for _,value in ipairs(members) do result[#result+1] = value end
 return result

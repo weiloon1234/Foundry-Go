@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	stdhttp "net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -26,35 +25,40 @@ func TestTrustedProxyChainAndHeaderPriority(t *testing.T) {
 		name, peer string
 		headers    stdhttp.Header
 		want       string
-		reject     bool
 	}{
-		{"untrusted-peer", "192.0.2.1:3000", stdhttp.Header{"X-Forwarded-For": {"garbage"}}, "192.0.2.1", false},
-		{"absent-header", "10.0.0.2:3000", nil, "10.0.0.2", false},
-		{"first-untrusted-hop", "10.0.0.2:3000", stdhttp.Header{"X-Forwarded-For": {"1.1.1.1, 198.51.100.9, 10.0.0.1"}}, "198.51.100.9", false},
-		{"all-hops-trusted", "10.0.0.2:3000", stdhttp.Header{"X-Forwarded-For": {"10.0.0.3,10.0.0.1"}}, "10.0.0.3", false},
-		{"multiple-lines", "10.0.0.2:3000", stdhttp.Header{"X-Forwarded-For": {"203.0.113.9", "10.0.0.1"}}, "203.0.113.9", false},
-		{"ipv6-peer-and-client", "[2001:db8:10::2]:3000", stdhttp.Header{"X-Forwarded-For": {"2001:db8:20::9,2001:db8:10::1"}}, "2001:db8:20::9", false},
-		{"mapped-ipv4-peer-and-client", "[::ffff:10.0.0.2]:3000", stdhttp.Header{"X-Forwarded-For": {"::ffff:203.0.113.9"}}, "203.0.113.9", false},
-		{"priority-single-header", "10.0.0.2:3000", stdhttp.Header{"Cf-Connecting-Ip": {"198.51.100.8"}, "X-Forwarded-For": {"203.0.113.9"}}, "198.51.100.8", false},
-		{"invalid-priority-no-fallback", "10.0.0.2:3000", stdhttp.Header{"Cf-Connecting-Ip": {"invalid"}, "X-Forwarded-For": {"203.0.113.9"}}, "", true},
-		{"forwarded-chain", "10.0.0.2:3000", stdhttp.Header{"Forwarded": {"for=1.1.1.1, for=198.51.100.7;proto=https, for=10.0.0.1"}}, "198.51.100.7", false},
-		{"unknown-boundary", "10.0.0.2:3000", stdhttp.Header{"Forwarded": {"for=1.1.1.1,for=unknown,for=10.0.0.1"}}, "10.0.0.1", false},
-		{"obfuscated-boundary", "10.0.0.2:3000", stdhttp.Header{"Forwarded": {"for=1.1.1.1,for=_private"}, "X-Forwarded-For": {"203.0.113.9"}}, "10.0.0.2", false},
-		{"missing-for-boundary", "10.0.0.2:3000", stdhttp.Header{"Forwarded": {"for=1.1.1.1,proto=https;host=example.test"}}, "10.0.0.2", false},
-		{"missing-peer", "", stdhttp.Header{"X-Forwarded-For": {"203.0.113.9"}}, "", false},
-		{"non-ip-peer", "proxy.test:3000", stdhttp.Header{"X-Forwarded-For": {"203.0.113.9"}}, "", false},
+		{"untrusted-peer", "192.0.2.1:3000", stdhttp.Header{"X-Forwarded-For": {"garbage"}}, "192.0.2.1"},
+		{"absent-header", "10.0.0.2:3000", nil, "10.0.0.2"},
+		{"first-untrusted-hop", "10.0.0.2:3000", stdhttp.Header{"X-Forwarded-For": {"1.1.1.1, 198.51.100.9, 10.0.0.1"}}, "198.51.100.9"},
+		{"all-hops-trusted", "10.0.0.2:3000", stdhttp.Header{"X-Forwarded-For": {"10.0.0.3,10.0.0.1"}}, "10.0.0.3"},
+		{"multiple-lines", "10.0.0.2:3000", stdhttp.Header{"X-Forwarded-For": {"203.0.113.9", "10.0.0.1"}}, "203.0.113.9"},
+		{"ipv6-peer-and-client", "[2001:db8:10::2]:3000", stdhttp.Header{"X-Forwarded-For": {"2001:db8:20::9,2001:db8:10::1"}}, "2001:db8:20::9"},
+		{"mapped-ipv4-peer-and-client", "[::ffff:10.0.0.2]:3000", stdhttp.Header{"X-Forwarded-For": {"::ffff:203.0.113.9"}}, "203.0.113.9"},
+		{"priority-single-header", "10.0.0.2:3000", stdhttp.Header{"Cf-Connecting-Ip": {"198.51.100.8"}, "X-Forwarded-For": {"203.0.113.9"}}, "198.51.100.8"},
+		{"invalid-priority-no-fallback", "10.0.0.2:3000", stdhttp.Header{"Cf-Connecting-Ip": {"invalid"}, "X-Forwarded-For": {"203.0.113.9"}}, "10.0.0.2"},
+		{"repeated-single-header", "10.0.0.2:3000", stdhttp.Header{"Cf-Connecting-Ip": {"198.51.100.8", "198.51.100.9"}}, "10.0.0.2"},
+		{"single-header-with-port", "10.0.0.2:3000", stdhttp.Header{"Cf-Connecting-Ip": {"198.51.100.8:4711"}}, "198.51.100.8"},
+		{"client-garbage-beyond-boundary", "10.0.0.2:3000", stdhttp.Header{"X-Forwarded-For": {"unknown, not-an-ip,, 1.2.3.4"}}, "1.2.3.4"},
+		{"unknown-at-boundary", "10.0.0.2:3000", stdhttp.Header{"X-Forwarded-For": {"198.51.100.9, unknown, 10.0.0.1"}}, "10.0.0.1"},
+		{"empty-xff", "10.0.0.2:3000", stdhttp.Header{"X-Forwarded-For": {""}}, "10.0.0.2"},
+		{"azure-ip-port", "10.0.0.2:3000", stdhttp.Header{"X-Forwarded-For": {"203.0.113.9:51234, 10.0.0.1:443"}}, "203.0.113.9"},
+		{"bracketed-ipv6-port", "10.0.0.2:3000", stdhttp.Header{"X-Forwarded-For": {"[2001:db8:20::9]:443"}}, "2001:db8:20::9"},
+		{"malformed-trusted-hop", "10.0.0.2:3000", stdhttp.Header{"X-Forwarded-For": {"198.51.100.9, private-input-invalid"}}, "10.0.0.2"},
+		{"oversized-client-prefix", "10.0.0.2:3000", stdhttp.Header{"X-Forwarded-For": {strings.Repeat("x", 16<<10) + ", 203.0.113.9"}}, "203.0.113.9"},
+		{"forwarded-client-quote-isolated", "10.0.0.2:3000", stdhttp.Header{"Forwarded": {`for="1.1.1.1`, "for=198.51.100.7"}}, "198.51.100.7"},
+		{"forwarded-client-quote-same-line", "10.0.0.2:3000", stdhttp.Header{"Forwarded": {`for="1.1.1.1, for=198.51.100.7`}}, "198.51.100.7"},
+		{"forwarded-malformed-trusted-hop", "10.0.0.2:3000", stdhttp.Header{"Forwarded": {"for=198.51.100.7, for=10.0.0.1;for=10.0.0.3"}}, "10.0.0.2"},
+		{"forwarded-chain", "10.0.0.2:3000", stdhttp.Header{"Forwarded": {"for=1.1.1.1, for=198.51.100.7;proto=https, for=10.0.0.1"}}, "198.51.100.7"},
+		{"unknown-boundary", "10.0.0.2:3000", stdhttp.Header{"Forwarded": {"for=1.1.1.1,for=unknown,for=10.0.0.1"}}, "10.0.0.1"},
+		{"obfuscated-boundary", "10.0.0.2:3000", stdhttp.Header{"Forwarded": {"for=1.1.1.1,for=_private"}, "X-Forwarded-For": {"203.0.113.9"}}, "10.0.0.2"},
+		{"missing-for-boundary", "10.0.0.2:3000", stdhttp.Header{"Forwarded": {"for=1.1.1.1,proto=https;host=example.test"}}, "10.0.0.2"},
+		{"missing-peer", "", stdhttp.Header{"X-Forwarded-For": {"203.0.113.9"}}, ""},
+		{"non-ip-peer", "proxy.test:3000", stdhttp.Header{"X-Forwarded-For": {"203.0.113.9"}}, ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			request := httptest.NewRequest("GET", "/", nil)
 			request.RemoteAddr = test.peer
 			request.Header = test.headers
-			got, err := policy.clientIP(request)
-			if (err != nil) != test.reject {
-				t.Fatalf("resolution error: %v", err)
-			}
-			if test.reject {
-				return
-			}
+			got := policy.clientIP(request)
 			var want netip.Addr
 			if test.want != "" {
 				want = netip.MustParseAddr(test.want)
@@ -116,22 +120,30 @@ func TestTrustedProxyPreservesNativeRequestAndSharedAttribution(t *testing.T) {
 	}
 }
 
-func TestTrustedProxyRejectsMalformedTrustedInputWithSharedEnvelope(t *testing.T) {
-	handler, err := ApplyMiddleware(stdhttp.HandlerFunc(func(stdhttp.ResponseWriter, *stdhttp.Request) { t.Error("rejected request reached handler") }), TrustedProxy(TrustedProxyConfig{Proxies: []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}, Headers: []ProxyHeader{XForwardedForHeader()}}))
+func TestTrustedProxyMalformedHopsNeverRejectRequests(t *testing.T) {
+	var resolved []netip.Addr
+	handler, err := ApplyMiddleware(stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		resolved = append(resolved, ClientIP(r.Context()))
+		w.WriteHeader(204)
+	}), TrustedProxy(TrustedProxyConfig{Proxies: []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}, Headers: []ProxyHeader{XForwardedForHeader()}}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := httptest.NewRequest("GET", "/", nil)
-	request.RemoteAddr = "10.0.0.2:3000"
-	request.Header.Set("X-Forwarded-For", "private-input-invalid")
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
-	var body ErrorResponse
-	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
-		t.Fatal(err)
+	for _, value := range []string{"private-input-invalid", "unknown, 1.2.3.4", "", "203.0.113.9:443", "[2001:db8::9]:443"} {
+		request := httptest.NewRequest("GET", "/", nil)
+		request.RemoteAddr = "10.0.0.2:3000"
+		request.Header.Set("X-Forwarded-For", value)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != 204 || strings.Contains(response.Body.String(), "private-input-invalid") {
+			t.Fatalf("%q rejected: %d %s", value, response.Code, response.Body.String())
+		}
 	}
-	if response.Code != 400 || body.Code != BadRequest || strings.Contains(response.Body.String(), "private-input-invalid") {
-		t.Fatalf("unsafe denial: %s", response.Body.String())
+	want := []string{"10.0.0.2", "1.2.3.4", "10.0.0.2", "203.0.113.9", "2001:db8::9"}
+	for i, address := range want {
+		if resolved[i] != netip.MustParseAddr(address) {
+			t.Fatalf("resolved[%d] = %v; want %s", i, resolved[i], address)
+		}
 	}
 }
 
@@ -181,5 +193,42 @@ func TestTrustedProxyConfigurationOwnershipAndValidation(t *testing.T) {
 	}
 	if PeerIP(nil).IsValid() || ClientIP(nil).IsValid() {
 		t.Fatal("nil request/context invented an address")
+	}
+}
+
+func TestProxyDependentMiddlewareMustRunInsideTrustedProxy(t *testing.T) {
+	next := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, _ *stdhttp.Request) { w.WriteHeader(204) })
+	proxy := TrustedProxy(TrustedProxyConfig{Proxies: []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}, Headers: []ProxyHeader{XForwardedForHeader()}})
+	public := PublicURLs(PublicURLConfig{AllowedOrigins: []Origin{"https://app.example.test"}})
+	for _, chain := range [][]Middleware{
+		{CSRF(CSRFConfig{}), proxy},
+		{public, proxy},
+		{SecurityHeaders(DefaultSecurityHeadersConfig()), CredentialRequests(), proxy},
+	} {
+		if _, err := ApplyMiddleware(next, chain...); err == nil || !strings.Contains(err.Error(), "TrustedProxy") {
+			t.Errorf("misordered chain %v assembled: %v", middlewareIDs(chain), err)
+		}
+	}
+	for _, chain := range [][]Middleware{
+		{proxy, CSRF(CSRFConfig{}), public},
+		{SecurityHeaders(DefaultSecurityHeadersConfig()), proxy, CSRF(CSRFConfig{})},
+		{CSRF(CSRFConfig{})},
+	} {
+		if _, err := ApplyMiddleware(next, chain...); err != nil {
+			t.Errorf("ordered chain %v rejected: %v", middlewareIDs(chain), err)
+		}
+	}
+	// A route-level TrustedProxy cannot sit inside a global policy that needs it.
+	route := staticRoute("proxied", stdhttp.MethodGet, "/proxied").WithMiddleware(proxy).HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { w.WriteHeader(204) })
+	router, err := NewRouter(route)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ApplyMiddleware(router, CSRF(CSRFConfig{})); err == nil {
+		t.Fatal("global CSRF outside route TrustedProxy assembled")
+	}
+	misordered := staticRoute("misordered", stdhttp.MethodGet, "/misordered").WithMiddleware(CSRF(CSRFConfig{}), proxy).HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) {})
+	if _, err := NewRouter(misordered); err == nil {
+		t.Fatal("route chain with CSRF before TrustedProxy registered")
 	}
 }

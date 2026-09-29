@@ -1,30 +1,41 @@
 package http
 
 import (
+	"encoding/json"
+	"slices"
+
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
 // PayloadInfo describes the JSON, form, multipart or file contract used at runtime.
 // EndpointInfo uses nil payload pointers for empty bodies/responses.
+// Example is a documented JSON example already encoded by the same contract.
 type PayloadInfo struct {
 	MediaType string               `json:"media_type,omitempty"`
 	Schema    contract.Schema      `json:"schema,omitzero"`
 	Form      []QueryParameterInfo `json:"form,omitempty"`
 	Multipart *MultipartInfo       `json:"multipart,omitempty"`
 	File      *FileResponseInfo    `json:"file,omitempty"`
+	Raw       *RawBodyInfo         `json:"raw,omitempty"`
+	Example   json.RawMessage      `json:"example,omitempty"`
 }
 
 // EndpointInfo is an owned snapshot of typed endpoint declarations. Query
 // cardinality and codec-owned scalar metadata share the runtime declarations.
 // Undescribed custom codecs retain nil metadata instead of a fabricated schema.
 type EndpointInfo struct {
-	Path        []PathParameterInfo     `json:"path"`
-	Route       RouteInfo               `json:"route"`
-	Query       []QueryParameterInfo    `json:"query"`
-	Body        *PayloadInfo            `json:"body,omitempty"`
-	Response    *PayloadInfo            `json:"response,omitempty"`
-	Status      int                     `json:"status"`
+	Path     []PathParameterInfo  `json:"path"`
+	Route    RouteInfo            `json:"route"`
+	Query    []QueryParameterInfo `json:"query"`
+	Body     *PayloadInfo         `json:"body,omitempty"`
+	Response *PayloadInfo         `json:"response,omitempty"`
+	Status   int                  `json:"status"`
+	// Statuses lists every declared success status, primary first, when the
+	// response declares alternatives (JSONResponses).
+	Statuses []int `json:"statuses,omitempty"`
+	// Redirect marks a RedirectResponse: Status is 3xx with a Location and no body.
+	Redirect    bool                    `json:"redirect,omitempty"`
 	Limits      EndpointLimits          `json:"limits"`
 	Preparation bool                    `json:"preparation,omitempty"`
 	Validation  *validation.Description `json:"validation,omitempty"`
@@ -47,7 +58,7 @@ func (e Endpoint[P, Q, B, R]) Description() (EndpointInfo, error) {
 func (e Endpoint[P, Q, B, R]) snapshot(route RouteInfo) EndpointInfo {
 	query, _ := e.query.Parameters()
 	path, _ := e.route.path.Parameters()
-	info := EndpointInfo{Path: path, Route: route.clone(), Query: query, Status: e.response.status, Limits: e.limits}
+	info := EndpointInfo{Path: path, Route: route.clone(), Query: query, Status: e.response.status, Statuses: slices.Clone(e.response.statuses), Redirect: e.response.kind == payloadRedirect, Limits: e.limits}
 	info.Idempotency = e.idempotency.clone()
 	info.Preparation = e.preparation != nil
 	info.Errors, _ = e.errorDefinitions()
@@ -57,7 +68,7 @@ func (e Endpoint[P, Q, B, R]) snapshot(route RouteInfo) EndpointInfo {
 	}
 	if e.body.kind == payloadJSON {
 		schema, _ := e.body.json.Description()
-		info.Body = &PayloadInfo{MediaType: "application/json", Schema: schema}
+		info.Body = &PayloadInfo{MediaType: "application/json", Schema: schema, Example: slices.Clone(e.examples.body)}
 	}
 	if e.body.kind == payloadForm {
 		fields, _ := e.body.form.Parameters()
@@ -67,9 +78,19 @@ func (e Endpoint[P, Q, B, R]) snapshot(route RouteInfo) EndpointInfo {
 		form, _ := e.body.multipart.Description()
 		info.Body = &PayloadInfo{MediaType: "multipart/form-data", Multipart: &form}
 	}
+	if e.body.kind == payloadRaw {
+		info.Body = &PayloadInfo{Raw: &RawBodyInfo{MediaTypes: slices.Clone(e.body.raw.media)}}
+		if len(e.body.raw.media) == 1 {
+			info.Body.MediaType = string(e.body.raw.media[0])
+		}
+	}
 	if e.response.kind == payloadJSON {
 		schema, _ := e.response.json.Description()
-		info.Response = &PayloadInfo{MediaType: "application/json", Schema: schema}
+		info.Response = &PayloadInfo{MediaType: "application/json", Schema: schema, Example: slices.Clone(e.examples.response)}
+	}
+	if e.response.kind == payloadEvents {
+		schema, _ := e.response.events.Description()
+		info.Response = &PayloadInfo{MediaType: EventStreamMediaType, Schema: schema}
 	}
 	if e.response.kind == payloadDownload || e.response.kind == payloadStream {
 		file := e.response.file.description()

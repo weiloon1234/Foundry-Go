@@ -124,7 +124,8 @@ func (d Query[Q]) prepare(ctx context.Context, limits QueryLimits) error {
 // their order. No body or path values are merged into the query.
 //
 // Codec and field-selector execution is owned until it returns, even after
-// cancellation. Panics and Goexit become internal failures. Custom codecs must
+// cancellation. It runs on the caller's goroutine: panics become internal
+// failures, and runtime.Goexit ends the goroutine as any Go call does. Custom codecs must
 // be deterministic and concurrency-safe and must not retain input references
 // that they can mutate. Every failure discards the partially constructed Q.
 func (d Query[Q]) Decode(ctx context.Context, raw string, limits QueryLimits) (Q, error) {
@@ -171,7 +172,7 @@ func (d Query[Q]) decodeValues(ctx context.Context, values url.Values, issueLimi
 	var result Q
 	var failed *queryBindingFailure
 	var info QueryParameterInfo
-	err := callback.Isolated("decode query parameters", func() error {
+	err := callback.Invoke("decode query parameters", func() error {
 		for _, parameter := range d.parameters {
 			if ctx.Err() != nil {
 				break
@@ -203,7 +204,7 @@ func (d Query[Q]) Encode(ctx context.Context, input Q, limits QueryLimits) (stri
 	budget := queryBudget{pairs: limits.Pairs, bytes: limits.Bytes}
 	var failed *queryBindingFailure
 	var info QueryParameterInfo
-	err := callback.Isolated("encode query parameters", func() error {
+	err := callback.Invoke("encode query parameters", func() error {
 		for _, parameter := range d.parameters {
 			if ctx.Err() != nil {
 				break

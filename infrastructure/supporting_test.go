@@ -239,3 +239,68 @@ func TestCustomMailDriverIsBorrowedAndUsesConfiguredSender(t *testing.T) {
 		t.Fatal("custom borrowed driver ownership changed")
 	}
 }
+
+// The process-local memory queue loses jobs dispatched by processes without a
+// worker, so outside local/test environments it requires an explicit opt-in.
+func TestMemoryJobDriverRequiresOptInOutsideLocalEnvironments(t *testing.T) {
+	for _, test := range []struct {
+		environment string
+		allow, ok   bool
+	}{{"development", false, true}, {"test", false, true}, {"production", false, false}, {"staging", false, false}, {"production", true, true}} {
+		s := supportingSettings(t)
+		s.Namespace.Environment = test.environment
+		connection := s.Jobs.Connections["default"]
+		connection.AllowMemory = test.allow
+		s.Jobs.Connections["default"] = connection
+		second := s.Jobs.Connections["second"]
+		second.AllowMemory = true
+		s.Jobs.Connections["second"] = second
+		_, err := infrastructure.Configure(s)
+		if (err == nil) != test.ok || err != nil && !errors.Is(err, fault.Invalid) {
+			t.Fatal(test.environment, test.allow, err)
+		}
+	}
+}
+
+type transientMailer struct{ calls int }
+
+func (d *transientMailer) Send(context.Context, email.Outbound) (email.Receipt, error) {
+	d.calls++
+	return email.Receipt{}, email.Transient
+}
+
+func TestComposedMailersFailOverThroughOwnTransports(t *testing.T) {
+	s := supportingSettings(t)
+	primary, secondary := s.Mail.Mailers["default"], s.Mail.Mailers["second"]
+	primary.Driver, secondary.Driver = "flaky", "custom"
+	composed := s.Mail.Mailers["default"]
+	composed.Driver, composed.Transports = infrastructure.FailoverMail, []email.MailerName{"primary", "secondary"}
+	s.Mail.Mailers = infrastructure.Mailers{"default": composed, "primary": primary, "secondary": secondary}
+	flaky := &transientMailer{}
+	fallback := &borrowedMailer{}
+	plan, err := infrastructure.Configure(s, infrastructure.WithMailDriver("flaky", flaky), infrastructure.WithMailDriver("custom", fallback))
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := built(t, plan)
+	if err := app.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	mailer, _ := services(t, app).Mailer()
+	recipient, _ := email.ParseAddress("to@example.test")
+	if _, err := mailer.Send(t.Context(), mailer.Message("subject", recipient).Text("body"), email.SendOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if flaky.calls != 1 || fallback.calls != 1 {
+		t.Fatal("failover did not move to the next transport", flaky.calls, fallback.calls)
+	}
+	for _, transports := range [][]email.MailerName{{"primary"}, {"primary", "absent"}, {"primary", "primary"}, {"primary", "default"}} {
+		invalid := supportingSettings(t)
+		c := invalid.Mail.Mailers["default"]
+		c.Driver, c.Transports = infrastructure.RoundRobinMail, transports
+		invalid.Mail.Mailers = infrastructure.Mailers{"default": c, "primary": invalid.Mail.Mailers["second"]}
+		if _, err := infrastructure.Configure(invalid); err == nil {
+			t.Fatal("invalid composed mailer accepted", transports)
+		}
+	}
+}

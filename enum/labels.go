@@ -8,6 +8,7 @@ import (
 )
 
 // LabelKey uses the same case list as enum membership and client metadata.
+// Descriptor validation is cached, so a retained descriptor does not repeat it.
 func (d Descriptor[E]) LabelKey(value E) (i18n.MessageKey, error) {
 	if err := d.Validate(); err != nil {
 		return "", err

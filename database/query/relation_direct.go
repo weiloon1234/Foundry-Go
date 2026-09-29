@@ -2,16 +2,19 @@ package query
 
 import (
 	"context"
-	"fmt"
-	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 type relationSpec[M, N any] struct {
+	// hop is the intermediate model of HasManyThrough/HasOneThrough.
+	hop *relationHop
+	// morph limits a MorphTo to parents storing one morph name.
+	morph          *morphSource
 	scope          func(context.Context, Query[M], Query[N], M) (Query[N], bool, error)
 	name           string
 	source         Query[M]
@@ -19,10 +22,14 @@ type relationSpec[M, N any] struct {
 	local, foreign fieldRef
 	fetch          func(context.Context, database.Executor, Query[M], Query[N], []M, *relationLoadState, int) ([][]N, error)
 	bindingError   error
+	// declarationError is set by a constructor (for example an invalid morph
+	// name) and, unlike bindingError, survives generated Bind calls.
+	declarationError error
 }
 
 func (q Query[M]) hasQueryOptions() bool {
-	return q.softDeleteScope != activeRecords || len(q.predicates) != 0 || len(q.orders) != 0 || len(q.relations) != 0 || q.limit.IsSet() || q.offset != 0 || q.relationLimits != nil
+	return q.softDeleteScope != activeRecords || len(q.predicates) != 0 || len(q.orders) != 0 || len(q.relations) != 0 || q.limit.IsSet() || q.offset != 0 || q.relationLimits != nil ||
+		len(q.withoutScopes) != 0 || q.allScopesOff || q.skipModelHooks
 }
 
 func (s relationSpec[M, N]) bind(name string, source Query[M], target Query[N]) relationSpec[M, N] {
@@ -45,6 +52,9 @@ func (s relationSpec[M, N]) validate(source string, depth int, limits RelationLi
 }
 
 func (s relationSpec[M, N]) validateMetadata(source string, depth int, limits RelationLimits) error {
+	if s.declarationError != nil {
+		return s.declarationError
+	}
 	if s.bindingError != nil {
 		return s.bindingError
 	}
@@ -75,6 +85,11 @@ func (s relationSpec[M, N]) validateMetadata(source string, depth int, limits Re
 	if s.target.limit.IsSet() || s.target.offset != 0 {
 		return fault.New(fault.Invalid, "relation scopes cannot use global limits or offsets")
 	}
+	if s.hop != nil {
+		if err := s.hop.validate(); err != nil {
+			return err
+		}
+	}
 	return s.target.validateAt(depth, limits)
 }
 
@@ -84,6 +99,8 @@ type OneRelation[M, N any] struct {
 	spec relationSpec[M, N]
 	get  func(M) relation.One[N]
 	set  func(M, relation.One[N]) M
+	// ofMany selects one target among several; see OfMany.
+	ofMany ofManyChoice
 }
 
 // ManyRelation loads an explicitly ordered collection for each parent key.
@@ -175,6 +192,9 @@ func (r OneRelation[M, N]) validateRelation(source string, depth int, limits Rel
 	if r.get == nil || r.set == nil {
 		return fault.New(fault.Invalid, "singular relation requires a typed slot")
 	}
+	if err := r.validateOfMany(); err != nil {
+		return err
+	}
 	return r.spec.validate(source, depth, limits)
 }
 func (r ManyRelation[M, N]) validateRelation(source string, depth int, limits RelationLimits) error {
@@ -197,14 +217,14 @@ func selectedParents[M any](parents []M, skip func(M) bool) ([]M, []int) {
 }
 func (r OneRelation[M, N]) loadRelation(ctx context.Context, executor database.Executor, parents []M, state *relationLoadState, depth int, missing bool) ([]M, error) {
 	selected, indices := selectedParents(parents, func(m M) bool { return missing && r.get(m).IsLoaded() })
-	groups, err := r.spec.fetch(ctx, executor, r.spec.source, r.spec.target, selected, state, depth)
+	groups, err := r.spec.fetch(ctx, executor, r.spec.source, r.oneOfManyTarget(), selected, state, depth)
 	if err != nil {
 		return nil, err
 	}
-	result := slices.Clone(parents)
+	result := parents // owned by loadRelations, which copied the caller slice once
 	for i, group := range groups {
 		if len(group) > 1 {
-			return nil, fmt.Errorf("singular relation cardinality: %w", database.TooManyRows)
+			return nil, database.NewError("singular relation cardinality", database.TooManyRows)
 		}
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -227,7 +247,7 @@ func (r ManyRelation[M, N]) loadRelation(ctx context.Context, executor database.
 	if err != nil {
 		return nil, err
 	}
-	result := slices.Clone(parents)
+	result := parents // owned by loadRelations, which copied the caller slice once
 	for i, group := range groups {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -236,7 +256,7 @@ func (r ManyRelation[M, N]) loadRelation(ctx context.Context, executor database.
 			return nil, err
 		}
 		index := indices[i]
-		result[index] = r.set(result[index], relation.Collection(group))
+		result[index] = r.set(result[index], relation.FoundryCollection(sqlowner.Seal{}, group))
 	}
 	return result, nil
 }
@@ -299,7 +319,12 @@ func fetchDirect[M, N any, K comparable](ctx context.Context, executor database.
 	}
 	var rows []N
 	target.relationLimits = &state.limits
-	ordered, err := target.paginationBase()
+	// The whole relation tree was validated once before the parent read. The
+	// batch SELECT does not load relations, so it compiles without revalidating
+	// the nested subtree; loadRelations below reuses the same descriptors.
+	fetch := target.inContext(ctx)
+	fetch.relations = nil
+	ordered, err := fetch.paginationBase()
 	if err != nil {
 		return nil, err
 	}

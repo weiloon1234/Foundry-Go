@@ -19,17 +19,25 @@ type Config struct {
 	MaxFills int
 	// MaxFillWaiters bounds followers of each Remember loader (excluding its owner).
 	MaxFillWaiters int
-	Timeout        time.Duration
+	// Timeout bounds each backend step (read, write, metadata) and every other
+	// operation. It does not cap Remember loaders; LoadTimeout does.
+	Timeout time.Duration
+	// LoadTimeout bounds one Remember loader run, detached from the requesting
+	// caller's cancellation. A call can narrow it with WithLoadTimeout.
+	LoadTimeout time.Duration
 }
 
+// MaxLoadTimeout bounds how long a detached Remember loader can own its fill.
+const MaxLoadTimeout = 24 * time.Hour
+
 func DefaultConfig(namespace Namespace) Config {
-	return Config{Namespace: namespace, MaxKeyBytes: 1024, MaxValueBytes: 1 << 20, MaxDeclarations: 256, MaxTags: 16, MaxBatchEntries: 64, MaxFills: 128, MaxFillWaiters: 256, Timeout: 5 * time.Second}
+	return Config{Namespace: namespace, MaxKeyBytes: 1024, MaxValueBytes: 1 << 20, MaxDeclarations: 256, MaxTags: 16, MaxBatchEntries: 64, MaxFills: 128, MaxFillWaiters: 256, Timeout: 5 * time.Second, LoadTimeout: 30 * time.Second}
 }
 func (c Config) Validate() error {
 	if err := c.Namespace.Validate(); err != nil {
 		return err
 	}
-	if c.MaxKeyBytes <= 0 || c.MaxKeyBytes > MaxKeyBytes || c.MaxValueBytes <= 0 || c.MaxDeclarations <= 0 || c.MaxBatchEntries <= 0 || c.MaxBatchEntries > MaxBatchEntries || c.MaxTags <= 0 || c.MaxTags > MaxTags || c.MaxFills <= 0 || c.MaxFillWaiters <= 0 || c.Timeout <= 0 {
+	if c.MaxKeyBytes <= 0 || c.MaxKeyBytes > MaxKeyBytes || c.MaxValueBytes <= 0 || c.MaxDeclarations <= 0 || c.MaxBatchEntries <= 0 || c.MaxBatchEntries > MaxBatchEntries || c.MaxTags <= 0 || c.MaxTags > MaxTags || c.MaxFills <= 0 || c.MaxFillWaiters <= 0 || c.Timeout <= 0 || c.LoadTimeout <= 0 || c.LoadTimeout > MaxLoadTimeout {
 		return fault.New(fault.Invalid, "invalid cache limits")
 	}
 	return nil

@@ -24,9 +24,13 @@ type FilterInfo struct {
 	Operators []Operator                `json:"operators"`
 }
 
+// condition keeps AND-ed predicates of one or both phases. complement builds
+// the null-aware negation "this condition is not TRUE": SQL NOT alone would
+// also drop rows where a NULL column makes the condition unknown.
 type condition[S any] struct {
-	where  []query.Predicate[S]
-	having []query.HavingPredicate[S]
+	where      []query.Predicate[S]
+	having     []query.HavingPredicate[S]
+	complement func() condition[S]
 }
 
 func rowCondition[S any](p query.Predicate[S]) condition[S] {
@@ -35,21 +39,66 @@ func rowCondition[S any](p query.Predicate[S]) condition[S] {
 func groupCondition[S any](p query.HavingPredicate[S]) condition[S] {
 	return condition[S]{having: []query.HavingPredicate[S]{p}}
 }
-func (c condition[S]) not() condition[S] {
+
+// sqlNot is three-valued SQL NOT of one single-phase condition.
+func (c condition[S]) sqlNot() condition[S] {
 	if len(c.where) > 0 {
 		return rowCondition(query.And(c.where...).Not())
 	}
 	return groupCondition(query.HavingAnd(c.having...).Not())
 }
 
+// anyOf ORs single-phase conditions of the same phase.
+func anyOf[S any](children []condition[S]) condition[S] {
+	if len(children) > 0 && len(children[0].where) > 0 {
+		parts := make([]query.Predicate[S], len(children))
+		for i, c := range children {
+			parts[i] = query.And(c.where...)
+		}
+		return rowCondition(query.Or(parts...))
+	}
+	parts := make([]query.HavingPredicate[S], len(children))
+	for i, c := range children {
+		parts[i] = query.HavingAnd(c.having...)
+	}
+	return groupCondition(query.HavingOr(parts...))
+}
+
+// allOf concatenates AND-ed predicates, preserving both phases.
+func allOf[S any](children []condition[S]) condition[S] {
+	var result condition[S]
+	for _, c := range children {
+		result.where = append(result.where, c.where...)
+		result.having = append(result.having, c.having...)
+	}
+	return result
+}
+
+// leaf attaches the complement of one declared comparison. unknown is the
+// IS NULL test of a nullable operand that can make c unknown; it is nil when c
+// is never unknown (non-null operands, NULL tests and NULL-inclusive negations).
+func leaf[S any](c condition[S], unknown *condition[S]) condition[S] {
+	c.complement = func() condition[S] {
+		negated := c.sqlNot()
+		if unknown != nil {
+			negated = anyOf([]condition[S]{negated, *unknown})
+		}
+		negated.complement = func() condition[S] { return c }
+		return negated
+	}
+	return c
+}
+
 // FilterSource retains both SQL scope and column value, including nullability.
 // Construct with Where/Having or their nullable counterparts. Constructors
-// infer supported comparisons from the supplied typed field/expression.
+// infer supported comparisons from the supplied typed field/expression. The
+// SQL pattern operator `like` is discovered but disabled until AllowLike.
 type FilterSource[S, V any] struct {
-	_     [0]*V
-	info  FilterInfo
-	build func(Operator, []string) (condition[S], error)
-	err   error
+	_       [0]*V
+	info    FilterInfo
+	build   func(Operator, []string) (condition[S], error)
+	pattern bool
+	err     error
 }
 
 func (s FilterSource[S, V]) Validate() error {
@@ -122,40 +171,57 @@ func makeFilter[S, V, P any](codec foundryhttp.QueryCodec[V], source comparisons
 		return result
 	}
 	result.info.Scalar = scalar
-	operators := map[Operator]func([]V) condition[S]{
-		Equal:    func(v []V) condition[S] { return wrap(source.Eq(v[0])) },
-		NotEqual: func(v []V) condition[S] { return wrap(source.Ne(v[0])) },
-		In:       func(v []V) condition[S] { return wrap(source.In(v...)) },
-		NotIn:    func(v []V) condition[S] { return wrap(source.In(v...)).not() },
-	}
-	if ordered, ok := source.(ranges[V, P]); ok {
-		operators[Less] = func(v []V) condition[S] { return wrap(ordered.Lt(v[0])) }
-		operators[LessEqual] = func(v []V) condition[S] { return wrap(ordered.Lte(v[0])) }
-		operators[Greater] = func(v []V) condition[S] { return wrap(ordered.Gt(v[0])) }
-		operators[GreaterEqual] = func(v []V) condition[S] { return wrap(ordered.Gte(v[0])) }
-		operators[Between] = func(v []V) condition[S] {
-			a, b := wrap(ordered.Gte(v[0])), wrap(ordered.Lte(v[1]))
-			return condition[S]{where: append(a.where, b.where...), having: append(a.having, b.having...)}
-		}
-	}
-	if text, ok := source.(textComparisons[V, P]); ok {
-		operators[Contains] = func(v []V) condition[S] { return wrap(text.Contains(v[0])) }
-		operators[Like] = func(v []V) condition[S] { return wrap(text.Like(v[0])) }
-	}
-	if text, ok := source.(interface{ IContains(V) P }); ok {
-		operators[InsensitiveContains] = func(v []V) condition[S] { return wrap(text.IContains(v[0])) }
-	}
+	// A nullable operand makes ordinary comparisons unknown for NULL rows.
+	// Negated comparisons include those rows, matching what "not equal" means
+	// to a report user; SQL NOT alone would silently exclude them.
+	var unknown *condition[S]
+	var nulls nullComparisons[P]
 	if nullable {
-		nulls, ok := source.(nullComparisons[P])
-		if !ok {
+		var ok bool
+		if nulls, ok = source.(nullComparisons[P]); !ok {
 			result.err = invalid("nullable filter requires explicit null comparisons")
 			return result
 		}
-		operators[IsNull] = func([]V) condition[S] { return wrap(nulls.IsNull()) }
-		operators[IsNotNull] = func([]V) condition[S] { return wrap(nulls.IsNotNull()) }
+		isNull := wrap(nulls.IsNull())
+		unknown = &isNull
+	}
+	orNull := func(c condition[S]) condition[S] {
+		if unknown == nil {
+			return c
+		}
+		return anyOf([]condition[S]{c, *unknown})
+	}
+	operators := map[Operator]func([]V) condition[S]{
+		Equal:    func(v []V) condition[S] { return leaf(wrap(source.Eq(v[0])), unknown) },
+		NotEqual: func(v []V) condition[S] { return leaf(orNull(wrap(source.Ne(v[0]))), nil) },
+		In:       func(v []V) condition[S] { return leaf(wrap(source.In(v...)), unknown) },
+		NotIn:    func(v []V) condition[S] { return leaf(orNull(wrap(source.In(v...)).sqlNot()), nil) },
+	}
+	if ordered, ok := source.(ranges[V, P]); ok {
+		operators[Less] = func(v []V) condition[S] { return leaf(wrap(ordered.Lt(v[0])), unknown) }
+		operators[LessEqual] = func(v []V) condition[S] { return leaf(wrap(ordered.Lte(v[0])), unknown) }
+		operators[Greater] = func(v []V) condition[S] { return leaf(wrap(ordered.Gt(v[0])), unknown) }
+		operators[GreaterEqual] = func(v []V) condition[S] { return leaf(wrap(ordered.Gte(v[0])), unknown) }
+		operators[Between] = func(v []V) condition[S] {
+			return leaf(allOf([]condition[S]{wrap(ordered.Gte(v[0])), wrap(ordered.Lte(v[1]))}), unknown)
+		}
+	}
+	if text, ok := source.(textComparisons[V, P]); ok {
+		operators[Contains] = func(v []V) condition[S] { return leaf(wrap(text.Contains(v[0])), unknown) }
+		operators[Like] = func(v []V) condition[S] { return leaf(wrap(text.Like(v[0])), unknown) }
+		result.pattern = true
+	}
+	if text, ok := source.(interface{ IContains(V) P }); ok {
+		operators[InsensitiveContains] = func(v []V) condition[S] { return leaf(wrap(text.IContains(v[0])), unknown) }
+	}
+	if nullable {
+		operators[IsNull] = func([]V) condition[S] { return leaf(wrap(nulls.IsNull()), nil) }
+		operators[IsNotNull] = func([]V) condition[S] { return leaf(wrap(nulls.IsNotNull()), nil) }
 	}
 	for op := range operators {
-		result.info.Operators = append(result.info.Operators, op)
+		if op != Like {
+			result.info.Operators = append(result.info.Operators, op)
+		}
 	}
 	slices.Sort(result.info.Operators)
 	result.build = func(op Operator, raw []string) (condition[S], error) {
@@ -186,14 +252,15 @@ func Having[S, V any](codec foundryhttp.QueryCodec[V], source GroupEquality[S, V
 }
 func NullableWhere[S, V any](codec foundryhttp.QueryCodec[V], source RowNullable[S, V]) FilterSource[S, value.Nullable[V]] {
 	base := makeFilter(codec, source, WherePhase, true, rowCondition[S])
-	return FilterSource[S, value.Nullable[V]]{info: base.info, build: base.build, err: base.err}
+	return FilterSource[S, value.Nullable[V]]{info: base.info, build: base.build, pattern: base.pattern, err: base.err}
 }
 func NullableHaving[S, V any](codec foundryhttp.QueryCodec[V], source GroupNullable[S, V]) FilterSource[S, value.Nullable[V]] {
 	base := makeFilter(codec, source, HavingPhase, true, groupCondition[S])
-	return FilterSource[S, value.Nullable[V]]{info: base.info, build: base.build, err: base.err}
+	return FilterSource[S, value.Nullable[V]]{info: base.info, build: base.build, pattern: base.pattern, err: base.err}
 }
 
-// Restrict narrows the discovered comparison allowlist without changing codecs.
+// Restrict narrows the enabled comparison allowlist without changing codecs.
+// Call AllowLike first when the restricted set includes `like`.
 func (s FilterSource[S, V]) Restrict(operators ...Operator) FilterSource[S, V] {
 	if s.Validate() != nil {
 		return s
@@ -210,20 +277,45 @@ func (s FilterSource[S, V]) Restrict(operators ...Operator) FilterSource[S, V] {
 			return s
 		}
 	}
-	original := s.build
 	s.info.Operators = allowed
-	s.build = func(op Operator, values []string) (condition[S], error) {
+	return s
+}
+
+// AllowLike explicitly enables `like`, whose value is a SQL LIKE pattern: `%`
+// and `_` are wildcards chosen by the client. It is off by default because a
+// client pattern can defeat indexes. `contains`/`icontains` keep literal text.
+func (s FilterSource[S, V]) AllowLike() FilterSource[S, V] {
+	if s.Validate() != nil || slices.Contains(s.info.Operators, Like) {
+		return s
+	}
+	if !s.pattern {
+		s.err = invalid("filter source does not support like patterns")
+		return s
+	}
+	s.info.Operators = append(slices.Clone(s.info.Operators), Like)
+	slices.Sort(s.info.Operators)
+	return s
+}
+
+// enabled returns the builder restricted to the declared allowlist. Request
+// validation checks the same list before any scalar codec runs.
+func (s FilterSource[S, V]) enabled() func(Operator, []string) (condition[S], error) {
+	if s.build == nil {
+		return nil
+	}
+	allowed, build := slices.Clone(s.info.Operators), s.build
+	return func(op Operator, values []string) (condition[S], error) {
 		if !slices.Contains(allowed, op) {
 			return condition[S]{}, invalid("filter operator is not declared")
 		}
-		return original(op, values)
+		return build(op, values)
 	}
-	return s
 }
 
 // Related lifts a declared child filter through a typed relation predicate, such
 // as child.Where(predicate).Exists(). It cannot lift HAVING into a row filter.
 // The callback is server-owned; the table operation owns its isolation/lifetime.
+// The lifted comparison is never unknown, so its negation is NOT EXISTS.
 func Related[S, C, V any](source FilterSource[C, V], exists func(query.Predicate[C]) query.Predicate[S]) FilterSource[S, V] {
 	result := FilterSource[S, V]{info: source.info, err: source.Validate()}
 	if result.err != nil {
@@ -233,12 +325,13 @@ func Related[S, C, V any](source FilterSource[C, V], exists func(query.Predicate
 		result.err = invalid("relation filter requires a row predicate mapping")
 		return result
 	}
+	child := source.enabled()
 	result.build = func(op Operator, values []string) (condition[S], error) {
-		child, err := source.build(op, values)
+		c, err := child(op, values)
 		if err != nil {
 			return condition[S]{}, err
 		}
-		return rowCondition(exists(query.And(child.where...))), nil
+		return leaf(rowCondition(exists(query.And(c.where...))), nil), nil
 	}
 	return result
 }

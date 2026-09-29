@@ -54,10 +54,27 @@ Ordinary deletion changes active rows even with `WithTrashed`; `OnlyTrashed().De
 
 ## Atomicity, callbacks and concurrency
 
-One call is atomic within a transaction or savepoint. A later draft callback, hook, codec, constraint or SQL failure rolls back earlier rows and their queued after-commit work. Cancellation, panic and `runtime.Goexit` use the existing transaction failure handling. A caller-supplied outer transaction still owns final commit, and its locks remain until that commit or rollback.
+One call is atomic within a transaction or savepoint. A later draft callback, hook, codec, constraint or SQL failure rolls back earlier rows and their queued after-commit work. Rows run directly in that one transaction (or the caller's single savepoint), not in a savepoint per row: PostgreSQL caches only 64 subtransaction IDs per backend, and overflowing it slows every concurrent snapshot. Lookup writes and pivot attachment nest their inner write the same way, and factories' `CreateMany` inherits it through `CreateEach`. Cancellation, panic and `runtime.Goexit` use the existing transaction failure handling. A caller-supplied outer transaction still owns final commit, and its locks remain until that commit or rollback.
 
 Larger workloads explicitly choose batches and whether those batches share an outer transaction. The selected row locks protect the current candidate set; they do not claim rows inserted afterward or provide a serializable predicate lock. Database isolation, uniqueness constraints and ordinary conflict/deadlock errors still apply. There is no hidden retry.
 
 After-commit callbacks run only after the outer commit and remain in-process work. They do not provide crash durability. A committed callback failure or uncertain commit outcome retains the candidate slice in the ordinary typed `query.WriteError[[]Model]`; inspect the outcome before retrying. Side effects outside the transaction retain the [normal hook limitations](model-hooks.md).
 
 The [mode tests](../../tests/fixtures/consumer/linkqueries/each_modes_postgres_test.go) cover bulk/per-model separation, hook vetoes, physical deletion and natural keys. The [concurrency test](../../tests/fixtures/consumer/linkqueries/each_concurrency_postgres_test.go) checks that later candidates are already locked before the first callback and that a concurrent later insert stays outside the batch. Compiler-rejection examples retain draft, callback, result and limit types, while real gopls checks expose the generated concrete signatures.
+
+## Set-based mass writes
+
+When per-model behavior is not needed, generated queries also write every matching row in one statement, like Laravel's query-builder `update`, `delete` and `increment`:
+
+```go
+q := QueryDocuments().Where(DocumentFields().Published.Eq(false))
+updated, err := q.UpdateAll(ctx, db, DocumentDraft{}.SetViews(0))
+viewed, err := QueryDocuments().Where(f.ID.Eq(id)).Increment(ctx, db, f.Views.By(1))
+archived, err := q.Decrement(ctx, db, f.Views.By(1), DocumentDraft{}.SetTitle("archived"))
+deleted, err := q.DeleteAll(ctx, db)             // soft-deletes a soft-delete model
+removed, err := q.WithTrashed().ForceDeleteAll(ctx, db)
+```
+
+Each returns the affected row count. The statement uses the query's filters, [global scopes](model-global-scopes.md) and soft-delete visibility; ordering, pagination and eager-loading options are rejected. `UpdateAll` applies managed update timestamps and field mutators once. `Increment`/`Decrement` take a typed `query.Adjustment` from a numeric generated field (`Field.By(delta)`), compile to `column = column + $1`, leave SQL NULL as NULL, and accept one optional extra draft. `DeleteAll` soft-deletes active rows of a soft-delete model and physically deletes ordinary rows; `ForceDeleteAll` (soft-delete models only) physically deletes the rows the current visibility selects. The [tenant consumer](../../tests/fixtures/consumer/tenantqueries/tenant_postgres_test.go) exercises them against PostgreSQL.
+
+These writes never hydrate models, so per-model hooks, provider observers and change capture do not run. On a model that declares hooks, or when the executor cannot prove that no observers are registered, they fail with `fault.Invalid` unless the query acknowledges this with `WithoutModelHooks()`. The acknowledgement affects only set-based writes; per-model writes on such a query are rejected so it cannot be mistaken for disabling hooks. Use the `Each` methods above when every row needs its lifecycle.

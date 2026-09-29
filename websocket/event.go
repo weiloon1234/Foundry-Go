@@ -71,6 +71,14 @@ func (e Incoming[C, R, S, P]) AcknowledgeAccepted() Incoming[C, R, S, P] { e.acc
 // Relay is an ordinary typed handler; private room and payload policies still
 // run before the corresponding outgoing event is published.
 func (e Incoming[C, R, S, P]) Relay(outgoing Outgoing[C, P]) EventRegistration[C] {
+	return e.relay(outgoing, false)
+}
+
+// RelayToOthers is Relay without live delivery back to the sending connection.
+func (e Incoming[C, R, S, P]) RelayToOthers(outgoing Outgoing[C, P]) EventRegistration[C] {
+	return e.relay(outgoing, true)
+}
+func (e Incoming[C, R, S, P]) relay(outgoing Outgoing[C, P], others bool) EventRegistration[C] {
 	original := e.validate
 	e.validate = func() error {
 		if outgoing.definition == nil || outgoing.definition.channel != e.channel.token {
@@ -82,11 +90,15 @@ func (e Incoming[C, R, S, P]) Relay(outgoing Outgoing[C, P]) EventRegistration[C
 		return original()
 	}
 	registration := e.Handle(func(ctx context.Context, message MessageContext[R, S], payload P) error {
+		var options []PublishOption
+		if others {
+			options = append(options, ExceptConnection(message.Connection))
+		}
 		if room, present := message.Target.Room.Get(); present {
-			_, err := Publish(ctx, message.Publisher, e.channel, room, outgoing, payload)
+			_, err := Publish(ctx, message.Publisher, e.channel, room, outgoing, payload, options...)
 			return err
 		}
-		_, err := Broadcast(ctx, message.Publisher, e.channel, outgoing, payload)
+		_, err := Broadcast(ctx, message.Publisher, e.channel, outgoing, payload, options...)
 		return err
 	})
 	registration.definition.relay = outgoing.definition

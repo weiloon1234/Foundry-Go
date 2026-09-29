@@ -52,8 +52,8 @@ This declaration does not register a login route or decide model eligibility.
 
 ## Rehash and resource policy
 
-`NeedsRehash(stored)` compares the stored parameters, salt length and key length
-with the configured issuance policy. It does not authenticate or write anything.
+`NeedsRehash(stored)` compares the stored algorithm, parameters, salt length and
+key length with the configured issuance policy. It does not authenticate or write anything.
 Only update after a successful check, using a compare-and-swap against the original
 stored hash so concurrent password changes cannot be overwritten. Parameter policy
 changes can raise or lower costs; choose deployment policy deliberately.
@@ -61,17 +61,45 @@ changes can raise or lower costs; choose deployment policy deliberately.
 typed conditional replacement, as described below.
 
 Verification ceilings are separate from issuance parameters. Defaults permit
-existing hashes up to 128 MiB, six passes and eight lanes, with at most two active
-KDF operations per shared hasher. Parameters and salt/key lengths are bounded before
+existing hashes up to 128 MiB, six passes and eight lanes, with at most four active
+KDF operations per shared hasher (`MaxConcurrent`). Each running Argon2 check
+allocates its hash's memory cost: 64 MiB with the default parameters and up to
+`VerifyLimit.MemoryKiB` (128 MiB) for stored legacy hashes, so the default bounds
+KDF memory to about 256 MiB (512 MiB worst case). Size `MaxConcurrent` to the
+instance's memory budget. Parameters and salt/key lengths are bounded before
 any Argon2 allocation. A hash above this instance's ceiling is rejected; configure
 an explicit ceiling suitable for supported legacy hashes rather than letting stored
 parameters choose unbounded memory/CPU work. New hashing requires at least 19 MiB
-and two passes. Only version 19 Argon2id PHC values are supported in this implementation.
+and two passes. New hashes are always version 19 Argon2id PHC values.
 
-The timeout controls admission and result publication. Argon2 itself cannot stop
-mid-computation, so cancellation waits for actual callback exit, keeps the capacity
-slot occupied, and discards a late result. Overload is a classified conflict rather
-than an unbounded work queue. Each call owns its temporary byte buffers; the framework
+Imported hashes are accepted for verification only: version 19 Argon2i PHC values
+and bcrypt (`$2a$`, `$2b$`, `$2y$`, for example users imported from Laravel).
+`MaxBcryptCost` (default 13; zero rejects bcrypt) bounds bcrypt work, and like PHP
+`password_verify` only the first 72 password bytes are compared. `NeedsRehash`
+reports every imported hash, so a successful `PasswordLogin` replaces it with
+Argon2id through the model's conditional `Rehash` callback.
+
+Imported hashes change login timing until they are rehashed: a bcrypt check
+takes bcrypt time for its stored cost, while missing accounts run the Argon2id
+dummy check, so response latency can reveal which accounts still hold an
+imported hash (and therefore exist). Rehash imported accounts promptly (for
+example by prompting their next login), keep imported bcrypt costs close to the
+Argon2id timing, and rely on login lockout and request rate limits rather than
+on timing uniformity.
+
+`PasswordLogin.Confirm(ctx, model, password)` re-verifies the current model's
+hash for a password-confirmation step. Configure
+`login.WithConfirmationLockout(throttle)` with a per-subject declaration, for
+example `lockout.Define("accounts.confirm", auth.ConfirmationKeys(),
+lockout.DefaultPolicy())`: without it a stolen session could brute-force the
+password through confirmation. A locked subject fails with `lockout.Locked`
+(HTTP 429) before any hashing.
+
+The timeout controls admission and result publication. Excess checks queue for at
+most min(`Timeout`, 5s) before any KDF work starts, then fail with
+`fault.Overloaded`, which HTTP maps to 503 with `Retry-After`. Argon2 itself cannot
+stop mid-computation, so cancellation waits for actual callback exit and keeps the
+capacity slot occupied. There is no unbounded work queue. Each call owns its temporary byte buffers; the framework
 does not promise that passwords or Argon2 working memory can be securely erased from
 Go's process memory. Rate limiting and model login policy remain separate controls.
 
@@ -140,7 +168,11 @@ around second-factor authorization. The result's formatting and JSON omit its
 model and proof; map an explicit response DTO.
 
 The replacement callback compares the original hash inside its write transaction
-and returns the complete updated model. A lost comparison rejects the attempt.
+and returns the complete updated model. When the comparison is lost (for example
+to a parallel login's rehash), Foundry reloads the model once and verifies the
+password against the winning hash; if it still matches, login continues with that
+model. If the password itself changed, the attempt is rejected with
+`auth.Unauthenticated` without counting as a lockout failure.
 Foundry verifies the returned identity/hash and checks eligibility again after a
 replacement; it never retries an uncertain write. Model hooks can roll back the
 normal update. Credentials are issued subsequently, using an automatic proof

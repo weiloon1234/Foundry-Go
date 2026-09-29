@@ -28,6 +28,30 @@ Both results are `[]Membership`, one complete model for each selected pivot. `De
 
 `ForceDetach` requires a soft-delete pivot and runs its force-delete lifecycle. The selected pivot visibility remains in force: use `WithTrashedPivot` to include deleted links, or `OnlyTrashedPivot` to select only deleted links. Ordinary `Detach` changes active pivots even with `WithTrashedPivot`; `OnlyTrashedPivot().Detach` therefore selects nothing. To restore a known pivot, use its ordinary generated `Restore` method with the typed pivot ID. See [soft deletion](model-soft-deletes.md) for event order and visibility.
 
+## Synchronizing many links
+
+```go
+tags := DocumentRelations().Tags
+changes, err := tags.Sync(ctx, db, document, []Tag{go, sql},
+    DocumentTagDraft{}.SetWeight(1),  // creates missing links
+    DocumentTagDraft{}.SetWeight(5))  // updates retained links; pass nil to leave them
+```
+
+The [tenant consumer](../../tests/fixtures/consumer/tenantqueries/tenant_postgres_test.go) exercises every operation:
+
+| Method | Effect |
+| --- | --- |
+| `AttachMany(ctx, db, source, targets, create)` | creates one pivot per distinct target; like `Attach`, repeated calls create duplicate links unless a constraint rejects them |
+| `Sync(ctx, db, source, targets, create, update)` | links exactly the targets: missing links created, other links removed, retained links updated when `update` is non-nil |
+| `SyncWithoutDetaching(ctx, db, source, targets, create, update)` | like `Sync` without removing other links |
+| `Toggle(ctx, db, source, targets, create)` | links unlinked targets and removes the links of linked ones |
+| `DetachMany(ctx, db, source, targets)` / `DetachAll(ctx, db, source)` | removes the source's links to the targets, or all of its links |
+| `UpdateExistingPivot(ctx, db, source, target, update)` | updates the source's links to one target; `database.NotFound` when none exist |
+
+`Sync`, `SyncWithoutDetaching` and `Toggle` return a typed `query.PivotChanges[DocumentTag]` with complete `Attached`, `Detached` and `Updated` pivot models; each carries its typed source and target keys. The other methods return the affected pivots. `create` is the generated pivot draft (`query.CreateDraft`); omitted keys are filled from the relationship as for `Attach`. `update` is any generated draft (`query.UpdateDraft`, via `FoundryUpdateMutation`).
+
+Each call is one transaction (or one savepoint of the caller's). The source and all targets are refreshed and locked within their filters in one query each, and a missing target fails before any link changes. `Sync`, `SyncWithoutDetaching`, `Toggle`, `DetachMany`, `DetachAll` and `UpdateExistingPivot` lock the source row exclusively (`FOR NO KEY UPDATE`), so concurrent calls for one source run one after another and each reads the links the previous one committed: two concurrent `Sync`s leave exactly the later call's set, and two `Toggle`s never create duplicate links. `AttachMany` keeps a shared source lock, so concurrent attachments proceed in parallel and rely on a unique pivot constraint to reject duplicates. The exclusive lock does not block ordinary reads or foreign-key checks against the source ([concurrency acceptance](../../tests/fixtures/consumer/tenantqueries/pivot_concurrency_postgres_test.go)). Current links are read once and locked. Pivot filters (`WherePivot`) and pivot scopes select which existing links count. Without pivot hooks or registered observers, the changes run as a few set-based statements: one multi-row `INSERT`, one `UPDATE`/`DELETE ... RETURNING` per change kind (soft-delete pivots are soft-deleted), and one query verifying that every created pivot satisfies the relationship's endpoints and filters. Managed timestamps and field mutators apply. When the pivot declares hooks or has registered observers, each changed pivot instead runs its ordinary create, update or delete lifecycle in the same transaction, exactly as `Attach` and `Detach` do: once per changed link, with its before/after state, and never for retained links that are not updated. A hook failure rolls back the whole call, including links already changed, and no after-commit callbacks run ([hook acceptance](../../tests/fixtures/consumer/pivothooks/pivot_hooks_postgres_test.go)). Bounds follow `WithWriteLimit`.
+
 ## Filters, keys and bounded writes
 
 ```go

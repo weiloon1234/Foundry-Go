@@ -41,7 +41,7 @@ func DistributionPath(name string) bool {
 }
 
 func distributionPolicy(owner pluginmanifest.Distribution) outputPolicy {
-	return outputPolicy{version: 3, name: DistributionPath, content: func(string, []byte) bool { return true }, distribution: &owner}
+	return outputPolicy{version: 3, name: DistributionPath, maxBytes: MaxDistributionFileBytes, content: func(string, []byte) bool { return true }, distribution: &owner}
 }
 
 // SnapshotDistribution validates the complete path set and returns owned bytes.

@@ -6,12 +6,12 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"io"
-	"mime"
-	"net/http"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/imaging"
+	"github.com/weiloon1234/Foundry-Go/internal/filename"
+	"github.com/weiloon1234/Foundry-Go/internal/mediatype"
 	"github.com/weiloon1234/Foundry-Go/internal/workscope"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -19,7 +19,11 @@ import (
 
 // Upload borrows Source until the operation actually returns and never closes
 // it. OriginalName and ContentType are untrusted metadata hints. Media acceptance
-// is based on bytes; Image policy performs actual bounded decode/re-encoding.
+// is based on bytes; ContentType can only specialize generic plain text to a
+// compatible textual type (CSV, TSV, Markdown, calendar, valid JSON) that the
+// policy accepts, otherwise the file stays text/plain. Image
+// policy performs actual bounded decode/re-encoding. Invisible bidirectional
+// and zero-width characters are removed from OriginalName.
 type Upload struct {
 	Source       io.Reader
 	OriginalName string
@@ -34,6 +38,7 @@ type prepared struct {
 }
 
 func prepare(ctx context.Context, m *Manager, policy Policy, input Upload) (prepared, error) {
+	input.OriginalName = filename.StripInvisible(input.OriginalName)
 	if input.Source == nil || !validFilename(input.OriginalName) {
 		return prepared{}, invalid()
 	}
@@ -46,16 +51,22 @@ func prepare(ctx context.Context, m *Manager, policy Policy, input Upload) (prep
 	if err != nil {
 		return prepared{}, err
 	}
-	body, err := io.ReadAll(io.LimitReader(workscope.Reader(ctx, input.Source), policy.MaxBytes+1))
+	// The stored-bytes digest is computed in the same pass that reads the
+	// source; an image policy rehashes only its re-encoded output.
+	digest := sha256.New()
+	body, err := io.ReadAll(io.TeeReader(io.LimitReader(workscope.Reader(ctx, input.Source), policy.MaxBytes+1), digest))
 	if err != nil {
 		return prepared{}, err
 	}
 	if int64(len(body)) > policy.MaxBytes {
 		return prepared{}, storage.Failure(storage.LimitExceeded, storage.PutOperation, storage.Unchanged, nil)
 	}
-	detected, _, err := mime.ParseMediaType(http.DetectContentType(body))
-	if err != nil {
-		return prepared{}, invalid()
+	// A client hint may specialize generic text (for example to text/csv) only
+	// when the policy accepts that specialization; otherwise the byte-detected
+	// type stands, so text/plain collections keep accepting such files.
+	detected := mediatype.Detect(body, "")
+	if specialized := mediatype.Detect(body, string(input.ContentType)); specialized != detected && accepted(policy, storage.MediaType(specialized)) {
+		detected = specialized
 	}
 	result := prepared{open: func() io.Reader { return bytes.NewReader(body) }, info: UploadInfo{OriginalName: input.OriginalName, MediaType: storage.MediaType(detected), Size: int64(len(body))}, properties: properties}
 	if plan, imageRequired := policy.Image.Get(); imageRequired {
@@ -73,6 +84,10 @@ func prepare(ctx context.Context, m *Manager, policy Policy, input Upload) (prep
 		}
 		info := transformed.Info()
 		result.open = transformed.Reader
+		digest.Reset()
+		if _, err := io.Copy(digest, transformed.Reader()); err != nil {
+			return prepared{}, err
+		}
 		result.info.MediaType = storage.MediaType(info.Format.MediaType())
 		result.info.Size = transformed.Size()
 		result.info.Width = info.Width
@@ -82,10 +97,6 @@ func prepare(ctx context.Context, m *Manager, policy Policy, input Upload) (prep
 	}
 	if result.info.Size > policy.MaxStoredBytes {
 		return prepared{}, storage.Failure(storage.LimitExceeded, storage.PutOperation, storage.Unchanged, nil)
-	}
-	digest := sha256.New()
-	if _, err := io.Copy(digest, workscope.Reader(ctx, result.open())); err != nil {
-		return prepared{}, err
 	}
 	copy(result.digest[:], digest.Sum(nil))
 	return result, nil

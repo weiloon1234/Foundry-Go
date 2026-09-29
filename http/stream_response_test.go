@@ -154,7 +154,8 @@ func TestStreamRejectsBeforeCommitAndCloses(t *testing.T) {
 				want = 404
 			}
 			if mode == "canceled" {
-				want = 408
+				// The source ends the request after the handler: server phase.
+				want = 503
 			}
 			expectedCloses := int32(1)
 			if mode == "no-body" {
@@ -331,5 +332,50 @@ func TestStreamPreservesTransportFailureCause(t *testing.T) {
 	}
 	if strings.Contains(writer.Body.String(), "private") {
 		t.Fatal("transport cause leaked to response")
+	}
+}
+
+type flushCountingWriter struct {
+	*httptest.ResponseRecorder
+	flushes atomic.Int32
+}
+
+func (w *flushCountingWriter) Flush() { w.flushes.Add(1); w.ResponseRecorder.Flush() }
+
+// A progressive stream flushes each accepted chunk; an ordinary one leaves
+// buffering to the native writer.
+func TestProgressiveStreamFlushesEachChunk(t *testing.T) {
+	t.Parallel()
+	for _, progressive := range []bool{false, true} {
+		chunks := []string{"alpha", "beta", "gamma"}
+		router, err := NewRouter(streamEndpoint().Handle(func(context.Context, streamRequest) (Stream, error) {
+			index := 0
+			stream := StreamFrom(func(context.Context) (StreamContent, error) {
+				return StreamContent{Body: fileReaderCallbacks{read: func(p []byte) (int, error) {
+					if index == len(chunks) {
+						return 0, io.EOF
+					}
+					n := copy(p, chunks[index])
+					index++
+					return n, nil
+				}, close: func() error { return nil }}, MediaType: "text/plain; charset=utf-8"}, nil
+			})
+			if progressive {
+				stream = stream.Progressive()
+			}
+			return stream, nil
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		w := &flushCountingWriter{ResponseRecorder: httptest.NewRecorder()}
+		router.ServeHTTP(w, httptest.NewRequest("GET", "/stream", nil))
+		want := int32(0)
+		if progressive {
+			want = int32(len(chunks))
+		}
+		if w.Code != 200 || w.Body.String() != "alphabetagamma" || w.flushes.Load() != want {
+			t.Fatal("progressive flushes", progressive, w.Code, w.Body.String(), w.flushes.Load())
+		}
 	}
 }

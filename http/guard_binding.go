@@ -49,7 +49,7 @@ func NewCookieAuthentication(registry *auth.Registry, config CSRFConfig, sources
 	if err != nil {
 		return nil, err
 	}
-	a, err := NewAuthentication(registry, sources...)
+	a, err := newAuthentication(registry, sources)
 	if err != nil {
 		return nil, err
 	}

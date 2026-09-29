@@ -6,10 +6,12 @@ explicit registrations. Foundry-Go provides infrastructure, generation and a sha
 lifecycle for HTTP, CLI, workers, scheduling and WebSockets.
 
 Use it as a Go module dependency in your team's own boilerplate. The
-[team readiness review](docs/guides/final-readiness-20260927.md) accepted the
-supported framework scope for that use and found no remaining implementation TODO
-blocking adoption. This repository contains the framework and executable consumer
-fixtures; your application skeleton belongs in its own repository.
+[team readiness review](docs/guides/final-readiness-20260927.md), the subsequent
+[stabilization review](docs/guides/stabilization-20260929.md) and the
+[second independent review](docs/guides/second-review-20260929.md) record the
+supported scope, verification and required upgrade steps. This repository contains the
+framework and executable consumer fixtures; your application skeleton belongs
+in its own repository.
 
 ## Start a project
 
@@ -43,16 +45,16 @@ available for advanced composition.
 | Area | Delivered functionality |
 | --- | --- |
 | Configuration and time | [Generated typed configuration](docs/guides/generated-configuration.md), defaults/TOML/environment/typed overrides, [named services](docs/guides/named-services.md), and [application timezone](docs/guides/application-timezone.md) shared by calendar helpers, schedules, logs and report presentation. |
-| HTTP | [Typed endpoints](docs/guides/http-endpoints.md), request/response DTOs, [middleware](docs/guides/http-middleware.md), route groups, model binding, forms, multipart uploads, downloads, streams, static assets, compression and ETags. [Pagination](docs/guides/http-pagination.md) includes authenticated numbered, simple and cursor endpoints. |
+| HTTP | [Typed endpoints](docs/guides/http-endpoints.md), request/response DTOs, [middleware](docs/guides/http-middleware.md), route groups, model binding, forms, multipart uploads, raw bodies, downloads, streams, server-sent events, redirects, multiple success statuses, per-route timeouts and body limits, static assets, compression, ETags and typed cache headers. [Pagination](docs/guides/http-pagination.md) includes authenticated numbered, simple and cursor endpoints. |
 | Validation and translation | [Built-in typed rules](docs/guides/validation-expanded.md) for presence, strings, formats, numbers, comparisons, collections, passwords and files; custom rules, database existence/uniqueness and bounded concurrent checks using explicitly selected connections. [Localized validation messages](docs/guides/validation-messages.md), field labels, pluralization and fallback share the catalog system. |
-| PostgreSQL | [Generated models](docs/guides/model-generation.md), typed queries and writes, relations, projections, joins, aggregates, CTEs, windows, JSON/binary values, transactions, locks, hooks and soft deletes. [Named connections and read routing](docs/guides/database-routing.md); explicit [migrations and seeding](docs/guides/migrations-and-seeding.md). |
-| Authentication and security | [Model-specific guards and policies](docs/guides/authentication.md), sessions, scoped tokens, password hashing, lockout, account recovery and MFA; CSRF, CORS, signed URLs, [encryption](docs/guides/encryption.md) and [webhook verification](docs/guides/webhooks.md). |
-| Caching and coordination | [Typed caches](docs/guides/caching.md), tags and namespace invalidation; [Redis data and commands](docs/guides/redis-commands.md), distributed leases, rate limits and pub/sub. |
-| Background work | [Jobs and workers](docs/guides/jobs.md), [failure logs and retry commands](docs/guides/jobs-operations.md), events, [scheduling](docs/guides/scheduler.md), [transactional outbox](docs/guides/outbox.md) and [HTTP idempotency](docs/guides/idempotent-operations.md). |
-| Storage and communication | [Local, S3 and R2 storage](docs/guides/storage.md), attachments and imaging; [email](docs/guides/email.md), queued delivery and [notifications](docs/guides/notifications.md) with database inboxes and private realtime delivery. |
+| PostgreSQL | [Generated models](docs/guides/model-generation.md), typed queries and writes, relations (including through, one-of-many and polymorphic), pivot sync, [global scopes](docs/guides/model-global-scopes.md), set-based writes, projections, joins, aggregates, CTEs, windows, JSON/binary values, transactions with retry, locks, hooks, soft deletes and [pruning](docs/guides/model-pruning.md). [Named connections, read routing and sticky reads](docs/guides/database-routing.md); explicit [migrations and seeding](docs/guides/migrations-and-seeding.md) with optional confirmed rollback. |
+| Authentication and security | [Model-specific guards and policies](docs/guides/authentication.md), sessions, scoped tokens, password hashing, lockout, account recovery, MFA, impersonation and [social login](docs/guides/social-login.md); CSRF, CORS, signed URLs, encrypted cookies, [encryption key rotation](docs/guides/encryption.md) and [inbound and outbound webhooks](docs/guides/webhooks.md). |
+| Caching and coordination | [Typed caches](docs/guides/caching.md), tags, namespace invalidation and stale-while-revalidate; [Redis data and commands](docs/guides/redis-commands.md), distributed leases and semaphores, [rate limits](docs/guides/rate-limiting.md) and pub/sub. |
+| Background work | [Jobs and workers](docs/guides/jobs.md) with job middleware, workflows and a sync driver, [failure archive and queue commands](docs/guides/jobs-operations.md), events with queued listeners, [scheduling](docs/guides/scheduler.md), [transactional outbox](docs/guides/outbox.md) and [HTTP idempotency](docs/guides/idempotent-operations.md). |
+| Storage and communication | [Local, S3, R2 and S3-compatible storage](docs/guides/storage.md), presigned uploads, attachments with image variants and imaging; [email](docs/guides/email.md) with failover transports, queued delivery and [notifications](docs/guides/notifications.md) with database inboxes, on-demand routes and private realtime delivery. |
 | Realtime | [Typed WebSocket channels](docs/guides/websocket.md), authorization and presence; [Redis-backed distributed fan-out](docs/guides/websocket-distributed.md) and bounded replay. |
-| Application support | [Localization](docs/guides/localization.md), [settings](docs/guides/settings.md), countries, model extensions, [datatables and CSV/XLSX reporting](docs/guides/datatable.md), and named [outbound HTTP clients](docs/guides/http-client.md). |
-| Operations | [Structured logging](docs/guides/logging.md), typed audit records, health/readiness checks, [observability](docs/guides/observability.md), diagnostics and lifecycle-managed shutdown. |
+| Application support | [Localization](docs/guides/localization.md), [settings](docs/guides/settings.md), countries, model extensions, [datatables, CSV/XLSX reporting and imports](docs/guides/datatable.md), money and decimal rounding, and named [outbound HTTP clients](docs/guides/http-client.md). |
+| Operations | [Structured logging](docs/guides/logging.md), typed audit records, public liveness/readiness probes, redacted server-failure diagnostics, [observability](docs/guides/observability.md) with Prometheus metrics and OTLP traces, fleet-wide [maintenance mode](docs/guides/readiness-and-maintenance.md), an opt-in [housekeeping schedule](docs/guides/production-operations.md) and lifecycle-managed shutdown. |
 | Extensibility and tooling | [Typed plugins](docs/guides/plugins.md), CLI scaffolds, generation, inspection, doctor and [testing helpers](docs/guides/developer-tooling-and-testing.md). [Agent/editor tooling](docs/guides/agent-language-tooling.md) inspects actual consumer APIs with gopls. |
 
 Configuration is explicit: the framework reads the environment lookup supplied by
@@ -99,19 +101,26 @@ The following are not implemented:
   durable WebSocket recovery, binary WebSocket messages and Pusher/Echo compatibility.
   Bounded realtime replay is already available, with different guarantees from
   durable recovery. See [deferred extensions](blueprint/25-deferred-extensions.md).
-- A general route/group documentation API for OpenAPI summaries, descriptions,
-  tags, examples and custom-header explanations. Existing exports already describe
-  registered types, parameters, responses, authentication and idempotency.
+- Go doc comments as OpenAPI schema descriptions and custom-header explanations.
+  Route documentation (summary, description, tags, deprecation) and typed
+  request/response examples are exported.
 - Rich form-control hints such as widgets and display precision, a typed form
   controller, and automatic React/Vue form rendering. Existing SDK field types,
   enums, route metadata and validation are the foundation for this future work.
+- Token-family impersonation, a cache failover store, direct local `sendfile`,
+  lossy WebP output, and test/factory/mail/observer scaffolds. Session impersonation,
+  lossless WebP and the existing testing/factory APIs are available; see the
+  [improvement program's remaining work](docs/guides/improvement-program-20260929.md#not-delivered).
 
 These extensions do not block a team boilerplate using the delivered scope.
 Production configuration, deployment and application-specific integration/load
 testing remain the consuming team's responsibility. Live real-account email
 smoke sends remain unverified; local SMTP/TLS and provider contract fixtures are
-covered. Native acceptance ran on macOS; Linux amd64/arm64 cross-builds passed,
-which is compilation evidence rather than native Linux runtime certification.
+covered. Framework acceptance ran on macOS; Linux amd64/arm64 cross-builds passed.
+The subsequent stabilization also verified an independently packaged starter on
+Linux arm64, including integration/race tests and non-root process shutdown.
+Live systemd supervision and the complete framework suite on every Linux
+architecture remain outside that evidence.
 
 ## Verification and maintenance
 
@@ -120,7 +129,20 @@ records the framework audit, full verification, race/fuzz coverage and independe
 packaged consumers. The later
 [authenticated pagination review](docs/guides/authenticated-pagination-20260928.md)
 records another full verification pass and affected races, compiler/editor checks
-and real generated-client requests on September 28. These are dated evidence
+and real generated-client requests on September 28. The
+[improvement program record](docs/guides/improvement-program-20260929.md) covers
+the September 29 audit fixes and parity work with a fresh `make verify`, TypeScript,
+editor and full race pass. The subsequent
+[stabilization review](docs/guides/stabilization-20260929.md) records additional
+auth, retry and cancellation fixes, final `make verify`, affected race suites,
+independent packaged consumers and repeated starter queue-process tests on macOS
+and Linux arm64. The [second independent review](docs/guides/second-review-20260929.md)
+then fixed further defects across every changed area and passed a fresh
+`make verify`, TypeScript, editor and full race pass on its revision. The later
+[acceptance follow-up](docs/guides/second-review-acceptance-20260929.md) passed
+PostgreSQL races, security, fuzzing, packaged consumers and ordinary starter
+verification on macOS/Linux; an additional Linux queue stress timeout still
+prevents complete release acceptance. These are dated evidence
 records for their reviewed source, not guarantees for arbitrary application code
 or future revisions.
 

@@ -34,7 +34,9 @@ go tool foundry doctor --dir .
 The `tool` directive and ordinary application imports use the same Foundry-Go
 requirement in `go.mod`. `go tool foundry` therefore follows the project's module
 graph when the framework is upgraded; it needs no separately installed global
-CLI. Retain `go.mod` and `go.sum` in the boilerplate. The
+CLI. `foundry generate` and `foundry doctor` compare the tool's framework release
+with the module's selection and fail on a known mismatch, so an older global
+binary cannot silently generate code for a newer runtime. Retain `go.mod` and `go.sum` in the boilerplate. The
 [independent consumer](../../tests/fixtures/consumer/go.mod) uses this arrangement,
 and its [tool acceptance](../../tests/fixtures/consumer/pinned_tool_test.go)
 checks the real CLI and generated model metadata.
@@ -92,7 +94,9 @@ persistence and Redis where distributed jobs, scheduling or shared coordination
 are required. Select persistent session/token services for production authentication.
 
 Keep generated output and `.foundry-gen.json` ownership manifests alongside their
-declarations. Regenerate after declaration or framework changes. Add these checks
+declarations. Regenerate after declaration or framework changes. A failed
+generation check lists each stale file and whether its content, comments,
+formatting, managed field notes or ownership manifest differ. Add these checks
 to the boilerplate's own CI, together with its configured integration/client tests:
 
 ```sh

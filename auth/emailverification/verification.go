@@ -27,16 +27,37 @@ func ParseToken[M any](raw secret.String) (Token[M], error) {
 // Model maps stored email state. EmailRevision must be persisted and replaced
 // transactionally whenever Email changes; restoring an old address must never
 // restore its old revision. MarkVerified must preserve email and revision.
+// Eligible optionally replaces the provider's eligibility for this flow, for
+// example when the provider only admits accounts with verified addresses.
 type Model[M model.Identifiable, K any] struct {
 	Lock          func(context.Context, *database.Tx, K) (value.Optional[M], error)
 	Email         func(M) string
 	EmailRevision func(M) challenge.Revision[M]
 	Verified      func(M) bool
 	MarkVerified  func(context.Context, *database.Tx, M) (M, error)
+	Eligible      func(context.Context, M) (bool, error)
 }
 type Verification[M model.Identifiable, K any] struct {
-	flow  *challenge.Flow[M, K, challenge.EmailVerification]
-	model Model[M, K]
+	flow     *challenge.Flow[M, K, challenge.EmailVerification]
+	model    Model[M, K]
+	provider auth.ProviderName
+	observer auth.Observer
+}
+
+// WithObserver reports EventVerified after each committed verification.
+func (v *Verification[M, K]) WithObserver(observer auth.Observer) (*Verification[M, K], error) {
+	if err := v.Validate(); err != nil {
+		return nil, err
+	}
+	if observer == nil {
+		return nil, fault.New(fault.Invalid, "email verification observer is nil")
+	}
+	if v.observer != nil {
+		return nil, fault.New(fault.Duplicate, "email verification observer already configured")
+	}
+	next := *v
+	next.observer = observer
+	return &next, nil
 }
 
 func New[M model.Identifiable, K any](store *challenge.Store, provider auth.Provider[M, K], binding Model[M, K], lifetime time.Duration) (*Verification[M, K], error) {
@@ -48,11 +69,11 @@ func New[M model.Identifiable, K any](store *challenge.Store, provider auth.Prov
 			return challenge.Binding{}, auth.Unauthenticated
 		}
 		return challenge.BindRevision(binding.EmailRevision(subject), secret.New(binding.Email(subject)))
-	}}, lifetime)
+	}, Eligible: binding.Eligible}, lifetime)
 	if err != nil {
 		return nil, err
 	}
-	return &Verification[M, K]{flow: flow, model: binding}, nil
+	return &Verification[M, K]{flow: flow, model: binding, provider: provider.Name()}, nil
 }
 func (v *Verification[M, K]) Validate() error {
 	if v == nil || v.flow == nil {
@@ -73,7 +94,7 @@ func (v *Verification[M, K]) Complete(ctx context.Context, token Token[M]) (M, e
 	if err := v.Validate(); err != nil {
 		return *new(M), err
 	}
-	return v.flow.Consume(ctx, token, func(op context.Context, tx *database.Tx, subject M) (M, error) {
+	verified, err := v.flow.Consume(ctx, token, func(op context.Context, tx *database.Tx, subject M) (M, error) {
 		updated, err := v.model.MarkVerified(op, tx, subject)
 		if err != nil {
 			return *new(M), err
@@ -83,6 +104,15 @@ func (v *Verification[M, K]) Complete(ctx context.Context, token Token[M]) (M, e
 		}
 		return updated, nil
 	})
+	if err != nil {
+		return *new(M), err
+	}
+	if v.observer != nil {
+		if identity, err := verified.FoundryIdentity(); err == nil {
+			auth.Notify(ctx, v.observer, auth.Event{Kind: auth.EventVerified, Provider: v.provider, Subject: value.Set(identity)})
+		}
+	}
+	return verified, nil
 }
 func (v *Verification[M, K]) Revoke(ctx context.Context, reference model.Reference[M, K]) (bool, error) {
 	if err := v.Validate(); err != nil {

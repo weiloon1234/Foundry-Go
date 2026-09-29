@@ -42,6 +42,30 @@ func (r SignedAuthenticatedRoute[P, S]) URL(ctx context.Context, origin Origin, 
 	}
 	return r.signed.URL(ctx, origin, path, expires)
 }
+
+// WithPermanentLinks explicitly permits links without expiry; see SignedRoute.
+func (r SignedAuthenticatedRoute[P, S]) WithPermanentLinks() SignedAuthenticatedRoute[P, S] {
+	r.signed = r.signed.WithPermanentLinks()
+	return r
+}
+
+// WithIgnoredParameters declares unauthenticated query parameters; see SignedRoute.
+func (r SignedAuthenticatedRoute[P, S]) WithIgnoredParameters(names ...string) SignedAuthenticatedRoute[P, S] {
+	r.signed = r.signed.WithIgnoredParameters(names...)
+	return r
+}
+func (r SignedAuthenticatedRoute[P, S]) PermanentURL(ctx context.Context, origin Origin, path P) (string, error) {
+	if err := r.Validate(); err != nil {
+		return "", err
+	}
+	return r.signed.PermanentURL(ctx, origin, path)
+}
+func (r SignedAuthenticatedRoute[P, S]) RelativeURL(ctx context.Context, path P, expires time.Time) (string, error) {
+	if err := r.Validate(); err != nil {
+		return "", err
+	}
+	return r.signed.RelativeURL(ctx, path, expires)
+}
 func (r SignedAuthenticatedRoute[P, S]) Description() (RouteInfo, error) {
 	if err := r.Validate(); err != nil {
 		return RouteInfo{}, err
@@ -50,7 +74,7 @@ func (r SignedAuthenticatedRoute[P, S]) Description() (RouteInfo, error) {
 	if err != nil {
 		return RouteInfo{}, err
 	}
-	info.SignedURL = signedURLInfo()
+	info.SignedURL = signedURLInfo(r.signed.signer.policy)
 	return info, nil
 }
 func (r SignedAuthenticatedRoute[P, S]) HandleRaw(handler func(stdhttp.ResponseWriter, *stdhttp.Request, S, P)) RouteRegistration {

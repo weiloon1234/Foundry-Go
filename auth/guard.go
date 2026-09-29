@@ -15,9 +15,10 @@ type GuardName string
 // preserve the key type at construction. A model may have multiple guards.
 type Guard[M any] struct{ definition *guardDefinition[M] }
 type guardResult[M any] struct {
-	identity model.Identity
-	subject  value.Optional[M]
-	grants   *accessGrant
+	identity   model.Identity
+	subject    value.Optional[M]
+	grants     *accessGrant
+	credential *attachedCredential
 }
 type guardDefinition[M any] struct {
 	id           *declarationID
@@ -69,7 +70,7 @@ func DefineGuard[M model.Identifiable, K any](name GuardName, provider Provider[
 		if err != nil {
 			return guardResult[M]{}, err
 		}
-		return guardResult[M]{identity: proof.identity, subject: value.Set(subject), grants: proof.grants}, nil
+		return guardResult[M]{identity: proof.identity, subject: value.Set(subject), grants: proof.grants, credential: proof.credential}, nil
 	}
 	return Guard[M]{definition: d}
 }

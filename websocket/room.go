@@ -30,31 +30,40 @@ func (r Rooms[R]) decode(ctx context.Context, text *string) (Target[R], error) {
 	}
 	var result R
 	err := callback.Isolated("WebSocket room codec", func() error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if !validRoom(*text) {
-			return Malformed
-		}
 		var err error
-		result, err = r.codec.Parse(*text)
-		if err != nil {
-			return err
-		}
-		canonical, err := r.codec.Format(result)
-		if err != nil {
-			return err
-		}
-		if canonical != *text {
-			return fault.New(fault.Invalid, "room key is not canonical")
-		}
-		return ctx.Err()
+		result, err = r.parse(ctx, *text)
+		return err
 	})
 	if err != nil {
 		return Target[R]{}, err
 	}
 	return Room(result), nil
 }
+
+// parse requires the canonical text form. Callers own callback isolation.
+func (r Rooms[R]) parse(ctx context.Context, text string) (R, error) {
+	var zero R
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	if !validRoom(text) {
+		return zero, Malformed
+	}
+	result, err := r.codec.Parse(text)
+	if err != nil {
+		return zero, err
+	}
+	canonical, err := r.codec.Format(result)
+	if err != nil {
+		return zero, err
+	}
+	if canonical != text {
+		return zero, fault.New(fault.Invalid, "room key is not canonical")
+	}
+	return result, ctx.Err()
+}
+
+// encode formats and round-trips a room inside one isolation boundary.
 func (r Rooms[R]) encode(ctx context.Context, room R) (string, error) {
 	if err := r.Validate(); err != nil {
 		return "", err
@@ -72,7 +81,7 @@ func (r Rooms[R]) encode(ctx context.Context, room R) (string, error) {
 		if !validRoom(text) {
 			return fault.New(fault.Invalid, "invalid room key")
 		}
-		_, err = r.decode(ctx, &text)
+		_, err = r.parse(ctx, text)
 		return err
 	})
 	return text, err

@@ -12,12 +12,21 @@ import (
 // and applies to native TLS or a scheme validated by preceding TrustedProxy
 // middleware. Arbitrary forwarding headers are ignored. Extra is an explicit native-header
 // extension and does not validate arbitrary header-specific languages.
+//
+// CrossOriginOpener, CrossOriginEmbedder and CrossOriginResource emit the
+// Cross-Origin-*-Policy headers; Permissions emits a typed Permissions-Policy.
+// All four are opt-in and omitted when zero. Extra cannot repeat a header that a
+// typed field emits.
 type SecurityHeadersConfig struct {
 	NoSniff                bool
 	Frame                  FramePolicy
 	Referrer               ReferrerPolicy
 	HSTS                   value.Optional[HSTSPolicy]
 	DisableLegacyXSSFilter bool
+	CrossOriginOpener      CrossOriginOpenerPolicy
+	CrossOriginEmbedder    CrossOriginEmbedderPolicy
+	CrossOriginResource    CrossOriginResourcePolicy
+	Permissions            []PermissionDirective
 	Extra                  []ResponseHeader
 }
 
@@ -61,6 +70,27 @@ func compileSecurityHeaders(c SecurityHeadersConfig) (securityHeaderPolicy, erro
 	if c.DisableLegacyXSSFilter {
 		p.headers = append(p.headers, ResponseHeader{"X-Xss-Protection", "0"})
 	}
+	for _, err := range []error{c.CrossOriginOpener.Validate(), c.CrossOriginEmbedder.Validate(), c.CrossOriginResource.Validate()} {
+		if err != nil {
+			return securityHeaderPolicy{}, err
+		}
+	}
+	if c.CrossOriginOpener != "" {
+		p.headers = append(p.headers, ResponseHeader{"Cross-Origin-Opener-Policy", HeaderValue(c.CrossOriginOpener)})
+	}
+	if c.CrossOriginEmbedder != "" {
+		p.headers = append(p.headers, ResponseHeader{"Cross-Origin-Embedder-Policy", HeaderValue(c.CrossOriginEmbedder)})
+	}
+	if c.CrossOriginResource != "" {
+		p.headers = append(p.headers, ResponseHeader{"Cross-Origin-Resource-Policy", HeaderValue(c.CrossOriginResource)})
+	}
+	if len(c.Permissions) != 0 {
+		permissions, err := compilePermissionsPolicy(c.Permissions)
+		if err != nil {
+			return securityHeaderPolicy{}, err
+		}
+		p.headers = append(p.headers, ResponseHeader{"Permissions-Policy", permissions})
+	}
 	if hsts, present := c.HSTS.Get(); present {
 		if err := hsts.Validate(); err != nil {
 			return securityHeaderPolicy{}, err
@@ -74,7 +104,11 @@ func compileSecurityHeaders(c SecurityHeadersConfig) (securityHeaderPolicy, erro
 		size += len("Strict-Transport-Security") + 4
 	}
 	for _, header := range p.headers {
+		seen[strings.ToLower(string(header.Name))] = true
 		size += len(header.Name) + len(header.Value) + 4
+	}
+	if size > maxSecurityHeaderBytes {
+		return securityHeaderPolicy{}, fault.New(fault.Invalid, "security headers exceed their byte bound")
 	}
 	for _, header := range c.Extra {
 		if err := header.Validate(); err != nil {

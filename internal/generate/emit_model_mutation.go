@@ -36,6 +36,7 @@ func (e *emitter) emitModelMutation(m model, primary field) {
 	e.emitModelLookup(m)
 	e.emitModelInsertSelect(m)
 	e.emitModelSourceWrites(m, primary)
+	e.emitModelSetWrites(m)
 
 	draftName, defaultsName := e.localName("d"), e.localName("defaults")
 	valuesName, errName, inputName := e.localName("values"), e.localName("err"), e.localName("v")

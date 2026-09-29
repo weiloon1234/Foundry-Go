@@ -3,6 +3,7 @@ package application
 import (
 	"github.com/weiloon1234/Foundry-Go/attachments"
 	"github.com/weiloon1234/Foundry-Go/audit"
+	mfapg "github.com/weiloon1234/Foundry-Go/auth/mfa/postgres"
 	sessionpg "github.com/weiloon1234/Foundry-Go/auth/session/postgres"
 	tokenpg "github.com/weiloon1234/Foundry-Go/auth/token/postgres"
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -30,6 +31,7 @@ func persistenceTargets(s *FeatureSettings) []persistenceTarget {
 	}
 	add(s.Auth.Sessions.Enabled, &s.Auth.Sessions.Database, &s.Auth.Sessions.Schema, sessionpg.Migrations)
 	add(s.Auth.Tokens.Enabled, &s.Auth.Tokens.Database, &s.Auth.Tokens.Schema, tokenpg.Migrations)
+	add(s.Auth.MFA.Enabled, &s.Auth.MFA.Database, &s.Auth.MFA.Schema, mfapg.Migrations)
 	add(s.Idempotency.Enabled, &s.Idempotency.Database, &s.Idempotency.Config.Schema, idempotency.Migrations)
 	add(s.Outbox.Enabled, &s.Outbox.Database, &s.Outbox.Schema, outbox.Migrations)
 	add(s.Audit.Enabled, &s.Audit.Database, &s.Audit.Schema, audit.Migrations)

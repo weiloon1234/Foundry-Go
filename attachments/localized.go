@@ -77,7 +77,7 @@ func (c Collection[M, K]) LoadLocalized(ctx context.Context, m *Manager, owners 
 		return LocalizedBatch[M, K]{}, invalid()
 	}
 	var result LocalizedBatch[M, K]
-	err := m.calls.Run(ctx, "localized attachment batch", func(ctx context.Context) error {
+	err := m.reads.Run(ctx, "localized attachment batch", func(ctx context.Context) error {
 		catalog, err := i18n.SnapshotLocales(ctx, m.locales)
 		if err != nil {
 			return err

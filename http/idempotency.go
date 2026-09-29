@@ -25,7 +25,9 @@ type IdempotentEndpoint[P, Q, B, R any] struct {
 	definition idempotency.Definition
 	headers    func(context.Context, R) ([]ResponseHeader, error)
 	wrap       func(RouteRegistration) RouteRegistration
-	err        error
+	// signedURL is the signed link policy when wrap signs the registration.
+	signedURL *SignedURLInfo
+	err       error
 }
 
 // Idempotent supports transaction-bound JSON/empty operations on unsafe methods.
@@ -36,6 +38,7 @@ func (e Endpoint[P, Q, B, R]) Idempotent(store *idempotency.Store, definition id
 func (e SignedEndpoint[P, Q, B, R]) Idempotent(store *idempotency.Store, definition idempotency.Definition) IdempotentEndpoint[P, Q, B, R] {
 	bound := e.endpoint.Idempotent(store, definition)
 	bound.err = e.Validate()
+	bound.signedURL = signedURLInfo(e.signer.policy)
 	bound.wrap = func(r RouteRegistration) RouteRegistration {
 		return signedRegistration(r, e.signer, e.endpoint.route.spec, e.endpoint.Pattern(), true)
 	}
@@ -54,6 +57,10 @@ func (e IdempotentEndpoint[P, Q, B, R]) WithHeaders(prepare func(context.Context
 	return e
 }
 func (e IdempotentEndpoint[P, Q, B, R]) Validate() error {
+	if e.endpoint.headers != nil {
+		// Replays must reproduce the stored outcome exactly.
+		return fault.New(fault.Invalid, "idempotent endpoints declare replayable headers with IdempotentEndpoint.WithHeaders")
+	}
 	for _, err := range []error{e.err, e.endpoint.Validate(), e.store.Validate(), e.definition.Validate()} {
 		if err != nil {
 			return err
@@ -95,8 +102,8 @@ func (e IdempotentEndpoint[P, Q, B, R]) Description() (EndpointInfo, error) {
 		return EndpointInfo{}, err
 	}
 	info, err := e.described().Description()
-	if e.wrap != nil {
-		info.Route.SignedURL = signedURLInfo()
+	if e.signedURL != nil {
+		info.Route.SignedURL = e.signedURL
 	}
 	return info, err
 }

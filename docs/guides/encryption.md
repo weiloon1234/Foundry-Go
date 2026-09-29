@@ -36,6 +36,28 @@ provides complete typed functions for encryption, decryption and rotation. This
 fixture demonstrates primitives; it does not implement factor enrollment or grant
 authentication authority.
 
+## Application key ring
+
+Configured applications load one key ring from settings instead of building it
+by hand. `Encryption.KeyID` names the active key and `Encryption.Key` holds its
+material; `Encryption.Previous` retains retired keys by ID. Keep the material in
+secret files or environment variables, for example:
+
+```sh
+APP__ENCRYPTION__KEY_ID=app_2026
+APP__ENCRYPTION__KEY_FILE=/run/secrets/app_2026
+APP__ENCRYPTION__PREVIOUS__APP_2025__KEY_FILE=/run/secrets/app_2025
+```
+
+Keys and the previous-key table are sensitive settings: provenance reports mark
+them secret and never include values. `application.New` parses every key before
+acquiring resources; malformed material, a key without an ID, or the active ID
+repeated under `Previous` fails the build. An empty `KeyID` disables the key
+ring. `Services.Encryption()` returns it (`fault.Missing` when not configured),
+and `Services.CookieEncrypter()` returns an `http.CookieEncrypter` using it and
+the application clock for `Cookie.Encrypted`. The configured MFA store
+(`Features.Auth.MFA`) requires it; see [MFA](mfa.md#key-rotation).
+
 ## Envelope and limits
 
 `fg1:<keyID>:<payload>` stores a version, key ID and canonical base64url payload.
@@ -65,7 +87,16 @@ Install the next key alongside retained keys and make it active. `Reencrypt`
 authenticates the old envelope with its retained key and emits a new envelope under
 the active key. Callers atomically replace the persisted value using the same
 record binding. Retire old keys only after all relevant records have migrated.
-Key IDs must never be reassigned to different material.
+Key IDs must never be reassigned to different material. `EnvelopePrefix(id)`
+returns the non-secret text every envelope under that key starts with, so
+storage adapters can select records that still use another key.
+
+With the application key ring, rotation is: generate a new key, set it as
+`Encryption.KeyID`/`Key` and move the old one to `Encryption.Previous`, deploy,
+run `mfa reencrypt` (and re-encrypt any application-owned records), then remove
+the previous key once nothing uses it. Encrypted cookies need no migration: they
+stay readable while the previous key is retained and are re-issued with the new
+key.
 
 Keys, contexts and ciphertext redact ordinary formatting, JSON and structured
 logging. `Key.Secret()`, `Ciphertext.Encoded()` and decrypted `secret.String.Reveal()`

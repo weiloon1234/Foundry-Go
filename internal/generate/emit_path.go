@@ -14,7 +14,8 @@ func emitPath(p *packageInput, declaration pathDeclaration) ([]byte, error) {
 	variable := e.localName("path")
 	e.line("// %sDescriptor binds the declared pattern to concrete %s fields.", declaration.name, declaration.name)
 	e.line("// Reuse this descriptor for route registration and named URL generation.")
-	e.line("func %sDescriptor() %s.Path[%s] {", declaration.name, http, declaration.name)
+	e.line("func %sDescriptor() %s.Path[%s] {return foundry%sDescriptor()}", declaration.name, http, declaration.name, declaration.name)
+	e.line("var foundry%sDescriptor=%s.OnceValue(func()%s.Path[%s]{", declaration.name, e.use("sync"), http, declaration.name)
 	e.line("return %s.DefinePath[%s](%q,", http, declaration.name, declaration.pattern)
 	for _, field := range declaration.fields {
 		typ := e.typeName(field.typ)
@@ -24,6 +25,6 @@ func emitPath(p *packageInput, declaration pathDeclaration) ([]byte, error) {
 		}
 		e.line("%s.Param[%s,%s](%q,%s,func(%s *%s)*%s{return &%s.%s}),", http, declaration.name, typ, field.parameter, codec, variable, declaration.name, typ, variable, field.name)
 	}
-	e.line(")}")
-	return e.finish(declaration.position.Filename, declaration.position.Line)
+	e.line(")})")
+	return e.finish(declaration.position.Filename)
 }

@@ -32,6 +32,15 @@ for (const change of [
 ]) assert.throws(() => sdk.contractValue(type, { ...source, ...change }), sdk.ContractError);
 const missing = { ...source }; delete missing.nullable;
 assert.throws(() => sdk.contractValue(type, missing), sdk.ContractError);
+// Server output decodes tolerantly: additive properties and enum cases do not
+// break a deployed client, while strict decoding and requests still reject them.
+const additive = encoded.replace('"state":"ready"', '"state":"archived","added":{"nested":[1]}');
+const tolerated = sdk.decodeReceived(type, additive);
+assert.ok(tolerated.state instanceof sdk.UnknownEnumValue); assert.equal(tolerated.state.value, "archived");
+assert.equal(Object.hasOwn(tolerated, "added"), false); assert.equal(tolerated.large, source.large);
+assert.throws(() => sdk.decodeContract(type, additive), sdk.ContractError);
+assert.throws(() => sdk.encodeContract(type, tolerated), sdk.ContractError);
+assert.throws(() => sdk.decodeReceived(type, encoded.replace('"large":9223372036854775807', '"large":"text"')), sdk.ContractError);
 for (const text of [encoded + "false", encoded.replace('"natural":"MY"', '"natural":"MY","natural":"US"'), encoded.replace('"natural":"MY"', '"natural":"\\ud800"'), encoded.replace('"large":9223372036854775807', '"large":9.223372036854776e18')]) {
   assert.throws(() => sdk.decodeContract(type, text), sdk.ContractError);
 }
@@ -91,9 +100,10 @@ assert.equal(sdk.manifestJSON.includes("must-not-be-exported"), false);
 let calls = 0, closes = 0;
 const transport = async request => {
   calls++;
-  assert.ok(request.body === undefined || typeof request.body === "string" || request.body instanceof Blob);
+  assert.ok(request.body === undefined || typeof request.body === "string" || request.body instanceof Blob || request.body instanceof ReadableStream);
   if (request.body instanceof Blob) assert.ok(request.body.size <= request.maxBodyBytes);
-  const result = await fetch(request.url, { method: request.method, headers: request.headers, body: request.body, signal: request.signal, credentials: request.credentials });
+  assert.ok(request.redirect === "follow" || request.redirect === "manual");
+  const result = await fetch(request.url, { method: request.method, headers: request.headers, body: request.body, signal: request.signal, credentials: request.credentials, redirect: request.redirect, ...(request.duplex ? { duplex: request.duplex } : {}) });
   return { status: result.status, headers: Object.fromEntries(result.headers), body: result.body ?? new Uint8Array(), close: async () => { closes++; if (result.body && !result.body.locked) await result.body.cancel(); } };
 };
 const api = sdk.createClient(transport, { baseURL });
@@ -224,6 +234,65 @@ const ranges = await api.download({}, { headers: { range: "bytes=0-0,3-3,6-6" } 
 assert.equal(ranges.status, 206); let rangeBytes = 0;
 for await (const bytes of ranges.body) rangeBytes += bytes.byteLength;
 assert.ok(rangeBytes > 15);
+// Several declared success statuses: the client returns the received one.
+const created = await api.membersUpsert({ body: { display: "new" } });
+assert.equal(created.status, 201); assert.equal(created.body.display, "new"); assert.ok(Object.isFrozen(created));
+const updated = await api.membersUpsert({ body: { display: "existing" } });
+assert.equal(updated.status, 200); assert.equal(updated.body.display, "existing");
+assert.deepEqual(metadata.http.find(operation => operation.name === "membersUpsert").statuses.map(status => status.text), ["200", "201"]);
+await assert.rejects(sdk.createClient(async () => ({ status: 202, headers: { "content-type": "application/json" }, body: '{"display":"x"}', close: () => {} })).membersUpsert({ body: { display: "x" } }), sdk.ContractError);
+// Redirects are returned, not followed, and only relative targets are accepted.
+let redirectMode;
+const continued = await sdk.createClient(async request => { redirectMode = request.redirect; return transport(request); }, { baseURL }).sessionContinue({});
+assert.equal(redirectMode, "manual"); assert.equal(continued.status, 303); assert.equal(continued.location, "/account");
+for (const result of [{ status: 0, headers: {} }, { status: 303, headers: { location: "//evil.test/" } }, { status: 303, headers: { location: "https://evil.test/" } }, { status: 303, headers: {} }, { status: 302, headers: { location: "/account" } }]) {
+  await assert.rejects(sdk.createClient(async () => ({ body: "", close: () => {}, ...result })).sessionContinue({}), sdk.ContractError);
+}
+// Typed server-sent events decode each event's data and resume after Last-Event-ID.
+const eventStream = await api.membersEvents({});
+assert.equal(eventStream.status, 200);
+const streamed = [];
+for await (const event of eventStream) streamed.push(event);
+assert.deepEqual(streamed.map(event => [event.id, event.name, event.data.display]), [["1", "member", "member 1"], ["2", "member", "member 2"], ["3", "member", "member 3"]]);
+assert.equal(streamed[2].retry, 1500); assert.ok(Object.isFrozen(streamed[0]));
+await assert.rejects(async () => { for await (const ignored of eventStream) void ignored; }, sdk.ContractError);
+const resumed = [];
+for await (const event of await api.membersEvents({}, { headers: { "last-event-id": "2" } })) resumed.push(event.id);
+assert.deepEqual(resumed, ["3"]);
+const unread = await api.membersEvents({}); await unread.close();
+const framed = sdk.createClient(async () => ({ status: 200, headers: { "content-type": "text/event-stream" }, body: (async function* () {
+  yield new TextEncoder().encode(": comment\r\nid: 7\r\nevent: member\r\ndata: {\"display\":\r");
+  yield new TextEncoder().encode("\ndata: \"split\",\"added\":1}\r\n\r\ndata: {\"display\":\"unterminated\"}");
+})(), close: () => {} }));
+const parsed = [];
+for await (const event of await framed.membersEvents({})) parsed.push(event);
+assert.equal(parsed.length, 1); assert.equal(parsed[0].id, "7"); assert.equal(parsed[0].data.display, "split"); assert.equal(Object.hasOwn(parsed[0].data, "added"), false);
+const oversized = sdk.createClient(async () => ({ status: 200, headers: { "content-type": "text/event-stream" }, body: "data: " + "x".repeat(40 << 20) + "\n\n", close: () => {} }));
+await assert.rejects(async () => { for await (const ignored of await oversized.membersEvents({})) void ignored; }, sdk.ContractError);
+// Signed links: absolute, origin-relative (sent to the base URL), permanent and
+// decorated with a declared ignored parameter all reach the signed route.
+const links = JSON.parse(process.argv[5]);
+for (const signedURL of [links.absolute, links.relative, links.permanent, links.decorated]) {
+  assert.equal((await api.membersSigned({ signedURL })).display, "signed member");
+}
+const signedMeta = metadata.http.find(operation => operation.name === "membersSigned").route.signed_url;
+assert.equal(signedMeta.permanent, true); assert.equal(signedMeta.relative, true); assert.deepEqual([...signedMeta.ignored_parameters], ["utm_source"]);
+for (const signedURL of [links.absolute + "&extra=1", links.absolute.replace(/&signature=/, "&expires=1&signature="), "https://evil.test" + links.relative, links.relative.replace("/members/signed", "/members/other")]) {
+  assert.throws(() => sdk.validateRequest("membersSigned", { signedURL }), sdk.ContractError);
+}
+const tampered = links.absolute.replace(/signature=[^&]+/, "signature=v1.fixture.AAAA");
+await assert.rejects(api.membersSigned({ signedURL: tampered }), error => error instanceof sdk.APIError && error.status === 403);
+// Raw bodies: Blob, bytes and streams of declared media types, bounded client side.
+const rawText = await api.filesRaw({ body: { data: new Blob(["raw text"]), mediaType: "text/plain" } });
+assert.equal(rawText.bytes, "8"); assert.equal(rawText.detected_type, "text/plain");
+assert.equal((await api.filesRaw({ body: { data: new Uint8Array([1, 2, 3]), mediaType: "application/octet-stream" } })).bytes, "3");
+const chunks = new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(1000)); controller.enqueue(new Uint8Array(24)); controller.close(); } });
+assert.equal((await api.filesRaw({ body: { data: chunks, mediaType: "application/octet-stream" } })).bytes, "1024");
+await assert.rejects(api.filesRaw({ body: { data: new Blob(["x"]), mediaType: "image/png" } }), sdk.ContractError);
+await assert.rejects(api.filesRaw({ body: { data: new Uint8Array(65 << 10), mediaType: "application/octet-stream" } }), sdk.ContractError);
+await assert.rejects(api.filesRaw({ body: { data: new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(65 << 10)); controller.close(); } }), mediaType: "application/octet-stream" } }));
+assert.equal((await fetch(baseURL + "/raw", { method: "POST", headers: { "content-type": "application/octet-stream" }, body: new Uint8Array(65 << 10) })).status, 413);
+assert.equal((await fetch(baseURL + "/raw", { method: "POST", headers: { "content-type": "image/png" }, body: new Uint8Array(1) })).status, 415);
 const unconsumed = await api.download({}); const beforeClose = closes; await unconsumed.close(); await unconsumed.close(); assert.equal(closes, beforeClose + 1);
 await assert.rejects(async () => { for await (const ignored of unconsumed.body) void ignored; }, sdk.ContractError);
 const controller = new AbortController(); controller.abort(); const beforeAbort = calls;
@@ -240,6 +309,10 @@ for (const result of [
   const badClient = sdk.createClient(async () => ({ headers: { "content-type": "application/json" }, ...result, close: () => { closed++; } }));
   await assert.rejects(badClient.itemsEcho(request), sdk.ContractError); assert.equal(closed, 1);
 }
+const additiveTransport = async () => ({ status: 201, headers: { "content-type": "application/json" }, body: additive, close: () => {} });
+const additiveResult = await sdk.createClient(additiveTransport).itemsEcho(request);
+assert.ok(additiveResult.state instanceof sdk.UnknownEnumValue); assert.equal(Object.hasOwn(additiveResult, "added"), false);
+await assert.rejects(sdk.createClient(additiveTransport, { strictResponses: true }).itemsEcho(request), sdk.ContractError);
 const brokenCleanup = sdk.createClient(async () => ({ status: 201, headers: { "content-type": "application/json" }, body: "{}", close: () => { throw new Error("cleanup failure"); } }));
 await assert.rejects(brokenCleanup.itemsEcho(request), sdk.ContractError);
 const readFailure = new Error("stream read failed");
@@ -353,4 +426,4 @@ if (process.argv[4]) {
   const oldClient = legacy.createClient(transport, { baseURL }); assert.equal(oldClient.empty, undefined);
   assert.equal((await oldClient.itemsEcho(request)).large, source.large);
 }
-console.log("PASS exact codecs, strict payloads, validation, HTTP status/errors/files/pagination, realtime auth/replay/presence/acks/cancellation, additive client compatibility");
+console.log("PASS exact codecs, strict payloads, validation, HTTP status/errors/files/pagination/alternative statuses/redirects/raw bodies/typed event streams/signed link forms, realtime auth/replay/presence/acks/cancellation, additive client compatibility");

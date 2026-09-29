@@ -16,17 +16,24 @@ const (
 	Readiness Endpoint = "readiness"
 	Status    Endpoint = "status"
 	Metrics   Endpoint = "metrics"
+	// Profile serves runtime/pprof profiles. It additionally requires
+	// Config.Profiling; see ProfileQuery for the accepted parameters.
+	Profile Endpoint = "profile"
 )
 
 // Route requires a concrete authenticated GET route. Configure its permissions
 // and scopes with normal auth APIs before binding. No implicit public route,
-// credential bypass, debug profiler, configuration dump or listener is created.
+// credential bypass, configuration dump or listener is created. The profiler is
+// available only through an explicitly bound Profile route with Profiling set.
 func Route[M any](runtime *Runtime, route foundryhttp.AuthenticatedRoute[foundryhttp.NoPath, M], endpoint Endpoint) foundryhttp.RouteRegistration {
 	if runtime == nil || runtime.slots == nil {
 		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "diagnostics requires an initialized runtime"))
 	}
-	if endpoint != Liveness && endpoint != Readiness && endpoint != Status && endpoint != Metrics {
+	if endpoint != Liveness && endpoint != Readiness && endpoint != Status && endpoint != Metrics && endpoint != Profile {
 		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "unknown diagnostics endpoint"))
+	}
+	if endpoint == Profile && !runtime.profiling {
+		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "diagnostics profiling is not enabled"))
 	}
 	description, err := route.Description()
 	if err != nil {
@@ -45,11 +52,15 @@ func Route[M any](runtime *Runtime, route foundryhttp.AuthenticatedRoute[foundry
 			_ = foundryhttp.WriteError(writer, request, foundryhttp.Unavailable)
 			return
 		}
+		if endpoint == Profile {
+			runtime.serveProfile(writer, request)
+			return
+		}
 		if endpoint == Metrics {
 			writer.Header().Set("Content-Type", observability.PrometheusContentType)
 			writer.WriteHeader(stdhttp.StatusOK)
 			if request.Method != stdhttp.MethodHead {
-				_, recorder := runtime.source()
+				_, recorder, _ := runtime.source()
 				_ = recorder.WritePrometheus(writer)
 			}
 			return

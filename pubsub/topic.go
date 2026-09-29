@@ -76,6 +76,33 @@ func (t Topic[K, V]) Publish(ctx context.Context, key K, input V) (uint64, error
 // the Broker owns the subscription afterwards. Close it when no longer needed.
 // Receive waits use their own contexts and do not implicitly resubscribe.
 func (t Topic[K, V]) Subscribe(ctx context.Context, key K) (*Subscription[V], error) {
+	state, err := t.subscribe(ctx, []K{key})
+	if err != nil {
+		return nil, err
+	}
+	return &Subscription[V]{state: state}, nil
+}
+
+// SubscribeKeys confirms readiness for every key in one subscription, whose
+// Receive reports which typed key each payload was published under. Duplicate
+// keys are rejected; the count is bounded by Config.Buffer.Channels. Keys are
+// retained for delivery and must stay immutable while the subscription lives.
+func (t Topic[K, V]) SubscribeKeys(ctx context.Context, first K, rest ...K) (*KeyedSubscription[K, V], error) {
+	if err := t.Validate(); err != nil {
+		return nil, err
+	}
+	if len(rest) >= t.broker.config.Buffer.Channels {
+		return nil, fault.New(fault.Invalid, "pub/sub channel count exceeds its bound")
+	}
+	keys := append([]K{first}, rest...)
+	state, err := t.subscribe(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+	return &KeyedSubscription[K, V]{typed: Subscription[V]{state: state}, keys: keys}, nil
+}
+
+func (t Topic[K, V]) subscribe(ctx context.Context, keys []K) (*subscriptionState, error) {
 	if err := t.Validate(); err != nil {
 		return nil, err
 	}
@@ -87,12 +114,20 @@ func (t Topic[K, V]) Subscribe(ctx context.Context, key K) (*Subscription[V], er
 			return err
 		}
 		defer close(state.ready)
-		channel, err := t.address(ctx, key)
-		if err != nil {
-			return err
+		channels := make([]Channel, len(keys))
+		state.channels = make(map[Channel]int, len(keys))
+		for i, key := range keys {
+			channel, err := t.address(ctx, key)
+			if err != nil {
+				return err
+			}
+			if _, duplicate := state.channels[channel]; duplicate {
+				return fault.New(fault.Duplicate, "pub/sub subscription repeats a key")
+			}
+			channels[i] = channel
+			state.channels[channel] = i
 		}
-		state.channel = channel
-		state.stream, err = t.broker.backend.Subscribe(ctx, []Channel{channel}, t.broker.config.Buffer)
+		state.stream, err = t.broker.backend.Subscribe(ctx, channels, t.broker.config.Buffer)
 		if state.stream != nil {
 			state.rawDone = state.stream.Done()
 		}
@@ -122,5 +157,49 @@ func (t Topic[K, V]) Subscribe(ctx context.Context, key K) (*Subscription[V], er
 		return nil, errors.Join(ErrClosed, state.cleanupErr)
 	default:
 	}
-	return &Subscription[V]{state: state}, nil
+	return state, nil
+}
+
+// Delivery pairs a received payload with the typed key it was published under.
+type Delivery[K, V any] struct {
+	Key   K
+	Value V
+}
+
+// KeyedSubscription is one typed stream over several keys of the same topic. It
+// shares Subscription's ownership, sequential receive and failure semantics.
+type KeyedSubscription[K, V any] struct {
+	typed Subscription[V]
+	keys  []K
+}
+
+func (s *KeyedSubscription[K, V]) Done() <-chan struct{} {
+	if s == nil {
+		return nil
+	}
+	return s.typed.Done()
+}
+func (s *KeyedSubscription[K, V]) Err() error {
+	if s == nil {
+		return fault.New(fault.Invalid, "pub/sub subscription is not initialized")
+	}
+	return s.typed.Err()
+}
+func (s *KeyedSubscription[K, V]) Close(ctx context.Context) error {
+	if s == nil {
+		return fault.New(fault.Invalid, "pub/sub close needs subscription and context")
+	}
+	return s.typed.Close(ctx)
+}
+
+// Receive returns the next payload together with the key it was published to.
+func (s *KeyedSubscription[K, V]) Receive(ctx context.Context) (Delivery[K, V], error) {
+	if s == nil || s.typed.state == nil || ctx == nil {
+		return Delivery[K, V]{}, fault.New(fault.Invalid, "pub/sub receive needs subscription and context")
+	}
+	position, value, err := receive[V](ctx, s.typed.state)
+	if err != nil {
+		return Delivery[K, V]{}, err
+	}
+	return Delivery[K, V]{Key: s.keys[position], Value: value}, nil
 }

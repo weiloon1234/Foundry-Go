@@ -6,11 +6,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
+	"time"
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionvalue"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -147,27 +150,130 @@ func (k Key[V]) Validate() error {
 func (Key[V]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("typed setting key")) }
 
 type Registration struct {
-	name     Name
-	version  Version
-	id       *declarationID
-	validate func() error
-	decode   func(context.Context, value.JSON[json.RawMessage]) error
+	name         Name
+	version      Version
+	id           *declarationID
+	presentation Presentation
+	cache        time.Duration
+	validate     func() error
+	decode       func(context.Context, value.JSON[json.RawMessage]) error
+	upgrades     map[Version]func(context.Context, value.JSON[json.RawMessage]) (value.JSON[json.RawMessage], error)
 }
 
-func (k Key[V]) Registration() Registration {
-	if k.definition == nil {
-		return Registration{}
-	}
-	return Registration{name: k.Name(), version: k.Version(), id: k.definition.id, validate: k.Validate, decode: func(ctx context.Context, v value.JSON[json.RawMessage]) error {
-		_, err := extensionvalue.Decode(ctx, k.definition.codec, v)
-		return err
+// MaxCacheTTL bounds how long a process may serve a cached setting. It is also
+// the upper bound on staleness after a write made by another process.
+const MaxCacheTTL = time.Hour
+
+// Upgrade converts a value persisted by an earlier declaration version. It is
+// declared next to the key and applied by reads and by Reconcile.
+type Upgrade[V any] struct {
+	from     Version
+	validate func() error
+	convert  func(context.Context, value.JSON[json.RawMessage]) (V, error)
+}
+
+// UpgradeFrom decodes a stored value of an earlier version with that version's
+// codec, then converts it. The result is re-encoded and validated by the current
+// codec. convert is application code: it must be deterministic and must not
+// perform I/O; panics are contained and reported as failures.
+func UpgradeFrom[Old, V any](from Version, previous contract.JSON[Old], convert func(context.Context, Old) (V, error)) Upgrade[V] {
+	return Upgrade[V]{from: from, validate: func() error {
+		if from == 0 || convert == nil {
+			return invalid()
+		}
+		return previous.Validate()
+	}, convert: func(ctx context.Context, stored value.JSON[json.RawMessage]) (V, error) {
+		old, err := extensionvalue.Decode(ctx, previous, stored)
+		if err != nil {
+			return *new(V), err
+		}
+		var result V
+		err = callback.Invoke("upgrade stored setting", func() error {
+			var err error
+			result, err = convert(ctx, old)
+			return err
+		})
+		return result, err
 	}}
 }
 
-// Manager borrows the extension Store, which owns admission and shutdown.
+// Options adds optional registration behavior. The zero value is Registration().
+//
+// Cache enables the manager's per-process read cache for this key: Get, GetOr,
+// Find and Load serve a validated snapshot for at most Cache, then read again.
+// Writes through the same manager invalidate the entry immediately and again
+// after commit. Other processes observe a write after at most Cache. Zero
+// disables caching; the maximum is MaxCacheTTL.
+//
+// Upgrades declare conversions for values stored by earlier versions.
+type Options[V any] struct {
+	Cache    time.Duration
+	Upgrades []Upgrade[V]
+}
+
+func (k Key[V]) Registration() Registration { return k.RegistrationWith(Options[V]{}) }
+func (k Key[V]) RegistrationWith(options Options[V]) Registration {
+	if k.definition == nil {
+		return Registration{}
+	}
+	upgrades := slices.Clone(options.Upgrades)
+	r := Registration{name: k.Name(), version: k.Version(), id: k.definition.id, presentation: k.definition.presentation, cache: options.Cache, decode: func(ctx context.Context, v value.JSON[json.RawMessage]) error {
+		_, err := extensionvalue.Decode(ctx, k.definition.codec, v)
+		return err
+	}}
+	r.validate = func() error {
+		if err := k.Validate(); err != nil {
+			return err
+		}
+		if options.Cache < 0 || options.Cache > MaxCacheTTL {
+			return invalid()
+		}
+		seen := make(map[Version]bool, len(upgrades))
+		for _, upgrade := range upgrades {
+			if upgrade.validate == nil || upgrade.convert == nil || seen[upgrade.from] || upgrade.from >= k.Version() {
+				return invalid()
+			}
+			if err := upgrade.validate(); err != nil {
+				return err
+			}
+			seen[upgrade.from] = true
+		}
+		return nil
+	}
+	if len(upgrades) > 0 {
+		r.upgrades = make(map[Version]func(context.Context, value.JSON[json.RawMessage]) (value.JSON[json.RawMessage], error), len(upgrades))
+		for _, upgrade := range upgrades {
+			r.upgrades[upgrade.from] = func(ctx context.Context, stored value.JSON[json.RawMessage]) (value.JSON[json.RawMessage], error) {
+				converted, err := upgrade.convert(ctx, stored)
+				if err != nil {
+					return value.JSON[json.RawMessage]{}, err
+				}
+				return extensionvalue.Encode(ctx, k.definition.codec, converted)
+			}
+		}
+	}
+	return r
+}
+
+// Selection names one registered key for a batched read. Key implements it;
+// the declaration identity, not a lookalike name, selects the stored row.
+type Selection interface {
+	selection() (Name, *declarationID)
+}
+
+func (k Key[V]) selection() (Name, *declarationID) {
+	if k.definition == nil {
+		return "", nil
+	}
+	return k.definition.name, k.definition.id
+}
+
+// Manager borrows the extension Store, which owns admission and shutdown. Its
+// optional read cache is owned by this manager instance only.
 type Manager struct {
 	store *extensions.Store
 	keys  map[Name]Registration
+	cache *cache
 }
 
 func New(store *extensions.Store, keys ...Registration) (*Manager, error) {
@@ -189,6 +295,9 @@ func New(store *extensions.Store, keys ...Registration) (*Manager, error) {
 			return nil, fault.New(fault.Duplicate, "setting already registered")
 		}
 		m.keys[key.name] = key
+		if key.cache > 0 && m.cache == nil {
+			m.cache = newCache(store.Clock())
+		}
 	}
 	return m, nil
 }
@@ -209,5 +318,16 @@ func (k Key[V]) check(m *Manager) error {
 		return invalid()
 	}
 	return nil
+}
+func (m *Manager) selected(s Selection) (Registration, error) {
+	if s == nil {
+		return Registration{}, invalid()
+	}
+	name, id := s.selection()
+	registration, ok := m.keys[name]
+	if !ok || id == nil || registration.id != id {
+		return Registration{}, invalid()
+	}
+	return registration, nil
 }
 func invalid() error { return fault.New(fault.Invalid, "invalid setting declaration or data") }

@@ -14,11 +14,24 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
 )
 
+// Catalog directory bounds. Raw directory listings are bounded separately from
+// catalog files so ignored entries cannot force unbounded materialization.
+const (
+	MaxCatalogFiles        = 1024
+	maxDirectoryEntries    = 4096
+	maxCatalogFileBytes    = 1 << 20
+	catalogFileExtension   = ".json"
+	catalogDirectoryReason = "the catalog directory cannot be enumerated within its bounds"
+)
+
 // Load reads locale/*.json from an explicit FS root (including embed.FS).
 // Nested objects flatten with dots; plural leaves are {"$plural":{"one":...,
-// "other":...}}. Duplicate keys/files, unknown messages/locales, symlinks,
-// malformed leaves and excess resources fail construction atomically.
-// Filesystem callbacks are isolated and awaited through actual return.
+// "other":...}}. Dot entries (.DS_Store, .git, .gitkeep) at any level and
+// non-.json regular files are ignored; root .json files, nested directories,
+// symlinks, duplicate keys/files, unknown messages/locales, malformed leaves and
+// excess resources fail construction atomically. Every failure names its
+// locale, file and key where known. Filesystem callbacks are isolated and
+// awaited through actual return.
 func Load(ctx context.Context, source fs.FS, locales LocaleCatalog, options CatalogOptions, definitions ...MessageDefinition) (*Catalog, error) {
 	if ctx == nil || source == nil {
 		return nil, invalidMessage()
@@ -30,63 +43,94 @@ func Load(ctx context.Context, source fs.FS, locales LocaleCatalog, options Cata
 	var result *Catalog
 	err = callback.Isolated("localization catalog load", func() error {
 		messages := make(map[LocaleID]map[MessageKey]Template)
-		entries, err := readCatalogDirectory(source, ".", MaxLocales)
+		sources := make(messageSources)
+		directories := make(map[LocaleID]string)
+		entries, err := readCatalogDirectory(source, ".", maxDirectoryEntries)
 		if err != nil {
-			return invalidMessage()
-		}
-		if len(entries) > MaxLocales {
-			return invalidMessage()
+			return catalogError("", ".", "", catalogDirectoryReason)
 		}
 		total, files := 0, 0
 		for _, entry := range entries {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			locale, err := ParseLocale(entry.Name())
-			if err != nil || !entry.IsDir() || entry.Type()&fs.ModeSymlink != 0 || !set.Contains(locale) {
-				return invalidMessage()
+			name := entry.Name()
+			if ignoredCatalogEntry(name) {
+				continue
 			}
-			if _, exists := messages[locale]; exists {
-				return invalidMessage()
+			if entry.Type()&fs.ModeSymlink != 0 {
+				return catalogError("", name, "", "symlinks are not followed")
 			}
-			messages[locale] = make(map[MessageKey]Template)
-			children, err := readCatalogDirectory(source, entry.Name(), 1024-files)
+			if !entry.IsDir() {
+				if entry.Type().IsRegular() && !strings.HasSuffix(name, catalogFileExtension) {
+					continue
+				}
+				return catalogError("", name, "", "catalog files belong in locale directories such as en/messages.json")
+			}
+			locale, err := ParseLocale(name)
 			if err != nil {
-				return invalidMessage()
+				return catalogError("", name, "", "the directory name is not a BCP 47 locale")
 			}
-			files += len(children)
-			if files > 1024 {
-				return invalidMessage()
+			if !set.Contains(locale) {
+				return catalogError(locale, name, "", "the locale is not in the supported locale set")
+			}
+			if previous, exists := directories[locale]; exists {
+				return catalogError(locale, name, "", "the locale directory duplicates "+boundedQuote(previous))
+			}
+			if len(directories) >= MaxLocales {
+				return catalogError(locale, name, "", "more than 64 locale directories")
+			}
+			directories[locale] = name
+			messages[locale] = make(map[MessageKey]Template)
+			sources[locale] = make(map[MessageKey]string)
+			children, err := readCatalogDirectory(source, name, maxDirectoryEntries)
+			if err != nil {
+				return catalogError(locale, name, "", catalogDirectoryReason)
 			}
 			for _, child := range children {
 				if err := ctx.Err(); err != nil {
 					return err
 				}
-				if !child.Type().IsRegular() || !strings.HasSuffix(child.Name(), ".json") {
-					return invalidMessage()
+				file := path.Join(name, child.Name())
+				if ignoredCatalogEntry(child.Name()) {
+					continue
 				}
-				data, err := readCatalogFile(source, path.Join(entry.Name(), child.Name()))
+				if child.Type()&fs.ModeSymlink != 0 {
+					return catalogError(locale, file, "", "symlinks are not followed")
+				}
+				if !child.Type().IsRegular() {
+					return catalogError(locale, file, "", "nested directories and special files are not supported")
+				}
+				if !strings.HasSuffix(child.Name(), catalogFileExtension) {
+					continue
+				}
+				files++
+				if files > MaxCatalogFiles {
+					return catalogError(locale, file, "", "more than 1,024 catalog files")
+				}
+				data, err := readCatalogFile(source, file)
 				if err != nil {
-					return err
+					return catalogError(locale, file, "", "the file cannot be read or exceeds 1 MiB")
 				}
 				total += len(data)
 				if total > MaxCatalogBytes {
-					return invalidMessage()
+					return catalogError(locale, file, "", "catalog files exceed 16 MiB in total")
 				}
-				root, err := jsonwire.Decode(data, jsonwire.Limits{Bytes: 1 << 20, Depth: 32, Nodes: MaxMessages * 4})
+				root, err := jsonwire.Decode(data, jsonwire.Limits{Bytes: maxCatalogFileBytes, Depth: 32, Nodes: MaxMessages * 4})
 				if err != nil {
-					return invalidMessage()
+					return catalogError(locale, file, "", "the file is not one bounded JSON object without duplicate names")
 				}
 				object, ok := root.(map[string]any)
 				if !ok {
-					return invalidMessage()
+					return catalogError(locale, file, "", "the file root must be a JSON object")
 				}
-				if err := flattenCatalog(messages[locale], "", object); err != nil {
+				flat := catalogFile{locale: locale, file: file, messages: messages[locale], sources: sources[locale]}
+				if err := flat.flatten("", object); err != nil {
 					return err
 				}
 			}
 		}
-		result, err = NewCatalog(ctx, set, options, definitions, messages)
+		result, err = newCatalog(ctx, set, options, definitions, messages, sources)
 		return err
 	})
 	if err != nil {
@@ -94,6 +138,10 @@ func Load(ctx context.Context, source fs.FS, locales LocaleCatalog, options Cata
 	}
 	return result, nil
 }
+
+// ignoredCatalogEntry skips editor, VCS and operating-system metadata such as
+// .DS_Store, .git and .gitkeep without opening it.
+func ignoredCatalogEntry(name string) bool { return strings.HasPrefix(name, ".") }
 
 // ReadDir(n) bounds native directory materialization as well as the resulting
 // catalog. FS implementations must expose directory handles implementing
@@ -146,22 +194,37 @@ func readCatalogFile(source fs.FS, name string) (data []byte, err error) {
 			err = errors.Join(err, invalidMessage())
 		}
 	}()
-	data, err = io.ReadAll(io.LimitReader(f, (1<<20)+1))
-	if err != nil || len(data) > 1<<20 {
+	data, err = io.ReadAll(io.LimitReader(f, maxCatalogFileBytes+1))
+	if err != nil || len(data) > maxCatalogFileBytes {
 		return nil, invalidMessage()
 	}
 	return data, nil
 }
 
-func flattenCatalog(result map[MessageKey]Template, prefix string, object map[string]any) error {
-	for name, value := range object {
+// catalogFile flattens one locale file while recording which file supplied
+// each key, so duplicates and later compilation errors can name both.
+type catalogFile struct {
+	locale   LocaleID
+	file     string
+	messages map[MessageKey]Template
+	sources  map[MessageKey]string
+}
+
+func (c catalogFile) flatten(prefix string, object map[string]any) error {
+	names := make([]string, 0, len(object))
+	for name := range object {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		value := object[name]
 		key := name
 		if prefix != "" {
 			key = prefix + "." + name
 		}
 		id := MessageKey(key)
 		if id.Validate() != nil {
-			return invalidMessage()
+			return catalogError(c.locale, c.file, key, "the flattened key is not a semantic message key")
 		}
 		var template Template
 		switch value := value.(type) {
@@ -171,29 +234,33 @@ func flattenCatalog(result map[MessageKey]Template, prefix string, object map[st
 			if forms, ok := value["$plural"]; ok {
 				m, ok := forms.(map[string]any)
 				if !ok || len(value) != 1 || len(m) > 6 {
-					return invalidMessage()
+					return catalogError(c.locale, c.file, key, "a $plural leaf must be the only member and contain at most six string forms")
 				}
 				template.Forms = make(map[PluralForm]string, len(m))
 				for form, text := range m {
 					s, ok := text.(string)
 					if !ok {
-						return invalidMessage()
+						return catalogError(c.locale, c.file, key, "plural form "+boundedQuote(form)+" must be a string")
 					}
 					template.Forms[PluralForm(form)] = s
 				}
 			} else {
-				if err := flattenCatalog(result, key, value); err != nil {
+				if err := c.flatten(key, value); err != nil {
 					return err
 				}
 				continue
 			}
 		default:
-			return invalidMessage()
+			return catalogError(c.locale, c.file, key, "a leaf must be a string or a $plural object")
 		}
-		if _, exists := result[id]; exists || len(result) >= MaxMessages {
-			return invalidMessage()
+		if previous, exists := c.sources[id]; exists {
+			return catalogError(c.locale, c.file, key, "the key is already defined in "+boundedQuote(previous))
 		}
-		result[id] = template
+		if len(c.messages) >= MaxMessages {
+			return catalogError(c.locale, c.file, key, "more than 10,000 messages for this locale")
+		}
+		c.messages[id] = template
+		c.sources[id] = c.file
 	}
 	return nil
 }

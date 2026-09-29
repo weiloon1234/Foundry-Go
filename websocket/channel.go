@@ -161,6 +161,13 @@ type accessResult struct {
 	origin    attribution.Origin
 }
 
+// retained drops the operation context so a subscription can cache an
+// authorization result between refreshes without retaining a dead scope.
+func (a accessResult) retained() accessResult {
+	a.context = nil
+	return a
+}
+
 func (c Channel[C, R, S]) check(ctx context.Context, room *string) (accessResult, error) {
 	target, err := c.rooms.decode(ctx, room)
 	if err != nil {

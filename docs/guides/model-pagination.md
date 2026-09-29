@@ -66,7 +66,20 @@ page, err := q.CursorPaginate(ctx, db,
 
 `CursorPaginate` performs one query for size plus one rows, with no count. The extra row indicates whether more rows exist in the requested direction. Returned items always follow the declared order, including when moving backward. The opposite navigation cursor uses the first/last returned position and the supplied boundary; it is a navigation hint and does not separately prove a row still exists on that side. Empty results have no navigation cursors.
 
-Multiple sort columns may mix ascending and descending directions. The primary key resolves ties. Nullable fields follow PostgreSQL defaults: NULLs last for ascending, first for descending. Foundry compiles explicit null-aware lexicographic predicates through the shared query AST, reverses ordering when fetching backward, and restores canonical order for the result. A plain tuple comparison would not provide these null semantics. [PostgreSQL ordering](https://www.postgresql.org/docs/18/queries-order.html)
+Multiple sort columns may mix ascending and descending directions. The primary key resolves ties. Nullable fields follow PostgreSQL defaults: NULLs last for ascending, first for descending. Foundry compiles explicit null-aware lexicographic predicates through the shared query AST, reverses ordering when fetching backward, and restores canonical order for the result. When every sort field is declared NOT NULL and all share one direction, the boundary is a single row comparison such as `("created_at", "id") < ($1, $2)`, which a composite index on the same columns in the same direction serves as one range; nullable fields keep the expanded NULL-aware predicate, and NOT NULL fields never add an `IS NULL` alternative. Explicit `NullsFirst`/`NullsLast` placement is rejected for cursor ordering. [PostgreSQL ordering](https://www.postgresql.org/docs/18/queries-order.html)
+
+A cursor binds to the query's filters and their bound values. A filter relative to "now" computed in Go (for example `f.CreatedAt.Gt(now.Add(-24 * time.Hour))`) binds a different value on every request, so the next request's query no longer matches the cursor and is rejected. Keep the relative window in SQL instead, so the bound values stay constant across pages:
+
+```go
+elapsed, err := temporal.Elapsed(24 * time.Hour)
+if err != nil {
+    return err
+}
+since := query.SubtractInstantInterval(query.TransactionTime(q), elapsed, query.UTCZone())
+page, err := q.Where(query.Greater(f.CreatedAt, since)).CursorPaginate(ctx, db, request)
+```
+
+`TransactionTime` uses the database clock at each request's transaction start, so the window moves between pages; rows that age out of it disappear from later pages, as they would for any live filter. When every page must see the same window, choose the boundary once and send that same value with every page request instead.
 
 At most `query.MaxCursorFields` sort fields, including the tie-breaker, are accepted. All model pagination methods reject a preexisting `Limit` or nonzero `Offset`, and repeated ordered columns. They never silently discard those clauses. Ordinary `Limit`/`Offset` reads remain available separately.
 

@@ -9,7 +9,7 @@ func Embed[Outer, Inner any](rule Rule[Inner], selector func(Outer) Inner) Rule[
 	if selector == nil {
 		return failed[Outer](invalid("validation embedding requires a selector"))
 	}
-	return lift(Description{Kind: AllKind}, rule, func(state *execution, input Outer, path string, depth int) {
-		rule.run(state, selector(input), path, depth+1)
+	return lift(Description{Kind: AllKind}, rule, func(state *execution, input Outer, depth int) {
+		rule.run(state, selector(input), depth+1)
 	})
 }

@@ -68,5 +68,11 @@ func (r Record) encryptionContext() (encryption.Context, error) {
 	if err != nil {
 		return encryption.Context{}, err
 	}
-	return encryption.NewContext("auth.mfa.totp.v1", secret.New(owner+":"+r.ID.String()))
+	return factorContext(owner, r.ID)
+}
+
+// factorContext binds a factor envelope to its opaque subject key and factor
+// generation, so key rotation can re-encrypt without loading the subject.
+func factorContext(owner string, generation model.ID[Record]) (encryption.Context, error) {
+	return encryption.NewContext("auth.mfa.totp.v1", secret.New(owner+":"+generation.String()))
 }

@@ -8,8 +8,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"path"
 	"slices"
 	"sync"
+	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
@@ -20,6 +23,9 @@ const MaxRecordedBytes = 16 << 20
 const MaxRecordedURLBytes = 16 << 10
 
 var Exhausted = fault.New(fault.Missing, "outbound HTTP fake has no remaining outcome")
+
+// Unmatched reports a request that matches no Route of a routed fake.
+var Unmatched = fault.New(fault.Missing, "outbound HTTP fake has no matching route")
 
 type Outcome struct {
 	status  int
@@ -49,20 +55,70 @@ func (r Request) Headers() http.Header         { return r.headers.Clone() }
 func (r Request) Body() []byte                 { return slices.Clone(r.body) }
 func (Request) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("recorded HTTP request")) }
 
+// Route answers requests whose method and URL match, in declaration order of
+// its outcomes. The pattern uses path.Match syntax against "host/path" (scheme
+// and query excluded), for example "api.example.com/v1/users/*". An empty
+// method matches every method.
+type Route struct {
+	method, pattern string
+	outcomes        []Outcome
+	next            int
+}
+
+func On(method, pattern string, outcomes ...Outcome) Route {
+	return Route{method: method, pattern: pattern, outcomes: outcomes}
+}
+func (Route) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("HTTP fake route")) }
+
 type Fake struct {
 	mu       sync.Mutex
 	outcomes []Outcome
 	next     int
+	routes   []Route
 	requests []Request
 	bytes    int
 }
 
+// New answers requests with outcomes in arrival order.
 func New(outcomes ...Outcome) (*Fake, error) {
+	owned, err := ownOutcomes(outcomes, 0)
+	if err != nil {
+		return nil, err
+	}
+	return &Fake{outcomes: owned}, nil
+}
+
+// NewRoutes answers each request from the first matching Route. A request
+// matching no route fails with Unmatched; an exhausted route with Exhausted.
+func NewRoutes(routes ...Route) (*Fake, error) {
+	if len(routes) == 0 || len(routes) > 256 {
+		return nil, invalid()
+	}
+	fake := &Fake{routes: make([]Route, len(routes))}
+	total := 0
+	for i, route := range routes {
+		if len(route.method) > 32 || route.pattern == "" || len(route.pattern) > MaxRecordedURLBytes {
+			return nil, invalid()
+		}
+		if _, err := path.Match(route.pattern, ""); err != nil {
+			return nil, invalid()
+		}
+		owned, err := ownOutcomes(route.outcomes, total)
+		if err != nil {
+			return nil, err
+		}
+		for _, outcome := range owned {
+			total += len(outcome.body) + headerBytes(outcome.headers)
+		}
+		fake.routes[i] = Route{method: route.method, pattern: route.pattern, outcomes: owned}
+	}
+	return fake, nil
+}
+func ownOutcomes(outcomes []Outcome, total int) ([]Outcome, error) {
 	if len(outcomes) > MaxRequests {
 		return nil, invalid()
 	}
 	owned := make([]Outcome, len(outcomes))
-	total := 0
 	for i, outcome := range outcomes {
 		if outcome.failure == nil && (outcome.status < 100 || outcome.status > 599) || len(outcome.body) > MaxRecordedBodyBytes || len(outcome.headers) > 128 {
 			return nil, invalid()
@@ -77,7 +133,31 @@ func New(outcomes ...Outcome) (*Fake, error) {
 		}
 		owned[i] = Outcome{status: outcome.status, headers: outcome.headers.Clone(), body: slices.Clone(outcome.body), failure: outcome.failure}
 	}
-	return &Fake{outcomes: owned}, nil
+	return owned, nil
+}
+
+// take selects the next outcome for a request; callers hold f.mu.
+func (f *Fake) take(method string, address *url.URL) (Outcome, error) {
+	if f.routes == nil {
+		if f.next >= len(f.outcomes) {
+			return Outcome{}, Exhausted
+		}
+		f.next++
+		return f.outcomes[f.next-1], nil
+	}
+	target := address.Host + address.EscapedPath()
+	for i := range f.routes {
+		route := &f.routes[i]
+		if matched, _ := path.Match(route.pattern, target); !matched || route.method != "" && route.method != method {
+			continue
+		}
+		if route.next >= len(route.outcomes) {
+			return Outcome{}, Exhausted
+		}
+		route.next++
+		return route.outcomes[route.next-1], nil
+	}
+	return Outcome{}, Unmatched
 }
 
 func headerBytes(headers http.Header) int {
@@ -129,20 +209,8 @@ func (f *Fake) RoundTrip(request *http.Request) (response *http.Response, err er
 	if len(address) > MaxRecordedURLBytes {
 		return nil, invalid()
 	}
-	f.mu.Lock()
-	if len(f.requests) >= MaxRequests {
-		f.mu.Unlock()
-		return nil, invalid()
-	}
-	index := len(f.requests)
-	f.requests = append(f.requests, Request{})
-	var outcome Outcome
-	available := f.next < len(f.outcomes)
-	if available {
-		outcome = f.outcomes[f.next]
-		f.next++
-	}
-	f.mu.Unlock()
+	// Read the complete body before recording, so Requests never observes a
+	// placeholder for a request whose body is still being consumed.
 	var data []byte
 	if request.Body != nil {
 		data, err = io.ReadAll(io.LimitReader(request.Body, MaxRecordedBodyBytes+1))
@@ -153,20 +221,22 @@ func (f *Fake) RoundTrip(request *http.Request) (response *http.Response, err er
 			return nil, invalid()
 		}
 	}
-	if err := request.Context().Err(); err != nil {
-		return nil, err
-	}
 	size := len(request.Method) + len(address) + len(data) + headerSize
 	f.mu.Lock()
-	if size > MaxRecordedBytes-f.bytes {
+	if len(f.requests) >= MaxRequests || size > MaxRecordedBytes-f.bytes {
 		f.mu.Unlock()
 		return nil, invalid()
 	}
 	f.bytes += size
-	f.requests[index] = Request{method: request.Method, url: address, headers: request.Header.Clone(), body: slices.Clone(data)}
+	f.requests = append(f.requests, Request{method: request.Method, url: address, headers: request.Header.Clone(), body: data})
+	if err := request.Context().Err(); err != nil {
+		f.mu.Unlock()
+		return nil, err
+	}
+	outcome, selectErr := f.take(request.Method, u)
 	f.mu.Unlock()
-	if !available {
-		return nil, Exhausted
+	if selectErr != nil {
+		return nil, selectErr
 	}
 	if outcome.failure != nil {
 		return nil, outcome.failure
@@ -192,7 +262,47 @@ func (f *Fake) Pending() int {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return len(f.outcomes) - f.next
+	pending := len(f.outcomes) - f.next
+	for _, route := range f.routes {
+		pending += len(route.outcomes) - route.next
+	}
+	return pending
+}
+
+// AssertSent fails t unless a recorded request satisfies match.
+func (f *Fake) AssertSent(t testing.TB, match func(Request) bool) {
+	t.Helper()
+	if f.count(match) == 0 {
+		t.Fatal("expected outbound HTTP request was not sent")
+	}
+}
+
+// AssertNotSent fails t when any recorded request satisfies match.
+func (f *Fake) AssertNotSent(t testing.TB, match func(Request) bool) {
+	t.Helper()
+	if f.count(match) != 0 {
+		t.Fatal("unexpected outbound HTTP request was sent")
+	}
+}
+
+// AssertSentCount fails t unless exactly expected requests satisfy match.
+func (f *Fake) AssertSentCount(t testing.TB, expected int, match func(Request) bool) {
+	t.Helper()
+	if actual := f.count(match); actual != expected {
+		t.Fatalf("outbound HTTP request count %d, expected %d", actual, expected)
+	}
+}
+func (f *Fake) count(match func(Request) bool) int {
+	if match == nil {
+		match = func(Request) bool { return true }
+	}
+	count := 0
+	for _, request := range f.Requests() {
+		if match(request) {
+			count++
+		}
+	}
+	return count
 }
 func (f *Fake) Sent() int {
 	if f == nil {

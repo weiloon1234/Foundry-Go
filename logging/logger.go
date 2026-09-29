@@ -23,11 +23,16 @@ type Options struct {
 // and respecting typed slog.LogValuer values such as secret.String. Unknown
 // nested application objects must still use explicit safe logging contracts.
 func JSON(writer io.Writer, options Options) *slog.Logger {
+	return slog.New(Correlate(newJSONHandler(writer, options)))
+}
+
+// newJSONHandler is the shared redacting JSON encoder without correlation.
+func newJSONHandler(writer io.Writer, options Options) slog.Handler {
 	location := *time.UTC
 	if options.Location != nil {
 		location = *options.Location
 	}
-	return slog.New(Correlate(slog.NewJSONHandler(writer, &slog.HandlerOptions{
+	return slog.NewJSONHandler(writer, &slog.HandlerOptions{
 		Level: options.Level, AddSource: options.AddSource,
 		ReplaceAttr: func(groups []string, attribute slog.Attr) slog.Attr {
 			if len(groups) == 0 && attribute.Key == slog.TimeKey && attribute.Value.Kind() == slog.KindTime {
@@ -43,7 +48,7 @@ func JSON(writer io.Writer, options Options) *slog.Logger {
 			}
 			return attribute
 		},
-	})))
+	})
 }
 
 func sensitiveKey(key string) bool {

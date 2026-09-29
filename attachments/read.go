@@ -3,7 +3,10 @@ package attachments
 import (
 	"context"
 	"crypto/sha256"
+	"hash"
+	"io"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -46,7 +49,7 @@ func (c Collection[M, K]) Load(ctx context.Context, m *Manager, owners []model.R
 		return Batch[M, K]{}, err
 	}
 	var result Batch[M, K]
-	err := m.calls.Run(ctx, "attachment batch", func(ctx context.Context) error {
+	err := m.reads.Run(ctx, "attachment batch", func(ctx context.Context) error {
 		var err error
 		result, err = c.loadRows(ctx, m, owners, value.Optional[ID[M]]{})
 		return err
@@ -132,6 +135,9 @@ func (c Collection[M, K]) scanRows(ctx context.Context, tx *database.Tx, m *Mana
 	if err != nil {
 		return Batch[M, K]{}, err
 	}
+	if err := c.loadVariants(ctx, tx, m, result.files); err != nil {
+		return Batch[M, K]{}, err
+	}
 	return result, nil
 }
 func (c Collection[M, K]) List(ctx context.Context, m *Manager, owner model.Reference[M, K]) ([]Attachment[M, K], error) {
@@ -170,7 +176,7 @@ func (c Collection[M, K]) Find(ctx context.Context, m *Manager, owner model.Refe
 		return Attachment[M, K]{}, err
 	}
 	var result Attachment[M, K]
-	err := m.calls.Run(ctx, "attachment lookup", func(ctx context.Context) error { var err error; result, err = c.find(ctx, m, owner, id); return err })
+	err := m.reads.Run(ctx, "attachment lookup", func(ctx context.Context) error { var err error; result, err = c.find(ctx, m, owner, id); return err })
 	if err != nil {
 		return Attachment[M, K]{}, err
 	}
@@ -185,15 +191,25 @@ func readBytes[M any, K comparable](ctx context.Context, m *Manager, file Attach
 	if err != nil {
 		return nil, err
 	}
-	data, _, err := disk.ReadBytes(ctx, file.key, maximum, storage.ReadOptions{IfMatch: file.etag, Version: file.version})
+	data, info, err := disk.ReadBytes(ctx, file.key, maximum, storage.ReadOptions{IfMatch: file.etag, Version: file.version})
 	if err != nil {
 		return nil, err
 	}
-	digest := storage.SHA256(sha256.Sum256(data))
-	if int64(len(data)) != file.info.Size || digest != file.digest {
+	if int64(len(data)) != file.info.Size {
+		return nil, storage.Failure(storage.IntegrityFailed, storage.OpenOperation, storage.NotApplicable, nil)
+	}
+	if !diskVerified(info, file.digest) && storage.SHA256(sha256.Sum256(data)) != file.digest {
 		return nil, storage.Failure(storage.IntegrityFailed, storage.OpenOperation, storage.NotApplicable, nil)
 	}
 	return data, nil
+}
+
+// diskVerified reports a complete read whose stored full-object checksum
+// equals the attachment pin. The disk reader verified those bytes at EOF, so
+// hashing them again is unnecessary.
+func diskVerified(info storage.ReadInfo, digest storage.SHA256) bool {
+	checksum, ok := info.Object.Checksum.Get()
+	return ok && checksum == digest && info.Offset == 0 && info.Length == info.Object.Size
 }
 func (c Collection[M, K]) ReadBytes(ctx context.Context, m *Manager, owner model.Reference[M, K], id ID[M], maximum int64) ([]byte, error) {
 	if err := c.check(m); err != nil {
@@ -203,7 +219,7 @@ func (c Collection[M, K]) ReadBytes(ctx context.Context, m *Manager, owner model
 		return nil, storage.Failure(storage.LimitExceeded, storage.OpenOperation, storage.NotApplicable, nil)
 	}
 	var result []byte
-	err := m.calls.Run(ctx, "attachment read", func(ctx context.Context) error {
+	err := m.reads.Run(ctx, "attachment read", func(ctx context.Context) error {
 		file, err := c.find(ctx, m, owner, id)
 		if err != nil {
 			return err
@@ -227,7 +243,7 @@ func (c Collection[M, K]) Image(ctx context.Context, m *Manager, owner model.Ref
 		return imaging.Result{}, err
 	}
 	var result imaging.Result
-	err := m.calls.Run(ctx, "attachment image", func(ctx context.Context) error {
+	err := m.reads.Run(ctx, "attachment image", func(ctx context.Context) error {
 		file, err := c.find(ctx, m, owner, id)
 		if err != nil {
 			return err
@@ -244,24 +260,20 @@ func (c Collection[M, K]) Image(ctx context.Context, m *Manager, owner model.Ref
 	}
 	return result, nil
 }
+
+// PublicURL rechecks ready membership, then derives the public URL of the
+// pinned object. Keys are immutable per upload, so no storage request is made.
 func (c Collection[M, K]) PublicURL(ctx context.Context, m *Manager, owner model.Reference[M, K], id ID[M]) (string, error) {
 	if err := c.check(m); err != nil {
 		return "", err
 	}
 	var result string
-	err := m.calls.Run(ctx, "attachment public URL", func(ctx context.Context) error {
+	err := m.reads.Run(ctx, "attachment public URL", func(ctx context.Context) error {
 		file, err := c.find(ctx, m, owner, id)
 		if err != nil {
 			return err
 		}
-		disk, err := m.disks.Disk(file.disk)
-		if err != nil {
-			return err
-		}
-		if _, err := disk.Stat(ctx, file.key, storage.ReadOptions{IfMatch: file.etag}); err != nil {
-			return err
-		}
-		result, err = disk.PublicURL(ctx, file.key)
+		result, err = c.publicURL(ctx, m, file)
 		return err
 	})
 	if err != nil {
@@ -269,6 +281,9 @@ func (c Collection[M, K]) PublicURL(ctx context.Context, m *Manager, owner model
 	}
 	return result, nil
 }
+
+// TemporaryURL rechecks ready membership, then signs a read link pinned to the
+// stored version. Signing performs no storage request.
 func (c Collection[M, K]) TemporaryURL(ctx context.Context, m *Manager, owner model.Reference[M, K], id ID[M], expires time.Duration) (storage.TemporaryURL, error) {
 	if err := c.check(m); err != nil {
 		return storage.TemporaryURL{}, err
@@ -277,19 +292,12 @@ func (c Collection[M, K]) TemporaryURL(ctx context.Context, m *Manager, owner mo
 		return storage.TemporaryURL{}, err
 	}
 	var result storage.TemporaryURL
-	err := m.calls.Run(ctx, "attachment temporary URL", func(ctx context.Context) error {
+	err := m.reads.Run(ctx, "attachment temporary URL", func(ctx context.Context) error {
 		file, err := c.find(ctx, m, owner, id)
 		if err != nil {
 			return err
 		}
-		disk, err := m.disks.Disk(file.disk)
-		if err != nil {
-			return err
-		}
-		if _, err := disk.Stat(ctx, file.key, storage.ReadOptions{IfMatch: file.etag, Version: file.version}); err != nil {
-			return err
-		}
-		result, err = disk.TemporaryURL(ctx, file.key, storage.LinkOptions{ExpiresIn: expires, Version: file.version})
+		result, err = c.temporaryURL(ctx, m, file, storage.LinkOptions{ExpiresIn: expires})
 		return err
 	})
 	if err != nil {
@@ -297,3 +305,158 @@ func (c Collection[M, K]) TemporaryURL(ctx context.Context, m *Manager, owner mo
 	}
 	return result, nil
 }
+
+// PublicURLOf derives the public URL of an attachment already loaded through
+// this collection (for example from Load or List) without database or storage
+// I/O. Authorize access to the attachment first; the URL does not.
+func (c Collection[M, K]) PublicURLOf(ctx context.Context, m *Manager, file Attachment[M, K]) (string, error) {
+	if err := c.owns(m, file); err != nil {
+		return "", err
+	}
+	return c.publicURL(ctx, m, file)
+}
+
+// PublicURLsOf maps loaded attachments to public URLs in order, for listing
+// responses. It performs no database or storage I/O.
+func (c Collection[M, K]) PublicURLsOf(ctx context.Context, m *Manager, files []Attachment[M, K]) ([]string, error) {
+	if len(files) > MaxBatchFiles {
+		return nil, invalid()
+	}
+	urls := make([]string, len(files))
+	for i, file := range files {
+		var err error
+		if urls[i], err = c.PublicURLOf(ctx, m, file); err != nil {
+			return nil, err
+		}
+	}
+	return urls, nil
+}
+
+// TemporaryURLOf signs a read link for a loaded attachment, pinned to its
+// stored version, without database or storage I/O. options.Version must be
+// zero; response overrides (for example a download Content-Disposition using
+// the original name) are signed into the link.
+func (c Collection[M, K]) TemporaryURLOf(ctx context.Context, m *Manager, file Attachment[M, K], options storage.LinkOptions) (storage.TemporaryURL, error) {
+	if err := c.owns(m, file); err != nil {
+		return storage.TemporaryURL{}, err
+	}
+	if options.Version != "" {
+		return storage.TemporaryURL{}, invalid()
+	}
+	return c.temporaryURL(ctx, m, file, options)
+}
+func (c Collection[M, K]) publicURL(ctx context.Context, m *Manager, file Attachment[M, K]) (string, error) {
+	// A stable public URL renders inline; script-capable files would run in
+	// the serving origin (stored XSS) unless the policy explicitly allows it.
+	if activeContent(file.info.MediaType) && !c.definition.policy.InlineActiveContent {
+		return "", ActiveContentRefused
+	}
+	disk, err := m.disks.Disk(file.disk)
+	if err != nil {
+		return "", err
+	}
+	return disk.PublicURL(ctx, file.key)
+}
+func (c Collection[M, K]) temporaryURL(ctx context.Context, m *Manager, file Attachment[M, K], options storage.LinkOptions) (storage.TemporaryURL, error) {
+	if activeContent(file.info.MediaType) && !c.definition.policy.InlineActiveContent {
+		// Signed links to script-capable files always download.
+		switch {
+		case options.ResponseContentDisposition == "":
+			options.ResponseContentDisposition = "attachment"
+		case !strings.HasPrefix(strings.ToLower(options.ResponseContentDisposition), "attachment"):
+			return storage.TemporaryURL{}, ActiveContentRefused
+		}
+	}
+	disk, err := m.disks.Disk(file.disk)
+	if err != nil {
+		return storage.TemporaryURL{}, err
+	}
+	options.Version = file.version
+	return disk.TemporaryURL(ctx, file.key, options)
+}
+
+// ActiveContentRefused reports an inline link to a script-capable attachment
+// (SVG, HTML, XML, JavaScript) whose policy does not set InlineActiveContent.
+// It matches fault.Invalid.
+var ActiveContentRefused = fault.New(fault.Invalid, "script-capable attachment cannot be linked inline")
+
+// activeContent reports media browsers can execute scripts from when a
+// response renders inline: SVG and other XML documents, HTML and JavaScript.
+func activeContent(media storage.MediaType) bool {
+	text := strings.ToLower(string(media))
+	switch text {
+	case "text/html", "application/xhtml+xml", "text/xml", "application/xml", "text/javascript", "application/javascript", "application/ecmascript", "text/ecmascript":
+		return true
+	}
+	return strings.HasSuffix(text, "+xml")
+}
+
+// owns checks that a loaded attachment belongs to this registered collection,
+// locale and disk. It never trusts a value from another collection.
+func (c Collection[M, K]) owns(m *Manager, file Attachment[M, K]) error {
+	if err := c.check(m); err != nil {
+		return err
+	}
+	if file.IsZero() || file.collection != c.Name() || file.disk != c.definition.policy.Disk.ID() || file.locale != c.locale || file.key.IsZero() || file.etag == "" {
+		return invalid()
+	}
+	return nil
+}
+
+// Open streams an attachment pinned to its stored ETag/version. The full
+// SHA-256 and length are verified at EOF (by the disk when the stored checksum
+// matches the pin, otherwise here). Only the lookup uses manager read
+// admission; the returned reader holds one disk stream slot until Close.
+// Always close it, and close it before closing the disk.
+func (c Collection[M, K]) Open(ctx context.Context, m *Manager, owner model.Reference[M, K], id ID[M]) (io.ReadCloser, Attachment[M, K], error) {
+	if err := c.check(m); err != nil {
+		return nil, Attachment[M, K]{}, err
+	}
+	var file Attachment[M, K]
+	err := m.reads.Run(ctx, "attachment stream lookup", func(ctx context.Context) error { var err error; file, err = c.find(ctx, m, owner, id); return err })
+	if err != nil {
+		return nil, Attachment[M, K]{}, err
+	}
+	disk, err := m.disks.Disk(file.disk)
+	if err != nil {
+		return nil, Attachment[M, K]{}, err
+	}
+	body, info, err := disk.Open(ctx, file.key, storage.ReadOptions{IfMatch: file.etag, Version: file.version})
+	if err != nil {
+		return nil, Attachment[M, K]{}, err
+	}
+	if info.Length != file.info.Size || info.Offset != 0 {
+		cleanup := body.Close()
+		return nil, Attachment[M, K]{}, storage.Failure(storage.IntegrityFailed, storage.OpenOperation, storage.NotApplicable, cleanup)
+	}
+	if diskVerified(info, file.digest) {
+		return body, file, nil
+	}
+	return &verifiedReader{body: body, digest: sha256.New(), expected: file.digest, remaining: file.info.Size}, file, nil
+}
+
+// verifiedReader checks the pinned digest and exact length at EOF when the
+// disk has no matching stored checksum to verify.
+type verifiedReader struct {
+	body      io.ReadCloser
+	digest    hash.Hash
+	expected  storage.SHA256
+	remaining int64
+}
+
+func (r *verifiedReader) Read(p []byte) (int, error) {
+	n, err := r.body.Read(p)
+	if n > 0 {
+		_, _ = r.digest.Write(p[:n])
+		r.remaining -= int64(n)
+	}
+	if err == io.EOF {
+		var actual storage.SHA256
+		copy(actual[:], r.digest.Sum(nil))
+		if r.remaining != 0 || actual != r.expected {
+			return n, storage.Failure(storage.IntegrityFailed, storage.OpenOperation, storage.NotApplicable, nil)
+		}
+	}
+	return n, err
+}
+func (r *verifiedReader) Close() error { return r.body.Close() }

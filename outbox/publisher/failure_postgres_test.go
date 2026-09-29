@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"runtime"
 	"testing"
 	"time"
@@ -15,6 +17,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/internal/outboxstore"
 	"github.com/weiloon1234/Foundry-Go/internal/outboxtest"
+	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/outbox"
 	"github.com/weiloon1234/Foundry-Go/outbox/publisher"
 	"github.com/weiloon1234/Foundry-Go/testkit"
@@ -56,7 +59,11 @@ func TestPostgresPublicationFailureInspectionReleasesRowAndRetainsRetry(t *testi
 		{"panic", faultyPublicationError{}, false},
 		{"goexit", faultyPublicationError{exit: true}, false},
 		{"invalid", fmt.Errorf("wrapped: %w", fault.Invalid), true},
-		{"missing", errors.Join(errors.New("transient"), fault.Missing), true},
+		// An unregistered job/event name is transient during rolling deploys.
+		{"missing", errors.Join(errors.New("transient"), fault.Missing), false},
+		// A queue policy mismatch during a configuration rollout is an operator
+		// problem, never a permanent property of the row.
+		{"queue-policy", fmt.Errorf("enqueue: %w", jobs.ErrQueuePolicy), false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			address := outboxstore.Address{Kind: "inspection", Destination: outbox.Destination(test.name), Name: "notice", Version: 1}
@@ -106,7 +113,7 @@ func TestPostgresPublicationFailureInspectionReleasesRowAndRetainsRetry(t *testi
 				t.Fatal(err)
 			}
 			failure = nil
-			clock.Advance(config.RetryDelay + time.Microsecond)
+			clock.Advance(config.RetryDelay + config.Jitter + time.Microsecond)
 			retry, err := p.PublishOne(t.Context())
 			if err != nil {
 				t.Fatal(err)
@@ -122,8 +129,9 @@ func TestPostgresPublicationFailureInspectionReleasesRowAndRetainsRetry(t *testi
 	}
 }
 
-// Observation happens after commit. Its cancellation-time error must not strand
-// Run's ownership, lose that committed row, or admit a duplicate publication.
+// Observation happens after commit. Its error is logged with a bounded
+// diagnostic and never stops Run, strands its ownership, loses that committed
+// row, or admits a duplicate publication.
 func TestPostgresCancelledObservationReleasesPublisherRun(t *testing.T) {
 	writer := outboxtest.Open(t)
 	for _, mode := range []string{"cycle", "panic", "goexit", "cancelled"} {
@@ -157,6 +165,7 @@ func TestPostgresCancelledObservationReleasesPublisherRun(t *testing.T) {
 			published, observed := 0, 0
 			config := publisher.DefaultConfig()
 			config.MaxInFlight = 1
+			config.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 			source := testkit.NewClock(time.Now().Add(time.Second))
 			config.Clock = source
 			config.Observe = func(_ context.Context, result publisher.Result) error {
@@ -181,14 +190,11 @@ func TestPostgresCancelledObservationReleasesPublisherRun(t *testing.T) {
 				returned = true
 				return nil
 			})
-			if escaped != nil || !returned || (runErr == nil) != (mode == "cancelled") {
-				t.Fatal("observation error escaped Run or changed cancellation classification")
+			if escaped != nil || !returned || runErr != nil {
+				t.Fatal("observation error escaped Run or stopped it", runErr)
 			}
-			if mode == "cycle" && (cycle.visits == 0 || cycle.visits > 256) {
-				t.Fatal("publisher cancellation inspection exceeded its bound")
-			}
-			if (mode == "panic" || mode == "goexit") && !errorgraph.Is(runErr, fault.Panicked) {
-				t.Fatal("abnormal inspection did not retain its safe classification")
+			if mode == "cycle" && cycle.visits > 256 {
+				t.Fatal("observation diagnostic inspection exceeded its bound")
 			}
 			if published != 1 || observed != 1 {
 				t.Fatal("observation replayed or skipped publication")

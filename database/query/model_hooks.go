@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -37,26 +38,20 @@ func (d Definition[M]) WithObserverHooks(factory func(context.Context, lifecycle
 	return d
 }
 
-// Only concrete framework owners can prove the absence of observers without
-// entering a transaction. An arbitrary wrapper must use the Tx it supplies.
-func writerObservers(writer database.Transactor) (lifecycle.Observers, bool) {
-	switch owner := writer.(type) {
-	case *database.DB:
-		// A prepared pool may still bind observers before concurrent startup.
-		// Only a ready pool proves this snapshot is frozen for its lifetime.
-		if owner != nil && owner.Stats().Ready {
-			return owner.Observers(), true
-		}
-	case *database.Session:
-		if owner != nil {
-			return owner.Observers(), true
-		}
-	case *database.Tx:
-		if owner != nil {
-			return owner.Observers(), true
-		}
+// observerOwner is the module-sealed capability implemented by DB,
+// PrimaryExecutor, Session and Tx. Only these owners can prove observer absence
+// without entering a transaction; an arbitrary wrapper must use the Tx it
+// supplies. The capability reads a frozen snapshot without pool locks or I/O.
+type observerOwner interface {
+	FoundryObservers(sqlowner.Seal) (lifecycle.Observers, bool)
+}
+
+func writerObservers(writer any) (lifecycle.Observers, bool) {
+	owner, ok := writer.(observerOwner)
+	if !ok {
+		return lifecycle.Observers{}, false
 	}
-	return lifecycle.Observers{}, false
+	return owner.FoundryObservers(sqlowner.Seal{})
 }
 
 // MaxLifecycleDepth bounds nested write and retrieval callbacks using the
@@ -96,7 +91,7 @@ func executeHookedMutation[M any](ctx context.Context, writer database.Transacto
 			if err != nil {
 				return *new(M), err
 			}
-			return returningOne(ctx, tx, statement, plan.query.definition.scan)
+			return plan.returning(ctx, tx, statement)
 		}
 		ctx, err := writeHookContext(ctx)
 		if err != nil {
@@ -138,7 +133,7 @@ func executeHookedMutation[M any](ctx context.Context, writer database.Transacto
 		if err != nil {
 			return *new(M), err
 		}
-		result, err := returningOne(ctx, tx, statement, plan.query.definition.scan)
+		result, err := plan.returning(ctx, tx, statement)
 		if err != nil {
 			return *new(M), err
 		}

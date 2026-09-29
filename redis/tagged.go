@@ -59,7 +59,7 @@ func (c *Client) taggedCommand(ctx context.Context, key cache.TaggedKey, op stri
 	}
 	addresses, args := taggedArguments(key, op, data, expiry, bound)
 	value, err := c.execute(ctx, func(ctx context.Context, raw *driver.Client) (any, error) {
-		return raw.Eval(ctx, taggedCacheScript, addresses, args...).Result()
+		return evalScript(ctx, raw, taggedCacheScript, addresses, args...).Result()
 	})
 	if err != nil {
 		return nil, false, err
@@ -71,11 +71,79 @@ func taggedArguments(key cache.TaggedKey, op string, data []byte, expiry string,
 	stamps := key.Stamps()
 	addresses := make([]string, 1, len(stamps)+1)
 	addresses[0] = key.DataKey().String()
-	fingerprint := key.Fingerprint()
-	args := []any{tagMetadataPrefix, cache.TagVersionBytes, op, bound, string(data), expiry, string(fingerprint[:])}
+	args := []any{tagMetadataPrefix, cache.TagVersionBytes, op, bound, string(data), expiry, string(key.VersionFingerprint())}
 	for _, stamp := range stamps {
 		addresses = append(addresses, stamp.Key.String())
 		args = append(args, string(stamp.Version.Bytes()))
 	}
 	return addresses, args
+}
+
+var _ cache.SnapshotWriteBackend = (*Client)(nil)
+
+// PutSnapshot resolves tag metadata (creating fresh versions for missing
+// metadata) and writes under the resolved snapshot in one atomic script.
+func (c *Client) PutSnapshot(ctx context.Context, base cache.EntryKey, tags []cache.EntryKey, data []byte, ttl cache.TTL) error {
+	_, _, err := c.snapshotCommand(ctx, base, tags, "put", data, ttl)
+	return err
+}
+
+// AddSnapshot fills an absent or invalidated entry under the current snapshot.
+func (c *Client) AddSnapshot(ctx context.Context, base cache.EntryKey, tags []cache.EntryKey, data []byte, ttl cache.TTL) (bool, error) {
+	_, ok, err := c.snapshotCommand(ctx, base, tags, "add", data, ttl)
+	return ok, err
+}
+
+// ForgetSnapshot removes the entry of the current snapshot; obsolete payloads
+// are reclaimed but not counted.
+func (c *Client) ForgetSnapshot(ctx context.Context, base cache.EntryKey, tags []cache.EntryKey) (bool, error) {
+	_, ok, err := c.snapshotCommand(ctx, base, tags, "forget", nil, cache.Forever())
+	return ok, err
+}
+
+// IncrementSnapshot applies exact signed arithmetic under the current snapshot.
+func (c *Client) IncrementSnapshot(ctx context.Context, base cache.EntryKey, tags []cache.EntryKey, delta int64, ttl cache.TTL) (int64, error) {
+	data, _, err := c.snapshotCommand(ctx, base, tags, "increment", cacheint.Encode(delta), ttl)
+	if err != nil {
+		return 0, err
+	}
+	return cacheint.Decode(data)
+}
+
+// ExpireSnapshot changes the expiry of the current snapshot's entry.
+func (c *Client) ExpireSnapshot(ctx context.Context, base cache.EntryKey, tags []cache.EntryKey, ttl cache.TTL) (bool, error) {
+	_, ok, err := c.snapshotCommand(ctx, base, tags, "expire", nil, ttl)
+	return ok, err
+}
+
+// snapshotCommand runs the tagged script in resolve mode: an empty fingerprint
+// followed by one fresh version per metadata key for missing metadata.
+func (c *Client) snapshotCommand(ctx context.Context, base cache.EntryKey, tags []cache.EntryKey, op string, data []byte, ttl cache.TTL) ([]byte, bool, error) {
+	address, err := cache.TaggedDataKey(base, tags)
+	if err != nil {
+		return nil, false, err
+	}
+	expiry, bound, err := c.cacheArguments(ctx, op, data, ttl)
+	if err != nil {
+		return nil, false, err
+	}
+	addresses := make([]string, 1, len(tags)+1)
+	addresses[0] = address.String()
+	args := make([]any, 7, len(tags)+7)
+	args[0], args[1], args[2], args[3], args[4], args[5], args[6] = tagMetadataPrefix, cache.TagVersionBytes, op, bound, string(data), expiry, ""
+	for _, key := range tags {
+		version, err := cache.NewTagVersion()
+		if err != nil {
+			return nil, false, err
+		}
+		addresses = append(addresses, key.String())
+		args = append(args, string(version.Bytes()))
+	}
+	value, err := c.execute(ctx, func(ctx context.Context, raw *driver.Client) (any, error) {
+		return evalScript(ctx, raw, taggedCacheScript, addresses, args...).Result()
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	return decodeReply(value, op == "increment")
 }

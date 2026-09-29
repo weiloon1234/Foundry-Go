@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"errors"
 	"io"
 	stdhttp "net/http"
 
@@ -9,8 +10,9 @@ import (
 )
 
 // Native range/precondition failures are held before commit so the endpoint
-// can use its shared JSON errors. Successful representations stream directly;
-// no whole-body buffer or ReaderFrom fast path bypasses the write accounting.
+// can use its shared JSON errors. Successful representations stream directly
+// without a whole-body buffer. A local regular file may take the native
+// ReaderFrom (sendfile) path; its count still feeds the same length check.
 type fileResponseWriter struct {
 	ctx       context.Context
 	native    stdhttp.ResponseWriter
@@ -72,6 +74,19 @@ func (w *fileResponseWriter) Write(data []byte) (int, error) {
 	return n, nil
 }
 
+// flush pushes accepted bytes to the client for a progressive stream. A native
+// writer without flush support keeps its own buffering.
+func (w *fileResponseWriter) flush() error {
+	if w.failed != nil {
+		return errFileTransfer
+	}
+	if err := stdhttp.NewResponseController(w.native).Flush(); err != nil && !errors.Is(err, stdhttp.ErrNotSupported) {
+		w.failed = err
+		return errFileTransfer
+	}
+	return nil
+}
+
 // WriteError owns all ordinary error headers. A native 416 additionally carries
 // its computed Content-Range, injected only at the final error-header boundary.
 type fileRangeErrorWriter struct {
@@ -84,4 +99,26 @@ func (w fileRangeErrorWriter) WriteHeader(status int) {
 		w.Header().Set("Content-Range", w.contentRange)
 	}
 	w.ResponseWriter.WriteHeader(status)
+}
+
+// ReadFrom serves ServeContent's copy. A framework-opened local file transfers
+// through the native writer's ReaderFrom (sendfile where the connection allows);
+// every other source uses the ordinary per-chunk Write path.
+func (w *fileResponseWriter) ReadFrom(source io.Reader) (int64, error) {
+	if w.status == 0 {
+		w.WriteHeader(stdhttp.StatusOK)
+	}
+	if w.status < 400 && w.failed == nil {
+		if limited, ok := source.(*io.LimitedReader); ok {
+			if reader, ok := limited.R.(*fileReader); ok {
+				if native, ok := w.native.(io.ReaderFrom); ok {
+					if n, handled, err := reader.sendTo(native, limited.N, w); handled {
+						limited.N -= n
+						return n, err
+					}
+				}
+			}
+		}
+	}
+	return io.Copy(struct{ io.Writer }{w}, source)
 }

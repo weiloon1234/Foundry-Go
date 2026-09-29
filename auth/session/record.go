@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
+	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 // Address binds persisted credentials to one application/environment, guard,
@@ -49,6 +50,31 @@ type Record struct {
 	LastSeenAt    temporal.DateTime
 	IdleExpiresAt temporal.DateTime
 	ExpiresAt     temporal.DateTime
+	Device        auth.Device
+	// ConfirmedAt is when the holder last re-entered its password (see
+	// Sessions.ConfirmCurrent). It never outlives the session.
+	ConfirmedAt value.Optional[temporal.DateTime] `json:",omitzero"`
+	// Impersonator marks an impersonation session with its original actor.
+	Impersonator value.Optional[Impersonator] `json:",omitzero"`
+}
+
+// Impersonator is the original actor of an impersonation session: its stored
+// identity, the guard that authenticated it and that actor's own session, which
+// Impersonation.Resume and Stop use to return. It is metadata, never authority.
+type Impersonator struct {
+	Subject model.Identity
+	Guard   auth.GuardName
+	Session model.ID[Record]
+}
+
+func (i Impersonator) Validate() error {
+	if err := i.Subject.Validate(); err != nil {
+		return err
+	}
+	if i.Guard == "" || i.Session.IsZero() {
+		return fault.New(fault.Invalid, "invalid session impersonator")
+	}
+	return nil
 }
 
 func (Record) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("session record")) }
@@ -75,10 +101,36 @@ func (r Record) Validate(address Address) error {
 	if r.CreatedAt.IsZero() || r.LastSeenAt.IsZero() || r.IdleExpiresAt.IsZero() || r.ExpiresAt.IsZero() || seen.Before(created) || !expires.After(created) || !idle.After(seen) || idle.After(expires) || !expires.Equal(created.Add(r.Lifetime.Absolute)) || idle.After(seen.Add(r.Lifetime.Idle)) {
 		return fault.New(fault.Invalid, "invalid stored session lifetime")
 	}
-	return nil
+	if confirmed, present := r.ConfirmedAt.Get(); present && (confirmed.IsZero() || confirmed.UTC().Before(created) || r.Assurance != auth.Authenticated) {
+		return fault.New(fault.Invalid, "invalid stored session confirmation")
+	}
+	if impersonator, present := r.Impersonator.Get(); present {
+		if err := impersonator.Validate(); err != nil {
+			return err
+		}
+		if r.Assurance != auth.Authenticated || r.Remember || r.ConfirmedAt.IsSet() {
+			return fault.New(fault.Invalid, "invalid stored impersonation session")
+		}
+	}
+	return r.Device.Validate()
 }
 func (r Record) Live(now time.Time) bool {
 	return now.Before(r.IdleExpiresAt.UTC()) && now.Before(r.ExpiresAt.UTC())
+}
+
+// TouchInterval is the minimum age of LastSeenAt before a sliding session's
+// activity is written again: max(1 minute, Idle/20), but never more than half
+// the idle lifetime, so a short idle window still slides for an active user.
+// Skipping more frequent writes avoids a row update per request; idle expiry
+// may therefore arrive up to this interval earlier than Idle after the last
+// request.
+func (l Lifetime) TouchInterval() time.Duration {
+	return min(max(time.Minute, l.Idle/20), l.Idle/2).Truncate(time.Microsecond)
+}
+
+// NeedsTouch reports whether a live sliding session should record activity now.
+func (r Record) NeedsTouch(now time.Time) bool {
+	return r.Lifetime.Sliding && r.Live(now) && now.UTC().Sub(r.LastSeenAt.UTC()) >= r.Lifetime.TouchInterval()
 }
 
 // Touch keeps monotonic activity across small server clock regressions. It never
@@ -112,23 +164,39 @@ func (r Record) Touch(now time.Time) (Record, bool, error) {
 }
 
 // Creation contains verified identity metadata and a newly generated hash.
-// Maximum is the active-session bound enforced under the subject's write lock.
+// Maximum is the live full-session bound and PendingMaximum the live pending-MFA
+// bound, both enforced under the subject's write lock for the credential's own
+// kind. Limit selects eviction or rejection for full sessions; pending sessions
+// always evict their oldest. Expired rows never count.
 type Creation struct {
-	ID        model.ID[Record]
-	Subject   model.Identity
-	Hash      Digest
-	Assurance auth.Assurance
-	Remember  bool
-	Lifetime  Lifetime
-	Maximum   int
+	ID             model.ID[Record]
+	Subject        model.Identity
+	Hash           Digest
+	Assurance      auth.Assurance
+	Remember       bool
+	Lifetime       Lifetime
+	Maximum        int
+	PendingMaximum int
+	Limit          auth.LimitPolicy
+	Device         auth.Device
+	// Impersonator marks an impersonation session. Impersonation sessions count
+	// only against PendingMaximum, like pending MFA, so they never evict or are
+	// rejected by the subject's own sessions.
+	Impersonator value.Optional[Impersonator]
 }
 
 func (c Creation) Validate(address Address) error {
 	if _, err := address.SubjectKey(c.Subject); err != nil {
 		return err
 	}
-	if c.ID.IsZero() || c.Hash.IsZero() || c.Maximum < 1 || c.Maximum > MaxSessions {
+	if c.ID.IsZero() || c.Hash.IsZero() || c.Maximum < 1 || c.PendingMaximum < 1 || c.Maximum+2*c.PendingMaximum > MaxSessions {
 		return fault.New(fault.Invalid, "invalid session creation")
+	}
+	if err := c.Limit.Validate(); err != nil {
+		return err
+	}
+	if err := c.Device.Validate(); err != nil {
+		return err
 	}
 	if err := c.Assurance.Validate(); err != nil {
 		return err
@@ -138,6 +206,14 @@ func (c Creation) Validate(address Address) error {
 	}
 	if c.Assurance == auth.PendingMFA && (c.Remember || c.Lifetime.Sliding) {
 		return fault.New(fault.Invalid, "pending MFA session cannot persist or slide")
+	}
+	if impersonator, present := c.Impersonator.Get(); present {
+		if err := impersonator.Validate(); err != nil {
+			return err
+		}
+		if c.Assurance != auth.Authenticated || c.Remember {
+			return fault.New(fault.Invalid, "impersonation sessions must be fully authenticated and not remembered")
+		}
 	}
 	return nil
 }
@@ -158,6 +234,6 @@ func (c Creation) At(address Address, now time.Time) (Record, error) {
 	if err != nil {
 		return Record{}, err
 	}
-	r := Record{ID: c.ID, Address: address, Subject: c.Subject, Hash: c.Hash, Assurance: c.Assurance, Remember: c.Remember, Lifetime: c.Lifetime, CreatedAt: created, LastSeenAt: created, IdleExpiresAt: idle, ExpiresAt: expires}
+	r := Record{ID: c.ID, Address: address, Subject: c.Subject, Hash: c.Hash, Assurance: c.Assurance, Remember: c.Remember, Lifetime: c.Lifetime, CreatedAt: created, LastSeenAt: created, IdleExpiresAt: idle, ExpiresAt: expires, Device: c.Device, Impersonator: c.Impersonator}
 	return r, r.Validate(address)
 }

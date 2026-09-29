@@ -33,7 +33,8 @@ type PasswordModel[M model.Identifiable, I any] struct {
 	// Preserve ordinary model lifecycle behavior. Never retry uncertain writes.
 	Rehash func(ctx context.Context, subject M, old, next password.Hash) (value.Optional[M], error)
 	// RequiresMFA checks current factor policy. It is explicit even when false;
-	// a required second factor produces only a PendingMFA proof.
+	// a required second factor produces only a PendingMFA proof. Link enrolled
+	// factors with PasswordLogin.WithSecondFactor so enrollment always applies.
 	RequiresMFA func(context.Context, M) (bool, error)
 }
 

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -17,24 +18,39 @@ import (
 // PostgresConfig owns a migration history namespace and resource bounds. The
 // schema/table must be simple PostgreSQL identifiers of at most 63 ASCII bytes.
 // All cooperating runners must use the same history schema and table.
+//
+// LockTimeout bounds acquisition of the runner's advisory lock. Up also sets
+// PostgreSQL's lock_timeout to StatementLockTimeout for its session, so DDL that
+// cannot obtain a table lock fails instead of queueing behind long transactions
+// and blocking application traffic; a transactional migration then rolls back
+// and can be retried. StatementTimeout sets statement_timeout for the session;
+// zero disables it, so long migrations are not canceled by an application pool
+// limit. Both settings are restored before the connection returns to the pool.
 type PostgresConfig struct {
-	Schema           string
-	Table            string
-	LockTimeout      time.Duration
-	LockPollInterval time.Duration
-	CleanupTimeout   time.Duration
-	MaxHistory       int
+	Schema               string
+	Table                string
+	LockTimeout          time.Duration
+	LockPollInterval     time.Duration
+	CleanupTimeout       time.Duration
+	MaxHistory           int
+	StatementLockTimeout time.Duration
+	StatementTimeout     time.Duration
 }
 
 func DefaultPostgresConfig() PostgresConfig {
-	return PostgresConfig{Schema: "foundry_ops", Table: "schema_migrations", LockTimeout: 30 * time.Second, LockPollInterval: 50 * time.Millisecond, CleanupTimeout: 5 * time.Second, MaxHistory: 10000}
+	return PostgresConfig{Schema: "foundry_ops", Table: "schema_migrations", LockTimeout: 30 * time.Second, LockPollInterval: 50 * time.Millisecond, CleanupTimeout: 5 * time.Second, MaxHistory: 10000, StatementLockTimeout: 10 * time.Second}
 }
 
 func (c PostgresConfig) Validate() error {
-	if !sqlname.Valid(c.Schema) || !sqlname.Valid(c.Table) || len(c.Schema) > 63 || len(c.Table) > 63 || c.LockTimeout <= 0 || c.LockPollInterval <= 0 || c.CleanupTimeout <= 0 || c.MaxHistory <= 0 || c.MaxHistory == math.MaxInt {
+	if !sqlname.Valid(c.Schema) || !sqlname.Valid(c.Table) || len(c.Schema) > 63 || len(c.Table) > 63 || c.LockTimeout <= 0 || c.LockPollInterval <= 0 || c.CleanupTimeout <= 0 || c.MaxHistory <= 0 || c.MaxHistory == math.MaxInt || !sessionLimit(c.StatementLockTimeout) || !sessionLimit(c.StatementTimeout) {
 		return fault.New(fault.Invalid, "invalid PostgreSQL migration configuration")
 	}
 	return nil
+}
+
+// sessionLimit accepts PostgreSQL's whole-millisecond integer timeout range.
+func sessionLimit(limit time.Duration) bool {
+	return limit >= 0 && limit%time.Millisecond == 0 && limit <= time.Duration(math.MaxInt32)*time.Millisecond
 }
 
 // Postgres is an explicit PostgreSQL migration runner over Foundry's DB. Creating
@@ -140,7 +156,7 @@ func (p *Postgres) Up(ctx context.Context) (result RunResult, err error) {
 			result.Interrupted = &key
 			applied, err := p.apply(ctx, session, item, result.Batch)
 			if err != nil {
-				return err
+				return p.failure(key, err)
 			}
 			result.Applied = append(result.Applied, applied)
 			result.Interrupted = nil
@@ -156,8 +172,63 @@ func (p *Postgres) locked(ctx context.Context, run func(*database.Session) error
 			return err
 		}
 		defer func() { err = errors.Join(err, p.releaseLock(ctx, session)) }()
+		if err := p.limitSession(ctx, session); err != nil {
+			session.Discard()
+			return err
+		}
+		defer func() { err = errors.Join(err, p.restoreSession(ctx, session)) }()
 		return run(session)
 	})
+}
+
+// limitSession applies the migration lock and statement limits to this
+// connection only. Values are integer milliseconds; zero disables each limit.
+func (p *Postgres) limitSession(ctx context.Context, session *database.Session) error {
+	_, err := session.Exec(ctx, "SELECT pg_catalog.set_config('lock_timeout', $1, false), pg_catalog.set_config('statement_timeout', $2, false)", strconv.FormatInt(p.config.StatementLockTimeout.Milliseconds(), 10), strconv.FormatInt(p.config.StatementTimeout.Milliseconds(), 10))
+	return err
+}
+
+// restoreSession returns both limits to the connection's configured defaults.
+// A connection that cannot be restored is discarded instead of reused.
+func (p *Postgres) restoreSession(ctx context.Context, session *database.Session) error {
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), p.config.CleanupTimeout)
+	defer cancel()
+	_, err := session.Exec(cleanup, "RESET lock_timeout")
+	if err == nil {
+		_, err = session.Exec(cleanup, "RESET statement_timeout")
+	}
+	if err != nil {
+		session.Discard()
+	}
+	return err
+}
+
+// failure names the migration and the next safe action. It formats only
+// declared identifiers and the database classification, never SQL or values.
+func (p *Postgres) failure(key Key, err error) error {
+	var interrupted *InterruptedMigration
+	if errors.As(err, &interrupted) {
+		return err
+	}
+	name := string(key.Origin) + "/" + string(key.ID)
+	var classified *database.Error
+	if !errors.As(err, &classified) {
+		return err
+	}
+	detail := string(classified.Code())
+	if state := classified.SQLState(); state != "" {
+		detail += ", SQLSTATE " + state
+	}
+	switch {
+	case classified.Outcome() == database.Unknown:
+		return fault.Wrap(fault.Conflict, "migration "+name+" has an unknown commit outcome ("+detail+"); run migrate status and reconcile before retrying", err)
+	case classified.Code() == database.LockNotAvailable:
+		return fault.Wrap(fault.Timeout, "migration "+name+" could not acquire a table lock within "+p.config.StatementLockTimeout.String()+" ("+detail+"); it was not committed and can be retried after conflicting transactions finish", err)
+	case classified.Code() == database.SerializationFailure || classified.Code() == database.Deadlock:
+		return fault.Wrap(fault.Conflict, "migration "+name+" conflicted with concurrent work ("+detail+"); it was not committed and can be retried", err)
+	default:
+		return fault.Wrap(fault.Invalid, "migration "+name+" failed and was not committed ("+detail+")", err)
+	}
 }
 
 func (p *Postgres) acquireLock(ctx context.Context, session *database.Session) error {

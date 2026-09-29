@@ -78,6 +78,10 @@ func (c Collection[M, K]) DetachKeepFile(ctx context.Context, m *Manager, owner 
 			if err != nil {
 				return err
 			}
+			// The retained original is handed over; its derived variants are not.
+			if _, err := m.retireVariants(ctx, tx, row.ID); err != nil {
+				return err
+			}
 			retained, err = retainedFile(row)
 			return err
 		})
@@ -85,6 +89,12 @@ func (c Collection[M, K]) DetachKeepFile(ctx context.Context, m *Manager, owner 
 		case database.Committed:
 			result.Publication = Published
 			result.File = value.Set(retained)
+			if err == nil {
+				cleanupCtx, cancel := m.cleanupContext(ctx)
+				defer cancel()
+				// A failed deletion stays in cleanup for ReconcilePending.
+				err = m.cleanupVariantsOf(cleanupCtx, model.IDFromBytes[store.File](id.Bytes()))
+			}
 		case database.Unknown:
 			result.Publication = PublicationUnknown
 		}
@@ -103,7 +113,7 @@ func (m *Manager) RetainedObject(ctx context.Context, id OperationID) (RetainedF
 		return RetainedFile{}, invalid()
 	}
 	var result RetainedFile
-	err := m.calls.Run(ctx, "retained attachment lookup", func(ctx context.Context) error {
+	err := m.reads.Run(ctx, "retained attachment lookup", func(ctx context.Context) error {
 		return m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 			row, err := store.QueryFoundryAttachments().RequireFind(ctx, tx, fileID(id))
 			if err != nil {

@@ -1,8 +1,5 @@
 # HTTP middleware
 
-**Combined verification passed.** Full repository acceptance supplements the
-focused runtime/consumer races and compiler/editor checks recorded in the master.
-
 Foundry composes native `net/http` wrappers with typed middleware identities.
 Declare dependencies in a constructor, then attach the result to a route or
 scope. This example is exercised in the independent `httpmiddleware` consumer:
@@ -49,6 +46,19 @@ cover redirects, missing routes and method errors. Global wrappers run before
 route matching, so they do not yet have `MatchedRoute`. Route inspection lists
 route/scope middleware; it does not infer arbitrary wrappers outside the router.
 
+Assembly rejects two ordering hazards with an actionable error:
+
+- A policy that reads [trusted proxy](http-trusted-proxy.md) results — rate
+  limits, CSRF, `PublicURLs`, browser sessions and credential-request checks —
+  declared before `TrustedProxy` in one chain, or a route that installs
+  `TrustedProxy` beneath such a global policy. Declare `TrustedProxy` first.
+- A router whose signed routes, `PublicLinks` pagination or `RequirePublicURLs()`
+  routes are not covered by [`PublicURLs`](http-public-urls.md) in the same
+  `ApplyMiddleware` call or on the route itself.
+
+The checks inspect the chain applied directly around a router and each route's
+own chain; wrap the router once with the complete global chain.
+
 Foundry passes the native writer through unchanged. A custom wrapper that
 replaces it must preserve the optional capabilities it needs, such as flushing
 or hijacking. Request handling is synchronous: do not use the writer after
@@ -62,4 +72,17 @@ and [security headers](http-security-headers.md) use this same assembly API.
 Use [RateLimit or RateLimitByIP](rate-limiting.md) with a bound typed quota. The
 framework reuses trusted attribution, emits shared 429/503 error contracts, and
 keeps the native handler inputs after admission. Install TrustedProxy first when
-forwarded IP attribution is required.
+forwarded IP attribution is required; assembly rejects the reverse order.
+
+`RateLimitByIP` keys IPv4 clients per address and IPv6 clients per /64 network,
+because one IPv6 subscriber usually controls a whole /64. Use
+`RateLimitByIPWith(limiter, foundryhttp.IPRateLimitOptions{IPv6Prefix: 56})` to
+change the grouping (IPv4 1–32, IPv6 1–128; zero selects the default).
+
+Every 429 from `RateLimit` or `RateLimitByIP` carries `Retry-After` (at least one
+second) together with `X-RateLimit-Limit`, `X-RateLimit-Remaining` and
+`X-RateLimit-Reset`. A handler that calls a limiter itself can return
+`foundryhttp.RateLimitExceeded(decision)` (optionally wrapped); the shared error
+writer then sends the same headers from that denied decision. An allowed
+decision passed to it is an internal error. A bare `RateLimited` error carries
+no retry information, so its 429 has no `Retry-After`.

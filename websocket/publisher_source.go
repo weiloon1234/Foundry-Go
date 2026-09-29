@@ -22,11 +22,23 @@ func (p *Publisher) publicationHub() *Hub {
 	}
 	return p.hub
 }
+
+// Close stops publication and waits, bounded by ctx, for admitted operations
+// and the cluster subscription to finish. A timeout ends only the wait; keep
+// the borrowed adapter open until Done closes.
 func (p *Publisher) Close(ctx context.Context) error {
 	if p == nil {
 		return fault.New(fault.Invalid, "WebSocket publisher is not initialized")
 	}
 	return p.hub.Stop(ctx)
+}
+
+// Done closes once every publication operation and background task exited.
+func (p *Publisher) Done() <-chan struct{} {
+	if p == nil {
+		return nil
+	}
+	return p.hub.Done()
 }
 func publicationHub(source PublisherSource) (*Hub, error) {
 	if source == nil {

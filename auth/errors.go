@@ -12,6 +12,17 @@ const (
 	Unauthenticated Code = "unauthenticated"
 	Forbidden       Code = "forbidden"
 	MFARequired     Code = "mfa_required"
+	// CredentialLimit rejects issuing another session/token when the subject's
+	// active-credential cap is reached under a reject-new policy. It is a client
+	// conflict (revoke an existing credential), not a server failure.
+	CredentialLimit Code = "credential_limit"
+	// ConfirmationRequired rejects a sensitive operation until the current
+	// session recently re-entered its password.
+	ConfirmationRequired Code = "password_confirmation_required"
+	// ImpersonationForbidden rejects an operation that an impersonated session
+	// must not perform, such as changing credentials or starting another
+	// impersonation. It is a Forbidden-class refusal.
+	ImpersonationForbidden Code = "impersonation_forbidden"
 )
 
 func (c Code) Error() string { return string(c) }

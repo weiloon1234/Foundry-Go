@@ -116,9 +116,15 @@ func TestResolverOwnsCapacityUntilExit(t *testing.T) {
 	}()
 	<-entered
 	cancel()
-	if _, err := l.Allow(t.Context(), "b"); !errors.Is(err, fault.Conflict) {
+	// A saturated store queues briefly, then reports retryable overload.
+	bounded, stop := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	_, err := l.Allow(bounded, "b")
+	stop()
+	if !errors.Is(err, fault.Overloaded) || !errors.Is(err, context.DeadlineExceeded) {
 		t.Error(err)
 	}
+	queued := make(chan error, 1)
+	go func() { _, err := l.Allow(t.Context(), "queued"); queued <- err }()
 	select {
 	case err := <-finished:
 		t.Error("callback abandoned", err)
@@ -128,8 +134,11 @@ func TestResolverOwnsCapacityUntilExit(t *testing.T) {
 	if err := <-finished; !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
-	if calls.Load() != 0 {
-		t.Fatal("canceled resolver reached backend")
+	if err := <-queued; err != nil {
+		t.Fatal("queued operation did not receive the released slot", err)
+	}
+	if calls.Load() != 1 {
+		t.Fatal("canceled resolver reached backend", calls.Load())
 	}
 	if d, err := l.Allow(t.Context(), "c"); err != nil || !d.Allowed {
 		t.Fatal(d, err)
@@ -218,5 +227,88 @@ func TestStoreAndKeyBoundsRejectBeforeBackend(t *testing.T) {
 	}
 	if calls.Load() != 0 {
 		t.Fatal(calls.Load())
+	}
+}
+
+// inspectable adds the optional inspection capability to a scripted backend.
+type inspectable struct {
+	backendFunc
+	peek  func(context.Context, ratelimit.Key, ratelimit.Limit, uint32) (ratelimit.Decision, error)
+	clear func(context.Context, ratelimit.Key) (bool, error)
+}
+
+func (b inspectable) PeekRateLimit(ctx context.Context, k ratelimit.Key, l ratelimit.Limit, c uint32) (ratelimit.Decision, error) {
+	return b.peek(ctx, k, l, c)
+}
+func (b inspectable) ClearRateLimit(ctx context.Context, k ratelimit.Key) (bool, error) {
+	return b.clear(ctx, k)
+}
+func TestInspectionAttemptAndCapability(t *testing.T) {
+	var keys []ratelimit.Key
+	var cleared atomic.Int32
+	b := inspectable{backendFunc: backendFunc(accepted), peek: func(_ context.Context, k ratelimit.Key, l ratelimit.Limit, c uint32) (ratelimit.Decision, error) {
+		keys = append(keys, k)
+		d := ratelimit.Decision{Allowed: c <= 2, Limit: l.Requests, Remaining: 2, ResetAfter: 400 * time.Millisecond}
+		if !d.Allowed {
+			d.RetryAfter = d.ResetAfter
+		}
+		return d, nil
+	}, clear: func(_ context.Context, k ratelimit.Key) (bool, error) {
+		keys = append(keys, k)
+		cleared.Add(1)
+		return true, nil
+	}}
+	l, _ := fixture(t, b, nil, keyspace.StringKeys[string]())
+	if remaining, err := l.Remaining(t.Context(), "a"); err != nil || remaining != 2 {
+		t.Fatal(remaining, err)
+	}
+	if wait, err := l.AvailableIn(t.Context(), "a", 2); err != nil || wait != 0 {
+		t.Fatal(wait, err)
+	}
+	if wait, err := l.AvailableIn(t.Context(), "a", 3); err != nil || wait != 400*time.Millisecond {
+		t.Fatal(wait, err)
+	}
+	if d, err := l.Peek(t.Context(), "a", 6); !errors.Is(err, fault.Invalid) || d != (ratelimit.Decision{}) {
+		t.Fatal("impossible cost reached backend", d, err)
+	}
+	if ok, err := l.Clear(t.Context(), "a"); err != nil || !ok || cleared.Load() != 1 {
+		t.Fatal(ok, err)
+	}
+	for _, k := range keys {
+		if k != keys[0] {
+			t.Fatal("inspection used a different address")
+		}
+	}
+	// Malformed inspection output is rejected, never trusted.
+	b.peek = func(_ context.Context, _ ratelimit.Key, l ratelimit.Limit, _ uint32) (ratelimit.Decision, error) {
+		return ratelimit.Decision{Allowed: true, Limit: l.Requests, Remaining: 0, ResetAfter: time.Second}, nil
+	}
+	malformed, _ := fixture(t, b, nil, keyspace.StringKeys[string]())
+	if _, err := malformed.Peek(t.Context(), "a", 1); !errors.Is(err, fault.Internal) {
+		t.Fatal(err)
+	}
+
+	basic, _ := fixture(t, backendFunc(accepted), nil, keyspace.StringKeys[string]())
+	if _, err := basic.Peek(t.Context(), "a", 1); !errors.Is(err, fault.Invalid) {
+		t.Fatal("unsupported inspection", err)
+	}
+	if _, err := basic.Clear(t.Context(), "a"); !errors.Is(err, fault.Invalid) {
+		t.Fatal("unsupported clear", err)
+	}
+
+	ran := 0
+	sentinel := errors.New("domain failure")
+	d, err := basic.Attempt(t.Context(), "a", 1, func(ctx context.Context) error { ran++; return sentinel })
+	if !errors.Is(err, sentinel) || !d.Allowed || ran != 1 {
+		t.Fatal(d, err, ran)
+	}
+	denied, _ := fixture(t, backendFunc(func(_ context.Context, _ ratelimit.Key, l ratelimit.Limit, _ uint32) (ratelimit.Decision, error) {
+		return ratelimit.Decision{Limit: l.Requests, ResetAfter: time.Second, RetryAfter: time.Second}, nil
+	}), nil, keyspace.StringKeys[string]())
+	if d, err := denied.Attempt(t.Context(), "a", 1, func(context.Context) error { ran++; return nil }); err != nil || d.Allowed || ran != 1 {
+		t.Fatal("denied attempt ran its callback", d, err, ran)
+	}
+	if _, err := basic.Attempt(t.Context(), "a", 1, nil); !errors.Is(err, fault.Invalid) {
+		t.Fatal(err)
 	}
 }

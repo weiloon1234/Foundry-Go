@@ -61,8 +61,10 @@ internal error cause and are not included in that public message. Invalid
 response values are internal failures. Declaration/configuration errors fail
 before encoding begins.
 
-Panic and `runtime.Goexit` in codecs become internal faults, and failures return
-no body bytes. Cancellation waits for an active codec to actually finish rather
+Panics in codecs become internal faults, and failures return no body bytes.
+Encoding runs codecs on the caller's goroutine, so `runtime.Goexit` in a codec
+ends that goroutine; typed endpoints prepare responses inside the handler's
+isolated boundary, where Goexit is still a safe internal failure. Cancellation waits for an active codec to actually finish rather
 than releasing resources while it still runs. A codec panic remains visible even
 if cancellation happens at the same time. Callers must keep input unchanged until
 the operation returns.

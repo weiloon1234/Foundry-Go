@@ -58,7 +58,7 @@ func TestFieldDocumentationForcedTermination(t *testing.T) {
 				if !result.Kept {
 					t.Fatalf("complete source/output publication not retained: %+v", result)
 				}
-				if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+				if _, err := Generate(t.Context(), Options{Dir: dir, Check: true, FieldDocumentation: true}); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -72,6 +72,7 @@ func TestFieldDocumentationRejectsConcurrentSourceEdit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	g.fieldDocumentation = true
 	writes, err := g.prepare(t.Context())
 	if err != nil {
 		t.Fatal(err)

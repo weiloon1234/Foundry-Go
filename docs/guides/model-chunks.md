@@ -23,9 +23,9 @@ err := models.QueryUsers().
 
 | Method | Callback | Traversal and row ownership |
 | --- | --- | --- |
-| `Each(ctx, db, callback)` | `func(User) error` | Streams rows without eager loads; uses `DefaultChunkSize` offset batches when eager relations or aggregate slots are selected |
-| `Chunk(ctx, db, size, callback)` | `func([]User) error` | Offset batches with all rows closed before each callback |
-| `EachChunked(ctx, db, size, callback)` | `func(User) error` | Individual callbacks over complete offset batches |
+| `Each(ctx, db, callback)` | `func(User) error` | Streams rows when nothing can run per model; uses `DefaultChunkSize` keyset batches when eager relations, aggregate slots or retrieval hooks/observers are selected, or the executor cannot prove observers absent |
+| `Chunk(ctx, db, size, callback)` | `func([]User) error` | Keyset batches (offset only for unkeyable orders) with all rows closed before each callback |
+| `EachChunked(ctx, db, size, callback)` | `func(User) error` | Individual callbacks over complete `Chunk` batches |
 | `ChunkByID(ctx, db, size, callback)` | `func([]User) error` | Primary-key batches with all rows closed before each callback |
 | `EachByID(ctx, db, size, callback)` | `func(User) error` | Individual callbacks over complete primary-key batches |
 
@@ -33,7 +33,9 @@ Sizes must be between one and `query.MaxChunkSize`; invalid values fail before d
 
 `Chunk` and `EachChunked` preserve the query's filters, ordering, initial `Offset` and total `Limit`. A missing primary-key tie-breaker is appended in ascending order. For example, `Offset(10).Limit(250).Chunk(..., 100, ...)` delivers at most 100, 100 and 50 models, starting at the selected offset. The original query remains unchanged.
 
-Large offsets can become expensive, and changes to earlier matching rows can shift subsequent offsets. [PostgreSQL LIMIT/OFFSET behavior](https://www.postgresql.org/docs/18/queries-limit.html) explains both ordering and offset costs. Prefer key traversal when changing the query's filter fields during iteration:
+After the first batch, each batch continues after the last delivered row's ordered values and primary key (keyset traversal), so deleting or inserting rows behind the current position does not shift later batches, and the cost of a batch does not grow with its position. When every ordered field is declared NOT NULL and all share one direction, the continuation is one row comparison such as `("rank", "id") > ($1, $2)`, which a composite index on the same columns serves as a single range. Nullable fields use the NULL-aware expanded predicate (ascending NULLS LAST, descending NULLS FIRST). Orders that cannot be keyed fall back to `LIMIT`/`OFFSET` batches: computed expressions, explicit `NullsFirst`/`NullsLast` placement, and fields without a generated getter. Complete-model projections and set results, which `Each` batches when retrieval hooks may run, continue by primary key when ordered only by it over plain columns without joins, grouping or `DISTINCT`, and use offsets otherwise.
+
+Offset batches over large offsets can become expensive, and changes to earlier matching rows can shift them. [PostgreSQL LIMIT/OFFSET behavior](https://www.postgresql.org/docs/18/queries-limit.html) explains both ordering and offset costs. Keyset batches still observe rows whose ordered values change during iteration; prefer primary-key traversal when changing the query's filter or order fields during iteration:
 
 ```go
 u := models.UserFields()

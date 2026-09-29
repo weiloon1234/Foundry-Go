@@ -16,6 +16,7 @@ import (
 
 	"foundry.test/consumer/clientcontracts"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/openapi"
 	"github.com/weiloon1234/Foundry-Go/typescript"
 	"github.com/weiloon1234/Foundry-Go/websocket"
@@ -56,7 +57,7 @@ func TestConsumerClientManifestKeepsRealFeatureBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if document.Version != manifest.Version || len(document.HTTP) != 17 || document.Realtime == nil || len(document.Realtime.Channels) != 2 || document.Locales == nil || len(document.Enums) != 1 || len(document.Permissions) != 1 {
+	if document.Version != manifest.Version || len(document.HTTP) != 22 || document.Realtime == nil || len(document.Realtime.Channels) != 2 || document.Locales == nil || len(document.Enums) != 1 || len(document.Permissions) != 1 {
 		t.Fatal("registered metadata missing")
 	}
 	if len(document.Tables) != 1 || document.Tables[0].ID != "reports.members" || !document.Tables[0].Exports || len(document.Notifications) != 1 || len(document.Notifications[0].Channels) != 1 || document.Notifications[0].Channels[0].Payload != "foundry.test/consumer/clientcontracts.Member" {
@@ -232,7 +233,14 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 		t.Fatal(err)
 	}
 	mux := http.NewServeMux()
-	mux.Handle("/", f.Router)
+	server := httptest.NewUnstartedServer(mux)
+	origin := foundryhttp.Origin("http://" + server.Listener.Addr().String())
+	// Signed routes verify against the admitted public origin.
+	routes, err := foundryhttp.ApplyMiddleware(f.Router, foundryhttp.PublicURLs(foundryhttp.PublicURLConfig{AllowedOrigins: []foundryhttp.Origin{origin}}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux.Handle("/", routes)
 	mux.Handle("/ws", hub)
 	// Native Node WebSocket has no browser cookie jar. This loopback-only test
 	// endpoint supplies a fixed fixture credential before the real auth adapter.
@@ -240,7 +248,15 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 		r.AddCookie(&http.Cookie{Name: "fixture_session", Value: "fixture-only"})
 		hub.ServeHTTP(w, r)
 	}))
-	server := httptest.NewServer(mux)
+	server.Start()
+	links, err := f.Links(t.Context(), origin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signed, err := json.Marshal(links)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
@@ -249,5 +265,5 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 		}
 		server.Close()
 	})
-	run("real HTTP/WebSocket and adversarial codec contracts", filepath.Join(dir, "runtime.mjs"), filepath.Join(dir, "dist", "contracts_foundry.gen.js"), server.URL, filepath.Join(dir, "dist", "legacy.js"))
+	run("real HTTP/WebSocket and adversarial codec contracts", filepath.Join(dir, "runtime.mjs"), filepath.Join(dir, "dist", "contracts_foundry.gen.js"), server.URL, filepath.Join(dir, "dist", "legacy.js"), string(signed))
 }

@@ -5,25 +5,38 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"sync"
+	"time"
 
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// streamTimeout is the cancellation cause when a read stream does not open
+// within Timeout or makes no read progress for StreamIdleTimeout.
+var streamTimeout = fault.Wrap(fault.Timeout, "storage stream made no progress before its deadline", context.DeadlineExceeded)
+
 // Disk owns bounded operations and returned readers, borrowing its backend.
-// Close cancels work and closes readers; Done waits for their actual release.
-// Close the backend only afterward. Construction performs no storage I/O.
+// Metadata/write operations and open read streams use separate queued
+// admission pools. Close cancels work and closes readers; Done waits for their
+// actual release. Close the backend only afterward. Construction performs no
+// storage I/O.
 type Disk struct {
 	id           DiskID
 	backend      Backend
 	config       Config
 	capabilities Capabilities
+	operations   *admission.Semaphore
+	streams      *admission.Semaphore
 	ctx          context.Context
 	cancel       context.CancelFunc
 	mu           sync.Mutex
 	active       int
+	streaming    int
 	closing      bool
 	readers      map[*ownedReader]struct{}
 	done         chan struct{}
@@ -37,6 +50,7 @@ func NewDisk(id DiskID, backend Backend, config Config) (*Disk, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
+	config = config.normalized()
 	if backend == nil {
 		return nil, Failure(Invalid, OpenOperation, NotApplicable, nil)
 	}
@@ -48,7 +62,7 @@ func NewDisk(id DiskID, backend Backend, config Config) (*Disk, error) {
 		return nil, Failure(Invalid, OpenOperation, NotApplicable, nil)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Disk{id: id, backend: backend, config: config, capabilities: capabilities, ctx: ctx, cancel: cancel, readers: make(map[*ownedReader]struct{}), done: make(chan struct{})}, nil
+	return &Disk{id: id, backend: backend, config: config, capabilities: capabilities, operations: admission.New(config.MaxActive), streams: admission.New(config.MaxStreams), ctx: ctx, cancel: cancel, readers: make(map[*ownedReader]struct{}), done: make(chan struct{})}, nil
 }
 func (d *Disk) ID() DiskID {
 	if d == nil {
@@ -62,33 +76,80 @@ func (d *Disk) Capabilities() Capabilities {
 	}
 	return d.capabilities
 }
+
+// Config returns the disk's normalized limits. Recovery policies use Timeout to
+// bound how long an admitted operation can still be running.
+func (d *Disk) Config() Config {
+	if d == nil {
+		return Config{}
+	}
+	return d.config
+}
 func (d *Disk) Validate() error {
 	if d == nil || d.done == nil {
 		return Failure(Invalid, OpenOperation, NotApplicable, nil)
 	}
 	return nil
 }
-func (d *Disk) begin(ctx context.Context, op Operation) (context.Context, func(), error) {
+
+// admit waits in FIFO order for a slot of pool. Exhausted capacity is a
+// retryable Unavailable failure whose cause matches fault.Overloaded; the
+// operation did not start. Closing the disk ends every wait as Closed.
+func (d *Disk) admit(ctx context.Context, pool *admission.Semaphore, op Operation) (func(), error) {
 	if err := d.Validate(); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if ctx == nil {
-		return nil, nil, Failure(Invalid, op, NotApplicable, nil)
+		return nil, Failure(Invalid, op, NotApplicable, nil)
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, nil, Failure(Unavailable, op, Unchanged, err)
+		return nil, Failure(Unavailable, op, Unchanged, err)
 	}
+	d.mu.Lock()
+	closing := d.closing
+	d.mu.Unlock()
+	if closing {
+		return nil, Failure(Closed, op, Unchanged, nil)
+	}
+	if err := pool.Acquire(ctx, admission.Wait(d.config.Timeout), d.ctx.Done()); err != nil {
+		if errors.Is(err, fault.Closed) {
+			return nil, Failure(Closed, op, Unchanged, err)
+		}
+		return nil, Failure(Unavailable, op, Unchanged, err)
+	}
+	streaming := pool == d.streams
 	d.mu.Lock()
 	if d.closing {
 		d.mu.Unlock()
-		return nil, nil, Failure(Closed, op, Unchanged, nil)
-	}
-	if d.active >= d.config.MaxActive {
-		d.mu.Unlock()
-		return nil, nil, Failure(LimitExceeded, op, Unchanged, nil)
+		pool.Release()
+		return nil, Failure(Closed, op, Unchanged, nil)
 	}
 	d.active++
+	if streaming {
+		d.streaming++
+	}
 	d.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			d.mu.Lock()
+			defer d.mu.Unlock()
+			d.active--
+			if streaming {
+				d.streaming--
+			}
+			pool.Release()
+			if d.closing && d.active == 0 {
+				close(d.done)
+			}
+		})
+	}, nil
+}
+func (d *Disk) begin(ctx context.Context, op Operation) (context.Context, func(), error) {
+	admitted, err := d.admit(ctx, d.operations, op)
+	if err != nil {
+		return nil, nil, err
+	}
 	operation, cancel := context.WithTimeout(ctx, d.config.Timeout)
 	stop := context.AfterFunc(d.ctx, cancel)
 	var once sync.Once
@@ -96,12 +157,7 @@ func (d *Disk) begin(ctx context.Context, op Operation) (context.Context, func()
 		once.Do(func() {
 			stop()
 			cancel()
-			d.mu.Lock()
-			defer d.mu.Unlock()
-			d.active--
-			if d.closing && d.active == 0 {
-				close(d.done)
-			}
+			admitted()
 		})
 	}
 	return operation, release, nil
@@ -122,7 +178,7 @@ func finish(op Operation, ctx context.Context, err error, success Outcome) error
 	if success == NotApplicable {
 		outcome = NotApplicable
 	}
-	return Failure(Unavailable, op, outcome, errors.Join(ctx.Err(), failed))
+	return Failure(Unavailable, op, outcome, errors.Join(context.Cause(ctx), failed))
 }
 
 func classifyOutcome(op Operation, ctx context.Context, err error, success Outcome) error {
@@ -136,7 +192,8 @@ func classifyOutcome(op Operation, ctx context.Context, err error, success Outco
 		}
 		return !matched
 	})
-	if canceled := ctx.Err(); canceled != nil {
+	if ctx.Err() != nil {
+		canceled := context.Cause(ctx)
 		outcome := success
 		if err != nil {
 			outcome = Unknown
@@ -178,11 +235,7 @@ func (d *Disk) readOptions(o ReadOptions) error {
 	if err := o.Validate(); err != nil {
 		return err
 	}
-	c := d.capabilities
-	if o.Range.IsSet() && !c.Ranges || o.IfMatch != "" && !c.ConditionalRead || o.Version != "" && !c.Versions {
-		return Failure(Unsupported, OpenOperation, NotApplicable, nil)
-	}
-	return nil
+	return d.capabilities.ValidateRead(o)
 }
 func (d *Disk) validateInfo(key ObjectKey, info ObjectInfo) error {
 	if err := info.Validate(); err != nil {
@@ -206,6 +259,7 @@ func (d *Disk) Put(ctx context.Context, key ObjectKey, source io.Reader, options
 	if err := d.writeOptions(options); err != nil {
 		return StoredObject{}, err
 	}
+	options.Metadata = options.Metadata.Clone()
 	op, release, err := d.begin(ctx, PutOperation)
 	if err != nil {
 		return StoredObject{}, err
@@ -244,6 +298,11 @@ func (d *Disk) PutBytes(ctx context.Context, key ObjectKey, data []byte, options
 	options.Size = value.Set(int64(len(data)))
 	return d.Put(ctx, key, bytes.NewReader(data), options)
 }
+
+// Open returns an owned reader holding one MaxStreams slot until Close,
+// cancellation, shutdown or StreamIdleTimeout without read progress. Opening
+// itself must complete within Timeout. A stream is not bounded by Timeout, so a
+// slow consumer can finish a large download while it keeps reading.
 func (d *Disk) Open(ctx context.Context, key ObjectKey, options ReadOptions) (io.ReadCloser, ReadInfo, error) {
 	if err := d.Validate(); err != nil {
 		return nil, ReadInfo{}, err
@@ -254,16 +313,25 @@ func (d *Disk) Open(ctx context.Context, key ObjectKey, options ReadOptions) (io
 	if err := d.readOptions(options); err != nil {
 		return nil, ReadInfo{}, err
 	}
-	op, release, err := d.begin(ctx, OpenOperation)
+	admitted, err := d.admit(ctx, d.streams, OpenOperation)
 	if err != nil {
 		return nil, ReadInfo{}, err
 	}
 	// Reader.Close must synchronously cancel the context given to the backend
 	// before interrupting its body. Disk cancellation reaches operation contexts
 	// through AfterFunc, whose scheduling must not determine a read's outcome.
-	op, cancel := context.WithCancel(op)
-	releaseAdmission := release
-	release = func() { cancel(); releaseAdmission() }
+	op, cancel := context.WithCancelCause(ctx)
+	stop := context.AfterFunc(d.ctx, func() { cancel(context.Canceled) })
+	watchdog := time.AfterFunc(d.config.Timeout, func() { cancel(streamTimeout) })
+	var once sync.Once
+	release := func() {
+		once.Do(func() {
+			watchdog.Stop()
+			stop()
+			cancel(context.Canceled)
+			admitted()
+		})
+	}
 	var body io.ReadCloser
 	var info ReadInfo
 	err = callback.Isolated("storage open", func() error { var err error; body, info, err = d.backend.Open(op, key, options); return err })
@@ -281,7 +349,7 @@ func (d *Disk) Open(ctx context.Context, key ObjectKey, options ReadOptions) (io
 	}
 	err = finish(OpenOperation, op, err, NotApplicable)
 	if err != nil {
-		cancel()
+		cancel(context.Canceled)
 		if body != nil {
 			if cleanup := closeBody(body); cleanup != nil {
 				err = Failure(Unavailable, OpenOperation, NotApplicable, errors.Join(err, cleanup))
@@ -290,7 +358,9 @@ func (d *Disk) Open(ctx context.Context, key ObjectKey, options ReadOptions) (io
 		release()
 		return nil, ReadInfo{}, err
 	}
-	reader := &ownedReader{disk: d, raw: body, ctx: op, cancel: cancel, release: release, length: info.Length, closed: make(chan struct{})}
+	// Opening succeeded: the watchdog now measures read progress only.
+	watchdog.Reset(d.config.StreamIdleTimeout)
+	reader := &ownedReader{disk: d, raw: body, ctx: op, cancel: func() { cancel(context.Canceled) }, release: release, idle: watchdog, idleTimeout: d.config.StreamIdleTimeout, length: info.Length, closed: make(chan struct{})}
 	reader.verifyChecksum(info)
 	d.mu.Lock()
 	d.readers[reader] = struct{}{}
@@ -300,8 +370,9 @@ func (d *Disk) Open(ctx context.Context, key ObjectKey, options ReadOptions) (io
 	reader.watch = context.AfterFunc(op, func() { _ = reader.Close() })
 	reader.watchMu.Unlock()
 	if closing || op.Err() != nil {
+		cause := context.Cause(op)
 		cleanup := reader.Close()
-		return nil, ReadInfo{}, Failure(Closed, OpenOperation, NotApplicable, errors.Join(op.Err(), cleanup))
+		return nil, ReadInfo{}, Failure(Closed, OpenOperation, NotApplicable, errors.Join(cause, cleanup))
 	}
 	return reader, info, nil
 }
@@ -354,8 +425,8 @@ func (d *Disk) Delete(ctx context.Context, key ObjectKey, options DeleteOptions)
 	if err := options.Validate(); err != nil {
 		return err
 	}
-	if options.IfMatch != "" && !d.capabilities.ConditionalDelete || options.Version != "" && !d.capabilities.Versions {
-		return Failure(Unsupported, DeleteOperation, Unchanged, nil)
+	if err := d.capabilities.ValidateDelete(options); err != nil {
+		return err
 	}
 	op, release, err := d.begin(ctx, DeleteOperation)
 	if err != nil {
@@ -372,6 +443,9 @@ func (d *Disk) List(ctx context.Context, options ListOptions) (Page, error) {
 	if err := options.Validate(); err != nil {
 		return Page{}, err
 	}
+	if err := d.capabilities.ValidateList(options); err != nil {
+		return Page{}, err
+	}
 	op, release, err := d.begin(ctx, ListOperation)
 	if err != nil {
 		return Page{}, err
@@ -380,25 +454,57 @@ func (d *Disk) List(ctx context.Context, options ListOptions) (Page, error) {
 	var page Page
 	err = callback.Isolated("storage list", func() error { var err error; page, err = d.backend.List(op, options); return err })
 	if err == nil {
-		if len(page.Objects) > options.Limit || len(page.Next.Token()) > MaxCursorBytes || !page.Next.IsZero() && page.Next == options.Cursor {
-			err = Failure(IntegrityFailed, ListOperation, NotApplicable, nil)
-		}
-		previous := ""
-		for _, info := range page.Objects {
-			if e := d.validateInfo(info.Key, info); e != nil {
-				err = errors.Join(err, e)
-			}
-			if !options.Prefix.Contains(info.Key) || info.Key.String() <= previous {
-				err = Failure(IntegrityFailed, ListOperation, NotApplicable, err)
-			}
-			previous = info.Key.String()
-		}
+		err = validatePage(options, page)
 	}
 	if err = finish(ListOperation, op, err, NotApplicable); err != nil {
 		return Page{}, err
 	}
-	page.Objects = append([]ObjectInfo(nil), page.Objects...)
+	// An adapter's own object bound may exceed this disk's. Such entries are
+	// counted, never returned as objects this disk would refuse to read.
+	objects := make([]ObjectInfo, 0, len(page.Objects))
+	for _, info := range page.Objects {
+		if info.Size > d.config.MaxObjectBytes {
+			page.Skipped++
+			continue
+		}
+		objects = append(objects, info)
+	}
+	page.Objects = objects
+	page.Directories = append([]Prefix(nil), page.Directories...)
 	return page, nil
+}
+
+// validatePage checks an adapter page as an untrusted boundary: bounds, order,
+// prefix containment and one-level shape for delimited listings.
+func validatePage(options ListOptions, page Page) error {
+	integrity := func(cause error) error { return Failure(IntegrityFailed, ListOperation, NotApplicable, cause) }
+	if len(page.Objects)+len(page.Directories) > options.Limit || page.Skipped < 0 || len(page.Next.Token()) > MaxCursorBytes || !page.Next.IsZero() && page.Next == options.Cursor {
+		return integrity(nil)
+	}
+	if !options.Delimited && len(page.Directories) > 0 {
+		return integrity(nil)
+	}
+	prefix := options.Prefix.String()
+	previous := ""
+	for _, info := range page.Objects {
+		if err := info.ValidateListed(); err != nil {
+			return integrity(err)
+		}
+		text := info.Key.String()
+		if !options.Prefix.Contains(info.Key) || text <= previous || options.Delimited && strings.Contains(text[len(prefix):], "/") {
+			return integrity(nil)
+		}
+		previous = text
+	}
+	previous = ""
+	for _, directory := range page.Directories {
+		text := directory.String()
+		if directory.Validate() != nil || !strings.HasPrefix(text, prefix) || len(text) <= len(prefix)+1 || !strings.HasSuffix(text, "/") || strings.Contains(text[len(prefix):len(text)-1], "/") || text <= previous {
+			return integrity(nil)
+		}
+		previous = text
+	}
+	return nil
 }
 func (d *Disk) Close(ctx context.Context) error {
 	if err := d.Validate(); err != nil {
@@ -438,8 +544,11 @@ func (d *Disk) Done() <-chan struct{} {
 	return d.done
 }
 
+// Stats reports admitted work. Active counts operations and open streams;
+// Streams is the subset holding MaxStreams slots.
 type Stats struct {
 	Active  int
+	Streams int
 	Closing bool
 }
 
@@ -449,5 +558,5 @@ func (d *Disk) Stats() Stats {
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return Stats{Active: d.active, Closing: d.closing}
+	return Stats{Active: d.active, Streams: d.streaming, Closing: d.closing}
 }

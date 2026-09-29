@@ -77,7 +77,7 @@ func TestTypedActorRequestLifecycle(t *testing.T) {
 				sequence    string
 			}{
 				{"valid", "name=++Jane++", 204, "prepare,authorize,handler"},
-				{"valid", "name=+", 422, "prepare"},
+				{"valid", "name=+", 422, "prepare,authorize"}, // authorization precedes validation
 				{"valid", "name=deny", 403, "prepare,authorize"},
 				{"invalid", "malformed=%", 401, ""},
 				{"", "name=Jane", map[bool]int{false: 401, true: 204}[optional], map[bool]string{false: "", true: "prepare,authorize,handler"}[optional]},

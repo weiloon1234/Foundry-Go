@@ -305,7 +305,9 @@ func TestRetrievalDispatchUsesBoundedBatchesForStreaming(t *testing.T) {
 			}
 			state := &driverState{}
 			var sizes []int
+			keyed := 0
 			window := regexp.MustCompile(` LIMIT \$(\d+)(?: OFFSET \$(\d+))?$`)
+			keyset := regexp.MustCompile(`"id" > \$(\d+)\)`)
 			state.query = func(_ context.Context, sql string, args []driver.NamedValue) (driver.Rows, error) {
 				match := window.FindStringSubmatch(sql)
 				if match == nil {
@@ -320,6 +322,16 @@ func TestRetrievalDispatchUsesBoundedBatchesForStreaming(t *testing.T) {
 				}
 				if limit > query.DefaultChunkSize {
 					return nil, errors.New("retrieval batch exceeds its bound")
+				}
+				// Later batches continue after the last delivered key (ids are
+				// 1-based positions), never by accumulating OFFSET.
+				if key := keyset.FindStringSubmatch(sql); key != nil {
+					index, _ := strconv.Atoi(key[1])
+					if match[2] != "" {
+						return nil, errors.New("keyset batch also used OFFSET")
+					}
+					offset = int(args[index-1].Value.(int64))
+					keyed++
 				}
 				selected := values[min(offset, len(values)):min(offset+limit, len(values))]
 				sizes = append(sizes, len(selected))
@@ -347,8 +359,8 @@ func TestRetrievalDispatchUsesBoundedBatchesForStreaming(t *testing.T) {
 				seen = append(seen, item.ID)
 				return nil
 			})
-			if err != nil || !reflect.DeepEqual(sizes, []int{100, 100, 5}) || factories != 3 || retrieved != 205 || len(seen) != 205 || seen[0] != 4 || seen[len(seen)-1] != 208 {
-				t.Fatal("streaming retrieval lost its batch/window contract", sizes, factories, retrieved, len(seen), err)
+			if err != nil || !reflect.DeepEqual(sizes, []int{100, 100, 5}) || keyed != 2 || factories != 3 || retrieved != 205 || len(seen) != 205 || seen[0] != 4 || seen[len(seen)-1] != 208 {
+				t.Fatal("streaming retrieval lost its batch/window contract", sizes, keyed, factories, retrieved, len(seen), err)
 			}
 			if db.Stats().Owners != 0 || db.Stats().InUse != 0 {
 				t.Fatal("streaming retrieval retained resources")

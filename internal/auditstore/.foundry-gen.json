@@ -1,6 +1,7 @@
 {
   "version": 1,
   "files": {
-    "entry_foundry.gen.go": "136064574c7e36b3c1d47dd3555ca057edcfbffea5dd531357fea2286a51feca"
+    "activity_foundry.gen.go": "5e89fac0cb48a19f3f4f150499f49ffd8b6863a74b2725139574cae220b42ef8",
+    "entry_foundry.gen.go": "930dc10df71304e9a53df640940946c36462af39e84e713da4c295b62ec2fb04"
   }
 }

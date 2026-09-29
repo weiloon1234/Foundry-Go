@@ -50,6 +50,14 @@ func (p Permission[M]) Allows(ctx context.Context, guard Guard[M]) (bool, error)
 	}
 	return p.policy.Allows(ctx, guard, struct{}{})
 }
+
+// Inspect returns the decision, including a typed Denial when one was given.
+func (p Permission[M]) Inspect(ctx context.Context, guard Guard[M]) (Decision, error) {
+	if err := p.Validate(); err != nil {
+		return Decision{}, err
+	}
+	return p.policy.Inspect(ctx, guard, struct{}{})
+}
 func (p Permission[M]) Authorize(ctx context.Context, guard Guard[M]) error {
 	if err := p.Validate(); err != nil {
 		return err

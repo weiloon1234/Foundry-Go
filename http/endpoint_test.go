@@ -262,8 +262,10 @@ func TestTypedEndpointHandlerFailureAndCancellation(t *testing.T) {
 	}
 	close(release)
 	<-done
-	if response.Code != 408 {
-		t.Fatalf("canceled handler: %d", response.Code)
+	// The handler returned success after cancellation: its completed outcome
+	// is published, never replaced by a timeout.
+	if response.Code != 201 {
+		t.Fatalf("canceled handler success: %d", response.Code)
 	}
 }
 
@@ -363,6 +365,13 @@ func TestTypedEndpointReaderFailureIsOwned(t *testing.T) {
 			request.ContentLength = -1
 			request.Header.Set("Content-Type", "application/json")
 			response := httptest.NewRecorder()
+			if mode == "goexit" {
+				// Body reads run on the request goroutine (callback.Invoke).
+				if !exitsGoroutine(func() { router.ServeHTTP(response, request) }) {
+					t.Fatal("reader Goexit was converted into a response")
+				}
+				return
+			}
 			router.ServeHTTP(response, request)
 			want := 500
 			if mode == "error" {

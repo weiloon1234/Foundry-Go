@@ -14,6 +14,12 @@ import (
 
 const jobMessageKind = "job"
 
+// Workflows publish on the job route under a reserved message name.
+const (
+	workflowMessageName    = "foundry.workflow"
+	workflowMessageVersion = 1
+)
+
 // Outbox snapshots jobs through business transactions. It never publishes on
 // transaction callback return; the shared publisher only sees committed rows.
 type Outbox struct {
@@ -97,6 +103,44 @@ func (p Pending[P]) Enqueue(ctx context.Context, tx *database.Tx, producer *Outb
 	return outbox.IDFromBytes[P](row.ID.Bytes()), nil
 }
 
+// Enqueue snapshots the whole workflow into the business transaction. After
+// commit the shared publisher submits it as one atomic group through the job
+// route; rollback suppresses it. Every member must be registered with the
+// producer's dispatcher. The stable workflow and member IDs deduplicate
+// repeated publication, bounded by queue retention.
+func (w Workflow) Enqueue(ctx context.Context, tx *database.Tx, producer *Outbox) (outbox.ID[WorkflowExecution], error) {
+	if producer == nil || tx == nil {
+		return outbox.ID[WorkflowExecution]{}, fault.New(fault.Invalid, "workflow enqueue requires an outbox and transaction")
+	}
+	release, err := producer.dispatcher.begin(ctx)
+	if err != nil {
+		return outbox.ID[WorkflowExecution]{}, err
+	}
+	defer release()
+	if err := w.check(producer.dispatcher.registry); err != nil {
+		return outbox.ID[WorkflowExecution]{}, err
+	}
+	data, err := w.envelope.MarshalJSON()
+	if err != nil {
+		return outbox.ID[WorkflowExecution]{}, err
+	}
+	var row outboxstore.Message
+	appendRow := func(tx *database.Tx) error {
+		var err error
+		row, err = outboxstore.Append(ctx, tx, outboxstore.Address{Kind: jobMessageKind, Destination: producer.destination, Name: workflowMessageName, Version: workflowMessageVersion}, string(data), w.envelope.steps[0].Origin())
+		return err
+	}
+	if producer.database != nil {
+		err = sqlscope.InSchema(ctx, tx, producer.database, producer.schema, appendRow)
+	} else {
+		err = appendRow(tx)
+	}
+	if err != nil {
+		return outbox.ID[WorkflowExecution]{}, err
+	}
+	return outbox.IDFromBytes[WorkflowExecution](row.ID.Bytes()), nil
+}
+
 // DurableBackend declares durable acceptance under the backend's configured
 // persistence/failover policy. A process-local queue cannot publish an outbox.
 type DurableBackend interface {
@@ -131,6 +175,9 @@ func (o *Outbox) PublicationRoute() (publisher.Route, error) {
 		if err != nil {
 			return err
 		}
+		if message.Name() == workflowMessageName && message.Version() == workflowMessageVersion && message.Destination() == o.destination {
+			return o.publishWorkflow(ctx, data)
+		}
 		envelope, err := DecodeEnvelope([]byte(data))
 		if err != nil {
 			return err
@@ -148,4 +195,24 @@ func (o *Outbox) PublicationRoute() (publisher.Route, error) {
 		_, err = o.dispatcher.backend.JobEnqueue(ctx, key, envelope)
 		return err
 	}}, nil
+}
+
+// publishWorkflow submits a committed workflow row. A member name/version this
+// process does not register is fault.Missing, which the publisher retries.
+func (o *Outbox) publishWorkflow(ctx context.Context, data string) error {
+	workflow, err := DecodeWorkflow([]byte(data))
+	if err != nil {
+		return err
+	}
+	for _, member := range workflow.Members() {
+		if _, err := o.dispatcher.registry.lookup(jobKey{member.Name(), member.Version()}); err != nil {
+			return err
+		}
+	}
+	key, err := NewKey(o.dispatcher.config.Namespace, workflow.Queue())
+	if err != nil {
+		return err
+	}
+	_, err = o.dispatcher.backend.JobWorkflow(ctx, key, workflow)
+	return err
 }

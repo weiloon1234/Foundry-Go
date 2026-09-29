@@ -20,14 +20,29 @@ func ParseDigest(text string) (Digest, error) {
 	hash, err := credential.ParseDigest(text)
 	return Digest{hash: hash}, err
 }
+
+// HashSecret accepts the canonical 256-bit random encoding, optionally preceded
+// by a Config.Prefix-style prefix. Only the random part is hashed, so changing
+// the configured prefix never invalidates existing tokens.
 func HashSecret(value secret.String) (Digest, error) {
+	text := value.Reveal()
+	if len(text) > credential.EncodedSecretBytes {
+		prefix := text[:len(text)-credential.EncodedSecretBytes]
+		if validatePrefix(prefix) != nil {
+			return Digest{}, auth.Unauthenticated
+		}
+		value = secret.New(text[len(prefix):])
+	}
 	hash, err := credential.Hash(value)
 	if err != nil {
 		return Digest{}, auth.Unauthenticated
 	}
 	return Digest{hash: hash}, nil
 }
-func newSecret() (secret.String, Digest, error) {
+func newSecret(prefix string) (secret.String, Digest, error) {
 	value, hash, err := credential.New()
-	return value, Digest{hash: hash}, err
+	if err != nil || prefix == "" {
+		return value, Digest{hash: hash}, err
+	}
+	return secret.New(prefix + value.Reveal()), Digest{hash: hash}, nil
 }

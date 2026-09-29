@@ -9,7 +9,6 @@ import (
 	"go/scanner"
 	"go/token"
 	"go/types"
-	"path/filepath"
 	"slices"
 	"strings"
 )
@@ -67,10 +66,10 @@ func planFieldDocumentation(p *packageInput, metadata *metadata) (map[string][]b
 	for _, source := range p.files {
 		clean, err := stripFieldNotes(source.data)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", source.name, err)
+			return nil, fmt.Errorf("%s: %w", p.displayName(source.name), err)
 		}
 		fset := token.NewFileSet()
-		syntax, err := parser.ParseFile(fset, source.name, clean, parser.ParseComments)
+		syntax, err := parser.ParseFile(fset, p.displayName(source.name), clean, parser.ParseComments)
 		if err != nil {
 			return nil, err
 		}
@@ -136,16 +135,13 @@ func planFieldDocumentation(p *packageInput, metadata *metadata) (map[string][]b
 		}
 		updated, err := format.Source(applySourceEdits(clean, edits))
 		if err != nil {
-			return nil, fmt.Errorf("format field documentation in %s: %w", source.name, err)
+			return nil, fmt.Errorf("format field documentation in %s: %w", p.displayName(source.name), err)
 		}
 		if err := validateFieldDocumentationChange(source.data, updated); err != nil {
-			return nil, fmt.Errorf("%s: %w", source.name, err)
+			return nil, fmt.Errorf("%s: %w", p.displayName(source.name), err)
 		}
 		if !bytes.Equal(updated, source.data) {
 			updates[source.name] = updated
-			if err := updateSourcePositions(metadata, source.name, updated); err != nil {
-				return nil, err
-			}
 		}
 	}
 	return updates, nil
@@ -254,53 +250,4 @@ func unmanagedSourceTokens(data []byte) ([]string, error) {
 		result = append(result, item.kind.String()+":"+item.literal)
 	}
 	return result, nil
-}
-
-func updateSourcePositions(metadata *metadata, name string, data []byte) error {
-	fset := token.NewFileSet()
-	syntax, err := parser.ParseFile(fset, name, data, 0)
-	if err != nil {
-		return err
-	}
-	positions := make(map[string]token.Position)
-	for _, decl := range syntax.Decls {
-		if gen, ok := decl.(*ast.GenDecl); ok && gen.Tok == token.TYPE {
-			for _, spec := range gen.Specs {
-				typ := spec.(*ast.TypeSpec)
-				positions[typ.Name.Name] = fset.Position(typ.Pos())
-			}
-		}
-	}
-	update := func(symbol string, position *token.Position) {
-		if filepath.Base(position.Filename) == name {
-			if next, ok := positions[symbol]; ok {
-				*position = next
-			}
-		}
-	}
-	for i := range metadata.models {
-		update(metadata.models[i].name, &metadata.models[i].position)
-	}
-	for i := range metadata.enums {
-		update(metadata.enums[i].name, &metadata.enums[i].position)
-	}
-	for i := range metadata.projections {
-		update(metadata.projections[i].name, &metadata.projections[i].position)
-	}
-	for i := range metadata.paths {
-		update(metadata.paths[i].name, &metadata.paths[i].position)
-	}
-	for i := range metadata.queries {
-		update(metadata.queries[i].name, &metadata.queries[i].position)
-	}
-	for i := range metadata.multipart {
-		update(metadata.multipart[i].name, &metadata.multipart[i].position)
-	}
-	for i := range metadata.dtos {
-		update(metadata.dtos[i].name, &metadata.dtos[i].position)
-	}
-	for i := range metadata.configs {
-		update(metadata.configs[i].name, &metadata.configs[i].position)
-	}
-	return nil
 }

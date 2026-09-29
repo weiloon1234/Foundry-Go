@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/base64"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/frameworkadapter"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -54,4 +55,25 @@ func (c base64CookieCodec[V]) Format(v V) (string, error) {
 		return "", fault.New(fault.Invalid, "cookie value exceeds its byte bound")
 	}
 	return base64.RawURLEncoding.EncodeToString([]byte(text)), nil
+}
+
+// Built-in scalar and credential codecs run no application methods and never
+// call runtime.Goexit, so cookie reads and writes use the in-goroutine panic
+// boundary for them. Text, enum and custom codecs remain isolated.
+func (stringPathCodec[V]) FoundryAdapter(frameworkadapter.Seal)    {}
+func (integerPathCodec[V]) FoundryAdapter(frameworkadapter.Seal)   {}
+func (floatPathCodec[V]) FoundryAdapter(frameworkadapter.Seal)     {}
+func (boolPathCodec[V]) FoundryAdapter(frameworkadapter.Seal)      {}
+func (modelIDPathCodec[M]) FoundryAdapter(frameworkadapter.Seal)   {}
+func (credentialCookieCodec) FoundryAdapter(frameworkadapter.Seal) {}
+
+// cookieCodecOwned reports whether every layer of a codec is framework-owned.
+func cookieCodecOwned[V any](codec CookieCodec[V]) bool {
+	switch c := codec.(type) {
+	case describedURLCodec[V]:
+		return c.err != nil || frameworkadapter.Is(c.codec)
+	case base64CookieCodec[V]:
+		return cookieCodecOwned(c.inner)
+	}
+	return frameworkadapter.Is(codec)
 }

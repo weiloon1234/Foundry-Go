@@ -122,11 +122,14 @@ func publishBrowserSession(ctx context.Context, w stdhttp.ResponseWriter, status
 	cookie, deadline := s.cookie, s.deadline
 	s.cookie = ""
 	s.mu.Unlock()
-	if err := ctx.Err(); err != nil {
-		return err
-	}
+	// Only a credential-bearing publication (a staged session cookie, rotation
+	// or clear) is withheld once the request context ended; an ordinary
+	// completed response is still delivered.
 	if cookie == "" || status < 200 || status >= 400 {
 		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if !deadline.IsZero() {
 		err := callback.Isolated("HTTP session expiry", func() error {

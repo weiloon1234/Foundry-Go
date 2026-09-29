@@ -3,10 +3,12 @@ package jobs
 import (
 	"context"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -14,15 +16,17 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// DispatchConfig bounds simultaneous payload capture/adapter operations. Full
-// admission fails immediately; recursive dispatch cannot deadlock on capacity.
+// DispatchConfig bounds simultaneous payload capture/adapter operations. A
+// burst beyond MaxInFlight queues briefly (bounded by the caller's context and
+// the shared admission wait) and then fails with fault.Overloaded, which HTTP
+// maps to a retryable 503. No dispatch waits on another dispatch's completion.
 type DispatchConfig struct {
 	Namespace   keyspace.Namespace
 	MaxInFlight int
 }
 
 func DefaultDispatchConfig(namespace keyspace.Namespace) DispatchConfig {
-	return DispatchConfig{Namespace: namespace, MaxInFlight: 64}
+	return DispatchConfig{Namespace: namespace, MaxInFlight: 256}
 }
 func (c DispatchConfig) Validate() error {
 	if err := c.Namespace.Validate(); err != nil {
@@ -43,7 +47,11 @@ type Dispatcher struct {
 	backend  Backend
 	registry *Registry
 	config   DispatchConfig
-	slots    chan struct{}
+	slots    *admission.Semaphore
+	// The inline worker is built on first use by an inline (sync) backend.
+	inlineOnce        sync.Once
+	inlineWorkerValue *Worker
+	inlineErr         error
 }
 
 func NewDispatcher(backend Backend, registry *Registry, config DispatchConfig) (*Dispatcher, error) {
@@ -53,7 +61,7 @@ func NewDispatcher(backend Backend, registry *Registry, config DispatchConfig) (
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
-	return &Dispatcher{backend: backend, registry: registry, config: config, slots: make(chan struct{}, config.MaxInFlight)}, nil
+	return &Dispatcher{backend: backend, registry: registry, config: config, slots: admission.New(config.MaxInFlight)}, nil
 }
 func isNil(v any) bool {
 	r := reflect.ValueOf(v)
@@ -70,12 +78,10 @@ func (d *Dispatcher) begin(ctx context.Context) (func(), error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	select {
-	case d.slots <- struct{}{}:
-		return func() { <-d.slots }, nil
-	default:
-		return nil, fault.New(fault.Conflict, "job dispatch capacity reached")
+	if err := d.slots.Acquire(ctx, admission.DefaultWait, nil); err != nil {
+		return nil, err
 	}
+	return d.slots.Release, nil
 }
 
 // Options are owned by the concrete job payload. Zero ID generates a new one;
@@ -90,6 +96,9 @@ type Options[P any] struct {
 	// Upgrade every worker/outbox reader before enabling it. False preserves
 	// the legacy wire shape; an absent trace also keeps the legacy shape.
 	PropagateTrace bool
+	// RetryUntil overrides the policy's absolute retry deadline for this job
+	// (ExtendedEnvelope). Zero keeps the declared policy.
+	RetryUntil time.Time
 }
 
 // Receipt identifies the captured dispatch even if backend acceptance is unknown.
@@ -143,6 +152,9 @@ func (d Definition[P]) Capture(ctx context.Context, input P, options Options[P])
 	if options.Queue != "" {
 		policy.Queue = options.Queue
 	}
+	if !options.RetryUntil.IsZero() {
+		policy.RetryUntil = options.RetryUntil.UTC()
+	}
 	var payload string
 	err = callback.Isolated("capture job payload", func() error {
 		snapshot, err := value.NewJSON(input)
@@ -158,10 +170,19 @@ func (d Definition[P]) Capture(ctx context.Context, input P, options Options[P])
 	if err := ctx.Err(); err != nil {
 		return Pending[P]{}, err
 	}
-	envelope := Envelope{wire: envelopeWire{ID: model.IDFromBytes[Execution](id.Bytes()), Name: d.name, Version: d.version, Policy: policy, AvailableAt: options.At.UTC(), Origin: origin, Unique: unique}, payload: payload}
+	encrypted := d.keyring != nil
+	if encrypted {
+		if payload, err = d.seal(ctx, payload); err != nil {
+			return Pending[P]{}, err
+		}
+	}
+	envelope := Envelope{wire: envelopeWire{ID: model.IDFromBytes[Execution](id.Bytes()), Name: d.name, Version: d.version, Policy: policy, AvailableAt: options.At.UTC(), Origin: origin, Unique: unique, Encrypted: encrypted}, payload: payload}
 	if trace := tracing.FromContext(ctx); options.PropagateTrace && !trace.IsZero() {
 		envelope.wire.EnvelopeVersion = TracedEnvelope
 		envelope.wire.Trace = value.Set(trace)
+	}
+	if envelope.wire.extended() {
+		envelope.wire.EnvelopeVersion = ExtendedEnvelope
 	}
 	if _, err := envelope.MarshalJSON(); err != nil {
 		return Pending[P]{}, err
@@ -182,42 +203,54 @@ func (d Definition[P]) check(registry *Registry) error {
 // Dispatch captures and submits a concrete payload. For deliberate retries after
 // network ambiguity, prefer Capture once followed by Pending.Dispatch.
 func (d Definition[P]) Dispatch(ctx context.Context, dispatcher *Dispatcher, input P, options Options[P]) (Receipt[P], error) {
-	release, err := dispatcher.begin(ctx)
-	if err != nil {
-		return Receipt[P]{}, err
+	receipt, key, err := func() (Receipt[P], Key, error) {
+		release, err := dispatcher.begin(ctx)
+		if err != nil {
+			return Receipt[P]{}, Key{}, err
+		}
+		defer release()
+		if err := d.check(dispatcher.registry); err != nil {
+			return Receipt[P]{}, Key{}, err
+		}
+		pending, err := d.Capture(ctx, input, options)
+		if err != nil {
+			return Receipt[P]{}, Key{}, err
+		}
+		return pending.submit(ctx, dispatcher)
+	}()
+	if err == nil && receipt.Inserted {
+		dispatcher.runInline(ctx, key)
 	}
-	defer release()
-	if err := d.check(dispatcher.registry); err != nil {
-		return Receipt[P]{}, err
-	}
-	pending, err := d.Capture(ctx, input, options)
-	if err != nil {
-		return Receipt[P]{}, err
-	}
-	return pending.submit(ctx, dispatcher)
+	return receipt, err
 }
 func (p Pending[P]) Dispatch(ctx context.Context, dispatcher *Dispatcher) (Receipt[P], error) {
-	release, err := dispatcher.begin(ctx)
-	if err != nil {
-		return Receipt[P]{}, err
+	receipt, key, err := func() (Receipt[P], Key, error) {
+		release, err := dispatcher.begin(ctx)
+		if err != nil {
+			return Receipt[P]{}, Key{}, err
+		}
+		defer release()
+		if err := p.definition.check(dispatcher.registry); err != nil {
+			return Receipt[P]{}, Key{}, err
+		}
+		return p.submit(ctx, dispatcher)
+	}()
+	if err == nil && receipt.Inserted {
+		dispatcher.runInline(ctx, key)
 	}
-	defer release()
-	if err := p.definition.check(dispatcher.registry); err != nil {
-		return Receipt[P]{}, err
-	}
-	return p.submit(ctx, dispatcher)
+	return receipt, err
 }
-func (p Pending[P]) submit(ctx context.Context, dispatcher *Dispatcher) (Receipt[P], error) {
+func (p Pending[P]) submit(ctx context.Context, dispatcher *Dispatcher) (Receipt[P], Key, error) {
 	receipt := Receipt[P]{ID: p.ID()}
 	if err := p.envelope.Validate(); err != nil {
-		return receipt, err
+		return receipt, Key{}, err
 	}
 	key, err := NewKey(dispatcher.config.Namespace, p.envelope.Queue())
 	if err != nil {
-		return receipt, err
+		return receipt, Key{}, err
 	}
 	receipt.Inserted, err = dispatcher.backend.JobEnqueue(ctx, key, p.envelope)
-	return receipt, err
+	return receipt, key, err
 }
 
 // Inspect and Cancel preserve the payload owner on ordinary application IDs.

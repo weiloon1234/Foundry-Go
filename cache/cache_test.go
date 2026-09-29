@@ -298,7 +298,8 @@ func TestReadBoundsAndTimeoutReachBackend(t *testing.T) {
 			if value != 0 || found {
 				t.Fatal("invalid read published result")
 			}
-			if mode == "timeout" && !errors.Is(err, context.DeadlineExceeded) || mode == "oversized" && !errors.Is(err, fault.Invalid) || mode == "missing" && err != nil {
+			// A value above the current decode bound is a miss that a write replaces.
+			if mode == "timeout" && !errors.Is(err, context.DeadlineExceeded) || mode == "oversized" && err != nil || mode == "missing" && err != nil {
 				t.Fatal("read failure classification", err)
 			}
 		})

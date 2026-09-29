@@ -31,20 +31,20 @@ func TestThroughAliasedScopesAndStableOrder(t *testing.T) {
 	if err := cursorQuery().With(r).Validate(); err != nil {
 		t.Fatal(err)
 	}
-	s, err := r.compileThrough(id.In(4, 5).expression, 6)
+	s, err := r.compileThrough(t.Context(), id.In(4, 5).expression, 6)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
 		`FROM "records" AS "foundry_target" INNER JOIN "records" AS "foundry_pivot" ON ("foundry_target"."id" = "foundry_pivot"."id")`,
-		`WHERE (("foundry_target"."id" = $1) OR (NOT ("foundry_target"."rank" > $2))) AND ("foundry_pivot"."rank" >= $3) AND ("foundry_pivot"."id" IN ($4, $5))`,
-		`ORDER BY "foundry_pivot"."rank" DESC, "foundry_target"."rank" ASC, "foundry_target"."id" ASC, "foundry_pivot"."id" ASC LIMIT $6`,
+		`WHERE (("foundry_target"."id" = $1) OR (NOT ("foundry_target"."rank" > $2))) AND ("foundry_pivot"."rank" >= $3) AND ("foundry_pivot"."id" = ANY($4))`,
+		`ORDER BY "foundry_pivot"."rank" DESC, "foundry_target"."rank" ASC, "foundry_target"."id" ASC, "foundry_pivot"."id" ASC LIMIT $5`,
 	} {
 		if !strings.Contains(s.SQL(), want) {
 			t.Fatalf("missing %s in %s", want, s.SQL())
 		}
 	}
-	if !reflect.DeepEqual(s.Arguments(), []any{int64(1), int64(2), int64(3), int64(4), int64(5), int64(6)}) {
+	if !reflect.DeepEqual(s.Arguments(), []any{int64(1), int64(2), int64(3), "{4,5}", int64(6)}) {
 		t.Fatal("joined bindings lost order")
 	}
 	if len(base.orders) != 0 || len(base.spec.target.predicates) != 0 || len(base.pivot.predicates) != 0 {
@@ -108,12 +108,12 @@ func TestJoinedHydrationPublishesOnlyCompleteTuple(t *testing.T) {
 		return m, err
 	})
 	row := &joinedTestRow{}
-	link, err := scanJoined(row, d, d)
+	link, err := scanJoined(row, &d, &d)
 	if err != nil || link.Model.ID != 1 || link.Pivot.ID != 2 || row.calls != 2 {
 		t.Fatal("joined fields were not partitioned", err)
 	}
 	want := errors.New("second decoder failed")
-	link, err = scanJoined(&joinedTestRow{failAt: 2, err: want}, d, d)
+	link, err = scanJoined(&joinedTestRow{failAt: 2, err: want}, &d, &d)
 	if !errors.Is(err, want) || link.Model.ID != 0 || link.Pivot.ID != 0 {
 		t.Fatal("partial tuple escaped hydration failure")
 	}

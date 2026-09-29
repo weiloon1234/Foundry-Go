@@ -29,10 +29,19 @@ func TestCookiePresenceDuplicatesAndNativeQuoting(t *testing.T) {
 		{nil, "", false, false},
 		{[]string{"preference="}, "", true, false},
 		{[]string{"another=1", "preference=\"a b,c\""}, "a b,c", true, false},
-		{[]string{"preference=one; preference=one"}, "", false, true},
-		{[]string{"preference=one", "preference=two"}, "", false, true},
+		{[]string{"preference=one; preference=one"}, "", false, false},
+		{[]string{"preference=one", "preference=two"}, "", false, false},
 		{[]string{"preference=\"unfinished"}, "", false, true},
+		{[]string{"preference=bad\\value"}, "", false, true},
 		{[]string{"Preference=other"}, "", false, false},
+		// Real-world Cookie fields carry cookies owned by analytics scripts and
+		// other applications; none of their syntax errors may reject a request.
+		{[]string{`_ga=GA1.2.1; ajs_user={"id":"a b","n":1}; preference=x; _fbp="fb.1`}, "x", true, false},
+		{[]string{"=nameless; noequals; preference=x;"}, "x", true, false},
+		{[]string{"ümlaut=wert; utm=\x01ctl; preference=x ; ;"}, "x", true, false},
+		{[]string{`session="unterminated; preference= "quoted" `}, "quoted", true, false},
+		{[]string{"preference2=x; xpreference=y"}, "", false, false},
+		{[]string{";"}, "", false, false},
 	} {
 		r := httptest.NewRequest("GET", "/", nil)
 		r.Header["Cookie"] = input.lines
@@ -55,6 +64,22 @@ func TestCookiePresenceDuplicatesAndNativeQuoting(t *testing.T) {
 	cookies := r.Result().Cookies()
 	if len(cookies) != 1 || cookies[0].Value != "a b,c" || !cookies[0].Secure || !cookies[0].HttpOnly || cookies[0].SameSite != stdhttp.SameSiteLaxMode {
 		t.Fatalf("native cookie mismatch: %+v", cookies)
+	}
+}
+
+func TestCookieReadIgnoresUnrelatedMalformedPairsAtScale(t *testing.T) {
+	c := DefineCookie("__Host-session", StringCookie[string](), DefaultCookieOptions())
+	unrelated := strings.Repeat(`tracker={"a":"b c"}; `, 300)
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("Cookie", unrelated+"__Host-session=token; trailing=")
+	got, err := c.Read(r)
+	if value, present := got.Get(); err != nil || !present || value != "token" {
+		t.Fatalf("session cookie=%q,%v %v", value, present, err)
+	}
+	// A tossed same-name cookie cannot be distinguished from ours by the server.
+	r.Header.Set("Cookie", "__Host-session=token; __Host-session=tossed")
+	if got, err := c.Read(r); err != nil || got.IsSet() {
+		t.Fatalf("repeated cookie=%v %v", got, err)
 	}
 }
 

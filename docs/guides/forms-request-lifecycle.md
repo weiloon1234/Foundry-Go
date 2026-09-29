@@ -43,7 +43,7 @@ they never interpret arbitrary PHP-style nested keys. Kernel body limits remain
 an additional ceiling. An unused zero Form budget is allowed for old explicit
 non-form limit literals; a form endpoint requires positive form limits.
 
-## Normalize, validate, authorize
+## Normalize, authorize, validate
 
 ```go
 type Request = http.Input[http.NoPath, Search, Submission]
@@ -66,10 +66,22 @@ endpoint = endpoint.WithPreparation(prepare).
 
 Existing credential, signature, CSRF and transport admission runs first, then
 path/query/body decoding. Preparation returns only query and body; the adapter
-retains path identity. Validation uses prepared values, request authorization
-follows validation, then resource binding and the handler execute. Preparation
-cannot repair invalid syntax or a missing codec-required field. Declare a field
-Optional if preparation supplies its default.
+retains path identity. The order is decode, prohibited-input check, preparation,
+request authorization, binding (model binding and its resource policy), validation,
+then the handler, as a Laravel FormRequest authorizes before its rules. A denied caller therefore never
+reaches validation rules that query the database, such as `Unique` or `Exists`.
+Authorization receives prepared input that validation has not yet checked; treat
+it as structurally decoded but unvalidated. Validation uses the prepared values.
+Preparation cannot repair invalid syntax or a missing codec-required field.
+Declare a field Optional if preparation supplies its default.
+
+`Endpoint.HandleBound(bind)` exposes the binding stage directly (authenticated
+and signed endpoints provide the same method with their subject). `bind`
+receives the prepared, authorized input, resolves request state such as a model,
+and returns the handler that completes the request, closing over that state so
+no second lookup is needed. Its error is published as returned (for example 404),
+and validation and the handler do not run. [Model binding](http-model-binding.md)
+uses it.
 
 Built-in `Prohibited`/`Absent` rules also check the original decoded input before
 preparation. Their conditions evaluate the original input on this preflight and
@@ -81,9 +93,12 @@ Preparation and authorization callbacks must not perform business writes. Their
 input is borrowed: copy referenced maps/slices before changing them. Preserve
 Optional/Nullable state unless an explicit application transformation changes it.
 Callbacks return ordinary errors; use declared safe HTTP errors for intentional
-denials. Unexpected errors, panic and Goexit produce internal errors. Cancellation
-waits for callback exit before releasing owned multipart files. Callbacks should
-observe their context to finish promptly.
+denials. A returned error is authoritative even if the request was canceled
+while the callback ran. Unexpected errors, panic and Goexit produce internal
+errors. A deadline that has already expired before or after a callback returns
+503, because the request was fully read. Cancellation waits for callback exit
+before releasing owned multipart files. Callbacks should observe their context
+to finish promptly.
 
 Both setters return independent endpoint values and replace their own prior hook.
 An explicitly nil callback fails registration. Without hooks, existing behavior
@@ -103,8 +118,10 @@ The route must declare Guarded access. A named guard chooses its concrete model
 at assembly; no context cast is needed. `http.OptionalAuthentication` instead
 passes `value.Optional[Account]` to its authorization hook and handler. Missing
 credentials may be anonymous; invalid supplied credentials fail before decoding.
-Authentication is not loaded a second time for authorization. A resource-specific
-policy belongs after resource binding, where the loaded resource is available.
+Authentication is not loaded a second time for authorization. The actor hook
+runs at the request-authorization stage, after any endpoint-level authorization
+and before validation, on idempotent replays too. A resource-specific policy
+belongs after resource binding, where the loaded resource is available.
 
 ## Generated clients
 

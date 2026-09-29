@@ -27,9 +27,12 @@ func TestKeyCallbackRetainsOperationUntilExit(t *testing.T) {
 		result <- err
 	}()
 	<-entered
-	if _, err := topic.Publish(t.Context(), 2, payload{}); !errors.Is(err, fault.Conflict) {
+	// A full broker queues briefly, then reports retryable overload.
+	bounded, stop := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	if _, err := topic.Publish(bounded, 2, payload{}); !errors.Is(err, fault.Overloaded) {
 		t.Error(err)
 	}
+	stop()
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	if err := broker.Close(ctx); !errors.Is(err, context.Canceled) {

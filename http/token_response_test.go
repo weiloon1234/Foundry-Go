@@ -196,7 +196,9 @@ func TestTokenDeliveryDoesNotDiscloseOnFailure(t *testing.T) {
 			router.ServeHTTP(w, httptest.NewRequestWithContext(ctx, "POST", "https://app.test/token", nil))
 			want := 500
 			if mode == "cancel" {
-				want = 408
+				// Credential responses are never disclosed after the request
+				// context ended, even when issuance completed.
+				want = 503
 			}
 			if mode == "handler-error" {
 				want = 401

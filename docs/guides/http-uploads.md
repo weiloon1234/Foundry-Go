@@ -33,10 +33,14 @@ request order. A named slice's own complete text codec takes precedence over
 implicit repetition, as it does for query inputs.
 
 UploadedFile fields require one file part. Optional UploadedFile fields can be
-omitted. File slices accept repeated parts. An empty filename or zero-byte file
-is still a supplied upload. `FileMinSize(1)` enforces nonempty contents. Pointers
-to files and optional file collections are rejected by generation; these would
-make presence or part cardinality ambiguous.
+omitted. File slices accept repeated parts. A browser submits an HTML file input
+with no selected file as a part with `filename=""` and no bytes; Optional and
+repeated file fields treat exactly that part as absent (a slice of only blank
+inputs stays nil), while a required field still receives it as an empty upload.
+A named zero-byte file, or an unnamed part with content, remains a supplied
+upload. `FileMinSize(1)` enforces nonempty contents. Pointers to files and
+optional file collections are rejected by generation; these would make presence
+or part cardinality ambiguous.
 
 Use `form:"details,json"` for one structured JSON part. This includes a whole JSON
 array when the Go value is a slice. Use `form:"records,json,repeat"` for repeated
@@ -111,7 +115,18 @@ unexpected filesystem failures without recursively deleting unrelated entries.
 ## Resource limits
 
 Use DefaultEndpointLimits and modify its Multipart limits for the route. The
-HTTP kernel's global body ceiling remains an additional ceiling. Multipart Bytes
+HTTP kernel's `MaxBodyBytes` remains an additional ceiling; to accept files larger
+than that server-wide default on one upload route only, declare the route's own
+ceiling with `WithBodyLimit` and a matching `WithTimeout` for slow transfers:
+
+```go
+limits := foundryhttp.DefaultEndpointLimits()
+limits.Multipart.Bytes, limits.Multipart.FileBytes = 512<<20, 512<<20
+upload := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(form), foundryhttp.EmptyResponse(204)).
+    WithLimits(limits).WithBodyLimit(512 << 20).WithTimeout(10 * time.Minute)
+```
+
+Other routes keep the kernel default. Multipart Bytes
 counts complete encoded input, including MIME framing and legal epilogues;
 FileBytes, Files and Readers bound captured files and open readers. FieldBytes
 and FieldsBytes bound buffered text/JSON parts individually and together. Parts

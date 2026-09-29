@@ -21,8 +21,8 @@ handler, err := foundryhttp.ApplyMiddleware(router,
 ```
 
 Origins include the scheme and port. Hostname casing and default ports normalize
-through the shared `ParseOrigin` implementation. The list must be nonempty and
-contains at most 256 exact origins. Repeated normalized origins, opaque `null`
+through the shared `ParseOrigin` implementation. At least one origin or pattern
+is required; each list contains at most 256 entries. Repeated normalized origins, opaque `null`
 origins and invalid authorities reject assembly. A canonical origin must also
 appear in the allowed list. It changes generated links for accepted aliases,
 without redirecting requests or asserting that a connection used HTTPS.
@@ -30,6 +30,41 @@ without redirecting requests or asserting that a connection used HTTPS.
 Unlisted or malformed request origins receive a shared 400 response before route
 execution. Outside this middleware, `PublicOrigin(ctx)` reports absence and
 `PublicURL(ctx, relative)` returns an error. It never silently trusts `Host`.
+
+### Tenant subdomains and probes
+
+`AllowedPatterns` admits HTTP(S) subdomain wildcards using the shared
+[`OriginPattern`](http-cors.md) grammar, for example
+`"https://*.tenants.example.com"`. A wildcard matches one or more complete labels
+with the same scheme and port, never the bare suffix; non-HTTP(S) patterns are
+rejected here. The admitted request origin itself becomes the URL base (unless
+`Canonical` is set, which must be an allowed origin or match a pattern), so
+typed links and [signed URLs](http-signed-urls.md) stay on the tenant's host. A
+signature binds that exact tenant origin: another tenant cannot replay it.
+
+`ExemptPaths` lists exact request paths served without host admission, such as
+load-balancer or Kubernetes probes that arrive with `Host: <pod-ip>`:
+
+```go
+public := foundryhttp.PublicURLConfig{
+    AllowedOrigins:  []foundryhttp.Origin{"https://app.example.com"},
+    AllowedPatterns: []foundryhttp.OriginPattern{"https://*.tenants.example.com"},
+    ExemptPaths:     []string{"/healthz", "/readyz"},
+}
+```
+
+Exempt paths are exact, clean absolute paths (at most 64); no public origin is
+bound for them, so they cannot generate public or signed URLs.
+
+### Routes that generate public URLs
+
+Signed routes and pagination endpoints with `PublicLinks` require a bound
+public origin. `ApplyMiddleware` rejects a router whose such routes are not
+covered by `PublicURLs` in the same chain (or on the route itself), so the
+misconfiguration fails at assembly instead of as a runtime 500. Mark other raw
+routes that call `PublicURL` with the `RequirePublicURLs()` route middleware to
+get the same check. A router served directly, without `ApplyMiddleware`, still
+answers such routes with a shared 500 instead of guessing an origin.
 
 ```go
 relative, err := endpoint.URL(ctx, path, query)
@@ -88,7 +123,8 @@ internal TLS remains public HTTP when a trusted origin source declares it.
 
 HSTS uses this determination. Place `TrustedProxy` before `SecurityHeaders` when
 TLS terminates at the proxy; later secure-cookie/session policies use the same
-boundary. The middleware preserves native `RemoteAddr`, `Host`, `URL`, headers,
+boundary. `ApplyMiddleware` rejects `PublicURLs`, CSRF, rate limits, browser
+sessions and credential-request checks placed before `TrustedProxy`. The middleware preserves native `RemoteAddr`, `Host`, `URL`, headers,
 TLS state, writer capabilities, attribution and cancellation. Trusted origin
 metadata lives in request context and does not mutate the caller's request.
 

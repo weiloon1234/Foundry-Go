@@ -26,7 +26,11 @@ that same version and keep generated outputs together with their ownership
 manifests. Changes to generated binary ownership, field capabilities, query
 scopes or method signatures require regeneration and consumer compilation. A
 successful runtime codec test alone does not establish generated-model support.
-Do not combine a newer generator with an older runtime by accident.
+Do not combine a newer generator with an older runtime by accident. Enum cases
+are the exported typed constants declared as values; aliases of another case are
+not cases. An unexported constant with its own value was a case in earlier
+releases, so regeneration now fails on it instead of dropping that wire value:
+export it to keep it, or mark it `//foundry:ignore` to remove it deliberately.
 
 Plugin release versions and framework compatibility requirements use the existing
 typed [plugin manifest](../plugin/manifest/manifest.go). Its `FrameworkVersion`
@@ -40,12 +44,16 @@ not inferred from a synthetic packaging candidate version.
 | Contract | Rollout rule |
 | --- | --- |
 | Generator ownership/journal format | Use its existing versioned decoder and recovery rules. Keep manifests with owned output; never overwrite unknown ownership. |
-| Public contract manifest/OpenAPI/TypeScript | Export from the registered descriptors, regenerate adapters together, and validate old/new clients against the server. Strict decoders can reject additive fields. |
+| Public contract manifest/OpenAPI/TypeScript | Export from the registered descriptors, regenerate adapters together, and validate old/new clients against the server. Strict decoders can reject additive fields. Generated TypeScript clients decode responses and events tolerantly by default (`strictResponses`/`strictEvents` restore strict decoding); schema names no longer carry hash suffixes, so regenerate clients and update imports of renamed types together. |
 | WebSocket protocol | Retain the declared protocol version and frozen transport fixtures. A version change requires explicit negotiation/migration; do not silently reinterpret messages. |
 | Job payload `Version` | Keep handlers for retained producer versions until queued, delayed, retried and workflow work has drained or been deliberately migrated. |
-| Job envelope transport version | Legacy shape remains the default. Enable optional trace format 2 only after every worker/outbox/workflow reader can decode it. |
+| Job envelope transport version | Legacy shape remains the default. Enable optional trace format 2 only after every worker/outbox/workflow reader can decode it. Format 3 (`MaxExceptions`, `RetryUntil`, until-processing uniqueness, encrypted payloads, workflow callbacks) is written only when a job uses those fields; upgrade every reader first. |
+| WebSocket cluster policy | The namespace policy fingerprint includes cluster limits such as `MaxConnections` (default now 65,536). During a rolling upgrade, pin the previous value on new processes or deploy the new release under a new realtime namespace; mixed fingerprints are rejected as `PolicyConflict`. Fan-out envelopes stay readable by earlier releases: excluding the sender (`RelayToOthers`, `ExceptConnection` of a local connection) adds no envelope field. Excluding a connection on another instance does, and earlier releases stop their hub on such an envelope, so `ClusterConfig.ExcludeRemoteConnections` stays off (such publications fail with `fault.Invalid`) until every instance runs this release; alternatively deploy under a new namespace. This release drops a single envelope it cannot read instead of stopping. |
+| Redis cache entries and rate-limit windows | Tagged cache payloads store their snapshot fingerprint and fixed rate-limit windows start at a per-key phase. Entries written by an earlier release are misses that the next write replaces; for an error-free rolling upgrade shared by old and new processes, deploy the new release under a new cache/rate-limit namespace. |
+| Redis job queue storage layout | Layout 2 is written only after an explicit `jobs migrate-layout` per queue; a layout-1 queue otherwise returns `jobs.ErrLegacyLayout` unchanged. Stop or drain the previous release before migrating; rollback needs a pre-migration Redis snapshot or a fully drained queue. See [the upgrade procedure](guides/jobs-operations.md#redis-queue-layout-upgrade). |
 | Outbox records | Preserve captured bytes, IDs and destinations across retries. An ambiguous publish is reconciled using the same captured pending operation. |
-| Application/database schema | Use reviewed forward migrations with compatible expansion/backfill before contraction. No automatic destructive synchronization or reset. |
+| Application/database schema | Use reviewed forward migrations with compatible expansion/backfill before contraction. No automatic destructive synchronization or reset. Framework-owned migrations (sessions, tokens, outbox, idempotency, audit, settings/extensions, translations, countries, notifications, attachments, job archive, outbound webhooks, MFA) must be applied before the release that reads them serves traffic; application boot never applies them. Down migrations are optional and run only through `migrate rollback --step N --confirm`. |
+| Token refresh history | Refresh keeps the current and previous generation rows and moves older consumed refresh digests to `foundry_token_consumed_refreshes`. A rollback to an earlier release keeps valid tokens working but loses reuse detection for digests already moved. |
 
 See [job trace rollout](guides/job-trace-rollout.md),
 [client contracts](guides/client-contracts.md), [realtime](guides/websocket.md),
@@ -60,6 +68,47 @@ all readers compatible with retained data before enabling new writers. Rollback
 must preserve a reader capable of consuming formats already written.
 
 ## Operational behavior
+
+The [stabilization handoff](guides/stabilization-20260929.md) records the boilerplate
+upgrade order and additional authentication/retry corrections. Custom session
+adapters require the optional `session.ResumptionBackend` capability for atomic
+impersonation resume; the built-in PostgreSQL adapter already implements it.
+The second review replaced `ConsumeActorIn` with `ResumeActor`: custom adapters
+must rotate the exact live actor session in place without extending its absolute
+lifetime, following the [session contract](guides/sessions.md).
+
+Password logins using `WithLockout` must bind a declaration made with
+`lockout.DefineLogin(name, codec, lockout.DefaultLimits())` (or explicit validated
+limits). The older single-key `lockout.Define` remains useful for authenticated
+MFA/challenge attempts, but password-login construction rejects it. Regeneration
+does not replace handwritten declarations. Request attribution and configured
+trusted proxies supply the client address; see [login lockout](guides/login-lockout.md).
+
+Scheduler capacity now waits according to `CapacityWait` before skipping work.
+Tests with manual clocks must advance that clock through the wait, or explicitly
+select zero when testing immediate rejection. HTTP numbered/simple pagination
+also enforces `MaximumPage`; exceeding it reports the page field's validation
+path before offset arithmetic. Preserve those bounds when updating consumer
+tests. Migration tests should compare the configured declarations and their
+states rather than retaining a fixed framework migration count.
+
+The [second review](guides/second-review-20260929.md) also requires these consumer
+adjustments when the corresponding features are enabled:
+
+| Feature | Upgrade requirement |
+| --- | --- |
+| Password confirmation | Configure `PasswordLogin.WithConfirmationLockout` and the confirmation route's HTTP rate limit; see [password confirmation](guides/browser-sessions.md). |
+| Datatable downloads | Declare the download route with `.WithTimeout(manager.DownloadTimeout())`; see [datatable exports](guides/datatable.md). |
+| Failed-job archive | Apply its new migration and use cursor paging with `ListOptions.After`; see [archive operations](guides/jobs-operations.md). |
+| Outbound webhook workers | Register `job.FailureSink(service)` with every worker running the delivery job so terminal failures update delivery state; see [outbound delivery](guides/webhooks.md). |
+| Login limits | The per-address ceiling is now opt-in. Review [login lockout](guides/login-lockout.md) before enabling it for shared client addresses. |
+| Public readiness | Dependency results are cached for one second by default; lifecycle and maintenance state remain live. See [public probes](guides/production-diagnostics.md) when setting load-balancer probe expectations. |
+| Maintenance bypass | Share application encryption keys across instances. Without keys, bypass cookies work only in the issuing process; configure trusted proxies before using client allowlists behind a load balancer. See [maintenance](guides/readiness-and-maintenance.md). |
+
+Apply the new session/token constraint-validation and idempotency-index migrations
+before serving the revised runtime, as well as migrations for any other enabled
+framework store. Migration commands must target each store's configured database
+and schema; enabling a feature does not apply its schema automatically.
 
 Default-safe opt-ins remain explicit: incoming trusted trace context, outgoing
 HTTP propagation, queued trace transport and read-pool routing. Replica reads do

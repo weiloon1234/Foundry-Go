@@ -18,7 +18,7 @@ import (
 func TestTypedAggregateSQLAndResultRepresentations(t *testing.T) {
 	integer := NewExactField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
 	input := testThrough().Where(integer.Gt(2)).WherePivot(integer.Lt(20)).aggregateInput()
-	statement, err := compileRelationAggregate(input, integer.Avg().node, []driver.Value{int64(3), int64(4)}, 9)
+	statement, err := compileRelationAggregate(t.Context(), input, integer.Avg().node, []driver.Value{int64(3), int64(4)}, 9)
 	if err != nil {
 		t.Fatal(err)
 	}

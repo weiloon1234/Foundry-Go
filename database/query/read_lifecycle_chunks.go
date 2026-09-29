@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"database/sql/driver"
 	"math"
 	"slices"
 
@@ -13,6 +14,8 @@ import (
 // Complete model records keep their original selection expressions through
 // aliases/CTEs/joins. Append the stored primary expression as a tie-breaker while
 // preserving user order and nested query windows. DTOs retain streaming reads.
+// When the result is ordered only by its primary key over plain columns, later
+// batches continue after the last delivered key; other orders use OFFSET.
 func (q readResult[R]) retrievalChunks(ctx context.Context, executor database.Executor, yield func(R) error) error {
 	if q.lifecycle == nil || q.lifecycle.primaryIndex < 0 || q.lifecycle.primaryIndex >= len(q.node.selections) {
 		return fault.New(fault.Invalid, "retrieval batches require complete model primary metadata")
@@ -36,6 +39,8 @@ func (q readResult[R]) retrievalChunks(ctx context.Context, executor database.Ex
 	if _, err := q.Compile(); err != nil {
 		return err
 	}
+	keyed := q.lifecycle.primaryKey != nil && primaryKeyset(q.node, primary)
+	predicates := q.node.predicates
 	remaining := q.node.limit
 	for {
 		size := DefaultChunkSize
@@ -60,7 +65,22 @@ func (q readResult[R]) retrievalChunks(ctx context.Context, executor database.Ex
 		if n, bounded := remaining.Get(); bounded && n == 0 {
 			more = false
 		}
-		if more {
+		if more && keyed {
+			key, err := q.lifecycle.primaryKey(items[len(items)-1])
+			if err != nil {
+				return err
+			}
+			if key == nil {
+				return fault.New(fault.Invalid, "retrieval batch primary key cannot be NULL")
+			}
+			op := greater
+			if q.node.orders[0].descending {
+				op = less
+			}
+			after := comparison{operand: primary, operator: op, values: []any{key}, bind: func(raw any) (driver.Value, error) { return raw, nil }}
+			q.node.predicates = append(slices.Clip(predicates), after)
+			q.node.offset = 0
+		} else if more {
 			if q.node.offset > math.MaxInt-len(items) {
 				return fault.New(fault.Invalid, "retrieval batch offset overflow")
 			}
@@ -76,4 +96,24 @@ func (q readResult[R]) retrievalChunks(ctx context.Context, executor database.Ex
 			return nil
 		}
 	}
+}
+
+// primaryKeyset allows key continuation only when the primary key is the sole
+// order, keys are unique in the result (no joins can repeat them) and a WHERE
+// bound cannot change which rows or values are selected: every selection is a
+// plain column and nothing groups or deduplicates rows.
+func primaryKeyset(node selectNode, primary valueExpression) bool {
+	key, ok := primary.(fieldRef)
+	if !ok || len(node.orders) != 1 || node.orders[0].nulls != nullsDefault || len(node.joins) != 0 || len(node.groupBy) != 0 || len(node.having) != 0 || node.distinct.kind != noDistinct {
+		return false
+	}
+	if field, ok := node.orders[0].expression.(fieldRef); !ok || field != key {
+		return false
+	}
+	for _, selection := range node.selections {
+		if _, ok := selection.expression.(fieldRef); !ok {
+			return false
+		}
+	}
+	return true
 }

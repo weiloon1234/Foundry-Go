@@ -48,3 +48,63 @@ func TestIsolationCancellationAndSelfClose(t *testing.T) {
 		t.Fatal("closed service admitted work")
 	}
 }
+
+func TestAdmissionQueuesBurstsAndReportsOverload(t *testing.T) {
+	g, err := New(1, 50*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer g.Close(context.Background())
+	held, err := g.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A queued caller is admitted once the slot is released within the wait.
+	admitted := make(chan error, 1)
+	go func() {
+		lease, err := g.Begin(t.Context())
+		if err == nil {
+			lease.Release()
+		}
+		admitted <- err
+	}()
+	time.Sleep(10 * time.Millisecond)
+	held.Release()
+	if err := <-admitted; err != nil {
+		t.Fatal("queued caller was not admitted", err)
+	}
+	// An unsatisfied wait is a retryable overload, not an internal conflict.
+	held, err = g.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := g.Begin(t.Context()); !errors.Is(err, fault.Overloaded) {
+		t.Fatal("expected overload after the admission wait", err)
+	}
+	// Nested admission never waits for capacity held by its own caller.
+	started := time.Now()
+	if _, err := g.Begin(held.Context()); !errors.Is(err, fault.Overloaded) || time.Since(started) > 40*time.Millisecond {
+		t.Fatal("nested admission waited or succeeded", err)
+	}
+	held.Release()
+	// Closing wakes queued callers with a closed classification.
+	held, err = g.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	g2, _ := New(1, time.Minute)
+	blocker, _ := g2.Begin(t.Context())
+	waiting := make(chan error, 1)
+	go func() { _, err := g2.Begin(t.Context()); waiting <- err }()
+	time.Sleep(10 * time.Millisecond)
+	closed := make(chan error, 1)
+	go func() { closed <- g2.Close(t.Context()) }()
+	if err := <-waiting; !errors.Is(err, fault.Closed) {
+		t.Fatal("close did not wake queued caller", err)
+	}
+	blocker.Release()
+	if err := <-closed; err != nil {
+		t.Fatal(err)
+	}
+	held.Release()
+}

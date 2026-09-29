@@ -48,7 +48,7 @@ func (e AuthenticatedEndpoint[P, Q, B, M, R]) validate(optional bool) error {
 func (e AuthenticatedEndpoint[P, Q, B, M, R]) bound(optional bool) Endpoint[P, Q, B, R] {
 	endpoint := e.endpoint
 	endpoint.route.authentication = e.authenticationBinding.info(optional)
-	return endpoint.WithMiddleware(e.authenticationBinding.middleware(optional))
+	return endpoint.WithMiddleware(e.authenticationBinding.chain(optional)...)
 }
 func (e AuthenticatedEndpoint[P, Q, B, M, R]) Description() (EndpointInfo, error) {
 	if err := e.Validate(); err != nil {
@@ -69,21 +69,48 @@ func (e AuthenticatedEndpoint[P, Q, B, M, R]) Handle(handler func(context.Contex
 	if handler == nil {
 		return InvalidRouteRegistration(fault.New(fault.Invalid, "authenticated endpoint requires a handler"))
 	}
-	return e.bound(false).Handle(func(ctx context.Context, in Input[P, Q, B]) (R, error) {
+	return e.authorized().Handle(func(ctx context.Context, in Input[P, Q, B]) (R, error) {
 		subject, err := e.guard.Require(ctx)
 		if err != nil {
 			return *new(R), authenticationError(err)
-		}
-		if e.authorization != nil {
-			if err := requestHook(ctx, "HTTP actor request authorization", func() error { return (*e.authorization)(ctx, subject, in) }); err != nil {
-				return *new(R), authenticationError(err)
-			}
 		}
 		result, err := handler(ctx, subject, in)
 		if err != nil {
 			return *new(R), authenticationError(err)
 		}
 		return result, nil
+	})
+}
+
+// HandleBound runs bind with the concrete actor after request (and actor)
+// authorization and before validation; see Binding.
+func (e AuthenticatedEndpoint[P, Q, B, M, R]) HandleBound(bind AuthenticatedBinding[P, Q, B, M, R]) RouteRegistration {
+	if err := e.Validate(); err != nil {
+		return InvalidRouteRegistration(err)
+	}
+	if bind == nil {
+		return InvalidRouteRegistration(fault.New(fault.Invalid, "authenticated endpoint requires a binding"))
+	}
+	return e.authorized().HandleBound(bindSubject(bind, e.guard.Require))
+}
+
+// authorized installs actor authorization as the endpoint's request
+// authorization stage, so it runs before validation (FormRequest order).
+func (e AuthenticatedEndpoint[P, Q, B, M, R]) authorized() Endpoint[P, Q, B, R] {
+	endpoint := e.bound(false)
+	if e.authorization == nil {
+		return endpoint
+	}
+	authorize := *e.authorization
+	return endpoint.appendAuthorization(func(ctx context.Context, in Input[P, Q, B]) error {
+		subject, err := e.guard.Require(ctx)
+		if err != nil {
+			return authenticationError(err)
+		}
+		if err := authorize(ctx, subject, in); err != nil {
+			return authenticationError(err)
+		}
+		return nil
 	})
 }
 
@@ -122,20 +149,47 @@ func (e OptionalAuthenticationEndpoint[P, Q, B, M, R]) Handle(handler func(conte
 	if handler == nil {
 		return InvalidRouteRegistration(fault.New(fault.Invalid, "optional authentication endpoint requires a handler"))
 	}
-	return e.required.bound(true).Handle(func(ctx context.Context, in Input[P, Q, B]) (R, error) {
+	return e.authorized().Handle(func(ctx context.Context, in Input[P, Q, B]) (R, error) {
 		subject, err := e.required.guard.Optional(ctx)
 		if err != nil {
 			return *new(R), authenticationError(err)
-		}
-		if e.authorization != nil {
-			if err := requestHook(ctx, "HTTP actor request authorization", func() error { return (*e.authorization)(ctx, subject, in) }); err != nil {
-				return *new(R), authenticationError(err)
-			}
 		}
 		result, err := handler(ctx, subject, in)
 		if err != nil {
 			return *new(R), authenticationError(err)
 		}
 		return result, nil
+	})
+}
+
+// HandleBound runs bind with the optional actor after request (and actor)
+// authorization and before validation; see Binding.
+func (e OptionalAuthenticationEndpoint[P, Q, B, M, R]) HandleBound(bind AuthenticatedBinding[P, Q, B, value.Optional[M], R]) RouteRegistration {
+	if err := e.Validate(); err != nil {
+		return InvalidRouteRegistration(err)
+	}
+	if bind == nil {
+		return InvalidRouteRegistration(fault.New(fault.Invalid, "optional authentication endpoint requires a binding"))
+	}
+	return e.authorized().HandleBound(bindSubject(bind, e.required.guard.Optional))
+}
+
+// authorized installs optional-actor authorization as the endpoint's request
+// authorization stage, before validation.
+func (e OptionalAuthenticationEndpoint[P, Q, B, M, R]) authorized() Endpoint[P, Q, B, R] {
+	endpoint := e.required.bound(true)
+	if e.authorization == nil {
+		return endpoint
+	}
+	authorize := *e.authorization
+	return endpoint.appendAuthorization(func(ctx context.Context, in Input[P, Q, B]) error {
+		subject, err := e.required.guard.Optional(ctx)
+		if err != nil {
+			return authenticationError(err)
+		}
+		if err := authorize(ctx, subject, in); err != nil {
+			return authenticationError(err)
+		}
+		return nil
 	})
 }

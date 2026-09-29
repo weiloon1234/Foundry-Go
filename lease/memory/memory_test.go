@@ -54,3 +54,35 @@ func TestCapacityNeverEvictsLiveOwner(t *testing.T) {
 		}
 	})
 }
+func TestRenewalReordersExpiryAndForceReleaseRepairs(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		b, _ := memory.New(2)
+		defer b.Close()
+		a, _ := lease.NewKey(keyspace.Namespace{Application: "test", Environment: "memory"}, "leases", "a")
+		z, _ := lease.NewKey(a.Namespace(), "leases", "z")
+		c, _ := lease.NewKey(a.Namespace(), "leases", "c")
+		owner, _ := lease.NewOwner()
+		for _, key := range []lease.Key{a, z} {
+			if ok, err := b.LeaseAcquire(t.Context(), key, owner, lease.MinDuration); err != nil || !ok {
+				t.Fatal(ok, err)
+			}
+		}
+		// A renewed owner moves behind the other deadline and must survive reclamation.
+		if ok, err := b.LeaseRenew(t.Context(), a, owner, time.Minute); err != nil || !ok {
+			t.Fatal(ok, err)
+		}
+		time.Sleep(lease.MinDuration)
+		if ok, err := b.LeaseAcquire(t.Context(), c, owner, time.Minute); err != nil || !ok {
+			t.Fatal("expired owner was not reclaimed", ok, err)
+		}
+		if ok, err := b.LeaseRenew(t.Context(), a, owner, time.Minute); err != nil || !ok {
+			t.Fatal("renewed owner was reclaimed", ok, err)
+		}
+		if removed, err := b.LeaseForceRelease(t.Context(), a); err != nil || !removed {
+			t.Fatal(removed, err)
+		}
+		if ok, err := b.LeaseRenew(t.Context(), a, owner, time.Minute); err != nil || ok {
+			t.Fatal("forced release kept the owner", ok, err)
+		}
+	})
+}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/postgres"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/idempotency"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
@@ -137,5 +138,19 @@ func TestIdempotencyRetryErrorsRemainDeclared(t *testing.T) {
 		if !errors.Is(err, code) {
 			t.Fatal("underlying outcome lost")
 		}
+	}
+}
+
+// Local admission saturation reaches HTTP as the declared retryable 503, not the
+// caller-quota 429 or an in-progress 409.
+func TestIdempotencyOverloadIsUnavailable(t *testing.T) {
+	err := idempotencyHTTPError(errors.Join(idempotency.Unavailable, fault.New(fault.Overloaded, "operation capacity is exhausted")), time.Second)
+	r := httptest.NewRequest("POST", "/", nil)
+	w := httptest.NewRecorder()
+	if writeErr := WriteError(w, r, err); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	if w.Code != stdhttp.StatusServiceUnavailable || w.Header().Get("Retry-After") != "1" || errors.Is(err, idempotency.Capacity) || errors.Is(err, idempotency.InProgress) {
+		t.Fatal("overload was not a retryable unavailable outcome", w.Code, w.Header())
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -45,27 +46,36 @@ const (
 // Definition is the handwritten or generated source of an immutable migration.
 // SQL entries execute in order using Mode (transactional by default). Requires
 // references declared migrations; New snapshots all slices and computes hashes.
+//
+// Down optionally reverses the migration for an explicit Postgres.Rollback.
+// It is excluded from the checksum, so adding or correcting Down never drifts
+// applied history, and it must be valid inside one transaction: a
+// nontransactional migration cannot declare Down. Without Down a migration is
+// irreversible and rollback refuses to cross it.
 type Definition struct {
 	Mode     ExecutionMode
 	Key      Key
 	Version  Version
 	SQL      []string
+	Down     []string
 	Requires []Key
 }
 
 // Entry is immutable migration metadata, returned as a caller-owned snapshot.
 // Checksum covers origin, ID, introduced version, ordered SQL and dependencies.
 type Entry struct {
-	Mode     ExecutionMode `json:"mode,omitempty"`
-	Key      Key           `json:"key"`
-	Version  Version       `json:"version"`
-	Checksum Checksum      `json:"checksum"`
-	Requires []Key         `json:"requires,omitempty"`
+	Mode       ExecutionMode `json:"mode,omitempty"`
+	Key        Key           `json:"key"`
+	Version    Version       `json:"version"`
+	Checksum   Checksum      `json:"checksum"`
+	Requires   []Key         `json:"requires,omitempty"`
+	Reversible bool          `json:"reversible,omitempty"`
 }
 
 type migration struct {
 	entry      Entry
 	statements []string
+	down       []string
 }
 
 // Registry owns validated definitions in deterministic dependency order. It is
@@ -96,10 +106,14 @@ func New(definitions ...Definition) (*Registry, error) {
 			return nil, fault.New(fault.Duplicate, "migration key is duplicated: "+keyLabel(definition.Key))
 		}
 		statements := append([]string(nil), definition.SQL...)
-		for _, statement := range statements {
+		down := append([]string(nil), definition.Down...)
+		for _, statement := range append(slices.Clone(statements), down...) {
 			if strings.TrimSpace(statement) == "" || !utf8.ValidString(statement) || strings.ContainsRune(statement, 0) {
 				return nil, fault.New(fault.Invalid, "invalid SQL in migration "+keyLabel(definition.Key))
 			}
+		}
+		if len(down) != 0 && definition.Mode == NonTransactional {
+			return nil, fault.New(fault.Invalid, "nontransactional migration "+keyLabel(definition.Key)+" cannot declare Down SQL")
 		}
 		requires := append([]Key(nil), definition.Requires...)
 		sortKeys(requires)
@@ -125,7 +139,7 @@ func New(definitions ...Definition) (*Registry, error) {
 		if err != nil {
 			return nil, fault.Wrap(fault.Internal, "cannot encode migration definition", err)
 		}
-		byKey[definition.Key] = migration{entry: Entry{Mode: definition.Mode, Key: definition.Key, Version: definition.Version, Checksum: Checksum(sha256.Sum256(encoded)), Requires: requires}, statements: statements}
+		byKey[definition.Key] = migration{entry: Entry{Mode: definition.Mode, Key: definition.Key, Version: definition.Version, Checksum: Checksum(sha256.Sum256(encoded)), Requires: requires, Reversible: len(down) != 0}, statements: statements, down: down}
 	}
 	keys := make([]Key, 0, len(byKey))
 	for key := range byKey {

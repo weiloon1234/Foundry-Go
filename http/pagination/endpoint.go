@@ -28,20 +28,22 @@ type pageEndpoint[P, F, W, Page, Response any] struct {
 
 // DefineNumbered composes generated filters, defaulted pagination and a declared
 // item DTO. The endpoint accepts no request body; ordinary route/method rules
-// apply. Configure PublicURLs if Config.Links selects approved absolute links.
+// apply. Config.Links=PublicLinks requires PublicURLs; ApplyMiddleware rejects a
+// router whose PublicLinks routes are not covered by it.
 func DefineNumbered[P, F, T any](route foundryhttp.Route[P], filters foundryhttp.Query[F], item contract.JSON[T], config Config) NumberedEndpoint[P, F, T] {
-	return newOffsetEndpoint(route, filters, NumberedJSON(item), config, numberedResponse[P, F, T])
+	return newOffsetEndpoint(route, filters, NumberedJSON(item), config, numberedResponse[P, F, T](config.navigation()))
 }
 
 // DefineSimple creates the same thin handler boundary without a count query or
 // fabricated total metadata. Handlers return query.SimplePage[T].
 func DefineSimple[P, F, T any](route foundryhttp.Route[P], filters foundryhttp.Query[F], item contract.JSON[T], config Config) SimpleEndpoint[P, F, T] {
-	return newOffsetEndpoint(route, filters, SimpleJSON(item), config, simpleResponse[P, F, T])
+	return newOffsetEndpoint(route, filters, SimpleJSON(item), config, simpleResponse[P, F, T](config.navigation()))
 }
 func newOffsetEndpoint[P, F, Page, Response any](route foundryhttp.Route[P], filters foundryhttp.Query[F], response contract.JSON[Response], config Config, finish func(Request[P, F], Page, func(query.PageRequest) (string, error)) (Response, error)) pageEndpoint[P, F, query.PageRequest, Page, Response] {
 	if err := config.Validate(); err != nil {
 		return pageEndpoint[P, F, query.PageRequest, Page, Response]{err: err}
 	}
+	maximumPage := config.maximumPage()
 	validate := func(page query.PageRequest) error {
 		if err := page.Validate(); err != nil {
 			return err
@@ -49,10 +51,16 @@ func newOffsetEndpoint[P, F, Page, Response any](route foundryhttp.Route[P], fil
 		if page.Size > config.MaximumSize {
 			return fault.New(fault.Invalid, "page size exceeds endpoint maximum")
 		}
+		if page.Number > maximumPage {
+			return errBeyondMaximumPage
+		}
 		return nil
 	}
 	return newPageEndpoint(route, pageQuery(filters, config), pageRules[F](config), response, config.Links, validate, finish)
 }
+
+// errBeyondMaximumPage lets navigation omit a link the endpoint would reject.
+var errBeyondMaximumPage = fault.New(fault.Invalid, "page exceeds endpoint maximum depth")
 
 func newPageEndpoint[P, F, W, Page, Response any](route foundryhttp.Route[P], parameters foundryhttp.Query[parameters[F, W]], rules validation.Rule[parameters[F, W]], response contract.JSON[Response], links LinkMode, validate func(W) error, finish func(pageRequest[P, F, W], Page, func(W) (string, error)) (Response, error)) pageEndpoint[P, F, W, Page, Response] {
 	return pageEndpoint[P, F, W, Page, Response]{
@@ -137,11 +145,21 @@ func (e pageEndpoint[P, F, W, Page, Response]) Handle(handler func(context.Conte
 	if handler == nil {
 		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "pagination endpoint requires a handler"))
 	}
-	return e.transport.Handle(func(ctx context.Context, input foundryhttp.Input[P, parameters[F, W], foundryhttp.NoBody]) (Response, error) {
+	return e.withLinkRequirements().transport.Handle(func(ctx context.Context, input foundryhttp.Input[P, parameters[F, W], foundryhttp.NoBody]) (Response, error) {
 		request := request(input)
 		page, err := handler(ctx, request)
 		return e.complete(ctx, request, page, err)
 	})
+}
+
+// withLinkRequirements declares, innermost on the route, that PublicLinks
+// generate absolute URLs. Router assembly then rejects a missing PublicURLs
+// policy instead of failing each request with a 500.
+func (e pageEndpoint[P, F, W, Page, Response]) withLinkRequirements() pageEndpoint[P, F, W, Page, Response] {
+	if e.links == PublicLinks {
+		e.transport = e.transport.WithMiddleware(foundryhttp.RequirePublicURLs())
+	}
+	return e
 }
 
 // complete is the shared post-handler boundary for public and authenticated pages.

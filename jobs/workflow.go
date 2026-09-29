@@ -14,6 +14,10 @@ import (
 )
 
 const MaxWorkflowSteps = 256
+
+// MaxWorkflowMembers bounds all jobs of one workflow: its steps plus the
+// optional completion, catch and finally jobs.
+const MaxWorkflowMembers = MaxWorkflowSteps + 3
 const MaxWorkflowBytes = 8 << 20
 
 type WorkflowID = model.ID[WorkflowExecution]
@@ -40,7 +44,12 @@ func (p Pending[P]) Step() Step {
 // Workflow is an immutable atomic group. All members use one queue authority.
 // A chain stops after the first terminal failure/cancellation. A batch continues
 // its other members; its optional completion runs only if every member succeeds.
-// Reuse this captured value on ambiguous enqueue; member IDs remain stable.
+// Optional callbacks run once every member (and the completion) is terminal:
+// the catch job only if a member failed or was cancelled, the finally job
+// always. An explicit workflow cancellation cancels callbacks too. A callback
+// that is not triggered ends cancelled with reason not_triggered. Callbacks are
+// ordinary registered jobs with their own retries. Reuse this captured value on
+// ambiguous enqueue; member IDs remain stable.
 type Workflow struct {
 	envelope WorkflowEnvelope
 	steps    []Step
@@ -76,31 +85,68 @@ func (w Workflow) WithCompletion(step Step) (Workflow, error) {
 	w.steps = append(slices.Clone(w.steps), step)
 	return w, w.envelope.Validate()
 }
+
+// WithCatch returns a new snapshot whose catch job runs once, after every
+// member is terminal, if any member failed or was cancelled by a failure.
+func (w Workflow) WithCatch(step Step) (Workflow, error) {
+	if w.envelope.catch.IsSet() {
+		return Workflow{}, fault.New(fault.Invalid, "workflow already has a catch job")
+	}
+	w.envelope.catch = value.Set(step.envelope)
+	w.steps = append(slices.Clone(w.steps), step)
+	return w, w.envelope.Validate()
+}
+
+// WithFinally returns a new snapshot whose finally job runs once after every
+// member (and the completion) is terminal, whatever the outcome.
+func (w Workflow) WithFinally(step Step) (Workflow, error) {
+	if w.envelope.finally.IsSet() {
+		return Workflow{}, fault.New(fault.Invalid, "workflow already has a finally job")
+	}
+	w.envelope.finally = value.Set(step.envelope)
+	w.steps = append(slices.Clone(w.steps), step)
+	return w, w.envelope.Validate()
+}
 func (w Workflow) Dispatch(ctx context.Context, dispatcher *Dispatcher) (WorkflowReceipt, error) {
+	receipt, key, err := w.dispatch(ctx, dispatcher)
+	if err == nil && receipt.Inserted {
+		dispatcher.runInline(ctx, key)
+	}
+	return receipt, err
+}
+func (w Workflow) dispatch(ctx context.Context, dispatcher *Dispatcher) (WorkflowReceipt, Key, error) {
 	receipt := WorkflowReceipt{ID: w.ID()}
 	release, err := dispatcher.begin(ctx)
 	if err != nil {
-		return receipt, err
+		return receipt, Key{}, err
 	}
 	defer release()
-	if err := w.envelope.Validate(); err != nil {
-		return receipt, err
-	}
-	for _, step := range w.steps {
-		entry, err := dispatcher.registry.lookup(jobKey{step.envelope.Name(), step.envelope.Version()})
-		if err != nil {
-			return receipt, err
-		}
-		if entry.typ != step.typ || !entry.policy.same(step.policy) {
-			return receipt, fault.New(fault.Invalid, "workflow step differs from its registered definition")
-		}
+	if err := w.check(dispatcher.registry); err != nil {
+		return receipt, Key{}, err
 	}
 	key, err := NewKey(dispatcher.config.Namespace, w.envelope.Queue())
 	if err != nil {
-		return receipt, err
+		return receipt, Key{}, err
 	}
 	receipt.Inserted, err = dispatcher.backend.JobWorkflow(ctx, key, w.envelope)
-	return receipt, err
+	return receipt, key, err
+}
+
+// check validates the snapshot and that every member matches its registration.
+func (w Workflow) check(registry *Registry) error {
+	if err := w.envelope.Validate(); err != nil {
+		return err
+	}
+	for _, step := range w.steps {
+		entry, err := registry.lookup(jobKey{step.envelope.Name(), step.envelope.Version()})
+		if err != nil {
+			return err
+		}
+		if entry.typ != step.typ || !entry.policy.same(step.policy) {
+			return fault.New(fault.Invalid, "workflow step differs from its registered definition")
+		}
+	}
+	return nil
 }
 func (w Workflow) Cancel(ctx context.Context, dispatcher *Dispatcher) (bool, error) {
 	release, err := dispatcher.begin(ctx)
@@ -126,12 +172,30 @@ type WorkflowEnvelope struct {
 	kind       WorkflowKind
 	steps      []Envelope
 	completion value.Optional[Envelope]
+	catch      value.Optional[Envelope]
+	finally    value.Optional[Envelope]
 }
 
 func (w WorkflowEnvelope) ID() WorkflowID                       { return w.id }
 func (w WorkflowEnvelope) Kind() WorkflowKind                   { return w.kind }
 func (w WorkflowEnvelope) Steps() []Envelope                    { return slices.Clone(w.steps) }
 func (w WorkflowEnvelope) Completion() value.Optional[Envelope] { return w.completion }
+
+// Catch and Finally are the optional callback jobs.
+func (w WorkflowEnvelope) Catch() value.Optional[Envelope]   { return w.catch }
+func (w WorkflowEnvelope) Finally() value.Optional[Envelope] { return w.finally }
+
+// Members returns every job of the workflow: steps, then the completion, catch
+// and finally jobs when present.
+func (w WorkflowEnvelope) Members() []Envelope {
+	members := slices.Clone(w.steps)
+	for _, optional := range []value.Optional[Envelope]{w.completion, w.catch, w.finally} {
+		if item, ok := optional.Get(); ok {
+			members = append(members, item)
+		}
+	}
+	return members
+}
 func (w WorkflowEnvelope) Queue() Queue {
 	if len(w.steps) == 0 {
 		return ""
@@ -142,12 +206,12 @@ func (w WorkflowEnvelope) Validate() error {
 	if w.id.IsZero() || (w.kind != ChainKind && w.kind != BatchKind) || len(w.steps) == 0 || len(w.steps) > MaxWorkflowSteps {
 		return fault.New(fault.Invalid, "invalid job workflow identity, kind or size")
 	}
-	members := slices.Clone(w.steps)
-	if completion, ok := w.completion.Get(); ok {
-		if w.kind != BatchKind {
-			return fault.New(fault.Invalid, "chain cannot have a batch completion")
-		}
-		members = append(members, completion)
+	if w.completion.IsSet() && w.kind != BatchKind {
+		return fault.New(fault.Invalid, "chain cannot have a batch completion")
+	}
+	members := w.Members()
+	if len(members) > MaxWorkflowMembers {
+		return fault.New(fault.Invalid, "invalid job workflow size")
 	}
 	seen := make(map[ExecutionID]bool)
 	size := 0
@@ -175,28 +239,37 @@ func (w WorkflowEnvelope) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 	wire := workflowWire{ID: w.id, Kind: w.kind, Steps: w.steps}
-	if completion, ok := w.completion.Get(); ok {
-		data, err := completion.MarshalJSON()
-		if err != nil {
-			return nil, err
+	for _, item := range []struct {
+		source value.Optional[Envelope]
+		target *json.RawMessage
+	}{{w.completion, &wire.Completion}, {w.catch, &wire.Catch}, {w.finally, &wire.Finally}} {
+		if envelope, ok := item.source.Get(); ok {
+			data, err := envelope.MarshalJSON()
+			if err != nil {
+				return nil, err
+			}
+			*item.target = data
 		}
-		wire.Completion = data
 	}
 	return json.Marshal(wire)
 }
 
+// Catch and Finally are omitted when absent, so workflows without callbacks
+// keep the transport older readers accept.
 type workflowWire struct {
 	ID         WorkflowID      `json:"id"`
 	Kind       WorkflowKind    `json:"kind"`
 	Steps      []Envelope      `json:"steps"`
 	Completion json.RawMessage `json:"completion,omitempty"`
+	Catch      json.RawMessage `json:"catch,omitempty"`
+	Finally    json.RawMessage `json:"finally,omitempty"`
 }
 
 func DecodeWorkflow(data []byte) (WorkflowEnvelope, error) {
 	if len(data) > MaxWorkflowBytes+64*1024 {
 		return WorkflowEnvelope{}, fault.New(fault.Invalid, "job workflow exceeds transport capacity")
 	}
-	if _, err := jsonwire.Decode(data, jsonwire.Limits{Bytes: MaxWorkflowBytes + 64*1024, Depth: value.JSONMaxDepth, Nodes: (MaxWorkflowSteps + 2) * value.JSONMaxNodes}); err != nil {
+	if _, err := jsonwire.Decode(data, jsonwire.Limits{Bytes: MaxWorkflowBytes + 64*1024, Depth: value.JSONMaxDepth, Nodes: (MaxWorkflowMembers + 1) * value.JSONMaxNodes}); err != nil {
 		return WorkflowEnvelope{}, err
 	}
 	var wire workflowInput
@@ -214,12 +287,17 @@ func DecodeWorkflow(data []byte) (WorkflowEnvelope, error) {
 		}
 		result.steps = append(result.steps, step)
 	}
-	if len(wire.Completion) > 0 {
-		step, err := DecodeEnvelope(wire.Completion)
-		if err != nil {
-			return WorkflowEnvelope{}, err
+	for _, item := range []struct {
+		source json.RawMessage
+		target *value.Optional[Envelope]
+	}{{wire.Completion, &result.completion}, {wire.Catch, &result.catch}, {wire.Finally, &result.finally}} {
+		if len(item.source) > 0 {
+			step, err := DecodeEnvelope(item.source)
+			if err != nil {
+				return WorkflowEnvelope{}, err
+			}
+			*item.target = value.Set(step)
 		}
-		result.completion = value.Set(step)
 	}
 	return result, result.Validate()
 }
@@ -229,4 +307,6 @@ type workflowInput struct {
 	Kind       WorkflowKind      `json:"kind"`
 	Steps      []json.RawMessage `json:"steps"`
 	Completion json.RawMessage   `json:"completion,omitempty"`
+	Catch      json.RawMessage   `json:"catch,omitempty"`
+	Finally    json.RawMessage   `json:"finally,omitempty"`
 }

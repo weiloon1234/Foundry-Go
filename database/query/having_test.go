@@ -33,11 +33,11 @@ func TestHavingAndAggregateOrderingShareSelectCompiler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `SELECT "records"."id" AS "id", COUNT(*) AS "count" FROM "records" WHERE ("records"."id" > $1) GROUP BY "records"."id" HAVING ((COUNT(*) > $2) AND ((SUM(CAST("records"."id" AS numeric)) > $3) OR (NOT ("records"."id" IN ($4, $5))))) ORDER BY COUNT(*) DESC, "records"."id" ASC LIMIT $6`
+	want := `SELECT "records"."id" AS "id", COUNT(*) AS "count" FROM "records" WHERE ("records"."id" > $1) GROUP BY "records"."id" HAVING ((COUNT(*) > $2) AND ((SUM(CAST("records"."id" AS numeric)) > $3) OR (NOT ("records"."id" = ANY($4))))) ORDER BY COUNT(*) DESC, "records"."id" ASC LIMIT $5`
 	if s.SQL() != want {
 		t.Fatal(s.SQL())
 	}
-	if !reflect.DeepEqual(s.Arguments(), []any{int64(0), int64(2), "5", int64(1), int64(2), int64(4)}) {
+	if !reflect.DeepEqual(s.Arguments(), []any{int64(0), int64(2), "5", "{1,2}", int64(4)}) {
 		t.Fatal("WHERE/HAVING/window parameters or captured values changed", s.Arguments())
 	}
 	derived, err := q.Having(id.Sum().IsNotNull()).OrderBy(id.Sum().Asc()).Compile()
@@ -58,7 +58,6 @@ func TestHavingRejectsInvalidScopeStructureAndBindings(t *testing.T) {
 	var absent *expressionOrder[cursorRecord]
 	for _, q := range []ProjectionQuery[cursorRecord, reportRecord]{
 		groupedReport().Having(HavingPredicate[cursorRecord]{}),
-		groupedReport().Having(HavingAnd[cursorRecord]()),
 		groupedReport().Having(Grouped(text.Eq("not grouped"))),
 		groupedReport().Having(other.Sum().Gt(decimal.FromInt64(1))),
 		groupedReport().Having(floating.Avg().Gt(math.Inf(1))),

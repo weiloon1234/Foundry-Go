@@ -7,6 +7,7 @@ import (
 	"context"
 	"io"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/microcosm-cc/bluemonday"
@@ -85,16 +86,23 @@ func (p *Policy) HTML(ctx context.Context, input string) (string, error) {
 }
 
 // StripTags returns escaped HTML text with all tags removed. Active-element
-// content is discarded. Reuse New with an empty allowlist for repeated calls.
+// content is discarded. Calls share one immutable empty-allowlist policy with
+// the default bounds; it is built on first use.
 func StripTags(ctx context.Context, input string) (string, error) {
-	config := DefaultConfig()
-	config.AllowedTags = nil
-	p, err := New(config)
+	p, err := stripTagsPolicy()
 	if err != nil {
 		return "", err
 	}
 	return p.HTML(ctx, input)
 }
+
+// stripTagsPolicy is immutable after construction and safe for concurrent use;
+// it is not configurable application state.
+var stripTagsPolicy = sync.OnceValues(func() (*Policy, error) {
+	config := DefaultConfig()
+	config.AllowedTags = nil
+	return New(config)
+})
 
 type contextInput struct {
 	ctx    context.Context

@@ -5,8 +5,30 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
+
+// enclosingTransaction runs a nested model write directly on the transaction of
+// an operation that is already atomic and fails as a unit: per-row batch writes,
+// lookup creation and pivot attachment. A savepoint per row would only consume
+// PostgreSQL subtransaction IDs, whose per-backend cache overflows after 64 in
+// one transaction. A failed row still fails the whole enclosing operation; a
+// caller-supplied transaction keeps its single savepoint around that operation.
+type enclosingTransaction struct{ tx *database.Tx }
+
+func (e enclosingTransaction) Transaction(_ context.Context, fn func(*database.Tx) error, options ...database.TxOptions) error {
+	if len(options) != 0 {
+		return fault.New(fault.Invalid, "nested model writes cannot set transaction options")
+	}
+	return fn(e.tx)
+}
+
+// FoundryObservers reports the enclosing transaction's frozen observer set.
+func (e enclosingTransaction) FoundryObservers(seal sqlowner.Seal) (lifecycle.Observers, bool) {
+	return e.tx.FoundryObservers(seal)
+}
 
 // MaxPerModelWriteRows bounds one atomic operation that runs ordinary model
 // writes per row. It shares the established atomic insert row budget.
@@ -14,13 +36,15 @@ const MaxPerModelWriteRows = MaxInsertRows
 
 // InsertEach creates each supplied input through the ordinary model lifecycle.
 // The bounded batch is atomic and results preserve input order. Unlike
-// InsertMany, this invokes one normal write and its observers per input.
+// InsertMany, this invokes one normal write and its observers per input. Rows
+// run directly in the batch transaction, without a savepoint per row.
 // A valid empty batch performs no transaction. Generated CreateEach methods
 // preserve concrete drafts and share their normal UUID/input preparation.
 func (q Query[M]) InsertEach(ctx context.Context, writer database.Transactor, mutations []Mutation[M]) ([]M, error) {
 	if err := writeContext(ctx, writer); err != nil {
 		return nil, err
 	}
+	q = q.inContext(ctx)
 	if _, _, _, err := (insertPlan[M]{query: q, rows: mutations}).validateRowShapes(false); err != nil {
 		return nil, err
 	}
@@ -34,7 +58,7 @@ func (q Query[M]) InsertEach(ctx context.Context, writer database.Transactor, mu
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			created, err := q.Insert(ctx, tx, mutation)
+			created, err := q.Insert(ctx, enclosingTransaction{tx}, mutation)
 			if err != nil {
 				return nil, err
 			}
@@ -82,6 +106,7 @@ func (q Query[M]) writeEach(ctx context.Context, writer database.Transactor, kin
 	if err := writeContext(ctx, writer); err != nil {
 		return nil, err
 	}
+	q = q.inContext(ctx)
 	if err := validatePerModelWriteLimit(limit); err != nil {
 		return nil, err
 	}
@@ -105,6 +130,7 @@ func validatePerModelWriteLimit(limit int) error {
 // hydration skips Retrieved callbacks. Later concurrent inserts are outside
 // the statement's selected set, and later writes retain the original filters.
 func mutateSelectedModels[M any](ctx context.Context, tx *database.Tx, q Query[M], kind mutationKind, limit int, draft func(context.Context, *database.Tx, M) (Mutation[M], error)) ([]M, error) {
+	q = q.inContext(ctx)
 	candidates, err := lockedModelWriteCandidates(ctx, tx, q, kind, limit)
 	if err != nil {
 		return nil, err
@@ -125,7 +151,7 @@ func mutateSelectedModels[M any](ctx context.Context, tx *database.Tx, q Query[M
 				return nil, err
 			}
 		}
-		changed, err := executeMutation(ctx, tx, mutationPlan[M]{query: q.Where(primary), kind: kind, mutation: mutation})
+		changed, err := executeMutation(ctx, enclosingTransaction{tx}, mutationPlan[M]{query: q.Where(primary), kind: kind, mutation: mutation})
 		if err != nil {
 			return nil, err
 		}
@@ -135,6 +161,7 @@ func mutateSelectedModels[M any](ctx context.Context, tx *database.Tx, q Query[M
 }
 
 func lockedModelWriteCandidates[M any](ctx context.Context, tx *database.Tx, q Query[M], kind mutationKind, limit int) ([]M, error) {
+	q = q.inContext(ctx)
 	if err := validatePerModelWriteLimit(limit); err != nil {
 		return nil, err
 	}
@@ -183,7 +210,7 @@ func validateModelWriteIdentities[M any](ctx context.Context, primary ModelField
 			return err
 		}
 		if seen[identity] {
-			return database.TooManyRows
+			return database.NewError("per-model write identity", database.TooManyRows)
 		}
 		seen[identity] = true
 	}

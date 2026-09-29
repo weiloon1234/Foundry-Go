@@ -195,6 +195,7 @@ func TestCanceledCallbackOwnsSlotUntilActualExit(t *testing.T) {
 	b, _ := local(t)
 	config := lockout.DefaultConfig(keyspace.Namespace{Application: "test", Environment: "lockout"})
 	config.MaxConcurrent = 1
+	config.Timeout = 100 * time.Millisecond // Also bounds the queued admission wait.
 	th := throttle(t, store(t, b, config), lockout.DefaultPolicy())
 	entered, release, done := make(chan struct{}), make(chan struct{}), make(chan error, 1)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -208,7 +209,7 @@ func TestCanceledCallbackOwnsSlotUntilActualExit(t *testing.T) {
 	}()
 	<-entered
 	cancel()
-	if ok, err := th.Run(t.Context(), "another", func(context.Context) (bool, error) { t.Error("over-capacity verifier ran"); return true, nil }); ok || !errors.Is(err, fault.Conflict) {
+	if ok, err := th.Run(t.Context(), "another", func(context.Context) (bool, error) { t.Error("over-capacity verifier ran"); return true, nil }); ok || !errors.Is(err, fault.Overloaded) {
 		t.Error(ok, err)
 	}
 	close(release)

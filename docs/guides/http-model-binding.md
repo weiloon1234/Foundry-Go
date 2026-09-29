@@ -44,8 +44,27 @@ binding resolution does not promise exactly one SQL statement in those cases.
 A malformed path key returns 400 before database access. An omitted lookup result
 returns 404. An existing model outside the declared filter or parent scope also
 appears absent. Database failures and failed retrieval hooks remain errors and
-never become an absent model. Validation occurs before lookup. Signature checks
-on a `SignedEndpoint` still happen before any path decoding or model resolution.
+never become an absent model. Framework endpoints resolve the model at their
+binding stage (`HandleBound`): after request authorization and before
+validation, as Laravel resolves route bindings before a FormRequest's rules. A
+missing model is therefore 404, and a `WithAuthorization` resource denial 403,
+even when the body would also fail validation (422). The handler receives the
+model from that single lookup. A custom transport without `HandleBound` resolves
+after validation instead. Idempotent model-bound endpoints resolve inside their
+preparation, after validation. Signature checks on a `SignedEndpoint` still
+happen before any path decoding or model resolution.
+
+`WithMissing` replaces the default 404 for an omitted result, for example with a
+declared application error or a 410 for archived resources:
+
+```go
+resolver := UserByID(db).WithMissing(func(ctx context.Context, p httpkernel.UserPath) error {
+    return UserGone // a declared application error
+})
+```
+
+The callback receives the decoded path, runs in an owned callback (panics become
+internal errors) and is never invoked for lookup failures. Returning nil keeps 404.
 
 There is no implicit transaction or row lock. Model writes and any required
 transaction-scoped reads remain part of the domain operation. Locked query types
@@ -95,9 +114,12 @@ is observed. Panics and `runtime.Goexit` are contained as internal failures.
 Cancellation never abandons an active callback or releases its resources early;
 cooperative database cancellation and the existing HTTP timeouts still apply.
 
-Zero resolvers, nil executors/queries/selectors and invalid query declarations
-reject registration. Registration validates declarations without resolving a
-model or opening a transaction. Custom resolver errors preserve private causes;
+Zero resolvers, nil executors/queries/selectors, a nil missing handler and
+invalid query declarations reject registration. Registration validates the whole
+declaration once — each nested ancestor exactly once — without resolving a model
+or opening a transaction; requests then resolve without revalidating. A direct
+`Resolve` call validates once per call and resolves nested parents without
+revalidating each level. Custom resolver errors preserve private causes;
 response classification follows the endpoint's existing error declarations.
 
 
@@ -110,7 +132,6 @@ their concrete authenticated model; optional transports retain `value.Optional[M
 Both ordinary and signed auth endpoints satisfy `http.AuthenticatedTransport`.
 
 Authentication, token scopes, permissions and signatures execute before decoding
-or model resolution. The shared resolver still runs once after input validation;
-resource policies remain explicit. See [authentication composition](authentication.md#signed-endpoints-and-bound-resources)
+or model resolution. The shared resolver still runs once per request, at the
+binding stage before validation; resource policies remain explicit. See [authentication composition](authentication.md#signed-endpoints-and-bound-resources)
 and the [consumer](../../tests/fixtures/consumer/authenticating/composed_routes.go).
-Runtime, independent consumer, compiler and editor cases are written but unrun.

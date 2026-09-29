@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"foundry.test/consumer/bootstrap"
@@ -31,12 +30,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	err = app.Run(ctx, foundation.HTTP)
-	if errors.Is(err, context.Canceled) {
-		// Shutdown retains task/cleanup failures independently of caller cancellation.
-		cleanup, finish := context.WithTimeout(context.Background(), app.ShutdownTimeout())
-		defer finish()
-		return app.Shutdown(cleanup)
-	}
-	return err
+	// A signal is a graceful stop: Run drains within the application shutdown
+	// budget and returns nil, or the task/cleanup failures it observed.
+	return app.Run(ctx, foundation.HTTP)
 }

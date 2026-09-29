@@ -3,6 +3,8 @@
 package manifest
 
 import (
+	"encoding/json"
+
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/datatable"
@@ -15,9 +17,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
-// Version 4 adds required idempotency keys and transaction/replay policy metadata.
-// Earlier formats must be regenerated; older readers reject unsupported versions.
-const Version = 4
+// Version 5 adds alternative success statuses, redirect responses, raw request
+// bodies and event stream responses (Version 4 added idempotency policy metadata). Earlier formats must be
+// regenerated; older readers reject unsupported versions.
+const Version = 5
 const MaxBytes = 16 << 20
 const MaxOperations = 4096
 
@@ -60,6 +63,8 @@ type Operation struct {
 	Body              *Payload                     `json:"body,omitempty"`
 	Response          *Payload                     `json:"response,omitempty"`
 	Status            int                          `json:"status"`
+	Statuses          []int                        `json:"statuses,omitempty"`
+	Redirect          bool                         `json:"redirect,omitempty"`
 	FileTransferBytes int64                        `json:"file_transfer_bytes,omitempty"`
 	Limits            foundryhttp.EndpointLimits   `json:"limits"`
 	Idempotency       *foundryhttp.IdempotencyInfo `json:"idempotency,omitempty"`
@@ -83,12 +88,15 @@ type Part struct {
 	Kind foundryhttp.MultipartKind `json:"kind"`
 }
 
+// Example is a documented JSON example encoded by the payload's own contract.
 type Payload struct {
 	MediaType string                        `json:"media_type,omitempty"`
 	Type      contract.TypeID               `json:"type,omitempty"`
 	Fields    []Parameter                   `json:"fields,omitempty"`
 	Parts     []Part                        `json:"parts,omitempty"`
 	File      *foundryhttp.FileResponseInfo `json:"file,omitempty"`
+	Raw       *foundryhttp.RawBodyInfo      `json:"raw,omitempty"`
+	Example   json.RawMessage               `json:"example,omitempty"`
 }
 
 type Realtime struct {

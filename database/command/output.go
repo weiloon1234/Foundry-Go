@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
+	"github.com/weiloon1234/Foundry-Go/database/prune"
 	"github.com/weiloon1234/Foundry-Go/database/seed"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
@@ -75,6 +76,63 @@ func (c Command) writeSeedResult(output io.Writer, result seed.Result) error {
 	fmt.Fprintf(&text, "Confirmed %d seeder(s).\n", len(result.Committed))
 	if err := c.write(output, result, &text); err != nil {
 		return fault.Wrap(fault.Internal, fmt.Sprintf("cannot write seeder result (%d confirmed commits); inspect data before retrying", len(result.Committed)), err)
+	}
+	return nil
+}
+
+func (c Command) writeRollbackPlan(output io.Writer, plan []migrate.Applied) error {
+	var text strings.Builder
+	for _, item := range plan {
+		fmt.Fprintf(&text, "Would roll back: %s\t%s\tbatch %d\n", item.Key.Origin, item.Key.ID, item.Batch)
+	}
+	fmt.Fprintf(&text, "%d migration(s) planned; nothing changed. Rerun with --confirm to execute.\n", len(plan))
+	return c.write(output, struct {
+		Planned []migrate.Applied `json:"planned"`
+	}{plan}, &text)
+}
+
+func (c Command) writeRollback(output io.Writer, result migrate.RollbackResult) error {
+	var text strings.Builder
+	for _, item := range result.RolledBack {
+		fmt.Fprintf(&text, "Rolled back: %s\t%s\tbatch %d\n", item.Key.Origin, item.Key.ID, item.Batch)
+	}
+	if result.Interrupted != nil {
+		fmt.Fprintf(&text, "Unconfirmed: %s\t%s; inspect status before retrying.\n", result.Interrupted.Origin, result.Interrupted.ID)
+	}
+	fmt.Fprintf(&text, "Confirmed %d rollback(s).\n", len(result.RolledBack))
+	if err := c.write(output, result, &text); err != nil {
+		return fault.Wrap(fault.Internal, fmt.Sprintf("cannot write rollback result (%d confirmed reversals); inspect history before retrying", len(result.RolledBack)), err)
+	}
+	return nil
+}
+
+func (c Command) writePrunables(output io.Writer, names []prune.Name) error {
+	var text strings.Builder
+	for _, name := range names {
+		fmt.Fprintln(&text, name)
+	}
+	return c.write(output, struct {
+		Prunables []prune.Name `json:"prunables"`
+	}{names}, &text)
+}
+
+func (c Command) writePruneResult(output io.Writer, result prune.Result) error {
+	var text strings.Builder
+	var total int64
+	for _, count := range result.Counts {
+		fmt.Fprintf(&text, "Pruned: %s\t%d", count.Name, count.Removed)
+		if count.Remaining {
+			text.WriteString("\tmore remain")
+		}
+		text.WriteByte('\n')
+		total += count.Removed
+	}
+	if result.StoppedAt != nil {
+		fmt.Fprintf(&text, "Stopped at: %s; committed batches remain removed.\n", *result.StoppedAt)
+	}
+	fmt.Fprintf(&text, "Removed %d model(s).\n", total)
+	if err := c.write(output, result, &text); err != nil {
+		return fault.Wrap(fault.Internal, fmt.Sprintf("cannot write prune result (%d committed removals)", total), err)
 	}
 	return nil
 }

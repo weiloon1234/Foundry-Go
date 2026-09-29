@@ -3,7 +3,9 @@ package cli
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"io"
+	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
@@ -12,8 +14,17 @@ import (
 // Configure runs for every parse against a fresh A and FlagSet; bind defaults
 // there rather than retaining pointers or using global flags. Validation runs
 // after parsing, before command construction. Positional arguments are rejected;
-// a custom Decoder can explicitly describe positional/subcommand behavior.
+// use FlagsWithArgs, or a custom Decoder for subcommand behavior.
 func Flags[A any](configure func(*flag.FlagSet, *A), validate func(A) error) Decoder[A] {
+	return FlagsWithArgs(configure, nil, validate)
+}
+
+// FlagsWithArgs also binds the positional arguments remaining after flags
+// (and after a "--" terminator) into the same owned argument struct. The
+// positional callback receives an owned slice; return an error for a wrong count
+// or format, which becomes a usage error. A nil callback rejects positional
+// arguments exactly like Flags.
+func FlagsWithArgs[A any](configure func(*flag.FlagSet, *A), positional func(*A, []string) error, validate func(A) error) Decoder[A] {
 	return func(args []string, help io.Writer) (A, error) {
 		var result A
 		if configure == nil || help == nil {
@@ -28,7 +39,11 @@ func Flags[A any](configure func(*flag.FlagSet, *A), validate func(A) error) Dec
 		if err := ParseFlags(flags, args); err != nil {
 			return *new(A), err
 		}
-		if flags.NArg() != 0 {
+		if positional != nil {
+			if err := positional(&result, slices.Clone(flags.Args())); err != nil {
+				return *new(A), InvalidArguments(err)
+			}
+		} else if flags.NArg() != 0 {
 			return *new(A), Usage("command accepts flags only")
 		}
 		if validate != nil {
@@ -104,4 +119,18 @@ func InvalidArguments(err error) error {
 		return err
 	}
 	return &UsageError{cause: err}
+}
+
+// ExactArgs binds exactly count positional values through assign, a helper for
+// FlagsWithArgs. Values are validated text; assign converts them to typed fields.
+func ExactArgs[A any](count int, assign func(*A, []string) error) func(*A, []string) error {
+	return func(target *A, values []string) error {
+		if count < 0 || assign == nil {
+			return fault.New(fault.Invalid, "positional binding requires a count and assignment")
+		}
+		if len(values) != count {
+			return fmt.Errorf("expected %d positional argument(s), got %d", count, len(values))
+		}
+		return assign(target, values)
+	}
 }

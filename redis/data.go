@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	_ "embed"
+	"slices"
 
 	driver "github.com/redis/go-redis/v9"
 	"github.com/weiloon1234/Foundry-Go/cache"
@@ -47,12 +48,22 @@ func (c *Client) dataCommand(ctx context.Context, key data.Key, op string, l dat
 			return nil, 0, err
 		}
 	}
-	values := []any{op, string(key.Kind()), l.Entries, l.FieldBytes, l.ValueBytes, l.ReplyBytes}
+	return c.dataCall(ctx, dataScript, key, op, l, args...)
+}
+
+// dataCall runs one typed data script with the shared argument envelope. Callers
+// validate operation-specific inputs; l already includes the client value ceiling.
+func (c *Client) dataCall(ctx context.Context, script string, key data.Key, op string, l data.Limits, args ...string) ([]any, int64, error) {
+	if err := c.valid(ctx); err != nil {
+		return nil, 0, err
+	}
+	values := make([]any, 0, 6+len(args))
+	values = append(values, op, string(key.Kind()), l.Entries, l.FieldBytes, l.ValueBytes, l.ReplyBytes)
 	for _, arg := range args {
 		values = append(values, arg)
 	}
 	reply, err := c.execute(ctx, func(ctx context.Context, raw *driver.Client) (any, error) {
-		return raw.Eval(ctx, dataScript, []string{key.String()}, values...).Result()
+		return evalScript(ctx, raw, script, []string{key.String()}, values...).Result()
 	})
 	if err != nil {
 		return nil, 0, err
@@ -70,6 +81,9 @@ func dataReply(reply any) ([]any, int64, error) {
 	}
 	if code == -1 && len(fields) == 1 {
 		return nil, 0, fault.New(fault.Invalid, "stored Redis data has the wrong type or exceeds its bound")
+	}
+	if code == -2 && len(fields) == 1 {
+		return nil, 0, fault.New(fault.Invalid, "Redis data value is not a number or would overflow")
 	}
 	if code != 0 && code != 1 || code == 0 && len(fields) != 1 {
 		return nil, 0, invalidDataReply()
@@ -136,7 +150,7 @@ func (c *Client) DataDeleteMany(ctx context.Context, keys []data.Key) (uint64, e
 			addresses[i] = k.String()
 			kinds[i] = string(k.Kind())
 		}
-		return raw.Eval(ctx, dataBatchScript, addresses, kinds...).Result()
+		return evalScript(ctx, raw, dataBatchScript, addresses, kinds...).Result()
 	})
 	if err != nil {
 		return 0, err
@@ -212,11 +226,18 @@ func (c *Client) SetMembers(ctx context.Context, key data.Key, l data.Limits) ([
 			return nil, err
 		}
 		text, ok := field.(string)
-		if !ok || l.ValidateValue(text) != nil || len(text) > c.config.MaxValueBytes || len(text) > remaining || i > 0 && text <= result[i-1] {
+		if !ok || l.ValidateValue(text) != nil || len(text) > c.config.MaxValueBytes || len(text) > remaining {
 			return nil, invalidDataReply()
 		}
 		remaining -= len(text)
 		result[i] = text
+	}
+	// Sorted here by bytes: the script's order would follow the server locale.
+	slices.Sort(result)
+	for i := 1; i < len(result); i++ {
+		if result[i] == result[i-1] {
+			return nil, invalidDataReply()
+		}
 	}
 	return result, nil
 }

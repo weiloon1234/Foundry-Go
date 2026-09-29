@@ -57,6 +57,14 @@ func TestErrorClassificationOwnsPanicAndGoexit(t *testing.T) {
 				var logs bytes.Buffer
 				request := withRequestLogger(httptest.NewRequest("GET", "/", nil), slog.New(slog.NewTextHandler(&logs, nil)))
 				response := httptest.NewRecorder()
+				if mode == "goexit" {
+					// Classification runs on the caller's goroutine
+					// (callback.Invoke): Goexit ends it before any write.
+					if !exitsGoroutine(func() { _ = WriteError(response, request, cause) }) || response.Body.Len() != 0 {
+						t.Fatal("classification Goexit was converted or wrote a response")
+					}
+					return
+				}
 				if err := WriteError(response, request, cause); err != nil {
 					t.Fatal(err)
 				}

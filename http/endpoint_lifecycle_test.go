@@ -23,7 +23,7 @@ func TestRequestLifecycleOrderAndOriginalProhibitions(t *testing.T) {
 	}{
 		{"normalize", `{"name":"  Jane  ","note":null}`, false, 201, "prepare,authorize,handler"},
 		{"omitted", `{"name":"  Jane  "}`, false, 201, "prepare,authorize,handler"},
-		{"invalid-normalized", `{"name":"    "}`, false, 422, "prepare"},
+		{"invalid-normalized", `{"name":"    "}`, false, 422, "prepare,authorize"},
 		{"structural", `{"name":123}`, false, 400, ""},
 		{"forbidden-original", `{"name":"Jane","note":"cannot erase"}`, true, 422, ""},
 	} {
@@ -46,7 +46,13 @@ func TestRequestLifecycleOrderAndOriginalProhibitions(t *testing.T) {
 			}).WithAuthorization(func(_ context.Context, in endpointRequest) error {
 				stages = append(stages, "authorize")
 				q, _ := in.Query.Term.Get()
-				if in.Path.User.String() != endpointUserID || in.Body.Name != "Jane" || q != "default" {
+				// Authorization precedes validation: it sees prepared input
+				// that validation has not checked yet.
+				wantName := "Jane"
+				if tc.name == "invalid-normalized" {
+					wantName = ""
+				}
+				if in.Path.User.String() != endpointUserID || in.Body.Name != wantName || q != "default" {
 					t.Error("authorization did not receive prepared input")
 				}
 				return nil
@@ -178,10 +184,9 @@ func TestRequestLifecycleMultipartCleanupAndCancellation(t *testing.T) {
 					close(release)
 				}
 				<-finished
+				// The hook's returned denial is authoritative even when the
+				// request was canceled while it ran.
 				want := 403
-				if cancelRequest {
-					want = 408
-				}
 				if res.Code != want {
 					t.Fatalf("%d %s", res.Code, res.Body.String())
 				}

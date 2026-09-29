@@ -101,3 +101,36 @@ func TestNotificationRealtimePrivateOwnershipAndRetryDedup(t *testing.T) {
 		t.Fatal("revoked recipient subscribed")
 	}
 }
+
+// A realtime publication that provably never started (the hub is stopped) is
+// retried; it is never reported as uncertain.
+func TestNotificationRealtimeRetriesAPublicationThatNeverStarted(t *testing.T) {
+	a := newAuthority(t)
+	realtime := DefineRealtime[NotificationRoom](a.recipient, "member.stopped", websocket.DefineRooms(foundryhttp.IntegerPath[int64]()), "notification", textSchema[InboxData]())
+	registry, err := websocket.NewRegistry(realtime.Registration())
+	if err != nil {
+		t.Fatal(err)
+	}
+	transport, err := foundryhttp.NewAuthentication(a.registry, foundryhttp.BearerCredential("bearer"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hub, err := websocket.New(registry, transport, websocket.DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	if err := hub.Stop(stop); err != nil {
+		t.Fatal(err)
+	}
+	channel := RealtimeChannel("realtime", realtime, hub, func(_ context.Context, _ Member, _ DeliveryContext, p Input) (InboxData, error) {
+		return InboxData{p.Text}, nil
+	})
+	b := Bind(Define("stopped.notice", 1, textSchema[Input]()), a.recipient, channel)
+	m, _ := fixture(t, b.Registration())
+	report, _ := captureNotification(t, b, 1, "later").Send(t.Context(), m)
+	if len(report.Channels) != 1 || report.Channels[0].State != Prepared {
+		t.Fatalf("unstarted publication was not left for retry: %+v", report.Channels)
+	}
+}

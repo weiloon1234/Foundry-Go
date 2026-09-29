@@ -14,11 +14,13 @@ import (
 
 type AtomicExpiryBackend interface {
 	BasicEntryBackend
-	Access(context.Context, cache.EntryKey, cacheatomic.Change) error
+	Access(context.Context, cache.EntryKey, cacheatomic.Mode, cacheatomic.Change) error
 }
 
 // RunContendedExpiry holds the actual adapter lock while a competing metadata
 // operation starts. The application clock advances without wall-clock sleeps.
+// Reads take no mutation lock: Exists completes while the lock is held and
+// evaluates liveness at its own observation time.
 func RunContendedExpiry(t *testing.T, prepare func(*testing.T) (AtomicExpiryBackend, *testkit.Clock, cache.EntryKey)) {
 	for _, operation := range []string{"exists", "expire", "forever", "relative-ttl"} {
 		t.Run(operation, func(t *testing.T) {
@@ -37,7 +39,7 @@ func RunContendedExpiry(t *testing.T, prepare func(*testing.T) (AtomicExpiryBack
 			defer unlock.Do(func() { close(release) })
 			blocker := make(chan error, 1)
 			go func() {
-				blocker <- b.Access(ctx, key, func(*cacheatomic.Record) (*cacheatomic.Record, bool, error) {
+				blocker <- b.Access(ctx, key, cacheatomic.Payload, func(time.Time, *cacheatomic.Record) (*cacheatomic.Record, bool, error) {
 					close(locked)
 					select {
 					case <-release:
@@ -51,6 +53,20 @@ func RunContendedExpiry(t *testing.T, prepare func(*testing.T) (AtomicExpiryBack
 			case <-ctx.Done():
 				t.Fatal("lock not acquired")
 			}
+			if operation == "exists" {
+				if found, err := b.Exists(ctx, key); err != nil || !found {
+					t.Fatalf("lock-free read blocked or missed a live entry: %v %v", found, err)
+				}
+				clock.Advance(2 * time.Second)
+				if found, err := b.Exists(ctx, key); err != nil || found {
+					t.Fatalf("read ignored current time: %v %v", found, err)
+				}
+				unlock.Do(func() { close(release) })
+				if err := <-blocker; err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
 			waiting := &expiryWaitContext{Context: ctx, entered: make(chan struct{})}
 			type outcome struct {
 				found bool
@@ -61,8 +77,6 @@ func RunContendedExpiry(t *testing.T, prepare func(*testing.T) (AtomicExpiryBack
 				var found bool
 				var err error
 				switch operation {
-				case "exists":
-					found, err = b.Exists(waiting, key)
 				case "forever":
 					found, err = b.Expire(waiting, key, cache.Forever())
 				default:

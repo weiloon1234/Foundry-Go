@@ -4,10 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"math/rand/v2"
+	"strings"
 	"time"
 
+	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -29,6 +33,7 @@ type readPool struct {
 	adapter Adapter
 	config  PoolConfig
 	raw     *sql.DB
+	probe   *sql.DB
 }
 
 // WithReadPool configures an optional read endpoint and an explicit combined
@@ -121,11 +126,18 @@ func ReadQuery(ctx context.Context, executor Executor, statement string, argumen
 // SQL must be safe to execute on that endpoint. Replica lag means a recent
 // primary commit is not necessarily visible; use Primary or the owning Tx.
 func (db *DB) QueryRead(ctx context.Context, statement string, arguments ...any) (*Rows, error) {
-	conn, release, classify, err := db.acquirePool(ctx, ReadPool)
+	role := ReadPool
+	if db.read == nil || db.readsStickToPrimary(ctx) {
+		role = PrimaryPool
+	}
+	instrument := db.instrumented(role)
+	acquired := instrument.start()
+	conn, release, classify, err := db.acquirePool(ctx, role)
 	if err != nil {
 		return nil, err
 	}
-	return query(ctx, conn, classify, db.Observers(), observerOwner{db: db, ctx: ctx}, release, statement, arguments)
+	instrument.wait = sinceStart(acquired)
+	return query(ctx, conn, classify, instrument, db.Observers(), observerOwner{db: db, ctx: ctx}, release, statement, arguments)
 }
 
 // PrimaryExecutor pins all query and transaction work to the primary endpoint.
@@ -153,16 +165,37 @@ func (p PrimaryExecutor) Transaction(ctx context.Context, fn func(*Tx) error, op
 	return p.db.Transaction(ctx, fn, options...)
 }
 
+// Clock returns the original DB's application clock, or nil for the zero value.
+func (p PrimaryExecutor) Clock() clock.Clock {
+	if p.db == nil {
+		return nil
+	}
+	return p.db.Clock()
+}
+
+// FoundryAutocommitQuery keeps framework single-statement writes on primary.
+func (p PrimaryExecutor) FoundryAutocommitQuery(seal sqlowner.Seal, ctx context.Context, statement string, arguments ...any) (*Rows, error) {
+	if p.db == nil {
+		return nil, &Error{operation: "query", detail: Detail{Code: NotReady}, outcome: NoCommit}
+	}
+	return p.db.FoundryAutocommitQuery(seal, ctx, statement, arguments...)
+}
+
 // HasReadPool reports configuration, not current endpoint health.
 func (db *DB) HasReadPool() bool { return db.read != nil }
 
 // PoolStats describes one endpoint. Resource owners belong to the shared DB and
-// appear once in Stats; per-endpoint connection counts are independent.
+// appear once in Stats; per-endpoint connection counts are independent. Counts
+// and durations are cumulative since Start, suitable for metric counters. The
+// dedicated readiness probe connection is not included.
 type PoolStats struct {
 	Role                       PoolRole
 	MaxOpen, Open, InUse, Idle int
 	WaitCount                  int64
 	WaitDuration               time.Duration
+	MaxIdleClosed              int64
+	MaxIdleTimeClosed          int64
+	MaxLifetimeClosed          int64
 }
 
 type RoutingStats struct {
@@ -177,6 +210,7 @@ func poolStats(role PoolRole, config PoolConfig, raw *sql.DB) PoolStats {
 		s := raw.Stats()
 		result.Open, result.InUse, result.Idle = s.OpenConnections, s.InUse, s.Idle
 		result.WaitCount, result.WaitDuration = s.WaitCount, s.WaitDuration
+		result.MaxIdleClosed, result.MaxIdleTimeClosed, result.MaxLifetimeClosed = s.MaxIdleClosed, s.MaxIdleTimeClosed, s.MaxLifetimeClosed
 	}
 	return result
 }
@@ -206,17 +240,26 @@ func (db *DB) Health(ctx context.Context) []PoolHealth {
 	return result
 }
 
+// PingPrimary checks the primary endpoint through its dedicated probe
+// connection, so a saturated application pool cannot make readiness fail.
 func (db *DB) PingPrimary(ctx context.Context) error { return db.pingPool(ctx, PrimaryPool) }
 
 // PingRead checks the selected read endpoint, falling back only when absent.
 func (db *DB) PingRead(ctx context.Context) error { return db.pingPool(ctx, ReadPool) }
-func (db *DB) pingPool(ctx context.Context, role PoolRole) (err error) {
-	conn, release, classify, err := db.acquirePool(ctx, role)
-	if err != nil {
+
+// pingPool never queues behind application work: each endpoint owns one probe
+// connection outside MaxOpen, opened on demand and retained while idle. The
+// pool owner is retained so shutdown still drains an in-flight probe.
+func (db *DB) pingPool(ctx context.Context, role PoolRole) error {
+	if err := db.own(); err != nil {
 		return err
 	}
-	defer func() { err = errors.Join(err, release()) }()
-	return classify.wrap("ping "+string(role), conn.PingContext(ctx))
+	defer db.release()
+	probe, classify := db.probe, db.classify
+	if role == ReadPool && db.read != nil {
+		probe, classify = db.read.probe, classifier(db.read.adapter.Classify)
+	}
+	return classify.wrap("ping "+string(role), probe.PingContext(ctx))
 }
 
 func openPool(adapter Adapter, config PoolConfig) *sql.DB {
@@ -228,10 +271,59 @@ func openPool(adapter Adapter, config PoolConfig) *sql.DB {
 	return raw
 }
 
+// openProbe prepares, without connecting, one serialized health connection.
+func openProbe(adapter Adapter, config PoolConfig) *sql.DB {
+	raw := sql.OpenDB(adapter.Connector)
+	raw.SetMaxOpenConns(1)
+	raw.SetMaxIdleConns(1)
+	raw.SetConnMaxLifetime(config.MaxLifetime)
+	raw.SetConnMaxIdleTime(config.MaxIdleTime)
+	return raw
+}
+
+const (
+	startRetryInitial = 100 * time.Millisecond
+	startRetryMaximum = 2 * time.Second
+)
+
+// pingStartingPool retries transient connection failures within StartupTimeout
+// using jittered exponential backoff. Each attempt is bounded by ConnectTimeout
+// and the caller's context; authentication failures fail immediately.
 func pingStartingPool(ctx context.Context, role PoolRole, raw *sql.DB, config PoolConfig, classify classifier) error {
-	connect, cancel := context.WithTimeout(ctx, config.ConnectTimeout)
-	defer cancel()
-	return classify.wrap("start "+string(role), raw.PingContext(connect))
+	deadline := time.Now().Add(config.StartupTimeout)
+	delay := startRetryInitial
+	for {
+		connect, cancel := context.WithTimeout(ctx, config.ConnectTimeout)
+		err := classify.wrap("start "+string(role), raw.PingContext(connect))
+		cancel()
+		if err == nil || ctx.Err() != nil || !transientStartFailure(err) {
+			return err
+		}
+		wait := delay/2 + rand.N(delay/2+1)
+		if time.Now().Add(wait).After(deadline) {
+			return err
+		}
+		timer := time.NewTimer(wait)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			return errors.Join(err, classify.wrap("start "+string(role), ctx.Err()))
+		}
+		delay = min(delay*2, startRetryMaximum)
+	}
+}
+
+// SQLSTATE class 28 is the standard invalid-authorization class.
+func transientStartFailure(err error) bool {
+	classified, ok := err.(*Error)
+	if !ok || classified == nil {
+		return false
+	}
+	if strings.HasPrefix(classified.detail.SQLState, "28") {
+		return false
+	}
+	return classified.detail.Code == Unavailable || classified.detail.Code == DeadlineExceeded
 }
 
 func (db *DB) closePools() error {
@@ -239,8 +331,14 @@ func (db *DB) closePools() error {
 	if db.raw != nil {
 		result = db.classify.wrap("close primary", db.raw.Close())
 	}
+	if db.probe != nil {
+		result = errors.Join(result, db.classify.wrap("close primary probe", db.probe.Close()))
+	}
 	if db.read != nil && db.read.raw != nil {
 		result = errors.Join(result, classifier(db.read.adapter.Classify).wrap("close read", db.read.raw.Close()))
+	}
+	if db.read != nil && db.read.probe != nil {
+		result = errors.Join(result, classifier(db.read.adapter.Classify).wrap("close read probe", db.read.probe.Close()))
 	}
 	return result
 }

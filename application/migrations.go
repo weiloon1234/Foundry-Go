@@ -4,10 +4,11 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/jobs/archive"
 	"slices"
 )
 
-func featureMigrations(plan *infrastructure.Plan, s FeatureSettings) ([]infrastructure.MigrationTarget, error) {
+func featureMigrations(plan *infrastructure.Plan, s FeatureSettings, jobArchive JobArchiveSettings) ([]infrastructure.MigrationTarget, error) {
 	type target struct {
 		connection database.ConnectionName
 		schema     string
@@ -24,6 +25,9 @@ func featureMigrations(plan *infrastructure.Plan, s FeatureSettings) ([]infrastr
 		if t.definitions != nil {
 			add(*t.connection, *t.schema, t.definitions())
 		}
+	}
+	if jobArchive.Enabled {
+		add(jobArchive.Database, jobArchive.Schema, archive.Migrations())
 	}
 	keys := make([]target, 0, len(groups))
 	for key := range groups {

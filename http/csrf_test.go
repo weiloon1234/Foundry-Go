@@ -48,9 +48,12 @@ func TestCSRFCrossOriginEvidenceAndSafeMethods(t *testing.T) {
 			if w.Code != test.status {
 				t.Fatal(w.Code, w.Body.String())
 			}
+			// Only unsafe decisions depend on Origin/Fetch Metadata; cacheable
+			// safe responses must not fragment caches on those fields.
 			vary := strings.Join(w.Header().Values("Vary"), ",")
-			if !strings.Contains(vary, "Origin") || !strings.Contains(vary, "Sec-Fetch-Site") {
-				t.Fatal("missing cache variation")
+			unsafe := test.method != "GET" && test.method != "OPTIONS"
+			if (strings.Contains(vary, "Origin") && strings.Contains(vary, "Sec-Fetch-Site")) != unsafe || !unsafe && vary != "" {
+				t.Fatalf("cache variation=%q for %s", vary, test.method)
 			}
 		})
 	}

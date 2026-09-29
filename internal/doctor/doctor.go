@@ -18,6 +18,9 @@ type Options struct {
 	Dir, Go, Gopls string
 	RequireGopls   bool
 	Timeout        time.Duration
+	// Framework is the running tool's framework build. A known release must
+	// equal the consumer's selected framework version.
+	Framework frameworkinfo.Build
 }
 type Check struct {
 	Name     string `json:"name"`
@@ -27,7 +30,10 @@ type Check struct {
 }
 type Report struct {
 	FrameworkAPI manifest.Version `json:"framework_api"`
-	Checks       []Check          `json:"checks"`
+	// FrameworkModule is the tool's framework module version when its build
+	// records one; development builds and local replacements leave it empty.
+	FrameworkModule string  `json:"framework_module,omitempty"`
+	Checks          []Check `json:"checks"`
 }
 
 func (r Report) Check() error {
@@ -66,6 +72,7 @@ func inspect(ctx context.Context, options Options, execute probe) (Report, error
 		options.Gopls = "gopls"
 	}
 	result.FrameworkAPI = manifest.FrameworkVersion
+	result.FrameworkModule = options.Framework.Version
 	add := func(name string, required, passed bool, detail string) {
 		result.Checks = append(result.Checks, Check{name, required, passed, detail})
 	}
@@ -104,6 +111,17 @@ func inspect(ctx context.Context, options Options, execute probe) (Report, error
 					detail += "; an explicit module replacement is active"
 				}
 				add("framework", true, true, detail)
+				selection := frameworkinfo.Selection{Main: framework.Main, Version: framework.Version}
+				if framework.Replace != nil {
+					selection.Version, selection.Local = framework.Replace.Version, framework.Replace.Version == ""
+				}
+				if verified, err := options.Framework.Check(selection); err != nil {
+					add("tool-version", true, false, err.Error())
+				} else if !verified {
+					add("tool-version", false, false, "The tool/framework version pair is not verifiable for development builds or local replacements; run the module-pinned go tool foundry")
+				} else {
+					add("tool-version", true, true, "The foundry tool matches the selected framework "+selection.Version)
+				}
 				minimum := "go" + consumer.GoVersion
 				if version.Compare("go"+frameworkGo, minimum) > 0 {
 					minimum = "go" + frameworkGo

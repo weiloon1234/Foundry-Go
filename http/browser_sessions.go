@@ -146,13 +146,15 @@ func (a *browserSessionAdapter) wrap(next stdhttp.Handler) stdhttp.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		csrfVary(w.Header())
+		csrfVary(w.Header(), r)
 		credential, err := a.readCredential(r)
 		if err != nil {
 			writeRoutingError(w, r, err)
 			return
 		}
-		owner, cancel := context.WithCancel(r.Context())
+		// Session work ends on client disconnect or forced shutdown; the
+		// handler's own context carries its route's deadline.
+		owner, cancel := context.WithCancel(transportParent(r))
 		state := &browserSessionState{owner: a, context: owner, cancel: cancel, credential: credential, method: r.Method}
 		defer state.close()
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), browserSessionKey{}, state)))

@@ -37,10 +37,15 @@ type Family struct {
 	Generation       uint32
 	CreatedAt        temporal.DateTime
 	ExpiresAt        temporal.DateTime
+	// ClientIP and UserAgent are display-only device metadata from issuance.
+	ClientIP  value.Nullable[string]
+	UserAgent value.Nullable[string]
 }
 
-// Entry retains hashes for every generation until its family is removed. An old
-// refresh hash identifies reuse; an old access hash never authenticates a request.
+// Entry retains the current generation and the one before it. The previous
+// access hash authenticates only within the configured refresh grace; its
+// refresh hash, like every older one kept in foundry_token_consumed_refreshes,
+// identifies reuse and revokes the family.
 //
 //foundry:model table=foundry_token_generations
 type Entry struct {
@@ -54,14 +59,6 @@ type Entry struct {
 	LastSeenAt       temporal.DateTime
 	AccessExpiresAt  temporal.DateTime
 	RefreshExpiresAt value.Nullable[temporal.DateTime]
-}
-
-// PruneCandidate is an explicit partial projection, never a partial Family model.
-//
-//foundry:projection
-type PruneCandidate struct {
-	ID         model.ID[Family]
-	SubjectKey string
 }
 
 func (Subject) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("token subject")) }

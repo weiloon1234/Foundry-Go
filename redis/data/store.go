@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
@@ -42,7 +43,7 @@ type declarationKey struct {
 type Store struct {
 	backend      Backend
 	config       Config
-	slots        chan struct{}
+	slots        *admission.Semaphore
 	mu           sync.Mutex
 	declarations map[declarationKey]*declarationID
 }
@@ -54,7 +55,7 @@ func NewStore(backend Backend, c Config) (*Store, error) {
 	if err := c.Validate(); err != nil {
 		return nil, err
 	}
-	return &Store{backend: backend, config: c, slots: make(chan struct{}, c.MaxConcurrent), declarations: make(map[declarationKey]*declarationID)}, nil
+	return &Store{backend: backend, config: c, slots: admission.New(c.MaxConcurrent), declarations: make(map[declarationKey]*declarationID)}, nil
 }
 func (s *Store) bind(name Name, version Version, id *declarationID) error {
 	if s == nil || s.slots == nil {
@@ -82,12 +83,12 @@ func (s *Store) execute(ctx context.Context, fn func(context.Context) error) err
 	if err := op.Err(); err != nil {
 		return err
 	}
-	select {
-	case s.slots <- struct{}{}:
-	default:
-		return fault.New(fault.Conflict, "Redis data operation capacity reached")
+	// A full store queues in FIFO order for at most admission.Wait(Timeout) and
+	// the operation deadline, then reports retryable fault.Overloaded.
+	if err := s.slots.Acquire(op, admission.Wait(s.config.Timeout), nil); err != nil {
+		return err
 	}
-	defer func() { <-s.slots }()
+	defer s.slots.Release()
 	err := callback.Isolated("Redis data operation", func() error {
 		if err := op.Err(); err != nil {
 			return err

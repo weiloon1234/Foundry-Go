@@ -65,7 +65,7 @@ func (b *Backend) Stat(ctx context.Context, key storage.ObjectKey, options stora
 	if options.Version != "" {
 		input.VersionId = aws.String(string(options.Version))
 	}
-	result, err := b.client.HeadObject(ctx, input, safeRetry(b.config.ReadAttempts))
+	result, err := b.client.HeadObject(ctx, input, b.readRetry)
 	if err != nil {
 		return storage.ObjectInfo{}, failure(storage.StatOperation, storage.NotApplicable, err)
 	}
@@ -102,7 +102,7 @@ func (b *Backend) Open(ctx context.Context, key storage.ObjectKey, options stora
 	if span, ok := options.Range.Get(); ok {
 		input.Range = aws.String("bytes=" + strconv.FormatInt(span.Offset, 10) + "-" + strconv.FormatInt(span.Offset+span.Length-1, 10))
 	}
-	result, err := b.client.GetObject(ctx, input, safeRetry(b.config.ReadAttempts))
+	result, err := b.client.GetObject(ctx, input, b.readRetry)
 	if err != nil {
 		if result != nil && result.Body != nil {
 			err = errors.Join(err, result.Body.Close())
@@ -178,13 +178,13 @@ func (b *Backend) Delete(ctx context.Context, key storage.ObjectKey, options sto
 		return err
 	}
 	// S3 evaluates delete preconditions against the current object, not an
-	// explicitly selected historical version. Never imply otherwise.
-	if options.Version == "null" || options.IfMatch != "" && options.Version != "" {
+	// explicitly selected historical version; ValidateDelete rejects that
+	// combination. A version selector alone deletes exactly that version.
+	if options.Version == "null" {
 		return storage.Failure(storage.Unsupported, storage.DeleteOperation, storage.Unchanged, nil)
 	}
-	caps := b.Capabilities()
-	if options.IfMatch != "" && !caps.ConditionalDelete || options.Version != "" && !caps.Versions {
-		return storage.Failure(storage.Unsupported, storage.DeleteOperation, storage.Unchanged, nil)
+	if err := b.Capabilities().ValidateDelete(options); err != nil {
+		return err
 	}
 	input := &awss3.DeleteObjectInput{Bucket: aws.String(b.config.Bucket), Key: aws.String(full)}
 	if options.IfMatch != "" {

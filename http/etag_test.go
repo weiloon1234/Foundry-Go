@@ -6,9 +6,11 @@ import (
 	"io"
 	stdhttp "net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func etagTestHandler(t *testing.T, config ETagConfig, next stdhttp.HandlerFunc) stdhttp.Handler {
@@ -177,10 +179,16 @@ func TestETagCaptureSaturationAndRelease(t *testing.T) {
 	ready, release, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	config := DefaultETagConfig()
 	config.MaxConcurrent = 1
+	config.AdmissionWait = 10 * time.Millisecond
+	large := strings.Repeat("x", responseBufferPageBytes+1)
 	var calls atomic.Int32
 	handler := etagTestHandler(t, config, func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		n := calls.Add(1)
-		_, _ = io.WriteString(w, "body")
+		if r.URL.Path == "/small" {
+			_, _ = io.WriteString(w, "body")
+			return
+		}
+		_, _ = io.WriteString(w, large)
 		if n == 1 {
 			close(ready)
 			<-release
@@ -190,12 +198,67 @@ func TestETagCaptureSaturationAndRelease(t *testing.T) {
 	go func() { defer close(done); handler.ServeHTTP(first, httptest.NewRequest("GET", "/", nil)) }()
 	<-ready
 	second := etagTestRequest(handler, "GET", "", "")
+	// Small captures never compete for large-capture slots.
+	small := httptest.NewRecorder()
+	handler.ServeHTTP(small, httptest.NewRequest("GET", "/small", nil))
 	close(release)
 	<-done
 	third := etagTestRequest(handler, "GET", "", "")
-	if second.Body.String() != "body" || second.Header().Get("ETag") != "" ||
+	if second.Body.String() != large || second.Header().Get("ETag") != "" || small.Header().Get("ETag") == "" ||
 		first.Header().Get("ETag") == "" || third.Header().Get("ETag") == "" {
 		t.Fatal("saturation lost body or capture permit was retained")
+	}
+}
+
+func TestETagWaitsBrieflyForCaptureCapacity(t *testing.T) {
+	config := DefaultETagConfig()
+	config.MaxConcurrent = 1
+	config.AdmissionWait = 2 * time.Second
+	large := strings.Repeat("y", responseBufferPageBytes+1)
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var first atomic.Bool
+	handler := etagTestHandler(t, config, func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		_, _ = io.WriteString(w, large)
+		if first.CompareAndSwap(false, true) {
+			close(entered)
+			<-release
+		}
+	})
+	done := make(chan *httptest.ResponseRecorder)
+	go func() { done <- etagTestRequest(handler, "GET", "", "") }()
+	<-entered
+	waiting := make(chan *httptest.ResponseRecorder)
+	go func() { waiting <- etagTestRequest(handler, "GET", "", "") }()
+	time.Sleep(20 * time.Millisecond)
+	close(release)
+	if (<-done).Header().Get("ETag") == "" || (<-waiting).Header().Get("ETag") == "" {
+		t.Fatal("bounded capacity wait did not admit the queued capture")
+	}
+}
+
+func TestETagValidatesDeclaredSingleWriteWithoutCapture(t *testing.T) {
+	config := DefaultETagConfig()
+	config.MaxConcurrent = 1
+	config.AdmissionWait = 0
+	body := strings.Repeat("z", 3*responseBufferPageBytes)
+	handler := etagTestHandler(t, config, func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		if n, err := w.Write([]byte(body)); err != nil || n != len(body) {
+			t.Errorf("single write=%d %v", n, err)
+		}
+		if _, err := w.Write([]byte("extra")); !errors.Is(err, stdhttp.ErrContentLength) {
+			t.Errorf("write after complete body=%v", err)
+		}
+	})
+	response := etagTestRequest(handler, "GET", "", "")
+	tag := response.Header().Get("ETag")
+	if response.Code != 200 || tag == "" || response.Body.String() != body {
+		t.Fatalf("direct validation: %d %q", response.Code, tag)
+	}
+	if conditional := etagTestRequest(handler, "GET", "If-None-Match", tag); conditional.Code != 304 || conditional.Body.Len() != 0 {
+		t.Fatalf("conditional direct validation: %d", conditional.Code)
 	}
 }
 

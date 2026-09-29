@@ -27,3 +27,29 @@ type TaggedBackend interface {
 type TaggedCounterBackend interface {
 	IncrementTagged(context.Context, TaggedKey, int64, TTL) (int64, error)
 }
+
+// SnapshotReadBackend optionally combines ResolveTags with a tagged read in one
+// atomic operation, halving round trips for Get, Exists and Remember lookups.
+// tags are canonical metadata addresses (see ValidateTagKeys); missing metadata
+// receives fresh random versions exactly as in ResolveTags.
+// The returned key must be NewTaggedKey(base, stamps) for the versions read.
+// found reports a current, readable payload for that key; payload=false skips
+// transferring the value. An obsolete or over-bound stored payload is a miss.
+type SnapshotReadBackend interface {
+	ReadSnapshot(ctx context.Context, base EntryKey, tags []EntryKey, payload bool) (TaggedKey, []byte, bool, error)
+}
+
+// SnapshotWriteBackend optionally resolves tag metadata (tags are canonical
+// metadata addresses; missing metadata receives fresh versions exactly as in
+// ResolveTags) and applies one tagged mutation under the resolved snapshot in
+// the same atomic operation. Direct Put, Add, Forget, Increment and Expire then
+// cost one round trip and never cross an invalidation; Remember publications
+// keep the snapshot they read. Results and failures follow the matching
+// TaggedBackend, TaggedCounterBackend and TaggedEntryBackend methods.
+type SnapshotWriteBackend interface {
+	PutSnapshot(ctx context.Context, base EntryKey, tags []EntryKey, data []byte, ttl TTL) error
+	AddSnapshot(ctx context.Context, base EntryKey, tags []EntryKey, data []byte, ttl TTL) (bool, error)
+	ForgetSnapshot(ctx context.Context, base EntryKey, tags []EntryKey) (bool, error)
+	IncrementSnapshot(ctx context.Context, base EntryKey, tags []EntryKey, delta int64, ttl TTL) (int64, error)
+	ExpireSnapshot(ctx context.Context, base EntryKey, tags []EntryKey, ttl TTL) (bool, error)
+}

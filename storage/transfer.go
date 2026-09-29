@@ -5,7 +5,9 @@ import (
 	"errors"
 	"io"
 	"os"
+	"reflect"
 
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -91,17 +93,35 @@ func (d *Disk) PutFile(ctx context.Context, key ObjectKey, path string, options 
 
 // CopyOptions reads one complete source version and publishes a destination.
 // Destination metadata defaults to the source's media type, exact size and
-// available checksum. Conditions remain explicit. Copy is always streamed with
-// the adapter's bounded buffers; it never buffers the entire object.
+// available checksum. Conditions remain explicit. Copies between disks sharing
+// one ServerCopier adapter run inside the provider; other copies stream with
+// the adapters' bounded buffers. Neither buffers the entire object.
 type CopyOptions struct {
 	Source      ReadOptions
 	Destination PutOptions
 }
 
+// ServerCopier copies within one adapter without streaming bytes through this
+// process (for example S3 CopyObject or a local kernel-assisted file copy). It
+// honors the same source pins, destination condition and declared
+// size/checksum as a streamed copy, and writes the metadata a streamed copy
+// writes: the destination's content type (the source's by default), the
+// source's recorded full checksum and options.Destination.Metadata, never other
+// source metadata such as cache or custom headers.
+// A source larger than maximum (the smaller of both disks' MaxObjectBytes)
+// fails with LimitExceeded and an Unchanged outcome before any mutation. When a
+// request needs the streamed path, it returns Unsupported with an Unchanged
+// outcome before any provider mutation.
+type ServerCopier interface {
+	Copy(ctx context.Context, source, target ObjectKey, options CopyOptions, maximum int64) (ObjectInfo, error)
+}
+
 // CopyTo copies this disk's source to destination without deleting the source.
-// Capacity on both disks is required (two slots for a copy within one disk).
-// Source close failures after a successful publication report Applied. The
-// returned object is zero on any failure; reconcile uncertain writes by key.
+// A same-adapter copy uses ServerCopier when available and holds one operation
+// slot on each disk. A streamed copy holds a read stream on the source disk and
+// an operation slot on the destination. Source close failures after a
+// successful publication report Applied. The returned object is zero on any
+// failure; reconcile uncertain writes by key.
 func (d *Disk) CopyTo(ctx context.Context, source ObjectKey, destination *Disk, target ObjectKey, options CopyOptions) (StoredObject, error) {
 	if err := d.Validate(); err != nil {
 		return StoredObject{}, err
@@ -120,6 +140,12 @@ func (d *Disk) CopyTo(ctx context.Context, source ObjectKey, destination *Disk, 
 	}
 	if err := options.Destination.Validate(destination.config.MaxObjectBytes); err != nil {
 		return StoredObject{}, err
+	}
+	if copier, ok := d.backend.(ServerCopier); ok && sameBackend(d.backend, destination.backend) {
+		result, err := d.serverCopy(ctx, copier, source, destination, target, options)
+		if !errors.Is(err, errServerCopyDeclined) {
+			return result, err
+		}
 	}
 	body, info, err := d.Open(ctx, source, options.Source)
 	if err != nil {
@@ -149,6 +175,68 @@ func (d *Disk) CopyTo(ctx context.Context, source ObjectKey, destination *Disk, 
 		return StoredObject{}, err
 	}
 	return result, nil
+}
+
+var errServerCopyDeclined = Failure(Unsupported, CopyOperation, Unchanged, nil)
+
+func sameBackend(a, b Backend) bool {
+	if a == nil || b == nil {
+		return false
+	}
+	first, second := reflect.TypeOf(a), reflect.TypeOf(b)
+	return first == second && first.Comparable() && a == b
+}
+
+// serverCopy runs a provider-side copy. An adapter that declines before any
+// mutation (Unsupported, Unchanged) returns errServerCopyDeclined so CopyTo
+// can stream instead; every other failure keeps its established outcome.
+func (d *Disk) serverCopy(ctx context.Context, copier ServerCopier, source ObjectKey, destination *Disk, target ObjectKey, options CopyOptions) (StoredObject, error) {
+	if err := d.readOptions(options.Source); err != nil {
+		return StoredObject{}, err
+	}
+	if err := destination.writeOptions(options.Destination); err != nil {
+		return StoredObject{}, err
+	}
+	options.Destination.Metadata = options.Destination.Metadata.Clone()
+	op, release, err := d.begin(ctx, CopyOperation)
+	if err != nil {
+		return StoredObject{}, err
+	}
+	defer release()
+	if destination != d {
+		var releaseTarget func()
+		op, releaseTarget, err = destination.begin(op, CopyOperation)
+		if err != nil {
+			return StoredObject{}, err
+		}
+		defer releaseTarget()
+	}
+	var info ObjectInfo
+	// Neither disk may hold an object beyond its limit, and the provider must
+	// check that before it publishes anything.
+	maximum := min(d.config.MaxObjectBytes, destination.config.MaxObjectBytes)
+	err = callback.Isolated("storage server copy", func() error { var err error; info, err = copier.Copy(op, source, target, options, maximum); return err })
+	var declined *Error
+	if err != nil && op.Err() == nil && errors.As(err, &declined) && declined.Code() == Unsupported && declined.Outcome() == Unchanged {
+		return StoredObject{}, errServerCopyDeclined
+	}
+	if err == nil {
+		if info.Size > maximum {
+			err = Failure(IntegrityFailed, CopyOperation, Applied, nil)
+		} else if e := destination.validateInfo(target, info); e != nil {
+			err = Failure(IntegrityFailed, CopyOperation, Applied, e)
+		} else if expected, present := options.Destination.Size.Get(); present && info.Size != expected {
+			err = Failure(IntegrityFailed, CopyOperation, Applied, nil)
+		} else if expected, present := options.Destination.Checksum.Get(); present {
+			if actual, available := info.Checksum.Get(); !available || actual != expected {
+				err = Failure(IntegrityFailed, CopyOperation, Applied, nil)
+			}
+		}
+	}
+	if err = finish(CopyOperation, op, err, Applied); err != nil {
+		return StoredObject{}, err
+	}
+	return StoredObject{Disk: destination.id, Object: info}, nil
 }
 
 // MoveResult records the two separately committed effects. A failed move can

@@ -5,44 +5,85 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
+
+// PublishOption adjusts one publication's live delivery.
+type PublishOption func(*publishOptions)
+type publishOptions struct{ except ConnectionID }
+
+// ExceptConnection skips live delivery to one connection, typically the sender
+// of a relayed message ("to others"). Recent replay still includes the event.
+func ExceptConnection(id ConnectionID) PublishOption {
+	return func(o *publishOptions) { o.except = id }
+}
 
 // Publish reaches subscriptions for exactly this room. Whole-channel subscribers
 // do not implicitly subscribe to every private room. Success means local queue
 // admission or distributed live publication was attempted, not recipient delivery.
 // Slow peers disconnect. Distributed errors may follow partial publication/history.
-func Publish[C, R, S, P any](ctx context.Context, source PublisherSource, channel Channel[C, R, S], room R, event Outgoing[C, P], payload P) (MessageID, error) {
-	return publish(ctx, source, channel, event, payload, Room(room))
+func Publish[C, R, S, P any](ctx context.Context, source PublisherSource, channel Channel[C, R, S], room R, event Outgoing[C, P], payload P, options ...PublishOption) (MessageID, error) {
+	return publish(ctx, source, channel, event, payload, Room(room), options)
 }
 
 // Broadcast reaches every connection subscribed anywhere in this channel, once
 // per connection even when it has overlapping whole-channel/room subscriptions.
-func Broadcast[C, R, S, P any](ctx context.Context, source PublisherSource, channel Channel[C, R, S], event Outgoing[C, P], payload P) (MessageID, error) {
-	return publish(ctx, source, channel, event, payload, WholeChannel[R]())
+func Broadcast[C, R, S, P any](ctx context.Context, source PublisherSource, channel Channel[C, R, S], event Outgoing[C, P], payload P, options ...PublishOption) (MessageID, error) {
+	return publish(ctx, source, channel, event, payload, WholeChannel[R](), options)
 }
-func publish[C, R, S, P any](ctx context.Context, source PublisherSource, channel Channel[C, R, S], event Outgoing[C, P], payload P, target Target[R]) (MessageID, error) {
+
+// NotPublished reports that a Publish or Broadcast error happened before any
+// live publication, fan-out or replay history was attempted (validation, local
+// admission, a closing hub or payload encoding), so retrying cannot produce a
+// duplicate. Other errors may follow partial distributed publication.
+func NotPublished(err error) bool { return errorgraph.Has[*notPublished](err) }
+
+type notPublished struct{ cause error }
+
+func (e *notPublished) Error() string { return e.cause.Error() }
+func (e *notPublished) Unwrap() error { return e.cause }
+
+func publish[C, R, S, P any](ctx context.Context, source PublisherSource, channel Channel[C, R, S], event Outgoing[C, P], payload P, target Target[R], options []PublishOption) (MessageID, error) {
+	id, attempted, err := publishAttempt(ctx, source, channel, event, payload, target, options)
+	if err != nil && !attempted {
+		return MessageID{}, &notPublished{err}
+	}
+	return id, err
+}
+
+// publishAttempt reports whether publication itself was attempted: after that
+// point an error may follow partial distributed publication or history.
+func publishAttempt[C, R, S, P any](ctx context.Context, source PublisherSource, channel Channel[C, R, S], event Outgoing[C, P], payload P, target Target[R], options []PublishOption) (id MessageID, attempted bool, err error) {
+	var settings publishOptions
+	for _, option := range options {
+		if option == nil {
+			return MessageID{}, false, fault.New(fault.Invalid, "nil WebSocket publish option")
+		}
+		option(&settings)
+	}
 	if ctx == nil {
-		return MessageID{}, fault.New(fault.Invalid, "WebSocket publication requires a context")
+		return MessageID{}, false, fault.New(fault.Invalid, "WebSocket publication requires a context")
 	}
 	hub, err := publicationHub(source)
 	if err != nil {
-		return MessageID{}, err
+		return MessageID{}, false, err
 	}
 	if err := hub.validateChannel(channel.token, channel.id); err != nil {
-		return MessageID{}, err
+		return MessageID{}, false, err
 	}
 	d := event.definition
 	if d == nil || event.encode == nil || d.channel != channel.token || hub.registry.channels[channel.id].events[d.id] != d || d.direction != ServerToClient {
-		return MessageID{}, fault.New(fault.Invalid, "outgoing event declaration is not registered on this channel")
+		return MessageID{}, false, fault.New(fault.Invalid, "outgoing event declaration is not registered on this channel")
 	}
 	ctx, finish, err := hub.operation(ctx)
 	if err != nil {
-		return MessageID{}, err
+		return MessageID{}, false, err
 	}
 	defer finish()
-	var id MessageID
-	err = callback.Isolated("WebSocket publication", func() error {
+	// The typed codecs below contain their own panics; publication is a
+	// framework step and needs no additional isolation goroutine.
+	err = callback.Invoke("WebSocket publication", func() error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -69,7 +110,8 @@ func publish[C, R, S, P any](ctx context.Context, source PublisherSource, channe
 			return err
 		}
 		if hub.cluster != nil {
-			return hub.publishDistributed(ctx, response, frame)
+			attempted = true
+			return hub.publishDistributed(ctx, response, frame, settings.except)
 		}
 		hub.mu.Lock()
 		defer hub.mu.Unlock()
@@ -82,13 +124,14 @@ func publish[C, R, S, P any](ctx context.Context, source PublisherSource, channe
 		if err := hub.retainLocked(response, frame); err != nil {
 			return err
 		}
-		hub.routePublicationLocked(response, frame)
-		hub.metrics[channel.id].Published++
-		hub.publications++
+		attempted = true
+		hub.routePublicationLocked(response, frame, settings.except)
+		hub.metrics[channel.id].published.Add(1)
+		hub.counters.publications.Add(1)
 		return nil
 	})
 	if err != nil {
-		return MessageID{}, err
+		return MessageID{}, attempted, err
 	}
-	return id, nil
+	return id, true, nil
 }

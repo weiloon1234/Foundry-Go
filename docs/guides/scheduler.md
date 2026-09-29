@@ -39,6 +39,25 @@ periods to the UTC Unix epoch; `IntervalFrom` supplies an explicit first instant
 Periods and anchors require whole milliseconds, with periods between one
 millisecond and 365 days. Handler duration/restarts do not cause drift.
 
+`EveryMinute`, `EveryFiveMinutes`, `EveryTenMinutes`, `EveryFifteenMinutes` and
+`EveryThirtyMinutes` run on local wall-clock minute boundaries in an explicit zone
+(also on `Calendar`). `LastDayOfMonthAt(id, "HH:MM", zone, handler)` runs on the
+last local day of each month.
+
+Options narrow a declaration without new timing syntax. `Days` (for example
+`schedule.Weekdays()` or `schedule.Weekends()`), `Between` (built with
+`schedule.Between(from, to)` or `schedule.UnlessBetween(from, to)` from
+`temporal.Time` values; a window wraps midnight when `from` is after `to`) and
+`LastDayOfMonth` are evaluated in the spec's zone (UTC for intervals) at
+admission. A filtered occurrence advances the schedule silently, like a time the
+spec never produced: no history, log or execution slot. `When` is an owned
+predicate evaluated immediately before the `Before` hook; `false` records the
+occurrence as skipped with reason `filtered` (not logged as a problem), and an
+error fails it as a hook failure. `EvenInMaintenanceMode` keeps admitting a
+schedule while the application's maintenance gate is paused. Use `After` and
+`Failed` for success and failure callbacks. Start from `declaration.Options()`
+when calling `With`, so helper-set options such as `LastDayOfMonth` are kept.
+
 `Spec.Next` returns a strictly later UTC instant. DST gaps skip nonexistent local
 times; repeated wall times produce distinct UTC occurrences and IDs. Intervals
 measure elapsed time independently of DST. Restricted day-of-month/day-of-week
@@ -62,9 +81,30 @@ system attribution from the schedule ID, intended UTC time and a stable typed
 occurrence ID. `schedule.Current(ctx)` only represents live owned callbacks;
 saved contexts stop representing execution after callbacks exit.
 
-`Stop(ctx)` stops admission, cancels work and bounds the caller's wait. `Done`
-closes after actual callback exit. A context-ignoring goroutine retains its slot;
-Go cannot kill it. Self-wait from an active callback returns `fault.Cycle`.
+Cancelling `Run`'s context (the kernel shutdown path) or calling `Drain(ctx)`
+starts a graceful drain: admission stops while running tasks keep leadership and
+their overlap leases for up to `Config.DrainTimeout` (default 5s); the deadline
+then cancels them. `Stop(ctx)` stops admission and cancels work immediately. Both
+bound only the caller's wait. Application assembly rejects a `DrainTimeout` that
+is not shorter than `ShutdownTimeout - StopDelay`. `Done` closes after actual
+callback exit. A context-ignoring goroutine retains its slot; Go cannot kill it.
+Self-wait from an active callback returns `fault.Cycle`.
+
+`Config.Logger` (the application logger under `schedule.Module` when nil)
+receives `schedule occurrence skipped` at WARN for `missed`, `capacity_reached`,
+`backlog_limited` and `overlap_busy` decisions and `schedule invocation failed`
+at ERROR, with schedule ID, occurrence ID, intended time, reason and a redacted
+diagnostic (type names, framework fault codes and panic frames, never error
+text). Invocation observations end with the same diagnostic.
+
+`Scheduler.RunNow(ctx, id)` invokes one registered schedule immediately, outside
+leadership and timing, and returns its classified record: the `When` predicate,
+hooks, timeout and overlap protection apply, calendar filters and catch-up
+cursors do not. Register `schedule/command.Declaration` with a constructor
+returning `services.Scheduler()` to expose it as
+`./service schedule test --id reports.daily [--format json]`; the command
+prints only the classification and fails unless the invocation succeeded (or its
+`When` predicate declined it).
 
 `schedule.Module` registers the typed service and foundation Scheduler kernel.
 List the lease manager's owning provider in `requires`. Only running the Scheduler
@@ -78,11 +118,22 @@ one exactly at the initial cursor. During operation, `Config.Grace` bounds laten
 older occurrences are skipped with history. Match polling/grace to required precision.
 
 Opt into `Options.CatchUp` with both `Window` and `Max`: at most seven days and
-1,000 considered occurrences per schedule per tick. Excess backlog is skipped.
+1,000 considered occurrences per schedule per tick. When the backlog exceeds
+`Max`, the most recent occurrences run and the older ones are recorded as one
+`backlog_limited` skip. Catch-up resumes after a per-schedule cursor of the last
+completed or deliberately skipped occurrence. When the lease backend implements
+`schedule.CursorBackend` (the Redis coordination client does), the cursor is
+persisted in the coordination store, so a restart or leadership change does not
+replay occurrences another process already completed; otherwise it lives only in
+the scheduler process. A cancelled occurrence (shutdown, leadership loss) is not
+recorded, so catch-up may replay it.
+
 `MaxPerTick` bounds total admissions/skip decisions; a rotating schedule cursor
-gives due schedules turns. Capacity exhaustion skips work and advances its cursor.
-Scheduling is best effort, not durable replay; use a domain ledger if every
-occurrence must eventually complete.
+gives due schedules turns. When all `Concurrency` slots (default 16) are busy, a
+due occurrence waits up to `Config.CapacityWait` (default 5s) for a slot and is
+then skipped as `capacity_reached`, advancing its cursor. Scheduling is best
+effort, not durable replay; use a domain ledger if every occurrence must
+eventually complete.
 
 `Config.Clock` injects application time. Optional `Wake` replaces the polling ticker
 for deterministic tests; callers own the channel and closing it terminates Run

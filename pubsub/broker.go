@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
@@ -17,6 +18,7 @@ import (
 type Broker struct {
 	backend       Backend
 	config        Config
+	slots         *admission.Semaphore
 	mu            sync.Mutex
 	closing       bool
 	active        int
@@ -36,7 +38,7 @@ func NewBroker(backend Backend, config Config) (*Broker, error) {
 		return nil, err
 	}
 	lifetime, cancel := context.WithCancel(context.Background())
-	return &Broker{backend: backend, config: config, declarations: make(map[declarationKey]*declarationID), subscriptions: make(map[*subscriptionState]struct{}), lifetime: lifetime, cancel: cancel, done: make(chan struct{})}, nil
+	return &Broker{backend: backend, config: config, slots: admission.New(config.MaxConcurrent), declarations: make(map[declarationKey]*declarationID), subscriptions: make(map[*subscriptionState]struct{}), lifetime: lifetime, cancel: cancel, done: make(chan struct{})}, nil
 }
 func (b *Broker) Namespace() keyspace.Namespace { return b.config.Namespace }
 func (b *Broker) Done() <-chan struct{} {
@@ -65,25 +67,61 @@ func (b *Broker) operation(ctx context.Context, sub *subscriptionState) (context
 	linked, release := contextlink.Link(context.WithValue(ctx, operationKey{}, frame), parents...)
 	return linked, func() { frame.active.Store(false); release() }
 }
+
+// acquire reserves one MaxConcurrent slot. A full broker queues in FIFO order
+// for at most admission.Wait(Timeout) and the caller's deadline, then returns
+// retryable fault.Overloaded; Close ends waits with ErrClosed. An operation
+// nested inside one of this broker's own callbacks never waits, so it cannot
+// deadlock on capacity held by its caller.
 func (b *Broker) acquire(ctx context.Context) error {
 	if b == nil || b.done == nil || ctx == nil {
 		return fault.New(fault.Invalid, "pub/sub operation needs an initialized broker and context")
 	}
 	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.closing {
+	closing := b.closing
+	b.mu.Unlock()
+	if closing {
 		return ErrClosed
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if b.active >= b.config.MaxConcurrent {
-		return fault.New(fault.Conflict, "pub/sub operation capacity reached")
+	if b.nested(ctx) {
+		if !b.slots.TryAcquire() {
+			return fault.New(fault.Overloaded, "pub/sub operation capacity is exhausted")
+		}
+	} else if err := b.slots.Acquire(ctx, admission.Wait(b.config.Timeout), b.lifetime.Done()); err != nil {
+		if errors.Is(err, fault.Closed) {
+			return ErrClosed
+		}
+		return err
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closing {
+		b.slots.Release()
+		return ErrClosed
 	}
 	b.active++
 	return nil
 }
-func (b *Broker) release() { b.mu.Lock(); defer b.mu.Unlock(); b.active--; b.finishLocked() }
+
+// nested reports whether ctx belongs to an active operation of this broker.
+func (b *Broker) nested(ctx context.Context) bool {
+	for frame, _ := ctx.Value(operationKey{}).(*operationFrame); frame != nil; frame = frame.parent {
+		if frame.broker == b && frame.active.Load() {
+			return true
+		}
+	}
+	return false
+}
+func (b *Broker) release() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.active--
+	b.slots.Release()
+	b.finishLocked()
+}
 func (b *Broker) finishLocked() {
 	if b.closing && b.active == 0 && len(b.subscriptions) == 0 {
 		select {

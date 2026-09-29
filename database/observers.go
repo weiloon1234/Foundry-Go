@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
 
 type observerBinding struct{}
@@ -97,6 +98,9 @@ func (db *DB) bindObservers(set lifecycle.Observers, managed bool) error {
 // Observers returns this database's immutable observer set. A directly prepared
 // pool may bind it before Start; running pools retain the same set for life.
 func (db *DB) Observers() lifecycle.Observers {
+	if db.frozen.Load() {
+		return db.observers
+	}
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	return db.observers
@@ -108,3 +112,39 @@ func (s *Session) Observers() lifecycle.Observers { return s.observers }
 // Observers retains the owning database's declarations on transactions and
 // nested savepoints. Custom transactors must use this supplied Tx's ownership.
 func (tx *Tx) Observers() lifecycle.Observers { return tx.observers }
+
+// FoundryObservers is the sealed owner capability used by typed queries to prove
+// observer absence without I/O or pool locks. known is false while a prepared
+// pool can still bind observers; callers must then use the Tx they receive.
+func (db *DB) FoundryObservers(sqlowner.Seal) (set lifecycle.Observers, known bool) {
+	if db == nil {
+		return lifecycle.Observers{}, false
+	}
+	if db.frozen.Load() {
+		return db.observers, true
+	}
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.observers, db.observersBound
+}
+
+// FoundryObservers reports the pinned pool's owner metadata.
+func (p PrimaryExecutor) FoundryObservers(seal sqlowner.Seal) (lifecycle.Observers, bool) {
+	return p.db.FoundryObservers(seal)
+}
+
+// FoundryObservers reports the session owner's frozen observer set.
+func (s *Session) FoundryObservers(sqlowner.Seal) (lifecycle.Observers, bool) {
+	if s == nil {
+		return lifecycle.Observers{}, false
+	}
+	return s.observers, true
+}
+
+// FoundryObservers reports the transaction owner's frozen observer set.
+func (tx *Tx) FoundryObservers(sqlowner.Seal) (lifecycle.Observers, bool) {
+	if tx == nil {
+		return lifecycle.Observers{}, false
+	}
+	return tx.observers, true
+}

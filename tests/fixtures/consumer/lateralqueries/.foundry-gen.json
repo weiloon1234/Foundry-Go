@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    "ranked_order_foundry.gen.go": "08f20df623c989d55920e94512e399032a25c4137aa8eece48078ab33c908731",
-    "user_order_foundry.gen.go": "3f8d9930e999c309c731ad71f06dc8e469cedd50e01c57bf231fc77945b2377a"
+    "ranked_order_foundry.gen.go": "381324c73137ba0dc6f9e68900fa8a7da8e7a6749ece3b996425c37ab0c619c0",
+    "user_order_foundry.gen.go": "39c7449f8dca1003f945acde3ddae943068d0fcc82f4c8bf4726361f6d824b20"
   }
 }

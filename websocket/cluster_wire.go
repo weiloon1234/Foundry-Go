@@ -1,15 +1,12 @@
 package websocket
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"reflect"
-	"strings"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
-	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
 )
 
 type clusterKind string
@@ -56,47 +53,104 @@ func (h *Hub) sendClusterControl(ctx context.Context, envelope clusterEnvelope) 
 		return h.publishEnvelope(ctx, envelope)
 	})
 }
-func (h *Hub) publishDistributed(ctx context.Context, response Response, data []byte) error {
-	err := h.clusterCall(ctx, func(ctx context.Context) error {
-		if err := h.cluster.backend.WebSocketAppend(ctx, h.cluster.key, response.Channel, h.registry.channels[response.Channel].replay, data); err != nil {
-			return err
+func (h *Hub) publishDistributed(ctx context.Context, response Response, data []byte, except ConnectionID) error {
+	policy := h.registry.channels[response.Channel].replay
+	if !except.IsZero() && !h.cluster.config.ExcludeRemoteConnections {
+		// Earlier releases reject envelopes that carry an exclusion, so a local
+		// connection is excluded when this instance routes the echo instead.
+		if err := h.excludeLocally(response.MessageID, except); err != nil {
+			return &notPublished{err}
 		}
-		return h.publishEnvelope(ctx, clusterEnvelope{Kind: clusterPublication, Frame: data})
+		except = ConnectionID{}
+	}
+	err := h.clusterCall(ctx, func(ctx context.Context) error {
+		// History is written only for channels that retain replay.
+		if policy.Messages > 0 {
+			if err := h.cluster.backend.WebSocketAppend(ctx, h.cluster.key, response.Channel, policy, data); err != nil {
+				return err
+			}
+		}
+		// Connection names an excluded live recipient on publications.
+		return h.publishEnvelope(ctx, clusterEnvelope{Kind: clusterPublication, Frame: data, Connection: except})
 	})
 	if err == nil {
-		h.mu.Lock()
-		h.publications++
-		h.metrics[response.Channel].Published++
-		h.mu.Unlock()
+		h.counters.publications.Add(1)
+		h.metrics[response.Channel].published.Add(1)
 	}
+	// A successful exclusion is consumed by the echo, which may arrive after
+	// this returns; expiry removes one whose echo is lost.
 	return err
 }
-func decodeExact(data []byte, maximum int, output any) error {
-	node, err := jsonwire.Decode(data, jsonwire.Limits{Bytes: maximum, Depth: jsonwire.MaxDepth, Nodes: 65536})
-	if err != nil {
-		return err
+
+// excludeLocally records an exclusion of this instance's own connection for
+// the publication's echo. A connection hosted elsewhere needs the envelope
+// field, which requires ExcludeRemoteConnections across the namespace.
+func (h *Hub) excludeLocally(id MessageID, connection ConnectionID) error {
+	now := time.Now()
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, local := h.connections[connection]; !local {
+		return fault.New(fault.Invalid, "excluding a connection of another instance requires ClusterConfig.ExcludeRemoteConnections")
 	}
-	object, ok := node.(map[string]any)
-	typ := reflect.TypeOf(output)
-	if !ok || typ == nil || typ.Kind() != reflect.Pointer || typ.Elem().Kind() != reflect.Struct {
-		return fault.New(fault.Invalid, "wire envelope requires an object")
+	state := h.cluster
+	expired := 0
+	for expired < len(state.exclusionOrder) && !now.Before(state.exclusionOrder[expired].expires) {
+		delete(state.exclusions, state.exclusionOrder[expired].id)
+		expired++
 	}
-	typ = typ.Elem()
-	names := make(map[string]bool, typ.NumField())
-	for i := 0; i < typ.NumField(); i++ {
-		name, _, _ := strings.Cut(typ.Field(i).Tag.Get("json"), ",")
-		if name != "" && name != "-" {
-			names[name] = true
+	state.exclusionOrder = state.exclusionOrder[expired:]
+	if len(state.exclusions) >= maxLocalExclusions {
+		return fault.New(fault.Overloaded, "too many publications await their exclusion echo")
+	}
+	state.exclusions[id] = connection
+	state.exclusionOrder = append(state.exclusionOrder, pendingExclusion{id: id, expires: now.Add(exclusionLifetime)})
+	return nil
+}
+
+// decodeEnvelope decodes a cluster envelope once, including its nested scope.
+func decodeEnvelope(data []byte, maximum int) (clusterEnvelope, error) {
+	var envelope clusterEnvelope
+	_, err := decodeObject(data, maximum, func(name string) wireMember {
+		switch name {
+		case "v":
+			return into(&envelope.Version)
+		case "policy":
+			return into(&envelope.Policy)
+		case "instance":
+			return into(&envelope.Instance)
+		case "kind":
+			return into(&envelope.Kind)
+		case "frame":
+			return into(&envelope.Frame)
+		case "connection":
+			return into(&envelope.Connection)
+		case "subject":
+			return into(&envelope.Subject)
+		case "scope":
+			return func(decoder *json.Decoder) error {
+				var raw json.RawMessage
+				if err := decoder.Decode(&raw); err != nil {
+					return err
+				}
+				var scope Scope
+				_, err := decodeObject(raw, len(raw), func(name string) wireMember {
+					switch name {
+					case "channel":
+						return into(&scope.Channel)
+					case "room":
+						return into(&scope.Room)
+					case "has_room":
+						return into(&scope.HasRoom)
+					}
+					return nil
+				})
+				envelope.Scope = &scope
+				return err
+			}
 		}
-	}
-	for name := range object {
-		if !names[name] {
-			return fault.New(fault.Invalid, "unknown wire envelope property")
-		}
-	}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	return decoder.Decode(output)
+		return nil
+	})
+	return envelope, err
 }
 func (h *Hub) decodePublication(ctx context.Context, data []byte) (Response, error) {
 	response, err := DecodePublication(data, h.config.MaxFrameBytes)
@@ -120,8 +174,8 @@ func (h *Hub) decodePublication(ctx context.Context, data []byte) (Response, err
 	return response, nil
 }
 func (h *Hub) receiveCluster(ctx context.Context, data []byte) error {
-	var envelope clusterEnvelope
-	if err := decodeExact(data, h.cluster.config.Buffer.PayloadBytes, &envelope); err != nil {
+	envelope, err := decodeEnvelope(data, h.cluster.config.Buffer.PayloadBytes)
+	if err != nil {
 		return err
 	}
 	if envelope.Version != ProtocolVersion || envelope.Policy != h.cluster.key.Policy() || envelope.Instance.IsZero() {
@@ -129,7 +183,7 @@ func (h *Hub) receiveCluster(ctx context.Context, data []byte) error {
 	}
 	switch envelope.Kind {
 	case clusterPublication:
-		if !envelope.Connection.IsZero() || envelope.Subject != "" || envelope.Scope != nil {
+		if envelope.Subject != "" || envelope.Scope != nil {
 			return fault.New(fault.Invalid, "invalid publication envelope")
 		}
 		response, err := h.decodePublication(ctx, envelope.Frame)
@@ -138,8 +192,13 @@ func (h *Hub) receiveCluster(ctx context.Context, data []byte) error {
 		}
 		h.mu.Lock()
 		defer h.mu.Unlock()
+		except := envelope.Connection
+		if local, ok := h.cluster.exclusions[response.MessageID]; ok && envelope.Instance == h.cluster.instance {
+			except = local
+			delete(h.cluster.exclusions, response.MessageID)
+		}
 		if !h.closing {
-			h.routePublicationLocked(response, envelope.Frame)
+			h.routePublicationLocked(response, envelope.Frame, except)
 		}
 		return nil
 	case clusterDisconnectConnection:
@@ -161,20 +220,56 @@ func (h *Hub) receiveCluster(ctx context.Context, data []byte) error {
 		if err := envelope.Scope.Validate(); err != nil {
 			return err
 		}
-		return h.refreshClusterPresence(ctx, *envelope.Scope)
+		// The worker refreshes from the authority off this receive loop.
+		h.mu.Lock()
+		marked := h.markPresenceLocked(envelope.Scope.key())
+		h.mu.Unlock()
+		if marked {
+			h.wakePresence()
+		}
+		return nil
 	default:
 		return fault.New(fault.Invalid, "unknown cluster command")
 	}
 }
 
-// DecodePublication validates the stable event envelope for adapters and history.
-// Runtime registries additionally validate the registered room and payload types.
+// DecodePublication validates the stable event envelope for adapters and history
+// in one strict pass. Runtime registries additionally validate the registered
+// room and payload types.
 func DecodePublication(data []byte, maxBytes int) (Response, error) {
 	if maxBytes < 1 || maxBytes > 1<<20 {
 		return Response{}, fault.New(fault.Invalid, "invalid publication frame bound")
 	}
 	var response Response
-	if err := decodeExact(data, maxBytes, &response); err != nil {
+	if _, err := decodeObject(data, maxBytes, func(name string) wireMember {
+		switch name {
+		case "v":
+			return into(&response.Version)
+		case "type":
+			return into(&response.Type)
+		case "id":
+			return into(&response.ID)
+		case "channel":
+			return into(&response.Channel)
+		case "room":
+			return into(&response.Room)
+		case "event":
+			return into(&response.Event)
+		case "message_id":
+			return into(&response.MessageID)
+		case "payload":
+			return into(&response.Payload)
+		case "code":
+			return into(&response.Code)
+		case "members":
+			return into(&response.Members)
+		case "member":
+			return into(&response.Member)
+		case "replayed":
+			return into(&response.Replayed)
+		}
+		return nil
+	}); err != nil {
 		return Response{}, err
 	}
 	if response.Version != ProtocolVersion || response.Type != EventResponse || response.MessageID.IsZero() || response.ID != "" || response.Code != "" || len(response.Members) != 0 || response.Member != nil || response.Replayed {

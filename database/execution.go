@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
 
 // Executor is the raw SQL capability shared by pools and transactions. Values
@@ -27,45 +29,105 @@ type sqlExecutor interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }
 
-func execute(ctx context.Context, executor sqlExecutor, classify classifier, statement string, arguments []any) (Result, error) {
-	result, err := executor.ExecContext(ctx, statement, arguments...)
+func execute(ctx context.Context, executor sqlExecutor, classify classifier, instrument statementProbe, statement string, arguments []any) (result Result, err error) {
+	started := instrument.start()
+	rows := int64(-1)
+	defer func() { instrument.finish(ctx, "exec", statement, started, rows, err) }()
+	raw, err := executor.ExecContext(ctx, statement, arguments...)
 	if err != nil {
 		return Result{}, classify.wrap("execute", err)
 	}
-	count, err := result.RowsAffected()
+	count, err := raw.RowsAffected()
 	if err != nil {
 		return Result{}, classify.wrap("affected rows", err)
 	}
+	rows = count
 	return Result{RowsAffected: count}, nil
 }
 
-func query(ctx context.Context, executor sqlExecutor, classify classifier, observers lifecycle.Observers, owner observerOwner, release func() error, statement string, arguments []any) (*Rows, error) {
+func query(ctx context.Context, executor sqlExecutor, classify classifier, instrument statementProbe, observers lifecycle.Observers, owner observerOwner, release func() error, statement string, arguments []any) (*Rows, error) {
+	return queryStatement(ctx, executor, classify, instrument, observers, owner, release, statement, arguments, false)
+}
+
+// queryStatement ties the stream to its query context: database/sql closes its
+// driver rows on cancellation, but only Close returns Foundry's checked-out
+// connection and resource owner. A forgotten stream is therefore closed when
+// ctx ends instead of retaining the connection and blocking pool shutdown.
+func queryStatement(ctx context.Context, executor sqlExecutor, classify classifier, instrument statementProbe, observers lifecycle.Observers, owner observerOwner, release func() error, statement string, arguments []any, autocommit bool) (*Rows, error) {
+	started := instrument.start()
 	rows, err := executor.QueryContext(ctx, statement, arguments...)
 	if err != nil {
-		return nil, errors.Join(classify.wrap("query", err), release())
+		failure := classify.wrap("query", err)
+		if autocommit {
+			failure = statementOutcome(failure)
+		}
+		instrument.finish(ctx, "query", statement, started, -1, failure)
+		return nil, errors.Join(failure, release())
 	}
-	return &Rows{raw: rows, classify: classify, observers: observers, observerOwner: owner, release: release}, nil
+	result := &Rows{raw: rows, classify: classify, observers: observers, observerOwner: owner, release: release, autocommit: autocommit, probe: instrument, started: started, statement: statement, ctx: ctx}
+	// A query can finish as its context ends. Publish the stop hook while
+	// holding the same mutex as Close, before the cancellation callback reads it.
+	result.mu.Lock()
+	result.stop = context.AfterFunc(ctx, func() { _ = result.Close() })
+	result.mu.Unlock()
+	return result, nil
 }
 
 // Exec executes a parameterized statement and releases its connection on return.
 func (db *DB) Exec(ctx context.Context, statement string, arguments ...any) (result Result, err error) {
+	instrument := db.instrumented(PrimaryPool)
+	acquired := instrument.start()
+	db.markWrite(ctx)
 	conn, release, err := db.acquire(ctx)
 	if err != nil {
 		return Result{}, err
 	}
 	defer func() { err = errors.Join(err, release()) }()
-	return execute(ctx, conn, db.classify, statement, arguments)
+	instrument.wait = sinceStart(acquired)
+	// Mark again on completion so a long write does not consume its own
+	// read-your-writes window.
+	defer db.markWrite(ctx)
+	return execute(ctx, conn, db.classify, instrument, statement, arguments)
 }
 
-// Query returns a stream owning its connection until Close or complete iteration.
-// Always defer Close, and check Err after iteration. Do not share Rows between
-// goroutines. Scan errors close the stream to release the connection promptly.
+// Query returns a stream owning its connection until Close, complete iteration
+// or the end of ctx. Always defer Close, and check Err after iteration. Do not
+// share Rows between goroutines. Scan errors close the stream to release the
+// connection promptly; cancellation closes a forgotten stream as a safety net.
+//
+// A primary query may write (for example INSERT ... RETURNING), so with
+// WithStickyReads it marks the request scope when it starts and when its
+// stream closes.
 func (db *DB) Query(ctx context.Context, statement string, arguments ...any) (*Rows, error) {
+	instrument := db.instrumented(PrimaryPool)
+	acquired := instrument.start()
+	db.markWrite(ctx)
 	conn, release, err := db.acquire(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return query(ctx, conn, db.classify, db.Observers(), observerOwner{db: db, ctx: ctx}, release, statement, arguments)
+	instrument.wait = sinceStart(acquired)
+	return db.markOnClose(ctx)(query(ctx, conn, db.classify, instrument, db.Observers(), observerOwner{db: db, ctx: ctx}, release, statement, arguments))
+}
+
+// FoundryAutocommitQuery runs one framework-compiled write statement outside an
+// explicit transaction. Every returned failure carries the statement outcome:
+// NoCommit before the statement was performed, RolledBack when the adapter
+// confirms server rejection, and otherwise Unknown with CommitUnknown. Only a
+// complete iteration whose Err and Close both succeed confirms the commit.
+func (db *DB) FoundryAutocommitQuery(_ sqlowner.Seal, ctx context.Context, statement string, arguments ...any) (*Rows, error) {
+	db.markWrite(ctx)
+	instrument := db.instrumented(PrimaryPool)
+	acquired := instrument.start()
+	conn, release, err := db.acquire(ctx)
+	if err != nil {
+		if classified, ok := err.(*Error); ok && classified != nil {
+			classified.outcome = NoCommit
+		}
+		return nil, err
+	}
+	instrument.wait = sinceStart(acquired)
+	return db.markOnClose(ctx)(queryStatement(ctx, conn, db.classify, instrument, db.Observers(), observerOwner{db: db, ctx: ctx}, release, statement, arguments, true))
 }
 
 // Row is the read capability passed to typed hydration callbacks. Standard Go
@@ -83,8 +145,28 @@ type Rows struct {
 	observerOwner  observerOwner
 	observerScoped bool
 	release        func() error
+	stop           func() bool
+	autocommit     bool
 	closed         bool
 	err            error
+	// afterClose runs once when the stream closes, for read-your-writes marking.
+	afterClose func()
+	// Instrumentation: the event is reported once, when the stream closes.
+	probe     statementProbe
+	started   time.Time
+	statement string
+	ctx       context.Context
+	returned  int64
+}
+
+// wrap classifies stream failures. Autocommit write streams also label their
+// statement outcome because a failure after sending may follow the commit.
+func (r *Rows) wrap(operation string, err error) error {
+	classified := r.classify.wrap(operation, err)
+	if r.autocommit {
+		return statementOutcome(classified)
+	}
+	return classified
 }
 
 // Observers retains the actual database owner's immutable registrations, even
@@ -99,6 +181,7 @@ func (r *Rows) Next() bool {
 		return false
 	}
 	if r.raw.Next() {
+		r.returned++
 		return true
 	}
 	_ = r.close()
@@ -112,7 +195,7 @@ func (r *Rows) Scan(destinations ...any) error {
 		return failure("scan", Closed)
 	}
 	if err := r.raw.Scan(destinations...); err != nil {
-		r.err = errors.Join(r.err, r.classify.wrap("scan", err))
+		r.err = errors.Join(r.err, r.wrap("scan", err))
 		_ = r.close()
 		return r.err
 	}
@@ -127,7 +210,7 @@ func (r *Rows) Columns() ([]string, error) {
 		return nil, failure("columns", Closed)
 	}
 	columns, err := r.raw.Columns()
-	return append([]string(nil), columns...), r.classify.wrap("columns", err)
+	return append([]string(nil), columns...), r.wrap("columns", err)
 }
 
 func (r *Rows) Err() error {
@@ -136,7 +219,7 @@ func (r *Rows) Err() error {
 	if r.closed {
 		return r.err
 	}
-	return errors.Join(r.err, r.classify.wrap("iterate", r.raw.Err()))
+	return errors.Join(r.err, r.wrap("iterate", r.raw.Err()))
 }
 
 // Close is idempotent and preserves scan, iteration, and release errors.
@@ -151,8 +234,29 @@ func (r *Rows) close() error {
 		return r.err
 	}
 	r.closed = true
-	r.err = errors.Join(r.err, r.classify.wrap("close rows", r.raw.Close()), r.classify.wrap("iterate", r.raw.Err()), r.release())
+	if r.stop != nil {
+		r.stop()
+	}
+	closeErr := r.wrap("close rows", r.raw.Close())
+	iterateErr := r.wrap("iterate", r.raw.Err())
+	released := r.release()
+	if r.autocommit {
+		released = statementOutcome(released)
+	}
+	r.err = errors.Join(r.err, closeErr, iterateErr, released)
+	if r.afterClose != nil {
+		r.afterClose()
+	}
+	r.probe.finish(r.ctx, "query", r.statement, r.started, r.returned, r.err)
 	return r.err
+}
+
+// sinceStart measures from an instrumentation sample; zero when disabled.
+func sinceStart(started time.Time) time.Duration {
+	if started.IsZero() {
+		return 0
+	}
+	return time.Since(started)
 }
 
 // ScanOne requires exactly one row and always closes the stream. A zero-row

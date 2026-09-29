@@ -251,7 +251,8 @@ func TestCapacityNeverEvictsWork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := backend.JobEnqueue(context.Background(), f.key, other.Envelope()); !errors.Is(err, fault.Conflict) {
+	// A full queue is temporary exhaustion: retryable, never a conflict.
+	if _, err := backend.JobEnqueue(context.Background(), f.key, other.Envelope()); !errors.Is(err, fault.Overloaded) || !errors.Is(err, jobs.ErrQueueFull) {
 		t.Fatalf("capacity: %v", err)
 	}
 	if f.record(t, first.ID()).State != jobs.Waiting {
@@ -273,4 +274,176 @@ func TestExpiredOwnerCannotBeResurrectedByBackwardClock(t *testing.T) {
 		t.Fatalf("expired owner resurrected: %+v %v", status, err)
 	}
 	_ = f.reserve(t)
+}
+
+// finish reserves, starts and completes the next job with state.
+func (f fixture) finish(t *testing.T, state jobs.State) jobs.Reservation {
+	t.Helper()
+	reservation := f.reserve(t)
+	if _, err := f.backend.JobStart(context.Background(), f.key, reservation.Ownership); err != nil {
+		t.Fatal(err)
+	}
+	result := jobs.Result{State: state}
+	if state == jobs.Failed {
+		result.Reason = jobs.HandlerFailed
+	}
+	if ok, err := f.backend.JobFinish(context.Background(), f.key, reservation.Ownership, result); err != nil || !ok {
+		t.Fatal("finish", ok, err)
+	}
+	return reservation
+}
+
+func TestCapacityCountsOnlyLiveWorkAndEvictsOldestTerminal(t *testing.T) {
+	f := setup(t, 1)
+	config := memory.DefaultConfig()
+	config.MaxEntries, config.MaxRetained, config.Retention = 2, 2, time.Hour
+	config.Clock = f.clock
+	backend, err := memory.New(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+	f.backend = backend
+	var finished []jobs.ExecutionID
+	for i := range 4 {
+		envelope := f.enqueue(t, i)
+		f.finish(t, jobs.Succeeded)
+		finished = append(finished, envelope.ID())
+		f.clock.Advance(time.Millisecond)
+	}
+	// Retained successes never block new work; the oldest were evicted.
+	for _, id := range finished[:2] {
+		if found, err := backend.JobInspect(context.Background(), f.key, id); err != nil || found.IsSet() {
+			t.Fatal("oldest terminal record was not evicted", err)
+		}
+	}
+	for _, id := range finished[2:] {
+		if f.record(t, id).State != jobs.Succeeded {
+			t.Fatal("newest terminal records were not retained")
+		}
+	}
+	f.enqueue(t, 10)
+	f.enqueue(t, 11)
+	stats, err := backend.JobStats(context.Background(), f.key)
+	if err != nil || stats.Waiting != 2 || stats.Retained != 2 {
+		t.Fatalf("stats: %+v %v", stats, err)
+	}
+	extra, err := f.definition.Capture(context.Background(), payload{Number: 12, Labels: map[string]string{}}, jobs.Options[payload]{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := backend.JobEnqueue(context.Background(), f.key, extra.Envelope()); !errors.Is(err, jobs.ErrQueueFull) {
+		t.Fatal("live capacity ignored", err)
+	}
+}
+
+func TestRepeatedReservationExpiryFailsPoisonJob(t *testing.T) {
+	f := setup(t, 1)
+	envelope := f.enqueue(t, 1)
+	for range 3 {
+		// A process that crashes while decoding never starts the attempt.
+		_ = f.reserve(t)
+		f.clock.Advance(2 * time.Second)
+		if state := f.record(t, envelope.ID()).State; state != jobs.Waiting && state != jobs.Failed {
+			t.Fatal("unexpected state", state)
+		}
+	}
+	record := f.record(t, envelope.ID())
+	if record.State != jobs.Failed || record.History[len(record.History)-1].Reason != jobs.DeliveryLimit || record.Attempts != 0 {
+		t.Fatalf("poison job was redelivered forever: %+v", record)
+	}
+}
+
+func TestRefundedReleaseReturnsInterruptedAttempt(t *testing.T) {
+	f := setup(t, 1)
+	envelope := f.enqueue(t, 1)
+	reservation := f.reserve(t)
+	if attempt, err := f.backend.JobStart(context.Background(), f.key, reservation.Ownership); err != nil || attempt != 1 {
+		t.Fatal(attempt, err)
+	}
+	if _, err := f.backend.JobFinish(context.Background(), f.key, reservation.Ownership, jobs.Result{State: jobs.Succeeded, Refund: true}); err == nil {
+		t.Fatal("refund accepted for a terminal result")
+	}
+	if ok, err := f.backend.JobFinish(context.Background(), f.key, reservation.Ownership, jobs.Result{State: jobs.Waiting, Reason: jobs.WorkerStopped, Refund: true}); err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	record := f.record(t, envelope.ID())
+	if record.State != jobs.Waiting || record.Attempts != 0 {
+		t.Fatalf("interrupted attempt consumed its only budget: %+v", record)
+	}
+}
+
+func TestForgetRemovesOnlyRetainedTerminalRecords(t *testing.T) {
+	f := setup(t, 1)
+	live := f.enqueue(t, 1)
+	if changed, err := f.backend.JobForget(context.Background(), f.key, live.Target()); err != nil || changed {
+		t.Fatal("live job forgotten", changed, err)
+	}
+	f.finish(t, jobs.Failed)
+	if changed, err := f.backend.JobForget(context.Background(), f.key, live.Target()); err != nil || !changed {
+		t.Fatal("failed job retained", changed, err)
+	}
+	if added, err := f.backend.JobEnqueue(context.Background(), f.key, live); err != nil || !added {
+		t.Fatal("forgotten identity still deduplicated", added, err)
+	}
+}
+
+// A finished workflow's group metadata is retained, not live: running many
+// workflows to completion never exhausts live capacity.
+func TestFinishedWorkflowBytesLeaveLiveCapacity(t *testing.T) {
+	f := setup(t, 1)
+	config := memory.DefaultConfig()
+	config.MaxBytes, config.MaxRetained, config.Retention = 64<<10, 4, time.Hour
+	config.Clock = f.clock
+	backend, err := memory.New(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+	f.backend = backend
+	// Each finished group once kept a few hundred bytes live: well past
+	// MaxBytes after this many workflows.
+	for i := range 400 {
+		pending, err := f.definition.Capture(context.Background(), payload{Number: i, Labels: map[string]string{}}, jobs.Options[payload]{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		group, err := jobs.NewChain(pending.Step())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ok, err := backend.JobWorkflow(context.Background(), f.key, group.Envelope()); err != nil || !ok {
+			t.Fatal("finished workflows consumed live capacity", i, err)
+		}
+		f.finish(t, jobs.Succeeded)
+		f.clock.Advance(time.Millisecond)
+	}
+	stats, err := backend.JobStats(context.Background(), f.key)
+	if err != nil || stats.Waiting != 0 || stats.Retained > 4 {
+		t.Fatalf("stats: %+v %v", stats, err)
+	}
+}
+
+// An enqueue wakes only workers subscribed to its own queue.
+func TestWakeupsArePerQueue(t *testing.T) {
+	f := setup(t, 1)
+	other, err := jobs.NewKey(f.key.Namespace(), "other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mine, theirs := f.backend.JobWakeup(f.key), f.backend.JobWakeup(other)
+	f.enqueue(t, 1)
+	select {
+	case <-mine:
+	default:
+		t.Fatal("enqueue did not wake its own queue")
+	}
+	select {
+	case <-theirs:
+		t.Fatal("enqueue woke another queue")
+	default:
+	}
+	if f.backend.JobWakeup(other) != theirs {
+		t.Fatal("an unsignalled wakeup was replaced")
+	}
 }

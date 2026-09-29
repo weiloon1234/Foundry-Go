@@ -1,11 +1,11 @@
 {
   "version": 1,
   "files": {
-    "inventory_response_foundry.gen.go": "8534f59be0a390352633d606b2d5502534f007ca6abe5d8f16ae7a928232ff7f",
-    "order_response_foundry.gen.go": "cc90e818122635f81c015eb2f5fc8f2e3b6862966fa7de981361c621df27a33c",
-    "stream_response_foundry.gen.go": "97297497b931a1d0ee545d5a3c2d95e0bf6166c3d0d1e257e8c87ef22dc769b9",
-    "tracking_response_foundry.gen.go": "f10849ac85fe82c97e1d41cde0541a12de9ffc535e97e3cefeeb2688dbaae77f",
-    "update_user_foundry.gen.go": "99dd5341269ca5017a6dfd0a50184297f2096af99cf4471f00a814be91728bd8",
-    "user_response_foundry.gen.go": "bfbcc812112c543e55150bd07f803844d9e5ec3b10e69245f92b4e478ff5c373"
+    "inventory_response_foundry.gen.go": "20cc3ab00101c0019ed1780e00f51da1fee84c6b907c271d2448bd903b21f72c",
+    "order_response_foundry.gen.go": "6ae2ceec532ba705d499ca3679374822be261d630ab596970e41d628d8d70fd2",
+    "stream_response_foundry.gen.go": "f557a458aede5a2c9a18a4ef1aa20dda42d2d49abd8474215ff8a5db8dd0d65a",
+    "tracking_response_foundry.gen.go": "ca0228bb6d3293356cbfc3c986a33e89cdc57be17e15548b8784d74c3e7ab7e2",
+    "update_user_foundry.gen.go": "59a5e8273144e4d781684e4b42898ceb0a466c9b5d0a2611105890f5af19aad6",
+    "user_response_foundry.gen.go": "d8de8105791d02f751c888e215c87706bbe4457c5ba7eaf7f149427ec84da31c"
   }
 }

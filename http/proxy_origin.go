@@ -115,25 +115,24 @@ func (p proxyPolicy) forwardedOrigin(r *stdhttp.Request) (proxyRequestOrigin, er
 		}
 		var origin proxyRequestOrigin
 		if source.format == proxyOriginForwarded {
-			if err := validateProxyHeaderValues(values); err != nil {
-				return proxyRequestOrigin{}, err
-			}
-			chain, err := parseForwarded(strings.Join(values, ","))
-			if err != nil {
-				return proxyRequestOrigin{}, err
-			}
-			selected := -1
-			for i := len(chain) - 1; i >= 0 && p.trusts(peer); i-- {
-				selected = i
-				if !chain[i].address.IsValid() {
+			// The selected element is always appended by a trusted peer. Client
+			// elements beyond the boundary are tokenized per line but never used.
+			var selected forwardedElement
+			found := false
+			for _, hop := range forwardedHops(values) {
+				if !p.trusts(peer) {
 					break
 				}
-				peer = chain[i].address
+				selected, found = hop, true
+				if !hop.valid || !hop.address.IsValid() {
+					break
+				}
+				peer = hop.address
 			}
-			if selected < 0 {
+			if !found || !selected.valid {
 				return proxyRequestOrigin{}, BadRequest
 			}
-			origin = proxyRequestOrigin{chain[selected].scheme, chain[selected].host}
+			origin = proxyRequestOrigin{selected.scheme, selected.host}
 		} else {
 			if len(values) != 1 || len(values[0]) > maxOriginBytes || strings.Contains(values[0], ",") {
 				return proxyRequestOrigin{}, BadRequest

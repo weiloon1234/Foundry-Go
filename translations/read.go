@@ -20,8 +20,9 @@ type Resolved struct {
 }
 
 // Values is an immutable field snapshot. Empty strings are present translations,
-// not missing values. Resolve follows requested, default, then lexicographic
-// supported locale order, matching the reference framework's stable fallback.
+// not missing values. Resolve follows i18n.LocaleSet.Fallbacks: requested, its
+// supported regional parents (en-GB → en), the default, then lexicographic
+// supported locale order. UI catalogs share the same parent-locale rule.
 type Values struct {
 	locales i18n.LocaleSet
 	values  map[i18n.LocaleID]string
@@ -84,9 +85,11 @@ func (b Batch[M, K]) Get(owner model.Reference[M, K]) (Values, error) {
 	return b.values[subject.Key], nil
 }
 
-// Load uses one owner SELECT and one streaming translation SELECT in the same
-// read-only repeatable-read snapshot. No per-model lazy queries or global cache.
-// Bounds are explicit; split larger batches instead of returning partial data.
+// Load uses one owner SELECT and keyset-paged translation SELECTs (MaxBatchRows
+// rows per page) in the same read-only repeatable-read snapshot, so batches of
+// owners × locales beyond one page load without partial data. Total rows are
+// bounded by owners × supported locales; text is bounded by MaxBatchBytes.
+// No per-model lazy queries or global cache.
 func (f Field[M, K]) Load(ctx context.Context, m *Manager, owners []model.Reference[M, K]) (Batch[M, K], error) {
 	if err := f.check(m); err != nil {
 		return Batch[M, K]{}, err
@@ -117,26 +120,41 @@ func (f Field[M, K]) Load(ctx context.Context, m *Manager, owners []model.Refere
 			localeNames[i] = string(id)
 		}
 		fields := store.TranslationFields()
-		count, bytes := 0, 0
-		return store.QueryFoundryModelTranslations().Where(fields.Scope.Eq(f.definition.owner.Scope()), fields.SubjectKey.In(keys...), fields.Field.Eq(string(f.Name())), fields.Locale.In(localeNames...)).OrderBy(fields.Key.Asc()).Limit(MaxBatchRows+1).Each(ctx, tx, func(row store.Translation) error {
-			count++
-			bytes += len(row.Value)
-			if count > MaxBatchRows || bytes > MaxBatchBytes {
-				return fault.New(fault.Conflict, "translation batch exceeds its row or byte limit")
+		base := store.QueryFoundryModelTranslations().Where(fields.Scope.Eq(f.definition.owner.Scope()), fields.SubjectKey.In(keys...), fields.Field.Eq(string(f.Name())), fields.Locale.In(localeNames...))
+		// UNIQUE(scope,subject_key,field,locale) bounds the pages structurally.
+		limit := len(keys) * len(ids)
+		rows, bytes, after := 0, 0, ""
+		for {
+			page := base
+			if after != "" {
+				page = page.Where(fields.Key.Gt(after))
 			}
-			if row.Field != string(f.Name()) || !validText(row.Value, f.definition.options.MaxBytes) {
-				return invalid()
-			}
-			if err := validateOwnerRow(f.definition.owner, row); err != nil {
+			count := 0
+			err := page.OrderBy(fields.Key.Asc()).Limit(MaxBatchRows).Each(ctx, tx, func(row store.Translation) error {
+				count++
+				rows++
+				after = row.Key
+				bytes += len(row.Value)
+				if rows > limit || bytes > MaxBatchBytes {
+					return fault.New(fault.Conflict, "translation batch exceeds its row or byte limit")
+				}
+				if row.Field != string(f.Name()) || !validText(row.Value, f.definition.options.MaxBytes) {
+					return invalid()
+				}
+				if err := validateOwnerRow(f.definition.owner, row); err != nil {
+					return err
+				}
+				values, ok := result.values[row.SubjectKey]
+				if !ok || !locales.Contains(i18n.LocaleID(row.Locale)) {
+					return invalid()
+				}
+				values.values[i18n.LocaleID(row.Locale)] = row.Value
+				return nil
+			})
+			if err != nil || count < MaxBatchRows {
 				return err
 			}
-			values, ok := result.values[row.SubjectKey]
-			if !ok || !locales.Contains(i18n.LocaleID(row.Locale)) {
-				return invalid()
-			}
-			values.values[i18n.LocaleID(row.Locale)] = row.Value
-			return nil
-		})
+		}
 	})
 	if err != nil {
 		return Batch[M, K]{}, err

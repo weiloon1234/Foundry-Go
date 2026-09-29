@@ -11,22 +11,35 @@ import (
 )
 
 // Declaration erases model types only at application assembly. Names and model
-// namespaces must be unique; constructing a registry performs no database I/O.
+// namespaces, including declared storage models, must be unique; constructing a
+// registry performs no database I/O.
 type Declaration struct {
-	name         OwnerName
-	model, scope string
-	id           *declarationID
-	validate     func() error
-	retained     func(context.Context, database.Executor, []model.Identity) (map[string]bool, error)
-	subject      func(model.Identity) (Subject, error)
+	name                  OwnerName
+	model, storage, scope string
+	recorded              []string
+	id                    *declarationID
+	validate              func() error
+	retained              func(context.Context, database.Executor, []model.Identity) (map[string]bool, error)
+	subject               func(model.Identity) (Subject, error)
+	adopt                 func(model.Identity) (Subject, error)
 }
 
 func (o Owner[M, K]) Registration() Declaration {
 	if o.definition == nil {
 		return Declaration{}
 	}
-	return Declaration{name: o.Name(), model: o.ModelName(), scope: o.Scope(), id: o.definition.id, validate: o.Validate, subject: func(identity model.Identity) (Subject, error) {
+	return Declaration{name: o.Name(), model: o.ModelName(), storage: o.StorageModel(), scope: o.Scope(), recorded: o.RecordedModels(), id: o.definition.id, validate: o.Validate, subject: func(identity model.Identity) (Subject, error) {
 		ref, err := o.Parse(identity)
+		if err != nil {
+			return Subject{}, err
+		}
+		return o.Subject(ref)
+	}, adopt: func(identity model.Identity) (Subject, error) {
+		renamed, err := identity.WithModelName(o.ModelName())
+		if err != nil {
+			return Subject{}, err
+		}
+		ref, err := o.Parse(renamed)
 		if err != nil {
 			return Subject{}, err
 		}
@@ -71,18 +84,22 @@ func NewRegistry(owners ...Declaration) (*Registry, error) {
 	r := &Registry{owners: make(map[OwnerName]Declaration, len(owners))}
 	models := make(map[string]bool, len(owners))
 	for _, owner := range owners {
-		if owner.validate == nil || owner.id == nil || owner.retained == nil || owner.subject == nil {
+		if owner.validate == nil || owner.id == nil || owner.retained == nil || owner.subject == nil || owner.adopt == nil {
 			return nil, invalid("invalid model extension owner registration")
 		}
 		if err := owner.validate(); err != nil {
 			return nil, err
 		}
-		if _, exists := r.owners[owner.name]; exists || models[owner.model] {
+		// Storage and previous models attribute persisted identities to this
+		// owner, so they cannot name another owner's current or declared model.
+		if _, exists := r.owners[owner.name]; exists || slices.ContainsFunc(owner.recorded, func(name string) bool { return models[name] }) {
 			return nil, fault.New(fault.Duplicate, "model extension owner already registered")
 		}
 		r.owners[owner.name] = owner
 		r.names = append(r.names, owner.name)
-		models[owner.model] = true
+		for _, name := range owner.recorded {
+			models[name] = true
+		}
 	}
 	slices.Sort(r.names)
 	return r, nil
@@ -111,6 +128,46 @@ func (r *Registry) Subject(owner OwnerName, identity model.Identity) (Subject, e
 		return Subject{}, invalid("unknown model extension owner")
 	}
 	return entry.subject(identity)
+}
+
+// AdoptSubject is the explicit re-scope maintenance boundary. It attributes a
+// persisted identity recorded under one of the owner's declared models (see
+// DeclaresModel) to its current model, decodes the key through the current
+// codec and returns the subject in the owner's current scope. An identity of
+// any other model is rejected. It performs no I/O and grants nothing.
+func (r *Registry) AdoptSubject(owner OwnerName, identity model.Identity) (Subject, error) {
+	if !r.DeclaresModel(owner, identity.ModelName()) {
+		return Subject{}, invalid("persisted identity names an undeclared owner model")
+	}
+	return r.owners[owner].adopt(identity)
+}
+
+// DeclaresModel reports whether name is the owner's current model, storage
+// model or one of its declared OwnerOptions.PreviousModels.
+func (r *Registry) DeclaresModel(owner OwnerName, name string) bool {
+	if r.Validate() != nil {
+		return false
+	}
+	entry, ok := r.owners[owner]
+	return ok && name != "" && slices.Contains(entry.recorded, name)
+}
+
+// DeclaresScope reports whether scope is the owner scope of one of the owner's
+// declared models, the scopes its persisted rows may have been written under.
+func (r *Registry) DeclaresScope(owner OwnerName, scope string) bool {
+	if r.Validate() != nil {
+		return false
+	}
+	entry, ok := r.owners[owner]
+	if !ok {
+		return false
+	}
+	for _, name := range entry.recorded {
+		if Digest(string(owner), name) == scope {
+			return true
+		}
+	}
+	return false
 }
 func (r *Registry) Scope(owner OwnerName) (string, error) {
 	if err := r.Validate(); err != nil {

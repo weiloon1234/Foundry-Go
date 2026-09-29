@@ -23,6 +23,7 @@ type Server struct {
 	logger    *slog.Logger
 	managed   bool
 	observers []RequestObserver
+	proxy     *proxyPolicy
 
 	mu        sync.Mutex
 	attempted bool
@@ -64,7 +65,7 @@ func prepare(handler stdhttp.Handler, config ServerConfig, options ...ServerOpti
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
-	return &Server{observers: settings.observers, handler: handler, config: config.Snapshot(), ready: make(chan struct{}), done: make(chan struct{})}, nil
+	return &Server{observers: settings.observers, proxy: settings.proxy, handler: handler, config: config.Snapshot(), ready: make(chan struct{}), done: make(chan struct{})}, nil
 }
 
 // Ready waits for the one startup attempt and returns the actual bound TCP
@@ -137,6 +138,7 @@ func (s *Server) run(ctx context.Context, logger *slog.Logger, managed bool) err
 	requests, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	defer cancel()
 	owners := newHandlerLifetime()
+	owners.proxy = s.proxy
 	server := &stdhttp.Server{
 		Handler:           owners.wrap(s.handler, logger, s.config, s.observers...),
 		ReadHeaderTimeout: s.config.ReadHeaderTimeout, ReadTimeout: s.config.ReadTimeout,

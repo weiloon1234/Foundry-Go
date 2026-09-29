@@ -34,7 +34,7 @@ func DefaultLogSettings() LogSettings {
 func (s LogSettings) inTimeZone(zone temporal.ZoneName) LogChannels {
 	channels := maps.Clone(s.Channels)
 	for name, channel := range channels {
-		if channel.Sink.Driver != logging.Stack && channel.Sink.TimeZone == "" {
+		if channel.Sink.Driver != logging.Stack && channel.Sink.Driver != logging.Custom && channel.Sink.TimeZone == "" {
 			channel.Sink.TimeZone = zone
 			channels[name] = channel
 		}

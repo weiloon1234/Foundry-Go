@@ -70,11 +70,11 @@ func TestCTECyclesAndSharedParameterBound(t *testing.T) {
 		t.Fatal("CTE dependency cycle accepted", err)
 	}
 	id := NewScalarField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
-	values := make([]int64, MaxParameters/2+1)
-	definition := CTE("wide", cursorQuery().Where(id.In(values...)))
+	base := cursorQuery()
+	definition := CTE("wide", base.Where(wideScoped(base.Scope(), MaxParameters/2+1)))
 	a := As[firstAlias](definition, "a")
 	inner := SelectValue(a, scopedID(a.Scope()).Value())
-	if s, err := cursorQuery().Where(id.InQuery(inner), id.In(values...)).Compile(); !errors.Is(err, fault.Invalid) || s.SQL() != "" || len(s.Arguments()) != 0 {
+	if s, err := cursorQuery().Where(id.InQuery(inner), wideScoped(base.Scope(), MaxParameters/2+1)).Compile(); !errors.Is(err, fault.Invalid) || s.SQL() != "" || len(s.Arguments()) != 0 {
 		t.Fatal("CTE bypassed shared parameter bound", err)
 	}
 }

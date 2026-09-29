@@ -32,7 +32,12 @@ func Module(name foundation.ProviderID, key foundation.Key[*Scheduler], config C
 			return err
 		}
 		return r.Kernel(foundation.Scheduler, func(runtime *foundation.Runtime) (foundation.Kernel, error) {
-			return foundation.Resolve(runtime.Services(), key)
+			scheduler, err := foundation.Resolve(runtime.Services(), key)
+			if err != nil {
+				return nil, err
+			}
+			scheduler.bindLogger(runtime.Logger())
+			return scheduler, nil
 		})
 	}}
 }

@@ -4,11 +4,13 @@ package enum
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/token"
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/i18n"
 )
@@ -27,15 +29,27 @@ type Case[E Scalar] struct {
 }
 
 // Descriptor is an immutable enum declaration. Its zero value is invalid.
+// Copies share one validation result, so retained descriptors validate once.
 type Descriptor[E Scalar] struct {
 	packagePath, name string
 	cases             []Case[E]
+	checked           *validationResult
 }
+
+// validationResult caches Validate for one immutable Describe result. A
+// validation that panics leaves errValidationIncomplete rather than success.
+type validationResult struct {
+	once sync.Once
+	err  error
+}
+
+var errValidationIncomplete = errors.New("enum declaration validation did not complete")
 
 // Describe is a declaration boundary used by generated code. It copies cases;
 // registries and custom declarations must Validate before accepting a descriptor.
+// Retain the result to reuse its cached validation across label lookups.
 func Describe[E Scalar](packagePath, name string, cases ...Case[E]) Descriptor[E] {
-	return Descriptor[E]{packagePath, name, slices.Clone(cases)}
+	return Descriptor[E]{packagePath, name, slices.Clone(cases), new(validationResult)}
 }
 
 func (d Descriptor[E]) PackagePath() string { return d.packagePath }
@@ -51,8 +65,20 @@ func (d Descriptor[E]) Contains(value E) bool {
 }
 
 // Validate checks descriptor names, values and their actual JSON representation.
-// It does not infer public API exposure from a persistence model.
+// It does not infer public API exposure from a persistence model. The result is
+// computed once per Describe call; custom enum marshalers run only that once.
 func (d Descriptor[E]) Validate() error {
+	if d.checked == nil {
+		return d.validate()
+	}
+	d.checked.once.Do(func() {
+		d.checked.err = errValidationIncomplete
+		d.checked.err = d.validate()
+	})
+	return d.checked.err
+}
+
+func (d Descriptor[E]) validate() error {
 	if strings.TrimSpace(d.packagePath) == "" || strings.ContainsAny(d.packagePath, " \t\r\n\\") || !token.IsIdentifier(d.name) || !token.IsExported(d.name) || len(d.cases) == 0 {
 		return fmt.Errorf("invalid enum declaration")
 	}

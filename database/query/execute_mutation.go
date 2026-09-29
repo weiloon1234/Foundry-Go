@@ -3,7 +3,6 @@ package query
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -75,31 +74,43 @@ func executeMutation[M any](ctx context.Context, writer database.Transactor, pla
 	if err := writeContext(ctx, writer); err != nil {
 		return *new(M), err
 	}
+	plan.query = plan.query.inContext(ctx)
+	if plan.query.skipModelHooks {
+		return *new(M), fault.New(fault.Invalid, "WithoutModelHooks applies only to set-based writes; per-model writes always run hooks")
+	}
 	observers, known := writerObservers(writer)
 	if plan.query.definition != nil && (plan.query.definition.hasWriteHooks || !known || lifecycle.HasObservers[M](observers)) {
 		return executeHookedMutation(ctx, writer, plan)
+	}
+	if plan.kind == insertModel && plan.query.definition != nil {
+		switch owner := writer.(type) {
+		case *database.DB:
+			return executeAutocommitInsert(ctx, owner.FoundryAutocommitQuery, owner.Clock(), plan)
+		case database.PrimaryExecutor:
+			return executeAutocommitInsert(ctx, owner.FoundryAutocommitQuery, owner.Clock(), plan)
+		}
 	}
 	mutate := plan.kind.sqlKind() != deleteModel && (plan.query.hasFieldMutators() || plan.needsConventions())
 	return executeModelStatement(ctx, writer, mutate, func(ctx context.Context, tx *database.Tx) (Statement, error) {
 		return prepareMutation(ctx, &plan, transactionClock(tx))
 	}, func(ctx context.Context, tx *database.Tx, s Statement) (M, error) {
-		return returningOne(ctx, tx, s, plan.query.definition.scan)
+		return plan.returning(ctx, tx, s)
 	})
 }
 
 // prepareMutation shares post-hook validation, once-only field transforms and
 // compilation across ordinary writes and the no-observer wrapper fallback.
 func prepareMutation[M any](ctx context.Context, plan *mutationPlan[M], source clock.Clock) (Statement, error) {
-	if err := plan.applyConventions(ctx, source); err != nil {
+	if err := plan.applyConventionsFor(ctx, source, !plan.setBased); err != nil {
 		return Statement{}, err
 	}
 
 	if plan.kind.sqlKind() != deleteModel && plan.query.hasFieldMutators() {
-		c, err := plan.query.mutationCompiler(plan.kind)
+		c, err := plan.query.modelWriteCompiler(plan.kind, !plan.setBased)
 		if err != nil {
 			return Statement{}, err
 		}
-		if _, err := plan.query.validateMutation(plan.kind, plan.mutation, &c); err != nil {
+		if _, err := plan.validate(&c); err != nil {
 			return Statement{}, err
 		}
 		mutation, err := plan.query.mutateFields(ctx, plan.mutation)
@@ -173,6 +184,15 @@ func executeWrite[R any](ctx context.Context, writer database.Transactor, write 
 	return model, nil
 }
 
+// returning runs the plan's own single-row statement.
+func (p mutationPlan[M]) returning(ctx context.Context, tx *database.Tx, statement Statement) (M, error) {
+	result, err := returningOne(ctx, tx, statement, p.query.definition.scan)
+	if err != nil && p.statementFailure != nil {
+		*p.statementFailure = err
+	}
+	return result, err
+}
+
 func returningOne[M any](ctx context.Context, tx *database.Tx, statement Statement, scan func(database.Row) (M, error)) (M, error) {
 	items, err := returningModels(ctx, tx, statement, scan, 1, 1)
 	if err != nil {
@@ -195,7 +215,7 @@ func returningModels[M any](ctx context.Context, tx *database.Tx, statement Stat
 	result = make([]M, 0, maximum)
 	for rows.Next() {
 		if len(result) >= maximum {
-			return nil, fmt.Errorf("model write returned too many rows: %w", database.TooManyRows)
+			return nil, database.NewError("model write returned too many rows", database.TooManyRows)
 		}
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -210,7 +230,7 @@ func returningModels[M any](ctx context.Context, tx *database.Tx, statement Stat
 		return nil, err
 	}
 	if len(result) < minimum {
-		return nil, fmt.Errorf("model write returned too few rows: %w", database.NotFound)
+		return nil, database.NewError("model write returned too few rows", database.NotFound)
 	}
 	return result, nil
 }

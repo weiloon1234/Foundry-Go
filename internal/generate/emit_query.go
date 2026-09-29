@@ -19,7 +19,8 @@ func emitQuery(p *packageInput, declaration queryDeclaration) ([]byte, error) {
 	}
 	e.line("// Reuse this descriptor for request decoding and query URL encoding.")
 	e.line("// Optional fields preserve omission; repeated fields retain slice order.")
-	e.line("func %sDescriptor() %s.Query[%s] {", declaration.name, http, declaration.name)
+	e.line("func %sDescriptor() %s.Query[%s] {return foundry%sDescriptor()}", declaration.name, http, declaration.name, declaration.name)
+	e.line("var foundry%sDescriptor=%s.OnceValue(func()%s.Query[%s]{", declaration.name, e.use("sync"), http, declaration.name)
 	e.line("return %s.DefineQuery[%s](", http, declaration.name)
 	for _, field := range declaration.fields {
 		codec, err := e.urlScalarCodec(http, "Query", field.element, field.scalar)
@@ -32,9 +33,9 @@ func emitQuery(p *packageInput, declaration queryDeclaration) ([]byte, error) {
 		}
 		e.line("%s.%s[%s](%q,%s,func(%s *%s)*%s{return &%s.%s}),", http, field.binding, typeArguments, field.parameter, codec, variable, declaration.name, e.typeName(field.typ), variable, field.name)
 	}
-	e.line(")}")
+	e.line(")})")
 	if declaration.source == "form" {
 		e.emitTransportValidation(declaration.name, declaration.typ, declaration.position, declaration.validationProperties(), "form", "field")
 	}
-	return e.finish(declaration.position.Filename, declaration.position.Line)
+	return e.finish(declaration.position.Filename)
 }

@@ -7,8 +7,9 @@ import (
 )
 
 // WithAuthorization configures a resource policy after the complete model
-// bundle resolves, before domain work. Request-only authorization belongs on
-// the original HTTP endpoint and runs before any model lookups.
+// bundle resolves. On framework endpoints it runs at the binding stage, before
+// validation and domain work. Request-only authorization belongs on the
+// original HTTP endpoint and runs before any model lookups.
 func (e Endpoint[P, Q, B, M, R]) WithAuthorization(authorize func(context.Context, Input[P, Q, B, M]) error) Endpoint[P, Q, B, M, R] {
 	e.authorization = &authorize
 	return e

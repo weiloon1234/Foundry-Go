@@ -157,7 +157,7 @@ func TestGeneratedForm(t *testing.T){
  add("count","","","0",false);add("enabled","","","false",false);add("state","","","active",false)
  add("display_name","","","literal+%20",false)
  add("tags[]","","","first",false);add("tags[]","","","second",false);add("packed","","","one,two",false)
- add("primary","primary.txt","text/plain","file bytes",true);add("avatar","","","",true)
+ add("primary","primary.txt","text/plain","file bytes",true);add("avatar","empty.txt","","",true)
  add("gallery","one.txt","","",true);add("gallery","two.txt","","",true)
  add("details","","application/json","{\"name\":\"json\",\"note\":null}",false)
  add("labels","","application/json","[\"one\",\"two\"]",false)

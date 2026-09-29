@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "files": {
+    "delivery_foundry.gen.go": "93648e2e84e8a7efc35ca885740becfbc1b0fd71f7774c468a7d619aa5efdab5",
+    "endpoint_foundry.gen.go": "2f50ec900f4922229ada2fbce10bab5b4a2b79db2a4bc80c6428f9b260184ccc",
+    "secret_foundry.gen.go": "d136a6970157d878f250c01aac225d40607ae57c7301846283d18354a2b96458"
+  }
+}

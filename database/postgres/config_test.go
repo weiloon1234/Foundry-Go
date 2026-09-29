@@ -106,7 +106,8 @@ func TestSQLStateClassificationPreservesCommitUncertainty(t *testing.T) {
 		code     database.Code
 		rejected bool
 	}{
-		{"23505", database.UniqueViolation, true}, {"23503", database.ForeignKeyViolation, true}, {"23502", database.NotNullViolation, true}, {"23514", database.CheckViolation, true}, {"40001", database.SerializationFailure, true}, {"40P01", database.Deadlock, true}, {"40003", database.QueryFailed, false}, {"08007", database.Unavailable, false}, {"57014", database.Canceled, false}, {"28P01", database.Unavailable, false}, {"XX000", database.QueryFailed, false},
+		{"23505", database.UniqueViolation, true}, {"23503", database.ForeignKeyViolation, true}, {"23502", database.NotNullViolation, true}, {"23514", database.CheckViolation, true}, {"40001", database.SerializationFailure, true}, {"40P01", database.Deadlock, true}, {"40003", database.QueryFailed, false}, {"08007", database.Unavailable, false}, {"57014", database.QueryCanceled, false}, {"28P01", database.Unavailable, false}, {"XX000", database.QueryFailed, false},
+		{"55P03", database.LockNotAvailable, false}, {"23P01", database.ExclusionViolation, true}, {"25006", database.ReadOnlyTransaction, false}, {"22001", database.StringDataRightTruncation, false}, {"22P02", database.InvalidTextRepresentation, false}, {"22003", database.NumericValueOutOfRange, false}, {"22012", database.DivisionByZero, false}, {"22023", database.DataException, false}, {"53100", database.InsufficientResources, false}, {"53300", database.Unavailable, false}, {"25P03", database.IdleInTransactionTimeout, false},
 	} {
 		original := &pgconn.PgError{Code: item.state, ConstraintName: "constraint_name", Message: "private statement", Detail: "private value"}
 		result := classify(fmt.Errorf("wrapped: %w", original))
@@ -116,5 +117,19 @@ func TestSQLStateClassificationPreservesCommitUncertainty(t *testing.T) {
 	}
 	if !classify(pgx.ErrTxCommitRollback).CommitRejected || classify(errors.New("network response lost")).CommitRejected {
 		t.Fatal("incorrect transaction completion classification")
+	}
+}
+
+func TestSQLStateClassificationConfirmsOnlyRejectedAutocommitStatements(t *testing.T) {
+	for state, rejected := range map[string]bool{
+		"23505": true, "22P02": true, "42P01": true, "40001": true, "55P03": true, "P0001": true,
+		"40003": false, "57014": false, "08006": false, "53100": false, "XX000": false, "57P01": false, "25P03": false,
+	} {
+		if classify(&pgconn.PgError{Code: state}).StatementRejected != rejected {
+			t.Fatalf("SQLSTATE %s autocommit rejection classification", state)
+		}
+	}
+	if classify(errors.New("network response lost")).StatementRejected {
+		t.Fatal("unknown transport failure was treated as a rejected statement")
 	}
 }

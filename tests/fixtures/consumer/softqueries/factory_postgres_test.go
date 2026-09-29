@@ -68,3 +68,58 @@ func TestPostgresFactoryUsesGeneratedDraftsHooksAndTransaction(t *testing.T) {
 		t.Fatal("factory retained rolled-back callbacks or lost successful callbacks", len(trace.Committed))
 	}
 }
+
+// AfterCreating hooks share the insert's transaction: a failing hook rolls back
+// the model it follows and, for CreateMany, every model of the batch.
+func TestPostgresFactoryHookFailureLeavesNoRows(t *testing.T) {
+	runSoft(t, func(tx *database.Tx, _ *testkit.Clock) error {
+		members, err := factory.New[softqueries.Member](func(_ context.Context, n factory.Sequence) (softqueries.MemberDraft, error) {
+			return softqueries.MemberDraft{}.SetName(fmt.Sprintf("hooked-%d", n)), nil
+		})
+		if err != nil {
+			return err
+		}
+		failure := errors.New("hook failed")
+		var seen []int64
+		failAt := 0
+		hooked, err := members.AfterCreating(func(ctx context.Context, writer database.Transactor, member softqueries.Member) (softqueries.Member, error) {
+			// The hook runs in the transaction that inserted its model.
+			scoped, ok := writer.(*database.Tx)
+			if !ok {
+				return member, errors.New("hook did not receive the insert transaction")
+			}
+			visible, err := softqueries.QuerySoftMembers().Count(ctx, scoped)
+			if err != nil {
+				return member, err
+			}
+			seen = append(seen, visible)
+			if len(seen) == failAt {
+				return member, failure
+			}
+			return member, nil
+		})
+		if err != nil {
+			return err
+		}
+		failAt = 2
+		if items, err := hooked.CreateMany(t.Context(), tx, 3); !errors.Is(err, failure) || len(items) != 0 || !reflect.DeepEqual(seen, []int64{3, 3}) {
+			return fmt.Errorf("failing hook batch = %d, %v, saw %v", len(items), err, seen)
+		}
+		seen, failAt = nil, 1
+		if _, err := hooked.Create(t.Context(), tx); !errors.Is(err, failure) || !reflect.DeepEqual(seen, []int64{1}) {
+			return fmt.Errorf("failing hook create: %v, saw %v", err, seen)
+		}
+		count, err := softqueries.QuerySoftMembers().Count(t.Context(), tx)
+		if err != nil {
+			return err
+		}
+		if count != 0 {
+			return fmt.Errorf("a failing hook left %d row(s)", count)
+		}
+		seen, failAt = nil, 0
+		if created, err := hooked.Create(t.Context(), tx); err != nil || created.ID.IsZero() {
+			return fmt.Errorf("successful hook create: %v", err)
+		}
+		return nil
+	})
+}

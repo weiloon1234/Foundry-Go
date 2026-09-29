@@ -3,6 +3,7 @@ package email
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/i18n"
 	"log/slog"
 
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -26,6 +27,7 @@ type snapshotWire struct {
 	HTML        string            `json:"html"`
 	Headers     map[string]string `json:"headers"`
 	Attachments []Attachment      `json:"attachments"`
+	Locale      i18n.LocaleID     `json:"locale,omitempty"`
 }
 
 // CaptureMessage freezes a validated message within value.JSONMaxBytes. Every
@@ -40,10 +42,11 @@ func CaptureMessage(message Message) (Snapshot, error) {
 			return Snapshot{}, Construction
 		}
 	}
-	if len(message.text)+len(message.html) > value.JSONMaxBytes {
+	// In-memory content is not durable; snapshots reference stored files.
+	if len(message.data) > 0 || len(message.text)+len(message.html) > value.JSONMaxBytes {
 		return Snapshot{}, Construction
 	}
-	wire := snapshotWire{1, message.from, message.to, message.cc, message.bcc, message.replyTo, message.subject, message.text, message.html, message.headers, message.attachments}
+	wire := snapshotWire{1, message.from, message.to, message.cc, message.bcc, message.replyTo, message.subject, message.text, message.html, message.headers, message.attachments, message.locale}
 	data, err := value.NewJSON(wire)
 	if err != nil {
 		return Snapshot{}, Construction
@@ -56,7 +59,7 @@ func (s Snapshot) Message() (Message, error) {
 	if err != nil || wire.Version != 1 {
 		return Message{}, Construction
 	}
-	message := Message{from: wire.From, to: wire.To, cc: wire.CC, bcc: wire.BCC, replyTo: wire.ReplyTo, subject: wire.Subject, text: wire.Text, html: wire.HTML, headers: wire.Headers, attachments: wire.Attachments}
+	message := Message{from: wire.From, to: wire.To, cc: wire.CC, bcc: wire.BCC, replyTo: wire.ReplyTo, subject: wire.Subject, text: wire.Text, html: wire.HTML, headers: wire.Headers, attachments: wire.Attachments, locale: wire.Locale}
 	if err := message.Validate(); err != nil {
 		return Message{}, err
 	}

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -134,10 +135,6 @@ func (d Multipart[B]) readParts(r *stdhttp.Request, reader *multipart.Reader, so
 		declaration := d.parts[index]
 		// Retain the declared name, not a substring of an incoming MIME header.
 		name = declaration.info.Name
-		input.counts[index]++
-		if code := parameterCardinalityIssue(declaration.info, input.counts[index]); code != "" {
-			return endpointInputError(r.Context(), "body", multipartIssue(queryIssuePath(name), code))
-		}
 		filename, isFile := parameters["filename"]
 		if isFile != (declaration.kind == MultipartFile) || len(header.Values("Content-Transfer-Encoding")) != 0 || !identityRequestEncoding(header) {
 			return endpointInputError(r.Context(), "body", multipartIssue(queryIssuePath(name), contract.TypeIssue))
@@ -146,8 +143,27 @@ func (d Multipart[B]) readParts(r *stdhttp.Request, reader *multipart.Reader, so
 		if len(types) > 1 {
 			return endpointInputError(r.Context(), "body", multipartIssue(queryIssuePath(name), contract.TypeIssue))
 		}
+		var content io.Reader = part
+		if declaration.kind == MultipartFile && filename == "" && !declaration.info.Required {
+			// A browser submits an HTML file input with no selection as a part
+			// with filename="" and no bytes. Optional and repeated file fields
+			// treat that part as absent; a required field still receives it.
+			var probe [1]byte
+			n, err := io.ReadFull(part, probe[:])
+			if n == 0 && err == io.EOF {
+				continue
+			}
+			if err != nil {
+				return source.failure(err)
+			}
+			content = io.MultiReader(bytes.NewReader(probe[:n]), part)
+		}
+		input.counts[index]++
+		if code := parameterCardinalityIssue(declaration.info, input.counts[index]); code != "" {
+			return endpointInputError(r.Context(), "body", multipartIssue(queryIssuePath(name), code))
+		}
 		if declaration.kind == MultipartFile {
-			file, err := batch.Capture(r.Context(), part, filename, header.Get("Content-Type"))
+			file, err := batch.Capture(r.Context(), content, filename, header.Get("Content-Type"))
 			if err != nil {
 				switch err.(type) {
 				case *upload.LimitError:
@@ -224,6 +240,10 @@ func (b Body[B]) readOwned(w stdhttp.ResponseWriter, r *stdhttp.Request, limits 
 
 	if b.kind == payloadMultipart {
 		return b.multipart.read(w, r, limits)
+	}
+	if b.kind == payloadRaw {
+		// The handler streams a raw body; only its framing is checked here.
+		return b.raw.open(w, r, limits.Raw)
 	}
 	body, err := b.read(w, r, limits.Body)
 	return body, nil, err

@@ -86,6 +86,7 @@ const (
 	jsonIndexOperation
 	jsonScalarOperation
 	jsonUnquoteOperation
+	jsonArrayLengthOperation
 )
 
 // Operation names and arities are private, closed compiler metadata. Public
@@ -221,6 +222,54 @@ func (n operationNode) validate() error {
 	}
 	return nil
 }
+
+// operationArguments compiles each argument with its explicit SQL type.
+func (c *compiler) operationArguments(n operationNode, grouped map[fieldRef]bool, grouping bool) ([]string, error) {
+	args := make([]string, len(n.arguments))
+	argumentBytes := 0
+	for i, a := range n.arguments {
+		text, err := c.selectedExpression(a.value, grouped, grouping)
+		if err != nil {
+			return nil, err
+		}
+		typeName, _ := parameterSQLType(a.kind)
+		// SUBSTR uses SQL integer positions. Dynamic out-of-range positions fail
+		// at the database; Go literal positions are int32 and are always bound.
+		if (n.kind == substringOperation && i > 0) || (n.kind == jsonIndexOperation && i == 1) {
+			typeName = "integer"
+		}
+		args[i] = "CAST(" + text + " AS " + typeName + ")"
+		argumentBytes += len(args[i])
+		if argumentBytes > MaxScalarSQLBytes {
+			return nil, fault.New(fault.Invalid, "scalar SQL arguments exceed their resource bound")
+		}
+	}
+	return args, nil
+}
+
+// jsonTextScalarSQL extracts a scalar directly below a property or element
+// with ->>, which returns the same text as (document -> key) #>> '{}' (JSON
+// null and missing paths are SQL NULL), so (document ->> 'key') expression
+// indexes match typed predicates on declared properties.
+func (c *compiler) jsonTextScalarSQL(n operationNode, grouped map[fieldRef]bool, grouping bool) (string, bool, error) {
+	if n.kind != jsonScalarOperation || len(n.arguments) != 1 {
+		return "", false, nil
+	}
+	inner, ok := n.arguments[0].value.(operationNode)
+	if !ok || (inner.kind != jsonPropertyOperation && inner.kind != jsonIndexOperation) {
+		return "", false, nil
+	}
+	if err := inner.validate(); err != nil {
+		return "", true, err
+	}
+	args, err := c.operationArguments(inner, grouped, grouping)
+	if err != nil {
+		return "", true, err
+	}
+	target, _ := parameterSQLType(n.result)
+	return "CAST((" + args[0] + " ->> " + args[1] + ") AS " + target + ")", true, nil
+}
+
 func (c *compiler) operationSQL(n operationNode, grouped map[fieldRef]bool, grouping bool) (sql string, err error) {
 	defer func() {
 		if err == nil {
@@ -233,25 +282,13 @@ func (c *compiler) operationSQL(n operationNode, grouped map[fieldRef]bool, grou
 	if err := n.validate(); err != nil {
 		return "", err
 	}
+	if sql, collapsed, err := c.jsonTextScalarSQL(n, grouped, grouping); collapsed || err != nil {
+		return sql, err
+	}
 	spec, _ := n.kind.spec()
-	args := make([]string, len(n.arguments))
-	argumentBytes := 0
-	for i, a := range n.arguments {
-		text, err := c.selectedExpression(a.value, grouped, grouping)
-		if err != nil {
-			return "", err
-		}
-		typeName, _ := parameterSQLType(a.kind)
-		// SUBSTR uses SQL integer positions. Dynamic out-of-range positions fail
-		// at the database; Go literal positions are int32 and are always bound.
-		if (n.kind == substringOperation && i > 0) || (n.kind == jsonIndexOperation && i == 1) {
-			typeName = "integer"
-		}
-		args[i] = "CAST(" + text + " AS " + typeName + ")"
-		argumentBytes += len(args[i])
-		if argumentBytes > MaxScalarSQLBytes {
-			return "", fault.New(fault.Invalid, "scalar SQL arguments exceed their resource bound")
-		}
+	args, err := c.operationArguments(n, grouped, grouping)
+	if err != nil {
+		return "", err
 	}
 	if n.kind >= jsonContainsOperation {
 		return jsonOperationSQL(n, args)

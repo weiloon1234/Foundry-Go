@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"slices"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -13,15 +14,28 @@ import (
 // RoutingConfig owns typed primary/read endpoints and their combined process
 // connection ceiling. Read omission keeps single-pool behavior. Credentials and
 // TLS configuration retain Config's explicit ownership and redaction rules.
+//
+// SlowQueryThreshold, when positive, logs statements on either endpoint that
+// take at least that long through the application logger (see
+// database.WithSlowQueryThreshold); zero disables slow-statement logging.
+//
+// StickyReadWindow, when positive with a read endpoint, routes reads in a
+// database.StickyReads request scope to the primary for that long after a
+// write (see database.WithStickyReads).
 type RoutingConfig struct {
-	Primary        Config
-	Read           value.Optional[Config]
-	MaxConnections int
+	Primary            Config
+	Read               value.Optional[Config]
+	MaxConnections     int
+	SlowQueryThreshold time.Duration
+	StickyReadWindow   time.Duration
 }
 
 func (c RoutingConfig) Validate() error {
 	if err := c.Primary.Validate(); err != nil {
 		return err
+	}
+	if c.SlowQueryThreshold < 0 || c.StickyReadWindow < 0 {
+		return fault.New(fault.Invalid, "PostgreSQL slow query threshold cannot be negative")
 	}
 	if c.MaxConnections <= 0 || c.Primary.Pool.MaxOpen > c.MaxConnections {
 		return fault.New(fault.Invalid, "PostgreSQL primary pool exceeds the combined connection bound")
@@ -48,6 +62,12 @@ func (c RoutingConfig) snapshot() RoutingConfig {
 func (c RoutingConfig) options(options []database.Option) []database.Option {
 	result := slices.Clone(options)
 	result = append(result, database.WithConnectionLimit(c.MaxConnections))
+	if c.SlowQueryThreshold > 0 {
+		result = append(result, database.WithSlowQueryThreshold(c.SlowQueryThreshold))
+	}
+	if c.StickyReadWindow > 0 {
+		result = append(result, database.WithStickyReads(c.StickyReadWindow))
+	}
 	if read, configured := c.Read.Get(); configured {
 		result = append(result, database.WithReadPool(func() (database.Adapter, error) { return New(read) }, read.Pool, c.MaxConnections))
 	}

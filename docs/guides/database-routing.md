@@ -53,13 +53,21 @@ observer registrations. An executor wrapper owns its policy: forward
 `QueryRead` explicitly when preserving routing. A wrapper exposing only
 `Executor` keeps its existing `Query` behavior.
 
+## Read-your-writes
+
+Replica lag means a read right after a write may not see it. `database.WithStickyReads(window)` (or the connection's `sticky_read_window`, `postgres.RoutingConfig.StickyReadWindow`) makes routed reads sticky within a request scope: after a write through the DB in a context from `database.StickyReads(ctx)`, reads that would use the read pool use the primary for `window`. Writes are `Exec`, primary `Query` streams (they may write, for example `INSERT ... RETURNING`), `Session` `Exec`/`Query`, transactions that are not read-only and framework single-statement writes; a read-only transaction does not count. The window is measured from the write's completion: a write marks the scope when it starts and again when it finishes (a statement returns, a stream closes, a transaction commits or its commit outcome is unknown), so a long write never consumes its own window. Other requests keep reading the replica, and stickiness ends after the window. Add `database.StickyReadsHandler` to the HTTP middleware stack to give each request its own scope; configured applications install it automatically as the outermost global middleware (`application.StickyReadsMiddlewareID`) when any connection enables its read pool and sets `sticky_read_window`, and add nothing otherwise. Background work calls `database.StickyReads` itself. Without a read pool or a marked context the option has no effect.
+
 `Health(ctx)` reports the primary and configured read endpoint separately.
 `Ping(ctx)` checks both; `PingPrimary` and `PingRead` check individual targets.
-Without a read pool, `PingRead` checks primary. Dependency failure belongs in
-readiness, not process liveness. Startup success in `Stats.Ready` is not a
-substitute for current health checks.
+Without a read pool, `PingRead` checks primary. Pings use one dedicated probe
+connection per endpoint outside `MaxOpen`, so they never queue behind
+application work and a saturated pool does not report every replica unready.
+Dependency failure belongs in readiness, not process liveness. Startup success
+in `Stats.Ready` is not a substitute for current health checks.
 
-`RoutingStats()` exposes independent connection counts and the combined ceiling.
+`RoutingStats()` exposes independent connection counts, cumulative acquisition
+waits and connections closed by idle count, idle time and lifetime, plus the
+combined ceiling; the probe connection is not included.
 `Stats()` aggregates connection utilization while counting resource owners once.
 Shutdown rejects new work across both endpoints and retains existing rows,
 transactions and observer callbacks until they release ownership. A canceled

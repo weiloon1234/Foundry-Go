@@ -36,6 +36,37 @@ middleware supplies an explicitly validated public scheme. Client-IP header
 trust alone cannot prove HTTPS. See [public URL and proxy origin handling](http-public-urls.md)
 for middleware order and typed source declarations.
 
+## Cross-origin isolation and permissions
+
+Four more typed, opt-in fields cover the isolation and feature-policy headers.
+Each is omitted when zero and rejects unsupported values at assembly:
+
+```go
+config.CrossOriginOpener = foundryhttp.OpenerSameOrigin       // Cross-Origin-Opener-Policy
+config.CrossOriginEmbedder = foundryhttp.EmbedderRequireCORP  // Cross-Origin-Embedder-Policy
+config.CrossOriginResource = foundryhttp.ResourceSameSite     // Cross-Origin-Resource-Policy
+config.Permissions = []foundryhttp.PermissionDirective{
+    {Feature: foundryhttp.PermissionCamera},               // camera=()
+    {Feature: foundryhttp.PermissionGeolocation, Self: true,
+        Origins: []foundryhttp.Origin{"https://maps.example"}},
+    {Feature: foundryhttp.PermissionFullscreen, Any: true}, // fullscreen=*
+}
+```
+
+Opener, embedder and resource policies accept only their standard tokens.
+`same-origin` opener plus `require-corp` or `credentialless` embedder enables
+cross-origin isolation; every embedded resource must then opt in, and OAuth or
+payment popups may need `same-origin-allow-popups`. `Permissions-Policy` is
+serialized as a structured-fields dictionary. An empty allowlist disables the
+feature everywhere; `Self` adds `self`; `Origins` are distinct exact HTTP(S)
+origins; `Any` grants `*` and excludes both. Feature names are lowercase tokens,
+so registered features without a constant use the same type. A policy allows at
+most 64 features with 32 origins each, and repeated features are rejected. When a
+typed field is set, `Extra` cannot repeat that header; without it, an existing
+`Extra` value for the same header keeps working.
+
+## Custom headers
+
 Custom native response fields use separate `HeaderName` and `HeaderValue` types:
 
 ```go

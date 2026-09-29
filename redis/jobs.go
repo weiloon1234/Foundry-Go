@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
+	"sync"
 	"time"
 
 	driver "github.com/redis/go-redis/v9"
@@ -21,13 +22,31 @@ var jobsScript string
 
 // JobBackend borrows the existing Redis client and owns no connections. Limits
 // apply per queue and must match across processes. Accepted work persists until
-// terminal retention expires; durability depends on Redis persistence/failover.
-// Stop workers and publication before closing the client's owning module.
+// terminal retention expires or retained-record eviction; durability depends on
+// Redis persistence/failover. Stop workers and publication before closing the
+// client's owning module.
+//
+// Queues use storage layout 2: the immutable envelope is stored apart from
+// small mutable state. A layout-1 queue is never migrated implicitly: every
+// operation returns jobs.ErrLegacyLayout until an operator stops or drains the
+// previous release and runs JobMigrateLayout (`jobs migrate-layout`). The
+// previous release cannot read a migrated queue.
 type JobBackend struct {
 	client   *Client
 	config   jobs.QueueConfig
 	identity string
+	legacy   string
 	limits   string
+	mu       sync.Mutex
+	wake     map[jobs.Key]chan struct{}
+}
+
+// legacyQueueConfig reproduces the layout-1 policy identity for migration.
+type legacyQueueConfig struct {
+	MaxEntries int
+	MaxBytes   int64
+	MaxHistory int
+	Retention  time.Duration
 }
 
 func NewJobBackend(client *Client, config jobs.QueueConfig) (*JobBackend, error) {
@@ -41,21 +60,57 @@ func NewJobBackend(client *Client, config jobs.QueueConfig) (*JobBackend, error)
 	if err != nil {
 		return nil, err
 	}
+	legacy, err := json.Marshal(legacyQueueConfig{MaxEntries: config.MaxEntries, MaxBytes: config.MaxBytes, MaxHistory: config.MaxHistory, Retention: config.Retention})
+	if err != nil {
+		return nil, err
+	}
 	limits, err := json.Marshal(map[string]any{
 		"entries": config.MaxEntries, "bytes": config.MaxBytes, "history": config.MaxHistory,
+		"retained": config.RetainedLimit(), "delivery_floor": 3,
 		"retention": config.Retention.Milliseconds(), "max_delay": jobs.MaxDelay.Milliseconds(),
 		"record_bytes": 2*(jobs.MaxPayloadBytes+64*1024) + config.MaxHistory*256,
 		"owner_bytes":  lease.OwnerBytes * 2, "attempts": jobs.MaxAttempts, "scan_limit": jobs.ListScanLimit,
-		"workflow_steps": jobs.MaxWorkflowSteps,
+		"workflow_steps": jobs.MaxWorkflowSteps, "workflow_members": jobs.MaxWorkflowMembers,
 		"manual_retries": jobs.MaxManualRetries,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &JobBackend{client: client, config: config, identity: string(identity), limits: string(limits)}, nil
+	return &JobBackend{client: client, config: config, identity: string(identity), legacy: string(legacy), limits: string(limits)}, nil
 }
 
 var _ jobs.Backend = (*JobBackend)(nil)
+var _ jobs.WakeBackend = (*JobBackend)(nil)
+var _ jobs.StatsBackend = (*JobBackend)(nil)
+var _ jobs.ForgetBackend = (*JobBackend)(nil)
+
+// JobWakeup wakes idle workers of this process subscribed to key after this
+// process's own accepted enqueue in that queue. Workers in other processes rely
+// on their adaptive idle polling.
+func (b *JobBackend) JobWakeup(key jobs.Key) <-chan struct{} {
+	if b == nil {
+		return nil
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.wake == nil {
+		b.wake = make(map[jobs.Key]chan struct{})
+	}
+	wake, ok := b.wake[key]
+	if !ok {
+		wake = make(chan struct{})
+		b.wake[key] = wake
+	}
+	return wake
+}
+func (b *JobBackend) signal(key jobs.Key) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if wake, ok := b.wake[key]; ok {
+		close(wake)
+		delete(b.wake, key)
+	}
+}
 
 type jobRequest struct {
 	RetryToken       jobs.RetryToken   `json:"retry_token,omitempty"`
@@ -69,6 +124,8 @@ type jobRequest struct {
 	WorkflowKind     jobs.WorkflowKind `json:"workflow_kind,omitempty"`
 	Steps            []jobRequest      `json:"steps,omitempty"`
 	Completion       string            `json:"completion"`
+	Catch            string            `json:"catch,omitempty"`
+	Finally          string            `json:"finally,omitempty"`
 	Fingerprint      string            `json:"fingerprint,omitempty"`
 	GroupBytes       int64             `json:"group_bytes,omitempty"`
 	Op               string            `json:"op"`
@@ -86,22 +143,25 @@ type jobRequest struct {
 	State            jobs.State        `json:"state,omitempty"`
 	Reason           jobs.Reason       `json:"reason"`
 	Delay            int64             `json:"delay"`
+	Refund           bool              `json:"refund,omitempty"`
+	UniqueRelease    bool              `json:"unique_release,omitempty"`
 }
 type jobStoredRecord struct {
-	Retries   uint32          `json:"retries"`
-	LastRetry jobs.RetryToken `json:"last_retry"`
-	Workflow  jobs.WorkflowID `json:"workflow,omitempty"`
-	Position  uint32          `json:"position"`
-	ID        string          `json:"id"`
-	Envelope  string          `json:"envelope"`
-	State     jobs.State      `json:"state"`
-	Attempts  uint32          `json:"attempts"`
-	Available int64           `json:"available"`
-	Expiry    int64           `json:"expiry"`
-	Created   int64           `json:"created"`
-	Finished  int64           `json:"finished"`
-	Cancelled bool            `json:"cancelled"`
-	History   []struct {
+	Retries    uint32          `json:"retries"`
+	LastRetry  jobs.RetryToken `json:"last_retry"`
+	Workflow   jobs.WorkflowID `json:"workflow,omitempty"`
+	Position   uint32          `json:"position"`
+	ID         string          `json:"id"`
+	Envelope   string          `json:"envelope"`
+	State      jobs.State      `json:"state"`
+	Attempts   uint32          `json:"attempts"`
+	Exceptions uint32          `json:"exceptions"`
+	Available  int64           `json:"available"`
+	Expiry     int64           `json:"expiry"`
+	Created    int64           `json:"created"`
+	Finished   int64           `json:"finished"`
+	Cancelled  bool            `json:"cancelled"`
+	History    []struct {
 		Retry   uint32      `json:"retry"`
 		State   jobs.State  `json:"state"`
 		At      int64       `json:"at"`
@@ -118,11 +178,28 @@ type jobReply struct {
 	Cancelled bool              `json:"cancelled"`
 	Attempt   uint32            `json:"attempt"`
 	Record    *jobStoredRecord  `json:"record"`
+	Stats     *jobs.QueueStats  `json:"stats"`
+	Workflow  *workflowStatus   `json:"workflow"`
+}
+
+// workflowStatus is the script's status reply; finished is Unix milliseconds.
+type workflowStatus struct {
+	ID         string            `json:"id"`
+	Kind       jobs.WorkflowKind `json:"kind"`
+	Total      int               `json:"total"`
+	Pending    int               `json:"pending"`
+	Processed  int               `json:"processed"`
+	Succeeded  int               `json:"succeeded"`
+	FailedJobs int               `json:"failed_jobs"`
+	Cancelled  int               `json:"cancelled"`
+	Failed     bool              `json:"failed"`
+	Cancelling bool              `json:"cancelling"`
+	Finished   int64             `json:"finished"`
 }
 
 func jobKeys(key jobs.Key) []string {
 	base := key.String()
-	return []string{base + ":records", base + ":ready", base + ":leases", base + ":finished", base + ":metadata", base + ":unique", base + ":workflows", base + ":workflow_finished", base + ":index"}
+	return []string{base + ":records", base + ":ready", base + ":leases", base + ":finished", base + ":metadata", base + ":unique", base + ":workflows", base + ":workflow_finished", base + ":index", base + ":envelopes"}
 }
 func (b *JobBackend) command(ctx context.Context, key jobs.Key, request jobRequest) (jobReply, error) {
 	if err := jobs.ValidateOperation(ctx, key); err != nil {
@@ -136,7 +213,7 @@ func (b *JobBackend) command(ctx context.Context, key jobs.Key, request jobReque
 		return jobReply{}, err
 	}
 	raw, err := b.client.execute(ctx, func(ctx context.Context, c *driver.Client) (any, error) {
-		return c.Eval(ctx, jobsScript, jobKeys(key), b.identity, b.limits, string(encoded)).Result()
+		return evalScript(ctx, c, jobsScript, jobKeys(key), b.identity, b.limits, string(encoded), b.legacy).Result()
 	})
 	if err != nil {
 		return jobReply{}, err
@@ -153,7 +230,7 @@ func (b *JobBackend) command(ctx context.Context, key jobs.Key, request jobReque
 	case -2:
 		return jobReply{}, fault.New(fault.Invalid, "Redis job state or operation is invalid")
 	case -3:
-		return jobReply{}, fault.New(fault.Conflict, "Redis job identity, capacity or queue policy conflicts")
+		return jobReply{}, fault.New(fault.Conflict, "Redis job identity already belongs to a different envelope")
 	case -4:
 		return jobReply{}, jobs.ErrOwnershipLost
 	case -5:
@@ -162,6 +239,12 @@ func (b *JobBackend) command(ctx context.Context, key jobs.Key, request jobReque
 		return jobReply{}, jobs.ErrNotUnique
 	case -7:
 		return jobReply{}, jobs.ErrNotRetryable
+	case -8:
+		return jobReply{}, jobs.ErrQueueFull
+	case -9:
+		return jobReply{}, jobs.ErrQueuePolicy
+	case -10:
+		return jobReply{}, jobs.ErrLegacyLayout
 	case 1:
 	default:
 		return jobReply{}, fault.New(fault.Internal, "invalid Redis job status")
@@ -188,7 +271,10 @@ func (b *JobBackend) JobEnqueue(ctx context.Context, key jobs.Key, envelope jobs
 		return false, err
 	}
 	available := jobAvailableAt(envelope)
-	reply, err := b.command(ctx, key, jobRequest{Op: "enqueue", Unique: envelope.Uniqueness().Digest, UniqueFor: envelope.Uniqueness().For.Milliseconds(), ID: envelope.ID().String(), Envelope: string(data), Name: envelope.Name(), Version: envelope.Version(), Maximum: envelope.Policy().Attempts, Available: available, Bytes: int64(len(data) + len(envelope.PayloadJSON()) + 8*len(envelope.Policy().Backoff))})
+	reply, err := b.command(ctx, key, jobRequest{Op: "enqueue", Unique: envelope.Uniqueness().Digest, UniqueFor: envelope.Uniqueness().For.Milliseconds(), UniqueRelease: envelope.Uniqueness().UntilProcessing, ID: envelope.ID().String(), Envelope: string(data), Name: envelope.Name(), Version: envelope.Version(), Maximum: envelope.Policy().Attempts, Available: available, Bytes: int64(len(data) + len(envelope.PayloadJSON()) + 8*len(envelope.Policy().Backoff))})
+	if err == nil && reply.Inserted {
+		b.signal(key)
+	}
 	return reply.Inserted, err
 }
 
@@ -224,7 +310,7 @@ func (b *JobBackend) JobReserve(ctx context.Context, key jobs.Key, owner lease.O
 	if err != nil {
 		return value.Optional[jobs.Reservation]{}, err
 	}
-	return value.Set(jobs.Reservation{Retries: record.Retries, Envelope: record.Envelope, Ownership: proof, Attempts: record.Attempts, ExpiresAt: record.LeaseExpiresAt}), nil
+	return value.Set(jobs.Reservation{Retries: record.Retries, Envelope: record.Envelope, Ownership: proof, Attempts: record.Attempts, Exceptions: record.Exceptions, ExpiresAt: record.LeaseExpiresAt}), nil
 }
 func proofRequest(op string, proof jobs.Ownership) jobRequest {
 	return jobRequest{Op: op, ID: proof.ID().String(), Owner: hex.EncodeToString(proof.Owner().Bytes())}
@@ -258,6 +344,7 @@ func (b *JobBackend) JobFinish(ctx context.Context, key jobs.Key, proof jobs.Own
 	request := proofRequest("finish", proof)
 	request.State = result.State
 	request.Reason = result.Reason
+	request.Refund = result.Refund
 	if result.Delay > 0 {
 		request.Delay = ceilMilliseconds(result.Delay)
 	}
@@ -296,7 +383,7 @@ func (r *jobStoredRecord) decode(key jobs.Key) (jobs.Record, error) {
 	if envelope.ID().String() != r.ID {
 		return jobs.Record{}, fault.New(fault.Invalid, "stored Redis job identity differs")
 	}
-	result := jobs.Record{Retries: r.Retries, LastRetry: r.LastRetry, Workflow: r.Workflow, Position: r.Position, Envelope: envelope, State: r.State, Attempts: r.Attempts, AvailableAt: time.UnixMilli(r.Available).UTC(), CreatedAt: time.UnixMilli(r.Created).UTC(), CancellationRequested: r.Cancelled}
+	result := jobs.Record{Retries: r.Retries, LastRetry: r.LastRetry, Workflow: r.Workflow, Position: r.Position, Envelope: envelope, State: r.State, Attempts: r.Attempts, Exceptions: r.Exceptions, AvailableAt: time.UnixMilli(r.Available).UTC(), CreatedAt: time.UnixMilli(r.Created).UTC(), CancellationRequested: r.Cancelled}
 	if r.Expiry != 0 {
 		result.LeaseExpiresAt = time.UnixMilli(r.Expiry).UTC()
 	}
@@ -322,10 +409,15 @@ func (b *JobBackend) JobWorkflow(ctx context.Context, key jobs.Key, workflow job
 	}
 	digest := sha256.Sum256(data)
 	request := jobRequest{Op: "workflow", ID: workflow.ID().String(), WorkflowKind: workflow.Kind(), Fingerprint: hex.EncodeToString(digest[:])}
-	members := workflow.Steps()
+	members := workflow.Members()
 	if completion, ok := workflow.Completion().Get(); ok {
-		members = append(members, completion)
 		request.Completion = completion.ID().String()
+	}
+	if catch, ok := workflow.Catch().Get(); ok {
+		request.Catch = catch.ID().String()
+	}
+	if finally, ok := workflow.Finally().Get(); ok {
+		request.Finally = finally.ID().String()
 	}
 	request.GroupBytes = int64(256 + len(members)*32)
 	for _, envelope := range members {
@@ -337,8 +429,43 @@ func (b *JobBackend) JobWorkflow(ctx context.Context, key jobs.Key, workflow job
 		request.Steps = append(request.Steps, jobRequest{ID: envelope.ID().String(), Envelope: string(data), Name: envelope.Name(), Version: envelope.Version(), Maximum: envelope.Policy().Attempts, Available: available, Bytes: int64(len(data) + len(envelope.PayloadJSON()) + 8*len(envelope.Policy().Backoff))})
 	}
 	reply, err := b.command(ctx, key, request)
+	if err == nil && reply.Inserted {
+		b.signal(key)
+	}
 	return reply.Inserted, err
 }
+
+// JobWorkflowStatus reports one workflow's progress without payloads.
+func (b *JobBackend) JobWorkflowStatus(ctx context.Context, key jobs.Key, id jobs.WorkflowID) (value.Optional[jobs.WorkflowStatus], error) {
+	if id.IsZero() {
+		return value.Optional[jobs.WorkflowStatus]{}, fault.New(fault.Invalid, "workflow status requires an identity")
+	}
+	reply, err := b.command(ctx, key, jobRequest{Op: "workflow_status", ID: id.String()})
+	if err != nil || reply.Workflow == nil {
+		return value.Optional[jobs.WorkflowStatus]{}, err
+	}
+	w := reply.Workflow
+	if w.ID != id.String() || w.Total != w.Pending+w.Processed || w.Processed != w.Succeeded+w.FailedJobs+w.Cancelled {
+		return value.Optional[jobs.WorkflowStatus]{}, fault.New(fault.Invalid, "invalid Redis workflow status")
+	}
+	status := jobs.WorkflowStatus{ID: id, Kind: w.Kind, Total: w.Total, Pending: w.Pending, Processed: w.Processed, Succeeded: w.Succeeded, FailedJobs: w.FailedJobs, Cancelled: w.Cancelled, Failed: w.Failed, Cancelling: w.Cancelling}
+	if w.Finished > 0 {
+		status.FinishedAt = time.UnixMilli(w.Finished).UTC()
+	}
+	return value.Set(status), nil
+}
+
+var _ jobs.WorkflowStatusBackend = (*JobBackend)(nil)
+var _ jobs.LayoutMigrator = (*JobBackend)(nil)
+
+// JobMigrateLayout moves a layout-1 queue to layout 2 in one atomic script.
+// Records keep their IDs, state and history; embedded envelopes move on each
+// record's next write. It is idempotent.
+func (b *JobBackend) JobMigrateLayout(ctx context.Context, key jobs.Key) (bool, error) {
+	reply, err := b.command(ctx, key, jobRequest{Op: "migrate_layout"})
+	return reply.Changed, err
+}
+
 func (b *JobBackend) JobCancelWorkflow(ctx context.Context, key jobs.Key, id jobs.WorkflowID) (bool, error) {
 	if id.IsZero() {
 		return false, fault.New(fault.Invalid, "workflow cancellation requires an identity")
@@ -380,3 +507,25 @@ func (b *JobBackend) JobList(ctx context.Context, key jobs.Key, options jobs.Lis
 // DurableAcceptance describes Redis acknowledgement under the deployment's
 // persistence/failover policy; it is not an fsync or replication guarantee.
 func (*JobBackend) DurableAcceptance() bool { return true }
+
+// JobStats reports queue depth from indexes and counters, without payloads.
+func (b *JobBackend) JobStats(ctx context.Context, key jobs.Key) (jobs.QueueStats, error) {
+	reply, err := b.command(ctx, key, jobRequest{Op: "stats"})
+	if err != nil {
+		return jobs.QueueStats{}, err
+	}
+	if reply.Stats == nil {
+		return jobs.QueueStats{}, fault.New(fault.Internal, "invalid Redis job statistics")
+	}
+	return *reply.Stats, nil
+}
+
+// JobForget removes one retained terminal independent record, its envelope and
+// its deduplication identity. Live and workflow records are never removed.
+func (b *JobBackend) JobForget(ctx context.Context, key jobs.Key, target jobs.Target) (bool, error) {
+	if err := target.Validate(); err != nil {
+		return false, err
+	}
+	reply, err := b.command(ctx, key, jobRequest{Op: "forget", ID: target.ID.String(), Name: target.Name, Version: target.Version})
+	return reply.Changed, err
+}

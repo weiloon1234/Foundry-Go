@@ -19,6 +19,9 @@ type Throttle[K any] struct {
 
 func (t Throttle[K]) Name() Name     { return (Declaration[K]{t.definition}).Name() }
 func (t Throttle[K]) Policy() Policy { return (Declaration[K]{t.definition}).Policy() }
+
+// Limits returns the client-aware limits when this throttle came from DefineLogin.
+func (t Throttle[K]) Limits() (Limits, bool) { return (Declaration[K]{t.definition}).Limits() }
 func (t Throttle[K]) Validate() error {
 	if t.store == nil || t.store.gate == nil {
 		return fault.New(fault.Invalid, "lockout throttle is not bound")
@@ -48,6 +51,9 @@ func (t Throttle[K]) Run(ctx context.Context, key K, verify func(context.Context
 	}
 	if verify == nil {
 		return false, fault.New(fault.Invalid, "lockout requires a verifier")
+	}
+	if t.definition.limits != nil {
+		return t.runClient(ctx, key, verify)
 	}
 	verified := false
 	err := t.store.gate.Execute(ctx, func(op context.Context) error {
@@ -101,7 +107,7 @@ func (t Throttle[K]) Run(ctx context.Context, key K, verify func(context.Context
 		}
 		if decision.Triggered && t.observer != nil {
 			if err := callback.Isolated("lockout observer", func() error { return t.observer(op, Notice[K]{key: key, retryAfter: decision.RetryAfter}) }); err != nil {
-				return &Rejection{retryAfter: decision.RetryAfter, cause: err}
+				return &Rejection{retryAfter: decision.RetryAfter, cause: err, triggered: true}
 			}
 		}
 		return decisionError(decision)
@@ -115,9 +121,14 @@ func (t Throttle[K]) Run(ctx context.Context, key K, verify func(context.Context
 // Reset is an explicit administrative/account-recovery operation. Authorize its
 // caller. It invalidates outstanding attempts; ordinary login success uses the
 // revision check in Run instead. It does not alter request-rate-limit quotas.
+// A DefineLogin throttle clears the account ceiling and the pair for the
+// current request's client; other clients' pair windows expire on their own.
 func (t Throttle[K]) Reset(ctx context.Context, key K) (bool, error) {
 	if err := t.Validate(); err != nil {
 		return false, err
+	}
+	if t.definition.limits != nil {
+		return t.resetClient(ctx, key)
 	}
 	changed := false
 	err := t.store.gate.Execute(ctx, func(op context.Context) error {

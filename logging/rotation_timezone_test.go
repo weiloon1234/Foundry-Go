@@ -29,7 +29,7 @@ func TestDailyRotationUsesConfiguredMidnightAcrossDST(t *testing.T) {
 				t.Fatal(err)
 			}
 			path := filepath.Join(t.TempDir(), "app.log")
-			f, err := openRotatingFile(path, RotationConfig{}, start, zone)
+			f, err := openRotatingFile(path, RotationConfig{}, start, zone, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -67,7 +67,7 @@ func TestDailyRotationRestartUsesLocalModificationDate(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := previous.Add(time.Minute)
-	f, err := openRotatingFile(path, RotationConfig{}, now, zone)
+	f, err := openRotatingFile(path, RotationConfig{}, now, zone, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"foundry.test/consumer/httpdto"
+	"foundry.test/consumer/httpendpoints"
 	"foundry.test/consumer/httpkernel"
 	"foundry.test/consumer/httpquery"
 	"foundry.test/consumer/httpvalidation"
@@ -11,6 +13,7 @@ import (
 	"foundry.test/consumer/models"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/model"
+	"github.com/weiloon1234/Foundry-Go/validation"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
@@ -101,5 +104,69 @@ func TestAsyncRulesUseRequestLifecycle(t *testing.T) {
 	}
 	if router.Endpoints()[0].Validation == nil {
 		t.Fatal("async rules lost metadata")
+	}
+}
+
+// ownedAddresses is an application lookup scoped at check time by the route key.
+type ownedAddresses struct {
+	current validation.Slot[model.ID[models.User]]
+	owners  map[string]model.ID[models.User]
+}
+
+func (*ownedAddresses) Validate() error { return nil }
+func (a *ownedAddresses) Exists(ctx context.Context, email string) (bool, error) {
+	ignored, err := a.current.Value(ctx)
+	if err != nil {
+		return false, err
+	}
+	owner, found := a.owners[email]
+	return found && owner != ignored, nil
+}
+
+func TestSlotProvidesRouteKeyToOneDeclaredRule(t *testing.T) {
+	first, err := model.NewID[models.User]()
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := model.NewID[models.User]()
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := validation.NewSlot[model.ID[models.User]]()
+	domain := &service{}
+	router, err := httpvalidation.OwnEmailRouter(domain, current, &ownedAddresses{current: current, owners: map[string]model.ID[models.User]{"first@example.test": first}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		user   model.ID[models.User]
+		status int
+	}{{first, 200}, {second, 422}} {
+		location, err := httpvalidation.Update.URL(t.Context(), httpkernel.UserPath{User: tc.user}, httpquery.NearbyInput{Latitude: 1.5})
+		if err != nil {
+			t.Fatal(err)
+		}
+		request := httptest.NewRequest("PATCH", location, strings.NewReader(`{"email":"first@example.test"}`)).WithContext(t.Context())
+		request.Header.Set("Content-Type", "application/json")
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != tc.status {
+			t.Fatalf("status %d want %d: %s", response.Code, tc.status, response.Body.String())
+		}
+		if tc.status == 422 {
+			var failure foundryhttp.ErrorResponse
+			if err := json.Unmarshal(response.Body.Bytes(), &failure); err != nil {
+				t.Fatal(err)
+			}
+			if len(failure.Issues) != 1 || failure.Issues[0].Path != "/body/email" || failure.Issues[0].Code != "foundry.unique" {
+				t.Fatal(failure.Issues)
+			}
+		}
+	}
+	// A slot reader without its provider fails registration, not each request.
+	fields := httpdto.UpdateUserValidationFields()
+	missing := httpendpoints.Update.WithBodyValidation(fields.Email.Rules(validation.Optional(validation.Requires(current, validation.Unique[string](&ownedAddresses{current: current})))))
+	if _, err := foundryhttp.NewRouter(missing.Handle(domain.Update)); err == nil {
+		t.Fatal("slot reader registered without its provider")
 	}
 }

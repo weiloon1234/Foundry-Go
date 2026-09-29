@@ -2,7 +2,9 @@ package observability
 
 import (
 	"context"
+	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -16,63 +18,109 @@ func (r *Recorder) Run(ctx context.Context) error {
 	if r == nil || r.done == nil || ctx == nil {
 		return fault.New(fault.Invalid, "reporters require a recorder and context")
 	}
-	r.mu.Lock()
-	if r.running || r.closing {
-		r.mu.Unlock()
+	r.life.Lock()
+	if r.running || r.closing() {
+		r.life.Unlock()
 		return fault.New(fault.Closed, "reporter runtime already started or closed")
 	}
 	if err := ctx.Err(); err != nil {
-		r.mu.Unlock()
+		r.life.Unlock()
 		return err
 	}
 	r.running = true
 	close(r.ready)
-	r.mu.Unlock()
+	r.life.Unlock()
 	stop := context.AfterFunc(ctx, r.seal)
 	defer stop()
 	var workers sync.WaitGroup
-	startExportWorkers(&workers, r, r.queue, r.config.ReporterConcurrency, r.config.ReporterTimeout, r.reporters, &r.reporterFailures)
-	startExportWorkers(&workers, r, r.traces, r.config.TraceConcurrency, r.config.TraceTimeout, r.config.TraceExporters, &r.traceExportFailures)
+	startReportWorkers(&workers, r.queue, r.config.ReporterConcurrency, r.config.ReporterTimeout, r.reporters, &r.reporterFailures)
+	startTraceWorkers(&workers, r.traces, r.config, &r.traceFailures)
 	workers.Wait()
-	r.mu.Lock()
+	r.life.Lock()
 	close(r.done)
-	r.mu.Unlock()
+	r.life.Unlock()
 	return nil
 }
 
-func startExportWorkers[T any, F ~func(context.Context, T) error](workers *sync.WaitGroup, recorder *Recorder, queue <-chan T, concurrency int, timeout time.Duration, exporters []F, failures *uint64) {
-	// A no-exporter queue still has one consumer so shutdown always waits for
-	// admission to close it. Such queues never receive data from recordLocked.
-	if len(exporters) == 0 {
+// exportOne runs one callback with its own isolation and deadline. A callback
+// that fails or ignores its deadline counts one failure.
+func exportOne(timeout time.Duration, failures *atomic.Uint64, export func(context.Context) error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	err := callback.Isolated("export observation", func() error { return export(ctx) })
+	failed := err != nil || ctx.Err() != nil
+	cancel()
+	if failed {
+		increment(failures)
+	}
+}
+
+func startReportWorkers(workers *sync.WaitGroup, queue <-chan ErrorReport, concurrency int, timeout time.Duration, reporters []Reporter, failures *atomic.Uint64) {
+	// A no-reporter queue still has one consumer so shutdown always waits for
+	// admission to close it. Such queues never receive data from record.
+	if len(reporters) == 0 {
 		concurrency = 1
 	}
 	for range concurrency {
 		workers.Go(func() {
-			for item := range queue {
-				for _, exporter := range exporters {
-					ctx, cancel := context.WithTimeout(context.Background(), timeout)
-					err := callback.Isolated("export observation", func() error { return exporter(ctx, item) })
-					failed := err != nil || ctx.Err() != nil
-					cancel()
-					if failed {
-						recorder.mu.Lock()
-						increment(failures)
-						recorder.mu.Unlock()
-					}
+			for report := range queue {
+				for _, reporter := range reporters {
+					exportOne(timeout, failures, func(ctx context.Context) error { return reporter(ctx, report) })
 				}
 			}
 		})
 	}
 }
 
-func (r *Recorder) finishAdmissionLocked() {
-	if !r.closing || r.active != 0 || r.queueClosed {
-		return
+// Trace workers never wait to fill a batch: they take one queued entry, then
+// only entries that are already queued, up to the configured batch size.
+func startTraceWorkers(workers *sync.WaitGroup, queue <-chan Entry, config Config, failures *atomic.Uint64) {
+	concurrency := config.TraceConcurrency
+	if len(config.TraceExporters)+len(config.TraceBatchExporters) == 0 {
+		concurrency = 1
 	}
-	r.queueClosed = true
-	close(r.queue)
-	close(r.traces)
-	if !r.running {
+	size := config.batchSize()
+	for range concurrency {
+		workers.Go(func() {
+			batch := make([]Entry, 0, size)
+			for first := range queue {
+				batch = append(batch[:0], first)
+			fill:
+				for len(batch) < size {
+					select {
+					case entry, open := <-queue:
+						if !open {
+							break fill
+						}
+						batch = append(batch, entry)
+					default:
+						break fill
+					}
+				}
+				for _, entry := range batch {
+					for _, exporter := range config.TraceExporters {
+						exportOne(config.TraceTimeout, failures, func(ctx context.Context) error { return exporter(ctx, entry) })
+					}
+				}
+				for _, exporter := range config.TraceBatchExporters {
+					owned := slices.Clone(batch)
+					exportOne(config.TraceTimeout, failures, func(ctx context.Context) error { return exporter(ctx, owned) })
+				}
+			}
+		})
+	}
+}
+
+// finishAdmission runs once, after sealing and after the last admitted span
+// released. No span can enqueue afterwards, so closing the queues is safe.
+func (r *Recorder) finishAdmission() {
+	r.finished.Do(func() {
+		close(r.queue)
+		close(r.traces)
+		r.life.Lock()
+		defer r.life.Unlock()
+		if r.running {
+			return
+		}
 		// No reporter worker was ever started. Preserve honest drop accounting
 		// instead of running user callbacks unexpectedly from Close.
 		for range r.queue {
@@ -83,17 +131,23 @@ func (r *Recorder) finishAdmissionLocked() {
 		}
 		close(r.ready)
 		close(r.done)
-	}
+	})
 }
 
 func (r *Recorder) seal() {
 	r.gate.Drain()
-	r.mu.Lock()
-	if !r.closing {
-		r.closing = true
-		r.finishAdmissionLocked()
+	for {
+		current := r.state.Load()
+		if current&closingBit != 0 {
+			return
+		}
+		if r.state.CompareAndSwap(current, current|closingBit) {
+			if current == 0 {
+				r.finishAdmission()
+			}
+			return
+		}
 	}
-	r.mu.Unlock()
 }
 
 // Close rejects new spans immediately. A deadline bounds the caller's wait;
@@ -132,9 +186,9 @@ func (r *Recorder) Ready(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if !r.running || r.closing {
+	r.life.Lock()
+	defer r.life.Unlock()
+	if !r.running || r.closing() {
 		return fault.New(fault.Closed, "reporter runtime is closed")
 	}
 	return nil

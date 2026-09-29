@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/secret"
@@ -12,6 +13,7 @@ import (
 func TestDummyCheckUsesSharedHashCapacity(t *testing.T) {
 	config := DefaultConfig()
 	config.MaxConcurrent = 1
+	config.Timeout = 50 * time.Millisecond // Also bounds the queued admission wait.
 	h, err := New(config)
 	if err != nil {
 		t.Fatal(err)
@@ -31,7 +33,7 @@ func TestDummyCheckUsesSharedHashCapacity(t *testing.T) {
 	if gateErr := <-done; gateErr != nil {
 		t.Fatal(gateErr)
 	}
-	if !errors.Is(err, fault.Conflict) {
+	if !errors.Is(err, fault.Overloaded) {
 		t.Fatal("dummy work bypassed hasher admission", err)
 	}
 	if err := h.DummyCheck(t.Context(), plain); err != nil {

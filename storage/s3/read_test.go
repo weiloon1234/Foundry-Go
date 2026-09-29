@@ -135,16 +135,14 @@ func TestSDKDistinguishesAccessMissingBucketAndAmbiguousDelete(t *testing.T) {
 		})
 	}
 }
-func TestSDKPaginationDecodesOnceAndPinsHeads(t *testing.T) {
-	var calls atomic.Int32
+func TestSDKPaginationDecodesOnceWithoutPerObjectRequests(t *testing.T) {
+	var calls, heads atomic.Int32
 	prefix, _ := storage.ParsePrefix("page/")
 	disk, _ := wireDisk(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		if r.Method == "HEAD" {
-			if r.Header.Get("If-Match") != `"one"` {
-				t.Error("list HEAD not pinned")
-			}
-			wireHeaders(w, 1, `"one"`)
+		if r.Method != "GET" {
+			heads.Add(1)
+			wireError(w, 400, "UnexpectedFixtureOperation")
 			return
 		}
 		if r.URL.Query().Get("prefix") != "isolated/page/" || r.URL.Query().Get("max-keys") != "1" || r.URL.Query().Get("encoding-type") != "url" {
@@ -168,6 +166,9 @@ func TestSDKPaginationDecodesOnceAndPinsHeads(t *testing.T) {
 	second, err := disk.List(t.Context(), storage.ListOptions{Prefix: prefix, Limit: 1, Cursor: first.Next})
 	if err != nil || len(second.Objects) != 1 || second.Objects[0].Key.String() != "page/b +.txt" || !second.Next.IsZero() {
 		t.Fatal("continuation changed", err)
+	}
+	if heads.Load() != 0 || calls.Load() != 2 {
+		t.Fatal("listing sent per-object requests", heads.Load(), calls.Load())
 	}
 }
 

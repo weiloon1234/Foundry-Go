@@ -56,5 +56,5 @@ type RedisSettings struct {
 }
 
 func DefaultRedisSettings() RedisSettings {
-	return RedisSettings{Default: "default", MaxConnections: 256}
+	return RedisSettings{Default: "default", MaxConnections: 1024}
 }

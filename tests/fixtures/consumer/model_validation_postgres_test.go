@@ -206,3 +206,86 @@ func TestModelValidationRejectsInvalidSourcesWithoutIO(t *testing.T) {
 		t.Fatal("invalid declarations performed I/O")
 	}
 }
+
+// Check-time scopes and batched element lookups run against real PostgreSQL:
+// one declaration serves several requests and valid lists use one statement.
+func TestPostgresCheckTimeScopesAndElementLookups(t *testing.T) {
+	db := pgtest.Open(t)
+	namespace := pgtest.Namespace(t, db)
+	var users [3]model.ID[models.User]
+	for i := range users {
+		id, err := model.NewID[models.User]()
+		if err != nil {
+			t.Fatal(err)
+		}
+		users[i] = id
+	}
+	err := db.Transaction(t.Context(), func(tx *database.Tx) error {
+		for _, sql := range []string{
+			`SET LOCAL search_path TO "` + namespace + `"`,
+			`CREATE TABLE users (id uuid PRIMARY KEY, email_address text UNIQUE NOT NULL, age bigint NOT NULL, nickname text, status text NOT NULL, level smallint NOT NULL, birthday date, introducer_id uuid)`,
+		} {
+			if _, err := tx.Exec(t.Context(), sql); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.Exec(t.Context(), `INSERT INTO users (id,email_address,age,status,level) VALUES ($1,'first@example.test',21,'active',1),($2,'second@example.test',22,'disabled',1),($3,'third@example.test',23,'active',1)`, users[0].String(), users[1].String(), users[2].String()); err != nil {
+			return err
+		}
+		executor := &readOnlyValidationExecutor{Executor: tx}
+		type update struct {
+			ID    model.ID[models.User]
+			Email string
+		}
+		current := validation.NewSlot[model.ID[models.User]]()
+		email := validation.DefineField("email", func(input update) string { return input.Email })
+		rename := validation.Provide(current, func(_ context.Context, input update) (model.ID[models.User], error) { return input.ID, nil },
+			email.Rules(modelvalidation.AvailableEmailExceptCurrent(executor, current)))
+		if err := rename.Validate(); err != nil {
+			return err
+		}
+		if err := rename.Check(t.Context(), update{ID: users[0], Email: "first@example.test"}, validation.DefaultLimits()); err != nil {
+			return err
+		}
+		var rejected *validation.Errors
+		if err := rename.Check(t.Context(), update{ID: users[1], Email: "first@example.test"}, validation.DefaultLimits()); !errors.As(err, &rejected) || rejected.Issues()[0].Path != "/email" || rejected.Issues()[0].Code != "foundry.unique" {
+			return fmt.Errorf("unique-ignoring rejection: %v", err)
+		}
+		if modelvalidation.AvailableEmailExceptCurrent(executor, current).Validate() == nil {
+			return errors.New("slot reader validated without a provider")
+		}
+
+		status := validation.NewSlot[models.Status]()
+		byStatus := validation.Provide(status, func(context.Context, model.ID[models.User]) (models.Status, error) { return models.StatusDisabled, nil },
+			modelvalidation.UserInStatus(executor, status))
+		if err := byStatus.Check(t.Context(), users[1], validation.DefaultLimits()); err != nil {
+			return err
+		}
+		if err := byStatus.Check(t.Context(), users[0], validation.DefaultLimits()); !errors.As(err, &rejected) {
+			return fmt.Errorf("scoped lookup accepted another status: %v", err)
+		}
+
+		assignments := modelvalidation.ActiveAssignees(executor)
+		before := executor.queries
+		valid := []modelvalidation.Assignment{{Assignee: users[0]}, {Assignee: users[2]}, {Assignee: users[0]}}
+		if err := assignments.Check(t.Context(), valid, validation.DefaultLimits()); err != nil || executor.queries != before+1 {
+			return fmt.Errorf("valid assignments used %d statements: %v", executor.queries-before, err)
+		}
+		invalid := []modelvalidation.Assignment{{Assignee: users[0]}, {Assignee: users[2]}, {Assignee: users[1]}, {Assignee: users[0]}}
+		if err := assignments.Check(t.Context(), invalid, validation.DefaultLimits()); !errors.As(err, &rejected) || len(rejected.Issues()) != 1 || rejected.Issues()[0].Path != "/2/assignee_id" {
+			return fmt.Errorf("element path rejection: %v", err)
+		}
+		emails := databasevalidation.UniqueAll(executor, models.QueryUsers(), models.UserFields().Email)
+		before = executor.queries
+		if err := emails.Check(t.Context(), []string{"new@example.test", "other@example.test"}, validation.DefaultLimits()); err != nil || executor.queries != before+1 {
+			return fmt.Errorf("unique list used %d statements: %v", executor.queries-before, err)
+		}
+		if err := emails.Check(t.Context(), []string{"new@example.test", "third@example.test"}, validation.DefaultLimits()); !errors.As(err, &rejected) || rejected.Issues()[0].Path != "/1" || rejected.Issues()[0].Code != "foundry.unique_all" {
+			return fmt.Errorf("unique list rejection: %v", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}

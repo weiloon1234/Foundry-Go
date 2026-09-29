@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -120,11 +121,50 @@ func TestAdmittedCompletionRetainsRequestCapacity(t *testing.T) {
 		handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/", nil))
 	}()
 	<-entered
+	// Capacity waits briefly in arrival order; a short request context bounds
+	// this wait so the held slot is observed as a 503.
+	waiting, stop := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer stop()
 	rejected := httptest.NewRecorder()
-	handler.ServeHTTP(rejected, httptest.NewRequest("GET", "/", nil))
+	handler.ServeHTTP(rejected, httptest.NewRequestWithContext(waiting, "GET", "/", nil))
 	if rejected.Code != 503 {
 		t.Error("completion released admission early", rejected.Code)
 	}
 	close(release)
 	<-done
+}
+
+func TestCapacityWaitAdmitsQueuedRequestWhenASlotFrees(t *testing.T) {
+	owner := newHandlerLifetime()
+	config := DefaultServerConfig()
+	config.MaxConcurrentRequests = 1
+	entered, release := make(chan struct{}), make(chan struct{})
+	var first atomic.Bool
+	handler := owner.wrap(stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		if first.CompareAndSwap(false, true) {
+			close(entered)
+			<-release
+		}
+		w.WriteHeader(204)
+	}), slog.New(slog.NewTextHandler(io.Discard, nil)), config)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/", nil))
+	}()
+	<-entered
+	go func() { time.Sleep(20 * time.Millisecond); close(release) }()
+	queued := httptest.NewRecorder()
+	handler.ServeHTTP(queued, httptest.NewRequest("GET", "/", nil))
+	<-done
+	if queued.Code != 204 {
+		t.Fatal("queued request was not admitted after the slot freed", queued.Code)
+	}
+	owner.seal()
+	<-owner.done
+	sealed := httptest.NewRecorder()
+	handler.ServeHTTP(sealed, httptest.NewRequest("GET", "/", nil))
+	if sealed.Code != 503 {
+		t.Fatal("sealed kernel admitted a request", sealed.Code)
+	}
 }

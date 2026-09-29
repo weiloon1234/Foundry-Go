@@ -94,10 +94,16 @@ func TestTraceStateBoundsAndRootOwnership(t *testing.T) {
 			t.Fatal("valid tracestate rejected", err)
 		}
 	}
+	// Cancellation belongs to the operation; a cancelled context still receives
+	// trace identity so its observation is recorded rather than dropped.
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, _, err := tracing.Start(ctx, true); !errors.Is(err, context.Canceled) {
-		t.Fatal("cancelled trace start accepted", err)
+	started, child, err := tracing.Start(ctx, true)
+	if err != nil || child.Validate() != nil || tracing.FromContext(started) != child || !errors.Is(started.Err(), context.Canceled) {
+		t.Fatal("cancelled trace start lost identity or cancellation", err)
+	}
+	if _, _, err := tracing.StartSampled(t.Context(), nil); !errors.Is(err, fault.Invalid) {
+		t.Fatal("nil sampler accepted", err)
 	}
 	if _, _, err := tracing.Start(nil, false); !errors.Is(err, fault.Invalid) {
 		t.Fatal("nil trace start accepted", err)
@@ -123,4 +129,38 @@ func FuzzTraceContext(f *testing.F) {
 			t.Fatal("normalized trace was not stable", err)
 		}
 	})
+}
+
+func TestRatioSamplerIsDeterministicByTrace(t *testing.T) {
+	for _, invalid := range []float64{-0.1, 1.5} {
+		if _, err := tracing.RatioSampler(invalid); !errors.Is(err, fault.Invalid) {
+			t.Fatal("invalid ratio accepted", invalid)
+		}
+	}
+	never, _ := tracing.RatioSampler(0)
+	always, _ := tracing.RatioSampler(1)
+	half, err := tracing.RatioSampler(0.5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sampled := 0
+	for range 2000 {
+		ctx, root, err := tracing.StartSampled(t.Context(), half)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, child, err := tracing.StartSampled(ctx, half)
+		if err != nil || child.TraceID() != root.TraceID() || child.Sampled() != root.Sampled() {
+			t.Fatal("spans of one trace disagreed on sampling", err)
+		}
+		if never(root.TraceID()) || !always(root.TraceID()) {
+			t.Fatal("boundary ratios are not constant")
+		}
+		if root.Sampled() {
+			sampled++
+		}
+	}
+	if sampled < 800 || sampled > 1200 {
+		t.Fatal("ratio sampler deviates from its fraction", sampled)
+	}
 }

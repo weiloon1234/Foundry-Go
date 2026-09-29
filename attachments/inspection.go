@@ -23,7 +23,7 @@ func (m *Manager) Inspect(ctx context.Context, id OperationID) (ReconcileResult,
 		return ReconcileResult{}, invalid()
 	}
 	var result ReconcileResult
-	err := m.calls.Run(ctx, "attachment intent inspection", func(ctx context.Context) error {
+	err := m.reads.Run(ctx, "attachment intent inspection", func(ctx context.Context) error {
 		return m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 			row, err := store.QueryFoundryAttachments().RequireFind(ctx, tx, fileID(id))
 			if err != nil {
@@ -97,7 +97,7 @@ func (m *Manager) InspectStorage(ctx context.Context, options StorageInspection)
 		return StorageOrphanPage{}, invalid()
 	}
 	var result StorageOrphanPage
-	err = m.calls.Run(ctx, "attachment storage inspection", func(ctx context.Context) error {
+	err = m.reads.Run(ctx, "attachment storage inspection", func(ctx context.Context) error {
 		disk, err := options.Disk.Resolve(m.disks)
 		if err != nil {
 			return err

@@ -5,11 +5,9 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth/token"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/tokenstore"
 	"github.com/weiloon1234/Foundry-Go/model"
-	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
 func (b *Backend) RevokeID(ctx context.Context, address token.Address, identity model.Identity, id model.ID[token.Record]) (bool, error) {
@@ -48,61 +46,55 @@ func (b *Backend) RevokeID(ctx context.Context, address token.Address, identity 
 	}
 	return removed, nil
 }
+
+// List reads the subject's live families with their current generation in one
+// statement without locking the subject, so listing never blocks issuance,
+// refresh or request authentication.
 func (b *Backend) List(ctx context.Context, address token.Address, identity model.Identity, limit int) ([]token.Record, error) {
-	if _, err := address.SubjectKey(identity); err != nil {
+	key, err := address.SubjectKey(identity)
+	if err != nil {
 		return nil, err
 	}
 	if limit < 1 || limit > token.MaxTokens {
 		return nil, fault.New(fault.Invalid, "invalid token listing limit")
 	}
-	var result []token.Record
-	err := b.within(ctx, func(tx *database.Tx) error {
-		subject, present, err := lockSubject(ctx, tx, address, identity, false)
-		if err != nil || !present {
-			return err
-		}
-		now, err := b.now()
-		if err != nil {
-			return err
-		}
-		rows, err := subjectFamilies(ctx, tx, subject)
-		if err != nil {
-			return err
-		}
-		for _, family := range rows {
-			current, err := currentRecord(ctx, tx, address, subject, family)
-			if err != nil {
-				return err
-			}
-			if current.Live(now) {
-				if len(result) >= limit {
-					return fault.New(fault.Invalid, "live token listing exceeds requested limit")
-				}
-				result = append(result, current)
-			}
-		}
-		return nil
-	})
+	if b == nil || b.db == nil || ctx == nil {
+		return nil, fault.New(fault.Invalid, "token PostgreSQL operation requires a backend and context")
+	}
+	scope, err := address.Key()
 	if err != nil {
 		return nil, err
+	}
+	now, err := b.now()
+	if err != nil {
+		return nil, err
+	}
+	rows, err := b.readTokens(ctx, b.db, token.MaxTokens, `WHERE f.scope = $1 AND f.subject_key = $2 AND g.generation = f.generation AND NOT `+dead("$3")+` ORDER BY f.created_at, f.id LIMIT $4`, scope, key, now, token.MaxTokens+1)
+	if err != nil {
+		return nil, err
+	}
+	var result []token.Record
+	for _, row := range rows {
+		current, err := record(address, row.subject, row.family, row.entry)
+		if err != nil {
+			return nil, err
+		}
+		if current.Live(now) {
+			if len(result) >= limit {
+				return nil, fault.New(fault.Invalid, "live token listing exceeds requested limit")
+			}
+			result = append(result, current)
+		}
 	}
 	return result, nil
 }
 
-type pruneFamilyAlias struct{}
-type pruneEntryAlias struct{}
-
-func pruneCandidates(ctx context.Context, tx *database.Tx, scope string, now temporal.DateTime, limit int) ([]tokenstore.PruneCandidate, error) {
-	left := query.As[pruneFamilyAlias](families(scope, ""), "token_family")
-	right := query.As[pruneEntryAlias](entries(scope, model.ID[tokenstore.Family]{}), "token_generation")
-	lf, rf := tokenstore.FamilyFieldsAt(left.Scope()), tokenstore.EntryFieldsAt(right.Scope())
-	joined := query.InnerJoin(left, right, query.OnAnd(query.On(lf.ID, rf.FamilyID), query.On(lf.Generation, rf.Generation)))
-	family := tokenstore.FamilyFieldsAt(query.LeftScope(joined, left.Scope()))
-	entry := tokenstore.EntryFieldsAt(query.RightScope(joined, right.Scope()))
-	expired := query.Or(family.ExpiresAt.Lte(now), entry.RefreshExpiresAt.Lte(now), query.And(entry.RefreshExpiresAt.IsNull(), entry.AccessExpiresAt.Lte(now)))
-	return tokenstore.ProjectPruneCandidate(joined).SelectID(family.ID.Value()).SelectSubjectKey(family.SubjectKey.Value()).Query().
-		Where(expired).OrderBy(family.SubjectKey.Asc(), family.ID.Asc()).Limit(limit).All(ctx, tx)
-}
+// Prune deletes at most limit expired families of this address, with their
+// generations and consumed digests, in one set-based statement. Candidates come
+// from the family absolute-expiry and generation expiry indexes; the dead
+// predicate is rechecked on each locked family against its current generation,
+// and families locked by a concurrent refresh or revocation are skipped.
+// Subject rows remain for issuance/revocation serialization.
 func (b *Backend) Prune(ctx context.Context, address token.Address, limit int) (uint64, error) {
 	scope, err := address.Key()
 	if err != nil {
@@ -111,60 +103,26 @@ func (b *Backend) Prune(ctx context.Context, address token.Address, limit int) (
 	if limit < 1 || limit > token.MaxPruneFamilies {
 		return 0, fault.New(fault.Invalid, "invalid token prune family limit")
 	}
-	var count uint64
-	err = b.within(ctx, func(tx *database.Tx) error {
-		now, err := b.now()
-		if err != nil {
-			return err
-		}
-		instant, err := temporal.NewDateTime(now)
-		if err != nil {
-			return err
-		}
-		candidates, err := pruneCandidates(ctx, tx, scope, instant, limit)
-		if err != nil {
-			return err
-		}
-		var subject tokenstore.Subject
-		for _, candidate := range candidates {
-			if subject.Key != candidate.SubjectKey {
-				locked, present, err := subjectByKey(ctx, tx, address, candidate.SubjectKey, true)
-				if err != nil {
-					return err
-				}
-				if !present {
-					return fault.New(fault.Invalid, "token family has no subject")
-				}
-				subject = locked
-			}
-			found, err := families(scope, subject.Key).ForUpdate().Find(ctx, tx, candidate.ID)
-			if err != nil {
-				return err
-			}
-			family, present := found.Get()
-			if !present {
-				continue
-			}
-			current, err := currentRecord(ctx, tx, address, subject, family)
-			if err != nil {
-				return err
-			}
-			now, err := b.now()
-			if err != nil {
-				return err
-			}
-			if current.Live(now) {
-				continue
-			}
-			if _, err := families(scope, subject.Key).Delete(ctx, tx, family.ID); err != nil {
-				return err
-			}
-			count++
-		}
-		return nil
-	})
+	if b == nil || b.db == nil || ctx == nil {
+		return 0, fault.New(fault.Invalid, "token PostgreSQL operation requires a backend and context")
+	}
+	now, err := b.now()
 	if err != nil {
 		return 0, err
 	}
-	return count, nil
+	families, generations := b.familyTable(), b.generationTable()
+	current := ` JOIN ` + families + ` f ON f.id = g.family_id AND f.scope = g.scope AND f.generation = g.generation`
+	// Both CTEs are evaluated once: an IN subquery may be rescanned per row, and
+	// its LIMIT would then no longer bound the delete.
+	result, err := b.db.Exec(ctx, `WITH candidates AS MATERIALIZED (`+
+		`(SELECT f.id FROM `+families+` f WHERE f.scope = $1 AND f.expires_at <= $2 ORDER BY f.expires_at LIMIT $3) UNION `+
+		`(SELECT g.family_id FROM `+generations+` g`+current+` WHERE g.scope = $1 AND g.refresh_expires_at <= $2 ORDER BY g.refresh_expires_at LIMIT $3) UNION `+
+		`(SELECT g.family_id FROM `+generations+` g`+current+` WHERE g.scope = $1 AND g.refresh_expires_at IS NULL AND g.access_expires_at <= $2 ORDER BY g.access_expires_at LIMIT $3)`+
+		`), doomed AS MATERIALIZED (SELECT f.id FROM `+families+` f JOIN `+generations+` g ON g.family_id = f.id AND g.scope = f.scope AND g.generation = f.generation `+
+		`WHERE f.scope = $1 AND f.id IN (SELECT id FROM candidates) AND `+dead("$2")+` LIMIT $3 FOR UPDATE OF f SKIP LOCKED) `+
+		`DELETE FROM `+families+` t USING doomed WHERE t.id = doomed.id AND t.scope = $1`, scope, now, limit)
+	if err != nil {
+		return 0, err
+	}
+	return affected(result), nil
 }

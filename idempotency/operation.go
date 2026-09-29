@@ -2,8 +2,6 @@ package idempotency
 
 import (
 	"context"
-	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"slices"
@@ -12,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/internal/idempotencystore"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -66,6 +65,7 @@ func (Result[R]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("idempotent
 // Run never retries the business callback. An uncertain commit is reconciled on
 // the primary, or becomes Unavailable. Retry with the SAME scope/key and input.
 // Authorization belongs before every Run, including those that only replay.
+// Exhausted local admission (fault.Overloaded) returns a retryable Unavailable.
 func (o Operation[I, R]) Run(ctx context.Context, scope Scope, key Key, input I, handler Handler[I, R]) (Result[R], error) {
 	if err := o.Validate(); err != nil {
 		return Result[R]{}, err
@@ -78,14 +78,18 @@ func (o Operation[I, R]) Run(ctx context.Context, scope Scope, key Key, input I,
 	}
 	lease, err := o.store.calls.Begin(ctx)
 	if err != nil {
-		if errors.Is(err, fault.Conflict) {
-			return Result[R]{}, failure(Capacity, err)
+		// The operation never started; the same key can be retried shortly.
+		if errors.Is(err, fault.Overloaded) {
+			return Result[R]{}, failure(Unavailable, err)
 		}
 		return Result[R]{}, err
 	}
 	defer lease.Release()
+	// Framework code runs in this goroutine. Application input/result codecs and
+	// the transaction callback (which runs the handler) are already isolated by
+	// their own owners, so Goexit cannot bypass rollback or release.
 	var result Result[R]
-	err = callback.Isolated("idempotent operation", func() error {
+	err = callback.Invoke("idempotent operation", func() error {
 		var err error
 		result, err = o.run(lease.Context(), scope, key, input, handler)
 		return err
@@ -105,50 +109,38 @@ func (o Operation[I, R]) run(ctx context.Context, scope Scope, key Key, input I,
 	address := idempotencystore.Address{Namespace: o.store.namespaceDigest(), Operation: string(o.definition.ID), Version: o.definition.Version, Scope: scope.digest, Key: digest("foundry.idempotency.key.v1", key.text)}
 	var result Result[R]
 	err = o.store.db.Transaction(ctx, func(tx *database.Tx) error {
-		if err := o.store.limits(ctx, tx); err != nil {
+		previous, err := o.store.enter(ctx, tx)
+		if err != nil {
 			return err
 		}
-		var row idempotencystore.Record
-		claimed := false
-		if err := o.store.scoped(ctx, tx, func(child *database.Tx) error {
-			inserted, err := idempotencystore.Claim(ctx, child, address, fingerprint)
-			if err != nil {
-				return err
+		inserted, err := idempotencystore.Claim(ctx, tx, address, fingerprint)
+		if err != nil {
+			// Only the claim waits on a lock bounded by DuplicateWait: the
+			// uncommitted winner of this exact address. Other lock timeouts
+			// never report an in-progress duplicate.
+			if lockTimeout(err) {
+				return failure(InProgress, err)
 			}
-			row, claimed = inserted.Get()
-			if !claimed {
-				stored, err := idempotencystore.Find(ctx, child, address)
-				if err != nil {
-					return err
-				}
-				var exists bool
-				row, exists = stored.Get()
-				if !exists {
-					return Unavailable
-				}
-				return nil
-			}
-			// Serialize admission for this caller across all operation versions and
-			// processes. Hash collisions only reduce concurrency; addresses stay exact.
-			lockBytes, _ := hex.DecodeString(digest("foundry.idempotency.admission.v1", address.Namespace, address.Scope))
-			lockID := int64(binary.BigEndian.Uint64(lockBytes[:8]))
-			if _, err := child.Exec(ctx, `SELECT pg_catalog.pg_advisory_xact_lock($1)`, lockID); err != nil {
-				return err
-			}
-			count, err := idempotencystore.CountCaller(ctx, child, address)
-			if err != nil {
-				return err
-			}
-			if count > int64(o.store.config.MaxRetainedPerCaller) {
-				return Capacity
-			}
-			return nil
-		}); err != nil {
 			return err
 		}
+		row, claimed := inserted.Get()
 		if !claimed {
-			var err error
+			// A fresh Read Committed statement observes the committed winner.
+			stored, err := idempotencystore.Find(ctx, tx, address)
+			if err != nil {
+				return err
+			}
+			row, exists := stored.Get()
+			if !exists {
+				return Unavailable
+			}
 			result, err = o.restore(ctx, row, fingerprint)
+			return err
+		}
+		if err := o.admit(ctx, tx, address); err != nil {
+			return err
+		}
+		if err := o.store.leave(ctx, tx, previous); err != nil {
 			return err
 		}
 		value, err := handler(ctx, tx, input)
@@ -175,9 +167,12 @@ func (o Operation[I, R]) run(ctx context.Context, scope Scope, key Key, input I,
 		if err != nil {
 			return err
 		}
-		if err := o.store.scoped(ctx, tx, func(child *database.Tx) error {
-			return idempotencystore.Complete(ctx, child, row, o.output.identity, digest("foundry.idempotency.result.v1", string(encoded)), encoded, completed, expires)
-		}); err != nil {
+		// Completion is the transaction's last statement, so the schema scope
+		// ends at commit without a separate restoration round trip.
+		if err := o.store.selectSchema(ctx, tx); err != nil {
+			return err
+		}
+		if err := idempotencystore.Complete(ctx, tx, row, o.output.identity, digest("foundry.idempotency.result.v1", string(encoded)), encoded, completed, expires); err != nil {
 			return err
 		}
 		result = Result[R]{value: restored, encoded: encoded}
@@ -187,21 +182,64 @@ func (o Operation[I, R]) run(ctx context.Context, scope Scope, key Key, input I,
 		result.committed = true
 		return result, nil
 	}
-	var dbError *database.Error
-	if errors.As(err, &dbError) {
-		if dbError.Outcome() == database.Committed {
-			result.committed = true
-			return result, err
+	// Failure classification inspects arbitrary handler errors; isolate it.
+	var outcome database.Outcome
+	var inProgress, locked bool
+	if failed := callback.Isolated("classify idempotent operation failure", func() error {
+		if dbError, found, _ := errorgraph.As[*database.Error](err); found && dbError != nil {
+			outcome = dbError.Outcome()
 		}
-		if dbError.Outcome() == database.Unknown {
-			return o.reconcile(ctx, address, fingerprint, err)
-		}
-		if dbError.SQLState() == "55P03" {
-			return Result[R]{}, failure(InProgress, err)
-		}
+		inProgress = errorgraph.Is(err, InProgress)
+		locked = lockTimeout(err)
+		return nil
+	}); failed != nil {
+		return Result[R]{}, failure(Unavailable, errors.Join(err, failed))
+	}
+	switch {
+	case outcome == database.Committed:
+		result.committed = true
+		return result, err
+	case outcome == database.Unknown:
+		return o.reconcile(ctx, address, fingerprint, err)
+	case inProgress:
+		return Result[R]{}, err
+	case locked:
+		// An application statement's own lock wait expired; the transaction
+		// rolled back, so the same key can be retried.
+		return Result[R]{}, failure(Unavailable, err)
 	}
 	return Result[R]{}, err
 }
+
+// admit enforces the caller's retention quota after this request's claim. It
+// reads at most MaxRetainedPerCaller unexpired committed outcomes and takes no
+// lock, so a caller's operations never serialize on each other.
+func (o Operation[I, R]) admit(ctx context.Context, tx *database.Tx, address idempotencystore.Address) error {
+	now, err := temporal.Now(o.store.db.Clock())
+	if err != nil {
+		return err
+	}
+	retained, err := idempotencystore.CountRetained(ctx, tx, address, now, o.store.config.MaxRetainedPerCaller)
+	if err != nil {
+		return err
+	}
+	// The uncommitted claim is this request's own retained record.
+	if retained >= int64(o.store.config.MaxRetainedPerCaller) {
+		return Capacity
+	}
+	return nil
+}
+
+// lockTimeout reports a lock_timeout/NOWAIT expiry within the bounded graph.
+func lockTimeout(err error) bool {
+	return errorgraph.Is(err, database.LockNotAvailable)
+}
+
+// restore replays a committed outcome. A stored result schema identity that
+// differs from the current encoding (a changed response contract) replays only
+// when the current codec still accepts the exact stored representation, which
+// preserves compatible schema evolution. An incompatible outcome stays
+// Unavailable: re-executing a committed operation could duplicate its effects.
 func (o Operation[I, R]) restore(ctx context.Context, row idempotencystore.Record, fingerprint string) (Result[R], error) {
 	if row.Fingerprint != fingerprint {
 		return Result[R]{}, Mismatch
@@ -211,7 +249,7 @@ func (o Operation[I, R]) restore(ctx context.Context, row idempotencystore.Recor
 	}
 	completed, complete := row.CompletedAt.Get()
 	expires, expiring := row.ExpiresAt.Get()
-	if !complete || !expiring || completed.IsZero() || !expires.UTC().After(completed.UTC()) || row.ResultSchema != o.output.identity || row.ResultHash != digest("foundry.idempotency.result.v1", string(row.Representation)) {
+	if !complete || !expiring || completed.IsZero() || !expires.UTC().After(completed.UTC()) || !identityPart(row.ResultSchema) || row.ResultHash != digest("foundry.idempotency.result.v1", string(row.Representation)) {
 		return Result[R]{}, Unavailable
 	}
 	value, err := o.output.restore(ctx, row.Representation, o.store.config.MaxResultBytes)
@@ -223,18 +261,19 @@ func (o Operation[I, R]) restore(ctx context.Context, row idempotencystore.Recor
 func (o Operation[I, R]) reconcile(ctx context.Context, address idempotencystore.Address, fingerprint string, cause error) (Result[R], error) {
 	var result Result[R]
 	err := o.store.db.Transaction(ctx, func(tx *database.Tx) error {
-		return o.store.scoped(ctx, tx, func(child *database.Tx) error {
-			stored, err := idempotencystore.Find(ctx, child, address)
-			if err != nil {
-				return err
-			}
-			row, exists := stored.Get()
-			if !exists {
-				return Unavailable
-			}
-			result, err = o.restore(ctx, row, fingerprint)
+		if err := o.store.selectSchema(ctx, tx); err != nil {
 			return err
-		})
+		}
+		stored, err := idempotencystore.Find(ctx, tx, address)
+		if err != nil {
+			return err
+		}
+		row, exists := stored.Get()
+		if !exists {
+			return Unavailable
+		}
+		result, err = o.restore(ctx, row, fingerprint)
+		return err
 	}, database.TxOptions{Isolation: database.ReadCommitted, ReadOnly: true})
 	if err != nil {
 		return Result[R]{}, failure(Unavailable, errors.Join(cause, err))

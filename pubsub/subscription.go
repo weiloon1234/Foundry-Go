@@ -7,12 +7,14 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/frameworkadapter"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 type subscriptionState struct {
-	broker               *Broker
-	channel              Channel
+	broker *Broker
+	// channels maps each subscribed channel to the position of its typed key.
+	channels             map[Channel]int
 	stream               Stream
 	ready, done          chan struct{}
 	rawDone              <-chan struct{}
@@ -31,8 +33,10 @@ func (b *Broker) reserve() (*subscriptionState, error) {
 	if b.closing {
 		return nil, ErrClosed
 	}
+	// Subscriptions are long-lived, so the bound fails fast instead of queueing;
+	// Overloaded tells callers the same request may succeed after one closes.
 	if len(b.subscriptions) >= b.config.MaxSubscriptions {
-		return nil, fault.New(fault.Conflict, "pub/sub subscription capacity reached")
+		return nil, fault.New(fault.Overloaded, "pub/sub subscription capacity reached")
 	}
 	lifetime, cancel := context.WithCancel(b.lifetime)
 	s := &subscriptionState{broker: b, ready: make(chan struct{}), done: make(chan struct{}), drained: make(chan struct{}), watchDone: make(chan struct{}), lifetime: lifetime, cancel: cancel}
@@ -56,7 +60,7 @@ func (s *subscriptionState) beginClose(reason error) {
 		<-s.ready
 		var err error
 		if s.stream != nil {
-			err = callback.Isolated("pub/sub subscription cleanup", func() error { return s.stream.Close(context.Background()) })
+			err = frameworkadapter.Call(s.stream, "pub/sub subscription cleanup", func() error { return s.stream.Close(context.Background()) })
 			if s.rawDone != nil {
 				<-s.rawDone
 			}
@@ -138,15 +142,22 @@ func (s *Subscription[V]) Receive(ctx context.Context) (V, error) {
 	if s == nil || s.state == nil || ctx == nil {
 		return *new(V), fault.New(fault.Invalid, "pub/sub receive needs subscription and context")
 	}
-	state := s.state
+	_, value, err := receive[V](ctx, s.state)
+	return value, err
+}
+
+// receive decodes the next message and reports the position of its channel's
+// typed key. It is shared by single- and multi-key subscriptions.
+func receive[V any](ctx context.Context, state *subscriptionState) (int, V, error) {
 	if err := state.acquire(ctx); err != nil {
-		return *new(V), err
+		return 0, *new(V), err
 	}
 	defer state.release()
 	operation, release := state.broker.operation(ctx, state)
 	defer release()
 
 	var output V
+	position := 0
 	err := callback.Isolated("pub/sub receive", func() error {
 		if err := operation.Err(); err != nil {
 			return err
@@ -155,9 +166,11 @@ func (s *Subscription[V]) Receive(ctx context.Context) (V, error) {
 		if err != nil {
 			return err
 		}
-		if message.Channel != state.channel || len(message.Data) > state.broker.config.Buffer.PayloadBytes {
+		index, known := state.channels[message.Channel]
+		if !known || len(message.Data) > state.broker.config.Buffer.PayloadBytes {
 			return fault.New(fault.Invalid, "pub/sub adapter returned an invalid channel or oversized payload")
 		}
+		position = index
 		snapshot, err := value.ParseJSON[V](string(message.Data))
 		if err != nil {
 			return err
@@ -169,6 +182,18 @@ func (s *Subscription[V]) Receive(ctx context.Context) (V, error) {
 		err = operation.Err()
 	}
 	if err != nil {
+		// A wait ended because delivery was interrupted (overflow, disconnect,
+		// undecodable payload) reports that terminal cause, not the cancellation
+		// of the internal operation context it produced. An explicit Close or
+		// broker shutdown (the ErrClosed sentinel) keeps reporting cancellation.
+		if ctx.Err() == nil {
+			state.mu.Lock()
+			closing, terminal := state.closing, state.terminal
+			state.mu.Unlock()
+			if closing && terminal != nil && terminal != ErrClosed {
+				err = terminal
+			}
+		}
 		// A canceled receive wait is not an instruction to discard the subscription.
 		canceledWait := false
 		if ctx.Err() != nil {
@@ -184,9 +209,9 @@ func (s *Subscription[V]) Receive(ctx context.Context) (V, error) {
 		if !canceledWait {
 			state.beginClose(err)
 		}
-		return *new(V), err
+		return 0, *new(V), err
 	}
-	return output, nil
+	return position, output, nil
 }
 
 // Each registered subscription owns one watcher, including during setup. A raw
@@ -198,7 +223,7 @@ func (s *subscriptionState) watch() {
 	case <-s.lifetime.Done():
 		return
 	case <-s.rawDone:
-		reason := callback.Isolated("pub/sub terminal status", func() error { return s.stream.Err() })
+		reason := frameworkadapter.Call(s.stream, "pub/sub terminal status", func() error { return s.stream.Err() })
 		if reason == nil {
 			reason = ErrDisconnected
 		}

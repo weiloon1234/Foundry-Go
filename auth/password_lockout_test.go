@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/auth/lockout"
 	"github.com/weiloon1234/Foundry-Go/auth/lockout/memory"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/testkit"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -40,7 +41,16 @@ func TestPasswordLoginLockoutPrecedesLookupAndProtectsProofPublication(t *testin
 		t.Fatal(err)
 	}
 	policy := lockout.Policy{MaxFailures: 2, Window: time.Minute, LockFor: time.Second}
-	throttle, err := lockout.Define("password", keyspace.StringKeys[loginEmail](), policy).Bind(store)
+	single, err := lockout.Define("password.single", keyspace.StringKeys[loginEmail](), policy).Bind(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Submitted identifiers need client-aware limits; a single-key throttle
+	// would let any client keep the account locked for everyone.
+	if _, err := loginInstance(t, h, b).WithLockout(single); !errors.Is(err, fault.Invalid) {
+		t.Fatal("single-key password lockout accepted", err)
+	}
+	throttle, err := lockout.DefineLogin("password", keyspace.StringKeys[loginEmail](), lockout.Limits{PerClient: policy, Account: policy, Address: value.Set(policy)}).Bind(store)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +132,8 @@ func TestCyclicPasswordFailureRetainsNoAuthorityOrFailedAttempt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	throttle, err := lockout.Define("password", keyspace.StringKeys[loginEmail](), lockout.Policy{MaxFailures: 1, Window: time.Minute, LockFor: time.Minute}).Bind(store)
+	policy := lockout.Policy{MaxFailures: 1, Window: time.Minute, LockFor: time.Minute}
+	throttle, err := lockout.DefineLogin("password", keyspace.StringKeys[loginEmail](), lockout.Limits{PerClient: policy, Account: policy, Address: value.Set(policy)}).Bind(store)
 	if err != nil {
 		t.Fatal(err)
 	}

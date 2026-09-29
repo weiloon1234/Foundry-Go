@@ -111,6 +111,14 @@ func TestRecoveryPublishesNothingOnUncertainOrMalformedIssuance(t *testing.T) {
 			}}
 			flow := setup(t, backend, &m)
 			issued, err := flow.Issue(ctx, m.reference())
+			if mode == "cancel" {
+				// A backend that returned a complete record committed it; a late
+				// cancellation must not discard the committed link.
+				if err != nil || issued.Token().Secret().IsZero() {
+					t.Fatal("committed issuance was lost after cancellation", err)
+				}
+				return
+			}
 			if err == nil || !issued.Token().Secret().IsZero() {
 				t.Fatal("bad backend published a credential")
 			}
@@ -233,5 +241,39 @@ func TestRecoveryRejectsSuppressedConsumptionCallbackFailures(t *testing.T) {
 				t.Fatal("backend suppressed a callback failure", err)
 			}
 		})
+	}
+}
+
+// A flow-specific eligibility rule replaces the provider's login eligibility,
+// so email verification can reach accounts that cannot log in yet, while
+// identity checks and a false decision still reject.
+func TestFlowEligibilityOverridesProviderEligibility(t *testing.T) {
+	store, err := NewStore(&fakeBackend{issue: issueBackend}, DefaultConfig(keyspace.Namespace{Application: "recovery-unit", Environment: "test"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := auth.DefineProvider("members", member{}.reference(), func(context.Context, int64) (value.Optional[member], error) { panic("second model lookup") }, func(_ context.Context, m member) (bool, error) { return m.Enabled, nil })
+	unverified := member{ID: 7, Email: "new@example.test", Enabled: false}
+	allow := true
+	flow, err := New[member, int64, EmailVerification](store, provider, Model[member, int64]{
+		Lock: func(context.Context, *database.Tx, int64) (value.Optional[member], error) {
+			return value.Set(unverified), nil
+		},
+		Binding:  func(m member) (Binding, error) { return Bind(secret.New(m.Email)) },
+		Eligible: func(context.Context, member) (bool, error) { return allow, nil },
+	}, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if issued, err := flow.Issue(t.Context(), unverified.reference()); err != nil || issued.Token().Secret().IsZero() {
+		t.Fatal("flow eligibility did not replace provider eligibility", err)
+	}
+	allow = false
+	if _, err := flow.Issue(t.Context(), unverified.reference()); !errors.Is(err, auth.Unauthenticated) {
+		t.Fatal("ineligible model received a link", err)
+	}
+	defaulted := setup(t, &fakeBackend{issue: issueBackend}, &unverified)
+	if _, err := defaulted.Issue(t.Context(), unverified.reference()); !errors.Is(err, auth.Unauthenticated) {
+		t.Fatal("provider eligibility no longer applies by default", err)
 	}
 }

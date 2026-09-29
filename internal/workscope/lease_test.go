@@ -25,7 +25,9 @@ func TestLeaseRetainsCapacityAfterCancellationUntilActualRelease(t *testing.T) {
 	if !errors.Is(lease.Context().Err(), context.Canceled) {
 		t.Fatal("lease did not inherit cancellation")
 	}
-	if next, err := g.Begin(t.Context()); !errors.Is(err, fault.Conflict) || next != nil {
+	waiting, stopWaiting := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer stopWaiting()
+	if next, err := g.Begin(waiting); !errors.Is(err, fault.Overloaded) || next != nil {
 		t.Fatal("cancellation released actual ownership", err)
 	}
 	stopped, stop := context.WithCancel(t.Context())
@@ -51,7 +53,7 @@ func TestLeaseRetainsCapacityAfterCancellationUntilActualRelease(t *testing.T) {
 	default:
 		t.Fatal("release did not complete shutdown")
 	}
-	if _, err := g.Begin(t.Context()); !errors.Is(err, fault.Conflict) {
+	if _, err := g.Begin(t.Context()); !errors.Is(err, fault.Closed) {
 		t.Fatal("closed admission reopened", err)
 	}
 }
@@ -129,7 +131,7 @@ func TestLeaseInvalidAdmissionAndRunUseOneCapacityLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := g.Run(t.Context(), "outer", func(ctx context.Context) error {
-		if lease, err := g.Begin(ctx); lease != nil || !errors.Is(err, fault.Conflict) {
+		if lease, err := g.Begin(ctx); lease != nil || !errors.Is(err, fault.Overloaded) {
 			t.Error("Run and Begin did not share capacity", err)
 		}
 		return nil

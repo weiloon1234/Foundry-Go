@@ -74,9 +74,10 @@ func (b *Backend) walk(ctx context.Context, visit func(*os.Root, string) error) 
 }
 
 type listCursor struct {
-	Store  string `json:"s"`
-	Prefix string `json:"p"`
-	After  string `json:"a"`
+	Store     string `json:"s"`
+	Prefix    string `json:"p"`
+	After     string `json:"a"`
+	Delimited bool   `json:"d,omitempty"`
 }
 
 func (b *Backend) after(options storage.ListOptions) (string, error) {
@@ -100,31 +101,50 @@ func (b *Backend) after(options storage.ListOptions) (string, error) {
 	if decoder.Decode(&extra) != io.EOF {
 		return invalid()
 	}
-	key, err := storage.ParseKey(cursor.After)
-	if err != nil || cursor.Store != b.storeID || cursor.Prefix != options.Prefix.String() || !options.Prefix.Contains(key) {
+	if cursor.Store != b.storeID || cursor.Prefix != options.Prefix.String() || cursor.Delimited != options.Delimited || !strings.HasPrefix(cursor.After, cursor.Prefix) {
+		return invalid()
+	}
+	// A delimited page can end on a child prefix; every other cursor is a key.
+	if cursor.Delimited && strings.HasSuffix(cursor.After, "/") {
+		if _, err = storage.ParsePrefix(cursor.After); err != nil {
+			return invalid()
+		}
+		return cursor.After, nil
+	}
+	if _, err = storage.ParseKey(cursor.After); err != nil {
 		return invalid()
 	}
 	return cursor.After, nil
 }
-func (b *Backend) cursor(prefix storage.Prefix, after storage.ObjectKey) storage.Cursor {
-	raw, _ := json.Marshal(listCursor{Store: b.storeID, Prefix: prefix.String(), After: after.String()})
+func (b *Backend) cursor(options storage.ListOptions, after string) storage.Cursor {
+	raw, _ := json.Marshal(listCursor{Store: b.storeID, Prefix: options.Prefix.String(), After: after, Delimited: options.Delimited})
 	return storage.NewCursor(base64.RawURLEncoding.EncodeToString(raw))
 }
 
-type candidates []storage.ObjectInfo
+// entry is one listing item: an object, or a child prefix of a delimited page.
+type entry struct {
+	name      string
+	object    storage.ObjectInfo
+	directory bool
+}
+type candidates []entry
 
 func (h candidates) Len() int           { return len(h) }
-func (h candidates) Less(i, j int) bool { return h[i].Key.String() > h[j].Key.String() }
+func (h candidates) Less(i, j int) bool { return h[i].name > h[j].name }
 func (h candidates) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
-func (h *candidates) Push(v any)        { *h = append(*h, v.(storage.ObjectInfo)) }
+func (h *candidates) Push(v any)        { *h = append(*h, v.(entry)) }
 func (h *candidates) Pop() any {
 	old := *h
 	n := len(old)
 	item := old[n-1]
-	old[n-1] = storage.ObjectInfo{}
+	old[n-1] = entry{}
 	*h = old[:n-1]
 	return item
 }
+
+// List scans the bounded store and keeps the smallest Limit+1 entries after
+// the cursor. Unreadable or mismatched records are counted in Skipped rather
+// than failing the page; staging and control files are never listed.
 func (b *Backend) List(ctx context.Context, options storage.ListOptions) (storage.Page, error) {
 	if err := b.ready(ctx, storage.ListOperation); err != nil {
 		return storage.Page{}, err
@@ -136,7 +156,10 @@ func (b *Backend) List(ctx context.Context, options storage.ListOptions) (storag
 	if err != nil {
 		return storage.Page{}, err
 	}
+	prefix := options.Prefix.String()
 	selected := make(candidates, 0, options.Limit+1)
+	queued := make(map[string]bool)
+	skipped := 0
 	err = b.walk(ctx, func(parent *os.Root, name string) error {
 		if len(name) != 64 || strings.ToLower(name) != name {
 			return nil
@@ -153,32 +176,68 @@ func (b *Backend) List(ctx context.Context, options storage.ListOptions) (storag
 		}
 		info, _, err := b.readHeader(file)
 		closeErr := file.Close()
-		if err != nil || closeErr != nil {
-			return errors.Join(err, closeErr)
+		if closeErr != nil {
+			return closeErr
 		}
-		_, expected := address(info.Key)
-		if name != expected {
-			return failure(storage.IntegrityFailed, storage.ListOperation, storage.NotApplicable, nil)
+		if err != nil {
+			if options.Prefix.String() == "" {
+				skipped++
+			}
+			return nil
 		}
-		if info.Key.String() <= after || !options.Prefix.Contains(info.Key) {
+		if _, expected := address(info.Key); name != expected {
+			if options.Prefix.Contains(info.Key) {
+				skipped++
+			}
+			return nil
+		}
+		if !options.Prefix.Contains(info.Key) {
+			return nil
+		}
+		item := entry{name: info.Key.String(), object: info}
+		if options.Delimited {
+			if slash := strings.IndexByte(item.name[len(prefix):], '/'); slash >= 0 {
+				item = entry{name: item.name[:len(prefix)+slash+1], directory: true}
+			}
+		}
+		if item.name <= after || item.directory && queued[item.name] {
 			return nil
 		}
 		if len(selected) < options.Limit+1 {
-			heap.Push(&selected, info)
-		} else if info.Key.String() < selected[0].Key.String() {
-			selected[0] = info
+			heap.Push(&selected, item)
+		} else if item.name < selected[0].name {
+			if selected[0].directory {
+				delete(queued, selected[0].name)
+			}
+			selected[0] = item
 			heap.Fix(&selected, 0)
+		} else {
+			return nil
+		}
+		if item.directory {
+			queued[item.name] = true
 		}
 		return nil
 	})
 	if err != nil {
 		return storage.Page{}, failure(storage.Unavailable, storage.ListOperation, storage.NotApplicable, err)
 	}
-	slices.SortFunc(selected, func(a, b storage.ObjectInfo) int { return strings.Compare(a.Key.String(), b.Key.String()) })
-	page := storage.Page{Objects: []storage.ObjectInfo(selected)}
-	if len(page.Objects) > options.Limit {
-		page.Objects = page.Objects[:options.Limit]
-		page.Next = b.cursor(options.Prefix, page.Objects[len(page.Objects)-1].Key)
+	slices.SortFunc(selected, func(a, b entry) int { return strings.Compare(a.name, b.name) })
+	page := storage.Page{Skipped: skipped}
+	if len(selected) > options.Limit {
+		selected = selected[:options.Limit]
+		page.Next = b.cursor(options, selected[len(selected)-1].name)
+	}
+	for _, item := range selected {
+		if item.directory {
+			directory, err := storage.ParsePrefix(item.name)
+			if err != nil {
+				return storage.Page{}, failure(storage.IntegrityFailed, storage.ListOperation, storage.NotApplicable, err)
+			}
+			page.Directories = append(page.Directories, directory)
+			continue
+		}
+		page.Objects = append(page.Objects, item.object)
 	}
 	return page, nil
 }

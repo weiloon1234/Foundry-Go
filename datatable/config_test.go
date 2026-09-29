@@ -18,11 +18,13 @@ func TestManagerRejectsInvalidResourceConfigurationAtConstruction(t *testing.T) 
 		"row bytes":       func(c *Config) { c.MaxRowBytes = 0 },
 		"page bytes":      func(c *Config) { c.MaxPageBytes = c.MaxRowBytes - 1 },
 		"export capacity": func(c *Config) { c.MaxExports = 0 },
+		"retention":       func(c *Config) { c.MaxArtifacts = c.MaxExports - 1 },
+		"retention bound": func(c *Config) { c.MaxArtifacts = 1025 },
 		"export timeout":  func(c *Config) { c.ExportTimeout = time.Hour + 1 },
 		"export rows":     func(c *Config) { c.MaxExportRows = maxWorksheetRows },
 		"export bytes":    func(c *Config) { c.MaxExportBytes = 0 },
 		"XML bytes":       func(c *Config) { c.MaxXMLBytes = 0 },
-		"cell bytes":      func(c *Config) { c.MaxCellBytes = 0 },
+		"cell bytes":      func(c *Config) { c.MaxCellBytes = minCellBytes - 1 },
 		"relative path":   func(c *Config) { c.TempDir = "relative" },
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -32,6 +34,9 @@ func TestManagerRejectsInvalidResourceConfigurationAtConstruction(t *testing.T) 
 				t.Fatal("invalid resource configuration constructed manager")
 			}
 		})
+	}
+	if config := DefaultConfig(); config.MaxOffset != 10_000 || config.MaxArtifacts < config.MaxExports || config.Validate() != nil {
+		t.Fatal("unexpected default capacity", config)
 	}
 	if manager, err := New(Dependencies{}, DefaultConfig()); err == nil || manager != nil {
 		t.Fatal("missing database accepted")

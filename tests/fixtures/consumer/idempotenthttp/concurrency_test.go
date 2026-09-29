@@ -104,15 +104,29 @@ func TestHTTPFailuresRollbackResponsePreparationAndClaims(t *testing.T) {
 			t.Fatal("response failure retained claim or outbox")
 		}
 	}
-	// A new schema contract must not execute an already committed key again.
+	// A changed result contract never executes an already committed key again.
+	// A retained representation that the current contract still decodes replays
+	// unchanged; one it rejects (here: a different declared status) stays 503.
 	key := "schema-mismatch-001"
 	body := `{"name":"schema"}`
-	assertResponse(t, app.send(t.Context(), "/workspaces/1/orders", "alice", key, body), 201)
+	original := app.send(t.Context(), "/workspaces/1/orders", "alice", key, body)
+	assertResponse(t, original, 201)
 	if _, err := db.Exec(t.Context(), `UPDATE foundry_idempotency SET result_schema='future-schema'`); err != nil {
+		t.Fatal(err)
+	}
+	replay := app.send(t.Context(), "/workspaces/1/orders", "alice", key, body)
+	assertResponse(t, replay, 201)
+	if !bytes.Equal(original.body, replay.body) {
+		t.Fatal("compatible result changed on replay")
+	}
+	if _, err := db.Exec(t.Context(), `UPDATE foundry_idempotency SET representation = changed.data,
+result_hash = encode(sha256(int8send(29::bigint) || convert_to('foundry.idempotency.result.v1', 'UTF8') || int8send(octet_length(changed.data)::bigint) || changed.data), 'hex')
+FROM (SELECT id, convert_to(jsonb_set(convert_from(representation, 'UTF8')::jsonb, '{status}', '200')::text, 'UTF8') AS data FROM foundry_idempotency) AS changed
+WHERE foundry_idempotency.id = changed.id`); err != nil {
 		t.Fatal(err)
 	}
 	assertResponse(t, app.send(t.Context(), "/workspaces/1/orders", "alice", key, body), 503)
 	if scalar(t, db, `SELECT count(*) FROM idem_orders`) != 1 {
-		t.Fatal("incompatible result reexecuted")
+		t.Fatal("changed result contract reexecuted")
 	}
 }

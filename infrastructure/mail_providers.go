@@ -2,8 +2,10 @@ package infrastructure
 
 import (
 	"context"
+	"errors"
 	"github.com/weiloon1234/Foundry-Go/cloud/credentials"
 	"github.com/weiloon1234/Foundry-Go/email"
+	"github.com/weiloon1234/Foundry-Go/email/failover"
 	emaillog "github.com/weiloon1234/Foundry-Go/email/log"
 	"github.com/weiloon1234/Foundry-Go/email/mailgun"
 	"github.com/weiloon1234/Foundry-Go/email/memory"
@@ -14,21 +16,70 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/storage"
+	"slices"
 )
 
 func builtInMailDriver(driver MailDriver) bool {
 	switch driver {
-	case LogMail, MemoryMail, SMTPMail, SESMail, ResendMail, PostmarkMail, MailgunMail:
+	case LogMail, PreviewMail, MemoryMail, SMTPMail, SESMail, ResendMail, PostmarkMail, MailgunMail, FailoverMail, RoundRobinMail:
 		return true
 	}
 	return false
 }
-func (p *Plan) mailAdapter(s MailerSettings, provider credentials.Provider) (*ownedAdapter[email.Driver], error) {
+
+// mailCredentials returns the credential sources a mailer's transport needs:
+// its own for SES, or its referenced transports' for a composition.
+func (p *Plan) mailCredentials(s MailerSettings) []credentials.Name {
+	var names []credentials.Name
+	add := func(s MailerSettings) {
+		if s.Driver == SESMail {
+			name := s.API.Credentials
+			if name == "" {
+				name = "default"
+			}
+			if !slices.Contains(names, name) {
+				names = append(names, name)
+			}
+		}
+	}
+	add(s)
+	if s.Driver == FailoverMail || s.Driver == RoundRobinMail {
+		for _, name := range s.Transports {
+			add(p.settings.Mail.Mailers[name])
+		}
+	}
+	return names
+}
+
+// composedMail validates a failover/roundrobin reference list.
+func (p *Plan) composedMail(s MailerSettings) error {
+	if len(s.Transports) < 2 || len(s.Transports) > failover.MaxTransports {
+		return fault.New(fault.Invalid, "a composed mailer requires 2 to 8 transports")
+	}
+	for i, name := range s.Transports {
+		child, ok := p.settings.Mail.Mailers[name]
+		if !ok {
+			return fault.New(fault.Missing, "composed mailer transport is not configured")
+		}
+		if child.Driver == FailoverMail || child.Driver == RoundRobinMail || slices.Contains(s.Transports[:i], name) {
+			return fault.New(fault.Invalid, "composed mailer transports must be distinct, non-composed mailers")
+		}
+	}
+	return nil
+}
+
+func (p *Plan) mailAdapter(s MailerSettings, credential func(credentials.Name) (credentials.Provider, error)) (*ownedAdapter[email.Driver], error) {
 	result := &ownedAdapter[email.Driver]{}
 	http := email.HTTPConfig{Endpoint: s.API.Endpoint, Timeout: s.API.Timeout}
 	switch s.Driver {
 	case LogMail:
 		driver, err := emaillog.New(p.options.logger)
+		if err != nil {
+			return nil, err
+		}
+		result.value = driver
+	case PreviewMail:
+		driver, err := emaillog.NewPreview(p.options.logger, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -41,12 +92,21 @@ func (p *Plan) mailAdapter(s MailerSettings, provider credentials.Provider) (*ow
 		result.value = driver
 		result.close = func(context.Context) error { driver.Close(); return nil }
 	case SMTPMail:
-		driver, err := smtp.New(smtp.Config{Address: s.SMTP.Address, Security: s.SMTP.Security, Username: s.SMTP.Username, Password: s.SMTP.Password, Timeout: s.SMTP.Timeout})
+		driver, err := smtp.New(smtp.Config{Address: s.SMTP.Address, Security: s.SMTP.Security, Username: s.SMTP.Username, Password: s.SMTP.Password, Auth: s.SMTP.Auth, LocalName: s.SMTP.LocalName, Timeout: s.SMTP.Timeout, MaxIdle: s.SMTP.MaxIdle, IdleTimeout: s.SMTP.IdleTimeout})
 		if err != nil {
 			return nil, err
 		}
 		result.value = driver
+		result.close = func(context.Context) error { driver.Close(); return nil }
 	case SESMail:
+		name := s.API.Credentials
+		if name == "" {
+			name = "default"
+		}
+		provider, err := credential(name)
+		if err != nil {
+			return nil, err
+		}
 		driver, err := ses.New((ses.Config{HTTP: http, Region: s.API.Region, ConfigurationSet: s.API.ConfigurationSet}).WithCredentials(provider))
 		if err != nil {
 			return nil, err
@@ -74,6 +134,39 @@ func (p *Plan) mailAdapter(s MailerSettings, provider credentials.Provider) (*ow
 		}
 		result.value = driver
 		result.close = func(context.Context) error { driver.Close(); return nil }
+	case FailoverMail, RoundRobinMail:
+		if err := p.composedMail(s); err != nil {
+			return nil, err
+		}
+		var transports []email.Driver
+		var closers []func(context.Context) error
+		closeAll := func(ctx context.Context) error {
+			var failures []error
+			for _, close := range closers {
+				failures = append(failures, close(ctx))
+			}
+			return errors.Join(failures...)
+		}
+		for _, name := range s.Transports {
+			child, err := p.mailAdapter(p.settings.Mail.Mailers[name], credential)
+			if err != nil {
+				return nil, errors.Join(err, closeAll(context.Background()))
+			}
+			transports = append(transports, child.value)
+			if child.close != nil {
+				closers = append(closers, child.close)
+			}
+		}
+		compose := failover.New
+		if s.Driver == RoundRobinMail {
+			compose = failover.RoundRobin
+		}
+		driver, err := compose(transports...)
+		if err != nil {
+			return nil, errors.Join(err, closeAll(context.Background()))
+		}
+		result.value = driver
+		result.close = closeAll
 	default:
 		driver, ok := p.options.mailDrivers[s.Driver]
 		if !ok {
@@ -87,19 +180,13 @@ func (p *Plan) mailer(name email.MailerName, s MailerSettings) {
 	owner := foundation.ProviderID(string(MailProvider(name)) + ".transport")
 	key := foundation.NewKey[*ownedAdapter[email.Driver]](string(owner))
 	var requires []foundation.ProviderID
-	if s.Driver == SESMail {
-		requires = append(requires, CredentialProvider(s.API.Credentials))
+	for _, name := range p.mailCredentials(s) {
+		requires = append(requires, CredentialProvider(name))
 	}
 	p.providers = append(p.providers, adapterModule(owner, key, requires, func(r foundation.Resolver) (*ownedAdapter[email.Driver], error) {
-		var provider credentials.Provider
-		if s.Driver == SESMail {
-			var err error
-			provider, err = foundation.Resolve(r, CredentialKey(s.API.Credentials))
-			if err != nil {
-				return nil, err
-			}
-		}
-		return p.mailAdapter(s, provider)
+		return p.mailAdapter(s, func(name credentials.Name) (credentials.Provider, error) {
+			return foundation.Resolve(r, CredentialKey(name))
+		})
 	}))
 	requires = []foundation.ProviderID{owner}
 	if len(p.settings.Storage.Disks) > 0 {

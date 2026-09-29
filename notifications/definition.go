@@ -38,6 +38,8 @@ type Binding[M model.Identifiable, K, P any] struct {
 	definition   Definition[P]
 	recipient    Recipient[M, K]
 	registration Registration
+	// parse checks that a captured identity belongs to this binding's model.
+	parse func(model.Identity) error
 }
 type registrationKey struct {
 	recipient RecipientName
@@ -132,7 +134,8 @@ func Bind[M model.Identifiable, K, P any](definition Definition[P], recipient Re
 		}
 		return channels[index].render(ctx, subject.(M), delivery, payload)
 	}
-	return Binding[M, K, P]{definition, recipient, Registration{r}}
+	parse := func(identity model.Identity) error { _, err := recipient.provider.Parse(identity); return err }
+	return Binding[M, K, P]{definition, recipient, Registration{r}, parse}
 }
 func (b Binding[M, K, P]) Registration() Registration { return b.registration }
 func (b Binding[M, K, P]) Validate() error {

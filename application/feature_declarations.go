@@ -29,6 +29,9 @@ type FeatureDeclarations struct {
 	Catalog       map[i18n.LocaleID]map[i18n.MessageKey]i18n.Template
 	Outbox        []publisher.Route
 	Readiness     []health.Probe
+	// Pruning joins application stores to the maintenance schedule
+	// (features.maintenance); it is ignored while that schedule is disabled.
+	Pruning []Pruning
 }
 type Features func(Services) (FeatureDeclarations, error)
 
@@ -68,6 +71,7 @@ func mergeFeatures(r foundation.Resolver, s FeatureSettings, constructors []Feat
 		result.Messages = append(result.Messages, d.Messages...)
 		result.Outbox = append(result.Outbox, d.Outbox...)
 		result.Readiness = append(result.Readiness, d.Readiness...)
+		result.Pruning = append(result.Pruning, d.Pruning...)
 		if result.Catalog == nil {
 			result.Catalog = make(map[i18n.LocaleID]map[i18n.MessageKey]i18n.Template)
 		}

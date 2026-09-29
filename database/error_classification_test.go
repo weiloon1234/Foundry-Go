@@ -137,6 +137,20 @@ func TestTransactionErrorInspectionRetainsRollbackAndPoolOwnership(t *testing.T)
 				}}
 				done := make(chan error, 1)
 				go func() { done <- db.Transaction(t.Context(), func(*database.Tx) error { return failure }) }()
+				if method == "Is" {
+					// Scope classification only searches for framework database
+					// errors; an application error's Is method is never invoked.
+					select {
+					case err := <-done:
+						var detail *database.Error
+						if errors.As(err, &detail) || state.committed.Load() != 0 || state.rolledBack.Load() != 1 || db.Stats().Owners != 0 {
+							t.Fatal("application callback failure was relabeled or leaked ownership", err)
+						}
+					case <-time.After(time.Second):
+						t.Fatal("transaction did not return")
+					}
+					return
+				}
 				select {
 				case <-entered:
 				case <-time.After(time.Second):
@@ -153,9 +167,20 @@ func TestTransactionErrorInspectionRetainsRollbackAndPoolOwnership(t *testing.T)
 				}
 				select {
 				case err := <-done:
+					if state.committed.Load() != 0 || state.rolledBack.Load() != 1 {
+						t.Fatal("inspection lost rollback", err)
+					}
 					var detail *database.Error
-					if !errors.As(err, &detail) || detail.Outcome() != database.RolledBack || state.committed.Load() != 0 || state.rolledBack.Load() != 1 || strings.Contains(err.Error(), "private") {
-						t.Fatal("inspection lost rollback or redaction", err)
+					if mode == "blocked" {
+						// Completed inspection found no database failure: the
+						// callback error keeps its identity after rollback.
+						if errors.As(err, &detail) || err.Error() != failure.Error() {
+							t.Fatal("application callback failure was relabeled", err)
+						}
+						break
+					}
+					if !errors.As(err, &detail) || detail.Outcome() != database.RolledBack || strings.Contains(err.Error(), "private") {
+						t.Fatal("failed inspection lost conservative classification or redaction", err)
 					}
 				case <-time.After(time.Second):
 					t.Fatal("inspection stranded transaction")

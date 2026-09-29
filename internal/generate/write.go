@@ -112,12 +112,12 @@ func planWritePolicy(p *packageInput, outputs map[string][]byte, policy outputPo
 	}
 	for name := range p.previous {
 		if _, ok := owned.Files[name]; !ok {
-			return plan, fmt.Errorf("unowned generated file %s is not recorded in the manifest; review its ownership before generation", name)
+			return plan, fmt.Errorf("unowned generated file %s is not recorded in the manifest; review its ownership before generation", p.displayName(name))
 		}
 	}
 	next := manifest{Version: policy.version, Files: make(map[string]string), Distribution: policy.distribution}
 	for name, data := range outputs {
-		if !policy.name(name) || !policy.content(name, data) || len(data) > 8<<20 {
+		if !policy.name(name) || !policy.content(name, data) || len(data) > policy.maxBytes {
 			return plan, fmt.Errorf("invalid generated filename %s", name)
 		}
 		next.Files[name] = hash(data)
@@ -143,10 +143,10 @@ func planWritePolicy(p *packageInput, outputs map[string][]byte, policy outputPo
 		if old.exists {
 			digest, ours := owned.Files[name]
 			if !ours || !policy.content(name, old.data) {
-				return plan, fmt.Errorf("refusing to overwrite unowned file %s", name)
+				return plan, fmt.Errorf("refusing to overwrite unowned file %s", p.displayName(name))
 			}
 			if hash(old.data) != digest {
-				return plan, fmt.Errorf("owned output %s was edited outside the generator; restore or review it before regeneration", name)
+				return plan, fmt.Errorf("owned output %s was edited outside the generator; restore or review it before regeneration", p.displayName(name))
 			}
 		}
 		data, keep := outputs[name]
@@ -201,7 +201,7 @@ func checkInput(p *packageInput, plan writePlan) error {
 			return err
 		}
 		if !bytes.Equal(current, file.data) {
-			return fmt.Errorf("source %s changed during generation; retry", file.name)
+			return fmt.Errorf("source %s changed during generation; retry", p.displayName(file.name))
 		}
 	}
 	for name, old := range plan.before {

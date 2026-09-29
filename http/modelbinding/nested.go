@@ -22,8 +22,10 @@ func Then[P, A, B any](parent Resolver[P, A], child func(context.Context, P, A) 
 	if child == nil {
 		return Resolver[P, Models[A, B]]{err: fault.New(fault.Invalid, "nested binding requires a child resolver")}
 	}
+	// The composed check validates the parent once at registration; request
+	// lookups reuse the validated parent without revalidating every ancestor.
 	return Resolver[P, Models[A, B]]{check: parent.Validate, lookup: func(ctx context.Context, path P) (value.Optional[Models[A, B]], error) {
-		a, err := parent.Resolve(ctx, path)
+		a, err := parent.resolve(ctx, path)
 		if err != nil {
 			return value.Optional[Models[A, B]]{}, err
 		}

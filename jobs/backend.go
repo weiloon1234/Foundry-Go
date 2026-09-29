@@ -44,11 +44,30 @@ const (
 	RateLimited      Reason = "rate_limited"
 	DependencyFailed Reason = "dependency_failed"
 	ManuallyRetried  Reason = "manually_retried"
+	// DeliveryLimit fails a job whose reservations repeatedly expired before an
+	// attempt started, such as a payload that crashes its process while decoding.
+	DeliveryLimit Reason = "delivery_limit"
+	// ExceptionLimit fails a job that reached Policy.MaxExceptions.
+	ExceptionLimit Reason = "exception_limit"
+	// RetryExpired fails a job whose Policy.RetryUntil deadline passed.
+	RetryExpired Reason = "retry_expired"
+	// NotTriggered cancels a workflow catch job when no member failed.
+	NotTriggered Reason = "not_triggered"
 )
+
+// exception reports reasons counted against Policy.MaxExceptions.
+func (r Reason) exception() bool {
+	return r == HandlerFailed || r == HandlerPanicked || r == TimedOut || r == ExceptionLimit
+}
+
+// CountsException reports whether a finished attempt with this reason is a
+// handler exception for Policy.MaxExceptions. Backends increment their per-record
+// exception counter when they apply such a result.
+func (r Reason) CountsException() bool { return r.exception() }
 
 func (r Reason) Validate() error {
 	switch r {
-	case NoReason, HandlerFailed, HandlerPanicked, PayloadInvalid, Unregistered, AttemptLimit, LeaseExpired, TimedOut, CancelRequested, WorkerStopped, RateLimited, DependencyFailed, ManuallyRetried:
+	case NoReason, HandlerFailed, HandlerPanicked, PayloadInvalid, Unregistered, AttemptLimit, LeaseExpired, TimedOut, CancelRequested, WorkerStopped, RateLimited, DependencyFailed, ManuallyRetried, DeliveryLimit, ExceptionLimit, RetryExpired, NotTriggered:
 		return nil
 	}
 	return fault.New(fault.Invalid, "invalid job failure classification")
@@ -93,12 +112,15 @@ func (Ownership) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("job owners
 
 // Reservation is returned only after an atomic ready-to-leased transition.
 // Attempts excludes the reserved attempt until JobStart confirms it.
+// Reservation.Exceptions counts attempts that ended as handler exceptions
+// (Reason.CountsException) for Policy.MaxExceptions.
 type Reservation struct {
-	Retries   uint32
-	Envelope  Envelope
-	Ownership Ownership
-	Attempts  uint32
-	ExpiresAt time.Time
+	Retries    uint32
+	Envelope   Envelope
+	Ownership  Ownership
+	Attempts   uint32
+	Exceptions uint32
+	ExpiresAt  time.Time
 }
 
 // LeaseStatus distinguishes loss from a cancellation request. A canceled job
@@ -111,15 +133,24 @@ type LeaseStatus struct {
 // Result is applied once by the current owner. Waiting schedules retry/release;
 // Succeeded and Failed finish execution. Cancellation requests take precedence.
 // Retrying does not replace the stable ID or reset the attempt counter.
+//
+// Refund returns a started attempt to the budget because the worker interrupted
+// it (shutdown or drain deadline) rather than the job failing. It is valid only
+// with State Waiting. Built-in backends decrement a running record's attempts;
+// a custom backend that ignores it consumes the attempt, as before.
 type Result struct {
 	State  State
 	Delay  time.Duration
 	Reason Reason
+	Refund bool
 }
 
 func (r Result) Validate() error {
 	if r.State != Waiting && r.State != Succeeded && r.State != Failed {
 		return fault.New(fault.Invalid, "invalid job completion state")
+	}
+	if r.Refund && r.State != Waiting {
+		return fault.New(fault.Invalid, "only a released job can refund its attempt")
 	}
 	if r.Delay < 0 || r.Delay > MaxDelay || (r.State != Waiting && r.Delay != 0) {
 		return fault.New(fault.Invalid, "invalid job completion delay")
@@ -148,6 +179,7 @@ type Record struct {
 	Envelope              Envelope
 	State                 State
 	Attempts              uint32
+	Exceptions            uint32
 	AvailableAt           time.Time
 	LeaseExpiresAt        time.Time
 	CancellationRequested bool
@@ -178,6 +210,33 @@ type Backend interface {
 	JobFinish(context.Context, Key, Ownership, Result) (bool, error)
 	JobCancel(context.Context, Key, Target) (bool, error)
 	JobInspect(context.Context, Key, ExecutionID) (value.Optional[Record], error)
+}
+
+// WakeBackend is optional. An in-process authority closes the channel returned
+// for key after its next accepted enqueue, retry or workflow in that queue, so
+// idle local workers subscribed to it poll immediately instead of waiting for
+// their adaptive idle interval. Other queues' work never wakes them.
+type WakeBackend interface {
+	JobWakeup(Key) <-chan struct{}
+}
+
+// ErrQueuePolicy reports that a queue was created with a different QueueConfig
+// than this process uses, typically during a configuration rollout. Nothing was
+// changed. It is an operator problem, not a permanent property of the job:
+// outbox publication keeps such rows pending and retries them.
+var ErrQueuePolicy = fault.New(fault.Internal, "job queue policy differs from this process; use the same QueueConfig on every process sharing the queue")
+
+// ErrLegacyLayout reports a queue still stored in an older layout that this
+// release does not migrate implicitly. Stop or drain every process of the
+// previous release, then migrate explicitly (`jobs migrate-layout`,
+// Dispatcher.MigrateLayout). Nothing was changed.
+var ErrLegacyLayout = fault.New(fault.Internal, "job queue uses an older storage layout; stop or drain every process of the previous release, then run `jobs migrate-layout` for this queue")
+
+// LayoutMigrator is optional: an authority whose stored queue layout changed
+// migrates a queue only when explicitly asked. migrated=false means the queue
+// already used the current layout (or did not exist); repeating is safe.
+type LayoutMigrator interface {
+	JobMigrateLayout(context.Context, Key) (bool, error)
 }
 
 // ErrOwnershipLost means the reservation can no longer authorize a mutation.

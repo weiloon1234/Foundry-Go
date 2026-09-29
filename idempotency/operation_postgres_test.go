@@ -12,6 +12,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
@@ -295,7 +296,12 @@ func TestBoundedActiveWorkCancellationAndClose(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("callback did not enter")
 	}
-	if _, err := op.Run(t.Context(), identity, key, testInput{"cancel"}, effect); !errors.Is(err, Capacity) {
+	// Exhausted local admission queues briefly, then reports a retryable
+	// Unavailable outcome (HTTP 503) rather than the caller retention quota.
+	bounded, stop := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	_, err := op.Run(bounded, identity, key, testInput{"cancel"}, effect)
+	stop()
+	if !errors.Is(err, Unavailable) || !errors.Is(err, fault.Overloaded) || errors.Is(err, Capacity) {
 		t.Fatal("active work unbounded", err)
 	}
 	closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

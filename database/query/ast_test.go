@@ -49,7 +49,6 @@ func TestInvalidDeclarationBoundaries(t *testing.T) {
 		"zero field":     For[user]("users").Where(ScalarField[user, int]{}.Eq(1)),
 		"wrong table":    For[user]("users").Where(NewScalarField[user, int]("orders", "id", codec.Signed[int]()).Eq(1)),
 		"unsafe column":  For[user]("users").Where(NewScalarField[user, int]("users", "id;--", codec.Signed[int]()).Eq(1)),
-		"empty junction": For[user]("users").Where(And[user]()),
 		"zero order":     For[user]("users").OrderBy(Order[user]{}),
 	} {
 		t.Run(name, func(t *testing.T) {

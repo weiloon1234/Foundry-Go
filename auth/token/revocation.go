@@ -33,9 +33,6 @@ func (t *Tokens[M, K]) RevokeAllIn(ctx context.Context, tx *database.Tx, referen
 			return err
 		}
 		count, err = backend.RevokeAllIn(op, tx, t.address, identity)
-		if err == nil && count > MaxTokens {
-			return fault.New(fault.Invalid, "credential backend exceeded revocation capacity")
-		}
 		return err
 	})
 	if err != nil {

@@ -10,7 +10,7 @@ func (c *connectionState) subscribe(ctx context.Context, request Request, key su
 	if replayCount > channel.replay.Messages {
 		return Response{}, Malformed
 	}
-	subscription := &subscriptionState{key: key, channel: channel, subject: access.reference, origin: access.origin}
+	subscription := &subscriptionState{key: key, channel: channel, subject: access.reference, origin: access.origin, access: access.retained()}
 	if channel.private {
 		var err error
 		subscription.subjectID, err = memberID(access.reference)
@@ -98,10 +98,9 @@ func (c *connectionState) subscribe(ctx context.Context, request Request, key su
 	if err := check(); err != nil {
 		return Response{}, err
 	}
-	c.subscriptions[key] = subscription
-	admitted = true
 	pending := c.pending[key]
-	delete(c.pending, key)
+	c.hub.promotePendingLocked(c, subscription, pending)
+	admitted = true
 	var changed *MemberFrame
 	kind := PresenceJoined
 	if subscription.member != "" && c.hub.cluster == nil {
@@ -154,6 +153,8 @@ func (c *connectionState) subscribe(ctx context.Context, request Request, key su
 }
 func (c *connectionState) removeLocked(subscription *subscriptionState) {
 	delete(c.subscriptions, subscription.key)
+	c.hub.unindexSubscriptionLocked(c, subscription.key)
+	c.hub.trackSubjectLocked(c, subscription.subjectID, -1)
 	if subscription.member == "" {
 		return
 	}
@@ -181,9 +182,36 @@ func (h *Hub) presenceChangedLocked(key subscriptionKey, kind ResponseType, memb
 	if err != nil {
 		return
 	}
-	for _, connection := range h.connections {
-		if connection.subscriptions[key] != nil {
-			connection.enqueueLocked(frame)
+	for connection := range h.subscribers[key] {
+		connection.enqueueLocked(frame)
+	}
+}
+
+// Subscription indexes are maintained with every hub.mu mutation so routing
+// and presence notification visit only matching connections.
+func (h *Hub) indexSubscriptionLocked(c *connectionState, key subscriptionKey) {
+	connections := h.subscribers[key]
+	if connections == nil {
+		connections = make(map[*connectionState]struct{})
+		h.subscribers[key] = connections
+		keys := h.channelKeys[key.channel]
+		if keys == nil {
+			keys = make(map[subscriptionKey]struct{})
+			h.channelKeys[key.channel] = keys
+		}
+		keys[key] = struct{}{}
+	}
+	connections[c] = struct{}{}
+}
+func (h *Hub) unindexSubscriptionLocked(c *connectionState, key subscriptionKey) {
+	connections := h.subscribers[key]
+	delete(connections, c)
+	if len(connections) == 0 {
+		delete(h.subscribers, key)
+		keys := h.channelKeys[key.channel]
+		delete(keys, key)
+		if len(keys) == 0 {
+			delete(h.channelKeys, key.channel)
 		}
 	}
 }

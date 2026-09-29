@@ -48,6 +48,37 @@ provider dependency order, determines listener order. `RegisterTopic` permits an
 intentional topic with no listeners; listener registration already declares its
 schema, so it does not require another registration. Undeclared topics fail.
 
+## Queued listeners, subscribers and test fakes
+
+`events.Listen(name, handler).Queued()` (or `events.RegisterQueuedListener`,
+`application.ListenQueued`) marks one listener to run as a job instead of
+inline. Sync and queued listeners can be mixed for one event: at its position in
+declaration order, each queued listener is enqueued with a fresh payload
+snapshot and later runs with the job's retries and attribution; a failing sync
+listener still stops the listeners after it. Queued delivery needs an
+`events.ListenerQueue` per bus: create it with `events.NewListenerQueue(bus,
+policy)`, register its `Declaration()` in the job registry and `Bind` the
+dispatcher before dispatching. Dispatching an event with a queued listener and no
+bound queue fails with `fault.Invalid`. Configured applications enable this with
+`features.events.queued_listeners = true`, optionally selecting
+`listener_connection` (default: the default job connection) and
+`listener_queue` (default `default`); a worker must consume that queue.
+
+A subscriber groups related listeners in one type: implement
+`events.Subscriber` (`Declarations() ([]events.Declaration, error)`, typically
+one `Topic.Declare` per event, mixing sync and queued listeners) and register it
+with `events.Subscribe` for `Prepare`, `events.RegisterSubscriber` for a provider,
+or `application.Subscribe(id, constructor)` for a configured application.
+
+`testkit/events.NewFake(t, bus)` intercepts every dispatch on a production bus
+for the rest of the test: listeners (sync and queued) do not run, while payloads
+are still validated and captured. `Dispatched`, `AssertDispatched`,
+`AssertNotDispatched` and `AssertDispatchedCount` decode the recorded payloads
+of a typed topic and apply typed predicates without printing payloads. The fake
+uses a module-internal interception seam (`Bus.Intercept` requires a token only
+framework test helpers can obtain, so production code cannot suppress
+listeners) and is removed at cleanup.
+
 ## Payloads, failures and ownership
 
 Foundry snapshots the input through its existing strict typed JSON facility,
@@ -69,9 +100,13 @@ jobs and durable outbox delivery, not an unmanaged background goroutine.
 
 Directly prepared buses use `Prepare(config, declarations...)`, then `Start(ctx)`
 and `Close(ctx)`. The application module handles this lifecycle automatically.
-`DefaultConfig` admits up to 64 concurrent captures/deliveries and 32 active nested
-dispatches. Admission returns a capacity error instead of waiting on a recursive
-semaphore. Completed context markers do not count as active recursion.
+`DefaultConfig` admits up to 256 concurrent captures/deliveries and 32 active nested
+dispatches. A top-level dispatch beyond `MaxInFlight` waits briefly (bounded by
+its context and the shared five-second admission wait) and then fails with
+`fault.Overloaded`, which HTTP maps to a retryable 503. A nested dispatch from an
+active listener never waits for capacity held by its own ancestors; it fails
+immediately with `fault.Overloaded` instead of deadlocking. Completed context
+markers do not count as active recursion.
 
 Shutdown rejects new work, cancels active work and waits for actual callback exit.
 Successful listener completion still checks owner cancellation before returning.

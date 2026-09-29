@@ -15,9 +15,12 @@ func (n CookieName) Validate() error { return HeaderName(n).Validate() }
 
 // MaxCookieBytes bounds a complete outgoing Set-Cookie field, including scope.
 const MaxCookieBytes = 4096
-const maxCookieRequestBytes = 16 << 10
-const maxCookieRequestFields = 32
-const maxCookieRequestPairs = 128
+
+// Request bounds are generous parser-work limits for all cookies a browser may
+// send to this host, including those owned by other applications or scripts.
+const maxCookieRequestBytes = 64 << 10
+const maxCookieRequestFields = 256
+const maxCookieRequestPairs = 2048
 
 // CookieOptions owns scope and browser persistence. Zero MaxAge/Expires means a
 // session cookie; Clear performs deletion explicitly. MaxAge takes precedence

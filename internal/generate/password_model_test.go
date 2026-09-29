@@ -16,7 +16,7 @@ type Account struct{ID int64;Digest StoredHash;Backup value.Nullable[password.Ha
 //foundry:projection
 type Credential struct{Digest StoredHash}
 `)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := Generate(t.Context(), Options{Dir: dir, FieldDocumentation: true}); err != nil {
 		t.Fatal(err)
 	}
 	output := generatedSnapshot(t, dir)["account_foundry.gen.go"]

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/storage"
@@ -39,6 +40,9 @@ func Stream(disk *storage.Disk, key storage.ObjectKey, options storage.ReadOptio
 	})
 }
 
+// responseError maps storage failures to the shared HTTP envelope. Capacity
+// exhaustion (fault.Overloaded, LimitExceeded), disk shutdown and deadlines are
+// retryable 503 responses, not 500s; unclassified adapter failures remain 500.
 func responseError(err error) error {
 	var failure *storage.Error
 	if errors.As(err, &failure) {
@@ -51,10 +55,12 @@ func responseError(err error) error {
 			return foundryhttp.PreconditionFailed.WithCause(err)
 		case storage.RangeNotSatisfiable:
 			return foundryhttp.RangeNotSatisfiable.WithCause(err)
+		case storage.LimitExceeded, storage.Closed:
+			return foundryhttp.Unavailable.WithCause(err)
 		}
 	}
-	if errorgraph.Is(err, context.DeadlineExceeded) || errorgraph.Is(err, context.Canceled) {
-		return foundryhttp.RequestTimeout.WithCause(err)
+	if errorgraph.Is(err, fault.Overloaded) || errorgraph.Is(err, context.DeadlineExceeded) || errorgraph.Is(err, context.Canceled) {
+		return foundryhttp.Unavailable.WithCause(err)
 	}
 	return foundryhttp.InternalError.WithCause(err)
 }

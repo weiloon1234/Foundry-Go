@@ -50,6 +50,22 @@ permit JSON null according to their declared Go representation. An Optional
 wrapper does not silently turn every inner type into a nullable value; use
 Nullable when a patch must distinguish omission from clearing.
 
+To publish a list that is never null, declare the field as `value.List[T]`, an
+ordinary slice type (`len`, `range`, `append` and indexing work unchanged):
+
+```go
+Tags value.List[string] `json:"tags"`
+```
+
+A nil list encodes as `[]`, decoding rejects `null`, and OpenAPI and TypeScript
+describe the field as a non-nullable array, so clients iterate it without null
+checks. Keep a plain slice where `null` is meaningful. `value.List[byte]` is
+rejected because a byte slice's JSON form is base64 text.
+
+A DTO that is only ever sent, never decoded from a request, can be declared with
+`//foundry:dto role=response`. Its JSON codec and schema are unchanged; the
+request validation field descriptors (`XValidationFields`) are not generated.
+
 ## Strict, typed decoding
 
 The descriptor is immutable and can be reused concurrently. The lower-level
@@ -80,7 +96,11 @@ every failure, rather than exposing a partially assigned DTO.
 Paths use JSON Pointer. Unknown fields produce one issue on their containing
 object without echoing unknown names; received values are never included in the
 error message. Internal causes remain available through ordinary error inspection.
-Panic and Goexit in codecs become safe internal faults. Cancellation is checked
+Panic and Goexit in decoding codecs become safe internal faults. A direct
+`Encode` call runs codecs on the caller's goroutine: a panic becomes a safe
+internal fault, while `runtime.Goexit` ends that goroutine. Typed endpoints
+encode their response inside the handler's isolated boundary, so Goexit there
+is still a safe 500. Cancellation is checked
 around bounded work, and an active codec is waited for until it actually returns.
 A real codec panic is retained even if cancellation also occurs.
 

@@ -29,7 +29,7 @@ type authenticatedPageEndpoint[P, F, W, A, Page, Response any] struct {
 func Authenticated[P, F, W, A, Page, Response any](endpoint pageEndpoint[P, F, W, Page, Response], binding foundryhttp.GuardBinding[A]) authenticatedPageEndpoint[P, F, W, A, Page, Response] {
 	return authenticatedPageEndpoint[P, F, W, A, Page, Response]{
 		page:      endpoint,
-		transport: foundryhttp.Authenticated(endpoint.transport, binding),
+		transport: foundryhttp.Authenticated(endpoint.withLinkRequirements().transport, binding),
 	}
 }
 

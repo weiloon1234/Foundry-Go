@@ -1,15 +1,15 @@
 {
   "version": 1,
   "files": {
-    "broker_settings_foundry.gen.go": "b86e606d083b29d05ff5ff530949cf040703da1b204e27217fd85d3753eedcd4",
-    "cache_settings_foundry.gen.go": "e162d5dda9291dddfd2e2a442ed06e3c1a32a67981532aaca8e8bd49fa6a70f9",
-    "connection_settings_foundry.gen.go": "55e46c104e479e71b6564d8b6bd7790f07c8e6aea80f4ada8eccea85e78f368f",
-    "disk_settings_foundry.gen.go": "16b2c7256c78b4a1a1fd18fad819816cd308bc3ca42f0997f8878f8d51a37432",
-    "http_client_settings_foundry.gen.go": "c9cd7ef3fbdf641fd8c4506364b2c1a017b173d9ec05657c61b9aea728a9e7c1",
-    "job_connection_settings_foundry.gen.go": "d180700eedfe6e9260c85b9cd46dbba4199bd2235df2de601d841ac014f7acf1",
-    "mailer_settings_foundry.gen.go": "f9455cec911792a55786d675010c3707250bb484a4bccc8f14e4fbcbfd197a40",
-    "realtime_connection_settings_foundry.gen.go": "beb24c2842ab5d08bd247494a98419714cfe95da106bae419f264f384bb4a27d",
-    "redis_connection_settings_foundry.gen.go": "33630198e9c065b1b11820eb00fd9503a723acb19cd92b6cabbdd3b2b973c3c2",
-    "settings_foundry.gen.go": "f3ca9958cfee82280a503104284955daf372f53686e5f3a2b79d8951279715f0"
+    "broker_settings_foundry.gen.go": "63591c8a4004e83e6aace290a693d44fb44ddf8938cd8c2da201795a5fdfeeea",
+    "cache_settings_foundry.gen.go": "cf7410c5aea9e4a6e2fbe53f3131a8e67752badf7a3b843443ddf7bfc15114bb",
+    "connection_settings_foundry.gen.go": "75b6a56b4b66b46dfa983c251f0e77b9f32fa39fba72684d0882fe6514e595a5",
+    "disk_settings_foundry.gen.go": "1f164de02afffb6ab70a49c37321f069c6e8af8023b8c71a2934ac231de1a0a7",
+    "http_client_settings_foundry.gen.go": "d3b89b4f101279fd2544ffa3003f4106c43e5e66a94311c2307592af23ee0db5",
+    "job_connection_settings_foundry.gen.go": "aed2e27bacc787cb6f56263d1069299e23f83bd3473adcd20ebbfe1f1aaff668",
+    "mailer_settings_foundry.gen.go": "f5cb2163391cb41869a317155a2199e31f0038bcdc6e1fcbf2d1fbb0379ed4fe",
+    "realtime_connection_settings_foundry.gen.go": "4ac014ae329100aa96996b8cbb031b03f258a813a7dfe7ec90e3f06c1e855395",
+    "redis_connection_settings_foundry.gen.go": "f2e6445b5e7d3c07e6dff0979067c5980a6e3b2778f9c74d0ca119707dfe5146",
+    "settings_foundry.gen.go": "ed331a7da118ea1a75e44642e824841121a9458b8a98f42a38835521909aa2ea"
   }
 }

@@ -34,7 +34,7 @@ func Module(name foundation.ProviderID, key foundation.Key[*Runtime], probes fou
 		if runtime.state != nil {
 			return fault.New(fault.Conflict, "diagnostics already belongs to an application")
 		}
-		runtime.state, runtime.recorder = app.State, app.Observability()
+		runtime.state, runtime.recorder, runtime.gate = app.State, app.Observability(), app.Maintenance()
 		return nil
 	}}
 }

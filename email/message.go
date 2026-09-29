@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
@@ -30,10 +31,18 @@ type Attachment struct {
 }
 
 func (a Attachment) Validate() error {
-	for _, err := range []error{a.Disk.Validate(), a.Key.Validate(), a.ContentType.Validate(), a.Version.Validate(), a.IfMatch.Validate()} {
+	for _, err := range []error{a.Disk.Validate(), a.Key.Validate(), a.Version.Validate(), a.IfMatch.Validate()} {
 		if err != nil {
 			return Construction
 		}
+	}
+	return a.validateMetadata()
+}
+
+// validateMetadata checks the fields shared with in-memory attachments.
+func (a Attachment) validateMetadata() error {
+	if a.ContentType.Validate() != nil {
+		return Construction
 	}
 	if a.Filename == "" || len(a.Filename) > 200 || !headerText(a.Filename) || strings.ContainsAny(a.Filename, "/\\") || a.Filename == "." || a.Filename == ".." {
 		return Construction
@@ -59,7 +68,44 @@ type Message struct {
 	subject, text, html  string
 	headers              map[string]string
 	attachments          []Attachment
+	data                 []DataAttachment
+	locale               i18n.LocaleID
 }
+
+// MaxDataAttachmentBytes bounds one in-memory attachment; the mailer's
+// MaxAttachmentBytes and MaxMessageBytes still apply.
+const MaxDataAttachmentBytes = 10 << 20
+
+// DataAttachment is in-memory content attached directly, for generated files
+// such as a rendered invoice. It holds an owned copy of the bytes. It is not
+// serializable: queued and snapshotted email must reference stored attachments.
+type DataAttachment struct {
+	metadata Attachment
+	data     []byte
+}
+
+func NewDataAttachment(filename string, contentType storage.MediaType, data []byte) (DataAttachment, error) {
+	result := DataAttachment{metadata: Attachment{Filename: filename, ContentType: contentType}, data: slices.Clone(data)}
+	if len(data) == 0 || len(data) > MaxDataAttachmentBytes || result.metadata.validateMetadata() != nil {
+		return DataAttachment{}, Construction
+	}
+	return result, nil
+}
+
+// WithContentID returns an inline copy referenced as cid:id from HTML.
+func (a DataAttachment) WithContentID(id string) (DataAttachment, error) {
+	a.metadata.ContentID = id
+	if id == "" || a.metadata.validateMetadata() != nil {
+		return DataAttachment{}, Construction
+	}
+	return a, nil
+}
+func (a DataAttachment) Filename() string               { return a.metadata.Filename }
+func (a DataAttachment) ContentType() storage.MediaType { return a.metadata.ContentType }
+func (a DataAttachment) ContentID() string              { return a.metadata.ContentID }
+func (a DataAttachment) Size() int                      { return len(a.data) }
+func (DataAttachment) Format(s fmt.State, _ rune)       { _, _ = s.Write([]byte("email data attachment")) }
+func (DataAttachment) LogValue() slog.Value             { return slog.StringValue("email data attachment") }
 
 func NewMessage(from Address, subject string, to ...Address) Message {
 	return Message{from: from, subject: subject, to: slices.Clone(to)}
@@ -87,17 +133,29 @@ func (m Message) Attach(attachments ...Attachment) Message {
 	m.attachments = append(slices.Clone(m.attachments), attachments...)
 	return m
 }
-func (m Message) From() Address              { return m.from }
-func (m Message) To() []Address              { return slices.Clone(m.to) }
-func (m Message) CC() []Address              { return slices.Clone(m.cc) }
-func (m Message) BCC() []Address             { return slices.Clone(m.bcc) }
-func (m Message) ReplyAddresses() []Address  { return slices.Clone(m.replyTo) }
-func (m Message) Subject() string            { return m.subject }
-func (m Message) TextBody() string           { return m.text }
-func (m Message) HTMLBody() string           { return m.html }
-func (m Message) Headers() map[string]string { return maps.Clone(m.headers) }
-func (m Message) Attachments() []Attachment  { return slices.Clone(m.attachments) }
-func (m Message) RecipientCount() int        { return len(m.to) + len(m.cc) + len(m.bcc) }
+
+// AttachData adds in-memory attachments (see DataAttachment).
+func (m Message) AttachData(attachments ...DataAttachment) Message {
+	m.data = append(slices.Clone(m.data), attachments...)
+	return m
+}
+
+// Locale records the message's language. MIME transports send it as the
+// Content-Language header; LocalizedTemplate sets it when rendering.
+func (m Message) Locale(locale i18n.LocaleID) Message { m.locale = locale; return m }
+func (m Message) LocaleID() i18n.LocaleID             { return m.locale }
+func (m Message) DataAttachments() []DataAttachment   { return slices.Clone(m.data) }
+func (m Message) From() Address                       { return m.from }
+func (m Message) To() []Address                       { return slices.Clone(m.to) }
+func (m Message) CC() []Address                       { return slices.Clone(m.cc) }
+func (m Message) BCC() []Address                      { return slices.Clone(m.bcc) }
+func (m Message) ReplyAddresses() []Address           { return slices.Clone(m.replyTo) }
+func (m Message) Subject() string                     { return m.subject }
+func (m Message) TextBody() string                    { return m.text }
+func (m Message) HTMLBody() string                    { return m.html }
+func (m Message) Headers() map[string]string          { return maps.Clone(m.headers) }
+func (m Message) Attachments() []Attachment           { return slices.Clone(m.attachments) }
+func (m Message) RecipientCount() int                 { return len(m.to) + len(m.cc) + len(m.bcc) }
 
 // EnvelopeRecipients includes BCC. MIME headers deliberately exclude BCC.
 func (m Message) EnvelopeRecipients() []Address {
@@ -121,19 +179,28 @@ func (m Message) Validate() error {
 			}
 		}
 	}
-	if len(m.attachments) > MaxAttachments || len(m.headers) > MaxHeaders {
+	if len(m.attachments)+len(m.data) > MaxAttachments || len(m.headers) > MaxHeaders || m.locale != "" && m.locale.Validate() != nil {
 		return Construction
 	}
 	ids := make(map[string]bool)
+	contentID := func(id string) bool {
+		if id == "" {
+			return true
+		}
+		if ids[id] || m.html == "" {
+			return false
+		}
+		ids[id] = true
+		return true
+	}
 	for _, a := range m.attachments {
-		if a.Validate() != nil {
+		if a.Validate() != nil || !contentID(a.ContentID) {
 			return Construction
 		}
-		if a.ContentID != "" {
-			if ids[a.ContentID] || m.html == "" {
-				return Construction
-			}
-			ids[a.ContentID] = true
+	}
+	for _, a := range m.data {
+		if len(a.data) == 0 || a.metadata.validateMetadata() != nil || !contentID(a.metadata.ContentID) {
+			return Construction
 		}
 	}
 	for k, v := range m.headers {

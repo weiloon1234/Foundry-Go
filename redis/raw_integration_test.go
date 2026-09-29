@@ -187,7 +187,7 @@ func (h lostRawAcknowledgement) DialHook(next driver.DialHook) driver.DialHook {
 func (h lostRawAcknowledgement) ProcessHook(next driver.ProcessHook) driver.ProcessHook {
 	return func(ctx context.Context, c driver.Cmder) error {
 		err := next(ctx, c)
-		if !h.pipeline && strings.EqualFold(c.Name(), h.command) {
+		if !h.pipeline && (strings.EqualFold(c.Name(), h.command) || h.command == "eval" && strings.EqualFold(c.Name(), "evalsha")) {
 			h.calls.Add(1)
 			if err == nil {
 				return h.failure

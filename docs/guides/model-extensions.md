@@ -43,6 +43,67 @@ queries. Stored subject keys use database equality semantics, including signed
 floating zero and equivalent interval keys. A snapshot is not a later request's
 authorization or eligibility cache.
 
+The store admits 64 concurrent operations by default (`MaxActive`, at most 1024),
+each bounded by `Timeout` (one minute). A burst beyond capacity, for example
+while the database is slow, queues in FIFO order for up to five seconds (or the
+caller's shorter deadline) instead of failing immediately; only an unsatisfied
+wait reports `fault.Overloaded`, which HTTP maps to a retryable 503.
+
+### Owner identity and table renames
+
+Every stored metadata row, translation, attachment and registration key belongs
+to the owner's scope, an opaque digest of the owner name and its *storage model*.
+The storage model defaults to the generated table name, so renaming an owner
+table silently moves the owner to a new, empty scope unless its persisted
+identity is declared. Declare the previous table name before renaming:
+
+```go
+var Users = extensions.DefineOwnerWith("users",
+    query.IdentityOf(models.QueryMembers().Query, models.MemberFields().ID),
+    extensions.OwnerOptions{StorageModel: "users"})
+```
+
+The scope, row keys and attachment object paths are then unchanged, and stored
+identities attributed to the old table decode through the current key codec. New
+applications may declare a stable `StorageModel` from the start. A storage model
+cannot name another registered owner's table or storage model. Keep it unchanged
+for the lifetime of the stored data.
+
+If a table was already renamed without a declaration, rows written under the old
+scope are hidden but intact. Declare the old table name as a previous model:
+
+```go
+var Users = extensions.DefineOwnerWith("users",
+    query.IdentityOf(models.QueryMembers().Query, models.MemberFields().ID),
+    extensions.OwnerOptions{PreviousModels: []string{"users"}})
+```
+
+`metadata rescope --owner users` and `translations rescope --owner users` (or
+`metadata.InspectStale`/`Rescope` and the translation equivalents) list rows
+whose owner column matches but whose scope differs from the owner's current
+scope; `--apply` moves them in bounded, locked pages after verifying each row's
+key digest and re-decoding its key with the current codec. Only rows whose
+recorded scope and identity both belong to a declared model (the current model,
+`StorageModel` or `PreviousModels`) are adopted; rows of any other earlier model
+are reported as `undeclared`. A row whose subject no longer exists is reported
+as `missing` instead of becoming an orphan in the current scope, and a row whose
+current-scope equivalent already exists is never overwritten; it stays and is
+reported as a `conflict` for an explicit decision. Previous models, like storage
+models, cannot name another registered owner's model.
+Attachments cannot be re-scoped because object paths embed the scope, so declare
+`StorageModel` before renaming a table that owns attachments.
+
+### Natural keys and bulk deletes
+
+Extension data belongs to the owner's key, not to a row instance. Ordinary
+model deletes clean it up through the `Cleanup` observers below, but set-based
+bulk deletes skip per-model observers. For natural-key owners (country codes,
+slugs, SKUs) a row recreated with the same key after such a delete therefore
+inherits the old metadata and translations. After a bulk delete, remove the
+extension data before recreating keys: call `DeleteAll` for each affected owner
+inside the same transaction, or run orphan inspection and `PruneOrphans` before
+the keys are reused. Soft deletion deliberately retains data for restoration.
+
 ## Typed metadata
 
 ```go
@@ -111,7 +172,11 @@ Unknown owners and corrupted identity metadata fail closed.
 booting services, then run the command with the assembled manager and output
 writer. It inspects every page without deleting and prints only opaque row keys
 and metadata names. JSON emits one page per line; it never exports model identity
-or value payloads. Framework CLI composition remains in milestone 23.
+or value payloads. The same parser accepts
+`metadata rescope --owner users [--page-size 100] [--format text|json] [--apply]`
+for [stale scopes](#owner-identity-and-table-renames); without `--apply` it only
+lists stale and target row keys, and rows left in place carry a `conflict`,
+`missing` or `undeclared` marker. Framework CLI composition remains in milestone 23.
 
 The common store bounds operation count and owns actual callback lifetime. Close
 cancels operations, the caller's context bounds waiting, and Done closes after
@@ -138,34 +203,45 @@ request localization system remains in milestone 20; model content never uses a
 process-global current locale.
 
 `Get` returns the exact locale's optional text. `Resolve` checks the requested
-locale, then the catalog default, then the first lexicographically ordered
-supported translation. Empty text is a present value. Unsupported locales fail
-instead of bypassing catalog membership through fallback. Locale removal retains
-stored rows for migration but excludes them from ordinary field values.
+locale, then its supported regional parents (`en-GB` → `en`), then the catalog
+default, then the first lexicographically ordered supported translation. UI
+catalogs share the same `LocaleSet.Match` parent rule. Empty text is a present
+value. Unsupported locales fail instead of bypassing catalog membership through
+fallback. Locale removal retains stored rows for migration but excludes them from
+ordinary field values.
 
-`ProductName.Load(ctx, manager, references)` uses one active-owner query and one
-streaming translation query in the same snapshot. `batch.Get(reference)` performs
-no I/O and exposes immutable `Values`; `Entries` returns a fresh map. Limits are
-1000 owner references, 4096 returned translation rows and 4 MiB of text per batch.
-Each field defaults to 64 KiB per value and may declare a smaller `MaxBytes`.
+`ProductName.Load(ctx, manager, references)` uses one active-owner query and
+keyset-paged translation queries of 4096 rows in the same snapshot, so 1000 owners
+in several locales load completely; most batches need a single page. `batch.Get(reference)`
+performs no I/O and exposes immutable `Values`; `Entries` returns a fresh map.
+Limits are 1000 owner references and 4 MiB of text per batch; rows are bounded by
+owners × supported locales. Each field defaults to 64 KiB per value and may declare
+a smaller `MaxBytes`.
 
 `translations.Set(ctx, manager, reference, ProductName.SetValue(locale, text), ...)`
-atomically writes multiple fields/locales for one typed owner. It validates every
-assignment before writing; duplicates fail. `SetIn` joins a business transaction.
-An owner can have 64 declared fields and 4096 persisted locale/field pairs.
+atomically writes multiple fields/locales for one typed owner with one set-based
+`INSERT ... ON CONFLICT`. It validates every assignment before writing; duplicates
+fail. `SetIn` joins a business transaction. An owner can have 64 declared fields
+and 4096 persisted locale/field pairs.
 
 `All` provides bounded administrative inspection, including removed locales and
 old fields. `Forget` removes an exact active-locale value, `Clear` removes all
-locales of a declared field, and `DeleteAll` clears the active owner's translations.
-`Matching` supplies a typed, bounded exact-value owner scope. Authorization stays
-with the caller and the subsequent model query.
+locales of a declared field, and `DeleteAll` clears the active owner's
+translations; clearing and cleanup use one set-based `DELETE` without loading
+text. `Matching` supplies a typed, bounded exact-value owner scope and selects only
+ownership columns. The `000002_index_translation_values` migration adds a hash
+index on the value, which serves exact equality for values up to 64 KiB; it is a
+regular transactional `CREATE INDEX`, so apply it in a maintenance window on a
+large existing table. Authorization stays with the caller and the subsequent
+model query.
 
 `translations.Cleanup` has the same transactional hard-delete and soft-delete
 semantics as metadata. `InspectOrphans` and explicit `PruneOrphans` share owner
 validation and bounded pagination. Inspection selects only ownership/index
 columns; it does not load private content. `translations/command` accepts
 `translations orphans --owner products --page-size 100 --format text|json` and
-exposes no deletion flag. Apply `translations.Migrations()` explicitly.
+exposes no deletion flag, plus `translations rescope --owner products [--apply]`
+with the metadata re-scope semantics. Apply `translations.Migrations()` explicitly.
 
 Settings and country reference data use the same store and are documented in
 [Settings](settings.md) and [Countries](countries.md).

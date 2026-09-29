@@ -28,19 +28,66 @@ do not put credentials, SQL, request bodies or user data in probe IDs.
 
 ## Maintenance and rolling termination
 
-Use the application's recorder `Gate().Set(true)` to pause new work and publish
-non-ready status. Existing HTTP handlers, jobs, heartbeats and owner cleanup
-continue. Workers pause before reservation; schedules retain pending occurrence
-times and use their bounded catch-up policy after resume. WebSockets reject new
-upgrades/messages/subscriptions while allowing unsubscribe cleanup. CLI admission
-fails before constructing the command handler. `Set(false)` resumes a paused
-gate. `Drain()` is terminal and cannot be resumed.
+Every application owns one maintenance gate, with or without observability:
+`services.Maintenance()` (or `App.Maintenance()`) returns it. `Set(true)` pauses
+new work and publishes non-ready status. Existing HTTP handlers, jobs, heartbeats
+and owner cleanup continue. Workers pause before reservation; schedules retain
+pending occurrence times and use their bounded catch-up policy after resume.
+WebSockets reject new upgrades/messages/subscriptions while allowing unsubscribe
+cleanup. CLI admission fails before constructing the command handler. `Set(false)`
+resumes a paused gate. `Drain()` is terminal and cannot be resumed.
+`features.observability.maintenance = true` starts an instance paused.
+
+For a fleet, name a configured cache store (Redis, or PostgreSQL with its explicit
+cache migration) in `maintenance.store`. Each instance applies the shared record at
+boot and polls it every `maintenance.poll_interval` (5s by default, 100ms-10m);
+requests only read the local gate, and a store outage keeps the last applied state
+and logs one warning until it recovers. Register `application.MaintenanceCommands()`
+in the CLI registry for the operator commands:
+
+```sh
+app down --retry 60 --message "Upgrading, back soon" --with-secret \
+  --allow 203.0.113.0/24 --except "POST /hooks/*"
+app up
+```
+
+`down` publishes the record; paused responses are 503 with the standard error
+envelope, the operator `message` and `Retry-After`. Operator messages are not
+logged as server failures. `--with-secret` prints a generated secret (or pass
+`--secret`); only its SHA-256 digest is stored. Visiting `/<secret>` sets an
+HTTP-only `foundry_maintenance` cookie (12 hours by default, `maintenance.bypass_ttl`)
+sealed with the application encryption keys (`encryption.key_id`/`key`), so it
+admits that browser on every instance sharing those keys until the secret
+changes, and the stored digest alone cannot mint one. Without application keys the
+cookie is valid only on the instance that issued it. The cookie is `Secure` for
+native TLS or a trusted https scheme. `--allow` admits client addresses or CIDRs.
+With a global `http.TrustedProxy` the allow list matches the client it resolves;
+without one it matches the socket peer, which behind a load balancer is the
+balancer, so allowing its subnet would admit everyone. `--except "[METHOD ]/path[/*]"` exempts exact paths or path
+prefixes for any or one method. `maintenance.exempt` and `maintenance.allow`
+configure permanent exemptions. Both commands are declared with
+`AllowDuringMaintenance()`; run any other command during maintenance, such as a
+migration, with the explicit leading flag `app --during-maintenance migrate`.
 
 Keep protected GET/HEAD diagnostics reachable during maintenance using exact
-descriptor-derived `MaintenanceReadPaths`. That exception preserves auth and
-permissions and cannot reopen a shutting-down listener. Do not add broad path
-prefixes or write endpoints. Start a rolling replacement only after it is ready,
-remove the old instance from admission, and allow its owned work to finish.
+descriptor-derived `MaintenanceReadPaths`, or narrow exemption rules. Exemptions
+preserve route auth and permissions and never reopen a draining (shutting-down)
+listener. Do not exempt broad write endpoints. Start a rolling replacement only
+after it is ready, remove the old instance from admission, and allow its owned
+work to finish.
+
+`http.probes.liveness`/`readiness` mount public `/up` and `/ready` routes that
+report only status (see [diagnostics](production-diagnostics.md#public-probes));
+they stay reachable while paused so orchestrators do not restart a paused but
+healthy instance.
+
+`ShutdownTimeout` (default 25 seconds) is one budget from the shutdown request:
+the optional `StopDelay` lame-duck period (lifecycle `Stopping`, so readiness fails
+while listeners keep serving and load balancers deregister the instance), kernel
+drain and every cleanup share it. Keep it below the orchestrator's termination
+grace (for example Kubernetes' 30-second default) and above `StopDelay` plus the
+HTTP shutdown grace; configured assembly rejects budgets without room for cleanup.
+A signal-initiated graceful stop returns nil from `Run`, so the process exits 0.
 
 Application shutdown drains admission before canceling managed work. HTTP grants
 its configured grace, then cancels remaining handler contexts and closes ordinary
@@ -68,6 +115,59 @@ also obey database/sql's own driver contract, including error methods invoked
 inside that package; Foundry cannot repair internal driver state after a driver
 panics or calls Goexit.
 
+## Housekeeping schedule
+
+Bounded stores grow until something prunes them. `features.maintenance.enabled`
+(off by default) registers leader-only housekeeping schedules in each process that
+runs the scheduler kernel; other processes only validate the settings. Every task
+is one `foundry.maintenance.<task>` schedule with `WithoutOverlap` and a stable
+name-derived offset within its interval (so tasks do not all start at the top of
+the hour), runs on the scheduler leader (so on one server), pauses with the
+maintenance gate, and removes at most `batch` rows per statement and
+`max_batches` batches per run; a backlog continues at the next run. Runs that remove rows log `maintenance task pruned
+records` with the task, count and whether work remained; failures are logged and
+observed by the scheduler like any schedule.
+
+| Task | Registered when | Removes |
+| --- | --- | --- |
+| `outbox` | `features.outbox.enabled` | Published rows completed before `retention` (30 days); never pending or failed rows |
+| `idempotency` | Idempotency enabled with `config.prune_interval = 0` | Expired outcomes; otherwise the store's own pruner already runs, so it is not pruned twice |
+| `audit` | Audit enabled with `config.retention_days > 0` | Entries of the configured area older than that retention |
+| `jobs.archive` | `worker.archive.enabled` | Archived failed jobs older than `retention` (30 days) |
+| `notifications.inbox` | `features.notifications.enabled` | Read inbox records older than `retention` (90 days); unread too with `notifications_unread` |
+| `sessions.<guard>`, `tokens.<guard>` | Declared with `application.PruneSessions` / `PruneTokens` | Expired sessions / token families of that guard |
+| `models.<connection>` | Declared with `application.PruneModels` | [Prunable models](model-pruning.md#scheduled-pruning) of one connection, selected again each run |
+| declared name | Declared with `application.PruneWith` | Another store's bounded prune (challenge flows, verifications, resets, MFA factors, outbound webhook deliveries) |
+
+Declared tasks are returned in `FeatureDeclarations.Pruning`; guards are
+constructed there with `NewBrowserGuard`/`NewTokenGuard` because a guard's
+provider, not configuration, identifies its credentials. Defaults run each task
+hourly with 500-row batches, 20 batches and a 5-minute timeout. Override them for
+all tasks under `features.maintenance.defaults` or per task under
+`features.maintenance.<outbox|idempotency|audit|job_archive|notifications|sessions|tokens|models|custom>`
+(`interval`, `batch`, `max_batches`, `timeout`, `retention`, `disabled`). Build
+rejects intervals under one second, timeouts over a day and batches above the
+store's own bound. Audit applies its batch size but not `max_batches`; one run
+removes every expired batch within its timeout. Cache backends and datatable
+export artifacts own their cleanup and are not scheduled. Outbound webhooks
+(`webhook/outbound`) are constructed by the application rather than configured
+assembly, so declare their delivery retention yourself:
+
+```go
+application.PruneWith("webhooks.deliveries", outbound.MaxPruneBatch, func(ctx context.Context, limit int) (int64, error) {
+    removed, err := webhooks.PruneDeliveries(ctx, 30*24*time.Hour, limit)
+    return int64(removed), err
+})
+```
+
+```toml
+[features.maintenance]
+enabled = true
+[features.maintenance.outbox]
+retention = '168h'
+interval = '30m'
+```
+
 ## Resource pressure
 
 | Shared resource | Default | Exhaustion/lifetime behavior |
@@ -75,8 +175,9 @@ panics or calls Goexit.
 | HTTP accepted connections | 4096 | Capacity is reserved before Accept; additional peers wait in the OS backlog. A hijacked connection retains its slot until Close. |
 | HTTP active requests | 1024 | Excess requests receive 503; cancellation does not free a still-running handler's slot. |
 | HTTP maintenance read paths | At most 16 configured paths | Exact unescaped GET/HEAD matches only. |
-| Readiness callbacks | 8 across a registry, at most 64 probes by default | Requests wait within their deadlines; an unfinished callback retains capacity. |
-| Readiness time budgets | 3 seconds total, 1 second per probe | Dependency failure/cancellation changes readiness, not liveness. |
+| Readiness callbacks | 8 across a registry, at most 64 probes by default | Probes in one check run concurrently; requests wait within their deadlines; an unfinished callback retains capacity. |
+| Readiness time budgets | 3 seconds total, 1 second per probe | Each probe has its own deadline. Dependency failure/cancellation changes readiness, not liveness. |
+| Maintenance rules | 64 exemptions and 64 networks each for configuration and shared state | Message at most 512 bytes; Retry-After at most one day; poll 100ms-10m. |
 | Diagnostics HTTP operations | 8 | Capacity exhaustion returns 503 before probes start. |
 | Active observation spans | 65536 | New observations are dropped and counted; domain work is not rejected solely for missing telemetry. |
 | Metric series / recent entries | 512 / 128 | New excess series are counted as dropped; recent entries overwrite the oldest ring entry. |
@@ -112,8 +213,10 @@ Retain old application payload handlers while old work remains. Do not regenerat
 an ambiguous outbox operation under the same ID with different captured trace or
 payload bytes; reconcile and retry the original captured operation.
 
-Protected diagnostics do not expose a profiler, environment dump or unrestricted
-configuration/error output. They expose bounded operational metadata. Use normal
+Protected diagnostics do not expose an environment dump or unrestricted
+configuration/error output. They expose bounded operational metadata, and a
+`runtime/pprof` profiler only when `diagnostics.Config.Profiling` is enabled and a
+Profile route is explicitly bound under operator authorization. Use normal
 log redaction for custom sinks and `logging.Correlate` for context-aware custom
 handlers; `logging.JSON` already applies correlation. Scope log access and
 retention like other operational data.

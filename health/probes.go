@@ -67,7 +67,8 @@ type Report struct {
 }
 
 // Registry owns callback admission across all concurrent readiness requests.
-// Checks within one request run in declaration order under one total timeout.
+// Checks within one request run concurrently, each under its own ProbeTimeout
+// and all under one CheckTimeout; results keep declaration order.
 // A callback ignoring cancellation retains its slot and shutdown ownership until
 // it actually returns. This prevents repeated health requests leaking goroutines.
 // Construction performs no I/O and starts no goroutines. Do not copy a Registry.
@@ -110,7 +111,8 @@ func (r *Registry) Describe() []ProbeID {
 	return result
 }
 
-// Check bounds the complete readiness request and each callback. Cancellation
+// Check bounds the complete readiness request and each callback. Probes run
+// concurrently up to MaxConcurrent callbacks shared by all requests. Cancellation
 // returns the completed/remaining result states together with the context error.
 // A dependency failure returns a non-ready report without exporting its error.
 func (r *Registry) Check(ctx context.Context) (Report, error) {
@@ -120,10 +122,15 @@ func (r *Registry) Check(ctx context.Context) (Report, error) {
 	started := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, r.config.CheckTimeout)
 	defer cancel()
-	result := Report{Ready: true, Results: make([]Result, 0, len(r.probes))}
-	for _, probe := range r.probes {
-		item := r.check(ctx, probe)
-		result.Results = append(result.Results, item)
+	result := Report{Ready: true, Results: make([]Result, len(r.probes))}
+	// Probes run concurrently; registry slots bound callbacks across requests.
+	// Each waiter returns by its probe deadline, so Check stays within its total.
+	var waiters sync.WaitGroup
+	for i, probe := range r.probes {
+		waiters.Go(func() { result.Results[i] = r.check(ctx, probe) })
+	}
+	waiters.Wait()
+	for _, item := range result.Results {
 		result.Ready = result.Ready && item.State == Up
 	}
 	select {

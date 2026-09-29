@@ -32,15 +32,27 @@ func (c CatchUp) Validate() error {
 	return nil
 }
 
+// Options configure one declaration. Days, Between and LastDayOfMonth narrow
+// the spec in its zone without callbacks: a filtered occurrence advances the
+// schedule silently. When runs as an owned callback before the Before hook; a
+// false result records the occurrence as Skipped with reason Filtered (not
+// logged as a failure), and an error fails it as a hook failure.
+// EvenInMaintenanceMode keeps admitting this schedule while the application's
+// maintenance gate is paused or draining.
 type Options struct {
-	Timeout        time.Duration
-	WithoutOverlap bool
-	OverlapTTL     time.Duration
-	Environments   []string
-	CatchUp        CatchUp
-	Before         Handler
-	After          Handler
-	Failed         func(context.Context, Invocation, error) error
+	Timeout               time.Duration
+	WithoutOverlap        bool
+	OverlapTTL            time.Duration
+	Environments          []string
+	CatchUp               CatchUp
+	Days                  []time.Weekday
+	Between               Window
+	LastDayOfMonth        bool
+	When                  Predicate
+	EvenInMaintenanceMode bool
+	Before                Handler
+	After                 Handler
+	Failed                func(context.Context, Invocation, error) error
 }
 
 func DefaultOptions() Options { return Options{Timeout: 5 * time.Minute, OverlapTTL: 30 * time.Second} }
@@ -54,6 +66,12 @@ func (o Options) Validate() error {
 	if err := o.CatchUp.Validate(); err != nil {
 		return err
 	}
+	if err := validateDays(o.Days); err != nil {
+		return err
+	}
+	if err := o.Between.Validate(); err != nil {
+		return err
+	}
 	seen := make(map[string]bool)
 	for _, environment := range o.Environments {
 		if !keyspace.ValidName(environment) || seen[environment] {
@@ -63,7 +81,10 @@ func (o Options) Validate() error {
 	}
 	return nil
 }
-func (o Options) snapshot() Options { o.Environments = slices.Clone(o.Environments); return o }
+func (o Options) snapshot() Options {
+	o.Environments, o.Days = slices.Clone(o.Environments), slices.Clone(o.Days)
+	return o
+}
 
 // Declaration freezes parsed timing and domain callbacks. No I/O or background
 // activity occurs during declaration/registration. Services are constructor-injected.
@@ -126,6 +147,35 @@ func Weekly(id ID, zone *time.Location, handler Handler) (Declaration, error) {
 }
 func Monthly(id ID, zone *time.Location, handler Handler) (Declaration, error) {
 	return Cron(id, "0 0 0 1 * *", zone, handler)
+}
+
+// EveryMinute and the Every*Minutes helpers run on local wall-clock minute
+// boundaries in zone (for example :00, :05, :10 for EveryFiveMinutes).
+func EveryMinute(id ID, zone *time.Location, handler Handler) (Declaration, error) {
+	return Cron(id, "0 * * * * *", zone, handler)
+}
+func EveryFiveMinutes(id ID, zone *time.Location, handler Handler) (Declaration, error) {
+	return Cron(id, "0 */5 * * * *", zone, handler)
+}
+func EveryTenMinutes(id ID, zone *time.Location, handler Handler) (Declaration, error) {
+	return Cron(id, "0 */10 * * * *", zone, handler)
+}
+func EveryFifteenMinutes(id ID, zone *time.Location, handler Handler) (Declaration, error) {
+	return Cron(id, "0 */15 * * * *", zone, handler)
+}
+func EveryThirtyMinutes(id ID, zone *time.Location, handler Handler) (Declaration, error) {
+	return Cron(id, "0 */30 * * * *", zone, handler)
+}
+
+// LastDayOfMonthAt runs at HH:MM on the last local day of each month.
+func LastDayOfMonthAt(id ID, text string, zone *time.Location, handler Handler) (Declaration, error) {
+	d, err := DailyAt(id, text, zone, handler)
+	if err != nil {
+		return Declaration{}, err
+	}
+	options := d.Options()
+	options.LastDayOfMonth = true
+	return d.With(options)
 }
 
 type Registry struct{ entries []Declaration }

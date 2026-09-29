@@ -11,12 +11,14 @@ import (
 
 // classify never formats server/transport errors, which can include credentials
 // or payloads. The cause remains available for deliberate internal inspection.
+// A command that completed successfully is a success even when its deadline
+// expired after the reply arrived; only a failed command reports the context.
 func classify(ctx context.Context, err error) error {
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
 	if err == nil {
 		return nil
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
 	var existing *fault.Error
 	if errors.As(err, &existing) {

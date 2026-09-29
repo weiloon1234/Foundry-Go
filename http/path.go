@@ -22,12 +22,30 @@ type NoPath struct{}
 type Path[P any] struct {
 	pattern    string
 	parameters []PathParameter[P]
+	// compiled caches the validated grammar. Copies share it read-only, so
+	// registration and URL generation do not parse the pattern again.
+	compiled *compiledPath
 }
 
-// DefinePath snapshots parameter declarations. Validation occurs at registration
-// and URL generation so related descriptors can be declared as package variables.
+type compiledPath struct {
+	segments []pathSegment
+	err      error
+}
+
+// DefinePath snapshots parameter declarations. Validation errors are reported at
+// registration and URL generation so related descriptors can be declared as
+// package variables. The pattern is parsed once, here.
 func DefinePath[P any](pattern string, parameters ...PathParameter[P]) Path[P] {
-	return Path[P]{pattern: pattern, parameters: slices.Clone(parameters)}
+	path := Path[P]{pattern: pattern, parameters: slices.Clone(parameters)}
+	path.compiled = path.compile()
+	return path
+}
+
+// prefixed returns an independent path under a literal scope prefix.
+func (p Path[P]) prefixed(prefix string) Path[P] {
+	p.pattern = prefix + p.pattern
+	p.compiled = p.compile()
+	return p
 }
 
 // StaticPath declares an exact path with no parameters.
@@ -67,6 +85,19 @@ func ambiguousEncodedPath(path string) bool {
 }
 
 func (p Path[P]) validate() ([]pathSegment, error) {
+	compiled := p.compiled
+	if compiled == nil {
+		compiled = p.compile()
+	}
+	return compiled.segments, compiled.err
+}
+
+func (p Path[P]) compile() *compiledPath {
+	segments, err := p.parse()
+	return &compiledPath{segments: segments, err: err}
+}
+
+func (p Path[P]) parse() ([]pathSegment, error) {
 	segments, err := httppath.Parse(p.pattern)
 	if err != nil {
 		return nil, err
@@ -95,24 +126,26 @@ func (p Path[P]) validate() ([]pathSegment, error) {
 
 // URL renders a relative path, escaping each value once. No incoming host or
 // forwarded header participates. The concrete P prevents unrelated model IDs or
-// path DTOs from being supplied to this route. Codec and selector callbacks are
-// owned until they return; panic and Goexit become internal failures. Custom
+// path DTOs from being supplied to this route. Codec and selector callbacks run
+// on the caller's goroutine; a panic becomes an internal failure. Custom
 // codec errors remain private causes without invoking their error methods.
 func (p Path[P]) URL(parameters P) (string, error) {
 	segments, err := p.validate()
 	if err != nil {
 		return "", err
 	}
-	values := make(map[string]string, len(p.parameters))
+	values := make([]string, len(p.parameters))
 	var failed error
-	err = callback.Isolated("HTTP path encoding", func() error {
-		for _, binding := range p.parameters {
+	// Framework hot path: Invoke contains panics on this goroutine (see
+	// callback.Invoke). Goexit is not converted; it ends the calling goroutine.
+	err = callback.Invoke("HTTP path encoding", func() error {
+		for i, binding := range p.parameters {
 			text, cause := binding.encode(&parameters)
 			if cause != nil {
 				failed = cause
 				break
 			}
-			values[binding.name] = text
+			values[i] = text
 		}
 		return nil
 	})
@@ -127,13 +160,20 @@ func (p Path[P]) URL(parameters P) (string, error) {
 		return "", fault.Wrap(code, "route URL parameters could not be encoded", failed)
 	}
 	var out strings.Builder
+	out.Grow(len(p.pattern) + 16)
 	for _, segment := range segments {
 		out.WriteByte('/')
 		if segment.Name == "" {
 			out.WriteString(url.PathEscape(segment.Literal))
 			continue
 		}
-		text := values[segment.Name]
+		var text string
+		for i, binding := range p.parameters {
+			if binding.name == segment.Name {
+				text = values[i]
+				break
+			}
+		}
 		if err := validateParameterText(text, segment.Tail); err != nil {
 			return "", err
 		}
@@ -159,7 +199,7 @@ func (p Path[P]) decode(r *stdhttp.Request, segments []pathSegment) (P, error) {
 	var result P
 	var failed error
 	var failedName string
-	err := callback.Isolated("HTTP path decoding", func() error {
+	err := callback.Invoke("HTTP path decoding", func() error {
 		for _, segment := range segments {
 			if ctx.Err() != nil {
 				break

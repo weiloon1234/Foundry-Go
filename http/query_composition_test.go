@@ -136,6 +136,20 @@ func TestEmbeddedQuerySelectorsRetainFailureOwnership(t *testing.T) {
 				}
 				return nil
 			})
+			if mode == "goexit" {
+				// Selectors run on the caller's goroutine (callback.Invoke).
+				returned := make(chan bool, 1)
+				go func() {
+					completed := false
+					defer func() { returned <- completed }()
+					_, _ = descriptor.Decode(context.Background(), "user="+queryUserID, queryLimits)
+					completed = true
+				}()
+				if <-returned {
+					t.Fatal("selector Goexit was converted into a return")
+				}
+				return
+			}
 			result, err := descriptor.Decode(context.Background(), "user="+queryUserID, queryLimits)
 			if !errors.Is(err, fault.Internal) || !reflect.DeepEqual(result, composedSearch{}) {
 				t.Fatalf("selector failure escaped: %+v %v", result, err)

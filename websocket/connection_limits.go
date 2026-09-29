@@ -2,77 +2,67 @@ package websocket
 
 import (
 	"context"
+	"time"
 
-	"github.com/weiloon1234/Foundry-Go/clock"
-	"github.com/weiloon1234/Foundry-Go/keyspace"
+	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/ratelimit"
-	"github.com/weiloon1234/Foundry-Go/ratelimit/memory"
 )
 
-// Each connection owns one local bucket. Dead connections leave no shared live
-// quota entries behind; the shared limiter supplies fixed-window semantics.
-func (c *connectionState) prepareRateLimit() error {
-	backend, err := memory.New(1, clock.System{})
-	if err != nil {
-		return err
-	}
-	config := ratelimit.DefaultConfig(keyspace.Namespace{Application: "foundry.websocket", Environment: "local"})
-	config.MaxConcurrent = 1
-	config.MaxDeclarations = 1
-	config.MaxKeyBytes = 64
-	config.Timeout = c.hub.config.OperationTimeout
-	store, err := ratelimit.NewStore(backend, config)
-	if err != nil {
-		return err
-	}
-	declaration := ratelimit.Define("connection", keyspace.TextKeys[ConnectionID](), c.hub.config.MessageRate)
-	c.rate, err = declaration.Bind(store)
-	return err
+// tokenBucket is the connection's inbound rate limit. Each connection owns one
+// bucket in memory; no shared quota entry outlives it. It refills continuously
+// at Requests per Window with a burst of Requests and measures elapsed time on
+// the monotonic clock, so wall-clock steps (NTP corrections) neither refill nor
+// drain it. Only the serial inbound loop uses it.
+type tokenBucket struct {
+	capacity, tokens, perSecond float64
+	last                        time.Time
 }
-func (c *connectionState) allowMessage() bool {
-	decision, err := c.rate.Allow(c.ctx, c.id)
-	if err != nil {
-		c.cancel()
+
+func newTokenBucket(limit ratelimit.Limit, now time.Time) tokenBucket {
+	capacity := float64(limit.Requests)
+	return tokenBucket{capacity: capacity, tokens: capacity, perSecond: capacity / limit.Window.Seconds(), last: now}
+}
+func (b *tokenBucket) allow(now time.Time) bool {
+	if elapsed := now.Sub(b.last); elapsed > 0 {
+		b.tokens = min(b.capacity, b.tokens+elapsed.Seconds()*b.perSecond)
+		b.last = now
+	}
+	if b.tokens < 1 {
 		return false
 	}
-	if decision.Allowed {
-		return true
-	}
-	c.hub.mu.Lock()
-	c.hub.rateRejected++
-	c.hub.mu.Unlock()
-	c.respond(Response{Type: ErrorResponse, Code: RateLimited})
-	return false
+	b.tokens--
+	return true
 }
 
 // Caller holds hub.mu. Count a connection only once for this verified subject,
 // regardless of its number of rooms or channels using that guard/provider.
 func (c *connectionState) subjectAllowedLocked(subject MemberID) bool {
-	count := 0
-	for _, connection := range c.hub.connections {
-		matched := false
-		for _, subscription := range connection.subscriptions {
-			if subscription.subjectID == subject {
-				matched = true
-				break
-			}
+	connections := c.hub.subjects[subject]
+	if connections[c] > 0 {
+		return true
+	}
+	return len(connections) < c.hub.config.MaxConnectionsPerSubject
+}
+
+// trackSubjectLocked counts one pending or active subscription of a subject.
+func (h *Hub) trackSubjectLocked(c *connectionState, subject MemberID, delta int) {
+	if subject == "" {
+		return
+	}
+	connections := h.subjects[subject]
+	if connections == nil {
+		if delta < 0 {
+			return
 		}
-		if !matched {
-			for _, pending := range connection.pending {
-				if pending.subscription.subjectID == subject {
-					matched = true
-					break
-				}
-			}
-		}
-		if matched {
-			if connection == c {
-				return true
-			}
-			count++
+		connections = make(map[*connectionState]int)
+		h.subjects[subject] = connections
+	}
+	if connections[c] += delta; connections[c] <= 0 {
+		delete(connections, c)
+		if len(connections) == 0 {
+			delete(h.subjects, subject)
 		}
 	}
-	return count < c.hub.config.MaxConnectionsPerSubject
 }
 
 func (c *connectionState) withFreshScope(ctx context.Context, run func(context.Context) error) error {
@@ -85,4 +75,30 @@ func (c *connectionState) withFreshScope(ctx context.Context, run func(context.C
 	}
 	defer scope.Close()
 	return run(scope.Context())
+}
+
+// messageScope returns the connection's current authentication scope with a
+// read hold that keeps a concurrent refresh from closing it mid-operation.
+// Guard resolutions are cached by the scope until the next refresh replaces it.
+func (c *connectionState) messageScope() (*auth.Scope, func(), error) {
+	if c.hub.authentication == nil {
+		return nil, func() {}, nil
+	}
+	for {
+		c.scopeMu.RLock()
+		if c.scope != nil {
+			return c.scope, c.scopeMu.RUnlock, nil
+		}
+		c.scopeMu.RUnlock()
+		c.scopeMu.Lock()
+		if c.scope == nil {
+			scope, err := c.hub.authentication.Registry().NewScope(c.ctx, c.credentials)
+			if err != nil {
+				c.scopeMu.Unlock()
+				return nil, nil, err
+			}
+			c.scope = scope
+		}
+		c.scopeMu.Unlock()
+	}
 }

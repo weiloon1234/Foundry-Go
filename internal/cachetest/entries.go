@@ -239,7 +239,7 @@ func RunEntries(t *testing.T, setup func(*testing.T) EntryFixture) {
 			}
 		}
 	})
-	t.Run("later-corruption-preserves-earlier-entry", func(t *testing.T) {
+	t.Run("unusable-payload-is-a-removable-miss", func(t *testing.T) {
 		f := setup(t)
 		b := f.Backend
 		keys := canonicalTagged(f.snapshot(t, f.Key("first")), f.snapshot(t, f.Key("last")))
@@ -248,18 +248,39 @@ func RunEntries(t *testing.T, setup func(*testing.T) EntryFixture) {
 				t.Fatal(err)
 			}
 		}
+		// An unusable stored envelope is logically absent: reads miss, expiry
+		// changes nothing, and writes and removal replace or reclaim it.
 		f.CorruptTagged(keys[1].DataKey())
-		if count, err := b.ForgetManyTagged(t.Context(), keys); count != 0 || !errors.Is(err, fault.Invalid) {
-			t.Fatal("partial deletion accepted", count, err)
+		if found, err := b.ExistsTagged(t.Context(), keys[1]); err != nil || found {
+			t.Fatal(found, err)
 		}
-		if data, hit, err := b.GetTagged(t.Context(), keys[0]); err != nil || !hit || string(data) != "live" {
-			t.Fatal("earlier entry removed", string(data), hit, err)
+		f.CorruptTagged(keys[1].DataKey())
+		if changed, err := b.ExpireTagged(t.Context(), keys[1], cache.Forever()); err != nil || changed {
+			t.Fatal(changed, err)
 		}
-		if _, err := b.ExistsTagged(t.Context(), keys[1]); !errors.Is(err, fault.Invalid) {
-			t.Fatal(err)
+		f.CorruptTagged(keys[1].DataKey())
+		if _, hit, err := b.GetTagged(t.Context(), keys[1]); err != nil || hit {
+			t.Fatal(hit, err)
 		}
-		if _, err := b.ExpireTagged(t.Context(), keys[1], cache.Forever()); !errors.Is(err, fault.Invalid) {
-			t.Fatal(err)
+		f.CorruptTagged(keys[1].DataKey())
+		if err := b.PutTagged(t.Context(), keys[1], []byte("replacement"), cache.Forever()); err != nil {
+			t.Fatal("unusable entry could not be overwritten", err)
+		}
+		if data, hit, err := b.GetTagged(t.Context(), keys[1]); err != nil || !hit || string(data) != "replacement" {
+			t.Fatal(string(data), hit, err)
+		}
+		f.CorruptTagged(keys[1].DataKey())
+		if count, err := b.ForgetManyTagged(t.Context(), keys); count != 1 || err != nil {
+			t.Fatal("unusable entry blocked batch removal or counted as live", count, err)
+		}
+		for _, key := range keys {
+			if _, hit, err := b.GetTagged(t.Context(), key); err != nil || hit {
+				t.Fatal("batch left an entry", hit, err)
+			}
+		}
+		f.CorruptTagged(keys[0].DataKey())
+		if removed, err := b.ForgetTagged(t.Context(), keys[0]); err != nil || removed {
+			t.Fatal(removed, err)
 		}
 	})
 	t.Run("maximum-batch-with-full-tag-snapshot", func(t *testing.T) {

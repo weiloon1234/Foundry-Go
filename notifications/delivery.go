@@ -39,31 +39,48 @@ func (m *Manager) load(ctx context.Context, id model.ID[store.Envelope]) (store.
 		if err != nil {
 			return err
 		}
-		if digest(registration.scope, text) != envelope.SubjectKey || requestFingerprint(registration, text, payload) != envelope.Fingerprint {
-			return invalid()
-		}
 		deliveries, err = store.QueryFoundryNotificationDeliveries().Where(store.DeliveryFields().NotificationID.Eq(id)).Limit(MaxChannels+1).All(ctx, tx)
 		if err != nil {
 			return err
 		}
-		if len(deliveries) != len(registration.channels) {
+		// The fingerprint covers the channels selected at capture, recorded by
+		// the delivery rows, so adding or removing a channel from the binding
+		// later does not make older notifications unreadable.
+		if len(deliveries) == 0 || len(deliveries) > MaxChannels || digest(registration.scope, text) != envelope.SubjectKey || fingerprintWith(registration, text, payload, storedChannels(deliveries)) != envelope.Fingerprint {
 			return invalid()
 		}
 		for _, delivery := range deliveries {
-			found := false
-			for _, channel := range registration.channels {
-				if channel.id == ChannelID(delivery.Channel) && channel.kind == delivery.Kind {
-					found = true
-					break
-				}
-			}
-			if !found || !State(delivery.State).valid() || delivery.Key != deliveryKey(id, ChannelID(delivery.Channel)) {
+			if !State(delivery.State).valid() || delivery.Key != deliveryKey(id, ChannelID(delivery.Channel)) {
 				return invalid()
 			}
 		}
 		return nil
 	})
 	return envelope, registration, deliveries, err
+}
+
+// outcomes reads only the delivery rows for the final status report. The
+// envelope was verified by load at the start of this pass and is immutable, so
+// the report skips reloading and re-digesting it.
+func (m *Manager) outcomes(ctx context.Context, id model.ID[store.Envelope]) ([]store.Delivery, error) {
+	var deliveries []store.Delivery
+	err := m.within(ctx, func(tx *database.Tx) error {
+		var err error
+		deliveries, err = store.QueryFoundryNotificationDeliveries().Where(store.DeliveryFields().NotificationID.Eq(id)).Limit(MaxChannels+1).All(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if len(deliveries) == 0 || len(deliveries) > MaxChannels {
+			return invalid()
+		}
+		for _, delivery := range deliveries {
+			if !State(delivery.State).valid() || delivery.Key != deliveryKey(id, ChannelID(delivery.Channel)) {
+				return invalid()
+			}
+		}
+		return nil
+	})
+	return deliveries, err
 }
 
 func (m *Manager) deliver(ctx context.Context, id model.ID[store.Envelope]) ([]ChannelStatus, error) {
@@ -94,14 +111,10 @@ func (m *Manager) deliver(ctx context.Context, id model.ID[store.Envelope]) ([]C
 			failures = append(failures, ctx.Err())
 			break
 		}
-		var row store.Delivery
-		for _, candidate := range deliveries {
-			if candidate.Channel == string(channel.id) {
-				row = candidate
-				break
-			}
-		}
-		if !State(row.State).Retryable() {
+		// A channel added to the binding after capture has no row and is not
+		// part of this notification; a retired channel's row is left untouched.
+		row, captured := currentRow(deliveries, channel)
+		if !captured || !State(row.State).Retryable() {
 			continue
 		}
 		if err := m.attempt(ctx, envelope, identity, input, registration, index, row); err != nil {
@@ -112,7 +125,7 @@ func (m *Manager) deliver(ctx context.Context, id model.ID[store.Envelope]) ([]C
 	// deadline, and it cannot erase an already recorded provider acceptance.
 	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	_, _, deliveries, err = m.load(cleanup, id)
+	deliveries, err = m.outcomes(cleanup, id)
 	if err != nil {
 		return nil, errors.Join(append(failures, err)...)
 	}
@@ -120,7 +133,7 @@ func (m *Manager) deliver(ctx context.Context, id model.ID[store.Envelope]) ([]C
 	bad := false
 	for _, channel := range registration.channels {
 		for _, row := range deliveries {
-			if row.Channel != string(channel.id) {
+			if row.Channel != string(channel.id) || row.Kind != channel.kind {
 				continue
 			}
 			state := State(row.State)
@@ -326,4 +339,14 @@ func (m *Manager) completeDatabase(ctx context.Context, envelope store.Envelope,
 		_, err = store.QueryFoundryNotificationDeliveries().Update(ctx, tx, row.Key, store.DeliveryDraft{}.SetState(string(Delivered)).SetAttempts(row.Attempts+1).SetUpdatedAt(now))
 		return err
 	})
+}
+
+// currentRow selects the stored row for a channel still bound with the same kind.
+func currentRow(deliveries []store.Delivery, channel channelDefinition) (store.Delivery, bool) {
+	for _, candidate := range deliveries {
+		if candidate.Channel == string(channel.id) && candidate.Kind == channel.kind {
+			return candidate, true
+		}
+	}
+	return store.Delivery{}, false
 }

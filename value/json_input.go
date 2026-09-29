@@ -137,11 +137,24 @@ func (b *jsonInputBudget) check(input reflect.Value, depth int) error {
 			}
 			for name, field := range fields {
 				child, exists := jsonInputField(v, field.index)
-				if !exists || jsonInputOmitted(child, typ.FieldByIndex(field.index).Tag.Get("json")) {
+				if !exists || jsonInputOmitted(child, field.tag) {
 					continue
 				}
-				if err := add(reflect.ValueOf(name), depth+1); err != nil {
+				// A declared name is a static string: account its work, node and
+				// bytes inline rather than queueing a boxed reflect.Value.
+				if len(pending) >= limits.Steps-b.steps {
+					return invalidJSON()
+				}
+				b.steps++
+				b.nodes++
+				if b.limits == nil && (depth+1 > limits.Depth || b.nodes > limits.Nodes) {
+					return invalidJSON()
+				}
+				if err := account(len(name)); err != nil {
 					return err
+				}
+				if !utf8.ValidString(name) || (!b.allowNUL && strings.ContainsRune(name, 0)) {
+					return invalidJSON()
 				}
 				if err := add(child, depth+1); err != nil {
 					return err

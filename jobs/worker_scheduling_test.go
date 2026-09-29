@@ -2,7 +2,6 @@ package jobs_test
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"sync/atomic"
 	"testing"
@@ -62,6 +61,7 @@ func TestWeightedQueuesGiveLowerPriorityBoundedService(t *testing.T) {
 	config := jobs.DefaultWorkerConfig(namespace)
 	config.Queues = []jobs.Subscription{{Queue: "high", Weight: 3}, {Queue: "low", Weight: 1}}
 	config.Concurrency = 1
+	config.DrainTimeout = 0
 	worker, err := jobs.NewWorker(backend, registry, config)
 	if err != nil {
 		t.Fatal(err)
@@ -97,10 +97,12 @@ func TestJobAdmissionUsesSharedTypedQuota(t *testing.T) {
 	if decision, err := limiter.Allow(t.Context(), "same"); err != nil || decision.Allowed {
 		t.Fatal("job did not consume shared quota", err)
 	}
-	if delay, err := admit(t.Context(), p); err != nil || delay != time.Second {
+	// Fixed windows may be offset per key, so the delay is the remaining window.
+	delay, err := admit(t.Context(), p)
+	if err != nil || delay <= 0 || delay > time.Second {
 		t.Fatal(delay, err)
 	}
-	clock.Advance(time.Second)
+	clock.Advance(delay)
 	if delay, err := admit(t.Context(), p); err != nil || delay != 0 {
 		t.Fatal(delay, err)
 	}
@@ -119,6 +121,8 @@ func (b *lostLeaseBackend) JobFinish(ctx context.Context, key jobs.Key, owner jo
 	return b.Backend.JobFinish(ctx, key, owner, result)
 }
 
+// Lease loss cancels the handler and keeps its slot until actual exit; the
+// worker itself keeps running and never acknowledges the lost reservation.
 func TestLeaseLossCancelsAndRetainsLiveHandler(t *testing.T) {
 	cancelled := make(chan struct{})
 	release := make(chan struct{})
@@ -162,13 +166,20 @@ func TestLeaseLossCancelsAndRetainsLiveHandler(t *testing.T) {
 	default:
 	}
 	release <- struct{}{}
+	deadline := time.Now().Add(3 * time.Second)
+	for worker.Active() != 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
 	select {
 	case err := <-done:
-		if !errors.Is(err, jobs.ErrOwnershipLost) {
-			t.Fatal(err)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("worker did not drain")
+		t.Fatal("lease loss stopped the worker", err)
+	default:
+	}
+	if err := worker.Stop(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 	if backend.finishes.Load() != 0 {
 		t.Fatal("lost owner acknowledged work")

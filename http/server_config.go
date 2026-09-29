@@ -31,18 +31,22 @@ type ServerConfig struct {
 	// RequestTimeout bounds the request context after admission. Cooperative
 	// handlers and database calls observe its cancellation. Ownership lasts
 	// until actual handler exit; raw handlers own their response behavior.
+	// A matched route declared with WithTimeout replaces it for that route.
 	RequestTimeout time.Duration
 	// ShutdownTimeout allows admitted handlers to finish before cancellation and
 	// connection closure. Dependency ownership still lasts until actual exit.
 	ShutdownTimeout time.Duration
 	// MaxHeaderBytes configures the native net/http request-header limit.
 	MaxHeaderBytes int
-	// MaxBodyBytes is a positive global ceiling for known and streamed bodies.
+	// MaxBodyBytes is a positive default ceiling for known and streamed bodies.
 	// Increasing it does not preallocate a buffer; raw handlers own their reads.
+	// A matched route declared with WithBodyLimit replaces it for that route only.
 	MaxBodyBytes int64
 	// MaxConcurrentRequests bounds handlers that have actually entered the
-	// server. Zero uses DefaultServerConfig's limit. Exhaustion returns 503;
-	// cancelled handlers retain their slot until they really return.
+	// server. Zero uses DefaultServerConfig's limit. A request waits briefly for
+	// a slot in arrival order (at most min(RequestTimeout, 5s)); exhaustion then
+	// returns 503 with Retry-After. Cancelled handlers retain their slot until
+	// they really return.
 	MaxConcurrentRequests int
 	// MaxConnections bounds accepted TCP connections, including connections
 	// still reading headers and hijacked connections until their owner closes

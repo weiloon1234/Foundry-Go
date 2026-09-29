@@ -103,6 +103,15 @@ type RetryBackend interface {
 // Retry is an explicit operator action, never an automatic error recovery loop.
 // changed=false with nil error confirms this token was already applied.
 func (d *Dispatcher) Retry(ctx context.Context, queue Queue, request RetryRequest) (bool, error) {
+	changed, err := d.retry(ctx, queue, request)
+	if err == nil && changed {
+		if key, keyErr := NewKey(d.config.Namespace, queue); keyErr == nil {
+			d.runInline(ctx, key)
+		}
+	}
+	return changed, err
+}
+func (d *Dispatcher) retry(ctx context.Context, queue Queue, request RetryRequest) (bool, error) {
 	release, err := d.begin(ctx)
 	if err != nil {
 		return false, err

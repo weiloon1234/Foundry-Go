@@ -15,3 +15,14 @@ func TestTranslationsOrphanCommandRejectsMutationFlags(t *testing.T) {
 		}
 	}
 }
+
+func TestTranslationsRescopeCommandRequiresExplicitApply(t *testing.T) {
+	for _, args := range [][]string{{"translations", "rescope", "--owner", "products"}, {"translations", "rescope", "--owner", "products", "--apply"}} {
+		if _, err := Parse(args, io.Discard); err != nil {
+			t.Fatal(args, err)
+		}
+	}
+	if _, err := Parse([]string{"translations", "orphans", "--owner", "products", "--apply"}, io.Discard); err == nil {
+		t.Fatal("orphan inspection accepted a write flag")
+	}
+}

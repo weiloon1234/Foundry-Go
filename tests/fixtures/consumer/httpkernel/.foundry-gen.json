@@ -1,8 +1,8 @@
 {
   "version": 1,
   "files": {
-    "asset_path_foundry.gen.go": "4e61ce801b1a7b1933fe65703dfb9ed345a78942f053239fcfc22221eabbc004",
-    "user_feed_path_foundry.gen.go": "d3f4ff25960d0231bd0b5e5b83343c76da8ec3eaba1f922f14122de18c9d17eb",
-    "user_path_foundry.gen.go": "5dc7e69c6d2c4b2adf0b37a56db9d6e9ee9e930f55b0e51d641466d67519ae4f"
+    "asset_path_foundry.gen.go": "e760d3df725412ec124aea11ab187bef2a8f5461a670d543c7aae5c41eb2cd6f",
+    "user_feed_path_foundry.gen.go": "c29cbce0e77694df7ab6634ef1fb7da42dbbf197d7caf95233258591aec13da4",
+    "user_path_foundry.gen.go": "312f16089eb607df7419d97cdbc7b6d934144f38a7367a6c5af91efc50648a92"
   }
 }

@@ -1,7 +1,9 @@
 package record_test
 
 import (
+	"crypto/sha256"
 	"database/sql/driver"
+	"encoding/hex"
 	"errors"
 	"strings"
 	"testing"
@@ -63,7 +65,7 @@ func TestAuditRejectsIdentityLeaksMismatchesAndPartialCapture(t *testing.T) {
 	}
 }
 
-func TestAuditBoundsTheWholeRecordAndRejectsDuplicateColumns(t *testing.T) {
+func TestAuditDigestsOversizedValuesAndRejectsDuplicateColumns(t *testing.T) {
 	c := codec.String[string]()
 	large := strings.Repeat("x", value.JSONMaxBytes/2)
 	change := changed(t, c, value.Optional[string]{}, value.Set(large), true)
@@ -71,11 +73,36 @@ func TestAuditBoundsTheWholeRecordAndRejectsDuplicateColumns(t *testing.T) {
 	if err := b.Add(capture(t, "first", c, change, record.Automatic)); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.Add(capture(t, "second", c, change, record.Automatic)); !errors.Is(err, fault.Invalid) {
-		t.Fatal("aggregate audit payload exceeded its bound", err)
+	if err := b.Add(capture(t, "second", c, change, record.Automatic)); err != nil {
+		t.Fatal("large values failed the business write", err)
 	}
-	if _, err := b.Build(); !errors.Is(err, fault.Invalid) {
-		t.Fatal("oversized capture published a partial record", err)
+	item := built(t, b)
+	payload, err := item.Entry().Payload()
+	if err != nil || len(payload) > value.JSONMaxBytes || strings.Contains(payload, large[:1024]) {
+		t.Fatal("oversized values were retained", err)
+	}
+	field, err := record.ReadField(inspect(t, item), "second", c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, present := field.Get()
+	if !present || stored.After().State() != record.Oversized || !stored.Changed() {
+		t.Fatal("oversized value lost its marker or change flags")
+	}
+	digest, present := stored.After().Snapshot().Digest()
+	sum := sha256.Sum256([]byte(large))
+	if !present || digest.Size != int64(len(large)) || digest.SHA256 != hex.EncodeToString(sum[:]) {
+		t.Fatal("oversized marker lost its size or digest")
+	}
+	if _, err := stored.After().Get(); !errors.Is(err, fault.Missing) {
+		t.Fatal("digest was decoded as a value", err)
+	}
+	restored, err := record.ParseEntry(item.Entry().Identity(), lifecycle.Create, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := restored.Payload(); again != payload {
+		t.Fatal("stored digest marker did not round trip")
 	}
 	duplicate := builder(t, lifecycle.Create)
 	small := capture(t, "label", c, changed(t, c, value.Optional[string]{}, value.Set("small"), true), record.Exclude)
@@ -84,6 +111,86 @@ func TestAuditBoundsTheWholeRecordAndRejectsDuplicateColumns(t *testing.T) {
 	}
 	if err := duplicate.Add(small); !errors.Is(err, fault.Duplicate) {
 		t.Fatal("excluded columns bypassed duplicate detection", err)
+	}
+}
+
+func TestAuditFitsTheWholeRecordByDigestingLargestValues(t *testing.T) {
+	c := codec.String[string]()
+	b := builder(t, lifecycle.Create)
+	medium := strings.Repeat("m", record.MaxCapturedValueBytes-1024)
+	for _, name := range []string{"a", "b", "c", "d", "e"} {
+		if err := b.Add(capture(t, name, c, changed(t, c, value.Optional[string]{}, value.Set(medium), true), record.Automatic)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := b.Add(capture(t, "note", c, changed(t, c, value.Optional[string]{}, value.Set("kept"), true), record.Automatic)); err != nil {
+		t.Fatal(err)
+	}
+	item := built(t, b)
+	payload, err := item.Entry().Payload()
+	if err != nil || len(payload) > value.JSONMaxBytes {
+		t.Fatal("aggregate audit payload exceeded its bound", err)
+	}
+	view := inspect(t, item)
+	digested := 0
+	for _, name := range []string{"a", "b", "c", "d", "e"} {
+		field, err := record.ReadField(view, name, c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		stored, _ := field.Get()
+		if stored.After().State() == record.Oversized {
+			digested++
+		}
+	}
+	note, err := record.ReadField(view, "note", c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept, _ := note.Get()
+	if digested == 0 || digested == 5 || kept.After().State() != record.Disclosed {
+		t.Fatal("record fitting did not digest only the largest values", digested)
+	}
+}
+
+func TestAuditCompactAppliesTheConfiguredValueThreshold(t *testing.T) {
+	c := codec.String[string]()
+	b := builder(t, lifecycle.Update)
+	text := strings.Repeat("v", 4096)
+	if err := b.Add(capture(t, "body", c, changed(t, c, value.Set("old"), value.Set(text), true), record.Automatic)); err != nil {
+		t.Fatal(err)
+	}
+	item := built(t, b)
+	same, err := item.Entry().Compact(8192)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, _ := item.Entry().Payload()
+	if kept, _ := same.Payload(); kept != original {
+		t.Fatal("compaction changed values below the threshold")
+	}
+	compacted, err := item.Entry().Compact(1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, err := record.RestoreModel(model.NewReference[subject]("audited_subjects", int64(0), codec.Signed[int64]()), compacted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	field, err := record.ReadField(inspect(t, restored), "body", c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, _ := field.Get()
+	before, err := stored.Before().Get()
+	if err != nil || stored.After().State() != record.Oversized || stored.Before().State() != record.Disclosed {
+		t.Fatal("compaction did not replace only the large value", err)
+	}
+	if old, _ := before.Get(); old != "old" {
+		t.Fatal("compaction changed a small value")
+	}
+	if _, err := item.Entry().Compact(0); !errors.Is(err, fault.Invalid) {
+		t.Fatal("non-positive value threshold accepted", err)
 	}
 }
 

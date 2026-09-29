@@ -68,5 +68,5 @@ func emitProjection(p *packageInput, projection projection, dto *dtoDeclaration)
 	if dto != nil {
 		e.emitDTO(*dto)
 	}
-	return e.finish(projection.position.Filename, projection.position.Line)
+	return e.finish(projection.position.Filename)
 }

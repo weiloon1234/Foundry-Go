@@ -18,6 +18,10 @@ export class JSONNumber {
   constructor(text: string) { if (!numberPattern.test(text)) reject(); this.text = text; Object.freeze(this); }
 }
 export type JSONValue = null | boolean | string | JSONNumber | readonly JSONValue[] | { readonly [name: string]: JSONValue };
+/** A server enum value this client does not know. Tolerant decoding surfaces it instead of failing; it cannot be sent back. */
+export class UnknownEnumValue {
+  constructor(readonly type: string, readonly value: string) { Object.freeze(this); }
+}
 function textBytes(text: string): number { return encoder.encode(text).byteLength; }
 function validUnicode(text: string): boolean {
   for (let i = 0; i < text.length; i++) {
@@ -130,17 +134,21 @@ interface RuntimePolicy { readonly maxDepth: number; readonly decimalDigits: num
 class WireCodec {
   private readonly types = new Map<string, WireType>();
   private readonly variants = new Map<string, Map<string, string>>();
+  private readonly properties = new Map<string, ReadonlySet<string>>();
   constructor(types: readonly WireType[]) {
     for (const type of types) {
       this.types.set(type.id, type);
       if (type.kind === "union") this.variants.set(type.id, new Map(type.variants!.map(v => [v.tag, v.type])));
+      if (type.kind === "object") this.properties.set(type.id, new Set((type.properties ?? []).map(p => p.name)));
     }
   }
   type(id: string): WireType { const type = this.types.get(id); if (!type) reject("", "schema"); return type; }
-  decode(id: string, input: string | Uint8Array, limits: JSONLimits): unknown { return this.transform(id, parseWire(input, limits), limits, false); }
+  /** Tolerant decoding ignores unknown object properties and surfaces unknown enum values; requests stay strict. */
+  decode(id: string, input: string | Uint8Array, limits: JSONLimits, tolerant = false): unknown { return this.transform(id, parseWire(input, limits), limits, false, false, tolerant); }
   encode(id: string, input: unknown, limits: JSONLimits): string { return writeWire(this.transform(id, input, limits, true), limits); }
   semantic(id: string, input: unknown, limits: JSONLimits): unknown { return this.transform(id, input, limits, true, true); }
-  transform(id: string, input: unknown, limits: JSONLimits, encode: boolean, semantic = false): unknown {
+  transform(id: string, input: unknown, limits: JSONLimits, encode: boolean, semantic = false, tolerant = false): unknown {
+    tolerant = tolerant && !encode;
     limitsValid(limits); let steps = 0;
     const visit = (id: string, value: unknown, path: string, depth: number): unknown => {
       if (depth > limits.Depth) reject(path, "limit");
@@ -175,9 +183,9 @@ class WireCodec {
           return result;
         }
         case "object": {
-          const record = object(value, path), properties = type.properties ?? [], known = new Set(properties.map(p => p.name));
+          const record = object(value, path), properties = type.properties ?? [], known = this.properties.get(id)!;
           const result: Record<string, unknown> = Object.create(null);
-          for (const key of Object.keys(record)) { if (++steps > limits.Steps) reject(path, "limit"); if (!known.has(key)) reject(pointer(path, key), "unknown"); }
+          for (const key of Object.keys(record)) { if (++steps > limits.Steps) reject(path, "limit"); if (!known.has(key) && !tolerant) reject(pointer(path, key), "unknown"); }
           for (const property of properties) {
             if (++steps > limits.Steps) reject(path, "limit");
             const child = pointer(path, property.name);
@@ -197,10 +205,13 @@ class WireCodec {
           for (const name of Object.keys(record).sort()) {
             if (++steps > limits.Steps) reject(path, "limit");
             if (key !== undefined) {
+              let checked: unknown;
               if (key.value.kind === "integer") {
                 if (!/^(?:0|-?[1-9][0-9]*)$/.test(name)) reject(pointer(path, name), "key");
-                this.scalar(key.value, new JSONNumber(name), false, path);
-              } else this.scalar(key.value, name, false, path);
+                checked = this.scalar(key.value, new JSONNumber(name), false, path, tolerant);
+              } else checked = this.scalar(key.value, name, false, path, tolerant);
+              // A tolerant client omits entries keyed by enum cases it does not know.
+              if (checked instanceof UnknownEnumValue) continue;
               if (key.syntax === "model_id" && name !== name.toLowerCase()) reject(pointer(path, name), "key");
               if (key.non_zero && name.toLowerCase() === "00000000-0000-0000-0000-000000000000") reject(pointer(path, name), "key");
             }
@@ -208,12 +219,12 @@ class WireCodec {
           }
           return result;
         }
-        default: return this.scalar(type, value, encode, path);
+        default: return this.scalar(type, value, encode, path, tolerant);
       }
     };
     return visit(id, input, "", 0);
   }
-  private scalar(type: WireType, value: unknown, encode: boolean, path: string): unknown {
+  private scalar(type: WireType, value: unknown, encode: boolean, path: string, tolerant = false): unknown {
     let wire: unknown = value, result: unknown = value;
     switch (type.kind) {
       case "boolean": if (typeof value !== "boolean") reject(path, "type"); break;
@@ -241,7 +252,10 @@ class WireCodec {
     }
     if (type.cases?.length) {
       const match = type.cases.some(candidate => type.kind === "integer" ? BigInt(String(candidate instanceof JSONNumber ? candidate.text : candidate)) === BigInt((wire as JSONNumber).text) : candidate === value);
-      if (!match) reject(path, "value");
+      if (!match) {
+        if (tolerant) return new UnknownEnumValue(type.id, wire instanceof JSONNumber ? wire.text : String(value));
+        reject(path, "value");
+      }
     }
     return encode ? wire : result;
   }

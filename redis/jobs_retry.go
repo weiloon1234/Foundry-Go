@@ -36,5 +36,8 @@ func (b *JobBackend) JobRetry(ctx context.Context, key jobs.Key, request jobs.Re
 		ExpectedFinished: record.FinishedAt.UnixMilli(), ExpectedAttempts: record.Attempts,
 		ExpectedRetries: record.Retries, MaxRetries: jobs.MaxManualRetries,
 	})
+	if err == nil && reply.Changed {
+		b.signal(key)
+	}
 	return reply.Changed, err
 }

@@ -206,3 +206,38 @@ func TestConstructorServicesExpireButRuntimeResourcesRemainResolvable(t *testing
 		t.Fatal("typed runtime facade duplicated a service", err)
 	}
 }
+
+func TestSyncJobDriverRunsDispatchedJobsInline(t *testing.T) {
+	s := settings()
+	s.HTTP.Enabled = false
+	c := infrastructure.DefaultJobConnectionSettings()
+	c.Driver = infrastructure.SyncJobs
+	s.Services.Jobs.Connections = infrastructure.JobConnections{"default": c}
+	definition := jobs.Define[assemblyPayload]("assembly.sync", 1, jobs.DefaultPolicy("default"))
+	var received []string
+	constructor := func(application.Services) (jobs.Handler[assemblyPayload], error) {
+		return func(_ context.Context, p assemblyPayload) error { received = append(received, p.Value); return nil }, nil
+	}
+	app, err := application.New(s, quiet()).Jobs(application.Job(definition, constructor)).Build(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { stop(t, app) })
+	if err := app.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	connection, _ := app.Resources().JobConnection()
+	bound, _ := definition.On(connection)
+	receipt, err := bound.Dispatch(t.Context(), assemblyPayload{"inline"}, jobs.Options[assemblyPayload]{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// No worker kernel runs: the handler already executed in this call.
+	if len(received) != 1 || received[0] != "inline" {
+		t.Fatal("sync driver did not run the job inline", received)
+	}
+	record, err := bound.Inspect(t.Context(), receipt.ID, "")
+	if stored, _ := record.Get(); err != nil || stored.State != jobs.Succeeded {
+		t.Fatal("inline job not finalized", err)
+	}
+}

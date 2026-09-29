@@ -113,23 +113,23 @@ type UploadInput struct { Name string }
 type UserResponse struct { Email string }
 `
 	dir := fixture(t, input)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := Generate(t.Context(), Options{Dir: dir, FieldDocumentation: true}); err != nil {
 		t.Fatal(err)
 	}
 	source := snapshotFile(t, dir, "models.go")
 	first := generatedSnapshot(t, dir)
 	for _, name := range []string{"user_foundry.gen.go", "state_foundry.gen.go", "user_row_foundry.gen.go", "user_path_foundry.gen.go", "search_input_foundry.gen.go", "upload_input_foundry.gen.go", "user_response_foundry.gen.go"} {
-		if !strings.Contains(first[name], "// Source: models.go:") {
-			t.Fatal("source location lost")
+		if !strings.Contains(first[name], "// Source: models.go.\n") {
+			t.Fatal("source file lost or line number retained")
 		}
 	}
 	if !strings.Contains(first["user_foundry.gen.go"], "Custom getter: [User.AccessEmail]") || !strings.Contains(string(source.data), fieldNotePrefix) {
 		t.Fatal("model/descriptors/drafts lost their shared field metadata")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true, FieldDocumentation: true}); err != nil {
 		t.Fatal(err)
 	}
-	if report, err := Generate(t.Context(), Options{Dir: dir}); err != nil || len(report.Written) != 0 || !reflect.DeepEqual(first, generatedSnapshot(t, dir)) {
+	if report, err := Generate(t.Context(), Options{Dir: dir, FieldDocumentation: true}); err != nil || len(report.Written) != 0 || !reflect.DeepEqual(first, generatedSnapshot(t, dir)) {
 		t.Fatalf("repeat generation changed source locations or output: %+v, %v", report, err)
 	}
 	// A removed notice is stale independently of the compiled generated files.
@@ -138,8 +138,15 @@ type UserResponse struct { Email string }
 		t.Fatal(err)
 	}
 	write(t, dir, "models.go", string(clean))
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err == nil || !strings.Contains(err.Error(), "stale") {
+	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true, FieldDocumentation: true}); err == nil || !strings.Contains(err.Error(), "stale") || !strings.Contains(err.Error(), "models.go: "+string(StaleFieldNotes)) {
 		t.Fatalf("missing field documentation was accepted: %v", err)
+	}
+	// Without the opt-in, generation never reads or rewrites handwritten notes.
+	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+		t.Fatalf("default generation inspected handwritten notes: %v", err)
+	}
+	if report, err := Generate(t.Context(), Options{Dir: dir}); err != nil || len(report.Written) != 0 {
+		t.Fatalf("default generation rewrote handwritten source: %+v %v", report, err)
 	}
 	if current := snapshotFile(t, dir, "models.go"); !bytes.Equal(current.data, clean) {
 		t.Fatal("check changed handwritten source")

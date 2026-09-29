@@ -13,6 +13,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go/logging"
+	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
@@ -28,14 +29,23 @@ type Backend struct {
 	client                    *awss3.Client
 	credentials               aws.CredentialsProvider
 	transport                 *http.Transport
-	uploads                   chan struct{}
+	uploads                   *admission.Semaphore
+	stop                      chan struct{}
+	buffers                   sync.Pool
+	// Replayable reads and parts share one standard retryer each, so their
+	// retry quota spans calls instead of being rebuilt per request.
+	readRetry, partRetry func(*awss3.Options)
 }
 
 func Prepare(config Config) (*Backend, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
-	return &Backend{config: config, prepared: true, activeWrites: make(map[storage.ObjectKey]int), uploads: make(chan struct{}, config.MaxUploads)}, nil
+	b := &Backend{config: config, prepared: true, activeWrites: make(map[storage.ObjectKey]int), uploads: admission.New(config.MaxUploads), stop: make(chan struct{})}
+	b.buffers.New = func() any { buffer := make([]byte, 0, int(config.PartBytes)); return &buffer }
+	b.readRetry = safeRetry(config.ReadAttempts)
+	b.partRetry = safeRetry(config.PartAttempts)
+	return b, nil
 }
 func Open(ctx context.Context, config Config) (*Backend, error) {
 	backend, err := Prepare(config)
@@ -73,7 +83,9 @@ func (b *Backend) Start(ctx context.Context) error {
 		// Request contexts own transfer deadlines, including response-body reads.
 		client = &http.Client{Transport: owned, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	}
-	options := []func(*awsconfig.LoadOptions) error{awsconfig.WithRegion(b.config.Region), awsconfig.WithHTTPClient(client), awsconfig.WithRetryer(func() aws.Retryer { return aws.NopRetryer{} })}
+	// Only S3 API operations disable SDK retries (below). Credential clients
+	// created by configuration loading (IMDS, STS, SSO) keep their own retries.
+	options := []func(*awsconfig.LoadOptions) error{awsconfig.WithRegion(b.config.Region), awsconfig.WithHTTPClient(client)}
 	if b.config.Profile != "" {
 		options = append(options, awsconfig.WithSharedConfigProfile(b.config.Profile))
 	}
@@ -115,6 +127,7 @@ func (b *Backend) Close() error {
 	defer b.lifecycle.Unlock()
 	if !b.closed {
 		b.closed = true
+		close(b.stop)
 		if b.transport != nil {
 			b.transport.CloseIdleConnections()
 		}
@@ -136,18 +149,31 @@ func (b *Backend) ready(ctx context.Context, op storage.Operation) error {
 	return failureIf(op, storage.Unchanged, ctx.Err())
 }
 func (b *Backend) Capabilities() storage.Capabilities {
-	capabilities := storage.Capabilities{Ranges: true, ConditionalRead: true}
-	if b != nil && b.config.Provider == AWS {
+	capabilities := storage.Capabilities{Ranges: true, ConditionalRead: true, DelimitedList: true, ObjectMetadata: true}
+	if b == nil {
+		return capabilities
+	}
+	switch b.config.Provider {
+	case AWS:
+		// AWS evaluates a delete condition against the current object, so a
+		// version delete never carries IfMatch (ConditionalVersionDelete false).
 		capabilities.ConditionalCreate = true
 		capabilities.ConditionalReplace = true
 		capabilities.ConditionalDelete = true
 		capabilities.Versions = true
-	}
-	if b != nil && b.config.Provider == R2 {
+	case R2:
 		// An exact size bound keeps conditional writes on supported PutObject calls.
 		capabilities.RequiresNFCKeys = true
 		capabilities.ConditionalCreate, capabilities.ConditionalReplace = true, true
 		capabilities.ConditionalWriteMaxBytes = b.config.PartBytes
+	case Compatible:
+		declared := b.config.Compatible
+		capabilities.RequiresNFCKeys = declared.RequiresNFCKeys
+		capabilities.ConditionalCreate, capabilities.ConditionalReplace = declared.ConditionalCreate, declared.ConditionalReplace
+		capabilities.ConditionalDelete, capabilities.Versions = declared.ConditionalDelete, declared.Versions
+		if declared.SingleRequestConditions {
+			capabilities.ConditionalWriteMaxBytes = b.config.PartBytes
+		}
 	}
 	return capabilities
 }
@@ -156,7 +182,7 @@ func (b *Backend) object(key storage.ObjectKey) (string, error) {
 		return "", err
 	}
 	full := b.config.Namespace.String() + key.String()
-	if err := validateKeyText(b.config.Provider, full); err != nil {
+	if err := validateKeyText(b.config.requiresNFC(), full); err != nil {
 		return "", err
 	}
 	if _, err := storage.ParseKey(full); err != nil {
@@ -179,16 +205,18 @@ func (b *Backend) readOptions(options storage.ReadOptions) error {
 	if err := options.Validate(); err != nil {
 		return err
 	}
-	if options.Version == "null" || options.Version != "" && !b.Capabilities().Versions {
+	if options.Version == "null" {
 		return storage.Failure(storage.Unsupported, storage.OpenOperation, storage.NotApplicable, nil)
 	}
-	return nil
+	return b.Capabilities().ValidateRead(options)
 }
+
+// safeRetry builds one reusable retryer for replayable operations. Only the
+// per-operation Retryer changes; the client's single-attempt default remains
+// for every mutation that is not explicitly replayable.
 func safeRetry(attempts int) func(*awss3.Options) {
-	return func(o *awss3.Options) {
-		o.RetryMaxAttempts = attempts
-		o.Retryer = retry.NewStandard(func(r *retry.StandardOptions) { r.MaxAttempts = attempts })
-	}
+	retryer := retry.NewStandard(func(r *retry.StandardOptions) { r.MaxAttempts = attempts })
+	return func(o *awss3.Options) { o.Retryer = retryer }
 }
 func failureIf(op storage.Operation, state storage.Outcome, err error) error {
 	if err == nil {

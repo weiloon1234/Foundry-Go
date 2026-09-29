@@ -77,16 +77,20 @@ func TestCORSRequestDecisions(t *testing.T) {
 		{"same-origin-ordinary-request", "POST", stdhttp.Header{"Origin": {"http://example.com"}}, 202, 1, ""},
 		{"allowed-ordinary-method-outside-preflight-list", "POST", stdhttp.Header{"Origin": {"https://client.test"}}, 202, 1, "https://client.test"},
 		{"ordinary-options", "OPTIONS", stdhttp.Header{"Origin": {"https://client.test"}}, 202, 1, "https://client.test"},
-		{"missing-preflight-origin", "OPTIONS", stdhttp.Header{"Access-Control-Request-Method": {"PATCH"}}, 400, 0, ""},
+		{"missing-preflight-origin-is-not-preflight", "OPTIONS", stdhttp.Header{"Access-Control-Request-Method": {"PATCH"}}, 202, 1, ""},
 		{"denied-preflight-origin", "OPTIONS", stdhttp.Header{"Origin": {"https://other.test"}, "Access-Control-Request-Method": {"PATCH"}}, 403, 0, ""},
 		{"denied-preflight-method", "OPTIONS", stdhttp.Header{"Origin": {"https://client.test"}, "Access-Control-Request-Method": {"DELETE"}}, 403, 0, ""},
 		{"denied-preflight-header", "OPTIONS", stdhttp.Header{"Origin": {"https://client.test"}, "Access-Control-Request-Method": {"PATCH"}, "Access-Control-Request-Headers": {"Authorization"}}, 403, 0, ""},
 		{"malformed-preflight-method", "OPTIONS", stdhttp.Header{"Origin": {"https://client.test"}, "Access-Control-Request-Method": {"patch"}}, 400, 0, ""},
 		{"duplicate-method", "OPTIONS", stdhttp.Header{"Origin": {"https://client.test"}, "Access-Control-Request-Method": {"PATCH", "PATCH"}}, 400, 0, ""},
 		{"empty-method", "OPTIONS", stdhttp.Header{"Origin": {"https://client.test"}, "Access-Control-Request-Method": {""}}, 400, 0, ""},
-		{"empty-origin", "GET", stdhttp.Header{"Origin": {""}}, 400, 0, ""},
-		{"multiple-origins", "GET", stdhttp.Header{"Origin": {"https://client.test", "https://other.test"}}, 400, 0, ""},
-		{"malformed-origin", "GET", stdhttp.Header{"Origin": {"https://client.test/secret"}}, 400, 0, ""},
+		{"empty-origin", "GET", stdhttp.Header{"Origin": {""}}, 202, 1, ""},
+		{"multiple-origins", "GET", stdhttp.Header{"Origin": {"https://client.test", "https://other.test"}}, 202, 1, ""},
+		{"malformed-origin", "GET", stdhttp.Header{"Origin": {"https://client.test/secret"}}, 202, 1, ""},
+		{"capacitor-origin-not-listed", "GET", stdhttp.Header{"Origin": {"capacitor://localhost"}}, 202, 1, ""},
+		{"extension-origin-not-listed", "POST", stdhttp.Header{"Origin": {"chrome-extension://abcdefghijklmnopabcdefghijklmnop"}}, 202, 1, ""},
+		{"tauri-preflight-not-listed", "OPTIONS", stdhttp.Header{"Origin": {"tauri://localhost"}, "Access-Control-Request-Method": {"PATCH"}}, 403, 0, ""},
+		{"malformed-preflight-origin", "OPTIONS", stdhttp.Header{"Origin": {"https://client.test/x"}, "Access-Control-Request-Method": {"patch"}}, 403, 0, ""},
 		{"opaque-origin-not-implicitly-allowed", "GET", stdhttp.Header{"Origin": {"null"}}, 202, 1, ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -163,6 +167,73 @@ func TestCORSWildcardAndOwnedConfiguration(t *testing.T) {
 		wildcard.ServeHTTP(response, request)
 		if response.Code != 200 || response.Header().Get("Access-Control-Allow-Origin") != "*" || response.Header().Get("Access-Control-Allow-Credentials") != "" {
 			t.Fatal("wildcard actual policy")
+		}
+	}
+}
+
+func TestCORSOriginPatternsAndPathPolicies(t *testing.T) {
+	config := CORSConfig{
+		Origins:        []Origin{"https://client.test"},
+		OriginPatterns: []OriginPattern{"capacitor://localhost", "Chrome-Extension://ABCDEF", "https://*.tenant.test", "http://*.dev.test:8080"},
+		Methods:        []Method{PATCH},
+		Paths:          []CORSPath{{Prefix: "/public", Policy: CORSConfig{AnyOrigin: true}}, {Prefix: "/public/private", Policy: CORSConfig{}}},
+	}
+	handler, err := ApplyMiddleware(stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, _ *stdhttp.Request) { w.WriteHeader(200) }), CORS(config))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct{ path, origin, shared string }{
+		{"/", "capacitor://localhost", "capacitor://localhost"},
+		{"/", "CAPACITOR://LocalHost", "CAPACITOR://LocalHost"},
+		{"/", "chrome-extension://abcdef", "chrome-extension://abcdef"},
+		{"/", "capacitor://localhost:8100", ""},
+		{"/", "ionic://localhost", ""},
+		{"/", "https://a.tenant.test", "https://a.tenant.test"},
+		{"/", "https://a.b.tenant.test:443", "https://a.b.tenant.test:443"},
+		{"/", "https://tenant.test", ""},
+		{"/", "https://evil-tenant.test", ""},
+		{"/", "https://a.tenant.test.evil.test", ""},
+		{"/", "http://a.tenant.test", ""},
+		{"/", "https://a.tenant.test:8443", ""},
+		{"/", "http://x.dev.test:8080", "http://x.dev.test:8080"},
+		{"/", "http://x.dev.test", ""},
+		{"/", "https://..tenant.test", ""},
+		{"/public", "https://other.test", "*"},
+		{"/public/file", "capacitor://unknown", "*"},
+		{"/publicity", "https://other.test", ""},
+		{"/public/private/x", "https://client.test", ""},
+	} {
+		request := httptest.NewRequest("GET", test.path, nil)
+		request.Header.Set("Origin", test.origin)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != 200 || response.Header().Get("Access-Control-Allow-Origin") != test.shared {
+			t.Errorf("%s %s: status=%d shared=%q", test.path, test.origin, response.Code, response.Header().Get("Access-Control-Allow-Origin"))
+		}
+	}
+	preflight := httptest.NewRequest("OPTIONS", "/items", nil)
+	preflight.Header.Set("Origin", "https://a.tenant.test")
+	preflight.Header.Set("Access-Control-Request-Method", "PATCH")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, preflight)
+	if response.Code != 204 || response.Header().Get("Access-Control-Allow-Origin") != "https://a.tenant.test" {
+		t.Fatalf("wildcard preflight: %d %v", response.Code, response.Header())
+	}
+	for _, invalid := range []CORSConfig{
+		{OriginPatterns: []OriginPattern{"*"}}, {OriginPatterns: []OriginPattern{"https://*"}}, {OriginPatterns: []OriginPattern{"https://*.com"}},
+		{OriginPatterns: []OriginPattern{"https://a*.example.test"}}, {OriginPatterns: []OriginPattern{"https://*.*.example.test"}},
+		{OriginPatterns: []OriginPattern{"https://*.example.test/path"}}, {OriginPatterns: []OriginPattern{"https://example.test"}},
+		{OriginPatterns: []OriginPattern{"https://*.192.0.2.1"}}, {OriginPatterns: []OriginPattern{"capacitor://"}},
+		{OriginPatterns: []OriginPattern{"capacitor://local host"}}, {OriginPatterns: []OriginPattern{"capacitor://localhost/path"}},
+		{OriginPatterns: []OriginPattern{"null"}}, {OriginPatterns: []OriginPattern{"1app://localhost"}},
+		{OriginPatterns: []OriginPattern{"tauri://localhost", "TAURI://LOCALHOST"}},
+		{AnyOrigin: true, OriginPatterns: []OriginPattern{"tauri://localhost"}},
+		{Paths: []CORSPath{{Prefix: "api"}}}, {Paths: []CORSPath{{Prefix: "/api/"}}}, {Paths: []CORSPath{{Prefix: "/a/../b"}}},
+		{Paths: []CORSPath{{Prefix: "/api"}, {Prefix: "/api"}}}, {Paths: []CORSPath{{Prefix: "/api", Policy: CORSConfig{Paths: []CORSPath{{Prefix: "/x"}}}}}},
+		{Paths: []CORSPath{{Prefix: "/api", Policy: CORSConfig{AnyOrigin: true, Credentials: true}}}},
+	} {
+		if invalid.Validate() == nil {
+			t.Errorf("accepted invalid config %+v", invalid)
 		}
 	}
 }

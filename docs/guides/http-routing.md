@@ -87,6 +87,9 @@ it does not implicitly register a subtree.
 `Within` returns a new descriptor, leaving the original intact. Scopes can nest;
 reuse the returned route so URLs include the same prefixes as registration.
 Path prefixes with parameters belong in a concrete typed path declaration.
+Within a scope, an empty pattern such as `StaticPath("")` names the scope root
+itself (`/api`), while `"/"` keeps its exact trailing slash (`/api/`). An empty
+pattern is invalid outside a nonempty path scope.
 
 URL generation produces a relative path and escapes parameter values once.
 Slashes inside a single parameter are encoded; catch-all values retain their
@@ -112,6 +115,17 @@ payloads are scrubbed before logging. The kernel adds the same request
 identity described in [HTTP request handling](http-requests.md). HEAD error
 responses omit their bodies. Native relative redirects retain their method and
 query semantics.
+
+`router.WithFallback(id, handler)` returns an independent router view whose
+unmatched GET and HEAD requests run `handler` instead of the shared 404, like
+Laravel's `Route::fallback`, for example a custom HTML 404 page. It runs only
+after no route matched and no [SPA fallback](http-assets.md) served the request;
+declared routes, 405 responses and other methods are unchanged. The handler owns
+its response and status. Global middleware around the router applies to it;
+compose fallback-specific middleware with `ApplyMiddleware`. `MatchedRoute`,
+request observation and audit attribution report its ID, and `Routes()` lists it
+as the raw route `GET /{path...}` with `RouteInfo.Fallback` set. A router has at
+most one fallback.
 
 `Router.Routes()` returns metadata sorted by route ID. `MatchedRoute(ctx)` returns
 the selected route's metadata inside its handler. Both return independent

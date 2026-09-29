@@ -1,17 +1,17 @@
 {
   "version": 1,
   "files": {
-    "country_foundry.gen.go": "40115931e5bb64f6729b39e01bb045629fe3621d265daae2e4e0bf1e2d81f8fa",
-    "friendship_foundry.gen.go": "c400028ee926d2c04c5f55040d65ee28a3ac85d1cf5ec52933a3544c8debb2f3",
-    "group_foundry.gen.go": "f440fa6c4a7b49174e5edeb0ab82bb1f998e19d45dc55dc0ec61f87aaec55fc5",
-    "ledger_entry_foundry.gen.go": "f10cf56cdbd8e001c127fd49a636f5ef5d97ff76c8f199b3f07642cdda685362",
-    "level_foundry.gen.go": "b3f2e0c16fc34e6e2505ae6ec5949a38baf4883eef9333020384ff6c4d20d1dc",
-    "location_foundry.gen.go": "e1a05ec801f2212981c2060c7f68c108d42eb7cd907a5591bb9430461be5157f",
-    "measurement_foundry.gen.go": "84e0e60d98f08a11bc652a035c93dbd7595a9897a07a7daa5106c87b9e63f87b",
-    "membership_foundry.gen.go": "caa70c31f55d21df468165f32dd59f4504765ae48233f26ada564532d8fa5b63",
-    "order_foundry.gen.go": "235593453a466ad8a71014b5e02e5ec7e1f958f6e75f2eb76e4deb057401c08b",
-    "status_foundry.gen.go": "4d77be0af0612f5b4e15df31513723c80c3c5ba2172877aa312042fb919a8028",
-    "user_foundry.gen.go": "cf0f9a11143f98f2360e751b4b6b23eeb2b45469e2c09c2279afc8e1ae378538",
-    "write_record_foundry.gen.go": "fbbedb147e9c6d8146e1005da835c9a1b6430f558b62f395669ad58e113c2316"
+    "country_foundry.gen.go": "9da462def5fc7cb14a12af8a04196cee25f2bfa32d3946f0dd7502c141b89a9f",
+    "friendship_foundry.gen.go": "a79272812272f734eee1f6da29b323a5fad35e19a01b6cfb7492cc9c00079acb",
+    "group_foundry.gen.go": "715cde7554be36c0f7166b0b09f94768bf693d0b2b6925b9920a4344781a43e2",
+    "ledger_entry_foundry.gen.go": "05f81cb1e6ba47f1851dd9dbe3dd5f584de8ae6e4ae354a1acf0fcec724519f4",
+    "level_foundry.gen.go": "ba8bdd49f0c075f24843540abba9570a8af2ae7b21885c42973debb52ff9343d",
+    "location_foundry.gen.go": "3f93d02577d511cfc47168f5298fd651a6ad475cd5e3f9b3100e770d095ecd51",
+    "measurement_foundry.gen.go": "3686f8669d05d16909d48c809e19e63bd542c65c89bceca2df258540b5f581ec",
+    "membership_foundry.gen.go": "3f1062f85e6f9515b46c3fca5f8f21211772cb44e292f33a900e3cbf60f678c1",
+    "order_foundry.gen.go": "6bd22554563587c3480bb743e10a761ed6d3e76c988a9ad76611a428763aa810",
+    "status_foundry.gen.go": "270d8a8461bd97c80c79e7b30832d1f06784017a59b933b7fcccf63b6ac8c0ba",
+    "user_foundry.gen.go": "8ea298861b2922a54abac62fae73a03d278f55d1be7efa270c390c8e6baecf3f",
+    "write_record_foundry.gen.go": "7a74022b378a1a217554379ecb038ddcca090efae64e86801696f41db2ea4101"
   }
 }

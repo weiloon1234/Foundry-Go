@@ -3,6 +3,7 @@ package validation
 import (
 	"context"
 	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/jsonpointer"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
 )
 
@@ -18,34 +20,53 @@ type definition struct{ id RuleID }
 type ruleNode struct {
 	info                Description
 	definitions         []*definition
+	slots               []*slotKey
 	nodes, depth, bytes int
 	err                 error
 	prohibitions        bool
+	// callbacks marks application-owned callbacks that may block or call
+	// runtime.Goexit (custom rules, lookups, hooks and slot providers).
+	callbacks bool
 }
 
 // Rule retains its concrete input type. It is immutable after construction;
 // Check may run concurrently on independent inputs. The zero value is invalid.
 type Rule[T any] struct {
 	ruleNode
-	apply   func(*execution, T, string, int)
-	leaf    func(*execution, T) (bool, error)
+	apply func(*execution, T, int)
+	leaf  func(*execution, T) (bool, error)
+	// report is a leaf that records zero or more issues itself, for example at
+	// element paths. It receives the current spec/message so overrides apply.
+	report  func(*execution, T, Spec, *i18n.PreparedMessage) error
 	message *i18n.PreparedMessage
 }
 
 // Validate checks the declaration without executing selectors or callbacks.
+// A rule reading a Slot is complete only inside a Provide for that slot.
 func (r Rule[T]) Validate() error {
+	if err := r.validateStructure(); err != nil {
+		return err
+	}
+	if len(r.slots) != 0 {
+		return invalid("validation slot requires an enclosing Provide")
+	}
+	return nil
+}
+
+func (r Rule[T]) validateStructure() error {
 	if r.err != nil {
 		return r.err
 	}
-	if r.apply == nil && r.leaf == nil || r.nodes == 0 {
+	if r.apply == nil && r.leaf == nil && r.report == nil || r.nodes == 0 {
 		return invalid("validation rule is not defined")
 	}
 	return nil
 }
 
 // Description returns an independent snapshot of the same rule tree Check uses.
+// A subtree awaiting its enclosing Provide can still be described.
 func (r Rule[T]) Description() (Description, error) {
-	if err := r.Validate(); err != nil {
+	if err := r.validateStructure(); err != nil {
 		return Description{}, err
 	}
 	return cloneDescription(r.info), nil
@@ -66,8 +87,13 @@ func (e *Errors) Truncated() bool          { return e.truncated }
 
 // Check executes owned callbacks and returns nil only after all applicable
 // checks pass. Input and referenced data must remain unchanged until return.
-// Panic/Goexit and infrastructure errors remain internal faults. Cancellation
-// never abandons a selector or custom rule that still owns work.
+// Panics and infrastructure errors remain internal faults. A tree containing
+// application callbacks (Custom, Dynamic, Hook, lookups, Provide, image
+// measurement) runs in one owned goroutine so runtime.Goexit is also contained;
+// other trees run inline without a goroutine, where Goexit in a selector or value
+// method ends the caller like any Go function. Cancellation never abandons a
+// selector or custom rule that still owns work. Valid input allocates no issue
+// storage or JSON Pointer paths.
 func (r Rule[T]) Check(ctx context.Context, input T, limits Limits) error {
 	return r.check(ctx, input, limits, false)
 }
@@ -95,8 +121,15 @@ func (r Rule[T]) check(ctx context.Context, input T, limits Limits, prohibitions
 	if prohibitionsOnly && !r.prohibitions {
 		return nil
 	}
-	state := execution{ctx: ctx, limits: limits, work: new(atomic.Int64), prohibitionsOnly: prohibitionsOnly}
-	err := callback.Isolated("validation", func() error { r.run(&state, input, "", 0); return nil })
+	state := execution{ctx: ctx, limits: limits, prohibitionsOnly: prohibitionsOnly}
+	state.work = &state.budget
+	state.segments = state.segmentBuffer[:0]
+	var err error
+	if r.callbacks {
+		err = r.runIsolated(&state, input)
+	} else {
+		err = callback.Invoke("validation", func() error { r.run(&state, input, 0); return nil })
+	}
 	if err != nil {
 		return fault.Wrap(fault.Internal, "validation callback failed", err)
 	}
@@ -112,13 +145,24 @@ func (r Rule[T]) check(ctx context.Context, input T, limits Limits, prohibitions
 	return nil
 }
 
+// runIsolated keeps the goroutine-capturing closure out of check's frame, so
+// inline checks do not move the rule to the heap.
+func (r Rule[T]) runIsolated(s *execution, input T) error {
+	return callback.Isolated("validation", func() error { r.run(s, input, 0); return nil })
+}
+
 type execution struct {
+	// budget stays first so the root state's atomic counter is 64-bit aligned.
+	// Only the root owns it; branches and probes share it through work.
+	budget           int64
 	ctx              context.Context
 	limits           Limits
-	work             *atomic.Int64
+	work             *int64
 	parallel         bool
 	issues           []contract.Issue
 	messages         []issueMessage
+	segments         []segment
+	segmentBuffer    [8]segment
 	field            string
 	otherField       string
 	otherLabel       string
@@ -147,30 +191,73 @@ func (s *execution) take(depth int) bool {
 		return false
 	}
 	for {
-		used := s.work.Load()
+		used := atomic.LoadInt64(s.work)
 		if used >= int64(s.limits.Checks) {
 			s.err = &LimitError{}
 			return false
 		}
-		if s.work.CompareAndSwap(used, used+1) {
+		if atomic.CompareAndSwapInt64(s.work, used, used+1) {
 			return true
 		}
 	}
 }
 
-func (s *execution) remainingChecks() int { return s.limits.Checks - int(s.work.Load()) }
-func (r Rule[T]) run(s *execution, input T, path string, depth int) {
+func (s *execution) remainingChecks() int { return s.limits.Checks - int(atomic.LoadInt64(s.work)) }
+
+// segment is one JSON Pointer step. Paths are materialized only for issues, so
+// valid input does not allocate path strings.
+// A named step uses index -1; an array step has a nonnegative index.
+type segment struct {
+	name  string
+	index int
+}
+
+func (s *execution) enter(name string) {
+	s.segments = append(s.segments, segment{name: name, index: -1})
+}
+func (s *execution) enterIndex(index int) {
+	s.segments = append(s.segments, segment{index: index})
+}
+func (s *execution) leave() { s.segments = s.segments[:len(s.segments)-1] }
+func (s *execution) path() string {
+	path := ""
+	for _, step := range s.segments {
+		if step.index < 0 {
+			path = jsonpointer.Append(path, step.name)
+		} else {
+			path = jsonpointer.Append(path, strconv.Itoa(step.index))
+		}
+	}
+	return path
+}
+
+// branch returns independent state for a concurrently executed child. Shared
+// work accounting and inherited labels are retained; path steps are copied.
+func (s *execution) branch() execution {
+	child := execution{ctx: s.ctx, limits: s.limits, work: s.work, parallel: true,
+		label: s.label, labelKey: s.labelKey, field: s.field, otherField: s.otherField, otherLabel: s.otherLabel, otherLabelKey: s.otherLabelKey, prohibitionsOnly: s.prohibitionsOnly}
+	child.limits.Issues -= len(s.issues)
+	child.segments = slices.Clone(s.segments)
+	return child
+}
+
+func (r Rule[T]) run(s *execution, input T, depth int) {
 	if s.prohibitionsOnly && !r.prohibitions {
 		return
 	}
 	if !s.take(depth) {
 		return
 	}
-	if r.leaf == nil {
-		r.apply(s, input, path, depth)
+	if r.leaf == nil && r.report == nil {
+		r.apply(s, input, depth)
 		return
 	}
-	valid, err := r.leaf(s, input)
+	valid, err := true, error(nil)
+	if r.report != nil {
+		err = r.report(s, input, *r.info.Spec, r.message)
+	} else {
+		valid, err = r.leaf(s, input)
+	}
 	if canceled := s.ctx.Err(); canceled != nil {
 		s.err = canceled
 		return
@@ -183,11 +270,12 @@ func (r Rule[T]) run(s *execution, input T, path string, depth int) {
 		return
 	}
 	if !valid {
-		s.issue(path, *r.info.Spec, r.message)
+		s.issue(*r.info.Spec, r.message)
 	}
 }
-func (s *execution) issue(path string, spec Spec, message *i18n.PreparedMessage) {
+func (s *execution) issue(spec Spec, message *i18n.PreparedMessage) {
 	item := issueMessage{message: message, field: s.field, label: s.label, labelKey: s.labelKey, otherField: s.otherField, otherLabel: s.otherLabel, otherLabelKey: s.otherLabelKey}
+	path := s.path()
 	text := spec.Message
 	if message != nil {
 		rendered, err := item.render(s.ctx, nil, "")
@@ -211,6 +299,7 @@ func Custom[T any](spec Spec, check func(context.Context, T) (bool, error)) Rule
 	rule := leaf(spec, true, check)
 	if rule.err == nil {
 		rule.definitions = []*definition{{id: spec.ID}}
+		rule.callbacks = true
 	}
 	return rule
 }
@@ -261,7 +350,7 @@ func failed[T any](err error) Rule[T] { return Rule[T]{ruleNode: ruleNode{err: e
 // WithMessage replaces only the public message of one leaf. Composite trees
 // retain their individual messages; overriding a composite is rejected.
 func (r Rule[T]) WithMessage(message string) Rule[T] {
-	if err := r.Validate(); err != nil {
+	if err := r.validateStructure(); err != nil {
 		return r
 	}
 	if r.info.Kind != LeafKind || !validText(message, false) {
@@ -299,6 +388,12 @@ func composeNode(info Description, children []ruleNode) ruleNode {
 		}
 		rule.nodes += child.nodes
 		rule.prohibitions = rule.prohibitions || child.prohibitions
+		rule.callbacks = rule.callbacks || child.callbacks
+		for _, key := range child.slots {
+			if !slices.Contains(rule.slots, key) {
+				rule.slots = append(rule.slots, key)
+			}
+		}
 		rule.depth = max(rule.depth, child.depth+1)
 		rule.bytes += child.bytes
 		rule.info.Children = append(rule.info.Children, child.info)

@@ -307,7 +307,7 @@ func decodeJournal(data []byte) (journal, error) {
 		if log.Version == 3 || log.Version == 7 {
 			// Both versions permit only one new consumer-owned file. Version 3
 			// retains its original migration/seeder authority; version 7 adds
-			// model/DTO/job/command names without replacement or deletion rights.
+			// the other scaffold kinds without replacement or deletion rights.
 			allowed := legacyScaffoldName.MatchString(base)
 			if log.Version == 7 {
 				allowed = scaffoldName.MatchString(base)

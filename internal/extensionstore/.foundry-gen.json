@@ -1,10 +1,11 @@
 {
   "version": 1,
   "files": {
-    "meta_foundry.gen.go": "e887b154cbd28904a6dec85718e04cf8471b6355563f773b28a9302e6bd0aa5e",
-    "meta_index_foundry.gen.go": "b3239f45ec00d1ad35bbbe96def8d728ecc3b4d5112d7da49e2eaab186e0e96d",
-    "setting_foundry.gen.go": "976b52328791384f7375997a6e4692e3cc82a411f0c7535cb7e5c06b9b54f585",
-    "translation_foundry.gen.go": "6584fde53d77482768fc01802aa8f387399787ff261c908148e40233ada6bd99",
-    "translation_index_foundry.gen.go": "b39a77384a39b71a2be12f46958f37c6ff70154c428d1f64f19e0da295bf4878"
+    "meta_foundry.gen.go": "d85419dbfb8af9fe2b65e0f61afa7cd7765eee9a7349df694f036a753789a693",
+    "meta_index_foundry.gen.go": "3d101c3bb3af218fe9234c5965363ef792b41b1c0773b21551d8ac3d720a90ef",
+    "setting_foundry.gen.go": "2958df3dba7f1649eb9ec075bf00930f51738f754ccd18a9e1c6d58b39a0cf1e",
+    "setting_state_foundry.gen.go": "d2aaf7c85fd704ee03764e2eea87835063b6ae45748b6e9e17ddac94640948c3",
+    "translation_foundry.gen.go": "add620d4bdf97279c31b1c8102cbf14b0c38cefb8a4341b704d0fe4b1fe2918e",
+    "translation_index_foundry.gen.go": "f57fe21684307dd9677da9eb79fd35b963b1d23025c7ee08d0314f7e31876853"
   }
 }

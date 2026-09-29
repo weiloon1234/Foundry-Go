@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/temporal"
+	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 // ID is a public session identifier owned by model M. It is not an authentication
@@ -32,6 +33,9 @@ type Info[M, K any] struct {
 	assurance                               auth.Assurance
 	remembered                              bool
 	created, lastSeen, idleExpires, expires temporal.DateTime
+	device                                  auth.Device
+	confirmed                               value.Optional[temporal.DateTime]
+	impersonator                            value.Optional[Impersonator]
 }
 
 func (i Info[M, K]) ID() ID[M]                        { return i.id }
@@ -42,7 +46,19 @@ func (i Info[M, K]) CreatedAt() temporal.DateTime     { return i.created }
 func (i Info[M, K]) LastSeenAt() temporal.DateTime    { return i.lastSeen }
 func (i Info[M, K]) IdleExpiresAt() temporal.DateTime { return i.idleExpires }
 func (i Info[M, K]) ExpiresAt() temporal.DateTime     { return i.expires }
-func (Info[M, K]) Format(s fmt.State, _ rune)         { _, _ = s.Write([]byte("session metadata")) }
+
+// Device is the client metadata captured when the session was issued.
+func (i Info[M, K]) Device() auth.Device { return i.device }
+
+// ConfirmedAt is when the holder last re-entered its password in this session.
+func (i Info[M, K]) ConfirmedAt() value.Optional[temporal.DateTime] { return i.confirmed }
+
+// Impersonator is the original actor when this is an impersonation session.
+func (i Info[M, K]) Impersonator() value.Optional[Impersonator] { return i.impersonator }
+
+// Impersonated reports whether this session was started by impersonation.
+func (i Info[M, K]) Impersonated() bool       { return i.impersonator.IsSet() }
+func (Info[M, K]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("session metadata")) }
 
 // Issued owns the newly generated secret. Only Secret exposes it for the explicit
 // transport boundary; routine formatting and JSON never serialize credentials.

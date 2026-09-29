@@ -45,7 +45,7 @@ func DisconnectSubject[M model.Identifiable, K any](ctx context.Context, source 
 		return err
 	}
 	defer finish()
-	return callback.Isolated("WebSocket subject disconnect", func() error {
+	return callback.Invoke("WebSocket subject disconnect", func() error {
 		if err := guard.Validate(); err != nil {
 			return err
 		}
@@ -71,34 +71,19 @@ func (h *Hub) disconnectConnection(id ConnectionID) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if c := h.connections[id]; c != nil && c.ctx.Err() == nil {
-		h.forcedDisconnects++
+		h.counters.forcedDisconnects.Add(1)
 		c.cancel()
 	}
 }
+
+// disconnectSubject uses the subject index, which includes pending private
+// admissions, instead of scanning every connection's subscriptions.
 func (h *Hub) disconnectSubject(id MemberID) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	for _, c := range h.connections {
-		if c.ctx.Err() != nil {
-			continue
-		}
-		matched := false
-		for _, subscription := range c.subscriptions {
-			if subscription.subjectID == id {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			for _, pending := range c.pending {
-				if pending.subscription.subjectID == id {
-					matched = true
-					break
-				}
-			}
-		}
-		if matched {
-			h.forcedDisconnects++
+	for c := range h.subjects[id] {
+		if c.ctx.Err() == nil {
+			h.counters.forcedDisconnects.Add(1)
 			c.cancel()
 		}
 	}

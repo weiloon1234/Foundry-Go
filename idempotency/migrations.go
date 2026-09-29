@@ -5,6 +5,18 @@ import "github.com/weiloon1234/Foundry-Go/database/migrate"
 const MigrationOrigin migrate.Origin = "foundry.idempotency"
 const CreateOutcomes migrate.ID = "000001_create_outcomes"
 
+// IndexRetainedOutcomes replaces the caller index with one that also orders
+// by expiry, so quota checks read at most MaxRetainedPerCaller unexpired rows.
+// It builds concurrently, outside a transaction, without blocking writes. The
+// build waits for older transactions, so it raises the session lock_timeout to
+// indexBuildLockTimeout for its statements and then restores the runner's value.
+// It first drops a leftover (possibly INVALID) index from an earlier attempt.
+const IndexRetainedOutcomes migrate.ID = "000002_index_retained_outcomes"
+
+// indexBuildLockTimeout bounds how long the concurrent build waits for older
+// transactions before failing (see the idempotency guide for recovery).
+const indexBuildLockTimeout = "300s"
+
 // Migrations describes the shared store. Install explicitly with ordinary
 // migrations; constructors never mutate schemas or existing data.
 func Migrations() []migrate.Definition {
@@ -27,5 +39,11 @@ CHECK ((completed_at IS NULL AND expires_at IS NULL AND result_schema = '' AND r
 )`,
 		`CREATE INDEX foundry_idempotency_caller ON foundry_idempotency (namespace, scope_digest)`,
 		`CREATE INDEX foundry_idempotency_expiry ON foundry_idempotency (namespace, expires_at, id) WHERE completed_at IS NOT NULL`,
+	}}, {Key: migrate.Key{Origin: MigrationOrigin, ID: IndexRetainedOutcomes}, Version: "v0.1.0", Mode: migrate.NonTransactional, Requires: []migrate.Key{{Origin: MigrationOrigin, ID: CreateOutcomes}}, SQL: []string{
+		`SELECT pg_catalog.set_config('foundry.idempotency_lock_timeout', pg_catalog.current_setting('lock_timeout'), false), pg_catalog.set_config('lock_timeout', '` + indexBuildLockTimeout + `', false)`,
+		`DROP INDEX CONCURRENTLY IF EXISTS foundry_idempotency_retained`,
+		`CREATE INDEX CONCURRENTLY foundry_idempotency_retained ON foundry_idempotency (namespace, scope_digest, expires_at)`,
+		`DROP INDEX CONCURRENTLY IF EXISTS foundry_idempotency_caller`,
+		`SELECT pg_catalog.set_config('lock_timeout', COALESCE(NULLIF(pg_catalog.current_setting('foundry.idempotency_lock_timeout', true), ''), pg_catalog.current_setting('lock_timeout')), false)`,
 	}}}
 }

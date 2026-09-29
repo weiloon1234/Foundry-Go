@@ -142,6 +142,9 @@ func TestRecoveryRequestsAcknowledgeWithoutExposingExistenceOrFailures(t *testin
 			if err := requests.Request(t.Context(), "submitted@example.test"); err != nil {
 				t.Fatal("admitted request revealed outcome", err)
 			}
+			if err := requests.Wait(t.Context()); err != nil { // Dispatch is owned background work.
+				t.Fatal(err)
+			}
 			if lookupCalls != 1 {
 				t.Fatal("lookup count", lookupCalls)
 			}
@@ -163,14 +166,23 @@ func TestRecoveryRequestsAcknowledgeWithoutExposingExistenceOrFailures(t *testin
 			if strings.Contains(mode, "error") && text == "" {
 				t.Fatal("operational failure was not diagnosed")
 			}
+			if err := requests.Close(t.Context()); err != nil {
+				t.Fatal(err)
+			}
 		})
 	}
 }
-func TestRecoveryRequestCancellationCapacityAndNoDetachedDelivery(t *testing.T) {
+
+// Delivery no longer runs in the caller's request, so response latency does not
+// depend on account existence. The dispatch is still owned: capacity is held
+// until the callback exits, the caller's cancellation does not abandon it, and
+// Close cancels and drains it.
+func TestRecoveryRequestDispatchIsOwnedBoundedAndDrained(t *testing.T) {
 	started, release := make(chan struct{}), make(chan struct{})
-	var calls atomic.Int32
+	var calls, lookups atomic.Int32
 	callbacks := RequestCallbacks[member, int64, string, PasswordReset]{
 		Lookup: func(context.Context, string) (value.Optional[model.Reference[member, int64]], error) {
+			lookups.Add(1)
 			return value.Set(member{ID: 7}.reference()), nil
 		},
 		Deliver: func(context.Context, Issued[member, PasswordReset]) error {
@@ -185,26 +197,31 @@ func TestRecoveryRequestCancellationCapacityAndNoDetachedDelivery(t *testing.T) 
 	}}
 	config := auth.DefaultConfig()
 	config.MaxConcurrent = 1
+	config.Timeout = 50 * time.Millisecond
 	requests, err := NewRequests(issuer, requestLimiter(t, 10), callbacks, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), config)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
-	done := make(chan error, 1)
-	go func() { done <- requests.Request(ctx, "first@example.test") }()
+	if err := requests.Request(ctx, "first@example.test"); err != nil {
+		t.Fatal("request waited for account-dependent work", err)
+	}
 	<-started
 	cancel()
-	if err := requests.Request(t.Context(), "second@example.test"); !errors.Is(err, fault.Conflict) {
-		t.Fatal("canceled callback released slot before exit", err)
+	if err := requests.Request(t.Context(), "second@example.test"); !errors.Is(err, fault.Overloaded) || lookups.Load() != 1 {
+		t.Fatal("dispatch capacity was released before exit", err)
 	}
-	select {
-	case <-done:
-		t.Fatal("delivery escaped ownership")
-	default:
+	closing, stop := context.WithTimeout(t.Context(), 10*time.Millisecond)
+	defer stop()
+	if err := requests.Close(closing); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("close did not wait for owned dispatch", err)
 	}
 	close(release)
-	if err := <-done; !errors.Is(err, context.Canceled) {
-		t.Fatal("caller cancellation lost", err)
+	if err := requests.Wait(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := requests.Request(t.Context(), "third@example.test"); !errors.Is(err, fault.Closed) {
+		t.Fatal("closed requester accepted work", err)
 	}
 	if calls.Load() != 1 {
 		t.Fatal("delivery was retried")
@@ -376,6 +393,9 @@ func TestCyclicRecoveryIssuerFailureIsAcknowledgedAndCapacityIsReleased(t *testi
 		if err := requests.Request(t.Context(), "submitted@example.test"); err != nil {
 			t.Fatal("issuer failure exposed an account-dependent outcome")
 		}
+		if err := requests.Wait(t.Context()); err != nil {
+			t.Fatal(err)
+		}
 		if calls != 1 || delivered != 0 || cycle.visits.Load() == 0 || cycle.visits.Load() > 256 {
 			t.Fatal("cyclic issuance failed to finish without delivery")
 		}
@@ -383,7 +403,11 @@ func TestCyclicRecoveryIssuerFailureIsAcknowledgedAndCapacityIsReleased(t *testi
 			t.Fatal("incomplete outcome was hidden or disclosed private details")
 		}
 		failure = nil
-		if err := requests.Request(t.Context(), "submitted@example.test"); err != nil || calls != 2 || delivered != 1 {
+		err = requests.Request(t.Context(), "submitted@example.test")
+		if waited := requests.Wait(t.Context()); waited != nil {
+			t.Fatal(waited)
+		}
+		if err != nil || calls != 2 || delivered != 1 {
 			t.Fatal("issuer error retained request capacity")
 		}
 	}

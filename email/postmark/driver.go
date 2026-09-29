@@ -45,6 +45,10 @@ func (d *Driver) Close() {
 }
 func (Driver) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("Postmark driver")) }
 
+// StructuredSubmission reports that this provider API sends native fields, so
+// the mailer skips MIME rendering.
+func (*Driver) StructuredSubmission() bool { return true }
+
 type attachment struct {
 	Name, Content, ContentType string
 	ContentID                  string `json:",omitempty"`

@@ -46,6 +46,14 @@ conflicting definitions across endpoints reject router assembly. Multiple
 endpoints can reuse the same declaration. The final OpenAPI and TypeScript
 exporters will consume these contracts in milestone 21.
 
+In locale-enabled applications, a declared error's public message can be
+translated. `SeatUnavailable.MessageDefinition()` returns its parameter-free
+catalog signature, `http.error.seats.unavailable`; add it to
+`application.FeatureDeclarations.Messages` and supply translations in `Catalog`,
+as for the built-in `http.error.<code>` keys described in
+[validation messages](validation-messages.md). Locales without a translation keep
+the declared message. Code, status and exported metadata never change.
+
 Zero/invalid declarations reject assembly and produce safe internal failures if
 passed directly to `WriteError`. Public text must be nonblank, valid UTF-8,
 NUL-free and at most 16KiB. Built-in codes are reserved. Declare only text that
@@ -60,6 +68,8 @@ private-cause values never become fields in the public failure envelope.
 
 The ordinary HTTP adapter preserves HEAD behavior, correlation and policy
 headers, safe cache defaults, and ownership of custom error methods. Error
-classification contains panic and Goexit before committing a response.
+classification runs on the request goroutine and contains panics before
+committing a response; `runtime.Goexit` in a custom error method ends that
+goroutine.
 
 Combined transport full regression passed.

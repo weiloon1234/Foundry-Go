@@ -285,7 +285,13 @@ func TestQueuedAcceptancePreventsRetryAfterTimeoutAndMiddlewareFailure(t *testin
 				t.Fatal(err)
 			}
 			startQueue(t, q)
-			record := waitEmailJob(t, q, receipt.ID, jobs.Failed)
+			// A handler that returned nil after acceptance succeeded even though
+			// its deadline passed; a failing after hook fails without retrying.
+			want := jobs.Failed
+			if mode == "timeout" {
+				want = jobs.Succeeded
+			}
+			record := waitEmailJob(t, q, receipt.ID, want)
 			if record.Attempts != 1 || calls.Load() != 1 || m.Snapshot().Accepted != 1 {
 				t.Fatal("accepted email retried after job failure")
 			}

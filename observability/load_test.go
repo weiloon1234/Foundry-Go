@@ -68,3 +68,32 @@ func TestBoundedLoadWithBlockedExporters(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// BenchmarkParallelSpans measures span admission and completion across many
+// goroutines sharing a few hot series, the recorder's contended path.
+func BenchmarkParallelSpans(b *testing.B) {
+	config := observability.DefaultConfig()
+	config.MaxRecent = 128
+	recorder, err := observability.New(config)
+	if err != nil {
+		b.Fatal(err)
+	}
+	operations := []observability.Operation{{Kind: observability.HTTP, Name: "request"}, {Kind: observability.Job, Name: "deliver"}, {Kind: observability.Resource, Name: "database.primary"}}
+	var next atomic.Uint64
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		operation := operations[next.Add(1)%uint64(len(operations))]
+		ctx := context.Background()
+		for pb.Next() {
+			_, span, err := recorder.Start(ctx, operation)
+			if err != nil {
+				b.Fatal(err)
+			}
+			span.End(observability.Result{})
+		}
+	})
+	b.StopTimer()
+	if err := recorder.Close(context.Background()); err != nil {
+		b.Fatal(err)
+	}
+}

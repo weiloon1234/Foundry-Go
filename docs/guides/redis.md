@@ -62,9 +62,17 @@ there is no environment, URL, credential-file or plaintext fallback. Local devel
 can explicitly use `config.TLS = redis.DisableTLS`. Credentials use `secret.String`.
 Custom TLS configuration is snapshotted; certificate/key objects must remain immutable.
 
-`MaxConnections` caps the pool. `MaxOperations` also bounds commands waiting for a
-connection; excess work returns `fault.Conflict`. Connection, operation and pool
-wait timeouts must be positive. Context deadlines can shorten them. Cancellation
+`MaxConnections` caps the pool (default 64, comparable to go-redis's 10 per CPU
+on a typical host, but fixed so validation is deterministic). `MaxOperations`
+(default 1024) also bounds commands waiting for a connection. A burst beyond it
+queues in FIFO order for at most the operation timeout (capped at five seconds)
+and the caller's deadline, then returns retryable `fault.Overloaded`, which HTTP
+maps to 503 with `Retry-After`. `Close` stops queued callers with `fault.Closed`.
+The per-command admission path uses atomics and a semaphore rather than a shared
+client mutex. The application-wide `Redis.MaxConnections` budget defaults to 1024
+connections across all configured Redis connections, including subscriptions.
+A command whose reply arrived is a success even if its deadline expires
+immediately afterwards. Connection, operation and pool wait timeouts must be positive. Context deadlines can shorten them. Cancellation
 before acquisition is checked immediately. Cancellation during socket I/O can wait
 until its existing socket deadline; the command keeps its owner until it exits.
 
@@ -88,13 +96,18 @@ representations fail without changing the stored value.
 
 Reads check the stored type and byte length on the server before returning the
 payload. Set `redis.Config.MaxValueBytes` to cover the bound used by `cache.Config`.
-The Redis bound also protects callers using the adapter boundary directly. Corrupt
-or oversized stored data fails with `fault.Invalid` and remains unchanged. This
+The Redis bound also protects callers using the adapter boundary directly. An
+entry of the wrong type or shape, or larger than the current bound (for example
+written before the bound was lowered), is a miss: `Put`/`Add`/`Increment` replace
+it, `Forget` removes it (reporting false) and batch removal deletes it without
+counting it as live. A non-canonical counter string still fails `Increment` with
+`fault.Invalid` and remains unchanged. This
 bounds ordinary stored-value replies; it does not bound allocations caused by a
 malicious server sending invalid RESP frames.
 
-A single bounded Lua operation combines validation and mutation. It is sent once
-with `EVAL`, without a script-cache fallback or automatic command retry. A lost reply
+A single bounded Lua operation combines validation and mutation. It is sent with
+`EVALSHA`; only a `NOSCRIPT` reply (which proves the script did not run) uploads the
+source, and there is no automatic command retry. A lost reply
 means the mutation may already have happened; the returned error does not imply
 rollback. Other clients cannot interleave commands inside the script, as described
 in Redis's [Lua execution contract](https://redis.io/docs/latest/develop/programmability/eval-intro/).
@@ -162,7 +175,19 @@ An unavailable script capability fails before creating metadata. Only the curren
 local Redis service is covered by integration acceptance; Cluster/Sentinel routing
 remains outside this adapter.
 
-Missing metadata receives a fresh random version in a versioned wire envelope.
+Missing metadata receives a fresh random version in a versioned wire envelope;
+corrupt metadata fails with `fault.Invalid` and is never overwritten. Typed reads use one script (`SnapshotReadBackend`) that resolves or
+creates the namespace/tag versions and reads the tagged hash in the same atomic
+round trip; obsolete, over-bound or malformed payloads are misses. Reads reclaim
+only obsolete (another snapshot) or malformed payloads; a current payload that
+merely exceeds this process's bound is left in place, so processes configured with
+different `MaxValueBytes` never delete each other's valid entries.
+Direct typed writes (`Put`, `Add`, `Forget`, `Increment`, `Expire`) use the tagged
+script's resolve mode (`SnapshotWriteBackend`): it resolves or creates the versions
+and mutates the payload in the same script, so each costs one round trip.
+Tagged payloads store the concatenated snapshot versions (16 bytes per tag plus the
+namespace stamp) as their fingerprint so the script can compare them server-side;
+payloads written by earlier releases are obsolete misses that the next write replaces.
 All selected metadata is validated before a single atomic replacement publishes an
 invalidation set. Corruption in a later tag cannot partially rotate earlier tags.
 The backend checks every snapshot again in the same script as the data operation.
@@ -183,8 +208,16 @@ ACL denials, corruption and stale snapshots preserve live data. Transport and
 unexpected server failures retain the ordinary uncertain-write contract; Lua does
 not provide rollback after a runtime error.
 
-Metadata persists until eviction or explicit removal. `Forever` payloads retain
-ordinary persistent-cache semantics. Redis server memory/eviction policy governs
+Metadata expires after 30 days without use. Every read or write refreshes it (when
+less than half the period remains), and a finite tagged write keeps it alive at
+least as long as the entry, so metadata never expires before a finite entry that
+depends on it. Metadata written by earlier releases without a TTL receives one on
+first use. Expired metadata is recreated with a fresh version, so an idle expiry
+turns old entries into misses without resurrecting them; `Forever` payloads that
+are not read for 30 days therefore become misses and are reclaimed on their next
+access or replacement. Namespace rotation rewrites one metadata key in place and
+never accumulates keys; stale payloads are reclaimed on access, replacement or
+their own expiry. Redis server memory/eviction policy governs
 total retained keys and bytes; Foundry bounds each operation, tag set and value.
 Restoring server state or losing accepted writes during failover remains a Redis
 durability concern. Cache tags do not claim crash-durable domain events.

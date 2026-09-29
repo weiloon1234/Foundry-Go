@@ -2,6 +2,7 @@ package validation
 
 import (
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -68,4 +69,27 @@ func Digits[S ~string]() Rule[S] {
 // It rejects implicit machine-local zones and retains server-only metadata.
 func Timezone[S ~string]() Rule[S] {
 	return textRule[S]("foundry.timezone", true, func(text string) bool { _, err := temporal.ParseTimeZone(text); return err == nil })
+}
+
+// DateFormat accepts text written exactly in a Go reference-time layout, such as
+// "2006-01-02" or "02/01/2006 15:04". The value must parse and format back to
+// the same text, so optional padding and alternative zone spellings reject. The
+// layout must round-trip the reference time. No timezone or clock is consulted;
+// prefer concrete temporal DTO fields when the wire format is RFC 3339.
+func DateFormat[S ~string](layout string) Rule[S] {
+	reference := time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)
+	if !validText(layout, false) || strings.TrimSpace(layout) == "" {
+		return failed[S](invalid("invalid date format layout"))
+	}
+	if parsed, err := time.Parse(layout, reference.Format(layout)); err != nil || parsed.Format(layout) != reference.Format(layout) {
+		return failed[S](invalid("invalid date format layout"))
+	}
+	return valueRule(Spec{ID: "foundry.date_format", Parameters: []Parameter{parameter("format", layout)}}, true, func(s *execution, input S) (bool, error) {
+		text := string(input)
+		if !textValue(s, text) {
+			return false, nil
+		}
+		parsed, err := time.Parse(layout, text)
+		return err == nil && parsed.Format(layout) == text, nil
+	})
 }

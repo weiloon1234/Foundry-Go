@@ -92,8 +92,11 @@ func normalizeHTTP(d *Document, types typeIndex) error {
 			return invalid("duplicate route or conflicting client name")
 		}
 		ids[op.Route.ID], names[name] = true, true
-		if op.Status < 200 || op.Status > 299 || op.Limits.Validate() != nil {
+		if op.Limits.Validate() != nil {
 			return invalid("invalid endpoint status or limits")
+		}
+		if err := operationStatus(op); err != nil {
+			return err
 		}
 		if op.Route.Method == foundryhttp.TRACE || (op.Route.Method == foundryhttp.GET || op.Route.Method == foundryhttp.HEAD) && op.Body != nil {
 			return invalid("typed endpoint method disagrees with its payload")
@@ -131,6 +134,11 @@ func normalizeHTTP(d *Document, types typeIndex) error {
 		}
 		if op.Body != nil && op.Body.MediaType == "application/x-www-form-urlencoded" {
 			if err := op.Limits.Form.Validate(); err != nil {
+				return err
+			}
+		}
+		if op.Body != nil && op.Body.Raw != nil {
+			if err := op.Limits.Raw.Validate(); err != nil {
 				return err
 			}
 		}
@@ -199,6 +207,11 @@ func normalizeHTTP(d *Document, types typeIndex) error {
 }
 
 func validateRoute(route foundryhttp.RouteInfo) error {
+	if route.Documentation != nil {
+		if err := route.Documentation.Validate(); err != nil {
+			return err
+		}
+	}
 	if route.SignedURL != nil {
 		if err := route.SignedURL.Validate(); err != nil {
 			return err
@@ -274,9 +287,50 @@ func (types typeIndex) parameter(p Parameter) error {
 	return nil
 }
 
+// operationStatus checks the success status contract: one 2xx status,
+// declared JSON alternatives, or a bodiless redirect. The HTTP owners validate
+// the status sets themselves.
+func operationStatus(op *Operation) error {
+	if op.Redirect {
+		if foundryhttp.RedirectResponse(op.Status).Validate() != nil || op.Response != nil || op.Statuses != nil || op.Idempotency != nil {
+			return invalid("invalid redirect response")
+		}
+		return nil
+	}
+	if op.Status < 200 || op.Status > 299 {
+		return invalid("invalid endpoint status or limits")
+	}
+	if op.Statuses == nil {
+		return nil
+	}
+	if op.Response == nil || op.Response.MediaType != "application/json" || op.Idempotency != nil || len(op.Statuses) == 0 || op.Statuses[0] != op.Status {
+		return invalid("alternative statuses require a JSON response and the primary status first")
+	}
+	if err := foundryhttp.JSONResponses(contract.StringJSON[string](), op.Statuses[0], op.Statuses[1:]...).Validate(); err != nil {
+		return invalid("invalid alternative response statuses")
+	}
+	return nil
+}
+
 func (types typeIndex) payload(payload *Payload, input bool) error {
 	if payload == nil {
 		return nil
+	}
+	if payload.Raw != nil {
+		media := payload.Raw.MediaTypes
+		if !input || payload.File != nil || payload.Type != "" || len(payload.Parts) != 0 || len(payload.Fields) != 0 || len(payload.Example) != 0 || len(media) == 0 {
+			return invalid("invalid raw request body")
+		}
+		if err := foundryhttp.RawRequestBody(media[0], media[1:]...).Validate(); err != nil {
+			return err
+		}
+		if payload.MediaType != "" && (len(media) != 1 || payload.MediaType != string(media[0])) {
+			return invalid("raw body media declarations disagree")
+		}
+		return nil
+	}
+	if len(payload.Example) != 0 && (payload.MediaType != "application/json" || len(payload.Example) > foundryhttp.MaxExampleBytes || !json.Valid(payload.Example)) {
+		return invalid("examples must be bounded JSON documents of a JSON payload")
 	}
 	if payload.MediaType == "application/x-www-form-urlencoded" {
 		if !input || payload.File != nil || payload.Type != "" || len(payload.Parts) != 0 {
@@ -314,6 +368,13 @@ func (types typeIndex) payload(payload *Payload, input bool) error {
 	if payload.MediaType == "application/json" {
 		if !types.has(payload.Type) || len(payload.Parts) != 0 {
 			return invalid("invalid JSON payload reference")
+		}
+		return nil
+	}
+	if payload.MediaType == foundryhttp.EventStreamMediaType {
+		// Server-sent events carry JSON data of the referenced type.
+		if input || !types.has(payload.Type) || len(payload.Parts) != 0 || len(payload.Example) != 0 {
+			return invalid("invalid event stream response")
 		}
 		return nil
 	}

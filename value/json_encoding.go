@@ -38,8 +38,9 @@ func (l JSONEncodingLimits) Validate() error {
 // Optional/Nullable values share the same input inspection as typed snapshots.
 // It returns no bytes on failure. It does not infer a DTO schema; contract.JSON
 // adds the generated schema checks before a transport can publish these bytes.
-// Panic and Goexit in codecs become internal faults. Cancellation never abandons
-// a codec that is still running or retaining resources.
+// Panics in codecs become internal faults. Codecs run on the caller's goroutine,
+// so runtime.Goexit in a codec ends that goroutine like any other Go call.
+// Cancellation never abandons a codec that is still running or retaining resources.
 func EncodeJSON[T any](ctx context.Context, input T, limits JSONEncodingLimits) ([]byte, error) {
 	if ctx == nil {
 		return nil, fault.New(fault.Invalid, "JSON encoding requires a context")
@@ -51,7 +52,8 @@ func EncodeJSON[T any](ctx context.Context, input T, limits JSONEncodingLimits) 
 		return nil, err
 	}
 	output := jsonOutput{ctx: ctx, limit: limits.Bytes}
-	err := callback.Isolated("encode JSON value", func() error {
+	// Framework hot path: Invoke contains codec panics without a goroutine.
+	err := callback.Invoke("encode JSON value", func() error {
 		budget := jsonInputBudget{ctx: ctx, limits: &limits, allowNUL: true}
 		if err := budget.check(reflect.ValueOf(input), 0); err != nil {
 			return err
@@ -71,7 +73,9 @@ func EncodeJSON[T any](ctx context.Context, input T, limits JSONEncodingLimits) 
 	if err != nil {
 		return nil, fault.Wrap(fault.Invalid, "invalid JSON value encoding", err)
 	}
-	_, err = jsonwire.Decode(output.data, jsonwire.Limits{Bytes: limits.Bytes, Depth: limits.Depth, Nodes: limits.Nodes})
+	// The encoder already guarantees syntax; one allocation-free scan bounds the
+	// emitted document's depth and nodes, including custom codec output.
+	err = jsonwire.Measure(output.data, jsonwire.Limits{Bytes: limits.Bytes, Depth: limits.Depth, Nodes: limits.Nodes})
 	if canceled := ctx.Err(); canceled != nil {
 		return nil, canceled
 	}

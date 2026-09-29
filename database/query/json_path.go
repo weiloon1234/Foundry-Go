@@ -43,8 +43,15 @@ func (p JSONPath[S, P]) IsJSONNull() Predicate[S] { return p.Kind().Eq(value.Of(
 
 // NewJSONProperty is a generator declaration boundary. Name is a JSON wire
 // property, never SQL. Quoted decodes a declared encoding/json ,string field.
+// The declared name is rendered as an escaped SQL literal, so a predicate on
+// (document -> 'name') can use an expression index on the same path.
 func NewJSONProperty[S, P, C any](parent JSONPath[S, P], name string, quoted bool) JSONPath[S, C] {
-	result := jsonPathOperation[S, C](jsonPropertyOperation, operationArg(parent.expression), operationArg(jsonPathKey[S](name).Value()))
+	return jsonProperty[S, P, C](parent, name, quoted, true)
+}
+
+// jsonProperty binds run-time map keys as parameters and declared names as literals.
+func jsonProperty[S, P, C any](parent JSONPath[S, P], name string, quoted, literal bool) JSONPath[S, C] {
+	result := jsonPathOperation[S, C](jsonPropertyOperation, operationArg(parent.expression), operationArg(jsonPathKey[S](name, literal).Value()))
 	if quoted {
 		result = jsonPathOperation[S, C](jsonUnquoteOperation, operationArg(result.expression))
 	}
@@ -53,6 +60,7 @@ func NewJSONProperty[S, P, C any](parent JSONPath[S, P], name string, quoted boo
 
 // NewJSONArrayElement is a generator declaration boundary for array elements.
 // Indices start at zero; negative indices count from the end, as in PostgreSQL.
+// The index is a run-time value, so it stays a bind parameter.
 func NewJSONArrayElement[S, P, C any](parent JSONPath[S, P], index int32) JSONPath[S, C] {
 	return jsonPathOperation[S, C](jsonIndexOperation, operationArg(parent.expression), operationArg(parameterExpression[S](index, codec.Signed[int32]()).Value()))
 }
@@ -79,11 +87,18 @@ func NewJSONMapEntry[S, P, C any, K comparable](parent JSONPath[S, P], key K) JS
 	if err != nil {
 		return JSONPath[S, C]{Expression[S, value.Nullable[value.JSON[C]]]{node: parameterNode{err: fault.New(fault.Invalid, "invalid JSON map key")}, codec: codec.Nullable(codec.JSON[C]())}}
 	}
-	return NewJSONProperty[S, P, C](parent, name, false)
+	return jsonProperty[S, P, C](parent, name, false, false)
 }
 
-func jsonPathKey[S any](name string) RowExpression[S, string] {
+// jsonPathKey renders a declared property name as a SQL literal: the path
+// (document -> 'name') then matches an expression index on the same path even
+// under generic plans. Run-time map keys remain bind parameters.
+func jsonPathKey[S any](name string, literal bool) RowExpression[S, string] {
 	result := parameterExpression[S](name, codec.String[string]())
+	if node, ok := result.expression.node.(parameterNode); ok && literal {
+		node.literal = true
+		result.expression.node = node
+	}
 	if len(name) > value.JSONMaxBytes || !utf8.ValidString(name) || strings.ContainsRune(name, 0) {
 		result.expression.node = parameterNode{err: fault.New(fault.Invalid, "invalid JSON property name")}
 	}

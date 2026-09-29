@@ -45,6 +45,14 @@ func validateOwnerRow[M any, K comparable](owner extensions.Owner[M, K], row sto
 	return extensionrow.Validate(owner, rowIdentity(row), row.Field, row.Locale)
 }
 
+// validateOwnerIndex checks an ownership/index projection without its text.
+func validateOwnerIndex[M any, K comparable](owner extensions.Owner[M, K], row store.TranslationIndex) error {
+	if !identifier.Semantic(row.Field) || i18n.LocaleID(row.Locale).Validate() != nil {
+		return invalid()
+	}
+	return extensionrow.Validate(owner, extensionrow.Identity{Key: row.Key, Owner: row.Owner, Scope: row.Scope, SubjectKey: row.SubjectKey, Identity: row.Identity}, row.Field, row.Locale)
+}
+
 // All deliberately includes retained translations for locales no longer present
 // in the catalog, and unregistered fields, for administrative migration. It
 // requires a currently active owner and never bypasses the row/byte limits.
@@ -107,11 +115,13 @@ func (f Field[M, K]) Matching(ctx context.Context, m *Manager, locale i18n.Local
 			return invalid()
 		}
 		fields := store.TranslationFields()
-		return store.QueryFoundryModelTranslations().Where(fields.Scope.Eq(f.definition.owner.Scope()), fields.Field.Eq(string(f.Name())), fields.Locale.Eq(string(locale)), fields.Value.Eq(text)).OrderBy(fields.Key.Asc()).Limit(query.MaxIdentityBatch+1).Each(ctx, tx, func(row store.Translation) error {
+		// The value hash index (000002_index_translation_values) serves the
+		// equality; only ownership/index columns are selected, never the text.
+		return store.TranslationsIndex(store.QueryFoundryModelTranslations().Where(fields.Scope.Eq(f.definition.owner.Scope()), fields.Field.Eq(string(f.Name())), fields.Locale.Eq(string(locale)), fields.Value.Eq(text)).OrderBy(fields.Key.Asc()).Limit(query.MaxIdentityBatch+1)).Each(ctx, tx, func(row store.TranslationIndex) error {
 			if len(keys) >= query.MaxIdentityBatch {
 				return fault.New(fault.Conflict, "translation matching scope exceeds its limit")
 			}
-			if err := validateOwnerRow(f.definition.owner, row); err != nil {
+			if err := validateOwnerIndex(f.definition.owner, row); err != nil {
 				return err
 			}
 			identity, err := row.Identity.Decode()
@@ -173,24 +183,16 @@ func deleteSubject(ctx context.Context, tx *database.Tx, subject extensions.Subj
 	return deleteRows(ctx, tx, store.QueryFoundryModelTranslations().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key)))
 }
 
-// Select and lock bounded keys first. Ordinary per-model batch deletion has a
-// smaller row budget than translations; do not hydrate thousands of large text
-// values at once or weaken that shared database limit.
+// deleteRows removes every row selected by q in one set-based DELETE USING,
+// without hydrating translation text or issuing one statement per row. Callers
+// lock the owner first (or run after its deletion); per-owner rows are bounded
+// by MaxRowsPerOwner at write time.
 func deleteRows(ctx context.Context, tx *database.Tx, q store.TranslationQuery) (int, error) {
-	f := store.TranslationFields()
-	keys, err := query.SelectValue(q.OrderBy(f.Key.Asc()).Limit(MaxRowsPerOwner+1), f.Key.Value()).ForUpdate().All(ctx, tx)
+	count, err := store.DeleteTranslationUsing(q, q).MatchKey(store.TranslationFields().Key.Value()).Exec(ctx, tx)
 	if err != nil {
 		return 0, err
 	}
-	if len(keys) > MaxRowsPerOwner {
-		return 0, fault.New(fault.Conflict, "translation cleanup exceeds its row limit")
-	}
-	for _, key := range keys {
-		if _, err := q.Delete(ctx, tx, key); err != nil {
-			return 0, err
-		}
-	}
-	return len(keys), nil
+	return int(count), nil
 }
 func Cleanup[M any, K comparable](ctx context.Context, tx *database.Tx, m *Manager, owner extensions.Owner[M, K], reference model.Reference[M, K], operation lifecycle.Operation) error {
 	if err := m.Validate(); err != nil {

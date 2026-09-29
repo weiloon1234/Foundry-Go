@@ -35,7 +35,11 @@ type RequestObserverFunc func(context.Context, RequestEvent)
 
 func (f RequestObserverFunc) ObserveRequest(ctx context.Context, event RequestEvent) { f(ctx, event) }
 
-type serverOptions struct{ observers []RequestObserver }
+type serverOptions struct {
+	observers []RequestObserver
+	// proxy resolves client address and scheme for kernel-level admission.
+	proxy *proxyPolicy
+}
 type ServerOption func(*serverOptions) error
 
 func WithRequestObserver(observer RequestObserver) ServerOption {
@@ -63,23 +67,30 @@ func configureServer(options []ServerOption) (serverOptions, error) {
 	return o, nil
 }
 
-type requestObservationKey struct{}
-
-func recordMatchedRoute(ctx context.Context, id RouteID) {
-	if observation, ok := ctx.Value(requestObservationKey{}).(*requestObservation); ok {
-		observation.routeMu.Lock()
-		observation.route = id
-		observation.routeMu.Unlock()
+// recordRequestDiagnostic keeps the first server-failure diagnostic of a request.
+func recordRequestDiagnostic(ctx context.Context, diagnostic fault.Diagnostic) {
+	if scope := requestScopeFrom(ctx); scope != nil && scope.observation != nil {
+		observation := scope.observation
+		observation.diagnosticMu.Lock()
+		if observation.diagnostic.IsZero() {
+			observation.diagnostic = diagnostic.Clone()
+		}
+		observation.diagnosticMu.Unlock()
 	}
 }
-func (o *requestObservation) complete(ctx context.Context, method Method, response *observedResponse, logger *slog.Logger, access bool, observers []RequestObserver) {
+
+func (o *requestObservation) complete(ctx context.Context, method Method, response *observedResponse, scope *requestScope, access bool, observers []RequestObserver) {
 	result := o.result(response)
-	if o.span != nil {
-		o.span.End(result)
+	var route RouteID
+	if matched := o.route.Load(); matched != nil {
+		route = matched.info.ID
 	}
-	o.routeMu.Lock()
-	route := o.route
-	o.routeMu.Unlock()
+	o.diagnosticMu.Lock()
+	diagnostic := o.diagnostic
+	o.diagnosticMu.Unlock()
+	if o.span != nil {
+		o.span.EndWithDiagnostic(result, diagnostic)
+	}
 	// Native requests can carry extension methods; a fixed label avoids retaining
 	// attacker-controlled method text in automatic diagnostic records.
 	if !method.valid() {
@@ -87,11 +98,11 @@ func (o *requestObservation) complete(ctx context.Context, method Method, respon
 	}
 	event := RequestEvent{RequestID: RequestID(ctx), Method: method, Route: route, Result: result, Duration: time.Since(o.started), Bytes: response.bytes, Hijacked: response.hijacked}
 	if access {
-		logger.InfoContext(ctx, "HTTP request completed", slog.String("method", string(event.Method)), slog.String("route", string(event.Route)), slog.Int("status", result.Status), slog.String("outcome", string(result.Outcome)), slog.Duration("duration", event.Duration), slog.Int64("bytes", event.Bytes), slog.Bool("hijacked", event.Hijacked))
+		scope.log().InfoContext(ctx, "HTTP request completed", slog.String("method", string(event.Method)), slog.String("route", string(event.Route)), slog.Int("status", result.Status), slog.String("outcome", string(result.Outcome)), slog.Duration("duration", event.Duration), slog.Int64("bytes", event.Bytes), slog.Bool("hijacked", event.Hijacked))
 	}
 	for _, observer := range observers {
 		if err := callback.Isolated("HTTP request observer", func() error { observer.ObserveRequest(ctx, event); return nil }); err != nil {
-			logger.ErrorContext(ctx, "HTTP request observer failed", slog.Any("error", err))
+			scope.log().ErrorContext(ctx, "HTTP request observer failed", slog.Any("error", err))
 		}
 	}
 }

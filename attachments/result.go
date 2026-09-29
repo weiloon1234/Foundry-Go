@@ -30,11 +30,14 @@ const (
 // attachment remains published when old-object cleanup returns an error. An
 // uncertain publication is never described as rolled back or automatically
 // retried. Inspect the durable Operation before deciding the next action.
+// PendingVariants reports that declared variants were queued, or that their
+// synchronous generation failed; the original is published either way.
 type Result[M any, K comparable] struct {
-	Operation      OperationID
-	Publication    Publication
-	Attachment     value.Optional[Attachment[M, K]]
-	PendingCleanup []OperationID
+	Operation       OperationID
+	Publication     Publication
+	Attachment      value.Optional[Attachment[M, K]]
+	PendingCleanup  []OperationID
+	PendingVariants bool
 }
 
 func (Result[M, K]) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte("attachment upload result")) }
@@ -60,6 +63,7 @@ type Attachment[M any, K comparable] struct {
 	properties value.JSON[json.RawMessage]
 	position   int32
 	created    temporal.DateTime
+	variants   []storedVariant
 }
 
 func (a Attachment[M, K]) ID() ID[M]                             { return a.id }

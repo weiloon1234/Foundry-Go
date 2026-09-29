@@ -2,6 +2,7 @@ package token
 
 import (
 	"context"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -30,6 +31,21 @@ type Backend interface {
 	RevokeAll(context.Context, Address, model.Identity) (uint64, error)
 	List(context.Context, Address, model.Identity, int) ([]Record, error)
 	Prune(context.Context, Address, int) (uint64, error)
+}
+
+// GraceBackend additionally accepts the generation immediately before the
+// family's current one, with Record.SupersededAt set, while the backend's clock
+// is within grace of the successor's issue time and before its own access
+// expiry. It never accepts older generations, and refresh-token reuse still
+// revokes the family.
+type GraceBackend interface {
+	LookupWithin(context.Context, Address, Digest, time.Duration) (value.Optional[Record], error)
+}
+
+// SelectiveBackend revokes every family of a subject in this address except
+// keep, under the subject lock shared with issuance, and returns the count.
+type SelectiveBackend interface {
+	RevokeOthers(context.Context, Address, model.Identity, model.ID[Record]) (uint64, error)
 }
 
 // CheckedBackend verifies a proof's current model in the SAME transaction as

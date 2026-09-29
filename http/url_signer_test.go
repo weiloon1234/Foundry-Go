@@ -264,3 +264,81 @@ func FuzzSignedURLVerification(f *testing.F) {
 		}
 	})
 }
+
+func TestSignedURLPermanentRelativeAndIgnoredParameters(t *testing.T) {
+	now := testkit.NewClock(urlTestTime)
+	signer := urlTestSigner(t, now)
+	spec := urlTestSpec()
+	const pattern = "/downloads/{name}"
+	if _, err := signer.sealForm(t.Context(), spec, pattern, urlTestOrigin, "/downloads/a", time.Time{}, signedURLForm{permanent: true}); err == nil {
+		t.Fatal("permanent link generated without route opt-in")
+	}
+	permanent := signer
+	permanent.policy.permanent = true
+	location, err := permanent.sealForm(t.Context(), spec, pattern, urlTestOrigin, "/downloads/a?q=1", time.Time{}, signedURLForm{permanent: true})
+	if err != nil || strings.Contains(location, "expires=") {
+		t.Fatalf("permanent link=%q %v", location, err)
+	}
+	relative := strings.TrimPrefix(location, string(urlTestOrigin))
+	now.Advance(100 * 365 * 24 * time.Hour)
+	if got, err := permanent.open(t.Context(), spec, pattern, urlTestOrigin, relative); err != nil || got != "q=1" {
+		t.Fatalf("permanent link rejected: %q %v", got, err)
+	}
+	if _, err := signer.open(t.Context(), spec, pattern, urlTestOrigin, relative); !errors.Is(err, ErrInvalidSignedURL) {
+		t.Fatal("route without opt-in accepted a permanent link")
+	}
+	// An expiring link cannot become permanent by dropping its expiry.
+	expiring, err := permanent.seal(t.Context(), spec, pattern, urlTestOrigin, "/downloads/a", now.Now().Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stripped := strings.Replace(strings.TrimPrefix(expiring, string(urlTestOrigin)), "expires=", "x=", 1)
+	stripped = "/downloads/a?" + stripped[strings.Index(stripped, "signature="):]
+	if _, err := permanent.open(t.Context(), spec, pattern, urlTestOrigin, stripped); !errors.Is(err, ErrInvalidSignedURL) {
+		t.Fatal("expiry removal accepted")
+	}
+
+	origin, err := signer.sealForm(t.Context(), spec, pattern, "", "/downloads/b?q=2", now.Now().Add(time.Minute), signedURLForm{relative: true})
+	if err != nil || !strings.HasPrefix(origin, "/downloads/b?q=2&expires=") || !strings.Contains(origin, "signature=r1.") {
+		t.Fatalf("relative link=%q %v", origin, err)
+	}
+	for _, admitted := range []Origin{urlTestOrigin, "https://tenant.example.test"} {
+		if got, err := signer.open(t.Context(), spec, pattern, admitted, origin); err != nil || got != "q=2" {
+			t.Fatalf("relative link on %s: %q %v", admitted, got, err)
+		}
+	}
+	if _, err := signer.open(t.Context(), spec, pattern, urlTestOrigin, strings.Replace(origin, "signature=r1.", "signature=v1.", 1)); !errors.Is(err, ErrInvalidSignedURL) {
+		t.Fatal("relative MAC accepted as an absolute link")
+	}
+	if _, err := signer.open(t.Context(), spec, pattern, urlTestOrigin, strings.Replace(origin, "/downloads/b", "/downloads/c", 1)); !errors.Is(err, ErrInvalidSignedURL) {
+		t.Fatal("relative link path changed")
+	}
+
+	tracked := signer
+	if tracked.policy, err = tracked.policy.withIgnored([]string{"utm_source", "fbclid"}); err != nil {
+		t.Fatal(err)
+	}
+	link, err := tracked.seal(t.Context(), spec, pattern, urlTestOrigin, "/downloads/c?q=3", now.Now().Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := strings.TrimPrefix(link, string(urlTestOrigin))
+	for _, decorated := range []string{
+		base + "&utm_source=mail", strings.Replace(base, "?q=3", "?utm_source=mail&q=3&fbclid=x", 1), base + "&%75tm_source=encoded",
+	} {
+		if got, err := tracked.open(t.Context(), spec, pattern, urlTestOrigin, decorated); err != nil || got != "q=3" {
+			t.Fatalf("ignored parameter broke verification: %q %q %v", decorated, got, err)
+		}
+	}
+	if _, err := signer.open(t.Context(), spec, pattern, urlTestOrigin, base+"&utm_source=mail"); !errors.Is(err, ErrInvalidSignedURL) {
+		t.Fatal("undeclared extra parameter accepted")
+	}
+	if _, err := tracked.seal(t.Context(), spec, pattern, urlTestOrigin, "/downloads/c?utm_source=x", now.Now().Add(time.Minute)); err == nil {
+		t.Fatal("ignored parameter signed into a link")
+	}
+	for _, names := range [][]string{{"expires"}, {"signature"}, {"a", "a"}, {""}, {"bad name"}} {
+		if _, err := (signedURLPolicy{}).withIgnored(names); err == nil {
+			t.Fatalf("invalid ignored names accepted: %q", names)
+		}
+	}
+}

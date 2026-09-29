@@ -60,7 +60,7 @@ func TestCloseRetainsUncooperativeTransportOwnership(t *testing.T) {
 		t.Fatal("claimed drain before transport exit")
 	default:
 	}
-	if _, err := c.Do(t.Context(), c.Get("next")); !errors.Is(err, fault.Conflict) {
+	if _, err := c.Do(t.Context(), c.Get("next")); !errors.Is(err, fault.Closed) {
 		t.Fatal("shutdown admitted work", err)
 	}
 	once.Do(func() { close(release) })
@@ -94,7 +94,10 @@ func TestResponseCloseCompletesBeforeAdmissionIsReleased(t *testing.T) {
 	result := make(chan error, 1)
 	go func() { _, err := c.Do(context.Background(), c.Get("close")); result <- err }()
 	await(t, closed)
-	if _, err := c.Do(t.Context(), c.Get("next")); !errors.Is(err, fault.Conflict) {
+	// Capacity is still owned: a further operation queues, then overloads.
+	busy, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer cancel()
+	if _, err := c.Do(busy, c.Get("next")); !errors.Is(err, fault.Overloaded) {
 		t.Fatal("capacity released before actual close", err)
 	}
 	select {

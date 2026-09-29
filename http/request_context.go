@@ -37,12 +37,13 @@ func prepareRequest(r *stdhttp.Request) (*stdhttp.Request, error) {
 		return r, InternalError.WithCause(err)
 	}
 	r = r.WithContext(ctx)
-	// Keep the generated ID even when the remaining request metadata is invalid.
-	metadata.UserAgent = r.UserAgent()
+	// Transport metadata is sanitized, never a reason to reject a request: a
+	// malformed or oversized User-Agent must not fail health checks or routes.
+	metadata.UserAgent = attribution.SanitizeUserAgent(r.UserAgent())
 	metadata.IP = PeerIP(r)
 	origin, err = origin.WithRequest(metadata)
 	if err != nil {
-		return r, BadRequest.WithCause(err)
+		return r, InternalError.WithCause(err)
 	}
 	ctx, err = attribution.WithContext(ctx, origin)
 	if err != nil {

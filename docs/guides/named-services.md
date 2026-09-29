@@ -80,9 +80,22 @@ entry starts with its adapter defaults, then applies the supplied nested fields.
 Durations use strings (`"5s"`); secrets retain `secret.String`; unknown fields,
 duplicate JSON keys, invalid widths and oversized/deep input fail. Environment
 variables for a collection contain the same JSON object representation, e.g.
-`APP__SERVICES__CACHE__STORES`; individual dynamic names do not create environment
-variables or generated Go identifiers. Typed `ConfigKeys().…Set` overrides keep
-the entire concrete collection type. Connection/credential provenance is redacted.
+`APP__SERVICES__CACHE__STORES`; individual dynamic names do not create generated
+Go identifiers. Typed `ConfigKeys().…Set` overrides keep the entire concrete
+collection type. Connection/credential provenance is redacted.
+
+When the loader also receives `Environ: os.Environ`, one field of one named entry
+can be overridden without restating the collection:
+`APP__SERVICES__DATABASE__CONNECTIONS__MAIN__PRIMARY__PASSWORD` sets
+`primary.password` of the `main` connection, and
+`APP__SERVICES__DATABASE__CONNECTIONS__MAIN__PRIMARY__PASSWORD_FILE` reads it from
+a mounted file. The entry segment is the upper-cased name, so address only names of
+lowercase letters, digits and single underscores this way. Overrides merge into the
+collection supplied by a file layer or the collection's own variable (or create
+entries in an empty collection, starting from adapter defaults) and then decode
+through the same element schema, so unknown fields and invalid values fail. A
+non-empty collection that exists only as a Go default cannot be merged and is
+rejected rather than silently replaced. Without `Environ`, these names are ignored.
 Do not serialize settings to build new input: secret serialization is redacted.
 
 Provide actual secrets through operator-controlled inputs. An AWS chain can read
@@ -115,6 +128,11 @@ Existing native customization remains available through the advanced adapter API
 | redis | Server policy | Yes | Yes | Optional, same Redis lease authority |
 | file | Owned local filesystem | No | Yes | No |
 | postgres | Explicitly migrated table | No | Yes | No |
+| null | None (every read misses) | Yes (nothing to invalidate) | Yes (nothing retained) | No |
+
+The `null` driver disables a store without changing its declarations: writes
+succeed without storing, `Remember` always runs its loader, `Add` reports true and
+counters return the delta. Do not rely on it for locks or accumulated counts.
 
 `CacheSettings.Require` checks needed capabilities during assembly. File and
 PostgreSQL provide expiry-aware atomic add/counters, existence and expiry updates.
@@ -123,20 +141,48 @@ Ordinary Remember coalesces calls within one Store. Redis distributed fills also
 require `Require.DistributedFills` and matching lease/cache namespaces.
 
 Automatic cache namespaces append the store name to the configured application
-namespace; explicit namespaces allow deliberate sharing. The new persistent
-backends serialize atomic mutations and capacity checks. File operations use
-process locks and atomic publication under `os.Root`; network filesystems are
-unsupported. Their capacity checks scan bounded entries, so Redis is preferable
-for high-throughput shared caching. File syscalls cannot be interrupted; lock
-contention honors context cancellation. Errors after publication may hide an
-applied write, and adapters never retry it automatically.
+namespace; explicit namespaces allow deliberate sharing. Persistent reads take no
+lock: file records are published by atomic rename, and PostgreSQL reads are single
+statements on the primary with expiry evaluated in SQL. File mutations serialize
+per key through one of 32 hash-sharded process locks under `os.Root`; network
+filesystems are unsupported. PostgreSQL `Put`, `Add` and `Forget` are single
+statements, and `Increment`/`Expire` lock only their own row; no schema-wide lock
+is taken. Redis remains preferable for high-throughput shared caching. File
+syscalls cannot be interrupted; lock contention honors context cancellation.
+Errors after publication may hide an applied write, and adapters never retry it
+automatically.
 
-File and PostgreSQL limits include retained expired records. Call bounded `Prune`
-explicitly to reclaim expiry; file prune also removes orphan temporary files.
-All processes sharing a physical cache must use matching bounds and synchronized
-clocks. PostgreSQL expiry has database timestamp precision. `plan.Migrations()`
-returns database/schema targets for explicit cache migrations. No migration runs
-at application boot, and no cleanup resets a database or touches unrelated data.
+File and PostgreSQL capacity (`max_entries`, `max_bytes`) is checked against a
+usage estimate that each backend maintains from its own writes and recounts with a
+bounded scan on every prune pass, so writes neither list the directory nor count
+the table. Processes sharing one physical cache can briefly overshoot between
+passes. Expired records never block a write: a write that does not fit first
+reclaims up to 256 expired records and rejects with `fault.Invalid` only if the
+cache is still full of live data. A reclamation that removes nothing is repeated
+at most once per second per backend. While the application is started, each file
+or PostgreSQL store runs an owned pruner every `prune_interval` (default `1m`,
+`1s` to `24h`; `0` disables it); shutdown stops it before the borrowed database
+closes. Pruner failures are logged as redacted diagnostics and retried at the next
+interval. `Prune(ctx, limit)` and `Sweep(ctx, limit)` remain for explicit
+maintenance; `Sweep` also reports skipped corrupt records, unrecognized files in a
+file root and the recounted usage. File prune also removes orphan temporary files.
+
+A record larger than the current `max_value_bytes` (written under an earlier,
+larger bound), or a file record whose envelope or checksum is corrupt, is a miss:
+reads report it absent, `Expire` leaves it unchanged, `Put`, `Add` and `Increment`
+replace it, and `Forget` removes it while reporting `false`. Prune passes skip and
+count corrupt file records instead of stopping. `Store.Invalidate` physically
+removes the namespace's file records or rows.
+
+PostgreSQL expiry uses the database clock (`clock_timestamp()`), so application
+servers need not agree on wall time. The adapter's `Config.Clock` exists for
+deterministic tests; configured applications pass their clock only when it is not
+the system clock. File expiry uses the application clock, so all processes sharing
+a root must use matching bounds and synchronized clocks. PostgreSQL stores sharing
+a schema must use matching bounds; expiry has database timestamp precision.
+`plan.Migrations()` returns database/schema targets for explicit cache migrations.
+No migration runs at application boot, a PostgreSQL store's startup performs no
+I/O, and no cleanup resets a database or touches unrelated data.
 
 See the independent [configured consumer](../../tests/fixtures/consumer/configured/settings.go)
 and the [consumer-startup blueprint](../../blueprint/consumer-startup/README.md).

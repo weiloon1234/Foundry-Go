@@ -188,7 +188,9 @@ func TestBackendCannotMutateTheRequestedScopeSnapshot(t *testing.T) {
 	}
 }
 
-func TestCanceledIssuanceOwnsCapacityAndDiscardsLateSecret(t *testing.T) {
+// A canceled issuance owns its capacity until actual exit; a backend that still
+// committed reports its result instead of stranding the persisted credential.
+func TestCanceledIssuanceOwnsCapacityAndKeepsCommittedResult(t *testing.T) {
 	started, release := make(chan struct{}), make(chan struct{})
 	backend := &fakeBackend{create: func(_ context.Context, a Address, c Creation) (Record, error) {
 		close(started)
@@ -197,25 +199,26 @@ func TestCanceledIssuanceOwnsCapacityAndDiscardsLateSecret(t *testing.T) {
 	}}
 	config := settings()
 	config.MaxConcurrent = 1
+	config.Timeout = 100 * time.Millisecond // Also bounds the queued admission wait.
 	tokens := binding(t, backend, config)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	result := make(chan error, 1)
 	go func() {
 		issued, err := tokens.Issue(ctx, proof(t, auth.Authenticated), IssueOptions[member]{})
-		if !issued.AccessSecret().IsZero() {
-			t.Error("late secret escaped")
+		if err == nil && issued.AccessSecret().IsZero() {
+			t.Error("committed token lost its secret")
 		}
 		result <- err
 	}()
 	<-started
 	cancel()
-	if _, err := tokens.Issue(t.Context(), proof(t, auth.Authenticated), IssueOptions[member]{}); !errors.Is(err, fault.Conflict) {
+	if _, err := tokens.Issue(t.Context(), proof(t, auth.Authenticated), IssueOptions[member]{}); !errors.Is(err, fault.Overloaded) {
 		t.Error("canceled callback released capacity early", err)
 	}
 	close(release)
-	if err := <-result; !errors.Is(err, context.Canceled) {
-		t.Fatal(err)
+	if err := <-result; err != nil {
+		t.Fatal("committed result was discarded", err)
 	}
 }
 
@@ -230,22 +233,22 @@ func TestRefreshPreservesGrantAbsoluteExpiryAndBounds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, access, err := newSecret()
+	_, access, err := newSecret("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, refresh, err := newSecret()
+	_, refresh, err := newSecret("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	creation := Creation{ID: id, Subject: identity, Scopes: []auth.AccessScopeName{"orders.read"}, Mode: Renewable, Assurance: auth.Authenticated, AccessHash: access, RefreshHash: value.Set(refresh), Lifetime: Lifetime{Access: 10 * time.Minute, RefreshIdle: 30 * time.Minute, Absolute: time.Hour}, RotationLimit: 2, Maximum: 2}
+	creation := Creation{ID: id, Subject: identity, Scopes: []auth.AccessScopeName{"orders.read"}, Mode: Renewable, Assurance: auth.Authenticated, AccessHash: access, RefreshHash: value.Set(refresh), Lifetime: Lifetime{Access: 10 * time.Minute, RefreshIdle: 30 * time.Minute, Absolute: time.Hour}, RotationLimit: 2, Maximum: 2, PendingMaximum: 1, Limit: auth.RejectNew}
 	current, err := creation.At(tokens.address, instant)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, advance := range []time.Duration{20 * time.Minute, 45 * time.Minute} {
-		_, a, _ := newSecret()
-		_, r, _ := newSecret()
+		_, a, _ := newSecret("")
+		_, r, _ := newSecret("")
 		next, live, err := current.Refreshed(instant.Add(advance), a, r)
 		if err != nil || !live {
 			t.Fatal(live, err)
@@ -260,8 +263,8 @@ func TestRefreshPreservesGrantAbsoluteExpiryAndBounds(t *testing.T) {
 		next.Scopes[0] = "orders.read"
 		current = next
 	}
-	_, a, _ := newSecret()
-	_, r, _ := newSecret()
+	_, a, _ := newSecret("")
+	_, r, _ := newSecret("")
 	if _, live, err := current.Refreshed(instant.Add(46*time.Minute), a, r); err != nil || live {
 		t.Fatal("rotation history was unbounded", err)
 	}
@@ -368,7 +371,7 @@ func TestTokenIssuanceRejectsCorruptBackendMetadata(t *testing.T) {
 	}{
 		{"subject", func(r *Record) { r.Subject, _ = member{8}.FoundryIdentity() }},
 		{"identifier", func(r *Record) { r.ID = model.ID[Record]{} }},
-		{"access", func(r *Record) { _, r.AccessHash, _ = newSecret() }},
+		{"access", func(r *Record) { _, r.AccessHash, _ = newSecret("") }},
 		{"refresh", func(r *Record) { r.RefreshHash = value.Optional[Digest]{} }},
 		{"generation", func(r *Record) { r.Generation = 1 }},
 		{"assurance", func(r *Record) { r.Assurance = auth.PendingMFA }},

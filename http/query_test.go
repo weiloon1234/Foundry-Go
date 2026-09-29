@@ -203,6 +203,25 @@ func TestTypedQueryCodecFailuresAreOwned(t *testing.T) {
 					return "", sentinel
 				}
 				d := customQuery(&queryFuncCodec{parse: method, format: method})
+				if mode == "goexit" {
+					// Codecs run on the caller's goroutine (callback.Invoke):
+					// Goexit ends it instead of becoming a returned error.
+					returned := make(chan bool, 1)
+					go func() {
+						completed := false
+						defer func() { returned <- completed }()
+						if direction == "decode" {
+							_, _ = d.Decode(ctx, "text=x", queryLimits)
+						} else {
+							_, _ = d.Encode(ctx, queryCustom{Text: "x"}, queryLimits)
+						}
+						completed = true
+					}()
+					if <-returned {
+						t.Fatal("query codec Goexit was converted into a return")
+					}
+					return
+				}
 				var err error
 				if direction == "decode" {
 					var got queryCustom

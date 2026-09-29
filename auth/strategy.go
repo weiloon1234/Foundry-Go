@@ -35,12 +35,13 @@ func (a Assurance) Validate() error {
 // Only trusted credential adapters should create proofs; construction itself
 // does not verify a password, signature, expiry, revocation or database record.
 type Proof[M, K any] struct {
-	_         [0]*M
-	_         [0]*K
-	identity  model.Identity
-	assurance Assurance
-	grants    *accessGrant
-	issuance  *issuanceCheck
+	_          [0]*M
+	_          [0]*K
+	identity   model.Identity
+	assurance  Assurance
+	grants     *accessGrant
+	issuance   *issuanceCheck
+	credential *attachedCredential
 }
 
 func (Proof[M, K]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("authentication proof")) }

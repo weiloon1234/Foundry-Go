@@ -13,7 +13,7 @@ func (p *preparedFile) writeStream(w stdhttp.ResponseWriter, r *stdhttp.Request)
 	var writer *fileResponseWriter
 	var transfer error
 	owned := callback.Isolated("HTTP stream response", func() error {
-		writer = newFileResponseWriter(r.Context(), w)
+		writer = newFileResponseWriter(p.reader.ctx, w)
 		header := writer.Header()
 		p.headers(header)
 		header.Set("Accept-Ranges", "none")
@@ -76,6 +76,11 @@ func (p *preparedFile) copyStream(w *fileResponseWriter) error {
 				return err
 			}
 			total += int64(n)
+			if p.flush {
+				if err := w.flush(); err != nil {
+					return err
+				}
+			}
 		}
 		if finished {
 			if !w.committed {

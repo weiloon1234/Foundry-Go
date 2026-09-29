@@ -6,11 +6,14 @@ import (
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
-// RealtimeMessage carries a stable notification ID across client reconnects.
+// RealtimeMessage carries a stable notification ID across client reconnects;
+// clients should ignore an ID they already handled.
 // Publication is local admission/distributed attempt, not an end-user receipt.
 type RealtimeMessage[D any] struct {
 	ID      NotificationID `json:"id"`
@@ -83,6 +86,17 @@ func RealtimeChannel[C any, M model.Identifiable, K comparable, P, D any](id Cha
 		}
 		_, err = websocket.Publish(ctx, publisher, realtime.channel, reference.Key(), realtime.event, message)
 		if err != nil {
+			// A declaration mismatch can never succeed. Only a failure that
+			// provably happened before anything was published (local
+			// admission, a closing hub, encoding) is retried; a distributed
+			// failure may follow partial fan-out or history and stays
+			// uncertain for an operator decision.
+			if errorgraph.Is(err, fault.Invalid) {
+				return Reject, nil
+			}
+			if websocket.NotPublished(err) {
+				return Retry, nil
+			}
 			return Unknown, nil
 		}
 		return Accepted, nil

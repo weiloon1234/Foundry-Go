@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/cache"
-	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/cacheint"
 )
 
@@ -31,12 +30,10 @@ func (b *Backend) Increment(ctx context.Context, key cache.EntryKey, delta int64
 func (b *Backend) incrementEntry(ctx context.Context, key cache.EntryKey, delta int64, initialTTL cache.TTL, now time.Time, tags *tagState) (int64, error) {
 	previous := b.lookup(key, now)
 	var value int64
+	// Stale or unusable tagged storage starts a new counter at zero.
 	if previous != nil && tags != nil {
 		item := previous.Value.(*entry)
-		if item.kind != taggedEntry {
-			return 0, fault.New(fault.Invalid, "tagged counter is corrupt")
-		}
-		if item.fingerprint != tags.key.Fingerprint() {
+		if item.kind != taggedEntry || item.fingerprint != tags.key.Fingerprint() {
 			previous = nil
 		}
 	}

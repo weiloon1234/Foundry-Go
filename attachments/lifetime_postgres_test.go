@@ -58,7 +58,10 @@ func TestPostgresAttachmentCancellationRetainsActualReaderLifetime(t *testing.T)
 		t.Fatal("canceled upload abandoned reader")
 	default:
 	}
-	if _, err := testSingle.Add(t.Context(), m, member(t, 1), uploadText("next")); !errors.Is(err, fault.Conflict) {
+	// The slot is still owned: another upload queues briefly, then overloads.
+	busy, busyCancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer busyCancel()
+	if _, err := testSingle.Add(busy, m, member(t, 1), uploadText("next")); !errors.Is(err, fault.Overloaded) {
 		t.Fatal("active canceled upload released its capacity", err)
 	}
 	closeCtx, closeCancel := context.WithTimeout(context.Background(), time.Millisecond)

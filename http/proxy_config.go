@@ -80,7 +80,9 @@ const TrustedProxyMiddlewareID MiddlewareID = "foundry.trusted-proxy"
 const maxProxyNetworks = 256
 const maxProxyHeaders = 8
 const maxProxyHops = 64
-const maxProxyHeaderBytes = 8192
+
+// maxProxyEntryBytes bounds one consumed hop; longer entries are unusable hops.
+const maxProxyEntryBytes = 256
 
 type proxyPolicy struct {
 	proxies       []netip.Prefix

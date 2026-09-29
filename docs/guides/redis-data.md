@@ -1,7 +1,8 @@
-# Typed Redis hashes and sets
+# Typed Redis hashes, sets, sorted sets and lists
 
 `redis/data` supplies ordinary typed handles over an explicitly configured Redis
-client. Use hashes for fields belonging to a resource and sets for membership.
+client. Use hashes for fields belonging to a resource, sets for membership,
+sorted sets for scored rankings and lists for bounded ordered sequences.
 These structures have their own addresses and are unaffected by cache invalidation.
 The [independent consumer](../../tests/fixtures/consumer/redisdata/members.go) is the
 compiling source for the examples below. No extra dependency is required.
@@ -79,9 +80,93 @@ unrelated model IDs as resource keys or members. `Members` returns an owned nati
 slice, including an empty slice for a missing set, sorted by encoded JSON bytes.
 This order is deterministic; apply native slice sorting for domain or numeric order.
 
+## Batch reads and exact counters
+
+```go
+values, err := profiles.GetMany(ctx, member.ID, DisplayProfile /*, more fields */)
+display, found := values[0].Get() // value.Optional[Profile], in input order
+```
+
+`GetMany` reads up to `Limits.Entries` fields in one atomic script. The result has
+one `value.Optional[V]` per requested field in input order; a missing field is unset
+and a repeated field repeats its value. Stored sizes are checked against the value
+and reply budgets before any payload is transferred.
+
+`GetAll` returns every field as `[]data.HashEntry[F, V]`, ordered by encoded field
+bytes (the adapter sorts them, independent of the Redis server's locale). Because key codecs only encode, the declaration must supply the inverse. The
+[rankings consumer](../../tests/fixtures/consumer/redisdata/rankings.go) declares:
+
+```go
+var Counts = data.DefineHash[model.ID[mutatorqueries.Member], ActivityKind, int64](
+    "member-activity", 1,
+    keyspace.TextKeys[model.ID[mutatorqueries.Member]](), keyspace.StringKeys[ActivityKind](),
+).WithFieldDecoder(func(text string) (ActivityKind, error) { return ActivityKind(text), nil })
+
+entries, err := counts.GetAll(ctx, member.ID)
+total, err := data.IncrementField(ctx, counts, member.ID, PageViews, 1)
+```
+
+`WithFieldDecoder` keeps the declaration's name/version identity. Every decoded field
+must encode back to its exact stored bytes, otherwise the read fails. Without a
+decoder, `GetAll` returns `fault.Invalid`.
+
+`IncrementField` is a package function because only `Hash[K, F, int64]` supports it;
+the compiler rejects it for other value types. It adds a signed delta with Redis
+64-bit arithmetic and returns the result. A missing field starts at zero, existing
+expiry is retained, and a full hash rejects a new field. A stored value that is not a
+canonical integer, or an overflow, fails with `fault.Invalid` without mutation.
+The value bound must allow 20 bytes.
+
+## Scored rankings with sorted sets
+
+```go
+var Rankings = data.DefineSortedSet[model.ID[models.Group], model.ID[mutatorqueries.Member]](
+    "group-rankings", 1, keyspace.TextKeys[model.ID[models.Group]](),
+)
+rankings, err := Rankings.Bind(store)
+added, err := rankings.Add(ctx, group.ID, member.ID, 1250)
+score, err := rankings.Increment(ctx, group.ID, member.ID, 25)
+top, err := rankings.Range(ctx, group.ID, data.Last(10)) // []data.Scored[model.ID[Member]]
+rank, found, err := rankings.Rank(ctx, group.ID, member.ID, data.Descending)
+window, err := rankings.RangeByScore(ctx, group.ID, data.Between(1000, 2000), data.First(20))
+count, err := rankings.CountByScore(ctx, group.ID, data.AllScores())
+```
+
+Members use canonical JSON identity, as in sets; each carries a `float64` score.
+Order follows Redis: by score, then by encoded member bytes (`Descending` reverses
+both). `data.Window` selects `Count` members after `Offset` (`First(n)`/`Last(n)`
+are shortcuts); `Count` must be within `Limits.Entries`. `data.ScoreRange` bounds
+are inclusive unless `ExcludeMin`/`ExcludeMax` is set; use `math.Inf` for open
+ends. NaN scores, NaN increment results and invalid ranges fail with
+`fault.Invalid`. `Add` reports whether the member is new; a full sorted set can
+re-score existing members but rejects growth. `Score` and `Rank` distinguish a
+missing member. Replies are checked for window size, order and payload bounds.
+
+## Bounded lists
+
+```go
+var Recent = data.DefineList[model.ID[models.Group], Activity](
+    "group-activity", 1, keyspace.TextKeys[model.ID[models.Group]](),
+)
+recent, err := Recent.Bind(store)
+err = recent.Trim(ctx, group.ID, -99, -1) // keep the newest 99 before pushing
+length, err := recent.Push(ctx, group.ID, Activity{Member: member.ID, Kind: PageViews})
+length, err = recent.PushFront(ctx, group.ID, newest)
+items, err := recent.Range(ctx, group.ID, 0, -1)
+item, found, err := recent.PopFront(ctx, group.ID)
+```
+
+A list's length is bounded by `Limits.Entries`: a push that would exceed it inserts
+nothing and fails with `fault.Invalid`, so trim before pushing when you want a
+capped window. `Push` appends in order; `PushFront` inserts each value at the head
+in turn (like Redis LPUSH), so the last argument becomes the first element. Both
+return the new length. `Range` and `Trim` use Redis index semantics, where negative
+indices count from the tail. A pop checks the element's size before removing it;
+an element that then fails JSON decoding is reported as an error and stays removed.
+
 ## Existence, expiry and deletion
 
-Both handles expose `Exists`, `Expire`, `Count`, `Delete` and `DeleteMany` while
+Every handle exposes `Exists`, `Expire`, `Count`, `Delete` and `DeleteMany` while
 retaining the declaration's resource key type:
 
 ```go
@@ -91,8 +176,9 @@ changed, err = groups.Expire(ctx, member.ID, cache.Forever())
 deleted, err := groups.DeleteMany(ctx, firstMember.ID, secondMember.ID)
 ```
 
-New hashes and sets are persistent. Field/member writes retain any existing key
-expiry. Removing the last field or member removes the key. `Expire` preserves
+New hashes, sets, sorted sets and lists are persistent. Field, member and element
+writes retain any existing key expiry. Removing the last field, member or element
+removes the key. `Expire` preserves
 contents, returns false for a missing key and true for an existing key, even if it
 was already persistent. Positive durations round up to whole milliseconds. The
 expiry type reuses `cache.TTL`; its zero value is invalid.
@@ -127,7 +213,10 @@ against arbitrary external writes or a malicious RESP server. Adapters and raw c
 must preserve the typed schema and canonical value representation.
 
 Store defaults separately bound declarations, key bytes, 128 active operations,
-64 input batch keys and a five-second operation deadline. Batch size has a shared
+64 input batch keys and a five-second operation deadline. When all operation slots
+are busy, a call queues in FIFO order for at most the operation timeout (capped at
+five seconds) and its own deadline, then returns retryable `fault.Overloaded`,
+which HTTP maps to 503 with `Retry-After`. Batch size has a shared
 hard cap of 256 keys. Key/JSON/adapter callbacks remain owned until they actually
 exit, including after cancellation. Panics and Goexit become errors; a callback that
 ignores cancellation retains its slot instead of being abandoned. Keep input maps,
@@ -136,8 +225,8 @@ slices and callback-backed keys unchanged until the call returns.
 Remote failures return zero results and errors. An acknowledgement can be lost after
 a write succeeds; Foundry never retries that mutation automatically or falls back to
 another authority. Script atomicity does not imply rollback after an arbitrary
-server runtime error, or a transaction with PostgreSQL. This slice uses one mutation
-command per operation after its validation reads. Advanced operations use the explicit [scoped command boundary](redis-commands.md),
+server runtime error, or a transaction with PostgreSQL. Each operation uses one
+mutation command after its validation reads. Advanced operations use the explicit [scoped command boundary](redis-commands.md),
 with `AdapterKey` reusing the typed declaration’s actual key resolution.
 
 Focused native behavior, races, ten compiler rejection cases and five real-gopls

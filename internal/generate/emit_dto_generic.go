@@ -170,7 +170,7 @@ func (e *emitter) genericIDExpressions(graph dtoGraph, parameters map[*types.Typ
 	for _, node := range graph.nodes {
 		if node.typ == nil && node.wire.Kind == contract.QuotedKind {
 			if base, ok := result[node.wire.Element]; ok {
-				result[node.wire.ID] = fmt.Sprintf("%s.TypeID(%q+string(%s))", pkg, "quoted:", base)
+				result[node.wire.ID] = fmt.Sprintf("%s.TypeID(%q+string(%s))", pkg, quotedTypePrefix, base)
 			}
 		}
 	}

@@ -14,10 +14,7 @@ func (b *Backend) readOptions(options storage.ReadOptions) error {
 	if err := options.Validate(); err != nil {
 		return err
 	}
-	if options.Version != "" {
-		return failure(storage.Unsupported, storage.OpenOperation, storage.NotApplicable, nil)
-	}
-	return nil
+	return b.Capabilities().ValidateRead(options)
 }
 func (b *Backend) Open(ctx context.Context, key storage.ObjectKey, options storage.ReadOptions) (io.ReadCloser, storage.ReadInfo, error) {
 	if err := b.ready(ctx, storage.OpenOperation); err != nil {
@@ -105,14 +102,19 @@ func (b *Backend) Delete(ctx context.Context, key storage.ObjectKey, options sto
 	if err = options.Validate(); err != nil {
 		return err
 	}
-	if options.Version != "" {
-		return failure(storage.Unsupported, storage.DeleteOperation, storage.Unchanged, nil)
+	if err = b.Capabilities().ValidateDelete(options); err != nil {
+		return err
 	}
-	unlock, err := b.lock(ctx)
+	unlock, err := b.lockKey(ctx, key)
 	if err != nil {
 		return err
 	}
-	defer unlock()
+	locked := true
+	defer func() {
+		if locked {
+			unlock()
+		}
+	}()
 	file, info, _, err := b.openRecord(key)
 	if err != nil {
 		if errors.Is(err, storage.NotFound) {
@@ -140,6 +142,15 @@ func (b *Backend) Delete(ctx context.Context, key storage.ObjectKey, options sto
 	defer parent.Close()
 	if err = parent.Remove(name); err != nil {
 		return failure(storage.Unavailable, storage.DeleteOperation, storage.Unchanged, err)
+	}
+	// An unconditional removal is decided and need not block the shard during
+	// its durability sync; a conditional one holds it until the removal is durable.
+	if options.IfMatch == "" {
+		unlock()
+		locked = false
+	}
+	if b.beforeSync != nil {
+		b.beforeSync(key)
 	}
 	if b.config.Sync {
 		if err = syncDirectory(parent); err != nil {

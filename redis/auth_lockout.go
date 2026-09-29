@@ -108,7 +108,7 @@ func (c *Client) lockoutCommand(ctx context.Context, key lockout.Key, policy loc
 		return nil, err
 	}
 	result, err := c.execute(ctx, func(ctx context.Context, raw *driver.Client) (any, error) {
-		return raw.Eval(ctx, authLockoutScript, []string{key.String()}, op, policy.MaxFailures, policy.Window.Milliseconds(), policy.LockFor.Milliseconds(), snapshot.Generation.Token(), snapshot.Revision, uint8(outcome), lockout.MaxFailures, lockout.MaxDuration.Milliseconds(), ratewindow.MaxTimestamp, uint64(math.MaxUint32), lockoutMetadataBytes).Result()
+		return evalScript(ctx, raw, authLockoutScript, []string{key.String()}, op, policy.MaxFailures, policy.Window.Milliseconds(), policy.LockFor.Milliseconds(), snapshot.Generation.Token(), snapshot.Revision, uint8(outcome), lockout.MaxFailures, lockout.MaxDuration.Milliseconds(), ratewindow.MaxTimestamp, uint64(math.MaxUint32), lockoutMetadataBytes).Result()
 	})
 	if err != nil {
 		return nil, err

@@ -40,6 +40,7 @@ func (q Query[M]) modelWriteCompiler(kind mutationKind, requirePrimary bool) (co
 	}
 	c := newCompiler(q.definition.columns)
 	c.sources = map[string]map[string]Column{q.table: c.columns}
+	c.scopeContext = q.scopeContext
 	return c, nil
 }
 

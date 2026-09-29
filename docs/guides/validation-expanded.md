@@ -14,15 +14,17 @@ base execution contract.
 | Text case and characters | `ASCII`, `Alpha`, `AlphaNumeric`, `AlphaDash`, `Lowercase`, `Uppercase` |
 | Length and numeric codes | `MinLength`, `MaxLength`, `Length`, `LengthBetween`, `Digits`, `MinDigits`, `MaxDigits`, `DigitsBetween` |
 | Text membership | `Contains`, `DoesntContain`, `StartsWith`, `EndsWith`, `DoesntStartWith`, `DoesntEndWith`, `Matches`, `NotMatches` |
-| Formats | Existing email, URL, IP, UUID, JSON and temporal rules; new `HexColor`, `MACAddress`, `ULID` |
-| Numbers | `Min`, `Max`, `Between`, integer `MultipleOf`, exact `DecimalMin`, `DecimalMax`, `DecimalBetween` |
-| Related values | `Compare` with `GreaterThan`, `GreaterOrEqual`, `LessThan`, `LessOrEqual`; `Confirmed` with two typed fields; existing `Same`, `Different` and temporal field comparisons |
-| Collections | `Items`, `ItemsBetween`, `MinItems`, `MaxItems`, `ContainsItems`, `ExcludesItems`, `Distinct`, `DistinctBy`, `Each` |
+| Formats | Existing email, URL, IP, UUID, JSON and temporal rules; `HexColor`, `MACAddress`, `ULID`, Go-layout `DateFormat` |
+| Numbers | `Min`, `Max`, `Between`, integer `MultipleOf`, exact `DecimalMin`, `DecimalMax`, `DecimalBetween`, `DecimalMaxPlaces`, `DecimalMultipleOf` |
+| Related values | `Compare` with `GreaterThan`, `GreaterOrEqual`, `LessThan`, `LessOrEqual` or their `Decimal…` equivalents; `Confirmed` with two typed fields; existing `Same`, `Different` and temporal field comparisons |
+| Current time | `AfterNow`, `BeforeNow`, `AfterToday`, `BeforeToday` and their `OrEqual` forms, reading an injected `temporal.Service` at check time |
+| Collections | `Items`, `ItemsBetween`, `MinItems`, `MaxItems`, `ContainsItems`, `ExcludesItems`, `Distinct`, `DistinctIgnoringCase`, `DistinctBy`, `Each` |
+| Maps | `EachKey`, `EachValue` in ascending key order with entry paths |
 | Password strength | `Password[string]` or `PasswordValue[password.Plaintext]`, using `PasswordOptions` |
 | Presence and conditions | `Required`, `RequiredNullable`, `Present`, `Absent`, `Prohibited`, `Optional`, `Nullable`, `NonEmpty`; compose `When`/`Unless` instead of string field names |
-| Model observations | `databasevalidation.Exists`, `Unique`, and new batched `ExistsAll` |
-| Remote/application checks | Context-aware `Custom[T]`, `Lookup[T]`, `BatchLookup[T]`, and bounded `Parallel` |
-| Files | Existing `FilePresent`, size, content type and extension rules; bounded image inspection belongs to [imaging](imaging.md) |
+| Model observations | `databasevalidation.Exists`, `Unique`, batched `ExistsAll`/`UniqueAll`, per-element `ExistsEach`/`UniqueEach`, `UniqueIgnoring` and check-time `Scoped` lookups |
+| Remote/application checks | Context-aware `Custom[T]`, `Dynamic[T]` messages, `Hook[T]` reports, `Lookup[T]`, `BatchLookup[T]`, `AnyLookup[T]`, slots and bounded `Parallel` |
+| Files | Existing `FilePresent`, size, content type and extension rules; `imagingvalidation.Dimensions` inspects image size through [imaging](imaging.md) |
 
 Go DTO types already enforce boolean/integer/string/list shape. `Optional` retains
 wire presence; zero and false are values. `When(condition, field.Rules(Required...))`
@@ -122,8 +124,31 @@ missing value. Empty lists succeed without I/O; combine with `MinItems` when
 selection is required. Duplicate inputs are allowed; use `Distinct` separately.
 The validation adapter charges every item against its work limit before I/O.
 
+Each missing value is reported at its own index path, such as `/user_ids/3`,
+with the collection's label. Valid lists cost only the batched observation
+above. When it rejects, the rule bisects the list with further batched
+observations: a half that passes proves the other half holds the missing value,
+so k missing values among n cost about 2k·log2(n/k) extra statements, bounded by
+the issue cap and work budget. The issue does not distinguish a nonexistent
+value from one outside the caller's scope.
+
+For lists of objects, select one field per element:
+
+```go
+assignee := validation.DefineField("assignee_id", func(a Assignment) model.ID[models.User] { return a.Assignee })
+assignees := databasevalidation.ExistsEach(db, activeUsers, fields.ID, assignee)
+// Rule[[]Assignment]; a missing assignee is reported at /2/assignee_id.
+```
+
+`UniqueAll` and `UniqueEach` require that no value is stored, using batched
+`IN` observations (`query.ValueLookup.AnyExist`) and the same per-element paths.
+They do not detect duplicates inside the request; add `Distinct`/`DistinctBy`.
+Base `validation.ExistsEach`/`UniqueEach` accept any `BatchLookup`/`AnyLookup`,
+including `databasevalidation.Lookup` and `Scoped`.
+
 Filters, named executor/transaction ownership and soft-delete scopes are retained.
-Updates exclude the trusted current model ID using the existing typed `Where`
+Updates exclude the trusted current model ID with `UniqueIgnoring` and a
+[check-time slot](validation.md#check-time-parameters), or with the typed `Where`
 predicate shown in the base guide. Never derive that exclusion from an
 untrusted field alone. Validation observations do not reserve values or replace
 write authorization, unique constraints or foreign keys. Separate batches can

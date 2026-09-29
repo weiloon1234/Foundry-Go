@@ -19,11 +19,21 @@ import (
 // CredentialSource snapshots one transport input into a named secret. Sources
 // never inspect URLs, request bodies, models, or serialized attribution.
 type CredentialSource struct {
-	name      auth.CredentialName
-	info      CredentialInfo
-	challenge string
-	validate  func() error
-	read      func(*stdhttp.Request) (value.Optional[secret.String], error)
+	name        auth.CredentialName
+	info        CredentialInfo
+	challenge   string
+	validate    func() error
+	read        func(*stdhttp.Request) (value.Optional[secret.String], error)
+	unprotected bool
+}
+
+// WithoutOriginProtection explicitly opts a cookie source out of the origin/CSRF
+// requirement enforced by NewAuthentication. Use it only when another layer owns
+// cross-site protection (for example a WebSocket upgrade that validates Origin,
+// or routes that never change state). Bearer sources are unaffected.
+func (s CredentialSource) WithoutOriginProtection() CredentialSource {
+	s.unprotected = true
+	return s
 }
 
 // BearerCredential accepts exactly one Authorization field with the Bearer
@@ -70,7 +80,10 @@ func bearerToken(token string) bool {
 
 // CookieCredential reuses a typed secret cookie's bounded parser, duplicate
 // detection and configuration. Cookie values still require strategy verification;
-// parsing is not authentication. Session cookie/CSRF policy is separate.
+// parsing is not authentication. Browsers attach cookies to cross-site requests,
+// so NewAuthentication rejects a cookie source unless NewCookieAuthentication
+// (or a browser-session adapter) supplies origin/CSRF protection or the source
+// explicitly opts out with WithoutOriginProtection.
 func CookieCredential(name auth.CredentialName, cookie Cookie[secret.String]) CredentialSource {
 	return CredentialSource{name: name, info: CredentialInfo{Source: name, Kind: CookieCredentialKind, Name: string(cookie.Name())}, validate: cookie.Validate, read: cookie.Read}
 }
@@ -87,6 +100,7 @@ func (credentialCookieCodec) Format(v secret.String) (string, error)   { return 
 // Authentication composes one registry and immutable HTTP input declarations.
 // Each accepted request gets a fresh scope; callbacks finish before its cleanup.
 // Construction performs no I/O and does not start a session/token service.
+// Cookie sources are secure by default: see CookieCredential.
 type Authentication struct {
 	browser  *browserSessionAdapter
 	csrf     *csrfPolicy
@@ -95,6 +109,14 @@ type Authentication struct {
 }
 
 func NewAuthentication(registry *auth.Registry, sources ...CredentialSource) (*Authentication, error) {
+	for _, source := range sources {
+		if source.info.Kind == CookieCredentialKind && !source.info.OriginProtection && !source.unprotected {
+			return nil, fault.New(fault.Invalid, "cookie credentials require NewCookieAuthentication origin/CSRF protection or an explicit WithoutOriginProtection opt-out")
+		}
+	}
+	return newAuthentication(registry, sources)
+}
+func newAuthentication(registry *auth.Registry, sources []CredentialSource) (*Authentication, error) {
 	if err := registry.Validate(); err != nil {
 		return nil, err
 	}
@@ -162,7 +184,7 @@ func (a *Authentication) middleware(source auth.CredentialName, resolve func(con
 				}
 			}
 			if a.csrf != nil {
-				csrfVary(w.Header())
+				csrfVary(w.Header(), r)
 				if err := a.csrf.check(r); err != nil {
 					writeRoutingError(w, r, err)
 					return
@@ -197,7 +219,7 @@ func (a *Authentication) middleware(source auth.CredentialName, resolve func(con
 // authenticationCode runs only inside an owned error-classification callback.
 // Keep the mapping shared by public login errors and guarded transport errors.
 func authenticationCode(err error) (ErrorCode, bool) {
-	var locked, unavailable, unauthenticated, forbidden, mfa, timeout bool
+	var locked, unavailable, unauthenticated, forbidden, mfa, timeout, overloaded, limited bool
 	complete := errorgraph.Walk(err, func(current error) bool {
 		locked = errorgraph.Matches(current, lockout.Locked)
 		if locked {
@@ -205,9 +227,11 @@ func authenticationCode(err error) (ErrorCode, bool) {
 		}
 		unavailable = unavailable || errorgraph.Matches(current, lockout.Unavailable)
 		unauthenticated = unauthenticated || errorgraph.Matches(current, auth.Unauthenticated) || errorgraph.Matches(current, Unauthenticated) || errorgraph.Matches(current, lockout.Expired)
-		forbidden = forbidden || errorgraph.Matches(current, auth.Forbidden)
+		forbidden = forbidden || errorgraph.Matches(current, auth.Forbidden) || errorgraph.Matches(current, auth.ConfirmationRequired) || errorgraph.Matches(current, auth.ImpersonationForbidden)
+		limited = limited || errorgraph.Matches(current, auth.CredentialLimit)
 		mfa = mfa || errorgraph.Matches(current, auth.MFARequired)
 		timeout = timeout || errorgraph.Matches(current, context.Canceled) || errorgraph.Matches(current, context.DeadlineExceeded)
+		overloaded = overloaded || errorgraph.Matches(current, fault.Overloaded)
 		return true
 	})
 	if !complete {
@@ -216,9 +240,7 @@ func authenticationCode(err error) (ErrorCode, bool) {
 	switch {
 	case locked:
 		return RateLimited, true
-	case unavailable && timeout:
-		return RequestTimeout, true
-	case unavailable:
+	case unavailable, overloaded:
 		return Unavailable, true
 	case unauthenticated:
 		return Unauthenticated, true
@@ -226,8 +248,13 @@ func authenticationCode(err error) (ErrorCode, bool) {
 		return Forbidden, true
 	case mfa:
 		return MFARequired, true
+	case limited:
+		return Conflict, true
 	case timeout:
-		return RequestTimeout, true
+		// An unclassified deadline or cancellation is the server's own budget
+		// ending (or the client leaving). It is not a client error; a request
+		// body that arrives too slowly is classified explicitly as RequestTimeout.
+		return Unavailable, true
 	default:
 		return "", false
 	}

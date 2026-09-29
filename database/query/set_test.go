@@ -74,8 +74,7 @@ func TestSetRejectsInvalidLayoutsAndBounds(t *testing.T) {
 	if _, err := c.compileSelect(node); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "resource bound") {
 		t.Fatal("cyclic set AST escaped resource bounds", err)
 	}
-	id := NewScalarField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
-	wide := base.Where(id.In(make([]int64, MaxParameters/2+1)...))
+	wide := base.Where(wideScoped(base.Scope(), MaxParameters/2+1))
 	if s, err := wide.UnionAll(wide).Compile(); !errors.Is(err, fault.Invalid) || s.SQL() != "" || len(s.Arguments()) != 0 {
 		t.Fatal("set bypassed shared parameter bound", err)
 	}

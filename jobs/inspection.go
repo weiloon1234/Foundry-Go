@@ -56,6 +56,7 @@ type Summary struct {
 	Attempts    uint32      `json:"attempts"`
 	MaxAttempts uint32      `json:"max_attempts"`
 	Retries     uint32      `json:"retries"`
+	Exceptions  uint32      `json:"exceptions,omitzero"`
 	Reason      Reason      `json:"reason,omitempty"`
 	Workflow    WorkflowID  `json:"workflow,omitzero"`
 	AvailableAt time.Time   `json:"available_at"`
@@ -66,7 +67,7 @@ type Summary struct {
 
 func (r Record) Summary() Summary {
 	token, _ := r.RetryToken()
-	result := Summary{ID: r.Envelope.ID(), Name: r.Envelope.Name(), Version: r.Envelope.Version(), Queue: r.Envelope.Queue(), State: r.State, Attempts: r.Attempts, MaxAttempts: r.Envelope.Policy().Attempts, Retries: r.Retries, Workflow: r.Workflow, AvailableAt: r.AvailableAt, CreatedAt: r.CreatedAt, FinishedAt: r.FinishedAt, RetryToken: token}
+	result := Summary{ID: r.Envelope.ID(), Name: r.Envelope.Name(), Version: r.Envelope.Version(), Queue: r.Envelope.Queue(), State: r.State, Attempts: r.Attempts, MaxAttempts: r.Envelope.Policy().Attempts, Retries: r.Retries, Exceptions: r.Exceptions, Workflow: r.Workflow, AvailableAt: r.AvailableAt, CreatedAt: r.CreatedAt, FinishedAt: r.FinishedAt, RetryToken: token}
 	if len(r.History) > 0 {
 		result.Reason = r.History[len(r.History)-1].Reason
 	}

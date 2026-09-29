@@ -50,14 +50,15 @@ func readEndpointBody(w stdhttp.ResponseWriter, r *stdhttp.Request, maxBytes int
 	}
 	var data []byte
 	var readErr error
-	failure := callback.Isolated("HTTP endpoint body read", func() error {
+	// Framework hot path: Invoke contains reader panics on this goroutine.
+	failure := callback.Invoke("HTTP endpoint body read", func() error {
 		if r.Body == nil {
 			return nil
 		}
 		if empty {
 			data, readErr = io.ReadAll(io.LimitReader(r.Body, 1))
 		} else {
-			data, readErr = io.ReadAll(stdhttp.MaxBytesReader(w, r.Body, maxBytes))
+			data, readErr = readBodySized(stdhttp.MaxBytesReader(w, r.Body, maxBytes), r.ContentLength)
 		}
 		return nil // Never format a reader's arbitrary error methods.
 	})
@@ -81,6 +82,33 @@ func readEndpointBody(w stdhttp.ResponseWriter, r *stdhttp.Request, maxBytes int
 		return nil, BadRequest
 	}
 	return data, nil
+}
+
+// bodyPresize bounds the buffer allocated from a declared Content-Length before
+// its bytes arrive, so a peer cannot reserve a whole body budget by header alone.
+const bodyPresize = 32 << 10
+
+// readBodySized reads like io.ReadAll but sizes its first buffer from the
+// declared length (bounded), avoiding repeated growth for ordinary bodies.
+func readBodySized(reader io.Reader, declared int64) ([]byte, error) {
+	size := 512
+	if declared >= 0 {
+		size = int(min(declared, bodyPresize)) + 1
+	}
+	data := make([]byte, 0, size)
+	for {
+		n, err := reader.Read(data[len(data):cap(data)])
+		data = data[:len(data)+n]
+		if err != nil {
+			if err == io.EOF {
+				err = nil
+			}
+			return data, err
+		}
+		if len(data) == cap(data) {
+			data = append(data, 0)[:len(data)]
+		}
+	}
 }
 
 func jsonRequestMedia(header stdhttp.Header) bool {

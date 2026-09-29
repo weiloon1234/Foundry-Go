@@ -25,7 +25,7 @@ func (t Topic[E]) Dispatch(ctx context.Context, bus *Bus, input E) error {
 	if err != nil {
 		return err
 	}
-	return dispatch(operation, entry, captured)
+	return dispatch(operation, bus, entry, captured)
 }
 
 func (t Topic[E]) captureOwned(ctx context.Context, input E) (payload, error) {
@@ -47,16 +47,27 @@ func (t Topic[E]) captureOwned(ctx context.Context, input E) (payload, error) {
 	return captured, nil
 }
 
-func dispatch(ctx context.Context, entry registration, captured payload) error {
+// dispatch runs sync listeners inline and enqueues queued listeners as jobs, in
+// declaration order. An installed interceptor (a test fake) may suppress them.
+func dispatch(ctx context.Context, bus *Bus, entry registration, captured payload) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if captured.typ != entry.schema.typ {
 		return fault.New(fault.Internal, "captured event has the wrong payload schema")
 	}
+	if bus.intercepted(ctx, entry.schema.key, captured) {
+		return ctx.Err()
+	}
 	for _, listener := range entry.listeners {
 		if err := ctx.Err(); err != nil {
 			return err
+		}
+		if listener.queued {
+			if err := bus.enqueueListener(ctx, entry.schema.key, listener.name, captured.text); err != nil {
+				return err
+			}
+			continue
 		}
 		err := callback.Isolated(fmt.Sprintf("event listener %s", listener.name), func() error { return listener.invoke(ctx, captured) })
 		if err != nil {
@@ -99,6 +110,6 @@ func (t Topic[E]) AfterCommit(ctx context.Context, tx *database.Tx, bus *Bus, in
 			return err
 		}
 		defer release()
-		return dispatch(operation, entry, captured)
+		return dispatch(operation, bus, entry, captured)
 	})
 }

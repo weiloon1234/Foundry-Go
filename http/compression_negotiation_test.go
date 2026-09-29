@@ -1,6 +1,8 @@
 package http
 
 import (
+	stdhttp "net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -48,6 +50,25 @@ func TestAcceptEncodingPreferenceAndBounds(t *testing.T) {
 	for _, value := range []string{"0.", "1.", "0.000", "0.001", "0.999", "1.000"} {
 		if _, ok := parseCompressionQuality(value); !ok {
 			t.Fatal("valid qvalue rejected")
+		}
+	}
+}
+func TestMalformedAcceptEncodingSelectsIdentity(t *testing.T) {
+	body := strings.Repeat("compressible ", 512)
+	handler, err := ApplyMiddleware(stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, _ *stdhttp.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte(body))
+	}), Compression(DefaultCompressionConfig()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, lines := range [][]string{{"gzip, GZIP"}, {"gzip;level=1"}, {"identity;q=0, identity;q=1"}, {"gzip\x7f"}, make([]string, maxAcceptEncodingLines+1)} {
+		request := httptest.NewRequest("GET", "/", nil)
+		request.Header["Accept-Encoding"] = lines
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != 200 || response.Header().Get("Content-Encoding") != "" || response.Body.String() != body {
+			t.Fatalf("%q: status=%d encoding=%q", lines, response.Code, response.Header().Get("Content-Encoding"))
 		}
 	}
 }

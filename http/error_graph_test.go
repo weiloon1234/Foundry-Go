@@ -10,6 +10,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/auth/lockout"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/idempotency"
 )
 
@@ -108,11 +109,13 @@ func TestAuthenticationErrorGraphRetainsPriority(t *testing.T) {
 	}{
 		{errors.Join(auth.Forbidden, lockout.Locked), RateLimited},
 		{errors.Join(auth.Forbidden, lockout.Unavailable), Unavailable},
-		{errors.Join(lockout.Unavailable, context.DeadlineExceeded), RequestTimeout},
+		{errors.Join(lockout.Unavailable, context.DeadlineExceeded), Unavailable},
+		{errors.Join(auth.Forbidden, fault.Overloaded), Unavailable},
+		{fault.Wrap(fault.Overloaded, "capacity", context.DeadlineExceeded), Unavailable},
 		{errors.Join(auth.Forbidden, auth.Unauthenticated), Unauthenticated},
 		{errors.Join(auth.MFARequired, auth.Forbidden), Forbidden},
 		{errors.Join(context.Canceled, auth.MFARequired), MFARequired},
-		{context.Canceled, RequestTimeout},
+		{context.Canceled, Unavailable},
 	} {
 		if code, found := authenticationCode(test.err); !found || code != test.code {
 			t.Fatal("authentication precedence changed", code)

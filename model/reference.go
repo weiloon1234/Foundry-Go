@@ -153,6 +153,20 @@ func (i Identity) KeyJSON() (string, error) {
 	return string(data), err
 }
 
+// WithModelName returns the same stored key attributed to another model name.
+// It is the explicit boundary for a declared storage identity that predates a
+// table rename; parsing still decodes the key through the expected codec.
+func (i Identity) WithModelName(name string) (Identity, error) {
+	if err := i.Validate(); err != nil {
+		return Identity{}, err
+	}
+	renamed := Identity{name: name, key: i.key}
+	if err := renamed.Validate(); err != nil {
+		return Identity{}, err
+	}
+	return renamed, nil
+}
+
 func (i Identity) Validate() error {
 	if !sqlname.Table(i.name) || len(i.key.Text) > MaxIdentityKeyBytes {
 		return invalidIdentity()

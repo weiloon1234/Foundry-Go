@@ -16,6 +16,9 @@ const (
 	StatusFailed    ErrorKind = "status_failed"
 	DecodeFailed    ErrorKind = "decode_failed"
 	CallbackFailed  ErrorKind = "callback_failed"
+	// Overloaded reports that the client's queued operation admission was
+	// exhausted; no request was sent. It matches fault.Overloaded.
+	Overloaded ErrorKind = "overloaded"
 )
 
 // Error exposes stable operation metadata, never URL, header, query, body or
@@ -44,6 +47,9 @@ func (e *Error) Is(target error) bool {
 	}
 	if target == fault.Internal {
 		return e.kind == TransportFailed || e.kind == BodyFailed || e.kind == CallbackFailed
+	}
+	if target == fault.Overloaded {
+		return e.kind == Overloaded
 	}
 	return false
 }

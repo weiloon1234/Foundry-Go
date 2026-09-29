@@ -13,7 +13,7 @@ func typedComparison[V any](operand valueExpression, op operator, c codec.Codec[
 	for i, v := range values {
 		bindings[i] = c.Clone(v)
 	}
-	return comparison{operand, op, bindings, func(raw any) (driver.Value, error) {
+	return comparison{operand: operand, operator: op, values: bindings, kind: c.ParameterType(), bind: func(raw any) (driver.Value, error) {
 		v, ok := raw.(V)
 		if !ok {
 			return nil, fault.New(fault.Invalid, "invalid typed query binding")

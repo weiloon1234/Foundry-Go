@@ -33,7 +33,9 @@ func Inspect(data []byte, limits Limits) (Info, error) {
 		return Info{}, err
 	}
 	var result Info
-	err := callback.Isolated("inspect image", func() error {
+	// Framework-owned parsers: contain a panic on hostile input without the
+	// goroutine an application-callback boundary would need.
+	err := callback.Invoke("inspect image", func() error {
 		var err error
 		result, err = inspect(data, limits)
 		return err
@@ -47,7 +49,7 @@ func inspect(data []byte, limits Limits) (Info, error) {
 	if len(data) == 0 || int64(len(data)) > limits.InputBytes {
 		return Info{}, limited()
 	}
-	if err := limits.workspace(int64(len(data)), 0); err != nil {
+	if err := limits.admit(int64(len(data)), 0); err != nil {
 		return Info{}, err
 	}
 	info := Info{Images: 1, Orientation: 1}
@@ -117,7 +119,9 @@ func inspect(data []byte, limits Limits) (Info, error) {
 	if info.Animated && int64(info.Images)*int64(info.Width)*int64(info.Height) > limits.Pixels {
 		return Info{}, limited()
 	}
-	if err := limits.workspace(int64(len(data)), int64(info.Width)*int64(info.Height)); err != nil {
+	// Decoding is the first phase: the input stays retained beside the
+	// decoder's buffers for this format.
+	if err := limits.admit(int64(len(data)), int64(info.Width)*int64(info.Height)*info.Format.decodePeakBytes()); err != nil {
 		return Info{}, err
 	}
 	return info, nil

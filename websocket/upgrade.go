@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/auth"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/observability"
 	"github.com/weiloon1234/Foundry-Go/tracing"
@@ -71,10 +72,13 @@ func (h *Hub) ServeHTTP(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		return
 	}
 	recorder := observability.FromContext(r.Context())
-	if recorder.Gate().Admit() != nil {
-		h.mu.Lock()
-		h.rejected++
-		h.mu.Unlock()
+	gate := maintenance.FromContext(r.Context())
+	if gate == nil {
+		// Manual compositions may carry only a recorder and its gate.
+		gate = recorder.Gate()
+	}
+	if gate.Admit() != nil {
+		h.counters.rejected.Add(1)
 		rejectUpgrade(w, r, foundryhttp.Unavailable)
 		return
 	}
@@ -121,7 +125,7 @@ func (h *Hub) ServeHTTP(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	}
 	// Preserve only declared correlation/runtime capabilities across the HTTP
 	// boundary. Socket lifetime still belongs to the Hub, not the HTTP deadline.
-	base = observability.WithContext(base, recorder)
+	base = maintenance.WithContext(observability.WithContext(base, recorder), gate)
 	if parent := tracing.FromContext(r.Context()); !parent.IsZero() {
 		base, _ = tracing.WithContext(base, parent)
 	}
@@ -135,14 +139,9 @@ func (h *Hub) ServeHTTP(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	transportContext, transportCancel := context.WithCancel(context.Background())
 	cancel := func() { operationCancel(); transportCancel() }
 	c := &connectionState{hub: h, id: id, ip: metadata.IP, ctx: ctx, cancel: cancel, operationCancel: operationCancel, transportContext: transportContext, credentials: credentials, subscriptions: make(map[subscriptionKey]*subscriptionState), inbound: make(chan []byte, h.config.InboundQueue), outbound: make(chan []byte, h.config.OutboundQueue)}
-	if err := c.prepareRateLimit(); err != nil {
-		cancel()
-		rejectUpgrade(w, r, foundryhttp.Unavailable)
-		return
-	}
 	h.mu.Lock()
 	if h.closing || !h.clusterReadyLocked() || len(h.connections) >= h.config.MaxConnections || h.ipConnections[c.ip] >= h.config.MaxConnectionsPerIP {
-		h.rejected++
+		h.counters.rejected.Add(1)
 		h.mu.Unlock()
 		cancel()
 		rejectUpgrade(w, r, foundryhttp.Unavailable)
@@ -160,6 +159,10 @@ func (h *Hub) ServeHTTP(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		if h.ipConnections[c.ip] == 0 {
 			delete(h.ipConnections, c.ip)
 		}
+		h.mu.Unlock()
+		// No producer can reach the connection once it left every index.
+		c.releaseQueues()
+		h.mu.Lock()
 		h.completeLocked()
 		h.mu.Unlock()
 	}()
@@ -172,9 +175,8 @@ func (h *Hub) ServeHTTP(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		if err := h.clusterCall(ctx, func(ctx context.Context) error {
 			return h.cluster.backend.WebSocketOpen(ctx, h.cluster.key, h.cluster.instance, c.id)
 		}); err != nil {
-			h.mu.Lock()
-			h.rejected++
-			h.mu.Unlock()
+			// Transient cluster failures reject only this upgrade (retryable 503).
+			h.counters.rejected.Add(1)
 			rejectUpgrade(w, r, foundryhttp.Unavailable)
 			return
 		}
@@ -188,9 +190,7 @@ func (h *Hub) ServeHTTP(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	c.socket = socket
 	defer socket.CloseNow()
 	socket.SetReadLimit(int64(h.config.MaxFrameBytes))
-	h.mu.Lock()
-	h.accepted++
-	h.mu.Unlock()
+	h.counters.accepted.Add(1)
 	c.run()
 	outcome = observability.Succeeded
 	if h.ctx.Err() != nil {

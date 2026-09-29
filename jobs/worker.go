@@ -2,8 +2,9 @@ package jobs
 
 import (
 	"context"
-	"errors"
 	"log/slog"
+	"math/rand/v2"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,23 +18,38 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// Worker owns reservation loops and their handler lifetimes. Run is single-use;
-// Stop cancels work and bounds only the caller's wait. Done closes only when
-// every owned handler has actually returned, including context-ignoring ones.
-// Close borrowed infrastructure only after Done. A Worker must not be copied.
+// Worker owns reservation loops and their handler lifetimes. Run is single-use.
+// Cancelling Run's context, or calling Drain, stops new reservations while
+// admitted handlers keep their heartbeats for up to DrainTimeout; Stop cancels
+// admitted work immediately. Both bound only the caller's wait: Done closes only
+// when every owned handler has actually returned, including context-ignoring
+// ones. Close borrowed infrastructure only after Done. A Worker must not be copied.
 type Worker struct {
-	backend  Backend
-	registry *Registry
-	config   WorkerConfig
-	logger   *slog.Logger
-	schedule []Key
-	cursor   atomic.Uint64
-	active   atomic.Int64
-	mu       sync.Mutex
-	running  bool
-	stopped  bool
-	cancel   context.CancelFunc
-	done     chan struct{}
+	backend       Backend
+	registry      *Registry
+	config        WorkerConfig
+	logger        *slog.Logger
+	schedule      []Key
+	queues        []Key
+	cursor        atomic.Uint64
+	active        atomic.Int64
+	mu            sync.Mutex
+	running       bool
+	draining      bool
+	stopped       bool
+	cancel        context.CancelFunc
+	stopReserving context.CancelFunc
+	drainTimer    *time.Timer
+	done          chan struct{}
+	sinks         []FailureSink
+}
+
+// workerRun separates the two shutdown phases. Reservations use reserve, which
+// ends when draining begins; admitted handlers use work, which ends only on a
+// hard stop or when the drain deadline expires.
+type workerRun struct {
+	work    context.Context
+	reserve context.Context
 }
 
 func NewWorker(backend Backend, registry *Registry, config WorkerConfig, options ...WorkerOption) (*Worker, error) {
@@ -57,6 +73,7 @@ func NewWorker(backend Backend, registry *Registry, config WorkerConfig, options
 		if err != nil {
 			return nil, err
 		}
+		worker.queues = append(worker.queues, key)
 		for range subscription.Weight {
 			worker.schedule = append(worker.schedule, key)
 		}
@@ -65,8 +82,10 @@ func NewWorker(backend Backend, registry *Registry, config WorkerConfig, options
 }
 
 // Run satisfies foundation.Kernel. Parent context values are not passed to
-// handlers; only the explicit observation recorder, cancellation and the envelope's captured attribution cross the
-// boundary. Any backend failure stops admission and drains all owned handlers.
+// handlers; only the explicit observation recorder, cancellation and the
+// envelope's captured attribution cross the boundary. Parent cancellation starts
+// a graceful drain. Backend failures are logged and retried with jittered
+// backoff; they never stop the worker or abandon an admitted handler.
 func (w *Worker) Run(ctx context.Context) error {
 	if w == nil || w.done == nil || ctx == nil {
 		return fault.New(fault.Invalid, "worker requires initialization and a context")
@@ -79,81 +98,102 @@ func (w *Worker) Run(ctx context.Context) error {
 		w.mu.Unlock()
 		return fault.New(fault.Closed, "worker is already running or stopped")
 	}
-	run, cancel := context.WithCancel(context.Background())
-	run = observability.WithContext(run, observability.FromContext(ctx))
+	work, cancel := context.WithCancel(context.Background())
+	work = maintenance.WithContext(observability.WithContext(work, observability.FromContext(ctx)), admissionGate(ctx))
+	reserve, stopReserving := context.WithCancel(work)
 	w.running = true
 	w.cancel = cancel
+	w.stopReserving = stopReserving
 	w.mu.Unlock()
-	stopParent := context.AfterFunc(ctx, w.stop)
+	stopParent := context.AfterFunc(ctx, w.drain)
 	defer stopParent()
+	run := workerRun{work: work, reserve: reserve}
 	var group sync.WaitGroup
-	failures := make(chan error, w.config.Concurrency)
 	for range w.config.Concurrency {
-		group.Go(func() {
-			if err := w.loop(run); err != nil {
-				failures <- err
-				w.stop()
-				w.logBackendFailure(run)
-			}
-		})
+		group.Go(func() { w.loop(run) })
 	}
 	group.Wait()
+	stopReserving()
 	cancel()
 	w.mu.Lock()
+	if w.drainTimer != nil {
+		w.drainTimer.Stop()
+	}
 	w.stopped = true
 	w.running = false
 	close(w.done)
 	w.mu.Unlock()
-	close(failures)
-	var result error
-	for err := range failures {
-		result = errors.Join(result, err)
-	}
-	return result
-}
-func (w *Worker) loop(ctx context.Context) error {
-	for ctx.Err() == nil {
-		found, err := w.reserveOne(ctx)
-		if err != nil {
-			stopped := false
-			failed := callback.Isolated("classify worker backend failure", func() error {
-				stopped = !found && (errorgraph.Is(err, maintenance.ErrDraining) || ctx.Err() != nil && errorgraph.Is(err, ctx.Err()))
-				return nil
-			})
-			if failed != nil {
-				return failed
-			}
-			if stopped {
-				return nil
-			}
-			return err
-		}
-		if !found {
-			timer := time.NewTimer(w.config.PollInterval)
-			select {
-			case <-ctx.Done():
-				timer.Stop()
-				return nil
-			case <-timer.C:
-			}
-		}
-	}
 	return nil
 }
-func (w *Worker) reserveOne(ctx context.Context) (bool, error) {
-	for range len(w.schedule) {
-		if err := observability.FromContext(ctx).Gate().Wait(ctx); err != nil {
-			return false, err
+
+func (w *Worker) loop(run workerRun) {
+	idle, failures := w.config.PollInterval, 0
+	for run.reserve.Err() == nil {
+		// Subscribe before reserving so an enqueue racing with an empty
+		// reservation still wakes this loop instead of waiting a full interval.
+		wake := w.wakeup()
+		key, reservation, reservedAt, found, err := w.reserveNext(run)
+		if err != nil {
+			if w.shuttingDown(run.reserve, err) {
+				return
+			}
+			failures++
+			w.logBackendFailure(run.work, "reserve", key, err)
+			if !pause(run.reserve, w.failureDelay(failures), nil) {
+				return
+			}
+			continue
 		}
-		if err := ctx.Err(); err != nil {
-			return false, err
+		if !found {
+			failures = 0
+			if !pause(run.reserve, idle, wake) {
+				return
+			}
+			idle = w.nextIdle(idle)
+			continue
 		}
-		key := w.schedule[(w.cursor.Add(1)-1)%uint64(len(w.schedule))]
+		idle = w.config.PollInterval
+		w.active.Add(1)
+		healthy := w.process(run, key, reservation, reservedAt)
+		w.active.Add(-1)
+		if healthy {
+			failures = 0
+			continue
+		}
+		failures++
+		if !pause(run.reserve, w.failureDelay(failures), nil) {
+			return
+		}
+	}
+}
+
+// reserveNext tries each distinct subscribed queue at most once per cycle. The
+// weighted cursor selects which queue is tried first, so weights shape service
+// without repeating backend calls for the same idle queue.
+func (w *Worker) reserveNext(run workerRun) (Key, Reservation, time.Time, bool, error) {
+	first := w.schedule[(w.cursor.Add(1)-1)%uint64(len(w.schedule))]
+	order := make([]Key, 0, len(w.queues))
+	order = append(order, first)
+	for _, key := range w.queues {
+		if key != first {
+			order = append(order, key)
+		}
+	}
+	for _, key := range order {
+		if err := maintenance.FromContext(run.reserve).Wait(run.reserve); err != nil {
+			return key, Reservation{}, time.Time{}, false, err
+		}
+		if err := run.reserve.Err(); err != nil {
+			return key, Reservation{}, time.Time{}, false, err
+		}
 		owner, err := lease.NewOwner()
 		if err != nil {
-			return false, err
+			return key, Reservation{}, time.Time{}, false, err
 		}
-		operation, cancel := context.WithTimeout(ctx, w.config.OperationTimeout)
+		// The reservation itself is not interrupted by a drain: a reply that
+		// arrives after draining began is released rather than abandoned.
+		operation, cancel := context.WithTimeout(run.work, w.config.OperationTimeout)
+		reservedAt := time.Now()
 		var found value.Optional[Reservation]
 		err = callback.Isolated("reserve job", func() error {
 			var err error
@@ -162,18 +202,125 @@ func (w *Worker) reserveOne(ctx context.Context) (bool, error) {
 		})
 		cancel()
 		if err != nil {
-			return false, err
+			return key, Reservation{}, time.Time{}, false, err
 		}
-		reservation, ok := found.Get()
-		if !ok {
-			continue
+		if reservation, ok := found.Get(); ok {
+			return key, reservation, reservedAt, true, nil
 		}
-		w.active.Add(1)
-		err = w.process(ctx, key, reservation)
-		w.active.Add(-1)
-		return true, err
 	}
-	return false, nil
+	return Key{}, Reservation{}, time.Time{}, false, nil
+}
+
+// admissionGate prefers the application's carried maintenance gate and falls
+// back to the observation recorder's gate for standalone recorder contexts.
+func admissionGate(ctx context.Context) *maintenance.Gate {
+	if gate := maintenance.FromContext(ctx); gate != nil {
+		return gate
+	}
+	return observability.FromContext(ctx).Gate()
+}
+
+// shuttingDown distinguishes the worker's own drain/stop from a backend
+// failure. Error inspection runs custom methods, so it stays isolated.
+func (w *Worker) shuttingDown(ctx context.Context, err error) bool {
+	if ctx.Err() != nil {
+		return true
+	}
+	draining := false
+	if failed := callback.Isolated("classify worker backend failure", func() error {
+		draining = errorgraph.Is(err, maintenance.ErrDraining)
+		return nil
+	}); failed != nil {
+		return false
+	}
+	return draining
+}
+
+// wakeup subscribes to local work in each of this worker's queues.
+func (w *Worker) wakeup() []<-chan struct{} {
+	source, ok := w.backend.(WakeBackend)
+	if !ok {
+		return nil
+	}
+	var wakes []<-chan struct{}
+	if callback.Isolated("subscribe job wakeup", func() error {
+		for _, key := range w.queues {
+			if wake := source.JobWakeup(key); wake != nil {
+				wakes = append(wakes, wake)
+			}
+		}
+		return nil
+	}) != nil {
+		return nil
+	}
+	return wakes
+}
+
+func (w *Worker) nextIdle(idle time.Duration) time.Duration {
+	if w.config.MaxPollInterval <= w.config.PollInterval {
+		return w.config.PollInterval
+	}
+	return min(idle*2, w.config.MaxPollInterval)
+}
+
+// failureDelay grows exponentially from PollInterval up to FailureBackoff and
+// selects uniformly from its upper half, so replicas do not retry in lockstep.
+func (w *Worker) failureDelay(failures int) time.Duration {
+	ceiling := max(w.config.FailureBackoff, w.config.PollInterval)
+	delay := w.config.PollInterval
+	for i := 1; i < failures && delay < ceiling; i++ {
+		delay *= 2
+	}
+	delay = min(delay, ceiling)
+	half := delay / 2
+	return half + rand.N(delay-half+1)
+}
+
+// pause waits for delay, any wake signal or ctx. It reports false when ctx
+// ended, meaning the caller must stop reserving.
+func pause(ctx context.Context, delay time.Duration, wakes []<-chan struct{}) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	if len(wakes) <= 1 {
+		var wake <-chan struct{}
+		if len(wakes) == 1 {
+			wake = wakes[0]
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-wake:
+		case <-timer.C:
+		}
+		return ctx.Err() == nil
+	}
+	cases := make([]reflect.SelectCase, 0, len(wakes)+2)
+	cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(ctx.Done())}, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(timer.C)})
+	for _, wake := range wakes {
+		cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(wake)})
+	}
+	chosen, _, _ := reflect.Select(cases)
+	return chosen != 0 && ctx.Err() == nil
+}
+
+// drain stops reservations and gives admitted handlers DrainTimeout to finish
+// while their heartbeats continue. The deadline then cancels them like Stop.
+func (w *Worker) drain() {
+	w.mu.Lock()
+	if w.stopped || w.draining {
+		w.mu.Unlock()
+		return
+	}
+	if !w.running || w.config.DrainTimeout == 0 {
+		w.mu.Unlock()
+		w.stop()
+		return
+	}
+	w.draining = true
+	stopReserving := w.stopReserving
+	w.drainTimer = time.AfterFunc(w.config.DrainTimeout, w.stop)
+	w.mu.Unlock()
+	stopReserving()
 }
 func (w *Worker) stop() {
 	w.mu.Lock()
@@ -182,18 +329,33 @@ func (w *Worker) stop() {
 		return
 	}
 	w.stopped = true
-	cancel := w.cancel
+	cancel, stopReserving := w.cancel, w.stopReserving
 	if !w.running {
 		close(w.done)
 	}
 	w.mu.Unlock()
+	if stopReserving != nil {
+		stopReserving()
+	}
 	if cancel != nil {
 		cancel()
 	}
 }
 
-// Stop rejects waiting from this worker's own active handler to avoid self-deadlock.
+// Stop cancels admitted work immediately. Interrupted attempts are released
+// without consuming their retry budget on built-in backends. Stop rejects waiting
+// from this worker's own active handler to avoid self-deadlock.
 func (w *Worker) Stop(ctx context.Context) error {
+	return w.shutdown(ctx, w.stop)
+}
+
+// Drain stops new reservations and lets admitted handlers finish within
+// DrainTimeout before cancelling them. ctx bounds only the caller's wait.
+func (w *Worker) Drain(ctx context.Context) error {
+	return w.shutdown(ctx, w.drain)
+}
+
+func (w *Worker) shutdown(ctx context.Context, begin func()) error {
 	if w == nil || w.done == nil || ctx == nil {
 		return fault.New(fault.Invalid, "worker shutdown requires initialization and context")
 	}
@@ -201,7 +363,7 @@ func (w *Worker) Stop(ctx context.Context) error {
 	if frame != nil && frame.worker == w && frame.active.Load() {
 		return fault.New(fault.Cycle, "handler cannot wait for its own worker shutdown")
 	}
-	w.stop()
+	begin()
 	select {
 	case <-w.done:
 		return nil

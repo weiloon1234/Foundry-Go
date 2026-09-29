@@ -8,6 +8,7 @@ import (
 	"io"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 )
@@ -64,8 +65,10 @@ type ownedReader struct {
 	disk         *Disk
 	raw          io.ReadCloser
 	ctx          context.Context
-	cancel       context.CancelFunc
+	cancel       func()
 	release      func()
+	idle         *time.Timer
+	idleTimeout  time.Duration
 	watch        func() bool
 	watchMu      sync.Mutex
 	length, read int64
@@ -87,8 +90,8 @@ func (r *ownedReader) Read(p []byte) (n int, err error) {
 	if r.closing.Load() {
 		return 0, Failure(Closed, OpenOperation, NotApplicable, nil)
 	}
-	if err := r.ctx.Err(); err != nil {
-		return 0, Failure(Unavailable, OpenOperation, NotApplicable, err)
+	if r.ctx.Err() != nil {
+		return 0, Failure(Unavailable, OpenOperation, NotApplicable, context.Cause(r.ctx))
 	}
 	allowed := int(min(int64(len(p)), r.length-r.read+1))
 	var returned error
@@ -100,8 +103,13 @@ func (r *ownedReader) Read(p []byte) (n int, err error) {
 		return 0, Failure(IntegrityFailed, OpenOperation, NotApplicable, nil)
 	}
 	r.read += int64(n)
-	if r.digest != nil && n > 0 {
-		_, _ = r.digest.Write(p[:n])
+	if n > 0 {
+		// Progress restarts the idle deadline; a stalled provider or consumer
+		// that stops reading is cancelled after StreamIdleTimeout.
+		r.idle.Reset(r.idleTimeout)
+		if r.digest != nil {
+			_, _ = r.digest.Write(p[:n])
+		}
 	}
 	if err == io.EOF && r.read == r.length && r.digest != nil {
 		var actual SHA256
@@ -113,8 +121,8 @@ func (r *ownedReader) Read(p []byte) (n int, err error) {
 	if err == io.EOF && r.read != r.length {
 		err = io.ErrUnexpectedEOF
 	}
-	if canceled := r.ctx.Err(); canceled != nil {
-		return n, Failure(Unavailable, OpenOperation, NotApplicable, errors.Join(canceled, err))
+	if r.ctx.Err() != nil {
+		return n, Failure(Unavailable, OpenOperation, NotApplicable, errors.Join(context.Cause(r.ctx), err))
 	}
 	if err != nil && err != io.EOF {
 		return n, finish(OpenOperation, r.ctx, err, NotApplicable)

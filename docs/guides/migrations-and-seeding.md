@@ -40,11 +40,30 @@ result, err := runner.Up(ctx)
 
 Constructing the runner performs no I/O. `Status` only reads committed history; an absent history table yields pending definitions without creating a table or taking a migration lock. `Up` acquires a session advisory lock, ensures its history namespace, rereads and validates history, then executes each pending definition according to its declared mode. The default commits SQL and history in one transaction. It never synchronizes schema during ordinary application boot.
 
-All cooperating runners must use the same configured history schema and table. Defaults are `foundry_ops.schema_migrations`, a 30-second lock wait, 50-millisecond polling, five-second cleanup, and at most 10,000 history records. Identifiers are quoted and restricted to simple names of at most 63 ASCII bytes to prevent PostgreSQL name truncation. Reads request at most the configured history limit plus one row and fail on overflow. Before executing migration SQL, `Up` also rejects a pending set that would grow history beyond that limit. PostgreSQL's [identifier rules](https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS) and [session lock behavior](https://www.postgresql.org/docs/18/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS) define these boundaries.
+All cooperating runners must use the same configured history schema and table. Defaults are `foundry_ops.schema_migrations`, a 30-second lock wait, 50-millisecond polling, five-second cleanup, at most 10,000 history records, a 10-second `StatementLockTimeout` and no `StatementTimeout`.
+
+`Up` sets PostgreSQL's `lock_timeout` to `StatementLockTimeout` on its session, so DDL that cannot obtain a table lock fails with `LockNotAvailable` instead of queueing behind a long transaction and blocking every later query on that table. A transactional migration then rolls back, and the error names the migration and says it was not committed and can be retried once conflicting transactions finish. `StatementTimeout` optionally bounds each migration statement; zero disables it, so long migrations are not canceled by an application pool limit. Both settings are reset before the connection returns to the pool. Failures name the migration and the next safe action: checksum drift and reconciliation messages keep their own text, serialization/deadlock conflicts are retryable, and an unknown commit outcome asks you to run `migrate status` and reconcile before retrying. Identifiers are quoted and restricted to simple names of at most 63 ASCII bytes to prevent PostgreSQL name truncation. Reads request at most the configured history limit plus one row and fail on overflow. Before executing migration SQL, `Up` also rejects a pending set that would grow history beyond that limit. PostgreSQL's [identifier rules](https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS) and [session lock behavior](https://www.postgresql.org/docs/18/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS) define these boundaries.
 
 Concurrent runners serialize and reload history after acquiring the lock. Earlier migrations remain committed if a later one fails. `RunResult.Applied` lists confirmed commits; `Interrupted` identifies an attempted migration without a successful confirmation. With an unknown commit outcome, that attempt may have committed. A later explicit `Up` reconciles from history under the lock. A cleanup error can accompany fully applied results; inspect both result and error.
 
 Failed lock cleanup discards the physical connection, releasing session-owned locks when the server session ends. Caller cancellation still governs the session lifetime; a new cleanup deadline cannot revive a canceled session. There is no reset, wipe, or destructive schema synchronization command. Test against an isolated project database and never reset existing data.
+
+## Explicit rollback
+
+A definition may declare `Down` SQL that reverses it:
+
+```go
+migrate.Definition{
+    Key:     migrate.Key{Origin: "app", ID: "20260911000001_add_record_label"},
+    Version: "v0.1.0",
+    SQL:     []string{"ALTER TABLE records ADD COLUMN label text"},
+    Down:    []string{"ALTER TABLE records DROP COLUMN label"},
+}
+```
+
+`Down` is excluded from the checksum, so adding or correcting it never drifts applied history; `Entry.Reversible` reports it. It must be valid inside one transaction, so a nontransactional migration cannot declare it. `runner.Rollback(ctx, steps)` reverses the last `steps` applied migrations, newest first (latest batch, then reverse registry order), each in its own transaction that runs `Down` and deletes its history row, while holding the migration lock. It refuses before changing anything when history has drifted or awaits reconciliation, when a selected migration has no `Down`, or when a migration outside the selection depends on one inside it. Earlier reversals stay committed if a later one fails; `RollbackResult.Interrupted` names an unconfirmed reversal. `runner.RollbackPlan(ctx, steps)` reports the same selection without locking or changing anything.
+
+Rollback is never implicit and is destructive by nature. `migrate rollback --step N` (default 1) prints the plan and exits with an error; only `--confirm` executes it. Rolled-back migrations become pending again, and a later `migrate up` reapplies them.
 
 ## Transactional seeders
 
@@ -61,8 +80,10 @@ The public `database/command` package owns parsing and reporting for:
 ```text
 migrate status [--format text|json]
 migrate up [--format text|json]
+migrate rollback [--step N] [--confirm] [--format text|json]
 seed list [--format text|json]
 seed run [--format text|json] [--id app.regions --id app.roles]
+prune list|run ...   (see model pruning)
 ```
 
 The [consumer command example](../../tests/fixtures/consumer/database_command_test.go) compiles these APIs. Parse with `command.Parse(args, stderr)` before assembling services. Help returns `flag.ErrHelp`; invalid arguments fail before database use. Call the resulting invocation's `Run(ctx, resources, stdout)` with `command.Resources` containing the migration runner, seeder registry, and database required by that command. Resource ownership and shutdown stay with application assembly. `seed list` only needs the registry.

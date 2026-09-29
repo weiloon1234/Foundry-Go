@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -18,14 +19,33 @@ import (
 	"unicode/utf8"
 )
 
-func buildMIME(m Message, attachments []ResolvedAttachment, limit int) ([]byte, error) {
-	b := &boundedBuffer{remaining: limit}
-	var id [16]byte
-	if _, err := rand.Read(id[:]); err != nil {
-		return nil, Construction
+// messageID returns a Message-ID in domain. A delivery identity (the
+// idempotency key, which queued email derives from the stable job ID) yields
+// the same ID on every retry, so receivers can recognise repeated submissions.
+// Without one the ID is random. An empty domain uses the sender's domain.
+func messageID(m Message, key IdempotencyKey, domain string) (string, error) {
+	if domain == "" {
+		_, domain, _ = strings.Cut(m.from.mailbox, "@")
 	}
+	if domain == "" {
+		domain = "foundry.invalid"
+	}
+	var id [16]byte
+	if key != "" {
+		digest := sha256.Sum256([]byte("foundry.email.message-id\x00" + string(key)))
+		copy(id[:], digest[:])
+	} else if _, err := rand.Read(id[:]); err != nil {
+		return "", Construction
+	}
+	return "<" + hex.EncodeToString(id[:]) + "@" + domain + ">", nil
+}
+func buildMIME(m Message, attachments []ResolvedAttachment, limit int, id string) ([]byte, error) {
+	b := &boundedBuffer{remaining: limit}
 	write := func(k, v string) error { _, err := fmt.Fprintf(b, "%s: %s\r\n", k, v); return err }
-	for _, h := range [][2]string{{"From", m.from.Header()}, {"To", addressHeader(m.to)}, {"Subject", encodeWords(m.subject)}, {"Date", time.Now().UTC().Format(time.RFC1123Z)}, {"Message-ID", "<" + hex.EncodeToString(id[:]) + "@foundry.invalid>"}, {"MIME-Version", "1.0"}} {
+	for _, h := range [][2]string{{"From", m.from.Header()}, {"To", addressHeader(m.to)}, {"Subject", encodeWords(m.subject)}, {"Date", time.Now().UTC().Format(time.RFC1123Z)}, {"Message-ID", id}, {"MIME-Version", "1.0"}, {"Content-Language", string(m.locale)}} {
+		if h[0] == "Content-Language" && h[1] == "" {
+			continue
+		}
 		if err := write(h[0], h[1]); err != nil {
 			return nil, err
 		}

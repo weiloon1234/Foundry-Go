@@ -8,6 +8,56 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts.
 
+## Second independent review — 2026-09-29
+
+Status: **accepted** for the reviewed source. Eight read-only reviewers
+re-examined every area changed by the improvement program and its stabilization;
+the owning implementers fixed the confirmed defects with regression tests. The
+[review record](../docs/guides/second-review-20260929.md) lists the principal
+corrections and remaining boundaries. Native `make verify`, the TypeScript
+client gate, real-gopls smoke and full `make race` passed with PostgreSQL and
+Redis on this revision. The later
+[acceptance follow-up](../docs/guides/second-review-acceptance-20260929.md) repeats
+PostgreSQL races, security, fuzzing, packaged-consumer and macOS/Linux starter
+checks. Most passed; an additional Linux queue-process timeout leaves release
+acceptance incomplete.
+
+## Improvement-program stabilization — 2026-09-29
+
+Status: **accepted**. The [stabilization review](../docs/guides/stabilization-20260929.md)
+records the must-have follow-up fixes for query cancellation, transaction retry,
+authorization error inspection, atomic session resume, OAuth/OIDC validation,
+publisher initialization and cache metrics. It also records the starter migration
+requirements and the existing rollout rules.
+
+Final `make verify`, affected runtime/consumer races, independent packaged
+consumption and required-integration starter checks on macOS and Linux arm64
+passed. Queue process stress passed ten repetitions per platform. The earlier
+full race gate preceded the final query cleanup-hook correction; final evidence
+includes the reproducing negative control, 4,000 fixed cancellation cases and
+the affected race reruns. The [acceptance record](../docs/evidence/stabilization-20260929.json)
+retains source hashes, commands, failures and corrections, security review and
+deployment-test boundaries. Runtime and test inputs matched that review's final gate.
+
+No required framework finding remains in this follow-up. The real starter was
+unchanged; a tested migration patch is retained for adoption after the user
+publishes and selects a reviewed revision. Deferred parity and milestone 25
+remain unchanged. Private candidate acceptance does not publish a release or
+certify production infrastructure.
+
+## Framework improvement program — 2026-09-29
+
+Status: **accepted** for the reviewed source. A framework-wide audit against
+Laravel-style production expectations led to fixes for failure diagnostics,
+overload handling, bounded-store pruning, transient-failure recovery and hot-path
+round trips, plus parity work across HTTP contracts, authentication, the typed
+ORM, background work, storage and operations. The [program record](../docs/guides/improvement-program-20260929.md)
+lists delivered and deliberately deferred work; the changelog details each area
+and the compatibility policy records the new rollout rules. Native `make verify`,
+the TypeScript client gate, real-gopls smoke and full `make race` passed with
+PostgreSQL and Redis. `make test-postgres`, fuzzing, security scanning and private
+package consumption were not rerun for this program.
+
 ## Authenticated pagination adapter — 2026-09-28
 
 Status: **accepted** for the framework's B05 adapter.

@@ -153,7 +153,7 @@ func (h *lostLockoutFinish) ProcessPipelineHook(next driver.ProcessPipelineHook)
 func (h *lostLockoutFinish) ProcessHook(next driver.ProcessHook) driver.ProcessHook {
 	return func(ctx context.Context, cmd driver.Cmder) error {
 		args := cmd.Args()
-		matches := len(args) > 4 && args[0] == "eval" && args[1] == authLockoutScript && args[4] == "finish"
+		matches := len(args) > 4 && runsScript(args, authLockoutScript) && args[4] == "finish"
 		err := next(ctx, cmd)
 		if matches && err == nil {
 			h.calls.Add(1)

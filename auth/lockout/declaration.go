@@ -11,6 +11,7 @@ type definition[K any] struct {
 	name   Name
 	codec  keyspace.Codec[K]
 	policy Policy
+	limits *Limits
 }
 
 // Declaration retains the submitted login key type. Include tenant/provider
@@ -18,8 +19,28 @@ type definition[K any] struct {
 // Missing and existing accounts must use the same policy and key construction.
 type Declaration[K any] struct{ definition *definition[K] }
 
+// Define declares a single-key throttle, for example MFA attempts keyed by an
+// already authenticated subject. Submitted login identifiers use DefineLogin.
 func Define[K any](name Name, codec keyspace.Codec[K], policy Policy) Declaration[K] {
 	return Declaration[K]{&definition[K]{name: name, codec: codec, policy: policy}}
+}
+
+// DefineLogin declares a client-aware throttle for submitted login identifiers.
+// Failures count per (account, trusted client IP) with limits.PerClient, plus
+// the Account and Address ceilings. The client IP comes from the request
+// attribution established by the Foundry HTTP server (trusted proxy rules
+// apply); without one, attempts share an "unknown" client and skip the Address
+// ceiling. Policy reports limits.PerClient.
+func DefineLogin[K any](name Name, codec keyspace.Codec[K], limits Limits) Declaration[K] {
+	return Declaration[K]{&definition[K]{name: name, codec: codec, policy: limits.PerClient, limits: &limits}}
+}
+
+// Limits returns the client-aware limits of a DefineLogin declaration.
+func (d Declaration[K]) Limits() (Limits, bool) {
+	if d.definition == nil || d.definition.limits == nil {
+		return Limits{}, false
+	}
+	return *d.definition.limits, true
 }
 func (d Declaration[K]) Name() Name {
 	if d.definition == nil {
@@ -39,6 +60,9 @@ func (d Declaration[K]) Validate() error {
 	}
 	if err := d.definition.codec.Validate(); err != nil {
 		return err
+	}
+	if d.definition.limits != nil {
+		return d.definition.limits.Validate()
 	}
 	return d.Policy().Validate()
 }

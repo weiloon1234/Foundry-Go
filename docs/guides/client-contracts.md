@@ -25,7 +25,10 @@ operation names and feature metadata. Conflicting definitions or ambiguous
 camel-cased names are errors. `Snapshot()` and `JSON()` return owned copies.
 `manifest.Decode(data)` validates a saved manifest without loading application
 code. The decoder rejects unknown versions, duplicate JSON keys, unknown fields,
-broken references and oversized/deep documents.
+broken references and oversized/deep documents. Manifest version 5 adds
+alternative success statuses, redirect responses, raw request bodies and event
+stream responses;
+regenerate saved manifests and clients together.
 
 Generate into an existing, dedicated client directory:
 
@@ -53,6 +56,24 @@ foundry contracts --manifest public-contract.json --dir frontend/src/generated \
   --title 'Shop API' --api-version 1 --check
 ```
 
+Instead of hand-writing that export command, mount the built-in one. It resolves
+the sources from the application when it runs:
+
+```go
+export, err := typescript.ExportCommand("contracts.export",
+    openapi.Options{Title: "Shop API", APIVersion: "1",
+        Servers: []openapi.Server{{URL: "https://api.example.com"}}},
+    func(ctx context.Context, services foundation.Resolver) (manifest.Sources, error) {
+        router, err := foundation.Resolve(services, routerKey)
+        return manifest.Sources{HTTP: router}, err
+    })
+```
+
+`routerKey` is the application's `foundation.Key[*http.Router]`; resolve the
+realtime description and other sources the same way. Register the declaration
+with the application's CLI commands, then run
+`app contracts.export --dir frontend/src/generated [--prefix contracts] [--check]`.
+
 The default output is `contracts_foundry.gen.ts`,
 `contracts_manifest_foundry.gen.json` and `contracts_openapi_foundry.gen.json`.
 `--prefix` changes their shared prefix. There are no timestamps, absolute source
@@ -64,14 +85,33 @@ Client JSON limits count containers, values and object names, matching Go. For
 example, `{"key":"value"}` uses three nodes; a two-node budget rejects it on
 both encode and decode. Byte, depth and schema-work limits remain independent.
 
+## Operation documentation, examples and servers
+
+Document an endpoint with `WithDocumentation(http.RouteDocumentation{Summary,
+Description, Tags, Deprecated})` on its route or endpoint. Documentation is
+bounded (`MaxRouteSummaryBytes`, `MaxRouteDescriptionBytes`, `MaxRouteTags`),
+never changes routing or access, and is exported with the manifest. OpenAPI
+receives `summary`, `description`, `tags` (plus a sorted top-level tag list) and
+`deprecated`; the TypeScript `API` interface receives the same text as TSDoc with
+`@deprecated`. The route ID remains the OpenAPI `operationId`.
+
+`WithBodyExample(value)` and `WithResponseExample(value)` take values of the
+endpoint's own request and response types and encode them immediately through
+the same JSON contracts, so an example can never disagree with the declared
+schema; an example that fails its contract makes the endpoint invalid. OpenAPI
+publishes them as the media type `example`. `openapi.Options.Servers` adds
+server entries: absolute `http`/`https` URLs without credentials, query or
+fragment, or paths such as `/api`.
+
 ## Ownership, checking and recovery
 
 The shared generator publisher owns all three files through a version 2
 `.foundry-gen.json`. Keep it with the generated outputs. This client directory
 must be separate from directories owned by Go generation. A prefix rename
 deletes obsolete, unchanged owned files; unrelated files remain untouched.
-Edited, orphaned, symbolic-link or conflicting outputs are rejected. Each
-artifact is limited to 8 MiB; the input manifest is limited to 16 MiB.
+Edited, orphaned, symbolic-link or conflicting outputs are rejected. The input
+manifest is limited to 16 MiB; each artifact is limited to 48 MiB, enough for a
+client module that embeds the largest accepted manifest.
 
 `--check` is read-only, including on first use and after interruption. Ordinary
 publication recovers an interrupted batch through the existing confined,
@@ -90,8 +130,16 @@ for process guards, retained backups and edit-conflict handling.
 
 Generated `Operations` and `ContractTypes` expose the public types. Operation
 methods use registered IDs converted to stable camel-cased names, for example
-`items.echo` becomes `api.itemsEcho(request)`. Schema symbols have readable names
-plus a stable suffix derived from their full Go type identity.
+`items.echo` becomes `api.itemsEcho(request)`. Schema symbols use the Go type's
+own name, including generic arguments (`Page_Invoice` for `Page[Invoice]`,
+`List_Invoice` for `[]Invoice`), without its package path, so moving a package
+keeps its names. When two types share a name, both are qualified with trailing
+package path elements (`Billing_Invoice`, `Archive_Invoice`); names that would
+shadow a declaration of the generated TypeScript module, such as `Map` or
+`Payload`, are qualified the same way, and only a remaining collision receives a
+stable digest suffix. Adding a same-named type can therefore rename an existing
+symbol; clients that must be immune to that select types by identity, for
+example `ContractTypes["example.com/app/billing.Invoice"]`.
 
 | Go contract | TypeScript value | JSON wire |
 | --- | --- | --- |
@@ -122,6 +170,36 @@ properties; typed map keys retain their canonical domain syntax. An explicit map
 schema without a key descriptor accepts arbitrary string names while retaining its
 declared value type, nullability and wire limits in both Go and TypeScript.
 
+## Tolerant server output
+
+Deployed clients, especially mobile applications, often outlive the server
+version they were generated from. Responses, error envelopes, server events and
+presence payloads therefore decode tolerantly by default:
+
+- unknown object properties are ignored and omitted from the decoded value;
+- an unknown enum value decodes as an `UnknownEnumValue` carrying the schema ID
+  and the raw wire value, instead of failing the whole payload;
+- a map entry keyed by an unknown enum case is omitted.
+
+Everything else remains strict: required properties, types, formats, numeric
+bounds and resource limits still fail with `ContractError`. Requests and
+published events are always encoded strictly, so an `UnknownEnumValue` cannot be
+sent back. Each schema reachable from server output that can contain enum values
+has a generated `...Received` type, used by `Operations[...]["response"]`,
+`ErrorResponse` and event handlers. Narrow it before reuse:
+
+```typescript
+const item = await api.itemsEcho(request);
+if (item.state instanceof UnknownEnumValue) showUnsupported(item.state.value);
+else render(item.state);
+```
+
+Set `strictResponses: true` in `ClientOptions` (or `strictEvents: true` in
+`RealtimeOptions`) to reject unknown properties and enum values instead.
+`decodeReceived(type, input)` applies tolerant decoding to a standalone value;
+`decodeContract` stays strict. The embedded manifest is parsed once, on first
+use rather than at import.
+
 ## Injected HTTP transport
 
 `createClient(transport, options)` owns endpoint paths, query defaults/cardinality,
@@ -138,8 +216,9 @@ const transport: HTTPTransport = async request => {
     method: request.method, headers: request.headers,
     ...(request.body === undefined ? {} : { body: request.body }),
     ...(request.signal ? { signal: request.signal } : {}),
-    credentials: request.credentials,
-  });
+    ...(request.duplex ? { duplex: request.duplex } : {}),
+    credentials: request.credentials, redirect: request.redirect,
+  } as RequestInit);
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   async function* chunks() {
     reader = response.body?.getReader();
@@ -176,7 +255,10 @@ required permissions remain explicit metadata, not client-side access grants.
 Unknown/custom URL syntax requires an explicit `urlCodecs` adapter. Built-in
 path/query codecs validate width, enum cases, room identity, cardinality and
 escaping. Signed operations require `signedURL` obtained from the server; the
-SDK checks the declared origin/path/domain query and preserves the signed URL.
+SDK checks the declared origin/path/domain query and preserves the signed URL's
+bytes. Following the exported link policy it accepts absolute links on the
+client's origin, origin-relative links (sent to `baseURL`), permanent links when
+the route permits them, and declared ignored parameters such as `utm_source`.
 It never creates signatures or exports signing keys.
 
 `APIError` carries the declared status, code and decoded framework error envelope.
@@ -185,6 +267,36 @@ payloads. An intermediary returning HTML or a mismatched error code/status canno
 silently become a typed DTO. Transport failures remain transport failures. No
 automatic mutation retries occur. A cache adapter must resolve a JSON `304` to
 its stored representation and successful status before returning it to the SDK.
+
+Forward every request field. `redirect` is `"manual"` for redirect operations and
+`"follow"` otherwise; `duplex` is `"half"` when a raw body is a stream, which
+`fetch` requires for a `ReadableStream` request body.
+
+An operation declaring several success statuses (`JSONResponses`) returns
+`StatusResult<S, T>`: `{ status, body }` with `status` typed as the union of its
+declared statuses, for example `200 | 201`. Other statuses are rejected.
+A redirect operation (`RedirectResponse`) returns `RedirectResult<S>`:
+`{ status, location }`, where `location` is the relative target on the server's
+origin; the SDK never follows it and rejects absolute or scheme-relative targets.
+Browser `fetch` hides a manual redirect (an `opaqueredirect` with status 0); the
+SDK reports that as a `ContractError` with code `opaque_redirect`, so call
+redirect operations from server-side or native clients, or navigate the browser
+to the endpoint directly.
+
+An event stream operation (`EventStreamResponse`) returns `EventStreamResult<T>`,
+an async iterable of frozen `{ id?, name, data, retry? }` events. Consume it once
+with `for await`; the response closes when iteration ends, or call `close()`.
+Event data decodes tolerantly within `limits.Response`. Framing follows
+`EventSource` (comments ignored, CR/LF/CRLF lines, an unterminated final event
+discarded). The SDK does not reconnect; pass the last `id` as a `last-event-id`
+call header to resume.
+
+A raw request body (`RawRequestBody`) takes `{ data, mediaType }`. `data` is a
+`Blob`, `ArrayBuffer`, typed array or `ReadableStream<Uint8Array>`; `mediaType` is
+one of the declared media types and may be omitted when only one is declared.
+The SDK bounds the body by `EndpointLimits.Raw.Bytes`, including a stream as it is
+sent. Client-side validation is skipped (`skipped: ["raw_body"]`) because the
+body is opaque; the server still applies its rules.
 
 Multipart requests use `Upload` values containing a `Blob` and filename; the SDK
 encodes text, repeated values, JSON fields and files from their descriptors.
@@ -291,11 +403,14 @@ preparation metadata; regenerate older manifests and clients. See
 The manifest version and exported realtime protocol version are independently
 checked. An old generated client remains compatible when existing operation IDs,
 paths, statuses, access, payloads and events retain their contracts. Adding an
-unrelated operation is compatible. Renaming/removing a used endpoint, changing
-required fields or statuses, adding enum values an old client can receive, or
-adding response fields to a strictly decoded DTO requires coordinated clients
-or an application API version boundary. Manifest version is the document format,
-not a promise that every application change is compatible.
+unrelated operation is compatible. With the default tolerant decoding, adding
+response/event properties or enum values an old client can receive is also
+compatible; clients created with `strictResponses`/`strictEvents` still need
+coordination. Renaming/removing a used endpoint, changing required fields,
+types or statuses, adding union variants an old client can receive, or changing
+request contracts requires coordinated clients or an application API version
+boundary. Manifest version is the document format, not a promise that every
+application change is compatible.
 
 The independent `tests/fixtures/consumer/clientcontracts` fixture contains strict
 TypeScript positive/negative contracts, codec adversarial cases and real HTTP/

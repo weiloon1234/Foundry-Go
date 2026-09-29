@@ -15,6 +15,9 @@ const (
 	LocalDisk DiskDriver = "local"
 	S3Disk    DiskDriver = "s3"
 	R2Disk    DiskDriver = "r2"
+	// CompatibleDisk is a generic S3-compatible endpoint whose guarantees are
+	// declared in CloudDiskSettings.Compatible.
+	CompatibleDisk DiskDriver = "s3_compatible"
 )
 
 type LocalDiskSettings struct {
@@ -29,6 +32,11 @@ type CloudDiskSettings struct {
 	PartBytes                                       int64
 	MaxUploads, ReadAttempts, PartAttempts          int
 	AbortTimeout                                    time.Duration
+	PartConcurrency                                 int
+	VerifyPublication                               bool
+	// AllowHTTP and Compatible apply only to the s3_compatible driver.
+	AllowHTTP  bool
+	Compatible s3.CompatibleCapabilities
 }
 
 // DiskSettings owns one driver selection and the common storage limits.
@@ -43,13 +51,17 @@ type DiskSettings struct {
 
 func DefaultDiskSettings() DiskSettings {
 	l, c := local.DefaultConfig(""), s3.DefaultConfig("", "")
-	return DiskSettings{Driver: LocalDisk, Config: storage.DefaultConfig(), Local: LocalDiskSettings{MaxScan: l.MaxScan, Sync: l.Sync}, Cloud: CloudDiskSettings{PartBytes: c.PartBytes, MaxUploads: c.MaxUploads, ReadAttempts: c.ReadAttempts, PartAttempts: c.PartAttempts, AbortTimeout: c.AbortTimeout}}
+	return DiskSettings{Driver: LocalDisk, Config: storage.DefaultConfig(), Local: LocalDiskSettings{MaxScan: l.MaxScan, Sync: l.Sync}, Cloud: CloudDiskSettings{PartBytes: c.PartBytes, MaxUploads: c.MaxUploads, ReadAttempts: c.ReadAttempts, PartAttempts: c.PartAttempts, AbortTimeout: c.AbortTimeout, PartConcurrency: c.PartConcurrency, VerifyPublication: c.VerifyPublication}}
 }
 func (s DiskSettings) cloudConfig(provider credentials.Provider) (s3.Config, error) {
 	c := s3.DefaultConfig(s.Cloud.Bucket, s.Cloud.Region)
-	if s.Driver == R2Disk {
+	switch s.Driver {
+	case R2Disk:
 		c = s3.R2WithCredentials(s.Cloud.Bucket, s.Cloud.Endpoint, provider)
-	} else {
+	case CompatibleDisk:
+		c = s3.CompatibleConfig(s.Cloud.Bucket, s.Cloud.Region, s.Cloud.Endpoint, s.Cloud.Compatible).WithCredentials(provider)
+		c.AllowHTTP = s.Cloud.AllowHTTP
+	default:
 		c = c.WithCredentials(provider)
 		c.Endpoint = s.Cloud.Endpoint
 	}
@@ -71,6 +83,10 @@ func (s DiskSettings) cloudConfig(provider credentials.Provider) (s3.Config, err
 	c.ReadAttempts = s.Cloud.ReadAttempts
 	c.PartAttempts = s.Cloud.PartAttempts
 	c.AbortTimeout = s.Cloud.AbortTimeout
+	if s.Cloud.PartConcurrency != 0 {
+		c.PartConcurrency = s.Cloud.PartConcurrency
+	}
+	c.VerifyPublication = s.Cloud.VerifyPublication
 	return c, c.Validate()
 }
 

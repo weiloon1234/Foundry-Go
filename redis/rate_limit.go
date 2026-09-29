@@ -3,12 +3,13 @@ package redis
 import (
 	"context"
 	_ "embed"
+	"math"
+	"time"
+
 	driver "github.com/redis/go-redis/v9"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/ratewindow"
 	"github.com/weiloon1234/Foundry-Go/ratelimit"
-	"math"
-	"time"
 )
 
 //go:embed rate_limit.lua
@@ -17,16 +18,65 @@ var rateLimitScript string
 const rateLimitMetadataBytes = 128
 
 var _ ratelimit.Backend = (*Client)(nil)
+var _ ratelimit.InspectBackend = (*Client)(nil)
 
-// RateLimit makes one atomic decision using Redis TIME and epoch-aligned windows.
-// Live policy conflicts and corrupt metadata fail without mutation. Lost replies
-// never trigger retry; their capacity consumption remains unknown to the caller.
+// RateLimit makes one atomic decision using Redis TIME and the key's phased
+// fixed windows. A live bucket with a different policy is converted, keeping its
+// admitted usage; corrupt metadata fails without mutation. Lost replies never
+// trigger retry; their capacity consumption remains unknown to the caller.
 func (c *Client) RateLimit(ctx context.Context, key ratelimit.Key, limit ratelimit.Limit, cost uint32) (ratelimit.Decision, error) {
 	if err := ratelimit.ValidateOperation(ctx, key, limit, cost); err != nil {
 		return ratelimit.Decision{}, err
 	}
+	decision, err := c.rateLimit(ctx, key, limit, cost, "take")
+	if err != nil {
+		return ratelimit.Decision{}, err
+	}
+	if err := decision.Validate(limit, cost); err != nil {
+		return ratelimit.Decision{}, err
+	}
+	return decision, nil
+}
+
+// PeekRateLimit runs the same atomic script read-only: it reports the decision
+// cost would receive now without consuming capacity or changing expiry.
+func (c *Client) PeekRateLimit(ctx context.Context, key ratelimit.Key, limit ratelimit.Limit, cost uint32) (ratelimit.Decision, error) {
+	if err := ratelimit.ValidateOperation(ctx, key, limit, cost); err != nil {
+		return ratelimit.Decision{}, err
+	}
+	decision, err := c.rateLimit(ctx, key, limit, cost, "peek")
+	if err != nil {
+		return ratelimit.Decision{}, err
+	}
+	if err := decision.ValidatePeek(limit, cost); err != nil {
+		return ratelimit.Decision{}, err
+	}
+	return decision, nil
+}
+
+// ClearRateLimit deletes the key's bucket, including unreadable state at its
+// exact address. A lost reply leaves the deletion unconfirmed; it is not retried.
+func (c *Client) ClearRateLimit(ctx context.Context, key ratelimit.Key) (bool, error) {
+	if err := ratelimit.ValidateClear(ctx, key); err != nil {
+		return false, err
+	}
 	result, err := c.execute(ctx, func(ctx context.Context, raw *driver.Client) (any, error) {
-		return raw.Eval(ctx, rateLimitScript, []string{key.String()}, limit.Requests, limit.Window.Milliseconds(), cost, rateLimitMetadataBytes, math.MaxUint32, ratelimit.MaxWindow.Milliseconds(), ratewindow.MaxTimestamp).Result()
+		return raw.Del(ctx, key.String()).Result()
+	})
+	if err != nil {
+		return false, err
+	}
+	removed, ok := result.(int64)
+	if !ok || removed < 0 || removed > 1 {
+		return false, fault.New(fault.Internal, "invalid Redis rate limit clear reply")
+	}
+	return removed == 1, nil
+}
+
+func (c *Client) rateLimit(ctx context.Context, key ratelimit.Key, limit ratelimit.Limit, cost uint32, mode string) (ratelimit.Decision, error) {
+	offset := key.WindowOffset(limit.Window).Milliseconds()
+	result, err := c.execute(ctx, func(ctx context.Context, raw *driver.Client) (any, error) {
+		return evalScript(ctx, raw, rateLimitScript, []string{key.String()}, limit.Requests, limit.Window.Milliseconds(), cost, rateLimitMetadataBytes, math.MaxUint32, ratelimit.MaxWindow.Milliseconds(), ratewindow.MaxTimestamp, offset, mode).Result()
 	})
 	if err != nil {
 		return ratelimit.Decision{}, err
@@ -43,10 +93,8 @@ func (c *Client) RateLimit(ctx context.Context, key ratelimit.Key, limit ratelim
 		switch status {
 		case -1:
 			return ratelimit.Decision{}, fault.New(fault.Invalid, "stored Redis rate limit metadata is corrupt")
-		case -2:
-			return ratelimit.Decision{}, fault.New(fault.Conflict, "live Redis rate limit policy differs")
 		case -3:
-			return ratelimit.Decision{}, fault.New(fault.Conflict, "Redis rate limit clock outside live window")
+			return ratelimit.Decision{}, fault.New(fault.Invalid, "Redis rate limit clock outside supported epoch range")
 		}
 	}
 	if len(parts) != 3 || (status != 0 && status != 1) {
@@ -60,9 +108,6 @@ func (c *Client) RateLimit(ctx context.Context, key ratelimit.Key, limit ratelim
 	decision := ratelimit.Decision{Allowed: status == 1, Limit: limit.Requests, Remaining: uint32(remaining), ResetAfter: time.Duration(reset) * time.Millisecond}
 	if !decision.Allowed {
 		decision.RetryAfter = decision.ResetAfter
-	}
-	if err := decision.Validate(limit, cost); err != nil {
-		return ratelimit.Decision{}, err
 	}
 	return decision, nil
 }

@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -14,6 +15,7 @@ func (q Query[M]) InsertOnConflict(ctx context.Context, writer database.Transact
 	if err := writeContext(ctx, writer); err != nil {
 		return value.Optional[M]{}, err
 	}
+	q = q.inContext(ctx)
 	plan := insertPlan[M]{query: q, rows: []Mutation[M]{mutation}, conflict: &conflict}
 	return executeModelStatement(ctx, writer, q.hasFieldMutators() || q.hasTimestamps(), func(ctx context.Context, tx *database.Tx) (Statement, error) {
 		prepared, err := plan.withTimestamps(ctx, transactionClock(tx))
@@ -23,6 +25,9 @@ func (q Query[M]) InsertOnConflict(ctx context.Context, writer database.Transact
 		return prepared.prepare(ctx)
 	}, func(ctx context.Context, tx *database.Tx, s Statement) (value.Optional[M], error) {
 		items, err := returningModels(ctx, tx, s, q.definition.scan, 0, 1)
+		if err == nil {
+			err = q.conflictScopeViolation(&conflict, 1, len(items))
+		}
 		if err != nil || len(items) == 0 {
 			return value.Optional[M]{}, err
 		}
@@ -47,6 +52,7 @@ func (q Query[M]) insertMany(ctx context.Context, writer database.Transactor, mu
 	if err := writeContext(ctx, writer); err != nil {
 		return nil, err
 	}
+	q = q.inContext(ctx)
 	plan := insertPlan[M]{query: q, rows: mutations, conflict: conflict}
 	if len(mutations) == 0 {
 		if _, err := plan.compile(); err != nil {
@@ -65,8 +71,27 @@ func (q Query[M]) insertMany(ctx context.Context, writer database.Transactor, mu
 		}
 		return prepared.prepare(ctx)
 	}, func(ctx context.Context, tx *database.Tx, s Statement) ([]M, error) {
-		return returningModels(ctx, tx, s, q.definition.scan, minimum, len(mutations))
+		items, err := returningModels(ctx, tx, s, q.definition.scan, minimum, len(mutations))
+		if err == nil {
+			err = q.conflictScopeViolation(conflict, len(mutations), len(items))
+		}
+		if err != nil {
+			return nil, err
+		}
+		return items, nil
 	})
+}
+
+// conflictScopeViolation reports an unconditional DO UPDATE that returned
+// fewer rows than it inserted or updated: with no update condition of its own,
+// only a conflicting row outside the destination's global scopes can have been
+// skipped. The write fails, so the caller learns the key belongs to rows it
+// may not change, instead of silently receiving no result.
+func (q Query[M]) conflictScopeViolation(conflict *Conflict[M], requested, returned int) error {
+	if conflict == nil || conflict.action != conflictUpdate || len(conflict.condition) != 0 || len(conflict.rowCondition) != 0 || returned >= requested || len(q.scopePredicates()) == 0 {
+		return nil
+	}
+	return fault.New(fault.Conflict, "upsert conflicts with a row outside the model's global scopes")
 }
 
 // Bulk operations normalize explicitly supplied field values without dispatching

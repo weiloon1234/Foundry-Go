@@ -3,14 +3,12 @@ package generate
 import (
 	"fmt"
 	"go/ast"
-	"go/constant"
 	"go/token"
 	"go/types"
 	"sort"
 	"strconv"
 	"strings"
 	"unicode"
-	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
@@ -289,7 +287,10 @@ func discover(p *packageInput) (metadata, error) {
 		if err := resolveDTOSchema(p, declaration, models); err != nil {
 			return result, err
 		}
-		suffixes := []string{"JSON", "ValidationFields", "ValidationFieldSet"}
+		suffixes := []string{"JSON"}
+		if declaration.role != dtoResponseRole {
+			suffixes = append(suffixes, "ValidationFields", "ValidationFieldSet")
+		}
 		if declaration.message != nil {
 			if err := validateMessageSchema(p, *declaration); err != nil {
 				return result, err
@@ -494,6 +495,9 @@ func discoverModel(p *packageInput, spec *ast.TypeSpec, named *types.Named, args
 	if err := discoverFieldMethods(p, &m); err != nil {
 		return m, err
 	}
+	if err := discoverGlobalScopeSource(p, m); err != nil {
+		return m, err
+	}
 	if err := discoverTimestamps(p, &m, args["timestamps"]); err != nil {
 		return m, err
 	}
@@ -650,55 +654,6 @@ func parseTags(text string) (map[string]string, error) {
 		}
 	}
 	return tags, nil
-}
-
-func discoverEnum(p *packageInput, spec *ast.TypeSpec, named *types.Named, args map[string]string) (enum, error) {
-	e := enum{name: spec.Name.Name, typ: named, position: p.fset.Position(spec.Pos())}
-	if len(args) != 0 && (len(args) != 1 || args["labels"] == "") {
-		return e, p.diagnostic(spec.Pos(), "enum directive only accepts labels=message.prefix")
-	}
-	e.labels = args["labels"]
-	if err := validateEnumLabels(e.labels); err != nil {
-		return e, p.diagnostic(spec.Pos(), err.Error())
-	}
-	base, ok := named.Underlying().(*types.Basic)
-	if !ok || base.Kind() == types.Uintptr || (base.Info()&types.IsInteger == 0 && base.Kind() != types.String) {
-		return e, p.diagnostic(spec.Pos(), "enum must have a string or integer underlying type")
-	}
-	e.base = base
-	seen := make(map[string]bool)
-	for _, name := range p.types.Scope().Names() {
-		v, ok := p.types.Scope().Lookup(name).(*types.Const)
-		if !ok || !types.Identical(v.Type(), named) {
-			continue
-		}
-		literal := v.Val().ExactString()
-		if v.Val().Kind() == constant.String {
-			if !utf8.ValidString(constant.StringVal(v.Val())) {
-				return e, p.diagnostic(v.Pos(), "enum strings must be valid UTF-8")
-			}
-			literal = strconv.Quote(constant.StringVal(v.Val()))
-		}
-		if seen[literal] {
-			return e, p.diagnostic(v.Pos(), "enum contains duplicate serialized values")
-		}
-		seen[literal] = true
-		e.values = append(e.values, enumValue{name, literal, p.fset.Position(v.Pos())})
-	}
-	if len(e.values) == 0 {
-		return e, p.diagnostic(spec.Pos(), "enum requires typed constant values")
-	}
-	if err := validateEnumCaseLabels(e); err != nil {
-		return e, p.diagnostic(spec.Pos(), err.Error())
-	}
-	sort.Slice(e.values, func(i, j int) bool {
-		a, b := e.values[i].position, e.values[j].position
-		if a.Filename != b.Filename {
-			return a.Filename < b.Filename
-		}
-		return a.Offset < b.Offset
-	})
-	return e, nil
 }
 
 func snake(name string) string {

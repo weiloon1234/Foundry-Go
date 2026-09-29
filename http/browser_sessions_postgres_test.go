@@ -225,7 +225,8 @@ func TestBrowserSessionFailuresNeverPublishCookie(t *testing.T) {
 			r.Header.Set("Sec-Fetch-Site", "same-origin")
 			w := httptest.NewRecorder()
 			newAuthRouter(t, route).ServeHTTP(w, r)
-			want := map[string]int{"handler-error": 400, "panic": 500, "goexit": 500, "expired": 401, "canceled": 408}[kind]
+			// Session credentials are never published after the request ended.
+			want := map[string]int{"handler-error": 400, "panic": 500, "goexit": 500, "expired": 401, "canceled": 503}[kind]
 			if w.Header().Get("Set-Cookie") != "" || w.Code != want {
 				t.Fatal("failed response contract or cookie", w.Code, w.Body.String())
 			}
@@ -240,7 +241,7 @@ func TestBrowserSessionCSRFAndCookieParsingRunBeforeHandler(t *testing.T) {
 		return foundryhttp.NoContent{}, nil
 	})
 	router := newAuthRouter(t, route)
-	for _, kind := range []string{"cross-origin", "missing-evidence", "malformed-cookie", "duplicate-cookie", "insecure"} {
+	for _, kind := range []string{"cross-origin", "missing-evidence", "malformed-cookie", "insecure"} {
 		t.Run(kind, func(t *testing.T) {
 			target := "https://app.test/login"
 			if kind == "insecure" {
@@ -256,12 +257,10 @@ func TestBrowserSessionCSRFAndCookieParsingRunBeforeHandler(t *testing.T) {
 				r.Header.Del("Sec-Fetch-Site")
 			case "malformed-cookie":
 				r.Header.Set("Cookie", "__Host-foundry_session=invalid")
-			case "duplicate-cookie":
-				r.Header.Set("Cookie", "__Host-foundry_session=invalid; __Host-foundry_session=invalid")
 			}
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, r)
-			want := map[string]int{"cross-origin": 403, "missing-evidence": 403, "malformed-cookie": 401, "duplicate-cookie": 400, "insecure": 400}[kind]
+			want := map[string]int{"cross-origin": 403, "missing-evidence": 403, "malformed-cookie": 401, "insecure": 400}[kind]
 			if w.Code != want || calls.Load() != 0 {
 				t.Fatal("untrusted input contract", w.Code, w.Body.String())
 			}

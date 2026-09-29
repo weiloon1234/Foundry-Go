@@ -310,6 +310,7 @@ func TestCancellationRetainsCallbackSlotAndCloseWaitsForExit(t *testing.T) {
 	g := auth.DefineGuard("api", p, strategy(t, "bearer", 7))
 	c := auth.DefaultConfig()
 	c.MaxConcurrent = 1
+	c.Timeout = 100 * time.Millisecond // Also bounds the queued admission wait.
 	r, err := auth.NewRegistry(c, g.Registration())
 	if err != nil {
 		t.Fatal(err)
@@ -336,7 +337,7 @@ func TestCancellationRetainsCallbackSlotAndCloseWaitsForExit(t *testing.T) {
 	case <-time.After(20 * time.Millisecond):
 	}
 	next := scope(t, r, auth.Credential{Name: "bearer", Secret: secret.New("valid")})
-	if _, err := g.Require(next.Context()); !errors.Is(err, fault.Conflict) {
+	if _, err := g.Require(next.Context()); !errors.Is(err, fault.Overloaded) {
 		t.Fatal("released live callback slot", err)
 	}
 	close(release)

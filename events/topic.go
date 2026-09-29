@@ -48,11 +48,18 @@ func (t Topic[E]) Validate() error {
 type Listener[E any] struct {
 	name    ListenerID
 	handler Handler[E]
+	queued  bool
 }
 
 func Listen[E any](name ListenerID, handler Handler[E]) Listener[E] {
 	return Listener[E]{name: name, handler: handler}
 }
+
+// Queued returns this listener marked to run as a job on the bus's
+// ListenerQueue instead of inline. Sync and queued listeners can be mixed per
+// event; each queued listener is enqueued at its position in declaration order
+// with a fresh payload snapshot, and runs later with its own retries.
+func (l Listener[E]) Queued() Listener[E]          { l.queued = true; return l }
 func (Listener[E]) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("event listener")) }
 
 // Declare contributes this schema and ordered listeners. A declaration with no
@@ -79,7 +86,7 @@ func (t Topic[E]) Declare(listeners ...Listener[E]) (Declaration, error) {
 			return Declaration{}, fault.New(fault.Duplicate, "event listener is already declared")
 		}
 		names[item.name] = struct{}{}
-		declarations = append(declarations, listener{name: item.name, invoke: func(ctx context.Context, captured payload) error {
+		declarations = append(declarations, listener{name: item.name, queued: item.queued, invoke: func(ctx context.Context, captured payload) error {
 			snapshot, ok := captured.typed.(value.JSON[E])
 			if !ok {
 				return fault.New(fault.Internal, "event payload does not match its registered schema")
@@ -125,6 +132,7 @@ type payload struct {
 }
 type listener struct {
 	name   ListenerID
+	queued bool
 	invoke func(context.Context, payload) error
 }
 

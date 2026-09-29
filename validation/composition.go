@@ -3,9 +3,7 @@ package validation
 import (
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"slices"
-	"strconv"
 
-	"github.com/weiloon1234/Foundry-Go/internal/jsonpointer"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -25,10 +23,10 @@ func sequence[T any](kind Kind, bail bool, rules []Rule[T]) Rule[T] {
 	for i, child := range owned {
 		nodes[i] = child.ruleNode
 	}
-	return Rule[T]{ruleNode: composeNode(Description{Kind: kind}, nodes), apply: func(s *execution, input T, path string, depth int) {
+	return Rule[T]{ruleNode: composeNode(Description{Kind: kind}, nodes), apply: func(s *execution, input T, depth int) {
 		for _, child := range owned {
 			before := len(s.issues)
-			child.run(s, input, path, depth+1)
+			child.run(s, input, depth+1)
 			if s.err != nil || s.truncated || bail && len(s.issues) > before {
 				return
 			}
@@ -36,7 +34,7 @@ func sequence[T any](kind Kind, bail bool, rules []Rule[T]) Rule[T] {
 	}}
 }
 
-func lift[O, I any](info Description, child Rule[I], apply func(*execution, O, string, int)) Rule[O] {
+func lift[O, I any](info Description, child Rule[I], apply func(*execution, O, int)) Rule[O] {
 	return Rule[O]{ruleNode: composeNode(info, []ruleNode{child.ruleNode}), apply: apply}
 }
 
@@ -89,12 +87,13 @@ func (f Field[T, V]) Rules(rules ...Rule[V]) Rule[T] {
 		return failed[T](err)
 	}
 	child := All(rules...)
-	return lift(Description{Kind: FieldKind, Field: f.name, Label: f.label, LabelKey: f.labelKey}, child, func(s *execution, input T, path string, depth int) {
+	return lift(Description{Kind: FieldKind, Field: f.name, Label: f.label, LabelKey: f.labelKey}, child, func(s *execution, input T, depth int) {
 		selected := f.selectValue(input)
 		previous, previousKey, previousField := s.label, s.labelKey, s.field
 		s.label, s.labelKey, s.field = f.label, f.labelKey, f.name
-		defer func() { s.label, s.labelKey, s.field = previous, previousKey, previousField }()
-		child.run(s, selected, jsonpointer.Append(path, f.name), depth+1)
+		s.enter(f.name)
+		defer func() { s.leave(); s.label, s.labelKey, s.field = previous, previousKey, previousField }()
+		child.run(s, selected, depth+1)
 	})
 }
 
@@ -102,9 +101,9 @@ func (f Field[T, V]) Rules(rules ...Rule[V]) Rule[T] {
 // It does not infer wire presence from an ordinary Go field's zero value.
 func Optional[T any](rules ...Rule[T]) Rule[value.Optional[T]] {
 	child := All(rules...)
-	return lift(Description{Kind: OptionalKind}, child, func(s *execution, input value.Optional[T], path string, depth int) {
+	return lift(Description{Kind: OptionalKind}, child, func(s *execution, input value.Optional[T], depth int) {
 		if selected, set := input.Get(); set {
-			child.run(s, selected, path, depth+1)
+			child.run(s, selected, depth+1)
 		}
 	})
 }
@@ -113,9 +112,9 @@ func Optional[T any](rules ...Rule[T]) Rule[value.Optional[T]] {
 // Optional for a patch that distinguishes omitted, null and replacement values.
 func Nullable[T any](rules ...Rule[T]) Rule[value.Nullable[T]] {
 	child := All(rules...)
-	return lift(Description{Kind: NullableKind}, child, func(s *execution, input value.Nullable[T], path string, depth int) {
+	return lift(Description{Kind: NullableKind}, child, func(s *execution, input value.Nullable[T], depth int) {
 		if selected, set := input.Get(); set {
-			child.run(s, selected, path, depth+1)
+			child.run(s, selected, depth+1)
 		}
 	})
 }
@@ -135,9 +134,11 @@ func NotNull[T any]() Rule[value.Nullable[T]] {
 // Empty slices have no elements; collection-size rules are separate.
 func Each[S ~[]T, T any](rules ...Rule[T]) Rule[S] {
 	child := All(rules...)
-	return lift(Description{Kind: EachKind, ServerOnly: collectionWireTransform[S, T]()}, child, func(s *execution, input S, path string, depth int) {
+	return lift(Description{Kind: EachKind, ServerOnly: collectionWireTransform[S, T]()}, child, func(s *execution, input S, depth int) {
 		for i, item := range input {
-			child.run(s, item, jsonpointer.Append(path, strconv.Itoa(i)), depth+1)
+			s.enterIndex(i)
+			child.run(s, item, depth+1)
+			s.leave()
 			if s.err != nil || s.truncated {
 				return
 			}

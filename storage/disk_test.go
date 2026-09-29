@@ -159,8 +159,12 @@ func TestReadersOwnCapacityAndCloseOnPartialOpenFailure(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := disk.Stat(t.Context(), testKey(t), storage.ReadOptions{}); !errors.Is(err, storage.LimitExceeded) {
-				t.Fatal("open reader did not reserve capacity", err)
+			// An open stream holds a stream slot, never metadata/write capacity.
+			if _, err := disk.Stat(t.Context(), testKey(t), storage.ReadOptions{}); err != nil {
+				t.Fatal("open reader consumed operation capacity", err)
+			}
+			if stats := disk.Stats(); stats.Streams != 1 || stats.Active != 1 {
+				t.Fatal("open reader did not reserve a stream slot", stats)
 			}
 			if err := disk.Close(t.Context()); err != nil {
 				t.Fatal(err)

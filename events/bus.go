@@ -7,17 +7,21 @@ import (
 	"sync/atomic"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
 )
 
 // Config bounds concurrent captures/deliveries and the active dispatch chain.
-// Admission never waits for another dispatch, including recursive calls.
+// A top-level burst beyond MaxInFlight queues briefly (bounded by the caller's
+// context and the shared admission wait) and then fails with fault.Overloaded.
+// A nested dispatch from an active listener never waits for capacity held by
+// its own ancestors; it fails immediately with fault.Overloaded instead.
 type Config struct {
 	MaxInFlight int
 	MaxDepth    int
 }
 
-func DefaultConfig() Config { return Config{MaxInFlight: 64, MaxDepth: 32} }
+func DefaultConfig() Config { return Config{MaxInFlight: 256, MaxDepth: 32} }
 func (c Config) Validate() error {
 	if c.MaxInFlight <= 0 || c.MaxDepth <= 0 {
 		return fault.New(fault.Invalid, "event concurrency and dispatch depth must be positive")
@@ -38,6 +42,10 @@ type Bus struct {
 	started      bool
 	closing      bool
 	active       int
+	slots        *admission.Semaphore
+	stopping     chan struct{}
+	listeners    atomic.Pointer[ListenerQueue]
+	interceptor  atomic.Pointer[Interceptor]
 	lifetime     context.Context
 	cancel       context.CancelFunc
 	stopLifetime func() bool
@@ -58,7 +66,7 @@ func prepare(config Config) (*Bus, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
-	return &Bus{config: config, done: make(chan struct{})}, nil
+	return &Bus{config: config, slots: admission.New(config.MaxInFlight), stopping: make(chan struct{}), done: make(chan struct{})}, nil
 }
 func (b *Bus) bind(declarations []Declaration, managed bool) error {
 	if b == nil {
@@ -147,6 +155,7 @@ func (b *Bus) beginClose() {
 		return
 	}
 	b.closing = true
+	close(b.stopping)
 	cancel, stop := b.cancel, b.stopLifetime
 	if b.active == 0 {
 		close(b.done)
@@ -200,13 +209,23 @@ func (b *Bus) begin(ctx context.Context, key topicKey, typ reflect.Type) (contex
 		b.mu.Unlock()
 		return nil, registration{}, nil, fault.New(fault.Cycle, "event dispatch depth exceeded")
 	}
-	if b.active >= b.config.MaxInFlight {
-		b.mu.Unlock()
-		return nil, registration{}, nil, fault.New(fault.Conflict, "event dispatch capacity is exhausted")
-	}
+	// Count the caller as active while it waits, so Close keeps Done open until
+	// the waiter has either been admitted and finished or given up.
 	b.active++
 	lifetime := b.lifetime
 	b.mu.Unlock()
+	nested := false
+	for _, frame := range chain {
+		nested = nested || frame.bus == b
+	}
+	wait := admission.DefaultWait
+	if nested {
+		wait = 0
+	}
+	if err := b.slots.Acquire(ctx, wait, b.stopping); err != nil {
+		b.leave()
+		return nil, registration{}, nil, err
+	}
 	frame := &dispatchFrame{bus: b}
 	frame.active.Store(true)
 	operation, cancel := contextlink.Link(ctx, lifetime)
@@ -214,12 +233,17 @@ func (b *Bus) begin(ctx context.Context, key topicKey, typ reflect.Type) (contex
 	release := func() {
 		frame.active.Store(false)
 		cancel()
-		b.mu.Lock()
-		defer b.mu.Unlock()
-		b.active--
-		if b.closing && b.active == 0 {
-			close(b.done)
-		}
+		b.slots.Release()
+		b.leave()
 	}
 	return operation, entry, release, nil
+}
+
+func (b *Bus) leave() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.active--
+	if b.closing && b.active == 0 {
+		close(b.done)
+	}
 }

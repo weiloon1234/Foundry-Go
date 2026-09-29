@@ -20,9 +20,55 @@ import (
 
 const SpecificationVersion = "3.1.1"
 
+// Options describe the consumer API. Servers are optional base URLs, either
+// absolute http(s) URLs without credentials, query or fragment, or paths
+// relative to the document such as "/api".
 type Options struct {
 	Title      string
 	APIVersion string
+	Servers    []Server
+}
+
+// Server is one OpenAPI server entry.
+type Server struct {
+	URL         string
+	Description string
+}
+
+// MaxServers bounds Options.Servers.
+const MaxServers = 16
+
+// Validate checks the required title and version and every server entry.
+func (o Options) Validate() error {
+	if !validText(o.Title) || !validText(o.APIVersion) {
+		return fault.New(fault.Invalid, "OpenAPI requires a title and API version")
+	}
+	if len(o.Servers) > MaxServers {
+		return fault.New(fault.Invalid, "OpenAPI servers exceed MaxServers")
+	}
+	for _, server := range o.Servers {
+		if !server.valid() {
+			return fault.New(fault.Invalid, "OpenAPI server requires an http(s) URL or absolute path without credentials, query or fragment")
+		}
+	}
+	return nil
+}
+
+func (s Server) valid() bool {
+	if s.URL == "" || len(s.URL) > 2048 || !utf8.ValidString(s.URL) || strings.ContainsAny(s.URL, " \t\r\n") {
+		return false
+	}
+	if s.Description != "" && !validText(s.Description) {
+		return false
+	}
+	parsed, err := url.Parse(s.URL)
+	if err != nil || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || strings.Contains(s.URL, "#") {
+		return false
+	}
+	if parsed.Scheme == "" {
+		return parsed.Host == "" && strings.HasPrefix(s.URL, "/")
+	}
+	return (parsed.Scheme == "https" || parsed.Scheme == "http") && parsed.Host != ""
 }
 
 type object = map[string]any
@@ -38,14 +84,14 @@ type renderer struct {
 // registered descriptors. Title and APIVersion describe the consumer API and
 // are required; they are not inferred from a module path or framework version.
 func Render(source *manifest.Manifest, options Options) ([]byte, error) {
-	if !validText(options.Title) || !validText(options.APIVersion) {
-		return nil, fault.New(fault.Invalid, "OpenAPI requires a title and API version")
+	if err := options.Validate(); err != nil {
+		return nil, err
 	}
 	document, err := source.Snapshot()
 	if err != nil {
 		return nil, err
 	}
-	names, err := contractname.Schemas(document.Types)
+	names, err := contractname.Schemas(document.Types, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -54,6 +100,7 @@ func Render(source *manifest.Manifest, options Options) ([]byte, error) {
 		r.types[typ.ID] = typ
 	}
 	schemas, paths, security := object{}, object{}, object{}
+	tags := make(map[string]bool)
 	pathShapes := make(map[string]string)
 	r.variants = make(map[contract.TypeID][]string)
 	occupied := make(map[string]bool, len(names))
@@ -100,6 +147,23 @@ func Render(source *manifest.Manifest, options Options) ([]byte, error) {
 			return nil, fault.New(fault.Conflict, "OpenAPI path/method collision")
 		}
 		operation := object{"operationId": string(op.Route.ID), "x-foundry-client-name": op.Name, "x-foundry-access": op.Route.Access, "x-foundry-limits": op.Limits}
+		if documentation := op.Route.Documentation; documentation != nil {
+			if documentation.Summary != "" {
+				operation["summary"] = documentation.Summary
+			}
+			if documentation.Description != "" {
+				operation["description"] = documentation.Description
+			}
+			if len(documentation.Tags) != 0 {
+				operation["tags"] = documentation.Tags
+				for _, tag := range documentation.Tags {
+					tags[tag] = true
+				}
+			}
+			if documentation.Deprecated {
+				operation["deprecated"] = true
+			}
+		}
 		if op.Preparation {
 			operation["x-foundry-request-preparation"] = true
 		}
@@ -166,6 +230,18 @@ func Render(source *manifest.Manifest, options Options) ([]byte, error) {
 			}
 		}
 		responses[strconv.Itoa(op.Status)] = success
+		for _, status := range op.Statuses {
+			// Alternative statuses share one declared representation.
+			alternative := make(object, len(success))
+			for key, value := range success {
+				alternative[key] = value
+			}
+			responses[strconv.Itoa(status)] = alternative
+		}
+		if op.Redirect {
+			// A redirect has no body; its target is the Location header.
+			responses[strconv.Itoa(op.Status)] = object{"description": "Redirect to a location on this origin", "headers": object{"Location": object{"required": true, "schema": object{"type": "string", "format": "uri-reference"}, "description": "Relative URL on this origin"}}}
+		}
 		if op.Response != nil && op.Response.File != nil && op.Response.File.Seekable {
 			partial := r.content(*op.Response)
 			partial["multipart/byteranges"] = object{"schema": object{"type": "string", "format": "binary"}}
@@ -185,6 +261,29 @@ func Render(source *manifest.Manifest, options Options) ([]byte, error) {
 		components["securitySchemes"] = security
 	}
 	result := object{"openapi": SpecificationVersion, "info": object{"title": options.Title, "version": options.APIVersion}, "paths": paths, "components": components, "x-foundry-manifest-version": document.Version}
+	if len(options.Servers) != 0 {
+		servers := make([]any, 0, len(options.Servers))
+		for _, server := range options.Servers {
+			entry := object{"url": server.URL}
+			if server.Description != "" {
+				entry["description"] = server.Description
+			}
+			servers = append(servers, entry)
+		}
+		result["servers"] = servers
+	}
+	if len(tags) != 0 {
+		names := make([]string, 0, len(tags))
+		for tag := range tags {
+			names = append(names, tag)
+		}
+		sort.Strings(names)
+		list := make([]any, 0, len(names))
+		for _, name := range names {
+			list = append(list, object{"name": name})
+		}
+		result["tags"] = list
+	}
 	data, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
 		return nil, err
@@ -257,6 +356,13 @@ func (r renderer) urlDefault(p manifest.Parameter, text string) any {
 }
 
 func (r renderer) content(payload manifest.Payload) object {
+	if payload.Raw != nil {
+		content := object{}
+		for _, media := range payload.Raw.MediaTypes {
+			content[string(media)] = object{"schema": object{"type": "string", "format": "binary"}}
+		}
+		return content
+	}
 	if payload.File != nil {
 		content := object{}
 		for _, media := range payload.File.MediaTypes {
@@ -264,8 +370,17 @@ func (r renderer) content(payload manifest.Payload) object {
 		}
 		return content
 	}
+	if payload.MediaType == foundryhttp.EventStreamMediaType {
+		// OpenAPI 3.1 has no schema for an event sequence; each event's data
+		// is the referenced JSON value.
+		return object{payload.MediaType: object{"schema": object{"type": "string"}, "x-foundry-event-data": r.ref(payload.Type)}}
+	}
 	if payload.Type != "" {
-		return object{payload.MediaType: object{"schema": r.ref(payload.Type)}}
+		media := object{"schema": r.ref(payload.Type)}
+		if len(payload.Example) != 0 {
+			media["example"] = payload.Example
+		}
+		return object{payload.MediaType: media}
 	}
 	if payload.MediaType == "application/x-www-form-urlencoded" {
 		properties, encodings := object{}, object{}

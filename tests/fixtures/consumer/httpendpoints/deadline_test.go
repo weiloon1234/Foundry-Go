@@ -73,7 +73,9 @@ func TestServerDeadlineReachesTypedDomainHandler(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&failure); err != nil {
 		t.Fatal(err)
 	}
-	if response.StatusCode != 408 || failure.Code != foundryhttp.RequestTimeout || !canceled.Load() {
+	// The request was fully read; a deadline during the handler is the server's
+	// own budget (503), not a slow client (408).
+	if response.StatusCode != 503 || failure.Code != foundryhttp.Unavailable || !canceled.Load() {
 		t.Fatalf("typed deadline response: %d %+v", response.StatusCode, failure)
 	}
 	if failure.RequestID == "" || string(failure.RequestID) != response.Header.Get(foundryhttp.RequestIDHeader) {

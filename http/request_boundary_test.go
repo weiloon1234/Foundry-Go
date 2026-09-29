@@ -138,15 +138,26 @@ func TestRequestAttributionIsFreshAndKeepsOrdinaryContextValues(t *testing.T) {
 	}
 }
 
-func TestInvalidRequestMetadataRetainsCorrelation(t *testing.T) {
-	request := httptest.NewRequest(stdhttp.MethodGet, "/", nil)
-	request.Header.Set("User-Agent", strings.Repeat("x", attribution.MaxUserAgentBytes+1))
-	recorder := httptest.NewRecorder()
-	requestBoundary(func(stdhttp.ResponseWriter, *stdhttp.Request) {
-		t.Fatal("invalid request metadata reached handler")
-	}, 8).ServeHTTP(recorder, request)
-	payload := decodeFailure(t, recorder)
-	if payload.Code != BadRequest || payload.RequestID == "" {
-		t.Fatalf("invalid metadata response: %#v", payload)
+func TestMalformedUserAgentIsSanitizedNotRejected(t *testing.T) {
+	for raw, want := range map[string]string{
+		strings.Repeat("x", attribution.MaxUserAgentBytes+1): strings.Repeat("x", attribution.MaxUserAgentBytes),
+		"Agent\t1.0\x7f":        "Agent1.0",
+		"Agent/\xff1.0":         "Agent/�1.0",
+		"Mozilla/5.0 (X11) ok ": "Mozilla/5.0 (X11) ok ",
+	} {
+		request := httptest.NewRequest(stdhttp.MethodGet, "/", nil)
+		request.Header["User-Agent"] = []string{raw}
+		recorder := httptest.NewRecorder()
+		reached := false
+		requestBoundary(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+			reached = true
+			if got := attribution.FromContext(r.Context()).Request(); got.UserAgent != want || got.ID == "" {
+				t.Errorf("sanitized agent=%q id=%q", got.UserAgent, got.ID)
+			}
+			w.WriteHeader(stdhttp.StatusNoContent)
+		}, 8).ServeHTTP(recorder, request)
+		if !reached || recorder.Code != stdhttp.StatusNoContent || recorder.Header().Get(RequestIDHeader) == "" {
+			t.Fatalf("user agent rejected request: %d", recorder.Code)
+		}
 	}
 }

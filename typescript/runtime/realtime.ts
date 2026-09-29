@@ -5,7 +5,7 @@ interface RealtimeDescription {
     readonly actions: { readonly subscribe: string; readonly unsubscribe: string; readonly message: string };
     readonly responses: { readonly subscribed: string; readonly unsubscribed: string; readonly acknowledged: string; readonly accepted: string; readonly error: string; readonly event: string; readonly presence_joined: string; readonly presence_left: string; readonly presence_updated: string };
     readonly codes: readonly string[] };
-  readonly limits: { readonly subscriptions: number; readonly frame_bytes: number; readonly presence_members: number; readonly member_bytes: number; readonly deduplication_entries: number; readonly operation_ms: number; readonly payload: JSONLimits };
+  readonly limits: { readonly subscriptions: number; readonly frame_bytes: number; readonly presence_members: number; readonly member_bytes: number; readonly deduplication_entries: number; readonly operation_ms: number; readonly inbound_queue: number; readonly message_rate: { readonly requests: number; readonly window_ms: number }; readonly payload: JSONLimits };
   readonly channels: readonly RealtimeChannel[];
 }
 /** Supply an already-open connection which negotiated the exported subprotocol. */
@@ -15,7 +15,8 @@ export interface RealtimeTransport {
   listen(receive: (text: string | Uint8Array) => void, closed: () => void): () => void;
   close(): void;
 }
-export interface RealtimeOptions extends CodecOptions { readonly onError?: (error: Error) => void }
+/** Event and presence payloads decode tolerantly unless strictEvents is set; published payloads stay strict. */
+export interface RealtimeOptions extends CodecOptions { readonly onError?: (error: Error) => void; readonly strictEvents?: boolean }
 export interface SubscribeOptions { readonly replay?: number; readonly signal?: AbortSignal }
 export interface PublishOptions { readonly signal?: AbortSignal; readonly onAccepted?: () => void }
 export interface EventInfo { readonly messageID: string; readonly replayed: boolean; readonly room?: string }
@@ -47,6 +48,15 @@ function createRealtimeEngine(document: RuntimeDocument, transport: RealtimeTran
   const frameLimits: JSONLimits = { ...limits.payload, Bytes: limits.frame_bytes, Depth: runtimePolicy.maxDepth, Nodes: limits.frame_bytes, Steps: limits.frame_bytes * 2, Issues: 1 };
   const states = new Map<string, RoomState>(), pending = new Map<string, PendingOperation>(), seen = new Set<string>();
   let sequence = 0, stopped = false, detach: (() => void) | undefined;
+  // The server processes one frame at a time from a bounded inbound queue and
+  // rate-limits every frame; stay within both instead of provoking disconnects.
+  const inFlight = Math.max(1, Math.min(limits.subscriptions, limits.inbound_queue));
+  const rate = { capacity: limits.message_rate.requests, perMs: limits.message_rate.requests / limits.message_rate.window_ms, tokens: limits.message_rate.requests, last: Date.now() };
+  const takeToken = (): boolean => {
+    const now = Date.now(), elapsed = Math.max(0, now - rate.last);
+    rate.tokens = Math.min(rate.capacity, rate.tokens + elapsed * rate.perMs); rate.last = now;
+    if (rate.tokens < 1) return false; rate.tokens -= 1; return true;
+  };
   const notify = (error: Error): void => {
     try { void Promise.resolve(options.onError?.(error)).catch(() => {}); }
     catch { /* Observers cannot retain protocol state or prevent cleanup. */ }
@@ -80,8 +90,9 @@ function createRealtimeEngine(document: RuntimeDocument, transport: RealtimeTran
   const request = (state: RoomState, action: string, event?: RealtimeEvent, payload?: unknown, settings: SubscribeOptions & PublishOptions = {}): Promise<readonly PresenceMember<unknown>[]> => {
     checkAbort(settings.signal);
     if (stopped || state.phase === "disposed") return Promise.reject(new RealtimeError("closed"));
-    if (pending.size >= limits.subscriptions || sequence === Number.MAX_SAFE_INTEGER) return Promise.reject(new RealtimeError("capacity_exceeded"));
+    if (pending.size >= inFlight || sequence === Number.MAX_SAFE_INTEGER) return Promise.reject(new RealtimeError("capacity_exceeded"));
     if (action === actions.subscribe && state.phase !== "idle" || action !== actions.subscribe && state.phase !== "subscribed") return Promise.reject(new RealtimeError("invalid_state"));
+    if (!takeToken()) return Promise.reject(new RealtimeError("rate_limited"));
     const frame: Record<string, unknown> = { v: new JSONNumber(String(protocol.version)), action, id: "r" + ++sequence, channel: state.channel.id, ...(state.room === undefined ? {} : { room: state.room }) };
     if (event) {
       if (event.direction !== "client_to_server") reject("", "wrong_direction");
@@ -110,7 +121,7 @@ function createRealtimeEngine(document: RuntimeDocument, transport: RealtimeTran
     if (!channel.presence || typeof record.id !== "string" || !/^[a-f0-9]{64}$/.test(record.id) || !Object.hasOwn(record, "data")) reject("", "presence");
     const connections = wireInteger(record.connections); if (connections < (leaving ? 0 : 1)) reject("", "presence");
     const payloadLimits = { ...limits.payload, Bytes: limits.member_bytes };
-    const data = codec.decode(channel.presence, writeWire(record.data, payloadLimits), payloadLimits);
+    const data = codec.decode(channel.presence, writeWire(record.data, payloadLimits), payloadLimits, options.strictEvents !== true);
     return immutable({ id: record.id, data, connections });
   };
   const receive = (input: string | Uint8Array): void => {
@@ -126,7 +137,9 @@ function createRealtimeEngine(document: RuntimeDocument, transport: RealtimeTran
       if (type === responses.error) {
         if (typeof frame.code !== "string" || !protocol.codes.includes(frame.code)) reject("", "protocol");
         const error = new RealtimeError(frame.code);
-        if (frame.id === undefined) { notify(error); close(error); return; }
+        // An uncorrelated error (for example a rate-limited or undecodable frame)
+        // affects no pending operation; only a protocol mismatch is fatal.
+        if (frame.id === undefined) { notify(error); if (frame.code === "unsupported_version") close(error); return; }
         if (!semanticID(frame.id)) reject("", "protocol"); const operation = pending.get(frame.id);
         if (!operation) reject("", "correlation");
         // Admission errors may precede channel binding. Other errors retain scope.
@@ -156,7 +169,7 @@ function createRealtimeEngine(document: RuntimeDocument, transport: RealtimeTran
       if (type === responses.event) {
         const event = channel.events.find(event => event.id === frame.event);
         if (!event || event.direction !== "server_to_client" || typeof frame.message_id !== "string" || !uuidPattern.test(frame.message_id) || /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(frame.message_id) || frame.replayed !== undefined && typeof frame.replayed !== "boolean" || !Object.hasOwn(frame, "payload")) reject("", "event");
-        const payload = immutable(codec.decode(event.payload, writeWire(frame.payload, limits.payload), limits.payload));
+        const payload = immutable(codec.decode(event.payload, writeWire(frame.payload, limits.payload), limits.payload, options.strictEvents !== true));
         const messageID = frame.message_id.toLowerCase(); if (seen.has(messageID)) return;
         if (seen.size >= limits.deduplication_entries) seen.delete(seen.values().next().value!); seen.add(messageID);
         const info: EventInfo = Object.freeze({ messageID, replayed: frame.replayed === true, ...(typeof frame.room === "string" ? { room: frame.room } : {}) });

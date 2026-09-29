@@ -35,7 +35,7 @@ func (r partitionedRow) Scan(destinations ...any) error {
 	return r.row.Scan(all...)
 }
 
-func scanJoined[N, P any](row database.Row, target Definition[N], pivot Definition[P]) (relation.Link[N, P], error) {
+func scanJoined[N, P any](row database.Row, target *Definition[N], pivot *Definition[P]) (relation.Link[N, P], error) {
 	n, p := len(target.columns), len(pivot.columns)
 	model, err := target.scan(partitionedRow{row, 0, n, n + p})
 	if err != nil {

@@ -25,11 +25,16 @@ import (
 //go:embed runtime/*.ts
 var runtimeSources embed.FS
 
-const maxOutputBytes = 8 << 20
+// maxOutputBytes shares the artifact publisher's bound, which admits a module
+// embedding the largest accepted manifest.
+const maxOutputBytes = generate.MaxArtifactBytes
 
 type renderer struct {
 	document manifest.Document
 	names    map[contract.TypeID]string
+	// received names tolerant variants of server-output schemas whose values can
+	// contain enum cases; other schemas are received unchanged.
+	received map[contract.TypeID]string
 	out      bytes.Buffer
 }
 
@@ -42,7 +47,11 @@ func Render(source *manifest.Manifest) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	names, err := contractname.Schemas(document.Types)
+	reserved, err := reservedNames()
+	if err != nil {
+		return nil, err
+	}
+	names, err := contractname.Schemas(document.Types, func(name string) bool { return reserved[name] })
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +60,7 @@ func Render(source *manifest.Manifest) ([]byte, error) {
 			return nil, fault.New(fault.Invalid, "TypeScript array length exceeds its exact index range")
 		}
 	}
-	r := renderer{document: document, names: names}
+	r := renderer{document: document, names: names, received: receivedNames(document, names, reserved)}
 	fmt.Fprintf(&r.out, "%s\n// Requires ES2022 and DOM transport types; no runtime package imports.\n\n", generate.ArtifactHeader)
 	fmt.Fprintf(&r.out, "export const manifestVersion = %d as const;\n", manifest.Version)
 	fmt.Fprintf(&r.out, "const runtimePolicy: RuntimePolicy = { maxDepth: %d, decimalDigits: %d, metadataBytes: %d, messageBytes: %d };\n", contract.MaxJSONDepth, decimal.MaxDigits, manifest.MaxBytes, i18n.MaxTextBytes)
@@ -72,8 +81,10 @@ func Render(source *manifest.Manifest) ([]byte, error) {
 	}
 	// A JSON string literal is also a safe TypeScript string literal, including
 	// escaped line separators and hostile declaration names. Preserve exact JSON.
+	// A string keeps the compiler's work independent of manifest size; the
+	// runtime parses it lazily on first use rather than at import.
 	literal, _ := json.Marshal(string(data))
-	fmt.Fprintf(&r.out, "\nexport const manifestJSON = %s;\nconst runtimeDocument = loadRuntimeDocument();\nconst contracts = new WireCodec(runtimeDocument.types);\n\n", literal)
+	fmt.Fprintf(&r.out, "\nexport const manifestJSON = %s;\nlet runtimeDocumentCache: RuntimeDocument | undefined;\nfunction runtimeDocument(): RuntimeDocument { return runtimeDocumentCache ??= loadRuntimeDocument(); }\nlet contractsCache: WireCodec | undefined;\nfunction contracts(): WireCodec { return contractsCache ??= new WireCodec(runtimeDocument().types); }\n\n", literal)
 	r.types()
 	r.http()
 	r.realtime()
@@ -86,7 +97,110 @@ func Render(source *manifest.Manifest) ([]byte, error) {
 func quote(value string) string                        { data, _ := json.Marshal(value); return string(data) }
 func (r *renderer) typeName(id contract.TypeID) string { return r.names[id] }
 
-func (r *renderer) expression(typ contract.Type) string {
+// receivedName is the client type of a decoded server value.
+func (r *renderer) receivedName(id contract.TypeID) string {
+	if name, ok := r.received[id]; ok {
+		return name
+	}
+	return r.names[id]
+}
+
+// receivedNames selects schemas reachable from responses, errors, server events
+// and presence whose values can contain enum cases. Their tolerant variants
+// admit UnknownEnumValue, so a deployed client can receive additive values.
+func receivedNames(document manifest.Document, names map[contract.TypeID]string, reserved map[string]bool) map[contract.TypeID]string {
+	types := make(map[contract.TypeID]contract.Type, len(document.Types))
+	for _, typ := range document.Types {
+		types[typ.ID] = typ
+	}
+	children := func(typ contract.Type) []contract.TypeID {
+		var result []contract.TypeID
+		for _, property := range typ.Properties {
+			result = append(result, property.Type)
+		}
+		for _, variant := range typ.Variants {
+			result = append(result, variant.Type)
+		}
+		if typ.Element != "" {
+			result = append(result, typ.Element)
+		}
+		return result
+	}
+	enums := make(map[contract.TypeID]bool)
+	for changed := true; changed; {
+		changed = false
+		for _, typ := range document.Types {
+			if enums[typ.ID] {
+				continue
+			}
+			enum := len(typ.Cases) != 0
+			for _, child := range children(typ) {
+				enum = enum || enums[child]
+			}
+			if enum {
+				enums[typ.ID], changed = true, true
+			}
+		}
+	}
+	var queue []contract.TypeID
+	if document.ErrorType != "" {
+		queue = append(queue, document.ErrorType)
+	}
+	for _, op := range document.HTTP {
+		if op.Response != nil && op.Response.Type != "" {
+			queue = append(queue, op.Response.Type)
+		}
+	}
+	if document.Realtime != nil {
+		for _, channel := range document.Realtime.Channels {
+			if channel.Presence != "" {
+				queue = append(queue, channel.Presence)
+			}
+			for _, event := range channel.Events {
+				if event.Direction == websocket.ServerToClient {
+					queue = append(queue, event.Payload)
+				}
+			}
+		}
+	}
+	reachable := make(map[contract.TypeID]bool)
+	for len(queue) != 0 {
+		id := queue[0]
+		queue = queue[1:]
+		if reachable[id] {
+			continue
+		}
+		reachable[id] = true
+		queue = append(queue, children(types[id])...)
+	}
+	taken := make(map[string]bool, len(names))
+	for _, name := range names {
+		taken[name] = true
+	}
+	result := make(map[contract.TypeID]string)
+	for _, typ := range document.Types {
+		if !reachable[typ.ID] || !enums[typ.ID] {
+			continue
+		}
+		name := names[typ.ID] + "Received"
+		for taken[name] || reserved[name] {
+			name += "_"
+		}
+		taken[name] = true
+		result[typ.ID] = name
+	}
+	return result
+}
+
+func (r *renderer) expression(typ contract.Type) string { return r.renderExpression(typ, false) }
+
+// renderExpression renders a declared schema, or with received its tolerant
+// server-output variant referring to other received names.
+func (r *renderer) renderExpression(typ contract.Type, received bool) string {
+	typeName := r.typeName
+	if received {
+		typeName = r.receivedName
+	}
 	var result string
 	switch typ.Kind {
 	case contract.BooleanKind:
@@ -113,17 +227,17 @@ func (r *renderer) expression(typ contract.Type) string {
 			if !property.Required {
 				optional = "?"
 			}
-			fields = append(fields, "readonly "+quote(property.Name)+optional+": "+r.typeName(property.Type))
+			fields = append(fields, "readonly "+quote(property.Name)+optional+": "+typeName(property.Type))
 		}
 		result = "{ " + strings.Join(fields, "; ") + " }"
 	case contract.UnionKind:
 		variants := make([]string, 0, len(typ.Variants))
 		for _, variant := range typ.Variants {
-			variants = append(variants, "({ readonly "+quote(typ.Discriminator)+": "+quote(variant.Tag)+" } & "+r.typeName(variant.Type)+")")
+			variants = append(variants, "({ readonly "+quote(typ.Discriminator)+": "+quote(variant.Tag)+" } & "+typeName(variant.Type)+")")
 		}
 		result = strings.Join(variants, " | ")
 	case contract.ArrayKind:
-		result = "ReadonlyArray<" + r.typeName(typ.Element) + ">"
+		result = "ReadonlyArray<" + typeName(typ.Element) + ">"
 		if length, set := typ.Length.Get(); set {
 			result += " & { readonly length: " + strconv.Itoa(length) + " }"
 		}
@@ -143,9 +257,9 @@ func (r *renderer) expression(typ contract.Type) string {
 			}
 			key = strings.Join(values, " | ")
 		}
-		result = "Readonly<Partial<Record<" + key + ", " + r.typeName(typ.Element) + ">>>"
+		result = "Readonly<Partial<Record<" + key + ", " + typeName(typ.Element) + ">>>"
 	case contract.AliasKind, contract.QuotedKind:
-		result = "Exclude<" + r.typeName(typ.Element) + ", null>"
+		result = "Exclude<" + typeName(typ.Element) + ", null>"
 	case contract.DynamicKind:
 		result = "Exclude<JSONValue, null>"
 	}
@@ -159,6 +273,9 @@ func (r *renderer) expression(typ contract.Type) string {
 			values = append(values, literal)
 		}
 		result = strings.Join(values, " | ")
+		if received {
+			result += " | UnknownEnumValue"
+		}
 	}
 	if typ.Nullable {
 		result = "(" + result + ") | null"
@@ -171,21 +288,34 @@ func (r *renderer) types() {
 	for _, typ := range r.document.Types {
 		fmt.Fprintf(&r.out, "export type %s = %s;\n", r.typeName(typ.ID), r.expression(typ))
 	}
+	for _, typ := range r.document.Types {
+		if name, ok := r.received[typ.ID]; ok {
+			fmt.Fprintf(&r.out, "/** Server output of %s; unknown enum values decode as UnknownEnumValue. */\nexport type %s = %s;\n", r.typeName(typ.ID), name, r.renderExpression(typ, true))
+		}
+	}
 	r.out.WriteString("\nexport interface ContractTypes {\n")
 	for _, typ := range r.document.Types {
 		fmt.Fprintf(&r.out, "  readonly %s: %s;\n", quote(string(typ.ID)), r.typeName(typ.ID))
 	}
+	r.out.WriteString("}\n\n/** Tolerantly decoded server output for each declared schema. */\nexport interface ReceivedContractTypes {\n")
+	for _, typ := range r.document.Types {
+		fmt.Fprintf(&r.out, "  readonly %s: %s;\n", quote(string(typ.ID)), r.receivedName(typ.ID))
+	}
 	r.out.WriteString("}\n\n")
 	r.out.WriteString(`/** Decode a raw network value using a declared schema and resource bounds. */
 export function decodeContract<K extends keyof ContractTypes>(type: K, input: string | Uint8Array, limits: JSONLimits = defaultJSONLimits): ContractTypes[K] {
-  return contracts.decode(type, input, limits) as ContractTypes[K];
+  return contracts().decode(type, input, limits) as ContractTypes[K];
+}
+/** Decode server output tolerantly: unknown properties are ignored and unknown enum values become UnknownEnumValue. */
+export function decodeReceived<K extends keyof ReceivedContractTypes>(type: K, input: string | Uint8Array, limits: JSONLimits = defaultJSONLimits): ReceivedContractTypes[K] {
+  return contracts().decode(type, input, limits, true) as ReceivedContractTypes[K];
 }
 export function encodeContract<K extends keyof ContractTypes>(type: K, input: ContractTypes[K], limits: JSONLimits = defaultJSONLimits): string {
-  return contracts.encode(type, input, limits);
+  return contracts().encode(type, input, limits);
 }
 /** Validate and own a client value, including applying a declared identity brand. */
 export function contractValue<K extends keyof ContractTypes>(type: K, input: unknown, limits: JSONLimits = defaultJSONLimits): ContractTypes[K] {
-  return decodeContract(type, contracts.encode(type, input, limits), limits);
+  return decodeContract(type, contracts().encode(type, input, limits), limits);
 }
 `)
 }
@@ -229,7 +359,18 @@ func (r *renderer) request(op manifest.Operation) string {
 	}
 	if op.Body != nil {
 		body := r.typeName(op.Body.Type)
-		if op.Body.MediaType == "application/x-www-form-urlencoded" {
+		if raw := op.Body.Raw; raw != nil {
+			media := make([]string, len(raw.MediaTypes))
+			for i, declared := range raw.MediaTypes {
+				media[i] = quote(string(declared))
+			}
+			// A single declared media type is the default.
+			optional := ""
+			if len(media) == 1 {
+				optional = "?"
+			}
+			body = "{ readonly data: RawData; readonly mediaType" + optional + ": " + strings.Join(media, " | ") + " }"
+		} else if op.Body.MediaType == "application/x-www-form-urlencoded" {
 			body = r.parameters(op.Body.Fields)
 		} else if op.Body.Type == "" {
 			parts := make([]string, 0, len(op.Body.Parts))
@@ -258,17 +399,31 @@ func (r *renderer) request(op manifest.Operation) string {
 }
 
 func (r *renderer) response(op manifest.Operation) string {
+	if op.Redirect {
+		return "RedirectResult<" + strconv.Itoa(op.Status) + ">"
+	}
 	if op.Response != nil && op.Response.File != nil {
 		return "FileResult"
 	}
 	if op.Response == nil || op.Route.Method == foundryhttp.HEAD {
 		return "void"
 	}
-	return r.typeName(op.Response.Type)
+	value := r.receivedName(op.Response.Type)
+	if op.Response.MediaType == foundryhttp.EventStreamMediaType {
+		return "EventStreamResult<" + value + ">"
+	}
+	if len(op.Statuses) != 0 {
+		statuses := make([]string, len(op.Statuses))
+		for i, status := range op.Statuses {
+			statuses[i] = strconv.Itoa(status)
+		}
+		return "StatusResult<" + strings.Join(statuses, " | ") + ", " + value + ">"
+	}
+	return value
 }
 
 func (r *renderer) http() {
-	fmt.Fprintf(&r.out, "\nexport type ErrorResponse = %s;\nexport interface Operations {\n", r.typeName(r.document.ErrorType))
+	fmt.Fprintf(&r.out, "\nexport type ErrorResponse = %s;\nexport interface Operations {\n", r.receivedName(r.document.ErrorType))
 	for _, op := range r.document.HTTP {
 		codes := make([]string, len(op.Errors))
 		for i, code := range op.Errors {
@@ -278,15 +433,16 @@ func (r *renderer) http() {
 	}
 	r.out.WriteString("}\nexport interface API {\n")
 	for _, op := range r.document.HTTP {
+		r.out.WriteString(documentationComment(op.Route.Documentation))
 		fmt.Fprintf(&r.out, "  %s(request: Operations[%s][\"request\"], options?: CallOptions): Promise<Operations[%s][\"response\"]>;\n", quote(op.Name), quote(op.Name), quote(op.Name))
 	}
-	r.out.WriteString("}\nexport function createClient(transport: HTTPTransport, options: ClientOptions = {}): API {\n  const engine = createHTTPInvoker(runtimeDocument, transport, options);\n  return Object.freeze({\n")
+	r.out.WriteString("}\nexport function createClient(transport: HTTPTransport, options: ClientOptions = {}): API {\n  const engine = createHTTPInvoker(runtimeDocument(), transport, options);\n  return Object.freeze({\n")
 	for _, op := range r.document.HTTP {
 		fmt.Fprintf(&r.out, "    [%s]: (request: Operations[%s][\"request\"], options?: CallOptions) => engine.invoke(%s, request, options) as Promise<Operations[%s][\"response\"]>,\n", quote(op.Name), quote(op.Name), quote(op.Name), quote(op.Name))
 	}
 	r.out.WriteString("  });\n}\n")
 	r.out.WriteString(`export function validateRequest<K extends keyof Operations>(operation: K, input: Operations[K]["request"], options: ClientOptions = {}): ValidationReport {
-  return createHTTPInvoker(runtimeDocument, async () => { throw new Error("Validation cannot send requests"); }, options).validate(operation, input);
+  return createHTTPInvoker(runtimeDocument(), async () => { throw new Error("Validation cannot send requests"); }, options).validate(operation, input);
 }
 `)
 }
@@ -300,7 +456,7 @@ func (r *renderer) realtime() {
 		name := "Channel_" + contractname.Symbol(string(channel.ID))
 		presence := "never"
 		if channel.Presence != "" {
-			presence = r.typeName(channel.Presence)
+			presence = r.receivedName(channel.Presence)
 		}
 		fmt.Fprintf(&r.out, "export interface %s {\n  subscribe(options?: SubscribeOptions): Promise<readonly PresenceMember<%s>[]>;\n  unsubscribe(options?: CallOptions): Promise<void>;\n  dispose(): void;\n", name, presence)
 		if channel.Presence != "" {
@@ -309,7 +465,7 @@ func (r *renderer) realtime() {
 		r.out.WriteString("  readonly on: {\n")
 		for _, event := range channel.Events {
 			if event.Direction == websocket.ServerToClient {
-				fmt.Fprintf(&r.out, "    %s(handler: (payload: %s, info: EventInfo) => void): () => void;\n", quote(event.Name), r.typeName(event.Payload))
+				fmt.Fprintf(&r.out, "    %s(handler: (payload: %s, info: EventInfo) => void): () => void;\n", quote(event.Name), r.receivedName(event.Payload))
 			}
 		}
 		r.out.WriteString("  };\n  readonly publish: {\n")
@@ -332,7 +488,7 @@ func (r *renderer) realtime() {
 		}
 		fmt.Fprintf(&r.out, "    %s(room%s: %s): Channel_%s;\n", quote(channel.Name), optional, r.typeName(channel.Room.Type), contractname.Symbol(string(channel.ID)))
 	}
-	r.out.WriteString("  };\n}\nexport function createRealtime(transport: RealtimeTransport, options: RealtimeOptions = {}): Realtime {\n  const engine = createRealtimeEngine(runtimeDocument, transport, options);\n  return Object.freeze({ close: () => engine.close(), channels: Object.freeze({\n")
+	r.out.WriteString("  };\n}\nexport function createRealtime(transport: RealtimeTransport, options: RealtimeOptions = {}): Realtime {\n  const engine = createRealtimeEngine(runtimeDocument(), transport, options);\n  return Object.freeze({ close: () => engine.close(), channels: Object.freeze({\n")
 	for _, channel := range r.document.Realtime.Channels {
 		optional := "?"
 		if channel.OwnedRooms {
@@ -340,7 +496,7 @@ func (r *renderer) realtime() {
 		}
 		presence := "never"
 		if channel.Presence != "" {
-			presence = r.typeName(channel.Presence)
+			presence = r.receivedName(channel.Presence)
 		}
 		fmt.Fprintf(&r.out, "    [%s]: (room%s: %s): Channel_%s => {\n      const bound = engine.room(%s, room);\n      return Object.freeze({\n        subscribe: (options?: SubscribeOptions) => bound.subscribe(options) as Promise<readonly PresenceMember<%s>[]>,\n        unsubscribe: (options?: CallOptions) => bound.unsubscribe(options),\n        dispose: () => bound.dispose(),\n", quote(channel.Name), optional, r.typeName(channel.Room.Type), contractname.Symbol(string(channel.ID)), quote(channel.Name), presence)
 		if channel.Presence != "" {
@@ -349,7 +505,7 @@ func (r *renderer) realtime() {
 		r.out.WriteString("        on: Object.freeze({\n")
 		for _, event := range channel.Events {
 			if event.Direction == websocket.ServerToClient {
-				fmt.Fprintf(&r.out, "          [%s]: (handler: (payload: %s, info: EventInfo) => void) => bound.on(%s, (payload, info) => handler(payload as %s, info)),\n", quote(event.Name), r.typeName(event.Payload), quote(event.Name), r.typeName(event.Payload))
+				fmt.Fprintf(&r.out, "          [%s]: (handler: (payload: %s, info: EventInfo) => void) => bound.on(%s, (payload, info) => handler(payload as %s, info)),\n", quote(event.Name), r.receivedName(event.Payload), quote(event.Name), r.receivedName(event.Payload))
 			}
 		}
 		r.out.WriteString("        }),\n        publish: Object.freeze({\n")
@@ -365,4 +521,36 @@ func (r *renderer) realtime() {
 		r.out.WriteString("        }),\n      });\n    },\n")
 	}
 	r.out.WriteString("  }) });\n}\n")
+}
+
+// documentationComment renders route documentation as an indented TSDoc block.
+// Text cannot close the comment early.
+func documentationComment(documentation *foundryhttp.RouteDocumentation) string {
+	if documentation == nil {
+		return ""
+	}
+	var lines []string
+	if documentation.Summary != "" {
+		lines = append(lines, documentation.Summary)
+	}
+	if documentation.Description != "" {
+		if len(lines) != 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, strings.Split(documentation.Description, "\n")...)
+	}
+	if documentation.Deprecated {
+		lines = append(lines, "@deprecated")
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	var result strings.Builder
+	result.WriteString("  /**\n")
+	for _, line := range lines {
+		line = strings.ReplaceAll(strings.ReplaceAll(line, "*/", "*\\/"), "\t", "  ")
+		result.WriteString(strings.TrimRight("   * "+line, " ") + "\n")
+	}
+	result.WriteString("   */\n")
+	return result.String()
 }

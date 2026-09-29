@@ -203,6 +203,17 @@ func TestAutomaticAuditUsesStoredChangesAndConcreteFields(t *testing.T) {
 				if !present || !email.Assigned() || email.Changed() {
 					return errors.New("assignment/dirty tracking changed during audit")
 				}
+				// Updates keep only touched fields; the untouched balance is omitted.
+				if fields.Balance.IsSet() || fields.Preferences.IsSet() {
+					return errors.New("update audit stored untouched fields")
+				}
+				timeline, err := audit.ModelTimeline(ctx, tx, c.recorder, account.FoundryReference(), audit.TimelineRequest{Size: 1})
+				if err != nil {
+					return err
+				}
+				if len(timeline.Items) != 1 || timeline.Items[0].ID() != row.ID() || !timeline.Next.IsSet() {
+					return errors.New("keyset history did not start with the latest update")
+				}
 				return nil
 			}
 		}

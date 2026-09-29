@@ -27,6 +27,8 @@ type Field[T any] interface {
 	decode(*T, string) error
 	assign(*T, any) error
 	validate(*T) error
+	table() bool
+	entries(*T) int
 }
 
 func (k Key[T, V]) snapshot() Field[T] { return k }
@@ -56,6 +58,20 @@ func (k Key[T, V]) valid() bool {
 	return settingName.MatchString(k.id) && k.access != nil && k.parse != nil && k.declarationErr == nil
 }
 func (k Key[T, V]) sensitive() bool { return k.private }
+
+// table reports a named collection (a map keyed by a string kind) decoded
+// from a JSON object, such as the generated connection tables.
+func (k Key[T, V]) table() bool {
+	typ := reflect.TypeFor[V]()
+	return typ.Kind() == reflect.Map && typ.Key().Kind() == reflect.String
+}
+func (k Key[T, V]) entries(target *T) int {
+	field := k.access(target)
+	if field == nil {
+		return 0
+	}
+	return reflect.ValueOf(*field).Len()
+}
 func (k Key[T, V]) validate(target *T) error {
 	if k.check == nil {
 		return nil
@@ -120,9 +136,19 @@ type Lookup func(string) (string, bool)
 
 // Inputs always applies files in order, then environment, then typed overrides.
 // Environment names use PREFIX__SECTION__FIELD for a section.field declaration.
+// NAME_FILE instead reads the value from the named regular file (at most
+// MaxTableBytes, one trailing newline removed); setting both is an error.
+//
+// Environ, such as os.Environ, additionally enables per-entry overrides inside
+// named collections: PREFIX__SERVICES__DATABASE__CONNECTIONS__MAIN__PRIMARY__PASSWORD
+// sets primary.password of entry "main" (entry names of lowercase letters,
+// digits and single underscores). They merge into the collection supplied by a
+// file or the collection's own variable, or create entries in an empty one,
+// then decode through the same element schema. _FILE applies to them too.
 type Inputs[T any] struct {
 	Files       []Values
 	Environment Lookup
+	Environ     func() []string
 	Prefix      string
 	Overrides   []Override[T]
 	Validate    func(T) error
@@ -172,6 +198,11 @@ func New[T any](fields ...Field[T]) (*Schema[T], error) {
 		schema.byName[name] = field
 		envNames[env] = name
 	}
+	for env, name := range envNames {
+		if prior, exists := envNames[env+"_FILE"]; exists {
+			return nil, fault.New(fault.Duplicate, "configuration environment names collide with a _FILE variant: "+name+" and "+prior)
+		}
+	}
 	for _, field := range schema.fields {
 		name := field.name()
 		for index := strings.LastIndexByte(name, '.'); index >= 0; index = strings.LastIndexByte(name, '.') {
@@ -215,6 +246,9 @@ func (s *Schema[T]) Load(defaults T, inputs Inputs[T]) (result T, report Report,
 	for _, field := range s.fields {
 		sources[field.name()] = "defaults"
 	}
+	// Named collections remember their last supplied text so per-entry
+	// environment overrides merge into it instead of replacing it.
+	tables := make(map[string]string)
 	apply := func(name, raw, source string) error {
 		field, exists := s.byName[name]
 		if !exists {
@@ -224,6 +258,9 @@ func (s *Schema[T]) Load(defaults T, inputs Inputs[T]) (result T, report Report,
 			return fault.Wrap(fault.Invalid, "cannot decode configuration field "+name+" from "+source, err)
 		}
 		sources[name] = source
+		if field.table() {
+			tables[name] = raw
+		}
 		return nil
 	}
 	for _, file := range inputs.Files {
@@ -244,8 +281,31 @@ func (s *Schema[T]) Load(defaults T, inputs Inputs[T]) (result T, report Report,
 	if inputs.Environment != nil {
 		for _, field := range s.fields {
 			env := environmentName(inputs.Prefix, field.name())
-			if raw, exists := inputs.Environment(env); exists {
-				if err := apply(field.name(), raw, "environment:"+env); err != nil {
+			raw, source, exists, err := environmentValue(inputs.Environment, env)
+			if err != nil {
+				return result, report, err
+			}
+			if exists {
+				if err := apply(field.name(), raw, source); err != nil {
+					return result, report, err
+				}
+			}
+		}
+	}
+	if inputs.Environ != nil {
+		environ := inputs.Environ()
+		for _, field := range s.fields {
+			if !field.table() {
+				continue
+			}
+			env := environmentName(inputs.Prefix, field.name())
+			base, supplied := tables[field.name()]
+			merged, changed, err := mergeEntryOverrides(environ, env, base, supplied || field.entries(&value) == 0)
+			if err != nil {
+				return result, report, err
+			}
+			if changed {
+				if err := apply(field.name(), merged, "environment:"+env+"__*"); err != nil {
 					return result, report, err
 				}
 			}

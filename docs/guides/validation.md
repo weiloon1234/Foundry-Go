@@ -67,8 +67,17 @@ failures remain separate outcomes.
 `All` checks children in order and accumulates bounded diagnostics. `Bail` stops
 its own sequence after the first rejection; an enclosing `All` may continue
 with other fields. `Each` validates slice elements in order and includes their
-indices in issue paths. Configure traversal, depth, issue and text limits through
-`validation.Limits`; HTTP uses `EndpointLimits.Validation`.
+indices in issue paths. `EachKey` and `EachValue` validate map keys and values in
+ascending key order with entry paths such as `/labels/en`; they accept native
+string or integer keys and reject key types with custom codecs. Configure
+traversal, depth, issue and text limits through `validation.Limits`; HTTP uses
+`EndpointLimits.Validation`.
+
+A tree of framework rules runs inline in the caller's goroutine. Valid input
+allocates no issue storage and no JSON Pointer path strings; paths are built only
+for rejected values. A tree containing an application callback (`Custom`,
+`Dynamic`, `Hook`, a lookup, `Provide` or image measurement) runs in one owned
+goroutine per `Check`, as before.
 
 For explicit adapters, `DefineField[T, V]` is the typed constructor used by
 generation. Generated DTO fields are the normal application entry point.
@@ -101,7 +110,23 @@ must have an accessible Go selector and a type the generating package can name.
 `Custom[T]` takes a `Spec` and `func(context.Context, T) (bool, error)`. Return
 `(false, nil)` to reject input and an error when execution fails. Callbacks must
 finish their work and observe cancellation; Foundry waits for their resource
-ownership to end. Panics and `runtime.Goexit` become internal failures.
+ownership to end. Panics and `runtime.Goexit` become internal failures. Panics
+in selectors and value methods are also internal failures. In a tree without
+application callbacks those run inline, so `runtime.Goexit` there ends the
+calling goroutine like any other Go function.
+
+`Dynamic[T]` chooses the rejection message at check time. Its callback returns
+the zero `Rejection` to accept, `validation.Reject(text)` for literal public
+text, or `validation.RejectWith(generatedMessage, args)` for a typed catalog
+message with check-time arguments such as a remaining quota. The spec supplies
+the stable code and declared message; `Reject("")` uses that declared message.
+
+`Hook[T]` runs an application callback after the preceding rules in its
+sequence and receives a `*Report`. `report.Add("items", "3", "sku")` records an
+issue at `/items/3/sku` relative to the hook's input; `AddRejection` adds a
+check-time message. Place a hook after field rules in `Bail` when it needs them
+to pass first. Reports are valid only during the call, respect the issue cap and
+are not safe for concurrent use. Returned errors are execution failures.
 
 Reuse a custom rule value when applying the same semantic ID to multiple fields.
 Different definitions with one ID are rejected. Built-in `foundry.*` IDs are
@@ -151,6 +176,8 @@ requires a non-nil pointer. Ordinary pointers do not distinguish JSON omission
 from null.
 
 `OneOf` and `NotOneOf` retain native scalar types and exact integer values.
+`DistinctIgnoringCase` compares text elements after Unicode case folding and is
+server-only.
 They own their membership lists and reject duplicate or invalid declarations.
 `Enum` uses the existing generated descriptor, including its actual JSON cases.
 `MinItems` and `MaxItems` accept ordinary or named slices; nil and empty slices
@@ -164,7 +191,9 @@ String rules include `Email`, `URL`, `IP`, `IPv4`, `IPv6`, `UUID`, `Date`,
 `Time`, `DateTime`, `LocalDateTime` and `JSON`. Named string types retain their
 type. Email accepts a single bare mailbox without display names or comments;
 URL requires an absolute HTTP/HTTPS URL with a hostname. These rules perform no
-DNS or reachability checks. IP literals reject zones and CIDR suffixes. UUID
+DNS or reachability checks. `DateFormat[S](layout)` accepts text written exactly
+in a Go reference-time layout such as `"02/01/2006"`; the value must format back
+to the same text, and the layout itself must round-trip. IP literals reject zones and CIDR suffixes. UUID
 and temporal checks reuse Foundry's parsers; UUID representation permits the nil
 UUID. JSON uses the shared strict parser and rejects duplicate object keys.
 
@@ -213,8 +242,26 @@ in their own calendar order without choosing an application timezone. Native
 `time.Time` is also supported within the framework's year range. Nanoseconds are
 retained in comparisons and metadata; a future client must not reduce these
 checks to JavaScript Date's millisecond precision. Bound rules capture a declared
-value and do not read the current clock. Dynamic business-time checks use an
-explicitly injected clock through a custom rule.
+value and do not read the current clock.
+
+Relative rules read the clock at every check:
+
+```go
+future := validation.AfterNow[temporal.DateTime](services.Time())
+dueDate := validation.AfterOrEqualToday[temporal.Date](services.Time())
+```
+
+`AfterNow`, `AfterOrEqualNow`, `BeforeNow` and `BeforeOrEqualNow` accept
+`time.Time`, `temporal.DateTime` and `temporal.LocalDateTime`; local values
+compare with the current wall time in the service's timezone. `AfterToday`,
+`AfterOrEqualToday`, `BeforeToday` and `BeforeOrEqualToday` also accept
+`temporal.Date` and compare calendar dates with today in that timezone; instants
+are first converted into it. Pass the application's `temporal.Service` so a
+frozen test clock and the configured `TimeZone` apply. A zero `temporal.Service`
+makes the declaration invalid instead of silently reading the host clock in UTC.
+A clock failure is an execution failure. These
+rules are server-only and have their own message keys, such as
+`validation.after_now`.
 
 
 ## Required, prohibited and empty content
@@ -295,6 +342,35 @@ their own labels; an unlabeled nested field does not inherit its parent's name.
 Invalid or oversized labels fail declaration validation, and labels count toward
 the existing aggregate metadata limit. Wire decoding errors omit the label.
 
+## Numbers and decimals
+
+`DecimalMin`, `DecimalMax` and `DecimalBetween` bound exact decimals.
+`DecimalGreaterThan`, `DecimalGreaterOrEqual`, `DecimalLessThan` and
+`DecimalLessOrEqual` compare two decimal fields through `Compare`.
+`DecimalMaxPlaces(n)` limits significant fractional digits; decimals are
+canonical, so `1.50` has one place. `DecimalMultipleOf(step)` requires an exact
+integer quotient for a positive step such as `0.25`. None of these convert
+through floating point.
+
+## Image dimensions
+
+Import `validation/imaging` as `imagingvalidation`:
+
+```go
+avatar := validation.Bail(
+    validation.FileMaxSize[foundryhttp.UploadedFile](5 << 20),
+    validation.FileContentTypes[foundryhttp.UploadedFile]("image/png", "image/jpeg"),
+    imagingvalidation.Dimensions[foundryhttp.UploadedFile](imaging.DefaultLimits(),
+        validation.DimensionConstraints{MinWidth: 128, MaxWidth: 4096, RatioWidth: 1, RatioHeight: 1}),
+)
+```
+
+The rule reads at most `Limits.InputBytes` of the captured file and uses
+`imaging.Inspect`; pixels are not decoded. Orientations that rotate by 90 degrees
+swap width and height. Absent, oversized, unsupported or malformed files reject;
+open/read failures are execution failures. `validation.Dimensions` accepts any
+`ImageMeasurer` for other file sources.
+
 ## Advisory database rules
 
 Import `validation/database` as `databasevalidation`. The adapter composes the
@@ -342,6 +418,50 @@ The adapter uses `query.Lookup` for typed stored-field lookup and the base
 `validation.Lookup[T]` interface for validation composition. This keeps ordinary
 validation independent of SQL and permits other explicitly injected, typed
 lookup implementations without a separate error or message system.
+`databasevalidation.Lookup(db, source, field)` returns that typed lookup for use
+with any base rule, including `validation.ExistsEach`.
+
+## Check-time parameters
+
+A rule tree is declared once, yet some scopes depend on the request: the row
+being updated, or the tenant of the authenticated actor. Declare a typed
+`validation.Slot` and provide its value per check instead of rebuilding rules:
+
+```go
+current := validation.NewSlot[model.ID[models.User]]()
+fields := models.UserFields()
+email := databasevalidation.UniqueIgnoring(db, models.QueryUsers(), fields.Email, fields.ID, current)
+
+body := validation.DefineField("body", func(in UpdateRequest) UpdateUser { return in.Body })
+endpoint := Update.WithValidation(validation.Provide(current,
+    func(_ context.Context, in UpdateRequest) (model.ID[models.User], error) { return in.Path.User, nil },
+    body.Rules(UpdateUserValidationFields().Email.Rules(validation.Optional(email))),
+))
+```
+
+`Provide` derives the value from the check context and the input at its level,
+here the path parameter, and makes it available to the rules below it. A derive
+error is an execution failure. `slot.Value(ctx)` returns an error, never a zero
+value, outside its `Provide`. `UniqueIgnoring` and `validation.Requires` record
+that a rule reads a slot; `Validate`, and therefore endpoint registration,
+rejects the tree until an enclosing `Provide` supplies it. Derive exclusions
+from trusted route or actor data, never from an untrusted body field alone.
+
+`databasevalidation.Scoped(db, scope, field)` derives the whole model scope at
+every check, for example from typed request metadata:
+
+```go
+lookup := databasevalidation.Scoped(db, func(ctx context.Context) (models.UserQuery, error) {
+    tenant, err := tenantOf(ctx) // application-owned typed accessor
+    return models.QueryUsers().Where(fields.TenantID.Eq(tenant)), err
+}, fields.ID)
+member := validation.Exists(lookup)
+```
+
+The returned scope must satisfy the ordinary lookup restrictions; an invalid
+scope or scope error fails execution and is never treated as a missing or
+available value. A scoped lookup also serves `ExistsAll`, `UniqueAll`,
+`ExistsEach` and `UniqueEach`.
 
 ## Transport and later integrations
 
@@ -350,4 +470,5 @@ lookup implementations without a separate error or message system.
 metadata is shared with endpoint inspection. Bounded image inspection is available through [imaging](imaging.md), and
 [localization](localization.md) provides catalogs and label translation. Generated
 clients execute supported rules and explicitly report skipped server checks.
-Automatic request-locale rule-message translation is not yet implemented.
+Request-locale rule messages are described in
+[validation messages](validation-messages.md).

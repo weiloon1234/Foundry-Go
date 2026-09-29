@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/andybalholm/brotli"
+
+	"github.com/weiloon1234/Foundry-Go/internal/admission"
 )
 
 func TestCompressedFlushIsReadableBeforeHandlerReturns(t *testing.T) {
@@ -299,7 +301,7 @@ func TestCompressionCancellationFailureAndPrefixBounds(t *testing.T) {
 	request := httptest.NewRequest("GET", "/", nil).WithContext(ctx)
 	preferences, _ := parseAcceptEncoding([]string{"gzip"})
 	base := &compressionPlainWriter{header: make(http.Header)}
-	response := &compressionResponse{underlying: base, request: request, header: make(http.Header), config: config, preferences: preferences, permits: make(chan struct{}, 1), declaredLength: -1}
+	response := &compressionResponse{underlying: base, request: request, header: make(http.Header), config: config, preferences: preferences, permits: admission.New(1), declaredLength: -1}
 	response.Header().Set("Content-Type", "text/plain")
 	if _, err := response.Write(bytes.Repeat([]byte("x"), config.MinBytes-1)); err != nil {
 		t.Fatal(err)
@@ -323,7 +325,7 @@ func TestCompressionCancellationFailureAndPrefixBounds(t *testing.T) {
 
 	failure := errors.New("write failure")
 	failed := &compressionFailWriter{header: make(http.Header), failure: failure}
-	response = &compressionResponse{underlying: failed, request: httptest.NewRequest("GET", "/", nil), header: make(http.Header), config: config, preferences: preferences, permits: make(chan struct{}, 1), declaredLength: -1}
+	response = &compressionResponse{underlying: failed, request: httptest.NewRequest("GET", "/", nil), header: make(http.Header), config: config, preferences: preferences, permits: admission.New(1), declaredLength: -1}
 	response.Header().Set("Content-Type", "text/plain")
 	_, err := response.Write(bytes.Repeat([]byte("x"), 4096))
 	if err == nil {
@@ -340,7 +342,7 @@ func TestCompressionCancellationFailureAndPrefixBounds(t *testing.T) {
 		t.Fatal("write retried after failure")
 	}
 	response.release()
-	if len(response.permits) != 0 {
+	if response.permits.Active() != 0 {
 		t.Fatal("failed stream retained permit")
 	}
 }
@@ -430,7 +432,7 @@ func TestCompressionResponseControllerRetainsFlushFailures(t *testing.T) {
 					header:         make(http.Header),
 					config:         config,
 					preferences:    preferences,
-					permits:        make(chan struct{}, 1),
+					permits:        admission.New(1),
 					declaredLength: -1,
 				}
 				defer response.release()

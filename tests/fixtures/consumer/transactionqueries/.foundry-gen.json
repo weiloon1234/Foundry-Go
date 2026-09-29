@@ -1,9 +1,9 @@
 {
   "version": 1,
   "files": {
-    "pair_foundry.gen.go": "5d40a50a0a516e6426246d4d05746cab3bf0a8e5d56225e50eb74a2c03531c4b",
-    "record_foundry.gen.go": "a9837b6f4a8b322484379a4490f85f2d7c31f6f1ec54c5dc83fd30214e19165c",
-    "summary_foundry.gen.go": "4ef426ecb80d028d9f4c9b386a97a3c75a2cc2cccdb7b42d09498c33147b717d",
-    "totals_foundry.gen.go": "c00a51de96df9f09d400da48f91a4228e476bf7be51968e020b5a0dfa7335343"
+    "pair_foundry.gen.go": "c3be295ca1c18f964b5f0f2af5e28abf1bf1a67b872c3aba34bbe624f23008b0",
+    "record_foundry.gen.go": "f881d61fae32f9d2881340e677e107760570055970311e793a20d778bf10d5da",
+    "summary_foundry.gen.go": "f82a6322969e363196fe1ae68c18ca4eb9cdac0d1ecac237d93329252137c176",
+    "totals_foundry.gen.go": "44b526c13e3ad17da4348b7dc80fbb68823361cc52ef3b95ed6d3d050f9b602f"
   }
 }

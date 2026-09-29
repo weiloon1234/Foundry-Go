@@ -16,8 +16,9 @@ func (e OptionalAuthenticationEndpoint[P, Q, B, M, R]) WithPreparation(prepare P
 	return e
 }
 
-// WithAuthorization receives the selected guard's concrete actor and validated
-// request before domain/resource work. Configure this before Signed or binding.
+// WithAuthorization receives the selected guard's concrete actor and the
+// prepared request before validation and domain/resource work, so a denied
+// actor never reaches database-backed rules. Configure this before Signed or binding.
 func (e AuthenticatedEndpoint[P, Q, B, M, R]) WithAuthorization(authorize func(context.Context, M, Input[P, Q, B]) error) AuthenticatedEndpoint[P, Q, B, M, R] {
 	e.authorization = &authorize
 	return e

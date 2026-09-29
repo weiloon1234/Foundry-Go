@@ -14,6 +14,9 @@ import (
 
 type Name string
 
+// MaxBatchRows is the keyset page size of batch loads, not a result cap: a
+// batch holds at most owners × supported locales rows. MaxBatchBytes bounds
+// the text retained by one Load or All result.
 const (
 	MaxValueBytes     = 64 << 10
 	MaxFieldsPerOwner = 64

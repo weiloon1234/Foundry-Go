@@ -92,9 +92,9 @@ func TestSubqueryValidationAndResourceBounds(t *testing.T) {
 
 func TestSubqueriesShareTheParameterBudget(t *testing.T) {
 	id := NewScalarField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
-	values := make([]int64, MaxParameters/2+1)
-	inner := SelectValue(cursorQuery().Where(id.In(values...)), id.Value())
-	outer := cursorQuery().Where(id.In(values...), id.InQuery(inner))
+	base := cursorQuery()
+	inner := SelectValue(base.Where(wideScoped(base.Scope(), MaxParameters/2+1)), id.Value())
+	outer := base.Where(wideScoped(base.Scope(), MaxParameters/2+1), id.InQuery(inner))
 	if s, err := outer.Compile(); !errors.Is(err, fault.Invalid) || s.SQL() != "" || len(s.Arguments()) != 0 {
 		t.Fatal("nested statements bypassed the shared parameter bound", err)
 	}

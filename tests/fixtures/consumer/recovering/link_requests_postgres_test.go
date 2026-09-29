@@ -92,13 +92,16 @@ func TestPostgresRecoveryLinkRequestsUseCommittedAddressAndQuota(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := requests.Request(t.Context(), "member@example.test"); err != nil || sent != 1 {
+	t.Cleanup(func() { _ = requests.Close(context.Background()) })
+	// Delivery is owned background work, so response latency does not reveal
+	// whether the account exists; Wait observes the completed dispatch.
+	if err := requests.Request(t.Context(), "member@example.test"); err != nil || requests.Wait(t.Context()) != nil || sent != 1 {
 		t.Fatal("request did not deliver", err)
 	}
 	if delivery.Subject().Email != "current@example.test" || current(t, s).Password == s.member.Password || logs.Len() != 0 {
 		t.Fatal("delivery was not after commit or used wrong address")
 	}
-	if err := requests.Request(t.Context(), "member@example.test"); err != nil || sent != 1 {
+	if err := requests.Request(t.Context(), "member@example.test"); err != nil || requests.Wait(t.Context()) != nil || sent != 1 {
 		t.Fatal("quota repeated lookup/delivery", err)
 	}
 	if _, err := s.reset.Complete(t.Context(), delivery.Token(), plain(t, "another long password")); !errors.Is(err, auth.Unauthenticated) {
@@ -130,14 +133,24 @@ func TestPostgresRecoveryRequestHTTPHasUniformAcknowledgements(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = reset.Close(context.Background()); _ = verify.Close(context.Background()) })
 	router, err := recovering.LinkRoutes(reset, verify, ingress)
 	if err != nil {
 		t.Fatal(err)
+	}
+	settle := func() {
+		if err := reset.Wait(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		if err := verify.Wait(t.Context()); err != nil {
+			t.Fatal(err)
+		}
 	}
 	paths := []string{"/recovery/request-reset", "/recovery/request-verification"}
 	for _, path := range paths {
 		for _, email := range []string{"member@example.test", "absent@example.test"} {
 			response := recoveryHTTP(router, "POST", "https", path, `{"email":"`+email+`"}`, "https://app.test")
+			settle()
 			if response.Code != 204 || response.Body.Len() != 0 || len(response.Result().Cookies()) != 0 || response.Header().Get("Cache-Control") != "no-store" {
 				t.Fatal("request disclosed outcome", response.Code)
 			}
@@ -148,10 +161,12 @@ func TestPostgresRecoveryRequestHTTPHasUniformAcknowledgements(t *testing.T) {
 	}
 	fail = true
 	response := recoveryHTTP(router, "POST", "https", paths[0], `{"email":"member@example.test"}`, "https://app.test")
+	settle()
 	if response.Code != 204 || sent != 3 || logs.Len() == 0 {
 		t.Fatal("delivery failure changed public acknowledgement", response.Code)
 	}
 	quota := recoveryHTTP(router, "POST", "https", paths[0], `{"email":"member@example.test"}`, "https://app.test")
+	settle()
 	if quota.Code != 204 || sent != 3 {
 		t.Fatal("recipient quota leaked or retried")
 	}
@@ -161,6 +176,7 @@ func TestPostgresRecoveryRequestHTTPHasUniformAcknowledgements(t *testing.T) {
 	}
 	update(t, s, recovering.MemberDraft{}.SetEnabled(false))
 	disabled := recoveryHTTP(router, "POST", "https", paths[1], `{"email":"member@example.test"}`, "https://app.test")
+	settle()
 	if disabled.Code != 204 || sent != 3 {
 		t.Fatal("disabled account disclosed or delivered", disabled.Code)
 	}

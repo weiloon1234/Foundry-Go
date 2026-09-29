@@ -149,12 +149,16 @@ type messageUnwrapper struct {
 
 func (w messageUnwrapper) Unwrap() stdhttp.ResponseWriter { w.action(); return w }
 func TestMessagePresenterOwnsBadWrapperMethods(t *testing.T) {
-	for _, action := range []func(){func() { panic("private") }, runtime.Goexit, func() {}} {
+	for _, action := range []func(){func() { panic("private") }, func() {}} {
 		recorder := httptest.NewRecorder()
 		writer := messageUnwrapper{recorder, action}
 		if _, err := findErrorPresenter(writer); err == nil {
 			t.Fatal("bad unwrap accepted")
 		}
+	}
+	// Presenter lookup runs on the caller's goroutine (callback.Invoke).
+	if !exitsGoroutine(func() { _, _ = findErrorPresenter(messageUnwrapper{httptest.NewRecorder(), runtime.Goexit}) }) {
+		t.Fatal("wrapper Goexit was converted into a return")
 	}
 }
 func TestLocaleRetainsNativeWriterCapabilitiesAndFindsBufferOwners(t *testing.T) {
@@ -228,5 +232,55 @@ func TestPathValidationLocalePreferenceAndStartupMismatch(t *testing.T) {
 	failure := decodeFailure(t, response)
 	if response.Code != 422 || failure.Issues[0].Message != "User must contain at least 100 characters." {
 		t.Fatal("presentation failure changed validation", failure)
+	}
+}
+
+// Declared application errors use the catalog when it defines their key; the
+// declared message remains the fallback, and code and status never change.
+func TestDeclaredApplicationErrorsUseCatalogMessages(t *testing.T) {
+	t.Parallel()
+	locked := DefineError("order_locked", 409, "Order is locked.")
+	missing := DefineError("order_expired", 410, "Order expired.")
+	definition, err := locked.MessageDefinition()
+	if err != nil || definition.Key != "http.error.order_locked" || len(definition.Parameters) != 0 {
+		t.Fatal("message definition", definition, err)
+	}
+	if _, err := DefineError("bad code", 409, "x").MessageDefinition(); err == nil {
+		t.Fatal("invalid declaration produced a message definition")
+	}
+	locales, _ := i18n.NewLocaleSet("en", "en", "ms")
+	catalog, err := i18n.NewCatalog(t.Context(), locales, i18n.CatalogOptions{}, append(MessageDefinitions(), definition), map[i18n.LocaleID]map[i18n.MessageKey]i18n.Template{"ms": {
+		"http.error.order_locked": {Text: "Pesanan dikunci."},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, declared := range []ErrorDeclaration{locked, missing} {
+		router, err := NewRouter(patchEndpoint().WithErrors(locked, missing).Handle(func(context.Context, endpointRequest) (EndpointReply, error) {
+			return EndpointReply{}, declared
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		handler, err := ApplyMiddleware(router, Locale(catalog))
+		if err != nil {
+			t.Fatal(err)
+		}
+		info, _ := declared.Description()
+		for _, locale := range []string{"en", "ms"} {
+			req := httptest.NewRequest("PATCH", "/items/"+endpointUserID, strings.NewReader(`{"name":"Jane"}`))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Accept-Language", locale)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, req)
+			failure := decodeFailure(t, response)
+			want := info.Message
+			if locale == "ms" && declared == locked {
+				want = "Pesanan dikunci."
+			}
+			if response.Code != info.Status || failure.Code != info.Code || failure.Message != want {
+				t.Fatal("declared error message", locale, response.Code, failure)
+			}
+		}
 	}
 }

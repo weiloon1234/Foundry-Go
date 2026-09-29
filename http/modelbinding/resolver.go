@@ -15,9 +15,10 @@ import (
 // request result between calls. Define supports custom route keys and scopes;
 // ByKey reuses a generated model query's typed primary-key lookup.
 type Resolver[P, M any] struct {
-	lookup func(context.Context, P) (value.Optional[M], error)
-	check  func() error
-	err    error
+	lookup  func(context.Context, P) (value.Optional[M], error)
+	check   func() error
+	missing func(context.Context, P) error
+	err     error
 }
 
 // Define declares a custom, context-aware lookup. Return an omitted Optional
@@ -28,8 +29,23 @@ func Define[P, M any](lookup func(context.Context, P) (value.Optional[M], error)
 	return Resolver[P, M]{lookup: lookup}
 }
 
+// WithMissing replaces the default 404 for an omitted lookup result. The
+// callback receives the decoded path and returns the error to report, such as a
+// declared application error; returning nil still reports NotFound. It runs in
+// an owned callback and is never invoked for lookup failures.
+func (r Resolver[P, M]) WithMissing(missing func(context.Context, P) error) Resolver[P, M] {
+	if missing == nil {
+		r.err = fault.New(fault.Invalid, "model binding missing handler is nil")
+		return r
+	}
+	r.missing = missing
+	return r
+}
+
 // Validate checks the declaration without resolving a model or opening a
 // transaction. Custom declaration callbacks remain owned until they return.
+// Endpoints validate once at registration; nested resolvers validate each
+// ancestor once through their composed check.
 func (r Resolver[P, M]) Validate() error {
 	if r.err != nil {
 		return r.err
@@ -43,10 +59,11 @@ func (r Resolver[P, M]) Validate() error {
 	return callback.Isolated("validate HTTP model resolver", r.check)
 }
 
-// Resolve performs exactly one lookup, returning 404 for an omitted result.
-// A failed or canceled lookup publishes no partial model. Panic and Goexit
-// remain internal failures; cancellation never abandons a running callback.
-// Resolving a route model does not authorize access or lock the row.
+// Resolve validates the declaration, then performs exactly one lookup, returning
+// 404 (or the WithMissing error) for an omitted result. A failed or canceled
+// lookup publishes no partial model. Panic and Goexit remain internal failures;
+// cancellation never abandons a running callback. Resolving a route model does
+// not authorize access or lock the row.
 func (r Resolver[P, M]) Resolve(ctx context.Context, path P) (M, error) {
 	if ctx == nil {
 		return *new(M), fault.New(fault.Invalid, "model binding requires a context")
@@ -57,6 +74,12 @@ func (r Resolver[P, M]) Resolve(ctx context.Context, path P) (M, error) {
 	if err := r.Validate(); err != nil {
 		return *new(M), err
 	}
+	return r.resolve(ctx, path)
+}
+
+// resolve performs the lookup of an already validated declaration. Registered
+// endpoints and nested parents use it so request paths never revalidate.
+func (r Resolver[P, M]) resolve(ctx context.Context, path P) (M, error) {
 	if err := ctx.Err(); err != nil {
 		return *new(M), err
 	}
@@ -77,7 +100,24 @@ func (r Resolver[P, M]) Resolve(ctx context.Context, path P) (M, error) {
 	}
 	model, present := result.Get()
 	if !present {
-		return *new(M), foundryhttp.NotFound
+		return *new(M), r.absent(ctx, path)
 	}
 	return model, nil
+}
+
+func (r Resolver[P, M]) absent(ctx context.Context, path P) error {
+	if r.missing == nil {
+		return foundryhttp.NotFound
+	}
+	var returned error
+	if owned := callback.Isolated("HTTP model missing handler", func() error { returned = r.missing(ctx, path); return nil }); owned != nil {
+		return foundryhttp.InternalError.WithCause(owned)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if returned == nil {
+		return foundryhttp.NotFound
+	}
+	return returned
 }

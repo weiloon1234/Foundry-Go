@@ -30,6 +30,16 @@ func (s schemaTransactor) Transaction(ctx context.Context, fn func(*database.Tx)
 }
 func registerOutbox(builder *foundation.Builder, s OutboxSettings, source clock.Clock) error {
 	const producerProvider foundation.ProviderID = "foundry.application.outbox-producers"
+	for i, kind := range s.Kernels {
+		switch kind {
+		case foundation.HTTP, foundation.CLI, foundation.Worker, foundation.Scheduler, foundation.WebSocket:
+		default:
+			return fault.New(fault.Invalid, "outbox publisher kernels must name known kernels")
+		}
+		if slices.Contains(s.Kernels[:i], kind) {
+			return fault.New(fault.Duplicate, "outbox publisher kernel is listed more than once")
+		}
+	}
 	requires := []foundation.ProviderID{infrastructure.DatabaseProvider(s.Database)}
 	names := make([]jobs.ConnectionName, 0, len(s.Jobs))
 	for name := range s.Jobs {
@@ -63,7 +73,9 @@ func registerOutbox(builder *foundation.Builder, s OutboxSettings, source clock.
 			return result, nil
 		})
 	}})
-	builder.Register(publisher.Module(OutboxProvider, OutboxKey, []foundation.ProviderID{producerProvider, FeatureDeclarationsProvider}, func(r foundation.Resolver) (*publisher.Publisher, error) {
+	// The module logs publication failures through the application logger and
+	// runs the publisher only under the configured kernels.
+	builder.Register(publisher.KernelModule(OutboxProvider, OutboxKey, s.Kernels, []foundation.ProviderID{producerProvider, FeatureDeclarationsProvider}, func(r foundation.Resolver) (*publisher.Publisher, error) {
 		db, err := foundation.Resolve(r, infrastructure.DatabaseKey(s.Database))
 		if err != nil {
 			return nil, err

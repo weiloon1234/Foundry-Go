@@ -224,7 +224,7 @@ func (p *Plan) validate() error {
 			if err := c.Validate(); err != nil {
 				return err
 			}
-		case S3Disk, R2Disk:
+		case S3Disk, R2Disk, CompatibleDisk:
 			var provider credentials.Provider
 			if disk.Cloud.Credentials != "" {
 				provider = p.options.credentials[disk.Cloud.Credentials]
@@ -233,8 +233,8 @@ func (p *Plan) validate() error {
 					if !ok {
 						return fault.New(fault.Missing, "storage credential source is not configured")
 					}
-					if disk.Driver == R2Disk && c.Mode == credentials.Chain {
-						return fault.New(fault.Invalid, "R2 requires explicit non-chain credentials")
+					if (disk.Driver == R2Disk || disk.Driver == CompatibleDisk) && c.Mode == credentials.Chain {
+						return fault.New(fault.Invalid, "R2 and S3-compatible disks require explicit non-chain credentials")
 					}
 				}
 				provider = credentials.ProviderFunc(func(context.Context) (credentials.Value, error) {
@@ -261,6 +261,7 @@ func (p *Plan) validate() error {
 			return err
 		}
 		switch c.Driver {
+		case NullCache:
 		case MemoryCache:
 			if err := c.Memory.Validate(); err != nil {
 				return err
@@ -277,7 +278,7 @@ func (p *Plan) validate() error {
 				return fault.New(fault.Invalid, "cache exceeds Redis value bound")
 			}
 		case FileCache:
-			f := c.fileConfig(p.options.clock)
+			f := c.fileConfig(p.options.clock, p.options.logger)
 			if err := f.Validate(); err != nil {
 				return err
 			}
@@ -288,7 +289,7 @@ func (p *Plan) validate() error {
 			if _, ok := s.Database.Connections[c.Database]; !ok {
 				return fault.New(fault.Missing, "cache database connection is not configured")
 			}
-			f := c.postgresConfig(p.options.clock)
+			f := c.postgresConfig(p.options.clock, p.options.logger)
 			if err := f.Validate(); err != nil {
 				return err
 			}
@@ -313,11 +314,18 @@ func (p *Plan) validate() error {
 	}
 	return p.validateSupporting()
 }
-func (c CacheSettings) fileConfig(source clock.Clock) cachefile.Config {
-	return cachefile.Config{Root: c.File.Root, MaxEntries: c.File.MaxEntries, MaxBytes: c.File.MaxBytes, MaxValueBytes: c.Config.MaxValueBytes, Sync: c.File.Sync, Clock: source}
+func (c CacheSettings) fileConfig(source clock.Clock, logger *slog.Logger) cachefile.Config {
+	return cachefile.Config{Root: c.File.Root, MaxEntries: c.File.MaxEntries, MaxBytes: c.File.MaxBytes, MaxValueBytes: c.Config.MaxValueBytes, Sync: c.File.Sync, Clock: source, PruneInterval: c.File.PruneInterval, Logger: logger}
 }
-func (c CacheSettings) postgresConfig(source clock.Clock) cachepg.Config {
-	return cachepg.Config{Schema: c.Postgres.Schema, MaxEntries: c.Postgres.MaxEntries, MaxBytes: c.Postgres.MaxBytes, MaxValueBytes: c.Config.MaxValueBytes, Clock: source}
+
+// postgresConfig uses PostgreSQL's own clock for expiry unless the application
+// injected a non-system clock (deterministic tests), which it then keeps using.
+func (c CacheSettings) postgresConfig(source clock.Clock, logger *slog.Logger) cachepg.Config {
+	var expiry clock.Clock
+	if _, system := source.(clock.System); !system {
+		expiry = source
+	}
+	return cachepg.Config{Schema: c.Postgres.Schema, MaxEntries: c.Postgres.MaxEntries, MaxBytes: c.Postgres.MaxBytes, MaxValueBytes: c.Config.MaxValueBytes, Clock: expiry, PruneInterval: c.Postgres.PruneInterval, Logger: logger}
 }
 
 // Validate performs the same pure checks used by Configure, without preparing

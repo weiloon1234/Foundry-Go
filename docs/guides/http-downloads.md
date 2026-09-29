@@ -74,10 +74,24 @@ Every native size seek is checked, including a file that grows after preparation
 
 Successful transfers use fixed copy buffers and explicit media with `nosniff`.
 No complete file buffer is required. Callback isolation adds allocation per
-chunk; benchmark results must distinguish total allocation from peak live memory.
+chunk for custom sources; benchmark results must distinguish total allocation
+from peak live memory. A `LocalDownload` (and a directory asset) is a
+framework-opened regular file: a single-range or full transfer is handed to the
+native writer's `io.ReaderFrom`, which reaches the kernel's `sendfile` path on a
+plain TCP connection, while holding the source so cleanup still waits for it.
+The kernel's request observer forwards that transfer and still counts its bytes.
+Transforming middleware (compression) and multi-range responses use the ordinary
+copy path. The transferred length is still verified against Content-Length.
 A short read/write or a failure after headers aborts the transfer. Foundry never
 replaces an already started file with a JSON error. Failure of the native writer
 itself also aborts, because the writer may no longer be usable for an error reply.
+
+A source opens only after the handler succeeded. If the request deadline expired
+after that success, the source still opens and transfers without the expired
+deadline, bounded by the native write deadline; client disconnect and forced
+shutdown still end it, and if the client already disconnected no source opens. A deadline reached
+while a source opens or transfers is the server's budget (503 before commit).
+Use a route `WithTimeout` for long transfers.
 
 Endpoint metadata includes owned `FileResponseInfo` with declared media and
 seekability. It has no invented JSON schema. Files and deferred downloads reject

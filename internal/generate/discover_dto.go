@@ -22,8 +22,17 @@ type dtoDeclaration struct {
 	position  token.Position
 	projected bool
 	message   *messageOptions
+	// role is dtoResponseRole for DTOs that are never decoded from requests.
+	role string
 	dtoGraph
 }
+
+// dtoResponseRole omits request validation descriptors from a response-only DTO.
+const dtoResponseRole = "response"
+
+// quotedTypePrefix names the synthetic node of a scalar encoded as a JSON
+// string; it has no Go type of its own.
+const quotedTypePrefix = "quoted:"
 
 // dtoGraph is shared by complete JSON DTOs and explicit JSON multipart parts.
 type dtoGraph struct {
@@ -53,8 +62,11 @@ func discoverDTO(p *packageInput, spec *ast.TypeSpec, named *types.Named, args m
 		named = instantiated.(*types.Named)
 	}
 	declaration := dtoDeclaration{name: spec.Name.Name, typ: named, position: p.fset.Position(spec.Pos())}
-	if len(args) != 0 {
-		return declaration, p.diagnostic(spec.Pos(), "DTO declarations do not accept options")
+	for key, value := range args {
+		if key != "role" || value != dtoResponseRole {
+			return declaration, p.diagnostic(spec.Pos(), "DTO declarations only accept role=response")
+		}
+		declaration.role = value
 	}
 	if _, ok := named.Underlying().(*types.Struct); !ok {
 		return declaration, p.diagnostic(spec.Pos(), "DTO declaration must be a struct")
@@ -153,6 +165,19 @@ func resolveJSONGraph(p *packageInput, graph *dtoGraph, root types.Type, positio
 				node.wire.Nullable = named.Obj().Name() == "Nullable" || nullable
 				continue
 			}
+			if element, list := valueList(named); list {
+				// value.List encodes nil as [] and rejects null; it is never a
+				// base64 byte string.
+				if basic, bytes := types.Unalias(element).Underlying().(*types.Basic); bytes && basic.Kind() == types.Uint8 {
+					return fail("value.List of bytes is ambiguous; use []byte for base64 text or a list of a named integer type")
+				}
+				id, err := add(element, node.position)
+				if err != nil {
+					return fail(err.Error())
+				}
+				node.wire.Kind, node.wire.Element = contract.ArrayKind, id
+				continue
+			}
 			if isNamed(named, framework+"/model", "ID") {
 				node.wire.Kind, node.wire.Format = contract.StringKind, contract.UUIDFormat
 				continue
@@ -245,7 +270,7 @@ func resolveJSONGraph(p *packageInput, graph *dtoGraph, root types.Type, positio
 						return fail("json string options cannot override a custom codec")
 					}
 					base := id
-					id = "quoted:" + base
+					id = quotedTypePrefix + base
 					if seen[id] == nil {
 						if len(graph.nodes) >= jsonwire.MaxNodes {
 							return fail("DTO graph exceeds its resource bound")
@@ -388,4 +413,12 @@ func dtoBasicType(basic *types.Basic, wire *contract.Type) bool {
 		return false
 	}
 	return true
+}
+
+// valueList reports value.List[T] and its element type T.
+func valueList(named *types.Named) (types.Type, bool) {
+	if named == nil || !isNamed(named, framework+"/value", "List") || named.TypeArgs().Len() != 1 {
+		return nil, false
+	}
+	return named.TypeArgs().At(0), true
 }

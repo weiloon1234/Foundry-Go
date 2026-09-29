@@ -59,8 +59,8 @@ func (c *Client) cacheCommand(ctx context.Context, key cache.EntryKey, op string
 		return nil, false, err
 	}
 	value, err := c.execute(ctx, func(ctx context.Context, raw *driver.Client) (any, error) {
-		// EVAL is intentional: one command, no NOSCRIPT fallback or mutation retries.
-		return raw.Eval(ctx, cacheScript, []string{key.String()}, op, bound, string(data), expiry).Result()
+		// One atomic script; a NOSCRIPT fallback proves nothing ran, and no mutation is retried.
+		return evalScript(ctx, raw, cacheScript, []string{key.String()}, op, bound, string(data), expiry).Result()
 	})
 	if err != nil {
 		return nil, false, err

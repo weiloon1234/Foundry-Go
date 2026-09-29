@@ -78,6 +78,21 @@ orders, err := models.QueryOrders().With(
 ).All(ctx, db)
 ```
 
+## Ad-hoc values, ordering and filtering by relation counts
+
+Without a model slot, `query.RelatedValue` computes the same typed aggregate as a correlated scalar subquery for each source row:
+
+```go
+headcount := query.RelatedValue(OfficeRelations().Colleagues, query.Count[Employee]())
+payroll := query.RelatedValue(OfficeRelations().Colleagues, EmployeeFields().Salary.Sum())
+
+busiest := QueryOffices().OrderBy(headcount.Desc())            // order by relation count
+large := QueryOffices().Where(query.OrderRow(headcount).Gte(10)) // filter by relation count
+pairs, err := query.WithValue(busiest.Query, payroll).All(ctx, db) // []query.Annotated[Office, value.Nullable[decimal.Decimal]]
+```
+
+The result is a `RowExpression` of the computation's own type: `COUNT` is never NULL, while `SUM` of no rows is NULL. It uses the relationship's keys, filters and scopes (many-to-many and through relationships include their joins), and composes wherever a row value does: ordering, predicates, projections via `Value()`, and `query.WithValue`, which reads complete models paired with the value in one statement (`Annotated{Model, Value}`), running retrieval hooks and loading the query's eager relations. The [office consumer](../../tests/fixtures/consumer/officequeries/office_postgres_test.go) exercises these forms.
+
 ## Many-to-many target and pivot summaries
 
 The relationship itself measures targets. `Pivot()` selects the concrete pivot input while retaining both target and pivot filters:

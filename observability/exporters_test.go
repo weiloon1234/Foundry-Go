@@ -125,3 +125,114 @@ func TestTraceExporterFailureAndLifetimeRemainOwned(t *testing.T) {
 		t.Fatal("exporter failures were not isolated/accounted")
 	}
 }
+
+func TestTraceSampleRatioIsValidatedAndApplied(t *testing.T) {
+	for _, ratio := range []float64{-0.5, 1.5} {
+		config := observability.DefaultConfig()
+		config.TraceSampleRatio = ratio
+		if _, err := observability.New(config); err == nil {
+			t.Fatal("invalid sampling ratio accepted", ratio)
+		}
+	}
+	for _, test := range []struct {
+		ratio    float64
+		min, max uint64
+	}{{0, 400, 400}, {1, 400, 400}, {1e-12, 0, 0}, {0.5, 120, 280}} {
+		config := observability.DefaultConfig()
+		config.TraceSampleRatio = test.ratio
+		config.TraceQueue = 4096
+		config.TraceExporters = []observability.TraceExporter{func(context.Context, observability.Entry) error { return nil }}
+		recorder, err := observability.New(config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for range 400 {
+			work, span, err := recorder.Start(t.Context(), observability.Operation{Kind: observability.Job, Name: "sampled"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			// A child always follows its root's decision.
+			_, child, err := recorder.Start(work, observability.Operation{Kind: observability.Resource, Name: "child"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			child.End(observability.Result{})
+			span.End(observability.Result{})
+		}
+		pending := uint64(recorder.Snapshot().PendingTraces)
+		if pending%2 != 0 || pending/2 < test.min || pending/2 > test.max {
+			t.Fatal("sampling ratio or trace agreement failed", test.ratio, pending)
+		}
+		if err := recorder.Close(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestTraceBatchExportersReceiveBoundedOwnedBatches(t *testing.T) {
+	config := observability.DefaultConfig()
+	config.TraceBatchSize = 3
+	config.TraceConcurrency = 1
+	var mu sync.Mutex
+	var sizes []int
+	calls := 0
+	config.TraceBatchExporters = []observability.TraceBatchExporter{
+		func(_ context.Context, batch []observability.Entry) error {
+			mu.Lock()
+			defer mu.Unlock()
+			sizes = append(sizes, len(batch))
+			batch[0].Operation.Name = "mutated"
+			return nil
+		},
+		func(_ context.Context, batch []observability.Entry) error {
+			mu.Lock()
+			defer mu.Unlock()
+			calls++
+			if batch[0].Operation.Name == "mutated" {
+				t.Error("batch exporters shared one slice")
+			}
+			return errors.New("collector unavailable")
+		},
+	}
+	invalid := config
+	invalid.TraceBatchSize = 513
+	if _, err := observability.New(invalid); err == nil {
+		t.Fatal("oversized batch accepted")
+	}
+	recorder, err := observability.New(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 7 {
+		_, span, err := recorder.Start(t.Context(), observability.Operation{Kind: observability.Job, Name: "batched"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		span.End(observability.Result{})
+	}
+	done := make(chan error, 1)
+	go func() { done <- recorder.Run(t.Context()) }()
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	if err := recorder.Ready(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := recorder.Close(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	total := 0
+	for _, size := range sizes {
+		if size < 1 || size > 3 {
+			t.Fatal("batch exceeded its bound", sizes)
+		}
+		total += size
+	}
+	if total != 7 || recorder.Snapshot().TraceExportFailures != uint64(calls) {
+		t.Fatal("batch export lost entries or failure accounting", sizes, calls)
+	}
+}

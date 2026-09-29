@@ -122,8 +122,8 @@ func TestMultipartTypedPresenceAndRequestOwnership(t *testing.T) {
 			t.Error("repeated text order changed")
 		}
 		avatar, present := body.Avatar.Get()
-		if !present || avatar.IsZero() || avatar.Size() != 0 || avatar.Name() != "upload" {
-			t.Error("empty filename/content became absence")
+		if !present || avatar.IsZero() || avatar.Size() != 0 || avatar.Name() != "empty.txt" {
+			t.Error("a named zero-byte upload became absence")
 		}
 		if len(body.Photos) != 2 || body.Photos[0].Name() != "first.txt" || body.Photos[1].Name() != "second.txt" {
 			t.Error("repeated file order changed")
@@ -153,7 +153,8 @@ func TestMultipartTypedPresenceAndRequestOwnership(t *testing.T) {
 	wire, media := multipartWire(t, primaryUpload("primary contents"),
 		multipartTestPart{name: "name", contents: "x+y%20z"}, multipartTestPart{name: "count", contents: "0"}, multipartTestPart{name: "active", contents: "false"},
 		multipartTestPart{name: "tags[]", contents: "one"}, multipartTestPart{name: "tags[]", contents: "two"},
-		multipartTestPart{name: "avatar", file: true},
+		multipartTestPart{name: "avatar", filename: "empty.txt", file: true},
+		multipartTestPart{name: "photos", file: true},
 		multipartTestPart{name: "photos", filename: "first.txt", file: true}, multipartTestPart{name: "photos", filename: "second.txt", file: true},
 		multipartTestPart{name: "details", media: "application/json", contents: `{"name":"json","note":null}`})
 	response := submitMultipart(t, router, wire, media)
@@ -249,7 +250,7 @@ func TestMultipartBodyAndFieldResourceLimits(t *testing.T) {
 		{"file-bytes", []multipartTestPart{primaryUpload("1234")}, func(l *EndpointLimits) { l.Multipart.FileBytes = 3 }, false},
 		{"field-bytes", []multipartTestPart{primaryUpload(""), {name: "name", contents: "1234"}}, func(l *EndpointLimits) { l.Multipart.FieldBytes = 3 }, false},
 		{"total-fields", []multipartTestPart{primaryUpload(""), {name: "name", contents: "123"}, {name: "tags[]", contents: "456"}}, func(l *EndpointLimits) { l.Multipart.FieldBytes = 4; l.Multipart.FieldsBytes = 5 }, false},
-		{"files", []multipartTestPart{primaryUpload(""), {name: "avatar", file: true}}, func(l *EndpointLimits) { l.Multipart.Files = 1 }, false},
+		{"files", []multipartTestPart{primaryUpload(""), {name: "avatar", filename: "a.txt", file: true}}, func(l *EndpointLimits) { l.Multipart.Files = 1 }, false},
 		{"parts", []multipartTestPart{primaryUpload(""), {name: "name", contents: "one"}}, func(l *EndpointLimits) { l.Multipart.Parts = 1; l.Multipart.Files = 1 }, false},
 		{"encoded-known", []multipartTestPart{primaryUpload(strings.Repeat("x", 1500))}, func(l *EndpointLimits) {
 			l.Multipart.Bytes = 1024
@@ -468,7 +469,9 @@ func TestMultipartCancellationAfterCaptureCleansFiles(t *testing.T) {
 	request.Header.Set("Content-Type", media)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
-	if response.Code != 408 {
+	// The handler completed: cancellation afterwards does not replace its
+	// success, and captured files are still cleaned after the response.
+	if response.Code != 204 {
 		t.Fatalf("response %d: %s", response.Code, response.Body)
 	}
 	assertMultipartCleanup(t, directory)
@@ -567,6 +570,45 @@ func TestMultipartPartHeaderLimitCleansEarlierFiles(t *testing.T) {
 	response := submitMultipart(t, router, wire, media)
 	if response.Code != 413 {
 		t.Fatalf("header limit response %d: %s", response.Code, response.Body)
+	}
+	assertMultipartCleanup(t, directory)
+}
+
+// A browser submits an HTML file input with no selection as filename="" and
+// no bytes. Optional and repeated file fields treat it as absent; a required
+// field still receives it, and any unnamed part with content remains present.
+func TestMultipartBlankFileInputsAreAbsentForOptionalFields(t *testing.T) {
+	directory := t.TempDir()
+	var body multipartRequest
+	router, err := NewRouter(multipartEndpoint(directory).Handle(func(_ context.Context, input multipartRequestInput) (NoContent, error) {
+		body = input.Body
+		return NoContent{}, nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	blank := func(name string) multipartTestPart {
+		return multipartTestPart{name: name, file: true, media: "application/octet-stream"}
+	}
+	wire, media := multipartWire(t, blank("primary"), blank("avatar"), blank("photos"), blank("photos"))
+	if response := submitMultipart(t, router, wire, media); response.Code != 204 {
+		t.Fatalf("blank inputs: %d %s", response.Code, response.Body)
+	}
+	if body.Primary.IsZero() || body.Primary.Size() != 0 {
+		t.Fatal("a required blank file input lost its supplied part")
+	}
+	if _, present := body.Avatar.Get(); present || body.Photos != nil {
+		t.Fatal("blank optional or repeated file inputs were treated as uploads")
+	}
+	wire, media = multipartWire(t, primaryUpload("x"), multipartTestPart{name: "avatar", file: true, contents: "data"}, blank("photos"), multipartTestPart{name: "photos", filename: "kept.txt", file: true})
+	if response := submitMultipart(t, router, wire, media); response.Code != 204 {
+		t.Fatalf("mixed inputs: %d %s", response.Code, response.Body)
+	}
+	if avatar, present := body.Avatar.Get(); !present || avatar.Size() != 4 {
+		t.Fatal("an unnamed file part with content became absence")
+	}
+	if len(body.Photos) != 1 || body.Photos[0].Name() != "kept.txt" {
+		t.Fatal("a blank repeated input changed the selected files")
 	}
 	assertMultipartCleanup(t, directory)
 }

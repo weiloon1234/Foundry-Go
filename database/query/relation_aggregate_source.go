@@ -18,6 +18,9 @@ type aggregateInput[M, N any] struct {
 }
 
 func directAggregateInput[M, N any](spec relationSpec[M, N], validate func(string, int, RelationLimits) error, singular bool) aggregateInput[M, N] {
+	if spec.hop != nil {
+		return hopAggregateInput(spec, validate, singular)
+	}
 	return aggregateInput[M, N]{source: spec.source, local: spec.local, inputTable: spec.target.table, inputAlias: spec.target.table, group: spec.foreign, singular: singular,
 		validate: func(depth int, limits RelationLimits) error {
 			if len(spec.target.relations) != 0 {
@@ -31,7 +34,13 @@ func directAggregateInput[M, N any](spec relationSpec[M, N], validate func(strin
 	}
 }
 func (r OneRelation[M, N]) aggregateInput() aggregateInput[M, N] {
-	return directAggregateInput(r.spec, r.validateRelation, true)
+	validate := r.validateRelation
+	if r.ofMany != singleTarget || r.spec.morph != nil {
+		validate = func(string, int, RelationLimits) error {
+			return fault.New(fault.Invalid, "aggregates over a one-of-many relationship are not supported; aggregate its HasMany form")
+		}
+	}
+	return directAggregateInput(r.spec, validate, true)
 }
 func (r ManyRelation[M, N]) aggregateInput() aggregateInput[M, N] {
 	return directAggregateInput(r.spec, r.validateRelation, false)

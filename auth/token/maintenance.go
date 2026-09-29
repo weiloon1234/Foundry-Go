@@ -72,9 +72,6 @@ func (t *Tokens[M, K]) RevokeAll(ctx context.Context, reference model.Reference[
 			return err
 		}
 		count, err = t.store.backend.RevokeAll(op, t.address, identity)
-		if err == nil && count > MaxTokens {
-			return fault.New(fault.Invalid, "token backend exceeded subject capacity")
-		}
 		return err
 	})
 	if err != nil {

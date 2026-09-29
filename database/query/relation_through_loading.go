@@ -2,7 +2,6 @@ package query
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
@@ -18,7 +17,7 @@ func fetchThrough[M, N, P any, A, B comparable](ctx context.Context, executor da
 	var rows []relation.Link[N, P]
 	for offset := 0; offset < len(keys); offset += state.limits.BatchSize {
 		end := min(offset+state.limits.BatchSize, len(keys))
-		statement, err := r.compileThrough(pivotLocal.In(keys[offset:end]...).expression, state.remaining+1)
+		statement, err := r.compileThrough(ctx, pivotLocal.In(keys[offset:end]...).expression, state.remaining+1)
 		if err != nil {
 			return nil, err
 		}
@@ -29,7 +28,7 @@ func fetchThrough[M, N, P any, A, B comparable](ctx context.Context, executor da
 					return relation.Link[N, P]{}, fault.New(fault.Invalid, "related rows exceed the shared loading budget")
 				}
 				count++
-				return scanJoined(row, *r.spec.target.definition, *r.pivot.definition)
+				return scanJoined(row, r.spec.target.definition, r.pivot.definition)
 			}, joinedReadLifecycle(r.spec.target.definition, r.pivot.definition))
 		if err != nil {
 			return nil, err
@@ -82,7 +81,7 @@ func fetchThrough[M, N, P any, A, B comparable](ctx context.Context, executor da
 			return nil, fault.New(fault.Invalid, "pivot primary key has no canonical database representation")
 		}
 		if seenPivots[identity] {
-			return nil, fmt.Errorf("pivot matched more than one target: %w", database.TooManyRows)
+			return nil, database.NewError("pivot matched more than one target", database.TooManyRows)
 		}
 		seenPivots[identity] = true
 		owners[i], targets[i], pivots[i] = key.identity, link.Model, link.Pivot

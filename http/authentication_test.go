@@ -274,7 +274,7 @@ func TestCookieCredentialsReuseBoundedTypedCookieParser(t *testing.T) {
 	var loads atomic.Int32
 	registry, guard, _ := authSetup(t, "session", &loads)
 	cookie := foundryhttp.DefineCookie("session", foundryhttp.SecretCookie(), foundryhttp.DefaultCookieOptions())
-	transport, err := foundryhttp.NewAuthentication(registry, foundryhttp.CookieCredential("session", cookie))
+	transport, err := foundryhttp.NewAuthentication(registry, foundryhttp.CookieCredential("session", cookie).WithoutOriginProtection())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,7 +284,7 @@ func TestCookieCredentialsReuseBoundedTypedCookieParser(t *testing.T) {
 	for _, test := range []struct {
 		header string
 		status int
-	}{{"session=valid", 204}, {"session=", 401}, {"session=valid; session=valid", 400}, {"session=invalid", 401}, {"other=valid", 401}} {
+	}{{"session=valid", 204}, {"session=", 401}, {"session=valid; session=valid", 401}, {"session=invalid", 401}, {"other=valid", 401}} {
 		r := httptest.NewRequest("GET", "/profile", nil)
 		r.Header.Set("Cookie", test.header)
 		w := httptest.NewRecorder()
@@ -361,7 +361,10 @@ func TestPublicEndpointAuthErrorsUseSharedHTTPCatalog(t *testing.T) {
 	for _, test := range []struct {
 		err    error
 		status int
-	}{{auth.Unauthenticated, 401}, {auth.Forbidden, 403}, {auth.MFARequired, 403}, {context.Canceled, 408}} {
+	}{{auth.Unauthenticated, 401}, {auth.Forbidden, 403}, {auth.MFARequired, 403}, {context.Canceled, 503},
+		// The credential cap is a client conflict even when a store wraps it.
+		{auth.CredentialLimit, 409}, {fault.Wrap(fault.Internal, "credential operation failed", auth.CredentialLimit), 409},
+		{auth.ConfirmationRequired, 403}, {auth.NewDenial("documents.archived", "Archived."), 403}} {
 		route := authEndpoint(foundryhttp.Public).Handle(func(context.Context, authInput) (foundryhttp.NoContent, error) {
 			return foundryhttp.NoContent{}, test.err
 		})

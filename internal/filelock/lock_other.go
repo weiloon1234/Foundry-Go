@@ -3,10 +3,12 @@
 package filelock
 
 import (
-	"github.com/weiloon1234/Foundry-Go/fault"
 	"os"
+
+	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
-func Try(*os.File) (bool, error) {
+func Try(*os.File) (bool, error) { return try(nil, exclusive) }
+func try(*os.File, mode) (bool, error) {
 	return false, fault.New(fault.Invalid, "filesystem locks require macOS or Linux")
 }

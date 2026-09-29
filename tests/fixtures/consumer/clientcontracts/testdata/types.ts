@@ -11,7 +11,41 @@ declare const genericProject: GenericProject;
 
 type Payment = sdk.Operations["unionsEcho"]["request"]["body"]["method"];
 declare const payment: Payment;
+type Echoed = sdk.Operations["itemsEcho"]["response"];
+declare const echoed: Echoed;
+type Upserted = sdk.Operations["membersUpsert"]["response"];
+declare const upserted: Upserted;
+type Continued = sdk.Operations["sessionContinue"]["response"];
+declare const continued: Continued;
+type MemberEvents = sdk.Operations["membersEvents"]["response"];
+declare const memberEvents: MemberEvents;
 export function typedConsumer(): void {
+  const upsertStatus: 200 | 201 = upserted.status;
+  const upsertDisplay: string = upserted.body.display;
+  // @ts-expect-error Only declared success statuses can be received.
+  const undeclaredStatus: 204 = upserted.status;
+  const location: string = continued.location;
+  const redirectStatus: 303 = continued.status;
+  void api.filesRaw({ body: { data: new Blob(["raw"]), mediaType: "text/plain" } });
+  void api.filesRaw({ body: { data: new Uint8Array([1]), mediaType: "application/octet-stream" } });
+  void api.filesRaw({ body: { data: new ReadableStream<Uint8Array>(), mediaType: "application/octet-stream" } });
+  // @ts-expect-error Several declared media types require an explicit choice.
+  void api.filesRaw({ body: { data: new Blob(["raw"]) } });
+  // @ts-expect-error Raw bodies accept only declared media types.
+  void api.filesRaw({ body: { data: new Blob(["raw"]), mediaType: "image/png" } });
+  // @ts-expect-error Raw data is binary, not text.
+  void api.filesRaw({ body: { data: "text", mediaType: "text/plain" } });
+  void (async () => {
+    for await (const event of memberEvents) {
+      const display: string = event.data.display;
+      const name: string = event.name;
+      const id: string | undefined = event.id;
+      // @ts-expect-error Event data keeps its declared type.
+      const wrong: number = event.data.display;
+      void [display, name, id, wrong];
+    }
+  })();
+  void [upsertStatus, upsertDisplay, undeclaredStatus, location, redirectStatus];
   type ExplicitLabels = sdk.ContractTypes["foundry.test/consumer/clientcontracts.ExplicitLabels"];
   const labels: ExplicitLabels = { "": "empty", "01": "text", ["__proto__"]: "ordinary" };
   const absentLabels: ExplicitLabels = null;
@@ -97,5 +131,9 @@ export function typedConsumer(): void {
   realtime.channels.accounts();
   // @ts-expect-error Narrowly typed API has no undeclared helper.
   void api.rawRoute({});
-  void [missing, undefinedOptional, crossOwner, lossy, wrongEnum];
+  if (echoed.state instanceof sdk.UnknownEnumValue) { const raw: string = echoed.state.value; void raw; }
+  else { const known: Payload = { ...payload, state: echoed.state }; void known; }
+  // @ts-expect-error A received unknown enum value must be narrowed before a request.
+  const resent: Payload = { ...payload, state: echoed.state };
+  void [missing, undefinedOptional, crossOwner, lossy, wrongEnum, resent];
 }

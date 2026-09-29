@@ -15,6 +15,7 @@ func examples(ctx context.Context,db database.Transactor){
  q:=QueryRecords().Where(RecordFields().Name.Eq("record"))
  var result Record
  result,_=q.FirstOrCreate(ctx,db,RecordDraft{}.SetName("record"))
+ result,_=q.CreateOrFirst(ctx,db,RecordDraft{}.SetName("record"))
  result,_=q.UpdateOrCreate(ctx,db,RecordDraft{}.SetName("record"),func(ctx context.Context,tx *database.Tx,current Record)(RecordDraft,error){return RecordDraft{}.SetName(current.Name+"!"),nil})
  _=result
 }

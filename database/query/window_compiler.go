@@ -225,11 +225,7 @@ func (c *compiler) windowSpecSQL(w windowSpec, grouped map[fieldRef]bool, groupi
 			if err != nil {
 				return "", err
 			}
-			direction := " ASC"
-			if order.descending {
-				direction = " DESC"
-			}
-			names[i] = text + direction
+			names[i] = text + orderDirection(order)
 		}
 		parts = append(parts, "ORDER BY "+strings.Join(names, ", "))
 	}
@@ -321,6 +317,15 @@ func groupsCondition(p expression, depth int) bool {
 		return groupsValue(p.operand, depth+1)
 	case binaryComparison:
 		return groupsValue(p.left, depth+1) || groupsValue(p.right, depth+1)
+	case rowComparison:
+		for _, operand := range p.operands {
+			if groupsValue(operand, depth+1) {
+				return true
+			}
+		}
+		return false
+	case scopeNode:
+		return false
 	case junction:
 		if len(p.children) > MaxExpressionNodes {
 			return false

@@ -14,6 +14,14 @@ var cacheBatchBody string
 var cacheBatchScript = cacheEntryScript + cacheBatchBody
 var taggedBatchScript = cacheEntryScript + tagMetadataScript + cacheBatchBody
 
+//go:embed cache_read_batch.lua
+var cacheReadBatchBody string
+var cacheReadBatchScript = cacheEntryScript + cacheReadBatchBody
+var taggedReadBatchScript = cacheEntryScript + tagMetadataScript + cacheReadBatchBody
+
+var _ cache.BatchReadBackend = (*Client)(nil)
+var _ cache.TaggedBatchReadBackend = (*Client)(nil)
+
 var _ cache.BatchBackend = (*Client)(nil)
 var _ cache.TaggedBatchBackend = (*Client)(nil)
 
@@ -58,8 +66,7 @@ func (c *Client) removeCacheBatch(ctx context.Context, keys []cache.EntryKey, sn
 		args := []any{tagMetadataPrefix, cache.TagVersionBytes, bound, len(keys), ""}
 		if snapshot != nil {
 			script = taggedBatchScript
-			fingerprint := snapshot.Fingerprint()
-			args[4] = string(fingerprint[:])
+			args[4] = string(snapshot.VersionFingerprint())
 			for _, stamp := range snapshot.Stamps() {
 				addresses = append(addresses, stamp.Key.String())
 				args = append(args, string(stamp.Version.Bytes()))
@@ -68,7 +75,7 @@ func (c *Client) removeCacheBatch(ctx context.Context, keys []cache.EntryKey, sn
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		return raw.Eval(ctx, script, addresses, args...).Result()
+		return evalScript(ctx, raw, script, addresses, args...).Result()
 	})
 	if err != nil {
 		return 0, err
@@ -85,4 +92,79 @@ func (c *Client) removeCacheBatch(ctx context.Context, keys []cache.EntryKey, sn
 		return 0, fault.New(fault.Internal, "invalid Redis cache batch count")
 	}
 	return uint64(count), nil
+}
+
+// GetMany reads a bounded canonical batch in one script; results follow input
+// order. Missing, expired, over-bound and wrong-type entries are misses.
+func (c *Client) GetMany(ctx context.Context, keys []cache.EntryKey) ([]cache.BatchValue, error) {
+	if err := cache.ValidateBatchKeys(keys); err != nil {
+		return nil, err
+	}
+	return c.readCacheBatch(ctx, keys, nil)
+}
+
+// GetManyTagged checks one shared snapshot and reads every payload in the same
+// script. Obsolete payloads are misses and are reclaimed.
+func (c *Client) GetManyTagged(ctx context.Context, keys []cache.TaggedKey) ([]cache.BatchValue, error) {
+	if err := cache.ValidateTaggedBatch(keys); err != nil {
+		return nil, err
+	}
+	if len(keys) == 0 {
+		return c.readCacheBatch(ctx, nil, nil)
+	}
+	bases := make([]cache.EntryKey, len(keys))
+	for i, key := range keys {
+		bases[i] = key.DataKey()
+	}
+	return c.readCacheBatch(ctx, bases, &keys[0])
+}
+func (c *Client) readCacheBatch(ctx context.Context, keys []cache.EntryKey, snapshot *cache.TaggedKey) ([]cache.BatchValue, error) {
+	_, bound, err := c.cacheArguments(ctx, "get", nil, cache.Forever())
+	if err != nil {
+		return nil, err
+	}
+	if len(keys) == 0 {
+		return []cache.BatchValue{}, nil
+	}
+	value, err := c.execute(ctx, func(ctx context.Context, raw *driver.Client) (any, error) {
+		addresses := make([]string, len(keys))
+		for i, key := range keys {
+			addresses[i] = key.String()
+		}
+		script := cacheReadBatchScript
+		args := []any{tagMetadataPrefix, cache.TagVersionBytes, bound, len(keys), ""}
+		if snapshot != nil {
+			script = taggedReadBatchScript
+			args[4] = string(snapshot.VersionFingerprint())
+			for _, stamp := range snapshot.Stamps() {
+				addresses = append(addresses, stamp.Key.String())
+				args = append(args, string(stamp.Version.Bytes()))
+			}
+		}
+		return evalScript(ctx, raw, script, addresses, args...).Result()
+	})
+	if err != nil {
+		return nil, err
+	}
+	fields, code, err := cacheReply(value)
+	if err != nil {
+		return nil, err
+	}
+	if code != 1 || len(fields) != len(keys) {
+		return nil, fault.New(fault.Internal, "invalid Redis cache batch reply")
+	}
+	values := make([]cache.BatchValue, len(keys))
+	for i, field := range fields {
+		switch item := field.(type) {
+		case string:
+			values[i] = cache.BatchValue{Data: []byte(item), Found: true}
+		case int64:
+			if item != 0 {
+				return nil, fault.New(fault.Internal, "invalid Redis cache batch entry")
+			}
+		default:
+			return nil, fault.New(fault.Internal, "invalid Redis cache batch entry")
+		}
+	}
+	return values, nil
 }

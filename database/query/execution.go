@@ -2,7 +2,6 @@ package query
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -17,10 +16,12 @@ func executionContext(ctx context.Context, executor database.Executor) error {
 }
 
 // Each streams complete models, closing on failure or early callback return.
-// Eager relations or possible retrieval hooks use DefaultChunkSize offset
-// batches, closing rows before I/O callbacks. Unknown executor wrappers cannot
-// prove hooks absent. Batches do not create a shared snapshot; changing selected
-// membership/order can shift later results. EachChunked selects an explicit size.
+// Eager relations or possible retrieval hooks use DefaultChunkSize batches,
+// closing rows before I/O callbacks. Unknown executor wrappers cannot prove
+// hooks absent. Batches advance by keyset on the ordered fields and primary key
+// (as Chunk does), so rows inserted or deleted behind the traversal do not shift
+// later batches; only orders that cannot be keyed fall back to OFFSET. Batches
+// do not share a snapshot. EachChunked selects an explicit size.
 func (q Query[M]) Each(ctx context.Context, executor database.Executor, yield func(M) error) error {
 	if len(q.relations) != 0 || q.definition != nil && q.definition.retrieval().mayRun(executor) {
 		return q.EachChunked(ctx, executor, DefaultChunkSize, yield)
@@ -31,6 +32,7 @@ func (q Query[M]) eachRows(ctx context.Context, executor database.Executor, yiel
 	if err := executionContext(ctx, executor); err != nil {
 		return err
 	}
+	q = q.inContext(ctx)
 	if yield == nil {
 		return fault.New(fault.Invalid, "model iteration requires a callback")
 	}
@@ -57,6 +59,7 @@ func (q Query[M]) allRows(ctx context.Context, executor database.Executor) ([]M,
 	if err := executionContext(ctx, executor); err != nil {
 		return nil, err
 	}
+	q = q.inContext(ctx)
 	statement, err := q.Compile()
 	if err != nil {
 		return nil, err
@@ -101,7 +104,7 @@ func (q Query[M]) RequireFirst(ctx context.Context, executor database.Executor) 
 	}
 	model, present := item.Get()
 	if !present {
-		return *new(M), fmt.Errorf("query first: %w", database.NotFound)
+		return *new(M), database.NewError("query first", database.NotFound)
 	}
 	return model, nil
 }
@@ -112,6 +115,7 @@ func (q Query[M]) Count(ctx context.Context, executor database.Executor) (int64,
 	if err := executionContext(ctx, executor); err != nil {
 		return 0, err
 	}
+	q = q.inContext(ctx)
 	statement, err := q.compile(readCount)
 	if err != nil {
 		return 0, err
@@ -126,6 +130,7 @@ func (q Query[M]) Exists(ctx context.Context, executor database.Executor) (bool,
 	if err := executionContext(ctx, executor); err != nil {
 		return false, err
 	}
+	q = q.inContext(ctx)
 	statement, err := q.compile(readExists)
 	if err != nil {
 		return false, err

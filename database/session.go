@@ -10,7 +10,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/internal/callback"
 )
 
 // Session is an advanced, callback-scoped connection capability for operations
@@ -37,14 +36,18 @@ func (db *DB) Session(ctx context.Context, fn func(*Session) error) (err error) 
 	if err != nil {
 		return err
 	}
-	defer func() { err = errors.Join(err, release()) }()
+	defer func() {
+		if releaseErr := release(); releaseErr != nil {
+			err = errors.Join(err, releaseErr)
+		}
+	}()
 	lifetime, cancel := context.WithCancel(ctx)
 	defer cancel()
 	session := &Session{owner: db, raw: conn, scope: &operationScope{ctx: lifetime, cancel: cancel}, classify: db.classify, observers: db.Observers(), timeSource: db.Clock()}
-	err = callback.Isolated("database session", func() error { return fn(session) })
+	err = invokeScope("database session", func() error { return fn(session) })
 	err = errors.Join(err, session.scope.finish())
 	if err == nil {
-		err = lifetime.Err()
+		err = db.classify.wrap("session", lifetime.Err())
 	}
 	if err != nil {
 		session.Discard()
@@ -52,19 +55,27 @@ func (db *DB) Session(ctx context.Context, fn func(*Session) error) (err error) 
 	if session.discard.Load() {
 		err = errors.Join(err, db.classify.wrap("discard session", discardConnection(conn)))
 	}
-	return db.classify.wrap("session", err)
+	// A session has no transaction outcome to attach. Callback failures, such as
+	// migration checksum drift, keep their own identity and message; database
+	// operations inside the callback already returned classified *Error values.
+	return err
 }
 
 // Discard prevents this connection from returning to the pool after the callback.
 // Use it whenever session state, such as an advisory lock, cannot be cleaned up.
 func (s *Session) Discard() { s.discard.Store(true) }
 
+// Exec and Query on a session may write, so with WithStickyReads they mark
+// the request scope when they start and when they complete.
 func (s *Session) Exec(ctx context.Context, statement string, arguments ...any) (Result, error) {
-	return s.scope.exec(ctx, s.raw, s.classify, statement, arguments)
+	s.owner.markWrite(ctx)
+	defer s.owner.markWrite(ctx)
+	return s.scope.exec(ctx, s.raw, s.classify, s.owner.instrumented(PrimaryPool), statement, arguments)
 }
 
 func (s *Session) Query(ctx context.Context, statement string, arguments ...any) (*Rows, error) {
-	return s.scope.query(ctx, s.raw, s.classify, s.observers, statement, arguments)
+	s.owner.markWrite(ctx)
+	return s.owner.markOnClose(ctx)(s.scope.query(ctx, s.raw, s.classify, s.owner.instrumented(PrimaryPool), s.observers, statement, arguments))
 }
 
 // Transaction runs on this session's existing connection. Unlike DB.Transaction,
@@ -81,9 +92,12 @@ func (s *Session) Transaction(ctx context.Context, fn func(*Tx) error, options .
 		return err
 	}
 	defer release()
+	if sqlOptions == nil || !sqlOptions.ReadOnly {
+		s.owner.markWrite(ctx)
+	}
 	operation, cancel := s.scope.context(ctx)
 	defer cancel()
-	return runTransaction(operation, s.raw, s.owner, s.classify, s.observers, s.timeSource, func() error { return nil }, fn, sqlOptions)
+	return runTransaction(operation, s.raw, s.owner, s.classify, s.observers, s.timeSource, s.owner.config.CommitTimeout, func() error { return nil }, fn, sqlOptions)
 }
 
 func discardConnection(conn *sql.Conn) error {

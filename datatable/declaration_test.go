@@ -123,3 +123,23 @@ func TestManagerRequiresExactRegisteredDeclaration(t *testing.T) {
 		t.Fatal("authorized inspection failed", err)
 	}
 }
+
+func TestSearchableColumnsCannotSpanWhereAndHavingPhases(t *testing.T) {
+	spec := reportSpec()
+	// No built-in aggregate offers text search, so shape the declaration
+	// directly: the rule applies to whichever typed sources a table combines.
+	grouped := spec.Columns[3].declaration
+	filter := *grouped.filter
+	filter.info.Phase = HavingPhase
+	filter.info.Operators = append(filter.info.Operators, Contains)
+	grouped.filter, grouped.searchable = &filter, true
+	spec.Columns[3] = ColumnRegistration[reportRecord, ReportRow]{declaration: grouped}
+	if err := Define(spec).Validate(); !errors.Is(err, fault.Invalid) {
+		t.Fatal("mixed-phase global search accepted at declaration", err)
+	}
+	grouped.searchable = false
+	spec.Columns[3] = ColumnRegistration[reportRecord, ReportRow]{declaration: grouped}
+	if err := Define(spec).Validate(); err != nil {
+		t.Fatal("single-phase search rejected", err)
+	}
+}

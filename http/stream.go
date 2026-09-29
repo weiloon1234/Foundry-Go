@@ -30,8 +30,17 @@ type StreamSource func(context.Context) (StreamContent, error)
 // Copies share the source callback but open independently for each request.
 type Stream struct {
 	filePresentation
-	source StreamSource
+	source      StreamSource
+	progressive bool
 }
+
+// Progressive flushes each chunk to the client as soon as the source produced
+// and Foundry accepted it, for incremental output such as a long export or a
+// log tail. Without it the native writer may buffer small chunks. Length and
+// byte-limit checks are unchanged: a flushed prefix can still be aborted by a
+// later failure, never completed early. Declare the route's WithTimeout for
+// streams that outlive the kernel RequestTimeout.
+func (s Stream) Progressive() Stream { s.progressive = true; return s }
 
 func StreamFrom(source StreamSource) Stream {
 	return Stream{source: source, filePresentation: defaultFilePresentation()}

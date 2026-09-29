@@ -1,17 +1,23 @@
 package query
 
-import "github.com/weiloon1234/Foundry-Go/value"
+import (
+	"context"
+
+	"github.com/weiloon1234/Foundry-Go/value"
+)
 
 const throughTargetAlias = "foundry_target"
 const throughPivotAlias = "foundry_pivot"
 
-func (r ThroughRelation[M, N, P]) compileThrough(keys expression, limit int) (Statement, error) {
+func (r ThroughRelation[M, N, P]) compileThrough(ctx context.Context, keys expression, limit int) (Statement, error) {
 	node := r.throughSelect()
 	if keys != nil {
 		node.predicates = append(node.predicates, requalify(keys, throughPivotAlias))
 	}
 	node.limit = value.Set(limit)
-	var c compiler
+	// Declaration validation compiles without a context: context scopes then
+	// stand in as TRUE for shape checks only; execution always resolves them.
+	c := compiler{scopeContext: ctx, scopeShapeOnly: ctx == nil}
 	sql, err := c.compileSelect(node)
 	if err != nil {
 		return Statement{}, err
@@ -43,7 +49,7 @@ func (r ThroughRelation[M, N, P]) throughSelectAt(targetAlias, pivotAlias string
 			alias = pivotAlias
 		}
 		expr := requalifyValue(o.value, alias)
-		node.orders = append(node.orders, orderNode{expr, o.descending})
+		node.orders = append(node.orders, orderNode{expr, o.descending, o.nulls})
 		if field, plain := expr.(fieldRef); plain {
 			seen[field] = true
 		}

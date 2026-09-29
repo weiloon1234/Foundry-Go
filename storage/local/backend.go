@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -25,6 +26,7 @@ import (
 
 const markerName = ".foundry-store"
 const lockName = ".foundry-lock"
+const lockDirectory = "locks"
 const markerMagic = "FNDLOCAL1\n"
 const tempPrefix = ".foundry-tmp-"
 const MaxPrune = 256
@@ -61,6 +63,12 @@ type Backend struct {
 	started   bool
 	closed    bool
 	closeErr  error
+	// ensured records shard directories whose creation this process has made
+	// durable, so later publications skip parent directory syncs.
+	ensured [256]atomic.Bool
+	// beforeSync, when set by package tests, observes the moment before a
+	// publication's or removal's directory sync. It is nil in production.
+	beforeSync func(storage.ObjectKey)
 }
 
 // Prepare validates configuration without filesystem I/O. Start initializes or
@@ -218,13 +226,27 @@ func initialize(ctx context.Context, config Config) (result *Backend, err error)
 			}
 		}
 	}
+	// Per-key publication locks live in their own directory, created once
+	// under the exclusive store lock.
+	if _, e := root.Lstat(lockDirectory); errors.Is(e, fs.ErrNotExist) {
+		if e = root.Mkdir(lockDirectory, 0700); e != nil && !errors.Is(e, fs.ErrExist) {
+			return nil, failure(storage.Unavailable, storage.OpenOperation, storage.Unchanged, e)
+		}
+		if config.Sync {
+			if e = syncDirectory(root); e != nil {
+				return nil, failure(storage.Unavailable, storage.OpenOperation, storage.Applied, e)
+			}
+		}
+	} else if e != nil {
+		return nil, failure(storage.Unavailable, storage.OpenOperation, storage.Unchanged, e)
+	}
 	if err = ctx.Err(); err != nil {
 		return nil, failure(storage.Unavailable, storage.OpenOperation, storage.NotApplicable, err)
 	}
 	return b, nil
 }
 func (b *Backend) Capabilities() storage.Capabilities {
-	return storage.Capabilities{Ranges: true, ConditionalRead: true, ConditionalCreate: true, ConditionalReplace: true, ConditionalDelete: true}
+	return storage.Capabilities{Ranges: true, ConditionalRead: true, ConditionalCreate: true, ConditionalReplace: true, ConditionalDelete: true, DelimitedList: true}
 }
 func (b *Backend) Close() error {
 	if b == nil {
@@ -301,8 +323,29 @@ func syncDirectory(root *os.Root) error {
 
 // Each acquisition has a separate open-file description, so flock serializes
 // goroutines and independent processes, not just different adapter instances.
+// The exclusive store lock guards initialization.
 func (b *Backend) lock(ctx context.Context) (func(), error) {
-	release, err := filelock.Acquire(ctx, b.root, lockName)
+	return lockFailure(filelock.Acquire(ctx, b.root, lockName))
+}
+
+// lockKey serializes check-and-publish for one key's hash shard. Publications
+// hold the store lock shared, so earlier framework versions that take it
+// exclusively still exclude every writer, while distinct shards proceed in
+// parallel. Hold it only across the condition check and rename.
+func (b *Backend) lockKey(ctx context.Context, key storage.ObjectKey) (func(), error) {
+	store, err := lockFailure(filelock.AcquireShared(ctx, b.root, lockName))
+	if err != nil {
+		return nil, err
+	}
+	_, name := address(key)
+	shard, err := lockFailure(filelock.Acquire(ctx, b.root, lockDirectory+"/"+name[:2]))
+	if err != nil {
+		store()
+		return nil, err
+	}
+	return func() { shard(); store() }, nil
+}
+func lockFailure(release func(), err error) (func(), error) {
 	if errors.Is(err, fault.Invalid) {
 		return nil, failure(storage.IntegrityFailed, storage.PutOperation, storage.Unchanged, err)
 	}
@@ -310,6 +353,28 @@ func (b *Backend) lock(ctx context.Context) (func(), error) {
 		return nil, failure(storage.Unavailable, storage.PutOperation, storage.Unchanged, err)
 	}
 	return release, nil
+}
+
+// ensureShard creates a key's shard directory. The first publication to each
+// shard in this process syncs its parents; later ones skip both syncs.
+func (b *Backend) ensureShard(directory string, index byte) error {
+	if b.ensured[index].Load() {
+		return nil
+	}
+	if err := b.root.MkdirAll(directory, 0700); err != nil {
+		return err
+	}
+	if b.config.Sync {
+		objects, err := b.root.OpenRoot("objects")
+		if err != nil {
+			return err
+		}
+		if err = errors.Join(syncDirectory(objects), objects.Close(), syncDirectory(b.root)); err != nil {
+			return err
+		}
+	}
+	b.ensured[index].Store(true)
+	return nil
 }
 
 var _ storage.Backend = (*Backend)(nil)

@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strconv"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/cli"
@@ -20,6 +21,8 @@ import (
 
 // Command is a validated immutable operation. Retry is guarded by the token
 // supplied on the command line, including when copied or invoked again.
+// Bulk operations (retry-failed, flush-failed, clear) walk the queue in bounded
+// pages and require --confirm; forget removes one retained terminal job.
 type Command struct {
 	operation  string
 	connection jobs.ConnectionName
@@ -27,10 +30,15 @@ type Command struct {
 	id         jobs.ExecutionID
 	token      jobs.RetryToken
 	options    jobs.ListOptions
+	confirm    bool
 	json       bool
 }
 
-const usage = "jobs failed|inspect|retry [--connection name] [--queue name] [--format text|json]; failed: [--limit 20] [--after id]; inspect: --id id; retry: --id id --token failed-state-token"
+const usage = "jobs failed|inspect|retry|stats|retry-failed|flush-failed|forget|clear|migrate-layout [--connection name] [--queue name] [--format text|json]; failed: [--limit 20] [--after id]; inspect|forget: --id id; retry: --id id --token failed-state-token; retry-failed|flush-failed|clear: --confirm [--name job --version n]; migrate-layout: --confirm (after the previous release stopped or drained)"
+
+func bulk(operation string) bool {
+	return operation == "retry-failed" || operation == "flush-failed" || operation == "clear"
+}
 
 func Parse(args []string, help io.Writer) (Command, error) {
 	if help == nil {
@@ -47,7 +55,9 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		return Command{}, cli.Usage(usage)
 	}
 	result := Command{operation: args[1], options: jobs.ListOptions{State: jobs.Failed, Limit: 20}}
-	if result.operation != "failed" && result.operation != "inspect" && result.operation != "retry" {
+	switch result.operation {
+	case "failed", "inspect", "retry", "stats", "retry-failed", "flush-failed", "forget", "clear", "migrate-layout":
+	default:
 		return Command{}, cli.Usage(usage)
 	}
 	flags := flag.NewFlagSet("jobs "+result.operation, flag.ContinueOnError)
@@ -61,14 +71,29 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		return result.queue.Validate()
 	})
 	format := flags.String("format", "text", "text or json")
-	if result.operation == "failed" {
+	switch {
+	case result.operation == "failed":
 		flags.IntVar(&result.options.Limit, "limit", 20, "maximum records in this page (1-100)")
 		flags.Func("after", "cursor from the previous page", func(text string) error {
 			id, err := model.ParseID[jobs.Execution](text)
 			result.options.After = id
 			return err
 		})
-	} else {
+	case bulk(result.operation):
+		result.options.Limit = jobs.MaxListLimit
+		flags.BoolVar(&result.confirm, "confirm", false, "confirm the bulk operation")
+		flags.Func("name", "limit to one job name (with --version)", func(text string) error {
+			result.options.Name = jobs.Name(text)
+			return nil
+		})
+		flags.Func("version", "job payload version (with --name)", func(text string) error {
+			version, err := strconv.ParseUint(text, 10, 32)
+			result.options.Version = jobs.Version(version)
+			return err
+		})
+	case result.operation == "migrate-layout":
+		flags.BoolVar(&result.confirm, "confirm", false, "confirm that every process of the previous release stopped or drained")
+	case result.operation != "stats":
 		flags.Func("id", "retained job execution ID", func(text string) error {
 			id, err := model.ParseID[jobs.Execution](text)
 			result.id = id
@@ -90,8 +115,14 @@ func Parse(args []string, help io.Writer) (Command, error) {
 	if err := result.options.Validate(); err != nil {
 		return Command{}, cli.InvalidArguments(err)
 	}
-	if result.operation != "failed" && result.id.IsZero() {
+	if (result.operation == "inspect" || result.operation == "retry" || result.operation == "forget") && result.id.IsZero() {
 		return Command{}, cli.Usage("--id is required")
+	}
+	if result.operation == "migrate-layout" && !result.confirm {
+		return Command{}, cli.Usage("--confirm is required: stop or drain every process of the previous release first")
+	}
+	if bulk(result.operation) && !result.confirm {
+		return Command{}, cli.Usage("--confirm is required for bulk queue operations")
 	}
 	if result.operation == "retry" && result.token == "" {
 		return Command{}, cli.Usage("--token from a failed inspection is required")
@@ -106,7 +137,7 @@ func Declaration(construct func(foundation.Resolver) (*jobs.Connections, error))
 	if construct == nil {
 		return cli.Declaration{}, fault.New(fault.Invalid, "job commands require a connection constructor")
 	}
-	definition := cli.Define("jobs", "Inspect failed jobs and explicitly retry an observed failure", func(args []string, help io.Writer) (Command, error) {
+	definition := cli.Define("jobs", "Inspect, retry and manage retained jobs", func(args []string, help io.Writer) (Command, error) {
 		if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 			return Parse(args, help)
 		}
@@ -145,7 +176,9 @@ func (c Command) Run(ctx context.Context, connections *jobs.Connections, output 
 	if ctx == nil || output == nil {
 		return fault.New(fault.Invalid, "job command requires context and output")
 	}
-	if c.operation != "failed" && c.operation != "inspect" && c.operation != "retry" {
+	switch c.operation {
+	case "failed", "inspect", "retry", "stats", "retry-failed", "flush-failed", "forget", "clear", "migrate-layout":
+	default:
 		return fault.New(fault.Invalid, "uninitialized job command; use Parse")
 	}
 	if err := ctx.Err(); err != nil {
@@ -166,6 +199,33 @@ func (c Command) Run(ctx context.Context, connections *jobs.Connections, output 
 		queue = connection.DefaultQueue()
 	}
 	dispatcher := connection.Dispatcher()
+	switch {
+	case c.operation == "migrate-layout":
+		migrated, err := dispatcher.MigrateLayout(ctx, queue)
+		if err != nil {
+			return err
+		}
+		if c.json {
+			return json.NewEncoder(output).Encode(struct {
+				Queue    jobs.Queue `json:"queue"`
+				Migrated bool       `json:"migrated"`
+			}{queue, migrated})
+		}
+		_, err = fmt.Fprintf(output, "%s\tmigrated=%t\n", queue, migrated)
+		return err
+	case c.operation == "stats":
+		stats, err := dispatcher.Stats(ctx, queue)
+		if err != nil {
+			return err
+		}
+		if c.json {
+			return json.NewEncoder(output).Encode(stats)
+		}
+		_, err = fmt.Fprintf(output, "waiting=%d delayed=%d blocked=%d leased=%d failed=%d retained=%d\n", stats.Waiting, stats.Delayed, stats.Blocked, stats.Leased, stats.Failed, stats.Retained)
+		return err
+	case bulk(c.operation):
+		return c.runBulk(ctx, dispatcher, queue, output)
+	}
 	if c.operation == "failed" {
 		found, err := dispatcher.List(ctx, queue, c.options)
 		if err != nil {
@@ -196,6 +256,20 @@ func (c Command) Run(ctx context.Context, connections *jobs.Connections, output 
 	if !ok {
 		return fault.New(fault.Missing, "job is not retained in the selected queue")
 	}
+	if c.operation == "forget" {
+		changed, err := dispatcher.Forget(ctx, queue, record.Envelope.Target())
+		if err != nil {
+			return err
+		}
+		if c.json {
+			return json.NewEncoder(output).Encode(struct {
+				ID      jobs.ExecutionID `json:"id"`
+				Changed bool             `json:"changed"`
+			}{c.id, changed})
+		}
+		_, err = fmt.Fprintf(output, "%s\tforgotten=%t\n", c.id.String(), changed)
+		return err
+	}
 	if c.operation == "inspect" {
 		if c.json {
 			return json.NewEncoder(output).Encode(inspection{record.Summary(), record.History})
@@ -221,6 +295,41 @@ func (c Command) Run(ctx context.Context, connections *jobs.Connections, output 
 		_, err = fmt.Fprintf(output, "%s\tacceptance=%s changed=%t token=%s\n", result.ID.String(), result.Acceptance, result.Changed, result.Token)
 	}
 	return errors.Join(retryErr, err)
+}
+
+// runBulk walks the whole queue in bounded pages. Each page's changes are
+// confirmed independently; an error leaves earlier pages applied.
+func (c Command) runBulk(ctx context.Context, dispatcher *jobs.Dispatcher, queue jobs.Queue, output io.Writer) error {
+	total := jobs.BulkResult{}
+	options := c.options
+	for {
+		var page jobs.BulkResult
+		var err error
+		switch c.operation {
+		case "retry-failed":
+			page, err = dispatcher.RetryFailed(ctx, queue, options)
+		case "flush-failed":
+			page, err = dispatcher.FlushFailed(ctx, queue, options)
+		default:
+			page, err = dispatcher.Clear(ctx, queue, options)
+		}
+		total.Matched += page.Matched
+		total.Changed += page.Changed
+		if err != nil || page.Next.IsZero() {
+			var writeErr error
+			if c.json {
+				writeErr = json.NewEncoder(output).Encode(struct {
+					Operation string `json:"operation"`
+					Matched   int    `json:"matched"`
+					Changed   int    `json:"changed"`
+				}{c.operation, total.Matched, total.Changed})
+			} else {
+				_, writeErr = fmt.Fprintf(output, "%s matched=%d changed=%d\n", c.operation, total.Matched, total.Changed)
+			}
+			return errors.Join(err, writeErr)
+		}
+		options.After = page.Next
+	}
 }
 
 func writeSummary(out io.Writer, job jobs.Summary) error {

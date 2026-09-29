@@ -128,3 +128,75 @@ func TestHeadOpenAPIHasNoPayloadForSuccessOrFailure(t *testing.T) {
 		}
 	}
 }
+
+func TestOpenAPIExportsRouteDocumentationExamplesAndServers(t *testing.T) {
+	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "notes.create", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/notes"))
+	endpoint := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.JSONBody(contract.StringJSON[string]()), foundryhttp.JSONResponse(201, contract.StringJSON[string]())).
+		WithDocumentation(foundryhttp.RouteDocumentation{Summary: "Create a note", Description: "Stores a note.\nReturns its text.", Tags: []string{"notes", "writes"}, Deprecated: true}).
+		WithBodyExample("draft").
+		WithResponseExample("stored")
+	router, err := foundryhttp.NewRouter(endpoint.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, string]) (string, error) {
+		t.Fatal("export invoked handler")
+		return "", nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := manifest.Build(t.Context(), manifest.Sources{HTTP: router})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manifest.Decode(must(source.JSON())); err != nil {
+		t.Fatal("documented manifest does not round-trip", err)
+	}
+	options := openapi.Options{Title: "Notes", APIVersion: "1", Servers: []openapi.Server{{URL: "https://api.example.test/v1", Description: "Production"}, {URL: "/api"}}}
+	data, err := openapi.Render(source, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document struct {
+		Servers []map[string]string `json:"servers"`
+		Tags    []map[string]string `json:"tags"`
+		Paths   map[string]map[string]struct {
+			Summary     string   `json:"summary"`
+			Description string   `json:"description"`
+			Tags        []string `json:"tags"`
+			Deprecated  bool     `json:"deprecated"`
+			RequestBody struct {
+				Content map[string]struct {
+					Example any `json:"example"`
+				} `json:"content"`
+			} `json:"requestBody"`
+			Responses map[string]struct {
+				Content map[string]struct {
+					Example any `json:"example"`
+				} `json:"content"`
+			} `json:"responses"`
+		} `json:"paths"`
+	}
+	if err := json.Unmarshal(data, &document); err != nil {
+		t.Fatal(err)
+	}
+	operation := document.Paths["/notes"]["post"]
+	if operation.Summary != "Create a note" || operation.Description != "Stores a note.\nReturns its text." || !operation.Deprecated || strings.Join(operation.Tags, ",") != "notes,writes" {
+		t.Fatalf("operation documentation = %+v", operation)
+	}
+	if operation.RequestBody.Content["application/json"].Example != "draft" || operation.Responses["201"].Content["application/json"].Example != "stored" {
+		t.Fatal("examples were not exported", operation.RequestBody, operation.Responses["201"])
+	}
+	if len(document.Servers) != 2 || document.Servers[0]["url"] != "https://api.example.test/v1" || document.Servers[1]["url"] != "/api" || len(document.Tags) != 2 || document.Tags[0]["name"] != "notes" {
+		t.Fatalf("servers/tags = %v, %v", document.Servers, document.Tags)
+	}
+	for _, server := range []openapi.Server{{URL: "ftp://example.test"}, {URL: "https://user:secret@example.test"}, {URL: "https://example.test/?q=1"}, {URL: "api"}, {URL: ""}} {
+		if _, err := openapi.Render(source, openapi.Options{Title: "Notes", APIVersion: "1", Servers: []openapi.Server{server}}); err == nil {
+			t.Fatalf("invalid server %q accepted", server.URL)
+		}
+	}
+}
+
+func must(data []byte, err error) []byte {
+	if err != nil {
+		panic(err)
+	}
+	return data
+}

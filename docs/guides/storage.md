@@ -7,7 +7,8 @@ evidence, including AWS versioned reads and cleanup, and provider limitations.
 
 `storage.Disk` owns operation limits, cancellation and returned readers.
 `storage/local` supplies a managed filesystem store. `storage/s3` uses the official
-AWS SDK with separate AWS and R2 profiles. Applications declare their disks once,
+AWS SDK with separate AWS and R2 profiles and a generic S3-compatible profile with
+explicitly declared capabilities. Applications declare their disks once,
 select their adapters and write domain policies; they do not implement transfers,
 multipart cleanup or HTTP file transport.
 
@@ -64,12 +65,28 @@ input length; `value.Set[int64](0)` means exactly empty. Streaming size/checksum
 failures occur before publication. An ETag is an opaque quoted validator, never
 an assumed MD5. Providers may reuse a validator for identical content.
 
+`PutOptions.Metadata` carries optional per-object provider metadata:
+`CacheControl`, `ContentDisposition`, `ContentEncoding`, `StorageClass`,
+`EncryptionKey` (an SSE-KMS key identifier, never key material) and `Custom`
+metadata. Header values are printable ASCII (use RFC 8187 encoding for non-ASCII
+filenames); custom names are lowercase letters, digits and `-`, bounded to
+`MaxCustomMetadataBytes`, and the `foundry-` prefix is reserved. It requires
+`Capabilities.ObjectMetadata` (S3 profiles); the local store rejects it as
+`Unsupported`, and R2 rejects `EncryptionKey`. Metadata is written with the
+object; listings and `Stat` do not echo it back.
+
 ## Conditions, listing and copies
 
 `storage.IfAbsent()` creates only when absent. `storage.IfMatch(etag)` returns a
 validated replacement condition. Reads and deletes take their own typed option
 structs. Inspect `disk.Capabilities()`; unsupported options fail before consuming
-a source or changing the target.
+a source or changing the target. Individual flags describe single options and
+combination flags make provider limits explicit: `ConditionalVersionDelete`
+permits `IfMatch` together with `Version` on `Delete`. AWS leaves it false (a
+delete condition is evaluated against the current object), so an immutable
+version is deleted by `Version` alone, which removes exactly that version without
+a delete marker. `Capabilities.ValidatePut`, `ValidateRead`, `ValidateDelete` and
+`ValidateList` are the shared checks used by `Disk` and the adapters.
 
 ```go
 prefix, err := storage.ParsePrefix("reports/")
@@ -81,14 +98,40 @@ if err != nil { return err }
 
 Listings are bounded pages, not transactionally consistent snapshots. A cursor
 belongs to its adapter/bucket namespace and prefix and grants no authorization.
-S3 listing obtains complete metadata through bounded, serial conditional HEAD
-requests. Concurrently removed/replaced entries are skipped while the provider
-cursor advances. Authorization scopes belong in application-selected prefixes
+Listed objects carry key, size, modification time, ETag and version from the
+provider listing. S3 builds entries from one `ListObjectsV2` page without
+per-object requests, so `ContentType` and `Checksum` are zero there; use `Stat`
+for complete metadata. Entries that cannot be framework objects (foreign or
+unparsable keys, objects above the size limit, entries without validators,
+unreadable local records) are counted in `Page.Skipped` and never fail the page.
+Authorization scopes belong in application-selected prefixes
 and object policies; a client-supplied prefix must not choose another tenant.
 
-`source.CopyTo(ctx, sourceKey, destination, targetKey, options)` streams a complete
-source to another key/disk. It requires capacity on both disks, including two
-slots for a same-disk copy. `MoveTo` then conditionally deletes the original. It
+`ListOptions{Delimited: true}` (with `Capabilities.DelimitedList`) lists one
+level below the prefix: objects without a further `/` and each distinct child
+prefix once in `Page.Directories`. `Limit` bounds objects and directories
+together, and the cursor is bound to the delimited mode. `DeleteMany` deletes up
+to `MaxBatchDelete` distinct keys unconditionally under one operation slot (one
+`DeleteObjects` request on AWS) and reports each key in `Deleted` or `Failed`
+with its own classified outcome; a partial failure also returns an error.
+`DeletePrefix` lists and deletes one bounded page below a nonempty prefix and
+returns `Next`; it is not a snapshot, so concurrently written objects can remain.
+
+`source.CopyTo(ctx, sourceKey, destination, targetKey, options)` copies a complete
+source to another key/disk. When both disks share one adapter implementing
+`storage.ServerCopier`, the copy runs inside the provider (S3 `CopyObject`
+pinned to the source ETag/version, up to 5 GiB; the local store copies
+file-to-file) and holds one operation slot on each disk. An adapter declines
+before any mutation when the request needs the streamed path (for example a
+destination condition, or a compatible profile without declared `ServerCopy`);
+the copy then streams with a read stream on the source and an operation slot on
+the destination. Before any provider copy, a source larger than either disk's
+`MaxObjectBytes` fails with `LimitExceeded` and an `Unchanged` outcome, so an
+oversized move publishes and deletes nothing. A server copy writes the same
+metadata as a streamed copy: the destination content type (the source's by
+default), the source's recorded checksum and `Destination.Metadata`; S3 uses
+`MetadataDirective: REPLACE`, so source cache, disposition and custom headers are
+never inherited. `MoveTo` then conditionally deletes the original. It
 requires conditional-read/delete capabilities, preserves replacements whose
 validators change, and returns `MoveResult` with separate destination/source
 outcomes. This is not an atomic rename. Both adapters must expose `ObjectLocator`,
@@ -124,8 +167,19 @@ diagnostics. `Cleanup().Get()` and the reference's explicit `Value()` identify
 orphan work; do not place them in ordinary public responses or logs.
 
 `Put` borrows and never closes its input. An uncooperative blocked source can delay
-cancellation; its operation slot stays occupied until it actually returns. `Open`
-returns an owned reader that holds a slot until close, cancellation or shutdown.
+cancellation; its operation slot stays occupied until it actually returns.
+
+`Config.MaxActive` and `Timeout` bound metadata and write operations (`Put`,
+`Stat`, `Delete`, `List`, signing) and opening a read stream. An open reader uses
+a separate `MaxStreams` pool (default 256) and is not bounded by `Timeout`: it
+stays open while it makes progress and is cancelled only after
+`StreamIdleTimeout` (default 2 minutes) without read progress, so a slow client
+download is neither cut off mid-body nor able to exhaust write capacity. Both
+pools queue in FIFO order for at most `min(Timeout, 5s)` and then fail as a
+retryable `Unavailable` error matching `fault.Overloaded`; nothing was started.
+`Stats` reports `Active` work and the `Streams` subset. `Open`
+returns an owned reader that holds a stream slot until close, cancellation,
+idle timeout or shutdown.
 `Disk.Close(ctx)` cancels work and interrupts owned readers. Closing an individual
 reader also cancels its backend context before closing the body, so an active read
 retains its cancellation cause. A timed-out disk close does not release capacity
@@ -148,7 +202,18 @@ header, metadata and payload, atomically renamed from a staging file in the same
 filesystem. This preserves case/Unicode key identity even on case-insensitive
 macOS volumes and avoids a separate metadata/payload commit. `os.Root` confines
 filesystem access; advisory locks coordinate publications across processes.
-`Sync` defaults on and syncs files/directories for crash durability. This is an
+Publications and deletes lock only their key's hash shard (while holding the
+store lock shared, so an exclusive holder still excludes every writer); keys in
+different shards proceed in parallel. Lock waits block in the kernel rather than
+polling and honor cancellation. An unconditional publication or delete holds
+its shard lock only across the rename or removal; a conditional one (`IfAbsent`,
+`IfMatch`, conditional delete) holds it until the directory sync made the change
+durable, so no other conditional writer acts on a change that a crash could
+still undo.
+`Sync` defaults on and syncs files/directories for crash durability: the staging
+file before publication and the shard directory after the rename, before success
+is reported; parent directories are synced only when a shard directory is first
+created by the process. This is an
 operator-controlled object store, **not a directory of plain uploaded files**.
 Back it up as a complete store. Use the HTTP storage bridge to serve content.
 
@@ -163,6 +228,8 @@ application maintenance or an explicitly registered [scheduler](scheduler.md) ta
 Listing scans bounded directory batches with a bounded selection heap. It is
 O(number of managed files) per page. `MaxScan` limits work and fails explicitly
 rather than returning an incomplete successful page; size it for the deployment.
+The local store supports delimited listings and same-store server copies; it
+does not accept per-object provider metadata.
 
 ## AWS S3 and Cloudflare R2
 
@@ -179,19 +246,33 @@ credentials)` requires explicit credentials, HTTPS and the account's R2 endpoint
 uses region `auto` and does not fall back to AWS host credentials. Keep secrets in
 an untracked environment/provider configuration, never application source.
 
-Uploads use one reusable `PartBytes` buffer per active upload plus fixed transfer
-buffers and a bounded parts manifest. `MaxUploads` bounds uploads across all disks
-sharing a backend. Parts are uploaded serially within one object; objects can run
-concurrently. Inputs are consumed once. Small/empty inputs use PutObject only
+A declared `Size` below `PartBytes` retains only that many bytes; larger or
+unknown-length inputs use pooled `PartBytes` buffers plus fixed transfer buffers
+and a bounded parts manifest. `PartConcurrency` (default 1) bounds concurrent
+part uploads per object: 1 uploads parts serially with one buffer, N keeps up to
+N parts in flight while one more buffer fills, so an upload retains at most
+N+1 buffers. `MaxUploads` bounds uploads across all disks sharing a backend and
+queues briefly before failing as retryable overload (`fault.Overloaded`).
+Inputs are consumed once. Small/empty inputs use PutObject only
 after EOF/length/checksum checks. Larger inputs stage multipart parts and publish
 only after complete input validation. Transport Content-MD5 checks each part;
 a known full SHA-256 is recorded as metadata. For unknown-length multipart
 uploads without an expected checksum, the returned publication has the computed
 SHA-256, but a later HEAD may not have a full checksum to return.
 
-Only reads and replayable part uploads/abort cleanup have bounded SDK retries.
-PutObject, CreateMultipartUpload and CompleteMultipartUpload never automatically
-retry ambiguous effects. Failed multipart work attempts abort with a separate,
+The PutObject/CompleteMultipartUpload acknowledgement establishes publication
+and supplies the returned ETag and version. With `VerifyPublication` (default
+on) one HEAD pinned to that validator/version reads the provider's
+Last-Modified; when it is disabled or refused (for example write-only
+credentials) the publication is still returned as applied, with the response
+`Date` as its modification time, instead of becoming uncertain.
+
+Only reads and replayable part uploads/abort cleanup have bounded SDK retries,
+using one retryer per backend. PutObject, CreateMultipartUpload,
+CompleteMultipartUpload and CopyObject never automatically retry ambiguous
+effects. The no-retry policy applies to S3 API operations only; credential
+clients created by configuration loading (IMDS, STS, SSO) keep their own
+retries. Failed multipart work attempts abort with a separate,
 bounded cleanup context even when the input context is canceled. Lost creation
 responses may not disclose an upload ID; cleanup references still identify the
 key scope. Configure provider lifecycle expiration for abandoned multipart work;
@@ -218,6 +299,22 @@ its `ObjectInfo.Version` stays empty and follow-up reads pin the ETag. Supported
 provider options must never be silently ignored. Separate live R2 and AWS checks
 passed; the owning blueprint records their evidence and tested scope.
 
+`CompatibleConfig(bucket, region, endpoint, capabilities)` selects a generic
+S3-compatible service (MinIO, DigitalOcean Spaces, Backblaze B2 and similar)
+with path-style addressing. Nothing is inferred from the endpoint:
+`CompatibleCapabilities` declares conditional create/replace/delete, retained
+versions, single-request-only conditions, NFC key normalization, server-side
+copy and path-style listing decoding. Declare only what the service enforces;
+anything undeclared fails as `Unsupported` before provider I/O. Its store
+identity is the complete endpoint host and bucket. `AllowHTTP` opts this
+profile into a plain-HTTP endpoint for local development only; AWS and R2 always
+require HTTPS. The `s3_compatible` disk driver exposes the same settings under
+`cloud.compatible` and `cloud.allow_http`.
+
+Credentials from a Foundry provider that reports no expiry are cached for at
+most five minutes, so rotating providers are consulted again; that refresh
+deadline is not treated as a credential expiry and does not shorten signed URLs.
+
 ## HTTP and links
 
 `storage/http.StoreUpload` persists an already validated `http.UploadedFile`, uses
@@ -232,12 +329,15 @@ retains HEAD/range/validator handling and closes readers automatically. Seeking
 reopens provider ranges pinned to a version or ETag; it does not buffer the whole
 object. `Stream` uses the existing finite streaming response without HTTP range
 negotiation. Presentation names and declared response media types remain explicit.
+Capacity exhaustion (`fault.Overloaded`, `LimitExceeded`), disk shutdown and
+server-side deadlines map to a retryable 503 `unavailable` response, not 500.
 
 Private disks are the default. `disk.PublicURL` requires `Visibility: storage.Public`
 and an explicitly configured public base; neither setting changes provider access
 policy. An S3 public base is the bucket/CDN root; Namespace is appended from the
 same adapter configuration. Keys are escaped literally, including `%`, `?`, `#`,
-spaces and Unicode. AWS listing responses decode form-style spaces (`+`)
+spaces and Unicode; a literal `+` is encoded as `%2B` because some CDNs and
+S3-compatible servers decode a path `+` as a space. AWS listing responses decode form-style spaces (`+`)
 and escaped literal plus signs (`%2B`) exactly once, including multipart key
 markers; R2 retains its path-style listing decoder. An authenticated S3 API endpoint is never guessed to be a
 public URL.
@@ -246,9 +346,34 @@ public URL.
 a signed **read** URL for S3/R2. Expiry is bounded by the requested lifetime and
 known temporary-credential expiry. Formatting redacts the bearer URL and implicit
 JSON serialization fails; explicitly put `link.URL()` in an authorized response
-DTO. Revocation can invalidate a link earlier. Local content uses the existing
+DTO. Revocation can invalidate a link earlier. `LinkOptions.ResponseContentType`
+and `ResponseContentDisposition` are signed provider response overrides (for
+example a download filename); they never change stored metadata. Local content uses the existing
 [typed signed HTTP endpoint](http-signed-urls.md) around the download bridge;
 there is no separate local signing algorithm or filesystem server.
+
+`disk.TemporaryUploadURL(ctx, key, storage.UploadLinkOptions{...})` signs a
+direct client upload (a single S3 `PutObject`, at most 5 GiB) for an
+application-selected key. `Size` must be at least one byte: SigV4 does not sign
+a zero `Content-Length`, so an empty link would accept any size; store empty
+objects with `Put`. The exact `Size`, `ContentType`, optional `Checksum`
+metadata and optional `IfAbsent` condition are signed; the client must send the
+returned `UploadLink.Headers()` unchanged with `Method()` to `URL()`. The link is
+a bearer write credential: authorize the caller first, return it only through an
+explicit response DTO (formatting redacts it and implicit JSON fails), and
+confirm the object with `Stat` before relying on it. Replacement conditions are
+not offered.
+
+`disk.TemporaryUploadForm(ctx, key, storage.UploadFormOptions{...})` signs an HTML
+form (S3 POST-policy) upload for browsers that post a file directly. The policy
+pins the exact bucket and key (never a `starts-with` prefix), the exact
+`ContentType`, a `content-length-range` of `[MinSize, MaxSize]` (at most 5 GiB and
+the disk's object limit) and optional checksum metadata, and expires with the
+link lifetime rules above. Render `UploadForm.Fields()` as hidden inputs in
+order, then the file input named `FileField()` last, posting to `URL()`. The
+form is a bearer write credential with the same disclosure rules as an upload
+link. R2 does not implement POST-object uploads (`Unsupported`); a compatible
+profile must declare `FormUploads` (`cloud.compatible.form_uploads`).
 
 ## Verification
 

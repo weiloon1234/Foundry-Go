@@ -1,8 +1,5 @@
 # HTTP response compression
 
-Focused runtime, consumer, type-safety and editor acceptance passed, followed by
-full canonical regression. See the [milestone completion review](../../blueprint/00-master-architecture-and-parity.md#milestone-08-completion-review).
-
 Apply `Compression(DefaultCompressionConfig())` around a router or declare it in
 a route's middleware chain. The [independent consumer](../../tests/fixtures/consumer/httpcompression/compression.go)
 adds this wrapper to an existing typed endpoint; its service and DTOs stay ordinary
@@ -49,17 +46,25 @@ memory; this middleware does not buffer an entire response.
 
 `MaxConcurrent` defaults to 32 and may be 1–1024. It bounds active encoders for
 each assembled middleware instance. When saturated, requests use identity if
-accepted; otherwise they receive the shared 503 response. Encoder requests do
-not form an unbounded queue. Slots are released on normal return, write failure,
-cancellation and panic. Interrupted streams are not finalized as successful
-compressed representations.
+accepted. A request that refuses identity waits up to 250 ms for an encoder and
+then receives the shared retryable 503 response with `Retry-After: 1`. Encoder
+requests do not form an unbounded queue. Slots are released on normal return,
+write failure, cancellation and panic. Interrupted streams are not finalized as
+successful compressed representations.
+
+Encoder state is pooled per configured encoder (algorithm, level and window)
+inside each assembled middleware; nothing is process-global. A pooled gzip or
+Brotli writer is `Reset` before reuse, keeping its allocated window, hash tables
+and buffers, and is detached from the completed response when released.
 
 ## Negotiation and representation policy
 
 `Accept-Encoding` parsing is bounded to 8 KiB, 16 lines and 64 list slots.
 Quality weights use exact integer thousandths. Unknown valid coding names are
-allowed, but unsupported encodings are not selected. Duplicate coding names,
-malformed quality values and control bytes return 400. The highest accepted
+allowed, but unsupported encodings are not selected. The field is client-owned
+negotiation metadata: a field with duplicate coding names, unknown parameters,
+malformed quality values, control bytes or more than the bounds above is ignored
+and the response is sent with identity encoding; it never returns 400. The highest accepted
 encoding weight wins, with server order breaking ties. An explicitly higher
 identity preference selects identity. Absent/empty fields select identity.
 [HTTP encoding negotiation](https://httpwg.org/specs/rfc9110.html#field.accept-encoding)

@@ -75,7 +75,9 @@ type Stream interface {
 }
 
 // Backend exposes ephemeral fan-out, separate from jobs or durable events. Publish
-// returns the authority's subscriber count, not a processing acknowledgement.
+// returns the authority's subscriber count, not a processing acknowledgement:
+// memory counts subscriptions, Redis counts subscribed connections (one client
+// multiplexes all of its subscriptions over one connection).
 // Subscribe's context bounds establishment only; the returned stream is explicitly
 // owned until Close or adapter shutdown. No implicit publish retry or fallback.
 type Backend interface {

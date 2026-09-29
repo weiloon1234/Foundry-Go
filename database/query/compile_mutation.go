@@ -11,11 +11,11 @@ func (p mutationPlan[M]) compile() (Statement, error) {
 	if p.kind == insertModel {
 		return (insertPlan[M]{query: q, rows: []Mutation[M]{p.mutation}}).compile()
 	}
-	c, err := q.mutationCompiler(p.kind)
+	c, err := q.modelWriteCompiler(p.kind, !p.setBased)
 	if err != nil {
 		return Statement{}, err
 	}
-	assigned, err := q.validateMutation(p.kind, p.mutation, &c)
+	assigned, err := p.validate(&c)
 	if err != nil {
 		return Statement{}, err
 	}
@@ -32,6 +32,13 @@ func (p mutationPlan[M]) compile() (Statement, error) {
 		}
 		sets = append(sets, quoted(column.Name)+" = "+parameter)
 	}
+	if p.adjust != nil {
+		set, err := p.adjustSet(&c, assigned)
+		if err != nil {
+			return Statement{}, err
+		}
+		sets = append(sets, set)
+	}
 	var sql strings.Builder
 	sql.WriteString(prefix)
 	switch p.kind.sqlKind() {
@@ -45,7 +52,9 @@ func (p mutationPlan[M]) compile() (Statement, error) {
 	if err := c.where(&sql, q.effectivePredicates()); err != nil {
 		return Statement{}, err
 	}
-	sql.WriteString(" RETURNING " + selectedColumns(q.table, q.definition.columns))
+	if !p.countOnly {
+		sql.WriteString(" RETURNING " + selectedColumns(q.table, q.definition.columns))
+	}
 	return Statement{sql: sql.String(), arguments: c.arguments}, nil
 }
 

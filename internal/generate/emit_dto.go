@@ -10,7 +10,7 @@ import (
 func emitDTO(p *packageInput, declaration dtoDeclaration) ([]byte, error) {
 	e := newEmitter(p)
 	e.emitDTO(declaration)
-	return e.finish(declaration.position.Filename, declaration.position.Line)
+	return e.finish(declaration.position.Filename)
 }
 
 func (e *emitter) emitDTO(declaration dtoDeclaration) {
@@ -27,19 +27,27 @@ func (e *emitter) emitDTO(declaration dtoDeclaration) {
 	if params != "" {
 		argumentDecl, arguments = e.genericArguments(declaration.typ, declaration.dtoGraph)
 	}
-	e.line("func %sJSON%s(%s)%s.JSON[%s%s]{", declaration.name, params, argumentDecl, contract, declaration.name, args)
-	fmt.Fprint(&e.body, "return ")
 	if params == "" {
+		// Non-generic descriptors are immutable; compile the schema once.
+		e.line("func %sJSON()%s.JSON[%s]{return foundry%sJSON()}", declaration.name, contract, declaration.name, declaration.name)
+		e.line("var foundry%sJSON=%s.OnceValue(func()%s.JSON[%s]{", declaration.name, e.use("sync"), contract, declaration.name)
+		fmt.Fprint(&e.body, "return ")
 		e.emitJSONValue(declaration.typ, declaration.dtoGraph, "DefineJSON")
+		e.line("})")
 	} else {
+		e.line("func %sJSON%s(%s)%s.JSON[%s%s]{", declaration.name, params, argumentDecl, contract, declaration.name, args)
+		fmt.Fprint(&e.body, "return ")
 		e.emitGenericJSONValue(declaration.typ, declaration.dtoGraph, arguments)
+		e.line("}")
 	}
-	e.line("}")
-	e.emitDTOValidation(declaration)
+	if declaration.role != dtoResponseRole {
+		e.emitDTOValidation(declaration)
+	}
 	if declaration.message != nil {
 		message := e.use(framework + "/i18n/message")
 		e.line("// %sMessage retains this declaration's exact argument type and shared JSON contract.", declaration.name)
-		e.line("func %sMessage()%s.Message[%s]{return %s.Define(%q,%sJSON(),%s.Options{Plural:%q,Kind:%q})}", declaration.name, message, declaration.name, message, declaration.message.key, declaration.name, message, declaration.message.plural, declaration.message.kind)
+		e.line("func %sMessage()%s.Message[%s]{return foundry%sMessage()}", declaration.name, message, declaration.name, declaration.name)
+		e.line("var foundry%sMessage=%s.OnceValue(func()%s.Message[%s]{return %s.Define(%q,%sJSON(),%s.Options{Plural:%q,Kind:%q})})", declaration.name, e.use("sync"), message, declaration.name, message, declaration.message.key, declaration.name, message, declaration.message.plural, declaration.message.kind)
 	}
 }
 
@@ -97,7 +105,10 @@ func (e *emitter) emitJSONGraph(typ types.Type, graph dtoGraph, constructor stri
 			continue
 		}
 		if node.typ != nil {
-			if _, ok := types.Unalias(node.typ).Underlying().(*types.Slice); ok && hasTypeParameter(node.typ) {
+			// value.List keeps its declared non-null array node below.
+			named, _ := types.Unalias(node.typ).(*types.Named)
+			_, list := valueList(named)
+			if _, ok := types.Unalias(node.typ).Underlying().(*types.Slice); ok && hasTypeParameter(node.typ) && !list {
 				e.line("%s.JSONSliceType[%s](%s,%s),", contract, e.typeName(node.typ), id(wire.ID), id(wire.Element))
 				continue
 			}

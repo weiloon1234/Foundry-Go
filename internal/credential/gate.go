@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 )
 
@@ -23,46 +24,46 @@ func IsNil(v any) bool {
 }
 
 // Gate owns callback capacity until actual exit, including cancellation/Goexit.
-// It does not own the borrowed backend or retry uncertain operations.
+// It does not own the borrowed backend or retry uncertain operations. A burst
+// queues for at most admission.Wait(timeout); an unsatisfied wait reports
+// fault.Overloaded before the operation starts.
 type Gate struct {
-	slots   chan struct{}
+	slots   *admission.Semaphore
 	timeout time.Duration
 }
 
 func NewGate(maximum int, timeout time.Duration) *Gate {
-	return &Gate{slots: make(chan struct{}, maximum), timeout: timeout}
+	return &Gate{slots: admission.New(maximum), timeout: timeout}
 }
 func (g *Gate) Execute(ctx context.Context, fn func(context.Context) error) error {
 	if g == nil || g.slots == nil || ctx == nil || fn == nil {
 		return fault.New(fault.Invalid, "credential operation requires a bound store and context")
 	}
-	op, cancel := context.WithTimeout(ctx, g.timeout)
-	defer cancel()
-	if err := op.Err(); err != nil {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
-	select {
-	case g.slots <- struct{}{}:
-	default:
-		return fault.New(fault.Conflict, "credential operation capacity reached")
+	// Queue before the operation budget starts, so waiting cannot consume it.
+	if err := g.slots.Acquire(ctx, admission.Wait(g.timeout), nil); err != nil {
+		return err
 	}
-	defer func() { <-g.slots }()
+	defer g.slots.Release()
+	op, cancel := context.WithTimeout(ctx, g.timeout)
+	defer cancel()
 	err := callback.Isolated("credential operation", func() error {
 		if err := op.Err(); err != nil {
 			return err
 		}
 		return fn(op)
 	})
+	if err == nil {
+		// The callback completed; a deadline reached afterwards cannot undo a
+		// committed result, so success is reported rather than discarded.
+		return nil
+	}
 	if canceled := op.Err(); canceled != nil {
 		// A late cancellation must not erase a known committed/uncertain database
 		// outcome or another operational cause. Keep both identities, safely formatted.
-		if err != nil {
-			return fault.Wrap(fault.Internal, "credential operation canceled", errors.Join(canceled, err))
-		}
-		return canceled
+		return fault.Wrap(fault.Internal, "credential operation canceled", errors.Join(canceled, err))
 	}
-	if err != nil {
-		return fault.Wrap(fault.Internal, "credential operation failed", err)
-	}
-	return nil
+	return fault.Wrap(fault.Internal, "credential operation failed", err)
 }

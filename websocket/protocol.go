@@ -1,13 +1,11 @@
 package websocket
 
 import (
-	"bytes"
 	"encoding/json"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
-	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -61,6 +59,9 @@ const (
 	OperationTimedOut  Code = "operation_timed_out"
 	Stopping           Code = "stopping"
 	RateLimited        Code = "rate_limited"
+	// Unavailable is a retryable transient failure, such as a cluster
+	// authority timeout or exhausted management capacity.
+	Unavailable Code = "unavailable"
 )
 
 func (c Code) Error() string { return string(c) }
@@ -112,51 +113,55 @@ func validRoom(room string) bool {
 	return true
 }
 
-// DecodeRequest enforces the exact versioned envelope with shared duplicate-key,
-// Unicode, depth and node checks. Callers must bound frame buffering first.
+// DecodeRequest enforces the exact versioned envelope in one strict pass:
+// duplicate/unknown members, invalid UTF-8 and unpaired surrogates are rejected.
+// Callers must bound frame buffering first. A malformed request still reports
+// its ID when one was decoded and valid, so errors can correlate.
 func DecodeRequest(data []byte, maxBytes int) (Request, error) {
 	if maxBytes < 1 || maxBytes > 1<<20 {
 		return Request{}, Malformed
 	}
-	node, err := jsonwire.Decode(data, jsonwire.Limits{Bytes: maxBytes, Depth: contractFrameDepth, Nodes: 65536})
-	if err != nil {
-		return Request{}, Malformed
-	}
-	object, ok := node.(map[string]any)
-	if !ok {
-		return Request{}, Malformed
-	}
-	for key := range object {
-		switch key {
-		case "v", "action", "id", "channel", "room", "event", "payload", "replay":
-		default:
-			return Request{}, Malformed
-		}
-	}
 	var request Request
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&request) != nil {
-		return Request{}, Malformed
+	present, err := decodeObject(data, maxBytes, func(name string) wireMember {
+		switch name {
+		case "v":
+			return into(&request.Version)
+		case "action":
+			return into(&request.Action)
+		case "id":
+			return into(&request.ID)
+		case "channel":
+			return into(&request.Channel)
+		case "room":
+			return into(&request.Room)
+		case "event":
+			return into(&request.Event)
+		case "payload":
+			return into(&request.Payload)
+		case "replay":
+			return into(&request.Replay)
+		}
+		return nil
+	})
+	identified := Request{}
+	if identifier.Semantic(string(request.ID)) {
+		identified.ID = request.ID
 	}
-	if !identifier.Semantic(string(request.ID)) || !identifier.Semantic(string(request.Channel)) {
-		return Request{}, Malformed
+	if err != nil || !identifier.Semantic(string(request.ID)) || !identifier.Semantic(string(request.Channel)) {
+		return identified, Malformed
 	}
 	if request.Version != ProtocolVersion {
 		return request, UnsupportedVersion
 	}
-	if _, exists := object["replay"]; exists && (request.Action != Subscribe || request.Replay == nil || *request.Replay < 0 || *request.Replay > MaxReplayMessages) {
+	if present["replay"] && (request.Action != Subscribe || request.Replay == nil || *request.Replay < 0 || *request.Replay > MaxReplayMessages) {
 		return request, Malformed
 	}
-	if _, exists := object["room"]; exists && (request.Room == nil || !validRoom(*request.Room)) {
+	if present["room"] && (request.Room == nil || !validRoom(*request.Room)) {
 		return request, Malformed
 	}
 	switch request.Action {
 	case Subscribe, Unsubscribe:
-		if _, ok := object["event"]; ok {
-			return request, Malformed
-		}
-		if _, ok := object["payload"]; ok {
+		if present["event"] || present["payload"] {
 			return request, Malformed
 		}
 	case Message:
@@ -168,5 +173,3 @@ func DecodeRequest(data []byte, maxBytes int) (Request, error) {
 	}
 	return request, nil
 }
-
-const contractFrameDepth = jsonwire.MaxDepth

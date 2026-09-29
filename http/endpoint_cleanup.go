@@ -28,11 +28,35 @@ type preparedResponse struct {
 	headers     []ResponseHeader
 	operational error
 	file        *preparedFile
+	// status is the handler-selected success status; zero is the declared one.
+	status int
+	// location is a validated redirect target.
+	location string
+	// events streams a prepared server-sent event response.
+	events func(stdhttp.ResponseWriter, *stdhttp.Request) error
+	// release ends a detached file-source context after the transfer.
+	release func()
+}
+
+func (p preparedResponse) statusOr(declared int) int {
+	if p.status != 0 {
+		return p.status
+	}
+	return declared
 }
 
 func (p preparedResponse) cleanup() func() error {
 	if p.file == nil || p.file.reader == nil {
-		return nil
+		if p.release == nil {
+			return nil
+		}
+		return func() error { p.release(); return nil }
 	}
-	return p.file.reader.Close
+	return func() error {
+		err := p.file.reader.Close()
+		if p.release != nil {
+			p.release()
+		}
+		return err
+	}
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
+	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/lease"
 	"github.com/weiloon1234/Foundry-Go/observability"
@@ -25,7 +26,17 @@ func (s *Scheduler) execute(leader context.Context, index int, id ExecutionID, i
 		base = observed
 	}
 	state, reason := Succeeded, NoReason
-	defer func() { span.End(observability.Result{Outcome: scheduleOutcome(state, reason)}) }()
+	var failure error
+	defer func() {
+		diagnostic := errordiag.Describe(failure)
+		span.EndWithDiagnostic(observability.Result{Outcome: scheduleOutcome(state, reason)}, diagnostic)
+		s.reportFinished(base, invocation, state, reason, diagnostic)
+		// A completed or deliberately skipped occurrence is handled; a cancelled
+		// one (stopping, leadership lost) may be replayed by catch-up.
+		if state == Succeeded || state == Failed || state == Skipped {
+			s.advanceCursor(index, invocation.IntendedAt)
+		}
+	}()
 	invoke := func(owned context.Context) error {
 		operation, unlink := contextlink.Link(base, leader, owned)
 		defer unlink()
@@ -33,11 +44,11 @@ func (s *Scheduler) execute(leader context.Context, index int, id ExecutionID, i
 		// outcome classification inside owned callback isolation, and never feed a
 		// domain error into the lease layer's coordination-error classification.
 		err := callback.Isolated("schedule invocation outcome", func() error {
-			state, reason, _ = s.invoke(operation, d, invocation)
+			state, reason, failure = s.invoke(operation, d, invocation)
 			return nil
 		})
 		if err != nil {
-			state, reason = Failed, Panicked
+			state, reason, failure = Failed, Panicked, err
 		}
 		return nil
 	}
@@ -49,9 +60,10 @@ func (s *Scheduler) execute(leader context.Context, index int, id ExecutionID, i
 		if !ran {
 			state, reason = Skipped, OverlapBusy
 			if err != nil {
-				state, reason = Failed, CoordinationFailed
+				state, reason, failure = Failed, CoordinationFailed, err
 			}
 		} else if err != nil {
+			failure = errors.Join(failure, err)
 			lost := false
 			inspection := callback.Isolated("classify schedule coordination", func() error {
 				lost = errorgraph.Is(err, lease.ErrLost)
@@ -112,8 +124,24 @@ func (s *Scheduler) invoke(parent context.Context, d Declaration, invocation Inv
 		}
 		return callback.Isolated(label, func() error { return handler(ctx, invocation) })
 	}
-	if err = call("before schedule", d.options.Before); err != nil {
-		reason = HookFailed
+	if d.options.When != nil && ctx.Err() == nil {
+		run := false
+		err = callback.Isolated("schedule filter", func() error {
+			var err error
+			run, err = d.options.When(ctx, invocation)
+			return err
+		})
+		if err == nil && !run && ctx.Err() == nil {
+			return Skipped, Filtered, nil
+		}
+		if err != nil {
+			reason = HookFailed
+		}
+	}
+	if err == nil {
+		if err = call("before schedule", d.options.Before); err != nil {
+			reason = HookFailed
+		}
 	}
 	if err == nil {
 		err = call("schedule handler", d.handler)

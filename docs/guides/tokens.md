@@ -23,10 +23,16 @@ api, err := token.New(store, "users.api", users, "users.bearer", declaredScopes)
 ```
 
 Generated internal models own subject locks, token families and retained token
-generations. Operational queries use the ordinary typed ORM. Only explicit
-migration DDL and schema selection require SQL infrastructure statements. Subject
-keys share the existing session identity serialization without changing persisted
-session addresses. Sessions and tokens have distinct tables and public hash types.
+generations. Request authentication, listing, capacity enforcement, revocation
+of many families and pruning use explicit schema-qualified SQL: bearer
+verification is one joined read with no transaction or row lock, so parallel
+requests never serialize on the subject. Other mutations use the typed ORM under
+the subject lock. Subject keys share the existing session identity serialization
+without changing persisted session addresses. Sessions and tokens have distinct
+tables and public hash types. Migration `000002_token_device_refresh_history`
+adds nullable device columns with `NOT VALID` checks (metadata-only, no scan under
+an exclusive lock) and the consumed-refresh table; `000003_validate_token_state`
+validates the checks in its own transaction without blocking reads or writes.
 
 ## Issue only after trusted verification
 
@@ -46,6 +52,24 @@ Without `Refresh`, issuance creates a fixed-expiry personal token. Fully
 authenticated issuance with `Refresh` creates a renewable pair. Pending MFA can
 only issue a short, fixed-expiry challenge with no scopes or refresh capability.
 Ordinary authenticated handlers reject it.
+
+`MaxPerSubject` (default 32) caps a subject's live personal/renewable families per
+guard. `Limit` selects `auth.RejectNew` (the token default), which fails issuance
+with `auth.CredentialLimit` (HTTP 409 `conflict`), or `auth.EvictOldest`, which
+revokes the oldest families so the new one fits. Challenge tokens never count
+toward that cap: they have their own `MaxPendingPerSubject` (default 8) and a new
+challenge always replaces the oldest. Expired families never count.
+
+Issuance records display-only device metadata (`Info().Device()`): the trusted
+client IP and the user agent, truncated to 512 bytes on a rune boundary, from the
+request attribution. Refresh keeps the family's device. Device data never
+authenticates or authorizes.
+
+`Config.Prefix` (empty by default; lowercase letters, digits and underscores, at
+most 16 bytes) is prepended to new access and refresh secrets, for example
+`acme_pat_`, so secret scanners can recognize leaked tokens. Only the random part
+is hashed: tokens issued before a prefix was configured keep working, and changing
+the prefix never invalidates existing tokens.
 
 `Issued.Info()` exposes immutable metadata. `AccessSecret()` and optional
 `RefreshSecret()` are explicit sensitive transport boundaries. Routine formatting
@@ -124,23 +148,31 @@ next, err := api.Refresh(ctx, refreshSecret)
 
 Each successful refresh retains the family's ID, original absolute deadline and
 grant. It consumes the old generation and creates both new hashes atomically.
-Old access tokens stop authenticating. Consumed refresh hashes remain available
-to detect reuse; replay revokes the entire family, including its current successor.
-That revocation commits before the public refresh call reports unauthenticated.
+The previous access token keeps authenticating until its own access expiry or
+`AccessGrace` after the refresh, whichever comes first (default 30 seconds; zero
+disables it; at most the renewable access lifetime), so requests already in flight
+with it do not fail. Older access tokens stop authenticating. Only the current and
+previous generations are kept as rows; older refresh digests move to a compact
+consumed set in the same transaction. Replaying any consumed refresh token revokes
+the entire family, including its current successor. That revocation commits
+before the public refresh call reports unauthenticated.
 
 Refresh rotates credential storage; it does not itself hydrate the subject model.
 Every ordinary guard authorization still resolves current provider eligibility, so
 a disabled/deleted subject cannot use a refreshed credential to authenticate.
 
 Clients must serialize refresh. Concurrent requests have at most one success, and
-reuse detection then invalidates that successor. No grace period or automatic
-retry is provided. A failed or uncertain commit never returns partial credentials;
-a client may need to authenticate again. Database commit and network delivery are
-separate, so a lost response can leave a credential that was never delivered.
+reuse detection then invalidates that successor. The access grace does not apply
+to refresh tokens, and no automatic retry is provided. A failed or uncertain commit
+never returns partial credentials; a client may need to authenticate again. A
+refresh whose commit completed is returned even when the operation deadline passes
+immediately afterwards, because the old refresh token is already consumed.
+Database commit and network delivery are separate, so a lost response can leave a
+credential that was never delivered.
 
 History is bounded by a persisted rotation limit (default/hard maximum 4,096).
 Reaching it requires authentication again and removes the exhausted family.
-Expiry and revocation remove all retained generations. The rotation/reuse behavior
+Expiry and revocation remove all retained generations and consumed digests. The rotation/reuse behavior
 follows the principle in [RFC 9700](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.14.2);
 these personal tokens are not a complete OAuth authorization server.
 
@@ -149,8 +181,10 @@ these personal tokens are not a complete OAuth authorization server.
 Defaults: personal tokens 30 days; renewable access 15 minutes, refresh idle seven
 days, absolute family lifetime 30 days; pending MFA five minutes. Configuration
 requires bounded microsecond-precision durations. Existing families preserve their
-issued policy when configuration changes. Changing the declared scope ceiling
-causes credentials carrying removed scopes to fail verification.
+issued policy when configuration changes. The binding's current scope ceiling
+always applies: removing a scope from the declaration withdraws it from existing
+tokens (verification, `List` and `Refresh` report the intersection) without
+making them unusable. The stored grant is never widened.
 
 Guard lookup is read-only. `Touch(ctx, accessSecret)` explicitly records activity
 without extending access, refresh-idle or absolute expiry. Only a successful
@@ -158,16 +192,55 @@ refresh renews idle expiry, always capped by the original absolute deadline.
 Instances sharing persistence require synchronized clocks; tests inject one clock.
 
 `List(ctx, user.FoundryReference())` returns typed metadata for current live families,
-including families whose access token expired while refresh remains live. Authorize
-inspection of another subject with an ordinary model policy. `RevokeID` requires
-both its model-owned family ID and the matching subject; `RevokeAll` serializes
-with issuance. `Revoke` accepts the current access secret and removes its family.
+including families whose access token expired while refresh remains live, in one
+statement without taking the subject lock. Authorize inspection of another subject
+with an ordinary model policy. `RevokeID` requires both its model-owned family ID
+and the matching subject; `RevokeAll` serializes with issuance and deletes in one
+statement. `Revoke` accepts the current access secret, or the previous
+generation's access secret while it is still valid within `AccessGrace` (a logout
+right after a refresh), and removes its family; `Logout` does the same and reports
+`auth.EventLogout`. A committed revocation always reports its count; it never
+turns into an error.
 
-`Prune` removes at most 16 expired families per call, including bounded generation
-history. Candidate selection uses current generations, so an expired historical
-refresh record cannot starve cleanup or prune a live successor. Candidates are
-rechecked under stable subject locks in deterministic order. Small subject lock
-rows remain after family deletion to avoid races with new issuance.
+## The current token
+
+On an authenticated route, `api.Current(ctx)` returns the `Info` of the token that
+authenticated the request, including its effective scopes, without a second
+lookup. Compare `ID()` values to mark "this device" in `List` results.
+`RevokeCurrent(ctx)` revokes it (API logout), and `RevokeOthers(ctx)` revokes every
+other family of the subject in this guard under the subject lock ("log out other
+devices"). `CurrentProof(ctx)` returns a proof that retains the request's scope
+grants, so a token minted from it can only narrow them, unlike `auth.NewProof`.
+
+`api.WithObserver(observer)` returns a binding sharing the same guard that reports
+`auth.EventLogin` after full issuance or MFA completion, `auth.EventLogout` and
+`auth.EventOtherDevicesLoggedOut` (with `Count`). Observers run after the backend
+returned, in process, and cannot undo the change; see
+[authentication events](authentication.md#lifecycle-events).
+
+## Pruning
+
+`Prune` removes at most `limit` expired families per call (up to 1,024), with their
+generations and consumed digests, in one set-based statement. Candidates come from
+the family absolute-expiry and generation expiry indexes and consider only current
+generations, so an expired historical refresh record cannot starve cleanup or
+prune a live successor. The expiry predicate is rechecked on each locked family;
+families locked by a concurrent refresh or revocation are skipped. Small subject
+lock rows remain after family deletion to avoid races with new issuance.
+
+`PruneExpired(ctx, batch, maxBatches)` prunes in batches until a short batch or
+`maxBatches`, honoring cancellation, and reports the removed families. Call it
+from a scheduler handler:
+
+```go
+cleanup, err := calendar.Hourly("auth.tokens.prune", func(ctx context.Context, _ schedule.Invocation) error {
+	_, err := api.PruneExpired(ctx, token.MaxPruneFamilies, 16)
+	return err
+})
+```
+
+Configured applications can instead return `application.PruneTokens(guard)` in
+`FeatureDeclarations.Pruning` to let the [housekeeping schedule](production-operations.md#housekeeping-schedule) prune each guard.
 
 These behaviors passed the milestone tests and consumer review.
 

@@ -69,3 +69,21 @@ func FuzzNormalizeDisplayName(f *testing.F) {
 		}
 	})
 }
+
+func TestInvisibleFormattingIsRemovedFromDisplayNames(t *testing.T) {
+	// A right-to-left override renders "invoice<RLO>fdp.exe" as "invoiceexe.pdf".
+	for _, test := range []struct{ name, want string }{
+		{"invoice\xe2\x80\xaefdp.exe", "invoicefdp.exe"},
+		{"\xef\xbb\xbfreport\xe2\x80\x8b.pdf", "report.pdf"},
+		{"a\xe2\x81\xa6b\xe2\x81\xa9c\xd8\x9c.txt", "abc.txt"},
+		{"zero\xe2\x80\x8dwidth\xe2\x81\xa0.txt", "zerowidth.txt"},
+		{"résumé.pdf", "résumé.pdf"},
+	} {
+		if got := StripInvisible(test.name); got != test.want {
+			t.Fatalf("StripInvisible(%q) = %q, want %q", test.name, got, test.want)
+		}
+		if got := Normalize(test.name, "upload"); got != test.want {
+			t.Fatalf("Normalize(%q) = %q, want %q", test.name, got, test.want)
+		}
+	}
+}

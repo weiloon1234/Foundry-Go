@@ -125,6 +125,12 @@ func TestTokenConsumerLoginRefreshReplayAndCurrentModel(t *testing.T) {
 	if first.Access == second.Access || first.Refresh == second.Refresh {
 		t.Fatal("refresh reused secrets")
 	}
+	// Requests already in flight with the previous access token succeed within
+	// the refresh grace; afterwards only the new access token authenticates.
+	if w := call("GET", "/profile", "", first.Access); w.Code != 204 {
+		t.Fatal("in-flight access rejected within the refresh grace", w.Code)
+	}
+	now.Advance(token.DefaultConfig(keyspace.Namespace{}).AccessGrace)
 	if w := call("GET", "/profile", "", first.Access); w.Code != 401 {
 		t.Fatal("old access accepted", w.Code)
 	}

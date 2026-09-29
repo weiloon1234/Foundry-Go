@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -92,7 +93,7 @@ func TestRequestAllowlistBoundsAndStableOrdering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	statement, err := source.Compile()
+	statement, err := source.rows.Compile()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,6 +104,95 @@ func TestRequestAllowlistBoundsAndStableOrdering(t *testing.T) {
 	}
 	if !reflect.DeepEqual(statement.Arguments(), []any{int64(7), "%Alpha !%!_!!%"}) {
 		t.Fatal("client strings changed SQL binding", statement.Arguments())
+	}
+	counted, err := source.count.Compile()
+	if err != nil || strings.Contains(counted.SQL(), "ORDER BY") || !strings.Contains(counted.SQL(), `ILIKE $2 ESCAPE '!'`) || !reflect.DeepEqual(counted.Arguments(), statement.Arguments()) {
+		t.Fatal("count query kept the table ordering or lost its filters", counted.SQL(), err)
+	}
+}
+
+func TestLikeRequiresExplicitOptIn(t *testing.T) {
+	_, name, note, _ := reportFields()
+	text := foundryhttp.StringQuery[string]()
+	plain := Where(text, name)
+	if info, err := plain.Description(); err != nil || slices.Contains(info.Operators, Like) || !slices.Contains(info.Operators, Contains) {
+		t.Fatal("like was enabled without an explicit opt-in", info.Operators, err)
+	}
+	if plain.Restrict(Like).Validate() == nil {
+		t.Fatal("restriction enabled a disabled pattern operator")
+	}
+	allowed := Where(text, name).AllowLike()
+	if info, err := allowed.Description(); err != nil || !slices.Contains(info.Operators, Like) {
+		t.Fatal("AllowLike did not enable like", err)
+	}
+	if info, err := NullableWhere(text, note).AllowLike().Restrict(Like, IsNull).Description(); err != nil || !reflect.DeepEqual(info.Operators, []Operator{IsNull, Like}) {
+		t.Fatal("nullable like could not be restricted after opt-in", info.Operators, err)
+	}
+	id, _, _, _ := reportFields()
+	if Where(foundryhttp.IntegerQuery[int64](), id).AllowLike().Validate() == nil {
+		t.Fatal("like enabled on a source without pattern comparisons")
+	}
+	spec := reportSpec()
+	table := Define(spec)
+	if _, err := table.definition.prepare(Request{Filters: []Filter{{Op: Like, Column: "name", Values: []string{"A%"}}}}, DefaultConfig()); !errors.Is(err, fault.Invalid) {
+		t.Fatal("request used an undeclared like filter", err)
+	}
+	spec.Columns[1] = DefineColumn[reportRecord](validation.DefineField("name", func(row ReportRow) string { return row.Name }), "reports.name").SortBy(name.Value()).FilterBy(Where(text, name).AllowLike()).Registration()
+	table = Define(spec)
+	if err := table.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := table.definition.prepare(Request{Filters: []Filter{{Op: Like, Column: "name", Values: []string{"A%"}}}}, DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := table.definition.scoped(t.Context(), reportActor{Tenant: 7, Allowed: true}, QueryAction, prepared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if statement, err := source.rows.Compile(); err != nil || !strings.Contains(statement.SQL(), " LIKE $2") || !reflect.DeepEqual(statement.Arguments(), []any{int64(7), "A%"}) {
+		t.Fatal("explicit like lost its pattern", err)
+	}
+}
+
+func TestNegatedFiltersIncludeRowsWithNullOperands(t *testing.T) {
+	table := Define(reportSpec())
+	compile := func(filters ...Filter) string {
+		t.Helper()
+		prepared, err := table.definition.prepare(Request{Filters: filters}, DefaultConfig())
+		if err != nil {
+			t.Fatal(err)
+		}
+		source, err := table.definition.scoped(t.Context(), reportActor{Tenant: 7, Allowed: true}, QueryAction, prepared)
+		if err != nil {
+			t.Fatal(err)
+		}
+		statement, err := source.count.Compile()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return statement.SQL()
+	}
+	eq := Filter{Op: Equal, Column: "note", Values: []string{"memo"}}
+	for name, filter := range map[string]Filter{
+		"ne":      {Op: NotEqual, Column: "note", Values: []string{"memo"}},
+		"not_in":  {Op: NotIn, Column: "note", Values: []string{"memo", "x"}},
+		"not eq":  {Op: Not, Children: []Filter{eq}},
+		"not and": {Op: Not, Children: []Filter{{Op: All, Children: []Filter{eq, {Op: Equal, Column: "id", Values: []string{"1"}}}}}},
+		"not or":  {Op: Not, Children: []Filter{{Op: Any, Children: []Filter{eq, {Op: Contains, Column: "note", Values: []string{"x"}}}}}},
+	} {
+		if sql := compile(filter); !strings.Contains(sql, `"note" IS NULL`) {
+			t.Fatal("negation dropped NULL rows", name, sql)
+		}
+	}
+	for name, filter := range map[string]Filter{
+		"not null test": {Op: Not, Children: []Filter{{Op: IsNull, Column: "note"}}},
+		"non-null ne":   {Op: NotEqual, Column: "id", Values: []string{"1"}},
+		"double not":    {Op: Not, Children: []Filter{{Op: Not, Children: []Filter{eq}}}},
+	} {
+		if sql := compile(filter); strings.Contains(sql, `"note" IS NULL OR`) || strings.Contains(sql, `OR "report_rows"."note" IS NULL`) {
+			t.Fatal("exact negation gained a NULL branch", name, sql)
+		}
 	}
 }
 
@@ -162,7 +252,7 @@ func TestFilterGroupsPreserveWhereAndHavingPhases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	statement, err := source.Compile()
+	statement, err := source.rows.Compile()
 	if err != nil || !strings.Contains(statement.SQL(), " OR ") || !strings.Contains(statement.SQL(), " AND ") || !reflect.DeepEqual(statement.Arguments(), []any{int64(7), int64(1), int64(3), int64(8)}) {
 		t.Fatal("OR did not keep BETWEEN endpoints together", statement.SQL(), err)
 	}

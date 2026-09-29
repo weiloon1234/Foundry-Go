@@ -32,10 +32,9 @@ func (s *Sessions[M, K]) RevokeAllIn(ctx context.Context, tx *database.Tx, refer
 		if _, err := s.provider.Parse(identity); err != nil {
 			return err
 		}
+		// A count never fails the joined transaction: rejecting it would roll back
+		// the caller's credential change (for example a password reset).
 		count, err = backend.RevokeAllIn(op, tx, s.address, identity)
-		if err == nil && count > MaxSessions {
-			return fault.New(fault.Invalid, "credential backend exceeded revocation capacity")
-		}
 		return err
 	})
 	if err != nil {

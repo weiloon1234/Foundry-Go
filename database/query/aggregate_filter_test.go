@@ -116,7 +116,7 @@ func TestAggregateFilterRelationQualificationAndCTEDiscovery(t *testing.T) {
 	common := As[firstAlias](CTE("eligible", cursorQuery().Where(f.Gt(2))), "eligible_source")
 	eligible := scopedID(common.Scope())
 	filtered := f.Sum().Filter(f.InQuery(SelectValue(common, eligible.Value())))
-	statement, err := compileRelationAggregate(testThrough().aggregateInput(), filtered.node, []driver.Value{int64(1)}, 9)
+	statement, err := compileRelationAggregate(t.Context(), testThrough().aggregateInput(), filtered.node, []driver.Value{int64(1)}, 9)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestAggregateFilterRelationQualificationAndCTEDiscovery(t *testing.T) {
 		t.Fatal(statement.Arguments())
 	}
 	bad := NewExactField[cursorRecord, int64]("wrong", "id", codec.Signed[int64]())
-	if _, err := compileRelationAggregate(testThrough().aggregateInput(), Count[cursorRecord]().Filter(bad.Eq(1)).node, nil, 9); !errors.Is(err, fault.Invalid) {
+	if _, err := compileRelationAggregate(t.Context(), testThrough().aggregateInput(), Count[cursorRecord]().Filter(bad.Eq(1)).node, nil, 9); !errors.Is(err, fault.Invalid) {
 		t.Fatal("relation requalification concealed wrong owner", err)
 	}
 	if filtered.node.field.table != "records" {

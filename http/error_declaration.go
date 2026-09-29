@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 )
 
@@ -18,7 +19,7 @@ type ErrorDeclaration struct{ definition ErrorDefinition }
 
 // DefineError declares a stable code, error status (400–599), and static public
 // message. The same value supplies runtime responses and endpoint metadata.
-// Built-in codes are reserved. Localized messages arrive with localization.
+// Built-in codes are reserved. MessageDefinition enables localized messages.
 func DefineError(code ErrorCode, status int, message string) ErrorDeclaration {
 	return ErrorDeclaration{definition: ErrorDefinition{Code: code, Status: status, Message: message}}
 }
@@ -45,6 +46,24 @@ func (d ErrorDeclaration) Description() (ErrorDefinition, error) {
 		return ErrorDefinition{}, err
 	}
 	return d.definition, nil
+}
+
+// MessageDefinition returns the parameter-free catalog signature
+// (http.error.<code>) that localizes this error's public message in
+// locale-enabled HTTP applications. Register it with the application's message
+// declarations and supply translations; locales without one keep the declared
+// message. Code, status and endpoint metadata are unchanged.
+func (d ErrorDeclaration) MessageDefinition() (i18n.MessageDefinition, error) {
+	info, err := d.Description()
+	if err != nil {
+		return i18n.MessageDefinition{}, err
+	}
+	// A code near the identifier length bound cannot carry the key prefix.
+	definition := i18n.MessageDefinition{Key: errorMessageKey(info.Code)}
+	if err := definition.Validate(); err != nil {
+		return i18n.MessageDefinition{}, err
+	}
+	return definition, nil
 }
 
 func (d ErrorDeclaration) Error() string { return string(d.httpErrorCode()) }
@@ -100,14 +119,12 @@ func (e Endpoint[P, Q, B, R]) errorDefinitions() ([]ErrorDefinition, error) {
 	return definitions, nil
 }
 
-type endpointErrorsKey struct{}
-
 func allowsError(ctx context.Context, definition ErrorDefinition) bool {
-	definitions, constrained := ctx.Value(endpointErrorsKey{}).([]ErrorDefinition)
-	if !constrained {
+	state, matched := ctx.Value(matchedRouteKey{}).(*matchedRoute)
+	if !matched || state == nil || !state.typed {
 		return true
 	} // Explicit raw transport has no typed endpoint contract.
-	return slices.Contains(definitions, definition)
+	return slices.Contains(state.errors, definition)
 }
 
 // ErrorDefinitions returns all built-in and declared application failures in

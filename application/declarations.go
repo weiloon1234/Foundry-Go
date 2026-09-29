@@ -78,6 +78,40 @@ func Listen[E any](topic events.Topic[E], name events.ListenerID, construct func
 		})
 	}}
 }
+
+// ListenQueued registers a listener that runs as a job instead of inline.
+// It requires features.events.queued_listeners.
+func ListenQueued[E any](topic events.Topic[E], name events.ListenerID, construct func(Services) (events.Handler[E], error)) EventDeclaration {
+	return EventDeclaration{install: func(r *foundation.Registrar) error {
+		if construct == nil {
+			return fault.New(fault.Invalid, "event listener requires a typed handler constructor")
+		}
+		return events.RegisterQueuedListener(r, EventKey, topic, name, func(resolver foundation.Resolver) (events.Handler[E], error) {
+			services, err := FromResolver(resolver)
+			if err != nil {
+				return nil, err
+			}
+			return construct(services)
+		})
+	}}
+}
+
+// Subscribe registers every listener of one subscriber type constructed from
+// the application's services. id names the subscriber uniquely.
+func Subscribe(id string, construct func(Services) (events.Subscriber, error)) EventDeclaration {
+	return EventDeclaration{install: func(r *foundation.Registrar) error {
+		if construct == nil {
+			return fault.New(fault.Invalid, "event subscriber requires a constructor")
+		}
+		return events.RegisterSubscriber(r, EventKey, id, func(resolver foundation.Resolver) (events.Subscriber, error) {
+			services, err := FromResolver(resolver)
+			if err != nil {
+				return nil, err
+			}
+			return construct(services)
+		})
+	}}
+}
 func Topic[E any](topic events.Topic[E]) EventDeclaration {
 	return EventDeclaration{install: func(r *foundation.Registrar) error { return events.RegisterTopic(r, EventKey, topic) }}
 }

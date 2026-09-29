@@ -78,20 +78,30 @@ func (e *emitter) emitModelQuery(m model) {
 			primary = f
 		}
 	}
+	// Codecs are built once with the declaration, not once per hydrated row.
+	codecs := make([]string, len(m.fields))
+	for i := range m.fields {
+		codecs[i] = e.localName(fmt.Sprintf("foundryCodec%d", i))
+	}
 	e.line("// %sQuery preserves model-specific keys through fluent query derivation.", m.name)
 	e.line("type %sQuery struct{%s.Query[%s]}", m.name, query, m.name)
-	e.line("// %s starts a complete-model query for %s with generated hydration.", m.query, m.table)
-	e.line("func %s()%sQuery{return %sQuery{%s.ForModel(%s.Define[%s](%q,%q,[]%s.Column{%s},func(%s %s.Row)(%s,error){", m.query, m.name, m.name, query, query, m.name, m.table, primary.column, query, strings.Join(columns, ","), rowVar, database, m.name)
+	e.line("// foundry%sModelQuery holds the immutable declaration, hydration codecs and field metadata, built once on first use.", m.name)
+	e.line("var foundry%sModelQuery %s.Memo[%s.Query[%s]]", m.name, query, query, m.name)
+	e.line("func foundry%sBuildQuery()%s.Query[%s]{", m.name, query, m.name)
+	for i, f := range m.fields {
+		e.line("%s:=%s", codecs[i], e.fieldCodec(f, true))
+	}
+	e.line("return %s.ForModel(%s.Define[%s](%q,%q,[]%s.Column{%s},func(%s %s.Row)(%s,error){", query, query, m.name, m.table, primary.column, query, strings.Join(columns, ","), rowVar, database, m.name)
 	e.line("var %s %s", itemVar, m.name)
 	e.line("if err:=%s.Scan(", rowVar)
-	for _, f := range m.fields {
-		e.line("%s.Scan(&%s.%s),", e.fieldCodec(f, true), itemVar, f.name)
+	for i, f := range m.fields {
+		e.line("%s.Scan(&%s.%s),", codecs[i], itemVar, f.name)
 	}
 	e.line(");err!=nil{return %s{},err};return %s,nil", m.name, itemVar)
 	e.line("},")
-	for _, f := range m.fields {
+	for i, f := range m.fields {
 		if f.mutator == "" {
-			e.line("%s.NewModelField(%q,%s,func(item %s)%s{return item.%s}),", query, f.column, e.fieldCodec(f, true), m.name, e.typeName(f.typ), f.name)
+			e.line("%s.NewModelField(%q,%s,func(item %s)%s{return item.%s}),", query, f.column, codecs[i], m.name, e.typeName(f.typ), f.name)
 			continue
 		}
 		factory := "NewMutatedModelField"
@@ -113,11 +123,20 @@ func (e *emitter) emitModelQuery(m model) {
 	if m.softDelete != "" {
 		behavior += fmt.Sprintf(".WithSoftDeletes(%q)", m.softDelete)
 	}
-	e.line(")%s.WithObserverHooks((%sHooks{}).foundryWriteHooks,%t).WithRetrievalHooks((%sRetrievalHooks{}).foundryRetrievalHooks,%t))}}", behavior, m.name, m.hooks != "", m.name, m.retrieval != "")
+	// A handwritten value-receiver DefineGlobalScopes method declares the
+	// model's default scopes (discovery validates its receiver and signature).
+	// The method value is evaluated lazily at first use, after this query
+	// declaration is memoized, so scopes may reference the model's relations.
+	if _, declared := e.pkg.methods[m.name]["DefineGlobalScopes"]; declared {
+		behavior += fmt.Sprintf(".WithGlobalScopeSource((%s{}).DefineGlobalScopes)", m.name)
+	}
+	e.line(")%s.WithObserverHooks((%sHooks{}).foundryWriteHooks,%t).WithRetrievalHooks((%sRetrievalHooks{}).foundryRetrievalHooks,%t))}", behavior, m.name, m.hooks != "", m.name, m.retrieval != "")
+	e.line("// %s starts a complete-model query for %s with generated hydration.", m.query, m.table)
+	e.line("func %s()%sQuery{return %sQuery{foundry%sModelQuery.Get(foundry%sBuildQuery)}}", m.query, m.name, m.name, m.name, m.name)
 	e.line("// FoundryQuery returns this model's generated metadata query for framework integrations.")
 	e.line("func(%s)FoundryQuery()%s.Query[%s]{return %s().Query}", m.name, query, m.name, m.query)
 	e.emitModelReference(m, primary)
-	for _, method := range modelQueryMethods(query, m.name) {
+	for _, method := range modelQueryMethods(query, context, m.name) {
 		e.line("// %s derives a new %s query without changing its source.", method.name, m.name)
 		e.line("func(q %sQuery)%s(%s)%sQuery{q.Query=q.Query.%s(%s);return q}", m.name, method.name, method.argument, m.name, method.name, method.forward)
 	}
@@ -133,11 +152,14 @@ func (e *emitter) emitModelQuery(m model) {
 
 type queryMethod struct{ name, argument, forward string }
 
-func modelQueryMethods(query, name string) []queryMethod {
+func modelQueryMethods(query, context, name string) []queryMethod {
 	return []queryMethod{
 		{"WithTrashed", "", ""},
 		{"OnlyTrashed", "", ""},
 		{"WithoutTrashed", "", ""},
+		{"WithoutGlobalScope", "scopes ..." + query + ".GlobalScope[" + name + "]", "scopes..."},
+		{"WithoutGlobalScopes", "", ""},
+		{"WithScopeContext", "ctx " + context + ".Context", "ctx"},
 		{"Where", "predicates ..." + query + ".Predicate[" + name + "]", "predicates..."},
 		{"WhereHas", "relation " + query + ".ExistenceRelation[" + name + "]", "relation"},
 		{"WhereDoesntHave", "relation " + query + ".ExistenceRelation[" + name + "]", "relation"},

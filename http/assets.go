@@ -23,6 +23,10 @@ type Assets struct {
 	done             chan struct{}
 	closeOnce        sync.Once
 	closeErr         error
+	// stats briefly caches successful lookups; tags caches content validators
+	// for files without a modification time, such as embed.FS entries.
+	stats assetStatCache
+	tags  sync.Map // string -> assetTag
 }
 
 func prepareAssets(config AssetsConfig) (*Assets, error) {
@@ -70,8 +74,9 @@ func (a *Assets) acquire(ctx context.Context) (func(), error) {
 	if a == nil || ctx == nil {
 		return nil, Unavailable
 	}
+	// Asset requests carry no body: a deadline here is the server's own budget.
 	if err := ctx.Err(); err != nil {
-		return nil, RequestTimeout.WithCause(err)
+		return nil, Unavailable.WithCause(err)
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()

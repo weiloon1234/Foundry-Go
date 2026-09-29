@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"slices"
+	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
@@ -26,6 +27,18 @@ type Definition[M any] struct {
 	hasReadAdapter   bool
 	timestamps       *timestampColumns
 	softDelete       *softDeleteColumn
+	globalScopes     []GlobalScope[M]
+	scopeSource      *lazyScopes[M]
+	// check memoizes Validate for the immutable copy owned by ForModel, so
+	// compiling each statement does not revalidate the whole declaration.
+	// Any other copy has a different address and validates itself.
+	check *definitionCheck[M]
+}
+
+type definitionCheck[M any] struct {
+	owner *Definition[M]
+	once  sync.Once
+	err   error
 }
 
 // Column describes one persisted column at the generated declaration boundary.
@@ -76,10 +89,26 @@ func (d Definition[M]) Validate() error {
 	if err := d.validateTimestamps(); err != nil {
 		return err
 	}
+	if err := d.validateGlobalScopes(); err != nil {
+		return err
+	}
 	return d.validateSoftDeletes()
 }
 
 // ForModel starts a query with complete model metadata and hydration behavior.
+// The query owns an immutable copy; its declaration is validated once, on the
+// first compilation, and the result is shared by every derived query.
 func ForModel[M any](definition Definition[M]) Query[M] {
-	return Query[M]{table: definition.table, definition: &definition}
+	owned := &definition
+	owned.check = &definitionCheck[M]{owner: owned}
+	return Query[M]{table: definition.table, definition: owned}
+}
+
+// validated returns the memoized declaration check of a ForModel copy.
+func (d *Definition[M]) validated() error {
+	if d.check == nil || d.check.owner != d {
+		return d.Validate()
+	}
+	d.check.once.Do(func() { d.check.err = d.Validate() })
+	return d.check.err
 }

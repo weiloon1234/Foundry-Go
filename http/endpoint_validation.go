@@ -8,7 +8,8 @@ import (
 
 // WithValidation adds request rules in declaration order, including comparisons
 // across parameter sources. It returns an independent endpoint. Rules execute
-// after decoding and before the handler; they must not mutate input values.
+// after decoding, preparation and request authorization, before the handler;
+// they must not mutate input values.
 func (e Endpoint[P, Q, B, R]) WithValidation(rules ...validation.Rule[Input[P, Q, B]]) Endpoint[P, Q, B, R] {
 	rule := validation.All(rules...)
 	if e.validation != nil {
@@ -38,9 +39,11 @@ func (e Endpoint[P, Q, B, R]) WithBodyValidation(rules ...validation.Rule[B]) En
 	return e.WithValidation(field.Rules(rules...))
 }
 
+// Validation runs after decoding: an expired deadline is the server's own
+// budget (503). Infrastructure failures are internal and reach WriteError.
 func endpointValidationError(ctx context.Context, err error) error {
 	if canceled := ctx.Err(); canceled != nil && err == canceled {
-		return RequestTimeout.WithCause(err)
+		return Unavailable.WithCause(err)
 	}
 	switch err.(type) {
 	case *validation.Errors:

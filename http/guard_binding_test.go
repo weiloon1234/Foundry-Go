@@ -2,8 +2,10 @@ package http_test
 
 import (
 	"context"
+	"errors"
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/auth"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"io"
 	"log/slog"
@@ -18,13 +20,18 @@ func TestApplicationRequiresCookieProtectionRegardlessOfPath(t *testing.T) {
 	registry, guard, _ := authSetup(t, "cookie", &loads)
 	source := foundryhttp.CookieCredential("cookie", foundryhttp.DefineCookie("session", foundryhttp.SecretCookie(), foundryhttp.DefaultCookieOptions()))
 	endpoint := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "api.cookie", Method: foundryhttp.POST, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/api/change")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+	// Secure by default: a cookie source without origin protection needs an
+	// explicit, documented opt-out instead of silently accepting cross-site POSTs.
+	if _, err := foundryhttp.NewAuthentication(registry, source); !errors.Is(err, fault.Invalid) {
+		t.Fatal("unprotected cookie authentication was accepted", err)
+	}
 	for _, protected := range []bool{false, true} {
 		var transport *foundryhttp.Authentication
 		var err error
 		if protected {
 			transport, err = foundryhttp.NewCookieAuthentication(registry, foundryhttp.CSRFConfig{}, source)
 		} else {
-			transport, err = foundryhttp.NewAuthentication(registry, source)
+			transport, err = foundryhttp.NewAuthentication(registry, source.WithoutOriginProtection())
 		}
 		if err != nil {
 			t.Fatal(err)

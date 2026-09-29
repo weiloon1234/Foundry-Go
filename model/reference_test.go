@@ -184,3 +184,28 @@ func TestReferenceIsolatesCustomCodecFailures(t *testing.T) {
 		}
 	}
 }
+
+func TestIdentityWithModelNameKeepsTheStoredKey(t *testing.T) {
+	ref := model.NewReference[referencedMember]("members", int64(42), codec.Signed[int64]())
+	identity, err := ref.Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	renamed, err := identity.WithModelName("legacy_members")
+	if err != nil || renamed.ModelName() != "legacy_members" {
+		t.Fatal("relabel", err)
+	}
+	if _, err := ref.Parse(renamed); err == nil {
+		t.Fatal("a relabeled identity must not parse as another model implicitly")
+	}
+	back, err := renamed.WithModelName("members")
+	if err != nil || back != identity {
+		t.Fatal("relabel changed the stored key", err)
+	}
+	if _, err := identity.WithModelName("bad name"); err == nil {
+		t.Fatal("invalid model name accepted")
+	}
+	if _, err := (model.Identity{}).WithModelName("members"); err == nil {
+		t.Fatal("zero identity relabeled")
+	}
+}

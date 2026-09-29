@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"slices"
+	"strings"
 
 	driver "github.com/redis/go-redis/v9"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -95,7 +96,7 @@ func (b *WebSocketBackend) command(ctx context.Context, key websocket.ClusterKey
 		return websocketReply{}, err
 	}
 	raw, err := b.client.execute(ctx, func(ctx context.Context, client *driver.Client) (any, error) {
-		return client.Eval(ctx, websocketScript, []string{key.String() + ":metadata", key.String() + ":connections"}, key.String(), key.Policy(), string(bounds), string(data)).Result()
+		return evalScript(ctx, client, websocketScript, []string{key.String() + ":metadata", key.String() + ":connections"}, key.String(), key.Policy(), string(bounds), string(data)).Result()
 	})
 	if err != nil {
 		return websocketReply{}, err
@@ -112,13 +113,16 @@ func (b *WebSocketBackend) command(ctx context.Context, key websocket.ClusterKey
 	case -1:
 		return websocketReply{}, fault.New(fault.Invalid, "stored Redis WebSocket state is corrupt")
 	case -2:
-		return websocketReply{}, fault.New(fault.Conflict, "live Redis WebSocket policy differs")
+		return websocketReply{}, websocket.PolicyConflict
 	case -3:
 		return websocketReply{}, websocket.CapacityExceeded
 	case -4:
 		return websocketReply{}, websocket.Stopping
 	case -5:
 		return websocketReply{}, fault.New(fault.Conflict, "Redis WebSocket clock or revision is outside its bound")
+	case -6:
+		// A per-connection record left by a failed leave; never a namespace policy.
+		return websocketReply{}, websocket.MembershipConflict
 	case 0:
 	default:
 		return websocketReply{}, fault.New(fault.Internal, "unknown Redis WebSocket status")
@@ -210,6 +214,14 @@ func websocketPresence(result websocketReply, key websocket.ClusterKey) (websock
 			return websocket.PresenceSnapshot{}, fault.New(fault.Invalid, "Redis presence member exceeds its bound")
 		}
 		snapshot.Members = append(snapshot.Members, websocket.MemberFrame{ID: member.ID, Data: json.RawMessage(member.Data), Connections: member.Connections})
+	}
+	// The script returns members unordered (Lua comparison follows the server
+	// locale); byte order here is stable on every Redis.
+	slices.SortFunc(snapshot.Members, func(a, b websocket.MemberFrame) int { return strings.Compare(string(a.ID), string(b.ID)) })
+	for i := 1; i < len(snapshot.Members); i++ {
+		if snapshot.Members[i].ID == snapshot.Members[i-1].ID {
+			return websocket.PresenceSnapshot{}, fault.New(fault.Invalid, "Redis presence repeated a member")
+		}
 	}
 	return snapshot, nil
 }

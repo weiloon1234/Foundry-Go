@@ -11,20 +11,44 @@ import (
 // Exists checks whether a live entry belongs to the current namespace/tag snapshot.
 // It does not decode or copy the value; it is not validation of the application DTO.
 // A later Get can miss after expiry/invalidation or fail its own codec/size checks.
+// Like Get, a tagged existence check that races an invalidation re-resolves its
+// snapshot (bounded) and otherwise reports false; it never returns Conflict.
 func (c Cache[K, V]) Exists(ctx context.Context, key K) (bool, error) {
+	started := c.startedAt()
 	var found bool
-	err := c.execute(ctx, key, func(ctx context.Context, access entryAccess) error {
-		backend, ok := access.backend.(EntryBackend)
-		if !ok {
+	err := c.operation(ctx, func(ctx context.Context) error {
+		if _, ok := c.store.backend.(EntryBackend); !ok {
 			return fault.New(fault.Invalid, "cache backend does not support entry inspection")
 		}
-		var err error
-		found, err = backend.Exists(ctx, access.key)
+		if _, scoped := c.store.backend.(TaggedBackend); scoped {
+			if _, ok := c.store.backend.(TaggedEntryBackend); !ok {
+				return fault.New(fault.Invalid, "cache backend does not support tagged entry inspection")
+			}
+		}
+		address, err := c.address(key)
+		if err != nil {
+			return err
+		}
+		memo, err := c.memoView(ctx)
+		if err != nil {
+			return err
+		}
+		if entry, ok := memo.load(address); ok {
+			found = entry.found
+			return nil
+		}
+		observed, err := c.observe(ctx, address, false)
+		found = observed.found
+		if err == nil && !found {
+			memo.save(address, nil, false)
+		}
 		return err
 	})
 	if err != nil {
+		c.report(ctx, Event{Operation: OperationExists}, started, err)
 		return false, err
 	}
+	c.report(ctx, readEvent(OperationExists, found), started, nil)
 	return found, nil
 }
 
@@ -36,6 +60,7 @@ func (c Cache[K, V]) Expire(ctx context.Context, key K, ttl TTL) (bool, error) {
 	if err := ttl.Validate(); err != nil {
 		return false, err
 	}
+	started := c.startedAt()
 	var changed bool
 	err := c.execute(ctx, key, func(ctx context.Context, access entryAccess) error {
 		backend, ok := access.backend.(EntryBackend)
@@ -46,6 +71,7 @@ func (c Cache[K, V]) Expire(ctx context.Context, key K, ttl TTL) (bool, error) {
 		changed, err = backend.Expire(ctx, access.key, ttl)
 		return err
 	})
+	c.report(ctx, Event{Operation: OperationExpire}, started, err)
 	if err != nil {
 		return false, err
 	}
@@ -59,6 +85,7 @@ func (c Cache[K, V]) Expire(ctx context.Context, key K, ttl TTL) (bool, error) {
 // A failed remote acknowledgement returns zero and may hide an applied batch.
 // Like Forget, this does not prevent a concurrent Remember from later repopulating.
 func (c Cache[K, V]) ForgetMany(ctx context.Context, keys ...K) (uint64, error) {
+	started := c.startedAt()
 	var count uint64
 	err := c.operation(ctx, func(ctx context.Context) error {
 		if len(keys) > c.store.config.MaxBatchEntries {
@@ -94,6 +121,7 @@ func (c Cache[K, V]) ForgetMany(ctx context.Context, keys ...K) (uint64, error) 
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		defer forgetMemo(ctx, c.store, bases...)
 		snapshot, err := c.snapshot(ctx)
 		if err != nil {
 			return err
@@ -125,6 +153,7 @@ func (c Cache[K, V]) ForgetMany(ctx context.Context, keys ...K) (uint64, error) 
 		}
 		return err
 	})
+	c.report(ctx, Event{Operation: OperationForgetMany}, started, err)
 	if err != nil {
 		return 0, err
 	}

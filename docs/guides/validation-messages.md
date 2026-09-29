@@ -29,9 +29,20 @@ Catalog: map[i18n.LocaleID]map[i18n.MessageKey]i18n.Template{
 
 Built-in validation keys replace the `foundry.` rule prefix with `validation.`.
 Every rule accepts a text `attribute`. Length/item bounds add numeric `min` or
-`max`; file size adds numeric `bytes`. These select plural forms. Numeric bounds
-and divisors preserve their exact declared text. Comparison/date bounds use text
-`other`. Inspect `validation.MessageDefinitions()` for the complete signatures.
+`max`; file size adds numeric `bytes`; `validation.decimal_places` adds numeric
+`places`. These select plural forms. Numeric bounds and divisors preserve their
+exact declared text. Comparison/date bounds use text `other`, and
+`validation.date_format` uses text `format`. Relative time rules have
+parameter-free keys (`validation.after_now`, `after_or_equal_now`, `before_now`,
+`before_or_equal_now`, `after_today`, `after_or_equal_today`, `before_today`,
+`before_or_equal_today`), as do `validation.image_dimensions` and
+`validation.unique_all`. Inspect `validation.MessageDefinitions()` for the
+complete signatures.
+
+`Dynamic` rules and `Hook` reports may choose a message at check time with
+`validation.RejectWith(generatedMessage, args)`; it renders in the request locale
+with the rule's declared message as English fallback, and its `attribute`/`other`
+arguments must be text like other validation messages.
 HTTP envelope keys are `http.error.<error_code>`; parameter-free decoding keys are
 `http.input.type`, `key`, `null`, `required`, `unknown`, `value` and `length`.
 

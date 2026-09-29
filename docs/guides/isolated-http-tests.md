@@ -68,16 +68,21 @@ so client cleanup runs first. The application drains handlers/tasks before pools
 ## Pool scope and retained data
 
 The typed adapter `postgres.Config.Schema` selects one validated existing schema.
-New and replacement connections establish it before application access. Each
-checkout restores it and UTC, verifies schema existence/USAGE, and discards a
-connection if restoration fails. Sessions that created temporary tables are also
-discarded on reuse to prevent table shadowing. A missing scoped table cannot fall
-back to `public`; a missing/inaccessible schema fails startup. An empty Schema
-preserves the existing unscoped adapter behavior.
+New and replacement connections establish it and UTC, verifying schema
+existence/USAGE, before application access. A checkout restores them when the
+server reports a changed `search_path` or `TimeZone` (PostgreSQL 18; older
+servers restore on every checkout) and discards a connection if restoration
+fails. A connection whose session created temporary objects is discarded on its
+next checkout, even if they were dropped, so session tables never reach another
+borrower. A missing scoped table cannot fall back to `public`; a
+missing/inaccessible schema fails startup. An empty Schema preserves the
+existing unscoped adapter behavior.
 
-Only the application schema is explicitly listed; PostgreSQL's implicit catalog
+The `search_path` lists the application schema and then `pg_temp`, so temporary
+tables cannot shadow application tables; PostgreSQL's implicit catalog
 resolution remains available. See the [PostgreSQL schema rules](https://www.postgresql.org/docs/18/ddl-schemas.html#DDL-SCHEMAS-PATH).
-This adds a bounded driver round trip per checkout. It does not reset arbitrary
+This adds one bounded driver round trip per checkout (a catalog call when the
+scope is unchanged). It does not reset arbitrary
 session state or provide a security sandbox for fully qualified SQL/shared roles.
 Use `database.Session.Discard` for custom session state such as advisory locks;
 do not mutate the pool's schema from domain code. Transactions/session scopes

@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
@@ -113,6 +114,14 @@ func (e responseError) httpErrorIssues() []contract.Issue { return slices.Clone(
 func (e responseError) Unwrap() error                     { return e.cause }
 func (e responseError) Is(target error) bool              { return target == e.code }
 
+// FoundryDiagnostic contributes the public transport code to redacted diagnostics.
+func (c ErrorCode) FoundryDiagnostic(errordiag.Seal) []fault.Attribute {
+	return []fault.Attribute{{Key: "http_code", Value: string(c)}}
+}
+func (e responseError) FoundryDiagnostic(errordiag.Seal) []fault.Attribute {
+	return e.code.FoundryDiagnostic(errordiag.Seal{})
+}
+
 // ErrorResponse is Foundry's public HTTP failure DTO. Models and internal causes
 // are never serialized into this envelope.
 type ErrorResponse struct {
@@ -136,8 +145,10 @@ func localizedErrorResponse(ctx context.Context, err error, presenter *errorPres
 	var presentationErr error
 	// Preserve ordinary Go wrapping/joining while owning arbitrary As/Unwrap
 	// methods. Classification never receives a writer, so callback failure
-	// cannot leave a partially committed error response.
-	classificationErr := callback.Isolated("HTTP error classification", func() error {
+	// cannot leave a partially committed error response. Framework hot paths
+	// use callback.Invoke (panic containment, no goroutine); Isolated is kept
+	// for application handlers and hooks, where Goexit must also be caught.
+	classificationErr := callback.Invoke("HTTP error classification", func() error {
 		classified, found, complete := errorgraph.As[classifiedError](err)
 		if !complete {
 			return fault.New(fault.Invalid, "HTTP error classification exceeded traversal bounds")
@@ -210,8 +221,9 @@ func localizedErrorResponse(ctx context.Context, err error, presenter *errorPres
 // before writing status/body; a response already sent cannot be replaced. Nil
 // errors are rejected. Internal causes are retained by their originating error,
 // never exposed in JSON. Raw handlers may use this explicit transport adapter.
-// Classification waits for custom error methods to finish; panic and Goexit
-// become a safe internal response before any headers or body are written. Error
+// Classification runs custom error methods on the caller's goroutine; a panic
+// becomes a safe internal response before any headers or body are written, and
+// runtime.Goexit ends the calling goroutine as any Go call does. Error
 // methods must terminate and be safe for concurrent classification calls. Each
 // search is bounded to 256 nodes and 64 nested levels; exhausted classification
 // becomes InternalError, while an exhausted retry lookup omits Retry-After.
@@ -219,6 +231,9 @@ func WriteError(w stdhttp.ResponseWriter, r *stdhttp.Request, err error) error {
 	if w == nil || r == nil || err == nil {
 		return fault.New(fault.Invalid, "HTTP error response requires a writer, request and error")
 	}
+	// The error is the matched route's final response: response wrappers
+	// deliver it even after the route's deadline, unless the client left.
+	completeRoute(r.Context())
 	presenter, presenterErr := findErrorPresenter(w)
 	if presenterErr != nil {
 		logRouteFailure(r, "HTTP message presenter lookup failed", presenterErr)
@@ -226,6 +241,9 @@ func WriteError(w stdhttp.ResponseWriter, r *stdhttp.Request, err error) error {
 	payload, classificationErr := localizedErrorResponse(r.Context(), err, presenter)
 	if classificationErr != nil {
 		logRouteFailure(r, "HTTP error classification failed", classificationErr)
+	}
+	if payload.Status >= 500 {
+		reportServerFailure(r, payload, err)
 	}
 	body, encodeErr := json.Marshal(payload)
 	if encodeErr != nil {
@@ -243,17 +261,17 @@ func WriteError(w stdhttp.ResponseWriter, r *stdhttp.Request, err error) error {
 	}
 	header.Set("X-Content-Type-Options", "nosniff")
 	if payload.Code == RateLimited {
-		retry, retryErr := authenticationRetryAfter(err)
-		if retryErr != nil {
+		if retryErr := rateLimitedHeaders(header, err); retryErr != nil {
 			logRouteFailure(r, "HTTP lockout retry classification failed", retryErr)
 		}
-		if retry > 0 {
-			header.Set("Retry-After", rateLimitSeconds(retry))
-		}
+	}
+	if payload.Code == Unavailable && header.Get("Retry-After") == "" && errorgraph.Is(err, fault.Overloaded) {
+		// Capacity waits already queued this request; a short retry is useful.
+		header.Set("Retry-After", "1")
 	}
 	if payload.Code == IdempotencyInProgress.definition.Code || payload.Code == IdempotencyCapacity.definition.Code || payload.Code == IdempotencyUnavailable.definition.Code {
 		var retry time.Duration
-		failure := callback.Isolated("HTTP idempotency retry classification", func() error {
+		failure := callback.Invoke("HTTP idempotency retry classification", func() error {
 			rejected, found, complete := errorgraph.As[*idempotencyRetryError](err)
 			if !complete {
 				return fault.New(fault.Invalid, "HTTP idempotency retry classification exceeded traversal bounds")

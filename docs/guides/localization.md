@@ -45,6 +45,14 @@ result, err := CartArgsMessage().Format(ctx, catalog, locale, CartArgs{
 `Registration()` erases the argument type only during catalog assembly. Formatting
 still checks the catalog's complete parameter and plural signature.
 
+The message signature and per-parameter wire metadata are resolved once when the
+generated message is defined. `Format` encodes arguments through the generated
+JSON descriptor, which remains the single source of wire names, custom codecs and
+quoting. For repeated rendering of the same arguments, `Bind` once and call
+`PreparedMessage.Format`: it checks the catalog signature without copying and
+renders already validated arguments. Plural rules use language tags parsed once
+per catalog locale.
+
 ## Load catalogs
 
 Pass `os.DirFS` or a scoped `embed.FS` containing locale directories such as
@@ -90,11 +98,22 @@ Substitution occurs once, so argument text containing braces is preserved. Outpu
 is plain text and must be escaped for the destination HTML, URL or other context.
 No expressions, functions or HTML trust are inferred from a translation.
 
-Unknown keys, unknown locales, duplicate JSON keys, duplicate flattened keys,
-duplicates across files, locale aliases that collide, symlinks, malformed leaves
-and placeholders fail loading. Resource limits are 64 locales, 1,024 files,
-1 MiB per file, 16 MiB aggregate catalog data, 10,000 message declarations,
-64 parameters and 64 KiB per template/result. Inputs and metadata are copied.
+Entries whose names start with a dot (`.DS_Store`, `.git`, `.gitkeep`) are ignored
+at every level without being opened, as are regular files without a `.json`
+suffix (`README.md`, editor backups). A `.json` file at the catalog root, nested
+directories inside a locale, symlinks, unknown keys, unknown locales, duplicate
+JSON keys, duplicate flattened keys, duplicates across files, locale aliases that
+collide, malformed leaves and placeholders fail loading. Resource limits are 64
+locales, 1,024 catalog files, 4,096 directory entries per directory, 1 MiB per
+file, 16 MiB aggregate catalog data, 10,000 message declarations, 64 parameters
+and 64 KiB per template/result. Inputs and metadata are copied.
+
+Every load and catalog error is `fault.Invalid` and names the locale, file and
+key where known, with a fixed reason, for example
+`invalid localization catalog (locale "ms", file "ms/cart.json", key "cart.items"): placeholder "nmae" is not a declared parameter`.
+A duplicate key names the file that first defined it. Coordinates are quoted as
+bounded ASCII; template text, JSON values and argument values are never included.
+Declaration and argument errors similarly name the message key and parameter.
 Filesystem callbacks are isolated and awaited through actual return. Directory
 handles must implement `fs.ReadDirFile` so enumeration can be bounded; `embed.FS`,
 `os.DirFS` and `os.Root.FS` support this. Choose `os.Root.FS` when the filesystem
@@ -111,17 +130,78 @@ negotiation: when none matches, the default is used.
 
 `i18n.WithLocale(ctx, catalog, locale)` accepts only supported IDs.
 `i18n.RequestLocale(ctx)` reads that request-local selection. HTTP applications can
-use `http.Locale(catalog)` with the existing middleware API. Response cache and
+use `http.Locale(catalog)` with the existing middleware API, or
+`http.LocaleWith(catalog, http.LocaleNegotiation{QueryParameter: "lang", Cookie: "locale", Preferred: userLocale})`
+to consult an explicit query parameter, a locale cookie and an application
+preference (such as the authenticated user's stored locale) before the context
+locale and Accept-Language. The query selector is request metadata: typed
+endpoints ignore it unless they declare a parameter of the same name, and a
+signed link still verifies when it is appended. Each value is matched against the catalog; malformed
+or unsupported values defer to the next source, while a `Preferred` error is
+returned as the shared error response. An authenticated preference needs the
+actor, so install `LocaleWith` on the authenticated route or scope, inside its
+authentication middleware; there it overrides a global `Locale`. Response cache and
 `Vary: Accept-Language` policy remain explicit because the response may also depend
-on a user's stored preference.
+on a user's stored preference. The framework's `LocaleSet` and `*Catalog` run no
+application code, so `WithLocale` and `SnapshotLocales` read them directly without
+an isolation goroutine; other `LocaleCatalog` implementations remain isolated.
 
-UI lookup tries the requested locale and the configured `CatalogOptions.Fallback`
-(the default locale when omitted). It does not try arbitrary other supported
-locales. `Result.Fallback` identifies a fallback translation. When a registered
-message is absent in both catalogs, `Result.Missing` is true and `Text` contains its
-key. This is a successful, diagnosable missing translation; it does not log argument
+`LocaleSet.Match(id)` is the one parent-locale rule: it returns `id` when
+supported, otherwise its nearest supported parent tag (`en-GB` → `en`,
+`zh-Hant-TW` → `zh-Hant`), never an unrelated sibling. As in CLDR, a script
+subtag directly after the language ends the chain: `zh-Hant` does not fall back
+to `zh`, nor `sr-Latn` to `sr`, because the parent may use another writing
+system; such requests continue with the default. `MatchTag` parses
+external text first, and `MatchAcceptLanguage` applies the header rules above.
+
+UI lookup tries the requested locale, its supported parents, then the configured
+`CatalogOptions.Fallback` (the default locale when omitted). With `en-GB`, `en`
+and default `ms` supported, an `en-GB` request uses an `en-GB` translation, then
+`en`, then `ms`. It does not try arbitrary other supported locales.
+`Result.Fallback` identifies a fallback translation. When a registered message is
+absent in the whole chain, `Result.Missing` is true and `Text` contains its key.
+This is a successful, diagnosable missing translation; it does not log argument
 values. An undeclared dynamic key or incompatible arguments is a configuration
-error. Model-content `LocaleSet.Fallbacks` retains its separate existing behavior.
+error. Model-content `LocaleSet.Fallbacks` uses the same parents: requested,
+supported parents, the default, then the remaining supported locales in lexical
+order.
+
+## Locale preferences
+
+`i18n.LocaleResolver[S]` selects a locale for a typed subject — an HTTP request,
+an authenticated user or a notification recipient — from ordered steps, then the
+catalog default:
+
+```go
+resolver, err := i18n.NewLocaleResolver(catalog,
+    i18n.ContextLocale[*Recipient](),
+    i18n.Preferred("user", func(ctx context.Context, r *Recipient) (i18n.LocaleID, bool, error) {
+        return r.Locale, r.Locale != "", nil // a stored, canonical preference
+    }),
+    i18n.AcceptLanguage(func(r *Recipient) string { return r.AcceptLanguage }),
+)
+resolution, err := resolver.Resolve(ctx, recipient)
+// resolution.Locale is supported; resolution.Source is "context", "user",
+// "accept_language" or "default".
+ctx, resolution, err = resolver.WithResolvedLocale(ctx, recipient)
+```
+
+`ContextLocale` uses a locale recorded by `WithLocale`. `Preferred` adapts an
+explicit or stored preference under an application source name (a semantic
+identifier; `context`, `accept_language` and `default` are reserved). A stored
+locale that is no longer supported falls back to its nearest supported parent or
+defers to the next step. A malformed stored ID such as `en_US` is treated as no
+preference: the step defers and `Resolution.Ignored` names the first such step,
+so one bad profile value never breaks that user's requests. Normalize input with
+`ParseLocale` before storing it. `AcceptLanguage` reads a header value from
+the subject with the bounds and quality rules above. Mail and notification
+delivery typically use a recipient preference without a header step.
+
+Every call takes one supported-locale snapshot. Lookup failures, contained
+panics and cancellation return an error instead of silently selecting the
+default. Lookups run as application callbacks with panic containment but no
+goroutine, must honor `ctx` and be concurrency-safe. A resolver accepts at most
+16 distinct steps, is immutable and can be shared across requests and workers.
 
 Dynamic applications explicitly supply `i18n.MessageDefinition` and call
 `Catalog.FormatDynamic` with typed `Text`, `Number` and `Boolean` arguments. They
@@ -134,7 +214,8 @@ receive runtime signature checks rather than generated Go argument typing.
   `Descriptor.LabelDefinitions()` contributes parameter-free catalog entries once
   per distinct key, so explicit cases can share a label;
   `Definition().Cases` includes the same labels and exact wire values. `Label` and
-  `LabelKey` reject unknown enum values.
+  `LabelKey` reject unknown enum values. A descriptor validates once per
+  `Describe` result; retain it for repeated label lookups.
 - Generated validation fields support `WithLabelKey(message.Key())`. Descriptions
   and issues retain that key separately from the JSON Pointer. `Errors.LocalizeLabels`
   returns copied diagnostics and keeps the static label if its registered

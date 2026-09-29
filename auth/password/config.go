@@ -40,11 +40,20 @@ func (p Parameters) within(limit Parameters) bool {
 
 // Config sets issuance costs and separate verification ceilings for existing
 // hashes. At most MaxConcurrent KDFs run, each bounded by VerifyLimit.MemoryKiB.
+// Each running Argon2 check allocates its hash's memory cost: 64 MiB with the
+// default Parameters, up to VerifyLimit.MemoryKiB (128 MiB by default) for
+// stored legacy hashes. The default of 4 therefore bounds KDF memory to about
+// 256 MiB (512 MiB worst case); size it to the instance's memory budget.
+// Excess requests queue for at most min(Timeout, 5s), then fail with
+// fault.Overloaded (HTTP 503) before any KDF work starts.
 // Timeout cancels admission/publication; a started KDF owns its slot until exit
 // because Argon2 has no cooperative cancellation. No background hash is abandoned.
 type Config struct {
-	Parameters    Parameters
-	VerifyLimit   Parameters
+	Parameters  Parameters
+	VerifyLimit Parameters
+	// MaxBcryptCost bounds verification of imported bcrypt hashes; each step
+	// doubles the work (12 is roughly 250ms). Zero rejects bcrypt hashes.
+	MaxBcryptCost int
 	MaxConcurrent int
 	Timeout       time.Duration
 }
@@ -52,7 +61,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{Parameters: Parameters{MemoryKiB: 64 * 1024, Iterations: 3, Parallelism: 4},
 		VerifyLimit:   Parameters{MemoryKiB: 128 * 1024, Iterations: 6, Parallelism: 8},
-		MaxConcurrent: 2, Timeout: 5 * time.Second}
+		MaxBcryptCost: 13, MaxConcurrent: 4, Timeout: 5 * time.Second}
 }
 func (c Config) Validate() error {
 	if err := c.Parameters.Validate(); err != nil {
@@ -61,7 +70,7 @@ func (c Config) Validate() error {
 	if err := c.VerifyLimit.Validate(); err != nil {
 		return err
 	}
-	if c.Parameters.MemoryKiB < 19*1024 || c.Parameters.Iterations < 2 || !c.Parameters.within(c.VerifyLimit) || c.MaxConcurrent < 1 || c.MaxConcurrent > 64 || c.Timeout <= 0 {
+	if c.Parameters.MemoryKiB < 19*1024 || c.Parameters.Iterations < 2 || !c.Parameters.within(c.VerifyLimit) || c.MaxConcurrent < 1 || c.MaxConcurrent > 64 || c.Timeout <= 0 || c.MaxBcryptCost != 0 && (c.MaxBcryptCost < 4 || c.MaxBcryptCost > 31) {
 		return fault.New(fault.Invalid, "invalid password hashing policy or capacity")
 	}
 	return nil

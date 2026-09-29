@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"image/color"
 	"image/draw"
 	"image/gif"
 	"image/jpeg"
@@ -112,8 +113,29 @@ func (e *Engine) Process(ctx context.Context, source io.Reader, plan Plan) (Resu
 	}
 	return result, nil
 }
+
+// ProcessBytes runs the same bounded pipeline directly on data without copying
+// it. data must not change during the call.
 func (e *Engine) ProcessBytes(ctx context.Context, data []byte, plan Plan) (Result, error) {
-	return e.Process(ctx, bytes.NewReader(data), plan)
+	if err := e.Validate(); err != nil {
+		return Result{}, err
+	}
+	if err := plan.Validate(); err != nil {
+		return Result{}, err
+	}
+	var result Result
+	err := e.calls.Run(ctx, "process image", func(ctx context.Context) error {
+		if int64(len(data)) > e.config.Limits.InputBytes {
+			return limited()
+		}
+		var err error
+		result, err = e.process(ctx, data, plan)
+		return err
+	})
+	if err != nil {
+		return Result{}, err
+	}
+	return result, nil
 }
 
 func (e *Engine) process(ctx context.Context, data []byte, p Plan) (Result, error) {
@@ -132,28 +154,9 @@ func (e *Engine) process(ctx context.Context, data []byte, p Plan) (Result, erro
 	if p.quality != 0 && format != JPEG {
 		return Result{}, invalid("quality applies only to JPEG; WebP output is lossless")
 	}
-	bounds := image.Rect(0, 0, info.Width, info.Height)
-	if p.orientation == ApplyOrientation && info.Orientation >= 5 {
-		bounds = image.Rect(0, 0, info.Height, info.Width)
-	}
-	if err := l.dimensions(bounds.Dx(), bounds.Dy()); err != nil {
+	bounds, err := p.admit(info, format, int64(len(data)), l)
+	if err != nil {
 		return Result{}, err
-	}
-	for _, s := range p.steps {
-		var peak int64
-		bounds, peak, err = s.dimensions(bounds, l)
-		if err != nil {
-			return Result{}, err
-		}
-		if err := l.dimensions(bounds.Dx(), bounds.Dy()); err != nil {
-			return Result{}, err
-		}
-		if peak > l.Pixels {
-			return Result{}, limited()
-		}
-		if err := l.workspace(int64(len(data)), peak); err != nil {
-			return Result{}, err
-		}
 	}
 	if format == ICO && (bounds.Dx() > 256 || bounds.Dy() > 256) {
 		return Result{}, invalid("ICO dimensions must not exceed 256")
@@ -188,14 +191,69 @@ func (e *Engine) process(ctx context.Context, data []byte, p Plan) (Result, erro
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
+	if p.flatten {
+		img = flatten(img, p.background)
+	}
 	output := boundedOutput{maximum: l.OutputBytes, ctx: ctx}
-	if err := encode(&output, img, format, p.quality, l.OutputBytes); err != nil {
+	if err := encode(&output, img, format, p.quality, p.avifQuality, l.OutputBytes); err != nil {
 		return Result{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
 	return Result{data: output.data, info: Info{Format: format, Width: img.Bounds().Dx(), Height: img.Bounds().Dy(), Images: 1, Orientation: 1}}, nil
+}
+
+// admit checks every pipeline phase against the limits before any pixel is
+// decoded and returns the final canvas. Each phase is admitted separately: the
+// decoded image is replaced by the first transform, and only the final canvas
+// remains while encoding.
+func (p Plan) admit(info Info, format Format, input int64, l Limits) (image.Rectangle, error) {
+	bounds := image.Rect(0, 0, info.Width, info.Height)
+	current := info.Format.decodedBytes()
+	if p.orientation == ApplyOrientation && orientationFilter(info.Orientation) != nil {
+		next := bounds
+		if info.Orientation >= 5 {
+			next = image.Rect(0, 0, info.Height, info.Width)
+		}
+		if err := l.dimensions(next.Dx(), next.Dy()); err != nil {
+			return image.Rectangle{}, err
+		}
+		pixels := int64(bounds.Dx()) * int64(bounds.Dy())
+		if err := l.admit(input, pixels*(current+transformBytes)); err != nil {
+			return image.Rectangle{}, err
+		}
+		bounds, current = next, transformBytes
+	}
+	for _, s := range p.steps {
+		before := int64(bounds.Dx()) * int64(bounds.Dy())
+		var peak int64
+		var err error
+		bounds, peak, err = s.dimensions(bounds, l)
+		if err != nil {
+			return image.Rectangle{}, err
+		}
+		if err := l.dimensions(bounds.Dx(), bounds.Dy()); err != nil {
+			return image.Rectangle{}, err
+		}
+		if peak > l.Pixels {
+			return image.Rectangle{}, limited()
+		}
+		after := int64(bounds.Dx()) * int64(bounds.Dy())
+		if err := l.admit(input, before*current+after*transformBytes+peak*s.scratch()); err != nil {
+			return image.Rectangle{}, err
+		}
+		current = transformBytes
+	}
+	final := int64(bounds.Dx()) * int64(bounds.Dy())
+	encoding := final*(current+format.encodeBytes()) + l.OutputBytes
+	if p.flatten {
+		encoding += final * transformBytes
+	}
+	if err := l.admit(input, encoding); err != nil {
+		return image.Rectangle{}, err
+	}
+	return bounds, nil
 }
 func decode(data []byte, f Format, l Limits) (image.Image, error) {
 	r := bytes.NewReader(data)
@@ -228,7 +286,7 @@ func decode(data []byte, f Format, l Limits) (image.Image, error) {
 		return nil, unsupported()
 	}
 }
-func encode(w io.Writer, img image.Image, f Format, quality int, maximum int64) error {
+func encode(w io.Writer, img image.Image, f Format, quality, avifQuality int, maximum int64) error {
 	switch f {
 	case JPEG:
 		if quality == 0 {
@@ -246,12 +304,28 @@ func encode(w io.Writer, img image.Image, f Format, quality int, maximum int64) 
 	case WebP:
 		return nativewebp.Encode(w, img, nil)
 	case AVIF:
-		return avif.Encode(w, img, avif.EncodeOptions{Quality: 60, Speed: 10})
+		if avifQuality == 0 {
+			avifQuality = DefaultAVIFQuality
+		}
+		return avif.Encode(w, img, avif.EncodeOptions{Quality: avifQuality, Speed: 10})
 	case ICO:
 		return encodeIcon(w, img, maximum)
 	default:
 		return unsupported()
 	}
+}
+
+// DefaultAVIFQuality is used unless a plan selects AVIFQuality.
+const DefaultAVIFQuality = 60
+
+// flatten composites an image over an opaque background, so formats without
+// alpha (such as JPEG) do not turn transparent pixels black.
+func flatten(img image.Image, background color.NRGBA) image.Image {
+	b := img.Bounds()
+	out := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	draw.Draw(out, out.Bounds(), &image.Uniform{C: background}, image.Point{}, draw.Src)
+	draw.Draw(out, out.Bounds(), img, b.Min, draw.Over)
+	return out
 }
 
 type boundedOutput struct {

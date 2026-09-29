@@ -73,7 +73,7 @@ type User struct{
 }
 func(User)MutateUpdatedAt(v time.Time)(time.Time,error){return v,nil}
 `)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := Generate(t.Context(), Options{Dir: dir, FieldDocumentation: true}); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, "models.go")
@@ -86,10 +86,10 @@ func(User)MutateUpdatedAt(v time.Time)(time.Time,error){return v,nil}
 	}
 	updated := strings.Replace(string(initial), "table=users primary=ID", "table=users primary=ID timestamps=false", 1)
 	write(t, dir, "models.go", updated)
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err == nil {
+	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true, FieldDocumentation: true}); err == nil {
 		t.Fatal("timestamp opt-out left generated output current")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+	if _, err := Generate(t.Context(), Options{Dir: dir, FieldDocumentation: true}); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(path)
@@ -102,7 +102,7 @@ func(User)MutateUpdatedAt(v time.Time)(time.Time,error){return v,nil}
 	if !strings.Contains(string(data), "Creation history belongs to this record.") || !strings.Contains(string(data), "Custom setter") {
 		t.Fatal("timestamp opt-out removed handwritten or mutator documentation")
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true, FieldDocumentation: true}); err != nil {
 		t.Fatal(err)
 	}
 }

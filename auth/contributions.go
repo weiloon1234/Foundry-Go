@@ -21,8 +21,8 @@ func authorizationContributions(key foundation.Key[*Registry]) foundation.Collec
 	return foundation.NewCollection[Registration](fmt.Sprintf("auth.declarations.%q", key.Name()))
 }
 
-// RegisterAuthorization adds the existing typed guard or policy declaration to
-// an application registry. Its subject/resource types remain part of override
+// RegisterAuthorization adds the existing typed guard, policy, permission or
+// Before/After hook declaration to an application registry. Its subject/resource types remain part of override
 // validation, and its exact declaration identity is retained for auth checks.
 func RegisterAuthorization[D authorizationDeclaration](r *foundation.Registrar, key foundation.Key[*Registry], declaration D) error {
 	if key.Name() == "" || r == nil {
@@ -34,8 +34,11 @@ func RegisterAuthorization[D authorizationDeclaration](r *foundation.Registrar, 
 	item := declaration.Registration()
 	item.owner = r.Owner()
 	kind := "guard."
-	if item.kind == policyRegistration {
+	switch item.kind {
+	case policyRegistration:
 		kind = "policy."
+	case hookRegistration:
+		kind = "hook."
 	}
 	return foundation.ContributeAs[D](r, authorizationContributions(key), kind+item.name, func(resolver foundation.Resolver) (Registration, error) {
 		if _, err := foundation.Resolve(resolver, registryRegistrationKey(key)); err != nil {

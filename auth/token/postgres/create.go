@@ -2,7 +2,9 @@ package postgres
 
 import (
 	"context"
+	"time"
 
+	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/auth/token"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -42,26 +44,8 @@ func (b *Backend) create(ctx context.Context, address token.Address, creation to
 		if err != nil {
 			return err
 		}
-		rows, err := subjectFamilies(ctx, tx, subject)
-		if err != nil {
+		if err := b.enforceCapacity(ctx, tx, subject, creation, now); err != nil {
 			return err
-		}
-		active := 0
-		for _, family := range rows {
-			current, err := currentRecord(ctx, tx, address, subject, family)
-			if err != nil {
-				return err
-			}
-			if current.Live(now) {
-				active++
-				continue
-			}
-			if _, err := families(subject.Scope, subject.Key).Delete(ctx, tx, family.ID); err != nil {
-				return err
-			}
-		}
-		if active >= creation.Maximum {
-			return fault.New(fault.Conflict, "active token capacity reached")
 		}
 		made, err := creation.At(address, now)
 		if err != nil {
@@ -96,4 +80,48 @@ func (b *Backend) create(ctx context.Context, address token.Address, creation to
 		return token.Record{}, err
 	}
 	return result, nil
+}
+
+// enforceCapacity runs under the subject lock. Expired families are removed
+// first in one statement, so they never count. Personal/renewable families and
+// pending-MFA challenges have separate caps: a new challenge replaces the
+// oldest challenges; a full family evicts the oldest full families or fails
+// with auth.CredentialLimit under RejectNew.
+func (b *Backend) enforceCapacity(ctx context.Context, tx *database.Tx, subject tokenstore.Subject, creation token.Creation, now time.Time) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM `+b.familyTable()+` f USING `+b.generationTable()+` g WHERE f.scope = $1 AND f.subject_key = $2 AND g.family_id = f.id AND g.scope = f.scope AND g.generation = f.generation AND `+dead("$3"), subject.Scope, subject.Key, now); err != nil {
+		return err
+	}
+	pending := creation.Mode == token.Challenge
+	var same []string
+	err := database.ForEach(ctx, tx, `SELECT id::text, mode FROM `+b.familyTable()+` WHERE scope = $1 AND subject_key = $2 ORDER BY created_at, id LIMIT $3`, []any{subject.Scope, subject.Key, token.MaxTokens + 1}, func(row database.Row) (string, error) {
+		var id string
+		var mode int16
+		if err := row.Scan(&id, &mode); err != nil {
+			return "", err
+		}
+		if (token.Mode(mode) == token.Challenge) != pending {
+			return "", nil
+		}
+		return id, nil
+	}, func(id string) error {
+		if id != "" {
+			same = append(same, id)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	limit := creation.Maximum
+	if pending {
+		limit = creation.PendingMaximum
+	}
+	if len(same) < limit {
+		return nil
+	}
+	if !pending && creation.Limit == auth.RejectNew {
+		return auth.CredentialLimit
+	}
+	_, err = tx.Exec(ctx, `DELETE FROM `+b.familyTable()+` WHERE scope = $1 AND subject_key = $2 AND id = ANY($3::uuid[])`, subject.Scope, subject.Key, same[:len(same)-limit+1])
+	return err
 }

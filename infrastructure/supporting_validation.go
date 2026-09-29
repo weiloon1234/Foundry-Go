@@ -47,20 +47,18 @@ func (p *Plan) validateSupporting() error {
 		if err := c.Config.From.Validate(); err != nil {
 			return fault.New(fault.Invalid, "configured mailer requires a valid sender")
 		}
-		var provider credentials.Provider
-		if c.Driver == SESMail {
-			if c.API.Credentials == "" {
-				c.API.Credentials = "default"
-			}
-			_, configured := s.Credentials[c.API.Credentials]
-			if !configured && p.options.credentials[c.API.Credentials] == nil {
-				return fault.New(fault.Missing, "mail credential source is not configured")
-			}
-			provider = credentials.ProviderFunc(func(context.Context) (credentials.Value, error) {
-				return credentials.Value{}, fault.New(fault.Internal, "validation-only credentials")
-			})
+		if c.Driver == SESMail && c.API.Credentials == "" {
+			c.API.Credentials = "default"
 		}
-		adapter, err := p.mailAdapter(c, provider)
+		adapter, err := p.mailAdapter(c, func(name credentials.Name) (credentials.Provider, error) {
+			_, configured := s.Credentials[name]
+			if !configured && p.options.credentials[name] == nil {
+				return nil, fault.New(fault.Missing, "mail credential source is not configured")
+			}
+			return credentials.ProviderFunc(func(context.Context) (credentials.Value, error) {
+				return credentials.Value{}, fault.New(fault.Internal, "validation-only credentials")
+			}), nil
+		})
 		if err != nil {
 			return err
 		}
@@ -89,7 +87,10 @@ func (p *Plan) validateSupporting() error {
 			}
 		}
 		switch c.Driver {
-		case MemoryJobs:
+		case MemoryJobs, SyncJobs:
+			if err := c.validateMemory(name); err != nil {
+				return err
+			}
 		case RedisJobs:
 			var err error
 			c.Redis, err = p.redisReference(c.Redis)

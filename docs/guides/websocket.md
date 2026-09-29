@@ -50,20 +50,46 @@ idempotency token. Publication is a trusted server-side operation; expose it to
 clients only through an authorized typed handler.
 
 Success records local publication/queue admission attempts. It does not certify
-that every peer received or processed a frame. Full output queues disconnect slow
+that every peer received or processed a frame. `websocket.NotPublished(err)`
+reports an error that happened before anything was published or retained
+(validation, local admission, a closing hub, encoding), so a retry cannot
+duplicate the event; any other error may follow partial distributed publication
+or history. Full output queues disconnect slow
 connections. There is no global order, durable history or exactly-once guarantee.
+Routing visits only the subscribers indexed under the published room (or the
+channel's rooms for a broadcast), not every connection.
+
+`websocket.ExceptConnection(id)` skips live delivery to one connection, and
+`Incoming.RelayToOthers(outgoing)` relays a client event to every subscriber except
+its sender ("to others"); recent replay still includes the event. Trusted
+publication, presence inspection and disconnect operations share
+`Config.MaxOperations` (default 1024), separate from socket capacity: callers wait
+briefly for a slot and then receive `fault.Overloaded` (HTTP 503) instead of an
+immediate capacity error.
 
 ## Authentication and room ownership
 
 `New(registry, authentication, config)` borrows the existing HTTP authentication
-adapter. It captures declared bearer/cookie inputs at the handshake, then creates
-and closes a fresh auth scope for each subscribe and client message. A connection
-never caches a hydrated subject or keeps an HTTP authentication scope alive.
-Provider eligibility, credential validity and channel authorization run again;
-event policies run after payload decoding. Verified guard attribution reaches
-domain handlers. Only immutable request metadata is copied from the handshake;
-request context values and inherited model/system authority are discarded.
-Unsubscribe can always release an existing subscription.
+adapter. It captures declared bearer/cookie inputs at the handshake. Each subscribe
+creates and closes a fresh auth scope: provider eligibility, credential validity
+and channel authorization run again before admission. Incoming messages reuse the
+connection's authorization freshness window instead: the connection's current auth
+scope (with its cached guard resolution) and each subscription's last authorized
+subject and target. The periodic refresh (`AuthRefreshInterval`, jittered by ±10%)
+re-resolves credentials in a new scope and re-authorizes every private
+subscription; success replaces the cached scope and results, failure disconnects,
+and a refresh that misses its window closes the socket. The window is
+`AuthRefreshInterval` × 1.1 + `OperationTimeout` + `PongTimeout`, plus
+`ClusterConfig.ConnectionTTL`/3 for a distributed hub (a ping and a lease renewal
+may run first on the same timer). A successful refresh extends the window before
+it waits for in-flight messages to release the previous scope, so that wait never
+revokes a fresh connection. A revoked credential can therefore still send messages until the next
+refresh. The cached subject lives in memory only for that window; it is never
+exported or persisted. Event policies run after payload decoding on every message.
+Verified guard attribution reaches domain handlers. Only immutable request
+metadata is copied from the handshake; request context values and inherited
+model/system authority are discarded. Unsubscribe can always release an existing
+subscription.
 
 For user-scoped channels, use `OwnedRooms` with the guard and generated zero
 model's `FoundryReference()`. It compares the room to the guard's verified stored
@@ -91,6 +117,13 @@ public-host admission through existing HTTP middleware before the upgrade route.
 Its `ServerConfig` supplies the HTTP listener settings, exact path and standard
 HTTP middleware. `Hub.Ready(ctx)` reports the module's actual bound address. The
 existing HTTP server owns each upgrade handler until all connection work exits.
+
+`SharedModule(name, key, serverKey, requires, construct)` instead serves the hub
+from an existing HTTP kernel: mount `websocket.Route(hub, path, middleware...)` on
+that router. Boot starts the hub, `Ready` reports that server's address, and the
+hub drains its sockets when the application lifetime ends. `WithLogger(logger)`
+(the modules default to the application logger) records cluster degradation,
+stream loss/recovery and terminal faults with redacted diagnostics.
 
 For manual hosting, mount `hub` as a native `http.Handler` at the intended path,
 keep its borrowed dependencies alive, and call `hub.Stop(ctx)` during shutdown.
@@ -124,10 +157,16 @@ authorization and handler execution produce stable codes without underlying
 error strings, credential values or panic data.
 
 Duplicate keys, case-folded field names, unknown envelope properties, invalid
-Unicode, undeclared action fields and unsupported versions are rejected. Binary
-or oversized frames close the connection. Subscribing twice is an error and
-does not run the join hook twice. Messages require the exact subscription and
-cannot invoke a server-only event.
+Unicode (including unpaired surrogate escapes), undeclared action fields and
+unsupported versions are rejected in one strict decoding pass. Error replies carry
+the request `id` whenever it was decoded, including `malformed` replies. The rate
+limit is checked before a frame is decoded, so a `rate_limited` reply carries the
+`id` only when it appears among the frame's first four scalar members, as
+generated clients send it (`v`, `action`, `id`). Binary or oversized frames close the connection. Subscribing twice is an
+error and does not run the join hook twice. Messages require the exact
+subscription and cannot invoke a server-only event. The `unavailable` code marks
+a retryable transient failure, such as a cluster authority timeout or exhausted
+management capacity; retry the same operation later.
 
 ## Presence and lifecycle hooks
 
@@ -155,18 +194,37 @@ cleanup failures increment operational failure counts.
 
 ## Bounds and ownership
 
-Start with `DefaultConfig`. It bounds connections, subscriptions, inbound/outbound
-queues, frame/payload parsing, callback/write timeouts, presence members and member
-DTO bytes. The aggregate configured queue-byte budget cannot exceed one GiB;
-presence limits must fit a single subscription response. One reader, serialized
-writer and sequential operation worker own each connection. Frame overflow closes
-the socket even while an application callback is still exiting.
+Start with `DefaultConfig`. It bounds connections (10,000 per process),
+subscriptions, inbound (64 frames) and outbound (256 frames) queues, frame/payload
+parsing, callback/write timeouts, presence members and member DTO bytes. Queued
+bytes are enforced when they are queued: `MaxQueuedBytes` (default 1 MiB) bounds
+one connection's inbound, outbound and pending-admission frames and
+`MaxTotalQueuedBytes` (default 256 MiB) bounds all connections. Exceeding a
+connection's own budget disconnects that connection. Exhausting the hub budget
+disconnects the connections actually holding it, largest queue first, releasing
+their queued bytes at once, so a reading subscriber whose own queue is small is
+not disconnected because others stopped reading; the connection being enqueued to
+is disconnected only when it holds the most. Publishers never block. Presence limits
+must fit a single subscription response. One reader, serialized writer, sequential
+operation worker and one maintenance timer (pings, authorization refresh, cluster
+lease renewal) own each connection. Frame overflow closes the socket even while
+an application callback is still exiting.
+
+`MessageRate` (default 128 frames per second) is a per-connection token bucket
+with a burst of `Requests`, refilled continuously and measured on the monotonic
+clock, so wall-clock steps never refill it or disconnect clients. Every frame,
+including malformed input, consumes a token. `DescribeClient` exports
+`inbound_queue` and `message_rate`; generated TypeScript clients keep at most
+`min(subscriptions, inbound_queue)` operations in flight, reject locally with
+`rate_limited` before exceeding the rate, and treat uncorrelated error replies as
+non-fatal (only `unsupported_version` closes the client).
 
 Callbacks, codecs and custom error inspection isolate panic and Goexit. Framework
 error traversal is bounded to 256 nodes and 64 levels per inspection. Cyclic or
 oversized handler errors return `operation_failed`; malformed room codec results
-remain `malformed`. Unclassified cluster failures degrade and stop an active hub
-so its owned setup and cleanup can finish. Custom error methods must still return.
+remain `malformed`. Transient cluster failures fail only their operation with
+`unavailable` and mark the hub degraded until an operation succeeds; see the
+[distributed guide](websocket-distributed.md). Custom error methods must still return.
 Deadlines
 cancel contexts, but cannot kill arbitrary Go code. A callback ignoring cancellation
 retains connection/public-operation capacity and dependencies until actual exit.
@@ -175,7 +233,10 @@ writes within `DrainTimeout`; `Done` waits for actual cleanup. Self-wait from an
 active callback returns `fault.Cycle`. Ordinary connection failure can discard
 pending output; shutdown drain does not promise delivery to a non-reading peer.
 
-`Snapshot` reports local counts without credentials or model objects. Protect any
+`Snapshot` reports local counts without credentials or model objects, including
+queued bytes, operation overloads and (distributed) stream state. `Hub.Probe(ctx)`
+is an I/O-free readiness check: it fails while stopping, after a terminal fault or
+while a distributed hub's fan-out stream is not subscribed. Protect any
 operational endpoint exposing channel/member inspection. `Registry.Channels()`
 returns owned, deterministic metadata from the runtime's exact descriptors for
 the shared client-contract exporter in milestone 21.

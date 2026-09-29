@@ -37,7 +37,11 @@ type Info[M, K any] struct {
 	generation                                        uint32
 	created, issued, lastSeen, accessExpires, expires temporal.DateTime
 	refreshExpires                                    value.Optional[temporal.DateTime]
+	device                                            auth.Device
 }
+
+// Device is the client metadata captured when the token family was issued.
+func (i Info[M, K]) Device() auth.Device { return i.device }
 
 func (i Info[M, K]) ID() ID[M]                                           { return i.id }
 func (i Info[M, K]) Subject() model.Reference[M, K]                      { return i.subject }

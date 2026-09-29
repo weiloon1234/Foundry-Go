@@ -10,8 +10,11 @@ import (
 // CORS snapshots a browser response-sharing policy. Invalid configuration is
 // returned by middleware assembly; CORSConfig.Validate can check it earlier.
 // Apply it around the router so preflights do not require OPTIONS routes.
-// Ordinary requests from disallowed origins still reach the handler without
-// sharing headers. Authentication, authorization and CSRF remain separate.
+// Ordinary requests from disallowed, unknown or malformed origins still reach
+// the handler without sharing headers; a preflight from them is 403. An OPTIONS
+// request without Origin is not a preflight and reaches the handler. Path
+// policies select a complete policy per prefix. Authentication, authorization
+// and CSRF remain separate.
 func CORS(config CORSConfig) Middleware {
 	policy, err := compileCORS(config)
 	return defineReplayMiddleware(CORSMiddlewareID, func(next stdhttp.Handler) (stdhttp.Handler, error) {
@@ -25,35 +28,27 @@ func CORS(config CORSConfig) Middleware {
 }
 
 func (p corsPolicy) serve(w stdhttp.ResponseWriter, r *stdhttp.Request, next stdhttp.Handler) {
-	// Even a wildcard policy rejects malformed Origin values. Preserve that
-	// response distinction in caches, including requests without Origin.
+	if len(p.paths) != 0 && r.URL != nil {
+		p = p.forPath(r.URL.Path)
+	}
+	// Preserve the sharing decision in caches, including requests without Origin.
 	appendVary(w.Header(), "Origin")
-	preflight := r.Method == stdhttp.MethodOptions && len(r.Header.Values("Access-Control-Request-Method")) != 0
+	origins := r.Header.Values("Origin")
+	preflight := r.Method == stdhttp.MethodOptions && len(r.Header.Values("Access-Control-Request-Method")) != 0 && len(origins) != 0
 	if r.Method == stdhttp.MethodOptions {
 		appendVary(w.Header(), "Access-Control-Request-Method", "Access-Control-Request-Headers")
 	}
-	origins := r.Header.Values("Origin")
+	// Origin is browser-owned metadata. Repeated, malformed or unknown values
+	// (custom schemes, extensions, opaque origins) are simply not allowed; they
+	// never reject an ordinary request.
+	// A wildcard policy keeps sharing with requests that omit Origin.
 	var raw string
-	var origin Origin
-	if len(origins) != 0 {
-		if len(origins) != 1 {
-			writeRoutingError(w, r, BadRequest)
-			return
-		}
+	allowed := len(origins) == 0 && p.anyOrigin
+	if len(origins) == 1 {
 		raw = origins[0]
-		var err error
-		origin, err = ParseOrigin(raw)
-		if err != nil {
-			writeRoutingError(w, r, BadRequest)
-			return
-		}
+		allowed = p.allows(raw)
 	}
-	allowed := p.anyOrigin || p.origins[origin]
 	if preflight {
-		if raw == "" {
-			writeRoutingError(w, r, BadRequest)
-			return
-		}
 		p.preflight(w, r, raw, allowed)
 		return
 	}
@@ -66,7 +61,40 @@ func (p corsPolicy) serve(w stdhttp.ResponseWriter, r *stdhttp.Request, next std
 	next.ServeHTTP(w, r)
 }
 
+// allows matches one received Origin value against the configured grammar.
+// A wildcard policy still requires a syntactically valid serialized origin.
+func (p corsPolicy) allows(raw string) bool {
+	if origin, err := ParseOrigin(raw); err == nil {
+		if p.anyOrigin || p.origins[origin] {
+			return true
+		}
+		for _, pattern := range p.patterns {
+			if pattern.matches(string(origin)) {
+				return true
+			}
+		}
+		return false
+	}
+	canonical, ok := canonicalAppOrigin(raw)
+	if !ok {
+		return false
+	}
+	if p.anyOrigin {
+		return true
+	}
+	for _, pattern := range p.patterns {
+		if pattern.matches(canonical) {
+			return true
+		}
+	}
+	return false
+}
+
 func (p corsPolicy) preflight(w stdhttp.ResponseWriter, r *stdhttp.Request, origin string, allowed bool) {
+	if !allowed {
+		writeRoutingError(w, r, Forbidden)
+		return
+	}
 	methods := r.Header.Values("Access-Control-Request-Method")
 	if len(methods) != 1 || !Method(methods[0]).valid() {
 		writeRoutingError(w, r, BadRequest)
@@ -77,7 +105,7 @@ func (p corsPolicy) preflight(w stdhttp.ResponseWriter, r *stdhttp.Request, orig
 		writeRoutingError(w, r, err)
 		return
 	}
-	if !allowed || !p.anyMethod && !p.methods[Method(methods[0])] {
+	if !p.anyMethod && !p.methods[Method(methods[0])] {
 		writeRoutingError(w, r, Forbidden)
 		return
 	}

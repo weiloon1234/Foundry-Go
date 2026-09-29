@@ -125,7 +125,9 @@ func TestHTTPConcurrentBudgetRetainsCancelledHandlerUntilReturn(t *testing.T) {
 	}
 	cancel()
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest("GET", "/next", nil))
+	waiting, stop := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer stop()
+	handler.ServeHTTP(response, httptest.NewRequestWithContext(waiting, "GET", "/next", nil))
 	if response.Code != 503 || recorder.Snapshot().Active != 1 {
 		t.Fatal("cancelled live handler released its admission")
 	}

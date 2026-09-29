@@ -140,10 +140,9 @@ func TestRecursiveCTERejectsSelfPlacement(t *testing.T) {
 
 func TestRecursiveCTESharedBoundsAndMalformedAST(t *testing.T) {
 	base := cursorQuery()
-	values := make([]int64, MaxParameters/2+1)
-	wide := RecursiveCTE("wide", base.Where(scopedID(base.Scope()).In(values...)), func(self RecursiveSelf[cursorRecord]) RecordQuerySource[cursorRecord] {
+	wide := RecursiveCTE("wide", base.Where(wideScoped(base.Scope(), MaxParameters/2+1)), func(self RecursiveSelf[cursorRecord]) RecordQuerySource[cursorRecord] {
 		a := As[firstAlias](self, "a")
-		return SelectRecord(a, a.Scope()).Where(scopedID(a.Scope()).In(values...))
+		return SelectRecord(a, a.Scope()).Where(wideScoped(a.Scope(), MaxParameters/2+1))
 	})
 	if s, err := compileRecursiveRecords(wide); !errors.Is(err, fault.Invalid) || s.SQL() != "" || len(s.Arguments()) != 0 {
 		t.Fatal("recursive definitions bypassed shared parameter budget", err)
