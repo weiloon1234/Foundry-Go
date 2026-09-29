@@ -1,0 +1,337 @@
+{
+  "format": 1,
+  "date": "2026-09-29",
+  "status": "diagnostics verified; B08 unresolved",
+  "scope": "Review the supplied Linux investigation, confirm starter adoption, and verify the remaining diagnostic patch without framework runtime changes.",
+  "raw_evidence": "${FOUNDRY_ROOT}/.cache/starter-diagnostics-20260929",
+  "framework_runtime_unchanged_in_this_followup": true,
+  "source_baseline_sha256": "50ee3f160436ac6b01cb426454d9b47c20b4f87873884b1c1e04967c6db23724",
+  "starter_adoption": {
+    "framework": {
+      "Path": "github.com/weiloon1234/Foundry-Go",
+      "Version": "v0.0.0-20260929144149-7ee1b7e07e79",
+      "Sum": "h1:lM+ZdfmtMzKZtRovm5qY8vvnCAEy6KTIxQnNhgc+LZQ=",
+      "GoModSum": "h1:WebH7hEXjX7udbMCdFkCTO5JA7I5uGNkIw3Hy94lVWg=",
+      "GoVersion": "1.27.1"
+    },
+    "record": "${STARTER_ROOT}/docs/evidence/framework-upgrade-20260929.json",
+    "record_sha256": "7b62535909aa582c4ce6b77f6c9e3f8d0b7613a2880e687b4559ebc03c757c4d",
+    "commands": {
+      "linux-deployment": {
+        "exit_code": 0,
+        "log_hash_matches": true
+      },
+      "linux-jobs": {
+        "exit_code": 0,
+        "log_hash_matches": true
+      },
+      "linux-probe": {
+        "exit_code": 0,
+        "log_hash_matches": true
+      },
+      "linux-verify": {
+        "exit_code": 0,
+        "log_hash_matches": true
+      },
+      "macos-jobs": {
+        "exit_code": 0,
+        "log_hash_matches": true
+      },
+      "macos-probe": {
+        "exit_code": 0,
+        "log_hash_matches": true
+      },
+      "macos-verify": {
+        "exit_code": 0,
+        "log_hash_matches": true
+      },
+      "linux-diagnostic": {
+        "exit_code": 0,
+        "log_hash_matches": true
+      }
+    },
+    "performed_by": "starter agent; this follow-up checked result files and log hashes",
+    "six_file_migration_already_applied": true,
+    "B07": "closed",
+    "B08": "open"
+  },
+  "packaged_runtime_comparison": {
+    "files": 1553,
+    "identical": true,
+    "private_version": "v0.0.0-candidate.secondreview.20260929.1",
+    "published_version": "v0.0.0-20260929144149-7ee1b7e07e79"
+  },
+  "patch": {
+    "framework_copy": "${FOUNDRY_ROOT}/.cache/starter-diagnostics-20260929/worker-timeout-diagnostics.patch",
+    "starter_owned_copy": "${STARTER_ROOT}/docs/evidence/b08-worker-timeout-diagnostics.patch",
+    "sha256": "3e4b7612c0dc989a4b3fa93fdf3d996ebf61dcbbed4725aad1b1bbacae0f6d57",
+    "copies_identical": true,
+    "files": [
+      "internal/console/jobs_integration_test.go"
+    ],
+    "condition_seconds_unchanged": 8,
+    "post_failure_stack_capture_wait_ms": 250,
+    "applied_to_real_starter_by_this_followup": false
+  },
+  "controlled_failure": {
+    "mechanism": "Go overlay blocks the child just before worker runtime startup; synthetic diagnostic test, not a reproduction of B08",
+    "overlay_source_sha256": "e78811230177ee1845c9a1c87dc8ac6c484339b4c886869636a9c9272ddf339c",
+    "expected_exit": 1,
+    "configured_test_credentials_absent": true,
+    "private_error_canaries_absent": true,
+    "job_waiting_zero_attempts": true,
+    "stack_captured": true
+  },
+  "normal_runs": {
+    "macOS_arm64": 3,
+    "Linux_arm64": 3,
+    "race": true,
+    "postgres_required": true,
+    "redis_required": true,
+    "version": "v0.0.0-candidate.secondreview.20260929.1"
+  },
+  "reported_investigation": {
+    "provenance": "User-pasted independent reviewer report; scratchpad location not supplied and raw timing/probe logs not inspected here",
+    "normal_runs_passed": 20,
+    "loaded_runs_passed": 12,
+    "normal_claim_ms": [
+      55,
+      65
+    ],
+    "normal_terminal_ms": [
+      222,
+      258
+    ],
+    "loaded_claim_ms": [
+      170,
+      1060
+    ],
+    "loaded_terminal_max_ms": 1450,
+    "later_lookup_and_connection_probes_reported": 6000,
+    "conclusion": "Sustained CPU pressure not reproduced as cause; one-off startup connection stall remains unproven."
+  },
+  "startup_source_review": {
+    "files": [
+      "database/routing.go",
+      "database/pool.go"
+    ],
+    "per_retry_logging": false,
+    "default_connect_timeout_seconds": 5,
+    "default_startup_retry_window_seconds": 15,
+    "hard_total_startup_bound": false,
+    "runtime_change": null,
+    "optional_followup": "Safe database startup retry warnings; not required to apply starter diagnostic patch."
+  },
+  "limits": [
+    "No new root cause or fix for B08; overall release acceptance remains incomplete.",
+    "No release exception granted.",
+    "Full published-version starter acceptance belongs to its own evidence record.",
+    "Known configured password strings are redacted; arbitrary application logs are not guaranteed safe.",
+    "No edits to real starter, dependency changes, service resets, publication or git writes."
+  ],
+  "unsuccessful_attempts": {
+    "patch-check": "Combined seven-file patch check failed after the starter agent had already applied the six migrations; incremental diagnostic patch check passed.",
+    "startup-stall-control": "Expected failure required to exercise diagnostic capture."
+  },
+  "commands": [
+    {
+      "argv": [
+        "git",
+        "apply",
+        "--check",
+        "${FOUNDRY_ROOT}/.cache/starter-diagnostics-20260929/starter-handwritten-migration.patch"
+      ],
+      "cwd": "${STARTER_ROOT}",
+      "darwin_max_process_rss_bytes": 7651328,
+      "elapsed_seconds": 0.2340939580462873,
+      "exit": 1,
+      "name": "patch-check",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1425408,
+      "timed_out": false,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e48a732082ac9476ee2939e1e4fbe25f267c86627b23e73b3ba68f417bec9dda"
+    },
+    {
+      "argv": [
+        "git",
+        "apply",
+        "--check",
+        "${FOUNDRY_ROOT}/.cache/starter-diagnostics-20260929/worker-timeout-diagnostics.patch"
+      ],
+      "cwd": "${STARTER_ROOT}",
+      "darwin_max_process_rss_bytes": 7569408,
+      "elapsed_seconds": 0.2364240410970524,
+      "exit": 0,
+      "name": "incremental-patch-check",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1490944,
+      "timed_out": false,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-race",
+        "-overlay=${FOUNDRY_ROOT}/.cache/starter-diagnostics-20260929/overlay.json",
+        "./internal/console",
+        "-run",
+        "^TestJobsOperationsAcrossProcesses$",
+        "-count=1",
+        "-timeout=2m",
+        "-v"
+      ],
+      "cwd": "${FOUNDRY_ROOT}/.cache/starter-diagnostics-20260929/starter",
+      "darwin_max_process_rss_bytes": 3270541312,
+      "elapsed_seconds": 63.93856370798312,
+      "exit": 1,
+      "name": "startup-stall-control",
+      "sampled_compiler_rss_bytes": 2664431616,
+      "sampled_tree_rss_bytes": 3263889408,
+      "timed_out": false,
+      "stdout_sha256": "66eb416080c4d5e349910930bf4a11157a1cd0a897d1e6033733635b1ad50d51",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-race",
+        "./internal/console",
+        "-run",
+        "^TestJobsOperationsAcrossProcesses$",
+        "-count=3",
+        "-timeout=5m",
+        "-v"
+      ],
+      "cwd": "${FOUNDRY_ROOT}/.cache/starter-diagnostics-20260929/starter",
+      "darwin_max_process_rss_bytes": 3258105856,
+      "elapsed_seconds": 51.92758112505544,
+      "exit": 0,
+      "name": "starter-native-jobs",
+      "sampled_compiler_rss_bytes": 1411301376,
+      "sampled_tree_rss_bytes": 3070771200,
+      "timed_out": false,
+      "stdout_sha256": "cf00a2cf87567d0fbdf11de7afc3edea5e556ee963d2019107cd2585544cbe49",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "docker",
+        "run",
+        "--rm",
+        "--init",
+        "--name",
+        "foundry-stabilization-2a32c7a9d574",
+        "--user",
+        "501:20",
+        "--workdir",
+        "/workspace",
+        "--mount",
+        "type=bind,source=${FOUNDRY_ROOT}/.cache/starter-diagnostics-20260929/starter,target=/workspace",
+        "--mount",
+        "type=bind,source=${FOUNDRY_ROOT}/.cache/second-review-acceptance-20260929/package/module-cache,target=/modules",
+        "--mount",
+        "type=bind,source=${FOUNDRY_ROOT}/.cache/second-review-acceptance-20260929/package/candidate-01/proxy,target=/proxy,readonly",
+        "--mount",
+        "type=bind,source=/tmp/foundry-starter-independent-knroa89u/linux-cache,target=/cache",
+        "--mount",
+        "type=bind,source=${FOUNDRY_ROOT}/.cache/second-review-acceptance-20260929/package/linux-home,target=/task-home",
+        "-e",
+        "FOUNDRY_TEST_NODE",
+        "-e",
+        "FOUNDRY_TEST_POSTGRES_REQUIRED",
+        "-e",
+        "FOUNDRY_TEST_POSTGRES_URL",
+        "-e",
+        "FOUNDRY_TEST_REDIS_ADDR",
+        "-e",
+        "FOUNDRY_TEST_REDIS_REQUIRED",
+        "-e",
+        "FOUNDRY_TEST_TYPESCRIPT",
+        "-e",
+        "FOUNDRY_TEST_TYPESCRIPT_REQUIRED",
+        "-e",
+        "GOCACHE",
+        "-e",
+        "GOENV",
+        "-e",
+        "GOFLAGS",
+        "-e",
+        "GOMODCACHE",
+        "-e",
+        "GONOPROXY",
+        "-e",
+        "GONOSUMDB",
+        "-e",
+        "GOPROXY",
+        "-e",
+        "GOSUMDB",
+        "-e",
+        "GOTOOLCHAIN",
+        "-e",
+        "GOWORK",
+        "-e",
+        "HOME=/task-home",
+        "-e",
+        "PYTHONDONTWRITEBYTECODE",
+        "sha256:d1d04d61b0a2a1df6b5ee3096174a2fec927bb0f46016c4bfb236f391a373c77",
+        "go",
+        "test",
+        "-race",
+        "./internal/console",
+        "-run",
+        "^TestJobsOperationsAcrossProcesses$",
+        "-count=3",
+        "-timeout=5m",
+        "-failfast",
+        "-v"
+      ],
+      "cwd": "${FOUNDRY_ROOT}/.cache/starter-diagnostics-20260929/starter",
+      "darwin_max_process_rss_bytes": 32030720,
+      "elapsed_seconds": 45.04653520800639,
+      "exit": 0,
+      "name": "starter-linux-jobs",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 32866304,
+      "timed_out": false,
+      "stdout_sha256": "a6892050947137fd68efbee4e1fe65baa0dab5ad7c53ee308e83d75c97f190ac",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "make",
+        "docs-check"
+      ],
+      "cwd": "${FOUNDRY_ROOT}",
+      "darwin_max_process_rss_bytes": 29769728,
+      "elapsed_seconds": 0.2298961249180138,
+      "exit": 0,
+      "name": "docs",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1245184,
+      "timed_out": false,
+      "stdout_sha256": "fd85898d49c4c9b114d0251a950b2b369f7138485ca00565be369f6c6c8979fb",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "cwd": "${FOUNDRY_ROOT}",
+      "darwin_max_process_rss_bytes": 9633792,
+      "elapsed_seconds": 0.23250545898918062,
+      "exit": 0,
+      "name": "diff",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1359872,
+      "timed_out": false,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ]
+}

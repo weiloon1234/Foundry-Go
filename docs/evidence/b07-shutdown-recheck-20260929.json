@@ -1,0 +1,363 @@
+{
+  "commands": [
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-race",
+        "-count=1",
+        "./outbox/publisher",
+        "./foundation",
+        "./database",
+        "./database/postgres",
+        "./cli"
+      ],
+      "cwd": "${FOUNDRY_ROOT}",
+      "darwin_max_process_rss_bytes": 1077346304,
+      "elapsed_seconds": 26.934107583016157,
+      "exit": 1,
+      "name": "affected-races",
+      "sampled_compiler_rss_bytes": 1077264384,
+      "sampled_tree_rss_bytes": 1129431040,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-race",
+        "./database",
+        "-count=1"
+      ],
+      "cwd": "${FOUNDRY_ROOT}",
+      "darwin_max_process_rss_bytes": 329711616,
+      "elapsed_seconds": 17.036639124969952,
+      "exit": 0,
+      "name": "database-races",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 175177728,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "cwd": "${FOUNDRY_ROOT}",
+      "darwin_max_process_rss_bytes": 9633792,
+      "elapsed_seconds": 0.2431740420870483,
+      "exit": 0,
+      "name": "diff",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1425408,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "make",
+        "docs-check"
+      ],
+      "cwd": "${FOUNDRY_ROOT}",
+      "darwin_max_process_rss_bytes": 302825472,
+      "elapsed_seconds": 2.112379709025845,
+      "exit": 0,
+      "name": "docs",
+      "sampled_compiler_rss_bytes": 295731200,
+      "sampled_tree_rss_bytes": 329383936,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "git",
+        "apply",
+        "--check",
+        "${FOUNDRY_ROOT}/.cache/second-review-acceptance-20260929/starter-handwritten-migration.patch"
+      ],
+      "cwd": "${STARTER_ROOT}",
+      "darwin_max_process_rss_bytes": 7634944,
+      "elapsed_seconds": 0.2500924579799175,
+      "exit": 0,
+      "name": "migration-patch-check",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1409024,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-race",
+        "-overlay=${FOUNDRY_ROOT}/.cache/b07-handoff-20260929/overlay.json",
+        "./outbox/publisher",
+        "-run",
+        "^TestPublisherShutdownDoesNotRequireDriverCancellationIdentity$",
+        "-count=1",
+        "-v"
+      ],
+      "cwd": "${FOUNDRY_ROOT}",
+      "darwin_max_process_rss_bytes": 726253568,
+      "elapsed_seconds": 11.511861083912663,
+      "exit": 1,
+      "name": "negative-control",
+      "sampled_compiler_rss_bytes": 726106112,
+      "sampled_tree_rss_bytes": 774569984,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-race",
+        "-overlay=${FOUNDRY_ROOT}/.cache/b07-handoff-20260929/overlay.json",
+        "./outbox/publisher",
+        "-run",
+        "^TestPublisherShutdownDoesNotRequireDriverCancellationIdentity$",
+        "-count=1",
+        "-v"
+      ],
+      "cwd": "${FOUNDRY_ROOT}",
+      "darwin_max_process_rss_bytes": 687718400,
+      "elapsed_seconds": 6.969944874988869,
+      "exit": 1,
+      "name": "negative-control-2",
+      "sampled_compiler_rss_bytes": 653312000,
+      "sampled_tree_rss_bytes": 703447040,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-race",
+        "./database",
+        "-run",
+        "^TestObserverScopeRejectsInvalidRepeatedOrClosedUse$",
+        "-count=1000"
+      ],
+      "cwd": "${FOUNDRY_ROOT}",
+      "darwin_max_process_rss_bytes": 1081851904,
+      "elapsed_seconds": 9.473913540947251,
+      "exit": 0,
+      "name": "observer-cancellation-regression",
+      "sampled_compiler_rss_bytes": 1081835520,
+      "sampled_tree_rss_bytes": 1129447424,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-race",
+        "./outbox/publisher",
+        "-run",
+        "^TestPublisherShutdownDoesNotRequireDriverCancellationIdentity$",
+        "-count=1000"
+      ],
+      "cwd": "${FOUNDRY_ROOT}",
+      "darwin_max_process_rss_bytes": 679395328,
+      "elapsed_seconds": 8.067161833052523,
+      "exit": 0,
+      "name": "shutdown-regression",
+      "sampled_compiler_rss_bytes": 679378944,
+      "sampled_tree_rss_bytes": 728055808,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "docker",
+        "run",
+        "--rm",
+        "--init",
+        "--name",
+        "foundry-stabilization-ec22cae33ec9",
+        "--user",
+        "501:20",
+        "--workdir",
+        "/workspace",
+        "--mount",
+        "type=bind,source=${FOUNDRY_ROOT}/.cache/b07-handoff-20260929/starter,target=/workspace",
+        "--mount",
+        "type=bind,source=${FOUNDRY_ROOT}/.cache/second-review-acceptance-20260929/package/module-cache,target=/modules",
+        "--mount",
+        "type=bind,source=${FOUNDRY_ROOT}/.cache/second-review-acceptance-20260929/package/candidate-01/proxy,target=/proxy,readonly",
+        "--mount",
+        "type=bind,source=/tmp/foundry-starter-independent-knroa89u/linux-cache,target=/cache",
+        "--mount",
+        "type=bind,source=${FOUNDRY_ROOT}/.cache/second-review-acceptance-20260929/package/linux-home,target=/task-home",
+        "-e",
+        "FOUNDRY_TEST_NODE",
+        "-e",
+        "FOUNDRY_TEST_POSTGRES_REQUIRED",
+        "-e",
+        "FOUNDRY_TEST_POSTGRES_URL",
+        "-e",
+        "FOUNDRY_TEST_REDIS_ADDR",
+        "-e",
+        "FOUNDRY_TEST_REDIS_REQUIRED",
+        "-e",
+        "FOUNDRY_TEST_TYPESCRIPT",
+        "-e",
+        "FOUNDRY_TEST_TYPESCRIPT_REQUIRED",
+        "-e",
+        "GOCACHE",
+        "-e",
+        "GOENV",
+        "-e",
+        "GOFLAGS",
+        "-e",
+        "GOMODCACHE",
+        "-e",
+        "GONOPROXY",
+        "-e",
+        "GONOSUMDB",
+        "-e",
+        "GOPROXY",
+        "-e",
+        "GOSUMDB",
+        "-e",
+        "GOTOOLCHAIN",
+        "-e",
+        "GOWORK",
+        "-e",
+        "HOME=/task-home",
+        "-e",
+        "PYTHONDONTWRITEBYTECODE",
+        "sha256:d1d04d61b0a2a1df6b5ee3096174a2fec927bb0f46016c4bfb236f391a373c77",
+        "go",
+        "test",
+        "-race",
+        "./internal/console",
+        "-run",
+        "^TestB07ShortLivedJobsShutdownProbe$",
+        "-count=5",
+        "-timeout=10m",
+        "-failfast",
+        "-v"
+      ],
+      "cwd": "${FOUNDRY_ROOT}/.cache/b07-handoff-20260929/starter",
+      "darwin_max_process_rss_bytes": 32997376,
+      "elapsed_seconds": 40.72092716698535,
+      "exit": 0,
+      "name": "starter-linux-probe",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 33275904,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "list",
+        "-m",
+        "-json",
+        "github.com/weiloon1234/Foundry-Go"
+      ],
+      "cwd": "${FOUNDRY_ROOT}/.cache/b07-handoff-20260929/starter",
+      "darwin_max_process_rss_bytes": 16482304,
+      "elapsed_seconds": 0.23399974999483675,
+      "exit": 0,
+      "name": "starter-module",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1425408,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-race",
+        "./internal/console",
+        "-run",
+        "^TestB07ShortLivedJobsShutdownProbe$",
+        "-count=5",
+        "-timeout=10m",
+        "-v"
+      ],
+      "cwd": "${FOUNDRY_ROOT}/.cache/b07-handoff-20260929/starter",
+      "darwin_max_process_rss_bytes": 3270098944,
+      "elapsed_seconds": 90.10101116704755,
+      "exit": 0,
+      "name": "starter-native-probe",
+      "sampled_compiler_rss_bytes": 2759262208,
+      "sampled_tree_rss_bytes": 8220295168,
+      "timed_out": false
+    }
+  ],
+  "date": "2026-09-29",
+  "format": 1,
+  "limits": [
+    "Private candidate, not a published revision.",
+    "Full starter verification was retained from the prior same-runtime acceptance, not rerun for this targeted recheck.",
+    "The packaged candidate includes the older observer test; its runtime and generated APIs remain unchanged.",
+    "No commits, pushes, merges, tags or publication.",
+    "Existing services and isolated retained namespaces; no resets or dependency upgrades."
+  ],
+  "module": {
+    "Dir": "${FOUNDRY_ROOT}/.cache/second-review-acceptance-20260929/package/module-cache/github.com/weiloon1234/!foundry-!go@v0.0.0-candidate.secondreview.20260929.1",
+    "GoMod": "${FOUNDRY_ROOT}/.cache/second-review-acceptance-20260929/package/module-cache/cache/download/github.com/weiloon1234/!foundry-!go/@v/v0.0.0-candidate.secondreview.20260929.1.mod",
+    "GoModSum": "h1:WebH7hEXjX7udbMCdFkCTO5JA7I5uGNkIw3Hy94lVWg=",
+    "GoVersion": "1.27.1",
+    "Path": "github.com/weiloon1234/Foundry-Go",
+    "Sum": "h1:1rtEpyCjviziLaEU/lFE198N15TDDZViUAmbXJB68Z8=",
+    "Time": "1970-01-01T00:00:00Z",
+    "Version": "v0.0.0-candidate.secondreview.20260929.1"
+  },
+  "negative_control": {
+    "expected_failing_classifications": [
+      "unavailable",
+      "deadline_exceeded",
+      "commit_unknown"
+    ],
+    "old_revision": "4cc5fdeb78b6",
+    "overlay": "Old shutdown cancellation-identity check restored through Go overlay, without editing checkout runtime files.",
+    "overlay_sha256": "9ddf23c4566caa969f999ed0b111c05d5a197970eff96b1f710bd4e46ce8bb6e"
+  },
+  "overall_release_acceptance": "incomplete: separate unclaimed-job Linux timeout remains open",
+  "prior_full_starter_evidence": "docs/evidence/second-review-acceptance-20260929.json",
+  "probe": {
+    "calls_per_repetition": 100,
+    "managed_outbox": "Original enabled delivery settings and empty kernel restriction; no publishers disabled, timeouts changed or command retries added.",
+    "original_source_sha256": "7d341580881fea7b48b144594fb676991ec015cb01555fd8cc9796d08917fd10",
+    "platforms": [
+      "macOS arm64",
+      "Linux arm64"
+    ],
+    "repetitions_per_platform": 5,
+    "unchanged": true
+  },
+  "raw_evidence": "${FOUNDRY_ROOT}/.cache/b07-handoff-20260929",
+  "regressions": {
+    "observer_race_repetitions": 1000,
+    "shutdown_race_repetitions": 1000
+  },
+  "required_reporting_pending": [],
+  "scope": "B07 managed outbox shutdown condition; starter adoption pending.",
+  "source": {
+    "baseline_sha256": "c3a015ed0224950650a986cfc8c3b569931d7d80b26323688b72fd853d490d66",
+    "non_reporting_changes": [
+      "database/observer_scope_test.go"
+    ],
+    "runtime_unchanged": true,
+    "test_correction": {
+      "after": "41012e1eec3da3391f18ed550d0a66f4380f404555a227ef78703278746ed92b",
+      "before": "d68fc6208802204979eed0347ae882f872a89521feef1926144b14480c5dcbde",
+      "file": "database/observer_scope_test.go",
+      "reason": "Canceled rows may already be closed by asynchronous cleanup. Both terminal rejection outcomes are valid; no-callback and zero-owner checks remain."
+    }
+  },
+  "starter": {
+    "adoption": "pending reviewed published revision and starter-owned acceptance",
+    "baseline_files": 193,
+    "handwritten_patch": "${FOUNDRY_ROOT}/.cache/second-review-acceptance-20260929/starter-handwritten-migration.patch",
+    "original_unchanged": true,
+    "original_version": "v0.0.0-20260928094130-4cc5fdeb78b6",
+    "patch_sha256": "e954f7424bb39e9b1475e91f75c4441227a20ce10dadb684ebdd9dc8eea97e2c",
+    "patch_unchanged": true
+  },
+  "status": "verified",
+  "unsuccessful_attempts": {
+    "affected-races": "Observer cancellation test assumed it always beat asynchronous row closure; corrected fixture and reran the database suite.",
+    "negative-control": "Harness compile error: removed branch left an unused variable; not regression evidence.",
+    "negative-control-2": "Expected regression failure after restoring the old shutdown cancellation identity requirement."
+  }
+}

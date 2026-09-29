@@ -376,8 +376,11 @@ func TestObserverScopeRejectsInvalidRepeatedOrClosedUse(t *testing.T) {
 	}
 	defer other.Close()
 	cancelQuery()
-	if err := other.WithObserverScope(context.Background(), callback); !errors.Is(err, context.Canceled) {
-		t.Fatal("replacement context erased prior query cancellation", err)
+	// Query cancellation also closes the rows asynchronously. If that cleanup
+	// wins, the scope correctly reports Closed before inspecting its owner.
+	// Either result must reject the callback and release the original work.
+	if err := other.WithObserverScope(context.Background(), callback); !errors.Is(err, context.Canceled) && !errors.Is(err, database.Closed) {
+		t.Fatal("replacement context accepted canceled or closed query work", err)
 	}
 	var empty database.Rows
 	if err := empty.WithObserverScope(t.Context(), callback); !errors.Is(err, fault.Invalid) {

@@ -2,8 +2,9 @@
 
 This follow-up repeats the checks left outstanding by the
 [second independent review](second-review-20260929.md). Its runtime and test
-inputs remain unchanged. The private packaged consumers and ordinary starter
-gates passed, but additional Linux queue stress found one timeout. Release
+inputs matched that revision when these checks completed. The private packaged
+consumers and ordinary starter gates passed, but additional Linux queue stress
+found one timeout. Release
 acceptance remains **incomplete** until that failure is explained and resolved.
 The [evidence record](../evidence/second-review-acceptance-20260929.json) preserves
 source and package hashes, exact commands, scanner findings, successful gates
@@ -60,10 +61,18 @@ go test -race ./internal/console -run '^TestJobsOperationsAcrossProcesses$' -cou
 worker stack dump on timeout. It is separate from the handwritten migration
 patch and does not change the eight-second condition deadline or its assertions.
 
+The later [B07 recheck](b07-shutdown-recheck-20260929.md) confirms the correction
+for the older CLI publisher shutdown failure and fixes an independent observer
+test ordering assumption. Framework runtime behavior remains unchanged. B07
+occurred after CLI output; the unclaimed-job timeout above remains a separate
+open finding. The later [starter diagnostics follow-up](starter-diagnostics-20260929.md)
+records published-version adoption, the additional reported investigation and
+verification of the diagnostic patch. B08 still has no established cause.
+
 ## Starter migration and rollout
 
-The real starter remains unchanged at
-`v0.0.0-20260928094130-4cc5fdeb78b6`. The tested copies use private candidate
+At the time these acceptance runs completed, the real starter remained at
+`v0.0.0-20260928094130-4cc5fdeb78b6`. These tested copies used private candidate
 `v0.0.0-candidate.secondreview.20260929.1`, with the runtime and generator pinned
 together and Go output, manifest version 5, OpenAPI and TypeScript regenerated.
 The private candidate is not a published revision.
@@ -77,9 +86,11 @@ does not use custom session adapters, datatable downloads, password confirmation
 or outbound webhook delivery workers. Applications enabling those features must
 apply the additional adjustments in [compatibility](../compatibility.md).
 
-Once acceptance is complete and the operator publishes a reviewed revision,
-apply the handwritten patch, pin that same revision for runtime and tool, and
-regenerate contracts together. Run all configured forward migrations before
+The starter agent has since applied that patch, selected published revision
+`v0.0.0-20260929144149-7ee1b7e07e79` for runtime and tool, regenerated contracts
+together and recorded passing adoption checks. See the linked follow-up for the
+scope and evidence; adoption does not close B08 or complete release acceptance.
+Run all configured forward migrations before
 starting the release. Stop or drain old Redis queue users before confirmed
 layout migration. Follow the documented cache/rate-limit namespace and WebSocket
 rolling-deployment rules. Boot never migrates.

@@ -29,6 +29,8 @@ managed task stops cleanly even when its driver error does not wrap cancellation
 One-shot publication still reports the original failure and never claims commit.
 This covers the loop boundary implicated by the starter's recorded B07 issue;
 consumer process checks provide separate application evidence.
+The later [B07 handoff recheck](b07-shutdown-recheck-20260929.md) verifies that
+correction against the old shutdown condition and the supplied starter probe.
 
 ## Verification and evidence
 
