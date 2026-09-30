@@ -169,12 +169,17 @@ export async function checkForms(sdk, api, request) {
   const task = taskForm.task(async (_, signal) => { const work = deferred(); runs.push(work); signals.push(signal); return work.promise; });
   const a = task.run(), b = task.run(); assert.equal(signals[0].aborted, true);
   runs[1].resolve(["new option"]); assert.equal((await b).status, "succeeded");
-  runs[0].resolve(["old option"]); assert.equal((await a).status, "stale");
+  // A superseded run reports canceled whether it was debouncing or running.
+  runs[0].resolve(["old option"]); assert.equal((await a).status, "canceled");
   assert.deepEqual(task.getSnapshot().value, ["new option"]);
   const c = task.run(); taskForm.field(op.field("body", "optional")).set("edit");
-  runs[2].resolve(["wrong input"]); assert.equal((await c).status, "stale"); assert.equal(task.getSnapshot().value, undefined);
+  runs[2].resolve(["wrong input"]); assert.equal((await c).status, "canceled"); assert.equal(task.getSnapshot().value, undefined);
   const d = task.run(); task.dispose(); assert.equal(task.getSnapshot().pending, 1);
   runs[3].resolve([]); await d; assert.equal(task.getSnapshot().pending, 0);
+  // cancel() while the callback runs reports canceled, as it does while debouncing.
+  const running = taskForm.task(async () => { const work = deferred(); runs.push(work); return work.promise; });
+  const during = running.run(); running.cancel(); runs[runs.length - 1].resolve("late");
+  assert.equal((await during).status, "canceled"); assert.equal(running.getSnapshot().value, undefined); running.dispose();
   let loaded = 0; const debounce = taskForm.task(async () => { loaded++; return "result"; }, { debounceMS: 25 });
   const before = debounce.run(); debounce.cancel(); assert.equal((await before).status, "canceled"); assert.equal(loaded, 0);
   assert.equal((await debounce.run()).status, "succeeded"); assert.equal(loaded, 1);

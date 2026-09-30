@@ -118,7 +118,9 @@ if (name.parse()) await suggestions.run();
 ```
 
 Each task has its own immutable store (`getSnapshot`, `subscribe`) and latest-run
-sequence. Form edits invalidate old work. Debounce is explicit and defaults to
+sequence. Form edits invalidate old work. A run ended by a newer run, an edit,
+`cancel()` or disposal resolves `canceled`, whether or not its callback had
+started, and its late result is discarded. Debounce is explicit and defaults to
 zero. Results are copied as bounded plain data; this interface is for option/check
 data, not streamed response handles. Use the result to display suggestions or
 advisory checks; it does not replace server validation or mark the request valid.
@@ -153,6 +155,35 @@ standalone effect scope subscribes immediately.
 Both accept forms and tasks, preserve their types, and borrow their controllers.
 Unmounting does not dispose another component's shared form. The screen/request
 owner calls `dispose`; Vue calls must run in setup/an active effect scope.
+
+In React, create a component-owned controller in the effect that disposes it,
+and render its editor once it exists:
+
+```tsx
+function ProjectFormOwner() {
+  const [form, setForm] = useState<FormController<"projectsCreate">>();
+  useEffect(() => {
+    const owned = createForm(operation("projectsCreate"), draft);
+    setForm(owned);
+    return () => owned.dispose();
+  }, []);
+  return form ? <ProjectForm form={form} /> : null;
+}
+
+function ProjectForm({ form }: { form: FormController<"projectsCreate"> }) {
+  const state = useForm(form);
+  // Render fields from state; bind them with form.field(...).
+}
+```
+
+Do not create the controller during render (for example with `useState(() =>
+createForm(...))`) and dispose it in an effect cleanup. `StrictMode` runs effect
+cleanups and then the effects again in development without rendering in
+between, so the subscription is re-created on the already disposed controller
+and throws `form_disposed`. With the pattern above the first controller is
+disposed and replaced, and each controller is disposed exactly once. For server
+rendering, which runs no effects, the request owner creates the controller
+outside React, passes it down and disposes it after rendering, as below.
 
 UI dependencies are optional peers of the consuming application/package. Importing
 the core SDK never imports an adapter. Keep adapter exports on separate subpaths

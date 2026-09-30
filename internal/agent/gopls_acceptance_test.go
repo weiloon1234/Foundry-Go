@@ -204,6 +204,7 @@ type consumerEditorProbe struct {
 func consumerEditorProbes() []consumerEditorProbe {
 	return []consumerEditorProbe{
 		{"client-presentation", "clientcontracts/presentation.go", "parameter.", "WithPresentation", []string{"WithPresentation"}, []string{"Presentation", "QueryParameter"}, "/http/presentation.go"},
+		{"application-spa-portal", "spaportals/portals.go", "builder.", "SPA", []string{"SPA", "HTTP", "Register", "Build"}, []string{"RouteID", "Assets", "SPAConfig", "Builder"}, "/application/builder.go"},
 		{"configured-dates", "configuredprofile/timezone_test.go", "dates.", "Today", []string{"Now", "Today", "Parse", "Format", "AddDays"}, []string{"Date", "error"}, "/temporal/service.go"},
 		{"configured-calendar", "configuredprofile/timezone_test.go", "calendar.", "DailyAt", []string{"DailyAt", "Cron", "In", "Weekly"}, []string{"ID", "Handler", "Declaration"}, "/schedule/calendar.go"},
 		{"configured-timezone-key", "configuredprofile/timezone_test.go", "keys.TimeZone.", "Set", []string{"Set", "Name", "Sensitive"}, []string{"Settings", "ZoneName"}, "/config/schema.go"},

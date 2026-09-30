@@ -17,7 +17,10 @@ type MapKeys<T> = Extract<keyof NonNullable<T>, string>;
 /** Maps keyed by model IDs have branded Identity keys, not property names. */
 type IdentityKeyed<T> = [MapKeys<T>] extends [never] ? false : [MapKeys<T>] extends [Identity<string>] ? true : false;
 type ObjectFields<T> = NonNullable<T> extends string | number | boolean | readonly unknown[] | Blob | Upload ? never : true extends IsUnion<NonNullable<T>> ? never : string extends keyof NonNullable<T> ? never : IdentityKeyed<T> extends true ? never : MapKeys<T>;
-type Discriminator<T> = { [K in Extract<keyof NonNullable<T>, string>]: NonNullable<T>[K] extends string ? string extends NonNullable<T>[K] ? never : K : never }[Extract<keyof NonNullable<T>, string>];
+type SingleLiteral<V> = [V] extends [string] ? string extends V ? false : true extends IsUnion<V> ? false : true : false;
+type TagsEveryMember<T, K extends string> = false extends (T extends unknown ? K extends keyof T ? SingleLiteral<T[K]> : false : never) ? false : true;
+/** A key whose value is one string literal in every member: each variant's tag. An enum-typed property of a plain object is not one. */
+type Discriminator<T> = { [K in Extract<keyof NonNullable<T>, string>]: TagsEveryMember<NonNullable<T>, K> extends true ? K : never }[Extract<keyof NonNullable<T>, string>];
 type IsCollection<T> = NonNullable<T> extends readonly unknown[] ? true : string extends keyof NonNullable<T> ? true : IdentityKeyed<T>;
 type CollectionKey<T> = NonNullable<T> extends readonly unknown[] ? number : IdentityKeyed<T> extends true ? MapKeys<T> : string;
 type ElementValue<T> = NonNullable<T> extends readonly (infer V)[] ? V : Exclude<NonNullable<T>[MapKeys<T>], undefined>;

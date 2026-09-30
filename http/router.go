@@ -152,6 +152,9 @@ func (r *Router) ServeHTTP(w stdhttp.ResponseWriter, request *stdhttp.Request) {
 	// original writer. Otherwise the native fallback retains its method
 	// matching/Allow source of truth: 404 and 405 become Foundry's shared error,
 	// and a native canonical redirect passes through unchanged.
+	if len(r.spas) != 0 {
+		request = request.WithContext(context.WithValue(request.Context(), spaRoutesKey{}, r.spas))
+	}
 	probe := &routingResponse{native: w}
 	r.mux.ServeHTTP(probe, request)
 	if probe.matched || probe.passthrough {

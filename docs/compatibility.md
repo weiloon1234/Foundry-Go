@@ -129,6 +129,7 @@ adjustments when the corresponding features are enabled:
 | Outbound webhook workers | Register `job.FailureSink(service)` with every worker running the delivery job so terminal failures update delivery state; see [outbound delivery](guides/webhooks.md). |
 | Login limits | The per-address ceiling is now opt-in. Review [login lockout](guides/login-lockout.md) before enabling it for shared client addresses. |
 | Public readiness | Dependency results are cached for one second by default; lifecycle and maintenance state remain live. See [public probes](guides/production-diagnostics.md) when setting load-balancer probe expectations. |
+| SPA fallbacks and asset mounts | A SPA more specific than a matching asset mount now owns its subtree, and a SPA with the same prefix answers the mount's misses; before, a root mount at `/` answered those paths itself, usually with 404. Check paths under each SPA prefix that a root mount used to serve from its own directory; they are now 404 unless the SPA's build contains them. See [SPA composition](guides/http-assets.md). |
 | Maintenance bypass | Share application encryption keys across instances. Without keys, bypass cookies work only in the issuing process; configure trusted proxies before using client allowlists behind a load balancer. See [maintenance](guides/readiness-and-maintenance.md). |
 
 Apply the new session/token constraint-validation and idempotency-index migrations
@@ -162,4 +163,8 @@ connection budgets or the B08 release disposition.
 The 2026-09-30 re-audit changed `FormSubmission`, which no published starter uses
 yet. Edits no longer abort a sent request or produce `stale`: completed results
 carry `changed`, and `canceled` carries `outcome` (`not_sent` or `unknown`).
-Update any code that matched `stale` and regenerate the SDK with the matching tool.
+`FormTaskResult` no longer includes `stale`; an ended run is `canceled`. The
+descriptor `variant()` type now requires a key that tags every union member, so
+calls passing an enum-typed property of a plain object stop compiling (they
+already failed at runtime). Update any code that matched `stale` and regenerate
+the SDK with the matching tool.

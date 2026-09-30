@@ -53,7 +53,8 @@ export interface FormOptions {
 export type FormSubmission<T> = { readonly status: "succeeded"; readonly value: T; readonly changed: boolean } | { readonly status: "invalid"; readonly report: ValidationReport } | { readonly status: "failed"; readonly error: unknown; readonly changed: boolean } | { readonly status: "canceled"; readonly outcome: "not_sent" | "unknown" };
 export interface FormTaskOptions { readonly debounceMS?: number }
 export interface FormTaskSnapshot<T> { readonly status: "idle" | "pending" | "succeeded" | "failed" | "canceled" | "disposed"; readonly value: FormReadonly<T> | undefined; readonly error: unknown; readonly pending: number }
-export type FormTaskResult<T> = { readonly status: "succeeded"; readonly value: FormReadonly<T> } | { readonly status: "failed"; readonly error: unknown } | { readonly status: "canceled" | "stale" };
+/** `canceled`: a newer run, an edit, cancel() or disposal ended this run, whether or not its callback had started. */
+export type FormTaskResult<T> = { readonly status: "succeeded"; readonly value: FormReadonly<T> } | { readonly status: "failed"; readonly error: unknown } | { readonly status: "canceled" };
 export interface FormTask<T> extends FormStore<FormTaskSnapshot<T>> {
   run(): Promise<FormTaskResult<T>>;
   cancel(): void;
@@ -387,6 +388,9 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
           if (activeTasks - (current && !current.started ? 1 : 0) >= formPolicy.active) reject("", "form_task_busy");
           const previous = stop(), run: TaskRun = { abort: new AbortController(), started: false, released: false };
           const token = ++sequence, version = revision, request = values, abort = run.abort;
+          // Every path that supersedes a run also aborts it, so one check covers
+          // a newer run, an edit, cancel() and disposal at any stage.
+          const ended = (): boolean => abort.signal.aborted || dead || disposed || token !== sequence || version !== revision;
           current = run; pending++; activeTasks++; taskStatus = "pending"; taskValue = undefined; taskError = undefined;
           previous?.abort.abort(); taskEmit();
           try {
@@ -395,15 +399,13 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
               const timer = setTimeout(end, debounce); abort.signal.addEventListener("abort", end, { once: true });
               if (abort.signal.aborted) end();
             });
-            if (abort.signal.aborted) return { status: "canceled" };
+            if (ended()) return { status: "canceled" };
             run.started = true;
             const result = await load(request, abort.signal);
-            if (dead || disposed || token !== sequence || version !== revision) return { status: "stale" };
-            if (abort.signal.aborted) return { status: "canceled" };
+            if (ended()) return { status: "canceled" };
             taskValue = formCopy(result, limits) as FormReadonly<T>; taskStatus = "succeeded"; return { status: "succeeded", value: taskValue };
           } catch (caught) {
-            if (dead || disposed || token !== sequence || version !== revision) return { status: "stale" };
-            if (abort.signal.aborted) return { status: "canceled" };
+            if (ended()) return { status: "canceled" };
             taskError = caught; taskStatus = "failed"; return { status: "failed", error: caught };
           } finally { release(run); if (current === run) current = undefined; taskEmit(); }
         },

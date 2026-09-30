@@ -18,6 +18,11 @@ attachments and typed metadata as model extension slots, registers them with
 `Builder.Models` and exercises generated deletion cleanup against PostgreSQL;
 see the [slot guide](../../../docs/guides/model-extension-slots.md).
 
+The [portal consumer](spaportals/portals.go) declares browser portals with
+`Builder.SPA` beside a root public mount, content-hashed bundles and a typed API
+route, and checks client-route fallback, precedence and Build-time rejection;
+see [SPA fallbacks with application.New](../../../docs/guides/http-assets.md#spa-fallbacks-with-applicationnew).
+
 The [plugin consumer](pluginusage/bootstrap.go) imports independent
 [base](../plugin_base/README.md) and [dependent](../plugin_dep/README.md) plugin
 modules with main-module replacements and `GOWORK=off`. Milestone 22 acceptance

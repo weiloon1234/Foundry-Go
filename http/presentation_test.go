@@ -46,8 +46,13 @@ func TestTransportPresentationUsesActualCodec(t *testing.T) {
 	if err != nil || len(description.Parts) != 2 {
 		t.Fatal(description, err)
 	}
-	if foundryhttp.DefineMultipart(file.WithPresentation(hint)).Validate() == nil {
-		t.Fatal("email file accepted")
+	if err := foundryhttp.DefineMultipart(file.WithPresentation(hint)).Validate(); err == nil || !strings.Contains(err.Error(), `"file"`) {
+		t.Fatal("email file accepted or not named", err)
+	}
+	type Parts struct{ Count int }
+	meta := foundryhttp.JSONPart("meta", contract.IntegerJSON[int](), func(p *Parts) *int { return &p.Count })
+	if err := foundryhttp.DefineMultipart(meta.WithPresentation(contract.Presentation{Kind: contract.TextPresentation})).Validate(); err == nil || !strings.Contains(err.Error(), `"meta"`) {
+		t.Fatal("contradictory JSON part accepted or not named", err)
 	}
 }
 

@@ -36,6 +36,31 @@ await React.act(async () => { reactOwner.field.parse(); }); assert.equal(host.te
 await React.act(async () => { root.unmount(); }); assert.equal(reactOwner.subscriptions, 0);
 reactOwner.field.set("still owned"); reactOwner.form.dispose(); host.remove();
 
+// The documented owner creates the controller in the effect that disposes it.
+// StrictMode (this development build) runs that effect, its cleanup and the
+// effect again, so the first controller is disposed and replaced, never reused.
+const created = [];
+function Editor({ form }) {
+  const snapshot = useReactForm(form);
+  return React.createElement("output", null, snapshot.values.body.name);
+}
+function EditorOwner() {
+  const [form, setForm] = React.useState();
+  React.useEffect(() => {
+    const owned = sdk.createForm(sdk.operation("formsSubmit"), { body: { name: "Owned", "tags[]": [] } });
+    created.push(owned); setForm(owned);
+    return () => owned.dispose();
+  }, []);
+  return form ? React.createElement(Editor, { form }) : null;
+}
+const ownerHost = document.createElement("div"); document.body.append(ownerHost);
+const ownerRoot = createRoot(ownerHost);
+await React.act(async () => { ownerRoot.render(React.createElement(React.StrictMode, null, React.createElement(EditorOwner))); });
+assert.equal(ownerHost.textContent, "Owned"); assert.equal(created.length, 2);
+assert.equal(created[0].getSnapshot().status, "disposed"); assert.notEqual(created[1].getSnapshot().status, "disposed");
+await React.act(async () => { ownerRoot.unmount(); });
+assert.ok(created.every(form => form.getSnapshot().status === "disposed")); ownerHost.remove();
+
 // Real server rendering and hydration preserve independent per-request state.
 const server = owned("SSR one"), other = owned("SSR two");
 const markup = renderToString(React.createElement(ReactForm, { owner: server }));

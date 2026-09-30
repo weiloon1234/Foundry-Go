@@ -100,12 +100,21 @@ func (p MultipartPart[B]) WithPresentation(presentation contract.Presentation) M
 	if p.err != nil {
 		return p
 	}
+	// A contradiction names its part. Text parts are named by their parameter;
+	// a JSON part's descriptor was validated when the part was declared, so a
+	// schema check failure here comes from the hint itself.
+	contradiction := func(err error) error {
+		if err == nil || presentation.Validate() != nil {
+			return err
+		}
+		return fault.New(fault.Invalid, fmt.Sprintf("client presentation on part %q contradicts its codec", p.info.Name))
+	}
 	switch p.kind {
 	case MultipartText:
 		p.text = p.text.WithPresentation(presentation)
 		p.err = p.text.err
 	case MultipartFile:
-		p.err = presentation.ValidateFile()
+		p.err = contradiction(presentation.ValidateFile())
 	case MultipartJSON:
 		if p.schema == nil {
 			p.err = fault.New(fault.Invalid, "presentation requires a JSON part schema")
@@ -115,7 +124,7 @@ func (p MultipartPart[B]) WithPresentation(presentation contract.Presentation) M
 		if err != nil {
 			p.err = err
 		} else {
-			p.err = presentation.ValidateSchema(schema)
+			p.err = contradiction(presentation.ValidateSchema(schema))
 		}
 	default:
 		p.err = fault.New(fault.Invalid, "presentation requires a multipart kind")

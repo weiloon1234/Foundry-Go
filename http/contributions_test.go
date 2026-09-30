@@ -1,11 +1,13 @@
 package http_test
 
 import (
+	"context"
 	"errors"
 	stdhttp "net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
@@ -61,5 +63,58 @@ func TestPluginRoutesAndMiddlewareUseNativeRouter(t *testing.T) {
 	_, err = foundation.NewBuilder().RegisterPlugin(extension).Build(t.Context())
 	if !errors.Is(err, fault.Missing) {
 		t.Fatalf("orphan route contributions accepted: %v", err)
+	}
+}
+
+// RegisterSPA composes a SPA with a router assembled from contributions; its
+// declaration is checked when registered and its assets when the router is
+// built, both during Build.
+func TestRegisterSPAComposesWithContributedRouter(t *testing.T) {
+	key := foundation.NewKey[*foundryhttp.Router]("portal.router")
+	assets := foundation.NewKey[*foundryhttp.Assets]("portal.assets")
+	source := foundryhttp.FilesystemAssets(fstest.MapFS{"index.html": {Data: []byte("portal shell")}})
+	build := func(id foundryhttp.RouteID, assetsKey foundation.Key[*foundryhttp.Assets], prefix string) (*foundation.App, error) {
+		config := foundryhttp.DefaultSPAConfig()
+		config.Prefix = prefix
+		return foundation.NewBuilder().Register(foundryhttp.AssetsModule("assets", assets, foundryhttp.DefaultAssetsConfig(source)), foundation.Module{Name: "http", OnRegister: func(r *foundation.Registrar) error {
+			if err := foundryhttp.RegisterRouter(r, key); err != nil {
+				return err
+			}
+			return foundryhttp.RegisterSPA(r, key, id, assetsKey, config)
+		}}).Build(t.Context())
+	}
+	app, err := build("portal", assets, "/portal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := app.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Shutdown(context.Background()) })
+	router, err := foundation.Resolve(app.Services(), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest("GET", "/portal/settings", nil)
+	request.Header.Set("Accept", "text/html")
+	router.ServeHTTP(response, request)
+	if response.Code != 200 || response.Body.String() != "portal shell" {
+		t.Fatal("contributed SPA did not serve its entry", response.Code, response.Body.String())
+	}
+	for name, test := range map[string]struct {
+		id     foundryhttp.RouteID
+		assets foundation.Key[*foundryhttp.Assets]
+		prefix string
+		kind   error
+	}{
+		"unknown assets": {"portal", foundation.NewKey[*foundryhttp.Assets]("portal.none"), "/portal", fault.Missing},
+		"no assets key":  {"portal", foundation.Key[*foundryhttp.Assets]{}, "/portal", fault.Invalid},
+		"route ID":       {"Portal Route", assets, "/portal", fault.Invalid},
+		"prefix":         {"portal", assets, "portal", fault.Invalid},
+	} {
+		if _, err := build(test.id, test.assets, test.prefix); !errors.Is(err, test.kind) {
+			t.Fatalf("%s: expected %v, got %v", name, test.kind, err)
+		}
 	}
 }

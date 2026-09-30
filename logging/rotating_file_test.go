@@ -149,6 +149,28 @@ func TestFileRetentionCountAgeAndRestart(t *testing.T) {
 	}
 }
 
+// A request made while an older one is still queued must not be dropped: the
+// worker would otherwise prune with the stale time. No worker runs here, so
+// the pending slot shows exactly what the worker would receive.
+func TestFileCleanupRequestKeepsTheLatestTime(t *testing.T) {
+	f := &rotatingFile{cleanup: make(chan time.Time, 1)}
+	now := rotationTime()
+	f.requestCleanup(now)
+	f.requestCleanup(now.Add(time.Hour))
+	if queued := <-f.cleanup; !queued.Equal(now.Add(time.Hour)) {
+		t.Fatal("a newer cleanup request was dropped", queued)
+	}
+	// A clock that stepped backwards keeps the later pending time.
+	f.requestCleanup(now.Add(2 * time.Hour))
+	f.requestCleanup(now)
+	if queued := <-f.cleanup; !queued.Equal(now.Add(2 * time.Hour)) {
+		t.Fatal("an earlier time replaced a later pending request", queued)
+	}
+	if next := f.nextPrune.Load(); next != now.Add(pruneInterval).UnixNano() {
+		t.Fatal("the writer's next prune deadline changed", next)
+	}
+}
+
 func TestFileRetentionRunsOnOrdinaryWrites(t *testing.T) {
 	f, _ := testRotatingFile(t, RotationConfig{MaxBytes: 100, MaxAge: time.Hour})
 	now := rotationTime()

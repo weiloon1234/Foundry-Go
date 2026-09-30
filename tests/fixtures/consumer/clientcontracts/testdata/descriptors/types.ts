@@ -22,4 +22,8 @@ owners.field(user);
 // @ts-expect-error A model-ID key is an Identity, not an arbitrary string.
 owners.at("not-an-identity");
 const second = index.field("pair").at(1), state = index.field("states").field("draft");
-void [values, quoted, limit, readers, issues, ranges, rangeBytes, numbers, rounded, ownerTemplate, ownerValue, second, state];
+// variant() takes a union's tag, not an enum-typed property of a plain object.
+const card = sdk.operation("unionsEcho").field("body", "method").variant("kind", "card").field("token");
+// @ts-expect-error Payload is not a union; its enum-typed state is not a discriminator.
+sdk.schema("foundry.test/consumer/clientcontracts.Payload").variant("state", "draft");
+void [values, quoted, limit, readers, issues, ranges, rangeBytes, numbers, rounded, ownerTemplate, ownerValue, second, state, card];

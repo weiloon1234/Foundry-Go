@@ -19,8 +19,12 @@ type spaFallback struct {
 }
 
 // WithSPA returns an independent router view sharing the immutable native route
-// table. Only a native unmatched 404 can reach this fallback. The original router
-// is unchanged; no endpoint error response is intercepted or rewritten.
+// table. The fallback answers a native unmatched 404, and an asset mount with a
+// less specific or equal prefix defers to it: a more specific SPA owns its
+// subtree below the mount, including what it declines, and an equal one answers
+// the mount's misses. Declared routes and more specific mounts keep precedence.
+// The original router is unchanged; no endpoint error response is intercepted
+// or rewritten.
 func (r *Router) WithSPA(id RouteID, assets *Assets, config SPAConfig) (*Router, error) {
 	if r == nil || r.mux == nil {
 		return nil, fault.New(fault.Invalid, "SPA requires a router")
@@ -119,10 +123,36 @@ func (s *spaFallback) entry(ctx context.Context) (assetSelection, error) {
 // Select the most specific prefix once. A missing asset or excluded API path
 // in that application must not fall through to an unrelated outer SPA.
 func (r *Router) serveSPA(w stdhttp.ResponseWriter, request *stdhttp.Request) bool {
-	for _, fallback := range r.spas {
-		if matchesAssetPrefix(request.URL.Path, fallback.prefix) {
-			return fallback.serve(w, request)
-		}
+	if fallback := coveringSPA(r.spas, request.URL.Path); fallback != nil {
+		return fallback.serve(w, request)
 	}
 	return false
+}
+
+// coveringSPA returns the most specific SPA whose prefix covers location; spas
+// are sorted most specific first.
+func coveringSPA(spas []*spaFallback, location string) *spaFallback {
+	for _, fallback := range spas {
+		if matchesAssetPrefix(location, fallback.prefix) {
+			return fallback
+		}
+	}
+	return nil
+}
+
+// spaRoutesKey carries a router view's SPAs to the asset mounts its native
+// table shares with other views. Only views with SPAs attach it.
+type spaRoutesKey struct{}
+
+// mountSPA returns the SPA a matched asset mount defers to: the most specific
+// SPA covering the request whose prefix is at least as specific as the mount's.
+// A more specific SPA owns its subtree below the mount, including what it
+// declines; an equal one answers the mount's misses. More specific mounts and
+// declared routes match first.
+func mountSPA(r *stdhttp.Request, prefix string) *spaFallback {
+	spas, _ := r.Context().Value(spaRoutesKey{}).([]*spaFallback)
+	if fallback := coveringSPA(spas, r.URL.Path); fallback != nil && len(fallback.prefix) >= len(prefix) {
+		return fallback
+	}
+	return nil
 }

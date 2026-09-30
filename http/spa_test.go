@@ -230,3 +230,69 @@ func TestMultipleSPAPrefixesDoNotLeakIntoOuterApplication(t *testing.T) {
 		t.Fatal("outer router mutated")
 	}
 }
+
+// A root public mount matches every path natively. A SPA with a more specific
+// prefix owns its subtree below it, including what it declines; a SPA with the
+// same prefix answers the mount's misses. More specific mounts still win.
+func TestAssetMountsDeferToCoveringSPAs(t *testing.T) {
+	public := assetsForTest(t, DefaultAssetsConfig(FilesystemAssets(fstest.MapFS{
+		"robots.txt":      {Data: []byte("robots")},
+		"admin/shadow.js": {Data: []byte("public copy")},
+	})))
+	admin := assetsForTest(t, DefaultAssetsConfig(FilesystemAssets(fstest.MapFS{
+		"index.html":      {Data: []byte("admin shell")},
+		"assets/other.js": {Data: []byte("unreachable: the bundle mount is more specific")},
+	})))
+	home := assetsForTest(t, DefaultAssetsConfig(FilesystemAssets(fstest.MapFS{
+		"index.html": {Data: []byte("home shell")},
+		"main.js":    {Data: []byte("home bundle")},
+	})))
+	bundles := assetsForTest(t, DefaultAssetsConfig(FilesystemAssets(fstest.MapFS{"app.js": {Data: []byte("immutable bundle")}})))
+	base, err := NewRouter(public.Mount("public", "/").Register(), bundles.Mount("admin.bundles", "/admin/assets").Register())
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminConfig := DefaultSPAConfig()
+	adminConfig.Prefix, adminConfig.Exclude = "/admin", []string{"/admin/api"}
+	withAdmin, err := base.WithSPA("admin", admin, adminConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router, err := withAdmin.WithSPA("home", home, DefaultSPAConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		path, accept string
+		status       int
+		body         string
+	}{
+		{"/admin/login", "text/html", 200, "admin shell"},
+		{"/admin/shadow.js", "", 404, ""},
+		{"/admin/api/users", "text/html", 404, ""},
+		{"/admin/assets/app.js", "", 200, "immutable bundle"},
+		{"/admin/assets/other.js", "", 404, ""},
+		{"/robots.txt", "", 200, "robots"},
+		{"/main.js", "", 200, "home bundle"},
+		{"/dashboard", "text/html", 200, "home shell"},
+		{"/missing.js", "text/html", 404, ""},
+	} {
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest("GET", tc.path, nil)
+		if tc.accept != "" {
+			request.Header.Set("Accept", tc.accept)
+		}
+		router.ServeHTTP(recorder, request)
+		if recorder.Code != tc.status || tc.status == 200 && recorder.Body.String() != tc.body {
+			t.Fatal("mount and SPA precedence", tc.path, recorder.Code, recorder.Body.String())
+		}
+	}
+	// The router without SPAs keeps the mount's own miss.
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest("GET", "/admin/login", nil)
+	request.Header.Set("Accept", "text/html")
+	base.ServeHTTP(recorder, request)
+	if recorder.Code != 404 {
+		t.Fatal("a router view without SPAs changed", recorder.Code)
+	}
+}

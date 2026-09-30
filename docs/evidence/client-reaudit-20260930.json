@@ -62,5 +62,33 @@
     "test_postgres": {"command": ["make", "test-postgres"], "environment": ["FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1"], "exit_code": 2, "seconds": 1654, "result": "265 packages passed; five consumer packages failed to build because files vanished from the shared ~/Library/Caches/go-build mid-run (the whole cache was cleared at 18:13:49 by a process outside this session, as at 14:11 earlier). No test failed."},
     "test_postgres_resumed": {"command": ["go", "test", "-mod=readonly", "-count=1", "-timeout=20m", "-race", "<the 21 consumer packages not reported ok>"], "environment": ["FOUNDRY_TEST_POSTGRES_REQUIRED=1", "FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1", "GOWORK=off"], "exit_code": 0, "seconds": 76, "result": "tenantqueries, timequeries, tooling, transactionqueries, upsertqueries, validationinput, validationrules and windowqueries passed; the rest have no tests. With the 265 above, all 273 packages passed."}
   },
-  "decision": "All confirmed findings fixed with regression tests and the full gates pass on the corrected source. The descriptor and form slices remain accepted; their earlier evidence records predate these corrections."
+  "decision": "All confirmed findings fixed with regression tests and the full gates pass on the corrected source. The descriptor and form slices remain accepted; their earlier evidence records predate these corrections.",
+  "follow_up": {
+    "base": "efcd8a8 (the re-audit fixes, committed unchanged: source fingerprint 93a800bc88db8139645b7f636c8879f6ec2a448645e870241b08a310c1255cdf)",
+    "fixes": [
+      {"area": "React ownership docs", "change": "The form guide and React adapter document creating a component-owned controller in the effect that disposes it. A throwaway run confirmed the render-created, dispose-in-cleanup pattern throws form_disposed under StrictMode; the documented pattern is tested under StrictMode (two controllers created, the first disposed and replaced, both disposed after unmount)."},
+      {"area": "form task results", "change": "A run ended by a newer run, an edit, cancel() or disposal resolves canceled at every stage; stale is removed from FormTaskResult.", "regression": "forms.mjs superseded, edited and cancel-while-running cases"},
+      {"area": "descriptor variant() type", "change": "Discriminator requires a key that is one string literal in every union member; one-variant unions keep working, enum-typed properties of plain objects no longer type-check.", "regression": "descriptors/types.ts union and @ts-expect-error Payload cases"},
+      {"area": "multipart presentation errors", "change": "Contradictory hints on file and JSON parts name the part.", "regression": "http TestTransportPresentationUsesActualCodec"}
+    ],
+    "checks": {
+      "typescript_consumers": {"command": ["go", "test", "-count=1", "-v", "./clientcontracts", "-run", "TypeScript client, descriptors and React/Vue adapters"], "environment": ["FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1"], "exit_code": 0},
+      "verify_first": {"command": ["make", "verify"], "exit_code": 2, "seconds": 375, "result": "Only logging TestFileRetentionRunsOnOrdinaryWrites failed; it passed 200 plain and 100 race runs in isolation. Pre-existing and unrelated to these changes; diagnosed and then fixed at the user's request (see logging_race)."},
+      "verify": {"command": ["make", "verify"], "exit_code": 0, "seconds": 570},
+      "typescript": {"command": ["make", "typescript-check"], "exit_code": 0, "seconds": 30},
+      "race": {"command": ["go", "test", "-race", "-count=1", "./http/", "./typescript/"], "exit_code": 0, "seconds": 60},
+      "not_run": "make test-postgres and make agent-smoke: the follow-up changes no SQL, persistence or editor-facing Go signatures"
+    },
+    "logging_race": {
+      "file": "logging/rotating_file.go",
+      "cause": "requestCleanup's non-blocking send on the one-slot cleanup channel dropped a newer request while an older one was queued; the worker then pruned with the older time, leaving a newly expired archive until the next prune interval.",
+      "change": "The serialized writer (the only sender) replaces a queued request with the latest time; a later time prunes a superset, so awaitCleanup still covers every earlier request.",
+      "regression": "TestFileCleanupRequestKeepsTheLatestTime (fails on the previous code: 'a newer cleanup request was dropped')",
+      "checks": [
+        {"command": ["logging.test", "-test.run", "^TestFileRetentionRunsOnOrdinaryWrites$", "-test.count=400", "-test.cpu=1"], "concurrency": "12 copies at once", "before_fix": "49 failures in 4800 runs", "after_fix": "0 failures in 4800 runs"},
+        {"command": ["go", "test", "-race", "-count=100", "-run", "TestFileRetention|TestFileCleanupRequest", "./logging/"], "exit_code": 0},
+        {"command": ["go", "test", "-race", "-count=1", "./logging/..."], "exit_code": 0}
+      ]
+    }
+  }
 }

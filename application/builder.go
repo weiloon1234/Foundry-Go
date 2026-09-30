@@ -28,6 +28,7 @@ type builderState struct {
 	settings   Settings
 	options    options
 	routes     []Routes
+	spas       []spaDeclaration
 	middleware []http.Middleware
 	observers  []http.RequestObserver
 	providers  []foundation.Provider
@@ -93,6 +94,34 @@ func (b *Builder) HTTP(routes ...Routes) *Builder {
 	return b
 }
 
+// spaDeclaration is one Builder.SPA call, snapshotted when declared.
+type spaDeclaration struct {
+	id     http.RouteID
+	assets foundation.Key[*http.Assets]
+	config http.SPAConfig
+}
+
+// SPA declares a single-page application fallback on the application router,
+// served from the assets registered under assets (usually by http.AssetsModule).
+// Existing files under config.Prefix are served, and an HTML navigation to a
+// missing extensionless path receives config.Index with config.CacheControl;
+// declared routes and more specific asset mounts keep precedence, and an asset
+// mount with a less specific or equal prefix, such as a root public mount,
+// defers to it (see http.Router.WithSPA). Build checks the declaration before
+// any resource opens: an unknown assets key, invalid configuration or a
+// duplicate route ID or prefix fails Build.
+func (b *Builder) SPA(id http.RouteID, assets foundation.Key[*http.Assets], config http.SPAConfig) *Builder {
+	config.Exclude = slices.Clone(config.Exclude)
+	b.mutate(func() {
+		if len(b.state.spas) >= 64 {
+			b.state.err = fault.New(fault.Invalid, "too many SPA declarations")
+			return
+		}
+		b.state.spas = append(b.state.spas, spaDeclaration{id: id, assets: assets, config: config})
+	})
+	return b
+}
+
 // Use applies global middleware in declaration order, including router misses.
 func (b *Builder) Use(middleware ...http.Middleware) *Builder {
 	b.mutate(func() { b.state.middleware = append(b.state.middleware, middleware...) })
@@ -120,7 +149,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 		return nil, fault.New(fault.Closed, "application builder is already built")
 	}
 	b.state.built = true
-	settings, configured, routes, middleware, observers, providers, plugins, buildErr := b.state.settings, b.state.options, slices.Clone(b.state.routes), slices.Clone(b.state.middleware), slices.Clone(b.state.observers), slices.Clone(b.state.providers), slices.Clone(b.state.plugins), b.state.err
+	settings, configured, routes, spas, middleware, observers, providers, plugins, buildErr := b.state.settings, b.state.options, slices.Clone(b.state.routes), slices.Clone(b.state.spas), slices.Clone(b.state.middleware), slices.Clone(b.state.observers), slices.Clone(b.state.providers), slices.Clone(b.state.plugins), b.state.err
 	jobDeclarations, eventDeclarations, schedules, realtime, features, models := slices.Clone(b.state.jobs), slices.Clone(b.state.events), slices.Clone(b.state.schedules), b.state.realtime, slices.Clone(b.state.features), slices.Clone(b.state.models)
 	b.state.mu.Unlock()
 	if buildErr != nil {
@@ -147,7 +176,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if err := validateShutdownBudget(s); err != nil {
 		return nil, err
 	}
-	if !s.HTTP.Enabled && (len(routes) > 0 || len(middleware) > 0 || len(observers) > 0) {
+	if !s.HTTP.Enabled && (len(routes) > 0 || len(spas) > 0 || len(middleware) > 0 || len(observers) > 0) {
 		return nil, fault.New(fault.Invalid, "HTTP declarations require HTTP to be enabled")
 	}
 	channels, err := logging.PrepareChannels(s.Log.Default, s.Log.inTimeZone(s.TimeZone), configured.logger, configured.logHandlers...)
@@ -211,7 +240,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if mount := realtimeRoutes(s); mount != nil {
 		routes = append(routes, mount)
 	}
-	registerHTTP(builder, s.HTTP, s.Features.Locales.Enabled, stickyReadsConfigured(s.Services.Database), routes, middleware, observers)
+	registerHTTP(builder, s.HTTP, s.Features.Locales.Enabled, stickyReadsConfigured(s.Services.Database), routes, spas, middleware, observers)
 	registerMetricsCollectors(builder, recorder, channels, s.Realtime.Enabled)
 	app, err := builder.Build(ctx)
 	if err != nil {

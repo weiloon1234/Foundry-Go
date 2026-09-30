@@ -8,6 +8,20 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts.
 
+## SPA fallbacks with application.New (starter B09) — 2026-09-30
+
+Status: **accepted** for the framework. `application.Builder.SPA` and
+`http.RegisterSPA` declare SPA fallbacks on routers built by the application or
+from contributions, checked by Build before assets open. SPAs compose with asset
+mounts by prefix, so portals coexist with a root public mount, hashed-bundle
+mounts and API routes, and a portal at `/` can sit beside a root mount. The
+[asset guide](../docs/guides/http-assets.md#spa-fallbacks-with-applicationnew)
+documents use; the [portal consumer](../tests/fixtures/consumer/spaportals/portals.go)
+covers the starter's requirements. `make verify`, a real-gopls probe and HTTP,
+application and consumer races passed
+([evidence](../docs/evidence/spa-application-20260930.json)). The starter bumps
+its pin and switches its portal routes after publication.
+
 ## Form controller, optional adapters and startup diagnostics — 2026-09-30
 
 Status: **accepted** for the framework follow-up and starter migration candidate.

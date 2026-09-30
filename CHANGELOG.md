@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### SPA fallbacks with application.New
+
+- `application.Builder.SPA(id, assetsKey, config)` declares a browser portal's
+  client-route fallback on the application router, using the existing
+  `http.SPAConfig`; several portals can use distinct prefixes. Build rejects an
+  unknown assets key, an invalid configuration and a route ID or prefix that
+  repeats another SPA or a declared route before any asset directory opens.
+  Route inspection lists each SPA; contract export is unchanged.
+- `http.RegisterSPA` adds the same declaration to a router assembled from
+  contributions; `Builder.SPA` uses it.
+- SPAs now compose with asset mounts by prefix. A SPA more specific than a
+  matching mount owns its subtree, so a root `public/` mount no longer answers
+  (and 404s) client routes under `/admin`; a SPA with the same prefix answers
+  the mount's misses, so a portal at `/` can sit beside a root `public/` mount.
+  Declared routes and more specific mounts, such as immutable hashed bundles,
+  keep precedence. See [SPA fallbacks with application.New](docs/guides/http-assets.md#spa-fallbacks-with-applicationnew).
+
 ### Re-audit of client descriptors, forms and startup diagnostics
 
 - Form submissions report actual outcomes. Edits and reset no longer abort a sent
@@ -31,6 +48,13 @@
   OpenAPI places a repeated input's hint on its items. `validation.EmailRuleID` and
   `validation.URLRuleID` own the rule IDs presentation checks recognize.
   See the [re-audit evidence](docs/evidence/client-reaudit-20260930.json).
+- Form task runs ended by a newer run, an edit, `cancel()` or disposal resolve
+  `canceled` whether or not their callback had started; `stale` is no longer a
+  task result. `variant()` accepts only the key that tags every union member, so
+  an enum-typed property of a plain object no longer type-checks as one.
+  Contradictory hints on multipart file and JSON parts name the part. The form
+  guide documents a React `StrictMode`-safe owner that creates the controller in
+  the effect that disposes it.
 
 ### Form controllers and startup diagnostics
 
@@ -119,6 +143,10 @@
 
 ### Stabilization review
 
+- Rotating log files no longer drop a newer retention request while an older one
+  is queued. The pending request now keeps the latest time, so an archive that
+  expires is removed on the write that expires it rather than up to one prune
+  interval later under load.
 - Query row cancellation hooks are registered under the row mutex. Cancellation
   during driver return can no longer race cleanup-hook initialization; forgotten
   streams still release their connection and owner automatically.

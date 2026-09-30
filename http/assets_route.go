@@ -83,12 +83,24 @@ func (m AssetMount) Register() RouteRegistration {
 	// Static paths allow a final directory slash. All other structural path
 	// validation shares the ordinary path rules; application binders are unchanged.
 	return RouteRegistration{info: info, middlewares: slices.Clone(m.route.middlewares), pattern: string(GET) + " " + nativePath(segments), handler: stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		// A more specific SPA owns its subtree: what it declines (a missing
+		// asset, an excluded path) is not looked up in this outer mount.
+		spa := mountSPA(r, m.prefix)
+		if spa != nil && len(spa.prefix) > len(m.prefix) {
+			if !spa.serve(w, r) {
+				writeRoutingError(w, r, NotFound)
+			}
+			return
+		}
 		if err := m.assets.config.Limits.checkRange(r.Header.Values("Range")); err != nil {
 			writeRoutingError(w, r, err)
 			return
 		}
 		selection, err := m.assets.selectAsset(r.Context(), r.PathValue(assetParameter), strings.HasSuffix(r.URL.Path, "/"))
 		if err != nil {
+			if spa != nil && len(spa.prefix) == len(m.prefix) && isMissingAsset(err) && spa.serve(w, r) {
+				return
+			}
 			writeRoutingError(w, r, err)
 			return
 		}

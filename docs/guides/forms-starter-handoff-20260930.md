@@ -52,7 +52,8 @@ After the user publishes the reviewed controller revision:
    full validation report and server JSON Pointer issues, including form-level
    errors. Preparation remains server-only; empty client issues do not imply
    acceptance. Disable duplicate submission while `pending` remains true, and
-   dispose the controller when the owning screen/request exits. Handle results
+   dispose the controller when the owning screen/request exits (in React, create
+   it in the disposing effect, as the form guide shows, so `StrictMode` works). Handle results
    marked `changed` (the draft moved on after sending) and reconcile a `canceled`
    result whose `outcome` is `unknown` before retrying.
 4. If shipping framework-specific examples, export contracts with `--react`

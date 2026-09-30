@@ -23,7 +23,9 @@ files roll over on the next accepted write.
 Cleanup runs at startup, after each rollover, and after the first write once an
 hour has passed since the last cleanup. Startup cleanup is synchronous; later
 cleanups run in one worker owned by the sink, so record writes never scan the
-directory. An idle/stopped application does not run a cleanup timer. Archives use
+directory. A cleanup requested while another is still pending replaces it with
+the later time, so it removes everything expired by then. An idle/stopped
+application does not run a cleanup timer. Archives use
 the active basename followed by
 `.foundry-<UTC timestamp>-<random suffix>.log`. Only regular files matching that
 exact archive format for that basename are eligible for cleanup. Other files,

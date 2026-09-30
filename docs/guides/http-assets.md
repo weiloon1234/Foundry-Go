@@ -48,8 +48,19 @@ also retain errors when HTML is not accepted or their namespace is excluded. HTM
 Multiple SPAs can use distinct prefixes on the same router. The most specific
 prefix wins; an excluded API or missing asset cannot fall into an outer SPA.
 Duplicate prefixes and route IDs are rejected. A SPA fallback already serves
-existing files under its prefix, so a root catch-all asset mount is unnecessary
-and would consume misses before fallback selection.
+existing files under its prefix, so it needs no asset mount of its own.
+
+SPAs compose with asset mounts by prefix. Declared routes and more specific
+mounts, such as `/admin/assets` for content-hashed bundles with an immutable
+`CacheControl`, keep precedence: their misses stay 404. A SPA whose prefix is
+more specific than a matching mount owns its subtree below it, so a root
+`public/` mount at `/` does not answer `/admin/login` under an `/admin` SPA, and
+what that SPA declines (a missing script, an excluded path) is 404 rather than a
+lookup in `public/`. A SPA with the same prefix as a mount answers the mount's
+misses: a portal at `/` beside a root `public/` mount serves `robots.txt` from
+`public/`, its own bundles from its build and its entry for client routes. A SPA
+reached through a mount responds inside that mount's route middleware, so keep
+mount middleware free of assumptions about which directory answers.
 
 Successful asset lookups are cached for one second (at most 4,096 entries), so a
 replaced file in a directory source is observed within that window; misses are
@@ -67,3 +78,28 @@ and stream response guides describe the shared transfer and cleanup behavior.
 Runtime, lifecycle, independent-consumer, compiler and actual-gopls checks passed.
 The [master acceptance record](../../blueprint/00-master-architecture-and-parity.md#milestone-08-static-assets-and-spa-focused-acceptance)
 tracks verification and the remaining milestone scope.
+
+## SPA fallbacks with application.New
+
+`application.New` builds the router itself, so declare SPAs on the builder with
+the same `SPAConfig`, naming the `*Assets` key an `AssetsModule` provides:
+
+```go
+admin := foundryhttp.DefaultSPAConfig()
+admin.Prefix, admin.Exclude = "/admin", []string{"/admin/api"}
+app, err := application.New(settings).
+    Register(foundryhttp.AssetsModule("web.admin", AdminAssets, adminConfig)).
+    HTTP(routes). // root public mount, /admin/assets bundles, API endpoints
+    SPA("portal.admin", AdminAssets, admin).
+    Build(ctx)
+```
+
+Build checks each declaration before any asset directory opens: an unknown
+assets key, an invalid configuration, or a route ID or prefix that repeats
+another SPA or a declared route fails Build. Route inspection lists each SPA with
+its prefix, index and exclusions; contract export is unchanged because SPAs and
+mounts are not operations. Applications assembling their own router from
+contributions use `foundryhttp.RegisterSPA(registrar, routerKey, id, assetsKey,
+config)`, which `Builder.SPA` uses too. The
+[portal consumer](../../tests/fixtures/consumer/spaportals/portals.go) exercises
+two portals, a root portal, hashed bundles and API routes with `application.New`.

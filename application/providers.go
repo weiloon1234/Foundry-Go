@@ -56,9 +56,14 @@ func stickyReadsConfigured(s infrastructure.DatabaseSettings) bool {
 	return false
 }
 
-func registerHTTP(builder *foundation.Builder, settings HTTPSettings, localesEnabled, stickyReads bool, routes []Routes, middleware []http.Middleware, observers []http.RequestObserver) {
+func registerHTTP(builder *foundation.Builder, settings HTTPSettings, localesEnabled, stickyReads bool, routes []Routes, spas []spaDeclaration, middleware []http.Middleware, observers []http.RequestObserver) {
 	if settings.Enabled {
 		builder.Register(foundation.Module{Name: RouterProvider, Requires: []foundation.ProviderID{Provider}, OnRegister: func(r *foundation.Registrar) error {
+			for _, spa := range spas {
+				if err := http.RegisterSPA(r, RouterKey, spa.id, spa.assets, spa.config); err != nil {
+					return err
+				}
+			}
 			return http.RegisterRouterWithRoutes(r, RouterKey, func(r foundation.Resolver) ([]http.RouteRegistration, error) {
 				services, err := FromResolver(r)
 				if err != nil {

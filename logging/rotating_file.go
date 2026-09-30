@@ -170,13 +170,26 @@ func (f *rotatingFile) writeAt(data []byte, now time.Time) (int, error) {
 	return n, err
 }
 
-// requestCleanup signals the worker without blocking a record write. A pending
-// request already covers this one.
+// requestCleanup signals the worker without blocking a record write. The one
+// pending slot keeps the latest time: an older queued request would prune with
+// a stale time and leave newly expired archives until the next prune interval.
+// A later time removes everything an earlier one would. The serialized writer
+// is the only sender, so once the slot is emptied the next send succeeds.
 func (f *rotatingFile) requestCleanup(now time.Time) {
 	f.nextPrune.Store(now.Add(pruneInterval).UnixNano())
-	select {
-	case f.cleanup <- now:
-	default:
+	for {
+		select {
+		case f.cleanup <- now:
+			return
+		default:
+		}
+		select {
+		case queued := <-f.cleanup:
+			if queued.After(now) {
+				now = queued
+			}
+		default:
+		}
 	}
 }
 

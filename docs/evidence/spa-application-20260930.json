@@ -1,0 +1,39 @@
+{
+  "format": 1,
+  "date": "2026-09-30",
+  "status": "accepted",
+  "scope": "Starter backlog B09: SPA fallbacks declarable through application.New, composing with a root public mount, more specific hashed-bundle mounts and API routes; a portal at / beside a root public mount",
+  "requested_by": "Foundry-Go-Starter session on the user's behalf; approved by the user in this session",
+  "working_tree_base": "efcd8a8 plus uncommitted, separately verified re-audit follow-ups and the logging retention fix",
+  "distribution": "Local changes only; the starter was not edited; no commit, push, tag or publication",
+  "environment": {
+    "go": "go version go1.27.1 darwin/arm64",
+    "modules": "GOWORK=off; existing native caches",
+    "tools": "Existing pinned bin/gopls"
+  },
+  "design": {
+    "declaration": "application.Builder.SPA(id, assets foundation.Key[*http.Assets], config http.SPAConfig) snapshots the configuration and registers http.RegisterSPA on application.RouterKey. http.RegisterSPA is the owner: it validates the route ID and configuration at registration, contributes to the router's collection and resolves the assets key when the router factory runs during Build, then applies Router.WithSPA.",
+    "validation": "Build constructs services before any provider boots, so an unknown assets key (fault.Missing), invalid configuration (fault.Invalid) and a route ID or prefix repeating another SPA or declared route (fault.Duplicate) fail before asset directories open.",
+    "composition": "A router view with SPAs attaches them to the request context. An asset mount defers to the most specific SPA covering the path whose prefix is at least as specific as its own: a more specific SPA owns its subtree (what it declines is 404, never a lookup in the outer mount); an equal one answers the mount's misses. Declared routes and more specific mounts match first natively and keep their own 404s.",
+    "unchanged": "Router.WithSPA's native-miss fallback, exclusions, HTML-navigation rules, prefix redirect, SPAConfig.CacheControl, route inspection metadata and contract export."
+  },
+  "requirements": [
+    {"requirement": "Several SPAs on distinct prefixes beside typed API routes, health routes, a root public mount and a more specific hashed-assets mount", "evidence": "spaportals TestPortalsServeClientRoutesBesideRootAssetsAndAPIs"},
+    {"requirement": "Missing JS/CSS and non-HTML requests keep 404; exclusions stay excluded; /admin redirects to /admin/; GET and HEAD", "evidence": "same test: missing bundle/script, non-HTML navigation, excluded API, portal-owned shadow file, 308 redirect, HEAD cases"},
+    {"requirement": "Fallback keeps SPAConfig.CacheControl independent of the immutable bundle mount", "evidence": "same test: no-cache on fallbacks, immutable on /admin/assets"},
+    {"requirement": "Validated before resources start; route listing shows SPA metadata; contract export unaffected", "evidence": "TestSPADeclarationsFailBuild (unknown key, duplicate ID, duplicate prefix, declared route ID, invalid prefix, HTTP disabled, exclusion snapshot); route metadata and manifest assertions"},
+    {"requirement": "A portal at / beside the root public mount", "evidence": "spaportals TestRootPortalAnswersPublicMountMisses; http TestAssetMountsDeferToCoveringSPAs"},
+    {"requirement": "Advanced foundation composition", "evidence": "http TestRegisterSPAComposesWithContributedRouter"}
+  ],
+  "checks": {
+    "mutations": "Removing the context hand-off, the more specific SPA's ownership, the equal-prefix miss hand-off or the contribution application failed 12, 1, 3 and 14 fixture subtests respectively",
+    "verify": {"command": ["make", "verify"], "exit_code": 0, "seconds": 698},
+    "agent_smoke": {"command": ["make", "agent-smoke"], "exit_code": 0, "seconds": 268, "note": "Includes the new application-spa-portal probe"},
+    "race": {"command": ["go", "test", "-race", "-count=1", "./http/", "./application/", "./foundation/", "and consumer ./spaportals/ ./httpassets/"], "exit_code": 0, "seconds": 51},
+    "not_run": "make test-postgres and make typescript-check: no SQL, persistence or client contract changes; the full consumer tests ran in make verify"
+  },
+  "limits": [
+    "When an SPA is more specific than a matching mount, the SPA's response runs inside that mount's route middleware.",
+    "The starter change itself (bumping the pin and switching PortalRoutes to Builder.SPA) is out of scope; it can either drop its /admin mount (the SPA serves existing files) or keep it (the equal-prefix SPA answers its misses)."
+  ]
+}

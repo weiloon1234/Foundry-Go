@@ -25,7 +25,8 @@ collections too: their entries take an `Identity` key through `.at(...)`, never
 `.field(...)`. `.at` checks keys with the codec's own rules (enum cases, integer
 syntax, lowercase non-zero model IDs) and indexes against a fixed array length.
 Tagged unions require `.variant(discriminator, tag)` before selecting payload
-fields. A variant descriptor describes the payload without the discriminator,
+fields; the discriminator must be the key that tags every variant, so an
+enum-typed property of a plain object is not accepted. A variant descriptor describes the payload without the discriminator,
 which belongs to the parent union. Enum-keyed maps retain their explicit keys.
 A request body is navigated from its object properties; a body whose root is
 itself a union, array or map has no root descriptor.

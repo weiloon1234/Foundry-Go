@@ -36,7 +36,9 @@ factory, SDK import or shutdown registration. Additional `.HTTP` callbacks add
 route declarations; duplicate/ambiguous routes fail together. `.Register` and
 `.RegisterPlugin` retain the existing extension graph. Plugins may contribute
 routes through `application.RouterKey`; ordinary and contributed routes use one
-router and the same validation.
+router and the same validation. `.SPA(id, assetsKey, config)` adds a browser
+portal's client-route fallback to that router; see
+[SPA fallbacks with application.New](http-assets.md#spa-fallbacks-with-applicationnew).
 
 ## Configuration and dependencies
 

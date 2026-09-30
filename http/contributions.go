@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 )
 
 type routeDeclaration interface {
@@ -24,6 +25,17 @@ func routeContributions(key foundation.Key[*Router]) foundation.Collection[Route
 }
 func middlewareContributions(key foundation.Key[*Router]) foundation.Collection[Middleware] {
 	return foundation.NewCollection[Middleware](fmt.Sprintf("http.middleware.%q", key.Name()))
+}
+
+// spaDeclaration is one RegisterSPA contribution with its assets resolved.
+type spaDeclaration struct {
+	id     RouteID
+	assets *Assets
+	config SPAConfig
+}
+
+func spaContributions(key foundation.Key[*Router]) foundation.Collection[spaDeclaration] {
+	return foundation.NewCollection[spaDeclaration](fmt.Sprintf("http.spas.%q", key.Name()))
 }
 
 // RegisterRoute preserves the concrete route/endpoint descriptor through the
@@ -79,6 +91,32 @@ func RegisterMiddleware(r *foundation.Registrar, key foundation.Key[*Router], mi
 	})
 }
 
+// RegisterSPA adds a SPA fallback, as Router.WithSPA declares it, to the router
+// assembled under key. The route ID and configuration are checked here; assets
+// is resolved when that router is built, during Build and before any provider
+// boots, so an unknown assets key or a duplicate route ID or prefix fails Build
+// before resources open. Asset mounts with a less specific or equal prefix
+// defer to the SPA as WithSPA describes.
+func RegisterSPA(r *foundation.Registrar, key foundation.Key[*Router], id RouteID, assets foundation.Key[*Assets], config SPAConfig) error {
+	if key.Name() == "" || assets.Name() == "" || !identifier.Semantic(string(id)) {
+		return fault.New(fault.Invalid, "SPA contribution requires a router, an assets key and a semantic route ID")
+	}
+	if err := config.Validate(); err != nil {
+		return err
+	}
+	config = config.snapshot()
+	return foundation.Contribute(r, spaContributions(key), string(id), func(resolver foundation.Resolver) (spaDeclaration, error) {
+		if _, err := foundation.Resolve(resolver, routerRegistrationKey(key)); err != nil {
+			return spaDeclaration{}, err
+		}
+		source, err := foundation.Resolve(resolver, assets)
+		if err != nil {
+			return spaDeclaration{}, err
+		}
+		return spaDeclaration{id: id, assets: source, config: config}, nil
+	})
+}
+
 // RegisterRouter assembles all contributions through the existing native router.
 // An application may register this in its HTTP provider and resolve it from the
 // HTTP Module handler factory. Assembly performs no network I/O.
@@ -127,6 +165,19 @@ func registerRouter(r *foundation.Registrar, key foundation.Key[*Router], constr
 				item.endpoint = func() EndpointInfo { info := previous(); info.Route.Middlewares = slices.Clone(ids); return info }
 			}
 		}
-		return NewRouter(registrations...)
+		router, err := NewRouter(registrations...)
+		if err != nil {
+			return nil, err
+		}
+		spas, err := foundation.Contributions(resolver, spaContributions(key))
+		if err != nil {
+			return nil, err
+		}
+		for _, spa := range spas {
+			if router, err = router.WithSPA(spa.id, spa.assets, spa.config); err != nil {
+				return nil, err
+			}
+		}
+		return router, nil
 	})
 }
