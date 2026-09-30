@@ -191,3 +191,45 @@ export async function descriptorConsumer(): Promise<void> {
   echo.metadata.route.path = "/changed";
   void [decimal, empty, absent, text, mapText, absentElement, result, report, lossy, otherOwner, otherField];
 }
+
+async function typedForms() {
+  const op = sdk.operation("itemsEcho");
+  const form = sdk.createForm(op, { body: {}, path: { key: "1" } });
+  const amount = form.field(op.field("body", "amount"));
+  amount.set("123456789012345678901234567890.123");
+  amount.setText("999.99"); amount.parse();
+  const exact: string | undefined = amount.getSnapshot().value;
+  const report: sdk.ValidationReport = form.validate();
+  form.field(op.field("body", "tags").at(0)).set("text");
+  const unionOp = sdk.operation("unionsEcho"), unionForm = sdk.createForm(unionOp, { body: {} });
+  unionForm.field(unionOp.field("body", "method").variant("kind", "card").field("token")).set("card token");
+  const card = unionForm.field(unionOp.field("body", "method").variant("kind", "card"));
+  card.set({ token: "card token", sequence: "8", labels: [] });
+  // @ts-expect-error The discriminator belongs to the parent union, not its payload.
+  card.set({ kind: "card", token: "card token", sequence: "8", labels: [] });
+  // @ts-expect-error Nested fields retain their operation owner.
+  form.field(unionOp.field("body", "method").variant("kind", "card").field("token"));
+  const task = form.task(async (draft, signal) => { void signal; return [draft.body?.amount ?? ""]; });
+  const options: readonly string[] | undefined = task.getSnapshot().value;
+  // @ts-expect-error Task results are immutable snapshots.
+  task.getSnapshot().value?.push("mutation");
+  const result = await form.submit(api);
+  if (result.status === "succeeded") { const response: sdk.Operations["itemsEcho"]["response"] = result.value; void response; }
+  // @ts-expect-error DTO descriptors are not fields of an operation.
+  form.field(sdk.schema("foundry.test/consumer/clientcontracts.Payload").field("amount"));
+  // @ts-expect-error Another operation cannot mutate this form.
+  form.field(sdk.operation("formsSubmit").field("body", "name"));
+  // @ts-expect-error Exact decimal input cannot be a JS number.
+  amount.set(12.5);
+  // @ts-expect-error Explicit parsing preserves the field's value type.
+  amount.parse(() => 12.5);
+  // @ts-expect-error Array index is numeric.
+  op.field("body", "tags").at("0");
+  // @ts-expect-error Scalars cannot be indexed as collections.
+  op.field("body", "amount").at(0);
+  // @ts-expect-error Draft values are read-only and may be incomplete.
+  form.getSnapshot().values.body.amount = "1";
+  // @ts-expect-error Initial draft retains operation keys.
+  sdk.createForm(op, { wrongLocation: {} });
+  void [exact, report, options];
+}

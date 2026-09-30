@@ -96,8 +96,8 @@ func newInstrumentation(settings poolSettings) *instrumentation {
 	return &instrumentation{observer: settings.queryObserver, logger: settings.slowLogger, threshold: settings.slowThreshold}
 }
 
-// bindRuntimeLogger supplies a Module's application logger to a configured
-// slow-statement threshold before Start; an explicit logger is retained.
+// bindRuntimeLogger supplies a Module's application logger for startup and a
+// configured slow-statement threshold. Explicit loggers are retained.
 func (db *DB) bindRuntimeLogger(logger *slog.Logger) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -106,6 +106,9 @@ func (db *DB) bindRuntimeLogger(logger *slog.Logger) error {
 	}
 	if db.instrument != nil && db.instrument.threshold > 0 && db.instrument.logger == nil {
 		db.instrument.logger = logger
+	}
+	if db.startupLogger == nil {
+		db.startupLogger = logger
 	}
 	return nil
 }

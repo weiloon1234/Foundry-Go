@@ -67,7 +67,7 @@ func Render(source *manifest.Manifest) ([]byte, error) {
 	fmt.Fprintf(&r.out, "const idempotencyKeyPattern = %s;\n", quote(idempotency.KeyPattern(idempotency.MaxKeyBytes)))
 	defaults, _ := json.Marshal(foundryhttp.DefaultEndpointLimits().Response)
 	fmt.Fprintf(&r.out, "const defaultJSONLimits: JSONLimits = Object.freeze(%s);\n", defaults)
-	for _, name := range []string{"wire", "formats", "validation_messages", "validation", "http", "realtime", "metadata", "descriptors"} {
+	for _, name := range []string{"wire", "formats", "validation_messages", "validation", "http", "realtime", "metadata", "descriptors", "forms"} {
 		data, err := runtimeSources.ReadFile("runtime/" + name + ".ts")
 		if err != nil {
 			return nil, err

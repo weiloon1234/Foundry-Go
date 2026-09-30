@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Form controllers and startup diagnostics
+
+- Generated `createForm` owns typed drafts, explicit exact parsing, touched/dirty
+  state, existing validation reports, server issue pointers and guarded submission.
+  Bounded async tasks prevent stale options/check results replacing current input.
+- Optional `--react`/`--vue` exports subscribe to the same core state. Their modules
+  are separate; the pure core SDK imports no UI dependencies. See the
+  [form guide](docs/guides/client-forms.md).
+- Database Modules log startup/ready, transient retries and terminal failures with
+  safe pool/attempt/timing/classification metadata. Direct pools can use
+  `WithStartupLog`. Retry behavior and timeouts remain unchanged; B08 stays open.
+
 ### Typed client descriptors and presentation
 
 - Generated `operation(name)` and `schema(typeID)` expose typed, immutable field

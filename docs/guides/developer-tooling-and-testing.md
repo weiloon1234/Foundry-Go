@@ -271,3 +271,14 @@ actual findings and failure dispositions. Known affected functions, npm findings
 missing/malformed results and tool failures fail the gate even when JSON-mode
 scanner exit status is zero. Module/package-only findings are preserved for review.
 See the [security policy](../../SECURITY.md) for private disclosure.
+
+## Optional frontend adapter acceptance
+
+`tools/typescript/package.json` declares development-only React, React DOM, Vue,
+DOM test support and declaration packages alongside the pinned compiler. Install
+these with the repository's normal dependency-approval policy before requiring
+`make typescript-check`. The core generated SDK has no runtime npm dependencies.
+The client gate compiles/runs ordinary TS/JS HTTP/WebSocket contracts and the
+optional real React/Vue adapter checks. Missing peers fail required-mode checks.
+External-input fingerprints include the selected compiler's dedicated
+`node_modules` tree, including transitive adapter implementations and types.

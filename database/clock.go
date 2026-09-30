@@ -19,6 +19,7 @@ type poolSettings struct {
 	connectionLimit int
 	queryObserver   QueryObserver
 	slowLogger      *slog.Logger
+	startupLogger   *slog.Logger
 	slowThreshold   time.Duration
 	stickyWindow    time.Duration
 }

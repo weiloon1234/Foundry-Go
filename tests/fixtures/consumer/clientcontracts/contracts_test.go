@@ -197,7 +197,31 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "legacy.ts"), legacy, 0600); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"types.ts", "runtime.mjs"} {
+	// The runtime must also compile for applications without streaming routes;
+	// their generated response union has no FileResult/EventStreamResult member.
+	kept = previous.HTTP[:0]
+	for _, operation := range previous.HTTP {
+		if operation.Response == nil || operation.Response.File == nil && operation.Response.MediaType != "text/event-stream" {
+			kept = append(kept, operation)
+		}
+	}
+	previous.HTTP = kept
+	nonStreamingJSON, err := json.Marshal(previous)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonStreamingManifest, err := manifest.Decode(nonStreamingJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonStreaming, err := typescript.Render(nonStreamingManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "non_streaming.ts"), nonStreaming, 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"types.ts", "runtime.mjs", "forms.mjs"} {
 		data, err := os.ReadFile(filepath.Join("testdata", name))
 		if err != nil {
 			t.Fatal(err)

@@ -52,7 +52,7 @@ func Module(name foundation.ProviderID, key foundation.Key[*DB], adapter func() 
 		if err := db.bindRuntimeClock(r.Clock()); err != nil {
 			return err
 		}
-		if err := db.bindRuntimeLogger(r.Logger()); err != nil {
+		if err := db.bindRuntimeLogger(r.Logger().With("database", string(name))); err != nil {
 			return err
 		}
 		return db.Start(ctx)

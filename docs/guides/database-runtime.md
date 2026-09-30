@@ -24,6 +24,19 @@ Readiness (`PingPrimary`, `PingRead`, `ReadinessProbes`) uses one dedicated prob
 
 `Close(ctx)` rejects new work immediately and waits for existing owners. It does not force-close a connection underneath open rows, transactions, or after-commit callbacks. A caller deadline stops waiting while cleanup continues. `Done()` closes only after owners have released and the underlying pool actually closes. Calls may repeat concurrently. Application work and driver operations must honor cancellation; Go cannot terminate uncooperative goroutines.
 
+## Startup diagnostics
+
+Database Modules inherit their application's logger. Startup logs identify the
+named provider and primary/read role: Info for starting/ready, Warn for each
+transient retry, Error for terminal failure/cancellation, and Debug before each
+connection attempt. Records include attempt, elapsed time, next retry delay and
+safe code/SQLSTATE. Connection strings and arbitrary driver error text are never
+logged. Direct `Open`/`Prepare` callers opt in with `database.WithStartupLog(logger)`.
+This adds no query timing, changes no retry classification or timeout, and creates
+no detached logging work. Custom log handlers must return promptly; panic/Goexit
+are contained while actual handler ownership is retained. These diagnostics can
+locate a future worker startup stall; they do not explain the historical B08 case.
+
 ## Raw execution and typed hydration
 
 `DB`, `Tx`, and `Session` implement `database.Executor`. `Exec(ctx, statement, arguments...)` returns a `Result` with `RowsAffected`; PostgreSQL generated keys belong in a `RETURNING` query, not `LastInsertId`.

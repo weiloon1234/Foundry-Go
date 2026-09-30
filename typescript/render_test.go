@@ -3,6 +3,8 @@ package typescript_test
 import (
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -83,6 +85,38 @@ func TestClientGenerationPublishesAllAdaptersTogether(t *testing.T) {
 	options.Prefix = "../bad"
 	if _, err := typescript.Generate(t.Context(), source, options); err == nil {
 		t.Fatal("unsafe prefix accepted")
+	}
+}
+
+func TestOptionalFormAdaptersUseOwnedAtomicPublication(t *testing.T) {
+	source := clientManifest(t)
+	options := typescript.Options{Dir: t.TempDir(), Prefix: "example", OpenAPI: openapi.Options{Title: "Consumer", APIVersion: "1"}, React: true, Vue: true}
+	report, err := typescript.Generate(t.Context(), source, options)
+	if err != nil || len(report.Written) != 5 {
+		t.Fatal(report, err)
+	}
+	for _, adapter := range []string{"react", "vue"} {
+		data, err := os.ReadFile(filepath.Join(options.Dir, "example_"+adapter+"_foundry.gen.ts"))
+		if err != nil || !bytes.Contains(data, []byte(`"./example_foundry.gen.js"`)) {
+			t.Fatal("adapter prefix/import mismatch", err)
+		}
+	}
+	core, err := os.ReadFile(filepath.Join(options.Dir, "example_foundry.gen.ts"))
+	if err != nil || bytes.Contains(core, []byte(`from "react"`)) || bytes.Contains(core, []byte(`from "vue"`)) {
+		t.Fatal("core imported optional UI dependencies", err)
+	}
+	options.Check = true
+	if _, err := typescript.Generate(t.Context(), source, options); err != nil {
+		t.Fatal(err)
+	}
+	options.React = false
+	if _, err := typescript.Generate(t.Context(), source, options); err == nil {
+		t.Fatal("check ignored obsolete adapter")
+	}
+	options.Check = false
+	report, err = typescript.Generate(t.Context(), source, options)
+	if err != nil || len(report.Removed) != 1 || report.Removed[0] != "example_react_foundry.gen.ts" {
+		t.Fatal(report, err)
 	}
 }
 

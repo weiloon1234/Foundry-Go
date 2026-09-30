@@ -22,6 +22,8 @@ func runContracts(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	flags.StringVar(&options.OpenAPI.Title, "title", "", "application API title")
 	flags.StringVar(&options.OpenAPI.APIVersion, "api-version", "", "application API version")
 	flags.BoolVar(&options.Check, "check", false, "fail on stale output without writing files or locks")
+	flags.BoolVar(&options.React, "react", false, "emit the optional React form subscription adapter")
+	flags.BoolVar(&options.Vue, "vue", false, "emit the optional Vue form subscription adapter")
 	if err := cli.ParseFlags(flags, args); err != nil {
 		return err
 	}

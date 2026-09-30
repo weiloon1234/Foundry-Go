@@ -16,6 +16,7 @@ type IsUnion<T, Whole = T> = T extends Whole ? [Whole] extends [T] ? false : tru
 type ObjectFields<T> = NonNullable<T> extends string | number | boolean | readonly unknown[] | Blob | Upload ? never : true extends IsUnion<NonNullable<T>> ? never : string extends keyof NonNullable<T> ? never : Extract<keyof NonNullable<T>, string>;
 type Discriminator<T> = { [K in Extract<keyof NonNullable<T>, string>]: NonNullable<T>[K] extends string ? string extends NonNullable<T>[K] ? never : K : never }[Extract<keyof NonNullable<T>, string>];
 type IsCollection<T> = NonNullable<T> extends readonly unknown[] ? true : string extends keyof NonNullable<T> ? true : false;
+type CollectionKey<T> = NonNullable<T> extends readonly unknown[] ? number : string;
 type ElementValue<T> = NonNullable<T> extends readonly (infer V)[] ? V : NonNullable<T> extends Readonly<Record<string, infer V>> ? Exclude<V, undefined> : never;
 declare const descriptorType: unique symbol;
 /** Value/owner identity prevents fields of different operations or types being interchanged. */
@@ -32,6 +33,8 @@ export interface FieldDescriptor<T, Owner = unknown> {
   field<K extends ObjectFields<T>>(name: K): FieldDescriptor<NonNullable<T>[K], readonly [Owner, K]>;
   /** Select a declared union payload; the discriminator stays on the parent. */
   variant<D extends Discriminator<T>, V extends Extract<NonNullable<T>[D], string>>(discriminator: D, tag: V): FieldDescriptor<Omit<Extract<NonNullable<T>, Record<D, V>>, D>, readonly [Owner, D, V]>;
+  /** Bind one concrete array index or map key; element() remains a template. */
+  at(this: IsCollection<T> extends true ? FieldDescriptor<T, Owner> : never, key: CollectionKey<T>): FieldDescriptor<ElementValue<T>, readonly [Owner, "element"]>;
   element(this: IsCollection<T> extends true ? FieldDescriptor<T, Owner> : never): FieldDescriptor<ElementValue<T>, readonly [Owner, "element"]>;
 }
 export type FieldValue<D> = D extends FieldDescriptor<infer T, infer _Owner> ? T : never;
@@ -86,7 +89,18 @@ function descriptorChoices(id: string, type: WireType): readonly unknown[] {
   });
 }
 
-function describeField(id: string | undefined, required: boolean, path: string, hint?: Presentation, parameter?: URLParameter | MultipartPart, repeated = false): unknown {
+interface DescriptorReference {
+  readonly operation: string;
+  readonly segments: readonly (string | number | null)[];
+  readonly guards: readonly { readonly segments: readonly (string | number | null)[]; readonly discriminator: string; readonly tag: string }[];
+  readonly id?: string;
+}
+const descriptorReferences = new WeakMap<object, DescriptorReference>();
+function childReference(reference: DescriptorReference | undefined, key: string | number | null): DescriptorReference | undefined {
+  return reference && { ...reference, segments: [...reference.segments, key] };
+}
+
+function describeField(id: string | undefined, required: boolean, path: string, hint?: Presentation, parameter?: URLParameter | MultipartPart, repeated = false, reference?: DescriptorReference): unknown {
   const resolved = id ? resolvedDescriptor(id) : undefined;
   const type = resolved?.type;
   const file = parameter && "kind" in parameter && parameter.kind === "file";
@@ -94,31 +108,39 @@ function describeField(id: string | undefined, required: boolean, path: string, 
   // Enum choices use the existing codec's exact client representation, including
   // wide integers as strings. No enum validator is recreated by the descriptor.
   const choices = !repeated && type ? descriptorChoices(id!, type) : [];
-  return freezeDescriptor({
+  const descriptor = freezeDescriptor({
     path, required, nullable: !repeated && (resolved?.nullable ?? false), repeated,
     presentation: hint ?? {}, schema: type, parameter, choices,
     field(name: string): unknown {
       if (typeof name !== "string" || repeated) reject(path, "unknown_field");
       if (type?.kind === "map" && type.key?.value.cases?.some(value => String(value instanceof JSONNumber ? value.text : value) === name)) {
-        return describeField(type.element, false, pointer(path, name));
+        return describeField(type.element, false, pointer(path, name), undefined, undefined, false, childReference(reference, name));
       }
       if (type?.kind !== "object") reject(path, "unknown_field");
       const property = type.properties?.find(property => property.name === name);
       if (!property) reject(path, "unknown_field");
-      return describeField(property.type, property.required, pointer(path, name), property.presentation);
+      return describeField(property.type, property.required, pointer(path, name), property.presentation, undefined, false, childReference(reference, name));
     },
     variant(discriminator: string, tag: string): unknown {
       if (repeated || type?.kind !== "union" || discriminator !== type.discriminator || typeof tag !== "string") reject(path, "unknown_variant");
       const variant = type.variants?.find(variant => variant.tag === tag);
       if (!variant) reject(path, "unknown_variant");
-      return describeField(variant.type, true, path);
+      return describeField(variant.type, true, path, undefined, undefined, false, reference && { ...reference, guards: [...reference.guards, { segments: reference.segments, discriminator, tag }] });
+    },
+    at(key: string | number): unknown {
+      const array = repeated || type?.kind === "array";
+      if (array ? !Number.isSafeInteger(key) || (key as number) < 0 : type?.kind !== "map" || typeof key !== "string" || !validUnicode(key) || key.length > defaultJSONLimits.Bytes) reject(path, "collection_key");
+      return repeated ? describeField(id, true, pointer(path, String(key)), hint, parameter, false, childReference(reference, key))
+        : describeField(type!.element, array, pointer(path, String(key)), undefined, undefined, false, childReference(reference, key));
     },
     element(): unknown {
-      if (repeated) return describeField(id, true, pointer(path, "*"), hint, parameter);
+      if (repeated) return describeField(id, true, pointer(path, "*"), hint, parameter, false, childReference(reference, null));
       if (type?.kind !== "array" && type?.kind !== "map") reject(path, "not_collection");
-      return describeField(type.element, true, pointer(path, "*"));
+      return describeField(type.element, true, pointer(path, "*"), undefined, undefined, false, childReference(reference, null));
     },
   });
+  if (reference) descriptorReferences.set(descriptor, { ...reference, ...(id ? { id } : {}) });
+  return descriptor;
 }
 
 function describeOperation(name: string): unknown {
@@ -135,7 +157,7 @@ function describeOperation(name: string): unknown {
         case "query": parameters = op.query; break;
         case "body":
           if (op.body?.type) {
-            const descriptor = describeField(op.body.type, true, "/body") as { field(name: string): unknown };
+            const descriptor = describeField(op.body.type, true, "/body", undefined, undefined, false, { operation: op.name, segments: ["body"], guards: [] }) as { field(name: string): unknown };
             return descriptor.field(name);
           }
           parameters = op.body?.parts ?? op.body?.fields; break;
@@ -143,7 +165,7 @@ function describeOperation(name: string): unknown {
       }
       const parameter = parameters?.find(field => field.name === name);
       if (!parameter) reject("", "unknown_field");
-      return describeField(parameter.type || undefined, parameter.required, pointer("/" + location, name), parameter.presentation, parameter, parameter.repeated);
+      return describeField(parameter.type || undefined, parameter.required, pointer("/" + location, name), parameter.presentation, parameter, parameter.repeated, { operation: op.name, segments: [location, name], guards: [] });
     },
     validate(input: unknown, options: ClientOptions = {}): ValidationReport {
       return validateRequest(name as keyof Operations, input as Operations[keyof Operations]["request"], options);

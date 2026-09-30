@@ -1,0 +1,927 @@
+{
+  "format": 1,
+  "date": "2026-09-30",
+  "status": "accepted",
+  "scope": "Framework-neutral form controller, optional React/Vue subscriptions, safe database startup diagnostics and verified starter migration candidate; publication/actual starter release remain separate",
+  "working_tree_base": "b245eb57e3fcd820cf4e616807adc3b04b0e1ef4",
+  "distribution": "Uncommitted working tree; no publication or actual starter changes",
+  "environment": {
+    "go": "go1.27.1 darwin/arm64",
+    "required_modes": [
+      "FOUNDRY_TEST_POSTGRES_REQUIRED=1",
+      "FOUNDRY_TEST_REDIS_REQUIRED=1",
+      "FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1"
+    ],
+    "services": "Existing private PostgreSQL/Redis configuration; no reset, drop, flush or duplicate server",
+    "tools": "User-approved development-only React/React DOM/types, Vue and jsdom installed without lifecycle scripts; existing native gopls, Node and TypeScript; warm caches",
+    "frontend_test_dependencies": {
+      "typescript": "5.9.3",
+      "react": "19.3.0",
+      "react-dom": "19.3.0",
+      "vue": "3.5.43",
+      "@types/react": "19.3.0",
+      "@types/react-dom": "19.3.0",
+      "jsdom": "30.1.1"
+    }
+  },
+  "checks": [
+    {
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "./database",
+        "./typescript",
+        "./cmd/foundry",
+        "./internal/cmd/testinputs"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 1560117248,
+      "elapsed_seconds": 21.961178957950324,
+      "exit": 0,
+      "name": "core-and-cli-01",
+      "sampled_compiler_rss_bytes": 1560100864,
+      "sampled_tree_rss_bytes": 3042902016,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "6a5a47d4523eb3e9059e8f8d964e70276c187f233ccf0a957c59775b69475b94",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "See source snapshots and audit corrections"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-count=1",
+        "./database"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 1085079552,
+      "elapsed_seconds": 31.09552408300806,
+      "exit": 0,
+      "name": "database-race-02",
+      "sampled_compiler_rss_bytes": 1085063168,
+      "sampled_tree_rss_bytes": 1131855872,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "8e94f2134cea185197f0c2835bcf45311ad5b6f46cd507e5bcc6b9aeeb4e4b63",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Relevant source unchanged since this check"
+    },
+    {
+      "argv": [
+        "make",
+        "fmt-check",
+        "vet",
+        "test",
+        "generate-check",
+        "docs-check",
+        "release-tools-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 1110294528,
+      "elapsed_seconds": 253.40838841709774,
+      "exit": 0,
+      "name": "framework-gates-03",
+      "sampled_compiler_rss_bytes": 1110294528,
+      "sampled_tree_rss_bytes": 1302495232,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "f6e9fbff6d89467fc8a604ced4c655c675086f43e574ac774826ce1a409eecf0",
+        "stderr.log": "6230753dbe740fcc8ea5e75adf859544a98f57c83f0fe8509596abec1581dd6d"
+      },
+      "scope_note": "Root framework gates precede the final non-streaming/Vue correction"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "./clientcontracts",
+        "-run",
+        "^TestTypeScriptClientAgainstRealHTTPAndWebSocket$",
+        "-v"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/tests/fixtures/consumer",
+      "darwin_max_process_rss_bytes": 3637903360,
+      "elapsed_seconds": 11.349637707928196,
+      "exit": 0,
+      "name": "http-typescript-04",
+      "sampled_compiler_rss_bytes": 3637837824,
+      "sampled_tree_rss_bytes": 3694788608,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "cf73540d1161701a553b5e9c44cf98b554111a34d9f4881978b8a386b74f050e",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "See source snapshots and audit corrections"
+    },
+    {
+      "argv": [
+        "go",
+        "run",
+        "./cmd/foundry",
+        "contracts",
+        "--manifest",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client/generated/contracts_manifest_foundry.gen.json",
+        "--dir",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client/generated",
+        "--title",
+        "foundry-go-starter",
+        "--api-version",
+        "1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 555761664,
+      "elapsed_seconds": 1.1675190409878269,
+      "exit": 0,
+      "name": "starter-sdk-export-02",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 178831360,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "01ad68e2a82f8dea0fb53b1d5304478cd46a23c2278563985b2c241e7719a050",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Private candidate only; actual starter unchanged"
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/node",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/tools/typescript/node_modules/typescript/lib/tsc.js",
+        "--project",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client/tsconfig.build.json"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client",
+      "darwin_max_process_rss_bytes": 322519040,
+      "elapsed_seconds": 0.7115107079735026,
+      "exit": 0,
+      "name": "starter-sdk-build-02",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 319897600,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Private candidate only; actual starter unchanged"
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/node",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/tools/typescript/node_modules/typescript/lib/tsc.js",
+        "--project",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client/tsconfig.json",
+        "--noEmit"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client",
+      "darwin_max_process_rss_bytes": 319619072,
+      "elapsed_seconds": 0.7106202499708161,
+      "exit": 0,
+      "name": "starter-sdk-types-02",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 319782912,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Private candidate only; actual starter unchanged"
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/node",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client/tests/package-runtime.mjs"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client",
+      "darwin_max_process_rss_bytes": 65847296,
+      "elapsed_seconds": 0.2405932080000639,
+      "exit": 0,
+      "name": "starter-sdk-runtime-02",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1392640,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Private candidate only; actual starter unchanged"
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/node",
+        "--check",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client/tests/interop.mjs"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client",
+      "darwin_max_process_rss_bytes": 47316992,
+      "elapsed_seconds": 0.23844533297233284,
+      "exit": 0,
+      "name": "starter-sdk-interop-syntax-02",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1376256,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Private candidate only; actual starter unchanged"
+    },
+    {
+      "argv": [
+        "make",
+        "fmt-check",
+        "docs-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 194314240,
+      "elapsed_seconds": 0.47085162496659905,
+      "exit": 0,
+      "name": "handoff-docs-01",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 161103872,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "fd85898d49c4c9b114d0251a950b2b369f7138485ca00565be369f6c6c8979fb",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Final documentation and formatting checks; no runtime acceptance implied"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "-mod=readonly",
+        "-modfile=/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-overlay.mod",
+        "-overlay=/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-overlay.json",
+        "-count=1",
+        "./internal/console",
+        "-run",
+        "^TestContractExportIsConfiguredDeterministicAndServiceFree$",
+        "-v"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-Starter",
+      "darwin_max_process_rss_bytes": 2741010432,
+      "elapsed_seconds": 21.51434162503574,
+      "exit": 0,
+      "name": "starter-console-overlay-01",
+      "sampled_compiler_rss_bytes": 2728607744,
+      "sampled_tree_rss_bytes": 2799796224,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "f55a8f33fe6029daf1d8edcd6e867b6804798469fda5197f972f72580d9f3e27",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Service-free patched Go export test via private overlay/local framework replacement, GOPROXY=off; not published-module consumption"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "./clientcontracts",
+        "-run",
+        "^TestTypeScriptClientAgainstRealHTTPAndWebSocket$",
+        "-v"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/tests/fixtures/consumer",
+      "darwin_max_process_rss_bytes": 3623747584,
+      "elapsed_seconds": 10.233469082973897,
+      "exit": 0,
+      "name": "http-typescript-05",
+      "sampled_compiler_rss_bytes": 3623714816,
+      "sampled_tree_rss_bytes": 3680436224,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "cdc3c03cbb844c9175369b10e668f098b4796ed8465389a5d9b6ea632605c7de",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Current source including whole union payload binding correction"
+    },
+    {
+      "argv": [
+        "go",
+        "run",
+        "./cmd/foundry",
+        "contracts",
+        "--manifest",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client/generated/contracts_manifest_foundry.gen.json",
+        "--dir",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client/generated",
+        "--title",
+        "foundry-go-starter",
+        "--api-version",
+        "1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 557252608,
+      "elapsed_seconds": 1.1704543340019882,
+      "exit": 0,
+      "name": "starter-sdk-export-03",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 181452800,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "01ad68e2a82f8dea0fb53b1d5304478cd46a23c2278563985b2c241e7719a050",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Current private SDK candidate only; actual starter unchanged"
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/node",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/tools/typescript/node_modules/typescript/lib/tsc.js",
+        "--project",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client/tsconfig.build.json"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client",
+      "darwin_max_process_rss_bytes": 317915136,
+      "elapsed_seconds": 0.7122546670725569,
+      "exit": 0,
+      "name": "starter-sdk-build-03",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 315146240,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Current private SDK candidate only; actual starter unchanged"
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/node",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/tools/typescript/node_modules/typescript/lib/tsc.js",
+        "--project",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client/tsconfig.json",
+        "--noEmit"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client",
+      "darwin_max_process_rss_bytes": 317095936,
+      "elapsed_seconds": 0.7119832918979228,
+      "exit": 0,
+      "name": "starter-sdk-types-03",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 316981248,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Current private SDK candidate only; actual starter unchanged"
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/node",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client/tests/package-runtime.mjs"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client",
+      "darwin_max_process_rss_bytes": 65814528,
+      "elapsed_seconds": 0.2319052090169862,
+      "exit": 0,
+      "name": "starter-sdk-runtime-03",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1916928,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Current private SDK candidate only; actual starter unchanged"
+    },
+    {
+      "argv": [
+        "make",
+        "fmt-check",
+        "docs-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 166035456,
+      "elapsed_seconds": 0.4643367499811575,
+      "exit": 0,
+      "name": "handoff-docs-02",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 105840640,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "fd85898d49c4c9b114d0251a950b2b369f7138485ca00565be369f6c6c8979fb",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Formatting and documentation after union payload correction and expanded starter patch"
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/npm",
+        "install",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+        "--cache",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/npm-cache"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/tools/typescript",
+      "darwin_max_process_rss_bytes": 294666240,
+      "elapsed_seconds": 4.991169166984037,
+      "exit": 0,
+      "name": "adapter-dependencies-install-01",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 295239680,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "f40df01a0c8b69a0a979dae323dff43329fd83be449767fb14b495fd8a16b5d0",
+        "stderr.log": "9b6e37cd1e1909cbded810605082be13711fab4eebcfc5b8290b0af35e905396"
+      },
+      "scope_note": "Final accepted evidence where listed in accepted_gate_names; other checks are retained history"
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/npm",
+        "audit",
+        "--json",
+        "--package-lock-only",
+        "--ignore-scripts",
+        "--cache",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/npm-cache"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/tools/typescript",
+      "darwin_max_process_rss_bytes": 107692032,
+      "elapsed_seconds": 0.6941224579932168,
+      "exit": 0,
+      "name": "adapter-dependencies-audit-01",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 108691456,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "bd3d616edb68b60b12a3defb5b31aa6295e9386882e79728776c7c71e8961902",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Final accepted evidence where listed in accepted_gate_names; other checks are retained history"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-v",
+        "./clientcontracts",
+        "-run",
+        "^TestOptionalFormAdaptersWithRealReactAndVue$"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/tests/fixtures/consumer",
+      "darwin_max_process_rss_bytes": 1440104448,
+      "elapsed_seconds": 3.972568374942057,
+      "exit": 0,
+      "name": "form-adapters-01",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1324630016,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "431f3bb201947e0da0e5ef3b3bc922d89873d630b3ca68b215111b4f504db50b",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Final accepted evidence where listed in accepted_gate_names; other checks are retained history"
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/node",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client/tests/package.mjs"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client",
+      "darwin_max_process_rss_bytes": 374341632,
+      "elapsed_seconds": 2.3133660410530865,
+      "exit": 0,
+      "name": "starter-sdk-package-01",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 424640512,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "e5f1eb4d806641698a35efe20e098efd20d7d57a9b90ee69079d5bb650920726",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Private migration candidate; Go overlay/local framework replacement and offline SDK archive. Actual starter unchanged."
+    },
+    {
+      "argv": [
+        "make",
+        "verify"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 5638520832,
+      "elapsed_seconds": 794.4542881660163,
+      "exit": 0,
+      "name": "verify-final-01",
+      "sampled_compiler_rss_bytes": 5638520832,
+      "sampled_tree_rss_bytes": 16333619200,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "5027de5e052290c9ef62f60be90112447fe750c0ef68398dd42657621a28cd6d",
+        "stderr.log": "26aedb219d94e7b849e2c294d54f8abd7f7fab89bb44986fc2fa1b2d13e0cfb9"
+      },
+      "scope_note": "Full pass before final cancellation/error-observer ownership correction; superseded by verify-final-02"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "-mod=readonly",
+        "-modfile=/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-overlay.mod",
+        "-overlay=/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-https-overlay.json",
+        "-count=1",
+        "./internal/bootstrap",
+        "-run",
+        "^TestGenerated(Client|DocumentClient)AgainstRealApplication$",
+        "-v"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-Starter",
+      "darwin_max_process_rss_bytes": 2817294336,
+      "elapsed_seconds": 13.73143833305221,
+      "exit": 1,
+      "name": "starter-https-overlay-01",
+      "sampled_compiler_rss_bytes": 2226749440,
+      "sampled_tree_rss_bytes": 2882699264,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "b02fa6ea7de070a3565d4ce4f4dc285bc6738afee68f9092947708be075a3962",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Retained failure: prototype-sensitive assertion in migration test; corrected without weakening checked report contents"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "-mod=readonly",
+        "-modfile=/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-overlay.mod",
+        "-overlay=/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-https-overlay.json",
+        "-count=1",
+        "./internal/bootstrap",
+        "-run",
+        "^TestGenerated(Client|DocumentClient)AgainstRealApplication$",
+        "-v"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-Starter",
+      "darwin_max_process_rss_bytes": 2817228800,
+      "elapsed_seconds": 7.458982374984771,
+      "exit": 0,
+      "name": "starter-https-overlay-02",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 2879176704,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "70a89eefd514ec65a55afd1eff36c614c98d99a2a4186948a1e08d6095a747c8",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Private migration candidate; Go overlay/local framework replacement and offline SDK archive. Actual starter unchanged."
+    },
+    {
+      "argv": [
+        "make",
+        "typescript-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 3699720192,
+      "elapsed_seconds": 12.604131083004177,
+      "exit": 0,
+      "name": "typescript-final-02",
+      "sampled_compiler_rss_bytes": 3699671040,
+      "sampled_tree_rss_bytes": 3760652288,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "567f00e53d3a2b3b8e807e89143dbe1faa0c31dcb51dbfdcf1b027af685b3996",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Final accepted evidence where listed in accepted_gate_names; other checks are retained history"
+    },
+    {
+      "argv": [
+        "go",
+        "run",
+        "./cmd/foundry",
+        "contracts",
+        "--manifest",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client/generated/contracts_manifest_foundry.gen.json",
+        "--dir",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client/generated",
+        "--title",
+        "foundry-go-starter",
+        "--api-version",
+        "1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 555319296,
+      "elapsed_seconds": 1.1843482090625912,
+      "exit": 0,
+      "name": "starter-sdk-export-04",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 182599680,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "01ad68e2a82f8dea0fb53b1d5304478cd46a23c2278563985b2c241e7719a050",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Private migration candidate; Go overlay/local framework replacement and offline SDK archive. Actual starter unchanged."
+    },
+    {
+      "argv": [
+        "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/node",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client/tests/package.mjs"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-migration/client",
+      "darwin_max_process_rss_bytes": 371490816,
+      "elapsed_seconds": 2.3382869999622926,
+      "exit": 0,
+      "name": "starter-sdk-package-02",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 421806080,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "e5f1eb4d806641698a35efe20e098efd20d7d57a9b90ee69079d5bb650920726",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Private migration candidate; Go overlay/local framework replacement and offline SDK archive. Actual starter unchanged."
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "-mod=readonly",
+        "-modfile=/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-overlay.mod",
+        "-overlay=/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/forms-startup-20260930/starter-https-overlay.json",
+        "-count=1",
+        "./internal/bootstrap",
+        "-run",
+        "^TestGenerated(Client|DocumentClient)AgainstRealApplication$",
+        "-v"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-Starter",
+      "darwin_max_process_rss_bytes": 2817687552,
+      "elapsed_seconds": 12.382112249964848,
+      "exit": 0,
+      "name": "starter-https-overlay-03",
+      "sampled_compiler_rss_bytes": 2267021312,
+      "sampled_tree_rss_bytes": 2882879488,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "8c707c45c54149707e4970ec1c34424e9e957eccc795c65aeab1cf45425056b3",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Private migration candidate; Go overlay/local framework replacement and offline SDK archive. Actual starter unchanged."
+    },
+    {
+      "argv": [
+        "make",
+        "verify"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 2051047424,
+      "elapsed_seconds": 519.1330556250177,
+      "exit": 0,
+      "name": "verify-final-02",
+      "sampled_compiler_rss_bytes": 1087127552,
+      "sampled_tree_rss_bytes": 2335653888,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "89b300c3d1aadd227194ca6ed4c29df7f5dd02af77d0d7f8b115924f207197a8",
+        "stderr.log": "97698cbbbd4b4256350fcc4e5c47f3ec4b37e431400fe0bf8f8a6828ff3f9ff6"
+      },
+      "scope_note": "Final accepted evidence where listed in accepted_gate_names; other checks are retained history"
+    },
+    {
+      "argv": [
+        "make",
+        "docs-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 29409280,
+      "elapsed_seconds": 0.27182324999012053,
+      "exit": 0,
+      "name": "accepted-docs-01",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1720320,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "fd85898d49c4c9b114d0251a950b2b369f7138485ca00565be369f6c6c8979fb",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "scope_note": "Final acceptance documentation/local-link check after documentation-only status updates"
+    }
+  ],
+  "starter_patch": {
+    "path": ".cache/forms-startup-20260930/starter-forms-migration.patch",
+    "sha256": "e069755ef2b5b3b8d4ef6cd8681bd54ab74563759d8e9b8a1b58b024fa0b67b7",
+    "check": {
+      "command": [
+        "patch",
+        "--dry-run",
+        "-p1",
+        "-i",
+        "starter-forms-migration.patch"
+      ],
+      "source_matches": true,
+      "files": 6,
+      "exit": 0
+    },
+    "starter_requirement": "v0.0.0-20260930053505-b245eb57e3fc",
+    "limits": "Patched Go export/freshness/adapter removal, installed SDK archive consumers and both real HTTPS profiles passed. Go tests use private overlays and a local framework replacement with downloads disabled. Actual published-module resolution and full platform/deployment acceptance remain starter-owned after publication."
+  },
+  "audit_corrections": [
+    "Custom parse and validate callbacks cannot overwrite state changed during their invocation; disposal retains pending capacity until actual callback exit.",
+    "Database cancellation classification occurs once, preserving extension invocation ownership.",
+    "A non-streaming-only application exposed an invalid FileResult assertion. Runtime narrowing fixes it; the actual HTTP compiler fixture now compiles a non-streaming SDK too.",
+    "Vue shallowRef must allocate an outer ref even if a generic store returns a ref-shaped snapshot. Corrected implementation and regression sources exist; real Vue execution remains pending.",
+    "Whole union payload binding now reads only payload properties and preserves the existing parent discriminator on set. Actual HTTP submission and strict TypeScript regression passed; switching variants still requires the parent union."
+  ],
+  "source_fingerprints": {
+    "algorithm": "sha256",
+    "changed_code_and_test_inputs": {
+      "Makefile": "804486a9cc1b9065c3aa39ad75ece802e3031b63fb3f3bb70413fd82f90d3366",
+      "cmd/foundry/contracts.go": "862b81a47d48f5cd8500145c06aaf08f29da17e9fe104a2c93752e7feea59c6b",
+      "cmd/foundry/contracts_test.go": "24f03dae3f7db765ca0ee884b6f69847a9adbfc6d5b71155f12d51c048e27e17",
+      "database/clock.go": "3bf0f4c14ec463c7083bb14e7b31dccf99e0e25d9fab7088b4769b24be718374",
+      "database/instrumentation.go": "894fb8728fde0bb449c0997e268f67c466ecdbbde094006d9a06c9c6c07e2478",
+      "database/module.go": "a4ede5f10ccbe3c228c908fa47485abc6a165d4986de9a40973576be60532ba3",
+      "database/pool.go": "194af8b69b15ea2d6005c377d3dc1ed3ec0aaab9a55db108d6a3452a738209e9",
+      "database/routing.go": "2d2c5b521c9a4bf4d3dea22f7b1cc0f6c8270a7a7677c104291023e5a49b7909",
+      "database/startup_logging.go": "f45c0bc1d81383e7f12708a5d5ccc661ab78145f73dbf2d97b6c02020c909c9b",
+      "database/startup_logging_test.go": "90c0f1a6eaaa8b6e1e70531eb3c81d70ad617f90808b44adb892710397493248",
+      "internal/agent/gopls_acceptance_test.go": "11c36be8ed5ca6778ea471a261e910910bbd60f3a4b998ad94fa94c2a8a7adfa",
+      "internal/cmd/testinputs/main.go": "025d066e431837a440d5a20aa2f53a3cc600bf0accb7849040d613ee0c61e96a",
+      "tests/fixtures/consumer/clientcontracts/contracts_test.go": "e49757c2e02168348b253eff8ac1b0752c61fe6adb901a521e26c4f4d76380a6",
+      "tests/fixtures/consumer/clientcontracts/form_adapters_test.go": "09625e14606ea85097b1cbd79232bd9f28dcbdb411e672ef55730a0fa260b08e",
+      "tests/fixtures/consumer/clientcontracts/testdata/form_adapters/runtime.mjs": "f04f8b9a8b79db4f6cca937a4d4ee9f588ec148ee3a97136e7001b252401aa7f",
+      "tests/fixtures/consumer/clientcontracts/testdata/form_adapters/types.ts": "5efa7dbaf8385bb81208933051291c4cec76bcda2daaa0c0081ee056eb620815",
+      "tests/fixtures/consumer/clientcontracts/testdata/forms.mjs": "d6d30b1bb64d7c7b5a1b38ba401858f0e440c3d6a87f8723f46bc0b665125c23",
+      "tests/fixtures/consumer/clientcontracts/testdata/runtime.mjs": "a6908fbc8d88c38976462c9862f6b0cf03b3bcf830dff5e302c55c822dc4cdb7",
+      "tests/fixtures/consumer/clientcontracts/testdata/types.ts": "c038f3ab052e4495dbbb61cf85429b83ad979e8aeccdbf3a7a1a62c356e4a360",
+      "tests/fixtures/consumer/database_example_test.go": "30e3c7f63ae8f69367dbee2bce307394f7fbadfd8f10138f8e7bb94d9a9408c6",
+      "tests/fixtures/consumer/internal/clientfixture/native.go": "1276fcc173e6f4af043cd1794522f22eaec261e1f69575e19f20c7b2d9e6634a",
+      "tools/typescript/package-lock.json": "8548dd08eb79d820d9fbacbf872046ea4c96e8e53782625370e5c99b140aa0fe",
+      "tools/typescript/package.json": "ab02dbb00725532ebe8ff90141791ac12209d5397aff1086476d7c4d8323549e",
+      "typescript/adapters/react.ts": "b18710541a81b2a6524a59a8e8ac940df9386821f67e1317f03aa0fe192dd8f2",
+      "typescript/adapters/vue.ts": "f9280f70a67c0330de274fa849d70fc425035da4ff05cefd35c43c1acc4a307f",
+      "typescript/export_command.go": "e806a281ad476718116af880f4f3a26f9881e56d317b083d16faa347d340e6c1",
+      "typescript/export_command_test.go": "540db0ca8c3cc9185f92c764144959e94c18ed581786a3779fd464b7015b0b4d",
+      "typescript/form_adapters.go": "428d30fc5819152a23488c418d271b41c3b6ffd8943801a954509e19c307033c",
+      "typescript/generate.go": "b2c2e06ee8096f2a72f610ee8b6545f5b5a9b974071d2d547dad054765a38e4a",
+      "typescript/render.go": "fc24834c6e09468eeade5bb4a6cd11bf6d1e883ec3a49c434b01af13cf6df0dd",
+      "typescript/render_test.go": "cdc32d35db5d3eb97d159f4e338f4fd3b4640803d640cfdd930a536229c780fb",
+      "typescript/runtime/descriptors.ts": "1c57a53885ad91ab532133e35886917fad589c1621ceab380c470fe86ba4b9bd",
+      "typescript/runtime/forms.ts": "17ffff35811d0a1d10b6bfd7bba07a26e72d83c484a3a5c3b2c2c0f3836412ff"
+    },
+    "full_snapshot_path": ".cache/forms-startup-20260930/verify-final-02-source.json",
+    "full_snapshot_sha256": "0d7186ec24eb8d5c41ab8ae959448fba5fba1da4ca155bcafe2a6b73d3b84ea8",
+    "final_verification_integrity": {
+      "source_unchanged": true,
+      "stages": {
+        "starter-https-overlay-03": "pass",
+        "starter-sdk-export-04": "pass",
+        "starter-sdk-package-02": "pass",
+        "typescript-final-02": "pass",
+        "verify-final-02": "pass"
+      }
+    },
+    "database_race_source_review": {
+      "checked_paths": 370,
+      "changed": [],
+      "source_snapshot": "review-corrected-source.json",
+      "race_stage": "database-race-02"
+    },
+    "implementation_unchanged_after_final_gate": true,
+    "note": "Only acceptance documentation/evidence changed after the full gate; those receive a separate documentation check."
+  },
+  "pending": [],
+  "B08": "Open. The original eight-second Linux unclaimed-job failure remains unexplained. New database diagnostics are not a root-cause fix. No repetition-only campaign, publisher disabling, command retry or timeout increase was introduced.",
+  "dependency_audit": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    }
+  },
+  "accepted_gate_names": [
+    "database-race-02",
+    "starter-console-overlay-01",
+    "typescript-final-02",
+    "starter-sdk-package-02",
+    "starter-https-overlay-03",
+    "verify-final-02",
+    "adapter-dependencies-audit-01",
+    "accepted-docs-01"
+  ],
+  "final_review": {
+    "confirmed_findings": [
+      {
+        "finding": "A validation listener could abort before the form installed its submission abort listener. A submitting listener could also allow an already canceled wrapped-client invocation.",
+        "before_probe": [
+          {
+            "phase": "idle",
+            "status": "succeeded",
+            "calls": 1
+          },
+          {
+            "phase": "submitting",
+            "status": "canceled",
+            "calls": 1
+          }
+        ],
+        "resolution": "Capture the original signal, observe already-aborted state after validation, and check the owned signal before invoking the client.",
+        "regression": "typescript-final-02"
+      },
+      {
+        "finding": "Task creation read the caller options object again for its error observer.",
+        "resolution": "Capture the configured observer when creating the form and reuse it for every task.",
+        "regression": "typescript-final-02"
+      },
+      {
+        "finding": "Starter HTTPS assertions compared a null-prototype owned report against a normal-prototype report.",
+        "resolution": "Compare the report fields through a shallow object projection, matching the existing starter pagination assertion pattern. All report contents remain checked.",
+        "regression": "starter-https-overlay-03"
+      }
+    ],
+    "review_scope": "Form value/owner typing, omitted/null/exact representations, validation delegation, callback and stream cleanup, cancellation, task bounds, adapter subscriptions and SSR ownership, startup log redaction, generated artifact ownership, and starter consumer paths."
+  },
+  "requirement_audit": {
+    "typed_core_and_exact_values": {
+      "source": "typescript/runtime/forms.ts",
+      "tests": [
+        "tests/fixtures/consumer/clientcontracts/testdata/types.ts",
+        "tests/fixtures/consumer/clientcontracts/testdata/forms.mjs"
+      ],
+      "gate": "typescript-final-02"
+    },
+    "actual_optional_adapters": {
+      "source": [
+        "typescript/adapters/react.ts",
+        "typescript/adapters/vue.ts"
+      ],
+      "tests": [
+        "tests/fixtures/consumer/clientcontracts/testdata/form_adapters/types.ts",
+        "tests/fixtures/consumer/clientcontracts/testdata/form_adapters/runtime.mjs"
+      ],
+      "gate": "typescript-final-02"
+    },
+    "safe_startup_diagnostics": {
+      "source": "database/startup_logging.go",
+      "tests": [
+        "database/startup_logging_test.go"
+      ],
+      "gate": "database-race-02"
+    },
+    "starter_migration": {
+      "artifact": ".cache/forms-startup-20260930/starter-forms-migration.patch",
+      "gates": [
+        "starter-console-overlay-01",
+        "starter-sdk-package-02",
+        "starter-https-overlay-03"
+      ]
+    },
+    "full_framework_gate": {
+      "command": [
+        "make",
+        "verify"
+      ],
+      "stage": "verify-final-02",
+      "status": "passed"
+    },
+    "separate_release_items": {
+      "B08": "Open, cause unproven; diagnostics/test limits preserved",
+      "publication": "User-owned; no git writes",
+      "starter_rollout": "Apply reviewed patch after matching published runtime/tool pin; normal platform release checks remain starter-owned"
+    },
+    "final_review": [
+      "Validated whole union payload projection and preserved parent discriminators.",
+      "Captured submission cancellation before user validation/listener callbacks; rechecked cancellation before invoking even a wrapped client.",
+      "Captured the configured error observer for all tasks.",
+      "Reused existing codecs, validation, module logging, atomic artifact publication and consumer runners; no parallel request schema or validator was added."
+    ]
+  },
+  "simplification_review": "No simplify tool/skill was available. Manual review retained the existing codec, validation, atomic publication, callback-isolation and consumer-test owners; no duplicate schema, validator or application runtime was introduced.",
+  "release_handoff": [
+    "User reviews and publishes the framework revision; no commit, push or tag was performed.",
+    "Starter applies the handwritten patch, pins the same published runtime/tool revision, regenerates Go/manifest v6/OpenAPI/SDK, and runs its normal independent macOS/Linux/deployment gates.",
+    "Optional starter UI package subpaths and domain visual controls remain frontend/starter choices.",
+    "B08 remains open; preserve diagnostics and its original eight-second condition during normal verification."
+  ],
+  "completion_audit": {
+    "all_framework_and_migration_candidate_requirements_proven": true,
+    "accepted_gate_exit_codes": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "final_implementation_hashes_match": true,
+    "publication_and_actual_starter_rollout": "Separate user/starter-owned handoff, not claimed complete",
+    "B08": "Open; not closed by this work"
+  }
+}

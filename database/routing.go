@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log/slog"
 	"math/rand/v2"
 	"strings"
 	"time"
@@ -289,26 +290,38 @@ const (
 // pingStartingPool retries transient connection failures within StartupTimeout
 // using jittered exponential backoff. Each attempt is bounded by ConnectTimeout
 // and the caller's context; authentication failures fail immediately.
-func pingStartingPool(ctx context.Context, role PoolRole, raw *sql.DB, config PoolConfig, classify classifier) error {
-	deadline := time.Now().Add(config.StartupTimeout)
+func pingStartingPool(ctx context.Context, role PoolRole, raw *sql.DB, config PoolConfig, classify classifier, logger *slog.Logger) error {
+	started := time.Now()
+	deadline := started.Add(config.StartupTimeout)
+	startupLog(ctx, logger, slog.LevelInfo, "database startup started", role, 0, started, 0, nil)
 	delay := startRetryInitial
-	for {
+	for attempt := 1; ; attempt++ {
+		startupLog(ctx, logger, slog.LevelDebug, "database startup attempt", role, attempt, started, 0, nil)
 		connect, cancel := context.WithTimeout(ctx, config.ConnectTimeout)
 		err := classify.wrap("start "+string(role), raw.PingContext(connect))
 		cancel()
-		if err == nil || ctx.Err() != nil || !transientStartFailure(err) {
+		if err == nil {
+			startupLog(ctx, logger, slog.LevelInfo, "database startup ready", role, attempt, started, 0, nil)
+			return nil
+		}
+		if ctx.Err() != nil || !transientStartFailure(err) {
+			startupLog(ctx, logger, slog.LevelError, "database startup failed", role, attempt, started, 0, err)
 			return err
 		}
 		wait := delay/2 + rand.N(delay/2+1)
 		if time.Now().Add(wait).After(deadline) {
+			startupLog(ctx, logger, slog.LevelError, "database startup failed", role, attempt, started, 0, err)
 			return err
 		}
+		startupLog(ctx, logger, slog.LevelWarn, "database startup retry", role, attempt, started, wait, err)
 		timer := time.NewTimer(wait)
 		select {
 		case <-timer.C:
 		case <-ctx.Done():
 			timer.Stop()
-			return errors.Join(err, classify.wrap("start "+string(role), ctx.Err()))
+			canceled := classify.wrap("start "+string(role), ctx.Err())
+			startupLog(ctx, logger, slog.LevelError, "database startup canceled", role, attempt, started, 0, canceled)
+			return errors.Join(err, canceled)
 		}
 		delay = min(delay*2, startRetryMaximum)
 	}

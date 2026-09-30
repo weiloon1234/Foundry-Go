@@ -138,3 +138,14 @@ Do not turn a timeout into silent data loss or close a dependency under admitted
 work. Use lifecycle state, owner `Done` signals and bounded diagnostics during
 rolling termination. Operational additions preserve ordinary authentication,
 permissions, redaction and typed identifiers.
+
+## Optional generated form adapters
+
+The [form controller](guides/client-forms.md) is additive to the existing SDK and
+manifest v6. Regenerate with the matching tool/runtime and review type imports: new
+SDK declarations can qualify colliding DTO names. React/Vue output is opt-in and
+uses separate generated modules/subpath exports; the core stays dependency-free.
+The generator owns adapter imports, freshness and removal along with all other
+artifacts. Never hand-edit generated adapters or re-export optional peers from a
+core entry point. Database startup logs add safe diagnostics without changing
+connection budgets or the B08 release disposition.

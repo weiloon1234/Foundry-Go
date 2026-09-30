@@ -8,6 +8,21 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts.
 
+## Form controller, optional adapters and startup diagnostics — 2026-09-30
+
+Status: **accepted** for the framework follow-up and starter migration candidate.
+The [form guide](../docs/guides/client-forms.md) records the shared controller,
+explicit parsing, bounded async ownership and optional React/Vue subscriptions.
+Database startup diagnostics preserve existing retry/timeout behavior. Final
+`make verify`, real HTTP/TypeScript consumers, React/Vue rendering/cleanup/SSR,
+React hydration and relevant database races passed. The
+[starter handoff](../docs/guides/forms-starter-handoff-20260930.md) includes a patch
+verified through the Go export command, installed SDK consumers and both real
+HTTPS profiles using a private overlay/local framework replacement. The
+[evidence](../docs/evidence/forms-startup-20260930.json) records final source hashes
+and review corrections. Publication, the actual starter upgrade and its independent
+platform release checks remain separate; B08 is open.
+
 ## Typed client descriptors and presentation — 2026-09-30
 
 Status: **accepted** for this framework slice. The

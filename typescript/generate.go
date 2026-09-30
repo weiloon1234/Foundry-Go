@@ -17,6 +17,10 @@ type Options struct {
 	Prefix  string
 	Check   bool
 	OpenAPI openapi.Options
+	// React and Vue emit optional subscription adapters as separate modules.
+	// They import their respective peer framework; the core SDK never does.
+	React bool
+	Vue   bool
 }
 type Report struct{ Written, Removed []string }
 
@@ -57,6 +61,12 @@ func Generate(ctx context.Context, source *manifest.Manifest, options Options) (
 		options.Prefix + "_foundry.gen.ts":            sdk,
 		options.Prefix + "_manifest_foundry.gen.json": metadata,
 		options.Prefix + "_openapi_foundry.gen.json":  api,
+	}
+	if options.React {
+		outputs[options.Prefix+"_react_foundry.gen.ts"] = renderFormAdapter(options.Prefix, reactAdapter)
+	}
+	if options.Vue {
+		outputs[options.Prefix+"_vue_foundry.gen.ts"] = renderFormAdapter(options.Prefix, vueAdapter)
 	}
 	report, err := generate.PublishArtifacts(ctx, options.Dir, outputs, options.Check)
 	return Report{Written: report.Written, Removed: report.Removed}, err

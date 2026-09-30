@@ -79,7 +79,14 @@ func assignment(ctx context.Context, root, goTool string) (string, error) {
 		if len(data) > 64<<10 || json.Unmarshal(data, &metadata) != nil || metadata.Name != "typescript" {
 			return "", fmt.Errorf("selected TypeScript package identity is invalid")
 		}
-		tools = append(tools, testinputs.Tool{Name: "typescript-package", Path: packageRoot, Tree: true})
+		// Optional frontend adapter tests resolve peers from the same dedicated
+		// node_modules as this compiler. Include transitive implementation/type
+		// files so an installed-package change cannot reuse old acceptance.
+		toolRoot := packageRoot
+		if modules := filepath.Dir(packageRoot); filepath.Base(modules) == "node_modules" {
+			toolRoot = modules
+		}
+		tools = append(tools, testinputs.Tool{Name: "typescript-package", Path: toolRoot, Tree: true})
 	} else {
 		tools = append(tools, testinputs.Tool{Name: "typescript-package"})
 	}

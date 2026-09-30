@@ -453,4 +453,6 @@ if (process.argv[4]) {
   const oldClient = legacy.createClient(transport, { baseURL }); assert.equal(oldClient.empty, undefined);
   assert.equal((await oldClient.itemsEcho(request)).large, source.large);
 }
+await (await import("./forms.mjs")).checkForms(sdk, api, request);
+
 console.log("PASS exact codecs, strict payloads, validation, HTTP status/errors/files/pagination/alternative statuses/redirects/raw bodies/typed event streams/signed link forms, realtime auth/replay/presence/acks/cancellation, additive client compatibility");

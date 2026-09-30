@@ -84,7 +84,8 @@ management are added.
 Manifest **version 6** carries presentation metadata. Regenerate saved manifests,
 OpenAPI and TypeScript together using the same framework/tool revision. Older
 formats are rejected explicitly. Existing direct client calls remain available.
-Headless controllers and frontend-specific adapters are a separate later slice.
+The [form controller continuation](client-forms.md) implements state and optional
+frontend adapters separately; consult the master for its acceptance status.
 
 ## Starter adoption
 

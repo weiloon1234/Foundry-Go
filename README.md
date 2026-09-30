@@ -77,10 +77,13 @@ includes typed HTTP and realtime operations, route method/path/name metadata,
 request/response fields, enum cases, access requirements, declared errors and
 supported client validation rules.
 
-The output has no runtime npm dependencies or React/Vue coupling. Frontend teams
-supply transport and state management, and can compile the TypeScript to ordinary
-JavaScript. Server-only validation rules are reported as skipped by client
-validation; the backend remains authoritative.
+The core output has no runtime npm dependencies or React/Vue coupling. Frontend
+teams supply transport and can compile the TypeScript to ordinary JavaScript. The
+[form controller and optional adapters](docs/guides/client-forms.md) provide typed
+drafts, validation, submission and React/Vue subscriptions. They share the existing
+contract/validation owners; frontends supply rendering and components. Server-only
+validation rules are reported as skipped by client validation; the backend remains
+authoritative.
 
 Persistence models are not automatically exposed as DTOs. Declare public fields
 explicitly, or use an explicit
@@ -104,9 +107,9 @@ The following are not implemented:
 - Go doc comments as OpenAPI schema descriptions and custom-header explanations.
   Route documentation (summary, description, tags, deprecation) and typed
   request/response examples are exported.
-- Rich form-control hints such as widgets and display precision, a typed form
-  controller, and automatic React/Vue form rendering. Existing SDK field types,
-  enums, route metadata and validation are the foundation for this future work.
+- Rich form-control hints such as widgets and display precision, and automatic
+  React/Vue form rendering. Typed descriptors, semantic hints, the shared controller
+  and optional subscription adapters are available; frontends supply visual controls.
 - Token-family impersonation, a cache failover store, direct local `sendfile`,
   lossy WebP output, and test/factory/mail/observer scaffolds. Session impersonation,
   lossless WebP and the existing testing/factory APIs are available; see the

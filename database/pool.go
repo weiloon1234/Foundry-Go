@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -73,6 +74,7 @@ const (
 // DB is a concurrency-safe, application-owned connection pool. Close rejects new
 // work and drains active resource owners. Rows and transactions must be closed.
 type DB struct {
+	startupLogger    *slog.Logger
 	instrument       *instrumentation
 	stickyWindow     time.Duration
 	raw              *sql.DB
@@ -134,7 +136,7 @@ func Prepare(adapter Adapter, config PoolConfig, options ...Option) (*DB, error)
 	if err != nil {
 		return nil, err
 	}
-	return &DB{instrument: newInstrumentation(settings), stickyWindow: settings.stickyWindow, read: read, maxConnections: maxConnections, timeSource: settings.clock, clockExplicit: settings.clockSet, clockBound: true, adapter: adapter, config: config, classify: adapter.Classify, startDone: make(chan struct{}), drained: make(chan struct{}), done: make(chan struct{})}, nil
+	return &DB{startupLogger: settings.startupLogger, instrument: newInstrumentation(settings), stickyWindow: settings.stickyWindow, read: read, maxConnections: maxConnections, timeSource: settings.clock, clockExplicit: settings.clockSet, clockBound: true, adapter: adapter, config: config, classify: adapter.Classify, startDone: make(chan struct{}), drained: make(chan struct{}), done: make(chan struct{})}, nil
 }
 
 // Start verifies a prepared pool once. The first caller's context controls that
@@ -192,9 +194,9 @@ func (db *DB) Start(ctx context.Context) error {
 		db.read.raw, db.read.probe = readRaw, readProbe
 	}
 	db.mu.Unlock()
-	err := pingStartingPool(ctx, PrimaryPool, raw, db.config, db.classify)
+	err := pingStartingPool(ctx, PrimaryPool, raw, db.config, db.classify, db.startupLogger)
 	if err == nil && db.read != nil {
-		err = pingStartingPool(ctx, ReadPool, db.read.raw, db.read.config, classifier(db.read.adapter.Classify))
+		err = pingStartingPool(ctx, ReadPool, db.read.raw, db.read.config, classifier(db.read.adapter.Classify), db.startupLogger)
 	}
 	if err != nil {
 		err = errors.Join(err, db.closePools())

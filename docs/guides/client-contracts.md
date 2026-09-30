@@ -424,3 +424,8 @@ generated clients have no npm runtime dependency.
 
 Inbound idempotency uses the [same runtime policy](idempotent-operations.md) for its
 required typed client key and safe outcomes. Version 3 readers must regenerate.
+
+For optional draft state and form subscriptions, see the
+[framework-neutral controller](client-forms.md). It reuses these codecs, validation
+reports and calls. Optional React/Vue modules are generated only when requested;
+ordinary direct calls and the core package remain independent of UI libraries.

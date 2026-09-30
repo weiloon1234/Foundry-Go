@@ -31,9 +31,33 @@ func Load(t testing.TB) Toolchain {
 	return tools
 }
 func (tools Toolchain) Check(t testing.TB, source *manifest.Manifest, baseURL, fixtures string) {
+	tools.check(t, source, baseURL, fixtures, false)
+}
+
+// CheckFormAdapters compiles and runs the actual optional React/Vue modules.
+// Their development dependencies live beside the selected TypeScript compiler.
+func (tools Toolchain) CheckFormAdapters(t testing.TB, source *manifest.Manifest, fixtures string) {
+	tools.check(t, source, "", fixtures, true)
+}
+
+func (tools Toolchain) check(t testing.TB, source *manifest.Manifest, baseURL, fixtures string, adapters bool) {
 	t.Helper()
 	dir := t.TempDir()
-	options := typescript.Options{Dir: dir, OpenAPI: openapi.Options{Title: "Consumer API", APIVersion: "1"}}
+	options := typescript.Options{Dir: dir, OpenAPI: openapi.Options{Title: "Consumer API", APIVersion: "1"}, React: adapters, Vue: adapters}
+	if adapters {
+		modules := filepath.Dir(filepath.Dir(filepath.Dir(tools.compiler)))
+		for _, name := range []string{"react", "react-dom", "vue", "jsdom", "@types/react", "@types/react-dom"} {
+			if _, err := os.Stat(filepath.Join(modules, name, "package.json")); err != nil {
+				if os.Getenv("FOUNDRY_TEST_TYPESCRIPT_REQUIRED") == "1" {
+					t.Fatalf("optional adapter acceptance requires installed development package %s", name)
+				}
+				t.Skipf("optional adapter development package %s is not installed", name)
+			}
+		}
+		if err := os.Symlink(modules, filepath.Join(dir, "node_modules")); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if _, err := typescript.Generate(t.Context(), source, options); err != nil {
 		t.Fatal(err)
 	}

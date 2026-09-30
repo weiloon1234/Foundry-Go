@@ -89,7 +89,7 @@ release-tools-check:
 
 typescript-check:
 	@test -n "$$FOUNDRY_TEST_NODE" -a -n "$$FOUNDRY_TEST_TYPESCRIPT" || { printf 'Set FOUNDRY_TEST_NODE and FOUNDRY_TEST_TYPESCRIPT to existing native tool paths.\n'; exit 1; }
-	cd tests/fixtures/consumer && FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1 $(GO) test -timeout=$(TEST_TIMEOUT) -count=1 -v ./clientcontracts -run '^TestTypeScriptClientAgainstRealHTTPAndWebSocket$$'
+	cd tests/fixtures/consumer && FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1 $(GO) test -timeout=$(TEST_TIMEOUT) -count=1 -v ./clientcontracts -run '^(TestTypeScriptClientAgainstRealHTTPAndWebSocket|TestOptionalFormAdaptersWithRealReactAndVue)$$'
 
 test-postgres:
 	$(GO) run ./internal/cmd/testpostgres --go $(GO) --race --batch-size $(TEST_PACKAGE_BATCH_SIZE) --timeout $(TEST_TIMEOUT)

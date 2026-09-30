@@ -4,9 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 )
+
+// Direct pool callers can opt into the same safe startup diagnostics that
+// Modules inherit automatically. The returned pool belongs to the caller.
+func Example_databaseStartup() {
+	open := func(ctx context.Context, adapter database.Adapter, logger *slog.Logger) (*database.DB, error) {
+		return database.Open(ctx, adapter, database.DefaultPoolConfig(), database.WithStartupLog(logger))
+	}
+	_ = open
+}
 
 var (
 	_ database.Executor = (*database.DB)(nil)

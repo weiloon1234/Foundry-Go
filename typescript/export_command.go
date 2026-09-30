@@ -20,6 +20,7 @@ type Sources func(context.Context, foundation.Resolver) (manifest.Sources, error
 type exportArguments struct {
 	Dir, Prefix string
 	Check       bool
+	React, Vue  bool
 }
 
 // ExportCommand declares an application command that builds the client
@@ -43,6 +44,8 @@ func ExportCommand(name cli.Name, api openapi.Options, sources Sources) (cli.Dec
 		flags.StringVar(&args.Dir, "dir", "", "existing client output directory")
 		flags.StringVar(&args.Prefix, "prefix", "contracts", "generated artifact filename prefix")
 		flags.BoolVar(&args.Check, "check", false, "fail on stale output without writing files or locks")
+		flags.BoolVar(&args.React, "react", false, "emit the optional React form subscription adapter")
+		flags.BoolVar(&args.Vue, "vue", false, "emit the optional Vue form subscription adapter")
 	}, func(args exportArguments) error {
 		if args.Dir == "" {
 			return fault.New(fault.Invalid, "contract export requires --dir")
@@ -62,7 +65,7 @@ func ExportCommand(name cli.Name, api openapi.Options, sources Sources) (cli.Dec
 			if err != nil {
 				return err
 			}
-			report, err := Generate(ctx, source, Options{Dir: args.Dir, Prefix: args.Prefix, Check: args.Check, OpenAPI: api})
+			report, err := Generate(ctx, source, Options{Dir: args.Dir, Prefix: args.Prefix, Check: args.Check, OpenAPI: api, React: args.React, Vue: args.Vue})
 			if err != nil {
 				return err
 			}
