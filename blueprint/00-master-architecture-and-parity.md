@@ -23,6 +23,13 @@ HTTPS profiles using a private overlay/local framework replacement. The
 and review corrections. Publication, the actual starter upgrade and its independent
 platform release checks remain separate; B08 is open.
 
+Re-audited on 2026-09-30: edits no longer abort a sent submission, whose outcome
+is reported (`changed`, or `canceled` with `not_sent`/`unknown`); debouncing task
+runs release capacity; parsing is exact; the Vue adapter leaves no SSR
+subscription. Full `make verify`, TypeScript/React/Vue, real-gopls and PostgreSQL
+race gates passed on the corrected source
+([re-audit evidence](../docs/evidence/client-reaudit-20260930.json)).
+
 ## Typed client descriptors and presentation — 2026-09-30
 
 Status: **accepted** for this framework slice. The
@@ -36,6 +43,13 @@ races and bounded manifest fuzzing passed. The
 [acceptance evidence](../docs/evidence/client-descriptors-20260930.json) records
 source hashes, review corrections and exact check scopes. Starter adoption and
 publication remain separate; B08 remains an open release-acceptance item.
+
+Re-audited on 2026-09-30: route registration rejects password-hinted responses
+and URL parameters; model-ID-keyed maps navigate by identity; `.at` applies codec
+key rules; enum and scalar contradictions fail generation; repeated inputs are
+checked per element; the kind set, rule IDs and key bound have single owners.
+The same gates passed on the corrected source
+([re-audit evidence](../docs/evidence/client-reaudit-20260930.json)).
 
 ## Second independent review — 2026-09-29
 

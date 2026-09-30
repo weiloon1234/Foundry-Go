@@ -16,8 +16,10 @@ function runtimeMetadata(value: JSONValue, bounded = false, clampLimits = true):
   }
   return value;
 }
-function loadRuntimeDocument(): RuntimeDocument {
-  const document = runtimeMetadata(contractMetadata()) as RuntimeDocument;
+// clampLimits=false keeps unsafe-size limits exact for public inspection; the
+// invoker's operational copy clamps them.
+function loadRuntimeDocument(clampLimits = true): RuntimeDocument {
+  const document = runtimeMetadata(contractMetadata(), false, clampLimits) as RuntimeDocument;
   if (document.version !== manifestVersion) reject("", "manifest_version");
   return document;
 }

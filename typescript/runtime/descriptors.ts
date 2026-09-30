@@ -1,6 +1,6 @@
 /** Public display hints; they neither validate nor supply default values. */
 export interface Presentation {
-  readonly kind?: "text" | "multiline" | "password" | "email" | "url" | "money" | "file";
+  readonly kind?: PresentationKind;
   readonly label_key?: string;
   readonly help_key?: string;
 }
@@ -13,11 +13,14 @@ export type OperationMetadata = Omit<Operation, "limits" | "file_transfer_bytes"
 export type SchemaMetadata = Readonly<WireType>;
 export type ValidationMetadata = Readonly<RuleDescription>;
 type IsUnion<T, Whole = T> = T extends Whole ? [Whole] extends [T] ? false : true : never;
-type ObjectFields<T> = NonNullable<T> extends string | number | boolean | readonly unknown[] | Blob | Upload ? never : true extends IsUnion<NonNullable<T>> ? never : string extends keyof NonNullable<T> ? never : Extract<keyof NonNullable<T>, string>;
+type MapKeys<T> = Extract<keyof NonNullable<T>, string>;
+/** Maps keyed by model IDs have branded Identity keys, not property names. */
+type IdentityKeyed<T> = [MapKeys<T>] extends [never] ? false : [MapKeys<T>] extends [Identity<string>] ? true : false;
+type ObjectFields<T> = NonNullable<T> extends string | number | boolean | readonly unknown[] | Blob | Upload ? never : true extends IsUnion<NonNullable<T>> ? never : string extends keyof NonNullable<T> ? never : IdentityKeyed<T> extends true ? never : MapKeys<T>;
 type Discriminator<T> = { [K in Extract<keyof NonNullable<T>, string>]: NonNullable<T>[K] extends string ? string extends NonNullable<T>[K] ? never : K : never }[Extract<keyof NonNullable<T>, string>];
-type IsCollection<T> = NonNullable<T> extends readonly unknown[] ? true : string extends keyof NonNullable<T> ? true : false;
-type CollectionKey<T> = NonNullable<T> extends readonly unknown[] ? number : string;
-type ElementValue<T> = NonNullable<T> extends readonly (infer V)[] ? V : NonNullable<T> extends Readonly<Record<string, infer V>> ? Exclude<V, undefined> : never;
+type IsCollection<T> = NonNullable<T> extends readonly unknown[] ? true : string extends keyof NonNullable<T> ? true : IdentityKeyed<T>;
+type CollectionKey<T> = NonNullable<T> extends readonly unknown[] ? number : IdentityKeyed<T> extends true ? MapKeys<T> : string;
+type ElementValue<T> = NonNullable<T> extends readonly (infer V)[] ? V : Exclude<NonNullable<T>[MapKeys<T>], undefined>;
 declare const descriptorType: unique symbol;
 /** Value/owner identity prevents fields of different operations or types being interchanged. */
 export interface FieldDescriptor<T, Owner = unknown> {
@@ -49,19 +52,12 @@ export interface OperationDescriptor<K extends keyof Operations> {
   call(client: API, input: Operations[K]["request"], options?: CallOptions): Promise<Operations[K]["response"]>;
 }
 
-function freezeDescriptor<T>(value: T): T {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    for (const child of Object.values(value)) freezeDescriptor(child);
-    Object.freeze(value);
-  }
-  return value;
-}
 let descriptorDocumentCache: RuntimeDocument | undefined;
 let descriptorTypesCache: ReadonlyMap<string, WireType> | undefined;
 function descriptorDocument(): RuntimeDocument {
   // An independent, lossless snapshot keeps public inspection from mutating the
   // invoker's internal metadata. Its numeric limits are not operational inputs.
-  return descriptorDocumentCache ??= freezeDescriptor(runtimeMetadata(contractMetadata(), false, false) as RuntimeDocument);
+  return descriptorDocumentCache ??= immutable(loadRuntimeDocument(false));
 }
 function descriptorTypes(): ReadonlyMap<string, WireType> {
   return descriptorTypesCache ??= new Map(descriptorDocument().types.map(type => [type.id, type]));
@@ -79,14 +75,21 @@ function resolvedDescriptor(id: string): { type: WireType; nullable: boolean } {
   }
 }
 
+// Choices depend only on their type. Decode each type's cases once instead of on
+// every navigation; enums may be large and decoding checks case membership.
+const descriptorChoicesCache = new Map<string, readonly unknown[]>();
 function descriptorChoices(id: string, type: WireType): readonly unknown[] {
+  const cached = descriptorChoicesCache.get(id);
+  if (cached) return cached;
   const quoted = type.kind === "quoted";
   const cases = (quoted ? resolvedDescriptor(type.element!).type : type).cases ?? [];
   const limits = metadataLimits();
-  return cases.map(value => {
+  const choices = Object.freeze(cases.map(value => {
     const wire = writeWire(typeof value === "number" ? new JSONNumber(String(value)) : value, limits);
     return contracts().decode(id, quoted ? writeWire(wire, limits) : wire, limits);
-  });
+  }));
+  descriptorChoicesCache.set(id, choices);
+  return choices;
 }
 
 interface DescriptorReference {
@@ -108,7 +111,7 @@ function describeField(id: string | undefined, required: boolean, path: string, 
   // Enum choices use the existing codec's exact client representation, including
   // wide integers as strings. No enum validator is recreated by the descriptor.
   const choices = !repeated && type ? descriptorChoices(id!, type) : [];
-  const descriptor = freezeDescriptor({
+  const descriptor = immutable({
     path, required, nullable: !repeated && (resolved?.nullable ?? false), repeated,
     presentation: hint ?? {}, schema: type, parameter, choices,
     field(name: string): unknown {
@@ -129,7 +132,14 @@ function describeField(id: string | undefined, required: boolean, path: string, 
     },
     at(key: string | number): unknown {
       const array = repeated || type?.kind === "array";
-      if (array ? !Number.isSafeInteger(key) || (key as number) < 0 : type?.kind !== "map" || typeof key !== "string" || !validUnicode(key) || key.length > defaultJSONLimits.Bytes) reject(path, "collection_key");
+      if (array) {
+        if (!Number.isSafeInteger(key) || (key as number) < 0 || !repeated && type!.length !== undefined && (key as number) >= type!.length) reject(path, "collection_key");
+      } else {
+        if (type?.kind !== "map" || typeof key !== "string" || !validUnicode(key) || key.length > defaultJSONLimits.Bytes) reject(path, "collection_key");
+        // Declared keys follow the codec's own rules: enum cases, integer
+        // syntax and lowercase non-zero model IDs.
+        if (type.key) contracts().mapKey(type.key, key, path);
+      }
       return repeated ? describeField(id, true, pointer(path, String(key)), hint, parameter, false, childReference(reference, key))
         : describeField(type!.element, array, pointer(path, String(key)), undefined, undefined, false, childReference(reference, key));
     },

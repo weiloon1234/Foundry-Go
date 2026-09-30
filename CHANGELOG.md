@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### Re-audit of client descriptors, forms and startup diagnostics
+
+- Form submissions report actual outcomes. Edits and reset no longer abort a sent
+  request; its `succeeded`/`failed` result is returned with `changed`, and only
+  `cancel()`, `dispose()` or the caller's signal abort, returning `canceled` with
+  `outcome` `not_sent` or `unknown`. `stale` is no longer produced. Non-`AbortSignal`
+  signals are rejected before the busy guard is taken.
+- Form tasks release capacity at once when a run is replaced or invalidated before
+  its debounce ends, so re-running several tasks from one handler is not refused.
+  Abort listeners observe the edit that aborted them. Built-in number/boolean
+  parsing is exact: surrounding whitespace, `+` and the text `null` fail.
+- The Vue adapter subscribes when its component mounts, so server rendering leaves
+  no subscription on a borrowed store.
+- Descriptors navigate maps keyed by model IDs through `.at(identity)`; `.at`
+  applies the codec's key rules and fixed array lengths; enum choices decode once
+  per type; the descriptor document checks the manifest version. TypeScript's
+  `PresentationKind` is generated from the new `contract.PresentationKinds()`.
+- Password hints stay out of outputs and URLs: route registration rejects JSON and
+  event-stream responses reaching one, even without a client export; path, query
+  and realtime room parameters reject them. `contract.PasswordTypes` is the shared
+  reachability owner.
+- `contract.MaxPresentationKeyBytes` is now 128, the message-key limit keys already
+  had to meet. Contradictory hints on enum fields and plain scalar transport fields
+  fail generation with a source diagnostic; codec contradictions found at
+  registration name their type and field. Manifest label/format consistency is
+  checked per element for repeated inputs and for a comparison's other field, and
+  OpenAPI places a repeated input's hint on its items. `validation.EmailRuleID` and
+  `validation.URLRuleID` own the rule IDs presentation checks recognize.
+  See the [re-audit evidence](docs/evidence/client-reaudit-20260930.json).
+
 ### Form controllers and startup diagnostics
 
 - Generated `createForm` owns typed drafts, explicit exact parsing, touched/dirty

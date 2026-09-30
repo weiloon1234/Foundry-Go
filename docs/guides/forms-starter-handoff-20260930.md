@@ -14,14 +14,15 @@ requires no database migration, queue layout change or replacement of that patch
 
 ## Prepared migration candidate
 
-The private patch is
-`.cache/forms-startup-20260930/starter-forms-migration.patch` in the framework
-checkout. It adds the optional adapter flags to the starter's existing export
-command, uses `createForm` in the existing project-create HTTPS test, and extends
-the installed-package test sources with exact-value, field-owner and presence
-checks. Its existing Go export test also covers optional adapter creation,
-freshness and removal. It contains handwritten changes only; regenerate owned
-outputs after updating the framework requirement. The real starter has not been modified.
+A migration patch was prepared in a private, untracked workspace. It is not part
+of this repository; re-derive it from the steps below when upgrading the starter.
+It added the optional adapter flags to the starter's existing export command,
+used `createForm` in the existing project-create HTTPS test, and extended the
+installed-package test sources with exact-value, field-owner and presence checks.
+Its Go export test also covered optional adapter creation, freshness and removal.
+It contained handwritten changes only; regenerate owned outputs after updating
+the framework requirement. The real starter has not been modified. It predates
+the re-audit's submit outcome change below, so it must be updated for it.
 
 The patch dry-run matches the current starter files. The private candidate passes
 SDK build, strict TypeScript, installed-archive consumers and both real HTTPS
@@ -51,7 +52,9 @@ After the user publishes the reviewed controller revision:
    full validation report and server JSON Pointer issues, including form-level
    errors. Preparation remains server-only; empty client issues do not imply
    acceptance. Disable duplicate submission while `pending` remains true, and
-   dispose the controller when the owning screen/request exits.
+   dispose the controller when the owning screen/request exits. Handle results
+   marked `changed` (the draft moved on after sending) and reconcile a `canceled`
+   result whose `outcome` is `unknown` before retrying.
 4. If shipping framework-specific examples, export contracts with `--react`
    and/or `--vue`. Keep generated adapters on optional package subpaths (`./react`,
    `./vue`), with optional peer dependencies and declarations. The core entry and

@@ -12,6 +12,13 @@ import (
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
+// Rule IDs of built-in formats that metadata owners, such as client
+// presentation checks, recognize in rule descriptions.
+const (
+	EmailRuleID RuleID = "foundry.email"
+	URLRuleID   RuleID = "foundry.url"
+)
+
 func textRule[S ~string](id RuleID, serverOnly bool, check func(string) bool) Rule[S] {
 	return valueRule(Spec{ID: id}, serverOnly, func(s *execution, input S) (bool, error) {
 		text := string(input)
@@ -24,7 +31,7 @@ func textRule[S ~string](id RuleID, serverOnly bool, check func(string) bool) Ru
 // It performs no DNS/delivery checks or normalization. Parser semantics remain
 // server-only in metadata rather than claiming browser equivalence.
 func Email[S ~string]() Rule[S] {
-	return textRule[S]("foundry.email", true, bareMailbox)
+	return textRule[S](EmailRuleID, true, bareMailbox)
 }
 
 func bareMailbox(text string) bool {
@@ -63,7 +70,7 @@ func bareMailbox(text string) bool {
 // URL accepts an absolute HTTP or HTTPS URL with a hostname. It checks syntax,
 // not reachability or whether a destination is authorized for outbound fetching.
 func URL[S ~string]() Rule[S] {
-	return textRule[S]("foundry.url", true, func(text string) bool {
+	return textRule[S](URLRuleID, true, func(text string) bool {
 		parsed, err := url.Parse(text)
 		return err == nil && (strings.EqualFold(parsed.Scheme, "http") || strings.EqualFold(parsed.Scheme, "https")) && parsed.Hostname() != ""
 	})

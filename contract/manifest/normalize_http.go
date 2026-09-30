@@ -115,7 +115,7 @@ func normalizeHTTP(d *Document, types typeIndex) error {
 			if p.Name != segment.Name || p.CatchAll != segment.Tail || !p.Required || p.Repeated || p.DefaultURL.IsSet() {
 				return invalid("path parameter disagrees with route pattern")
 			}
-			if err := types.parameter(p); err != nil {
+			if err := types.urlParameter(p); err != nil {
 				return err
 			}
 			pathIndex++
@@ -129,7 +129,7 @@ func normalizeHTTP(d *Document, types typeIndex) error {
 				return invalid("invalid or duplicate query parameter")
 			}
 			seen[p.Name] = true
-			if err := types.parameter(p); err != nil {
+			if err := types.urlParameter(p); err != nil {
 				return err
 			}
 		}

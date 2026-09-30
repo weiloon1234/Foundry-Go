@@ -184,6 +184,28 @@ func discover(p *packageInput) (metadata, error) {
 		enums[e.typ] = true
 	}
 	p.enumTypes = enums
+	// Transport hints are checked once enum declarations are known.
+	for _, declaration := range result.paths {
+		for _, field := range declaration.fields {
+			if err := p.transportPresentation(field.presentation, field.typ); err != nil {
+				return result, p.diagnostic(field.position, err.Error())
+			}
+		}
+	}
+	for _, declaration := range result.queries {
+		for _, field := range declaration.fields {
+			if err := p.transportPresentation(field.presentation, field.typ); err != nil {
+				return result, p.diagnostic(field.position, err.Error())
+			}
+		}
+	}
+	for _, declaration := range result.multipart {
+		for _, field := range declaration.fields {
+			if err := p.transportPresentation(field.presentation, field.typ); err != nil {
+				return result, p.diagnostic(field.position, err.Error())
+			}
+		}
+	}
 	p.unionTypes = make(map[*types.Named]*unionDeclaration, len(result.unions))
 	for i := range result.unions {
 		declaration := &result.unions[i]

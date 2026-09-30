@@ -51,7 +51,9 @@ Parsing is explicit. Until `parse()` succeeds, text does not replace the last
 parsed value, and validation/submission reports `form_unparsed`. Built-in scalar
 parsing delegates to the existing codec, including exact decimal and wide-integer
 strings, quoted scalars and declared enums. It does not trim, round money, select
-a timezone or treat an empty string as omission/null. A custom parser may return
+a timezone or treat an empty string as omission/null. Numbers and booleans must be
+their exact JSON literal: surrounding whitespace, a leading `+` or the text `null`
+fail parsing; use `unset()` or `set(null)` for omission or null. A custom parser may return
 the field's exact type; its result still passes the codec. Arbitrary parser
 exception text is not turned into a user-visible message.
 
@@ -90,12 +92,19 @@ retains all issues, including form-level failures and currently unmounted fields
 arbitrary internal fields or send them to logs automatically.
 
 A form admits exactly one submission at a time. Additional calls reject with
-`form_busy`; there are no mutation retries or implicit replacement. Edits,
-reset/cancel/disposal abort and invalidate prior work. A late completion cannot
-replace current state. `pending` stays true until the actual invocation exits,
-even if its transport ignores cancellation. Stale stream responses are closed;
-a successful file/event-stream response is owned by the caller and must be
-consumed/closed. Cancellation does not prove the server rolled back an operation.
+`form_busy`; there are no mutation retries or implicit replacement. Editing or
+resetting the draft never aborts a sent request: its actual `succeeded` or
+`failed` result is still returned with `changed: true`, without replacing the
+newer draft's state or issues. Only `cancel()`, `dispose()` or the caller's
+signal abort a request. The result is then `{ status: "canceled", outcome }`:
+`not_sent` means it never left the client, and `unknown` means the server may
+still have processed it, so reconcile (for example through an idempotency key)
+before retrying. A transport that completes anyway still reports its result.
+`pending` stays true until the actual invocation exits. A successful file or
+event-stream response is owned by the caller and must be consumed/closed, even
+when the draft changed meanwhile. `signal` must be a real `AbortSignal`. A
+response that fails its own contract after the server processed the request is
+also reported as `failed`; that is not evidence of a rollback.
 
 ## Async options and checks
 
@@ -115,8 +124,11 @@ data, not streamed response handles. Use the result to display suggestions or
 advisory checks; it does not replace server validation or mark the request valid.
 
 A form permits 32 task objects and four concurrently outstanding callbacks.
-Cancellation/disposal keeps a callback's capacity until it actually exits. A
-replacement is refused when capacity is full. Each store caps subscriptions at
+Cancellation/disposal keeps a started callback's capacity until it actually
+exits. A run still waiting for its debounce has started nothing, so replacing or
+invalidating it releases its capacity at once; re-running tasks from one input
+handler reuses their own pending runs' capacity. A replacement is refused only
+when started callbacks fill capacity. Each store caps subscriptions at
 1,024; unsubscribe/dispose releases them. Listeners only observe state; recursive
 mutation during notifications is rejected. `onListenerError` can inspect listener
 failures without allowing them to change a request's outcome.
@@ -134,7 +146,10 @@ The React module exports `useForm(store, getServerSnapshot?)`, backed by
 [`useSyncExternalStore`](https://react.dev/reference/react/useSyncExternalStore).
 The Vue module exports `useForm(store)`, returning a readonly shallow ref and
 releasing its subscription with the active
-[Vue scope](https://vuejs.org/api/reactivity-advanced.html#onscopedispose).
+[Vue scope](https://vuejs.org/api/reactivity-advanced.html#onscopedispose). In a
+component it subscribes when the component mounts, so server rendering, which
+never mounts or stops component scopes, leaves no subscription behind; a
+standalone effect scope subscribes immediately.
 Both accept forms and tasks, preserve their types, and borrow their controllers.
 Unmounting does not dispose another component's shared form. The screen/request
 owner calls `dispose`; Vue calls must run in setup/an active effect scope.

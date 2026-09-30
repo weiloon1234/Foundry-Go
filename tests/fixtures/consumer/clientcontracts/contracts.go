@@ -209,7 +209,11 @@ func (f Fixture) Manifest(ctx context.Context) (*manifest.Manifest, error) {
 	if err != nil {
 		return nil, err
 	}
-	return manifest.Build(ctx, manifest.Sources{HTTP: f.Router, Realtime: &realtime, Notifications: f.Notifications, Tables: f.Tables, Catalog: catalog, Enums: []enum.Definition{enumeration}, Permissions: []auth.PermissionDescription{permission}, Schemas: []contract.Schema{dynamic, labelSchema}})
+	ownerIndex, err := OwnerIndexJSON().Description()
+	if err != nil {
+		return nil, err
+	}
+	return manifest.Build(ctx, manifest.Sources{HTTP: f.Router, Realtime: &realtime, Notifications: f.Notifications, Tables: f.Tables, Catalog: catalog, Enums: []enum.Definition{enumeration}, Permissions: []auth.PermissionDescription{permission}, Schemas: []contract.Schema{dynamic, labelSchema, ownerIndex}})
 }
 
 func Export(ctx context.Context, source *manifest.Manifest, options typescript.Options) (typescript.Report, error) {

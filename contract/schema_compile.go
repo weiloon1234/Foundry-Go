@@ -3,6 +3,7 @@ package contract
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -262,7 +263,8 @@ func compileSchemaGraph(input Schema, metadataOnly, shared bool) (*compiledSchem
 	for _, typ := range result.types {
 		for _, property := range typ.Properties {
 			if err := property.Presentation.ValidateType(result.types[aliasTargets[property.Type]]); err != nil {
-				return nil, err
+				// Name the public declaration; generation cannot check custom codecs.
+				return nil, fault.New(fault.Invalid, fmt.Sprintf("client presentation on %s.%s contradicts its codec", typ.ID, property.Name))
 			}
 		}
 	}

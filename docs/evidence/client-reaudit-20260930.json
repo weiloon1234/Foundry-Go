@@ -1,0 +1,66 @@
+{
+  "format": 1,
+  "date": "2026-09-30",
+  "status": "verified",
+  "scope": "User-requested re-audit of committed work by another agent: typed client descriptors and presentation (commit b245eb5, excluding the model-extension-slot work also in it) and the form controller, React/Vue adapters and database startup logging (commit cac1ccf)",
+  "working_tree_base": "cac1ccf9c6d1cabc439d0b95414f17a290bf3c53",
+  "distribution": "Local changes only; no commit, push, tag, publication or starter dependency update performed",
+  "environment": {
+    "go": "go version go1.27.1 darwin/arm64",
+    "modules": "GOWORK=off; existing native caches",
+    "required_modes": ["FOUNDRY_TEST_POSTGRES_REQUIRED=1", "FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1"],
+    "tools": "Existing pinned bin/gopls, native Node v24.21.0 and the project TypeScript compiler with the previously approved React/React DOM/Vue/jsdom development dependencies",
+    "data": "Existing private test configuration read without printing it; no database reset/drop, shared-store flush or new server"
+  },
+  "baseline_gates": {
+    "source": "cac1ccf before any change",
+    "verify": {"command": ["make", "verify"], "exit_code": 0, "seconds": 621},
+    "typescript": {"command": ["make", "typescript-check"], "exit_code": 0, "seconds": 5},
+    "agent_smoke": {"command": ["make", "agent-smoke"], "exit_code": 0, "seconds": 262},
+    "test_postgres": {"command": ["make", "test-postgres"], "environment": ["FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1"], "exit_code": 0, "seconds": 1676, "packages_passed": 273},
+    "note": "The baseline gates passed; the findings below were found by source review and reproduced by new regression tests."
+  },
+  "findings": [
+    {"id": "R01", "area": "typescript/runtime/forms.ts submit", "finding": "Any edit or reset aborted an in-flight submission and a completed request returned 'stale' without its value, hiding a server outcome (AGENTS.md: never turn unknown outcomes into definite rollback).", "disposition": "fixed", "regression": "forms.mjs late completion, failure after edit, dispose, stream ownership and outcome cases"},
+    {"id": "R02", "area": "forms.ts task capacity", "finding": "Runs aborted while debouncing kept their capacity slot until a later microtask, so re-running three or more tasks from one handler threw form_task_busy.", "disposition": "fixed", "regression": "forms.mjs debounced burst re-run"},
+    {"id": "R03", "area": "descriptors.ts types", "finding": "Maps keyed by model IDs could not be navigated: .field(id) compiled but threw, .at/.element did not compile.", "disposition": "fixed", "regression": "descriptors/types.ts and runtime.mjs OwnerIndex cases (new schema-only fixture DTO)"},
+    {"id": "R04", "area": "descriptors.ts at()", "finding": ".at(key) accepted keys the codec rejects (enum cases, integer syntax, model IDs) and indexes beyond a fixed array length.", "disposition": "fixed by reusing the codec's map-key rules (WireCodec.mapKey)", "regression": "descriptors/runtime.mjs key and length cases"},
+    {"id": "R05", "area": "forms.ts parsing", "finding": "Built-in number/boolean parsing accepted surrounding whitespace and the text null, contradicting the guide.", "disposition": "fixed", "regression": "forms.mjs exact parsing cases"},
+    {"id": "R06", "area": "password output guarantee", "finding": "The input-only password rule ran only in manifest normalization, i.e. only when clients were exported.", "disposition": "fixed at route registration for JSON and event-stream responses (user decision); notification, table, presence and realtime outputs remain checked at contract export", "regression": "http TestPresentationKeepsCredentialsOutOfURLsAndOutputs"},
+    {"id": "R07", "area": "URL password hints", "finding": "Password hints were accepted on path/query/realtime room parameters.", "disposition": "fixed in http declarations/registration and manifest validation (user decision); form and multipart body fields remain valid", "regression": "http and manifest URL credential cases"},
+    {"id": "R08", "area": "descriptor enum choices", "finding": "Choices were decoded eagerly on every navigation with a linear membership check per case.", "disposition": "fixed: decoded once per type and shared frozen", "regression": "descriptors/runtime.mjs choice identity"},
+    {"id": "R09", "area": "forms.ts edit ordering", "finding": "Edits aborted tasks before storing new values, so an abort listener restarting a task used the old values with the new revision.", "disposition": "fixed", "regression": "forms.mjs abort-listener re-run"},
+    {"id": "R10", "area": "forms.ts submit guard", "finding": "A signal-like object without listener methods left the busy guard set until dispose.", "disposition": "fixed: signals are validated before the guard; the guard is released first in finally", "regression": "forms.mjs signal case"},
+    {"id": "R11", "area": "typescript/adapters/vue.ts", "finding": "Server rendering never stops component scopes, so each SSR render left a subscription on a borrowed store.", "disposition": "fixed: components subscribe on mount", "regression": "form_adapters/runtime.mjs SSR and stopped-scope subscription counts"},
+    {"id": "R12", "area": "contract.MaxPresentationKeyBytes", "finding": "Published as 256 while keys were capped at 128 by message-key validation; tests used 257.", "disposition": "fixed: derived from identifier.MaxSemanticBytes", "regression": "contract key boundary test; generator oversized key case"},
+    {"id": "R13", "area": "generator diagnostics", "finding": "Enum and transport-field contradictions passed generation and failed at registration with an unnamed generic error.", "disposition": "fixed: generation diagnostics for enum and plain scalar transport fields (checked after enum discovery); registration errors name the type/field or parameter", "regression": "TestPresentationGenerationRejectsCodecContradictions; contract and http naming cases"},
+    {"id": "R14", "area": "manifest consistency", "finding": "Repeated parameters/parts lost their element hint under Each rules and a comparison's other label was never compared.", "disposition": "fixed", "regression": "manifest repeated element and compare cases (mutation-checked)"},
+    {"id": "R15", "area": "single source of truth", "finding": "Copied rule IDs, a hand-maintained TypeScript kind union, a duplicated freeze helper and a descriptor loader without the manifest version check.", "disposition": "fixed: validation.EmailRuleID/URLRuleID, contract.PresentationKinds with generated PresentationKind, shared immutable and loadRuntimeDocument", "regression": "contract kind-set ownership test; existing consumer suites"},
+    {"id": "R16", "area": "tests", "finding": "Two descriptor assertions could not fail; OpenAPI presentation on path/query/form/multipart inputs was untested.", "disposition": "fixed; OpenAPI also placed repeated inputs' hints on the array and now places them on items. Two other claimed-vacuous tests (contract snapshot, http parameter snapshot) and the presentation_parameter_owner compile-fail case were checked and kept: they do guard slice ownership and owner-type preservation.", "regression": "TestOpenAPIPresentsURLFormAndMultipartInputs; descriptors/runtime.mjs"},
+    {"id": "R17", "area": "starter handoff guide", "finding": "A tracked guide depended on an untracked private .cache patch.", "disposition": "fixed: reworded as private and to be re-derived; adoption steps include the new submit outcomes"}
+  ],
+  "clean_areas": [
+    "Database startup logging: logs role/attempt/timing/classification only, never connection strings or driver text; handlers isolated through internal/callback; logger binding frozen once start is attempted; retry and timeout behavior unchanged; tests cover redaction, panic/Goexit and module binding",
+    "Descriptor lookups use Map/find (prototype keys rejected); JSON Pointer escaping matches Go; omitted/null/zero stay distinct; React snapshots are stable; the core SDK imports no UI package; manifest password reachability, determinism and version checks are sound"
+  ],
+  "not_changed": [
+    "A response that fails its own contract after the server processed the request still surfaces as a request-level failure; distinguishing it needs a new SDK error type.",
+    "A JSON body whose root is a union, array or map has no root descriptor (documented).",
+    "Any edit invalidates every task's result, including unrelated option lists (existing design).",
+    "Commit messages of b245eb5 and cac1ccf do not describe their contents; they are pushed, so history was not rewritten."
+  ],
+  "source_identity": {
+    "files": 32,
+    "sha256_of_shasum_list": "93a800bc88db8139645b7f636c8879f6ec2a448645e870241b08a310c1255cdf",
+    "note": "shasum -a 256 over the changed and new non-documentation files relative to cac1ccf, in sorted order; none was modified after the final verify"
+  },
+  "checks": {
+    "targeted": "go test for contract, http, openapi, internal/generate, validation, typescript, internal/identifier and i18n; clientcontracts with TypeScript required; three manifest mutations (URL password, repeated element, compare label) each caught by the new tests",
+    "verify": {"command": ["make", "verify"], "exit_code": 0, "seconds": 919},
+    "typescript": {"command": ["make", "typescript-check"], "exit_code": 0, "seconds": 4, "note": "Real HTTP/WebSocket TypeScript consumers and the React/Vue adapter runtime, in required mode"},
+    "agent_smoke": {"command": ["make", "agent-smoke"], "environment": ["FOUNDRY_TEST_GOPLS=bin/gopls"], "exit_code": 0, "seconds": 265},
+    "test_postgres": {"command": ["make", "test-postgres"], "environment": ["FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1"], "exit_code": 2, "seconds": 1654, "result": "265 packages passed; five consumer packages failed to build because files vanished from the shared ~/Library/Caches/go-build mid-run (the whole cache was cleared at 18:13:49 by a process outside this session, as at 14:11 earlier). No test failed."},
+    "test_postgres_resumed": {"command": ["go", "test", "-mod=readonly", "-count=1", "-timeout=20m", "-race", "<the 21 consumer packages not reported ok>"], "environment": ["FOUNDRY_TEST_POSTGRES_REQUIRED=1", "FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1", "GOWORK=off"], "exit_code": 0, "seconds": 76, "result": "tenantqueries, timequeries, tooling, transactionqueries, upsertqueries, validationinput, validationrules and windowqueries passed; the rest have no tests. With the 265 above, all 273 packages passed."}
+  },
+  "decision": "All confirmed findings fixed with regression tests and the full gates pass on the corrected source. The descriptor and form slices remain accepted; their earlier evidence records predate these corrections."
+}

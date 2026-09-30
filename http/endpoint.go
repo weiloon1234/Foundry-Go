@@ -97,6 +97,9 @@ func (e Endpoint[P, Q, B, R]) Validate() error {
 			return err
 		}
 	}
+	if err := e.query.urlPresentation(); err != nil {
+		return err
+	}
 	if e.validation != nil {
 		if err := e.validation.Validate(); err != nil {
 			return err
@@ -213,6 +216,9 @@ type preparedStage[P, Q, B any] func(context.Context, Input[P, Q, B]) (func(cont
 
 func (e Endpoint[P, Q, B, R]) register(stage preparedStage[P, Q, B], handler func(context.Context, Input[P, Q, B]) (preparedResponse, error)) RouteRegistration {
 	if err := e.Validate(); err != nil {
+		return InvalidRouteRegistration(err)
+	}
+	if err := e.response.outputPresentation(); err != nil {
 		return InvalidRouteRegistration(err)
 	}
 	registration := e.route.handle(func(w stdhttp.ResponseWriter, r *stdhttp.Request, path P) { e.serve(w, r, path, stage, handler) }, false)

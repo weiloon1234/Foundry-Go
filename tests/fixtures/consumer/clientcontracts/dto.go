@@ -36,6 +36,16 @@ type Payload struct {
 	Tags     []string                               `json:"tags"`
 }
 
+// OwnerIndex is a schema-only DTO for descriptor navigation: entries keyed by
+// model IDs and enum cases, and a fixed-length array.
+//
+//foundry:dto
+type OwnerIndex struct {
+	Owners map[model.ID[models.User]]string `json:"owners"`
+	States map[localization.Status]string   `json:"states"`
+	Pair   [2]string                        `json:"pair"`
+}
+
 //foundry:dto
 type Member struct {
 	Display string `json:"display"`

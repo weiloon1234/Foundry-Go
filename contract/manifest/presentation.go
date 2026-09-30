@@ -1,6 +1,9 @@
 package manifest
 
 import (
+	"maps"
+	"slices"
+
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/validation"
 	"github.com/weiloon1234/Foundry-Go/websocket"
@@ -18,36 +21,19 @@ func (types typeIndex) presentation(id contract.TypeID, p contract.Presentation)
 	return p.ValidateType(types.resolved(id))
 }
 
-// Compute sensitive reachability once, including recursive DTO graphs. Only an
-// explicit password hint is used; names and persistence models are not scanned.
+// passwordTypes computes sensitive reachability once through the shared
+// contract owner that route registration also uses.
 func (types typeIndex) passwordTypes() map[contract.TypeID]bool {
-	parents := make(map[contract.TypeID][]contract.TypeID)
-	sensitive := make(map[contract.TypeID]bool)
-	var pending []contract.TypeID
-	for id, typ := range types {
-		for _, p := range typ.Properties {
-			parents[p.Type] = append(parents[p.Type], id)
-			if p.Presentation.Kind == contract.PasswordPresentation && !sensitive[id] {
-				sensitive[id] = true
-				pending = append(pending, id)
-			}
-		}
-		if typ.Element != "" {
-			parents[typ.Element] = append(parents[typ.Element], id)
-		}
-		for _, v := range typ.Variants {
-			parents[v.Type] = append(parents[v.Type], id)
-		}
+	return contract.PasswordTypes(slices.Collect(maps.Values(types)))
+}
+
+// urlParameter checks a path, query or realtime room parameter. Credentials
+// must not travel in URLs, which proxies, logs and browser history retain.
+func (types typeIndex) urlParameter(p Parameter) error {
+	if p.Presentation.Kind == contract.PasswordPresentation {
+		return invalid("password presentation cannot describe a URL parameter")
 	}
-	for i := 0; i < len(pending); i++ {
-		for _, parent := range parents[pending[i]] {
-			if !sensitive[parent] {
-				sensitive[parent] = true
-				pending = append(pending, parent)
-			}
-		}
-	}
-	return sensitive
+	return types.parameter(p)
 }
 
 func (types typeIndex) outputPresentation(d *Document) error {
@@ -91,8 +77,26 @@ func (types typeIndex) operationPresentation(op Operation, passwords map[contrac
 	}
 	// Follow the existing rule tree into the corresponding transport/schema.
 	// No validation rule is translated into a second set of form constraints.
-	var visit func(validation.Description, contract.TypeID, []Parameter, contract.Presentation, bool) error
-	visit = func(rule validation.Description, id contract.TypeID, fields []Parameter, hint contract.Presentation, root bool) error {
+	// A repeated parameter's type and hint already describe each element, so
+	// its element rule keeps them instead of resolving another level.
+	member := func(id contract.TypeID, fields []Parameter, name string) (contract.TypeID, contract.Presentation, bool) {
+		if id != "" {
+			for _, p := range types.resolved(id).Properties {
+				if p.Name == name {
+					return p.Type, p.Presentation, false
+				}
+			}
+			return "", contract.Presentation{}, false
+		}
+		for _, p := range fields {
+			if p.Name == name {
+				return p.Type, p.Presentation, p.Repeated
+			}
+		}
+		return "", contract.Presentation{}, false
+	}
+	var visit func(validation.Description, contract.TypeID, []Parameter, contract.Presentation, bool, bool) error
+	visit = func(rule validation.Description, id contract.TypeID, fields []Parameter, hint contract.Presentation, root, repeated bool) error {
 		if rule.Kind == validation.FieldKind || rule.Kind == validation.CompareKind {
 			if root {
 				switch rule.Field {
@@ -109,24 +113,13 @@ func (types typeIndex) operationPresentation(op Operation, passwords map[contrac
 					}
 				}
 			} else {
-				hint = contract.Presentation{}
-				if id != "" {
-					shape := types.resolved(id)
-					id = ""
-					for _, p := range shape.Properties {
-						if p.Name == rule.Field {
-							id, hint = p.Type, p.Presentation
-							break
-						}
-					}
-				} else {
-					for _, p := range fields {
-						if p.Name == rule.Field {
-							id, hint = p.Type, p.Presentation
-							break
-						}
+				// A comparison's other field is a sibling in the same parent.
+				if rule.Kind == validation.CompareKind && rule.OtherLabelKey != "" {
+					if _, other, _ := member(id, fields, rule.OtherField); other.LabelKey != "" && other.LabelKey != rule.OtherLabelKey {
+						return invalid("presentation and validation label keys disagree")
 					}
 				}
+				id, hint, repeated = member(id, fields, rule.Field)
 				fields = nil
 			}
 			root = false
@@ -135,25 +128,29 @@ func (types typeIndex) operationPresentation(op Operation, passwords map[contrac
 			}
 		}
 		if rule.Kind == validation.EachKind || rule.Kind == validation.EachValueKind {
-			id = types.resolved(id).Element
-			hint = contract.Presentation{}
+			if repeated {
+				repeated = false
+			} else {
+				id = types.resolved(id).Element
+				hint = contract.Presentation{}
+			}
 		}
 		if rule.Kind == validation.EachKeyKind {
 			// A map key has no property presentation. Do not accidentally inspect
 			// value fields or restart at the operation root inside a key rule.
-			id, fields, hint, root = "", nil, contract.Presentation{}, false
+			id, fields, hint, root, repeated = "", nil, contract.Presentation{}, false, false
 		}
 		if rule.Spec != nil {
-			if hint.Kind == contract.EmailPresentation && rule.Spec.ID == "foundry.url" || hint.Kind == contract.URLPresentation && rule.Spec.ID == "foundry.email" {
+			if hint.Kind == contract.EmailPresentation && rule.Spec.ID == validation.URLRuleID || hint.Kind == contract.URLPresentation && rule.Spec.ID == validation.EmailRuleID {
 				return invalid("presentation and validation format disagree")
 			}
 		}
 		for _, child := range rule.Children {
-			if err := visit(child, id, fields, hint, root); err != nil {
+			if err := visit(child, id, fields, hint, root, repeated); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
-	return visit(*op.Validation, "", nil, contract.Presentation{}, true)
+	return visit(*op.Validation, "", nil, contract.Presentation{}, true, false)
 }

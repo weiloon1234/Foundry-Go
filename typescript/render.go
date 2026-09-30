@@ -67,6 +67,11 @@ func Render(source *manifest.Manifest) ([]byte, error) {
 	fmt.Fprintf(&r.out, "const idempotencyKeyPattern = %s;\n", quote(idempotency.KeyPattern(idempotency.MaxKeyBytes)))
 	defaults, _ := json.Marshal(foundryhttp.DefaultEndpointLimits().Response)
 	fmt.Fprintf(&r.out, "const defaultJSONLimits: JSONLimits = Object.freeze(%s);\n", defaults)
+	kinds := make([]string, 0, len(contract.PresentationKinds()))
+	for _, kind := range contract.PresentationKinds() {
+		kinds = append(kinds, quote(string(kind)))
+	}
+	fmt.Fprintf(&r.out, "/** Presentation kinds, emitted from the Go contract's closed set. */\nexport type PresentationKind = %s;\n", strings.Join(kinds, " | "))
 	for _, name := range []string{"wire", "formats", "validation_messages", "validation", "http", "realtime", "metadata", "descriptors", "forms"} {
 		data, err := runtimeSources.ReadFile("runtime/" + name + ".ts")
 		if err != nil {

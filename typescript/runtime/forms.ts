@@ -45,7 +45,12 @@ export interface FormOptions {
   /** Listeners observe state; they must not mutate it during notification. */
   readonly onListenerError?: (error: unknown) => void;
 }
-export type FormSubmission<T> = { readonly status: "succeeded"; readonly value: T } | { readonly status: "invalid"; readonly report: ValidationReport } | { readonly status: "failed"; readonly error: unknown } | { readonly status: "canceled" | "stale" };
+/**
+ * A completed request always reports its actual result; `changed` means the draft
+ * was edited, reset or disposed after it was sent. Cancellation only ends this
+ * client's wait: `unknown` means the server may still have processed the request.
+ */
+export type FormSubmission<T> = { readonly status: "succeeded"; readonly value: T; readonly changed: boolean } | { readonly status: "invalid"; readonly report: ValidationReport } | { readonly status: "failed"; readonly error: unknown; readonly changed: boolean } | { readonly status: "canceled"; readonly outcome: "not_sent" | "unknown" };
 export interface FormTaskOptions { readonly debounceMS?: number }
 export interface FormTaskSnapshot<T> { readonly status: "idle" | "pending" | "succeeded" | "failed" | "canceled" | "disposed"; readonly value: FormReadonly<T> | undefined; readonly error: unknown; readonly pending: number }
 export type FormTaskResult<T> = { readonly status: "succeeded"; readonly value: FormReadonly<T> } | { readonly status: "failed"; readonly error: unknown } | { readonly status: "canceled" | "stale" };
@@ -58,7 +63,7 @@ export interface FormController<K extends keyof Operations> extends FormStore<Fo
   readonly operation: OperationDescriptor<K>;
   field<T, O>(descriptor: FieldDescriptor<T, O> & ([DescriptorOperation<O>] extends [never] ? never : [DescriptorOperation<O>] extends [K] ? unknown : never)): FormField<T>;
   validate(): ValidationReport;
-  /** Exactly one invocation at a time. No implicit retries or replacement. */
+  /** Exactly one invocation at a time. No implicit retries or replacement. Edits never abort it; cancel() and dispose() do. */
   submit(client: API, options?: CallOptions): Promise<FormSubmission<Operations[K]["response"]>>;
   reset(values?: FormDraft<Operations[K]["request"]>): void;
   cancel(): void;
@@ -147,8 +152,18 @@ function formWrite(input: unknown, segments: readonly (string | number | null)[]
 function formScalarWire(type: WireType, text: string): string {
   if (type.kind === "quoted") return JSON.stringify(formScalarWire(resolvedDescriptor(type.element!).type, text));
   if (type.kind === "string") return JSON.stringify(text);
-  if (type.kind === "integer" || type.kind === "number" || type.kind === "boolean") return text;
+  // Numbers and booleans must be their exact JSON lexeme: the wire parser would
+  // otherwise skip surrounding whitespace and accept the text "null".
+  if (type.kind === "integer" || type.kind === "number") { if (!numberPattern.test(text)) reject("", "type"); return text; }
+  if (type.kind === "boolean") { if (text !== "true" && text !== "false") reject("", "type"); return text; }
   reject("", "form_parser_required");
+}
+// Submission listens on the caller's signal and must always release its guard,
+// so a JavaScript caller cannot pass an object that only resembles one.
+function formSignal(signal: unknown): void {
+  if (signal === undefined) return;
+  const candidate = signal as Partial<AbortSignal> | null;
+  if (candidate === null || typeof candidate !== "object" || typeof candidate.aborted !== "boolean" || typeof candidate.addEventListener !== "function" || typeof candidate.removeEventListener !== "function") reject("", "signal");
 }
 function formStore<S>(initial: S, onError?: (error: unknown) => void) {
   let snapshot = initial, notifying = false;
@@ -196,9 +211,12 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
   const store = formStore(snapshot(), onListenerError);
   const live = (): void => { store.mutable(); if (taskNotifying) reject("", "form_notification"); if (disposed) reject("", "form_disposed"); };
   const emit = (): void => store.publish(snapshot());
+  // Callers store their new state first: task abort listeners run synchronously
+  // and must observe current values with the new revision. Edits never abort a
+  // submission; only cancel() and dispose() do.
   const invalidate = (): void => {
-    revision++; submission?.abort(); for (const task of tasks) task.invalidate();
-    issues = Object.freeze([]); validation = undefined; error = undefined; status = "idle";
+    revision++; issues = Object.freeze([]); validation = undefined; error = undefined; status = "idle";
+    for (const task of [...tasks]) task.invalidate();
   };
   const checked = (descriptor: object): DescriptorReference => {
     const reference = descriptorReferences.get(descriptor);
@@ -226,7 +244,7 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
       const guard = formPayloadGuard(reference);
       if (!remove && guard) value = Object.assign(Object.create(null), value, { [guard.discriminator]: guard.tag });
       const next = formCopy(formWrite(values, reference.segments, value, remove), limits) as Draft;
-      invalidate(); values = next; clearText(); touched = Object.freeze(touched.filter(key => !key.startsWith(path + "/"))); emit();
+      values = next; clearText(); touched = Object.freeze(touched.filter(key => !key.startsWith(path + "/"))); invalidate(); emit();
     };
     return Object.freeze({
       path,
@@ -239,7 +257,7 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
       touch(): void { live(); checked(descriptor); if (!touched.includes(path)) { touched = formCopy([...touched, path], limits); emit(); } },
       setText(value: string): void {
         live(); checked(descriptor); if (typeof value !== "string") reject(path, "type");
-        const next = formCopy({ ...text, [path]: value }, limits); invalidate(); text = next; emit();
+        text = formCopy({ ...text, [path]: value }, limits); invalidate(); emit();
       },
       parse(parser?: (text: string) => Exclude<T, undefined>): boolean {
         live(); const reference = checked(descriptor); if (!Object.hasOwn(text, path)) return true;
@@ -268,75 +286,94 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
     if (disposed || revision !== version) reject("", "form_changed");
     validation = formCopy(report, limits); issues = validation.issues; error = undefined; emit(); return validation;
   };
-  const cancel = (): void => { live(); invalidate(); status = "canceled"; emit(); };
+  const cancel = (): void => { live(); invalidate(); status = "canceled"; submission?.abort(); emit(); };
   const controller: FormController<K> = {
     operation, getSnapshot: store.getSnapshot,
     subscribe(listener) { live(); return store.subscribe(listener); },
     field, validate,
     async submit(client, call = {}) {
       live(); if (submission) reject("", "form_busy");
-      const signal = call.signal; checkAbort(signal);
+      const signal = call.signal; formSignal(signal); checkAbort(signal);
       const report = validate(); if (report.issues.length) return { status: "invalid", report };
       const owner = new AbortController(); submission = owner;
       const attemptRevision = revision, request = values;
       const aborted = (): void => owner.abort(signal?.reason);
-      signal?.addEventListener("abort", aborted, { once: true });
-      // Validation callbacks/listeners may abort before this listener existed.
-      if (signal?.aborted) aborted();
-      status = "submitting"; error = undefined; emit();
+      // Edits, reset and disposal after sending do not abort the request; its
+      // actual outcome is still returned, marked as changed.
+      const changed = (): boolean => disposed || revision !== attemptRevision;
+      let sent = false;
       try {
+        signal?.addEventListener("abort", aborted, { once: true });
+        // Validation callbacks/listeners may abort before this listener existed.
+        if (signal?.aborted) aborted();
+        status = "submitting"; error = undefined; emit();
         checkAbort(owner.signal);
+        sent = true;
         const result = await operation.call(client, request as Operations[K]["request"], { ...call, signal: owner.signal });
-        if (disposed || revision !== attemptRevision || owner.signal.aborted) {
-          // A streaming result transfers ownership to its consumer. A stale
-          // completion has no consumer, so release it before relinquishing work.
-          if (registered.response?.file || registered.response?.media_type === "text/event-stream") {
-            const stream: unknown = result;
-            if (stream === null || typeof stream !== "object" || !("close" in stream) || typeof stream.close !== "function") reject("", "form_response");
-            await stream.close();
-          }
-          return { status: disposed || revision !== attemptRevision ? "stale" : "canceled" };
-        }
-        status = "succeeded"; return { status: "succeeded", value: result };
+        // Even after cancel/edit/dispose a completed request is reported; a file
+        // or event-stream response is then owned by the caller like any success.
+        const late = changed();
+        if (!late) status = "succeeded";
+        return { status: "succeeded", value: result, changed: late };
       } catch (caught) {
-        if (disposed || revision !== attemptRevision) return { status: "stale" };
-        if (owner.signal.aborted) { status = "canceled"; return { status: "canceled" }; }
-        status = "failed"; error = caught;
-        if (caught instanceof ContractError) issues = formCopy(caught.issues, limits);
-        else if (caught instanceof APIError && caught.response !== undefined) {
-          // The SDK already decoded the shared error envelope. Validate wrapped
-          // clients too before accepting its field pointers into form state.
-          try {
-            const envelope = contracts().decode(runtimeDocument().error_type, contracts().encode(runtimeDocument().error_type, caught.response, limits), limits) as { issues?: readonly Issue[] };
-            issues = formCopy(envelope.issues?.length ? envelope.issues : [{ path: "", code: caught.code }], limits);
-          } catch { issues = Object.freeze([{ path: "", code: "form_request" }]); }
-        } else issues = Object.freeze([{ path: "", code: "form_request" }]);
-        return { status: "failed", error: caught };
+        if (owner.signal.aborted) {
+          if (!changed()) status = "canceled";
+          return { status: "canceled", outcome: sent ? "unknown" : "not_sent" };
+        }
+        const late = changed();
+        // Server issues describe the request that was sent; a changed draft keeps
+        // its own, newer state and the caller receives the failure.
+        if (!late) {
+          status = "failed"; error = caught;
+          if (caught instanceof ContractError) issues = formCopy(caught.issues, limits);
+          else if (caught instanceof APIError && caught.response !== undefined) {
+            // The SDK already decoded the shared error envelope. Validate wrapped
+            // clients too before accepting its field pointers into form state.
+            try {
+              const envelope = contracts().decode(runtimeDocument().error_type, contracts().encode(runtimeDocument().error_type, caught.response, limits), limits) as { issues?: readonly Issue[] };
+              issues = formCopy(envelope.issues?.length ? envelope.issues : [{ path: "", code: caught.code }], limits);
+            } catch { issues = Object.freeze([{ path: "", code: "form_request" }]); }
+          } else issues = Object.freeze([{ path: "", code: "form_request" }]);
+        }
+        return { status: "failed", error: caught, changed: late };
       } finally {
-        signal?.removeEventListener("abort", aborted); submission = undefined;
+        // Release the guard first; nothing after it can keep the form busy.
+        submission = undefined; signal?.removeEventListener("abort", aborted);
         if (status === "submitting") status = "canceled"; emit();
       }
     },
     reset(next = baseline) {
       live(); const owned = formCopy(next, limits); object(owned);
-      invalidate(); baseline = owned; values = owned; text = Object.freeze(Object.create(null)); touched = Object.freeze([]); emit();
+      baseline = owned; values = owned; text = Object.freeze(Object.create(null)); touched = Object.freeze([]); invalidate(); emit();
     },
     cancel,
     dispose() {
-      if (disposed) return; live(); invalidate(); disposed = true; status = "disposed";
+      if (disposed) return; live(); invalidate(); disposed = true; status = "disposed"; submission?.abort();
       for (const task of [...tasks]) task.dispose(); emit(); store.clear();
     },
     task<T>(load: (values: Draft, signal: AbortSignal) => Promise<T>, taskOptions: FormTaskOptions = {}): FormTask<T> {
       live(); if (typeof load !== "function" || tasks.size >= formPolicy.tasks) reject("", "form_task_limit");
       const debounce = taskOptions.debounceMS ?? 0;
       if (!Number.isSafeInteger(debounce) || debounce < 0 || debounce > formPolicy.debounceMS) reject("", "form_debounce");
-      let sequence = 0, dead = false, current: AbortController | undefined, pending = 0;
+      interface TaskRun { readonly abort: AbortController; started: boolean; released: boolean }
+      let sequence = 0, dead = false, current: TaskRun | undefined, pending = 0;
       let taskStatus: FormTaskSnapshot<T>["status"] = "idle", taskValue: FormReadonly<T> | undefined, taskError: unknown;
       const taskSnapshot = (): FormTaskSnapshot<T> => Object.freeze({ status: taskStatus, value: taskValue, error: taskError, pending });
       const taskStore = formStore(taskSnapshot(), onListenerError);
       const taskEmit = (): void => { taskNotifying = true; try { taskStore.publish(taskSnapshot()); } finally { taskNotifying = false; } };
       const taskLive = (): void => { live(); taskStore.mutable(); if (dead) reject("", "form_task_disposed"); };
-      const invalidateTask = (): void => { sequence++; current?.abort(); taskStatus = "canceled"; taskValue = undefined; taskError = undefined; taskEmit(); };
+      // A run holds capacity until its callback actually exits. A run stopped
+      // before its callback started (still debouncing) has nothing left to wait
+      // for, so it releases capacity at once.
+      const release = (run: TaskRun): void => { if (!run.released) { run.released = true; pending--; activeTasks--; } };
+      // Callers finish their state before aborting: abort listeners run
+      // synchronously and may start a new run.
+      const stop = (): TaskRun | undefined => {
+        sequence++; const run = current; current = undefined;
+        if (run && !run.started) release(run);
+        return run;
+      };
+      const invalidateTask = (): void => { const run = stop(); taskStatus = "canceled"; taskValue = undefined; taskError = undefined; run?.abort.abort(); taskEmit(); };
       const owner = { invalidate: invalidateTask, dispose(): void { if (dead) return; invalidateTask(); dead = true; taskStatus = "disposed"; taskEmit(); taskStore.clear(); tasks.delete(owner); } };
       tasks.add(owner);
       return Object.freeze({
@@ -345,9 +382,13 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
         cancel() { taskLive(); invalidateTask(); },
         dispose() { if (dead) return; live(); taskStore.mutable(); owner.dispose(); },
         async run(): Promise<FormTaskResult<T>> {
-          taskLive(); if (activeTasks >= formPolicy.active) reject("", "form_task_busy");
-          invalidateTask(); const token = ++sequence, version = revision, request = values, abort = new AbortController(); current = abort;
-          pending++; activeTasks++; taskStatus = "pending"; taskEmit();
+          taskLive();
+          // Replacing this task's own not-yet-started run frees its capacity.
+          if (activeTasks - (current && !current.started ? 1 : 0) >= formPolicy.active) reject("", "form_task_busy");
+          const previous = stop(), run: TaskRun = { abort: new AbortController(), started: false, released: false };
+          const token = ++sequence, version = revision, request = values, abort = run.abort;
+          current = run; pending++; activeTasks++; taskStatus = "pending"; taskValue = undefined; taskError = undefined;
+          previous?.abort.abort(); taskEmit();
           try {
             if (debounce) await new Promise<void>(resolve => {
               const end = (): void => { clearTimeout(timer); abort.signal.removeEventListener("abort", end); resolve(); };
@@ -355,6 +396,7 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
               if (abort.signal.aborted) end();
             });
             if (abort.signal.aborted) return { status: "canceled" };
+            run.started = true;
             const result = await load(request, abort.signal);
             if (dead || disposed || token !== sequence || version !== revision) return { status: "stale" };
             if (abort.signal.aborted) return { status: "canceled" };
@@ -363,7 +405,7 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
             if (dead || disposed || token !== sequence || version !== revision) return { status: "stale" };
             if (abort.signal.aborted) return { status: "canceled" };
             taskError = caught; taskStatus = "failed"; return { status: "failed", error: caught };
-          } finally { pending--; activeTasks--; if (current === abort) current = undefined; taskEmit(); }
+          } finally { release(run); if (current === run) current = undefined; taskEmit(); }
         },
       });
     },

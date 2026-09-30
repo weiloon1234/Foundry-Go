@@ -204,17 +204,8 @@ class WireCodec {
           const record = object(value, path), result: Record<string, unknown> = Object.create(null), key = type.key;
           for (const name of Object.keys(record).sort()) {
             if (++steps > limits.Steps) reject(path, "limit");
-            if (key !== undefined) {
-              let checked: unknown;
-              if (key.value.kind === "integer") {
-                if (!/^(?:0|-?[1-9][0-9]*)$/.test(name)) reject(pointer(path, name), "key");
-                checked = this.scalar(key.value, new JSONNumber(name), false, path, tolerant);
-              } else checked = this.scalar(key.value, name, false, path, tolerant);
-              // A tolerant client omits entries keyed by enum cases it does not know.
-              if (checked instanceof UnknownEnumValue) continue;
-              if (key.syntax === "model_id" && name !== name.toLowerCase()) reject(pointer(path, name), "key");
-              if (key.non_zero && name.toLowerCase() === "00000000-0000-0000-0000-000000000000") reject(pointer(path, name), "key");
-            }
+            // A tolerant client omits entries keyed by enum cases it does not know.
+            if (key !== undefined && !this.mapKey(key, name, path, tolerant)) continue;
             result[name] = visit(type.element!, record[name], pointer(path, name), depth + 1);
           }
           return result;
@@ -223,6 +214,18 @@ class WireCodec {
       }
     };
     return visit(id, input, "", 0);
+  }
+  /** Checks one declared map key; false only for an unknown enum key a tolerant decode omits. */
+  mapKey(key: NonNullable<WireType["key"]>, name: string, path: string, tolerant = false): boolean {
+    let checked: unknown;
+    if (key.value.kind === "integer") {
+      if (!/^(?:0|-?[1-9][0-9]*)$/.test(name)) reject(pointer(path, name), "key");
+      checked = this.scalar(key.value, new JSONNumber(name), false, path, tolerant);
+    } else checked = this.scalar(key.value, name, false, path, tolerant);
+    if (checked instanceof UnknownEnumValue) return false;
+    if (key.syntax === "model_id" && name !== name.toLowerCase()) reject(pointer(path, name), "key");
+    if (key.non_zero && name.toLowerCase() === "00000000-0000-0000-0000-000000000000") reject(pointer(path, name), "key");
+    return true;
   }
   private scalar(type: WireType, value: unknown, encode: boolean, path: string, tolerant = false): unknown {
     let wire: unknown = value, result: unknown = value;

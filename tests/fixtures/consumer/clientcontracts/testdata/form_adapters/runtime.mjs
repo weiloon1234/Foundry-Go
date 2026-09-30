@@ -66,8 +66,21 @@ assert.notEqual(outerRef, firstRef); assert.equal(outerRef.value, firstRef);
 currentRef = nextRef; notifyRef();
 assert.equal(outerRef.value, nextRef); assert.equal(firstRef.value, "first"); assert.equal(nextRef.value, "next");
 refScope.stop(); assert.equal(refStopped, true);
+// Server rendering never mounts or stops component scopes, so it must not
+// leave a subscription behind on a borrowed, longer-lived store.
 const vueServer = owned("Vue SSR");
 const serverApp = Vue.createSSRApp({ setup() { const snapshot = useVueForm(vueServer.store); return () => Vue.h("output", snapshot.value.values.body.name); } });
-try { assert.match(await renderVue(serverApp), /Vue SSR/); } finally { vueServer.form.dispose(); }
+try {
+  assert.match(await renderVue(serverApp), /Vue SSR/); assert.match(await renderVue(serverApp), /Vue SSR/);
+  assert.equal(vueServer.subscriptions, 0);
+} finally { vueServer.form.dispose(); }
+// A scope stopped during setup, before its component mounts, never subscribes.
+const early = owned("early"), earlyHost = document.createElement("div"); document.body.append(earlyHost);
+const earlyApp = Vue.createApp({ setup() {
+  const inner = Vue.effectScope(), s = inner.run(() => useVueForm(early.store)); inner.stop();
+  return () => Vue.h("output", s.value.values.body.name);
+} });
+earlyApp.mount(earlyHost); assert.equal(earlyHost.textContent, "early"); assert.equal(early.subscriptions, 0);
+earlyApp.unmount(); early.form.dispose(); earlyHost.remove();
 dom.window.close();
 console.log("PASS real React StrictMode/render/hydration and Vue mount/scope/SSR; subscriptions clean up without disposing borrowed controllers");

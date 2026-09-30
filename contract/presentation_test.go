@@ -2,6 +2,7 @@ package contract
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -48,5 +49,57 @@ func TestPresentationDoesNotOverrideEnumOrWireShape(t *testing.T) {
 	}
 	if (Presentation{Kind: FilePresentation}).ValidateFile() != nil || (Presentation{Kind: MoneyPresentation}).ValidateFile() == nil {
 		t.Fatal("file hint mismatch")
+	}
+}
+
+func TestPresentationKeyBoundAndKindSetHaveOneOwner(t *testing.T) {
+	exact := i18n.MessageKey(strings.Repeat("a", MaxPresentationKeyBytes))
+	if (Presentation{LabelKey: exact}).Validate() != nil {
+		t.Fatal("a key at the published bound was rejected")
+	}
+	if (Presentation{HelpKey: exact + "a"}).Validate() == nil {
+		t.Fatal("a key above the published bound was accepted")
+	}
+	kinds := PresentationKinds()
+	for _, kind := range kinds {
+		if (Presentation{Kind: kind}).Validate() != nil {
+			t.Fatal("listed kind rejected", kind)
+		}
+	}
+	kinds[0] = "script"
+	if slices.Contains(PresentationKinds(), "script") || (Presentation{Kind: "script"}).Validate() == nil {
+		t.Fatal("caller mutation changed the closed kind set")
+	}
+}
+
+func TestPasswordTypesFollowEveryOutputPath(t *testing.T) {
+	password := Presentation{Kind: PasswordPresentation}
+	types := []Type{
+		{ID: "secret", Kind: ObjectKind, Properties: []Property{{Name: "password", Type: "string", Presentation: password}}},
+		{ID: "list", Kind: ArrayKind, Element: "secret"},
+		{ID: "alias", Kind: AliasKind, Element: "list"},
+		{ID: "choice", Kind: UnionKind, Discriminator: "kind", Variants: []Variant{{Tag: "secret", Type: "secret"}}},
+		{ID: "tree", Kind: ObjectKind, Properties: []Property{{Name: "self", Type: "tree"}, {Name: "choice", Type: "choice"}}},
+		{ID: "plain", Kind: ObjectKind, Properties: []Property{{Name: "name", Type: "string", Presentation: Presentation{Kind: TextPresentation}}}},
+		{ID: "string", Kind: StringKind},
+	}
+	sensitive := PasswordTypes(types)
+	for _, id := range []TypeID{"secret", "list", "alias", "choice", "tree"} {
+		if !sensitive[id] {
+			t.Fatal("password graph not reached through", id)
+		}
+	}
+	if sensitive["plain"] || sensitive["string"] {
+		t.Fatal("unrelated types were marked sensitive")
+	}
+}
+
+func TestPresentationRegistrationNamesTheContradictingField(t *testing.T) {
+	schema := Schema{Root: "Input", Types: []Type{
+		{ID: "Input", Kind: ObjectKind, Properties: []Property{{Name: "count", Type: "integer", Presentation: Presentation{Kind: EmailPresentation}}}},
+		{ID: "integer", Kind: IntegerKind, Bits: 64},
+	}}
+	if _, err := schema.Normalize(); err == nil || !strings.Contains(err.Error(), "Input.count") {
+		t.Fatal("contradiction did not name its field", err)
 	}
 }

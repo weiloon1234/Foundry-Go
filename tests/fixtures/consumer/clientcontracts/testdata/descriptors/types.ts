@@ -11,4 +11,15 @@ const rangeBytes: sdk.ExactMetadataNumber = sdk.operation("itemsEcho").metadata.
 const numbers: readonly number[] = choice.choices;
 // @ts-expect-error Unsafe-size limits must be inspected before numeric use.
 const rounded: number = sdk.operation("itemsEcho").metadata.limits.Body.Bytes;
-void [values, quoted, limit, readers, issues, ranges, rangeBytes, numbers, rounded];
+// Maps keyed by model IDs are collections: entries bind by identity, never as fields.
+const index = sdk.schema("foundry.test/consumer/clientcontracts.OwnerIndex");
+const owners = index.field("owners");
+declare const user: Parameters<typeof owners.at>[0];
+const ownerEntry = owners.at(user), ownerTemplate = owners.element();
+const ownerValue: string = null as unknown as sdk.FieldValue<typeof ownerEntry>;
+// @ts-expect-error Identity keys are entries, not declared fields.
+owners.field(user);
+// @ts-expect-error A model-ID key is an Identity, not an arbitrary string.
+owners.at("not-an-identity");
+const second = index.field("pair").at(1), state = index.field("states").field("draft");
+void [values, quoted, limit, readers, issues, ranges, rangeBytes, numbers, rounded, ownerTemplate, ownerValue, second, state];

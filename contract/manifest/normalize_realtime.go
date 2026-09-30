@@ -40,7 +40,7 @@ func normalizeRealtime(realtime *Realtime, types typeIndex) error {
 		if channel.Room.Name != "room" || channel.Room.Required != channel.OwnedRooms || channel.Room.Repeated || channel.Room.CatchAll || channel.Room.DefaultURL.IsSet() {
 			return invalid("invalid realtime room contract")
 		}
-		if err := types.parameter(channel.Room); err != nil {
+		if err := types.urlParameter(channel.Room); err != nil {
 			return err
 		}
 		if channel.Private {

@@ -151,3 +151,81 @@ func TestPresentationManifestVersionPrivacyAndAdapters(t *testing.T) {
 		t.Fatal("password field not marked input-only")
 	}
 }
+
+func TestPresentationKeepsURLCredentialsOutAndChecksElements(t *testing.T) {
+	source := credentialManifest(t)
+	email, err := validation.Email[string]().Description()
+	if err != nil {
+		t.Fatal(err)
+	}
+	url, err := validation.URL[string]().Description()
+	if err != nil {
+		t.Fatal(err)
+	}
+	same, err := validation.Same[string]().Description()
+	if err != nil {
+		t.Fatal(err)
+	}
+	field := func(name string, child validation.Description) validation.Description {
+		return validation.Description{Kind: validation.FieldKind, Field: name, Children: []validation.Description{child}}
+	}
+	each := func(child validation.Description) validation.Description {
+		return validation.Description{Kind: validation.EachKind, Children: []validation.Description{child}}
+	}
+	decode := func(edit func(*manifest.Document)) error {
+		d, _ := source.Snapshot()
+		edit(&d)
+		raw, err := json.Marshal(d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = manifest.Decode(raw)
+		return err
+	}
+	// Credentials never travel in URLs, whatever produced the manifest.
+	if decode(func(d *manifest.Document) {
+		d.HTTP[0].Query = []manifest.Parameter{{Name: "token", Type: "string", Syntax: foundryhttp.TextURLSyntax, Presentation: contract.Presentation{Kind: contract.PasswordPresentation}}}
+	}) == nil {
+		t.Fatal("password query parameter accepted")
+	}
+	// A repeated parameter's hint describes each element, so its element rule
+	// is checked against that hint rather than skipped.
+	site := manifest.Parameter{Name: "site", Type: "string", Syntax: foundryhttp.TextURLSyntax, Repeated: true, Presentation: contract.Presentation{Kind: contract.URLPresentation}}
+	for name, test := range map[string]struct {
+		rule  validation.Description
+		valid bool
+	}{"matching element rule": {url, true}, "conflicting element rule": {email, false}} {
+		t.Run(name, func(t *testing.T) {
+			err := decode(func(d *manifest.Document) {
+				d.HTTP[0].Query = []manifest.Parameter{site}
+				rule := field("query", field("site", each(test.rule)))
+				d.HTTP[0].Validation = &rule
+			})
+			if (err == nil) != test.valid {
+				t.Fatalf("valid=%v, error=%v", test.valid, err)
+			}
+		})
+	}
+	// A comparison's other label is checked against that sibling's presentation.
+	for name, test := range map[string]struct {
+		other i18n.MessageKey
+		valid bool
+	}{"matching other label": {"fields.confirm", true}, "conflicting other label": {"fields.other", false}} {
+		t.Run(name, func(t *testing.T) {
+			err := decode(func(d *manifest.Document) {
+				for i := range d.Types {
+					if d.Types[i].ID == "Secret" {
+						confirm := contract.Property{Name: "confirm", Type: "string", Required: true, Presentation: contract.Presentation{LabelKey: "fields.confirm"}}
+						d.Types[i].Properties = append([]contract.Property{confirm}, d.Types[i].Properties...)
+					}
+				}
+				compare := validation.Description{Kind: validation.CompareKind, Field: "password", OtherField: "confirm", LabelKey: "fields.password", OtherLabelKey: test.other, Children: []validation.Description{same}}
+				rule := field("body", field("children", each(compare)))
+				d.HTTP[0].Validation = &rule
+			})
+			if (err == nil) != test.valid {
+				t.Fatalf("valid=%v, error=%v", test.valid, err)
+			}
+		})
+	}
+}

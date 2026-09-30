@@ -31,6 +31,10 @@ export async function checkForms(sdk, api, request) {
   large.setText("9223372036854775808"); assert.equal(large.parse(), false);
   assert.equal(large.getSnapshot().value, request.body.large);
   assert.equal(large.getSnapshot().text, "9223372036854775808");
+  // Built-in parsing is exact: no trimming, and the text "null" is not a value.
+  for (const text of [" 42", "42\n", "null", "+1"]) {
+    large.setText(text); assert.equal(large.parse(), false); assert.equal(large.getSnapshot().value, request.body.large);
+  }
   large.setText("9223372036854775807"); assert.equal(large.parse(), true);
   assert.equal(large.getSnapshot().value, "9223372036854775807");
   assert.throws(() => large.set(123), sdk.ContractError);
@@ -82,27 +86,44 @@ export async function checkForms(sdk, api, request) {
     const call = { signal: abort.signal };
     wrapped.itemsEcho = async () => { invoked++; return request.body; };
     early.subscribe(() => { if (early.getSnapshot().status === phase) { call.signal = new AbortController().signal; abort.abort(); } });
-    assert.equal((await early.submit(wrapped, call)).status, "canceled");
+    const result = await early.submit(wrapped, call);
+    assert.equal(result.status, "canceled"); assert.equal(result.outcome, "not_sent");
     assert.equal(invoked, 0); assert.equal(early.getSnapshot().pending, false); early.dispose();
   }
+  // A signal-like object that is not an AbortSignal is refused before the guard.
+  await assert.rejects(form.submit(wrapped, { signal: { aborted: false } }), sdk.ContractError);
+  assert.equal(form.getSnapshot().pending, false);
   wrapped.itemsEcho = async (_, options) => { calls++; signal = options.signal; return pending.promise; };
   const old = form.submit(wrapped); assert.equal(form.getSnapshot().pending, true);
   await assert.rejects(form.submit(wrapped), sdk.ContractError);
-  optional.set("new input"); assert.equal(signal.aborted, true);
+  // Edits never abort a sent request: its actual outcome is still reported.
+  optional.set("new input"); assert.equal(signal.aborted, false);
   assert.equal(form.getSnapshot().pending, true);
   await assert.rejects(form.submit(wrapped), sdk.ContractError);
-  pending.resolve(request.body); assert.equal((await old).status, "stale");
+  pending.resolve(request.body);
+  const completed = await old;
+  assert.equal(completed.status, "succeeded"); assert.equal(completed.changed, true); assert.equal(completed.value, request.body);
   assert.equal(form.getSnapshot().status, "idle"); assert.equal(form.getSnapshot().pending, false); assert.equal(calls, 1);
   assert.equal(optional.getSnapshot().value, "new input");
+  // A failure after an edit is returned without replacing the newer draft's state.
+  const rejected = deferred(); wrapped.itemsEcho = async () => rejected.promise;
+  const failing = form.submit(wrapped); optional.set("newer input"); rejected.reject(new Error("server failure"));
+  const failed = await failing;
+  assert.equal(failed.status, "failed"); assert.equal(failed.changed, true); assert.equal(form.getSnapshot().issues.length, 0);
+  assert.equal(form.getSnapshot().status, "idle");
 
   const aborted = deferred(), outer = new AbortController();
   wrapped.itemsEcho = async () => aborted.promise;
   const canceled = form.submit(wrapped, { signal: outer.signal }); outer.abort();
   assert.equal(form.getSnapshot().pending, true); aborted.reject(new Error("aborted"));
-  assert.equal((await canceled).status, "canceled"); assert.equal(form.getSnapshot().pending, false);
-  const disposedResult = deferred(); wrapped.itemsEcho = async () => disposedResult.promise;
-  const disposing = form.submit(wrapped); form.dispose(); assert.equal(form.getSnapshot().pending, true);
-  disposedResult.resolve(request.body); assert.equal((await disposing).status, "stale");
+  // Cancellation after sending ends only this client's wait.
+  const canceledResult = await canceled;
+  assert.equal(canceledResult.status, "canceled"); assert.equal(canceledResult.outcome, "unknown"); assert.equal(form.getSnapshot().pending, false);
+  const disposedResult = deferred(); wrapped.itemsEcho = async (_, options) => { signal = options.signal; return disposedResult.promise; };
+  const disposing = form.submit(wrapped); form.dispose(); assert.equal(form.getSnapshot().pending, true); assert.equal(signal.aborted, true);
+  // A transport that completes anyway reports what the server did.
+  disposedResult.resolve(request.body);
+  const afterDispose = await disposing; assert.equal(afterDispose.status, "succeeded"); assert.equal(afterDispose.changed, true);
   assert.equal(form.getSnapshot().pending, false); assert.throws(() => form.reset(), sdk.ContractError);
 
   const prepared = sdk.createForm(sdk.operation("formsSubmit"), { body: { name: "  Native form  ", "tags[]": [] } });
@@ -121,8 +142,10 @@ export async function checkForms(sdk, api, request) {
 
   const download = sdk.createForm(sdk.operation("download"), {}), stream = deferred(); let closed = 0;
   const downloads = Object.create(api, { download: { value: async () => stream.promise } });
-  const staleStream = download.submit(downloads); download.reset(); stream.resolve({ close: async () => { closed++; } });
-  assert.equal((await staleStream).status, "stale"); assert.equal(closed, 1); download.dispose();
+  // A completed stream belongs to the caller even when the draft was reset meanwhile.
+  const lateStream = download.submit(downloads); download.reset(); stream.resolve({ close: async () => { closed++; } });
+  const streamed = await lateStream; assert.equal(streamed.status, "succeeded"); assert.equal(streamed.changed, true); assert.equal(closed, 0);
+  await streamed.value.close(); assert.equal(closed, 1); download.dispose();
 
   const unionOp = sdk.operation("unionsEcho");
   const unionForm = sdk.createForm(unionOp, { body: { method: { kind: "card", token: "card-token", sequence: "7", labels: [] } } });
@@ -161,7 +184,25 @@ export async function checkForms(sdk, api, request) {
   await assert.rejects(bounded.run(), sdk.ContractError); bounded.cancel();
   await assert.rejects(bounded.run(), sdk.ContractError);
   for (const work of stuck) work.resolve("done"); await Promise.all(owners);
-  assert.equal(bounded.getSnapshot().pending, 0); taskForm.dispose();
+  assert.equal(bounded.getSnapshot().pending, 0); bounded.dispose();
+  // Runs replaced or invalidated while still debouncing hold no capacity, so
+  // re-running several tasks from one input handler is never refused.
+  let started = 0; const debounced = [0, 1, 2, 3].map(() => taskForm.task(async () => { started++; return "ok"; }, { debounceMS: 20 }));
+  const first = debounced.map(item => item.run()), second = debounced.map(item => item.run());
+  taskForm.field(op.field("body", "optional")).set("typed"); assert.equal(debounced[0].getSnapshot().pending, 0);
+  const third = debounced.map(item => item.run());
+  assert.deepEqual((await Promise.all(first)).map(result => result.status), ["canceled", "canceled", "canceled", "canceled"]);
+  assert.deepEqual((await Promise.all(second)).map(result => result.status), ["canceled", "canceled", "canceled", "canceled"]);
+  assert.deepEqual((await Promise.all(third)).map(result => result.status), ["succeeded", "succeeded", "succeeded", "succeeded"]);
+  assert.equal(started, 4); for (const item of debounced) item.dispose();
+  // An abort listener that starts a new run sees the edit that aborted it.
+  let seen; const listening = taskForm.task(async (draft, signal) => {
+    if (seen === undefined) signal.addEventListener("abort", () => { seen = null; listening.run().then(result => { seen = result.value; }); }, { once: true });
+    return draft.body?.optional;
+  });
+  const hanging = listening.run(); taskForm.field(op.field("body", "optional")).set("latest");
+  await hanging; await new Promise(resolve => setTimeout(resolve, 0)); assert.equal(seen, "latest");
+  listening.dispose(); taskForm.dispose();
 
   const independent = sdk.createForm(op, request); assert.equal(independent.getSnapshot().dirty, false); independent.dispose();
   const cyclic = {}; cyclic.body = cyclic;
@@ -169,5 +210,5 @@ export async function checkForms(sdk, api, request) {
   const accessor = {}; Object.defineProperty(accessor, "body", { enumerable: true, get() { throw new Error("must not execute"); } });
   assert.throws(() => sdk.createForm(op, accessor), sdk.ContractError);
   assert.throws(() => sdk.createForm(op, request, { limits: { Bytes: 10, Depth: 10, Nodes: 100, Steps: 100, Issues: 10 } }), sdk.ContractError);
-  console.log("PASS form state, exact parsing, presence, ownership, actual HTTP/server issues/multipart, cancellation, stale streams and bounded async tasks");
+  console.log("PASS form state, exact parsing, presence, ownership, actual HTTP/server issues/multipart, cancellation, reported late outcomes and bounded async tasks");
 }

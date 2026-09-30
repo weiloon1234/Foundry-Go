@@ -1,6 +1,11 @@
 package contract
 
-import "github.com/weiloon1234/Foundry-Go/i18n"
+import (
+	"slices"
+
+	"github.com/weiloon1234/Foundry-Go/i18n"
+	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+)
 
 // PresentationKind is an optional public display hint. It never changes codecs,
 // validation, authorization or storage. An empty kind leaves control selection
@@ -17,6 +22,12 @@ const (
 	FilePresentation      PresentationKind = "file"
 )
 
+var presentationKinds = []PresentationKind{TextPresentation, MultilinePresentation, PasswordPresentation, EmailPresentation, URLPresentation, MoneyPresentation, FilePresentation}
+
+// PresentationKinds returns the closed kind set in declaration order. Generated
+// clients derive their kind type from it.
+func PresentationKinds() []PresentationKind { return slices.Clone(presentationKinds) }
+
 // Presentation contains public metadata only. LabelKey and HelpKey reference
 // locale messages; there are deliberately no values, defaults or examples.
 // Declare separate DTOs when input and output need different presentation.
@@ -26,18 +37,17 @@ type Presentation struct {
 	HelpKey  i18n.MessageKey  `json:"help_key,omitempty"`
 }
 
-// MaxPresentationKeyBytes bounds each public translation key independently.
-const MaxPresentationKeyBytes = 256
+// MaxPresentationKeyBytes bounds each public translation key independently. It
+// is the semantic message-key bound every key must also satisfy.
+const MaxPresentationKeyBytes = identifier.MaxSemanticBytes
 
 // Validate checks the closed kind set and bounded translation keys.
 func (p Presentation) Validate() error {
-	switch p.Kind {
-	case "", TextPresentation, MultilinePresentation, PasswordPresentation, EmailPresentation, URLPresentation, MoneyPresentation, FilePresentation:
-	default:
+	if p.Kind != "" && !slices.Contains(presentationKinds, p.Kind) {
 		return invalidSchema()
 	}
 	for _, key := range []i18n.MessageKey{p.LabelKey, p.HelpKey} {
-		if key != "" && (len(key) > MaxPresentationKeyBytes || key.Validate() != nil) {
+		if key != "" && key.Validate() != nil {
 			return invalidSchema()
 		}
 	}
@@ -91,4 +101,39 @@ func (p Presentation) ValidateSchema(schema Schema) error {
 		typ = compiled.types[typ.Element]
 	}
 	return p.ValidateType(typ)
+}
+
+// PasswordTypes returns the types whose values can contain a property hinted as
+// a password, following properties, elements, aliases and union variants,
+// including recursive graphs. Only explicit password hints count; property
+// names and persistence models are never scanned. Password hints are
+// input-only, so output owners reject these types.
+func PasswordTypes(types []Type) map[TypeID]bool {
+	parents := make(map[TypeID][]TypeID)
+	sensitive := make(map[TypeID]bool)
+	var pending []TypeID
+	for _, typ := range types {
+		for _, p := range typ.Properties {
+			parents[p.Type] = append(parents[p.Type], typ.ID)
+			if p.Presentation.Kind == PasswordPresentation && !sensitive[typ.ID] {
+				sensitive[typ.ID] = true
+				pending = append(pending, typ.ID)
+			}
+		}
+		if typ.Element != "" {
+			parents[typ.Element] = append(parents[typ.Element], typ.ID)
+		}
+		for _, v := range typ.Variants {
+			parents[v.Type] = append(parents[v.Type], typ.ID)
+		}
+	}
+	for i := 0; i < len(pending); i++ {
+		for _, parent := range parents[pending[i]] {
+			if !sensitive[parent] {
+				sensitive[parent] = true
+				pending = append(pending, parent)
+			}
+		}
+	}
+	return sensitive
 }

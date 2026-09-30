@@ -22,6 +22,15 @@ Explicit password hints reject output graphs and credential body examples/defaul
 parameters; applications should keep dedicated input and response views. No
 headless form controller or frontend adapter is introduced by this change.
 
+The 2026-09-30 re-audit tightened declarations that exporting a client would
+already have refused. Route registration now rejects JSON and event-stream
+responses reaching a password hint, even in applications that never export
+clients. Path parameters, endpoint query parameters and manifest URL/room
+parameters reject password hints; move credentials into a request body.
+Contradictory hints on enum fields and plain scalar transport fields now fail
+generation instead of registration. Declarations that passed before and export
+cleanly are unaffected.
+
 ## Modules and public Go APIs
 
 Root `go.mod` owns the supported Go requirement. All fixtures and development
@@ -149,3 +158,8 @@ The generator owns adapter imports, freshness and removal along with all other
 artifacts. Never hand-edit generated adapters or re-export optional peers from a
 core entry point. Database startup logs add safe diagnostics without changing
 connection budgets or the B08 release disposition.
+
+The 2026-09-30 re-audit changed `FormSubmission`, which no published starter uses
+yet. Edits no longer abort a sent request or produce `stale`: completed results
+carry `changed`, and `canceled` carries `outcome` (`not_sent` or `unknown`).
+Update any code that matched `stale` and regenerate the SDK with the matching tool.

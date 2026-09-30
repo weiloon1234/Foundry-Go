@@ -72,12 +72,54 @@ func validatePresentationGraph(graph *dtoGraph) error {
 			for steps := 0; target != nil && target.wire.Kind == contract.AliasKind && steps < len(nodes); steps++ {
 				target = nodes[target.wire.Element]
 			}
-			// Custom codecs and generic parameters are checked by the concrete
-			// schema compiler; their representations are not guessed here.
-			if target != nil && target.wire.Kind != "" && property.Presentation.ValidateType(target.wire) != nil {
-				return fmt.Errorf("client presentation contradicts its field codec")
+			// Enum values always carry cases, and every kind requires a plain
+			// string, decimal or file, so any kind contradicts an enum. Custom
+			// codecs and generic parameters are checked by the concrete schema
+			// compiler; their representations are not guessed here.
+			if target != nil && (target.enum != nil || target.wire.Kind != "" && property.Presentation.ValidateType(target.wire) != nil) {
+				return fmt.Errorf("client presentation on %s.%s contradicts its field codec", node.wire.ID, property.Name)
 			}
 		}
+	}
+	return nil
+}
+
+// transportPresentation checks a path, query, form or multipart text field's
+// hint when generation knows its representation: plain scalars (or their
+// repeated elements) and declared enums. Other codecs, including files, are
+// checked at registration.
+func (p *packageInput) transportPresentation(presentation contract.Presentation, typ types.Type) error {
+	if presentation.Kind == "" {
+		return nil
+	}
+	if slice, ok := types.Unalias(typ).(*types.Slice); ok {
+		typ = slice.Elem()
+	}
+	var wire contract.Type
+	switch t := types.Unalias(typ).(type) {
+	case *types.Named:
+		if p.enumTypes[t] || hasEnumDescriptor(t) {
+			return fmt.Errorf("client presentation contradicts its enum codec")
+		}
+		return nil
+	case *types.Basic:
+		switch info := t.Info(); {
+		case info&types.IsString != 0:
+			wire.Kind = contract.StringKind
+		case info&types.IsInteger != 0:
+			wire.Kind = contract.IntegerKind
+		case info&types.IsFloat != 0:
+			wire.Kind = contract.NumberKind
+		case info&types.IsBoolean != 0:
+			wire.Kind = contract.BooleanKind
+		default:
+			return nil
+		}
+	default:
+		return nil
+	}
+	if presentation.ValidateType(wire) != nil {
+		return fmt.Errorf("client presentation contradicts its field codec")
 	}
 	return nil
 }

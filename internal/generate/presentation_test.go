@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/weiloon1234/Foundry-Go/contract"
 )
 
 const presentationSource = `package sample
@@ -71,7 +73,7 @@ func TestDescriptors(t *testing.T) {
 }
 
 func TestPresentationGenerationRejectsInvalidDeclarations(t *testing.T) {
-	for _, tag := range []string{"kind=unknown", "kind=money", "kind=file", "kind=email,kind=url", "label=bad key", "default=secret", "help=" + strings.Repeat("a", 257)} {
+	for _, tag := range []string{"kind=unknown", "kind=money", "kind=file", "kind=email,kind=url", "label=bad key", "default=secret", "help=" + strings.Repeat("a", contract.MaxPresentationKeyBytes+1)} {
 		t.Run(tag[:min(len(tag), 32)], func(t *testing.T) {
 			source := "package sample\n//foundry:dto\ntype Input struct { Value string `json:\"value\" client:\"" + tag + "\"` }\n"
 			dir := fixture(t, source)
@@ -82,5 +84,34 @@ func TestPresentationGenerationRejectsInvalidDeclarations(t *testing.T) {
 				t.Fatal("invalid declaration published files")
 			}
 		})
+	}
+}
+
+// Contradictions generation can see are source diagnostics, not late
+// registration failures: plain transport scalars and declared enums.
+func TestPresentationGenerationRejectsCodecContradictions(t *testing.T) {
+	const enum = "//foundry:enum\ntype Mode string\nconst Live Mode = \"live\"\n"
+	for name, test := range map[string]struct{ source, message string }{
+		"path integer":   {"//foundry:path pattern=/items/{key}\ntype ItemPath struct { Key int64 `client:\"kind=email\"` }\n", "contradicts its field codec"},
+		"query integer":  {"//foundry:query\ntype Search struct { Page int `query:\"page\" client:\"kind=text\"` }\n", "contradicts its field codec"},
+		"repeated query": {"//foundry:query\ntype Search struct { Pages []int `query:\"page\" client:\"kind=url\"` }\n", "contradicts its field codec"},
+		"form boolean":   {"//foundry:form\ntype Form struct { Agree bool `form:\"agree\" client:\"kind=text\"` }\n", "contradicts its field codec"},
+		"enum query":     {enum + "//foundry:query\ntype Search struct { Mode Mode `query:\"mode\" client:\"kind=text\"` }\n", "contradicts its enum codec"},
+		"enum property":  {enum + "//foundry:dto\ntype Input struct { Mode Mode `json:\"mode\" client:\"kind=text\"` }\n", ".Input.mode contradicts its field codec"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := fixture(t, "package sample\n"+test.source)
+			if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), test.message) {
+				t.Fatal("codec contradiction was not a generation diagnostic", err)
+			}
+			if len(generatedSnapshot(t, dir)) != 0 {
+				t.Fatal("invalid declaration published files")
+			}
+		})
+	}
+	// The same hints on matching plain strings still generate.
+	dir := fixture(t, "package sample\n//foundry:query\ntype Search struct { Sites []string `query:\"site\" client:\"kind=url\"` }\n")
+	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+		t.Fatal(err)
 	}
 }
