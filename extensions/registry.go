@@ -21,7 +21,16 @@ type Declaration struct {
 	validate              func() error
 	retained              func(context.Context, database.Executor, []model.Identity) (map[string]bool, error)
 	subject               func(model.Identity) (Subject, error)
+	subjectKey            func(model.Identity) (string, error)
 	adopt                 func(model.Identity) (Subject, error)
+}
+
+// Name identifies the declared owner for assembly diagnostics.
+func (d Declaration) Name() OwnerName { return d.name }
+
+// Describe returns the owner's persisted identity for inspection.
+func (d Declaration) Describe() OwnerDescription {
+	return OwnerDescription{Name: d.name, Model: d.model, StorageModel: d.storage}
 }
 
 func (o Owner[M, K]) Registration() Declaration {
@@ -34,6 +43,12 @@ func (o Owner[M, K]) Registration() Declaration {
 			return Subject{}, err
 		}
 		return o.Subject(ref)
+	}, subjectKey: func(identity model.Identity) (string, error) {
+		ref, err := o.Parse(identity)
+		if err != nil {
+			return "", err
+		}
+		return o.SubjectKey(ref)
 	}, adopt: func(identity model.Identity) (Subject, error) {
 		renamed, err := identity.WithModelName(o.ModelName())
 		if err != nil {
@@ -62,11 +77,11 @@ func (o Owner[M, K]) Registration() Declaration {
 		}
 		result := make(map[string]bool, len(found))
 		for _, key := range found {
-			subject, err := o.Subject(o.Reference(key))
+			subject, err := o.SubjectKey(o.Reference(key))
 			if err != nil {
 				return nil, err
 			}
-			result[subject.Key] = true
+			result[subject] = true
 		}
 		return result, nil
 	}}
@@ -84,7 +99,7 @@ func NewRegistry(owners ...Declaration) (*Registry, error) {
 	r := &Registry{owners: make(map[OwnerName]Declaration, len(owners))}
 	models := make(map[string]bool, len(owners))
 	for _, owner := range owners {
-		if owner.validate == nil || owner.id == nil || owner.retained == nil || owner.subject == nil || owner.adopt == nil {
+		if owner.validate == nil || owner.id == nil || owner.retained == nil || owner.subject == nil || owner.subjectKey == nil || owner.adopt == nil {
 			return nil, invalid("invalid model extension owner registration")
 		}
 		if err := owner.validate(); err != nil {
@@ -128,6 +143,19 @@ func (r *Registry) Subject(owner OwnerName, identity model.Identity) (Subject, e
 		return Subject{}, invalid("unknown model extension owner")
 	}
 	return entry.subject(identity)
+}
+
+// SubjectKey returns the Subject.Key that Subject returns for identity, with
+// the same validation but without snapshotting the identity.
+func (r *Registry) SubjectKey(owner OwnerName, identity model.Identity) (string, error) {
+	if err := r.Validate(); err != nil {
+		return "", err
+	}
+	entry, ok := r.owners[owner]
+	if !ok {
+		return "", invalid("unknown model extension owner")
+	}
+	return entry.subjectKey(identity)
 }
 
 // AdoptSubject is the explicit re-scope maintenance boundary. It attributes a

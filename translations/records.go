@@ -38,19 +38,19 @@ func rowIdentity(row store.Translation) extensionrow.Identity {
 func validRow(row store.Translation) bool {
 	return identifier.Semantic(row.Field) && i18n.LocaleID(row.Locale).Validate() == nil && validText(row.Value, MaxValueBytes)
 }
-func validateOwnerRow[M any, K comparable](owner extensions.Owner[M, K], row store.Translation) error {
+func validateOwnerRow[M any, K comparable](rows extensionrow.Rows[M, K], row store.Translation) error {
 	if !validRow(row) {
 		return invalid()
 	}
-	return extensionrow.Validate(owner, rowIdentity(row), row.Field, row.Locale)
+	return rows.Validate(rowIdentity(row), row.Field, row.Locale)
 }
 
 // validateOwnerIndex checks an ownership/index projection without its text.
-func validateOwnerIndex[M any, K comparable](owner extensions.Owner[M, K], row store.TranslationIndex) error {
+func validateOwnerIndex[M any, K comparable](rows extensionrow.Rows[M, K], row store.TranslationIndex) error {
 	if !identifier.Semantic(row.Field) || i18n.LocaleID(row.Locale).Validate() != nil {
 		return invalid()
 	}
-	return extensionrow.Validate(owner, extensionrow.Identity{Key: row.Key, Owner: row.Owner, Scope: row.Scope, SubjectKey: row.SubjectKey, Identity: row.Identity}, row.Field, row.Locale)
+	return rows.Validate(extensionrow.Identity{Key: row.Key, Owner: row.Owner, Scope: row.Scope, SubjectKey: row.SubjectKey, Identity: row.Identity}, row.Field, row.Locale)
 }
 
 // All deliberately includes retained translations for locales no longer present
@@ -65,7 +65,7 @@ func All[M any, K comparable](ctx context.Context, m *Manager, owner extensions.
 	}
 	var result []Record[M]
 	err := m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
-		subject, err := owner.Subject(reference)
+		subject, err := owner.SubjectKey(reference)
 		if err != nil {
 			return err
 		}
@@ -73,17 +73,21 @@ func All[M any, K comparable](ctx context.Context, m *Manager, owner extensions.
 		if err != nil {
 			return err
 		}
-		if _, ok := active[subject.Key]; !ok {
+		if !active[subject] {
 			return database.NotFound
+		}
+		rows, err := extensionrow.For(owner, []model.Reference[M, K]{reference})
+		if err != nil {
+			return err
 		}
 		f := store.TranslationFields()
 		bytes := 0
-		return store.QueryFoundryModelTranslations().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key)).OrderBy(f.Field.Asc(), f.Locale.Asc()).Limit(MaxRowsPerOwner+1).Each(ctx, tx, func(row store.Translation) error {
+		return store.QueryFoundryModelTranslations().Where(f.Scope.Eq(owner.Scope()), f.SubjectKey.Eq(subject)).OrderBy(f.Field.Asc(), f.Locale.Asc()).Limit(MaxRowsPerOwner+1).Each(ctx, tx, func(row store.Translation) error {
 			bytes += len(row.Value)
 			if len(result) >= MaxRowsPerOwner || bytes > MaxBatchBytes {
 				return fault.New(fault.Conflict, "translation result exceeds its row or byte limit")
 			}
-			if err := validateOwnerRow(owner, row); err != nil {
+			if err := validateOwnerRow(rows, row); err != nil {
 				return err
 			}
 			result = append(result, Record[M]{field: Name(row.Field), locale: i18n.LocaleID(row.Locale), text: row.Value, created: row.CreatedAt, updated: row.UpdatedAt})
@@ -121,7 +125,7 @@ func (f Field[M, K]) Matching(ctx context.Context, m *Manager, locale i18n.Local
 			if len(keys) >= query.MaxIdentityBatch {
 				return fault.New(fault.Conflict, "translation matching scope exceeds its limit")
 			}
-			if err := validateOwnerIndex(f.definition.owner, row); err != nil {
+			if err := validateOwnerIndex(extensionrow.Unknown(f.definition.owner), row); err != nil {
 				return err
 			}
 			identity, err := row.Identity.Decode()
@@ -147,18 +151,24 @@ func (f Field[M, K]) Clear(ctx context.Context, m *Manager, reference model.Refe
 	}
 	count := 0
 	err := m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		subject, err := f.definition.owner.Lock(ctx, tx, m.store.Registry(), reference)
-		if err != nil {
-			return err
-		}
-		fields := store.TranslationFields()
-		count, err = deleteRows(ctx, tx, store.QueryFoundryModelTranslations().Where(fields.Scope.Eq(subject.Scope), fields.SubjectKey.Eq(subject.Key), fields.Field.Eq(string(f.Name()))))
+		var err error
+		count, err = f.clear(ctx, tx, m, reference)
 		return err
 	})
 	if err != nil {
 		return 0, err
 	}
 	return count, nil
+}
+
+// clear removes every locale of the field after locking the owner in tx.
+func (f Field[M, K]) clear(ctx context.Context, tx *database.Tx, m *Manager, reference model.Reference[M, K]) (int, error) {
+	subject, err := f.definition.owner.Lock(ctx, tx, m.store.Registry(), reference)
+	if err != nil {
+		return 0, err
+	}
+	fields := store.TranslationFields()
+	return deleteRows(ctx, tx, store.QueryFoundryModelTranslations().Where(fields.Scope.Eq(subject.Scope), fields.SubjectKey.Eq(subject.Key), fields.Field.Eq(string(f.Name()))))
 }
 func DeleteAll[M any, K comparable](ctx context.Context, m *Manager, owner extensions.Owner[M, K], reference model.Reference[M, K]) (int, error) {
 	if err := m.Validate(); err != nil {

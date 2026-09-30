@@ -117,6 +117,8 @@ func TestSchemaNamesAvoidRuntimeDeclarations(t *testing.T) {
 	colliding := contract.Schema{Root: "consumer/api.Payload", Types: []contract.Type{
 		{ID: "consumer/api.Payload", Kind: contract.ObjectKind, Properties: []contract.Property{{Name: "map", Type: "consumer/api.Map", Required: true}}},
 		{ID: "consumer/api.Map", Kind: contract.StringKind},
+		{ID: "consumer/api.OperationInputs", Kind: contract.StringKind},
+		{ID: "consumer/api.FieldDescriptor", Kind: contract.StringKind},
 	}}
 	source, err := manifest.Build(t.Context(), manifest.Sources{Schemas: []contract.Schema{colliding}})
 	if err != nil {
@@ -126,7 +128,7 @@ func TestSchemaNamesAvoidRuntimeDeclarations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"export type Api_Payload = ", "export type Api_Map = string;", `readonly "consumer/api.Payload": Api_Payload;`} {
+	for _, want := range []string{"export type Api_Payload = ", "export type Api_Map = string;", `readonly "consumer/api.Payload": Api_Payload;`, "export type Api_OperationInputs = string;", "export type Api_FieldDescriptor = string;"} {
 		if !strings.Contains(string(sdk), want) {
 			t.Fatal("reserved runtime name was not qualified", want)
 		}

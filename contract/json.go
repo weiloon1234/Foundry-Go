@@ -82,6 +82,10 @@ func dtoIdentityMatches(runtimePackage, name string, id TypeID) bool {
 	return mainTypeIdentityMatches(runtimeName, string(id))
 }
 
+// IsZero reports an unconstructed descriptor, as opposed to one whose
+// declaration failed. Callers use it to substitute an inferred descriptor.
+func (d JSON[T]) IsZero() bool { return d.schema == nil && d.err == nil && d.sourceName == "" }
+
 // Validate checks this immutable declaration without invoking DTO methods.
 func (d JSON[T]) Validate() error {
 	if d.err != nil {

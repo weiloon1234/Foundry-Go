@@ -2,6 +2,79 @@
 
 ## Unreleased
 
+### Typed client descriptors and presentation
+
+- Generated `operation(name)` and `schema(typeID)` expose typed, immutable field
+  descriptors, nested/collection/union navigation, exact enum choices and route
+  metadata. Calls and validation reuse the existing SDK owners.
+- Optional `client` field tags and typed `contract.Presentation` values supply
+  semantic hints and shared label/help keys across JSON, URL and multipart
+  declarations, manifest and OpenAPI. Contradictory/bounded metadata is validated;
+  explicit password hints reject public output graphs and credential examples.
+- Manifest format is now 6. Regenerate saved manifests, OpenAPI and TypeScript
+  together with the matching runtime/tool. See the
+  [descriptor guide](docs/guides/client-descriptors.md).
+
+### Model extension slots
+
+- E01: models declare `translations.Text`, `attachments.One`/`Many` and
+  `metadata.Value` fields with an optional `DefineExtensions` policy method.
+  Generation emits the policy set, typed slot descriptors, the extension owner,
+  `From(slots.Runtime)` binding and a declaration per model, plus a package-level
+  `FoundryExtensions()`. `application.Builder.Models` registers owners and slots
+  with the existing managers and a hard-delete cleanup observer on the extension
+  database; `Services.ModelExtensions()` returns the enabled managers. Slot stored
+  names follow the Go field (`foundry:"name=..."` pins one) and the
+  `extension_owner=` directive pins the owner. `attachments.Attachment` now embeds
+  the owner-free `attachments.File`; its method set is unchanged.
+  `translations.Options` gains `Require`, an `i18n.LocaleRequirement`, and
+  `contract.JSON` gains `IsZero`.
+  See the [slot guide](docs/guides/model-extension-slots.md).
+- E02: bound slot descriptors are eager-loading relations. `With`, `Load`,
+  `LoadMissing`, pagination, chunked iteration and nested relations fill
+  slots with a constant number of statements per parent batch; batches beyond
+  a store's row or byte limit are halved and retried. A load joins the caller's
+  transaction on the extension store's pool and otherwise reads the store's own
+  snapshot. Slots expose pure reads (`Exact`, `Resolve`, `ResolveRequest`,
+  `Get`, `Len`, `All`) and attachment descriptors derive public, temporary and
+  variant links from loaded files. `query.ExtensionSlot`, `extensions.LoadInParts`
+  and `Store.ReadFor` are the new extension boundaries.
+- E03: bound descriptors write for a model value. Translated slots offer
+  `SaveIn` (merge) and `SyncIn` (exact, enforcing `Require`) plus forget and
+  clear; metadata slots offer `SaveIn` and `ForgetIn`; attachment slots publish
+  any `attachments.FileSource`, such as `foundryhttp.UploadedFile`, through
+  `ReplaceFile`/`AddFile` and `attachments.AddFiles`, and check uploads with
+  `Accepts` using write-time detection. `TextSlot.Rule()` (complete input) and
+  `MergeRule()` (partial input) validate locale-keyed input through the new
+  server-only `validation.Locales` and `validation.MaxBytes` rules (issue codes
+  `foundry.supported_locale` and `foundry.max_bytes`).
+- E04: `inspection.Sources.Models` adds an `extensions` section describing
+  owners and slots (field, kind, stored name, storage and policy bounds) from
+  declarations alone. Read-only `translations`, `metadata` and `attachments`
+  `undeclared` commands and `InspectUndeclared` functions list stored names no
+  registration declares, for example after renaming a slot field. The
+  independent `articles` consumer exercises slots over real HTTP, PostgreSQL and
+  local storage. `App.Models()` returns the declarations registered with
+  `Builder.Models` for inspection.
+- E05 re-audit: slot loading charges the relation budget per parent batch and
+  enforces `MaxDepth`; `validation.Locales` reports unrepresentable locale keys
+  at the map instead of failing execution; translated input rules reject NUL
+  text and `SyncIn` shares the rule's blank check; `Accepts` buffers under the
+  attachment write admission; projections reject `foundry:"name=..."`;
+  generation refuses scalar inference for enum metadata, reports malformed
+  `JSONContract` methods and duplicate owner names, and field notices state
+  whether a stored name is pinned. See the [blueprint series](blueprint/model-extension-slots/README.md)
+  and the [E05 acceptance evidence](docs/evidence/model-extension-slots-e05.json).
+- Extension batch reads check each owner's identity once instead of re-deriving
+  it for every stored row: a row whose stored identity is its owner's canonical
+  identity is matched directly, and any other row, such as one recorded before a
+  declared table rename, is still validated in full. `extensions.Owner.SubjectKey`
+  and `Registry.SubjectKey` return `Subject.Key` without its identity snapshot,
+  and `Owner.Active` now returns the active subject keys as `map[string]bool`,
+  like `RetainedSubjects`, instead of full subjects. Loading two translated
+  fields and one metadata value for 1000 articles fell from about 281 ms and
+  180 MB to 166 ms and 86 MB ([measurements](docs/evidence/model-extension-slots-performance-20260930.json)).
+
 ### Stabilization review
 
 - Query row cancellation hooks are registered under the row mutex. Cancellation

@@ -28,14 +28,14 @@ func emitMultipart(p *packageInput, declaration multipartDeclaration) ([]byte, e
 				args += "," + e.typeName(field.typ)
 			}
 			input := e.localName("form")
-			e.line("%s.TextPart(%s.%s[%s](%q,%s,func(%s *%s)*%s{return &%s.%s})),", http, http, field.binding, args, field.parameter, codec, input, declaration.name, e.typeName(field.typ), input, field.name)
+			e.line("%s.TextPart(%s.%s[%s](%q,%s,func(%s *%s)*%s{return &%s.%s}))%s,", http, http, field.binding, args, field.parameter, codec, input, declaration.name, e.typeName(field.typ), input, field.name, e.presentationMethod(field.presentation))
 		case "file":
 			args := declaration.name
 			if field.binding == "RepeatedFilePart" {
 				args += "," + e.typeName(field.typ)
 			}
 			input := e.localName("form")
-			e.line("%s.%s[%s](%q,func(%s *%s)*%s{return &%s.%s}),", http, field.binding, args, field.parameter, input, declaration.name, e.typeName(field.typ), input, field.name)
+			e.line("%s.%s[%s](%q,func(%s *%s)*%s{return &%s.%s})%s,", http, field.binding, args, field.parameter, input, declaration.name, e.typeName(field.typ), input, field.name, e.presentationMethod(field.presentation))
 		case "json":
 			args := declaration.name + "," + e.typeName(field.element)
 			if field.binding == "RepeatedJSONPart" {
@@ -44,7 +44,7 @@ func emitMultipart(p *packageInput, declaration multipartDeclaration) ([]byte, e
 			fmt.Fprintf(&e.body, "%s.%s[%s](%q,", http, field.binding, args, field.parameter)
 			e.emitJSONValue(field.element, field.graph, "DefineJSONField")
 			input := e.localName("form")
-			e.line(",func(%s *%s)*%s{return &%s.%s}),", input, declaration.name, e.typeName(field.typ), input, field.name)
+			e.line(",func(%s *%s)*%s{return &%s.%s})%s,", input, declaration.name, e.typeName(field.typ), input, field.name, e.presentationMethod(field.presentation))
 		}
 	}
 	e.line(")})")

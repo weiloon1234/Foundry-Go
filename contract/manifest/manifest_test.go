@@ -178,6 +178,11 @@ func FuzzManifestDecoder(f *testing.F) {
 		f.Fatal(err)
 	}
 	f.Add(seed)
+	presentation, err := credentialManifest(f).JSON()
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(presentation)
 	f.Add([]byte(`{"version":1}`))
 	f.Add([]byte(`{"version":2,"types":[]}`))
 	f.Fuzz(func(t *testing.T, data []byte) {

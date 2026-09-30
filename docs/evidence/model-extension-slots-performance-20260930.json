@@ -1,0 +1,80 @@
+{
+  "format": 1,
+  "date": "2026-09-30",
+  "series": "model-extension-slots",
+  "follows": "docs/evidence/model-extension-slots-e05.json",
+  "status": "verified",
+  "scope": "Reduce extension batch-read cost measured at E05 without weakening persisted-identity validation, and fix the intermittent internal/workscope race-mode admission test that stopped the E05 PostgreSQL gate",
+  "working_tree_base": "c8e2f6100bea2e689f4a13518d7ec0c5605c800b",
+  "distribution": "Local changes only; no commit, push, tag, publication or starter dependency update performed",
+  "environment": {
+    "go": "go version go1.27.1 darwin/arm64",
+    "machine": "Apple M4 Max",
+    "modules": "GOWORK=off; existing native warm caches",
+    "required_modes": {
+      "FOUNDRY_TEST_POSTGRES_REQUIRED": "1"
+    },
+    "data": "Existing private test configuration read without printing it; retained isolated schemas; no database reset/drop, shared-store flush or new database server"
+  },
+  "workscope_fix": {
+    "file": "internal/workscope/group_test.go",
+    "cause": "TestAdmissionQueuesBurstsAndReportsOverload used one group whose 50 ms operation timeout is also its admission wait. The overload probe waited that full 50 ms while the held lease's 50 ms deadline ran, so the nested probe Begin(held.Context()) raced the deadline timer: usually it won, but under -race the timer often fired first and Begin returned context.DeadlineExceeded. The failed test then returned without releasing the lease, and its deferred Close waited for it until the 20m package timeout.",
+    "change": "Queued and nested probes use a group with a one-minute timeout, so no lease deadline or admission wait can end them; a waiting nested probe would block for the five-second admission wait, detected with a one-second bound. Only the overload probe uses a separate 50 ms group. Deferred releases run before the deferred Closes, so a failed assertion cannot hang. Assertions are unchanged in meaning; the framework is unchanged.",
+    "checks": [
+      {"command": ["go", "test", "-race", "-count=200", "-run", "^TestAdmissionQueuesBurstsAndReportsOverload$", "./internal/workscope/"], "exit_code": 0, "seconds": 16.2, "before_fix": "failed within three runs"},
+      {"command": ["workscope.test", "-test.run", "^TestAdmissionQueuesBurstsAndReportsOverload$", "-test.count=100"], "concurrency": "8 race-built copies at once, one with -test.cpu=1", "exit_code": 0, "runs": 800}
+    ]
+  },
+  "optimization": {
+    "profile": "Allocation profiles of loading 1000 articles found identity JSON dominating: Owner.Subject built a value.NewJSON identity snapshot (marshal plus full parse) that read paths never used, in Owner.Active per found owner, in each Batch.Get and in every stored row's validation; each row's validation also decoded and re-derived its stored identity although the owner batch already fixed the expected one. After the subject-key change, a throwaway run that skipped row validation entirely measured about 133 ms at 1000 parents, the upper bound for the row fast path.",
+    "changes": [
+      "extensions.Owner.SubjectKey and Registry.SubjectKey return Subject.Key with the same validation and no identity snapshot; Subject reuses the same derivation.",
+      "Owner.Active returns the active subject-key set (map[string]bool, as RetainedSubjects does) and reuses the subject keys of requested keys, deriving again only for a found key its codec normalized.",
+      "internal/extensionrow.Rows validates rows for a known owner batch (For), a locked subject (ForSubject) or unknown owners (Unknown). A row whose stored canonical identity equals its subject's expected canonical identity is checked for owner, scope, subject key and row key without re-deriving the identity; every other row, including rows recorded under a declared storage model, is validated in full as before.",
+      "translations, metadata and attachments batch readers, Batch.Get and attachment row checks use subject keys; metadata row checks reuse the shared extensionrow validation instead of a local copy."
+    ],
+    "guarantees": "Every stored row still must decode as a typed identity at scan, belong to the owner's current scope and name, and have an identity that derives its subject key and row key. Equivalence tests run the same accepted and tampered rows (swapped identity, claimed subject, row key, scope, owner name, other parts) through the batch, subject and unknown validators; a deliberately broken fast path was caught by them.",
+    "list_loading_benchmark": {
+      "command": ["go", "test", "-run", "^$", "-bench", "BenchmarkSlotListLoading", "-benchtime", "20x", "-count", "3", "-benchmem", "./articles"],
+      "directory": "tests/fixtures/consumer",
+      "conditions": "Same as E05: native PostgreSQL from the existing private test configuration; 1000 seeded articles, each with Title in two locales, Summary in one locale and one SEO metadata value; each operation reads the first 1, 100 or 1000 articles in one read transaction",
+      "ns_per_op_median": {
+        "parents-only/1": 329929,
+        "slots/1": 1883288,
+        "explicit-batches/1": 1669077,
+        "parents-only/100": 619921,
+        "slots/100": 21814856,
+        "explicit-batches/100": 25392898,
+        "parents-only/1000": 1486292,
+        "slots/1000": 166028490,
+        "explicit-batches/1000": 158169712
+      },
+      "e05_ns_per_op_median": {
+        "slots/1": 2035710,
+        "slots/100": 38039019,
+        "slots/1000": 281083321
+      },
+      "bytes_per_op_slots_1000": {"before": 179655796, "after": 86368856},
+      "allocs_per_op_slots_1000": {"before": 2932688, "after": 1434916},
+      "conclusion": "At 1000 parents slot loading takes 41% less time and 52% less memory, with 51% fewer allocations; at 100 parents 43% less time. Slot loading stays within 5% of explicit batch loads at 100 and 1000 parents and about 0.2 ms slower for one. The remaining cost is mostly scan-time decoding of each stored row's value.JSON identity and per-owner key derivation."
+    }
+  },
+  "source_identity": {
+    "files": ["internal/workscope/group_test.go", "extensions/owner.go", "extensions/registry.go", "extensions/owner_test.go", "internal/extensionrow/identity.go", "internal/extensionrow/identity_test.go", "translations/read.go", "translations/records.go", "translations/write.go", "translations/slot.go", "metadata/values.go", "metadata/records.go", "attachments/read.go", "attachments/row.go", "attachments/scopes.go"],
+    "sha256_of_shasum_list": "e1e17db4ac90bfef2bc6199a9fc267c47e0d2e079a16a480a50abba32aac10a7",
+    "note": "shasum -a 256 over the listed files in this order; none was modified after the final verify started"
+  },
+  "checks": {
+    "unit": {"command": ["go", "test", "-count=1", "./extensions/", "./internal/extensionrow/"], "exit_code": 0},
+    "affected-race-postgres": {"command": ["go", "test", "-race", "-count=1", "./extensions/...", "./internal/extensionrow/", "./translations/...", "./metadata/...", "./attachments/...", "./inspection/...", "./application/", "./internal/workscope/"], "exit_code": 0},
+    "consumer-race-postgres": {"command": ["go", "test", "-mod=readonly", "-count=1", "-timeout=20m", "-race", "<consumer packages in batches of 6>"], "directory": "tests/fixtures/consumer", "exit_code": 0, "seconds": 540},
+    "verify": {"command": ["make", "verify"], "exit_code": 0, "seconds": 694, "note": "Another session's make verify ran concurrently for part of this run"},
+    "test-postgres": {"command": ["make", "test-postgres"], "exit_code": 0, "seconds": 1004, "packages_passed": 273, "note": "The full gate, including internal/workscope, every extension package and the consumer module with its compile-fail catalog"}
+  },
+  "limits": [
+    "Scan-time decoding of each row's identity column is unchanged: value.JSON keeps validating persisted JSON at the codec boundary.",
+    "Subject keys are still derived once per owner in each of Active, the row validator and Batch.Get of every slot; sharing them across these would need a wider owner-batch API.",
+    "Owner.Active's return type changed from map[string]Subject to map[string]bool. In-repository callers are the translations, metadata and attachments stores; presence checks such as _, ok := active[key] still compile."
+  ],
+  "decision": "Accepted: the E05 PostgreSQL race gate now passes in full, and extension batch reads cost about 41% less time and 52% less memory at 1000 parents with persisted-identity validation unchanged in effect."
+}

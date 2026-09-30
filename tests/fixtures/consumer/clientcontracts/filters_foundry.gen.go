@@ -4,6 +4,7 @@
 package clientcontracts
 
 import (
+	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
 	sync "sync"
@@ -16,7 +17,7 @@ func FiltersDescriptor() foundryhttp.Query[Filters] { return foundryFiltersDescr
 
 var foundryFiltersDescriptor = sync.OnceValue(func() foundryhttp.Query[Filters] {
 	return foundryhttp.DefineQuery[Filters](
-		foundryhttp.OptionalQueryParam[Filters, string]("q", foundryhttp.URLType("string", foundryhttp.StringQuery[string]()), func(query *Filters) *foundryvalue.Optional[string] { return &query.Search }),
+		foundryhttp.OptionalQueryParam[Filters, string]("q", foundryhttp.URLType("string", foundryhttp.StringQuery[string]()), func(query *Filters) *foundryvalue.Optional[string] { return &query.Search }).WithPresentation(foundrycontract.Presentation{Kind: "text", LabelKey: "fields.search", HelpKey: ""}),
 		foundryhttp.RepeatedQueryParam[Filters, string, []string]("tag", foundryhttp.URLType("string", foundryhttp.StringQuery[string]()), func(query *Filters) *[]string { return &query.Tags }),
 	)
 })

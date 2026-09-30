@@ -20,9 +20,9 @@ type Payload struct {
 	Natural  models.CountryCode                     `json:"natural"`
 	Large    int64                                  `json:"large"`
 	Counter  uint64                                 `json:"counter"`
-	Amount   decimal.Decimal                        `json:"amount"`
+	Amount   decimal.Decimal                        `json:"amount" client:"kind=money,label=fields.amount,help=help.amount"`
 	State    localization.Status                    `json:"state"`
-	Optional value.Optional[value.Nullable[string]] `json:"optional,omitzero"`
+	Optional value.Optional[value.Nullable[string]] `json:"optional,omitzero" client:"kind=multiline"`
 	Nullable value.Nullable[string]                 `json:"nullable"`
 	Quoted   int64                                  `json:"quoted,string"`
 	Exact    json.Number                            `json:"exact"`
@@ -46,6 +46,6 @@ type ItemPath struct{ Key int64 }
 
 //foundry:query
 type Filters struct {
-	Search value.Optional[string] `query:"q"`
+	Search value.Optional[string] `query:"q" client:"kind=text,label=fields.search"`
 	Tags   []string               `query:"tag"`
 }

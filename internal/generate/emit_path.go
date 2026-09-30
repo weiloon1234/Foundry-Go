@@ -23,7 +23,7 @@ func emitPath(p *packageInput, declaration pathDeclaration) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		e.line("%s.Param[%s,%s](%q,%s,func(%s *%s)*%s{return &%s.%s}),", http, declaration.name, typ, field.parameter, codec, variable, declaration.name, typ, variable, field.name)
+		e.line("%s.Param[%s,%s](%q,%s,func(%s *%s)*%s{return &%s.%s})%s,", http, declaration.name, typ, field.parameter, codec, variable, declaration.name, typ, variable, field.name, e.presentationMethod(field.presentation))
 	}
 	e.line(")})")
 	return e.finish(declaration.position.Filename)

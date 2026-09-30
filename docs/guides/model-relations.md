@@ -1,6 +1,6 @@
 # Typed model relations
 
-Relations retain source model, target model and key types. The [handwritten model fields](../../tests/fixtures/consumer/models/models.go) declare `relation.One[User]`, `relation.Many[Order]` or `relation.Through[Group, Membership]`. These fields are relation state, not persisted columns: generation excludes them from SQL, drafts and codecs.
+Relations retain source model, target model and key types. The [handwritten model fields](../../tests/fixtures/consumer/models/models.go) declare `relation.One[User]`, `relation.Many[Order]` or `relation.Through[Group, Membership]`. These fields are relation state, not persisted columns: generation excludes them from SQL, drafts and codecs. [Model extension slots](model-extension-slots.md) for translated text, attachments and metadata load through the same `With` and `Load` paths.
 
 ## Declaring keys in Go
 

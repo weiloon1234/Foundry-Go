@@ -61,7 +61,7 @@ func (r renderer) schema(typ contract.Type) object {
 		properties := object{}
 		required := make([]string, 0)
 		for _, p := range typ.Properties {
-			properties[p.Name] = r.ref(p.Type)
+			properties[p.Name] = presentationSchema(r.ref(p.Type), p.Presentation)
 			if p.Required {
 				required = append(required, p.Name)
 			}
@@ -146,7 +146,7 @@ func (r renderer) taggedVariant(union contract.Type, variant contract.Variant) o
 	properties := object{union.Discriminator: object{"type": "string", "const": variant.Tag}}
 	required := []string{union.Discriminator}
 	for _, property := range payload.Properties {
-		properties[property.Name] = r.ref(property.Type)
+		properties[property.Name] = presentationSchema(r.ref(property.Type), property.Presentation)
 		if property.Required {
 			required = append(required, property.Name)
 		}

@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"github.com/weiloon1234/Foundry-Go/contract"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -22,10 +23,11 @@ type QueryParameter[Q any] struct {
 // QueryParameterInfo describes cardinality and codec metadata without inspecting values.
 // Repeated fields use repeated keys, never implicit comma or bracket expansion.
 type QueryParameterInfo struct {
-	Scalar   *URLScalarInfo `json:"scalar,omitempty"`
-	Name     string         `json:"name"`
-	Required bool           `json:"required"`
-	Repeated bool           `json:"repeated"`
+	Presentation contract.Presentation `json:"presentation,omitzero"`
+	Scalar       *URLScalarInfo        `json:"scalar,omitempty"`
+	Name         string                `json:"name"`
+	Required     bool                  `json:"required"`
+	Repeated     bool                  `json:"repeated"`
 	// DefaultURL is an unescaped URL scalar spelling, not a JSON default value.
 	// Absence differs from a present empty-string default.
 	DefaultURL value.Optional[string] `json:"default_url,omitzero"`

@@ -131,6 +131,20 @@ func (s *Store) Read(ctx context.Context, fn func(context.Context, *database.Tx)
 	return s.transaction(ctx, fn, database.TxOptions{Isolation: database.RepeatableRead, ReadOnly: true})
 }
 
+// ReadFor reads inside the caller's transaction when executor is a
+// transaction of this store's exact pool, so slot loads see that transaction's
+// own uncommitted writes; the savepoint restores its search path. Any other
+// executor, including custom wrappers, reads from Read's own snapshot.
+func (s *Store) ReadFor(ctx context.Context, executor database.Executor, fn func(context.Context, *database.Tx) error) error {
+	if err := s.Validate(); err != nil {
+		return err
+	}
+	if tx, ok := executor.(*database.Tx); ok && tx.BelongsTo(s.db) {
+		return s.Join(ctx, tx, fn)
+	}
+	return s.Read(ctx, fn)
+}
+
 // Write opens a normal transaction. Extension writers must Lock their owner
 // before modifying rows. Unknown commit outcomes must be reconciled, not undone
 // by deleting external objects.

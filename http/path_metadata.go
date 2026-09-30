@@ -1,12 +1,15 @@
 package http
 
+import "github.com/weiloon1234/Foundry-Go/contract"
+
 // PathParameterInfo retains pattern order, catch-all semantics and an optional
 // codec-owned scalar description. Nil Scalar identifies an undescribed custom
 // codec; exporters must report that gap instead of inferring a string schema.
 type PathParameterInfo struct {
-	Name     string         `json:"name"`
-	CatchAll bool           `json:"catch_all"`
-	Scalar   *URLScalarInfo `json:"scalar,omitempty"`
+	Presentation contract.Presentation `json:"presentation,omitzero"`
+	Name         string                `json:"name"`
+	CatchAll     bool                  `json:"catch_all"`
+	Scalar       *URLScalarInfo        `json:"scalar,omitempty"`
 }
 
 // Parameters returns an owned description from the same path and field bindings
@@ -29,6 +32,7 @@ func (p Path[P]) Parameters() ([]PathParameterInfo, error) {
 					return nil, err
 				}
 				info.Scalar = &scalar
+				info.Presentation = binding.presentation
 				break
 			}
 		}

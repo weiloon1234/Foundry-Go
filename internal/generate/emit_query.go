@@ -31,7 +31,7 @@ func emitQuery(p *packageInput, declaration queryDeclaration) ([]byte, error) {
 		if field.binding == "RepeatedQueryParam" {
 			typeArguments += "," + e.typeName(field.typ)
 		}
-		e.line("%s.%s[%s](%q,%s,func(%s *%s)*%s{return &%s.%s}),", http, field.binding, typeArguments, field.parameter, codec, variable, declaration.name, e.typeName(field.typ), variable, field.name)
+		e.line("%s.%s[%s](%q,%s,func(%s *%s)*%s{return &%s.%s})%s,", http, field.binding, typeArguments, field.parameter, codec, variable, declaration.name, e.typeName(field.typ), variable, field.name, e.presentationMethod(field.presentation))
 	}
 	e.line(")})")
 	if declaration.source == "form" {

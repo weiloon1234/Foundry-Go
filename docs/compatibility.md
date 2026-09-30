@@ -6,6 +6,22 @@ reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. No public version has been published by
 this acceptance work.
 
+## Client presentation metadata — manifest 6
+
+Manifest version 6 adds bounded presentation metadata to public properties and
+parameters. Versions 1–5 must be regenerated; readers continue rejecting unknown
+versions and fields. Use the same framework revision for runtime, Go generation,
+manifest/OpenAPI export and TypeScript. Existing direct SDK calls retain their
+signatures. New reserved descriptor names can qualify a colliding schema type
+name; review explicit type imports after regeneration. New descriptors and public
+presentation declarations are documented
+in [client descriptors](guides/client-descriptors.md).
+
+Presentation is optional and never changes request codecs or validation rules.
+Explicit password hints reject output graphs and credential body examples/default
+parameters; applications should keep dedicated input and response views. No
+headless form controller or frontend adapter is introduced by this change.
+
 ## Modules and public Go APIs
 
 Root `go.mod` owns the supported Go requirement. All fixtures and development
@@ -53,6 +69,7 @@ not inferred from a synthetic packaging candidate version.
 | Redis job queue storage layout | Layout 2 is written only after an explicit `jobs migrate-layout` per queue; a layout-1 queue otherwise returns `jobs.ErrLegacyLayout` unchanged. Stop or drain the previous release before migrating; rollback needs a pre-migration Redis snapshot or a fully drained queue. See [the upgrade procedure](guides/jobs-operations.md#redis-queue-layout-upgrade). |
 | Outbox records | Preserve captured bytes, IDs and destinations across retries. An ambiguous publish is reconciled using the same captured pending operation. |
 | Application/database schema | Use reviewed forward migrations with compatible expansion/backfill before contraction. No automatic destructive synchronization or reset. Framework-owned migrations (sessions, tokens, outbox, idempotency, audit, settings/extensions, translations, countries, notifications, attachments, job archive, outbound webhooks, MFA) must be applied before the release that reads them serves traffic; application boot never applies them. Down migrations are optional and run only through `migrate rollback --step N --confirm`. |
+| Model extension slots | A slot's stored name is its snake_case Go field name unless `foundry:"name=..."` pins it, and a generated owner's name and storage model are its table unless `extension_owner=` pins them. Pin both before renaming a Go field or a table; otherwise existing translations, metadata and files are hidden, not deleted. `translations`, `metadata` and `attachments` `undeclared` commands report stored names no slot declares. |
 | Token refresh history | Refresh keeps the current and previous generation rows and moves older consumed refresh digests to `foundry_token_consumed_refreshes`. A rollback to an earlier release keeps valid tokens working but loses reuse detection for digests already moved. |
 
 See [job trace rollout](guides/job-trace-rollout.md),

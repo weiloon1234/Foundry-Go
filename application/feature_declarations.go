@@ -4,6 +4,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/attachments"
 	"github.com/weiloon1234/Foundry-Go/datatable"
 	"github.com/weiloon1234/Foundry-Go/extensions"
+	"github.com/weiloon1234/Foundry-Go/extensions/slots"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/health"
@@ -35,6 +36,23 @@ type FeatureDeclarations struct {
 }
 type Features func(Services) (FeatureDeclarations, error)
 
+// Models registers generated model extension declarations, such as a model
+// package's FoundryExtensions(). Each registers its owner, its translated,
+// attachment and metadata slots, and a hard-delete cleanup observer on the
+// extension store's database, which must also write the owning models.
+func (b *Builder) Models(declarations ...slots.Declaration) *Builder {
+	b.mutate(func() {
+		for _, declaration := range declarations {
+			if err := declaration.Validate(); err != nil {
+				b.state.err = err
+				return
+			}
+		}
+		b.state.models = append(b.state.models, declarations...)
+	})
+	return b
+}
+
 func (b *Builder) Features(construct Features) *Builder {
 	b.mutate(func() {
 		if construct == nil {
@@ -50,8 +68,15 @@ const FeatureDeclarationsProvider foundation.ProviderID = "foundry.application.f
 
 var featureDeclarationsKey = foundation.NewKey[FeatureDeclarations](string(FeatureDeclarationsProvider))
 
-func mergeFeatures(r foundation.Resolver, s FeatureSettings, constructors []Features) (FeatureDeclarations, error) {
+func mergeFeatures(r foundation.Resolver, s FeatureSettings, constructors []Features, models []slots.Declaration) (FeatureDeclarations, error) {
 	var result FeatureDeclarations
+	for _, declaration := range models {
+		parts := declaration.Parts()
+		result.Owners = append(result.Owners, declaration.Owner())
+		result.Metadata = append(result.Metadata, parts.Metadata...)
+		result.Translations = append(result.Translations, parts.Translations...)
+		result.Attachments = append(result.Attachments, parts.Attachments...)
+	}
 	services, err := FromResolver(r)
 	if err != nil {
 		return result, err

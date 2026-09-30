@@ -37,10 +37,10 @@ func (c Collection[M, K]) Matching(ctx context.Context, m *Manager) (query.Predi
 				if err != nil {
 					return err
 				}
-				if seen[subject.Key] {
+				if seen[subject] {
 					continue
 				}
-				seen[subject.Key] = true
+				seen[subject] = true
 				if len(seen) > query.MaxIdentityBatch {
 					return fault.New(fault.Conflict, "attachment scope exceeds its owner limit")
 				}

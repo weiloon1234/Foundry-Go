@@ -50,12 +50,19 @@ func TestIsolationCancellationAndSelfClose(t *testing.T) {
 }
 
 func TestAdmissionQueuesBurstsAndReportsOverload(t *testing.T) {
-	g, err := New(1, 50*time.Millisecond)
+	// The queued and nested probes use a long operation timeout, so neither a
+	// lease deadline nor the admission wait can end them under a slow
+	// scheduler; only the overload probe below uses a short wait.
+	g, err := New(1, time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer g.Close(context.Background())
-	held, err := g.Begin(t.Context())
+	var held *Lease
+	// Release the current lease before the deferred Close on failure, so a
+	// failed assertion cannot turn into a Close waiting for it forever.
+	defer func() { held.Release() }()
+	held, err = g.Begin(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,20 +80,32 @@ func TestAdmissionQueuesBurstsAndReportsOverload(t *testing.T) {
 	if err := <-admitted; err != nil {
 		t.Fatal("queued caller was not admitted", err)
 	}
-	// An unsatisfied wait is a retryable overload, not an internal conflict.
+	// Nested admission never waits for capacity held by its own caller. A
+	// waiting probe would block for the full admission wait, five seconds.
 	held, err = g.Begin(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := g.Begin(t.Context()); !errors.Is(err, fault.Overloaded) {
-		t.Fatal("expected overload after the admission wait", err)
-	}
-	// Nested admission never waits for capacity held by its own caller.
 	started := time.Now()
-	if _, err := g.Begin(held.Context()); !errors.Is(err, fault.Overloaded) || time.Since(started) > 40*time.Millisecond {
+	if _, err := g.Begin(held.Context()); !errors.Is(err, fault.Overloaded) || time.Since(started) >= time.Second {
 		t.Fatal("nested admission waited or succeeded", err)
 	}
 	held.Release()
+	// An unsatisfied wait is a retryable overload, not an internal conflict.
+	short, err := New(1, 50*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer short.Close(context.Background())
+	blocking, err := short.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blocking.Release()
+	if _, err := short.Begin(t.Context()); !errors.Is(err, fault.Overloaded) {
+		t.Fatal("expected overload after the admission wait", err)
+	}
+	blocking.Release()
 	// Closing wakes queued callers with a closed classification.
 	held, err = g.Begin(t.Context())
 	if err != nil {

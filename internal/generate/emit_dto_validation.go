@@ -11,8 +11,8 @@ import (
 )
 
 type dtoValidationField struct {
-	name, wire, typ, selection string
-	guards                     []string
+	name, wire, typ, selection, labelKey string
+	guards                               []string
 }
 
 // emitDTOValidation uses the properties already resolved for the DTO schema.
@@ -51,7 +51,12 @@ func (e *emitter) emitTransportValidation(name string, root types.Type, position
 		if len(guards) != 0 {
 			typ = e.use(framework+"/value") + ".Optional[" + typ + "]"
 		}
-		fields = append(fields, dtoValidationField{name: name, wire: property.Name, typ: typ, selection: selection, guards: guards})
+		presentation, err := propertyPresentation(root, property.Index)
+		if err != nil {
+			e.err = fmt.Errorf("%s: %w", position, err)
+			return
+		}
+		fields = append(fields, dtoValidationField{labelKey: string(presentation.LabelKey), name: name, wire: property.Name, typ: typ, selection: selection, guards: guards})
 	}
 	input := e.localName("input")
 	params, args := e.genericDeclaration(root)
@@ -85,7 +90,11 @@ func (e *emitter) emitTransportValidation(name string, root types.Type, position
 		} else {
 			e.line("return %s.%s", input, field.selection)
 		}
-		e.line("}),")
+		if field.labelKey != "" {
+			e.line("}).WithLabelKey(%q),", field.labelKey)
+		} else {
+			e.line("}),")
+		}
 	}
 	if params == "" {
 		e.line("}})")

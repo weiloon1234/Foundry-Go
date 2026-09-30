@@ -5,7 +5,9 @@ Milestone 18 passed native verification and consumer review. The
 records the checks and operational limits.
 
 See also
-[attachments](attachments.md) for collection policy and recoverable storage.
+[attachments](attachments.md) for collection policy and recoverable storage, and
+[model extension slots](model-extension-slots.md) for declaring translated text,
+attachments and metadata as typed fields on the model itself.
 
 ## Shared owners
 
@@ -168,7 +170,9 @@ rechecks retained ownership, and leaves foreign or retained rows unchanged.
 Unknown owners and corrupted identity metadata fail closed.
 
 `metadata/command.Parse` provides
-`metadata orphans --owner users --page-size 100 --format text|json`. Parse before
+`metadata orphans --owner users --page-size 100 --format text|json`, and
+`metadata undeclared --owner users` lists stored key names no registered key
+declares (see [slot maintenance](model-extension-slots.md#inspection-and-maintenance)). Parse before
 booting services, then run the command with the assembled manager and output
 writer. It inspects every page without deleting and prints only opaque row keys
 and metadata names. JSON emits one page per line; it never exports model identity
@@ -240,8 +244,9 @@ semantics as metadata. `InspectOrphans` and explicit `PruneOrphans` share owner
 validation and bounded pagination. Inspection selects only ownership/index
 columns; it does not load private content. `translations/command` accepts
 `translations orphans --owner products --page-size 100 --format text|json` and
-exposes no deletion flag, plus `translations rescope --owner products [--apply]`
-with the metadata re-scope semantics. Apply `translations.Migrations()` explicitly.
+exposes no deletion flag, `translations undeclared --owner products` for stored
+field names no registered field declares, plus `translations rescope --owner
+products [--apply]` with the metadata re-scope semantics. Apply `translations.Migrations()` explicitly.
 
 Settings and country reference data use the same store and are documented in
 [Settings](settings.md) and [Countries](countries.md).

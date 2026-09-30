@@ -1,0 +1,391 @@
+{
+  "format": 1,
+  "date": "2026-09-30",
+  "status": "accepted",
+  "scope": "Approved framework SDK slices: typed operation/schema/field descriptors and bounded presentation metadata; no controller or frontend adapter",
+  "working_tree_base": "c8e2f6100bea2e689f4a13518d7ec0c5605c800b",
+  "distribution": "Uncommitted working-tree implementation; no publication, starter pin or starter source edits",
+  "environment": {
+    "go": "go1.27.1 darwin/arm64",
+    "required_modes": [
+      "FOUNDRY_TEST_POSTGRES_REQUIRED=1",
+      "FOUNDRY_TEST_REDIS_REQUIRED=1",
+      "FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1"
+    ],
+    "tools": "Existing native gopls, Node and TypeScript selections; ordinary warm caches",
+    "data": "Existing private services and configuration; no reset, drop, flush, credential output or duplicate service"
+  },
+  "checks": [
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "./contract/manifest",
+        "./typescript",
+        "-run",
+        "Presentation|Render|SchemaNames",
+        "-count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 587759616,
+      "elapsed_seconds": 2.6041733749443665,
+      "exit": 0,
+      "name": "final-focused",
+      "sampled_compiler_rss_bytes": 498794496,
+      "sampled_tree_rss_bytes": 879394816,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "7d1d8ea4abbd3d67a5fcae9330cc1e69d9da5864b2db1141c5f0a9ebd5fb7f30",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "./clientcontracts",
+        "-count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/tests/fixtures/consumer",
+      "darwin_max_process_rss_bytes": 3625779200,
+      "elapsed_seconds": 11.759631625027396,
+      "exit": 0,
+      "name": "final-client",
+      "sampled_compiler_rss_bytes": 3625697280,
+      "sampled_tree_rss_bytes": 3686580224,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "00f70c0287fe33c0a9a931a3a643969ff951e4236f8d8524b6e460b3872a12ec",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "argv": [
+        "make",
+        "verify"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 2051440640,
+      "elapsed_seconds": 573.7830951670185,
+      "exit": 0,
+      "name": "verify-accepted",
+      "sampled_compiler_rss_bytes": 1094320128,
+      "sampled_tree_rss_bytes": 2216804352,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "9133ab12137df61164631373d4d4e2f66278e657fafd1e911e58b3d3ac4297fd",
+        "stderr.log": "5d5c8748288d9e90892964315cf3ac7e3e6c5141d7a04d8170af1b8040810a79"
+      }
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-race",
+        "./contract/...",
+        "./http",
+        "./openapi",
+        "./typescript"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 2661859328,
+      "elapsed_seconds": 54.18346770806238,
+      "exit": 0,
+      "name": "race-affected",
+      "sampled_compiler_rss_bytes": 2116075520,
+      "sampled_tree_rss_bytes": 2520104960,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "9f5435953b6c3f3bdeb04f65b41530a06b27aa7f48d56cd599cf4d39b29214ca",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-race",
+        "./clientcontracts",
+        "-count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/tests/fixtures/consumer",
+      "darwin_max_process_rss_bytes": 3641671680,
+      "elapsed_seconds": 28.61451120802667,
+      "exit": 0,
+      "name": "race-client-accepted",
+      "sampled_compiler_rss_bytes": 3641671680,
+      "sampled_tree_rss_bytes": 3701456896,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "80edc94757127915a59275fbfcfdc64a5c301e3971d1083da3f1f0b6cc958e6e",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-race",
+        "./typescript"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 741539840,
+      "elapsed_seconds": 2.898940041079186,
+      "exit": 0,
+      "name": "race-renderer-accepted",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 638255104,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "44545a6e921596044d6151b4128fb2961b832c1373ef04d2d7b315b0b4cab56a",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "./contract/manifest",
+        "-run",
+        "^$",
+        "-fuzz",
+        "^FuzzManifestDecoder$",
+        "-fuzztime",
+        "30s",
+        "-parallel",
+        "2"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 1738129408,
+      "elapsed_seconds": 61.34801225003321,
+      "exit": 0,
+      "name": "fuzz-manifest",
+      "sampled_compiler_rss_bytes": 1738096640,
+      "sampled_tree_rss_bytes": 2329411584,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "f0564c57516bb68f31b9682ce35937e5553617d8c6ad2ae0609e5c119e2b1b61",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "argv": [
+        "make",
+        "typescript-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 3628269568,
+      "elapsed_seconds": 11.38291762501467,
+      "exit": 0,
+      "name": "receiver-fixed",
+      "sampled_compiler_rss_bytes": 3628253184,
+      "sampled_tree_rss_bytes": 3688955904,
+      "timed_out": false,
+      "log_sha256": {
+        "stdout.log": "7ccc723e67fc434733f443b96cbd16e51857172bf92d8afcf44bfef152e29045",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ],
+  "check_scope_note": "The Go manifest fuzz and contract/HTTP/OpenAPI race checks preceded only the final TS receiver correction; Go parser/runtime sources were unchanged. The accepted full gate, real client check and client/renderer races cover the final source.",
+  "verify_passed_packages": 276,
+  "source": {
+    "runtime_inputs": 4349,
+    "runtime_sha256": "4006a268d0261b1e4b5f688ae928b476f3c6d4940c5f30ee74b382db61a344c1",
+    "drift_during_acceptance": [],
+    "changed_files_since_task_baseline": {
+      "attachments/read.go": "c8ca1bc374380ef9343649e8d0aa15580bd53ac4a118863d088a34f8df2f8fc3",
+      "attachments/row.go": "1a58f1d70fd9ae4af501acc474598f9b5dd92b621f21c718d734ba0c8dde37db",
+      "attachments/scopes.go": "f9b9566edc6c544de65ec08c9e8dd789f5e5381e972037ee18f099aa1d306023",
+      "contract/manifest/build.go": "8d9d493790d95ec4be0f84c4cf892b6f33f01436c713e869d6fcafc518b798c8",
+      "contract/manifest/document.go": "a9c7aafe846218c529caa0b504e22dc93a115fe8c30e4425dfde326523c3a27a",
+      "contract/manifest/manifest_test.go": "b0f83cdeb6928f878ac5fe765a1c53f63e8ccf1d47639acb37d78599d161a915",
+      "contract/manifest/normalize.go": "d30aafaf389b30f55ae9007e342f89e05b84062caf6af15d9d6293b803f0b674",
+      "contract/manifest/normalize_http.go": "287c596e0a2e8fa4a3b56784a980477b8ac65d8610dd5633a1aac15c2b4e586e",
+      "contract/manifest/presentation.go": "51b1a757688cad3bc1678b73b96ac309997ed52de2582f88df75ea238b1eeb13",
+      "contract/manifest/presentation_test.go": "9c0efc7c74836b379978cf7951be76d1a03afee8211df974d7eb144947c853b1",
+      "contract/presentation.go": "999520a6e30d515672752e029d3a349ce56b8dcf3ae8aa1830556916d283464b",
+      "contract/presentation_test.go": "dab8dfbc97b1c10014968c7b302d927f44c6a5fc840c05c0cfcc466e0983e128",
+      "contract/schema.go": "4f7a0657e59674cc4b92b1d5326b7818bccb10845fe4b60cf22880e04be9d567",
+      "contract/schema_compile.go": "6320d559eff070b8389cc40bc828ebd5b143a93a7ee72328c7dea2562868143b",
+      "extensions/owner.go": "70d797c5fe2e7d0ae3b8a63926f604dd9a3c863edf8e5d87e8ca3485fad64c4e",
+      "extensions/owner_test.go": "276d9288b230607ec4d2b4676c32a3cfde3a92a20576f04656fecb0e037a681b",
+      "extensions/registry.go": "1e12bdf303fe1833b44d7e8a0bbe35cf911c959b3eedbb085a354ce816d1c89c",
+      "http/path.go": "781e949bb3b1423197cba23fd320d85962999cb7a980d235e168a2e37d46d97c",
+      "http/path_metadata.go": "8627701507e69c0f6732cfc84a8d29109d57665157708525908e8174c8751ee7",
+      "http/path_parameter.go": "1e90ca228986404b93eb7f62e65d025308fffbb36e1ccf38d44d6cc2e9c8ede7",
+      "http/presentation.go": "5b2a6dbcc878dba7a495c28dee4332fcbf3ad25eb9bf4db8613de4875fa1c493",
+      "http/presentation_test.go": "7c1cdfe7ffb156c79be002c6dac65f6bd20ee965eb5b7d2a744cca5c841379d7",
+      "http/query_parameter.go": "7705aae9d5535a6374fea43f762b755e71b6fd14ab47fa9b0624f8f59d7a9907",
+      "internal/agent/gopls_acceptance_test.go": "b7af97dd16b93275f976461c056cab28b1b2004646763a316093dd700dbdd7d5",
+      "internal/extensionrow/identity.go": "1dd55cebf5ed891fbbfe23689217797d66f67284953c44a8c98f2b1b88d355e6",
+      "internal/extensionrow/identity_test.go": "6683a010f7556a823336e62bd4286969a5304e842ad4bb4b5f1ed433fb90c168",
+      "internal/generate/discover_dto.go": "9c9d91ea748558c62d18b06f13aa5b570df87429de121d94dc31c4210fb05173",
+      "internal/generate/discover_path.go": "4982ab055872ca3bbd3263df66073024bf8ad22d4609ac9fe1403eb7db75e4aa",
+      "internal/generate/discover_transport_fields.go": "8728fe578e2812bc7cf65a78086ae3935aca8cd27232654a40d6e15cc7bd1d63",
+      "internal/generate/emit_dto.go": "91df37bb80fb597fbb51f016e7b1db4b3ac04b7b23455a9f6e61ac5a73f7682a",
+      "internal/generate/emit_dto_validation.go": "e8999d7cd191738cf7a0b5bfbcec4f2e8d2359139e136b11f33f2574f876cd28",
+      "internal/generate/emit_multipart.go": "ab0078580ed72f8ae2cc9d52aeede4a21376b4030d205e8eafd94cc71bafd31d",
+      "internal/generate/emit_path.go": "0c533b206e568ea2d36389faf49f267da64bf216eb7fbfca77a43aeeda5907ef",
+      "internal/generate/emit_query.go": "f4c980fad58da7b0fe0b11f2935776a6b22a7f607763149b5af591427f37682c",
+      "internal/generate/presentation.go": "ac90a83cafe5e85fa669e5d920765304c922f968480aa04d36343df8793564f9",
+      "internal/generate/presentation_test.go": "44d49ec2c9a83cd0d7c61548ce604899f9366d0d3cd1d2a907bb3df140402e12",
+      "metadata/records.go": "1029e4c4b9c08f90f9229bd5ea49cc5f6302c41c4718f6b751bdf2bb00df07a2",
+      "metadata/values.go": "0b44c23b47e7d4e0b3e6a512c8f4dce34fee70377bb0eb7170842031c0766c03",
+      "openapi/openapi.go": "9b619c22ff27d71b0798d7c614f7abd0e1fc41b4fd519b6a23f38573946afad6",
+      "openapi/presentation.go": "3e8c4b2071f75a14b0fe3cc84c108d844b20321337da1171d825678b88920d74",
+      "openapi/schema.go": "f08223d96606476fa77836808dc736245031050d314d3308d07e2f5b1af433f4",
+      "tests/fixtures/consumer/clientcontracts/.foundry-gen.json": "60f591aa10b5c14fc77d659ebbfb45d5217dd75964da0088b7d2168090c5ebcc",
+      "tests/fixtures/consumer/clientcontracts/descriptors_test.go": "3a758a516be54c2928c405bf784e29f941003a5f6876513caecb19e9c6ac4865",
+      "tests/fixtures/consumer/clientcontracts/dto.go": "b826fea2de8fa3827d41db3372d3f46e7dfb8bc8c90f8d02f9b995bea192758f",
+      "tests/fixtures/consumer/clientcontracts/filters_foundry.gen.go": "005e40fd085e064004d3002a72fa1f7b3934d024f7cf2e0e4149eb84d17529cf",
+      "tests/fixtures/consumer/clientcontracts/payload_foundry.gen.go": "7c4b43120899ae07d6ec2eccb706ccfae14d8730ff00361ac4b855e1d1d73559",
+      "tests/fixtures/consumer/clientcontracts/presentation.go": "b7fa03a2b640768283df126d176c1f4a9f8da6df9f7e84e73ecdefe1cfa4c4cb",
+      "tests/fixtures/consumer/clientcontracts/testdata/descriptors/runtime.mjs": "dfd95f94cab03438607bba1a305e1f54ae4cc6212f4d8bb7edf0da841ff6972d",
+      "tests/fixtures/consumer/clientcontracts/testdata/descriptors/types.ts": "474ddcae60660dbb00b52be0b3537fd23579002e1737b45d3956ac79e21fc807",
+      "tests/fixtures/consumer/clientcontracts/testdata/runtime.mjs": "3cc9df4cc7641c3fcfed3b7e3c3922c0e8e46f9a1e22ac32a1b8eccc40cae1ab",
+      "tests/fixtures/consumer/clientcontracts/testdata/types.ts": "0a543b3f27be3b4f92b13694672aa7459863e42738f0eeaef4bb18b4c31f6191",
+      "tests/fixtures/consumer/testdata/compilefail/presentation_kind/invalid.go": "9be9156099968e5cec5c94d40032bf2c34e42aece1fdb7fd2d6a2a3a3e0f0afb",
+      "tests/fixtures/consumer/testdata/compilefail/presentation_parameter_owner/invalid.go": "b1d4250c5bc9ae0e9680f6bf9d67e06a32ce47b8fcb58843cc2cf94c0b618e52",
+      "tests/fixtures/consumer/types_test.go": "3179806d5421d7e3bea2b8662b2567c6981c1669767034fbfcda59f8fa540d83",
+      "translations/read.go": "e30973a7326684476f7533a7819d1673b1117b202479b66b7cd34ec678b8ab93",
+      "translations/records.go": "4c617f3a06266b6b972d827a50b56afb65a1c7466e0457c2c2be9202302bddcc",
+      "translations/slot.go": "f80c035a769b298ae2cfb0a90fac03449fe8108336ebabff815c0e370b5641eb",
+      "translations/write.go": "311767d5ad928ef5ab389334540077a6792882c64b75c9b20c1a81ba5d8378d2",
+      "typescript/render.go": "b27703ab80954ec0310d262fb73c13d52f173df26311dbba59bde98ba2692c71",
+      "typescript/render_descriptors.go": "a6e80ec874e6ec456411283b50632e1602aa43a8fb677a8e924340adefe9cc82",
+      "typescript/render_test.go": "7421f534093e7cb7d5571ae05df78bb627cb5d3992624c2d6e288b720d063292",
+      "typescript/reserved_names.go": "7d00a3dd9ef72dd1aca827c15c797f92ed359d3d81d63bca67a74fc01c362ec0",
+      "typescript/runtime/descriptors.ts": "1c57bffa859a27f8f2988810f59bd887f40bfc7fe51bf9456fa47c571741edd0",
+      "typescript/runtime/http.ts": "21385b043ecca4c4f2f25965d4208289788fc0baf5d285db71a1e6d513dbd152",
+      "typescript/runtime/metadata.ts": "274cd7fe9968d10f06eadf25adce2176d7ac66ccfb7b5693b864a9f929013608",
+      "typescript/runtime/wire.ts": "f85fdfb559ed2ad0a39d0de3e1b752361253a7194123965a25b25c4c1c2cc4e6"
+    },
+    "baseline_note": "Preserved unrelated existing model-extension changes; this is not a clean HEAD-only candidate"
+  },
+  "corrections": [
+    "Initial targeted test failed because its manual JSON schema used an unqualified Go root identity. Corrected the fixture; the follow-up and final gates pass.",
+    "Completed publicly typed multipart readers/issues, download ranges and idempotency metadata; uploads reject nested JSON field lookup at compile time and runtime.",
+    "Validation presentation traversal keeps unknown selectors unknown instead of restarting at the operation root; matching/conflicting labels and email/URL hints are covered.",
+    "Outer alias nullability, quoted enum choices and present map element types now match the existing codecs; regression clients cover exact 64-bit choices and unsafe-size limits.",
+    "Reserved the generated OperationInputs name and tested descriptor/schema naming collisions.",
+    "A real HTTP negative control reproduced rejection of inherited API methods. Descriptor calls now accept wrapped API methods and preserve their receiver; the real HTTP/TypeScript test and final client race check pass.",
+    "The preliminary full verification was deliberately terminated (exit -15) after the editor suite to batch final audit fixes; verify-final passed; a later reproduced TS receiver fix was followed by verify-accepted on the final source."
+  ],
+  "guarantees": [
+    "Exact operation/request/response and field-owner types, nested objects/collections/unions, omitted/null/value distinctions and exact enum choices remain connected to existing generated contracts.",
+    "Descriptors and metadata are immutable, lossless snapshots; request execution and validation delegate to the existing client owners.",
+    "Optional client tags and typed Presentation declarations flow through actual JSON/URL/multipart descriptors, normalized manifest version 6 and OpenAPI/TypeScript.",
+    "Unknown, oversized or incompatible hints fail; explicit password hints reject reachable output graphs and credential examples/defaults without banning legitimate inputs.",
+    "Deterministic/current generation, independent consumer compilation, intended compile-fail cases, real gopls, real HTTP/WebSocket JS/TS clients, affected races and bounded manifest fuzzing passed."
+  ],
+  "limits": [
+    "B08 remains open and was not investigated or suppressed.",
+    "Headless controllers, React/Vue adapters and automatic form rendering remain later work.",
+    "No new private packaged-module, Linux starter or security scan acceptance; no dependencies changed.",
+    "Password hints are explicit and do not discover unmarked secrets by property names.",
+    "Client validation remains incomplete for server preparation and server-only rules.",
+    "Starter adoption requires a published reviewed revision, matching runtime/tool pins and regeneration of Go, manifest v6, OpenAPI and TypeScript together."
+  ],
+  "documentation_check": {
+    "argv": [
+      "make",
+      "docs-check"
+    ],
+    "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+    "darwin_max_process_rss_bytes": 29966336,
+    "elapsed_seconds": 0.23566262505482882,
+    "exit": 0,
+    "name": "docs-final",
+    "sampled_compiler_rss_bytes": 0,
+    "sampled_tree_rss_bytes": 1409024,
+    "timed_out": false
+  },
+  "documentation_files": {
+    "blueprint/00-master-architecture-and-parity.md": "834ab3f0e708b4537f10bea14c90d3ff210e0da54c8a98551dedbb47b3784f26",
+    "docs/compatibility.md": "47f8be60f35aa1c32028251234f916c74e1ced5fae514cf08f3a1b8651068b6d",
+    "docs/guides/client-descriptors.md": "969f97ca07f20e592d1d85cf452693d47d42b0afe0b5de1f9ec18e03006ba6f0",
+    "docs/guides/client-contracts.md": "1a7d3263d6e48aff58018df2f4066a7d03405f0deec822434f383ae44e382d40",
+    "CHANGELOG.md": "50d0002258a1648b7203c8d0983d05049043bb40f73f01a46150b7dec3649ae5"
+  },
+  "final_integrity": {
+    "runtime_unchanged_after_checks": true,
+    "documentation_only_changes": [
+      "blueprint/00-master-architecture-and-parity.md",
+      "docs/compatibility.md",
+      "docs/evidence/client-descriptors-20260930.json",
+      "docs/guides/client-descriptors.md"
+    ]
+  },
+  "diagnostic_runs": [
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "./contract",
+        "./contract/manifest",
+        "./http",
+        "./openapi",
+        "./typescript",
+        "./internal/generate",
+        "-run",
+        "Presentation|RenderOwns",
+        "-count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 2149220352,
+      "elapsed_seconds": 26.33941616700031,
+      "exit": 1,
+      "name": "targeted-1",
+      "sampled_compiler_rss_bytes": 2042429440,
+      "sampled_tree_rss_bytes": 5217746944,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "./contract/manifest",
+        "-run",
+        "Presentation",
+        "-count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 587251712,
+      "elapsed_seconds": 2.348820290993899,
+      "exit": 0,
+      "name": "targeted-2",
+      "sampled_compiler_rss_bytes": 376668160,
+      "sampled_tree_rss_bytes": 563888128,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "make",
+        "verify"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": null,
+      "elapsed_seconds": 403.40268029202707,
+      "exit": -15,
+      "name": "verify",
+      "sampled_compiler_rss_bytes": 155746304,
+      "sampled_tree_rss_bytes": 2255388672,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "make",
+        "typescript-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 1437483008,
+      "elapsed_seconds": 2.608692124951631,
+      "exit": 2,
+      "name": "receiver-negative-control",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 1390919680,
+      "timed_out": false
+    }
+  ]
+}

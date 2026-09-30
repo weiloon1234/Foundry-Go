@@ -4,6 +4,10 @@ Milestone 18 passed native verification and consumer review. The
 [master evidence](../../blueprint/00-master-architecture-and-parity.md#milestone-18-verification-and-consumer-review)
 records the checks and operational limits.
 
+A model can also declare collections as `attachments.One`/`Many` fields; see
+[model extension slots](model-extension-slots.md). Slots reuse this policy and
+publication workflow.
+
 Attachments share the registered [model extension owner](model-extensions.md#shared-owners),
 ordinary generated infrastructure models, and explicit versioned migrations.
 Apply `attachments.Migrations()` through the normal migration runner. The
@@ -289,7 +293,8 @@ settlement. Bulk model deletion that skips observers requires maintenance.
 checks. `PruneOrphans` accepts exact inspected operation IDs, rechecks owners
 under the transaction, and refuses unsettled writers. The read-only
 `attachments/command` adapter accepts `attachments orphans --owner profiles
---page-size 100 --format json`; it has no delete flag. It can be registered in
+--page-size 100 --format json` and `attachments undeclared --owner profiles` for
+stored collection names no registered collection declares; it has no delete flag. It can be registered in
 the command kernel supplied by milestone 23.
 
 `InspectStorage` lists one bounded provider page under the selected registered

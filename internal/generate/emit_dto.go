@@ -143,7 +143,11 @@ func (e *emitter) emitJSONGraph(typ types.Type, graph dtoGraph, constructor stri
 		if len(wire.Properties) != 0 {
 			e.line("Properties:[]%s.Property{", contract)
 			for _, property := range wire.Properties {
-				e.line("{Name:%q,Type:%s,Required:%t},", property.Name, id(property.Type), property.Required)
+				if property.Presentation == (foundrycontract.Presentation{}) {
+					e.line("{Name:%q,Type:%s,Required:%t},", property.Name, id(property.Type), property.Required)
+				} else {
+					e.line("{Name:%q,Type:%s,Required:%t,Presentation:%s},", property.Name, id(property.Type), property.Required, e.presentation(property.Presentation))
+				}
 			}
 			e.line("},")
 		}

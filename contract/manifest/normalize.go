@@ -40,6 +40,9 @@ func normalizeDocument(d *Document) error {
 	if err := normalizeFeatures(d, types); err != nil {
 		return err
 	}
+	if err := types.outputPresentation(d); err != nil {
+		return err
+	}
 	slices.SortFunc(d.Types, func(a, b contract.Type) int { return cmp.Compare(a.ID, b.ID) })
 	return nil
 }

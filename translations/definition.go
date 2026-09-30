@@ -26,7 +26,14 @@ const (
 	MaxBatchBytes     = 4 << 20
 )
 
-type Options struct{ MaxBytes int }
+// Options bound one translated field. MaxBytes limits each locale's text; zero
+// selects MaxValueBytes. Require selects the locales that slot input rules and
+// exact synchronization demand; lower-level writes do not enforce it.
+type Options struct {
+	MaxBytes int
+	Require  i18n.LocaleRequirement
+}
+
 type declarationID struct{ nonzero byte }
 type Field[M any, K comparable] struct{ definition *definition[M, K] }
 type definition[M any, K comparable] struct {
@@ -49,7 +56,7 @@ func (f Field[M, K]) Name() Name {
 	return f.definition.name
 }
 func (f Field[M, K]) Validate() error {
-	if f.definition == nil || !identifier.Semantic(string(f.Name())) || f.definition.options.MaxBytes < 1 || f.definition.options.MaxBytes > MaxValueBytes {
+	if f.definition == nil || !identifier.Semantic(string(f.Name())) || f.definition.options.MaxBytes < 1 || f.definition.options.MaxBytes > MaxValueBytes || f.definition.options.Require.Validate() != nil {
 		return invalid()
 	}
 	return f.definition.owner.Validate()

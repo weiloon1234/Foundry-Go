@@ -19,6 +19,11 @@ func Parse(args []string, help io.Writer) (Command, error) {
 	return Command{options: options}, err
 }
 func (c Command) Run(ctx context.Context, manager *attachments.Manager, out io.Writer) error {
+	if c.options.Undeclared() {
+		return extensioncommand.RunUndeclared(ctx, c.options, out, func(ctx context.Context, owner extensions.OwnerName) (extensionmaintenance.Undeclared, error) {
+			return attachments.InspectUndeclared(ctx, manager, owner)
+		})
+	}
 	return extensioncommand.Run(ctx, c.options, out, func(ctx context.Context, owner extensions.OwnerName, cursor attachments.Cursor, limit int) (extensionmaintenance.Page[attachments.Orphan], error) {
 		page, err := manager.InspectOrphans(ctx, owner, cursor, limit)
 		return extensionmaintenance.Page[attachments.Orphan]{Rows: page.Orphans, Scanned: page.Scanned, Next: page.Next}, err

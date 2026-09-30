@@ -131,6 +131,18 @@ func emit(p *packageInput, metadata metadata) (map[string][]byte, map[string]tok
 			return nil, nil, err
 		}
 	}
+	for _, m := range metadata.models {
+		if len(m.extensions) == 0 {
+			continue
+		}
+		// One package-level listing, owned by the first slot-owning model.
+		position = m.position
+		data, err := emitPackageExtensions(p, metadata.models)
+		if err := add(extensionsFunction, data, err); err != nil {
+			return nil, nil, err
+		}
+		break
+	}
 	for _, enum := range metadata.enums {
 		position = enum.position
 		data, err := emitEnum(p, enum)

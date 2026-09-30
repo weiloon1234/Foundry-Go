@@ -61,23 +61,12 @@ func prepare(ctx context.Context, m *Manager, policy Policy, input Upload) (prep
 	if int64(len(body)) > policy.MaxBytes {
 		return prepared{}, storage.Failure(storage.LimitExceeded, storage.PutOperation, storage.Unchanged, nil)
 	}
-	// A client hint may specialize generic text (for example to text/csv) only
-	// when the policy accepts that specialization; otherwise the byte-detected
-	// type stands, so text/plain collections keep accepting such files.
-	detected := mediatype.Detect(body, "")
-	if specialized := mediatype.Detect(body, string(input.ContentType)); specialized != detected && accepted(policy, storage.MediaType(specialized)) {
-		detected = specialized
+	detected, err := acceptMedia(m, policy, body, input.ContentType)
+	if err != nil {
+		return prepared{}, err
 	}
-	result := prepared{open: func() io.Reader { return bytes.NewReader(body) }, info: UploadInfo{OriginalName: input.OriginalName, MediaType: storage.MediaType(detected), Size: int64(len(body))}, properties: properties}
+	result := prepared{open: func() io.Reader { return bytes.NewReader(body) }, info: UploadInfo{OriginalName: input.OriginalName, MediaType: detected, Size: int64(len(body))}, properties: properties}
 	if plan, imageRequired := policy.Image.Get(); imageRequired {
-		inspected, err := imaging.Inspect(body, m.image.Limits())
-		if err != nil {
-			return prepared{}, err
-		}
-		detected = inspected.Format.MediaType()
-		if !accepted(policy, storage.MediaType(detected)) {
-			return prepared{}, invalid()
-		}
 		transformed, err := m.image.ProcessBytes(ctx, body, plan)
 		if err != nil {
 			return prepared{}, err
@@ -92,8 +81,6 @@ func prepare(ctx context.Context, m *Manager, policy Policy, input Upload) (prep
 		result.info.Size = transformed.Size()
 		result.info.Width = info.Width
 		result.info.Height = info.Height
-	} else if !accepted(policy, storage.MediaType(detected)) {
-		return prepared{}, invalid()
 	}
 	if result.info.Size > policy.MaxStoredBytes {
 		return prepared{}, storage.Failure(storage.LimitExceeded, storage.PutOperation, storage.Unchanged, nil)
@@ -101,6 +88,33 @@ func prepare(ctx context.Context, m *Manager, policy Policy, input Upload) (prep
 	copy(result.digest[:], digest.Sum(nil))
 	return result, nil
 }
+
+// acceptMedia detects media from bytes and applies the policy's acceptance,
+// inspecting image input under an image plan. Uploads and slot Accepts share
+// it, so request validation and writes agree. A client hint may specialize
+// generic text (for example to text/csv) only when the policy accepts that
+// specialization; otherwise the byte-detected type stands.
+func acceptMedia(m *Manager, policy Policy, body []byte, hint storage.MediaType) (storage.MediaType, error) {
+	detected := storage.MediaType(mediatype.Detect(body, ""))
+	if specialized := storage.MediaType(mediatype.Detect(body, string(hint))); specialized != detected && accepted(policy, specialized) {
+		detected = specialized
+	}
+	if policy.Image.IsSet() {
+		inspected, err := imaging.Inspect(body, m.image.Limits())
+		if err != nil {
+			return "", err
+		}
+		if !accepted(policy, storage.MediaType(inspected.Format.MediaType())) {
+			return "", invalid()
+		}
+		return detected, nil
+	}
+	if !accepted(policy, detected) {
+		return "", invalid()
+	}
+	return detected, nil
+}
+
 func accepted(policy Policy, media storage.MediaType) bool {
 	if policy.AnyMedia || policy.Image.IsSet() && len(policy.Accepted) == 0 {
 		return true

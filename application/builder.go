@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/config"
+	"github.com/weiloon1234/Foundry-Go/extensions/slots"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/http"
@@ -36,6 +37,7 @@ type builderState struct {
 	schedules  []Schedules
 	realtime   Realtime
 	features   []Features
+	models     []slots.Declaration
 	err        error
 	built      bool
 }
@@ -119,12 +121,15 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	}
 	b.state.built = true
 	settings, configured, routes, middleware, observers, providers, plugins, buildErr := b.state.settings, b.state.options, slices.Clone(b.state.routes), slices.Clone(b.state.middleware), slices.Clone(b.state.observers), slices.Clone(b.state.providers), slices.Clone(b.state.plugins), b.state.err
-	jobDeclarations, eventDeclarations, schedules, realtime, features := slices.Clone(b.state.jobs), slices.Clone(b.state.events), slices.Clone(b.state.schedules), b.state.realtime, slices.Clone(b.state.features)
+	jobDeclarations, eventDeclarations, schedules, realtime, features, models := slices.Clone(b.state.jobs), slices.Clone(b.state.events), slices.Clone(b.state.schedules), b.state.realtime, slices.Clone(b.state.features), slices.Clone(b.state.models)
 	b.state.mu.Unlock()
 	if buildErr != nil {
 		return nil, buildErr
 	}
 	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := validateModelExtensions(settings.Features, models); err != nil {
 		return nil, err
 	}
 	s := settings
@@ -191,7 +196,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	plan.Register(builder)
 	registerResources(builder, s.Image, logger, channels.Channels(), s.Features, configured.clock, recorder, dates, calendar)
 	builder.Register(providers...).RegisterPlugin(plugins...)
-	if err := registerFeatures(ctx, builder, s, configured.clock, features); err != nil {
+	if err := registerFeatures(ctx, builder, s, configured.clock, features, models); err != nil {
 		return nil, err
 	}
 	if err := registerKernelDeclarations(builder, plan, s, configured.clock, jobDeclarations, eventDeclarations, schedules, realtime); err != nil {
@@ -216,7 +221,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := &App{App: app, resources: resources, migrations: migrations}
+	result := &App{App: app, resources: resources, migrations: migrations, models: models}
 	if s.HTTP.Enabled {
 		result.server, err = foundation.Resolve(app.Services(), HTTPKey)
 	}

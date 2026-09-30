@@ -8,6 +8,20 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts.
 
+## Typed client descriptors and presentation — 2026-09-30
+
+Status: **accepted** for this framework slice. The
+[client descriptor guide](../docs/guides/client-descriptors.md) records typed
+operation/schema lookup, exact field/owner identity and optional public semantic
+hints carried through existing declarations and manifest version 6. Validation
+continues through `validateRequest`; controllers and frontend adapters remain
+outside this slice. Final `make verify`, real HTTP/WebSocket TypeScript and
+JavaScript consumers, intended compiler failures, real-gopls probes, affected
+races and bounded manifest fuzzing passed. The
+[acceptance evidence](../docs/evidence/client-descriptors-20260930.json) records
+source hashes, review corrections and exact check scopes. Starter adoption and
+publication remain separate; B08 remains an open release-acceptance item.
+
 ## Second independent review — 2026-09-29
 
 Status: **accepted** for the reviewed source. Eight read-only reviewers
@@ -327,6 +341,24 @@ See the [workflow guide](../docs/guides/typed-api-workflow.md),
 [commands, samples and source hashes](../docs/evidence/typed-api-t07.json).
 All seven typed API milestones and the requested final re-audit are complete.
 Existing foundation and consumer-startup milestones retain their accepted status.
+
+## Model extension slot delivery
+
+User direction on 2026-09-29 adds model-level declaration of translated text,
+attachments and typed schemaless values over milestone 18's extension stores,
+similar to Laravel model traits. Slots are typed model fields with one
+`DefineExtensions` policy method; generation binds owners, registrations,
+descriptors and deletion cleanup. The user chose explicit bind-once runtime
+injection. The [series](model-extension-slots/README.md) owns design. This table
+alone owns status; authoring these contracts does not imply runtime implementation.
+
+| ID | Contract | Prerequisites | Status |
+| --- | --- | --- | --- |
+| E01 | [Slot declarations and generation](model-extension-slots/01-slot-declarations-and-generation.md) | Accepted milestones 06, 07, 18 and 20 | Complete — native `make verify` (680 s), PostgreSQL races for affected framework and consumer packages, three compiler-rejection cases and four real-gopls scenarios passed |
+| E02 | [Slot loading and reads](model-extension-slots/02-slot-loading-and-reads.md) | E01 | Complete — native `make verify` (534 s), PostgreSQL races for slot loading and affected stores, constant statement counts (23 for 1 and 41 parents), one compiler-rejection case and two new real-gopls scenarios passed |
+| E03 | [Slot writes and HTTP input](model-extension-slots/03-slot-writes-and-http-input.md) | E01–E02 | Complete — native `make verify` (670 s), PostgreSQL races for slot writes, real JSON/multipart endpoints and detection parity, three compiler-rejection cases and two new real-gopls scenarios passed; the TypeScript locale union was not delivered (compatibility review required) |
+| E04 | [Consumer fixture, tooling and documentation](model-extension-slots/04-consumer-tooling-and-documentation.md) | E01–E03 | Complete — native `make verify` (354 s), PostgreSQL races for the articles consumer, extension inspection snapshot and undeclared-name commands passed; scaffold slot flags were not delivered |
+| E05 | [Integrated acceptance and final re-audit](model-extension-slots/05-acceptance-and-audit.md) | E01–E04 accepted | Complete — native `make verify` (500 s) after the re-audit corrections, 445 real-gopls checks, the compile-fail catalog, statement and list-loading measurements, and PostgreSQL races for every root and consumer package except `internal/workscope`, whose race-mode timing test failed intermittently ([evidence](../docs/evidence/model-extension-slots-e05.json)); that test was then fixed and the full `make test-postgres` passed, with extension batch reads about 41% faster at 1000 parents ([follow-up](../docs/evidence/model-extension-slots-performance-20260930.json)) |
 
 ## Milestones and dependencies
 

@@ -8,7 +8,9 @@ Milestone 20 passed native verification and consumer review. The
 records the checks and operational limits.
 
 Use one `i18n.LocaleSet` from application configuration for UI catalogs, model
-translations and localized attachments. `i18n.Catalog` implements that same
+translations and localized attachments. Translated model fields declared as
+[model extension slots](model-extension-slots.md) follow the same catalog, and
+`validation.Locales` checks locale-keyed request input against it. `i18n.Catalog` implements that same
 `LocaleCatalog` interface. It is immutable, creates no background work and can be
 injected with an ordinary foundation factory. Each operation receives an explicit
 locale; there is no process-wide current locale.

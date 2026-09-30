@@ -3,6 +3,7 @@ package application
 import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/extensions"
+	"github.com/weiloon1234/Foundry-Go/extensions/slots"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/metadata"
@@ -10,8 +11,29 @@ import (
 	"github.com/weiloon1234/Foundry-Go/translations"
 )
 
-func registerExtensions(builder *foundation.Builder, s FeatureSettings, source clock.Clock) {
+func registerExtensions(builder *foundation.Builder, s FeatureSettings, source clock.Clock, models []slots.Declaration) {
 	c := s.Extensions
+	if len(models) > 0 {
+		// Cleanup observers join the owner's deletion transaction, so they
+		// belong to the extension store's pool. Observer registration must
+		// happen here, before the pool binds its frozen observer set.
+		pool := infrastructure.DatabaseKey(c.Database)
+		builder.Register(foundation.Module{Name: "foundry.application.model-extensions", Requires: []foundation.ProviderID{infrastructure.DatabaseProvider(c.Database)}, OnRegister: func(r *foundation.Registrar) error {
+			resolve := func(resolver foundation.Resolver) (slots.Runtime, error) {
+				services, err := FromResolver(resolver)
+				if err != nil {
+					return slots.Runtime{}, err
+				}
+				return services.ModelExtensions()
+			}
+			for _, declaration := range models {
+				if err := declaration.Register(r, pool, resolve); err != nil {
+					return err
+				}
+			}
+			return nil
+		}})
+	}
 	builder.Register(extensions.Module(ExtensionProvider, ExtensionKey, []foundation.ProviderID{FeatureDeclarationsProvider, infrastructure.DatabaseProvider(c.Database)}, func(r foundation.Resolver) (*extensions.Store, error) {
 		db, err := foundation.Resolve(r, infrastructure.DatabaseKey(c.Database))
 		if err != nil {

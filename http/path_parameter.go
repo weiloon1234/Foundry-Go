@@ -1,16 +1,19 @@
 package http
 
 import (
+	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
 // PathParameter binds a named URL parameter to a concrete field of P. Its
 // callbacks are assembled by Param; there is no string-based field lookup.
 type PathParameter[P any] struct {
-	name   string
-	scalar func() (URLScalarInfo, error)
-	decode func(*P, string) error
-	encode func(*P) (string, error)
+	presentation contract.Presentation
+	err          error
+	name         string
+	scalar       func() (URLScalarInfo, error)
+	decode       func(*P, string) error
+	encode       func(*P) (string, error)
 }
 
 // Param defines a field once for both decoding and named URL generation. The

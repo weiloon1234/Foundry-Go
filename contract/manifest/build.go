@@ -66,7 +66,7 @@ func (g *graph) scalar(scalar *foundryhttp.URLScalarInfo) (contract.TypeID, foun
 
 func (g *graph) parameter(p foundryhttp.QueryParameterInfo) Parameter {
 	id, syntax := g.scalar(p.Scalar)
-	return Parameter{Name: p.Name, Type: id, Syntax: syntax, Required: p.Required, Repeated: p.Repeated, DefaultURL: p.DefaultURL}
+	return Parameter{Presentation: p.Presentation, Name: p.Name, Type: id, Syntax: syntax, Required: p.Required, Repeated: p.Repeated, DefaultURL: p.DefaultURL}
 }
 
 func (g *graph) payload(input *foundryhttp.PayloadInfo) *Payload {
@@ -85,7 +85,7 @@ func (g *graph) payload(input *foundryhttp.PayloadInfo) *Payload {
 		}
 	case input.Multipart != nil:
 		for _, part := range input.Multipart.Parts {
-			p := Parameter{Name: part.Name, Required: part.Required, Repeated: part.Repeated, DefaultURL: part.DefaultURL}
+			p := Parameter{Presentation: part.Presentation, Name: part.Name, Required: part.Required, Repeated: part.Repeated, DefaultURL: part.DefaultURL}
 			if part.Kind == foundryhttp.MultipartText {
 				p = g.parameter(part.QueryParameterInfo)
 			}
@@ -147,7 +147,7 @@ func Build(ctx context.Context, sources Sources) (*Manifest, error) {
 			}
 			for _, path := range endpoint.Path {
 				id, syntax := g.scalar(path.Scalar)
-				operation.Path = append(operation.Path, Parameter{Name: path.Name, Type: id, Syntax: syntax, Required: true, CatchAll: path.CatchAll})
+				operation.Path = append(operation.Path, Parameter{Presentation: path.Presentation, Name: path.Name, Type: id, Syntax: syntax, Required: true, CatchAll: path.CatchAll})
 			}
 			for _, query := range endpoint.Query {
 				operation.Query = append(operation.Query, g.parameter(query))

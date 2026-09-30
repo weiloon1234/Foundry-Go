@@ -21,6 +21,7 @@ type typeIndex map[contract.TypeID]contract.Type
 func (types typeIndex) has(id contract.TypeID) bool { _, ok := types[id]; return id != "" && ok }
 
 func normalizeHTTP(d *Document, types typeIndex) error {
+	passwords := types.passwordTypes()
 	if d.HTTP == nil {
 		d.HTTP = []Operation{}
 	}
@@ -168,6 +169,9 @@ func normalizeHTTP(d *Document, types typeIndex) error {
 			}
 			op.Validation = &rule
 		}
+		if err := types.operationPresentation(*op, passwords); err != nil {
+			return err
+		}
 		codes := make(map[foundryhttp.ErrorCode]bool)
 		for _, code := range op.Errors {
 			if !errors[code] || codes[code] {
@@ -264,6 +268,12 @@ func validateRoute(route foundryhttp.RouteInfo) error {
 }
 
 func (types typeIndex) parameter(p Parameter) error {
+	if err := p.Presentation.ValidateType(types[p.Type]); err != nil {
+		return err
+	}
+	if p.Presentation.Kind == contract.PasswordPresentation && p.DefaultURL.IsSet() {
+		return invalid("credential parameters cannot publish defaults")
+	}
 	if p.Name == "" || len(p.Name) > 16384 || !utf8.ValidString(p.Name) || strings.ContainsRune(p.Name, 0) || !types.has(p.Type) {
 		return invalid("invalid parameter declaration")
 	}
@@ -393,10 +403,16 @@ func (types typeIndex) payload(payload *Payload, input bool) error {
 				return err
 			}
 		case foundryhttp.MultipartJSON:
+			if err := types.presentation(part.Type, part.Presentation); err != nil {
+				return err
+			}
 			if !types.has(part.Type) || part.Syntax != "" || part.DefaultURL.IsSet() {
 				return invalid("invalid JSON multipart part")
 			}
 		case foundryhttp.MultipartFile:
+			if err := part.Presentation.ValidateFile(); err != nil {
+				return err
+			}
 			if part.Type != "" || part.Syntax != "" || part.DefaultURL.IsSet() {
 				return invalid("invalid file multipart part")
 			}

@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/datatable"
 	"github.com/weiloon1234/Foundry-Go/extensions"
+	"github.com/weiloon1234/Foundry-Go/extensions/slots"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/health"
@@ -40,13 +41,15 @@ var LocaleKey = foundation.NewKey[*i18n.Catalog](string(LocaleProvider))
 var HealthKey = foundation.NewKey[*health.Registry](string(HealthProvider))
 var AuditKey = foundation.NewKey[*audit.Recorder](string(AuditProvider))
 
-func registerFeatures(ctx context.Context, builder *foundation.Builder, settings Settings, source clock.Clock, constructors []Features) error {
+func registerFeatures(ctx context.Context, builder *foundation.Builder, settings Settings, source clock.Clock, constructors []Features, models []slots.Declaration) error {
 	if len(constructors) > 128 {
 		return fault.New(fault.Invalid, "too many feature declaration constructors")
 	}
 	s := settings.Features
 	builder.Register(foundation.Module{Name: FeatureDeclarationsProvider, Requires: []foundation.ProviderID{Provider}, OnRegister: func(r *foundation.Registrar) error {
-		return foundation.Factory(r, featureDeclarationsKey, func(r foundation.Resolver) (FeatureDeclarations, error) { return mergeFeatures(r, s, constructors) })
+		return foundation.Factory(r, featureDeclarationsKey, func(r foundation.Resolver) (FeatureDeclarations, error) {
+			return mergeFeatures(r, s, constructors, models)
+		})
 	}})
 	if err := registerEncryption(builder, settings.Encryption); err != nil {
 		return err
@@ -71,7 +74,7 @@ func registerFeatures(ctx context.Context, builder *foundation.Builder, settings
 		}})
 	}
 	if s.Extensions.Enabled {
-		registerExtensions(builder, s, source)
+		registerExtensions(builder, s, source, models)
 	}
 	if s.Notifications.Enabled {
 		c := s.Notifications
@@ -251,3 +254,45 @@ func (s Services) Reports() (*datatable.Manager, error)           { return Resol
 func (s Services) Locales() (*i18n.Catalog, error)                { return Resolve(s, LocaleKey) }
 func (s Services) Health() (*health.Registry, error)              { return Resolve(s, HealthKey) }
 func (s Services) Audit() (*audit.Recorder, error)                { return Resolve(s, AuditKey) }
+
+// ModelExtensions returns the managers bound model extension slots use,
+// resolving only enabled features. Bind it once in a constructor with
+// models.<Model>Extensions().From(runtime).
+func (s Services) ModelExtensions() (slots.Runtime, error) {
+	if !s.features.Extensions.Enabled {
+		return slots.Runtime{}, fault.New(fault.Missing, "model extensions require features.extensions")
+	}
+	var runtime slots.Runtime
+	var err error
+	if runtime.Metadata, err = s.Metadata(); err != nil {
+		return slots.Runtime{}, err
+	}
+	if s.features.Locales.Enabled {
+		if runtime.Translations, err = s.Translations(); err != nil {
+			return slots.Runtime{}, err
+		}
+	}
+	if s.features.Attachments.Enabled {
+		if runtime.Attachments, err = s.Attachments(); err != nil {
+			return slots.Runtime{}, err
+		}
+	}
+	return runtime, nil
+}
+
+// validateModelExtensions names the owner whose slots need a disabled feature
+// before any resource is acquired.
+func validateModelExtensions(s FeatureSettings, models []slots.Declaration) error {
+	for _, declaration := range models {
+		parts, owner := declaration.Parts(), string(declaration.Owner().Name())
+		switch {
+		case !s.Extensions.Enabled:
+			return fault.New(fault.Invalid, "model extension owner "+owner+" requires features.extensions")
+		case len(parts.Translations) > 0 && !s.Locales.Enabled:
+			return fault.New(fault.Invalid, "model extension owner "+owner+" declares translated slots, which require features.locales")
+		case len(parts.Attachments) > 0 && !s.Attachments.Enabled:
+			return fault.New(fault.Invalid, "model extension owner "+owner+" declares attachment slots, which require features.attachments")
+		}
+	}
+	return nil
+}

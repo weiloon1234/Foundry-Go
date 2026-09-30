@@ -148,6 +148,7 @@ func (e *emitter) emitModelQuery(m model) {
 	e.emitModelMutation(m, primary)
 	e.emitModelRelations(m)
 	e.emitModelAggregates(m)
+	e.emitModelExtensions(m, primary)
 }
 
 type queryMethod struct{ name, argument, forward string }

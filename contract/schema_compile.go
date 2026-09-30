@@ -131,6 +131,9 @@ func compileSchemaGraph(input Schema, metadataOnly, shared bool) (*compiledSchem
 		}
 		properties := make(map[string]Property, len(typ.Properties))
 		for _, property := range typ.Properties {
+			if !account(string(property.Presentation.Kind)) || !account(string(property.Presentation.LabelKey)) || !account(string(property.Presentation.HelpKey)) || property.Presentation.Validate() != nil {
+				return nil, invalidSchema()
+			}
 			if !utf8.ValidString(property.Name) || strings.ContainsRune(property.Name, 0) || !account(property.Name) || !account(string(property.Type)) || property.Type == "" {
 				return nil, invalidSchema()
 			}
@@ -254,6 +257,13 @@ func compileSchemaGraph(input Schema, metadataOnly, shared bool) (*compiledSchem
 		target := result.types[aliasTargets[element]]
 		if target.Kind != IntegerKind || target.Bits != 8 || target.Signed || aliasNullable[element] || len(target.Cases) != 0 {
 			return nil, invalidSchema()
+		}
+	}
+	for _, typ := range result.types {
+		for _, property := range typ.Properties {
+			if err := property.Presentation.ValidateType(result.types[aliasTargets[property.Type]]); err != nil {
+				return nil, err
+			}
 		}
 	}
 	for _, typ := range result.types {

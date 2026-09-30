@@ -117,7 +117,7 @@ function writeWire(value: unknown, limits: JSONLimits): string {
   };
   visit(value, 0); return chunks.join("");
 }
-interface Property { readonly name: string; readonly type: string; readonly required: boolean }
+interface Property { readonly name: string; readonly type: string; readonly required: boolean; readonly presentation?: Presentation }
 interface UnionVariant { readonly tag: string; readonly type: string }
 interface WireType {
   readonly discriminator?: string; readonly variants?: readonly UnionVariant[];

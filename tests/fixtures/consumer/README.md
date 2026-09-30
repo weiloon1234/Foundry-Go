@@ -13,6 +13,11 @@ and eight editor scenarios accompany the implementation. Native verification,
 relevant races and the complete 915-case compiler/365-scenario editor gates passed;
 see the [tooling guide](../../../docs/guides/developer-tooling-and-testing.md).
 
+The [articles consumer](articles/article.go) declares translated text,
+attachments and typed metadata as model extension slots, registers them with
+`Builder.Models` and exercises generated deletion cleanup against PostgreSQL;
+see the [slot guide](../../../docs/guides/model-extension-slots.md).
+
 The [plugin consumer](pluginusage/bootstrap.go) imports independent
 [base](../plugin_base/README.md) and [dependent](../plugin_dep/README.md) plugin
 modules with main-module replacements and `GOWORK=off`. Milestone 22 acceptance

@@ -67,7 +67,7 @@ func Render(source *manifest.Manifest) ([]byte, error) {
 	fmt.Fprintf(&r.out, "const idempotencyKeyPattern = %s;\n", quote(idempotency.KeyPattern(idempotency.MaxKeyBytes)))
 	defaults, _ := json.Marshal(foundryhttp.DefaultEndpointLimits().Response)
 	fmt.Fprintf(&r.out, "const defaultJSONLimits: JSONLimits = Object.freeze(%s);\n", defaults)
-	for _, name := range []string{"wire", "formats", "validation_messages", "validation", "http", "realtime", "metadata"} {
+	for _, name := range []string{"wire", "formats", "validation_messages", "validation", "http", "realtime", "metadata", "descriptors"} {
 		data, err := runtimeSources.ReadFile("runtime/" + name + ".ts")
 		if err != nil {
 			return nil, err
@@ -87,6 +87,7 @@ func Render(source *manifest.Manifest) ([]byte, error) {
 	fmt.Fprintf(&r.out, "\nexport const manifestJSON = %s;\nlet runtimeDocumentCache: RuntimeDocument | undefined;\nfunction runtimeDocument(): RuntimeDocument { return runtimeDocumentCache ??= loadRuntimeDocument(); }\nlet contractsCache: WireCodec | undefined;\nfunction contracts(): WireCodec { return contractsCache ??= new WireCodec(runtimeDocument().types); }\n\n", literal)
 	r.types()
 	r.http()
+	r.descriptors()
 	r.realtime()
 	if r.out.Len() > maxOutputBytes {
 		return nil, fault.New(fault.Invalid, "TypeScript output exceeds its publication byte budget")

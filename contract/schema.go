@@ -50,9 +50,10 @@ const (
 // Property binds an exact, case-sensitive JSON name to its declared wire type.
 // Required describes presence independently of the target type's nullability.
 type Property struct {
-	Name     string `json:"name"`
-	Type     TypeID `json:"type"`
-	Required bool   `json:"required"`
+	Name         string       `json:"name"`
+	Type         TypeID       `json:"type"`
+	Required     bool         `json:"required"`
+	Presentation Presentation `json:"presentation,omitzero"`
 }
 
 // Variant binds one closed discriminator literal to an ordinary object payload.

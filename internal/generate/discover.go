@@ -23,6 +23,9 @@ type model struct {
 	fields             []field
 	relations          []relationField
 	aggregates         []aggregateField
+	extensions         []extensionSlot
+	extensionOwner     string
+	extensionPolicy    bool
 	position           token.Position
 }
 type relationField struct {
@@ -186,16 +189,28 @@ func discover(p *packageInput) (metadata, error) {
 		declaration := &result.unions[i]
 		p.unionTypes[declaration.typ] = declaration
 	}
-	names, tables := make(map[string]bool), make(map[string]bool)
+	names, tables, owners := make(map[string]bool), make(map[string]bool), make(map[string]bool)
 	for i := range result.models {
 		m := &result.models[i]
 		if tables[m.table] {
 			return result, fmt.Errorf("%s: duplicate model table %s", m.position, m.table)
 		}
 		tables[m.table] = true
+		if len(m.extensions) > 0 {
+			if owners[m.extensionOwner] {
+				return result, fmt.Errorf("%s: duplicate extension owner %s; declare a distinct extension_owner", m.position, m.extensionOwner)
+			}
+			owners[m.extensionOwner] = true
+		}
 		markEnumFields(m.fields, enums)
 		symbols := []string{m.name + "FieldSet", m.name + "Fields", m.name + "ScopedFieldSet", m.name + "NullableFieldSet", m.name + "FieldsAt", m.name + "NullableFieldsAt", m.name + "Draft", m.name + "UpdateFromBuilder", "Update" + m.name + "From", m.name + "DeleteUsingBuilder", "Delete" + m.name + "Using", m.name + "InsertFromBuilder", "Insert" + m.name + "From", m.name + "Query", m.name + "LockedQuery", m.name + "FieldChanges", m.name + "Changes", m.name + "Hooks", m.name + "Observer", "New" + m.name + "Observer", "Register" + m.name + "Observer", m.name + "RetrievalHooks", m.name + "RetrievalObserver", "New" + m.name + "RetrievalObserver", "Register" + m.name + "RetrievalObserver", "Compare" + m.name, "foundry" + m.name + "Snapshot", m.query}
 		symbols = append(symbols, m.name+"AuditPolicy", m.name+"AuditFieldSet", m.name+"AuditFields", m.name+"Auditing")
+		if len(m.extensions) > 0 {
+			symbols = append(symbols, m.name+"ExtensionSet", m.name+"ExtensionSlots", m.name+"Extensions", m.name+"ExtensionOwner", m.name+"ExtensionDeclaration")
+			if !names[extensionsFunction] {
+				symbols = append(symbols, extensionsFunction)
+			}
+		}
 		for _, f := range m.fields {
 			if f.input != nil {
 				if !f.nullable {
@@ -305,6 +320,9 @@ func discover(p *packageInput) (metadata, error) {
 			names[symbol] = true
 		}
 	}
+	if err := inferMetadataContracts(p, result.models, result.dtos); err != nil {
+		return result, err
+	}
 	for i := range result.configs {
 		declaration := &result.configs[i]
 		if err := resolveConfig(p, declaration); err != nil {
@@ -397,7 +415,7 @@ func directive(group *ast.CommentGroup) (string, map[string]string, error) {
 func discoverModel(p *packageInput, spec *ast.TypeSpec, named *types.Named, args map[string]string) (model, error) {
 	m := model{name: spec.Name.Name, typ: named, position: p.fset.Position(spec.Pos())}
 	for key := range args {
-		if key != "table" && key != "primary" && key != "hooks" && key != "retrieval" && key != "timestamps" && key != "soft_deletes" {
+		if key != "table" && key != "primary" && key != "hooks" && key != "retrieval" && key != "timestamps" && key != "soft_deletes" && key != "extension_owner" {
 			return m, p.diagnostic(spec.Pos(), "unsupported model option "+key)
 		}
 	}
@@ -434,6 +452,12 @@ func discoverModel(p *packageInput, spec *ast.TypeSpec, named *types.Named, args
 		if !v.Exported() || v.Embedded() {
 			return m, p.diagnostic(v.Pos(), "persisted fields must be exported, non-embedded fields; use foundry:\"-\" to skip")
 		}
+		if slot, ok, err := discoverExtensionSlot(p, v, tag, named); err != nil {
+			return m, err
+		} else if ok {
+			m.extensions = append(m.extensions, slot)
+			continue
+		}
 		if wrapper, ok := types.Unalias(v.Type()).(*types.Named); ok && isNamed(wrapper, framework+"/database/relation", "Value") {
 			if len(tag) != 0 {
 				return m, p.diagnostic(v.Pos(), "aggregate slots cannot declare persistence column/default tags")
@@ -456,6 +480,9 @@ func discoverModel(p *packageInput, spec *ast.TypeSpec, named *types.Named, args
 			}
 			m.relations = append(m.relations, r)
 			continue
+		}
+		if tag["name"] != "" {
+			return m, p.diagnostic(v.Pos(), "foundry:\"name=...\" applies only to extension slot fields; use column=name for a persisted field")
 		}
 		f, err := discoverValueField(p, v, tag)
 		if err != nil {
@@ -502,6 +529,9 @@ func discoverModel(p *packageInput, spec *ast.TypeSpec, named *types.Named, args
 		return m, err
 	}
 	if err := discoverSoftDeletes(p, &m, args["soft_deletes"]); err != nil {
+		return m, err
+	}
+	if err := finishExtensions(p, spec, &m, args["extension_owner"]); err != nil {
 		return m, err
 	}
 	return m, nil
@@ -602,8 +632,8 @@ func fieldTag(tag string) (map[string]string, error) {
 	}
 	for _, part := range strings.Split(text, ",") {
 		key, value, ok := strings.Cut(part, "=")
-		if !ok || value == "" || (key != "column" && key != "default") || (key == "default" && value != "database") {
-			return nil, fmt.Errorf("unsupported foundry field tag; expected column=name, default=database or -")
+		if !ok || value == "" || (key != "column" && key != "default" && key != "name") || (key == "default" && value != "database") {
+			return nil, fmt.Errorf("unsupported foundry field tag; expected column=name, default=database, name=stored_name for an extension slot, or -")
 		}
 		if _, exists := result[key]; exists {
 			return nil, fmt.Errorf("duplicate foundry field tag option")

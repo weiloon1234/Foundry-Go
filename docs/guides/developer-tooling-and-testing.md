@@ -131,7 +131,7 @@ secret markers, never setting values.
 `inspection.Command` accepts a pure collector so it can include the final CLI
 registry itself. The consumer runs this invocation before `Build`/`Run`, keeping
 metadata inspection independent of service startup. Select a typed section
-(`routes`, `jobs`, `schedules`, `plugins`, `commands`, `configuration`, `contracts`
+(`routes`, `jobs`, `schedules`, `plugins`, `commands`, `configuration`, `contracts`, `extensions`
 or `all`) and compact JSON or readable indented text. The development binary
 cannot import an arbitrary application's bootstrap: register this command in the
 application that owns those declarations.

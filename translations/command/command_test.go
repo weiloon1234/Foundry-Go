@@ -26,3 +26,15 @@ func TestTranslationsRescopeCommandRequiresExplicitApply(t *testing.T) {
 		t.Fatal("orphan inspection accepted a write flag")
 	}
 }
+
+func TestTranslationsUndeclaredCommandIsReadOnly(t *testing.T) {
+	command, err := Parse([]string{"translations", "undeclared", "--owner", "products", "--format", "json"}, io.Discard)
+	if err != nil || !command.options.Undeclared() || command.options.Rescope() {
+		t.Fatal("undeclared command", err)
+	}
+	for _, args := range [][]string{{"translations", "undeclared"}, {"translations", "undeclared", "--owner", "products", "--apply"}, {"translations", "undeclared", "--owner", "products", "--page-size", "10"}} {
+		if _, err := Parse(args, io.Discard); err == nil {
+			t.Fatal("invalid undeclared command", args)
+		}
+	}
+}

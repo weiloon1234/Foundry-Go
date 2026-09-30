@@ -330,6 +330,7 @@ func (r renderer) parameter(p manifest.Parameter, location string) object {
 		schema["default"] = r.urlDefault(p, text)
 	}
 	result := object{"name": p.Name, "in": location, "required": p.Required, "schema": schema, "x-foundry-url-syntax": p.Syntax}
+	presentationSchema(schema, p.Presentation)
 	if location == "query" {
 		result["style"], result["explode"] = "form", true
 	} else {
@@ -424,7 +425,7 @@ func (r renderer) content(payload manifest.Payload) object {
 		if text, present := part.DefaultURL.Get(); present {
 			schema["default"] = r.urlDefault(part.Parameter, text)
 		}
-		properties[part.Name], encodings[part.Name] = schema, encoding
+		properties[part.Name], encodings[part.Name] = presentationSchema(schema, part.Presentation), encoding
 		if part.Required {
 			required = append(required, part.Name)
 		}

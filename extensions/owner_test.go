@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/extensiontest"
+	"github.com/weiloon1234/Foundry-Go/model"
 )
 
 func TestOwnerScopeFollowsTheDeclaredStorageModel(t *testing.T) {
@@ -115,6 +116,55 @@ func TestRegistryRejectsStorageModelCollisionsAndAdoptsRenamedIdentities(t *test
 	previous[0] = "extension_others"
 	if models := snapshot.RecordedModels(); len(models) != 2 || models[1] != "extension_members" {
 		t.Fatal("previous models were not snapshotted", models)
+	}
+}
+
+// SubjectKey is Subject's key without the identity snapshot, through both the
+// typed owner and the erased registry, including pre-rename identities.
+func TestSubjectKeyMatchesSubject(t *testing.T) {
+	pinned := extensions.DefineOwnerWith("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{StorageModel: "extension_members"})
+	registry, err := extensions.NewRegistry(pinned.Registration(), extensiontest.Others.Registration())
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := extensiontest.Members.Reference(7).Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := pinned.Reference(7).Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, identity := range []model.Identity{legacy, current} {
+		ref, err := pinned.Parse(identity)
+		if err != nil {
+			t.Fatal(err)
+		}
+		subject, err := pinned.Subject(ref)
+		if err != nil {
+			t.Fatal(err)
+		}
+		key, err := pinned.SubjectKey(ref)
+		if err != nil || key != subject.Key {
+			t.Fatal("owner subject key differs from its subject", err)
+		}
+		erased, err := registry.Subject("members", identity)
+		if err != nil {
+			t.Fatal(err)
+		}
+		key, err = registry.SubjectKey("members", identity)
+		if err != nil || key != erased.Key || key != subject.Key {
+			t.Fatal("registry subject key differs from its subject", err)
+		}
+	}
+	if _, err := registry.SubjectKey("unknown", current); !errors.Is(err, fault.Invalid) {
+		t.Fatal("unknown owner", err)
+	}
+	if _, err := registry.SubjectKey("others", current); err == nil {
+		t.Fatal("another owner's identity was accepted")
+	}
+	if _, err := pinned.SubjectKey(model.Reference[extensiontest.Member, int64]{}); err == nil {
+		t.Fatal("a zero reference was accepted")
 	}
 }
 

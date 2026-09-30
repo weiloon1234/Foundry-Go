@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/imaging"
@@ -25,9 +24,13 @@ const (
 	MaxBatchPropertiesBytes = 4 << 20
 )
 
+// errBatchLimit reports a batch beyond MaxBatchFiles or MaxBatchPropertiesBytes;
+// slot loading retries such a batch in smaller parts.
+var errBatchLimit = fault.New(fault.Conflict, "attachment batch exceeds its row or property limit")
+
 type Batch[M any, K comparable] struct {
 	collection Collection[M, K]
-	active     map[string]extensions.Subject
+	active     map[string]bool
 	files      map[string][]Attachment[M, K]
 }
 
@@ -35,14 +38,14 @@ func (b Batch[M, K]) Get(owner model.Reference[M, K]) ([]Attachment[M, K], error
 	if b.active == nil || b.files == nil {
 		return nil, invalid()
 	}
-	subject, err := b.collection.definition.owner.Subject(owner)
+	subject, err := b.collection.definition.owner.SubjectKey(owner)
 	if err != nil {
 		return nil, err
 	}
-	if _, ok := b.active[subject.Key]; !ok {
+	if !b.active[subject] {
 		return nil, database.NotFound
 	}
-	return slices.Clone(b.files[subject.Key]), nil
+	return slices.Clone(b.files[subject]), nil
 }
 func (c Collection[M, K]) Load(ctx context.Context, m *Manager, owners []model.Reference[M, K]) (Batch[M, K], error) {
 	if err := c.check(m); err != nil {
@@ -109,9 +112,9 @@ func (c Collection[M, K]) scanRows(ctx context.Context, tx *database.Tx, m *Mana
 		}
 		bytes += len(properties)
 		if count > MaxBatchFiles || bytes > MaxBatchPropertiesBytes {
-			return fault.New(fault.Conflict, "attachment batch exceeds its row or property limit")
+			return errBatchLimit
 		}
-		if _, ok := active[row.SubjectKey]; !ok {
+		if !active[row.SubjectKey] {
 			return invalid()
 		}
 		selected := c

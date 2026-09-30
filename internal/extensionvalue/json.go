@@ -14,6 +14,10 @@ import (
 const MaxBytes = 256 << 10
 const MaxBatchBytes = 4 << 20
 
+// ErrBatchLimit reports a batch retaining more than MaxBatchBytes of JSON. It
+// matches fault.Conflict; slot loading retries such a batch in smaller parts.
+var ErrBatchLimit = fault.New(fault.Conflict, "model extension JSON batch exceeds its byte limit")
+
 // BatchBudget bounds retained JSON across a streamed result. A caller returns
 // no partial result when this fails; one individually bounded row is decoded at
 // a time by the ordinary query API.
@@ -25,7 +29,7 @@ func (b *BatchBudget) Add(snapshot value.JSON[json.RawMessage]) error {
 		return err
 	}
 	if len(text) > MaxBatchBytes-b.bytes {
-		return fault.New(fault.Conflict, "model extension JSON batch exceeds its byte limit")
+		return ErrBatchLimit
 	}
 	b.bytes += len(text)
 	return nil

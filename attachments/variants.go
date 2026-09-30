@@ -86,17 +86,17 @@ type storedVariant struct {
 }
 
 // Variants returns the attachment's generated variants, ordered by name.
-func (a Attachment[M, K]) Variants() []VariantInfo {
-	result := make([]VariantInfo, len(a.variants))
-	for i, stored := range a.variants {
+func (f File[M]) Variants() []VariantInfo {
+	result := make([]VariantInfo, len(f.variants))
+	for i, stored := range f.variants {
 		result[i] = stored.info
 	}
 	return result
 }
 
 // Variant reports whether the declared variant has been generated.
-func (a Attachment[M, K]) Variant(variant Variant) (VariantInfo, bool) {
-	for _, stored := range a.variants {
+func (f File[M]) Variant(variant Variant) (VariantInfo, bool) {
+	for _, stored := range f.variants {
 		if stored.info.Name == variant.name {
 			return stored.info, true
 		}

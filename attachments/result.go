@@ -49,9 +49,12 @@ type UploadInfo struct {
 	Size          int64
 	Width, Height int
 }
-type Attachment[M any, K comparable] struct {
+
+// File is the owner-free view of one ready attachment: identity, collection,
+// detected metadata, properties and ready variants. Model slots hold Files;
+// Attachment adds the typed owner reference.
+type File[M any] struct {
 	id         ID[M]
-	owner      model.Reference[M, K]
 	collection Name
 	locale     value.Optional[i18n.LocaleID]
 	info       UploadInfo
@@ -66,14 +69,23 @@ type Attachment[M any, K comparable] struct {
 	variants   []storedVariant
 }
 
-func (a Attachment[M, K]) ID() ID[M]                             { return a.id }
-func (a Attachment[M, K]) Owner() model.Reference[M, K]          { return a.owner }
-func (a Attachment[M, K]) Collection() Name                      { return a.collection }
-func (a Attachment[M, K]) Locale() value.Optional[i18n.LocaleID] { return a.locale }
-func (a Attachment[M, K]) Info() UploadInfo                      { return a.info }
-func (a Attachment[M, K]) Position() int32                       { return a.position }
-func (a Attachment[M, K]) CreatedAt() temporal.DateTime          { return a.created }
-func (a Attachment[M, K]) Properties() (json.RawMessage, error)  { return a.properties.Decode() }
-func (a Attachment[M, K]) IsZero() bool                          { return a.id.IsZero() }
-func (Attachment[M, K]) Format(s fmt.State, _ rune)              { _, _ = s.Write([]byte("model attachment")) }
-func (Attachment[M, K]) MarshalJSON() ([]byte, error)            { return nil, invalid() }
+func (f File[M]) ID() ID[M]                             { return f.id }
+func (f File[M]) Collection() Name                      { return f.collection }
+func (f File[M]) Locale() value.Optional[i18n.LocaleID] { return f.locale }
+func (f File[M]) Info() UploadInfo                      { return f.info }
+func (f File[M]) Position() int32                       { return f.position }
+func (f File[M]) CreatedAt() temporal.DateTime          { return f.created }
+func (f File[M]) Properties() (json.RawMessage, error)  { return f.properties.Decode() }
+func (f File[M]) IsZero() bool                          { return f.id.IsZero() }
+func (File[M]) Format(s fmt.State, _ rune)              { _, _ = s.Write([]byte("model attachment file")) }
+func (File[M]) MarshalJSON() ([]byte, error)            { return nil, invalid() }
+
+// Attachment is a ready File with its typed owner reference.
+type Attachment[M any, K comparable] struct {
+	File[M]
+	owner model.Reference[M, K]
+}
+
+func (a Attachment[M, K]) Owner() model.Reference[M, K] { return a.owner }
+func (Attachment[M, K]) Format(s fmt.State, _ rune)     { _, _ = s.Write([]byte("model attachment")) }
+func (Attachment[M, K]) MarshalJSON() ([]byte, error)   { return nil, invalid() }

@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cli"
 	"github.com/weiloon1234/Foundry-Go/config"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
+	"github.com/weiloon1234/Foundry-Go/extensions/slots"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
@@ -33,6 +34,9 @@ type Sources struct {
 	Commands      *cli.Registry
 	Contracts     *manifest.Manifest
 	Configuration []config.Report
+	// Models lists generated model extension declarations, such as a model
+	// package's FoundryExtensions().
+	Models []slots.Declaration
 }
 type Report struct {
 	Assembly      foundation.Inspection   `json:"assembly"`
@@ -42,6 +46,7 @@ type Report struct {
 	Commands      []cli.Description       `json:"commands"`
 	Configuration []config.Entry          `json:"configuration"`
 	Contracts     *manifest.Document      `json:"contracts,omitempty"`
+	Extensions    []slots.Description     `json:"extensions"`
 }
 
 // Collect returns owned snapshots using each feature's existing metadata API.
@@ -86,6 +91,13 @@ func Collect(ctx context.Context, sources Sources) (Report, error) {
 		}
 	}
 	slices.SortFunc(result.Configuration, func(a, b config.Entry) int { return strings.Compare(a.Name, b.Name) })
+	for _, declaration := range sources.Models {
+		if err := declaration.Validate(); err != nil {
+			return Report{}, err
+		}
+		result.Extensions = append(result.Extensions, declaration.Describe())
+	}
+	slices.SortFunc(result.Extensions, func(a, b slots.Description) int { return strings.Compare(string(a.Owner.Name), string(b.Owner.Name)) })
 	if err := ctx.Err(); err != nil {
 		return Report{}, err
 	}
@@ -103,6 +115,7 @@ const (
 	Commands      Section = "commands"
 	Configuration Section = "configuration"
 	Contracts     Section = "contracts"
+	Extensions    Section = "extensions"
 )
 
 type Format string
@@ -119,7 +132,7 @@ type Arguments struct {
 
 func (a Arguments) Validate() error {
 	switch a.Section {
-	case All, Routes, Jobs, Schedules, Plugins, Commands, Configuration, Contracts:
+	case All, Routes, Jobs, Schedules, Plugins, Commands, Configuration, Contracts, Extensions:
 	default:
 		return cli.Usage("unknown inspection section")
 	}
@@ -160,6 +173,8 @@ func Write(ctx context.Context, output io.Writer, report Report, arguments Argum
 		selected = report.Configuration
 	case Contracts:
 		selected = report.Contracts
+	case Extensions:
+		selected = report.Extensions
 	}
 	return callback.Isolated("write declaration inspection", func() error {
 		encoder := json.NewEncoder(output)

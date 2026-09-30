@@ -137,3 +137,57 @@ export function typedConsumer(): void {
   const resent: Payload = { ...payload, state: echoed.state };
   void [missing, undefinedOptional, crossOwner, lossy, wrongEnum, resent];
 }
+
+export async function descriptorConsumer(): Promise<void> {
+  const echo = sdk.operation("itemsEcho");
+  const amount = echo.field("body", "amount");
+  const decimal: sdk.FieldValue<typeof amount> = "12345678901234567890.12";
+  const nullable = echo.field("body", "optional");
+  const empty: sdk.FieldValue<typeof nullable> = null;
+  const absent: sdk.FieldValue<typeof nullable> = undefined;
+  const card = sdk.operation("unionsEcho").field("body", "method").variant("kind", "card");
+  const token: sdk.FieldValue<ReturnType<typeof card.field<"token">>> = "token";
+  // @ts-expect-error Only declared variants may be selected.
+  sdk.operation("unionsEcho").field("body", "method").variant("kind", "future");
+  // @ts-expect-error Select the variant before accessing its fields.
+  sdk.operation("unionsEcho").field("body", "method").field("token");
+  // @ts-expect-error Another variant's fields are unavailable.
+  card.field("reference");
+  void token;
+  const tag = echo.field("body", "tags").element();
+  const text: sdk.FieldValue<typeof tag> = "tag";
+  const mapElement = sdk.schema("foundry.test/consumer/clientcontracts.ExplicitLabels").element();
+  const mapText: sdk.FieldValue<typeof mapElement> = "value";
+  // @ts-expect-error Absent map keys do not make present map element values undefined.
+  const absentElement: sdk.FieldValue<typeof mapElement> = undefined;
+  const nested = sdk.schema("foundry.test/consumer/clientcontracts.Payload").field("amount");
+  const result: sdk.Operations["itemsEcho"]["response"] = await echo.call(api, { path: { key: "1" }, body: payload });
+  const report: sdk.ValidationReport = echo.validate({ path: { key: "1" }, body: payload });
+  // @ts-expect-error Unknown operation names are not descriptors.
+  sdk.operation("missingOperation");
+  // @ts-expect-error Field location belongs to the operation.
+  sdk.operation("empty").field("body", "amount");
+  // @ts-expect-error Unknown fields cannot be selected.
+  echo.field("body", "privatePassword");
+  // @ts-expect-error Path and body fields cannot be interchanged.
+  echo.field("path", "amount");
+  // @ts-expect-error Exact decimals cannot become floating point.
+  const lossy: sdk.FieldValue<typeof amount> = 1.25;
+  // @ts-expect-error Field owners cannot be interchanged with a reusable schema.
+  const otherOwner: typeof amount = nested;
+  // @ts-expect-error Different field value types and identities remain distinct.
+  const otherField: typeof amount = echo.field("body", "state");
+  // @ts-expect-error Primitive values expose no object fields.
+  amount.field("length");
+  // @ts-expect-error A scalar is not a collection.
+  amount.element();
+  // @ts-expect-error A DTO is not a collection.
+  sdk.schema("foundry.test/consumer/clientcontracts.Payload").element();
+  // @ts-expect-error Upload handles have no nested JSON fields.
+  sdk.operation("uploadsProfile").field("body", "document").field("filename");
+  // @ts-expect-error Descriptor call retains the exact required request.
+  echo.call(api, { body: payload });
+  // @ts-expect-error Descriptor metadata is read-only.
+  echo.metadata.route.path = "/changed";
+  void [decimal, empty, absent, text, mapText, absentElement, result, report, lossy, otherOwner, otherField];
+}

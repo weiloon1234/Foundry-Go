@@ -6,9 +6,9 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
+	"github.com/weiloon1234/Foundry-Go/internal/extensionrow"
 	store "github.com/weiloon1234/Foundry-Go/internal/extensionstore"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -67,7 +67,7 @@ func (Values) MarshalJSON() ([]byte, error) { return nil, invalid() }
 
 type Batch[M any, K comparable] struct {
 	field  Field[M, K]
-	active map[string]extensions.Subject
+	active map[string]bool
 	values map[string]Values
 }
 
@@ -75,14 +75,14 @@ func (b Batch[M, K]) Get(owner model.Reference[M, K]) (Values, error) {
 	if b.active == nil || b.values == nil {
 		return Values{}, invalid()
 	}
-	subject, err := b.field.definition.owner.Subject(owner)
+	subject, err := b.field.definition.owner.SubjectKey(owner)
 	if err != nil {
 		return Values{}, err
 	}
-	if _, ok := b.active[subject.Key]; !ok {
+	if !b.active[subject] {
 		return Values{}, database.NotFound
 	}
-	return b.values[subject.Key], nil
+	return b.values[subject], nil
 }
 
 // Load uses one owner SELECT and keyset-paged translation SELECTs (MaxBatchRows
@@ -96,70 +96,89 @@ func (f Field[M, K]) Load(ctx context.Context, m *Manager, owners []model.Refere
 	}
 	var result Batch[M, K]
 	err := m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
-		locales, err := i18n.SnapshotLocales(ctx, m.catalog)
-		if err != nil {
-			return err
-		}
-		active, err := f.definition.owner.Active(ctx, tx, m.store.Registry(), owners)
-		if err != nil {
-			return err
-		}
-		result = Batch[M, K]{field: f, active: active, values: make(map[string]Values, len(active))}
-		if len(active) == 0 {
-			return nil
-		}
-		keys := make([]string, 0, len(active))
-		for key := range active {
-			keys = append(keys, key)
-			result.values[key] = Values{locales: locales, values: make(map[i18n.LocaleID]string)}
-		}
-		slices.Sort(keys)
-		ids := locales.Locales()
-		localeNames := make([]string, len(ids))
-		for i, id := range ids {
-			localeNames[i] = string(id)
-		}
-		fields := store.TranslationFields()
-		base := store.QueryFoundryModelTranslations().Where(fields.Scope.Eq(f.definition.owner.Scope()), fields.SubjectKey.In(keys...), fields.Field.Eq(string(f.Name())), fields.Locale.In(localeNames...))
-		// UNIQUE(scope,subject_key,field,locale) bounds the pages structurally.
-		limit := len(keys) * len(ids)
-		rows, bytes, after := 0, 0, ""
-		for {
-			page := base
-			if after != "" {
-				page = page.Where(fields.Key.Gt(after))
-			}
-			count := 0
-			err := page.OrderBy(fields.Key.Asc()).Limit(MaxBatchRows).Each(ctx, tx, func(row store.Translation) error {
-				count++
-				rows++
-				after = row.Key
-				bytes += len(row.Value)
-				if rows > limit || bytes > MaxBatchBytes {
-					return fault.New(fault.Conflict, "translation batch exceeds its row or byte limit")
-				}
-				if row.Field != string(f.Name()) || !validText(row.Value, f.definition.options.MaxBytes) {
-					return invalid()
-				}
-				if err := validateOwnerRow(f.definition.owner, row); err != nil {
-					return err
-				}
-				values, ok := result.values[row.SubjectKey]
-				if !ok || !locales.Contains(i18n.LocaleID(row.Locale)) {
-					return invalid()
-				}
-				values.values[i18n.LocaleID(row.Locale)] = row.Value
-				return nil
-			})
-			if err != nil || count < MaxBatchRows {
-				return err
-			}
-		}
+		var err error
+		result, err = f.loadIn(ctx, tx, m, owners)
+		return err
 	})
 	if err != nil {
 		return Batch[M, K]{}, err
 	}
 	return result, nil
+}
+
+// errBatchLimit reports a batch beyond MaxBatchRows pages' row bound or
+// MaxBatchBytes; slot loading retries such a batch in smaller parts.
+var errBatchLimit = fault.New(fault.Conflict, "translation batch exceeds its row or byte limit")
+
+// loadIn reads one owner batch inside tx, which is either the store's own
+// read-only snapshot or a savepoint joined to the caller's transaction.
+func (f Field[M, K]) loadIn(ctx context.Context, tx *database.Tx, m *Manager, owners []model.Reference[M, K]) (Batch[M, K], error) {
+	locales, err := i18n.SnapshotLocales(ctx, m.catalog)
+	if err != nil {
+		return Batch[M, K]{}, err
+	}
+	active, err := f.definition.owner.Active(ctx, tx, m.store.Registry(), owners)
+	if err != nil {
+		return Batch[M, K]{}, err
+	}
+	result := Batch[M, K]{field: f, active: active, values: make(map[string]Values, len(active))}
+	if len(active) == 0 {
+		return result, nil
+	}
+	checked, err := extensionrow.For(f.definition.owner, owners)
+	if err != nil {
+		return Batch[M, K]{}, err
+	}
+	keys := make([]string, 0, len(active))
+	for key := range active {
+		keys = append(keys, key)
+		result.values[key] = Values{locales: locales, values: make(map[i18n.LocaleID]string)}
+	}
+	slices.Sort(keys)
+	ids := locales.Locales()
+	localeNames := make([]string, len(ids))
+	for i, id := range ids {
+		localeNames[i] = string(id)
+	}
+	fields := store.TranslationFields()
+	base := store.QueryFoundryModelTranslations().Where(fields.Scope.Eq(f.definition.owner.Scope()), fields.SubjectKey.In(keys...), fields.Field.Eq(string(f.Name())), fields.Locale.In(localeNames...))
+	// UNIQUE(scope,subject_key,field,locale) bounds the pages structurally.
+	limit := len(keys) * len(ids)
+	rows, bytes, after := 0, 0, ""
+	for {
+		page := base
+		if after != "" {
+			page = page.Where(fields.Key.Gt(after))
+		}
+		count := 0
+		err := page.OrderBy(fields.Key.Asc()).Limit(MaxBatchRows).Each(ctx, tx, func(row store.Translation) error {
+			count++
+			rows++
+			after = row.Key
+			bytes += len(row.Value)
+			if rows > limit || bytes > MaxBatchBytes {
+				return errBatchLimit
+			}
+			if row.Field != string(f.Name()) || !validText(row.Value, f.definition.options.MaxBytes) {
+				return invalid()
+			}
+			if err := validateOwnerRow(checked, row); err != nil {
+				return err
+			}
+			values, ok := result.values[row.SubjectKey]
+			if !ok || !locales.Contains(i18n.LocaleID(row.Locale)) {
+				return invalid()
+			}
+			values.values[i18n.LocaleID(row.Locale)] = row.Value
+			return nil
+		})
+		if err != nil {
+			return Batch[M, K]{}, err
+		}
+		if count < MaxBatchRows {
+			return result, nil
+		}
+	}
 }
 func (f Field[M, K]) Values(ctx context.Context, m *Manager, owner model.Reference[M, K]) (Values, error) {
 	batch, err := f.Load(ctx, m, []model.Reference[M, K]{owner})

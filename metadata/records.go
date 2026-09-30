@@ -62,7 +62,7 @@ func All[M any, K comparable](ctx context.Context, m *Manager, owner extensions.
 	}
 	var result []Record[M]
 	err := m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
-		subject, err := owner.Subject(reference)
+		subject, err := owner.SubjectKey(reference)
 		if err != nil {
 			return err
 		}
@@ -70,16 +70,20 @@ func All[M any, K comparable](ctx context.Context, m *Manager, owner extensions.
 		if err != nil {
 			return err
 		}
-		if _, ok := active[subject.Key]; !ok {
+		if !active[subject] {
 			return database.NotFound
+		}
+		rows, err := extensionrow.For(owner, []model.Reference[M, K]{reference})
+		if err != nil {
+			return err
 		}
 		f := store.MetaFields()
 		var budget extensionvalue.BatchBudget
-		return store.QueryFoundryModelMetadata().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key)).OrderBy(f.Name.Asc()).Limit(MaxKeysPerOwner+1).Each(ctx, tx, func(row store.Meta) error {
+		return store.QueryFoundryModelMetadata().Where(f.Scope.Eq(owner.Scope()), f.SubjectKey.Eq(subject)).OrderBy(f.Name.Asc()).Limit(MaxKeysPerOwner+1).Each(ctx, tx, func(row store.Meta) error {
 			if len(result) >= MaxKeysPerOwner {
 				return invalid()
 			}
-			if err := validateOwnerRow(owner, row); err != nil {
+			if err := validateOwnerRow(rows, row); err != nil {
 				return err
 			}
 			if err := budget.Add(row.Value); err != nil {
@@ -94,11 +98,11 @@ func All[M any, K comparable](ctx context.Context, m *Manager, owner extensions.
 	}
 	return result, nil
 }
-func validateOwnerRow[M any, K comparable](owner extensions.Owner[M, K], row store.Meta) error {
+func validateOwnerRow[M any, K comparable](rows extensionrow.Rows[M, K], row store.Meta) error {
 	if !identifier.Semantic(row.Name) || row.Version == 0 {
 		return invalid()
 	}
-	return extensionrow.Validate(owner, rowIdentity(row), row.Name)
+	return rows.Validate(rowIdentity(row), row.Name)
 }
 
 // Matching yields a typed query predicate for owners with this exact canonical

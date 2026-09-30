@@ -1,0 +1,125 @@
+{
+  "format": 1,
+  "date": "2026-09-30",
+  "series": "model-extension-slots",
+  "milestone": "E05",
+  "status": "accepted-with-unrelated-flaky-check",
+  "scope": "Integrated acceptance and final re-audit of model extension slots: translations.Text, attachments.One/Many and metadata.Value fields declared on the model, generated typed bindings, Builder.Models assembly, relation-batched loading, typed writes, request validation, inspection, undeclared-name maintenance and deletion cleanup",
+  "working_tree_base": "c8e2f6100bea2e689f4a13518d7ec0c5605c800b",
+  "source_identity": {"changed_go_files": 88, "sha256_of_sorted_shasum_list": "7e75b5822d5ebb16ebf35eb564f66cf236beba7642213bf4614dd08412061e55", "note": "shasum -a 256 over the changed and untracked Go files relative to the base, in git order; no listed file was modified after the final verify completed, and the digest was identical before and after the resumed PostgreSQL run"},
+  "distribution": "Local changes only; no commit, push, tag, publication or starter dependency update performed",
+  "environment": {
+    "go": "go version go1.27.1 darwin/arm64",
+    "machine": "Apple M4 Max",
+    "modules": "GOWORK=off; existing native warm caches",
+    "required_modes": {
+      "FOUNDRY_TEST_POSTGRES_REQUIRED": "1"
+    },
+    "tools": "Existing pinned gopls at bin/gopls selected through FOUNDRY_TEST_GOPLS",
+    "data": "Existing private test configuration read without printing it; retained isolated schemas; no database reset/drop, shared-store flush or new database server",
+    "disk_before_final_gates": "301 GiB available"
+  },
+  "checks": {
+    "verify-e01": {"command": ["make", "verify"], "exit_code": 0, "seconds": 680},
+    "verify-e02": {"command": ["make", "verify"], "exit_code": 0, "seconds": 534},
+    "verify-e03": {"command": ["make", "verify"], "exit_code": 0, "seconds": 670},
+    "verify-e04": {"command": ["make", "verify"], "exit_code": 0, "seconds": 354},
+    "verify-e05-final": {"command": ["make", "verify"], "exit_code": 0, "seconds": 500, "note": "After every E05 re-audit correction; includes fmt-check, vet, tests, fixture-check with the consumer compile-fail catalog, generate-check and docs-check"},
+    "agent-smoke-e05": {"command": ["make", "agent-smoke"], "environment": ["FOUNDRY_TEST_GOPLS=$PWD/bin/gopls"], "exit_code": 0, "seconds": 264, "real_gopls_checks_passed": 445, "note": "Includes the eight new extension-slot scenarios: generated-extension-owner, generated-extension-binding, generated-extension-slot, extension-slot-read, extension-slot-link, extension-slot-write, extension-file-accepts and extension-slot-field"},
+    "test-postgres-e05": {"command": ["make", "test-postgres"], "exit_code": 2, "seconds": 1200, "result": "Stopped at the batch containing internal/workscope: TestAdmissionQueuesBurstsAndReportsOverload timed out after 20m under -race. The 162 root packages reported before the stop passed, including application, attachments, database/query, extensions, i18n, inspection, internal/generate, metadata, translations and validation."},
+    "test-postgres-e05-resumed": {"command": ["go", "test", "-mod=readonly", "-count=1", "-timeout=20m", "-race", "<batches of 6 packages>"], "environment": ["FOUNDRY_TEST_POSTGRES_URL from .env.test", "FOUNDRY_TEST_POSTGRES_REQUIRED=1", "GOWORK=off"], "exit_code": 0, "seconds": 671, "result": "Resumed the runner's own arguments and batch size for everything the stopped gate did not reach: the remaining 69 root packages passed in 109 s and every consumer module package, including foundry.test/consumer (compile-fail catalog) and foundry.test/consumer/articles, passed in 562 s. Together with the 162 root packages that passed before the stop, every PostgreSQL race package except internal/workscope passed on this source."},
+    "workscope-diagnosis": {
+      "command": ["go", "test", "-race", "-v", "-count=60", "-run", "TestAdmissionQueuesBurstsAndReportsOverload", "-timeout", "60s", "./internal/workscope/"],
+      "exit_code": 1,
+      "result": "Two passes, then group_test.go:87 'nested admission waited or succeeded context deadline exceeded' (a 40 ms bound under the race detector); the test's deferred Close then waits for a lease the failed path never releases, which is the 20m hang.",
+      "ownership": "Pre-existing and unrelated: fault, internal/admission, internal/callback, internal/contextlink and internal/workscope are unchanged from the working tree base. Non-race runs pass (count=5). Not changed in this series."
+    }
+  },
+  "measurements": {
+    "statements": {
+      "source": "tests/fixtures/consumer/articles/statements_postgres_test.go",
+      "result": "Loading every slot of an Article list issues 23 statements for 1 parent and 23 for 100 parents in one relation batch, 44 for 100 parents split into two batches, and 2 without slots. LoadMissing on loaded parents issues the same statements as an empty transaction."
+    },
+    "list_loading_benchmark": {
+      "command": ["go", "test", "-run", "^$", "-bench", "BenchmarkSlotListLoading", "-benchtime", "20x", "-count", "3", "-benchmem", "./articles"],
+      "directory": "tests/fixtures/consumer",
+      "conditions": "Native PostgreSQL from the existing private test configuration; 1000 seeded articles, each with Title in two locales, Summary in one locale and one SEO metadata value; each operation reads the first 1, 100 or 1000 articles in one read transaction",
+      "ns_per_op_median": {
+        "parents-only/1": 327721,
+        "slots/1": 2035710,
+        "explicit-batches/1": 1790252,
+        "parents-only/100": 615554,
+        "slots/100": 38039019,
+        "explicit-batches/100": 37633856,
+        "parents-only/1000": 1461790,
+        "slots/1000": 281083321,
+        "explicit-batches/1000": 271121456
+      },
+      "bytes_per_op_slots_1000": 179655796,
+      "allocs_per_op_slots_1000": 2932688,
+      "conclusion": "Generated slot loading through With costs about the same as calling the underlying translation and metadata batch readers directly: about 0.25 ms more for one parent, and within 4% at 100 and 1000 parents. Both are dominated by existing per-row identity validation and decoding inside the extension stores, which is a recommended follow-up optimization rather than a slot regression."
+    }
+  },
+  "acceptance": {
+    "declarations_and_generation": [
+      "internal/generate/extensions_test.go",
+      "internal/generate/projection_test.go",
+      "tests/fixtures/consumer/articles/article.go",
+      "tests/fixtures/consumer/articles/article_test.go"
+    ],
+    "loading_and_reads": [
+      "database/query/relation_extension_test.go",
+      "extensions/slot_test.go",
+      "tests/fixtures/consumer/articles/loading_postgres_test.go",
+      "tests/fixtures/consumer/articles/statements_postgres_test.go",
+      "tests/fixtures/consumer/articles/direct_postgres_test.go"
+    ],
+    "writes_and_http_input": [
+      "attachments/slot_postgres_test.go",
+      "validation/locales_test.go",
+      "tests/fixtures/consumer/articles/writes_postgres_test.go",
+      "tests/fixtures/consumer/articles/http_postgres_test.go"
+    ],
+    "assembly_cleanup_and_maintenance": [
+      "extensions/slots/slots_test.go",
+      "translations/command/command_test.go",
+      "tests/fixtures/consumer/articles/cleanup_postgres_test.go",
+      "tests/fixtures/consumer/articles/undeclared_postgres_test.go"
+    ],
+    "compiler_editor": [
+      "tests/fixtures/consumer/types_test.go",
+      "internal/agent/gopls_acceptance_test.go",
+      "internal/agent/field_documentation_acceptance_test.go"
+    ],
+    "measurements": [
+      "tests/fixtures/consumer/articles/loading_benchmark_test.go"
+    ]
+  },
+  "audit": {
+    "fixed": [
+      "Projection DTO fields accepted the model-only name= tag option; the generator now rejects it with a projection regression case.",
+      "Relation-batched slot loading charged the row budget only after every batch; it now charges state.remaining per BatchSize batch and checks MaxDepth, with a unit regression that stops an over-budget load after the exceeding batch.",
+      "A locale key containing NUL or too long for a path segment produced an internal error; validation.Locales now reports it as foundry.supported_locale at the map path.",
+      "Attachment Accepts buffered uploads outside write admission; it now runs under the collection's admitted calls and shares acceptMedia with writes, with detection-parity cases for docx, text, svg, png and path names.",
+      "Text slot Rule and SyncIn disagreed on blank text; both treat whitespace-only text as blank, and MergeRule validates partial updates without requiring the default locale.",
+      "Metadata contract inference accepted enums and discarded malformed JSONContract errors; enums are not inferred and malformed contracts are reported.",
+      "Two models with the same extension owner name were accepted by the generator; duplicate owners are reported.",
+      "Undeclared-name output did not distinguish a truncated report; the command prints a (truncated) marker.",
+      "Generated field documentation did not say whether a stored name was pinned; notes now state pinned or unpinned names and per-kind write guidance.",
+      "The articles HTTP fixture duplicated the gallery file limit; it reads Galleries.Describe().MaxFiles.",
+      "Inspection received model extension declarations separately from the application that installed them; App.Models() is now the single source for both.",
+      "Weak or vacuous fixture assertions were replaced with specific error, orphan-after-delete, version-mismatch, pagination, nested-count, depth and cancellation assertions.",
+      "Blueprint and changelog text described undelivered behavior; both now match delivered source."
+    ],
+    "not_delivered": [
+      "TypeScript locale-union output for translated text requires a compatibility review and was not delivered.",
+      "Scaffold flags for slot fields were not delivered."
+    ],
+    "limits": [
+      "Deletion cleanup observers are installed on the configured extension database pool only; models deleted through another pool must clean up explicitly. This is documented in the guide.",
+      "Attachments publish outside caller transactions; applications commit the owner first and inspect Result.Publication on error, as documented.",
+      "The per-row identity validation cost of the existing extension stores dominates large list loads (see the benchmark)."
+    ]
+  },
+  "decision": "E05 accepted on this source. The only failing check is the pre-existing, unrelated internal/workscope race-mode timing test, recorded above and left unchanged pending a separate decision."
+}

@@ -37,6 +37,7 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 		{"raw-field-getter", "mutatorqueries/accessors_test.go", "if member.", "ID", "/mutatorqueries/member.go", []string{"Custom getter", "AccessID", "ID is the database identity."}},
 		{"raw-field-setter", "mutatorqueries/accessors_test.go", "|| member.", "Attempts", "/mutatorqueries/member.go", []string{"Custom setter", "MutateAttempts", "persistence", "Direct field assignment"}},
 		{"query-field", "mutatorqueries/mutators_postgres_test.go", "q.Where(f.", "Email", "/mutatorqueries/member_foundry.gen.go", []string{"Custom getter", "AccessEmail", "Custom setter", "MutateEmail"}},
+		{"extension-slot-field", "articles/cleanup_postgres_test.go", "if article.", "Title", "/articles/article.go", []string{"Extension slot, not a column", "foundry_model_translations", "ArticleExtensions().Title", "From(runtime)"}},
 		{"draft-setter", "mutatorqueries/mutators_postgres_test.go", "mutatorqueries.MemberDraft{}.", "SetEmail", "/mutatorqueries/member_foundry.gen.go", []string{"Custom getter", "AccessEmail", "Custom setter", "MutateEmail", "draft construction"}},
 	} {
 		t.Run(probe.name, func(t *testing.T) {

@@ -280,7 +280,11 @@ func resolveJSONGraph(p *packageInput, graph *dtoGraph, root types.Type, positio
 						graph.nodes = append(graph.nodes, quoted)
 					}
 				}
-				node.wire.Properties = append(node.wire.Properties, contract.Property{Name: property.Name, Type: id, Required: !property.Optional})
+				presentation, err := propertyPresentation(typ, property.Index)
+				if err != nil {
+					return fail(err.Error())
+				}
+				node.wire.Properties = append(node.wire.Properties, contract.Property{Name: property.Name, Type: id, Required: !property.Optional, Presentation: presentation})
 			}
 		case *types.Array:
 			if shape.Len() > int64(int(^uint(0)>>1)) {
@@ -328,6 +332,9 @@ func resolveJSONGraph(p *packageInput, graph *dtoGraph, root types.Type, positio
 		}
 	}
 	sort.Slice(graph.nodes, func(i, j int) bool { return graph.nodes[i].wire.ID < graph.nodes[j].wire.ID })
+	if err := validatePresentationGraph(graph); err != nil {
+		return p.diagnostic(position, err.Error())
+	}
 	return validateUnionGraph(graph)
 }
 

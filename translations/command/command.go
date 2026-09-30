@@ -19,6 +19,11 @@ func Parse(args []string, help io.Writer) (Command, error) {
 	return Command{options: options}, err
 }
 func (c Command) Run(ctx context.Context, manager *translations.Manager, out io.Writer) error {
+	if c.options.Undeclared() {
+		return extensioncommand.RunUndeclared(ctx, c.options, out, func(ctx context.Context, owner extensions.OwnerName) (extensionmaintenance.Undeclared, error) {
+			return translations.InspectUndeclared(ctx, manager, owner)
+		})
+	}
 	if c.options.Rescope() {
 		return extensioncommand.RunRescope(ctx, c.options, out, func(ctx context.Context, owner extensions.OwnerName, cursor translations.Cursor, limit int, apply bool) (extensionmaintenance.RescopePage, error) {
 			if apply {

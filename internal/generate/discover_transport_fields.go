@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/internal/httpquery"
 )
 
@@ -18,6 +19,7 @@ type transportField struct {
 	position        token.Pos
 	index           int
 	options         map[string]bool
+	presentation    contract.Presentation
 }
 
 func discoverTransportFields(p *packageInput, structure *types.Struct, tag string, allowed map[string]bool, forbidden []string) ([]transportField, error) {
@@ -60,7 +62,11 @@ func discoverTransportFields(p *packageInput, structure *types.Struct, tag strin
 			return nil, p.diagnostic(field.Pos(), fmt.Sprintf("multiple fields bind the same %s parameter", tag))
 		}
 		seen[name] = true
-		fields = append(fields, transportField{name: field.Name(), parameter: name, typ: field.Type(), position: field.Pos(), index: i, options: options})
+		presentation, err := parsePresentation(tags["client"])
+		if err != nil {
+			return nil, p.diagnostic(field.Pos(), err.Error())
+		}
+		fields = append(fields, transportField{name: field.Name(), parameter: name, typ: field.Type(), position: field.Pos(), index: i, options: options, presentation: presentation})
 	}
 	sort.Slice(fields, func(i, j int) bool { return fields[i].parameter < fields[j].parameter })
 	return fields, nil

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionmaintenance"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionrow"
@@ -148,4 +149,23 @@ func rescopeTable() extensionmaintenance.RescopeTable[store.MetaIndex] {
 			return err
 		},
 	}
+}
+
+// Undeclared lists stored names that no current registration declares.
+type Undeclared = extensionmaintenance.Undeclared
+
+// InspectUndeclared lists stored key names in owner's current scope that no
+// key registered with m declares, for example after renaming a slot field
+// without pinning its stored name. It reads names only and modifies nothing.
+func InspectUndeclared(ctx context.Context, m *Manager, owner extensions.OwnerName) (Undeclared, error) {
+	if err := m.Validate(); err != nil {
+		return Undeclared{}, err
+	}
+	return extensionmaintenance.InspectUndeclared(ctx, m.store, owner, func(ctx context.Context, tx *database.Tx, scope string, limit int) ([]string, error) {
+		f := store.MetaFields()
+		return query.SelectValue(store.QueryFoundryModelMetadata().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)), f.Name.Value()).Distinct().OrderBy(f.Name.Asc()).Limit(limit).All(ctx, tx)
+	}, func(scope, name string) bool {
+		_, declared := m.keys[extensions.Digest(scope, name)]
+		return declared
+	})
 }

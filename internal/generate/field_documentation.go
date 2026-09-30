@@ -57,6 +57,26 @@ func fieldBehaviorNotes(owner, table string, f field) []string {
 	return notes
 }
 
+// extensionSlotNotes documents an extension slot beside its handwritten field,
+// sharing the generated descriptor summary.
+func extensionSlotNotes(m model, slot extensionSlot) []string {
+	policy := "slot defaults apply; declare " + extensionSetMethod + " to configure it"
+	if m.extensionPolicy {
+		policy = "policy: [" + m.name + "." + extensionSetMethod + "] entry " + slot.name
+	}
+	writes := map[string]string{
+		textSlot:  "Write with SaveIn (merge) or SyncIn (exact, enforcing Require) in the model's transaction, and validate request input with Rule() or MergeRule().",
+		oneSlot:   "Publish with ReplaceFile after the model commits, and check uploads with Accepts.",
+		manySlot:  "Publish with AddFile or attachments.AddFiles after the model commits, and check uploads with Accepts.",
+		valueSlot: "Write with SaveIn in the model's transaction.",
+	}[slot.kind]
+	naming := fmt.Sprintf("Renaming this field changes its stored name unless foundry:\"name=%s\" pins it.", slot.stored)
+	if slot.pinned {
+		naming = fmt.Sprintf("Its stored name is pinned by foundry:\"name=%s\", so renaming this field keeps its data.", slot.stored)
+	}
+	return []string{fmt.Sprintf("Extension slot, not a column: %s; %s. Descriptor: %sExtensions().%s; bind it once with From(runtime), then pass it to With or Load to fill this field. The zero value is not loaded and reads never perform I/O. %s Hard deletion removes the data; soft deletion keeps it. %s", extensionSlotDescription(slot), policy, m.name, slot.name, writes, naming)}
+}
+
 func planFieldDocumentation(p *packageInput, metadata *metadata) (map[string][]byte, error) {
 	models := make(map[string]model, len(metadata.models))
 	for _, m := range metadata.models {
@@ -92,6 +112,11 @@ func planFieldDocumentation(p *packageInput, metadata *metadata) (map[string][]b
 						for _, f := range m.fields {
 							if f.name == name.Name {
 								notes = append(notes, fieldBehaviorNotes(m.name, m.table, f)...)
+							}
+						}
+						for _, slot := range m.extensions {
+							if slot.name == name.Name {
+								notes = append(notes, extensionSlotNotes(m, slot)...)
 							}
 						}
 					}

@@ -25,10 +25,10 @@ operation names and feature metadata. Conflicting definitions or ambiguous
 camel-cased names are errors. `Snapshot()` and `JSON()` return owned copies.
 `manifest.Decode(data)` validates a saved manifest without loading application
 code. The decoder rejects unknown versions, duplicate JSON keys, unknown fields,
-broken references and oversized/deep documents. Manifest version 5 adds
-alternative success statuses, redirect responses, raw request bodies and event
-stream responses;
-regenerate saved manifests and clients together.
+broken references and oversized/deep documents. Manifest version 6 adds bounded
+property/parameter presentation metadata. Regenerate saved manifests and clients
+together. [Typed descriptors](client-descriptors.md) expose operation/field lookup
+and explicit semantic hints through the same contract.
 
 Generate into an existing, dedicated client directory:
 

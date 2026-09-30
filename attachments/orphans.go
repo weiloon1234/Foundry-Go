@@ -155,3 +155,23 @@ func (m *Manager) orphanTable(queue *Queue, scheduled *[]model.ID[store.File]) e
 		},
 	}
 }
+
+// Undeclared lists stored names that no current registration declares.
+type Undeclared = extensionmaintenance.Undeclared
+
+// InspectUndeclared lists stored collection names in owner's current scope
+// that no collection registered with m declares, in any journal state, for
+// example after renaming a slot field without pinning its stored name. It
+// reads names only and modifies no row or object.
+func InspectUndeclared(ctx context.Context, m *Manager, owner extensions.OwnerName) (Undeclared, error) {
+	if err := m.Validate(); err != nil {
+		return Undeclared{}, err
+	}
+	return extensionmaintenance.InspectUndeclared(ctx, m.store, owner, func(ctx context.Context, tx *database.Tx, scope string, limit int) ([]string, error) {
+		f := store.FileFields()
+		return query.SelectValue(store.QueryFoundryAttachments().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)), f.Collection.Value()).Distinct().OrderBy(f.Collection.Asc()).Limit(limit).All(ctx, tx)
+	}, func(scope, name string) bool {
+		_, declared := m.collections[extensions.Digest(scope, name)]
+		return declared
+	})
+}

@@ -17,10 +17,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
-// Version 5 adds alternative success statuses, redirect responses, raw request
-// bodies and event stream responses (Version 4 added idempotency policy metadata). Earlier formats must be
-// regenerated; older readers reject unsupported versions.
-const Version = 5
+// Version 6 adds bounded property/parameter presentation metadata. Earlier
+// formats must be regenerated; older readers reject unsupported versions.
+const Version = 6
 const MaxBytes = 16 << 20
 const MaxOperations = 4096
 
@@ -74,13 +73,14 @@ type Operation struct {
 }
 
 type Parameter struct {
-	Name       string                 `json:"name"`
-	Type       contract.TypeID        `json:"type,omitempty"`
-	Syntax     foundryhttp.URLSyntax  `json:"syntax,omitempty"`
-	Required   bool                   `json:"required"`
-	Repeated   bool                   `json:"repeated"`
-	CatchAll   bool                   `json:"catch_all,omitempty"`
-	DefaultURL value.Optional[string] `json:"default_url,omitzero"`
+	Presentation contract.Presentation  `json:"presentation,omitzero"`
+	Name         string                 `json:"name"`
+	Type         contract.TypeID        `json:"type,omitempty"`
+	Syntax       foundryhttp.URLSyntax  `json:"syntax,omitempty"`
+	Required     bool                   `json:"required"`
+	Repeated     bool                   `json:"repeated"`
+	CatchAll     bool                   `json:"catch_all,omitempty"`
+	DefaultURL   value.Optional[string] `json:"default_url,omitzero"`
 }
 
 type Part struct {

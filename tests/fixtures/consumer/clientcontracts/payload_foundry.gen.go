@@ -26,7 +26,7 @@ var foundryPayloadJSON = sync.OnceValue(func() foundrycontract.JSON[Payload] {
 		{ID: "encoding/json.Number", Kind: foundrycontract.Kind("number"), Nullable: false},
 		{ID: "foundry.test/consumer/clientcontracts.Payload", Kind: foundrycontract.Kind("object"), Nullable: false,
 			Properties: []foundrycontract.Property{
-				{Name: "amount", Type: "github.com/weiloon1234/Foundry-Go/decimal.Decimal", Required: true},
+				{Name: "amount", Type: "github.com/weiloon1234/Foundry-Go/decimal.Decimal", Required: true, Presentation: foundrycontract.Presentation{Kind: "money", LabelKey: "fields.amount", HelpKey: "help.amount"}},
 				{Name: "buyer_id", Type: "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]", Required: true},
 				{Name: "bytes", Type: "go:874612457cdc8d7319303305c10492405e8dd6f1b85c024df63dbfb73046fa1e", Required: true},
 				{Name: "clock", Type: "github.com/weiloon1234/Foundry-Go/temporal.Time", Required: true},
@@ -40,7 +40,7 @@ var foundryPayloadJSON = sync.OnceValue(func() foundrycontract.JSON[Payload] {
 				{Name: "local", Type: "github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime", Required: true},
 				{Name: "natural", Type: "foundry.test/consumer/models.CountryCode", Required: true},
 				{Name: "nullable", Type: "github.com/weiloon1234/Foundry-Go/value.Nullable[string]", Required: true},
-				{Name: "optional", Type: "github.com/weiloon1234/Foundry-Go/value.Optional[github.com/weiloon1234/Foundry-Go/value.Nullable[string]]", Required: false},
+				{Name: "optional", Type: "github.com/weiloon1234/Foundry-Go/value.Optional[github.com/weiloon1234/Foundry-Go/value.Nullable[string]]", Required: false, Presentation: foundrycontract.Presentation{Kind: "multiline", LabelKey: "", HelpKey: ""}},
 				{Name: "quoted", Type: "quoted:int64", Required: true},
 				{Name: "state", Type: "foundry.test/consumer/localization.Status", Required: true},
 				{Name: "tags", Type: "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0", Required: true},
@@ -150,7 +150,7 @@ var foundryPayloadValidationFields = sync.OnceValue(func() PayloadValidationFiel
 	return PayloadValidationFieldSet{
 		Amount: foundryvalidation.DefineField("amount", func(input Payload) decimal.Decimal {
 			return input.Amount
-		}),
+		}).WithLabelKey("fields.amount"),
 		BuyerID: foundryvalidation.DefineField("buyer_id", func(input Payload) model.ID[models.User] {
 			return input.BuyerID
 		}),

@@ -88,6 +88,28 @@ for (const input of [{ key: 1 }, { key: undefined }, { key: null }]) {
   assert.throws(() => sdk.encodeContract(labelsType, input), sdk.ContractError);
 }
 assert.throws(() => sdk.encodeContract(labelsType, labels, { ...tiny, Steps: 1 }), sdk.ContractError);
+assert.equal(sdk.operation("unionsEcho").field("body", "method").variant("kind", "card").field("token").schema.kind, "string");
+assert.throws(() => sdk.operation("unionsEcho").field("body", "method").variant("kind", "unknown"), sdk.ContractError);
+const echoDescriptor = sdk.operation("itemsEcho");
+assert.equal(echoDescriptor.name, "itemsEcho");
+assert.equal(echoDescriptor.metadata.route.id, "items.echo");
+assert.equal(echoDescriptor.metadata.route.path, "/items/{key}");
+assert.equal(echoDescriptor.metadata.route.method, "POST");
+const amountDescriptor = echoDescriptor.field("body", "amount");
+assert.equal(amountDescriptor.schema.format, "decimal");
+assert.equal(amountDescriptor.presentation.kind, "money");
+assert.equal(amountDescriptor.presentation.label_key, "fields.amount");
+assert.equal(amountDescriptor.presentation.help_key, "help.amount");
+assert.equal(amountDescriptor.path, "/body/amount");
+assert.equal(echoDescriptor.field("body", "optional").nullable, true);
+assert.equal(echoDescriptor.field("body", "optional").required, false);
+assert.equal(echoDescriptor.field("query", "q").presentation.label_key, "fields.search");
+assert.equal(echoDescriptor.field("body", "tags").element().schema.kind, "string");
+assert.equal(sdk.schema(type).field("amount").schema.format, "decimal");
+assert.ok(echoDescriptor.field("body", "state").choices.length > 0);
+assert.throws(() => { echoDescriptor.metadata.route.path = "/changed"; }, TypeError);
+assert.throws(() => { amountDescriptor.presentation.kind = "password"; }, TypeError);
+for (const fail of [() => sdk.operation("missing"), () => sdk.operation("__proto__"), () => sdk.schema("private.model"), () => echoDescriptor.field("body", "private"), () => echoDescriptor.field("wrong", "amount"), () => amountDescriptor.field("length"), () => amountDescriptor.element()]) assert.throws(fail, sdk.ContractError);
 const metadata = sdk.contractMetadata();
 assert.equal(metadata.version.text, String(sdk.manifestVersion));
 assert.ok(metadata.locales.supported.includes("ms"));
@@ -152,7 +174,12 @@ for (const wire of ['{"kind":"card","kind":"bank_transfer","reference":"duplicat
 assert.throws(() => sdk.contractValue("foundry.test/consumer/unions.PaymentRequest", {method:{kind:7}}), error => error instanceof sdk.ContractError && error.issues[0].path === "/method/kind");
 const beforeEchoClose = closes;
 const request = { path: { key: source.large }, query: { q: "spaces + / Unicode é", tag: ["first", "second"] }, body: payload };
-const response = await api.itemsEcho(request);
+// API wrappers may inherit methods and use a receiver. Descriptor submission
+// must preserve that receiver while delegating to the real generated client.
+const wrappedAPI = Object.create({ ...api, itemsEcho(input, options) { return this.client.itemsEcho(input, options); } });
+wrappedAPI.client = api;
+const response = await echoDescriptor.call(wrappedAPI, request);
+assert.deepEqual(echoDescriptor.validate(request), sdk.validateRequest("itemsEcho", request));
 assert.equal(response.large, source.large); assert.equal(response.counter, source.counter); assert.equal(response.exact, source.exact);
 assert.equal(response.quoted, source.quoted); assert.equal(response.amount, source.amount); assert.equal(response.natural, "MY");
 assert.equal(response.keys[source.large], "max"); assert.equal(response.when, source.when);

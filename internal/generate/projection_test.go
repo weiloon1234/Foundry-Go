@@ -260,6 +260,7 @@ func TestInvalidProjectionDeclarationsDoNotPublish(t *testing.T) {
 		strings.Replace(projectionSource, "type Summary struct { Name FoundryScope; Nickname value.Nullable[string] }", "type Summary struct{}", 1),
 		strings.Replace(projectionSource, "type Summary struct { Name FoundryScope; Nickname value.Nullable[string] }", "type Summary struct { Name FoundryScope; Nickname string }", 1),
 		strings.Replace(projectionSource, "type Summary struct { Name FoundryScope; Nickname value.Nullable[string] }", "type Summary struct { Name FoundryScope `foundry:\"default=database\"`; Nickname value.Nullable[string] }", 1),
+		strings.Replace(projectionSource, "type Summary struct { Name FoundryScope; Nickname value.Nullable[string] }", "type Summary struct { Name FoundryScope `foundry:\"name=display\"`; Nickname value.Nullable[string] }", 1),
 		strings.Replace(projectionSource, "type Summary struct { Name FoundryScope; Nickname value.Nullable[string] }", "type Summary struct { Name FoundryScope `foundry:\"-\"`; Nickname value.Nullable[string] }", 1),
 		strings.Replace(projectionSource, "Name:UserFields().Name.Value()", "Name:UserFields().ID.Value()", 1),
 		strings.Replace(projectionSource, "SummaryFieldsAt(source.Scope())", "UserFieldsAt(source.Scope())", 1),

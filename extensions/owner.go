@@ -165,18 +165,7 @@ type Subject struct {
 func (Subject) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("model extension subject")) }
 
 func (o Owner[M, K]) Subject(reference model.Reference[M, K]) (Subject, error) {
-	if err := o.Validate(); err != nil {
-		return Subject{}, err
-	}
-	identity, err := reference.Identity()
-	if err != nil {
-		return Subject{}, err
-	}
-	parsed, err := o.Parse(identity)
-	if err != nil {
-		return Subject{}, err
-	}
-	token, err := o.definition.source.KeyToken(parsed.Key())
+	identity, key, err := o.subjectKey(reference)
 	if err != nil {
 		return Subject{}, err
 	}
@@ -184,7 +173,43 @@ func (o Owner[M, K]) Subject(reference model.Reference[M, K]) (Subject, error) {
 	if err != nil {
 		return Subject{}, err
 	}
-	return Subject{Scope: o.Scope(), Key: Digest(token), Identity: snapshot}, nil
+	return Subject{Scope: o.Scope(), Key: key, Identity: snapshot}, nil
+}
+
+// SubjectKey returns the Subject.Key that Subject returns for reference, with
+// the same validation but without snapshotting the identity. Reads use it to
+// match owners with rows, which is all a subject key is for.
+func (o Owner[M, K]) SubjectKey(reference model.Reference[M, K]) (string, error) {
+	_, key, err := o.subjectKey(reference)
+	return key, err
+}
+
+func (o Owner[M, K]) subjectKey(reference model.Reference[M, K]) (model.Identity, string, error) {
+	if err := o.Validate(); err != nil {
+		return model.Identity{}, "", err
+	}
+	identity, err := reference.Identity()
+	if err != nil {
+		return model.Identity{}, "", err
+	}
+	parsed, err := o.Parse(identity)
+	if err != nil {
+		return model.Identity{}, "", err
+	}
+	subject, err := o.keySubject(parsed.Key())
+	if err != nil {
+		return model.Identity{}, "", err
+	}
+	return identity, subject, nil
+}
+
+// keySubject is the subject key of a parsed owner key.
+func (o Owner[M, K]) keySubject(key K) (string, error) {
+	token, err := o.definition.source.KeyToken(key)
+	if err != nil {
+		return "", err
+	}
+	return Digest(token), nil
 }
 
 // Lock validates the exact registry declaration then locks a currently active
@@ -217,9 +242,10 @@ func (o Owner[M, K]) Lock(ctx context.Context, tx *database.Tx, registry *Regist
 }
 
 // Active performs one primary-key-only query for a bounded batch and returns
-// subjects only for owners still visible under the generated soft-delete policy.
-// The returned map keys are opaque Subject.Key values, not application IDs.
-func (o Owner[M, K]) Active(ctx context.Context, executor database.Executor, registry *Registry, references []model.Reference[M, K]) (map[string]Subject, error) {
+// the subject keys of owners still visible under the generated soft-delete
+// policy, as RetainedSubjects does for maintenance. The keys are opaque
+// Subject.Key values, not application IDs; match a reference with SubjectKey.
+func (o Owner[M, K]) Active(ctx context.Context, executor database.Executor, registry *Registry, references []model.Reference[M, K]) (map[string]bool, error) {
 	if err := o.Check(registry); err != nil {
 		return nil, err
 	}
@@ -227,6 +253,7 @@ func (o Owner[M, K]) Active(ctx context.Context, executor database.Executor, reg
 		return nil, invalid("owner batch exceeds its limit")
 	}
 	keys := make([]K, len(references))
+	subjects := make(map[K]string, len(references))
 	for i, ref := range references {
 		identity, err := ref.Identity()
 		if err != nil {
@@ -237,18 +264,25 @@ func (o Owner[M, K]) Active(ctx context.Context, executor database.Executor, reg
 			return nil, err
 		}
 		keys[i] = parsed.Key()
+		if subjects[keys[i]], err = o.keySubject(keys[i]); err != nil {
+			return nil, err
+		}
 	}
 	found, err := o.definition.source.ActiveKeys(ctx, executor, keys)
 	if err != nil {
 		return nil, err
 	}
-	result := make(map[string]Subject, len(found))
+	result := make(map[string]bool, len(found))
 	for _, key := range found {
-		s, err := o.Subject(o.Reference(key))
-		if err != nil {
-			return nil, err
+		// A found key equals a requested one unless its codec normalizes;
+		// only then is its subject derived again.
+		subject, ok := subjects[key]
+		if !ok {
+			if subject, err = o.SubjectKey(o.Reference(key)); err != nil {
+				return nil, err
+			}
 		}
-		result[s.Key] = s
+		result[subject] = true
 	}
 	return result, nil
 }

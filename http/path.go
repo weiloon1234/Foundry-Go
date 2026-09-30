@@ -104,6 +104,9 @@ func (p Path[P]) parse() ([]pathSegment, error) {
 	}
 	bindings := make(map[string]bool, len(p.parameters))
 	for _, binding := range p.parameters {
+		if binding.err != nil {
+			return nil, binding.err
+		}
 		if binding.decode == nil || binding.encode == nil || bindings[binding.name] {
 			return nil, fault.New(fault.Invalid, "path parameter requires a unique name, codec and field selector")
 		}

@@ -17,10 +17,10 @@ func Command(name cli.Name, collect func(context.Context) (Report, error)) (cli.
 	if collect == nil {
 		return cli.Declaration{}, fault.New(fault.Invalid, "inspection command requires a pure report collector")
 	}
-	command := cli.Define(name, "Inspect declared routes, jobs, schedules, plugins, contracts and configuration sources", cli.Flags(func(flags *flag.FlagSet, args *Arguments) {
+	command := cli.Define(name, "Inspect declared routes, jobs, schedules, plugins, contracts, model extensions and configuration sources", cli.Flags(func(flags *flag.FlagSet, args *Arguments) {
 		args.Section = All
 		args.Format = Text
-		flags.Func("section", "all, routes, jobs, schedules, plugins, commands, configuration or contracts", func(value string) error { args.Section = Section(value); return nil })
+		flags.Func("section", "all, routes, jobs, schedules, plugins, commands, configuration, contracts or extensions", func(value string) error { args.Section = Section(value); return nil })
 		flags.Func("format", "text or json", func(value string) error { args.Format = Format(value); return nil })
 	}, Arguments.Validate))
 	return command.Declare(func(foundation.Resolver) (cli.Handler[Arguments], error) {

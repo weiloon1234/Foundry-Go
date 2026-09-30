@@ -23,6 +23,11 @@ func Parse(args []string, help io.Writer) (Command, error) {
 // Run emits only opaque row keys and key names, never owner/value payloads.
 // JSON output is one bounded page per line.
 func (c Command) Run(ctx context.Context, manager *metadata.Manager, out io.Writer) error {
+	if c.options.Undeclared() {
+		return extensioncommand.RunUndeclared(ctx, c.options, out, func(ctx context.Context, owner extensions.OwnerName) (extensionmaintenance.Undeclared, error) {
+			return metadata.InspectUndeclared(ctx, manager, owner)
+		})
+	}
 	if c.options.Rescope() {
 		return extensioncommand.RunRescope(ctx, c.options, out, func(ctx context.Context, owner extensions.OwnerName, cursor metadata.Cursor, limit int, apply bool) (extensionmaintenance.RescopePage, error) {
 			if apply {

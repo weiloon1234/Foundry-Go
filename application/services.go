@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/weiloon1234/Foundry-Go/clock"
+	"github.com/weiloon1234/Foundry-Go/extensions/slots"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/http"
@@ -14,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/schedule"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"log/slog"
+	"slices"
 )
 
 const Provider foundation.ProviderID = "foundry.application"
@@ -79,6 +81,16 @@ type App struct {
 	resources  Services
 	server     *http.Server
 	migrations []infrastructure.MigrationTarget
+	models     []slots.Declaration
+}
+
+// Models returns the model extension declarations registered with
+// Builder.Models, for declaration inspection. The slice is an owned copy.
+func (a *App) Models() []slots.Declaration {
+	if a == nil {
+		return nil
+	}
+	return slices.Clone(a.models)
 }
 
 func (a *App) Resources() Services { return a.resources }

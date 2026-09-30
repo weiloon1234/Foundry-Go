@@ -15,6 +15,10 @@ forms/request hooks, nested binding, isolated HTTP tests and inbound idempotency
 The [security hardening continuation](security-hardening/README.md) implements the
 confirmed cache issue and all four additional review items.
 
+The [model extension slot continuation](model-extension-slots/README.md) lets
+models declare translated text, attachments and typed schemaless values as typed
+fields over the delivered extension stores. Its status is also owned by the master.
+
 ## How to implement a milestone
 
 1. Read the master document and the milestone's prerequisites.

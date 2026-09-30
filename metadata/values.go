@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/extensionrow"
 	store "github.com/weiloon1234/Foundry-Go/internal/extensionstore"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionvalue"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -50,7 +51,7 @@ func (k Key[M, K, V]) set(ctx context.Context, tx *database.Tx, m *Manager, owne
 		return err
 	}
 	if row, ok := existing.Get(); ok {
-		if err := k.checkRow(row, subject); err != nil {
+		if err := k.checkRow(extensionrow.ForSubject(k.definition.owner, subject), row, subject.Key); err != nil {
 			return err
 		}
 		_, err = q.Update(ctx, tx, id, store.MetaDraft{}.SetValue(snapshot).SetVersion(uint32(k.Version())).SetUpdatedAt(now))
@@ -66,26 +67,14 @@ func (k Key[M, K, V]) set(ctx context.Context, tx *database.Tx, m *Manager, owne
 	_, err = q.Create(ctx, tx, store.MetaDraft{}.SetKey(id).SetOwner(string(k.definition.owner.Name())).SetScope(subject.Scope).SetSubjectKey(subject.Key).SetIdentity(subject.Identity).SetName(string(k.Name())).SetVersion(uint32(k.Version())).SetValue(snapshot).SetCreatedAt(now).SetUpdatedAt(now))
 	return err
 }
-func (k Key[M, K, V]) checkRow(row store.Meta, subject extensions.Subject) error {
-	if row.Key != extensions.Digest(subject.Scope, subject.Key, string(k.Name())) || row.Owner != string(k.definition.owner.Name()) || row.Scope != subject.Scope || row.SubjectKey != subject.Key || row.Name != string(k.Name()) {
+
+// checkRow validates row as this key's stored value for the subject key
+// expected, through the shared persisted-identity check.
+func (k Key[M, K, V]) checkRow(rows extensionrow.Rows[M, K], row store.Meta, expected string) error {
+	if row.SubjectKey != expected || row.Name != string(k.Name()) {
 		return invalid()
 	}
-	identity, err := row.Identity.Decode()
-	if err != nil {
-		return err
-	}
-	ref, err := k.definition.owner.Parse(identity)
-	if err != nil {
-		return err
-	}
-	stored, err := k.definition.owner.Subject(ref)
-	if err != nil {
-		return err
-	}
-	if stored.Key != subject.Key {
-		return invalid()
-	}
-	return nil
+	return rows.Validate(rowIdentity(row), row.Name)
 }
 
 // Batch is an immutable snapshot of one typed key for currently active owners.
@@ -93,7 +82,7 @@ func (k Key[M, K, V]) checkRow(row store.Meta, subject extensions.Subject) error
 // for later operations; each new read/write rechecks the actual owner.
 type Batch[M any, K comparable, V any] struct {
 	key    Key[M, K, V]
-	active map[string]extensions.Subject
+	active map[string]bool
 	values map[string]value.JSON[json.RawMessage]
 }
 
@@ -105,14 +94,14 @@ func (b Batch[M, K, V]) Get(ctx context.Context, owner model.Reference[M, K]) (v
 	if err := ctx.Err(); err != nil {
 		return value.Optional[V]{}, err
 	}
-	subject, err := b.key.definition.owner.Subject(owner)
+	subject, err := b.key.definition.owner.SubjectKey(owner)
 	if err != nil {
 		return value.Optional[V]{}, err
 	}
-	if _, ok := b.active[subject.Key]; !ok {
+	if !b.active[subject] {
 		return value.Optional[V]{}, database.NotFound
 	}
-	snapshot, ok := b.values[subject.Key]
+	snapshot, ok := b.values[subject]
 	if !ok {
 		return value.Optional[V]{}, nil
 	}
@@ -128,41 +117,56 @@ func (k Key[M, K, V]) Load(ctx context.Context, m *Manager, owners []model.Refer
 	}
 	var result Batch[M, K, V]
 	err := m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
-		active, err := k.definition.owner.Active(ctx, tx, m.store.Registry(), owners)
-		if err != nil {
+		var err error
+		result, err = k.loadIn(ctx, tx, m, owners)
+		return err
+	})
+	if err != nil {
+		return Batch[M, K, V]{}, err
+	}
+	return result, nil
+}
+
+// loadIn reads one owner batch inside tx, which is either the store's own
+// read-only snapshot or a savepoint joined to the caller's transaction.
+func (k Key[M, K, V]) loadIn(ctx context.Context, tx *database.Tx, m *Manager, owners []model.Reference[M, K]) (Batch[M, K, V], error) {
+	active, err := k.definition.owner.Active(ctx, tx, m.store.Registry(), owners)
+	if err != nil {
+		return Batch[M, K, V]{}, err
+	}
+	result := Batch[M, K, V]{key: k, active: active, values: make(map[string]value.JSON[json.RawMessage])}
+	if len(active) == 0 {
+		return result, nil
+	}
+	checked, err := extensionrow.For(k.definition.owner, owners)
+	if err != nil {
+		return Batch[M, K, V]{}, err
+	}
+	keys := make([]string, 0, len(active))
+	for key := range active {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	f := store.MetaFields()
+	var budget extensionvalue.BatchBudget
+	err = store.QueryFoundryModelMetadata().Where(f.Scope.Eq(k.definition.owner.Scope()), f.SubjectKey.In(keys...), f.Name.Eq(string(k.Name()))).Each(ctx, tx, func(row store.Meta) error {
+		if !active[row.SubjectKey] {
+			return invalid()
+		}
+		if err := k.checkRow(checked, row, row.SubjectKey); err != nil {
 			return err
 		}
-		result = Batch[M, K, V]{key: k, active: active, values: make(map[string]value.JSON[json.RawMessage])}
-		if len(active) == 0 {
-			return nil
+		if row.Version != uint32(k.Version()) {
+			return fault.New(fault.Conflict, "stored metadata version differs from its descriptor")
 		}
-		keys := make([]string, 0, len(active))
-		for key := range active {
-			keys = append(keys, key)
+		if err := budget.Add(row.Value); err != nil {
+			return err
 		}
-		slices.Sort(keys)
-		f := store.MetaFields()
-		var budget extensionvalue.BatchBudget
-		return store.QueryFoundryModelMetadata().Where(f.Scope.Eq(k.definition.owner.Scope()), f.SubjectKey.In(keys...), f.Name.Eq(string(k.Name()))).Each(ctx, tx, func(row store.Meta) error {
-			subject, ok := active[row.SubjectKey]
-			if !ok {
-				return invalid()
-			}
-			if err := k.checkRow(row, subject); err != nil {
-				return err
-			}
-			if row.Version != uint32(k.Version()) {
-				return fault.New(fault.Conflict, "stored metadata version differs from its descriptor")
-			}
-			if err := budget.Add(row.Value); err != nil {
-				return err
-			}
-			if _, err := extensionvalue.Decode(ctx, k.definition.value, row.Value); err != nil {
-				return err
-			}
-			result.values[row.SubjectKey] = row.Value
-			return nil
-		})
+		if _, err := extensionvalue.Decode(ctx, k.definition.value, row.Value); err != nil {
+			return err
+		}
+		result.values[row.SubjectKey] = row.Value
+		return nil
 	})
 	if err != nil {
 		return Batch[M, K, V]{}, err
@@ -182,31 +186,37 @@ func (k Key[M, K, V]) Forget(ctx context.Context, m *Manager, owner model.Refere
 	}
 	removed := false
 	err := m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		subject, err := k.definition.owner.Lock(ctx, tx, m.store.Registry(), owner)
-		if err != nil {
-			return err
-		}
-		q, f := store.QueryFoundryModelMetadata(), store.MetaFields()
-		id := extensions.Digest(subject.Scope, subject.Key, string(k.Name()))
-		found, err := q.Where(f.Key.Eq(id)).First(ctx, tx)
-		if err != nil {
-			return err
-		}
-		row, ok := found.Get()
-		if !ok {
-			return nil
-		}
-		if err := k.checkRow(row, subject); err != nil {
-			return err
-		}
-		if _, err := q.Delete(ctx, tx, id); err != nil {
-			return err
-		}
-		removed = true
-		return nil
+		var err error
+		removed, err = k.forget(ctx, tx, m, owner)
+		return err
 	})
 	if err != nil {
 		return false, err
 	}
 	return removed, nil
+}
+
+// forget removes the key after locking the owner in tx.
+func (k Key[M, K, V]) forget(ctx context.Context, tx *database.Tx, m *Manager, owner model.Reference[M, K]) (bool, error) {
+	subject, err := k.definition.owner.Lock(ctx, tx, m.store.Registry(), owner)
+	if err != nil {
+		return false, err
+	}
+	q, f := store.QueryFoundryModelMetadata(), store.MetaFields()
+	id := extensions.Digest(subject.Scope, subject.Key, string(k.Name()))
+	found, err := q.Where(f.Key.Eq(id)).First(ctx, tx)
+	if err != nil {
+		return false, err
+	}
+	row, ok := found.Get()
+	if !ok {
+		return false, nil
+	}
+	if err := k.checkRow(extensionrow.ForSubject(k.definition.owner, subject), row, subject.Key); err != nil {
+		return false, err
+	}
+	if _, err := q.Delete(ctx, tx, id); err != nil {
+		return false, err
+	}
+	return true, nil
 }

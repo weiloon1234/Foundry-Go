@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"go/types"
 
+	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/internal/httppath"
 )
 
@@ -19,6 +20,7 @@ type pathField struct {
 	typ                    types.Type
 	owner                  types.Type
 	position               token.Pos
+	presentation           contract.Presentation
 }
 
 func discoverPath(p *packageInput, spec *ast.TypeSpec, named *types.Named, args map[string]string) (pathDeclaration, error) {
@@ -62,7 +64,11 @@ func discoverPath(p *packageInput, spec *ast.TypeSpec, named *types.Named, args 
 		if _, exists := fields[parameter]; exists {
 			return declaration, p.diagnostic(field.Pos(), "multiple fields bind the same path parameter")
 		}
-		fields[parameter] = pathField{name: field.Name(), parameter: parameter, typ: field.Type(), position: field.Pos()}
+		presentation, err := parsePresentation(tags["client"])
+		if err != nil {
+			return declaration, p.diagnostic(field.Pos(), err.Error())
+		}
+		fields[parameter] = pathField{name: field.Name(), parameter: parameter, typ: field.Type(), position: field.Pos(), presentation: presentation}
 	}
 	// Emit in pattern order, independently of struct declaration order. Every
 	// binding must be consumed once by the same grammar the runtime uses.

@@ -19,15 +19,19 @@ import (
 )
 
 type Options struct {
-	owner    extensions.OwnerName
-	pageSize int
-	json     bool
-	rescope  bool
-	apply    bool
+	owner      extensions.OwnerName
+	pageSize   int
+	json       bool
+	rescope    bool
+	apply      bool
+	undeclared bool
 }
 
 // Rescope reports whether the parsed command is the re-scope maintenance form.
 func (o Options) Rescope() bool { return o.rescope }
+
+// Undeclared reports whether the parsed command lists undeclared stored names.
+func (o Options) Undeclared() bool { return o.undeclared }
 
 // Parse accepts only the read-only orphan inspection form.
 func Parse(name string, args []string, help io.Writer) (Options, error) {
@@ -40,6 +44,7 @@ func ParseMaintenance(name string, args []string, help io.Writer) (Options, erro
 }
 func parse(name string, args []string, help io.Writer, maintenance bool) (Options, error) {
 	usage := "usage: " + name + " orphans --owner name [--page-size 100] [--format text|json]"
+	usage += "\n       " + name + " undeclared --owner name [--format text|json]"
 	if maintenance {
 		usage += "\n       " + name + " rescope --owner name [--page-size 100] [--format text|json] [--apply]"
 	}
@@ -50,14 +55,18 @@ func parse(name string, args []string, help io.Writer, maintenance bool) (Option
 		_, err := io.WriteString(help, usage+"\n")
 		return Options{}, errors.Join(flag.ErrHelp, err)
 	}
-	if len(args) < 2 || args[0] != name || args[1] != "orphans" && (!maintenance || args[1] != "rescope") {
+	if len(args) < 2 || args[0] != name || args[1] != "orphans" && args[1] != "undeclared" && (!maintenance || args[1] != "rescope") {
 		return Options{}, fault.New(fault.Invalid, usage)
 	}
-	rescope := args[1] == "rescope"
+	rescope, undeclared := args[1] == "rescope", args[1] == "undeclared"
 	flags := flag.NewFlagSet(name+" "+args[1], flag.ContinueOnError)
 	flags.SetOutput(help)
 	owner := flags.String("owner", "", "registered model owner")
-	size := flags.Int("page-size", 100, "rows inspected per query")
+	size := new(int)
+	*size = 100
+	if !undeclared {
+		size = flags.Int("page-size", 100, "rows inspected per query")
+	}
 	format := flags.String("format", "text", "text or json")
 	var apply *bool
 	if rescope {
@@ -69,7 +78,35 @@ func parse(name string, args []string, help io.Writer, maintenance bool) (Option
 	if flags.NArg() != 0 || !identifier.Semantic(*owner) || *size < 1 || *size > 1000 || *format != "text" && *format != "json" {
 		return Options{}, fault.New(fault.Invalid, usage)
 	}
-	return Options{owner: extensions.OwnerName(*owner), pageSize: *size, json: *format == "json", rescope: rescope, apply: apply != nil && *apply}, nil
+	return Options{owner: extensions.OwnerName(*owner), pageSize: *size, json: *format == "json", rescope: rescope, apply: apply != nil && *apply, undeclared: undeclared}, nil
+}
+
+// RunUndeclared prints stored names of the owner's scope that no current
+// registration declares, one per line, and a final "(truncated)" marker, which
+// no stored name can equal, when the bounded read stopped early. It reads
+// names only and modifies nothing.
+func RunUndeclared(ctx context.Context, options Options, out io.Writer, inspect func(context.Context, extensions.OwnerName) (extensionmaintenance.Undeclared, error)) error {
+	if ctx == nil || out == nil || options.owner == "" || !options.undeclared || inspect == nil {
+		return fault.New(fault.Invalid, "uninitialized model extension undeclared-name command")
+	}
+	return callback.Isolated("model extension undeclared-name command", func() error {
+		report, err := inspect(ctx, options.owner)
+		if err != nil {
+			return err
+		}
+		if options.json {
+			return json.NewEncoder(out).Encode(report)
+		}
+		for _, name := range report.Names {
+			if _, err := fmt.Fprintln(out, name); err != nil {
+				return err
+			}
+		}
+		if report.Truncated {
+			_, err = fmt.Fprintln(out, "(truncated)")
+		}
+		return err
+	})
 }
 
 // RunRescope pages through stale rows, moving them only for --apply. Output
@@ -127,7 +164,7 @@ func RunRescope(ctx context.Context, options Options, out io.Writer, rescope fun
 	})
 }
 func Run[R any](ctx context.Context, options Options, out io.Writer, inspect func(context.Context, extensions.OwnerName, extensionmaintenance.Cursor, int) (extensionmaintenance.Page[R], error), columns func(R) []string) error {
-	if ctx == nil || out == nil || options.owner == "" || options.pageSize < 1 || options.rescope || inspect == nil || columns == nil {
+	if ctx == nil || out == nil || options.owner == "" || options.pageSize < 1 || options.rescope || options.undeclared || inspect == nil || columns == nil {
 		return fault.New(fault.Invalid, "uninitialized model extension inspection command")
 	}
 	return callback.Isolated("model extension inspection command", func() error {

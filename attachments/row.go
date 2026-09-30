@@ -20,57 +20,63 @@ func operationID(id model.ID[store.File]) OperationID {
 }
 func fileID(id OperationID) model.ID[store.File] { return model.IDFromBytes[store.File](id.Bytes()) }
 
-// validateRow treats persistence as a checked boundary before storage effects.
-// A manually corrupted key must not cause deletion or signing of another file.
-func (m *Manager) validateIndex(row store.FileIndex) (extensions.Subject, error) {
+// validateIndex treats persistence as a checked boundary before storage
+// effects and returns the row's subject key. A manually corrupted key must not
+// cause deletion or signing of another file.
+func (m *Manager) validateIndex(row store.FileIndex) (string, error) {
 	if row.ID.IsZero() || !identifier.Semantic(row.Collection) || State(row.State).Validate() != nil || row.Locale != "" && i18n.LocaleID(row.Locale).Validate() != nil || storage.DiskID(row.Disk).Validate() != nil {
-		return extensions.Subject{}, invalid()
+		return "", invalid()
 	}
 	identity, err := row.Identity.Decode()
 	if err != nil {
-		return extensions.Subject{}, err
+		return "", err
 	}
-	subject, err := m.store.Registry().Subject(extensions.OwnerName(row.Owner), identity)
+	owner := extensions.OwnerName(row.Owner)
+	scope, err := m.store.Registry().Scope(owner)
 	if err != nil {
-		return extensions.Subject{}, err
+		return "", err
 	}
-	if subject.Scope != row.Scope || subject.Key != row.SubjectKey {
-		return extensions.Subject{}, invalid()
+	subject, err := m.store.Registry().SubjectKey(owner, identity)
+	if err != nil {
+		return "", err
 	}
-	expected, err := objectKey(subject.Scope, row.ID)
+	if scope != row.Scope || subject != row.SubjectKey {
+		return "", invalid()
+	}
+	expected, err := objectKey(scope, row.ID)
 	if err != nil || expected.String() != row.ObjectKey {
-		return extensions.Subject{}, invalid()
+		return "", invalid()
 	}
 	return subject, nil
 }
 func indexOf(row store.File) store.FileIndex {
 	return store.FileIndex{ID: row.ID, Owner: row.Owner, Scope: row.Scope, SubjectKey: row.SubjectKey, Identity: row.Identity, Collection: row.Collection, Locale: row.Locale, State: row.State, Disk: row.Disk, ObjectKey: row.ObjectKey, UpdatedAt: row.UpdatedAt}
 }
-func (m *Manager) validateRow(row store.File) (extensions.Subject, error) {
+func (m *Manager) validateRow(row store.File) (string, error) {
 	subject, err := m.validateIndex(indexOf(row))
 	if err != nil {
-		return extensions.Subject{}, err
+		return "", err
 	}
 	if row.WriterID.IsZero() || row.Size < 0 || row.Size > MaxUploadBytes || row.Width < 0 || row.Height < 0 || row.Width > 65535 || row.Height > 65535 || (row.Width == 0) != (row.Height == 0) || row.SortOrder < 0 || row.Properties.IsZero() {
-		return extensions.Subject{}, invalid()
+		return "", invalid()
 	}
 	if storage.MediaType(row.ContentType).Validate() != nil || storage.ETag(row.ETag).Validate() != nil || storage.VersionID(row.ObjectVersion).Validate() != nil {
-		return extensions.Subject{}, invalid()
+		return "", invalid()
 	}
 	digest, err := storage.ParseSHA256(row.Digest)
 	if err != nil || digest.String() != row.Digest {
-		return extensions.Subject{}, invalid()
+		return "", invalid()
 	}
 	if row.State == string(Stored) || row.State == string(Ready) || row.State == string(CleanupPending) || row.State == string(Retained) {
 		if row.ETag == "" {
-			return extensions.Subject{}, invalid()
+			return "", invalid()
 		}
 	}
 	if _, err := normalizeProperties(row.Properties); err != nil {
-		return extensions.Subject{}, err
+		return "", err
 	}
 	if !validFilename(row.OriginalName) {
-		return extensions.Subject{}, invalid()
+		return "", invalid()
 	}
 	return subject, nil
 }
@@ -108,5 +114,5 @@ func (c Collection[M, K]) attachment(m *Manager, row store.File) (Attachment[M, 
 	if row.Locale != "" {
 		locale = value.Set(i18n.LocaleID(row.Locale))
 	}
-	return Attachment[M, K]{id: model.IDFromBytes[FileOf[M]](row.ID.Bytes()), owner: owner, collection: Name(row.Collection), locale: locale, info: UploadInfo{OriginalName: row.OriginalName, MediaType: storage.MediaType(row.ContentType), Size: row.Size, Width: int(row.Width), Height: int(row.Height)}, disk: storage.DiskID(row.Disk), key: key, etag: storage.ETag(row.ETag), version: storage.VersionID(row.ObjectVersion), digest: digest, properties: row.Properties, position: row.SortOrder, created: row.CreatedAt}, nil
+	return Attachment[M, K]{owner: owner, File: File[M]{id: model.IDFromBytes[FileOf[M]](row.ID.Bytes()), collection: Name(row.Collection), locale: locale, info: UploadInfo{OriginalName: row.OriginalName, MediaType: storage.MediaType(row.ContentType), Size: row.Size, Width: int(row.Width), Height: int(row.Height)}, disk: storage.DiskID(row.Disk), key: key, etag: storage.ETag(row.ETag), version: storage.VersionID(row.ObjectVersion), digest: digest, properties: row.Properties, position: row.SortOrder, created: row.CreatedAt}}, nil
 }
