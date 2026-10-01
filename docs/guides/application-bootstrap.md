@@ -132,6 +132,32 @@ enabled (and `Realtime.Enabled` off, for example in a worker), a managed
 cross-process publisher built from the same declarations and cluster connection
 and closed at shutdown. A local realtime connection cannot publish across processes.
 
+### Publishing from workers
+
+A worker or scheduler that publishes but serves no sockets shares the HTTP
+process's configuration and overrides a few settings for its own process.
+Publishing across processes needs a cluster connection (a `redis` driver in
+`services.realtime.connections`): a `local` connection only reaches sockets in its
+own process.
+
+| Setting | HTTP process | Worker or scheduler |
+| --- | --- | --- |
+| `http.enabled` | `true` | `false` |
+| `realtime.enabled` | `true` | `false` |
+| `realtime.shared` | `true`, or `false` for a dedicated listener | `false` |
+| `realtime.publisher` | `false` | `true` |
+| `realtime.connection` | the cluster connection | the same connection |
+
+Keep the base file for the HTTP process and set the worker's values in its
+environment or as [typed overrides](generated-configuration.md) in its entry
+point, for example `APP__REALTIME__ENABLED=false`, `APP__REALTIME__SHARED=false`
+and `APP__REALTIME__PUBLISHER=true` with prefix `APP`. Both processes register the
+same `.Realtime(...)` declarations, and handlers and jobs publish through
+`Services.RealtimePublisher()` in either. Build rejects combinations that cannot
+work instead of switching modes: `realtime.shared` without both realtime and
+HTTP, a hub and a publisher in one process, a publisher on a local connection,
+and realtime declarations with neither a hub nor a publisher enabled.
+
 ## Access logging and completion hooks
 
 `HTTP.Server.AccessLog` defaults to true in application settings. `Log.Default`

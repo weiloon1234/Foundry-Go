@@ -263,6 +263,23 @@ always applies: removing a scope from the declaration withdraws it from existing
 tokens (verification, `List` and `Refresh` report the intersection) without
 making them unusable. The stored grant is never widened.
 
+The store's lifetimes are a ceiling shared by every guard bound to it. One guard
+can shorten its own, for example admins on the same store as users:
+
+```go
+admin, err := token.New(store, "users.admin", users, "admin.bearer", adminScopes,
+    token.WithLifetimes(token.Lifetimes{Renewable: token.Lifetime{
+        Access: 5 * time.Minute, RefreshIdle: 12 * time.Hour, Absolute: 24 * time.Hour,
+    }}))
+```
+
+`application.NewTokenGuard` accepts the same options for the configured store. A
+zero `Lifetime` keeps the store's for that mode. Each duration must be at most the
+store's and valid for its mode, and the renewable access lifetime must still
+cover `AccessGrace`; construction fails otherwise. A family keeps the lifetime it
+was issued with across refreshes, and a browser refresh cookie's `Max-Age`
+follows it.
+
 Guard lookup is read-only. `Touch(ctx, accessSecret)` explicitly records activity
 without extending access, refresh-idle or absolute expiry. Only a successful
 refresh renews idle expiry, always capped by the original absolute deadline.

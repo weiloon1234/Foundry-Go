@@ -16,30 +16,45 @@ import (
 
 // Tokens binds one stored model/provider/guard/source and declared scope ceiling.
 // Its guard is constructed once; persisted tokens cannot be rebound by extracting
-// an unscoped strategy. Construction performs no I/O.
+// an unscoped strategy. Construction performs no I/O. It issues with the store's
+// lifetimes unless WithLifetimes shortens them for this guard.
 type Tokens[M model.Identifiable, K any] struct {
-	store    *Store
-	provider auth.Provider[M, K]
-	address  Address
-	allowed  auth.AccessScopes[M]
-	guard    auth.Guard[M]
-	current  auth.CredentialSlot[Info[M, K]]
-	observer auth.Observer
-	tickets  auth.Binder[familyBinding]
+	store     *Store
+	provider  auth.Provider[M, K]
+	address   Address
+	allowed   auth.AccessScopes[M]
+	lifetimes Lifetimes
+	guard     auth.Guard[M]
+	current   auth.CredentialSlot[Info[M, K]]
+	observer  auth.Observer
+	tickets   auth.Binder[familyBinding]
 }
 
-func New[M model.Identifiable, K any](store *Store, name auth.GuardName, provider auth.Provider[M, K], source auth.CredentialName, allowed auth.AccessScopes[M]) (*Tokens[M, K], error) {
+func New[M model.Identifiable, K any](store *Store, name auth.GuardName, provider auth.Provider[M, K], source auth.CredentialName, allowed auth.AccessScopes[M], opts ...Option) (*Tokens[M, K], error) {
 	if err := store.validate(); err != nil {
 		return nil, err
 	}
 	if err := provider.Validate(); err != nil {
 		return nil, err
 	}
+	var configured options
+	for _, option := range opts {
+		if option == nil {
+			return nil, fault.New(fault.Invalid, "nil token option")
+		}
+		if err := option(&configured); err != nil {
+			return nil, err
+		}
+	}
+	lifetimes, err := configured.lifetimes.within(store.config)
+	if err != nil {
+		return nil, err
+	}
 	address := Address{Namespace: store.config.Namespace, Guard: name, Provider: provider.Name(), Model: provider.ModelName()}
 	if err := address.Validate(); err != nil {
 		return nil, err
 	}
-	tokens := &Tokens[M, K]{store: store, provider: provider, address: address, allowed: allowed, current: auth.NewCredentialSlot[Info[M, K]]()}
+	tokens := &Tokens[M, K]{store: store, provider: provider, address: address, allowed: allowed, lifetimes: lifetimes, current: auth.NewCredentialSlot[Info[M, K]]()}
 	strategy, tickets := auth.BindStrategy(auth.DefineStrategy(source, tokens.verify), tokens.verifyFamily)
 	tokens.tickets = tickets
 	tokens.guard = auth.DefineGuard(name, provider, strategy)
@@ -212,15 +227,15 @@ func (t *Tokens[M, K]) issue(ctx context.Context, proof auth.Proof[M, K], option
 		if previous, scoped := proof.AccessScopes(); scoped && !previous.ContainsAll(options.Scopes) {
 			return auth.Forbidden
 		}
-		mode, policy := Personal, t.store.config.Personal
+		mode, policy := Personal, t.lifetimes.Personal
 		if options.Refresh {
-			mode, policy = Renewable, t.store.config.Renewable
+			mode, policy = Renewable, t.lifetimes.Renewable
 		}
 		if proof.Assurance() == auth.PendingMFA {
 			if options.Refresh || options.Scopes.Len() != 0 {
 				return fault.New(fault.Invalid, "MFA challenge cannot refresh or grant ordinary scopes")
 			}
-			mode, policy = Challenge, t.store.config.Challenge
+			mode, policy = Challenge, t.lifetimes.Challenge
 		}
 		id, err := model.NewID[Record]()
 		if err != nil {

@@ -64,14 +64,17 @@ func newMemoryBackend() *memoryBackend {
 	return b
 }
 
-func bindingWithin(t *testing.T, backend Backend, config Config, ceiling auth.AccessScopes[member]) *Tokens[member, int64] {
+func memberProvider() auth.Provider[member, int64] {
+	return auth.DefineProvider("members", member{}.reference(), func(_ context.Context, id int64) (value.Optional[member], error) { return value.Set(member{id}), nil }, func(context.Context, member) (bool, error) { return true, nil })
+}
+
+func bindingWithin(t *testing.T, backend Backend, config Config, ceiling auth.AccessScopes[member], opts ...Option) *Tokens[member, int64] {
 	t.Helper()
-	provider := auth.DefineProvider("members", member{}.reference(), func(_ context.Context, id int64) (value.Optional[member], error) { return value.Set(member{id}), nil }, func(context.Context, member) (bool, error) { return true, nil })
 	store, err := NewStore(backend, config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	tokens, err := New(store, "api", provider, "bearer", ceiling)
+	tokens, err := New(store, "api", memberProvider(), "bearer", ceiling, opts...)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Per-guard token lifetimes
+
+- `token.New` and `application.NewTokenGuard` accept options; `token.WithLifetimes`
+  shortens one guard's personal, renewable or challenge lifetimes below its
+  store's, so admins can expire sooner than users on one configured store. A zero
+  `Lifetime` keeps the store's; a longer duration, one invalid for its mode, a
+  renewable access lifetime below `AccessGrace` or a repeated option fails
+  construction. Issued families keep their lifetime across refreshes.
+
 ### Encrypted model fields
 
 - `database/encrypted` adds Laravel-style encrypted casts: model fields of type

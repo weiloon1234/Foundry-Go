@@ -5,6 +5,7 @@ import (
 	stdhttp "net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/auth"
@@ -91,7 +92,8 @@ func TestConfiguredGuardSharesApplicationAuthorization(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	operators, err := application.NewTokenGuard(services, "", provider, "operator.bearer", allowed)
+	// The configured store's lifetimes are shortened for this guard only.
+	operators, err := application.NewTokenGuard(services, "", provider, "operator.bearer", allowed, token.WithLifetimes(token.Lifetimes{Personal: token.Lifetime{Access: time.Hour, Absolute: time.Hour}}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,6 +113,9 @@ func TestConfiguredGuardSharesApplicationAuthorization(t *testing.T) {
 		issued, err := operators.Tokens.Issue(t.Context(), proof, token.IssueOptions[reportOperator]{Name: "fixture"})
 		if err != nil {
 			t.Fatal(err)
+		}
+		if info := issued.Info(); info.ExpiresAt().UTC().Sub(info.CreatedAt().UTC()) != time.Hour {
+			t.Fatal("configured guard ignored its lifetimes")
 		}
 		request := httptest.NewRequest("GET", "http://fixture.test/reports", nil)
 		request.Header.Set("Authorization", "Bearer "+issued.AccessSecret().Reveal())

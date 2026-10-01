@@ -217,7 +217,9 @@ type TokenGuard[M model.Identifiable, K any] struct {
 	Binding        http.GuardBinding[M]
 }
 
-func NewTokenGuard[M model.Identifiable, K any](s Services, name auth.GuardName, provider auth.Provider[M, K], source auth.CredentialName, allowed auth.AccessScopes[M]) (TokenGuard[M, K], error) {
+// NewTokenGuard binds a token guard to the configured token store; options such
+// as token.WithLifetimes apply to this guard only.
+func NewTokenGuard[M model.Identifiable, K any](s Services, name auth.GuardName, provider auth.Provider[M, K], source auth.CredentialName, allowed auth.AccessScopes[M], opts ...token.Option) (TokenGuard[M, K], error) {
 	var result TokenGuard[M, K]
 	if name == "" {
 		name = s.features.Auth.DefaultTokenGuard
@@ -226,7 +228,7 @@ func NewTokenGuard[M model.Identifiable, K any](s Services, name auth.GuardName,
 	if err != nil {
 		return result, err
 	}
-	tokens, err := token.New(store, name, provider, source, allowed)
+	tokens, err := token.New(store, name, provider, source, allowed, opts...)
 	if err != nil {
 		return result, err
 	}

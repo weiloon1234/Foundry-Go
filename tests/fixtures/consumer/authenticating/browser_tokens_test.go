@@ -121,7 +121,9 @@ func TestBrowserRefreshCookieRotatesRevokesOnReplayAndClearsOnLogout(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	admins, err := token.New(store, "users.admin", provider, "admin.bearer", scopes)
+	// Admin families expire sooner than the store's user lifetimes.
+	adminLifetime := token.Lifetime{Access: 5 * time.Minute, RefreshIdle: 12 * time.Hour, Absolute: 24 * time.Hour}
+	admins, err := token.New(store, "users.admin", provider, "admin.bearer", scopes, token.WithLifetimes(token.Lifetimes{Renewable: adminLifetime}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,6 +153,9 @@ func TestBrowserRefreshCookieRotatesRevokesOnReplayAndClearsOnLogout(t *testing.
 	adminSession := refreshCookieOf(t, adminLogin, "__Host-refresh-admin")
 	if adminLogin.Code != 200 || adminSession == nil {
 		t.Fatal("admin login did not set its own cookie", adminLogin.Code)
+	}
+	if adminSession.MaxAge != int(adminLifetime.RefreshIdle/time.Second) || first.MaxAge != int(config.Renewable.RefreshIdle/time.Second) {
+		t.Fatal("refresh cookies do not follow each guard's lifetime", adminSession.MaxAge, first.MaxAge)
 	}
 
 	now.Advance(time.Minute)
