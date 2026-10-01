@@ -88,9 +88,11 @@ func TestEncryptedFieldsStoreBoundEnvelopesAndHydratePlaintext(t *testing.T) {
 	if created.Token.Reveal() != "sk_live_secret" {
 		t.Fatal("created model does not reveal its plaintext")
 	}
+	// Envelopes are base64url, so a quoted JSON key can only be plaintext; a bare
+	// substring such as "sg" may occur in ciphertext by chance.
 	token, rawSettings := stored(t, db, created.ID.String())
-	if !strings.HasPrefix(token, "fg1:vault_2026:") || strings.Contains(token, "sk_live_secret") || rawSettings == nil || strings.Contains(*rawSettings, "sg") {
-		t.Fatal("stored values are not encryption envelopes", token)
+	if !strings.HasPrefix(token, "fg1:vault_2026:") || strings.Contains(token, "sk_live_secret") || rawSettings == nil || !strings.HasPrefix(*rawSettings, "fg1:vault_2026:") || strings.Contains(*rawSettings, `"region"`) {
+		t.Fatal("stored values are not encryption envelopes")
 	}
 	found, err := entries.RequireFind(t.Context(), db, created.ID)
 	if err != nil {

@@ -42,6 +42,14 @@ type GraceBackend interface {
 	LookupWithin(context.Context, Address, Digest, time.Duration) (value.Optional[Record], error)
 }
 
+// RefreshRevocationBackend revokes the family that issued a refresh digest,
+// whether it is the current or previous generation's or a consumed one, under
+// the subject lock shared with issuance. It returns the removed family's subject,
+// omitted when no family matches. Expired families are removed too.
+type RefreshRevocationBackend interface {
+	RevokeRefresh(context.Context, Address, Digest) (value.Optional[model.Identity], error)
+}
+
 // TicketBackend stores single-use handshake tickets as hashes. IssueTicket
 // stores one for the subject's live family, first dropping that family's expired
 // tickets and the oldest beyond max-1, and reports omitted expiry when the

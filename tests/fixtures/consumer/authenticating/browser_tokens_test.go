@@ -159,7 +159,7 @@ func TestBrowserRefreshCookieRotatesRevokesOnReplayAndClearsOnLogout(t *testing.
 	if rotated.Code != 200 || second == nil || second.Value == first.Value {
 		t.Fatal("refresh did not rotate the cookie", rotated.Code)
 	}
-	access := accessToken(t, rotated)
+	accessToken(t, rotated)
 	// The admin cookie never reaches the user refresh endpoint, and vice versa.
 	if w := browserCall(t, userRoutes, "/web/refresh", adminSession.Name, adminSession.Value, ""); w.Code != 401 {
 		t.Fatal("admin cookie refreshed a user family", w.Code)
@@ -192,18 +192,36 @@ func TestBrowserRefreshCookieRotatesRevokesOnReplayAndClearsOnLogout(t *testing.
 	if w := browserCall(t, userRoutes, "/web/refresh", second.Name, second.Value, ""); w.Code != 401 {
 		t.Fatal("successor survived refresh-token replay", w.Code)
 	}
-	if w := browserCall(t, userRoutes, "/web/logout", "", "", access); w.Code != 401 {
-		t.Fatal("revoked family's access token logged out", w.Code)
+	// Logging out with the revoked family's cookie still succeeds and clears it.
+	if w := browserCall(t, userRoutes, "/web/logout", second.Name, second.Value, ""); w.Code != 204 || refreshCookieOf(t, w, "__Host-refresh-user") == nil {
+		t.Fatal("logout of a revoked family failed", w.Code)
 	}
 
-	// Logout with the admin access token clears only the admin cookie.
-	adminAccess := accessToken(t, adminLogin)
-	logout := browserCall(t, adminRoutes, "/admin/logout", "", "", adminAccess)
+	// A user family's secret presented to the admin guard revokes nothing there.
+	relogin := browserCall(t, userRoutes, "/web/login", "", "", "")
+	third := refreshCookieOf(t, relogin, "__Host-refresh-user")
+	if relogin.Code != 200 || third == nil {
+		t.Fatal("web login after logout", relogin.Code)
+	}
+	if w := browserCall(t, adminRoutes, "/admin/logout", adminSession.Name, third.Value, ""); w.Code != 204 {
+		t.Fatal("unknown admin refresh secret failed logout", w.Code)
+	}
+	if w := browserCall(t, userRoutes, "/web/refresh", third.Name, third.Value, ""); w.Code != 200 {
+		t.Fatal("another guard's logout revoked the user family", w.Code)
+	}
+
+	// After the admin access token expired, the cookie alone logs out and clears
+	// only the admin cookie.
+	now.Advance(config.Renewable.Access)
+	logout := browserCall(t, adminRoutes, "/admin/logout", adminSession.Name, adminSession.Value, "")
 	if cleared := refreshCookieOf(t, logout, "__Host-refresh-admin"); logout.Code != 204 || cleared == nil || cleared.MaxAge >= 0 || refreshCookieOf(t, logout, "__Host-refresh-user") != nil {
 		t.Fatal("logout did not clear the admin cookie", logout.Code)
 	}
 	if w := browserCall(t, adminRoutes, "/admin/refresh", adminSession.Name, adminSession.Value, ""); w.Code != 401 {
 		t.Fatal("refresh succeeded after logout", w.Code)
+	}
+	if w := browserCall(t, adminRoutes, "/admin/logout", "", "", ""); w.Code != 204 || refreshCookieOf(t, w, "__Host-refresh-admin") == nil {
+		t.Fatal("logout without a cookie was not idempotent", w.Code)
 	}
 	if !strings.HasPrefix(adminSession.Name, "__Host-") {
 		t.Fatal("cookie lost its prefix")

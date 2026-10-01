@@ -71,7 +71,8 @@ person or grant authorization.
 `RemoteAddr`, `Host`, URL, TLS, headers, response-writer capabilities and request
 cancellation. Explicit `OriginHeaders` now capture validated public scheme and
 authority in context; native transport fields remain unchanged. See
-[public URLs and HTTPS behind proxies](http-public-urls.md).
+[public URLs and HTTPS behind proxies](http-public-urls.md), including
+[the origin descriptor for common proxies](http-public-urls.md#declaring-proxy-origin-sources).
 [Signed URLs](http-signed-urls.md) use the explicit public-origin policy.
 
 IPv4-mapped addresses are normalized to IPv4. IPv4 and IPv6 networks are explicit;

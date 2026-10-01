@@ -170,8 +170,8 @@ func (t *Tokens[M, K]) notify(ctx context.Context, kind auth.EventKind, subject 
 }
 
 // WithObserver returns a binding sharing this guard that reports EventLogin
-// for full issuance (including MFA completion), EventLogout for Logout and
-// RevokeCurrent, and EventOtherDevicesLoggedOut for RevokeOthers.
+// for full issuance (including MFA completion), EventLogout for Logout,
+// LogoutRefresh and RevokeCurrent, and EventOtherDevicesLoggedOut for RevokeOthers.
 func (t *Tokens[M, K]) WithObserver(observer auth.Observer) (*Tokens[M, K], error) {
 	if err := t.Validate(); err != nil {
 		return nil, err

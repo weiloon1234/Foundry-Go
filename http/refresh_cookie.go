@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/authtransport"
 	"github.com/weiloon1234/Foundry-Go/secret"
+	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 // RefreshCookie names the HttpOnly cookie that carries a browser client's
@@ -64,15 +65,19 @@ func (c RefreshCookie) clear() (string, error) { return c.cookie.header("", true
 // a 401 response, and must set or clear it on success: the read credential is
 // consumed, so leaving it in the browser would turn the next refresh into a
 // replay. It never contains a credential value.
+//
+// Optional marks a cookie-authenticated logout: it reads the cookie when the
+// browser has one and succeeds, clearing it, when it does not.
 type RefreshCookieInfo struct {
-	Name   CookieName `json:"name"`
-	Reads  bool       `json:"reads,omitempty"`
-	Sets   bool       `json:"sets,omitempty"`
-	Clears bool       `json:"clears,omitempty"`
+	Name     CookieName `json:"name"`
+	Reads    bool       `json:"reads,omitempty"`
+	Sets     bool       `json:"sets,omitempty"`
+	Clears   bool       `json:"clears,omitempty"`
+	Optional bool       `json:"optional,omitempty"`
 }
 
 func (i RefreshCookieInfo) Validate() error {
-	if err := i.Name.Validate(); err != nil || !strings.HasPrefix(string(i.Name), "__Host-") || !i.Reads && !i.Sets && !i.Clears || i.Sets && i.Clears || i.Reads && !i.Sets && !i.Clears {
+	if err := i.Name.Validate(); err != nil || !strings.HasPrefix(string(i.Name), "__Host-") || !i.Reads && !i.Sets && !i.Clears || i.Sets && i.Clears || i.Reads && !i.Sets && !i.Clears || i.Optional && (!i.Reads || !i.Clears) {
 		return fault.New(fault.Invalid, "invalid refresh cookie metadata")
 	}
 	return nil
@@ -146,11 +151,51 @@ func RefreshTokenCookie(cookie RefreshCookie) Body[RefreshTokenRequest] {
 	}}
 }
 
+// RefreshCookieLogoutRequest is a cookie-authenticated logout's input: the
+// refresh credential, when the browser presented a well-formed cookie.
+type RefreshCookieLogoutRequest struct {
+	RefreshToken value.Optional[RefreshCredential]
+}
+
+// RefreshTokenCookieLogout is the browser logout body: the refresh cookie itself
+// authenticates the logout, so an expired access token does not prevent it. Like
+// RefreshTokenCookie it reads only the cookie and accepts no body; a missing,
+// repeated or malformed cookie is absent rather than unauthenticated, so logout
+// is idempotent. Pair it with ClearRefreshCookie; validation rejects any other
+// response. The handler passes a present credential to Tokens.LogoutRefresh:
+//
+//	if refresh, ok := input.Body.RefreshToken.Get(); ok {
+//		_, err := tokens.LogoutRefresh(ctx, refresh.Secret())
+//		return foundryhttp.NoContent{}, err
+//	}
+//	return foundryhttp.NoContent{}, nil
+//
+// Success clears the cookie; a transient failure keeps it so the client retries.
+func RefreshTokenCookieLogout(cookie RefreshCookie) Body[RefreshCookieLogoutRequest] {
+	return Body[RefreshCookieLogoutRequest]{kind: payloadRefreshCookie, refreshCookie: &cookie, refreshLogout: true, fromCookie: func(r *stdhttp.Request) (RefreshCookieLogoutRequest, error) {
+		raw, err := cookie.cookie.Read(r)
+		if err != nil {
+			// A malformed cookie has no family to revoke; success still clears it.
+			return RefreshCookieLogoutRequest{}, nil
+		}
+		secret, present := raw.Get()
+		if !present {
+			return RefreshCookieLogoutRequest{}, nil
+		}
+		credential, err := authtransport.NewRefreshCredential(secret)
+		if err != nil {
+			return RefreshCookieLogoutRequest{}, nil
+		}
+		return RefreshCookieLogoutRequest{RefreshToken: value.Set(credential)}, nil
+	}}
+}
+
 // ClearRefreshCookie returns response extended to clear the refresh cookie on
-// success and in a 401 its handler returns, for a logout endpoint (for example
-// one calling Tokens.RevokeCurrent). A 401 from the guard's authentication
-// middleware runs before the endpoint and keeps the cookie, revoking nothing.
-// The endpoint gains the cookie's request protections.
+// success and in a 401 its handler returns, for a logout endpoint: a browser's
+// RefreshTokenCookieLogout, or one calling Tokens.RevokeCurrent behind
+// authentication. A 401 from the guard's authentication middleware runs before
+// the endpoint and keeps the cookie, revoking nothing. The endpoint gains the
+// cookie's request protections.
 func ClearRefreshCookie[R any](cookie RefreshCookie, response Response[R]) Response[R] {
 	if response.refreshCookie != nil {
 		response.refreshCookieErr = fault.New(fault.Invalid, "response already uses a refresh cookie")
@@ -207,6 +252,9 @@ func (e Endpoint[P, Q, B, R]) validateRefreshCookie() error {
 	if e.route.Method() != POST || e.idempotency != nil {
 		return fault.New(fault.Invalid, "refresh cookie endpoints require POST without idempotent replay")
 	}
+	if e.body.refreshLogout && !e.response.refreshCookieClears {
+		return fault.New(fault.Invalid, "a refresh-cookie logout must clear the cookie")
+	}
 	return e.refreshCookieInfo().Validate()
 }
 
@@ -215,5 +263,5 @@ func (e Endpoint[P, Q, B, R]) refreshCookieInfo() *RefreshCookieInfo {
 	if cookie == nil {
 		return nil
 	}
-	return &RefreshCookieInfo{Name: cookie.Name(), Reads: e.body.kind == payloadRefreshCookie, Sets: e.response.refreshCookieSets, Clears: e.response.refreshCookieClears}
+	return &RefreshCookieInfo{Name: cookie.Name(), Reads: e.body.kind == payloadRefreshCookie, Sets: e.response.refreshCookieSets, Clears: e.response.refreshCookieClears, Optional: e.body.refreshLogout}
 }

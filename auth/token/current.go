@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -44,6 +45,41 @@ func (t *Tokens[M, K]) Logout(ctx context.Context, access secret.String) (bool, 
 		auth.Notify(ctx, t.observer, event)
 	}
 	return removed, err
+}
+
+// LogoutRefresh revokes the family of a presented refresh secret, for a logout
+// authenticated by the refresh credential itself, such as a browser's HttpOnly
+// refresh cookie: an expired access token does not prevent it. A current,
+// previous or consumed refresh secret of the family revokes it, as replaying one
+// would; an unknown one revokes nothing and is not an error, so logout stays
+// idempotent. A malformed secret is Unauthenticated, as with Revoke. It reports
+// EventLogout when it removed a family.
+func (t *Tokens[M, K]) LogoutRefresh(ctx context.Context, refresh secret.String) (bool, error) {
+	if err := t.Validate(); err != nil {
+		return false, err
+	}
+	backend, ok := t.store.backend.(RefreshRevocationBackend)
+	if !ok {
+		return false, fault.New(fault.Invalid, "token backend cannot revoke by refresh credential")
+	}
+	hash, err := HashSecret(refresh)
+	if err != nil {
+		return false, err
+	}
+	var subject value.Optional[model.Identity]
+	err = t.store.execute(ctx, func(op context.Context) error {
+		var err error
+		subject, err = backend.RevokeRefresh(op, t.address, hash)
+		return err
+	})
+	if err != nil {
+		return false, err
+	}
+	removed := subject.IsSet()
+	if removed && t.observer != nil {
+		auth.Notify(ctx, t.observer, auth.Event{Kind: auth.EventLogout, Guard: t.address.Guard, Provider: t.address.Provider, Subject: subject})
+	}
+	return removed, nil
 }
 
 // RevokeCurrent revokes the family of the token that authenticated this request

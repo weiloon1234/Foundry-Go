@@ -22,12 +22,16 @@ func TestOpenAPIDescribesTheRefreshCookieWithoutASecret(t *testing.T) {
 	}
 	refresh := foundryhttp.DefineEndpoint(route("web.refresh", "/refresh"), foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookie(cookie), foundryhttp.TokenCookieResponse[cookieUser, int64](cookie, 200, clock.System{}))
 	logout := foundryhttp.DefineEndpoint(route("web.logout", "/logout"), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.ClearRefreshCookie(cookie, foundryhttp.EmptyResponse(204)))
+	cookieLogout := foundryhttp.DefineEndpoint(route("web.cookie_logout", "/session/logout"), foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookieLogout(cookie), foundryhttp.ClearRefreshCookie(cookie, foundryhttp.EmptyResponse(204)))
 	router, err := foundryhttp.NewRouter(
 		refresh.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.RefreshTokenRequest]) (token.Issued[cookieUser, int64], error) {
 			t.Fatal("export invoked handler")
 			return token.Issued[cookieUser, int64]{}, nil
 		}),
 		logout.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
+			return foundryhttp.NoContent{}, nil
+		}),
+		cookieLogout.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.RefreshCookieLogoutRequest]) (foundryhttp.NoContent, error) {
 			return foundryhttp.NoContent{}, nil
 		}),
 	)
@@ -78,7 +82,12 @@ func TestOpenAPIDescribesTheRefreshCookieWithoutASecret(t *testing.T) {
 			t.Fatal("refresh cookie security scheme", scheme)
 		}
 	}
-	for path, status := range map[string]string{"/refresh": "200", "/logout": "204"} {
+	// A cookie logout reads the cookie when present and also succeeds without it.
+	cookieLogoutOperation := document.Paths["/session/logout"]["post"]
+	if cookieLogoutOperation.RequestBody != nil || cookieLogoutOperation.Cookie == nil || !cookieLogoutOperation.Cookie.Optional || !cookieLogoutOperation.Cookie.Clears || len(cookieLogoutOperation.Security) != 2 || len(cookieLogoutOperation.Security[0]) != 1 || len(cookieLogoutOperation.Security[1]) != 0 {
+		t.Fatal("cookie logout operation shape", cookieLogoutOperation.Security)
+	}
+	for path, status := range map[string]string{"/refresh": "200", "/logout": "204", "/session/logout": "204"} {
 		if _, ok := document.Paths[path]["post"].Responses[status]["headers"]; !ok {
 			t.Fatal("success response does not document Set-Cookie", path)
 		}

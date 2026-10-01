@@ -352,7 +352,8 @@ empty or non-token ticket throws `RealtimeError("ticket")`. The ticket travels i
 
 Operations that read, set or clear a browser
 [refresh cookie](tokens.md#browser-refresh-cookies) carry `refresh_cookie` in
-the manifest. Keep the client's default `credentials: "same-origin"` (or
+the manifest; a cookie logout's is `optional`, since it also succeeds without the
+cookie. Keep the client's default `credentials: "same-origin"` (or
 `"include"` for a deliberately configured cross-origin deployment) so the
 browser sends and stores that cookie; `"omit"` breaks the refresh flow.
 

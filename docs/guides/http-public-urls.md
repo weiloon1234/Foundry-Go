@@ -114,6 +114,21 @@ malformed or incomplete values return 400 instead of falling back to another
 source. An untrusted peer's forwarding headers are ignored. Only HTTP and HTTPS
 schemes are accepted, and authorities share ordinary origin validation.
 
+Choose the descriptor from what the trusted edge actually overwrites:
+
+| Proxy | Forwards | Origin descriptor |
+| --- | --- | --- |
+| Laravel Herd and Valet | the public `Host` and `X-Forwarded-Proto`, no `X-Forwarded-Host` | `ProxySchemeHeader("X-Forwarded-Proto")` |
+| Go `httputil.ReverseProxy` with `ProxyRequest.SetXForwarded` | `X-Forwarded-Proto` and `X-Forwarded-Host`; `SetURL` rewrites `Host` to the upstream | `XForwardedOriginHeaders()` |
+| nginx `proxy_pass` | by default no forwarding headers, and `Host` becomes `$proxy_host` (the upstream) | set `X-Forwarded-Proto $scheme` and `X-Forwarded-Host $host` for `XForwardedOriginHeaders()`, or `Host $host` and `X-Forwarded-Proto $scheme` for `ProxySchemeHeader` |
+| An RFC 7239 proxy | `Forwarded` with `proto` and `host` | `ForwardedOriginHeader()` |
+
+With `XForwardedOriginHeaders()`, a request carrying `X-Forwarded-Proto` but no
+`X-Forwarded-Host` is a 400: the pair is incomplete. Declaring
+`ProxySchemeHeader("X-Forwarded-Proto")` beside it is rejected as a repeated
+source, so a missing host never falls back to `Host`; pick the one descriptor that
+matches the proxy.
+
 ## Transport security remains separate from URL configuration
 
 `IsSecure(request)` uses the validated forwarded scheme when present, otherwise

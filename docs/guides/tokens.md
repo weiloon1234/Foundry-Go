@@ -147,7 +147,7 @@ response := foundryhttp.TokenCookieResponse[User, model.ID[User]](cookie, 200, c
 // Login: EmptyBody (or the login DTO) with response.
 // Refresh: foundryhttp.RefreshTokenCookie(cookie) with response; the handler is
 // unchanged: api.Refresh(ctx, input.Body.RefreshToken.Secret()).
-// Logout (bearer-guarded, api.RevokeCurrent):
+// Logout: foundryhttp.RefreshTokenCookieLogout(cookie) with
 // foundryhttp.ClearRefreshCookie(cookie, foundryhttp.EmptyResponse(204)).
 ```
 
@@ -163,6 +163,26 @@ unauthenticated. Its response must set (`TokenCookieResponse`) or clear
 (`ClearRefreshCookie`) the same cookie; validation rejects any other pairing, so
 the rotated secret never reaches JSON and a consumed cookie is never left behind.
 
+`RefreshTokenCookieLogout` is the browser logout. The refresh cookie itself
+authenticates it, so the route needs no bearer guard and an expired access token
+does not prevent it. A missing, repeated or malformed cookie arrives as an absent
+`RefreshToken`, and the handler revokes only a present one:
+
+```go
+if refresh, ok := input.Body.RefreshToken.Get(); ok {
+	if _, err := api.LogoutRefresh(ctx, refresh.Secret()); err != nil {
+		return foundryhttp.NoContent{}, err
+	}
+}
+return foundryhttp.NoContent{}, nil
+```
+
+`LogoutRefresh` revokes the family of a current, previous or consumed refresh
+secret, including an expired family, under the subject lock, and reports
+`auth.EventLogout`. An unknown secret revokes nothing, so logging out twice, or
+after the family expired, still answers 204 and clears the cookie. Validation
+requires `ClearRefreshCookie` as its response.
+
 Every endpoint that sets, reads or clears the cookie requires POST, TLS (or
 `TrustedProxy`) and `no-store`, and checks the cookie's `CSRFConfig` origin
 protection (Origin or Fetch-Metadata, failing closed) before anything else,
@@ -171,16 +191,17 @@ attributes:
 
 - by a refresh endpoint's 401: a missing, malformed, expired, revoked or replayed
   refresh credential;
-- by a logout endpoint on success, and on a 401 its handler returns, such as
-  `RevokeCurrent` finding no current family.
+- by a logout endpoint on success, including a cookie logout without a usable
+  cookie, and on a 401 its handler returns, such as `LogoutRefresh` rejecting a
+  malformed secret or `RevokeCurrent` finding no current family.
 
 It is kept on a 403 (including a failed origin check), a body or query rejection,
-and a transient failure. A bearer-guarded logout whose access token is rejected
-also keeps it: that 401 comes from the authentication middleware, which runs
-before the endpoint's cookie handling, and nothing is revoked. A client whose
-access token has expired must refresh first and then log out: discarding only its
-local state leaves the family, and its cookie, live. Application middleware such
-as rate limits still applies.
+and a transient failure, so the client can retry the logout. A bearer-guarded
+logout (`ClearRefreshCookie` with `RevokeCurrent` behind authentication) whose
+access token is rejected also keeps it: that 401 comes from the authentication
+middleware, which runs before the endpoint's cookie handling, and nothing is
+revoked. Browsers should use the cookie logout, which needs no live access token.
+Application middleware such as rate limits still applies.
 
 Both transports issue ordinary families of the same guard, so revocation,
 `RevokeAll` and disabled subjects behave identically. Name one cookie per guard
@@ -188,7 +209,8 @@ when portals share an origin. There is no refresh-reuse window: concurrent
 refreshes still revoke the family, so serialize refreshes across tabs. Contracts
 export the cookie as the refresh operation's credential (no request body, an
 OpenAPI cookie security scheme) and document `Set-Cookie` on success and on a
-401; generated clients send it with their default `same-origin` credentials, or
+401. A cookie logout's `refresh_cookie` is `optional`, and its OpenAPI security
+also accepts a request without the cookie; generated clients send it with their default `same-origin` credentials, or
 `include` for a deliberately configured cross-origin deployment.
 
 Generated internal DTO declarations are the runtime and manifest source of truth.
@@ -254,7 +276,8 @@ and the matching subject; `RevokeAll` serializes with issuance and deletes in on
 statement. `Revoke` accepts the current access secret, or the previous
 generation's access secret while it is still valid within `AccessGrace` (a logout
 right after a refresh), and removes its family; `Logout` does the same and reports
-`auth.EventLogout`. A committed revocation always reports its count; it never
+`auth.EventLogout`. `LogoutRefresh` revokes by a refresh secret instead, for the
+[browser cookie logout](#browser-refresh-cookies). A committed revocation always reports its count; it never
 turns into an error.
 
 ## The current token

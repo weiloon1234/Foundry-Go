@@ -197,13 +197,19 @@ func Render(source *manifest.Manifest, options Options) ([]byte, error) {
 		if op.Validation != nil {
 			operation["x-foundry-validation"] = op.Validation
 		}
-		var requirement object
+		// Each alternative pairs one credential option with one cookie option; an
+		// empty option means the operation also accepts the request without it.
+		cookies, credentials := []object{{}}, []object{{}}
 		if cookie := op.RefreshCookie; cookie != nil {
 			operation["x-foundry-refresh-cookie"] = cookie
 			if cookie.Reads {
 				name := "RefreshCookie_" + contractname.Symbol(string(cookie.Name))
 				security[name] = object{"type": "apiKey", "in": "cookie", "name": string(cookie.Name)}
-				requirement = object{name: []string{}}
+				cookies = []object{{name: []string{}}}
+				if cookie.Optional {
+					// A cookie logout also succeeds without the cookie.
+					cookies = append(cookies, object{})
+				}
 			}
 		}
 		if a := op.Route.Authentication; a != nil {
@@ -214,18 +220,22 @@ func Render(source *manifest.Manifest, options Options) ([]byte, error) {
 				scheme = object{"type": "apiKey", "in": "cookie", "name": a.Credential.Name}
 			}
 			security[name] = scheme
-			required := object{name: []string{}}
-			maps.Copy(required, requirement)
-			requirements := []any{required}
+			credentials = []object{{name: []string{}}}
 			if a.Optional {
 				// Anonymous access still presents a required refresh cookie.
-				anonymous := object{}
-				maps.Copy(anonymous, requirement)
-				requirements = append(requirements, anonymous)
+				credentials = append(credentials, object{})
+			}
+		}
+		if len(cookies[0])+len(credentials[0]) > 0 {
+			requirements := make([]any, 0, len(cookies)*len(credentials))
+			for _, credential := range credentials {
+				for _, cookie := range cookies {
+					requirement := maps.Clone(credential)
+					maps.Copy(requirement, cookie)
+					requirements = append(requirements, requirement)
+				}
 			}
 			operation["security"] = requirements
-		} else if requirement != nil {
-			operation["security"] = []any{requirement}
 		}
 		responses := r.errors(op.Errors)
 		success := object{"description": "Successful response"}

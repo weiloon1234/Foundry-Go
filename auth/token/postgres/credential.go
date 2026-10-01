@@ -152,9 +152,16 @@ func (b *Backend) lookup(ctx context.Context, address token.Address, hash token.
 // previous generation. Only the compact consumed set still holds such digests,
 // and replaying one must revoke its family exactly like any other reuse.
 func (b *Backend) revokeReplayed(ctx context.Context, tx *database.Tx, address token.Address, hash token.Digest) error {
+	_, _, err := b.revokeConsumed(ctx, tx, address, hash)
+	return err
+}
+
+// revokeConsumed deletes the family of a consumed refresh digest under its
+// subject lock and returns that subject, shared by replay detection and logout.
+func (b *Backend) revokeConsumed(ctx context.Context, tx *database.Tx, address token.Address, hash token.Digest) (tokenstore.Subject, bool, error) {
 	scope, err := address.Key()
 	if err != nil {
-		return err
+		return tokenstore.Subject{}, false, err
 	}
 	var family, subjectKey string
 	err = database.ForEach(ctx, tx, `SELECT f.id::text, f.subject_key FROM `+b.consumedTable()+` c JOIN `+b.familyTable()+` f ON f.id = c.family_id WHERE c.refresh_hash = $1 AND f.scope = $2`, []any{hash.Hex(), scope}, func(row database.Row) ([2]string, error) {
@@ -165,14 +172,57 @@ func (b *Backend) revokeReplayed(ctx context.Context, tx *database.Tx, address t
 		return nil
 	})
 	if err != nil || family == "" {
-		return err
+		return tokenstore.Subject{}, false, err
 	}
 	subject, present, err := subjectByKey(ctx, tx, address, subjectKey, true)
 	if err != nil || !present {
-		return err
+		return tokenstore.Subject{}, false, err
 	}
-	_, err = tx.Exec(ctx, `DELETE FROM `+b.familyTable()+` WHERE id = $1 AND scope = $2 AND subject_key = $3`, family, subject.Scope, subject.Key)
-	return err
+	result, err := tx.Exec(ctx, `DELETE FROM `+b.familyTable()+` WHERE id = $1 AND scope = $2 AND subject_key = $3`, family, subject.Scope, subject.Key)
+	if err != nil {
+		return tokenstore.Subject{}, false, err
+	}
+	return subject, result.RowsAffected == 1, nil
+}
+
+var _ token.RefreshRevocationBackend = (*Backend)(nil)
+
+// RevokeRefresh deletes the family of a current, previous or consumed refresh
+// digest in one transaction, locking its subject before the family like every
+// other writer. Expired families are removed as well.
+func (b *Backend) RevokeRefresh(ctx context.Context, address token.Address, hash token.Digest) (value.Optional[model.Identity], error) {
+	if err := validateCredential(address, hash); err != nil {
+		return value.Optional[model.Identity]{}, err
+	}
+	var removed value.Optional[model.Identity]
+	err := b.within(ctx, func(tx *database.Tx) error {
+		subject, family, _, found, err := readCredential(ctx, tx, address, hash, true, true)
+		if err != nil {
+			return err
+		}
+		if found {
+			// readCredential locked the subject and this family row.
+			if _, err := families(subject.Scope, subject.Key).Delete(ctx, tx, family.ID); err != nil {
+				return err
+			}
+		} else {
+			consumed, present, err := b.revokeConsumed(ctx, tx, address, hash)
+			if err != nil || !present {
+				return err
+			}
+			subject = consumed
+		}
+		identity, err := subject.Identity.Decode()
+		if err != nil {
+			return err
+		}
+		removed = value.Set(identity)
+		return nil
+	})
+	if err != nil {
+		return value.Optional[model.Identity]{}, err
+	}
+	return removed, nil
 }
 
 // retire keeps the family's current and immediately previous generations. Older

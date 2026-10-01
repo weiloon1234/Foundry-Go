@@ -33,19 +33,28 @@
   only from the cookie, with no body or query string, and its handler stays
   `Tokens.Refresh(ctx, input.Body.RefreshToken.Secret())`.
   `ClearRefreshCookie(cookie, response)` clears it on logout.
+- `RefreshTokenCookieLogout(cookie)` is a browser logout authenticated by the
+  refresh cookie itself, so an expired access token no longer strands a live
+  family: its handler passes a present credential to the new
+  `Tokens.LogoutRefresh`, which revokes the family of a current, previous or
+  consumed refresh secret (an expired family too) and reports `EventLogout`. A
+  missing, malformed or unknown cookie revokes nothing and still answers success
+  with the cookie cleared; a transient failure keeps the cookie. It requires
+  `ClearRefreshCookie` as its response. Token backends implement the new
+  `token.RefreshRevocationBackend`; the PostgreSQL backend does.
 - Every endpoint that sets, reads or clears the cookie requires POST, TLS and
   no-store, and checks the cookie's origin protection first (which also
   prevents login CSRF). A refresh endpoint's 401 clears the cookie, and a logout
   endpoint clears it on success and on a 401 from its handler; 403, input
   rejections and transient failures keep it. A bearer-guarded logout whose access
   token is rejected by the authentication middleware keeps it and revokes
-  nothing, so a client with an expired access token refreshes before logging
-  out. A refresh-cookie read must be
+  nothing; browsers use the cookie logout instead. A refresh-cookie read must be
   paired with a response that sets or clears the cookie. Families from
   either transport behave identically. No refresh-reuse window is added.
 - `EndpointInfo`, the manifest and OpenAPI describe `refresh_cookie` use: no
   request body and a cookie security scheme for refresh, and `Set-Cookie` on
-  success and on 401. The new DTO `AccessTokenResponse` has no refresh field.
+  success and on 401. A cookie logout's description is `optional`, and its OpenAPI
+  security also accepts a request without the cookie. The new DTO `AccessTokenResponse` has no refresh field.
 - `RefreshTokenRequest` can now come from the refresh cookie as well as JSON.
 
 ### Realtime handshake tickets

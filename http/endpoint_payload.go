@@ -40,6 +40,8 @@ type Body[B any] struct {
 	// refreshCookie reads a refresh credential from its cookie instead of a body.
 	refreshCookie *RefreshCookie
 	fromCookie    func(*stdhttp.Request) (B, error)
+	// refreshLogout reads the cookie optionally, for a cookie-authenticated logout.
+	refreshLogout bool
 }
 
 func JSONBody[B any](descriptor contract.JSON[B]) Body[B] {
