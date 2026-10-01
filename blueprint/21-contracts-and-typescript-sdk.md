@@ -62,3 +62,128 @@ obsolete-output removal in a dedicated client directory. Native full acceptance,
 strict TypeScript positive/negative cases, real HTTP/WebSocket tests, older-client
 additive compatibility, consumer/compiler/editor checks, races and bounded fuzz
 passed. Details and actual timings are in the [master evidence](00-master-architecture-and-parity.md).
+
+## Client surfaces and shared runtime modules (starter F-G06)
+
+Status: **implemented** on 2026-10-02; see the
+[master status](00-master-architecture-and-parity.md) for its verification. The
+[client guide](../docs/guides/client-contracts.md#portal-surfaces) documents use.
+
+### Problem and baseline
+
+Every portal imports the single generated SDK, so it carries the whole embedded
+manifest and every runtime feature. The starter measured about +26 kB gzip per
+portal in Vite. The client fixture's SDK, compiled to JavaScript without
+minification and compressed with gzip -9, measured on 2026-10-02:
+
+| Part | gzip |
+| --- | --- |
+| Whole SDK | 36.5 KB |
+| Runtime code | 25.3 KB: core (wire, formats, validation, HTTP, metadata) about 17 KB, forms 5.4, realtime 4.1, descriptors 1.8 |
+| Embedded manifest | 9.8 KB indented; 7.2 KB as compact JSON |
+| Generated per-operation glue | about 1 KB |
+
+Per-operation exports alone would save little, would need the wire codec rebuilt
+around per-operation metadata, and would add a second helper for each operation,
+which this blueprint rules out. They are not planned.
+
+### Declared surfaces
+
+Export options declare named surfaces in Go, never on the command line:
+
+```go
+typescript.Options{Dir: dir, Surfaces: []typescript.Surface{
+    {Name: "admin", Routes: []http.RouteID{"admin"}, Channels: []websocket.ChannelID{"admin"}},
+    {Name: "web", Routes: []http.RouteID{"web", "health.live"}},
+}}
+```
+
+`typescript.ExportCommand` takes the same declarations, so `contracts:export`
+and its `--check` cover every surface. An entry selects the route or channel with
+exactly that ID and every ID that continues it after a `.`, so `admin` selects
+`admin.login` and `admin.orders.list` but not `administration.x`. Every entry must
+select something, and an unknown entry fails generation. A surface needs at least
+one route or channel. Surfaces may overlap. Names follow the prefix pattern, are
+unique, and exclude the artifact names `manifest`, `openapi`, `react`, `vue` and
+`runtime`, so generated file names never collide.
+
+### Manifest projection
+
+`contract/manifest` owns projection; the TypeScript generator never prunes the
+document itself. A projection of a manifest contains:
+
+- the selected operations and raw routes, in manifest order;
+- the realtime protocol and limits with the selected channels, omitted when none
+  are selected;
+- the closure of types reachable from those operations (parameters, bodies,
+  responses), channels (rooms, presence, event payloads), the error type and the
+  explicit roots;
+- tables whose row or request type is in that closure, and notifications with a
+  channel whose realtime delivery names a selected channel;
+- the application-wide label metadata unchanged: error definitions, locales,
+  enums and permissions.
+
+A projection is validated like any decoded manifest. A per-surface OpenAPI
+document can reuse it later; this milestone does not emit one.
+
+### Generated files
+
+- `<prefix>_foundry.gen.ts` keeps its full API.
+- `<prefix>_<surface>_foundry.gen.ts` exports the same names and types, restricted
+  to the surface. Its `contractMetadata()` returns the projection.
+- Two shared runtime modules are imported by every entry:
+  `<prefix>_runtime_foundry.gen.ts` (the Go-owned constants and shared brands,
+  wire codecs, formats, validation and the HTTP invoker) and
+  `<prefix>_runtime_realtime_foundry.gen.ts`. An entry imports exactly the
+  runtime names its code refers to and re-exports the public runtime API, so
+  imports from the full SDK keep working. Only entries with channels load the
+  realtime module; the full entry always re-exports its API.
+- The metadata, descriptor and form runtime stay inlined in each entry: their
+  types and caches belong to that entry's operations and embedded manifest.
+  Bundlers drop them when unused, so no per-entry contract object was needed.
+- Runtime modules have no top-level side effects, so bundlers drop features an
+  application never imports. A build with several portals shares one copy of the
+  core.
+- The runtime sources declare their module wiring as explicit import and export
+  lines. `typescript.Render` drops those lines to keep returning one
+  self-contained module from the same sources.
+- The React and Vue form adapters keep a type-only import of `FormStore` from
+  the full entry, which serves every entry of the directory.
+- Each entry embeds compact JSON. `manifestJSON` parses to the same document, but
+  its text is no longer indented.
+
+### Compatibility and acceptance
+
+The change is additive for imports and wire behaviour. The generated file set
+gains the runtime modules, which the ownership manifest publishes, checks and
+removes like other generated client files. Removing a surface removes its file.
+Older generated clients keep working against the server.
+
+Acceptance covers:
+
+- projection tests: namespace matching, closures, overlap, unknown and empty
+  selections, reserved names and validation of the projected document;
+- strict TypeScript compilation of the full SDK and each surface, including a
+  negative case where one portal's client cannot call another portal's operation;
+- real HTTP and WebSocket tests through a surface client;
+- generation `--check`, obsolete-output removal and older-client compatibility;
+- a two-portal consumer fixture;
+- measured gzip sizes of the full SDK and each surface, with minified bundle sizes
+  when a bundler is available, recorded as evidence with their conditions.
+
+The client fixture covers these with two surfaces, `members` (seven operations)
+and `live` (one operation and two channels), compiled with `isolatedModules` and
+`verbatimModuleSyntax`. Its bundle check uses the pinned development esbuild and
+asserts which runtime features each application keeps. Measured with esbuild
+0.28.2 (minified ES2022 modules, then gzip -9) on 2026-10-02:
+
+| Application imports | Minified | gzip |
+| --- | --- | --- |
+| Full entry: `createClient` | 107,647 B | 19,161 B |
+| Full entry: client, realtime, forms and descriptors | 129,579 B | 26,739 B |
+| `members`: `createClient` | 62,484 B | 14,935 B |
+| `members`: client, forms and descriptors | 75,789 B | 19,651 B |
+| `live`: client and realtime | 55,234 B | 17,708 B |
+
+The single-module SDK measured 107,646 B and 19,167 B for `createClient`, so
+the split layout costs nothing for an application that keeps the full entry.

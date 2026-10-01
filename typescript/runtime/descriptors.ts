@@ -1,9 +1,5 @@
-/** Public display hints; they neither validate nor supply default values. */
-export interface Presentation {
-  readonly kind?: PresentationKind;
-  readonly label_key?: string;
-  readonly help_key?: string;
-}
+import { JSONNumber, defaultJSONLimits, immutable, object, pointer, reject, validUnicode, writeWire } from "./runtime.js";
+import type { CallOptions, ClientOptions, Identity, MultipartPart, Operation, Payload, Presentation, RuleDescription, RuntimeDocument, URLParameter, Upload, ValidationReport, WireType, localeKeyed } from "./runtime.js";
 /** Unsafe-size metadata numbers stay exact instead of being rounded or clamped. */
 export type ExactMetadataNumber = number | JSONNumber;
 type ExactMetadata<T> = T extends number ? ExactMetadataNumber : T extends readonly (infer V)[] ? readonly ExactMetadata<V>[] : T extends object ? { readonly [K in keyof T]: ExactMetadata<T[K]> } : T;
@@ -84,7 +80,7 @@ function resolvedDescriptor(id: string): { type: WireType; nullable: boolean } {
 
 // Choices depend only on their type. Decode each type's cases once instead of on
 // every navigation; enums may be large and decoding checks case membership.
-const descriptorChoicesCache = new Map<string, readonly unknown[]>();
+const descriptorChoicesCache = /* @__PURE__ */ new Map<string, readonly unknown[]>();
 function descriptorChoices(id: string, type: WireType): readonly unknown[] {
   const cached = descriptorChoicesCache.get(id);
   if (cached) return cached;
@@ -105,7 +101,7 @@ interface DescriptorReference {
   readonly guards: readonly { readonly segments: readonly (string | number | null)[]; readonly discriminator: string; readonly tag: string }[];
   readonly id?: string;
 }
-const descriptorReferences = new WeakMap<object, DescriptorReference>();
+const descriptorReferences = /* @__PURE__ */ new WeakMap<object, DescriptorReference>();
 function childReference(reference: DescriptorReference | undefined, key: string | number | null): DescriptorReference | undefined {
   return reference && { ...reference, segments: [...reference.segments, key] };
 }

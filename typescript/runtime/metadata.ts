@@ -1,3 +1,5 @@
+import { JSONNumber, integerPattern, manifestVersion, parseWire, reject, runtimePolicy } from "./runtime.js";
+import type { JSONLimits, JSONValue, RuntimeDocument } from "./runtime.js";
 function metadataLimits(): JSONLimits { return { Bytes: runtimePolicy.metadataBytes, Depth: runtimePolicy.maxDepth, Nodes: 1 << 20, Steps: 1 << 22, Issues: 1 }; }
 /** Returns an owned lossless snapshot, including enum labels, permissions, locales and tables. */
 export function contractMetadata(): JSONValue { return parseWire(manifestJSON, metadataLimits()); }

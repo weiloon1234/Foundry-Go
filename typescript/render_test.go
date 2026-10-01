@@ -64,8 +64,9 @@ func TestRenderOwnsStableTypedClientAndExactManifest(t *testing.T) {
 func TestClientGenerationPublishesAllAdaptersTogether(t *testing.T) {
 	source := clientManifest(t)
 	options := typescript.Options{Dir: t.TempDir(), Prefix: "api", OpenAPI: openapi.Options{Title: "Consumer", APIVersion: "1"}}
+	// The full entry, its two shared runtime modules, the manifest and OpenAPI.
 	report, err := typescript.Generate(t.Context(), source, options)
-	if err != nil || len(report.Written) != 3 {
+	if err != nil || len(report.Written) != 5 {
 		t.Fatal(report, err)
 	}
 	options.Check = true
@@ -79,7 +80,7 @@ func TestClientGenerationPublishesAllAdaptersTogether(t *testing.T) {
 	}
 	options.Check = false
 	report, err = typescript.Generate(t.Context(), source, options)
-	if err != nil || len(report.Written) != 3 || len(report.Removed) != 3 {
+	if err != nil || len(report.Written) != 5 || len(report.Removed) != 5 {
 		t.Fatal(report, err)
 	}
 	options.Prefix = "../bad"
@@ -92,7 +93,7 @@ func TestOptionalFormAdaptersUseOwnedAtomicPublication(t *testing.T) {
 	source := clientManifest(t)
 	options := typescript.Options{Dir: t.TempDir(), Prefix: "example", OpenAPI: openapi.Options{Title: "Consumer", APIVersion: "1"}, React: true, Vue: true}
 	report, err := typescript.Generate(t.Context(), source, options)
-	if err != nil || len(report.Written) != 5 {
+	if err != nil || len(report.Written) != 7 {
 		t.Fatal(report, err)
 	}
 	for _, adapter := range []string{"react", "vue"} {

@@ -1,13 +1,5 @@
-interface RealtimeEvent { readonly id: string; readonly name: string; readonly direction: string; readonly payload: string; readonly accepted_acknowledgement: boolean }
-interface RealtimeChannel { readonly id: string; readonly name: string; readonly room: URLParameter; readonly owned_rooms: boolean; readonly presence?: string; readonly replay: { readonly messages: number; readonly bytes: number }; readonly events: readonly RealtimeEvent[] }
-interface RealtimeDescription {
-  readonly protocol: { readonly version: number; readonly subprotocol: string; readonly ticket_subprotocol_prefix: string; readonly max_room_bytes: number; readonly max_replay_messages: number;
-    readonly actions: { readonly subscribe: string; readonly unsubscribe: string; readonly message: string };
-    readonly responses: { readonly subscribed: string; readonly unsubscribed: string; readonly acknowledged: string; readonly accepted: string; readonly error: string; readonly event: string; readonly presence_joined: string; readonly presence_left: string; readonly presence_updated: string };
-    readonly codes: readonly string[] };
-  readonly limits: { readonly subscriptions: number; readonly frame_bytes: number; readonly presence_members: number; readonly member_bytes: number; readonly deduplication_entries: number; readonly operation_ms: number; readonly inbound_queue: number; readonly message_rate: { readonly requests: number; readonly window_ms: number }; readonly payload: JSONLimits };
-  readonly channels: readonly RealtimeChannel[];
-}
+import { ContractError, JSONNumber, WireCodec, checkAbort, immutable, integerPattern, object, ownInput, parseWire, reject, runtimePolicy, textBytes, urlValue, uuidPattern, writeWire } from "./runtime.js";
+import type { CallOptions, CodecOptions, JSONLimits, RealtimeChannel, RealtimeEvent, RuntimeDocument } from "./runtime.js";
 /** Supply an already-open connection which negotiated the exported subprotocol. */
 export interface RealtimeTransport {
   readonly protocol: string;
@@ -212,3 +204,4 @@ function createRealtimeEngine(document: RuntimeDocument, transport: RealtimeTran
     },
   };
 }
+export { createRealtimeEngine };

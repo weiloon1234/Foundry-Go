@@ -2,6 +2,7 @@ package clientcontracts_test
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"github.com/weiloon1234/Foundry-Go/testkit"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -148,7 +150,7 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	options := typescript.Options{Dir: dir, OpenAPI: openapi.Options{Title: "Consumer", APIVersion: "1"}}
+	options := typescript.Options{Dir: dir, OpenAPI: openapi.Options{Title: "Consumer", APIVersion: "1"}, Surfaces: surfaces}
 	if _, err := clientcontracts.Export(t.Context(), source, options); err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +223,7 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "non_streaming.ts"), nonStreaming, 0600); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"types.ts", "runtime.mjs", "forms.mjs"} {
+	for _, name := range []string{"types.ts", "runtime.mjs", "forms.mjs", "surfaces.ts", "surfaces.mjs"} {
 		data, err := os.ReadFile(filepath.Join("testdata", name))
 		if err != nil {
 			t.Fatal(err)
@@ -233,7 +235,9 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"type":"module"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	config := map[string]any{"compilerOptions": map[string]any{"target": "ES2022", "module": "NodeNext", "moduleResolution": "NodeNext", "lib": []string{"ES2022", "DOM", "DOM.Iterable"}, "strict": true, "exactOptionalPropertyTypes": true, "noUncheckedIndexedAccess": true, "noEmitOnError": true, "outDir": "dist"}, "include": []string{"*.ts"}}
+	// verbatimModuleSyntax and isolatedModules match bundler-oriented projects:
+	// entries import runtime types with type-only imports and re-exports.
+	config := map[string]any{"compilerOptions": map[string]any{"target": "ES2022", "module": "NodeNext", "moduleResolution": "NodeNext", "lib": []string{"ES2022", "DOM", "DOM.Iterable"}, "strict": true, "exactOptionalPropertyTypes": true, "noUncheckedIndexedAccess": true, "verbatimModuleSyntax": true, "isolatedModules": true, "noEmitOnError": true, "outDir": "dist"}, "include": []string{"*.ts"}}
 	settings, _ := json.Marshal(config)
 	if err := os.WriteFile(filepath.Join(dir, "tsconfig.json"), settings, 0600); err != nil {
 		t.Fatal(err)
@@ -290,4 +294,80 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 		server.Close()
 	})
 	run("real HTTP/WebSocket and adversarial codec contracts", filepath.Join(dir, "runtime.mjs"), filepath.Join(dir, "dist", "contracts_foundry.gen.js"), server.URL, filepath.Join(dir, "dist", "legacy.js"), string(signed))
+	entries := make([]string, 0, 3)
+	for _, name := range []string{"contracts", "contracts_members", "contracts_live"} {
+		entries = append(entries, filepath.Join(dir, "dist", name+"_foundry.gen.js"))
+	}
+	run("surface clients against real HTTP/WebSocket", append(append([]string{filepath.Join(dir, "surfaces.mjs")}, entries...), server.URL)...)
+	bundles(t, node, compiler, dir)
+}
+
+// surfaces are two portals of the fixture: member pages, and the account with
+// its realtime channels.
+var surfaces = []typescript.Surface{
+	{Name: "members", Routes: []foundryhttp.RouteID{"members"}},
+	{Name: "live", Routes: []foundryhttp.RouteID{"account.show"}, Channels: []websocket.ChannelID{"accounts", "updates"}},
+}
+
+// bundles minifies application entry points with the development esbuild
+// beside the TypeScript compiler. Runtime features an application does not
+// import are dropped, and a surface bundle is smaller than the full SDK's.
+func bundles(t *testing.T, node, compiler, dir string) {
+	t.Helper()
+	esbuild := filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(compiler))), "esbuild", "bin", "esbuild")
+	if _, err := os.Stat(esbuild); err != nil {
+		if os.Getenv("FOUNDRY_TEST_TYPESCRIPT_REQUIRED") == "1" {
+			t.Fatal("bundle acceptance requires the development esbuild beside the TypeScript compiler")
+		}
+		t.Skip("development esbuild is not installed")
+	}
+	apps := map[string]string{
+		"full_http":     `import { createClient } from "../contracts_foundry.gen.js"; console.log(createClient);`,
+		"members_http":  `import { createClient } from "../contracts_members_foundry.gen.js"; console.log(createClient);`,
+		"members_forms": `import { createClient, createForm, operation } from "../contracts_members_foundry.gen.js"; console.log(createClient, createForm, operation);`,
+		"live_realtime": `import { createClient, createRealtime } from "../contracts_live_foundry.gen.js"; console.log(createClient, createRealtime);`,
+		"full_all":      `import { createClient, createForm, createRealtime, operation } from "../contracts_foundry.gen.js"; console.log(createClient, createForm, createRealtime, operation);`,
+	}
+	if err := os.Mkdir(filepath.Join(dir, "apps"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	sizes := make(map[string][2]int, len(apps))
+	contents := make(map[string]string, len(apps))
+	for name, source := range apps {
+		input, output := filepath.Join(dir, "apps", name+".ts"), filepath.Join(dir, "apps", name+".js")
+		if err := os.WriteFile(input, []byte(source), 0600); err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+		command := exec.CommandContext(ctx, node, esbuild, input, "--bundle", "--minify", "--format=esm", "--platform=browser", "--target=es2022", "--log-level=error", "--outfile="+output)
+		command.WaitDelay = time.Second
+		result, err := command.CombinedOutput()
+		cancel()
+		if err != nil {
+			t.Fatalf("esbuild %s: %v\n%s", name, err, result)
+		}
+		data, err := os.ReadFile(output)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var compressed bytes.Buffer
+		writer, _ := gzip.NewWriterLevel(&compressed, gzip.BestCompression)
+		_, _ = writer.Write(data)
+		_ = writer.Close()
+		sizes[name] = [2]int{len(data), compressed.Len()}
+		contents[name] = string(data)
+		t.Logf("bundle %s: %d bytes minified, %d bytes gzip", name, len(data), compressed.Len())
+	}
+	// String literals survive minification: each marks one runtime feature.
+	markers := map[string]string{"realtime": `"RealtimeError"`, "forms": `"submitting"`, "descriptors": `"unknown_operation"`}
+	for name, included := range map[string][]string{"members_http": nil, "members_forms": {"forms", "descriptors"}, "live_realtime": {"realtime"}, "full_all": {"realtime", "forms", "descriptors"}} {
+		for feature, marker := range markers {
+			if present, want := strings.Contains(contents[name], marker), slices.Contains(included, feature); present != want {
+				t.Fatalf("bundle %s: %s included=%v, want %v", name, feature, present, want)
+			}
+		}
+	}
+	if sizes["members_http"][1] >= sizes["full_http"][1] {
+		t.Fatal("a surface bundle is not smaller than the full SDK's", sizes["members_http"], sizes["full_http"])
+	}
 }

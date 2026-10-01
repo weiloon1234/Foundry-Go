@@ -1,3 +1,5 @@
+import { APIError, ContractError, JSONNumber, ResponseContractError, checkAbort, defaultJSONLimits, limitsValid, numberPattern, object, reject, textBytes, unsentFailures, validUnicode } from "./runtime.js";
+import type { CallOptions, ClientOptions, Issue, JSONLimits, Upload, ValidationReport, WireType } from "./runtime.js";
 /** Editable request state. Missing values are allowed here, never asserted valid. */
 export type FormDraft<T> = T extends Blob | JSONNumber | Upload ? T : T extends readonly (infer V)[] ? readonly FormDraft<V>[] : T extends object ? { readonly [K in keyof T]?: FormDraft<T[K]> } : T;
 export type FormReadonly<T> = T extends Blob | JSONNumber ? T : T extends readonly (infer V)[] ? readonly FormReadonly<V>[] : T extends object ? { readonly [K in keyof T]: FormReadonly<T[K]> } : T;
@@ -89,7 +91,7 @@ export interface FormController<K extends keyof Operations> extends FormStore<Fo
 }
 // Form bookkeeping has independent bounds; wire/validation limits remain owned
 // by the operation. Async capacity counts callbacks until their actual exit.
-const formPolicy = Object.freeze({ listeners: 1024, tasks: 32, active: 4, debounceMS: 60000, dependencies: 64 });
+const formPolicy = /* @__PURE__ */ Object.freeze({ listeners: 1024, tasks: 32, active: 4, debounceMS: 60000, dependencies: 64 });
 // What an edit changed: everything (reset, cancel, disposal), only unparsed text,
 // or the value at one concrete path.
 type FormChange = undefined | "text" | readonly (string | number)[];

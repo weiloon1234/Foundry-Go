@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Client surfaces and shared runtime modules
+
+- `typescript.Surface` declares a portal's client entry: `Options.Surfaces` and
+  the variadic surfaces of `typescript.ExportCommand` publish
+  `<prefix>_<name>_foundry.gen.ts` beside the full entry, with the same API
+  restricted to route and channel ID namespaces (`admin` selects `admin.login`,
+  not `administration.list`). Each embeds only its projection of the manifest,
+  built by the new `manifest.Manifest.Project` and `manifest.Selection`.
+- Generated entries import the shared runtime modules
+  `<prefix>_runtime_foundry.gen.ts` and `<prefix>_runtime_realtime_foundry.gen.ts`,
+  which have no top-level side effects, so bundlers drop unused features. A
+  surface without channels does not load the realtime module. Schema names,
+  identity brands and runtime classes are shared by every entry of a directory.
+- Entries embed compact manifest JSON, and generated modules compile with
+  `isolatedModules` and `verbatimModuleSyntax`. `typescript.Render` still returns
+  one self-contained module.
+- On the client fixture, an HTTP-only seven-operation surface bundles to 14.9 KB
+  gzip against 19.2 KB for the full entry (esbuild, minified).
+
 ### Per-guard token lifetimes
 
 - `token.New` and `application.NewTokenGuard` accept options; `token.WithLifetimes`

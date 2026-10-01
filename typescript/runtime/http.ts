@@ -11,6 +11,16 @@ interface Operation {
     readonly Multipart: { readonly Bytes: number; readonly FileBytes: number; readonly Parts: number; readonly Files: number; readonly Readers: number; readonly HeaderBytes: number; readonly FieldBytes: number; readonly FieldsBytes: number; readonly Issues: number };
     readonly Files: { readonly Bytes: number; readonly Ranges: number; readonly RangeBytes: number }; readonly Raw?: { readonly Bytes: number } };
 }
+interface RealtimeEvent { readonly id: string; readonly name: string; readonly direction: string; readonly payload: string; readonly accepted_acknowledgement: boolean }
+interface RealtimeChannel { readonly id: string; readonly name: string; readonly room: URLParameter; readonly owned_rooms: boolean; readonly presence?: string; readonly replay: { readonly messages: number; readonly bytes: number }; readonly events: readonly RealtimeEvent[] }
+interface RealtimeDescription {
+  readonly protocol: { readonly version: number; readonly subprotocol: string; readonly ticket_subprotocol_prefix: string; readonly max_room_bytes: number; readonly max_replay_messages: number;
+    readonly actions: { readonly subscribe: string; readonly unsubscribe: string; readonly message: string };
+    readonly responses: { readonly subscribed: string; readonly unsubscribed: string; readonly acknowledged: string; readonly accepted: string; readonly error: string; readonly event: string; readonly presence_joined: string; readonly presence_left: string; readonly presence_updated: string };
+    readonly codes: readonly string[] };
+  readonly limits: { readonly subscriptions: number; readonly frame_bytes: number; readonly presence_members: number; readonly member_bytes: number; readonly deduplication_entries: number; readonly operation_ms: number; readonly inbound_queue: number; readonly message_rate: { readonly requests: number; readonly window_ms: number }; readonly payload: JSONLimits };
+  readonly channels: readonly RealtimeChannel[];
+}
 interface RuntimeDocument {
   readonly version: number; readonly types: readonly WireType[]; readonly http: readonly Operation[]; readonly error_type: string;
   readonly errors: readonly { readonly error_code: string; readonly status: number; readonly message: string }[]; readonly realtime?: RealtimeDescription;
@@ -82,7 +92,7 @@ function responseFailure(status: unknown, error: unknown): unknown {
 // Failures the invoker raised before calling its transport: only these prove a
 // request never left this client. The set is private, so an error thrown by
 // application code (a wrapped client or transport) can never claim it.
-const unsentFailures = new WeakSet<object>();
+const unsentFailures = /* @__PURE__ */ new WeakSet<object>();
 function beforeSending<T>(run: () => T): T {
   try { return run(); }
   catch (error) { if (error !== null && typeof error === "object") unsentFailures.add(error); throw error; }
@@ -419,3 +429,5 @@ function signedTarget(input: unknown, expected: string, policy: SignedURLPolicy,
   if (canonical(actual.searchParams) !== canonical(target.searchParams)) reject("", "signed_url");
   return relative && base ? base + input : input;
 }
+export { checkAbort, createHTTPInvoker, ownInput, unsentFailures, urlValue };
+export type { MultipartPart, Operation, Payload, RealtimeChannel, RealtimeEvent, RuntimeDocument, URLParameter };

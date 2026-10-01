@@ -77,7 +77,7 @@ func (tools Toolchain) check(t testing.TB, source *manifest.Manifest, baseURL, f
 	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"type":"module"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	config := map[string]any{"compilerOptions": map[string]any{"target": "ES2022", "module": "NodeNext", "moduleResolution": "NodeNext", "lib": []string{"ES2022", "DOM", "DOM.Iterable"}, "strict": true, "exactOptionalPropertyTypes": true, "noUncheckedIndexedAccess": true, "noEmitOnError": true, "outDir": "dist"}, "include": []string{"*.ts"}}
+	config := map[string]any{"compilerOptions": map[string]any{"target": "ES2022", "module": "NodeNext", "moduleResolution": "NodeNext", "lib": []string{"ES2022", "DOM", "DOM.Iterable"}, "strict": true, "exactOptionalPropertyTypes": true, "noUncheckedIndexedAccess": true, "verbatimModuleSyntax": true, "isolatedModules": true, "noEmitOnError": true, "outDir": "dist"}, "include": []string{"*.ts"}}
 	data, err := json.Marshal(config)
 	if err != nil {
 		t.Fatal(err)

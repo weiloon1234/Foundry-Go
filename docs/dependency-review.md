@@ -41,9 +41,10 @@ The module's ordinary tests and vet are included in `make verify`. Run its own
 vulnerability check as well as the packaged runtime/consumer checks.
 
 The existing gopls selection is pinned in [tools/gopls.version](../tools/gopls.version).
-The TypeScript compiler is development-only and pinned with its lockfile under
-[tools/typescript](../tools/typescript/package.json); generated clients have no
-runtime npm import. Review the selected scanner/gopls/TypeScript tool identities,
+The TypeScript compiler and esbuild, which the client acceptance uses to check
+minified bundles and tree-shaking, are development-only and pinned with their
+lockfile under [tools/typescript](../tools/typescript/package.json); generated
+clients have no runtime npm import. Review the selected scanner/gopls/TypeScript tool identities,
 their dependency findings and the lockfile integrity before release. Installing
 or upgrading a tool is an explicit verification setup step, not a side effect of
 the measurement harness.

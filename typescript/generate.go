@@ -21,14 +21,19 @@ type Options struct {
 	// They import their respective peer framework; the core SDK never does.
 	React bool
 	Vue   bool
+	// Surfaces adds one client entry per declared surface beside the full one.
+	Surfaces []Surface
 }
 type Report struct{ Written, Removed []string }
 
 var prefixPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{0,63}$`)
 
-// Generate publishes the manifest, SDK and OpenAPI together. Obsolete owned
-// artifacts are removed, edited/unowned files are refused, and an interrupted
-// publication uses the same recovery journal as foundry generate.
+// Generate publishes the manifest, SDK and OpenAPI together. The SDK is the
+// full entry <prefix>_foundry.gen.ts and one entry per surface, which import
+// the shared runtime modules <prefix>_runtime_foundry.gen.ts and
+// <prefix>_runtime_realtime_foundry.gen.ts. Obsolete owned artifacts are
+// removed, edited/unowned files are refused, and an interrupted publication
+// uses the same recovery journal as foundry generate.
 func Generate(ctx context.Context, source *manifest.Manifest, options Options) (Report, error) {
 	if ctx == nil {
 		return Report{}, fault.New(fault.Invalid, "client generation requires a context")
@@ -45,7 +50,11 @@ func Generate(ctx context.Context, source *manifest.Manifest, options Options) (
 	if !prefixPattern.MatchString(options.Prefix) {
 		return Report{}, fault.New(fault.Invalid, "invalid client artifact prefix")
 	}
-	sdk, err := Render(source)
+	surfaces, err := validateSurfaces(options.Surfaces)
+	if err != nil {
+		return Report{}, err
+	}
+	outputs, err := renderModules(source, options.Prefix, surfaces)
 	if err != nil {
 		return Report{}, err
 	}
@@ -57,11 +66,8 @@ func Generate(ctx context.Context, source *manifest.Manifest, options Options) (
 	if err != nil {
 		return Report{}, err
 	}
-	outputs := map[string][]byte{
-		options.Prefix + "_foundry.gen.ts":            sdk,
-		options.Prefix + "_manifest_foundry.gen.json": metadata,
-		options.Prefix + "_openapi_foundry.gen.json":  api,
-	}
+	outputs[options.Prefix+"_manifest_foundry.gen.json"] = metadata
+	outputs[options.Prefix+"_openapi_foundry.gen.json"] = api
 	if options.React {
 		outputs[options.Prefix+"_react_foundry.gen.ts"] = renderFormAdapter(options.Prefix, reactAdapter)
 	}

@@ -134,3 +134,4 @@ function numericIdentity(text: string): string {
   while (digits.endsWith("0")) { digits = digits.slice(0, -1); power++; }
   return "number:" + match[1] + digits + "e" + power;
 }
+export type { RuleDescription };

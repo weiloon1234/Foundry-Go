@@ -30,9 +30,10 @@ type exportArguments struct {
 //	app contracts:export --dir frontend/src/generated [--prefix contracts] [--check]
 //
 // It replaces a hand-written manifest.Build/Generate command. The API title,
-// version and servers come from api. Check is read-only and fails on stale
-// output. Building runs no handlers or external transports.
-func ExportCommand(name cli.Name, api openapi.Options, sources Sources) (cli.Declaration, error) {
+// version and servers come from api, and surfaces adds one client entry per
+// portal. Check is read-only and fails on stale output. Building runs no
+// handlers or external transports.
+func ExportCommand(name cli.Name, api openapi.Options, sources Sources, surfaces ...Surface) (cli.Declaration, error) {
 	if sources == nil {
 		return cli.Declaration{}, fault.New(fault.Invalid, "contract export requires a sources resolver")
 	}
@@ -40,6 +41,10 @@ func ExportCommand(name cli.Name, api openapi.Options, sources Sources) (cli.Dec
 		return cli.Declaration{}, err
 	}
 	api.Servers = slices.Clone(api.Servers)
+	surfaces, err := validateSurfaces(surfaces)
+	if err != nil {
+		return cli.Declaration{}, err
+	}
 	command := cli.Define(name, "Export the typed client contract, TypeScript SDK and OpenAPI", cli.Flags(func(flags *flag.FlagSet, args *exportArguments) {
 		flags.StringVar(&args.Dir, "dir", "", "existing client output directory")
 		flags.StringVar(&args.Prefix, "prefix", "contracts", "generated artifact filename prefix")
@@ -65,7 +70,7 @@ func ExportCommand(name cli.Name, api openapi.Options, sources Sources) (cli.Dec
 			if err != nil {
 				return err
 			}
-			report, err := Generate(ctx, source, Options{Dir: args.Dir, Prefix: args.Prefix, Check: args.Check, OpenAPI: api, React: args.React, Vue: args.Vue})
+			report, err := Generate(ctx, source, Options{Dir: args.Dir, Prefix: args.Prefix, Check: args.Check, OpenAPI: api, React: args.React, Vue: args.Vue, Surfaces: surfaces})
 			if err != nil {
 				return err
 			}

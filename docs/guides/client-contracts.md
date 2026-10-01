@@ -74,16 +74,70 @@ realtime description and other sources the same way. Register the declaration
 with the application's CLI commands, then run
 `app contracts.export --dir frontend/src/generated [--prefix contracts] [--check]`.
 
-The default output is `contracts_foundry.gen.ts`,
-`contracts_manifest_foundry.gen.json` and `contracts_openapi_foundry.gen.json`.
-`--prefix` changes their shared prefix. There are no timestamps, absolute source
-paths or runtime npm imports in the generated module. It requires ES2022 and DOM
-types. Enable `strict`, `exactOptionalPropertyTypes` and
-`noUncheckedIndexedAccess` in the consuming project.
+The default output is the client entry `contracts_foundry.gen.ts`, the shared
+runtime modules it imports (`contracts_runtime_foundry.gen.ts` and
+`contracts_runtime_realtime_foundry.gen.ts`), `contracts_manifest_foundry.gen.json`
+and `contracts_openapi_foundry.gen.json`. `--prefix` changes their shared prefix.
+Import an entry module; the runtime modules' exports are not a stable API. There
+are no timestamps, absolute source paths or runtime npm imports in the generated
+modules. They require ES2022 and DOM types. Enable `strict`,
+`exactOptionalPropertyTypes` and `noUncheckedIndexedAccess` in the consuming
+project; the modules also compile with `isolatedModules` and
+`verbatimModuleSyntax`. `typescript.Render` still returns one self-contained
+module with the runtime inlined.
 
 Client JSON limits count containers, values and object names, matching Go. For
 example, `{"key":"value"}` uses three nodes; a two-node budget rejects it on
 both encode and decode. Byte, depth and schema-work limits remain independent.
+
+## Portal surfaces
+
+An application with several portals declares one surface per portal, so each
+bundle carries only its own operations, channels and schemas:
+
+```go
+export, err := typescript.ExportCommand("contracts.export", api, sources,
+    typescript.Surface{Name: "admin", Routes: []http.RouteID{"admin"}, Channels: []websocket.ChannelID{"admin"}},
+    typescript.Surface{Name: "web", Routes: []http.RouteID{"web", "health.live"}})
+```
+
+`typescript.Options.Surfaces` takes the same declarations. Each surface publishes
+`contracts_<name>_foundry.gen.ts` beside the full entry, with the same API
+restricted to its selection. An entry selects the route or channel with exactly
+that ID and every ID continuing it after a dot: `admin` selects `admin.login` and
+`admin.orders.list`, not `administration.list`. Its embedded manifest is a
+projection (`manifest.Manifest.Project`) containing:
+
+- the selected operations and channels and the schemas they reach;
+- the tables whose row or request schema those operations reach;
+- notifications' inbox deliveries, and realtime deliveries on selected channels;
+- the application-wide error definitions, locales, enums, permissions and
+  explicit schemas.
+
+`contractMetadata()` returns that projection. Schema names are the full
+manifest's in every entry, and identity brands and runtime classes come from the
+shared modules, so values pass between entries of one directory. A surface
+without channels neither imports the realtime module nor exports
+`createRealtime`. Surface names follow the prefix pattern and are unique ignoring
+case. `manifest`, `openapi`, `react`, `vue` and names beginning with `runtime`
+are reserved, and at most 64 surfaces are allowed. Every selection entry must
+select something. Removing a surface removes its file.
+
+The runtime modules have no top-level side effects, so bundlers drop the runtime
+features an application does not import. Measured with esbuild 0.28.2 (minified
+ES2022 modules, then gzip -9) on the client fixture's 23 operations and two
+channels, 2026-10-02:
+
+| Application imports | gzip |
+| --- | --- |
+| Full entry: `createClient` | 19.2 KB |
+| Full entry: client, realtime, forms and descriptors | 26.7 KB |
+| Seven-operation surface: `createClient` | 14.9 KB |
+| Seven-operation surface: client and forms | 19.7 KB |
+| One operation and two channels: client and realtime | 17.7 KB |
+
+The remaining cost is the core runtime: lossless codecs, request validation and
+the HTTP invoker.
 
 ## Operation documentation, examples and servers
 
@@ -105,7 +159,7 @@ fragment, or paths such as `/api`.
 
 ## Ownership, checking and recovery
 
-The shared generator publisher owns all three files through a version 2
+The shared generator publisher owns every generated file through a version 2
 `.foundry-gen.json`. Keep it with the generated outputs. This client directory
 must be separate from directories owned by Go generation. A prefix rename
 deletes obsolete, unchanged owned files; unrelated files remain untouched.
@@ -452,8 +506,9 @@ application change is compatible.
 The independent `tests/fixtures/consumer/clientcontracts` fixture contains strict
 TypeScript positive/negative contracts, codec adversarial cases and real HTTP/
 WebSocket interoperability, including an older generated client's existing
-operation against a newer server. Framework maintainers can install the pinned
-compiler with `npm ci --prefix tools/typescript --ignore-scripts`, select absolute
+operation against a newer server, surface clients and minified bundles.
+Framework maintainers can install the pinned compiler and esbuild with
+`npm ci --prefix tools/typescript --ignore-scripts`, select absolute
 `FOUNDRY_TEST_NODE` and `FOUNDRY_TEST_TYPESCRIPT` (the compiler's `lib/tsc.js`), and
 run `make typescript-check`. Set `FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1` with both
 paths for the full `make verify` acceptance gate. Installation is tooling only;

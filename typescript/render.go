@@ -7,6 +7,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,13 +33,30 @@ const maxOutputBytes = generate.MaxArtifactBytes
 
 type renderer struct {
 	document manifest.Document
-	names    map[contract.TypeID]string
+	naming
+	// uses records the runtime names an entry module's generated code refers
+	// to, so it imports exactly those; nil for the self-contained module.
+	uses map[string]bool
+	out  bytes.Buffer
+}
+
+// naming is computed once from the full manifest and shared by every entry, so
+// a schema keeps its name in each surface.
+type naming struct {
+	names map[contract.TypeID]string
 	// received names tolerant variants of server-output schemas whose values can
 	// contain enum cases or locale keys; other schemas are received unchanged.
 	received map[contract.TypeID]string
 	// receivedEnums marks received variants that admit unknown enum values.
 	receivedEnums map[contract.TypeID]bool
-	out           bytes.Buffer
+}
+
+// ref records a runtime name the generated code refers to.
+func (r *renderer) ref(name string) string {
+	if r.uses != nil {
+		r.uses[name] = true
+	}
+	return name
 }
 
 // localeKey is the key type of maps keyed by i18n.LocaleID, taken from the
@@ -57,70 +75,109 @@ func localeKeyed(typ contract.Type) bool {
 	return typ.Kind == contract.MapKind && typ.Key != nil && len(typ.Key.Value.Cases) == 0 && typ.Key.Value.ID == localeKey()
 }
 
-// Render returns one deterministic, dependency-free ES2022 TypeScript module.
-// Runtime payload numbers never pass through JSON.parse. Wide integers and
-// exact JSON numbers have decimal-string client values and exact numeric wire
-// tokens; json,string continues to use the declared quoted wire format.
+// Render returns one deterministic, dependency-free ES2022 TypeScript module
+// with the runtime inlined. Generate publishes the same client as an entry
+// module importing shared runtime modules. Runtime payload numbers never pass
+// through JSON.parse. Wide integers and exact JSON numbers have decimal-string
+// client values and exact numeric wire tokens; json,string continues to use the
+// declared quoted wire format.
 func Render(source *manifest.Manifest) ([]byte, error) {
 	document, err := source.Snapshot()
 	if err != nil {
 		return nil, err
 	}
-	reserved, err := reservedNames()
+	names, err := newNaming(document)
 	if err != nil {
 		return nil, err
 	}
-	names, err := contractname.Schemas(document.Types, func(name string) bool { return reserved[name] })
-	if err != nil {
-		return nil, err
-	}
-	for _, typ := range document.Types {
-		if length, set := typ.Length.Get(); set && int64(length) > 9007199254740991 {
-			return nil, fault.New(fault.Invalid, "TypeScript array length exceeds its exact index range")
-		}
-	}
-	if localeKey() == "" {
-		return nil, fault.New(fault.Internal, "TypeScript locale key declaration is unavailable")
-	}
-	received, receivedEnums := receivedNames(document, names, reserved)
-	r := renderer{document: document, names: names, received: received, receivedEnums: receivedEnums}
+	r := renderer{document: document, naming: names}
 	fmt.Fprintf(&r.out, "%s\n// Requires ES2022 and DOM transport types; no runtime package imports.\n\n", generate.ArtifactHeader)
-	fmt.Fprintf(&r.out, "export const manifestVersion = %d as const;\n", manifest.Version)
-	fmt.Fprintf(&r.out, "const runtimePolicy: RuntimePolicy = { maxDepth: %d, decimalDigits: %d, metadataBytes: %d, messageBytes: %d };\n", contract.MaxJSONDepth, decimal.MaxDigits, manifest.MaxBytes, i18n.MaxTextBytes)
-	fmt.Fprintf(&r.out, "const idempotencyKeyPattern = %s;\n", quote(idempotency.KeyPattern(idempotency.MaxKeyBytes)))
-	defaults, _ := json.Marshal(foundryhttp.DefaultEndpointLimits().Response)
-	fmt.Fprintf(&r.out, "const defaultJSONLimits: JSONLimits = Object.freeze(%s);\n", defaults)
-	kinds := make([]string, 0, len(contract.PresentationKinds()))
-	for _, kind := range contract.PresentationKinds() {
-		kinds = append(kinds, quote(string(kind)))
-	}
-	fmt.Fprintf(&r.out, "/** Presentation kinds, emitted from the Go contract's closed set. */\nexport type PresentationKind = %s;\n", strings.Join(kinds, " | "))
-	for _, name := range []string{"wire", "formats", "validation_messages", "validation", "http", "realtime", "metadata", "descriptors", "forms"} {
-		data, err := runtimeSources.ReadFile("runtime/" + name + ".ts")
+	r.out.WriteString(preamble(false))
+	for _, name := range slices.Concat(coreSources, []string{realtimeSource}, entrySources) {
+		data, err := runtimeSource(name)
 		if err != nil {
 			return nil, err
 		}
-		r.out.Write(data)
+		r.out.Write(withoutModuleLines(data))
 		r.out.WriteByte('\n')
 	}
-	data, err := source.JSON()
-	if err != nil {
+	if err := r.body(source); err != nil {
 		return nil, err
 	}
-	// A JSON string literal is also a safe TypeScript string literal, including
-	// escaped line separators and hostile declaration names. Preserve exact JSON.
-	// A string keeps the compiler's work independent of manifest size; the
-	// runtime parses it lazily on first use rather than at import.
-	literal, _ := json.Marshal(string(data))
-	fmt.Fprintf(&r.out, "\nexport const manifestJSON = %s;\nlet runtimeDocumentCache: RuntimeDocument | undefined;\nfunction runtimeDocument(): RuntimeDocument { return runtimeDocumentCache ??= loadRuntimeDocument(); }\nlet contractsCache: WireCodec | undefined;\nfunction contracts(): WireCodec { return contractsCache ??= new WireCodec(runtimeDocument().types); }\n\n", literal)
-	r.types()
-	r.http()
-	r.descriptors()
-	r.realtime()
 	if r.out.Len() > maxOutputBytes {
 		return nil, fault.New(fault.Invalid, "TypeScript output exceeds its publication byte budget")
 	}
 	return r.out.Bytes(), nil
+}
+
+// newNaming validates the document's TypeScript constraints and names every
+// declared schema and its received variant.
+func newNaming(document manifest.Document) (naming, error) {
+	reserved, err := reservedNames()
+	if err != nil {
+		return naming{}, err
+	}
+	names, err := contractname.Schemas(document.Types, func(name string) bool { return reserved[name] })
+	if err != nil {
+		return naming{}, err
+	}
+	for _, typ := range document.Types {
+		if length, set := typ.Length.Get(); set && int64(length) > 9007199254740991 {
+			return naming{}, fault.New(fault.Invalid, "TypeScript array length exceeds its exact index range")
+		}
+	}
+	if localeKey() == "" {
+		return naming{}, fault.New(fault.Internal, "TypeScript locale key declaration is unavailable")
+	}
+	received, receivedEnums := receivedNames(document, names, reserved)
+	return naming{names: names, received: received, receivedEnums: receivedEnums}, nil
+}
+
+// preamble declares the Go-owned runtime constants and shared brands. A runtime
+// module exports what its sibling modules and entries import.
+func preamble(module bool) string {
+	var out strings.Builder
+	fmt.Fprintf(&out, "export const manifestVersion = %d as const;\n", manifest.Version)
+	fmt.Fprintf(&out, "const runtimePolicy: RuntimePolicy = { maxDepth: %d, decimalDigits: %d, metadataBytes: %d, messageBytes: %d };\n", contract.MaxJSONDepth, decimal.MaxDigits, manifest.MaxBytes, i18n.MaxTextBytes)
+	fmt.Fprintf(&out, "const idempotencyKeyPattern = %s;\n", quote(idempotency.KeyPattern(idempotency.MaxKeyBytes)))
+	defaults, _ := json.Marshal(foundryhttp.DefaultEndpointLimits().Response)
+	fmt.Fprintf(&out, "const defaultJSONLimits: JSONLimits = /* @__PURE__ */ Object.freeze(%s);\n", defaults)
+	kinds := make([]string, 0, len(contract.PresentationKinds()))
+	for _, kind := range contract.PresentationKinds() {
+		kinds = append(kinds, quote(string(kind)))
+	}
+	fmt.Fprintf(&out, "/** Presentation kinds, emitted from the Go contract's closed set. */\nexport type PresentationKind = %s;\n", strings.Join(kinds, " | "))
+	out.WriteString("declare const identity: unique symbol;\nexport type Identity<Owner extends string> = string & { readonly [identity]: Owner };\n")
+	if module {
+		out.WriteString("export declare const localeKeyed: unique symbol;\nexport { runtimePolicy, defaultJSONLimits };\n")
+	} else {
+		out.WriteString("declare const localeKeyed: unique symbol;\n")
+	}
+	return out.String()
+}
+
+// body writes the entry's embedded manifest, types, HTTP client, descriptors
+// and realtime client. A JSON string literal is also a safe TypeScript string
+// literal, including escaped line separators and hostile declaration names.
+// Compact JSON preserves the exact document; a string keeps the compiler's
+// work independent of manifest size, and the runtime parses it lazily on first
+// use rather than at import.
+func (r *renderer) body(source *manifest.Manifest) error {
+	data, err := source.JSON()
+	if err != nil {
+		return err
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, data); err != nil {
+		return fault.Wrap(fault.Internal, "manifest JSON is not compactable", err)
+	}
+	literal, _ := json.Marshal(compact.String())
+	fmt.Fprintf(&r.out, "\nexport const manifestJSON = %s;\nlet runtimeDocumentCache: %s | undefined;\nfunction runtimeDocument(): RuntimeDocument { return runtimeDocumentCache ??= loadRuntimeDocument(); }\nlet contractsCache: %s | undefined;\nfunction contracts(): WireCodec { return contractsCache ??= new WireCodec(runtimeDocument().types); }\n\n", literal, r.ref("RuntimeDocument"), r.ref("WireCodec"))
+	r.types()
+	r.http()
+	r.descriptors()
+	r.realtime()
+	return nil
 }
 
 func quote(value string) string                        { data, _ := json.Marshal(value); return string(data) }
@@ -257,7 +314,7 @@ func (r *renderer) renderExpression(typ contract.Type, received bool) string {
 	case contract.StringKind:
 		result = "string"
 		if typ.Format == contract.UUIDFormat {
-			result = "Identity<" + quote(string(typ.ID)) + ">"
+			result = r.ref("Identity") + "<" + quote(string(typ.ID)) + ">"
 		}
 	case contract.IntegerKind:
 		result = "number"
@@ -297,7 +354,7 @@ func (r *renderer) renderExpression(typ contract.Type, received bool) string {
 		}
 		key := "string"
 		if typ.Key != nil && typ.Key.Value.Format == contract.UUIDFormat {
-			key = "Identity<" + quote(string(typ.Key.Value.ID)) + ">"
+			key = r.ref("Identity") + "<" + quote(string(typ.Key.Value.ID)) + ">"
 		}
 		if typ.Key != nil && len(typ.Key.Value.Cases) != 0 {
 			values := make([]string, 0, len(typ.Key.Value.Cases))
@@ -314,7 +371,7 @@ func (r *renderer) renderExpression(typ contract.Type, received bool) string {
 	case contract.AliasKind, contract.QuotedKind:
 		result = "Exclude<" + typeName(typ.Element) + ", null>"
 	case contract.DynamicKind:
-		result = "Exclude<JSONValue, null>"
+		result = "Exclude<" + r.ref("JSONValue") + ", null>"
 	}
 	if len(typ.Cases) != 0 {
 		values := make([]string, 0, len(typ.Cases))
@@ -327,7 +384,7 @@ func (r *renderer) renderExpression(typ contract.Type, received bool) string {
 		}
 		result = strings.Join(values, " | ")
 		if received {
-			result += " | UnknownEnumValue"
+			result += " | " + r.ref("UnknownEnumValue")
 		}
 	}
 	if typ.Nullable {
@@ -337,7 +394,6 @@ func (r *renderer) renderExpression(typ contract.Type, received bool) string {
 }
 
 func (r *renderer) types() {
-	r.out.WriteString("declare const identity: unique symbol;\nexport type Identity<Owner extends string> = string & { readonly [identity]: Owner };\n")
 	locales := "string"
 	if r.document.Locales != nil && len(r.document.Locales.Supported) != 0 {
 		values := make([]string, 0, len(r.document.Locales.Supported))
@@ -347,7 +403,7 @@ func (r *renderer) types() {
 		locales = strings.Join(values, " | ")
 	}
 	fmt.Fprintf(&r.out, "/** The locale catalog's supported locales; any string when none is exported. */\nexport type Locale = %s;\n", locales)
-	r.out.WriteString("declare const localeKeyed: unique symbol;\n/** Input keyed by supported locales; descriptors bind its entries with at() and element(). Received values keep string keys. */\nexport type LocaleMap<V> = Readonly<Partial<Record<Locale, V>>> & { readonly [localeKeyed]?: never };\n\n")
+	fmt.Fprintf(&r.out, "/** Input keyed by supported locales; descriptors bind its entries with at() and element(). Received values keep string keys. */\nexport type LocaleMap<V> = Readonly<Partial<Record<Locale, V>>> & { readonly [%s]?: never };\n\n", r.ref("localeKeyed"))
 	for _, typ := range r.document.Types {
 		fmt.Fprintf(&r.out, "export type %s = %s;\n", r.typeName(typ.ID), r.expression(typ))
 	}
@@ -369,6 +425,8 @@ func (r *renderer) types() {
 		fmt.Fprintf(&r.out, "  readonly %s: %s;\n", quote(string(typ.ID)), r.receivedName(typ.ID))
 	}
 	r.out.WriteString("}\n\n")
+	r.ref("JSONLimits")
+	r.ref("defaultJSONLimits")
 	r.out.WriteString(`/** Decode a raw network value using a declared schema and resource bounds. */
 export function decodeContract<K extends keyof ContractTypes>(type: K, input: string | Uint8Array, limits: JSONLimits = defaultJSONLimits): ContractTypes[K] {
   return contracts().decode(type, input, limits) as ContractTypes[K];
@@ -406,7 +464,7 @@ func (r *renderer) parameters(parameters []manifest.Parameter) string {
 func (r *renderer) request(op manifest.Operation) string {
 	fields := make([]string, 0, 4)
 	if op.Idempotency != nil {
-		fields = append(fields, "readonly idempotencyKey: IdempotencyKey")
+		fields = append(fields, "readonly idempotencyKey: "+r.ref("IdempotencyKey"))
 	}
 	if op.Route.SignedURL != nil {
 		fields = append(fields, "readonly signedURL: string")
@@ -436,7 +494,7 @@ func (r *renderer) request(op manifest.Operation) string {
 			if len(media) == 1 {
 				optional = "?"
 			}
-			body = "{ readonly data: RawData; readonly mediaType" + optional + ": " + strings.Join(media, " | ") + " }"
+			body = "{ readonly data: " + r.ref("RawData") + "; readonly mediaType" + optional + ": " + strings.Join(media, " | ") + " }"
 		} else if op.Body.MediaType == "application/x-www-form-urlencoded" {
 			body = r.parameters(op.Body.Fields)
 		} else if op.Body.Type == "" {
@@ -444,7 +502,7 @@ func (r *renderer) request(op manifest.Operation) string {
 			for _, part := range op.Body.Parts {
 				typ := r.typeName(part.Type)
 				if part.Kind == foundryhttp.MultipartFile {
-					typ = "Upload"
+					typ = r.ref("Upload")
 				}
 				if part.Repeated {
 					typ = "ReadonlyArray<" + typ + ">"
@@ -467,29 +525,32 @@ func (r *renderer) request(op manifest.Operation) string {
 
 func (r *renderer) response(op manifest.Operation) string {
 	if op.Redirect {
-		return "RedirectResult<" + strconv.Itoa(op.Status) + ">"
+		return r.ref("RedirectResult") + "<" + strconv.Itoa(op.Status) + ">"
 	}
 	if op.Response != nil && op.Response.File != nil {
-		return "FileResult"
+		return r.ref("FileResult")
 	}
 	if op.Response == nil || op.Route.Method == foundryhttp.HEAD {
 		return "void"
 	}
 	value := r.receivedName(op.Response.Type)
 	if op.Response.MediaType == foundryhttp.EventStreamMediaType {
-		return "EventStreamResult<" + value + ">"
+		return r.ref("EventStreamResult") + "<" + value + ">"
 	}
 	if len(op.Statuses) != 0 {
 		statuses := make([]string, len(op.Statuses))
 		for i, status := range op.Statuses {
 			statuses[i] = strconv.Itoa(status)
 		}
-		return "StatusResult<" + strings.Join(statuses, " | ") + ", " + value + ">"
+		return r.ref("StatusResult") + "<" + strings.Join(statuses, " | ") + ", " + value + ">"
 	}
 	return value
 }
 
 func (r *renderer) http() {
+	for _, name := range []string{"HTTPTransport", "ClientOptions", "CallOptions", "createHTTPInvoker", "ValidationReport"} {
+		r.ref(name)
+	}
 	fmt.Fprintf(&r.out, "\nexport type ErrorResponse = %s;\nexport interface Operations {\n", r.receivedName(r.document.ErrorType))
 	for _, op := range r.document.HTTP {
 		codes := make([]string, len(op.Errors))
@@ -518,6 +579,9 @@ func (r *renderer) realtime() {
 	if r.document.Realtime == nil {
 		return
 	}
+	for _, name := range []string{"RealtimeError", "RealtimeTransport", "RealtimeOptions", "SubscribeOptions", "PresenceMember", "CallOptions", "createRealtimeEngine"} {
+		r.ref(name)
+	}
 	fmt.Fprintf(&r.out, "\nexport const realtimeSubprotocol = %s;\n", quote(r.document.Realtime.Protocol.Subprotocol))
 	// A browser cannot set Authorization on a WebSocket; a single-use ticket
 	// travels as one extra subprotocol entry, never in the URL.
@@ -530,18 +594,18 @@ func (r *renderer) realtime() {
 		}
 		fmt.Fprintf(&r.out, "export interface %s {\n  subscribe(options?: SubscribeOptions): Promise<readonly PresenceMember<%s>[]>;\n  unsubscribe(options?: CallOptions): Promise<void>;\n  dispose(): void;\n", name, presence)
 		if channel.Presence != "" {
-			fmt.Fprintf(&r.out, "  onPresence(handler: (change: PresenceChange<%s>) => void): () => void;\n", presence)
+			fmt.Fprintf(&r.out, "  onPresence(handler: (change: %s<%s>) => void): () => void;\n", r.ref("PresenceChange"), presence)
 		}
 		r.out.WriteString("  readonly on: {\n")
 		for _, event := range channel.Events {
 			if event.Direction == websocket.ServerToClient {
-				fmt.Fprintf(&r.out, "    %s(handler: (payload: %s, info: EventInfo) => void): () => void;\n", quote(event.Name), r.receivedName(event.Payload))
+				fmt.Fprintf(&r.out, "    %s(handler: (payload: %s, info: %s) => void): () => void;\n", quote(event.Name), r.receivedName(event.Payload), r.ref("EventInfo"))
 			}
 		}
 		r.out.WriteString("  };\n  readonly publish: {\n")
 		for _, event := range channel.Events {
 			if event.Direction == websocket.ClientToServer {
-				options := "Omit<PublishOptions, \"onAccepted\">"
+				options := "Omit<" + r.ref("PublishOptions") + ", \"onAccepted\">"
 				if event.AcceptedAcknowledgement {
 					options = "PublishOptions"
 				}

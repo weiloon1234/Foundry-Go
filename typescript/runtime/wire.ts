@@ -7,8 +7,8 @@ export class ContractError extends Error {
 }
 function reject(path = "", code = "invalid"): never { throw new ContractError([{ path, code }]); }
 function pointer(path: string, key: string): string { return path + "/" + key.replace(/~/g, "~0").replace(/\//g, "~1"); }
-const encoder = new TextEncoder();
-const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+const encoder = /* @__PURE__ */ new TextEncoder();
+const decoder = /* @__PURE__ */ new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 const numberPattern = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/;
 const integerPattern = /^-?(?:0|[1-9][0-9]*)$/;
 
@@ -116,6 +116,12 @@ function writeWire(value: unknown, limits: JSONLimits): string {
     } add("}");
   };
   visit(value, 0); return chunks.join("");
+}
+/** Public display hints; they neither validate nor supply default values. */
+export interface Presentation {
+  readonly kind?: PresentationKind;
+  readonly label_key?: string;
+  readonly help_key?: string;
 }
 interface Property { readonly name: string; readonly type: string; readonly required: boolean; readonly presentation?: Presentation }
 interface UnionVariant { readonly tag: string; readonly type: string }
@@ -272,3 +278,5 @@ function immutable<T>(value: T): T {
   }
   return value;
 }
+export { WireCodec, immutable, integerPattern, limitsValid, numberPattern, object, parseWire, pointer, reject, textBytes, validUnicode, writeWire };
+export type { WireType };

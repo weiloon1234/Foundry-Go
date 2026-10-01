@@ -57,7 +57,7 @@ func TestExportCommandPublishesFromApplicationSources(t *testing.T) {
 	if _, err := run(); cli.Status(err) != cli.InvalidUsage {
 		t.Fatal("missing --dir accepted", err)
 	}
-	if output, err := run("--dir", dir); err != nil || !strings.Contains(output, "Generated 3 client artifact(s)") {
+	if output, err := run("--dir", dir); err != nil || !strings.Contains(output, "Generated 5 client artifact(s)") {
 		t.Fatalf("export = %q, %v", output, err)
 	}
 	if output, err := run("--dir", dir, "--check"); err != nil || !strings.Contains(output, "current") {

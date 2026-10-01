@@ -8,6 +8,21 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts.
 
+## Client surfaces and shared runtime modules (starter F-G06) — 2026-10-02
+
+Status: **implemented; full gate pending**. `typescript.Surface` publishes one
+client entry per portal, selected by route and channel ID namespace, embedding
+only its projection from the new `manifest.Manifest.Project`. Entries import
+shared side-effect-free runtime modules and embed compact JSON; the full SDK's
+API and `typescript.Render`'s single module are unchanged.
+[Blueprint 21](21-contracts-and-typescript-sdk.md#client-surfaces-and-shared-runtime-modules-starter-f-g06)
+records the design, the delivered module split and the measurements: an
+HTTP-only seven-operation surface bundles to 14.9 KB gzip against 19.2 KB for
+the full entry. The client fixture's real HTTP/WebSocket, strict TypeScript,
+surface and esbuild bundle checks and the projection, TypeScript, manifest and
+consumer client tests pass. `make verify`, races and `test-postgres` have not
+run on this revision.
+
 ## SPA fallbacks with application.New (starter B09) — 2026-09-30
 
 Status: **accepted** for the framework. `application.Builder.SPA` and
