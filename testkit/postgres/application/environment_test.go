@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -73,7 +74,7 @@ func TestScopeMigrationTargetsShareOnlyIdenticalDefinitions(t *testing.T) {
 	definition := migrate.Definition{Key: migrate.Key{Origin: "test", ID: "001"}, Version: "v1", SQL: []string{"CREATE TABLE records(id bigint)"}}
 	targets := []infrastructure.MigrationTarget{{Definitions: []migrate.Definition{definition}}, {Connection: "audit", Definitions: []migrate.Definition{definition}}}
 	groups, err := env.migrationGroups(targets)
-	if err != nil || len(groups) != 1 || len(groups[0].registry.Entries()) != 1 {
+	if err != nil || len(groups) != 1 || len(groups[0].Definitions) != 1 || !slices.Equal(groups[0].Connections, []database.ConnectionName{"audit", "main"}) {
 		t.Fatal("shared schema did not group migrations", err)
 	}
 	targets[1].Definitions = []migrate.Definition{{Key: definition.Key, Version: "v2", SQL: definition.SQL}}

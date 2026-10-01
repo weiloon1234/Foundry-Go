@@ -36,6 +36,8 @@ type preparedResponse struct {
 	events func(stdhttp.ResponseWriter, *stdhttp.Request) error
 	// release ends a detached file-source context after the transfer.
 	release func()
+	// setCookie is a prepared refresh-cookie header, published with the body.
+	setCookie string
 }
 
 func (p preparedResponse) statusOr(declared int) int {

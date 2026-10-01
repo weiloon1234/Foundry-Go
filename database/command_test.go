@@ -28,7 +28,7 @@ func databaseCommand(t *testing.T, args ...string) dbcommand.Command {
 }
 
 func TestDatabaseCommandParsingNeedsNoServices(t *testing.T) {
-	for _, args := range [][]string{nil, {"migrate"}, {"migrate", "down"}, {"migrate", "fresh"}, {"migrate", "up", "--force"}, {"migrate", "status", "--format", "csv"}, {"seed", "run", "positional"}, {"seed", "run", "--id", "invalid id"}, {"seed", "run", "--id", "app.a", "--id", "app.a"}, {"seed", "list", "--id", "app.a"}} {
+	for _, args := range [][]string{nil, {"migrate"}, {"migrate", "down"}, {"migrate", "fresh"}, {"migrate", "up", "--force"}, {"migrate", "status", "--format", "csv"}, {"seed", "run", "positional"}, {"seed", "run", "--id", "invalid id"}, {"seed", "run", "--id", "app.a", "--id", "app.a"}, {"seed", "list", "--id", "app.a"}, {"migrate", "status", "--database", "bad name"}, {"migrate", "up", "--database", "main", "--database", "other"}, {"migrate", "up", "--schema", "tenant-a"}, {"migrate", "status", "--schema", "a", "--schema", "b"}, {"seed", "run", "--schema", "public"}, {"seed", "list", "--database", "main"}, {"migrate", "show"}, {"migrate", "show", "--migration", "app"}, {"migrate", "show", "--migration", "app/0001_first", "--migration", "app/0002_second"}, {"migrate", "show", "--migration", "App/0001"}} {
 		if _, err := dbcommand.Parse(args, io.Discard); err == nil {
 			t.Fatalf("accepted invalid arguments: %v", args)
 		}
@@ -137,5 +137,92 @@ func TestSeederCommandsListWithoutDatabaseAndRunTypedSelection(t *testing.T) {
 	cancel()
 	if err := databaseCommand(t, "seed", "run").Run(ctx, resources, io.Discard); !errors.Is(err, context.Canceled) || len(order) != 2 {
 		t.Fatal("canceled command executed")
+	}
+}
+
+func TestMigrationCommandsRunSchemaTargetsOfOneDatabase(t *testing.T) {
+	public, tenant := newMigrationServer(), newMigrationServer()
+	publicRunner, _ := migrationRunner(t, public, 1, migrationDefinitions(), nil)
+	tenantRunner, _ := migrationRunner(t, tenant, 1, migrationDefinitions(), nil)
+	resources := dbcommand.Resources{DatabaseName: "main", MigrationTargets: []dbcommand.MigrationTarget{{Schema: "tenant", Runner: tenantRunner}, {Schema: "public", Runner: publicRunner}}}
+	var output bytes.Buffer
+	if err := databaseCommand(t, "migrate", "status", "--format", "json").Run(t.Context(), resources, &output); err != nil {
+		t.Fatal(err)
+	}
+	var status struct {
+		Database string `json:"database"`
+		Targets  []struct {
+			Schema     string           `json:"schema"`
+			Migrations []migrate.Status `json:"migrations"`
+		} `json:"targets"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &status); err != nil || status.Database != "main" || len(status.Targets) != 2 || status.Targets[0].Schema != "public" || status.Targets[1].Schema != "tenant" || len(status.Targets[1].Migrations) != 2 || public.table || tenant.table {
+		t.Fatalf("read-only target status: %s %v", output.Bytes(), err)
+	}
+	output.Reset()
+	if err := databaseCommand(t, "migrate", "up", "--database", "main", "--schema", "tenant").Run(t.Context(), resources, &output); err != nil || !strings.Contains(output.String(), "== main/tenant\nApplied: app\t0001_first") || strings.Contains(output.String(), "main/public") || len(tenant.history) != 2 || len(public.history) != 0 {
+		t.Fatalf("schema selection: %q %v", output.String(), err)
+	}
+	output.Reset()
+	if err := databaseCommand(t, "migrate", "up").Run(t.Context(), resources, &output); err != nil || !strings.Contains(output.String(), "== main/public\n") || !strings.Contains(output.String(), "Confirmed 0 migration(s).") || len(public.history) != 2 {
+		t.Fatalf("every target of the database: %q %v", output.String(), err)
+	}
+	for name, test := range map[string]struct {
+		args      []string
+		resources dbcommand.Resources
+		code      fault.Code
+	}{
+		"rollback without schema":      {[]string{"migrate", "rollback", "--confirm"}, resources, fault.Invalid},
+		"unknown schema":               {[]string{"migrate", "status", "--schema", "absent"}, resources, fault.Missing},
+		"other database":               {[]string{"migrate", "status", "--database", "other"}, resources, fault.Invalid},
+		"runner with schema selection": {[]string{"migrate", "status", "--schema", "public"}, dbcommand.Resources{Migrations: publicRunner}, fault.Invalid},
+		"runner with database name":    {[]string{"migrate", "status", "--database", "main"}, dbcommand.Resources{Migrations: publicRunner}, fault.Invalid},
+		"runner and targets":           {[]string{"migrate", "status"}, dbcommand.Resources{Migrations: publicRunner, MigrationTargets: resources.MigrationTargets}, fault.Invalid},
+		"repeated schema":              {[]string{"migrate", "status"}, dbcommand.Resources{MigrationTargets: []dbcommand.MigrationTarget{{Schema: "public", Runner: publicRunner}, {Schema: "public", Runner: tenantRunner}}}, fault.Duplicate},
+	} {
+		if err := databaseCommand(t, test.args...).Run(t.Context(), test.resources, io.Discard); !errors.Is(err, test.code) {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	if len(public.history) != 2 || len(tenant.history) != 2 {
+		t.Fatal("refused selection changed history")
+	}
+	if databaseCommand(t, "seed", "run", "--database", "reports").Database() != "reports" || databaseCommand(t, "migrate", "status").Database() != "" {
+		t.Fatal("database selection is not exposed to resource assembly")
+	}
+}
+
+func TestMigrationShowPrintsOneDefinitionWithoutDatabaseIO(t *testing.T) {
+	public, tenant := newMigrationServer(), newMigrationServer()
+	publicRunner, _ := migrationRunner(t, public, 1, migrationDefinitions(), nil)
+	tenantRunner, _ := migrationRunner(t, tenant, 1, migrationDefinitions()[:1], nil)
+	show := databaseCommand(t, "migrate", "show", "--migration", "app/0002_second")
+	if show.NeedsDatabase() || databaseCommand(t, "seed", "list").NeedsDatabase() || !databaseCommand(t, "migrate", "status").NeedsDatabase() {
+		t.Fatal("database need is not reported for resource assembly")
+	}
+	var output bytes.Buffer
+	if err := show.Run(t.Context(), dbcommand.Resources{Migrations: publicRunner}, &output); err != nil || !strings.Contains(output.String(), "Migration: app/0002_second\n") || !strings.Contains(output.String(), "Requires: app/0001_first\n-- SQL 1\nSECOND\n") {
+		t.Fatalf("single runner show: %q %v", output.String(), err)
+	}
+	resources := dbcommand.Resources{DatabaseName: "main", MigrationTargets: []dbcommand.MigrationTarget{{Schema: "tenant", Runner: tenantRunner}, {Schema: "public", Runner: publicRunner}}}
+	output.Reset()
+	if err := databaseCommand(t, "migrate", "show", "--migration", "app/0001_first", "--format", "json").Run(t.Context(), resources, &output); err != nil {
+		t.Fatal(err)
+	}
+	var shown struct {
+		Targets []struct {
+			Schema string      `json:"schema"`
+			Key    migrate.Key `json:"key"`
+			SQL    []string    `json:"sql"`
+		} `json:"targets"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &shown); err != nil || len(shown.Targets) != 2 || shown.Targets[0].Schema != "public" || shown.Targets[1].SQL[0] != "FIRST" {
+		t.Fatalf("target show: %s %v", output.Bytes(), err)
+	}
+	if err := databaseCommand(t, "migrate", "show", "--migration", "app/0002_second", "--schema", "tenant").Run(t.Context(), resources, io.Discard); !errors.Is(err, fault.Missing) {
+		t.Fatal("unregistered target migration shown", err)
+	}
+	if len(public.ddl) != 0 || len(public.locks) != 0 || len(tenant.ddl) != 0 || len(tenant.locks) != 0 {
+		t.Fatal("migrate show performed database work")
 	}
 }

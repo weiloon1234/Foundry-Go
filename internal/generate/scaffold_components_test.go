@@ -46,7 +46,8 @@ func TestComponentScaffoldsGenerateAndCompileInFreshConsumer(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "list_notes_request_dto.go")); err == nil {
 		t.Fatal("GET endpoint received a request body")
 	}
-	migration, err := os.ReadFile(filepath.Join(dir, "create_notes_migration.go"))
+	// A migration file is named after its ID, dots included, so listings sort by ID.
+	migration, err := os.ReadFile(filepath.Join(dir, "notes.create_table_migration.go"))
 	if err != nil || !strings.Contains(string(migration), "CREATE TABLE notes (") {
 		t.Fatal("create-table migration template missing", err)
 	}

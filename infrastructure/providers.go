@@ -42,8 +42,12 @@ func (p *Plan) assemble() {
 		key := CredentialKey(name)
 		p.providers = append(p.providers, foundation.Module{Name: CredentialProvider(name), OnRegister: func(r *foundation.Registrar) error { return foundation.Provide(r, key, provider) }})
 	}
+	var databaseOptions []database.Option
+	if p.options.encryption != nil {
+		databaseOptions = append(databaseOptions, database.WithEncryption(p.options.encryption))
+	}
 	for _, name := range keys(s.Database.Connections) {
-		p.providers = append(p.providers, postgres.RoutedModule(DatabaseProvider(name), DatabaseKey(name), s.Database.Connections[name].Config()))
+		p.providers = append(p.providers, postgres.RoutedModule(DatabaseProvider(name), DatabaseKey(name), s.Database.Connections[name].Config(), databaseOptions...))
 	}
 	for _, name := range keys(s.Redis.Connections) {
 		p.providers = append(p.providers, redis.Module(RedisProvider(name), RedisKey(name), s.Redis.Connections[name].Config()))

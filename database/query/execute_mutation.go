@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
@@ -81,7 +82,8 @@ func executeMutation[M any](ctx context.Context, writer database.Transactor, pla
 	if plan.query.definition != nil && (plan.query.definition.hasWriteHooks || !known || observedBy[M](observers, plan.kind)) {
 		return executeHookedMutation(ctx, writer, plan)
 	}
-	if plan.kind == insertModel && plan.query.definition != nil {
+	// Encrypted fields are sealed inside the transaction with its key ring.
+	if plan.kind == insertModel && plan.query.definition != nil && !plan.mutation.encrypted() {
 		switch owner := writer.(type) {
 		case *database.DB:
 			return executeAutocommitInsert(ctx, owner.FoundryAutocommitQuery, owner.Clock(), plan)
@@ -89,17 +91,18 @@ func executeMutation[M any](ctx context.Context, writer database.Transactor, pla
 			return executeAutocommitInsert(ctx, owner.FoundryAutocommitQuery, owner.Clock(), plan)
 		}
 	}
-	mutate := plan.kind.sqlKind() != deleteModel && (plan.query.hasFieldMutators() || plan.needsConventions())
+	mutate := plan.kind.sqlKind() != deleteModel && (plan.query.hasFieldMutators() || plan.needsConventions() || plan.mutation.encrypted())
 	return executeModelStatement(ctx, writer, mutate, func(ctx context.Context, tx *database.Tx) (Statement, error) {
-		return prepareMutation(ctx, &plan, transactionClock(tx))
+		return prepareMutation(ctx, &plan, transactionClock(tx), transactionKeys(tx))
 	}, func(ctx context.Context, tx *database.Tx, s Statement) (M, error) {
 		return plan.returning(ctx, tx, s)
 	})
 }
 
-// prepareMutation shares post-hook validation, once-only field transforms and
-// compilation across ordinary writes and the no-observer wrapper fallback.
-func prepareMutation[M any](ctx context.Context, plan *mutationPlan[M], source clock.Clock) (Statement, error) {
+// prepareMutation shares post-hook validation, once-only field transforms,
+// encrypted-field sealing and compilation across ordinary writes and the
+// no-observer wrapper fallback.
+func prepareMutation[M any](ctx context.Context, plan *mutationPlan[M], source clock.Clock, keys *encryption.Keyring) (Statement, error) {
 	if err := plan.applyConventionsFor(ctx, source, !plan.setBased); err != nil {
 		return Statement{}, err
 	}
@@ -117,6 +120,9 @@ func prepareMutation[M any](ctx context.Context, plan *mutationPlan[M], source c
 			return Statement{}, err
 		}
 		plan.mutation = mutation
+	}
+	if err := plan.seal(ctx, keys); err != nil {
+		return Statement{}, err
 	}
 	return plan.compile()
 }

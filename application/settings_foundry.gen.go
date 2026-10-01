@@ -621,6 +621,10 @@ type SettingsFeaturesAuthTokensConfigConfigKeySet struct {
 	MaxConcurrent config.Key[Settings, int]
 	// Timeout selects features.auth.tokens.config.timeout. Set accepts time.Duration.
 	Timeout config.Key[Settings, time.Duration]
+	// TicketLifetime selects features.auth.tokens.config.ticket_lifetime. Set accepts time.Duration.
+	TicketLifetime config.Key[Settings, time.Duration]
+	// MaxTicketsPerFamily selects features.auth.tokens.config.max_tickets_per_family. Set accepts int.
+	MaxTicketsPerFamily config.Key[Settings, int]
 }
 
 // SettingsFeaturesAuthTokensConfigNamespaceConfigKeySet exposes compiler-checked configuration overrides.
@@ -1513,6 +1517,8 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 						Prefix:               config.Scalar[Settings, string]("features.auth.tokens.config.prefix", func(settings *Settings) *string { return &settings.Features.Auth.Tokens.Config.Prefix }),
 						MaxConcurrent:        config.Scalar[Settings, int]("features.auth.tokens.config.max_concurrent", func(settings *Settings) *int { return &settings.Features.Auth.Tokens.Config.MaxConcurrent }),
 						Timeout:              config.Duration[Settings]("features.auth.tokens.config.timeout", func(settings *Settings) *time.Duration { return &settings.Features.Auth.Tokens.Config.Timeout }),
+						TicketLifetime:       config.Duration[Settings]("features.auth.tokens.config.ticket_lifetime", func(settings *Settings) *time.Duration { return &settings.Features.Auth.Tokens.Config.TicketLifetime }),
+						MaxTicketsPerFamily:  config.Scalar[Settings, int]("features.auth.tokens.config.max_tickets_per_family", func(settings *Settings) *int { return &settings.Features.Auth.Tokens.Config.MaxTicketsPerFamily }),
 					},
 				},
 				MFA: SettingsFeaturesAuthMFAConfigKeySet{
@@ -1984,6 +1990,8 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.Features.Auth.Tokens.Config.Prefix,
 		keys.Features.Auth.Tokens.Config.MaxConcurrent,
 		keys.Features.Auth.Tokens.Config.Timeout,
+		keys.Features.Auth.Tokens.Config.TicketLifetime,
+		keys.Features.Auth.Tokens.Config.MaxTicketsPerFamily,
 		keys.Features.Auth.MFA.Enabled,
 		keys.Features.Auth.MFA.Database,
 		keys.Features.Auth.MFA.Schema,

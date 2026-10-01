@@ -114,6 +114,9 @@ func (e Endpoint[P, Q, B, R]) Validate() error {
 	if e.response.credentials && e.route.Method() != POST {
 		return fault.New(fault.Invalid, "credential delivery requires a POST endpoint")
 	}
+	if err := e.validateRefreshCookie(); err != nil {
+		return err
+	}
 	if e.route.Method() == TRACE {
 		return fault.New(fault.Invalid, "TRACE requires a raw HTTP handler")
 	}
@@ -237,8 +240,25 @@ func (e Endpoint[P, Q, B, R]) serve(w stdhttp.ResponseWriter, r *stdhttp.Request
 		r = withLastEventID(r)
 	}
 	ctx := r.Context()
-	if e.response.credentials && !checkCredentialRequest(w, r) {
+	cookie := e.refreshCookie()
+	if (e.response.credentials || cookie != nil) && !checkCredentialRequest(w, r) {
 		return
+	}
+	if cookie != nil {
+		// Origin protection precedes reading, so a cross-site request can
+		// neither use nor clear the cookie.
+		if err := cookie.csrf.check(r); err != nil {
+			writeRoutingError(w, r, err)
+			return
+		}
+		if e.body.kind == payloadRefreshCookie || e.response.refreshCookieClears {
+			clear, err := cookie.clear()
+			if err != nil {
+				writeRoutingError(w, r, InternalError.WithCause(err))
+				return
+			}
+			w = &refreshClearingWriter{ResponseWriter: w, clear: clear}
+		}
 	}
 	if err := bindBrowserResponse(ctx, e.idempotency == nil && (e.response.kind == payloadJSON || e.response.kind == payloadEmpty || e.response.kind == payloadRedirect)); err != nil {
 		writeRoutingError(w, r, err)
@@ -362,6 +382,17 @@ func (e Endpoint[P, Q, B, R]) serve(w stdhttp.ResponseWriter, r *stdhttp.Request
 	if err := publishBrowserSession(ctx, w, data.statusOr(e.response.status)); err != nil {
 		writeRoutingError(w, r, authenticationError(err))
 		return
+	}
+	if data.setCookie != "" {
+		w.Header().Add("Set-Cookie", data.setCookie)
+	}
+	if e.response.refreshCookieClears {
+		clear, err := cookie.clear()
+		if err != nil {
+			writeRoutingError(w, r, InternalError.WithCause(err))
+			return
+		}
+		w.Header().Add("Set-Cookie", clear)
 	}
 	if err := e.response.write(w, r, data); err != nil {
 		// The response is committed, so no error document can replace it. The

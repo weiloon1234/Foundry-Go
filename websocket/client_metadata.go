@@ -30,6 +30,7 @@ type ProtocolResponses struct {
 type ProtocolInfo struct {
 	Version           int               `json:"version"`
 	Subprotocol       string            `json:"subprotocol"`
+	TicketPrefix      string            `json:"ticket_subprotocol_prefix"`
 	MaxRoomBytes      int               `json:"max_room_bytes"`
 	MaxReplayMessages int               `json:"max_replay_messages"`
 	Actions           ProtocolActions   `json:"actions"`
@@ -39,7 +40,7 @@ type ProtocolInfo struct {
 
 func ProtocolDescription() ProtocolInfo {
 	return ProtocolInfo{
-		Version: ProtocolVersion, Subprotocol: Subprotocol, MaxRoomBytes: MaxRoomBytes, MaxReplayMessages: MaxReplayMessages,
+		Version: ProtocolVersion, Subprotocol: Subprotocol, TicketPrefix: TicketSubprotocolPrefix, MaxRoomBytes: MaxRoomBytes, MaxReplayMessages: MaxReplayMessages,
 		Actions:   ProtocolActions{Subscribe, Unsubscribe, Message},
 		Responses: ProtocolResponses{Subscribed, Unsubscribed, Acknowledged, Accepted, ErrorResponse, EventResponse, PresenceJoined, PresenceLeft, PresenceUpdated},
 		Codes:     []Code{Malformed, UnsupportedVersion, UnknownChannel, UnknownEvent, WrongDirection, Unauthenticated, Forbidden, NotSubscribed, AlreadySubscribed, InvalidPayload, CapacityExceeded, OperationFailed, OperationTimedOut, Stopping, RateLimited, Unavailable},

@@ -81,6 +81,53 @@ bounded local cipher call is not interruptible. An admitted encryption consumes
 its local budget even if cancellation prevents publication. This API does not
 provide stream encryption or global concurrency admission.
 
+## Encrypted model fields
+
+Like Laravel's `encrypted` and `encrypted:array/json` casts, a model field of type
+`encrypted.Text` or `encrypted.JSON[T]` (package `database/encrypted`, optionally
+inside `value.Nullable`) is stored as an envelope and used as plaintext:
+
+```go
+//foundry:model table=vault_entries
+type Entry struct {
+    ID       model.ID[Entry]
+    Token    encrypted.Text
+    Settings value.Nullable[encrypted.JSON[Settings]]
+}
+
+entry, err := QueryVaultEntries().Create(ctx, db, EntryDraft{}.
+    SetToken(encrypted.NewText(apiToken)).ClearSettings())
+// Handle err. entry.Token.Reveal() returns the plaintext; the column holds an envelope.
+```
+
+Configured applications give every database connection the application key ring
+(`Encryption.KeyID`/`Key`), so nothing else is wired; a direct pool uses
+`database.WithEncryption(keys)`. Without a key ring, encrypted reads and writes fail
+with `fault.Missing` instead of exposing or storing plaintext. Store envelopes in
+a `text` column.
+
+Writes seal the plaintext inside the write transaction with the active key, and
+every hydration path decrypts while scanning; a value that cannot be decrypted
+fails the read. Each value is authenticated (not stored) with the purpose
+`foundry.model.field.v1`, its table, its column and the row's primary key, so a
+ciphertext copied into another row, column or table does not decrypt. The primary
+key must therefore be application-assigned (Foundry's default `model.ID`), and an
+encrypted field cannot be the key, use a database default, declare a mutator or
+appear in a projection; generation rejects these. Renaming the table or column, or
+changing a primary key, needs re-encryption.
+
+Every write uses a fresh random nonce, so encrypted fields have no `Eq`, `Like`,
+ordering, conflict-update, `Select` mapping or aggregate operations; the compiler
+rejects them, and a nullable field offers only `IsNull`/`IsNotNull`. Set-based
+writes (`PatchAll`, `Values` on insert-from or update-from) reject encrypted
+assignments, because one envelope cannot belong to many rows; per-model writes,
+`CreateMany` and `CreateEach` bind each row to its own key. An upsert seals the
+inserted row; a conflict update cannot touch an encrypted field, so an existing
+row keeps its envelope. Change detection compares plaintext, so reassigning the
+same value is not a change. Formatting, JSON, logs and audit values are redacted,
+and cursor and identity keys reject encrypted fields. `encrypted.JSON[T]` opens
+with the same strict shape checks as `value.ParseJSON`.
+
 ## Rotation and disclosure
 
 Install the next key alongside retained keys and make it active. `Reencrypt`
@@ -94,7 +141,10 @@ storage adapters can select records that still use another key.
 With the application key ring, rotation is: generate a new key, set it as
 `Encryption.KeyID`/`Key` and move the old one to `Encryption.Previous`, deploy,
 run `mfa reencrypt` (and re-encrypt any application-owned records), then remove
-the previous key once nothing uses it. Encrypted cookies need no migration: they
+the previous key once nothing uses it. Encrypted model fields keep decrypting
+with the previous key; a row is written with the active key whenever its field is
+assigned again, and the envelope prefix (`EnvelopePrefix`) shows which rows still
+use the previous key. Encrypted cookies need no migration: they
 stay readable while the previous key is retained and are re-issued with the new
 key.
 

@@ -519,6 +519,9 @@ func (r *renderer) realtime() {
 		return
 	}
 	fmt.Fprintf(&r.out, "\nexport const realtimeSubprotocol = %s;\n", quote(r.document.Realtime.Protocol.Subprotocol))
+	// A browser cannot set Authorization on a WebSocket; a single-use ticket
+	// travels as one extra subprotocol entry, never in the URL.
+	fmt.Fprintf(&r.out, "/** Sec-WebSocket-Protocol entries for a new connection, with an optional single-use handshake ticket. Fetch a fresh ticket for every connect and reconnect. */\nexport function realtimeProtocols(ticket?: string): string[] {\n  if (ticket === undefined) return [realtimeSubprotocol];\n  if (!/^[!#$%%&'*+.^_`|~0-9A-Za-z-]+$/.test(ticket)) throw new RealtimeError(\"ticket\");\n  return [realtimeSubprotocol, %s + ticket];\n}\n", quote(r.document.Realtime.Protocol.TicketPrefix))
 	for _, channel := range r.document.Realtime.Channels {
 		name := "Channel_" + contractname.Symbol(string(channel.ID))
 		presence := "never"

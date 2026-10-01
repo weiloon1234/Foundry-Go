@@ -138,7 +138,7 @@ func (db *DB) QueryRead(ctx context.Context, statement string, arguments ...any)
 		return nil, err
 	}
 	instrument.wait = sinceStart(acquired)
-	return query(ctx, conn, classify, instrument, db.Observers(), observerOwner{db: db, ctx: ctx}, release, statement, arguments)
+	return db.attachEncryption(query(ctx, conn, classify, instrument, db.Observers(), observerOwner{db: db, ctx: ctx}, release, statement, arguments))
 }
 
 // PrimaryExecutor pins all query and transaction work to the primary endpoint.

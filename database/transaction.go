@@ -292,7 +292,7 @@ func (tx *Tx) Exec(ctx context.Context, statement string, arguments ...any) (res
 }
 
 func (tx *Tx) Query(ctx context.Context, statement string, arguments ...any) (*Rows, error) {
-	return tx.scope.query(ctx, tx.raw, tx.classify, tx.owner.instrumented(PrimaryPool), tx.observers, statement, arguments)
+	return tx.owner.attachEncryption(tx.scope.query(ctx, tx.raw, tx.classify, tx.owner.instrumented(PrimaryPool), tx.observers, statement, arguments))
 }
 
 // An operation may have a tighter context, but it cannot outlive the transaction

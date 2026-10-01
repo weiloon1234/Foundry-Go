@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
+	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
@@ -107,7 +108,7 @@ func (db *DB) Query(ctx context.Context, statement string, arguments ...any) (*R
 		return nil, err
 	}
 	instrument.wait = sinceStart(acquired)
-	return db.markOnClose(ctx)(query(ctx, conn, db.classify, instrument, db.Observers(), observerOwner{db: db, ctx: ctx}, release, statement, arguments))
+	return db.attachEncryption(db.markOnClose(ctx)(query(ctx, conn, db.classify, instrument, db.Observers(), observerOwner{db: db, ctx: ctx}, release, statement, arguments)))
 }
 
 // FoundryAutocommitQuery runs one framework-compiled write statement outside an
@@ -127,7 +128,7 @@ func (db *DB) FoundryAutocommitQuery(_ sqlowner.Seal, ctx context.Context, state
 		return nil, err
 	}
 	instrument.wait = sinceStart(acquired)
-	return db.markOnClose(ctx)(queryStatement(ctx, conn, db.classify, instrument, db.Observers(), observerOwner{db: db, ctx: ctx}, release, statement, arguments, true))
+	return db.attachEncryption(db.markOnClose(ctx)(queryStatement(ctx, conn, db.classify, instrument, db.Observers(), observerOwner{db: db, ctx: ctx}, release, statement, arguments, true)))
 }
 
 // Row is the read capability passed to typed hydration callbacks. Standard Go
@@ -151,6 +152,8 @@ type Rows struct {
 	err            error
 	// afterClose runs once when the stream closes, for read-your-writes marking.
 	afterClose func()
+	// fieldKeys is the owning pool's encrypted-field key ring, if any.
+	fieldKeys *encryption.Keyring
 	// Instrumentation: the event is reported once, when the stream closes.
 	probe     statementProbe
 	started   time.Time

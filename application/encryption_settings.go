@@ -83,17 +83,15 @@ const EncryptionProvider foundation.ProviderID = "foundry.application.encryption
 // EncryptionKey resolves the application key ring when Encryption.KeyID is set.
 var EncryptionKey = foundation.NewKey[*encryption.Keyring](string(EncryptionProvider))
 
-// registerEncryption parses the keys before any resource is acquired and
-// provides one immutable keyring for the application.
-func registerEncryption(builder *foundation.Builder, s EncryptionSettings) error {
-	keyring, err := s.keyring()
-	if err != nil || keyring == nil {
-		return err
+// registerEncryption provides the key ring Build parsed before acquiring any
+// resource; the same instance serves every database connection.
+func registerEncryption(builder *foundation.Builder, keyring *encryption.Keyring) {
+	if keyring == nil {
+		return
 	}
 	builder.Register(foundation.Module{Name: EncryptionProvider, OnRegister: func(r *foundation.Registrar) error {
 		return foundation.Provide(r, EncryptionKey, keyring)
 	}})
-	return nil
 }
 
 // Encryption returns the application key ring: new data uses the active key and

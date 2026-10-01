@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"io"
+	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
@@ -15,6 +16,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/seed"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
 type operation uint8
@@ -27,6 +29,7 @@ const (
 	rollback
 	listPrunables
 	runPrunables
+	showMigration
 )
 
 // Command is an immutable, validated invocation. Its zero value is invalid.
@@ -38,22 +41,41 @@ type Command struct {
 	confirmed bool
 	prunables []prune.Name
 	prune     prune.Options
+	database  database.ConnectionName
+	schema    string
+	migration migrate.Key
 }
 
 // Resources binds already assembled application services. Only the resources
 // required by the selected command are used. Commands never start or close them.
+//
+// Migration commands use either one Migrations runner or MigrationTargets, the
+// per-schema runners of one database; --schema selects among targets. Database
+// and MigrationTargets belong to the connection named by DatabaseName, which a
+// --database selection must match. Leave DatabaseName empty for resources that
+// were not assembled for a named selection; such resources accept none.
 type Resources struct {
-	Migrations *migrate.Postgres
-	Seeders    *seed.Registry
-	Prunables  *prune.Registry
-	Database   *database.DB
+	Migrations       *migrate.Postgres
+	MigrationTargets []MigrationTarget
+	Seeders          *seed.Registry
+	Prunables        *prune.Registry
+	Database         *database.DB
+	DatabaseName     database.ConnectionName
 }
 
-const usage = "usage: migrate status|up [--format text|json] | migrate rollback [--step N] [--confirm] [--format text|json] | seed list|run [--format text|json] [--id name ...] | prune list|run [--format text|json] [--name name ...] [--batch-size N] [--max-batches N]"
+// MigrationTarget is the runner of one schema's migration history.
+type MigrationTarget struct {
+	Schema string
+	Runner *migrate.Postgres
+}
+
+const usage = "usage: migrate status|up [--database name] [--schema name] [--format text|json] | migrate rollback [--database name] [--schema name] [--step N] [--confirm] [--format text|json] | migrate show --migration origin/id [--database name] [--schema name] [--format text|json] | seed list [--format text|json] | seed run [--database name] [--format text|json] [--id name ...] | prune list [--format text|json] | prune run [--database name] [--format text|json] [--name name ...] [--batch-size N] [--max-batches N]"
 
 // Parse validates arguments without application construction or database I/O.
 // Help returns flag.ErrHelp after writing usage to help. Repeated --id flags
 // select seeders for seed run; omission selects the complete seeder registry.
+// --database names the connection of commands that use one; --schema selects
+// one migration target on it.
 func Parse(args []string, help io.Writer) (Command, error) {
 	if help == nil {
 		return Command{}, fault.New(fault.Invalid, "database commands need a help writer")
@@ -73,6 +95,8 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		result.operation = up
 	case "migrate rollback":
 		result.operation = rollback
+	case "migrate show":
+		result.operation = showMigration
 	case "seed list":
 		result.operation = listSeeders
 	case "seed run":
@@ -108,12 +132,53 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		flags.IntVar(&result.prune.BatchSize, "batch-size", result.prune.BatchSize, "models removed per transaction")
 		flags.IntVar(&result.prune.MaxBatches, "max-batches", result.prune.MaxBatches, "batches per prunable in this run")
 	}
+	if result.operation != listSeeders && result.operation != listPrunables {
+		flags.Func("database", "configured connection to use; the default connection when omitted", func(value string) error {
+			name := database.ConnectionName(value)
+			if err := name.Validate(); err != nil {
+				return err
+			}
+			if result.database != "" {
+				return fault.New(fault.Duplicate, "database selection is repeated")
+			}
+			result.database = name
+			return nil
+		})
+	}
+	if result.operation == showMigration {
+		flags.Func("migration", "migration to show, as origin/id", func(value string) error {
+			origin, id, ok := strings.Cut(value, "/")
+			if !ok || !identifier.Semantic(origin) || !identifier.Semantic(id) {
+				return fault.New(fault.Invalid, "migration must be origin/id")
+			}
+			if result.migration != (migrate.Key{}) {
+				return fault.New(fault.Duplicate, "migration selection is repeated")
+			}
+			result.migration = migrate.Key{Origin: migrate.Origin(origin), ID: migrate.ID(id)}
+			return nil
+		})
+	}
+	if result.migrates() {
+		flags.Func("schema", "migration target schema on the selected database", func(value string) error {
+			if !sqlname.Valid(value) {
+				return fault.New(fault.Invalid, "invalid migration schema")
+			}
+			if result.schema != "" {
+				return fault.New(fault.Duplicate, "schema selection is repeated")
+			}
+			result.schema = value
+			return nil
+		})
+	}
 	if result.operation == rollback {
 		flags.IntVar(&result.steps, "step", 1, "number of most recently applied migrations to reverse")
 		flags.BoolVar(&result.confirmed, "confirm", false, "execute the rollback; without it the plan is only printed")
 	}
 	if err := flags.Parse(args[2:]); err != nil {
 		return Command{}, err
+	}
+	if result.operation == showMigration && result.migration == (migrate.Key{}) {
+		return Command{}, fault.New(fault.Invalid, "migrate show needs --migration origin/id")
 	}
 	if result.operation == rollback && (result.steps < 1 || result.steps > migrate.MaxRollbackSteps) {
 		return Command{}, fault.New(fault.Invalid, "rollback --step must be a positive bounded count")
@@ -135,6 +200,22 @@ func Parse(args []string, help io.Writer) (Command, error) {
 	return result, nil
 }
 
+// Database is the --database selection; empty selects the caller's default
+// connection. Whoever assembles Resources opens that connection and names it in
+// Resources.DatabaseName.
+func (c Command) Database() database.ConnectionName { return c.database }
+
+// NeedsDatabase reports whether Run uses a database connection. Listing
+// seeders or prunables and showing a migration read only their registries, so
+// resource assembly can leave the pool unconnected.
+func (c Command) NeedsDatabase() bool {
+	return c.operation != listSeeders && c.operation != listPrunables && c.operation != showMigration
+}
+
+func (c Command) migrates() bool {
+	return c.operation == status || c.operation == up || c.operation == rollback || c.operation == showMigration
+}
+
 // Run executes the selected operation exactly once. Status reports history drift
 // and returns its conflict error; it never applies migrations. Up and seed run
 // write confirmed progress even on failure, then return the original outcome.
@@ -147,9 +228,15 @@ func (c Command) Run(ctx context.Context, resources Resources, output io.Writer)
 		return err
 	}
 	switch c.operation {
-	case status, up, rollback:
-		if resources.Migrations == nil {
+	case status, up, rollback, showMigration:
+		if resources.Migrations == nil && len(resources.MigrationTargets) == 0 {
 			return fault.New(fault.Missing, "database command needs a migration runner")
+		}
+		if resources.Migrations != nil && len(resources.MigrationTargets) != 0 {
+			return fault.New(fault.Invalid, "database command takes either a migration runner or migration targets")
+		}
+		if resources.Migrations != nil && c.schema != "" {
+			return fault.New(fault.Invalid, "--schema selects among migration targets")
 		}
 	case listSeeders, runSeeders:
 		if resources.Seeders == nil {
@@ -161,6 +248,12 @@ func (c Command) Run(ctx context.Context, resources Resources, output io.Writer)
 		}
 	default:
 		return fault.New(fault.Invalid, "uninitialized database command; use Parse")
+	}
+	if c.database != "" && c.database != resources.DatabaseName {
+		return fault.New(fault.Invalid, "the --database selection does not match the supplied database resources")
+	}
+	if len(resources.MigrationTargets) != 0 && c.migrates() {
+		return c.runTargets(ctx, resources, output)
 	}
 	switch c.operation {
 	case status:
@@ -182,6 +275,12 @@ func (c Command) Run(ctx context.Context, resources Resources, output io.Writer)
 		}
 		result, err := resources.Migrations.Rollback(ctx, c.steps)
 		return errors.Join(err, c.writeRollback(output, result))
+	case showMigration:
+		shown, ok := c.show(resources.Migrations.Registry(), "")
+		if !ok {
+			return fault.New(fault.Missing, "migration is not registered")
+		}
+		return c.writeShown(output, shown)
 	case listSeeders:
 		return c.writeSeeders(output, resources.Seeders.IDs())
 	case runSeeders:

@@ -25,7 +25,10 @@ import (
 // and blocking application traffic; a transactional migration then rolls back
 // and can be retried. StatementTimeout sets statement_timeout for the session;
 // zero disables it, so long migrations are not canceled by an application pool
-// limit. Both settings are restored before the connection returns to the pool.
+// limit. SearchPath, when set, makes that one schema (then pg_temp) the session
+// search_path, so unqualified migration SQL creates and alters objects in it;
+// empty keeps the connection's own path. All settings are restored before the connection returns
+// to the pool. History and progress tables are always schema-qualified.
 type PostgresConfig struct {
 	Schema               string
 	Table                string
@@ -35,6 +38,7 @@ type PostgresConfig struct {
 	MaxHistory           int
 	StatementLockTimeout time.Duration
 	StatementTimeout     time.Duration
+	SearchPath           string
 }
 
 func DefaultPostgresConfig() PostgresConfig {
@@ -42,7 +46,7 @@ func DefaultPostgresConfig() PostgresConfig {
 }
 
 func (c PostgresConfig) Validate() error {
-	if !sqlname.Valid(c.Schema) || !sqlname.Valid(c.Table) || len(c.Schema) > 63 || len(c.Table) > 63 || c.LockTimeout <= 0 || c.LockPollInterval <= 0 || c.CleanupTimeout <= 0 || c.MaxHistory <= 0 || c.MaxHistory == math.MaxInt || !sessionLimit(c.StatementLockTimeout) || !sessionLimit(c.StatementTimeout) {
+	if !sqlname.Valid(c.Schema) || !sqlname.Valid(c.Table) || len(c.Schema) > 63 || len(c.Table) > 63 || c.LockTimeout <= 0 || c.LockPollInterval <= 0 || c.CleanupTimeout <= 0 || c.MaxHistory <= 0 || c.MaxHistory == math.MaxInt || !sessionLimit(c.StatementLockTimeout) || !sessionLimit(c.StatementTimeout) || (c.SearchPath != "" && !sqlname.Valid(c.SearchPath)) {
 		return fault.New(fault.Invalid, "invalid PostgreSQL migration configuration")
 	}
 	return nil
@@ -82,6 +86,9 @@ func NewPostgres(db *database.DB, registry *Registry, config PostgresConfig) (*P
 	progressName := config.Table[:min(len(config.Table), 37)] + "_progress_" + fmt.Sprintf("%x", hash[:8])
 	return &Postgres{db: db, registry: registry, config: config, table: qualified, progressName: progressName, progressTable: `"` + config.Schema + `"."` + progressName + `"`, lockKey: int64(binary.BigEndian.Uint64(hash[:8]))}, nil
 }
+
+// Registry returns the immutable registry this runner applies.
+func (p *Postgres) Registry() *Registry { return p.registry }
 
 // Status reads committed history and reports definition drift. A missing table
 // produces pending definitions without creating schemas, tables, or locks.
@@ -181,21 +188,34 @@ func (p *Postgres) locked(ctx context.Context, run func(*database.Session) error
 	})
 }
 
-// limitSession applies the migration lock and statement limits to this
-// connection only. Values are integer milliseconds; zero disables each limit.
+// limitSession applies the migration lock and statement limits, and the
+// optional search path, to this connection only. Limits are integer
+// milliseconds; zero disables each limit.
 func (p *Postgres) limitSession(ctx context.Context, session *database.Session) error {
-	_, err := session.Exec(ctx, "SELECT pg_catalog.set_config('lock_timeout', $1, false), pg_catalog.set_config('statement_timeout', $2, false)", strconv.FormatInt(p.config.StatementLockTimeout.Milliseconds(), 10), strconv.FormatInt(p.config.StatementTimeout.Milliseconds(), 10))
+	statement := "SELECT pg_catalog.set_config('lock_timeout', $1, false), pg_catalog.set_config('statement_timeout', $2, false)"
+	args := []any{strconv.FormatInt(p.config.StatementLockTimeout.Milliseconds(), 10), strconv.FormatInt(p.config.StatementTimeout.Milliseconds(), 10)}
+	if p.config.SearchPath != "" {
+		// Validated as a simple identifier, so quoting cannot be escaped. pg_temp
+		// is listed last, as the pool's schema scope does: left implicit it would
+		// be searched first and session temporary objects could shadow tables.
+		statement += ", pg_catalog.set_config('search_path', $3, false)"
+		args = append(args, `"`+p.config.SearchPath+`", pg_temp`)
+	}
+	_, err := session.Exec(ctx, statement, args...)
 	return err
 }
 
-// restoreSession returns both limits to the connection's configured defaults.
-// A connection that cannot be restored is discarded instead of reused.
+// restoreSession returns every session setting to the connection's configured
+// defaults. A connection that cannot be restored is discarded instead of reused.
 func (p *Postgres) restoreSession(ctx context.Context, session *database.Session) error {
 	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), p.config.CleanupTimeout)
 	defer cancel()
 	_, err := session.Exec(cleanup, "RESET lock_timeout")
 	if err == nil {
 		_, err = session.Exec(cleanup, "RESET statement_timeout")
+	}
+	if err == nil && p.config.SearchPath != "" {
+		_, err = session.Exec(cleanup, "RESET search_path")
 	}
 	if err != nil {
 		session.Discard()

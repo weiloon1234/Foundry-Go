@@ -573,3 +573,21 @@ func TestNonTransactionalProgressRejectsMissingPrerequisiteHistory(t *testing.T)
 		t.Fatal("history drift repeated effects", server.committedSQL)
 	}
 }
+
+func TestMigrationSearchPathAppliesToSessionAndIsRestored(t *testing.T) {
+	server := newMigrationServer()
+	runner, _ := migrationRunner(t, server, 1, migrationDefinitions(), func(c *migrate.PostgresConfig) { c.SearchPath = "tenant_a" })
+	if _, err := runner.Up(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if len(server.limits) != 4 || len(server.limits[0]) != 4 || server.limits[0][3] != `"tenant_a", pg_temp` || server.limits[3][0] != "RESET search_path" {
+		t.Fatalf("migration search path was not applied and restored: %v", server.limits)
+	}
+	for _, invalid := range []string{"tenant-a", `"tenant"`, strings.Repeat("a", 64)} {
+		config := migrate.DefaultPostgresConfig()
+		config.SearchPath = invalid
+		if err := config.Validate(); !errors.Is(err, fault.Invalid) {
+			t.Fatalf("invalid search path %q accepted", invalid)
+		}
+	}
+}

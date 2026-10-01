@@ -55,7 +55,7 @@ func TestMutationInputTransformsBeforeBindingAndRemainsReusable(t *testing.T) {
 		plain.modelFields[i].mutator = fieldMutator{}
 		plain.modelFields[i].conflictMutator = fieldMutator{}
 	}
-	if _, err := (insertPlan[inputRecord]{query: ForModel(plain), rows: []Mutation[inputRecord]{mutation}}).prepare(t.Context()); !errors.Is(err, fault.Invalid) || len(calls) != 0 {
+	if _, err := (insertPlan[inputRecord]{query: ForModel(plain), rows: []Mutation[inputRecord]{mutation}}).prepare(t.Context(), nil); !errors.Is(err, fault.Invalid) || len(calls) != 0 {
 		t.Fatal("pending input compiled without its transformation", err)
 	}
 	if strings.Contains(fmt.Sprintf("%+v %#v", name, mutation), "ADA") {
@@ -63,7 +63,7 @@ func TestMutationInputTransformsBeforeBindingAndRemainsReusable(t *testing.T) {
 	}
 	for range 2 {
 		calls = nil
-		statement, err := (insertPlan[inputRecord]{query: q, rows: []Mutation[inputRecord]{mutation}}).prepare(t.Context())
+		statement, err := (insertPlan[inputRecord]{query: q, rows: []Mutation[inputRecord]{mutation}}).prepare(t.Context(), nil)
 		if err != nil || !reflect.DeepEqual(statement.Arguments(), []any{int64(1), "ada", "memo"}) || !reflect.DeepEqual(calls, []string{"name", "note"}) {
 			t.Fatal("distinct input was lost or transformed twice", statement.Arguments(), calls, err)
 		}
@@ -91,7 +91,7 @@ func TestMutationInputPreservesNullOmissionAndRejectsStoredValues(t *testing.T) 
 			mutation.assignments = append(mutation.assignments, AssignInput[inputRecord]("input_records", "note", value.Null[inputName]()))
 		}
 		calls = nil
-		statement, err := (insertPlan[inputRecord]{query: q, rows: []Mutation[inputRecord]{mutation}}).prepare(t.Context())
+		statement, err := (insertPlan[inputRecord]{query: q, rows: []Mutation[inputRecord]{mutation}}).prepare(t.Context(), nil)
 		if err != nil || !reflect.DeepEqual(calls, []string{"name"}) {
 			t.Fatal("nullable input invoked a scalar transformation", calls, err)
 		}
@@ -125,7 +125,7 @@ func TestMutationInputConflictUsesFreshInputAndCopiesProposedOnce(t *testing.T) 
 		policy := OnConflict(name).DoUpdate(update)
 		for range 2 {
 			calls = nil
-			statement, err := (insertPlan[inputRecord]{query: q, rows: []Mutation[inputRecord]{mutation}, conflict: &policy}).prepare(t.Context())
+			statement, err := (insertPlan[inputRecord]{query: q, rows: []Mutation[inputRecord]{mutation}, conflict: &policy}).prepare(t.Context(), nil)
 			wantCalls := 1
 			if literal {
 				wantCalls = 2

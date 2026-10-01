@@ -433,7 +433,7 @@ func (r ThroughRelation[M, N, P]) linksTo(source pivotKey, keys []pivotKey, all 
 
 // setReturning runs one set-based write in tx and hydrates at most limit rows.
 func setReturning[P any](ctx context.Context, tx *database.Tx, plan mutationPlan[P], limit int) ([]P, error) {
-	statement, err := prepareMutation(ctx, &plan, transactionClock(tx))
+	statement, err := prepareMutation(ctx, &plan, transactionClock(tx), transactionKeys(tx))
 	if err != nil {
 		return nil, err
 	}

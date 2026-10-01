@@ -180,6 +180,17 @@ func (r *Registry) Entries() []Entry {
 	return entries
 }
 
+// Definition returns an owned copy of a registered definition, including its
+// SQL and Down statements, for read-only inspection such as migrate show.
+func (r *Registry) Definition(key Key) (Definition, bool) {
+	index, exists := r.byKey[key]
+	if !exists {
+		return Definition{}, false
+	}
+	item := r.ordered[index]
+	return Definition{Mode: item.entry.Mode, Key: item.entry.Key, Version: item.entry.Version, SQL: item.statements, Down: item.down, Requires: item.entry.Requires}.Clone(), true
+}
+
 func copyEntry(entry Entry) Entry {
 	entry.Requires = append([]Key(nil), entry.Requires...)
 	return entry

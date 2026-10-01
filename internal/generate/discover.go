@@ -522,6 +522,9 @@ func discoverModel(p *packageInput, spec *ast.TypeSpec, named *types.Named, args
 			if passwordHash(f.base) {
 				return m, p.diagnostic(v.Pos(), "password hashes cannot be model identity keys")
 			}
+			if f.kind == "Encrypted" {
+				return m, p.diagnostic(v.Pos(), "encrypted fields cannot be model identity keys")
+			}
 			foundPrimary = true
 			if f.nullable {
 				return m, p.diagnostic(v.Pos(), "primary key cannot be nullable")
@@ -542,6 +545,9 @@ func discoverModel(p *packageInput, spec *ast.TypeSpec, named *types.Named, args
 		return m, p.diagnostic(spec.Pos(), "model is missing primary field "+primary)
 	}
 	if err := discoverFieldMethods(p, &m); err != nil {
+		return m, err
+	}
+	if err := checkEncryptedFields(p, m); err != nil {
 		return m, err
 	}
 	if err := discoverGlobalScopeSource(p, m); err != nil {
@@ -584,12 +590,21 @@ func passwordHash(typ types.Type) bool {
 	return ok && isNamed(named, framework+"/auth/password", "Hash")
 }
 
+// encryptedField reports a database/encrypted field type: Text or JSON[T].
+func encryptedField(typ types.Type) bool {
+	named, ok := types.Unalias(typ).(*types.Named)
+	return ok && (isNamed(named, framework+"/database/encrypted", "Text") || isNamed(named, framework+"/database/encrypted", "JSON"))
+}
+
 func fieldKind(typ types.Type) (string, error) {
 	if binaryType(typ) {
 		return "Binary", nil
 	}
 	if passwordHash(typ) {
 		return "Scalar", nil
+	}
+	if encryptedField(typ) {
+		return "Encrypted", nil
 	}
 	base := types.Unalias(typ)
 	if named, ok := base.(*types.Named); ok {
@@ -621,7 +636,7 @@ func fieldKind(typ types.Type) (string, error) {
 			return "Float", nil
 		}
 	}
-	return "", fmt.Errorf("unsupported persisted field type; use a supported scalar, []byte, model.ID, decimal.Decimal, temporal value, password.Hash, value.JSON, or value.Nullable of one")
+	return "", fmt.Errorf("unsupported persisted field type; use a supported scalar, []byte, model.ID, decimal.Decimal, temporal value, password.Hash, value.JSON, encrypted.Text, encrypted.JSON, or value.Nullable of one")
 }
 
 // A named byte slice is supported; a slice of a distinct named octet is not
@@ -636,6 +651,11 @@ func isNamed(named *types.Named, path, name string) bool {
 }
 func (p *packageInput) diagnostic(pos token.Pos, message string) error {
 	return fmt.Errorf("%s: %s", p.fset.Position(pos), message)
+}
+
+// diagnosticAt reports at an already-resolved field position.
+func (p *packageInput) diagnosticAt(position token.Position, message string) error {
+	return fmt.Errorf("%s: %s", position, message)
 }
 
 func fieldTag(tag string) (map[string]string, error) {
@@ -729,4 +749,31 @@ func exportedName(name string) string {
 		}
 	}
 	return out.String()
+}
+
+// checkEncryptedFields keeps encrypted values bound to a key known before the
+// insert, and leaves their plaintext untransformed: a mutator would run on an
+// envelope boundary the framework owns.
+func checkEncryptedFields(p *packageInput, m model) error {
+	var primary field
+	encrypted := false
+	for _, f := range m.fields {
+		if f.primary {
+			primary = f
+		}
+		if f.kind != "Encrypted" {
+			continue
+		}
+		encrypted = true
+		if f.mutator != "" || f.input != nil {
+			return p.diagnosticAt(f.position, "encrypted fields cannot declare mutators; transform the plaintext before assigning it")
+		}
+		if f.databaseDefault {
+			return p.diagnosticAt(f.position, "encrypted fields cannot use database defaults; the framework must encrypt every stored value")
+		}
+	}
+	if encrypted && primary.databaseDefault {
+		return p.diagnosticAt(primary.position, "encrypted fields require an application-assigned primary key, not a database default")
+	}
+	return nil
 }

@@ -135,6 +135,12 @@ func (t *Tokens[M, K]) Prune(ctx context.Context, limit int) (uint64, error) {
 		if err == nil && count > uint64(limit) {
 			return fault.New(fault.Invalid, "token backend exceeded prune limit")
 		}
+		// Expired handshake tickets are pruned alongside, within the same bound,
+		// only while tickets are enabled: a deployment with them disabled keeps
+		// pruning families without depending on the ticket table.
+		if backend, ok := t.store.backend.(TicketBackend); ok && err == nil && t.store.config.TicketLifetime != 0 {
+			_, err = backend.PruneTickets(op, t.address, limit)
+		}
 		return err
 	})
 	if err != nil {

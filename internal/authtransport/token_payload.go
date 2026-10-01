@@ -20,6 +20,26 @@ type TokenPair struct {
 	TokenType    string                 `json:"token_type"`
 }
 
+// AccessTokenResponse is TokenResponse for the cookie transport: a refresh
+// token travels only in its HttpOnly cookie, so the JSON has no refresh field.
+//
+//foundry:dto
+type AccessTokenResponse struct {
+	Tokens      AccessTokenPair `json:"tokens"`
+	MFARequired bool            `json:"mfa_required"`
+}
+
+type AccessTokenPair struct {
+	AccessToken string `json:"access_token"`
+	ExpiresIn   int64  `json:"expires_in"`
+	TokenType   string `json:"token_type"`
+}
+
+func (AccessTokenResponse) Format(s fmt.State, _ rune) {
+	_, _ = s.Write([]byte("access token response"))
+}
+func (AccessTokenPair) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("access token pair")) }
+
 // These internal DTOs intentionally disclose credentials to the JSON encoder.
 // Formatting still redacts them; ordinary token.Issued values never serialize.
 func (TokenResponse) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("token response")) }

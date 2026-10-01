@@ -57,7 +57,7 @@ func (q Query[M]) PruneBatch(ctx context.Context, writer database.Transactor, si
 			return int64(len(removed)), err
 		}
 		plan := mutationPlan[M]{query: selected, kind: kind, setBased: true, countOnly: true}
-		prepared, err := prepareMutation(ctx, &plan, transactionClock(tx))
+		prepared, err := prepareMutation(ctx, &plan, transactionClock(tx), transactionKeys(tx))
 		if err != nil {
 			return 0, err
 		}

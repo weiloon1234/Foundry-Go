@@ -20,7 +20,8 @@ func (e *emitter) emitModelInsertSelect(m model) {
 	e.line("// UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.")
 	e.line("func Insert%sFrom[%s any](%s %s.ProjectionSource[%s])%s[%s]{return %s[%s]{plan:%s.InsertFrom(%s,(%s{}).FoundryQuery())}}", m.name, scope, source, query, scope, builder, scope, builder, scope, query, source, m.name)
 	for _, f := range m.fields {
-		if f.mutator != "" || (m.timestamps[1] != "" && f.column == m.timestamps[1]) {
+		// An encrypted envelope is bound to its source row and cannot be copied.
+		if f.mutator != "" || f.kind == "Encrypted" || (m.timestamps[1] != "" && f.column == m.timestamps[1]) {
 			continue
 		}
 		typ := e.typeName(f.typ)

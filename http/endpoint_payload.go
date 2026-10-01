@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	stdhttp "net/http"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -20,6 +21,7 @@ const (
 	payloadRedirect
 	payloadRaw
 	payloadEvents
+	payloadRefreshCookie
 )
 
 // NoBody marks an endpoint that accepts no request body.
@@ -35,6 +37,9 @@ type Body[B any] struct {
 	multipart Multipart[B]
 	form      Query[B]
 	raw       *rawBodyDescriptor[B]
+	// refreshCookie reads a refresh credential from its cookie instead of a body.
+	refreshCookie *RefreshCookie
+	fromCookie    func(*stdhttp.Request) (B, error)
 }
 
 func JSONBody[B any](descriptor contract.JSON[B]) Body[B] {
@@ -68,6 +73,11 @@ func (b Body[B]) Validate() error {
 		return validateRawMedia(b.raw.media)
 	case payloadEmpty:
 		return nil
+	case payloadRefreshCookie:
+		if b.refreshCookie == nil || b.fromCookie == nil {
+			return fault.New(fault.Invalid, "refresh cookie body is not defined")
+		}
+		return b.refreshCookie.Validate()
 	default:
 		return fault.New(fault.Invalid, "request body contract is not defined")
 	}
@@ -98,6 +108,13 @@ type Response[R any] struct {
 	redirectTarget func(R) (string, error)
 	// events is a typed server-sent event stream contract.
 	events eventResponse[R]
+	// refreshCookie is set by TokenCookieResponse (sets) or ClearRefreshCookie
+	// (clears); setRefreshCookie formats the cookie for a prepared result.
+	refreshCookie       *RefreshCookie
+	refreshCookieSets   bool
+	refreshCookieClears bool
+	refreshCookieErr    error
+	setRefreshCookie    func(context.Context, R) (string, error)
 }
 
 // JSONResponse declares a success status with a schema-checked JSON payload.
@@ -111,6 +128,14 @@ func EmptyResponse(status int) Response[NoContent] {
 }
 
 func (r Response[R]) Validate() error {
+	if r.refreshCookieErr != nil {
+		return r.refreshCookieErr
+	}
+	if r.refreshCookie != nil {
+		if err := r.refreshCookie.Validate(); err != nil {
+			return err
+		}
+	}
 	switch r.kind {
 	case payloadDownload, payloadStream:
 		if r.status != 200 || r.file == nil || r.prepareFile == nil {

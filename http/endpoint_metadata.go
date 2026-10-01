@@ -41,6 +41,9 @@ type EndpointInfo struct {
 	Validation  *validation.Description `json:"validation,omitempty"`
 	Idempotency *IdempotencyInfo        `json:"idempotency,omitempty"`
 	Errors      []ErrorDefinition       `json:"errors,omitempty"`
+	// RefreshCookie describes a browser refresh-token cookie the endpoint
+	// reads, sets or clears; it never contains a credential value.
+	RefreshCookie *RefreshCookieInfo `json:"refresh_cookie,omitempty"`
 }
 
 // Description validates before returning owned metadata for inspection.
@@ -60,6 +63,7 @@ func (e Endpoint[P, Q, B, R]) snapshot(route RouteInfo) EndpointInfo {
 	path, _ := e.route.path.Parameters()
 	info := EndpointInfo{Path: path, Route: route.clone(), Query: query, Status: e.response.status, Statuses: slices.Clone(e.response.statuses), Redirect: e.response.kind == payloadRedirect, Limits: e.limits}
 	info.Idempotency = e.idempotency.clone()
+	info.RefreshCookie = e.refreshCookieInfo()
 	info.Preparation = e.preparation != nil
 	info.Errors, _ = e.errorDefinitions()
 	if e.validation != nil {

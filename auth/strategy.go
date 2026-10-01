@@ -65,13 +65,17 @@ func (p Proof[M, K]) Assurance() Assurance     { return p.assurance }
 type Strategy[M, K any] struct {
 	source CredentialName
 	verify func(context.Context, secret.String) (value.Optional[Proof[M, K]], error)
+	// bound verifies credentials from the Binder of BindStrategy; bindable
+	// records that call so a missing verifier fails validation.
+	bound    func(context.Context, BoundCredential) (value.Optional[Proof[M, K]], error)
+	bindable bool
 }
 
 func DefineStrategy[M, K any](source CredentialName, verify func(context.Context, secret.String) (value.Optional[Proof[M, K]], error)) Strategy[M, K] {
 	return Strategy[M, K]{source: source, verify: verify}
 }
 func (s Strategy[M, K]) Validate() error {
-	if !identifier.Semantic(string(s.source)) || s.verify == nil {
+	if !identifier.Semantic(string(s.source)) || s.verify == nil || s.bindable && s.bound == nil {
 		return fault.New(fault.Invalid, "authentication strategy requires a source and verifier")
 	}
 	return nil

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/weiloon1234/Foundry-Go/clock"
+	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/extensions/slots"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
@@ -81,6 +82,10 @@ type App struct {
 	resources  Services
 	server     *http.Server
 	migrations []infrastructure.MigrationTarget
+	databases  infrastructure.DatabaseSettings
+	// encryption is the parsed application key ring that every database pool,
+	// including RunDatabaseCommand's, uses for encrypted model fields.
+	encryption *encryption.Keyring
 	models     []slots.Declaration
 }
 
@@ -100,6 +105,10 @@ func (a *App) HTTPReady(ctx context.Context) (string, error) {
 	}
 	return a.server.Ready(ctx)
 }
+
+// Migrations returns owned copies of the enabled framework feature targets
+// followed by the Builder.Migrations targets. Explicit tooling such as
+// RunDatabaseCommand and the PostgreSQL testkit applies them; boot never does.
 func (a *App) Migrations() []infrastructure.MigrationTarget {
 	if a == nil {
 		return nil

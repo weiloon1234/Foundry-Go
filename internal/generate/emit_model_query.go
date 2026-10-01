@@ -17,6 +17,18 @@ func (e *emitter) fieldCodec(f field, nullable bool) string {
 		}
 		return expression
 	}
+	if encryptedField(f.base) {
+		named := types.Unalias(f.base).(*types.Named)
+		encrypted := e.use(framework + "/database/encrypted")
+		expression := encrypted + ".TextCodec()"
+		if named.Obj().Name() == "JSON" {
+			expression = fmt.Sprintf("%s.JSONCodec[%s]()", encrypted, e.typeName(named.TypeArgs().At(0)))
+		}
+		if nullable && f.nullable {
+			expression = e.use(framework+"/database/codec") + ".Nullable(" + expression + ")"
+		}
+		return expression
+	}
 	codec := e.use(framework + "/database/codec")
 	base := types.Unalias(f.base)
 	typeName := e.typeName(f.base)
@@ -74,6 +86,9 @@ func (e *emitter) emitModelQuery(m model) {
 	columns := make([]string, len(m.fields))
 	for i, f := range m.fields {
 		columns[i] = fmt.Sprintf("%s.Column{Name:%q,Nullable:%t,DatabaseDefault:%t}", query, f.column, f.nullable, f.databaseDefault)
+		if f.kind == "Encrypted" {
+			columns[i] = strings.TrimSuffix(columns[i], "}") + ",Encrypted:true}"
+		}
 		if f.primary {
 			primary = f
 		}
@@ -97,7 +112,19 @@ func (e *emitter) emitModelQuery(m model) {
 	for i, f := range m.fields {
 		e.line("%s.Scan(&%s.%s),", codecs[i], itemVar, f.name)
 	}
-	e.line(");err!=nil{return %s{},err};return %s,nil", m.name, itemVar)
+	e.line(");err!=nil{return %s{},err}", m.name)
+	// Encrypted fields decrypt for this row before the model is published.
+	for _, f := range m.fields {
+		if f.kind != "Encrypted" {
+			continue
+		}
+		open := "OpenEncrypted"
+		if f.nullable {
+			open = "OpenNullableEncrypted"
+		}
+		e.line("if err:=%s.%s(%s,%q,%q,%s,%s.%s,&%s.%s);err!=nil{return %s{},err}", query, open, rowVar, m.table, f.column, codecs[primaryIndex(m)], itemVar, primary.name, itemVar, f.name, m.name)
+	}
+	e.line("return %s,nil", itemVar)
 	e.line("},")
 	for i, f := range m.fields {
 		if f.mutator == "" {
@@ -170,4 +197,13 @@ func modelQueryMethods(query, context, name string) []queryMethod {
 		{"With", "relations ..." + query + ".Relation[" + name + "]", "relations..."},
 		{"WithRelationLimits", "limits " + query + ".RelationLimits", "limits"},
 	}
+}
+
+func primaryIndex(m model) int {
+	for i, f := range m.fields {
+		if f.primary {
+			return i
+		}
+	}
+	return 0
 }

@@ -40,6 +40,9 @@ func discoverProjection(p *packageInput, spec *ast.TypeSpec, named *types.Named,
 		if err != nil {
 			return result, err
 		}
+		if f.kind == "Encrypted" {
+			return result, p.diagnostic(v.Pos(), "projections cannot select encrypted fields; read the model to decrypt them")
+		}
 		if columns[f.column] {
 			return result, p.diagnostic(v.Pos(), "duplicate projection column "+f.column)
 		}

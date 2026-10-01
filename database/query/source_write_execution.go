@@ -5,12 +5,16 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
 func (p sourceMutation[S, M]) validateExecution(ctx context.Context, writer database.Transactor) error {
 	if err := writeContext(ctx, writer); err != nil {
 		return err
+	}
+	if p.values.encrypted() {
+		return errSetEncrypted()
 	}
 	_, _, _, err := p.validateShape(true)
 	return err
@@ -102,6 +106,11 @@ func (p sourceMutation[S, M]) returning(ctx context.Context, writer database.Tra
 // The existing complete-model decoder owns field destinations. The final private
 // column validates the source cardinality before a decoded model is published.
 type sourceMatchRow struct{ database.Row }
+
+// FieldEncryption forwards the underlying stream's decryption scope.
+func (r sourceMatchRow) FieldEncryption() (context.Context, *encryption.Keyring) {
+	return forwardEncryption(r.Row)
+}
 
 func (r sourceMatchRow) Scan(destinations ...any) error {
 	var matches int64

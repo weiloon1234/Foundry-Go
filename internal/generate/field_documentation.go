@@ -32,6 +32,9 @@ func fieldBehaviorNotes(owner, table string, f field) []string {
 	if passwordHash(f.base) {
 		notes = append(notes, "Sensitive stored password hash: typed persistence uses password.Codec; ordinary formatting and JSON are redacted. Automatic audit values are redacted and cursor/identity keys are rejected. Compare-and-swap with the stored Hash; verify plaintext with password.Hasher.Check rather than SQL equality.")
 	}
+	if f.kind == "Encrypted" {
+		notes = append(notes, "Encrypted with the database key ring (AES-256-GCM, bound to this table, column and the row's primary key): drafts take plaintext, writes seal it inside the transaction and reads decrypt it while hydrating. Formatting, JSON and audit values are redacted. A fresh nonce per write means no comparison, ordering or conflict update; copied ciphertext does not decrypt in another row.")
+	}
 	switch f.timestamp {
 	case "created":
 		notes = append(notes, "Managed creation timestamp: persistence supplies the owning application clock when omitted, after before-write hooks and before field mutators. An explicit input is preserved.")

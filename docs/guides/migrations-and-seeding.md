@@ -40,7 +40,7 @@ result, err := runner.Up(ctx)
 
 Constructing the runner performs no I/O. `Status` only reads committed history; an absent history table yields pending definitions without creating a table or taking a migration lock. `Up` acquires a session advisory lock, ensures its history namespace, rereads and validates history, then executes each pending definition according to its declared mode. The default commits SQL and history in one transaction. It never synchronizes schema during ordinary application boot.
 
-All cooperating runners must use the same configured history schema and table. Defaults are `foundry_ops.schema_migrations`, a 30-second lock wait, 50-millisecond polling, five-second cleanup, at most 10,000 history records, a 10-second `StatementLockTimeout` and no `StatementTimeout`.
+All cooperating runners must use the same configured history schema and table. Defaults are `foundry_ops.schema_migrations`, a 30-second lock wait, 50-millisecond polling, five-second cleanup, at most 10,000 history records, a 10-second `StatementLockTimeout` and no `StatementTimeout`. An optional `SearchPath` names one schema that `Up`, `Rollback` and `Reconcile` set as their session `search_path` (followed by `pg_temp`, as a scoped pool does), so unqualified migration SQL creates and alters objects in that schema; empty keeps the connection's own path. History and progress tables are always schema-qualified.
 
 `Up` sets PostgreSQL's `lock_timeout` to `StatementLockTimeout` on its session, so DDL that cannot obtain a table lock fails with `LockNotAvailable` instead of queueing behind a long transaction and blocking every later query on that table. A transactional migration then rolls back, and the error names the migration and says it was not committed and can be retried once conflicting transactions finish. `StatementTimeout` optionally bounds each migration statement; zero disables it, so long migrations are not canceled by an application pool limit. Both settings are reset before the connection returns to the pool. Failures name the migration and the next safe action: checksum drift and reconciliation messages keep their own text, serialization/deadlock conflicts are retryable, and an unknown commit outcome asks you to run `migrate status` and reconcile before retrying. Identifiers are quoted and restricted to simple names of at most 63 ASCII bytes to prevent PostgreSQL name truncation. Reads request at most the configured history limit plus one row and fail on overflow. Before executing migration SQL, `Up` also rejects a pending set that would grow history beyond that limit. PostgreSQL's [identifier rules](https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS) and [session lock behavior](https://www.postgresql.org/docs/18/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS) define these boundaries.
 
@@ -78,19 +78,40 @@ Rollback is never implicit and is destructive by nature. `migrate rollback --ste
 The public `database/command` package owns parsing and reporting for:
 
 ```text
-migrate status [--format text|json]
-migrate up [--format text|json]
-migrate rollback [--step N] [--confirm] [--format text|json]
+migrate status [--database name] [--schema name] [--format text|json]
+migrate up [--database name] [--schema name] [--format text|json]
+migrate rollback [--database name] [--schema name] [--step N] [--confirm] [--format text|json]
+migrate show --migration origin/id [--database name] [--schema name] [--format text|json]
 seed list [--format text|json]
-seed run [--format text|json] [--id app.regions --id app.roles]
-prune list|run ...   (see model pruning)
+seed run [--database name] [--format text|json] [--id app.regions --id app.roles]
+prune list|run ...   (see model pruning; prune run also accepts --database)
 ```
 
-The [consumer command example](../../tests/fixtures/consumer/database_command_test.go) compiles these APIs. Parse with `command.Parse(args, stderr)` before assembling services. Help returns `flag.ErrHelp`; invalid arguments fail before database use. Call the resulting invocation's `Run(ctx, resources, stdout)` with `command.Resources` containing the migration runner, seeder registry, and database required by that command. Resource ownership and shutdown stay with application assembly. `seed list` only needs the registry.
+The [consumer command example](../../tests/fixtures/consumer/database_command_test.go) compiles these APIs. Parse with `command.Parse(args, stderr)` before assembling services. Help returns `flag.ErrHelp`; invalid arguments fail before database use. Call the resulting invocation's `Run(ctx, resources, stdout)` with `command.Resources` containing the migration runner, seeder registry, and database required by that command. Resource ownership and shutdown stay with application assembly. `seed list` only needs the registry. A configured application normally lets [`RunDatabaseCommand`](#application-migration-targets) assemble these resources.
+
+`Resources` takes either one `Migrations` runner, whose output is unchanged, or `MigrationTargets`: the per-schema runners of one database, named by `DatabaseName`. `--database` must match `DatabaseName`, so resources assembled without a name refuse a selection instead of silently ignoring it, and `invocation.Database()` tells the assembling code which connection to open. With targets, `status` reads every schema in name order, `up` applies them in that order and stops at the first failure (earlier schemas stay committed), `--schema` selects one, and `rollback` refuses to guess: it needs `--schema` when the database has several. Text output heads each target with `== database/schema`; JSON wraps per-target reports as `{"database": ..., "targets": [{"schema": ..., ...}]}`, and rollback output names its single target.
 
 These commands run in the consumer's compiled binary, which owns its declarations and configuration. The separately installed `foundry` development tool owns generation/scaffolding and does not dynamically load an application registry. The later CLI kernel will host these same feature commands through shared bootstrap.
 
-Status prints the report and returns a conflict error when history has drift. Migration and seeder execution print confirmed progress even if later work fails; the returned error preserves the database outcome. An output-writer failure can follow committed work and reports the confirmed count. Neither command retries an operation because output failed. JSON contains typed metadata and progress, never migration SQL, credential values, or unwrapped database causes. Commands propagate the caller's context.
+Status prints the report and returns a conflict error when history has drift. Migration and seeder execution print confirmed progress even if later work fails; the returned error preserves the database outcome. An output-writer failure can follow committed work and reports the confirmed count. Neither command retries an operation because output failed. Status, execution and rollback JSON contains typed metadata and progress, never migration SQL, credential values, or unwrapped database causes. `migrate show` is the explicit exception for reviewed SQL: it prints one definition's identity, version, mode, checksum, prerequisites, `SQL` and `Down` from the registry, per matching schema target, without database I/O. Use it to read a framework feature's migrations, such as `--migration foundry.outbox/000001_create_messages`; framework definitions are applied from the framework, not copied into the application, so the checksum always matches the code that reads the tables. `invocation.NeedsDatabase()` is false for `migrate show`, `seed list` and `prune list`, so `RunDatabaseCommand` does not connect for them. Commands propagate the caller's context.
+
+## Application migration targets
+
+`app.Migrations()` returns the enabled framework feature targets followed by the application's own, declared with `Builder.Migrations`:
+
+```go
+app, err := application.New(settings).
+    Migrations(infrastructure.MigrationTarget{Definitions: migrations.Definitions()}).
+    Build(ctx)
+// Handle err; Build validates every target without I/O. Shut the app down after use.
+invocation, err := dbcommand.Parse(args, stderr)
+// Handle err and flag.ErrHelp, then run without starting the application:
+err = app.RunDatabaseCommand(ctx, invocation, application.DatabaseCommandResources{Seeders: seeders}, stdout)
+```
+
+Each `infrastructure.MigrationTarget` names a connection (blank selects the default) and a schema (blank selects the connection's primary schema, or `public` for an unscoped connection). `DatabaseSettings.MigrationGroups` is the one resolution used by `Build`, `RunDatabaseCommand` and the PostgreSQL testkit. Targets addressing the same primary host, port, database and schema share one history, so they merge: a repeated identical definition collapses, a conflicting one fails, and each group must be a valid `migrate` registry. An undetected alias, such as a second hostname for one server, still shares the history table; the runner's drift check then refuses to apply rather than guessing.
+
+`RunDatabaseCommand` needs only a built application. It selects `--database` or the default connection, never every connection; opens only that connection's primary pool; never starts providers, so unrelated services need not be reachable; and closes the pool before returning. Every group on that database gets a runner whose history is `<schema>.schema_migrations` and whose `SearchPath` is that schema, so framework features configured for a schema other than the connection's are created where their stores read them. This is also where the PostgreSQL testkit keeps history. History written by a hand-built runner with `DefaultPostgresConfig` lives in `foundry_ops.schema_migrations` instead, which the helper does not read; keep using that runner for such a deployment instead of letting the helper see an empty history. `seed run` and `prune run` use the same pool with the registries in `DatabaseCommandResources`; the pool carries the application's `Encryption` key ring, so [encrypted model fields](encryption.md#encrypted-model-fields) seal and open as they do in the running application.
 
 ## Development scaffolding
 
@@ -102,7 +123,7 @@ foundry make migration --dir migrations --name AddRecordLabel \
 foundry make seeder --dir seeders --name SeedRegions --id app.regions
 ```
 
-Inside the framework repository, use `go run ./cmd/foundry make ...` with the same flags. These commands create one `add_record_label_migration.go` or `seed_regions_seeder.go` file. Names must be exported Go identifiers; identity fields follow the registry's semantic grammar. The explicit ID/version makes output repeatable and keeps historical metadata under review. No schema inspection or database connection occurs.
+Inside the framework repository, use `go run ./cmd/foundry make ...` with the same flags. These commands create one `20260911000001_add_record_label_migration.go` or `seed_regions_seeder.go` file. A migration file starts with its ID, so a directory lists migrations in their conventional run order; the fixed `_migration.go` suffix keeps it an ordinary Go file whatever the ID ends with. `--name` still names the Go function and ID constant, and file names never affect checksums. Names must be exported Go identifiers; identity fields follow the registry's semantic grammar. The explicit ID/version makes output repeatable and keeps historical metadata under review. No schema inspection or database connection occurs.
 
 Scaffolds are ordinary Go functions returning typed definitions, with typed ID constants for dependencies and selection. Complete the SQL or seeder domain work, then explicitly register those definitions with `migrate.New` or `seed.New`. A migration scaffold also contains an empty `Down` list; add reviewed reversal SQL there only if the change should support [explicit rollback](#explicit-rollback), otherwise leave it empty and the migration stays irreversible. An unfinished migration fails registry validation; an unfinished seeder returns an error. There is no silent successful placeholder.
 

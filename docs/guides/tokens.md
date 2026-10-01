@@ -136,6 +136,61 @@ missing, null or malformed values. Its typed value redacts formatting and JSON;
 `Authorization` only and never falls back to a URL token. This is native token
 transport; browser sessions use their separate cookie/CSRF adapter.
 
+### Browser refresh cookies
+
+A browser SPA keeps the access token in memory and must never let JavaScript read
+the refresh token. The same guard serves it with a cookie transport:
+
+```go
+cookie := foundryhttp.DefineRefreshCookie("__Host-refresh-user", foundryhttp.CSRFConfig{})
+response := foundryhttp.TokenCookieResponse[User, model.ID[User]](cookie, 200, clock.System{})
+// Login: EmptyBody (or the login DTO) with response.
+// Refresh: foundryhttp.RefreshTokenCookie(cookie) with response; the handler is
+// unchanged: api.Refresh(ctx, input.Body.RefreshToken.Secret()).
+// Logout (bearer-guarded, api.RevokeCurrent):
+// foundryhttp.ClearRefreshCookie(cookie, foundryhttp.EmptyResponse(204)).
+```
+
+`TokenCookieResponse` writes `{"tokens": {"access_token", "expires_in",
+"token_type"}, "mfa_required"}` with no `refresh_token`, and sets a renewable
+token's refresh secret in the cookie, again on every rotation. The cookie is
+`__Host-` (host-only, `Path=/`), `Secure`, `HttpOnly` and `SameSite=Strict`; its
+`Max-Age` is the family's refresh-idle deadline in whole seconds, never past the
+absolute deadline. Personal and MFA-pending credentials set no cookie.
+`RefreshTokenCookie` reads the refresh secret only from the cookie: a body is
+rejected, `EmptyQuery` rejects query strings, and a missing or malformed cookie is
+unauthenticated. Its response must set (`TokenCookieResponse`) or clear
+(`ClearRefreshCookie`) the same cookie; validation rejects any other pairing, so
+the rotated secret never reaches JSON and a consumed cookie is never left behind.
+
+Every endpoint that sets, reads or clears the cookie requires POST, TLS (or
+`TrustedProxy`) and `no-store`, and checks the cookie's `CSRFConfig` origin
+protection (Origin or Fetch-Metadata, failing closed) before anything else,
+which also prevents login CSRF. The cookie is cleared with its exact name and
+attributes:
+
+- by a refresh endpoint's 401: a missing, malformed, expired, revoked or replayed
+  refresh credential;
+- by a logout endpoint on success, and on a 401 its handler returns, such as
+  `RevokeCurrent` finding no current family.
+
+It is kept on a 403 (including a failed origin check), a body or query rejection,
+and a transient failure. A bearer-guarded logout whose access token is rejected
+also keeps it: that 401 comes from the authentication middleware, which runs
+before the endpoint's cookie handling, and nothing is revoked. A client whose
+access token has expired must refresh first and then log out: discarding only its
+local state leaves the family, and its cookie, live. Application middleware such
+as rate limits still applies.
+
+Both transports issue ordinary families of the same guard, so revocation,
+`RevokeAll` and disabled subjects behave identically. Name one cookie per guard
+when portals share an origin. There is no refresh-reuse window: concurrent
+refreshes still revoke the family, so serialize refreshes across tabs. Contracts
+export the cookie as the refresh operation's credential (no request body, an
+OpenAPI cookie security scheme) and document `Set-Cookie` on success and on a
+401; generated clients send it with their default `same-origin` credentials, or
+`include` for a deliberately configured cross-origin deployment.
+
 Generated internal DTO declarations are the runtime and manifest source of truth.
 Response metadata describes the wire payload, not the private fields of Issued.
 The request type aliases expose the same descriptor without a copied schema.
@@ -217,6 +272,39 @@ grants, so a token minted from it can only narrow them, unlike `auth.NewProof`.
 `auth.EventOtherDevicesLoggedOut` (with `Count`). Observers run after the backend
 returned, in process, and cannot undo the change; see
 [authentication events](authentication.md#lifecycle-events).
+
+## WebSocket handshake tickets
+
+A browser that holds a bearer token cannot send it on a WebSocket. On a request
+already authenticated by this binding's guard, `api.IssueTicket(ctx)` mints a
+single-use ticket for the token family that authenticated it:
+
+```go
+ticket := foundryhttp.DefineEndpoint(
+    foundryhttp.DefineRoute(foundryhttp.RouteSpec{
+        ID: "realtime.ticket", Method: foundryhttp.POST, Access: foundryhttp.Guarded,
+    }, foundryhttp.StaticPath("/realtime/ticket")),
+    foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(),
+    foundryhttp.TicketResponse[User, model.ID[User]](200, clock.System{}),
+)
+// Guard the route with this binding and return api.IssueTicket(ctx) from its handler.
+```
+
+`TicketResponse` uses the same credential boundary as `TokenResponse` (POST, TLS
+or `TrustedProxy`, `no-store`, never delivered after the request ended) and writes
+`{"ticket": "...", "expires_in": 30}`. Only the ticket's hash is stored, in
+`foundry_token_tickets` (migration `000004_create_tickets`). A ticket expires
+after `Config.TicketLifetime` (default 30 seconds, at most five minutes; zero
+disables tickets), the first redemption consumes it, and deleting its family
+(revocation, refresh-token replay, expiry pruning) deletes it. Each family keeps
+at most `MaxTicketsPerFamily` (default 8) unexpired tickets; issuing past the cap
+drops the oldest. While tickets are enabled, `Prune` also removes expired tickets.
+
+The WebSocket hub redeems tickets through `RedeemTicket`/`TicketSource` (see
+[handshake tickets](websocket.md#handshake-tickets-for-bearer-token-browsers)). A
+redeemed ticket becomes a bound credential that every later auth scope re-checks
+against the live family, so revocation still ends the connection while ordinary
+refreshes do not. Rate-limit the issuance route like other credential endpoints.
 
 ## Pruning
 

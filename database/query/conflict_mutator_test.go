@@ -41,7 +41,7 @@ func TestConflictMutatorsNormalizeLiteralAssignmentsOnce(t *testing.T) {
 	}, conflict: &policy}
 	for range 2 {
 		calls = nil
-		statement, err := plan.prepare(t.Context())
+		statement, err := plan.prepare(t.Context(), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -56,7 +56,7 @@ func TestConflictMutatorsNormalizeLiteralAssignmentsOnce(t *testing.T) {
 		calls = nil
 		p := policy.DoUpdate(update)
 		plan.conflict = &p
-		if _, err := plan.prepare(t.Context()); err != nil || len(calls) != 2 {
+		if _, err := plan.prepare(t.Context(), nil); err != nil || len(calls) != 2 {
 			t.Fatalf("NULL/incoming conflict assignment invoked its mutator: %v %v", calls, err)
 		}
 	}
@@ -79,7 +79,7 @@ func TestConflictMutatorsRejectComputedBypassBeforeUserCode(t *testing.T) {
 	} {
 		policy := OnConflict(name).DoUpdate(update)
 		plan := insertPlan[user]{query: q, rows: []Mutation[user]{Change(Assign[user]("users", "name", codec.String[string](), "input"))}, conflict: &policy}
-		if _, err := plan.prepare(t.Context()); !errors.Is(err, fault.Invalid) || calls != 0 {
+		if _, err := plan.prepare(t.Context(), nil); !errors.Is(err, fault.Invalid) || calls != 0 {
 			t.Fatalf("computed conflict bypassed mutator protection: %v calls=%d", err, calls)
 		}
 	}
@@ -87,7 +87,7 @@ func TestConflictMutatorsRejectComputedBypassBeforeUserCode(t *testing.T) {
 	for _, update := range []ConflictUpdate[user]{SetConflictValue(name, proposed), SetConflictValue(note, proposedNote)} {
 		policy := OnConflict(name).DoUpdate(update)
 		plan := insertPlan[user]{query: q, rows: []Mutation[user]{Change(Assign[user]("users", "name", codec.String[string](), "input"))}, conflict: &policy}
-		if _, err := plan.prepare(t.Context()); err != nil {
+		if _, err := plan.prepare(t.Context(), nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -105,7 +105,7 @@ func TestConflictMutatorsPreserveErrorsAndPrivateInputs(t *testing.T) {
 	update := name.Set("private-input")
 	policy := OnConflict(name).DoUpdate(update)
 	plan := insertPlan[user]{query: q, rows: []Mutation[user]{Change(Assign[user]("users", "name", codec.String[string](), "input"))}, conflict: &policy}
-	if _, err := plan.prepare(t.Context()); !errors.Is(err, sentinel) {
+	if _, err := plan.prepare(t.Context(), nil); !errors.Is(err, sentinel) {
 		t.Fatalf("conflict mutator error was lost: %v", err)
 	}
 	for _, formatted := range []string{fmt.Sprint(update), fmt.Sprintf("%#v", update), fmt.Sprint(policy), fmt.Sprintf("%#v", policy)} {

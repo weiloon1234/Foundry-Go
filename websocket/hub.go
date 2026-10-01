@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/netip"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -22,6 +23,7 @@ type Hub struct {
 	registry       *Registry
 	config         Config
 	authentication *foundryhttp.Authentication
+	tickets        []TicketRedeemer
 	logger         atomic.Pointer[slog.Logger]
 	ctx            context.Context
 	cancel         context.CancelFunc
@@ -74,7 +76,10 @@ type operationFrame struct {
 
 // Option configures optional hub collaborators at construction.
 type Option func(*options) error
-type options struct{ logger *slog.Logger }
+type options struct {
+	logger  *slog.Logger
+	tickets []TicketRedeemer
+}
 
 // WithLogger reports cluster degradation, stream loss/recovery and terminal
 // faults with safe structured diagnostics. Without it the hub does not log.
@@ -107,6 +112,9 @@ func newHub(registry *Registry, authentication *foundryhttp.Authentication, conf
 			return nil, err
 		}
 	}
+	if len(configured.tickets) != 0 && (authentication == nil || !inbound) {
+		return nil, fault.New(fault.Invalid, "WebSocket tickets require hub authentication")
+	}
 	var guards *auth.Registry
 	if authentication != nil {
 		guards = authentication.Registry()
@@ -136,7 +144,7 @@ func newHub(registry *Registry, authentication *foundryhttp.Authentication, conf
 	for id := range registry.channels {
 		metrics[id] = &channelCounters{}
 	}
-	hub := &Hub{registry: registry, config: config.snapshot(), authentication: authentication, ctx: ctx, cancel: cancel, done: make(chan struct{}), serverSelected: make(chan struct{}),
+	hub := &Hub{registry: registry, config: config.snapshot(), authentication: authentication, tickets: slices.Clone(configured.tickets), ctx: ctx, cancel: cancel, done: make(chan struct{}), serverSelected: make(chan struct{}),
 		admission: admission.New(config.MaxOperations), metrics: metrics,
 		connections: make(map[ConnectionID]*connectionState), ipConnections: make(map[netip.Addr]int),
 		subscribers: make(map[subscriptionKey]map[*connectionState]struct{}), channelKeys: make(map[ChannelID]map[subscriptionKey]struct{}),

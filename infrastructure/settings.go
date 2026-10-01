@@ -18,6 +18,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/cloud/credentials"
 	"github.com/weiloon1234/Foundry-Go/config"
+	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
@@ -54,6 +55,7 @@ type options struct {
 	logger      *slog.Logger
 	mailDrivers map[MailDriver]email.Driver
 	credentials map[credentials.Name]credentials.Provider
+	encryption  *encryption.Keyring
 }
 type Option func(*options) error
 
@@ -63,6 +65,21 @@ func WithClock(source clock.Clock) Option {
 			return fault.New(fault.Invalid, "infrastructure clock is nil")
 		}
 		o.clock = source
+		return nil
+	}
+}
+
+// WithDatabaseEncryption gives every configured database connection the key
+// ring that encrypted model fields (database/encrypted) seal and open with.
+func WithDatabaseEncryption(keys *encryption.Keyring) Option {
+	return func(o *options) error {
+		if keys == nil {
+			return fault.New(fault.Invalid, "database encryption key ring is nil")
+		}
+		if err := keys.Validate(); err != nil {
+			return err
+		}
+		o.encryption = keys
 		return nil
 	}
 }

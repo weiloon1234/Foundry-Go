@@ -23,7 +23,7 @@ func TestScaffoldsCompileAndRemainConsumerOwned(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filepath.Base(path) != "add_records_migration.go" {
+	if filepath.Base(path) != "202609110001_add_records_migration.go" {
 		t.Fatalf("unexpected scaffold filename: %s", path)
 	}
 	first, err := os.ReadFile(path)
@@ -119,7 +119,7 @@ func TestScaffoldValidatesNamesPackageAndGenerationBeforePublication(t *testing.
 				if err := os.WriteFile(outside, []byte("preserve"), 0600); err != nil {
 					t.Fatal(err)
 				}
-				if err := os.Symlink(outside, filepath.Join(dir, "add_records_migration.go")); err != nil {
+				if err := os.Symlink(outside, filepath.Join(dir, "202609110001_add_records_migration.go")); err != nil {
 					t.Fatal(err)
 				}
 			case "canceled":

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"reflect"
-	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -64,58 +63,22 @@ func (e *Environment) Start(t testing.TB, app Application, domain ...infrastruct
 	return nil
 }
 
-type migrationGroup struct {
-	schema   string
-	config   postgres.Config
-	registry *migrate.Registry
-}
-
-func (e *Environment) migrationGroups(targets []infrastructure.MigrationTarget) ([]migrationGroup, error) {
+// migrationGroups keeps every target inside its test namespace, then reuses the
+// application grouping: one registry and history per physical namespace.
+func (e *Environment) migrationGroups(targets []infrastructure.MigrationTarget) ([]infrastructure.MigrationGroup, error) {
 	if e == nil || len(e.settings.Connections) == 0 {
 		return nil, fault.New(fault.Invalid, "uninitialized PostgreSQL test environment")
 	}
-	definitions := make(map[string]map[migrate.Key]migrate.Definition)
-	configs := make(map[string]postgres.Config)
 	for _, target := range targets {
-		name, schema, err := e.settings.ScopedSchema(target.Connection)
+		_, schema, err := e.settings.ScopedSchema(target.Connection)
 		if err != nil {
 			return nil, err
 		}
 		if target.Schema != "" && target.Schema != schema {
 			return nil, fault.New(fault.Invalid, "migration target escapes its test namespace")
 		}
-		if definitions[schema] == nil {
-			definitions[schema] = make(map[migrate.Key]migrate.Definition)
-			configs[schema] = e.settings.Connections[name].Primary.Config()
-		}
-		for _, d := range target.Definitions {
-			// Sharing a physical namespace may repeat an identical framework migration.
-			// Conflicting definitions still fail before opening a pool or applying SQL.
-			d = d.Clone()
-			if previous, ok := definitions[schema][d.Key]; ok && !reflect.DeepEqual(previous, d) {
-				return nil, fault.New(fault.Conflict, "shared test namespace has conflicting migration definitions")
-			}
-			definitions[schema][d.Key] = d
-		}
 	}
-	schemas := make([]string, 0, len(definitions))
-	for schema := range definitions {
-		schemas = append(schemas, schema)
-	}
-	slices.Sort(schemas)
-	groups := make([]migrationGroup, 0, len(schemas))
-	for _, schema := range schemas {
-		var ds []migrate.Definition
-		for _, d := range definitions[schema] {
-			ds = append(ds, d)
-		}
-		registry, err := migrate.New(ds...)
-		if err != nil {
-			return nil, err
-		}
-		groups = append(groups, migrationGroup{schema, configs[schema], registry})
-	}
-	return groups, nil
+	return e.settings.MigrationGroups(targets...)
 }
 
 // Migrate validates all targets first, then applies one registry/history per
@@ -139,8 +102,12 @@ func (e *Environment) Migrate(ctx context.Context, targets ...infrastructure.Mig
 	}
 	return nil
 }
-func (e *Environment) migrateGroup(ctx context.Context, group migrationGroup) (err error) {
-	db, err := postgres.Open(ctx, group.config)
+func (e *Environment) migrateGroup(ctx context.Context, group infrastructure.MigrationGroup) (err error) {
+	registry, err := migrate.New(group.Definitions...)
+	if err != nil {
+		return err
+	}
+	db, err := postgres.Open(ctx, e.settings.Connections[group.Connections[0]].Primary.Config())
 	if err != nil {
 		return err
 	}
@@ -150,8 +117,7 @@ func (e *Environment) migrateGroup(ctx context.Context, group migrationGroup) (e
 		defer cancel()
 		err = errors.Join(err, db.Close(cleanup))
 	}()
-	c.Schema = group.schema
-	runner, err := migrate.NewPostgres(db, group.registry, c)
+	runner, err := migrate.NewPostgres(db, registry, group.PostgresConfig(c))
 	if err != nil {
 		return err
 	}

@@ -75,7 +75,7 @@ func (s *Session) Exec(ctx context.Context, statement string, arguments ...any) 
 
 func (s *Session) Query(ctx context.Context, statement string, arguments ...any) (*Rows, error) {
 	s.owner.markWrite(ctx)
-	return s.owner.markOnClose(ctx)(s.scope.query(ctx, s.raw, s.classify, s.owner.instrumented(PrimaryPool), s.observers, statement, arguments))
+	return s.owner.attachEncryption(s.owner.markOnClose(ctx)(s.scope.query(ctx, s.raw, s.classify, s.owner.instrumented(PrimaryPool), s.observers, statement, arguments)))
 }
 
 // Transaction runs on this session's existing connection. Unlike DB.Transaction,

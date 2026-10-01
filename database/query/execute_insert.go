@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -17,12 +18,12 @@ func (q Query[M]) InsertOnConflict(ctx context.Context, writer database.Transact
 	}
 	q = q.inContext(ctx)
 	plan := insertPlan[M]{query: q, rows: []Mutation[M]{mutation}, conflict: &conflict}
-	return executeModelStatement(ctx, writer, q.hasFieldMutators() || q.hasTimestamps(), func(ctx context.Context, tx *database.Tx) (Statement, error) {
+	return executeModelStatement(ctx, writer, q.hasFieldMutators() || q.hasTimestamps() || plan.encrypted(), func(ctx context.Context, tx *database.Tx) (Statement, error) {
 		prepared, err := plan.withTimestamps(ctx, transactionClock(tx))
 		if err != nil {
 			return Statement{}, err
 		}
-		return prepared.prepare(ctx)
+		return prepared.prepare(ctx, transactionKeys(tx))
 	}, func(ctx context.Context, tx *database.Tx, s Statement) (value.Optional[M], error) {
 		items, err := returningModels(ctx, tx, s, q.definition.scan, 0, 1)
 		if err == nil {
@@ -64,12 +65,12 @@ func (q Query[M]) insertMany(ctx context.Context, writer database.Transactor, mu
 	if conflict == nil {
 		minimum = len(mutations)
 	}
-	return executeModelStatement(ctx, writer, q.hasFieldMutators() || q.hasTimestamps(), func(ctx context.Context, tx *database.Tx) (Statement, error) {
+	return executeModelStatement(ctx, writer, q.hasFieldMutators() || q.hasTimestamps() || plan.encrypted(), func(ctx context.Context, tx *database.Tx) (Statement, error) {
 		prepared, err := plan.withTimestamps(ctx, transactionClock(tx))
 		if err != nil {
 			return Statement{}, err
 		}
-		return prepared.prepare(ctx)
+		return prepared.prepare(ctx, transactionKeys(tx))
 	}, func(ctx context.Context, tx *database.Tx, s Statement) ([]M, error) {
 		items, err := returningModels(ctx, tx, s, q.definition.scan, minimum, len(mutations))
 		if err == nil {
@@ -98,9 +99,13 @@ func (q Query[M]) conflictScopeViolation(conflict *Conflict[M], requested, retur
 // per-model observers. Literal conflict assignments use the same transformation;
 // the destination's own EXCLUDED value is already transformed. Other SQL
 // assignments to fields with Go mutators fail validation rather than bypass it.
-func (p insertPlan[M]) prepare(ctx context.Context) (Statement, error) {
+func (p insertPlan[M]) prepare(ctx context.Context, keys *encryption.Keyring) (Statement, error) {
 	if !p.query.hasFieldMutators() {
-		return p.compile()
+		sealed, err := p.sealRows(ctx, keys)
+		if err != nil {
+			return Statement{}, err
+		}
+		return sealed.compile()
 	}
 	if _, _, _, err := p.validateRows(); err != nil {
 		return Statement{}, err
@@ -120,5 +125,9 @@ func (p insertPlan[M]) prepare(ctx context.Context) (Statement, error) {
 		}
 		p.conflict = &policy
 	}
-	return p.compile()
+	sealed, err := p.sealRows(ctx, keys)
+	if err != nil {
+		return Statement{}, err
+	}
+	return sealed.compile()
 }

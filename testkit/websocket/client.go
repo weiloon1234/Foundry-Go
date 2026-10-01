@@ -11,6 +11,7 @@ import (
 	transport "github.com/coder/websocket"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/secret"
 	protocol "github.com/weiloon1234/Foundry-Go/websocket"
 )
 
@@ -23,10 +24,23 @@ type Client struct {
 }
 
 func Dial(ctx context.Context, url string, headers stdhttp.Header, maxFrameBytes int) (*Client, error) {
+	return dial(ctx, url, headers, maxFrameBytes, protocol.Subprotocol)
+}
+
+// DialTicket performs a browser-style handshake: the single-use ticket travels
+// as one extra Sec-WebSocket-Protocol entry, never in the URL.
+func DialTicket(ctx context.Context, url string, headers stdhttp.Header, maxFrameBytes int, ticket secret.String) (*Client, error) {
+	if ticket.IsZero() {
+		return nil, fault.New(fault.Invalid, "WebSocket test ticket is empty")
+	}
+	return dial(ctx, url, headers, maxFrameBytes, protocol.Subprotocol, protocol.TicketSubprotocolPrefix+ticket.Reveal())
+}
+
+func dial(ctx context.Context, url string, headers stdhttp.Header, maxFrameBytes int, subprotocols ...string) (*Client, error) {
 	if ctx == nil || maxFrameBytes < 1 || maxFrameBytes > 1<<20 {
 		return nil, fault.New(fault.Invalid, "invalid WebSocket test client configuration")
 	}
-	socket, response, err := transport.Dial(ctx, url, &transport.DialOptions{HTTPHeader: headers.Clone(), Subprotocols: []string{protocol.Subprotocol}, CompressionMode: transport.CompressionDisabled})
+	socket, response, err := transport.Dial(ctx, url, &transport.DialOptions{HTTPHeader: headers.Clone(), Subprotocols: subprotocols, CompressionMode: transport.CompressionDisabled})
 	if err != nil {
 		if response != nil && response.Body != nil {
 			response.Body.Close()

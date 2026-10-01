@@ -3,7 +3,6 @@ package websocket
 import (
 	"context"
 	stdhttp "net/http"
-	"strings"
 
 	transport "github.com/coder/websocket"
 	"github.com/weiloon1234/Foundry-Go/attribution"
@@ -42,23 +41,6 @@ func (h *Hub) originAllowed(r *stdhttp.Request) bool {
 	}
 	return false
 }
-func hasSubprotocol(r *stdhttp.Request) bool {
-	bytes := 0
-	for _, field := range r.Header.Values("Sec-WebSocket-Protocol") {
-		bytes += len(field)
-		if bytes > 1024 {
-			return false
-		}
-	}
-	for _, field := range r.Header.Values("Sec-WebSocket-Protocol") {
-		for _, item := range strings.Split(field, ",") {
-			if strings.TrimSpace(item) == Subprotocol {
-				return true
-			}
-		}
-	}
-	return false
-}
 func rejectUpgrade(w stdhttp.ResponseWriter, r *stdhttp.Request, code foundryhttp.ErrorCode) {
 	_ = foundryhttp.WriteError(w, r, code)
 }
@@ -87,7 +69,8 @@ func (h *Hub) ServeHTTP(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		rejectUpgrade(w, r, foundryhttp.MethodNotAllowed)
 		return
 	}
-	if r.URL == nil || r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.User != nil || !hasSubprotocol(r) {
+	ticket, offered := offeredSubprotocols(r)
+	if r.URL == nil || r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.User != nil || !offered {
 		rejectUpgrade(w, r, foundryhttp.BadRequest)
 		return
 	}
@@ -101,6 +84,16 @@ func (h *Hub) ServeHTTP(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		credentials, err = h.authentication.CaptureCredentials(r)
 		if err != nil {
 			rejectUpgrade(w, r, foundryhttp.Unauthenticated)
+			return
+		}
+	}
+	// A ticket is redeemed only after the origin check, so a cross-origin page
+	// cannot consume it, and it never travels in the URL.
+	if !ticket.IsZero() {
+		var code foundryhttp.ErrorCode
+		if credentials, code = h.redeemTicket(r, credentials, ticket); code != "" {
+			h.counters.rejected.Add(1)
+			rejectUpgrade(w, r, code)
 			return
 		}
 	}

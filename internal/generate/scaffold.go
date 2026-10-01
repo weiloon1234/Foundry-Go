@@ -91,7 +91,10 @@ func (o ScaffoldOptions) generation() Options {
 }
 
 var legacyScaffoldName = regexp.MustCompile(`^[\pL\pN_]+_(migration|seeder)\.go$`)
-var scaffoldName = regexp.MustCompile(`^[\pL\pN_]+_(migration|seeder|model|dto|job|command|endpoint|enum|middleware|rule|event|listener|policy|notification)\.go$`)
+
+// scaffoldName also admits the dots and hyphens of a migration ID, which leads
+// its file name; a leading letter or digit keeps the file visible to go build.
+var scaffoldName = regexp.MustCompile(`^[\pL\pN][\pL\pN_.-]*_(migration|seeder|model|dto|job|command|endpoint|enum|middleware|rule|event|listener|policy|notification)\.go$`)
 
 // Scaffold checks the consumer package with the proposed declaration in memory,
 // then creates one new file through the shared guarded publication/recovery path.
@@ -141,6 +144,11 @@ func scaffoldFile(ctx context.Context, options ScaffoldOptions, imports []string
 		return "", fmt.Errorf("generated output is stale; run foundry generate for the consumer before scaffolding")
 	}
 	name := snake(options.Name) + "_" + string(options.Kind) + ".go"
+	if options.Kind == MigrationScaffold {
+		// The ID leads so a directory lists migrations in their conventional run
+		// order. The fixed suffix keeps it an unconstrained, non-test Go file.
+		name = options.ID + "_migration.go"
+	}
 	old, err := readFile(filepath.Join(input.dir, name))
 	if err != nil {
 		return "", err

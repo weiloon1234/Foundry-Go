@@ -27,7 +27,8 @@ type autocommitQuery func(sqlowner.Seal, context.Context, string, ...any) (*data
 // RolledBack, and any other failure after sending Unknown, retaining a
 // hydrated candidate as WriteError exactly like an uncertain transaction.
 func executeAutocommitInsert[M any](ctx context.Context, send autocommitQuery, source clock.Clock, plan mutationPlan[M]) (M, error) {
-	statement, err := prepareMutation(ctx, &plan, source)
+	// Callers route encrypted inserts through a transaction instead.
+	statement, err := prepareMutation(ctx, &plan, source, nil)
 	if err != nil {
 		return *new(M), err
 	}

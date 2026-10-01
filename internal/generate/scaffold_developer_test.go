@@ -168,6 +168,11 @@ func TestDeveloperScaffoldOptionsAndRecoveryAuthority(t *testing.T) {
 			t.Fatal("invalid developer scaffold options accepted")
 		}
 	}
+	for _, name := range []string{"202610010001_admins-v2.create_migration.go", "_hidden_migration.go", ".hidden_migration.go"} {
+		if scaffoldName.MatchString(name) != (name[0] != '_' && name[0] != '.') {
+			t.Fatal("migration ID file name boundary changed", name)
+		}
+	}
 	for _, kind := range []ScaffoldKind{ModelScaffold, DTOScaffold, JobScaffold, CommandScaffold} {
 		name := "record_" + string(kind) + ".go"
 		entry := journalEntry{After: state(oldFile{true, []byte("package sample\n"), 0644})}

@@ -49,9 +49,9 @@ type serverFixture struct {
 func serve(t *testing.T, r *ws.Registry, authentication *foundryhttp.Authentication, config ws.Config) serverFixture {
 	return serveWith(t, r, authentication, config, nil)
 }
-func serveWith(t *testing.T, r *ws.Registry, authentication *foundryhttp.Authentication, config ws.Config, wrap func(http.Handler) http.Handler) serverFixture {
+func serveWith(t *testing.T, r *ws.Registry, authentication *foundryhttp.Authentication, config ws.Config, wrap func(http.Handler) http.Handler, opts ...ws.Option) serverFixture {
 	t.Helper()
-	hub, err := ws.New(r, authentication, config)
+	hub, err := ws.New(r, authentication, config, opts...)
 	if err != nil {
 		t.Fatal(err)
 	}

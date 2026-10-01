@@ -25,6 +25,7 @@ type Tokens[M model.Identifiable, K any] struct {
 	guard    auth.Guard[M]
 	current  auth.CredentialSlot[Info[M, K]]
 	observer auth.Observer
+	tickets  auth.Binder[familyBinding]
 }
 
 func New[M model.Identifiable, K any](store *Store, name auth.GuardName, provider auth.Provider[M, K], source auth.CredentialName, allowed auth.AccessScopes[M]) (*Tokens[M, K], error) {
@@ -39,7 +40,9 @@ func New[M model.Identifiable, K any](store *Store, name auth.GuardName, provide
 		return nil, err
 	}
 	tokens := &Tokens[M, K]{store: store, provider: provider, address: address, allowed: allowed, current: auth.NewCredentialSlot[Info[M, K]]()}
-	tokens.guard = auth.DefineGuard(name, provider, auth.DefineStrategy(source, tokens.verify))
+	strategy, tickets := auth.BindStrategy(auth.DefineStrategy(source, tokens.verify), tokens.verifyFamily)
+	tokens.tickets = tickets
+	tokens.guard = auth.DefineGuard(name, provider, strategy)
 	if err := tokens.guard.Validate(); err != nil {
 		return nil, err
 	}

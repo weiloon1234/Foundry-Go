@@ -1,10 +1,12 @@
 package query
 
 import (
+	"context"
 	"database/sql"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
+	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
@@ -15,6 +17,12 @@ type partitionedRow struct {
 	row                 database.Row
 	start, count, total int
 }
+
+// FieldEncryption forwards the underlying stream's decryption scope.
+func (r partitionedRow) FieldEncryption() (context.Context, *encryption.Keyring) {
+	return forwardEncryption(r.row)
+}
+
 type discardColumn struct{}
 
 func (discardColumn) Scan(any) error { return nil }

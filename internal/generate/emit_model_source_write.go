@@ -43,7 +43,8 @@ func (e *emitter) emitModelSourceWriteBuilder(m model, primary field, update boo
 	e.line("func(%s %s[%s])MatchNullable%s(%s %s.Expression[%s,%s.Nullable[%s]])%s[%s]{%s.plan=%s.plan.Match(%s.MatchNullableSource(%sFields().%s,%s));return %s}", receiver, builder, scope, primary.name, input, query, scope, value, typ, builder, scope, receiver, receiver, query, m.name, primary.name, input, receiver)
 	if update {
 		for _, f := range m.fields {
-			if f.column == primary.column || f.mutator != "" || (m.timestamps[1] != "" && f.column == m.timestamps[1]) {
+			// An encrypted envelope is bound to its source row and cannot be copied.
+			if f.column == primary.column || f.mutator != "" || f.kind == "Encrypted" || (m.timestamps[1] != "" && f.column == m.timestamps[1]) {
 				continue
 			}
 			e.line("// Select%s assigns a stored source value to %s; Values cannot also supply it.", f.name, f.column)

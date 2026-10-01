@@ -42,6 +42,29 @@ type GraceBackend interface {
 	LookupWithin(context.Context, Address, Digest, time.Duration) (value.Optional[Record], error)
 }
 
+// TicketBackend stores single-use handshake tickets as hashes. IssueTicket
+// stores one for the subject's live family, first dropping that family's expired
+// tickets and the oldest beyond max-1, and reports omitted expiry when the
+// family is no longer live. RedeemTicket deletes the ticket in the statement
+// that reads it, so a ticket redeems at most once; an unknown or expired ticket
+// is omitted. Revoking, refreshing past or expiring a family never revives a
+// ticket, and deleting a family deletes its tickets. LookupFamily reads a family's
+// current generation for a re-check and is omitted unless the family is live.
+// PruneTickets deletes at most limit expired tickets of the address.
+type TicketBackend interface {
+	IssueTicket(context.Context, Address, model.Identity, model.ID[Record], Digest, time.Duration, int) (value.Optional[temporal.DateTime], error)
+	RedeemTicket(context.Context, Address, Digest) (value.Optional[TicketRecord], error)
+	LookupFamily(context.Context, Address, model.Identity, model.ID[Record]) (value.Optional[Record], error)
+	PruneTickets(context.Context, Address, int) (uint64, error)
+}
+
+// TicketRecord is a redeemed ticket: the family and subject it was issued for.
+type TicketRecord struct {
+	Family    model.ID[Record]
+	Subject   model.Identity
+	ExpiresAt temporal.DateTime
+}
+
 // SelectiveBackend revokes every family of a subject in this address except
 // keep, under the subject lock shared with issuance, and returns the count.
 type SelectiveBackend interface {

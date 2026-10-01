@@ -42,11 +42,21 @@ func DefineGuard[M model.Identifiable, K any](name GuardName, provider Provider[
 		return strategy.Validate()
 	}
 	d.resolve = func(ctx context.Context, inputs Credentials) (guardResult[M], error) {
-		credential := inputs.Get(strategy.source)
-		if credential.IsZero() {
+		credential, bound := inputs.Get(strategy.source), inputs.bound[strategy.source]
+		if credential.IsZero() && bound.IsZero() {
 			return guardResult[M]{}, nil
 		}
-		result, err := strategy.verify(ctx, credential)
+		var result value.Optional[Proof[M, K]]
+		var err error
+		switch {
+		case bound.IsZero():
+			result, err = strategy.verify(ctx, credential)
+		case strategy.bound != nil:
+			result, err = strategy.bound(ctx, bound)
+		default:
+			// Only a strategy's own binder creates its bound credentials.
+			err = Unauthenticated
+		}
 		if err != nil {
 			return guardResult[M]{}, err
 		}

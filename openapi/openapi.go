@@ -4,6 +4,7 @@ package openapi
 
 import (
 	"encoding/json"
+	"maps"
 	"net/url"
 	"sort"
 	"strconv"
@@ -196,6 +197,15 @@ func Render(source *manifest.Manifest, options Options) ([]byte, error) {
 		if op.Validation != nil {
 			operation["x-foundry-validation"] = op.Validation
 		}
+		var requirement object
+		if cookie := op.RefreshCookie; cookie != nil {
+			operation["x-foundry-refresh-cookie"] = cookie
+			if cookie.Reads {
+				name := "RefreshCookie_" + contractname.Symbol(string(cookie.Name))
+				security[name] = object{"type": "apiKey", "in": "cookie", "name": string(cookie.Name)}
+				requirement = object{name: []string{}}
+			}
+		}
 		if a := op.Route.Authentication; a != nil {
 			operation["x-foundry-authentication"] = a
 			name := "Credential_" + contractname.Symbol(string(a.Credential.Source)+"/"+string(a.Credential.Kind)+"/"+a.Credential.Name)
@@ -204,11 +214,18 @@ func Render(source *manifest.Manifest, options Options) ([]byte, error) {
 				scheme = object{"type": "apiKey", "in": "cookie", "name": a.Credential.Name}
 			}
 			security[name] = scheme
-			requirements := []any{object{name: []string{}}}
+			required := object{name: []string{}}
+			maps.Copy(required, requirement)
+			requirements := []any{required}
 			if a.Optional {
-				requirements = append(requirements, object{})
+				// Anonymous access still presents a required refresh cookie.
+				anonymous := object{}
+				maps.Copy(anonymous, requirement)
+				requirements = append(requirements, anonymous)
 			}
 			operation["security"] = requirements
+		} else if requirement != nil {
+			operation["security"] = []any{requirement}
 		}
 		responses := r.errors(op.Errors)
 		success := object{"description": "Successful response"}
@@ -227,6 +244,20 @@ func Render(source *manifest.Manifest, options Options) ([]byte, error) {
 				if response, ok := responses[status].(object); ok {
 					response["headers"] = object{"Retry-After": object{"schema": object{"type": "integer", "minimum": 1, "maximum": 300}, "description": "Bounded retry delay for in-progress or unavailable outcomes; reuse the same key"}}
 				}
+			}
+		}
+		if cookie := op.RefreshCookie; cookie != nil {
+			// Never an example value: the header only names the cookie.
+			if cookie.Sets || cookie.Clears {
+				success["headers"] = object{"Set-Cookie": object{"schema": object{"type": "string"}, "description": refreshCookieHeader(*cookie)}}
+			}
+			if response, ok := responses["401"].(object); ok && (cookie.Reads || cookie.Clears) {
+				clears := "Clears the " + string(cookie.Name) + " refresh cookie"
+				if !cookie.Reads {
+					// A guarded logout's authentication 401 precedes its cookie handling.
+					clears += " when the handler rejects the request; an authentication failure keeps it"
+				}
+				response["headers"] = object{"Set-Cookie": object{"schema": object{"type": "string"}, "description": clears}}
 			}
 		}
 		responses[strconv.Itoa(op.Status)] = success
@@ -457,4 +488,11 @@ func (r renderer) errors(allowed []foundryhttp.ErrorCode) object {
 		result[strconv.Itoa(status)] = object{"description": strings.Join(codes, ", "), "content": object{"application/json": object{"schema": schema}}}
 	}
 	return result
+}
+
+func refreshCookieHeader(cookie foundryhttp.RefreshCookieInfo) string {
+	if cookie.Clears {
+		return "Clears the " + string(cookie.Name) + " refresh cookie"
+	}
+	return "Sets the " + string(cookie.Name) + " refresh cookie (HttpOnly, Secure, SameSite=Strict) for a renewable credential"
 }

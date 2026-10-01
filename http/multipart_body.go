@@ -245,6 +245,14 @@ func (b Body[B]) readOwned(w stdhttp.ResponseWriter, r *stdhttp.Request, limits 
 		// The handler streams a raw body; only its framing is checked here.
 		return b.raw.open(w, r, limits.Raw)
 	}
+	if b.kind == payloadRefreshCookie {
+		// The credential comes only from the cookie; any body is rejected.
+		if _, err := readEndpointBody(w, r, int64(limits.Body.Bytes), true, jsonRequestMedia); err != nil {
+			return *new(B), nil, err
+		}
+		result, err := b.fromCookie(r)
+		return result, nil, err
+	}
 	body, err := b.read(w, r, limits.Body)
 	return body, nil, err
 }

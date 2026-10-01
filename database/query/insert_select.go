@@ -89,6 +89,9 @@ func (p InsertSelect[S, M]) validateExecution(ctx context.Context, writer databa
 	if err := writeContext(ctx, writer); err != nil {
 		return err
 	}
+	if p.values.encrypted() {
+		return errSetEncrypted()
+	}
 	_, _, _, err := p.validateShape(true)
 	return err
 }

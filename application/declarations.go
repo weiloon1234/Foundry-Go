@@ -134,12 +134,25 @@ func (b *Builder) Schedules(construct Schedules) *Builder {
 }
 
 // RealtimeDeclarations contains domain channels, typed authentication and upgrade
-// middleware. The framework owns the selected hub, listener and shutdown.
+// middleware. Tickets lists the token guards whose single-use handshake tickets
+// the hub redeems (see websocket.WithTickets); each guard's credential source
+// must also be declared by Authentication. The framework owns the selected hub,
+// listener and shutdown.
 type RealtimeDeclarations struct {
 	Channels       []websocket.Registration
 	Authentication *http.Authentication
 	Middleware     []http.Middleware
+	Tickets        []websocket.TicketRedeemer
 }
+
+// hubOptions turns declared collaborators into hub construction options.
+func (d RealtimeDeclarations) hubOptions() []websocket.Option {
+	if len(d.Tickets) == 0 {
+		return nil
+	}
+	return []websocket.Option{websocket.WithTickets(d.Tickets...)}
+}
+
 type Realtime func(Services) (RealtimeDeclarations, error)
 
 func (b *Builder) Realtime(construct Realtime) *Builder {

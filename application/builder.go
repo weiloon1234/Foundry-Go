@@ -39,6 +39,7 @@ type builderState struct {
 	realtime   Realtime
 	features   []Features
 	models     []slots.Declaration
+	migrations []infrastructure.MigrationTarget
 	err        error
 	built      bool
 }
@@ -151,6 +152,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	b.state.built = true
 	settings, configured, routes, spas, middleware, observers, providers, plugins, buildErr := b.state.settings, b.state.options, slices.Clone(b.state.routes), slices.Clone(b.state.spas), slices.Clone(b.state.middleware), slices.Clone(b.state.observers), slices.Clone(b.state.providers), slices.Clone(b.state.plugins), b.state.err
 	jobDeclarations, eventDeclarations, schedules, realtime, features, models := slices.Clone(b.state.jobs), slices.Clone(b.state.events), slices.Clone(b.state.schedules), b.state.realtime, slices.Clone(b.state.features), slices.Clone(b.state.models)
+	domainMigrations := cloneMigrations(b.state.migrations)
 	b.state.mu.Unlock()
 	if buildErr != nil {
 		return nil, buildErr
@@ -197,7 +199,16 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if s.Worker.Archive, err = prepareJobArchive(s); err != nil {
 		return nil, err
 	}
-	plan, err := infrastructure.Configure(s.Services, append(slices.Clone(configured.infrastructure), infrastructure.WithClock(configured.clock), infrastructure.WithLogger(logger))...)
+	// One parsed key ring serves Services.Encryption and every database pool.
+	keys, err := s.Encryption.keyring()
+	if err != nil {
+		return nil, err
+	}
+	infrastructureOptions := append(slices.Clone(configured.infrastructure), infrastructure.WithClock(configured.clock), infrastructure.WithLogger(logger))
+	if keys != nil {
+		infrastructureOptions = append(infrastructureOptions, infrastructure.WithDatabaseEncryption(keys))
+	}
+	plan, err := infrastructure.Configure(s.Services, infrastructureOptions...)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +225,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if recorder != nil {
 		options = append(options, foundation.WithObservability(recorder))
 	}
-	migrations, err := featureMigrations(plan, s.Features, s.Worker.Archive)
+	migrations, err := featureMigrations(plan, s, domainMigrations)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +239,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	plan.Register(builder)
 	registerResources(builder, s.Image, logger, channels.Channels(), s.Features, configured.clock, recorder, dates, calendar)
 	builder.Register(providers...).RegisterPlugin(plugins...)
-	if err := registerFeatures(ctx, builder, s, configured.clock, features, models); err != nil {
+	if err := registerFeatures(ctx, builder, s, configured.clock, features, models, keys); err != nil {
 		return nil, err
 	}
 	if err := registerKernelDeclarations(builder, plan, s, configured.clock, jobDeclarations, eventDeclarations, schedules, realtime); err != nil {
@@ -253,7 +264,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := &App{App: app, resources: resources, migrations: migrations, models: models}
+	result := &App{App: app, resources: resources, migrations: migrations, databases: s.Services.Database, encryption: keys, models: models}
 	if s.HTTP.Enabled {
 		result.server, err = foundation.Resolve(app.Services(), HTTPKey)
 	}

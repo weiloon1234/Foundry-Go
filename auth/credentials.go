@@ -28,6 +28,7 @@ type Credential struct {
 // scope. Routine formatting and JSON never expose its contents.
 type Credentials struct {
 	values map[CredentialName]secret.String
+	bound  map[CredentialName]BoundCredential
 }
 
 func (Credentials) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("authentication credentials")) }

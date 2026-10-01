@@ -1,7 +1,7 @@
 interface RealtimeEvent { readonly id: string; readonly name: string; readonly direction: string; readonly payload: string; readonly accepted_acknowledgement: boolean }
 interface RealtimeChannel { readonly id: string; readonly name: string; readonly room: URLParameter; readonly owned_rooms: boolean; readonly presence?: string; readonly replay: { readonly messages: number; readonly bytes: number }; readonly events: readonly RealtimeEvent[] }
 interface RealtimeDescription {
-  readonly protocol: { readonly version: number; readonly subprotocol: string; readonly max_room_bytes: number; readonly max_replay_messages: number;
+  readonly protocol: { readonly version: number; readonly subprotocol: string; readonly ticket_subprotocol_prefix: string; readonly max_room_bytes: number; readonly max_replay_messages: number;
     readonly actions: { readonly subscribe: string; readonly unsubscribe: string; readonly message: string };
     readonly responses: { readonly subscribed: string; readonly unsubscribed: string; readonly acknowledged: string; readonly accepted: string; readonly error: string; readonly event: string; readonly presence_joined: string; readonly presence_left: string; readonly presence_updated: string };
     readonly codes: readonly string[] };

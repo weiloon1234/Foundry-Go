@@ -99,7 +99,38 @@ not establish authority. The consumer's `UserInbox` shows this composition.
 Browser applications pass `BrowserSessions.Authentication()`. Capture reuses its
 secure-cookie and credential validation. Session login/rotation remain ordinary
 HTTPS endpoints; reconnect after changing credentials. No long-lived secret is
-accepted in a URL or protocol payload. All upgrade query strings are rejected.
+accepted in a URL, subprotocol or protocol payload. All upgrade query strings are
+rejected.
+
+### Handshake tickets for bearer-token browsers
+
+A browser that authenticates with bearer tokens cannot set `Authorization` on a
+WebSocket. `websocket.WithTickets(tokens...)` (in a configured application,
+`RealtimeDeclarations.Tickets`) accepts a single-use ticket instead. A guarded
+HTTPS endpoint returns one from `tokens.IssueTicket(ctx)` through
+`http.TicketResponse` (see [tokens](tokens.md#websocket-handshake-tickets)); the
+browser offers `foundry.ticket.<ticket>` (`websocket.TicketSubprotocolPrefix`)
+beside `foundry.v1`, for example with the generated `realtimeProtocols(ticket)`.
+
+The hub checks the origin first, then redeems the ticket, trying each listed guard
+in order until one knows it. An unknown, expired or replayed ticket gets 401; when
+no guard knows it and a redeemer could not decide, it gets 503, so the client may
+retry with a fresh ticket; more than one
+ticket, or a ticket without `foundry.v1`, gets 400. A ticket combined with a header
+or cookie credential for the same guard source is ambiguous and gets 401. Only
+`foundry.v1` is negotiated and echoed.
+
+A redeemed ticket becomes a bound credential of its own guard (see
+[authentication](authentication.md)), so it authenticates only that guard's
+channels. Every subscribe and authorization refresh re-checks the token family
+(revocation, refresh-token replay, expiry), the subject's current eligibility and
+the guard's scope ceiling. A ticket connection therefore survives ordinary
+access-token refreshes and closes at the next refresh after its family is
+revoked, while a header-authenticated connection keeps re-verifying the access
+token it captured. Fetch a fresh ticket for every connect and reconnect. One hub
+serves several token guards by listing each binding; a connection carries one
+ticket and therefore one ticket-authenticated guard. Both `BearerCredential`
+sources stay declared on the hub's `Authentication` for native clients.
 In addition to incoming operation checks, private subscriptions now refresh
 authorization independently of handlers. The distributed guide covers this
 revocation backstop and typed cluster disconnect.

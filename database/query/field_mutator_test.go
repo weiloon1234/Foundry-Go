@@ -42,7 +42,7 @@ func TestFieldMutatorsPreserveAssignmentStateAndOrder(t *testing.T) {
 	plan := insertPlan[mutatorRecord]{query: q, rows: []Mutation[mutatorRecord]{input}}
 	for range 2 {
 		calls = nil
-		statement, err := plan.prepare(t.Context())
+		statement, err := plan.prepare(t.Context(), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -58,7 +58,7 @@ func TestFieldMutatorsPreserveAssignmentStateAndOrder(t *testing.T) {
 		Change(name, Assign[mutatorRecord]("records", "note", codec.Nullable(codec.String[string]()), value.Null[string]())),
 	} {
 		calls = nil
-		statement, err := (insertPlan[mutatorRecord]{query: q, rows: []Mutation[mutatorRecord]{mutation}}).prepare(t.Context())
+		statement, err := (insertPlan[mutatorRecord]{query: q, rows: []Mutation[mutatorRecord]{mutation}}).prepare(t.Context(), nil)
 		if err != nil || !reflect.DeepEqual(calls, []string{"name"}) {
 			t.Fatalf("omitted/NULL field invoked its scalar mutator: %v %v", calls, err)
 		}
@@ -121,7 +121,7 @@ func TestFieldMutatorsValidateOutputAndHonorCancellation(t *testing.T) {
 		return s, nil
 	})
 	mutation := Change(Assign[mutatorRecord]("records", "name", codec.String[string](), "input"), Assign[mutatorRecord]("records", "note", codec.Nullable(codec.String[string]()), value.Of("note")))
-	if _, err := (insertPlan[mutatorRecord]{query: q, rows: []Mutation[mutatorRecord]{mutation}}).prepare(ctx); !errors.Is(err, context.Canceled) || noteCalls != 0 {
+	if _, err := (insertPlan[mutatorRecord]{query: q, rows: []Mutation[mutatorRecord]{mutation}}).prepare(ctx, nil); !errors.Is(err, context.Canceled) || noteCalls != 0 {
 		t.Fatalf("cancellation did not stop remaining mutators: %v", err)
 	}
 	invalid := errors.New("invalid normalized value")
@@ -136,7 +136,7 @@ func TestFieldMutatorsValidateOutputAndHonorCancellation(t *testing.T) {
 		// Invalid original inputs can normalize into valid values; only the
 		// transformed value goes through the final declared database codec.
 		input := Change(Assign[mutatorRecord]("records", "name", c, "unvalidated input"))
-		_, err := (insertPlan[mutatorRecord]{query: q, rows: []Mutation[mutatorRecord]{input}}).prepare(t.Context())
+		_, err := (insertPlan[mutatorRecord]{query: q, rows: []Mutation[mutatorRecord]{input}}).prepare(t.Context(), nil)
 		if (output == "valid" && err != nil) || (output == "invalid" && !errors.Is(err, invalid)) {
 			t.Fatalf("final validation used the wrong value: %v", err)
 		}
@@ -154,7 +154,7 @@ func TestFieldMutatorsRejectInvalidDeclarationsAndInputs(t *testing.T) {
 		Change(Assign[mutatorRecord]("records", "name", codec.Signed[int](), 1)),
 		Change(name, Assign[mutatorRecord]("records", "note", codec.Signed[int](), 1)),
 	} {
-		if _, err := (insertPlan[mutatorRecord]{query: q, rows: []Mutation[mutatorRecord]{mutation}}).prepare(t.Context()); !errors.Is(err, fault.Invalid) {
+		if _, err := (insertPlan[mutatorRecord]{query: q, rows: []Mutation[mutatorRecord]{mutation}}).prepare(t.Context(), nil); !errors.Is(err, fault.Invalid) {
 			t.Fatalf("invalid assignment was transformed: %v", err)
 		}
 	}

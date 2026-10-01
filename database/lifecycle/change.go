@@ -67,20 +67,37 @@ func CompareField[V any](c codec.Codec[V], before, after value.Optional[V], assi
 	if assigned && !after.IsSet() {
 		return FieldChange[V]{}, fault.New(fault.Invalid, "deleted field cannot be assigned")
 	}
-	left, err := bindSnapshot(c, before)
-	if err != nil {
-		return FieldChange[V]{}, fmt.Errorf("compare original model field: %w", err)
-	}
-	right, err := bindSnapshot(c, after)
-	if err != nil {
-		return FieldChange[V]{}, fmt.Errorf("compare resulting model field: %w", err)
-	}
-	same, err := sameStoredValue(left, right)
+	same, err := sameField(c, before, after)
 	if err != nil {
 		return FieldChange[V]{}, err
 	}
 	return FieldChange[V]{before: c.CloneOptional(before), after: c.CloneOptional(after), assigned: assigned, codec: &c,
 		changed: before.IsSet() != after.IsSet() || !same}, nil
+}
+
+// sameField compares decoded values when the codec defines equality, because
+// such a codec binds non-deterministically (for example a fresh encryption
+// nonce), and otherwise compares canonical bound values.
+func sameField[V any](c codec.Codec[V], before, after value.Optional[V]) (bool, error) {
+	if c.ComparesValues() {
+		left, leftSet := before.Get()
+		right, rightSet := after.Get()
+		if !leftSet || !rightSet {
+			// Creation or deletion already changes the field.
+			return true, nil
+		}
+		same, _ := c.Equal(left, right)
+		return same, nil
+	}
+	left, err := bindSnapshot(c, before)
+	if err != nil {
+		return false, fmt.Errorf("compare original model field: %w", err)
+	}
+	right, err := bindSnapshot(c, after)
+	if err != nil {
+		return false, fmt.Errorf("compare resulting model field: %w", err)
+	}
+	return sameStoredValue(left, right)
 }
 
 func bindSnapshot[V any](c codec.Codec[V], snapshot value.Optional[V]) (driver.Value, error) {

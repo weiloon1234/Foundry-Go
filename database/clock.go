@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/clock"
+	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
@@ -22,6 +23,7 @@ type poolSettings struct {
 	startupLogger   *slog.Logger
 	slowThreshold   time.Duration
 	stickyWindow    time.Duration
+	encryption      *encryption.Keyring
 }
 
 // WithClock injects model lifecycle time. Direct Open/Prepare calls default to

@@ -41,7 +41,7 @@ func TestModelTimestampsUseOneSampleAndPreserveInputs(t *testing.T) {
 	raw := Change(Assign[timestampRecord]("timed_records", "name", codec.String[string](), "first"))
 	for range 2 {
 		plan := mutationPlan[timestampRecord]{query: q, kind: insertModel, mutation: raw}
-		statement, err := prepareMutation(t.Context(), &plan, source)
+		statement, err := prepareMutation(t.Context(), &plan, source, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -65,13 +65,13 @@ func TestModelTimestampsPreserveExplicitCreationAndSkipPhysicalDelete(t *testing
 	old := source.now.Add(-time.Hour)
 	raw := Change(Assign[timestampRecord]("timed_records", "name", codec.String[string](), "first"), Assign[timestampRecord]("timed_records", "created_on", codec.Time(), old))
 	plan := mutationPlan[timestampRecord]{query: q, kind: insertModel, mutation: raw}
-	statement, err := prepareMutation(t.Context(), &plan, source)
+	statement, err := prepareMutation(t.Context(), &plan, source, nil)
 	if err != nil || !reflect.DeepEqual(statement.Arguments(), []any{"first", old, source.now}) {
 		t.Fatal("explicit creation timestamp replaced", err)
 	}
 	id := NewScalarField[timestampRecord, int]("timed_records", "id", codec.Signed[int]())
 	plan = mutationPlan[timestampRecord]{query: q.Where(id.Eq(3)), kind: updateModel}
-	statement, err = prepareMutation(t.Context(), &plan, source)
+	statement, err = prepareMutation(t.Context(), &plan, source, nil)
 	if err != nil || !strings.Contains(statement.SQL(), `SET "modified_on" = $1 WHERE`) {
 		t.Fatal("timestamp-only update failed", err)
 	}
@@ -79,7 +79,7 @@ func TestModelTimestampsPreserveExplicitCreationAndSkipPhysicalDelete(t *testing
 		t.Fatal("update assigned the creation time")
 	}
 	plan = mutationPlan[timestampRecord]{query: q.Where(id.Eq(3)), kind: deleteModel}
-	statement, err = prepareMutation(t.Context(), &plan, source)
+	statement, err = prepareMutation(t.Context(), &plan, source, nil)
 	if err != nil || !strings.HasPrefix(statement.SQL(), "DELETE FROM") || source.calls != 2 {
 		t.Fatal("physical delete sampled application time", err, source.calls)
 	}
@@ -99,7 +99,7 @@ func TestModelTimestampsBulkAndConflictUseNormalizedProposedValue(t *testing.T) 
 		if err != nil {
 			t.Fatal(err)
 		}
-		statement, err := prepared.prepare(t.Context())
+		statement, err := prepared.prepare(t.Context(), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -131,7 +131,7 @@ func TestModelTimestampsBulkAndConflictUseNormalizedProposedValue(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if statement, err := prepared.prepare(t.Context()); err != nil || statement.SQL() != "" || source.calls != 2 {
+	if statement, err := prepared.prepare(t.Context(), nil); err != nil || statement.SQL() != "" || source.calls != 2 {
 		t.Fatal("empty timestamp batch changed execution", err)
 	}
 }

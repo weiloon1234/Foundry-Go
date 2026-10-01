@@ -11,10 +11,14 @@ const (
 	Introduced     migrate.Version = "v0.1.0"
 )
 
-func Registry() (*migrate.Registry, error) {
+// Definitions returns fresh historical definitions for Registry or an
+// application migration target.
+func Definitions() []migrate.Definition {
 	initial := migrate.Key{Origin: Origin, ID: CreateRecords}
-	return migrate.New(
-		migrate.Definition{Key: initial, Version: Introduced, SQL: []string{"CREATE TABLE consumer_records (id bigint PRIMARY KEY)"}},
-		migrate.Definition{Key: migrate.Key{Origin: Origin, ID: AddRecordLabel}, Version: Introduced, Requires: []migrate.Key{initial}, SQL: []string{"ALTER TABLE consumer_records ADD COLUMN label text NOT NULL DEFAULT ''"}},
-	)
+	return []migrate.Definition{
+		{Key: initial, Version: Introduced, SQL: []string{"CREATE TABLE consumer_records (id bigint PRIMARY KEY)"}},
+		{Key: migrate.Key{Origin: Origin, ID: AddRecordLabel}, Version: Introduced, Requires: []migrate.Key{initial}, SQL: []string{"ALTER TABLE consumer_records ADD COLUMN label text NOT NULL DEFAULT ''"}},
+	}
 }
+
+func Registry() (*migrate.Registry, error) { return migrate.New(Definitions()...) }

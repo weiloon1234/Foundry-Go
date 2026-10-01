@@ -119,6 +119,9 @@ func (q Query[M]) setWrite(ctx context.Context, writer database.Transactor, kind
 	if q.definition == nil {
 		return 0, fault.New(fault.Invalid, "set-based writes require model metadata")
 	}
+	if mutation.encrypted() {
+		return 0, errSetEncrypted()
+	}
 	if err := q.setWriteLifecycle(writer, kind); err != nil {
 		return 0, err
 	}
@@ -127,7 +130,7 @@ func (q Query[M]) setWrite(ctx context.Context, writer database.Transactor, kind
 	}
 	plan := mutationPlan[M]{query: q, kind: kind, mutation: mutation, setBased: true, countOnly: true, adjust: adjust}
 	return executeWrite(ctx, writer, func(ctx context.Context, tx *database.Tx) (int64, error) {
-		statement, err := prepareMutation(ctx, &plan, transactionClock(tx))
+		statement, err := prepareMutation(ctx, &plan, transactionClock(tx), transactionKeys(tx))
 		if err != nil {
 			return 0, err
 		}

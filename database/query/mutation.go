@@ -14,6 +14,8 @@ type Assignment[M any] struct {
 	_     [0]*M
 	field fieldRef
 	assignmentValue
+	// seal encrypts an encrypted field's plaintext for its row before binding.
+	seal sealer
 }
 
 // assignmentValue is shared by model drafts and conflict literals. Keeping the

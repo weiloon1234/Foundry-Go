@@ -18,9 +18,27 @@ func parseTokenCredential(data []byte) (secret.String, error) {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return secret.String{}, fault.New(fault.Invalid, "invalid token credential")
 	}
-	candidate := secret.New(raw)
+	return checkTokenCredential(secret.New(raw))
+}
+
+// checkTokenCredential applies the canonical syntax to a credential from any
+// transport, so a cookie and a JSON field accept exactly the same values.
+func checkTokenCredential(candidate secret.String) (secret.String, error) {
+	if len(candidate.Reveal()) > 512 {
+		return secret.String{}, fault.New(fault.Invalid, "invalid token credential")
+	}
 	if _, err := token.HashSecret(candidate); err != nil {
 		return secret.String{}, fault.New(fault.Invalid, "invalid token credential")
 	}
 	return candidate, nil
+}
+
+// NewRefreshCredential validates a refresh secret read from a transport other
+// than JSON, such as an HttpOnly cookie.
+func NewRefreshCredential(raw secret.String) (RefreshCredential, error) {
+	candidate, err := checkTokenCredential(raw)
+	if err != nil {
+		return RefreshCredential{}, err
+	}
+	return RefreshCredential{secret: candidate}, nil
 }

@@ -19,6 +19,10 @@ const MaxPruneFamilies = 1024
 // MaxPrefixBytes bounds Config.Prefix.
 const MaxPrefixBytes = 16
 
+// MaxTicketLifetime and MaxFamilyTickets bound single-use handshake tickets.
+const MaxTicketLifetime = 5 * time.Minute
+const MaxFamilyTickets = 64
+
 // Mode distinguishes nonrenewable personal credentials, renewable pairs and
 // short-lived MFA challenges. A challenge never carries ordinary access scopes.
 type Mode uint8
@@ -69,7 +73,9 @@ func (l Lifetime) Validate(mode Mode) error {
 // flight with it do not fail; zero disables it. Prefix is prepended to newly
 // issued access/refresh secrets for secret scanning (for example "myapp_");
 // secrets with or without a prefix are accepted, since only the random part is
-// hashed.
+// hashed. TicketLifetime bounds a single-use handshake ticket from IssueTicket
+// (between one second and MaxTicketLifetime; zero disables tickets), and
+// MaxTicketsPerFamily caps one family's unexpired tickets, dropping the oldest.
 type Config struct {
 	Namespace            keyspace.Namespace
 	Personal             Lifetime
@@ -83,6 +89,8 @@ type Config struct {
 	Prefix               string
 	MaxConcurrent        int
 	Timeout              time.Duration
+	TicketLifetime       time.Duration
+	MaxTicketsPerFamily  int
 }
 
 func DefaultConfig(namespace keyspace.Namespace) Config {
@@ -90,7 +98,8 @@ func DefaultConfig(namespace keyspace.Namespace) Config {
 		Personal:      Lifetime{Access: 30 * 24 * time.Hour, Absolute: 30 * 24 * time.Hour},
 		Renewable:     Lifetime{Access: 15 * time.Minute, RefreshIdle: 7 * 24 * time.Hour, Absolute: 30 * 24 * time.Hour},
 		Challenge:     Lifetime{Access: 5 * time.Minute, Absolute: 5 * time.Minute},
-		MaxPerSubject: 32, MaxPendingPerSubject: 8, Limit: auth.RejectNew, MaxRotations: MaxRotations, AccessGrace: 30 * time.Second, MaxConcurrent: 128, Timeout: 5 * time.Second}
+		MaxPerSubject: 32, MaxPendingPerSubject: 8, Limit: auth.RejectNew, MaxRotations: MaxRotations, AccessGrace: 30 * time.Second, MaxConcurrent: 128, Timeout: 5 * time.Second,
+		TicketLifetime: 30 * time.Second, MaxTicketsPerFamily: 8}
 }
 func (c Config) Validate() error {
 	for _, err := range []error{c.Namespace.Validate(), c.Personal.Validate(Personal), c.Renewable.Validate(Renewable), c.Challenge.Validate(Challenge), c.Limit.Validate(), validatePrefix(c.Prefix)} {
@@ -103,6 +112,9 @@ func (c Config) Validate() error {
 	}
 	if c.AccessGrace < 0 || c.AccessGrace > c.Renewable.Access || c.AccessGrace%time.Microsecond != 0 {
 		return fault.New(fault.Invalid, "token access grace must be between zero and the renewable access lifetime")
+	}
+	if c.TicketLifetime != 0 && (c.TicketLifetime < time.Second || c.TicketLifetime > MaxTicketLifetime || c.TicketLifetime%time.Microsecond != 0 || c.MaxTicketsPerFamily < 1) || c.MaxTicketsPerFamily < 0 || c.MaxTicketsPerFamily > MaxFamilyTickets {
+		return fault.New(fault.Invalid, "invalid token ticket lifetime or capacity")
 	}
 	return nil
 }

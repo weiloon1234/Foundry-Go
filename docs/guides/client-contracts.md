@@ -335,6 +335,27 @@ Forward raw string/byte messages unchanged. Browser cookies are established by
 ordinary HTTP authentication; the WebSocket adapter must honor the server's
 origin and authentication policy.
 
+A browser that authenticates with bearer tokens cannot set `Authorization` on a
+WebSocket. Fetch a single-use ticket from the application's guarded ticket
+endpoint (a generated operation like any other) for every connect and
+reconnect, and offer it with the generated `realtimeProtocols(ticket)`:
+
+```typescript
+const { ticket } = await api.realtimeTicket();
+const native = new WebSocket(realtimeURL, realtimeProtocols(ticket));
+```
+
+`realtimeProtocols()` without a ticket returns only `realtimeSubprotocol`; an
+empty or non-token ticket throws `RealtimeError("ticket")`. The ticket travels in
+`Sec-WebSocket-Protocol`, never the URL, and the server negotiates only
+`realtimeSubprotocol`. The endpoint name above is the application's own.
+
+Operations that read, set or clear a browser
+[refresh cookie](tokens.md#browser-refresh-cookies) carry `refresh_cookie` in
+the manifest. Keep the client's default `credentials: "same-origin"` (or
+`"include"` for a deliberately configured cross-origin deployment) so the
+browser sends and stores that cookie; `"omit"` breaks the refresh flow.
+
 Generated room handles expose only declared event directions:
 
 ```typescript

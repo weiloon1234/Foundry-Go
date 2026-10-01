@@ -26,7 +26,7 @@ func TestSoftDeleteConventionsShareTimeAndRunMutatorsOnce(t *testing.T) {
 	q = ForModel(d.WithTimestamps("created_on", "updated_on"))
 	source := &timestampClock{now: time.Date(2030, 1, 2, 3, 4, 5, 123456789, time.UTC)}
 	plan := mutationPlan[softRecord]{query: q.Where(softID().Eq(4)), kind: softDeleteModel}
-	statement, err := prepareMutation(t.Context(), &plan, source)
+	statement, err := prepareMutation(t.Context(), &plan, source, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func TestSoftDeleteConventionsShareTimeAndRunMutatorsOnce(t *testing.T) {
 	}
 	source.now = source.now.Add(time.Hour)
 	plan = mutationPlan[softRecord]{query: q.OnlyTrashed().Where(softID().Eq(4)), kind: restoreModel}
-	statement, err = prepareMutation(t.Context(), &plan, source)
+	statement, err = prepareMutation(t.Context(), &plan, source, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestSoftDeleteConventionsShareTimeAndRunMutatorsOnce(t *testing.T) {
 		t.Fatal("restore reported an ordinary update")
 	}
 	plan = mutationPlan[softRecord]{query: q.WithTrashed().Where(softID().Eq(4)), kind: forceDeleteModel}
-	statement, err = prepareMutation(t.Context(), &plan, source)
+	statement, err = prepareMutation(t.Context(), &plan, source, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestSoftDeleteConventionsShareTimeAndRunMutatorsOnce(t *testing.T) {
 func TestSoftDeleteRestoreWithoutTimestampsDoesNotReadClock(t *testing.T) {
 	q := softQuery().OnlyTrashed().Where(softID().Eq(8))
 	plan := mutationPlan[softRecord]{query: q, kind: restoreModel}
-	statement, err := prepareMutation(t.Context(), &plan, nil)
+	statement, err := prepareMutation(t.Context(), &plan, nil, nil)
 	if err != nil || !reflect.DeepEqual(statement.Arguments(), []any{nil, int64(8)}) {
 		t.Fatal("restoration without update time required a clock", err, statement.Arguments())
 	}
@@ -70,7 +70,7 @@ func TestSoftDeleteRestoreWithoutTimestampsDoesNotReadClock(t *testing.T) {
 		plain := *q.definition
 		plain.softDelete = nil
 		plan = mutationPlan[softRecord]{query: ForModel(plain).Where(softID().Eq(8)), kind: kind}
-		if _, err := prepareMutation(t.Context(), &plan, nil); !errors.Is(err, fault.Invalid) {
+		if _, err := prepareMutation(t.Context(), &plan, nil, nil); !errors.Is(err, fault.Invalid) {
 			t.Fatal("special write accepted an unsupported model or kind", kind, err)
 		}
 	}

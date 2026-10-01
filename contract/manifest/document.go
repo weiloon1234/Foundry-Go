@@ -70,6 +70,9 @@ type Operation struct {
 	Preparation       bool                         `json:"preparation,omitempty"`
 	Validation        *validation.Description      `json:"validation,omitempty"`
 	Errors            []foundryhttp.ErrorCode      `json:"errors,omitempty"`
+	// RefreshCookie marks a browser refresh-token cookie the operation reads,
+	// sets or clears; clients send it with same-origin or include credentials.
+	RefreshCookie *foundryhttp.RefreshCookieInfo `json:"refresh_cookie,omitempty"`
 }
 
 type Parameter struct {

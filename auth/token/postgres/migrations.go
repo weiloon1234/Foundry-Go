@@ -9,8 +9,10 @@ const (
 	CreateTokens    migrate.ID     = "000001_create_tokens"
 	AddTokenState   migrate.ID     = "000002_token_device_refresh_history"
 	// ValidateTokenState validates 000002's NOT VALID checks in a separate transaction.
-	ValidateTokenState migrate.ID      = "000003_validate_token_state"
-	Introduced         migrate.Version = "v0.1.0"
+	ValidateTokenState migrate.ID = "000003_validate_token_state"
+	// CreateTickets stores hashed single-use handshake tickets per family.
+	CreateTickets migrate.ID      = "000004_create_tickets"
+	Introduced    migrate.Version = "v0.1.0"
 )
 
 // Migrations returns immutable definitions for the schema selected by Config.
@@ -85,5 +87,19 @@ family_id uuid NOT NULL REFERENCES foundry_token_families (id) ON DELETE CASCADE
 	}}, {Key: migrate.Key{Origin: MigrationOrigin, ID: ValidateTokenState}, Version: Introduced, Requires: []migrate.Key{{Origin: MigrationOrigin, ID: AddTokenState}}, SQL: []string{
 		`ALTER TABLE foundry_token_families VALIDATE CONSTRAINT foundry_token_families_client_ip`,
 		`ALTER TABLE foundry_token_families VALIDATE CONSTRAINT foundry_token_families_user_agent`,
+	}}, {Key: migrate.Key{Origin: MigrationOrigin, ID: CreateTickets}, Version: Introduced, Requires: []migrate.Key{{Origin: MigrationOrigin, ID: CreateTokens}}, SQL: []string{
+		// Deleting a family (revocation, reuse, expiry pruning) deletes its tickets.
+		`CREATE TABLE foundry_token_tickets (
+ticket_hash text NOT NULL CHECK (ticket_hash ~ '^[0-9a-f]{64}$'),
+scope text NOT NULL CHECK (scope ~ '^[0-9a-f]{64}$'),
+family_id uuid NOT NULL,
+created_at timestamptz NOT NULL,
+expires_at timestamptz NOT NULL,
+PRIMARY KEY (scope, ticket_hash),
+FOREIGN KEY (family_id, scope) REFERENCES foundry_token_families (id, scope) ON DELETE CASCADE,
+CHECK (isfinite(created_at) AND isfinite(expires_at) AND expires_at > created_at AND expires_at - created_at <= interval '5 minutes')
+)`,
+		`CREATE INDEX foundry_token_ticket_family ON foundry_token_tickets (family_id, created_at)`,
+		`CREATE INDEX foundry_token_ticket_expiry ON foundry_token_tickets (scope, expires_at)`,
 	}}}
 }

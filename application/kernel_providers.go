@@ -225,7 +225,7 @@ func registerKernelDeclarations(builder *foundation.Builder, plan *infrastructur
 				if err != nil {
 					return nil, err
 				}
-				return connection.NewHub(registry, d.Authentication, s.Realtime.Config)
+				return connection.NewHub(registry, d.Authentication, s.Realtime.Config, d.hubOptions()...)
 			}))
 		default:
 			// Middleware comes from declarations, so apply it to the hub upgrade handler
@@ -235,7 +235,7 @@ func registerKernelDeclarations(builder *foundation.Builder, plan *infrastructur
 				if err != nil {
 					return nil, nil, err
 				}
-				hub, err := connection.NewHub(registry, d.Authentication, s.Realtime.Config)
+				hub, err := connection.NewHub(registry, d.Authentication, s.Realtime.Config, d.hubOptions()...)
 				return hub, d.Middleware, err
 			}))
 		}

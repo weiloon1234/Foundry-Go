@@ -355,6 +355,12 @@ const brokenFile = sdk.createClient(async () => ({ status: 200, headers: { "cont
 const failedDownload = await brokenFile.download({});
 await assert.rejects(async () => { for await (const chunk of failedDownload.body) void chunk; }, error => error === readFailure);
 
+// A browser offers a single-use ticket as one extra subprotocol entry, never in the URL.
+assert.deepEqual(sdk.realtimeProtocols(), [sdk.realtimeSubprotocol]);
+assert.deepEqual(sdk.realtimeProtocols("acme_Ticket-123_x"), [sdk.realtimeSubprotocol, "foundry.ticket.acme_Ticket-123_x"]);
+assert.throws(() => sdk.realtimeProtocols("bad ticket,foundry.v2"), sdk.RealtimeError);
+assert.throws(() => sdk.realtimeProtocols(""), sdk.RealtimeError);
+
 async function socket(path = "/ws") {
   const native = new WebSocket(baseURL.replace(/^http/, "ws") + path, sdk.realtimeSubprotocol);
   await new Promise((resolve, reject) => { native.addEventListener("open", resolve, { once: true }); native.addEventListener("error", () => reject(new Error("native socket failed")), { once: true }); });

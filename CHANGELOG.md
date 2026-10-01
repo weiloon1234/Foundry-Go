@@ -2,6 +2,113 @@
 
 ## Unreleased
 
+### Encrypted model fields
+
+- `database/encrypted` adds Laravel-style encrypted casts: model fields of type
+  `encrypted.Text` and `encrypted.JSON[T]` (optionally `value.Nullable`) take
+  plaintext in drafts (`encrypted.NewText`, `encrypted.NewJSON`) and read it with
+  `Reveal`/`Decode`, while the column stores an AES-256-GCM envelope.
+- Writes seal values inside the write transaction with the database key ring;
+  every hydration path decrypts while scanning and fails rather than publishing
+  ciphertext. Values are bound to table, column and the row's
+  application-assigned primary key, so copied ciphertext does not decrypt.
+- Configured applications pass their `Encryption` key ring to every database
+  connection (`infrastructure.WithDatabaseEncryption`,
+  `database.WithEncryption`); without one, encrypted reads and writes fail with
+  `fault.Missing`. `DB`, `Tx` and `Session` expose `Encryption()`, and result
+  rows carry it (`database.FieldEncryption`).
+- Encrypted fields get `query.EncryptedField`/`NullableEncryptedField`, with no
+  comparison, ordering, conflict update or SQL source mapping. Set-based writes
+  reject encrypted assignments; generation rejects encrypted identity keys,
+  database defaults, mutators and projections. `codec.WithEquality` lets change
+  detection compare plaintext.
+
+### Browser refresh-token cookies
+
+- `http.DefineRefreshCookie(name, csrf)` declares an `HttpOnly` refresh cookie
+  with fixed attributes (`__Host-`, `Secure`, `SameSite=Strict`, `Path=/`).
+  `TokenCookieResponse` returns only the access token in JSON and sets the
+  refresh secret in the cookie (Max-Age at the family's refresh-idle deadline,
+  re-set on every rotation). `RefreshTokenCookie` reads the refresh credential
+  only from the cookie, with no body or query string, and its handler stays
+  `Tokens.Refresh(ctx, input.Body.RefreshToken.Secret())`.
+  `ClearRefreshCookie(cookie, response)` clears it on logout.
+- Every endpoint that sets, reads or clears the cookie requires POST, TLS and
+  no-store, and checks the cookie's origin protection first (which also
+  prevents login CSRF). A refresh endpoint's 401 clears the cookie, and a logout
+  endpoint clears it on success and on a 401 from its handler; 403, input
+  rejections and transient failures keep it. A bearer-guarded logout whose access
+  token is rejected by the authentication middleware keeps it and revokes
+  nothing, so a client with an expired access token refreshes before logging
+  out. A refresh-cookie read must be
+  paired with a response that sets or clears the cookie. Families from
+  either transport behave identically. No refresh-reuse window is added.
+- `EndpointInfo`, the manifest and OpenAPI describe `refresh_cookie` use: no
+  request body and a cookie security scheme for refresh, and `Set-Cookie` on
+  success and on 401. The new DTO `AccessTokenResponse` has no refresh field.
+- `RefreshTokenRequest` can now come from the refresh cookie as well as JSON.
+
+### Realtime handshake tickets
+
+- Browser SPAs that authenticate with bearer tokens can join WebSocket channels
+  with a single-use ticket: `token.Tokens.IssueTicket(ctx)` on a guarded request,
+  delivered by `http.TicketResponse` (POST, TLS, no-store), and offered as
+  `foundry.ticket.<ticket>` beside `foundry.v1` (`websocket.TicketSubprotocolPrefix`,
+  generated TypeScript `realtimeProtocols(ticket)`). Tickets never travel in a URL.
+- `websocket.WithTickets(...)` (configured applications:
+  `RealtimeDeclarations.Tickets`) redeems a ticket after the origin check in one
+  atomic statement: unknown, expired or replayed tickets get 401, an undecided
+  redeemer 503, and only `foundry.v1` is negotiated. A ticket authenticates only
+  its own guard; one hub can list several token guards.
+- `auth.BindStrategy`, `auth.Binder`, `auth.BoundCredential` and
+  `Credentials.WithBound` let a strategy verify credentials exchanged at a
+  trusted boundary. Transport capture never creates them, and every scope
+  re-verifies them. A ticket connection is re-checked against its token family
+  at every subscribe and authorization refresh, so revocation, refresh-token
+  replay, expiry or a disabled subject disconnects it, while ordinary access
+  refreshes do not.
+- Token migration `000004_create_tickets` adds the hashed ticket table (family
+  deletion cascades). `token.Config` gains `TicketLifetime` (default 30s, zero
+  disables) and `MaxTicketsPerFamily` (default 8), configurable as
+  `features.auth.tokens.config.ticket_lifetime` and `max_tickets_per_family`;
+  `Prune` also removes expired tickets while tickets are enabled.
+- `testkit/websocket.DialTicket` performs a browser-style ticket handshake.
+
+### Application migration targets
+
+- `Builder.Migrations(targets...)` declares the application's own migration
+  targets. They join `App.Migrations()` after the framework feature targets and
+  are validated with them at `Build`.
+- `infrastructure.DatabaseSettings.MigrationGroups` is the one target resolution
+  used by `Build`, `App.RunDatabaseCommand` and the PostgreSQL testkit: blank
+  connections select the default, blank schemas the connection's schema (or
+  `public`), targets on the same primary host/port/database/schema merge into one
+  history, identical repeats collapse and conflicting definitions fail.
+- `App.RunDatabaseCommand` runs one parsed database command against the
+  `--database` connection (the default when omitted) without starting the
+  application: it opens only that primary pool. Each schema on that database gets
+  a runner with history in `<schema>.schema_migrations`, the testkit's location.
+  It does not read `foundry_ops.schema_migrations` history from hand-built
+  `DefaultPostgresConfig` runners.
+- `migrate.PostgresConfig.SearchPath` runs migration SQL with one schema as the
+  session search path and restores it afterwards.
+- Database commands accept `--database` (migrate, `seed run`, `prune run`) and
+  `--schema` (migrate). `command.Resources.MigrationTargets` and `DatabaseName`
+  carry per-schema runners; rollback needs `--schema` when a database has
+  several. Single-runner `Resources.Migrations` output is unchanged and refuses
+  these selections.
+
+- `migrate show --migration origin/id` prints one registered definition,
+  including its SQL and Down statements, without database I/O
+  (`migrate.Registry.Definition`, `migrate.Postgres.Registry`,
+  `command.Command.NeedsDatabase`). `RunDatabaseCommand` connects only when the
+  command needs the database.
+- `foundry make migration` names the file after the migration ID, for example
+  `20260911000001_add_record_label_migration.go`, so a directory lists
+  migrations in their conventional run order. `--name` still names the Go
+  function and ID constant; checksums are unaffected. Rename existing files
+  freely if you want the same ordering.
+
 ### Migration definition snapshots
 
 - `migrate.Definition.Clone` copies `SQL`, `Down` and `Requires`. Plugin

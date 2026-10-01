@@ -87,7 +87,7 @@ func executeHookedMutation[M any](ctx context.Context, writer database.Transacto
 			return *new(M), fault.New(fault.Invalid, "registered model observers require a generated observer adapter; regenerate the model")
 		}
 		if !registered && !plan.query.definition.hasWriteHooks {
-			statement, err := prepareMutation(ctx, &plan, transactionClock(tx))
+			statement, err := prepareMutation(ctx, &plan, transactionClock(tx), transactionKeys(tx))
 			if err != nil {
 				return *new(M), err
 			}
@@ -129,7 +129,7 @@ func executeHookedMutation[M any](ctx context.Context, writer database.Transacto
 		if err := ctx.Err(); err != nil {
 			return *new(M), err
 		}
-		statement, err := prepareMutation(ctx, &plan, transactionClock(tx))
+		statement, err := prepareMutation(ctx, &plan, transactionClock(tx), transactionKeys(tx))
 		if err != nil {
 			return *new(M), err
 		}

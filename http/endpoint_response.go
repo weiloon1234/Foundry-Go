@@ -63,7 +63,15 @@ func (r Response[R]) prepare(ctx context.Context, input R, limits EndpointLimits
 		}
 		return preparedResponse{}, InternalError.WithCause(fault.Wrap(fault.Internal, "typed JSON response failed its contract or EndpointLimits.Response bounds", err))
 	}
-	return preparedResponse{data: data, status: status}, nil
+	prepared := preparedResponse{data: data, status: status}
+	if r.setRefreshCookie != nil {
+		// Formatted with the same live context as the credential body.
+		prepared.setCookie, err = r.setRefreshCookie(encoding, input)
+		if err != nil {
+			return preparedResponse{}, InternalError.WithCause(fault.Wrap(fault.Internal, "refresh cookie could not be prepared", err))
+		}
+	}
+	return prepared, nil
 }
 
 func (r Response[R]) write(w stdhttp.ResponseWriter, request *stdhttp.Request, prepared preparedResponse) error {

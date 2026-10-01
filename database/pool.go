@@ -12,6 +12,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
+	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
@@ -97,8 +98,10 @@ type DB struct {
 	observersBound   bool
 	managedObservers bool
 	timeSource       clock.Clock
-	clockExplicit    bool
-	clockBound       bool
+	// fieldKeys encrypts and decrypts encrypted model fields; nil disables them.
+	fieldKeys     *encryption.Keyring
+	clockExplicit bool
+	clockBound    bool
 	// frozen publishes observers and clock after Start fixes them for life, so
 	// hot query paths read them without taking the pool mutex.
 	frozen atomic.Bool
@@ -136,7 +139,7 @@ func Prepare(adapter Adapter, config PoolConfig, options ...Option) (*DB, error)
 	if err != nil {
 		return nil, err
 	}
-	return &DB{startupLogger: settings.startupLogger, instrument: newInstrumentation(settings), stickyWindow: settings.stickyWindow, read: read, maxConnections: maxConnections, timeSource: settings.clock, clockExplicit: settings.clockSet, clockBound: true, adapter: adapter, config: config, classify: adapter.Classify, startDone: make(chan struct{}), drained: make(chan struct{}), done: make(chan struct{})}, nil
+	return &DB{startupLogger: settings.startupLogger, instrument: newInstrumentation(settings), stickyWindow: settings.stickyWindow, fieldKeys: settings.encryption, read: read, maxConnections: maxConnections, timeSource: settings.clock, clockExplicit: settings.clockSet, clockBound: true, adapter: adapter, config: config, classify: adapter.Classify, startDone: make(chan struct{}), drained: make(chan struct{}), done: make(chan struct{})}, nil
 }
 
 // Start verifies a prepared pool once. The first caller's context controls that

@@ -59,6 +59,13 @@ func (e *emitter) emitModelMutation(m model, primary field) {
 			} else {
 				e.line("if v,set:=d.field%s.Get();set{assignments=append(assignments,%s.AssignInput[%s](%q,%q,v))}", f.name, query, m.name, m.table, f.column)
 			}
+		} else if f.kind == "Encrypted" {
+			// Plaintext is sealed for its row inside the write transaction.
+			assign := "AssignEncrypted"
+			if f.nullable {
+				assign = "AssignNullableEncrypted"
+			}
+			e.line("if v,set:=d.field%s.Get();set{assignments=append(assignments,%s.%s[%s](%q,%q,%s,v))}", f.name, query, assign, m.name, m.table, f.column, e.fieldCodec(f, true))
 		} else {
 			e.line("if v,set:=d.field%s.Get();set{assignments=append(assignments,%s.Assign[%s](%q,%q,%s,v))}", f.name, query, m.name, m.table, f.column, e.fieldCodec(f, true))
 		}

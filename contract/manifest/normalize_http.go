@@ -184,6 +184,12 @@ func normalizeHTTP(d *Document, types typeIndex) error {
 				return invalid("endpoint omits a builtin failure")
 			}
 		}
+		if cookie := op.RefreshCookie; cookie != nil {
+			// A refresh cookie travels only on a POST and never beside a body.
+			if err := cookie.Validate(); err != nil || op.Route.Method != foundryhttp.POST || op.Idempotency != nil || cookie.Reads && op.Body != nil {
+				return invalid("invalid refresh cookie operation")
+			}
+		}
 		if policy := op.Idempotency; policy != nil {
 			if err := policy.Validate(); err != nil {
 				return err

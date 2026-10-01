@@ -21,6 +21,9 @@ type Codec[T any] struct {
 	clone         func(T) T
 	parameterType ParameterType
 	sensitive     bool
+	// equal compares decoded values for change detection when binding is not
+	// deterministic, such as randomized encryption (see WithEquality).
+	equal func(T, T) bool
 }
 
 // New is an explicit custom-codec boundary. Callbacks must be safe for concurrent
@@ -115,7 +118,7 @@ func (c Codec[T]) Validated(validate func(T) error) Codec[T] {
 			return *new(T), err
 		}
 		return v, validate(v)
-	}).withSensitivity(c.sensitive).withClone(c.clone)
+	}).withSensitivity(c.sensitive).withClone(c.clone).withEquality(c.equal)
 }
 
 // Nullable adds explicit SQL NULL without conflating it with T's zero value.
@@ -148,5 +151,5 @@ func Nullable[T any](base Codec[T]) Codec[value.Nullable[T]] {
 			return value.Null[T]()
 		}
 		return value.Of(base.Clone(item))
-	})
+	}).withEquality(nullableEquality(base.equal))
 }

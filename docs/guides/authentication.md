@@ -54,6 +54,16 @@ separate typed operations and never pass a pending model to these guards.
 present source is rejected. Limits are 32 sources, 16 KiB per secret and 64 KiB
 combined. Routine formatting/JSON does not expose credential/proof contents.
 
+A transport that already exchanged a credential at a trusted boundary, such as a
+WebSocket hub redeeming a [handshake ticket](websocket.md#handshake-tickets-for-bearer-token-browsers),
+carries an `auth.BoundCredential` instead of a secret. `BindStrategy(strategy,
+verify)` returns the strategy together with the only `Binder` that can create
+its bound credentials; `Credentials.WithBound(source, bound)` attaches one, and
+a source holds either a secret or a bound credential, never both. Transport
+capture never creates bound credentials, a bound credential from another binder
+is unauthenticated, and every new scope re-verifies it, so revocation and current
+eligibility still apply. `token.Tokens` binds redeemed tickets this way.
+
 ## Request scopes and ownership
 
 ```go

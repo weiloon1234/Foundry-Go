@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/audit"
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/datatable"
+	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/extensions/slots"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -44,7 +45,7 @@ var LocaleKey = foundation.NewKey[*i18n.Catalog](string(LocaleProvider))
 var HealthKey = foundation.NewKey[*health.Registry](string(HealthProvider))
 var AuditKey = foundation.NewKey[*audit.Recorder](string(AuditProvider))
 
-func registerFeatures(ctx context.Context, builder *foundation.Builder, settings Settings, source clock.Clock, constructors []Features, models []slots.Declaration) error {
+func registerFeatures(ctx context.Context, builder *foundation.Builder, settings Settings, source clock.Clock, constructors []Features, models []slots.Declaration, keys *encryption.Keyring) error {
 	if len(constructors) > 128 {
 		return fault.New(fault.Invalid, "too many feature declaration constructors")
 	}
@@ -54,9 +55,7 @@ func registerFeatures(ctx context.Context, builder *foundation.Builder, settings
 			return mergeFeatures(r, s, constructors, models)
 		})
 	}})
-	if err := registerEncryption(builder, settings.Encryption); err != nil {
-		return err
-	}
+	registerEncryption(builder, keys)
 	registerAuth(builder, s.Auth, source)
 	registerIdempotency(builder, s.Idempotency, settings.Services.Namespace)
 	if s.Locales.Enabled {

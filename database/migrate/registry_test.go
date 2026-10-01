@@ -71,6 +71,23 @@ func TestDefinitionCloneOwnsEverySlice(t *testing.T) {
 	}
 }
 
+func TestRegistryDefinitionReturnsOwnedSQL(t *testing.T) {
+	input := definitions()
+	input[1].Down = []string{"DROP SCHEMA foundry_ops"}
+	r := registry(t, input...)
+	definition, ok := r.Definition(baseKey)
+	if !ok || definition.SQL[0] != "CREATE SCHEMA foundry_ops" || definition.Down[0] != "DROP SCHEMA foundry_ops" || definition.Version != "v0.1.0" {
+		t.Fatalf("registered definition: %+v %t", definition, ok)
+	}
+	definition.SQL[0], definition.Down[0] = "changed", "changed"
+	if again, _ := r.Definition(baseKey); again.SQL[0] != "CREATE SCHEMA foundry_ops" || again.Down[0] != "DROP SCHEMA foundry_ops" {
+		t.Fatal("registry exposed owned SQL")
+	}
+	if _, ok := r.Definition(migrate.Key{Origin: "app", ID: "absent"}); ok {
+		t.Fatal("unregistered definition found")
+	}
+}
+
 func TestChecksumCoversWholeDefinitionWithoutBoundaryCollisions(t *testing.T) {
 	original := definitions()
 	first := registry(t, original...).Entries()[1].Checksum
