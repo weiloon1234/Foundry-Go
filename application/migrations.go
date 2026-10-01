@@ -63,9 +63,7 @@ func cloneMigrations(input []infrastructure.MigrationTarget) []infrastructure.Mi
 	for i := range result {
 		result[i].Definitions = slices.Clone(result[i].Definitions)
 		for j := range result[i].Definitions {
-			d := &result[i].Definitions[j]
-			d.SQL = slices.Clone(d.SQL)
-			d.Requires = slices.Clone(d.Requires)
+			result[i].Definitions[j] = result[i].Definitions[j].Clone()
 		}
 	}
 	return result

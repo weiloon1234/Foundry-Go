@@ -49,3 +49,32 @@ func TestPluginMigrationsKeepHistoricalReleaseAndOwnedSQL(t *testing.T) {
 		}
 	}
 }
+
+func TestPluginMigrationsSnapshotDownSQL(t *testing.T) {
+	key := foundation.NewKey[*migrate.Registry]("plugin.migrations")
+	appDefinition := migrate.Definition{Key: migrate.Key{Origin: "app", ID: "000_app"}, Version: "1.0.0", SQL: []string{"SELECT 0"}, Down: []string{"SELECT 0"}}
+	pluginDefinition := migrate.Definition{Key: migrate.Key{ID: "001_base"}, Version: "1.0.0", SQL: []string{"SELECT 1"}, Down: []string{"SELECT 1"}}
+	// Blank Down SQL is invalid, so a registry still sharing caller storage fails to build.
+	base := plugin.Module{Declaration: plugin.Manifest{ID: "base", Version: "1.0.0", Framework: "*"}, OnRegister: func(r *plugin.Registrar) error {
+		err := plugin.RegisterMigrations(r, key, pluginDefinition)
+		pluginDefinition.Down[0] = " "
+		return err
+	}}
+	module := foundation.Module{Name: "migrations", OnRegister: func(r *foundation.Registrar) error {
+		err := plugin.RegisterMigrationRegistry(r, key, appDefinition)
+		appDefinition.Down[0] = " "
+		return err
+	}}
+	app, err := foundation.NewBuilder().Register(module).RegisterPlugin(base).Build(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := foundation.Resolve(app.Services(), key)
+	if err != nil {
+		t.Fatal("registry retained mutable Down SQL: ", err)
+	}
+	entries := registry.Entries()
+	if len(entries) != 2 || !entries[0].Reversible || !entries[1].Reversible {
+		t.Fatalf("registered Down SQL lost: %+v", entries)
+	}
+}

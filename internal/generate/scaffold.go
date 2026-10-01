@@ -261,6 +261,9 @@ func %s() migrate.Definition {
 		Requires: []migrate.Key{},
 		// Add reviewed, transaction-compatible SQL. An empty list fails registry validation.
 		SQL: []string{%s},
+		// Optionally add reviewed SQL reversing SQL for an explicit migrate rollback.
+		// Empty keeps this migration irreversible; Down never changes its checksum.
+		Down: []string{},
 	}
 }
 `, pkg, framework+"/database/migrate", options.Name, options.Name, options.ID, options.Name, options.Name, options.Origin, options.Name, options.Version, createTableSQL(options.Create))

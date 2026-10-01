@@ -91,8 +91,7 @@ func (e *Environment) migrationGroups(targets []infrastructure.MigrationTarget) 
 		for _, d := range target.Definitions {
 			// Sharing a physical namespace may repeat an identical framework migration.
 			// Conflicting definitions still fail before opening a pool or applying SQL.
-			d.SQL = slices.Clone(d.SQL)
-			d.Requires = slices.Clone(d.Requires)
+			d = d.Clone()
 			if previous, ok := definitions[schema][d.Key]; ok && !reflect.DeepEqual(previous, d) {
 				return nil, fault.New(fault.Conflict, "shared test namespace has conflicting migration definitions")
 			}

@@ -47,8 +47,7 @@ func RegisterMigrations(r *Registrar, key foundation.Key[*migrate.Registry], def
 		if order > 0 {
 			return fault.New(fault.Invalid, "plugin migration was introduced after the installed plugin version")
 		}
-		definition.SQL = slices.Clone(definition.SQL)
-		definition.Requires = slices.Clone(definition.Requires)
+		definition = definition.Clone()
 		if err := foundation.Contribute(r, migrationContributions(key), fmt.Sprintf("%q.%q", definition.Key.Origin, definition.Key.ID), func(resolver foundation.Resolver) (migrate.Definition, error) {
 			if _, err := foundation.Resolve(resolver, migrationRegistryKey(key)); err != nil {
 				return migrate.Definition{}, err
@@ -68,10 +67,9 @@ func RegisterMigrationRegistry(r *Registrar, key foundation.Key[*migrate.Registr
 	if err := foundation.Provide(r, migrationRegistryKey(key), migrationRegistryRegistration{}); err != nil {
 		return err
 	}
-	owned := slices.Clone(definitions)
-	for i := range owned {
-		owned[i].SQL = slices.Clone(owned[i].SQL)
-		owned[i].Requires = slices.Clone(owned[i].Requires)
+	owned := make([]migrate.Definition, len(definitions))
+	for i, definition := range definitions {
+		owned[i] = definition.Clone()
 	}
 	return foundation.Factory(r, key, func(resolver foundation.Resolver) (*migrate.Registry, error) {
 		plugins, err := foundation.Contributions(resolver, migrationContributions(key))

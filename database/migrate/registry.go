@@ -61,6 +61,15 @@ type Definition struct {
 	Requires []Key
 }
 
+// Clone returns a copy that shares no SQL, Down or Requires storage with d.
+// Use it wherever a caller-owned definition is snapshotted before New.
+func (d Definition) Clone() Definition {
+	d.SQL = slices.Clone(d.SQL)
+	d.Down = slices.Clone(d.Down)
+	d.Requires = slices.Clone(d.Requires)
+	return d
+}
+
 // Entry is immutable migration metadata, returned as a caller-owned snapshot.
 // Checksum covers origin, ID, introduced version, ordered SQL and dependencies.
 type Entry struct {

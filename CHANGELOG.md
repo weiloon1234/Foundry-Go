@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Migration definition snapshots
+
+- `migrate.Definition.Clone` copies `SQL`, `Down` and `Requires`. Plugin
+  migration registration, `App.Migrations()` and the PostgreSQL testkit now use
+  it, so registered `Down` SQL no longer shares storage with the caller and a
+  later caller edit cannot change what a rollback executes.
+- `foundry make migration` emits an empty `Down` field for optional reviewed
+  rollback SQL. Leaving it empty keeps the migration irreversible.
+
 ### Client, routing and extension-slot follow-ups
 
 - The TypeScript SDK reports a response that breaks its contract after the server

@@ -33,6 +33,9 @@ func TestScaffoldsCompileAndRemainConsumerOwned(t *testing.T) {
 	if strings.Contains(string(first), generatedHeader) {
 		t.Fatal("handwritten scaffold marked generator-owned")
 	}
+	if !strings.Contains(string(first), "Down: []string{}") {
+		t.Fatal("migration scaffold omits its optional Down SQL")
+	}
 	secondDir := fixture(t, "package sample\n")
 	secondPath, err := Scaffold(t.Context(), migrationScaffold(secondDir))
 	if err != nil {

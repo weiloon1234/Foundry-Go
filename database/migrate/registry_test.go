@@ -62,6 +62,15 @@ func TestRegistryOrdersDependenciesAndOwnsDefinitions(t *testing.T) {
 	}
 }
 
+func TestDefinitionCloneOwnsEverySlice(t *testing.T) {
+	original := migrate.Definition{Key: appKey, Version: "v0.1.0", SQL: []string{"CREATE TABLE users (id bigint PRIMARY KEY)"}, Down: []string{"DROP TABLE users"}, Requires: []migrate.Key{baseKey}}
+	clone := original.Clone()
+	original.SQL[0], original.Down[0], original.Requires[0] = "changed", "changed", migrate.Key{Origin: "changed", ID: "changed"}
+	if clone.SQL[0] != "CREATE TABLE users (id bigint PRIMARY KEY)" || clone.Down[0] != "DROP TABLE users" || clone.Requires[0] != baseKey {
+		t.Fatal("cloned definition shares mutable storage")
+	}
+}
+
 func TestChecksumCoversWholeDefinitionWithoutBoundaryCollisions(t *testing.T) {
 	original := definitions()
 	first := registry(t, original...).Entries()[1].Checksum
