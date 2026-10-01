@@ -10,6 +10,7 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -79,6 +80,21 @@ func (g *packageGraph) loadPackage(path string) (*packageInput, error) {
 		}
 		declared = declared || mayDeclare(data)
 		input.files = append(input.files, source{name, data, full})
+	}
+	for _, path := range sortedNames(g.overlay) {
+		name := filepath.Base(path)
+		if filepath.Dir(path) != absolute {
+			continue
+		}
+		if slices.Contains(target.GoFiles, name) {
+			return nil, fmt.Errorf("proposed file %s already exists", input.displayName(name))
+		}
+		full, err := parser.ParseFile(input.fset, input.displayName(name), g.overlay[path], parser.ParseComments)
+		if err != nil {
+			return nil, err
+		}
+		declared = declared || mayDeclare(g.overlay[path])
+		input.files = append(input.files, source{name, g.overlay[path], full})
 	}
 	if !declared {
 		// Without directives there is nothing to discover. The complete overlay

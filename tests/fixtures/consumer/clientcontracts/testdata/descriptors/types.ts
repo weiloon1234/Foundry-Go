@@ -26,4 +26,14 @@ const second = index.field("pair").at(1), state = index.field("states").field("d
 const card = sdk.operation("unionsEcho").field("body", "method").variant("kind", "card").field("token");
 // @ts-expect-error Payload is not a union; its enum-typed state is not a discriminator.
 sdk.schema("foundry.test/consumer/clientcontracts.Payload").variant("state", "draft");
-void [values, quoted, limit, readers, issues, ranges, rangeBytes, numbers, rounded, ownerTemplate, ownerValue, second, state, card];
+// A LocaleMap is a collection of supported locales: entries bind with at().
+const titles = sdk.operation("itemsEcho").field("body", "titles"), title = titles.at("ms"), anyTitle = titles.element();
+// @ts-expect-error Locale keys are entries, not declared fields.
+titles.field("en");
+// @ts-expect-error Only supported locales are request keys.
+titles.at("fr");
+// A JSON body root is described through body(); a named-part body has no JSON root.
+const rootCard = sdk.operation("unionsMethod").body().variant("kind", "card").field("token");
+// @ts-expect-error Multipart and form bodies have no JSON root to describe.
+sdk.operation("uploadsProfile").body();
+void [values, quoted, limit, readers, issues, ranges, rangeBytes, numbers, rounded, ownerTemplate, ownerValue, second, state, card, rootCard, title, anyTitle];

@@ -57,7 +57,7 @@ export async function checkForms(sdk, api, request) {
   assert.equal(sent.status, "succeeded"); assert.equal(sent.value.large, request.body.large);
   form.field(op.field("body", "natural")).set("my");
   const server = await form.submit(api); assert.equal(server.status, "failed");
-  assert.ok(server.error instanceof sdk.APIError);
+  assert.ok(server.error instanceof sdk.APIError); assert.equal(server.outcome, "error_response");
   assert.equal(form.getSnapshot().issues[0].path, "/body/natural");
   assert.equal(form.field(op.field("body", "natural")).getSnapshot().issues[0].code, "foundry.uppercase");
   form.reset();
@@ -110,7 +110,22 @@ export async function checkForms(sdk, api, request) {
   const failing = form.submit(wrapped); optional.set("newer input"); rejected.reject(new Error("server failure"));
   const failed = await failing;
   assert.equal(failed.status, "failed"); assert.equal(failed.changed, true); assert.equal(form.getSnapshot().issues.length, 0);
-  assert.equal(form.getSnapshot().status, "idle");
+  assert.equal(failed.outcome, "unknown"); assert.equal(form.getSnapshot().status, "idle");
+  // A response that broke its contract means the server may have acted: the
+  // outcome is unknown and its issues point at the response, not the fields.
+  wrapped.itemsEcho = async () => { throw new sdk.ResponseContractError(201, [{ path: "/amount", code: "type" }]); };
+  const broken = await form.submit(wrapped);
+  assert.equal(broken.status, "failed"); assert.equal(broken.outcome, "unknown"); assert.equal(broken.changed, false);
+  assert.deepEqual(form.getSnapshot().issues.map(issue => [issue.path, issue.code]), [["", "form_response"]]);
+  // Only a contract failure the SDK raised before sending is not_sent; a
+  // ContractError from application code (here a wrapper) proves nothing about
+  // the server, so its outcome stays unknown.
+  wrapped.itemsEcho = (input, options) => api.itemsEcho({ ...input, body: { ...input.body, large: 5 } }, options);
+  const local = await form.submit(wrapped);
+  assert.equal(local.status, "failed"); assert.equal(local.outcome, "not_sent");
+  wrapped.itemsEcho = async () => { throw new sdk.ContractError([{ path: "/body/amount", code: "type" }]); };
+  const foreign = await form.submit(wrapped);
+  assert.equal(foreign.outcome, "unknown"); assert.equal(form.getSnapshot().issues[0].path, "/body/amount");
 
   const aborted = deferred(), outer = new AbortController();
   wrapped.itemsEcho = async () => aborted.promise;
@@ -147,6 +162,15 @@ export async function checkForms(sdk, api, request) {
   const streamed = await lateStream; assert.equal(streamed.status, "succeeded"); assert.equal(streamed.changed, true); assert.equal(closed, 0);
   await streamed.value.close(); assert.equal(closed, 1); download.dispose();
 
+  // A union request body is bound and edited from its root.
+  const methodOp = sdk.operation("unionsMethod");
+  const methodForm = sdk.createForm(methodOp, { body: { kind: "card", token: "t", sequence: "1", labels: [] } });
+  const rootToken = methodForm.field(methodOp.body().variant("kind", "card").field("token"));
+  rootToken.set("root token"); assert.equal(methodForm.getSnapshot().values.body.token, "root token");
+  methodForm.field(methodOp.body()).set({ kind: "bank_transfer", reference: "bank" });
+  assert.throws(() => rootToken.set("wrong variant"), sdk.ContractError);
+  const rootSent = await methodForm.submit(api);
+  assert.equal(rootSent.status, "succeeded"); assert.equal(rootSent.value.kind, "bank_transfer"); methodForm.dispose();
   const unionOp = sdk.operation("unionsEcho");
   const unionForm = sdk.createForm(unionOp, { body: { method: { kind: "card", token: "card-token", sequence: "7", labels: [] } } });
   const union = unionOp.field("body", "method"), tokenField = unionForm.field(union.variant("kind", "card").field("token"));
@@ -207,7 +231,27 @@ export async function checkForms(sdk, api, request) {
   });
   const hanging = listening.run(); taskForm.field(op.field("body", "optional")).set("latest");
   await hanging; await new Promise(resolve => setTimeout(resolve, 0)); assert.equal(seen, "latest");
-  listening.dispose(); taskForm.dispose();
+  listening.dispose();
+  // dependsOn scopes a task to the fields it reads: unrelated writes and unparsed
+  // text keep its run and result; a write at, above or below a dependency, an
+  // element template's entry, reset and cancel end them.
+  const scopedWork = []; const scoped = taskForm.task(async () => { const work = deferred(); scopedWork.push(work); return work.promise; },
+    { dependsOn: [op.field("body", "optional"), op.field("body", "tags").element()] });
+  const kept = scoped.run(); taskForm.field(op.field("body", "amount")).set("7"); taskForm.field(op.field("body", "amount")).setText("8");
+  scopedWork[0].resolve("kept"); assert.equal((await kept).status, "succeeded"); assert.equal(scoped.getSnapshot().value, "kept");
+  taskForm.field(op.field("body", "large")).set("1"); assert.equal(scoped.getSnapshot().value, "kept");
+  for (const edit of [() => taskForm.field(op.field("body", "optional")).set("scoped"), () => taskForm.field(op.field("body", "tags")).set(["a", "b"]), () => taskForm.field(op.field("body", "tags").at(1)).set("c"), () => scoped.cancel(), () => taskForm.reset()]) {
+    const ended = scoped.run(); edit(); scopedWork[scopedWork.length - 1].resolve("stale");
+    assert.equal((await ended).status, "canceled"); assert.equal(scoped.getSnapshot().value, undefined);
+  }
+  // Unscoped tasks keep ending on every edit, including unparsed text.
+  const whole = taskForm.task(async () => "whole"), wholeRun = whole.run(); taskForm.field(op.field("body", "amount")).setText("9");
+  assert.equal((await wholeRun).status, "canceled"); whole.dispose();
+  // Dependencies are this operation's descriptors; an empty list would ignore every edit.
+  for (const dependsOn of [[], [unionOp.field("body", "method")], [{ path: "/body/optional" }], "optional", Array(65).fill(op.field("body", "optional"))]) {
+    assert.throws(() => taskForm.task(async () => null, { dependsOn }), sdk.ContractError);
+  }
+  scoped.dispose(); taskForm.dispose();
 
   const independent = sdk.createForm(op, request); assert.equal(independent.getSnapshot().dirty, false); independent.dispose();
   const cyclic = {}; cyclic.body = cyclic;

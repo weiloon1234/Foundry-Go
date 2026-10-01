@@ -4,9 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
-	"net"
-	"os"
-	"strconv"
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/cache"
@@ -16,8 +13,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/pubsub"
-	"github.com/weiloon1234/Foundry-Go/redis"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
+	redistest "github.com/weiloon1234/Foundry-Go/testkit/redis"
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
@@ -27,25 +24,7 @@ func TestNativeNamedDatabaseAndSharedRedisIsolation(t *testing.T) {
 	c := infrastructure.DefaultConnectionSettings()
 	c.Primary = infrastructure.PostgreSQLSettingsFromConfig(pgtest.Config(t))
 	s.Database.Connections = infrastructure.DatabaseConnections{"default": c, "reports": c}
-	addr := os.Getenv("FOUNDRY_TEST_REDIS_ADDR")
-	if addr == "" {
-		if os.Getenv("FOUNDRY_TEST_REDIS_REQUIRED") == "1" {
-			t.Fatal("required Redis endpoint missing")
-		}
-		t.Skip("Redis acceptance is opt-in")
-	}
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	number, err := strconv.ParseUint(port, 10, 16)
-	if err != nil {
-		t.Fatal(err)
-	}
-	r := infrastructure.DefaultRedisConnectionSettings()
-	r.Host = host
-	r.Port = uint16(number)
-	r.TLS = redis.DisableTLS
+	r := infrastructure.RedisSettingsFromConfig(redistest.Config(t))
 	s.Redis.Connections = infrastructure.RedisConnections{"default": r, "second": r}
 	for name, settings := range s.Cache.Stores {
 		settings.Driver = infrastructure.RedisCache

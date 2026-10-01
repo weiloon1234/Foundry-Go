@@ -6,7 +6,7 @@ import (
 )
 
 // renderedNames are module-level declarations the renderer itself emits.
-var renderedNames = []string{"API", "ContractTypes", "ErrorResponse", "Identity", "OperationInputs", "Operations", "PresentationKind", "Realtime", "ReceivedContractTypes"}
+var renderedNames = []string{"API", "ContractTypes", "ErrorResponse", "Identity", "Locale", "LocaleMap", "OperationInputs", "OperationJSONBodies", "Operations", "PresentationKind", "Realtime", "ReceivedContractTypes"}
 
 var capitalizedIdentifier = regexp.MustCompile(`\b[A-Z][A-Za-z0-9_$]*\b`)
 

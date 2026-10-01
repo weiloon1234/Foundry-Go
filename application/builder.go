@@ -191,6 +191,9 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	if name := s.Features.ExtensionCleanup.Jobs; name != "" {
+		jobDeclarations = append(jobDeclarations, extensionCleanupDeclaration(name))
+	}
 	if s.Worker.Archive, err = prepareJobArchive(s); err != nil {
 		return nil, err
 	}

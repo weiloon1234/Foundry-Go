@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
@@ -33,9 +34,27 @@ type renderer struct {
 	document manifest.Document
 	names    map[contract.TypeID]string
 	// received names tolerant variants of server-output schemas whose values can
-	// contain enum cases; other schemas are received unchanged.
+	// contain enum cases or locale keys; other schemas are received unchanged.
 	received map[contract.TypeID]string
-	out      bytes.Buffer
+	// receivedEnums marks received variants that admit unknown enum values.
+	receivedEnums map[contract.TypeID]bool
+	out           bytes.Buffer
+}
+
+// localeKey is the key type of maps keyed by i18n.LocaleID, taken from the
+// contract's own key declaration rather than a second spelling of its name.
+var localeKey = sync.OnceValue(func() contract.TypeID {
+	info, err := contract.StringJSONKey[i18n.LocaleID]().Description()
+	if err != nil {
+		return ""
+	}
+	return info.Value.ID
+})
+
+// localeKeyed reports a map keyed by i18n.LocaleID. Requests type those keys as
+// the catalog's supported locales; received values keep open string keys.
+func localeKeyed(typ contract.Type) bool {
+	return typ.Kind == contract.MapKind && typ.Key != nil && len(typ.Key.Value.Cases) == 0 && typ.Key.Value.ID == localeKey()
 }
 
 // Render returns one deterministic, dependency-free ES2022 TypeScript module.
@@ -60,7 +79,11 @@ func Render(source *manifest.Manifest) ([]byte, error) {
 			return nil, fault.New(fault.Invalid, "TypeScript array length exceeds its exact index range")
 		}
 	}
-	r := renderer{document: document, names: names, received: receivedNames(document, names, reserved)}
+	if localeKey() == "" {
+		return nil, fault.New(fault.Internal, "TypeScript locale key declaration is unavailable")
+	}
+	received, receivedEnums := receivedNames(document, names, reserved)
+	r := renderer{document: document, names: names, received: received, receivedEnums: receivedEnums}
 	fmt.Fprintf(&r.out, "%s\n// Requires ES2022 and DOM transport types; no runtime package imports.\n\n", generate.ArtifactHeader)
 	fmt.Fprintf(&r.out, "export const manifestVersion = %d as const;\n", manifest.Version)
 	fmt.Fprintf(&r.out, "const runtimePolicy: RuntimePolicy = { maxDepth: %d, decimalDigits: %d, metadataBytes: %d, messageBytes: %d };\n", contract.MaxJSONDepth, decimal.MaxDigits, manifest.MaxBytes, i18n.MaxTextBytes)
@@ -111,10 +134,13 @@ func (r *renderer) receivedName(id contract.TypeID) string {
 	return r.names[id]
 }
 
-// receivedNames selects schemas reachable from responses, errors, server events
-// and presence whose values can contain enum cases. Their tolerant variants
-// admit UnknownEnumValue, so a deployed client can receive additive values.
-func receivedNames(document manifest.Document, names map[contract.TypeID]string, reserved map[string]bool) map[contract.TypeID]string {
+// receivedNames selects schemas reachable from responses, errors, server events,
+// presence, table rows, notification payloads and explicit schemas whose values
+// can contain enum cases or locale-keyed maps. Their tolerant variants admit
+// UnknownEnumValue and open locale keys, so a deployed client can receive
+// additive values and locales. The second result marks the variants that
+// contain enum cases.
+func receivedNames(document manifest.Document, names map[contract.TypeID]string, reserved map[string]bool) (map[contract.TypeID]string, map[contract.TypeID]bool) {
 	types := make(map[contract.TypeID]contract.Type, len(document.Types))
 	for _, typ := range document.Types {
 		types[typ.ID] = typ
@@ -132,22 +158,28 @@ func receivedNames(document manifest.Document, names map[contract.TypeID]string,
 		}
 		return result
 	}
-	enums := make(map[contract.TypeID]bool)
-	for changed := true; changed; {
-		changed = false
-		for _, typ := range document.Types {
-			if enums[typ.ID] {
-				continue
-			}
-			enum := len(typ.Cases) != 0
-			for _, child := range children(typ) {
-				enum = enum || enums[child]
-			}
-			if enum {
-				enums[typ.ID], changed = true, true
+	// containing marks the types whose values can contain a type matching seed.
+	containing := func(seed func(contract.Type) bool) map[contract.TypeID]bool {
+		found := make(map[contract.TypeID]bool)
+		for changed := true; changed; {
+			changed = false
+			for _, typ := range document.Types {
+				if found[typ.ID] {
+					continue
+				}
+				contains := seed(typ)
+				for _, child := range children(typ) {
+					contains = contains || found[child]
+				}
+				if contains {
+					found[typ.ID], changed = true, true
+				}
 			}
 		}
+		return found
 	}
+	enums := containing(func(typ contract.Type) bool { return len(typ.Cases) != 0 })
+	locales := containing(localeKeyed)
 	var queue []contract.TypeID
 	if document.ErrorType != "" {
 		queue = append(queue, document.ErrorType)
@@ -169,6 +201,17 @@ func receivedNames(document manifest.Document, names map[contract.TypeID]string,
 			}
 		}
 	}
+	// Table rows and notification payloads are server output too, and explicit
+	// schemas are what decodeReceived decodes without a route.
+	for _, table := range document.Tables {
+		queue = append(queue, table.Row)
+	}
+	for _, notification := range document.Notifications {
+		for _, channel := range notification.Channels {
+			queue = append(queue, channel.Payload)
+		}
+	}
+	queue = append(queue, document.Roots...)
 	reachable := make(map[contract.TypeID]bool)
 	for len(queue) != 0 {
 		id := queue[0]
@@ -185,7 +228,7 @@ func receivedNames(document manifest.Document, names map[contract.TypeID]string,
 	}
 	result := make(map[contract.TypeID]string)
 	for _, typ := range document.Types {
-		if !reachable[typ.ID] || !enums[typ.ID] {
+		if !reachable[typ.ID] || !enums[typ.ID] && !locales[typ.ID] {
 			continue
 		}
 		name := names[typ.ID] + "Received"
@@ -195,7 +238,7 @@ func receivedNames(document manifest.Document, names map[contract.TypeID]string,
 		taken[name] = true
 		result[typ.ID] = name
 	}
-	return result
+	return result, enums
 }
 
 func (r *renderer) expression(typ contract.Type) string { return r.renderExpression(typ, false) }
@@ -248,6 +291,10 @@ func (r *renderer) renderExpression(typ contract.Type, received bool) string {
 			result += " & { readonly length: " + strconv.Itoa(length) + " }"
 		}
 	case contract.MapKind:
+		if localeKeyed(typ) && !received {
+			result = "LocaleMap<" + typeName(typ.Element) + ">"
+			break
+		}
 		key := "string"
 		if typ.Key != nil && typ.Key.Value.Format == contract.UUIDFormat {
 			key = "Identity<" + quote(string(typ.Key.Value.ID)) + ">"
@@ -290,13 +337,27 @@ func (r *renderer) renderExpression(typ contract.Type, received bool) string {
 }
 
 func (r *renderer) types() {
-	r.out.WriteString("declare const identity: unique symbol;\nexport type Identity<Owner extends string> = string & { readonly [identity]: Owner };\n\n")
+	r.out.WriteString("declare const identity: unique symbol;\nexport type Identity<Owner extends string> = string & { readonly [identity]: Owner };\n")
+	locales := "string"
+	if r.document.Locales != nil && len(r.document.Locales.Supported) != 0 {
+		values := make([]string, 0, len(r.document.Locales.Supported))
+		for _, locale := range r.document.Locales.Supported {
+			values = append(values, quote(string(locale)))
+		}
+		locales = strings.Join(values, " | ")
+	}
+	fmt.Fprintf(&r.out, "/** The locale catalog's supported locales; any string when none is exported. */\nexport type Locale = %s;\n", locales)
+	r.out.WriteString("declare const localeKeyed: unique symbol;\n/** Input keyed by supported locales; descriptors bind its entries with at() and element(). Received values keep string keys. */\nexport type LocaleMap<V> = Readonly<Partial<Record<Locale, V>>> & { readonly [localeKeyed]?: never };\n\n")
 	for _, typ := range r.document.Types {
 		fmt.Fprintf(&r.out, "export type %s = %s;\n", r.typeName(typ.ID), r.expression(typ))
 	}
 	for _, typ := range r.document.Types {
 		if name, ok := r.received[typ.ID]; ok {
-			fmt.Fprintf(&r.out, "/** Server output of %s; unknown enum values decode as UnknownEnumValue. */\nexport type %s = %s;\n", r.typeName(typ.ID), name, r.renderExpression(typ, true))
+			note := "its locale keys stay open strings"
+			if r.receivedEnums[typ.ID] {
+				note = "unknown enum values decode as UnknownEnumValue"
+			}
+			fmt.Fprintf(&r.out, "/** Server output of %s; %s. */\nexport type %s = %s;\n", r.typeName(typ.ID), note, name, r.renderExpression(typ, true))
 		}
 	}
 	r.out.WriteString("\nexport interface ContractTypes {\n")

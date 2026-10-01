@@ -39,7 +39,11 @@ such a model to generated declarations using E01's scope-equality guarantee.
 - **Scaffolds.** `foundry make model` slot flags were not delivered in this
   series. Scaffolds keep their check-first publication; declaring slot fields
   and `DefineExtensions` by hand stays short, and an attachment policy always
-  needs an explicit disk, which a scaffold could not choose.
+  needs an explicit disk, which a scaffold could not choose. Follow-up delivered
+  on 2026-09-30: `--translated`, `--attachment`, `--attachments`, `--metadata`
+  and a required `--disk` for attachments. The model is checked together with
+  the declarations generation creates for it, then generated; its attachment
+  policies accept nothing until the application lists media types.
 
 ## Documentation
 

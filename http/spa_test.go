@@ -248,7 +248,15 @@ func TestAssetMountsDeferToCoveringSPAs(t *testing.T) {
 		"main.js":    {Data: []byte("home bundle")},
 	})))
 	bundles := assetsForTest(t, DefaultAssetsConfig(FilesystemAssets(fstest.MapFS{"app.js": {Data: []byte("immutable bundle")}})))
-	base, err := NewRouter(public.Mount("public", "/").Register(), bundles.Mount("admin.bundles", "/admin/assets").Register())
+	// The root mount's middleware marks what the mount answers. A more specific
+	// SPA answers outside it; the equal root SPA extends the mount, inside it.
+	marked := DefineMiddleware("public.marked", func(next stdhttp.Handler) (stdhttp.Handler, error) {
+		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+			w.Header().Set("X-Public-Mount", "1")
+			next.ServeHTTP(w, r)
+		}), nil
+	})
+	base, err := NewRouter(public.Mount("public", "/").WithMiddleware(marked).Register(), bundles.Mount("admin.bundles", "/admin/assets").Register())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,16 +274,17 @@ func TestAssetMountsDeferToCoveringSPAs(t *testing.T) {
 		path, accept string
 		status       int
 		body         string
+		mount        bool
 	}{
-		{"/admin/login", "text/html", 200, "admin shell"},
-		{"/admin/shadow.js", "", 404, ""},
-		{"/admin/api/users", "text/html", 404, ""},
-		{"/admin/assets/app.js", "", 200, "immutable bundle"},
-		{"/admin/assets/other.js", "", 404, ""},
-		{"/robots.txt", "", 200, "robots"},
-		{"/main.js", "", 200, "home bundle"},
-		{"/dashboard", "text/html", 200, "home shell"},
-		{"/missing.js", "text/html", 404, ""},
+		{"/admin/login", "text/html", 200, "admin shell", false},
+		{"/admin/shadow.js", "", 404, "", false},
+		{"/admin/api/users", "text/html", 404, "", false},
+		{"/admin/assets/app.js", "", 200, "immutable bundle", false},
+		{"/admin/assets/other.js", "", 404, "", false},
+		{"/robots.txt", "", 200, "robots", true},
+		{"/main.js", "", 200, "home bundle", true},
+		{"/dashboard", "text/html", 200, "home shell", true},
+		{"/missing.js", "text/html", 404, "", true},
 	} {
 		recorder := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", tc.path, nil)
@@ -285,6 +294,9 @@ func TestAssetMountsDeferToCoveringSPAs(t *testing.T) {
 		router.ServeHTTP(recorder, request)
 		if recorder.Code != tc.status || tc.status == 200 && recorder.Body.String() != tc.body {
 			t.Fatal("mount and SPA precedence", tc.path, recorder.Code, recorder.Body.String())
+		}
+		if (recorder.Header().Get("X-Public-Mount") != "") != tc.mount {
+			t.Fatal("mount middleware ownership", tc.path, recorder.Header())
 		}
 	}
 	// The router without SPAs keeps the mount's own miss.

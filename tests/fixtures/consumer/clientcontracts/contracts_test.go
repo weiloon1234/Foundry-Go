@@ -57,7 +57,7 @@ func TestConsumerClientManifestKeepsRealFeatureBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if document.Version != manifest.Version || len(document.HTTP) != 22 || document.Realtime == nil || len(document.Realtime.Channels) != 2 || document.Locales == nil || len(document.Enums) != 1 || len(document.Permissions) != 1 {
+	if document.Version != manifest.Version || len(document.HTTP) != 23 || document.Realtime == nil || len(document.Realtime.Channels) != 2 || document.Locales == nil || len(document.Enums) != 1 || len(document.Permissions) != 1 {
 		t.Fatal("registered metadata missing")
 	}
 	if len(document.Tables) != 1 || document.Tables[0].ID != "reports.members" || !document.Tables[0].Exports || len(document.Notifications) != 1 || len(document.Notifications[0].Channels) != 1 || document.Notifications[0].Channels[0].Payload != "foundry.test/consumer/clientcontracts.Member" {

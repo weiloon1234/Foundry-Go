@@ -2,6 +2,9 @@ package application
 
 import (
 	"context"
+	"maps"
+	"slices"
+
 	"github.com/weiloon1234/Foundry-Go/attachments"
 	"github.com/weiloon1234/Foundry-Go/audit"
 	"github.com/weiloon1234/Foundry-Go/clock"
@@ -74,7 +77,7 @@ func registerFeatures(ctx context.Context, builder *foundation.Builder, settings
 		}})
 	}
 	if s.Extensions.Enabled {
-		registerExtensions(builder, s, source, models)
+		registerExtensions(builder, s, source, models, slices.Sorted(maps.Keys(settings.Services.Database.Connections)))
 	}
 	if s.Notifications.Enabled {
 		c := s.Notifications
@@ -264,6 +267,9 @@ func (s Services) ModelExtensions() (slots.Runtime, error) {
 	}
 	var runtime slots.Runtime
 	var err error
+	if runtime.Store, err = s.ExtensionStore(); err != nil {
+		return slots.Runtime{}, err
+	}
 	if runtime.Metadata, err = s.Metadata(); err != nil {
 		return slots.Runtime{}, err
 	}

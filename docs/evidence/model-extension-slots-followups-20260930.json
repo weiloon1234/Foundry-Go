@@ -1,0 +1,349 @@
+{
+  "format": 1,
+  "date": "2026-09-30",
+  "status": "accepted",
+  "scope": "Follow-ups the user delegated on 2026-09-30: response-contract failures and form outcomes, JSON body-root descriptors, form task dependsOn, registration-time password output checks, SPA hand-off outside mount middleware, TypeScript locale union, model scaffold slot flags, cross-pool deletion cleanup, in-transaction attachment publication, shared subject keys in slot loads and the generator alias fix",
+  "requested_by": "The user, who delegated each design decision",
+  "working_tree_base": "1c55e2b plus uncommitted follow-up changes",
+  "distribution": "Local changes only; no commit, push, tag or publication",
+  "environment": {
+    "go": "go version go1.27.1 darwin/arm64",
+    "database": "Native local PostgreSQL through FOUNDRY_TEST_POSTGRES_URL (not recorded)",
+    "host": "Apple M4 Max, same host and database for before/after measurements"
+  },
+  "decisions": [
+    {
+      "item": "Response contract failures",
+      "decision": "ResponseContractError (a ContractError with the received status) for failures after the server answered; failed form submissions carry outcome not_sent, error_response or unknown"
+    },
+    {
+      "item": "Request bodies with a union, array or map root",
+      "decision": "operation(name).body() describes the JSON body root; OperationJSONBodies types it; form, multipart and raw bodies reject it"
+    },
+    {
+      "item": "Task invalidation on any edit",
+      "decision": "FormTaskOptions.dependsOn with operation-owned descriptors, element() wildcards, at most 64 entries; unscoped tasks unchanged"
+    },
+    {
+      "item": "Password outputs checked only at export",
+      "decision": "Checked at registration by the datatable declaration, notification registry and WebSocket registry with contract.PasswordTypes"
+    },
+    {
+      "item": "SPA inside a less specific mount's middleware",
+      "decision": "A route hand-off runs before route state, budget and middleware for a strictly more specific SPA; an equal-prefix SPA still extends the mount"
+    },
+    {
+      "item": "TypeScript locale union",
+      "decision": "Locale from the manifest's supported locales (string without one); LocaleMap<V> for request maps keyed by i18n.LocaleID with descriptor collection navigation; received values keep string keys; OpenAPI unchanged"
+    },
+    {
+      "item": "Scaffold slot flags",
+      "decision": "--translated, --attachment, --attachments, --metadata (empty DTO) and --disk; checked through an in-memory generation overlay, published through the single-file scaffold protocol, then generated"
+    },
+    {
+      "item": "Cleanup only on the extension store's pool",
+      "decision": "Observers on every configured connection; foreign-pool deletions clean after commit in a store transaction, skipping an owner that exists again; Runtime.Store enables it"
+    },
+    {
+      "item": "Attachments outside the caller's transaction",
+      "decision": "Two-phase: Prepare/PrepareFile stores the upload in the manager's own transactions before the caller's transaction (locking an existing owner); ReplaceIn/AddIn publish the Prepared upload through Join using only the caller's transaction; after-commit cleanup and variants (revised 2026-10-01 after review)"
+    },
+    {
+      "item": "Repeated subject-key derivation",
+      "decision": "Owner.ActiveSubjects returns index-aligned subject keys reused by slot loaders; public Batch.Get keeps full validation; scan-time persisted-identity checks are kept"
+    }
+  ],
+  "measurements": {
+    "benchmark": "tests/fixtures/consumer/articles BenchmarkSlotListLoading, two translated fields and one metadata value, -count 6, medians in ms",
+    "before": {
+      "slots/100": 28.1,
+      "slots/1000": 171.9,
+      "explicit-batches/100": 27.3,
+      "explicit-batches/1000": 153.8
+    },
+    "after": {
+      "slots/100": 25.2,
+      "slots/1000": 156.8,
+      "explicit-batches/100": 26.8,
+      "explicit-batches/1000": 165.6
+    },
+    "repeat_after": {
+      "slots/1000_range": "149.1-155.4",
+      "explicit-batches/1000_range": "156.4-167.4"
+    },
+    "notes": "The explicit-batch path's code is unchanged apart from one index slice; its movement is run-to-run variance, visible in the repeat run"
+  },
+  "checks": {
+    "verify": {
+      "command": [
+        "make",
+        "verify"
+      ],
+      "exit_code": 0,
+      "seconds": 996,
+      "note": "Ran before the final audit edits; fmt-check, vet and docs-check were rerun on the final source"
+    },
+    "typescript": {
+      "command": [
+        "make",
+        "typescript-check"
+      ],
+      "exit_code": 0,
+      "seconds": 12
+    },
+    "agent_smoke": {
+      "command": [
+        "make",
+        "agent-smoke"
+      ],
+      "exit_code": 0,
+      "seconds": 264
+    },
+    "postgres_first": {
+      "command": [
+        "make",
+        "test-postgres"
+      ],
+      "exit_code": 2,
+      "seconds": 1040,
+      "failure": "websocket TestSocketMaintenanceAndTraceFollowConnectionOwnership: socket shutdown stranded observations; reproduced at HEAD 1c55e2b (6 of 15 race runs), so pre-existing"
+    },
+    "postgres_final": {
+      "command": [
+        "make",
+        "test-postgres"
+      ],
+      "exit_code": 0,
+      "seconds": 1556,
+      "packages_ok": 274,
+      "note": "Final source, including the websocket fix and audit edits"
+    },
+    "final_source": {
+      "command": [
+        "make",
+        "fmt-check",
+        "vet",
+        "docs-check"
+      ],
+      "exit_code": 0,
+      "seconds": 8
+    },
+    "mutations": "Each new guard was broken deliberately and its test failed: dependsOn scoping (3), registration password checks (5), SPA hand-off, Locale typing (3), scaffold generation check and overlay keying, cross-pool registration and retained skip, staging owner lock and after-commit work, index-based subject reuse",
+    "race": "websocket race runs after the fix: target test 40 of 40, full package 3 of 3"
+  },
+  "audit_corrections": [
+    "After-commit cross-pool cleanup and attachment post-commit work detach from caller cancellation; the store's and manager's call timeouts and shutdown bound them",
+    "TypeScript rendering fails explicitly if the locale key declaration is unavailable instead of dropping locale typing",
+    "A subpackage scaffold test proves the generation check applies the proposed file",
+    "websocket: a connection ends its observation before signalling completion, fixing Hub.Stop returning with an active observation"
+  ],
+  "limits": [
+    "Without features.extension_cleanup.jobs, cross-connection cleanup stays process-local after-commit work (a crash before it runs leaves orphans for the prune commands); every connection must reach the model table in the same database",
+    "In-transaction attachment writes keep the caller's transaction open while the file is read and stored",
+    "OpenAPI keeps open object keys for locale-keyed maps",
+    "Attachment scaffold policies accept nothing until the application lists media types"
+  ],
+  "durable_cleanup": {
+    "date": "2026-10-01",
+    "requested_by": "The user, choosing a Laravel-style jobs/failed_jobs design made atomic on every connection",
+    "design": "features.extension_cleanup.jobs names a job connection with an outbox destination. Every configured database connection gets a jobs.PrepareOutboxIn producer for that destination and the outbox schema; deletions through a connection other than the extension store's enqueue foundry.extensions.cleanup (slots.CleanupRequest: owner name and persisted identity) inside the deletion transaction. The handler settles in a store transaction: it skips an owner that exists again, otherwise runs metadata/translations/attachments CleanupIdentity, which share the typed Cleanup logic. Invalid owners or identities fail permanently; other failures retry and surface in failed-job inspection. Only deletion observers receive the queue, so descriptors in job handlers never depend on the dispatcher.",
+    "validation": "Build refuses the setting without features.extensions, features.outbox and an outbox destination for the connection; construction requires a durable job backend; startup compares current_database() and pg_postmaster_start_time() of every connection with the outbox connection's, answered by each pool's primary",
+    "tests": [
+      "articles TestDurableCleanupAfterDeletionThroughAnotherPool: rolled-back deletion leaves no job; committed deletion leaves one outbox row and its data while no worker runs; a worker started afterwards removes metadata, translations and the logo",
+      "articles TestDurableCleanupRequiresTheOutbox: Build refusals",
+      "articles TestDurableCleanupRefusesAConnectionToAnotherDatabase: Start refuses a connection to another database on the same server"
+    ],
+    "mutations": "Observers without the queue, a no-op handler and a disabled startup comparison each failed their test"
+  },
+  "editor_probes": {
+    "date": "2026-10-01",
+    "harness": "internal/agent TestRealGoplsConsumer with the pinned bin/gopls: completion, hover and definition on real consumer expressions",
+    "probes": [
+      "extension-owner-active-subjects (owner.ActiveSubjects)",
+      "extension-identity-cleanup (metadata.CleanupIdentity)",
+      "extension-cleanup-job (slots.DefineCleanupJob)",
+      "extension-cleanup-queue (runtime.CleanupQueue)",
+      "extension-file-prepare (x.Logo.PrepareFile)",
+      "extension-files-in-transaction (x.Galleries.AddIn)",
+      "lifecycle-deletion-observer (lifecycle.NewDeletionObserver)"
+    ],
+    "probe_sites": "New behaviour tests supply the expressions: TestOwnerActiveSubjectsFollowReferenceOrder, identity cleanup after deletion in TestGeneratedDeclarationCleansExtensionDataOnHardDelete, TestCleanupJobDirectAssembly",
+    "result": "All 13 extension probes passed (6 new)"
+  },
+  "final_verification": {
+    "date": "2026-10-01",
+    "source": "Working tree after the durable outbox cleanup, editor probes and the /code-review max --fix corrections (13 fixed, 2 partly fixed findings), on top of 1c55e2b; uncommitted",
+    "checks": [
+      {
+        "command": [
+          "make",
+          "verify"
+        ],
+        "exit_code": 0,
+        "seconds": 859,
+        "packages_ok": 277
+      },
+      {
+        "command": [
+          "make",
+          "typescript-check"
+        ],
+        "exit_code": 0,
+        "seconds": 5
+      },
+      {
+        "command": [
+          "make",
+          "agent-smoke"
+        ],
+        "exit_code": 0,
+        "seconds": 262,
+        "note": "Includes the six new extension editor probes"
+      },
+      {
+        "command": [
+          "make",
+          "test-postgres"
+        ],
+        "exit_code": 0,
+        "seconds": 1668,
+        "packages_ok": 274,
+        "environment": "FOUNDRY_TEST_REDIS_ADDR set and FOUNDRY_TEST_REDIS_REQUIRED=1"
+      }
+    ],
+    "redis_gated_tests": "Verbose rerun confirmed the durable-cleanup tests executed, none skipped: TestDurableCleanupAfterDeletionThroughAnotherPool, TestDurableCleanupRequiresTheOutbox, TestDurableCleanupRefusesAConnectionToAnotherDatabase, TestCleanupJobDirectAssembly, TestCleanupAfterDeletionThroughAnotherPool, TestOwnerActiveSubjectsFollowReferenceOrder"
+  },
+  "review_findings_fixed": {
+    "date": "2026-10-01",
+    "findings": [
+      {
+        "finding": "Observers on every connection hooked all writes and blocked set-based updates",
+        "fix": "lifecycle.NewDeletionObserver: a write observer kind only deletions count and dispatch (Observers.ForDeletion, HasDeletionObservers); the query layer scopes the hooked decision and dispatch by mutation kind; generated slot cleanup declares it",
+        "tests": "lifecycle TestDeletionObserversJoinOnlyDeletions; articles TestCleanupAfterDeletionThroughAnotherPool: UpdateAll works without WithoutModelHooks on another connection, DeleteAll and ForceDeleteAll still require it",
+        "mutation": "Counting deletion observers for every write made the UpdateAll check fail"
+      },
+      {
+        "finding": "In-transaction attachment writes needed a second pooled connection while holding the caller's",
+        "fix": "Two-phase API: PrepareFile/Prepare before the transaction, ReplaceIn/AddIn(prepared) inside it using only that transaction; Discard; publishable() isolation restriction removed since the upload commits before the snapshot",
+        "tests": "articles TestSlotAttachmentsPublishInsideTheCallersTransaction on a one-connection pool (MaxOpen 1, 2 s acquire timeout); TestPreparedUploadAfterTheSnapshotIsReportedInvisible",
+        "mutation": "One extra store read during publication timed out on the one-connection pool"
+      },
+      {
+        "finding": "Unlocked in-transaction staging could overshoot MaxOwnerIntents",
+        "fix": "Prepare locks an existing owner while counting and recording the intent; a not-yet-created owner (key chosen by its creator) is staged unlocked and publication recounts under the owner lock",
+        "tests": "articles TestPrepareLocksAnExistingOwner: Prepare waits for a held owner row lock",
+        "mutation": "Staging without the owner lock let Prepare proceed and failed the test"
+      }
+    ],
+    "gates": [
+      {
+        "command": [
+          "make",
+          "verify"
+        ],
+        "exit_code": 0,
+        "seconds": 1018
+      },
+      {
+        "command": [
+          "make",
+          "typescript-check"
+        ],
+        "exit_code": 0,
+        "seconds": 4
+      },
+      {
+        "command": [
+          "make",
+          "agent-smoke"
+        ],
+        "exit_code": 0,
+        "seconds": 260
+      },
+      {
+        "command": [
+          "make",
+          "test-postgres"
+        ],
+        "exit_code": 0,
+        "seconds": 2010,
+        "packages_ok": 274,
+        "environment": "FOUNDRY_TEST_REDIS_ADDR set and FOUNDRY_TEST_REDIS_REQUIRED=1"
+      }
+    ]
+  },
+  "review_cleanups": {
+    "date": "2026-10-01",
+    "items": [
+      {
+        "item": "Scaffold field docs",
+        "change": "ScaffoldOptions.FieldDocumentation and Framework feed every generation a scaffold runs (generation()); foundry make model/endpoint/notification accept --field-docs, other scaffolds refuse it",
+        "test": "TestModelScaffoldGeneratesFieldDocumentation; CLI validation cases",
+        "mutation": "Dropping FieldDocumentation from generation() failed the test"
+      },
+      {
+        "item": "Duplicated password-output checks",
+        "change": "contract.RejectPasswordOutput replaces the HTTP, datatable, notification and WebSocket copies",
+        "test": "TestPasswordTypesFollowEveryOutputPath plus the existing owner tests"
+      },
+      {
+        "item": "Repeated intent-count query",
+        "change": "ownerIntentBound shared by staging (adding 1) and publication (adding 0)"
+      },
+      {
+        "item": "Redundant validation calls",
+        "change": "The repeated chain (ReplaceFileIn/joinable/bound then ReplaceIn/bound) disappeared with the two-phase API; each slot method binds once and its collection checks once"
+      },
+      {
+        "item": "SPA looked up twice per asset request",
+        "change": "The mount handler looks up an equal SPA only on an asset miss; hits use the hand-off's single lookup"
+      },
+      {
+        "item": "Scaffold loads the package graph three times",
+        "change": "The overlay check clones the first graph (withOverlay, shared export map, own importer and type-check cache) instead of listing packages again, and extensions/slots joins the first export listing; a slot scaffold runs go list four times instead of seven",
+        "test": "The subpackage collision test proves the clone still applies the proposed file"
+      },
+      {
+        "item": "Duplicated test helpers",
+        "change": "testkit/redis.Config replaces four Redis endpoint parsers (application, infrastructure, configuredprofile, articles); withWriter and fixture.throughWriter replace three copies in the articles tests"
+      }
+    ],
+    "gates": [
+      {
+        "command": [
+          "make",
+          "verify"
+        ],
+        "exit_code": 0,
+        "seconds": 744,
+        "packages_ok": 277
+      },
+      {
+        "command": [
+          "make",
+          "typescript-check"
+        ],
+        "exit_code": 0,
+        "seconds": 4
+      },
+      {
+        "command": [
+          "make",
+          "agent-smoke"
+        ],
+        "exit_code": 0,
+        "seconds": 262
+      },
+      {
+        "command": [
+          "make",
+          "test-postgres"
+        ],
+        "exit_code": 0,
+        "seconds": 1405,
+        "packages_ok": 274,
+        "environment": "FOUNDRY_TEST_REDIS_ADDR set and FOUNDRY_TEST_REDIS_REQUIRED=1"
+      }
+    ]
+  }
+}

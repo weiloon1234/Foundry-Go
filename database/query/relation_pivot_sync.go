@@ -129,7 +129,8 @@ func (r ThroughRelation[M, N, P]) pivotWrite(ctx context.Context, writer databas
 				return PivotChanges[P]{}, err
 			}
 		}
-		hooked := r.pivot.definition.hasWriteHooks || lifecycle.HasObservers[P](tx.Observers())
+		// Sync both creates and removes pivots, so deletion observers count.
+		hooked := r.pivot.definition.hasWriteHooks || lifecycle.HasDeletionObservers[P](tx.Observers())
 		var changes PivotChanges[P]
 		if mode == pivotAttach {
 			changes.Attached, err = r.createPivots(ctx, tx, sourceKey, desired, create, hooked)

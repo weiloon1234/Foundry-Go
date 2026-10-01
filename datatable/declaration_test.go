@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/auth"
@@ -95,6 +96,34 @@ func TestTableRejectsMissingAuthorityAndConflictingDeclarations(t *testing.T) {
 				t.Fatal("invalid table exposed partial metadata")
 			}
 		})
+	}
+}
+
+// Rows are output: one reaching a password hint fails its declaration, whether
+// or not clients are exported. Password hints are input-only.
+func TestTableRowsRejectPasswordPresentation(t *testing.T) {
+	spec := reportSpec()
+	schema, err := spec.Row.Description()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, typ := range schema.Types {
+		for j, property := range typ.Properties {
+			if typ.ID == schema.Root && property.Name == "note" {
+				schema.Types[i].Properties[j].Presentation = contract.Presentation{Kind: contract.PasswordPresentation}
+			}
+		}
+	}
+	spec.Row = contract.DefineJSON[ReportRow](schema)
+	if err := spec.Row.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	table := Define(spec)
+	if err := table.Validate(); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "password") {
+		t.Fatal("password row accepted", err)
+	}
+	if _, err := NewRegistry(table.Registration()); err == nil {
+		t.Fatal("password row registered")
 	}
 }
 

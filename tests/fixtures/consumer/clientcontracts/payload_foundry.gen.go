@@ -9,6 +9,7 @@ import (
 	models "foundry.test/consumer/models"
 	foundrycontract "github.com/weiloon1234/Foundry-Go/contract"
 	decimal "github.com/weiloon1234/Foundry-Go/decimal"
+	i18n "github.com/weiloon1234/Foundry-Go/i18n"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	temporal "github.com/weiloon1234/Foundry-Go/temporal"
 	foundryvalidation "github.com/weiloon1234/Foundry-Go/validation"
@@ -44,6 +45,7 @@ var foundryPayloadJSON = sync.OnceValue(func() foundrycontract.JSON[Payload] {
 				{Name: "quoted", Type: "quoted:int64", Required: true},
 				{Name: "state", Type: "foundry.test/consumer/localization.Status", Required: true},
 				{Name: "tags", Type: "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0", Required: true},
+				{Name: "titles", Type: "github.com/weiloon1234/Foundry-Go/value.Optional[map[github.com/weiloon1234/Foundry-Go/i18n.LocaleID]string]", Required: false},
 				{Name: "when", Type: "github.com/weiloon1234/Foundry-Go/temporal.DateTime", Required: true},
 			},
 		},
@@ -79,6 +81,10 @@ var foundryPayloadJSON = sync.OnceValue(func() foundrycontract.JSON[Payload] {
 		{ID: "github.com/weiloon1234/Foundry-Go/value.Optional[github.com/weiloon1234/Foundry-Go/value.Nullable[string]]", Kind: foundrycontract.Kind("alias"), Nullable: true,
 			Element: "github.com/weiloon1234/Foundry-Go/value.Nullable[string]",
 		},
+		{ID: "github.com/weiloon1234/Foundry-Go/value.Optional[map[github.com/weiloon1234/Foundry-Go/i18n.LocaleID]string]", Kind: foundrycontract.Kind("alias"), Nullable: false,
+			Element: "go:3b116365e8100fa0774841a4f3971426d59a3d3b2a85917e7c2c2cd61ae68f67",
+		},
+		foundrycontract.JSONMapType[map[i18n.LocaleID]string]("go:3b116365e8100fa0774841a4f3971426d59a3d3b2a85917e7c2c2cd61ae68f67", "string", "github.com/weiloon1234/Foundry-Go/i18n.LocaleID", foundrycontract.StringJSONKey[i18n.LocaleID]()),
 		{ID: "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0", Kind: foundrycontract.Kind("array"), Nullable: true,
 			Element: "string",
 		},
@@ -138,6 +144,8 @@ type PayloadValidationFieldSet struct {
 	State foundryvalidation.Field[Payload, localization.Status]
 	// Tags validates the declared JSON property "tags".
 	Tags foundryvalidation.Field[Payload, []string]
+	// Titles validates the declared JSON property "titles".
+	Titles foundryvalidation.Field[Payload, foundryvalue.Optional[map[i18n.LocaleID]string]]
 	// When validates the declared JSON property "when".
 	When foundryvalidation.Field[Payload, temporal.DateTime]
 }
@@ -201,6 +209,9 @@ var foundryPayloadValidationFields = sync.OnceValue(func() PayloadValidationFiel
 		}),
 		Tags: foundryvalidation.DefineField("tags", func(input Payload) []string {
 			return input.Tags
+		}),
+		Titles: foundryvalidation.DefineField("titles", func(input Payload) foundryvalue.Optional[map[i18n.LocaleID]string] {
+			return input.Titles
 		}),
 		When: foundryvalidation.DefineField("when", func(input Payload) temporal.DateTime {
 			return input.When

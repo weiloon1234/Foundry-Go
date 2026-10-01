@@ -82,23 +82,28 @@ func (m AssetMount) Register() RouteRegistration {
 	info.Assets = &metadata
 	// Static paths allow a final directory slash. All other structural path
 	// validation shares the ordinary path rules; application binders are unchanged.
-	return RouteRegistration{info: info, middlewares: slices.Clone(m.route.middlewares), pattern: string(GET) + " " + nativePath(segments), handler: stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-		// A more specific SPA owns its subtree: what it declines (a missing
-		// asset, an excluded path) is not looked up in this outer mount.
+	return RouteRegistration{info: info, middlewares: slices.Clone(m.route.middlewares), pattern: string(GET) + " " + nativePath(segments), handoff: func(w stdhttp.ResponseWriter, r *stdhttp.Request) bool {
+		// A more specific SPA owns its subtree, outside this mount and its
+		// middleware: what it declines (a missing asset, an excluded path) is
+		// 404, never a lookup in this outer mount.
 		spa := mountSPA(r, m.prefix)
-		if spa != nil && len(spa.prefix) > len(m.prefix) {
-			if !spa.serve(w, r) {
-				writeRoutingError(w, r, NotFound)
-			}
-			return
+		if spa == nil || len(spa.prefix) == len(m.prefix) {
+			return false
 		}
+		if !spa.serve(w, r) {
+			writeRoutingError(w, r, NotFound)
+		}
+		return true
+	}, handler: stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		if err := m.assets.config.Limits.checkRange(r.Header.Values("Range")); err != nil {
 			writeRoutingError(w, r, err)
 			return
 		}
 		selection, err := m.assets.selectAsset(r.Context(), r.PathValue(assetParameter), strings.HasSuffix(r.URL.Path, "/"))
 		if err != nil {
-			if spa != nil && len(spa.prefix) == len(m.prefix) && isMissingAsset(err) && spa.serve(w, r) {
+			// An equal SPA extends this mount: it answers the mount's misses
+			// inside the mount's middleware. Hits never look it up.
+			if spa := mountSPA(r, m.prefix); spa != nil && len(spa.prefix) == len(m.prefix) && isMissingAsset(err) && spa.serve(w, r) {
 				return
 			}
 			writeRoutingError(w, r, err)

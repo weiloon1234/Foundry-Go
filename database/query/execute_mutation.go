@@ -6,7 +6,6 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
@@ -79,7 +78,7 @@ func executeMutation[M any](ctx context.Context, writer database.Transactor, pla
 		return *new(M), fault.New(fault.Invalid, "WithoutModelHooks applies only to set-based writes; per-model writes always run hooks")
 	}
 	observers, known := writerObservers(writer)
-	if plan.query.definition != nil && (plan.query.definition.hasWriteHooks || !known || lifecycle.HasObservers[M](observers)) {
+	if plan.query.definition != nil && (plan.query.definition.hasWriteHooks || !known || observedBy[M](observers, plan.kind)) {
 		return executeHookedMutation(ctx, writer, plan)
 	}
 	if plan.kind == insertModel && plan.query.definition != nil {

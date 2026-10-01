@@ -31,6 +31,19 @@ Contradictory hints on enum fields and plain scalar transport fields now fail
 generation instead of registration. Declarations that passed before and export
 cleanly are unaffected.
 
+The follow-ups of 2026-09-30 add generated TypeScript names `Locale`,
+`LocaleMap` and `OperationJSONBodies`; a schema with one of those names is
+qualified after regeneration, so review explicit type imports. Request maps keyed
+by `i18n.LocaleID` change from `Record<string, V>` to `LocaleMap<V>`: code that
+wrote an unsupported locale now fails type checking, and descriptors address
+their entries with `.at(locale)` instead of `.field(...)`. Received values keep
+string keys. `FormTaskOptions` gained an operation type parameter with a default,
+and `failed` form submissions gained `outcome`; exhaustive matches on
+`ContractError` continue to match `ResponseContractError`. Registration now
+rejects password-hinted datatable rows, notification inbox and realtime
+payloads, presence members and server-to-client events that client export already
+refused.
+
 ## Modules and public Go APIs
 
 Root `go.mod` owns the supported Go requirement. All fixtures and development
@@ -94,6 +107,23 @@ all readers compatible with retained data before enabling new writers. Rollback
 must preserve a reader capable of consuming formats already written.
 
 ## Operational behavior
+
+A SPA more specific than a matching asset mount no longer runs inside that
+mount's route middleware or budget; move middleware that must cover SPA
+responses to the kernel or router. Model extension cleanup observers are
+registered on every configured database connection: a model deleted through a
+connection other than the extension store's is cleaned after commit instead of
+failing or leaving orphans, and that connection must reach the model table in the
+same database. Direct assembly sets `slots.Runtime.Store` for this. With
+`features.extension_cleanup.jobs`, that cleanup is an outbox-enqueued job instead:
+each configured connection must reach the outbox's database (startup refuses one
+that does not), and a worker must consume the job connection's default queue.
+Every connection now carries a deletion observer for slot-owning models: their
+set-based deletions (`DeleteAll`, `ForceDeleteAll`) need `WithoutModelHooks()` on
+every connection, and per-model deletions take the observed path there, while
+creates, updates, `UpdateAll` and `Increment` are unaffected. In-transaction
+attachment publication is two-phase: `PrepareFile` stores the file before the
+transaction, and `ReplaceIn`/`AddIn` use only the caller's transaction.
 
 The [stabilization handoff](guides/stabilization-20260929.md) records the boilerplate
 upgrade order and additional authentication/retry corrections. Custom session

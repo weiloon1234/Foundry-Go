@@ -162,6 +162,14 @@ pruning still apply.
 
 Slot-owning models must be written through the extension store's database,
 because cleanup joins the owner's transaction. The guide states this requirement.
+Follow-up delivered on 2026-09-30: application assembly registers the observer on
+every configured connection. A deletion through another connection is cleaned
+after it commits, in a store transaction that skips an owner that exists again;
+`slots.Runtime.Store` enables this, and orphan maintenance remains the backstop.
+With `features.extension_cleanup.jobs` (delivered 2026-10-01) the deletion instead
+enqueues the idempotent `foundry.extensions.cleanup` job through the outbox in its
+own transaction; every connection gets an outbox producer, and startup verifies
+that each reaches the outbox's database.
 An application that already composes `Cleanup` manually must remove that hook when
 adopting generated declarations. Acceptance verifies that a duplicate cleanup is
 harmless.

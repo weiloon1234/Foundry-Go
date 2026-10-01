@@ -75,10 +75,8 @@ func (r Response[R]) outputPresentation() error {
 	if err != nil {
 		return err
 	}
-	if contract.PasswordTypes(schema.Types)[schema.Root] {
-		return fault.New(fault.Invalid, "password presentation is input-only; declare an explicit response view")
-	}
-	return nil
+	// Responses declare an explicit view instead.
+	return contract.RejectPasswordOutput(schema, "response")
 }
 
 // WithPresentation attaches public hints to a typed path field. Path segments

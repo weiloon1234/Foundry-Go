@@ -82,7 +82,7 @@ func executeHookedMutation[M any](ctx context.Context, writer database.Transacto
 		if tx != nil {
 			observers = tx.Observers()
 		}
-		registered := lifecycle.HasObservers[M](observers)
+		registered := observedBy[M](observers, plan.kind)
 		if registered && !plan.query.definition.hasObserverHooks {
 			return *new(M), fault.New(fault.Invalid, "registered model observers require a generated observer adapter; regenerate the model")
 		}
@@ -114,7 +114,7 @@ func executeHookedMutation[M any](ctx context.Context, writer database.Transacto
 		if err := ctx.Err(); err != nil {
 			return *new(M), err
 		}
-		hooks, err := plan.query.definition.writeHooks(ctx, observers)
+		hooks, err := plan.query.definition.writeHooks(ctx, observersFor(observers, plan.kind))
 		if err != nil {
 			return *new(M), err
 		}

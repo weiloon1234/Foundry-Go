@@ -155,6 +155,7 @@ details and defaults.
 | `worker.archive.*` | Failed-job archive sink, `services.JobArchive()` and its migrations | [Failed-job archive](jobs-operations.md#durable-failed-job-archive) |
 | `features.events.queued_listeners`, `listener_connection`, `listener_queue` | Jobs for `application.ListenQueued` listeners | [Events](events.md#queued-listeners-subscribers-and-test-fakes) |
 | `features.outbox.kernels` | Kernels that run the outbox publisher (all when empty) | [Outbox](outbox.md#publisher-throughput-backoff-and-deployment) |
+| `features.extension_cleanup.jobs` | The `foundry.extensions.cleanup` job and an outbox producer on every database connection, so slot cleanup after deletions through other connections is crash-safe | [Durable cleanup](model-extension-slots.md#durable-cleanup-through-the-outbox) |
 | `encryption.key_id`, `key`, `previous`; `features.auth.mfa.*` | `services.Encryption()`, `CookieEncrypter()`, `MFA()` and `application.MFACommand()` | [Encryption](encryption.md#application-key-ring), [MFA](mfa.md) |
 | `features.health.configured_connections`, `configured_storage`, `configured_mail` | Database/Redis/realtime, disk and mailer readiness probes | [Readiness](readiness-and-maintenance.md) |
 | `features.observability.trace_sample_ratio`, `trace_batch_size`, `error_log.*` | Ratio sampling, batch export (`application.WithTraceBatchExporter`) and the structured error reporter; pool, queue, realtime and log metrics | [Observability](observability.md) |

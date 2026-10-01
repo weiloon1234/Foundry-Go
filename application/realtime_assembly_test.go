@@ -19,6 +19,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/logging"
+	redistest "github.com/weiloon1234/Foundry-Go/testkit/redis"
 	client "github.com/weiloon1234/Foundry-Go/testkit/websocket"
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
@@ -197,7 +198,7 @@ func TestManagedPublisherShutdownWaitsForItsOperations(t *testing.T) {
 	s := settings()
 	s.HTTP.Enabled = false
 	s.Realtime.Publisher = true
-	s.Services.Redis.Connections = infrastructure.RedisConnections{"default": nativeRedis(t)}
+	s.Services.Redis.Connections = infrastructure.RedisConnections{"default": infrastructure.RedisSettingsFromConfig(redistest.Config(t))}
 	connection := infrastructure.DefaultRealtimeConnectionSettings()
 	connection.Driver, connection.Redis = infrastructure.RedisRealtime, "default"
 	connection.Cluster.Namespace = keyspace.Namespace{Application: "publisher-" + rand.Text()[:8], Environment: "test"}

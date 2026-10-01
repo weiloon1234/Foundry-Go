@@ -6,6 +6,7 @@ import (
 	"io"
 	"mime"
 
+	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/filename"
 	"github.com/weiloon1234/Foundry-Go/internal/workscope"
@@ -24,9 +25,10 @@ type FileSource interface {
 	ClientContentType() string
 }
 
-// ReplaceFile replaces owner's collection with file. Attachments publish
-// outside any caller transaction, so commit the owner first; inspect
-// Result.Publication when an error is returned.
+// ReplaceFile replaces owner's collection with file, publishing in the
+// manager's own transaction, so commit the owner first; inspect
+// Result.Publication when an error is returned. To publish inside a
+// transaction, PrepareFile before it begins and ReplaceIn inside it.
 func (s slotDefinition[M, K, S]) ReplaceFile(ctx context.Context, owner M, file FileSource) (Result[M, K], error) {
 	return withFile(ctx, file, func(upload Upload) (Result[M, K], error) { return s.Replace(ctx, owner, upload) })
 }
@@ -38,6 +40,44 @@ func (s slotDefinition[M, K, S]) Replace(ctx context.Context, owner M, upload Up
 		return Result[M, K]{}, err
 	}
 	return s.collection.Replace(ctx, m, s.binding.Reference(owner), upload)
+}
+
+// PrepareFile reads, checks and stores file for owner without publishing it,
+// so a later transaction publishes it with ReplaceIn (or AddIn) using only its
+// own connection. Call it before that transaction begins; owner may be a model
+// the transaction creates, with its key chosen first. See Collection.Prepare.
+func (s slotDefinition[M, K, S]) PrepareFile(ctx context.Context, owner M, file FileSource) (Prepared[M, K], error) {
+	return withFile(ctx, file, func(upload Upload) (Prepared[M, K], error) { return s.Prepare(ctx, owner, upload) })
+}
+
+// Prepare is PrepareFile for one upload.
+func (s slotDefinition[M, K, S]) Prepare(ctx context.Context, owner M, upload Upload) (Prepared[M, K], error) {
+	m, err := s.bound()
+	if err != nil {
+		return Prepared[M, K]{}, err
+	}
+	return s.collection.Prepare(ctx, m, s.binding.Reference(owner), upload)
+}
+
+// ReplaceIn publishes a prepared upload as owner's collection inside tx, a
+// transaction of the extension store's pool, using only that transaction; a
+// rollback unpublishes it. Old files are cleaned after tx commits. See
+// Collection.AddIn.
+func (s slotDefinition[M, K, S]) ReplaceIn(ctx context.Context, tx *database.Tx, owner M, prepared Prepared[M, K]) (Result[M, K], error) {
+	m, err := s.bound()
+	if err != nil {
+		return Result[M, K]{}, err
+	}
+	return s.collection.ReplaceIn(ctx, tx, m, s.binding.Reference(owner), prepared)
+}
+
+// Discard reclaims a prepared upload that will not be published.
+func (s slotDefinition[M, K, S]) Discard(ctx context.Context, prepared Prepared[M, K]) error {
+	m, err := s.bound()
+	if err != nil {
+		return err
+	}
+	return s.collection.Discard(ctx, m, prepared)
 }
 
 // Detach retires one file of owner's collection and cleans its storage.
@@ -118,6 +158,16 @@ func (s ManySlot[M, K]) Add(ctx context.Context, owner M, upload Upload) (Result
 	return s.collection.Add(ctx, m, s.binding.Reference(owner), upload)
 }
 
+// AddIn publishes a prepared upload into owner's collection inside tx; see
+// ReplaceIn.
+func (s ManySlot[M, K]) AddIn(ctx context.Context, tx *database.Tx, owner M, prepared Prepared[M, K]) (Result[M, K], error) {
+	m, err := s.bound()
+	if err != nil {
+		return Result[M, K]{}, err
+	}
+	return s.collection.AddIn(ctx, tx, m, s.binding.Reference(owner), prepared)
+}
+
 // Reorder sets the collection order to an exact permutation of its file IDs.
 func (s ManySlot[M, K]) Reorder(ctx context.Context, owner M, order []ID[M]) ([]Attachment[M, K], error) {
 	m, err := s.bound()
@@ -151,13 +201,13 @@ func AddFiles[F FileSource, M any, K comparable](ctx context.Context, slot ManyS
 
 // withFile opens file for one operation and closes it after the operation
 // returns; a close failure is reported beside the operation's result.
-func withFile[M any, K comparable](ctx context.Context, file FileSource, run func(Upload) (Result[M, K], error)) (Result[M, K], error) {
+func withFile[T any](ctx context.Context, file FileSource, run func(Upload) (T, error)) (T, error) {
 	if file == nil {
-		return Result[M, K]{}, invalid()
+		return *new(T), invalid()
 	}
 	reader, err := file.Open(ctx)
 	if err != nil {
-		return Result[M, K]{}, err
+		return *new(T), err
 	}
 	result, err := run(Upload{Source: reader, OriginalName: file.Name(), ContentType: hintOf(file)})
 	return result, errors.Join(err, reader.Close())

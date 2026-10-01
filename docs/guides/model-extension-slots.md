@@ -40,6 +40,11 @@ func (Article) DefineExtensions() ArticleExtensionSet {
 }
 ```
 
+`foundry make model Article --table articles --translated Title --attachment Logo
+--metadata SEO --disk public` scaffolds this shape and generates its declarations
+([scaffolding](developer-tooling-and-testing.md)); list each attachment policy's
+accepted media types before assembly.
+
 | Field type | Stored in | Policy entry | Zero policy |
 | --- | --- | --- | --- |
 | `translations.Text` | `foundry_model_translations`, one row per locale | `translations.Options` | 64 KiB per value, no required locale |
@@ -148,8 +153,10 @@ x := models.ArticleExtensions().From(runtime)
 Descriptors borrow the managers; they never look services up per call. A
 manager left nil, for example in a hand-built `slots.Runtime`, leaves that slot
 kind unbound. Direct foundation assembly registers a declaration with
-`declaration.Register(registrar, poolKey, resolve)` and passes its `Owner()` and
-`Parts()` to the managers it constructs.
+`declaration.Register(registrar, poolKey, resolve)` on each pool that deletes the
+model, passes its `Owner()` and `Parts()` to the managers it constructs, and sets
+`Runtime.Store` to their extension store; without it, cleanup can only join
+deletions on the store's own pool.
 
 ## Loading slots
 
@@ -186,9 +193,14 @@ the same as the equivalent explicit batch loads: about 1.9 ms for one article
 (within 5%), against 0.3–1.6 ms for the parent rows alone, on native PostgreSQL
 on an Apple M4 Max ([measurements](../evidence/model-extension-slots-performance-20260930.json);
 the [E05 baseline](../evidence/model-extension-slots-e05.json) was 280 ms for
-1000). Most of the remaining cost is decoding and checking each stored row's
-persisted owner identity, shared by both paths; load only the slots a response
-needs, such as `x.Title` and `x.Logo` for a listing.
+1000). Slot loading derives each parent's owner subject key once per batch and
+reuses it when filling parents, which lowered the median at 1000 parents from
+172 ms to 152–157 ms and at 100 from 28 ms to 25 ms on the same host
+([measurements](../evidence/model-extension-slots-followups-20260930.json)).
+Most of the remaining cost is decoding and checking each stored row's persisted
+owner identity, which is kept: it is what refuses a row whose stored identity
+does not match its owner, so it is not traded for speed. Load only the slots a
+response needs, such as `x.Title` and `x.Logo` for a listing.
 
 When the parent query runs in a `*database.Tx` of the extension store's pool,
 slot loading joins that transaction through a savepoint and sees its own
@@ -244,12 +256,44 @@ err = db.Transaction(ctx, func(tx *database.Tx) error {
 | --- | --- |
 | `TextSlot` | `SaveIn`/`Save` merge the supplied locales in one statement and keep the others. `SyncIn`/`Sync` make the supported locales exactly the input and enforce `Options.Require`; locales removed from the catalog keep their retained rows. `ForgetIn`/`Forget` remove one locale and `ClearIn`/`Clear` the field. Every entry is validated before writing; empty text is a present value. |
 | `ValueSlot` | `SaveIn`/`Save` store the value with the declared version and contract; `ForgetIn`/`Forget` remove it. |
-| `OneSlot`, `ManySlot` | `ReplaceFile`, `Replace`, `Detach` and `Clear`; `ManySlot` adds `AddFile`, `Add` and `Reorder`. |
+| `OneSlot`, `ManySlot` | `ReplaceFile`/`Replace`, `PrepareFile`/`Prepare` with `ReplaceIn`, `Discard`, `Detach` and `Clear`; `ManySlot` adds `AddFile`/`Add`, `AddIn` and `Reorder`. |
 
-Attachments keep their recoverable publication workflow outside the caller's
-transaction: commit the model, its text and metadata first, then publish files
-and inspect `Result.Publication` when an error is returned. `ReplaceFile` and
-`AddFile` accept any `attachments.FileSource`, such as `foundryhttp.UploadedFile`,
+An attachment write reads, checks and stores the file, recording the upload in
+the manager's own transactions first so it stays visible for recovery whatever
+happens next, and then publishes it. To publish inside a transaction, prepare the
+file before the transaction begins and publish it inside:
+
+```go
+id, err := model.NewID[models.Article]()
+logo, err := x.Logo.PrepareFile(ctx, models.Article{ID: id}, in.Logo)
+err = db.Transaction(ctx, func(tx *database.Tx) error {
+    article, err := models.QueryArticles().Create(ctx, tx, draft.SetID(id))
+    if err != nil {
+        return err
+    }
+    _, err = x.Logo.ReplaceIn(ctx, tx, article, logo)
+    return err
+})
+```
+
+`PrepareFile` locks an existing owner while recording the intent and accepts a
+model the transaction will create, as here with its key chosen first.
+`ReplaceIn` and `AddIn` publish using only the caller's transaction, which must
+belong to the extension store's pool: the owner can be a model that transaction
+created, the file becomes visible when it commits, and any isolation level works
+because the upload was committed before the transaction began (one prepared after
+a REPEATABLE READ snapshot is reported as not visible). A failed or rolled-back
+publication leaves the prepared upload stored for another attempt; `Discard`
+reclaims it at once, and `attachments.ReconcilePending` after `StoredGrace`.
+Replaced files are cleaned, and unqueued variants generated, after that
+transaction commits; a failure there is returned as its after-commit error and
+leaves the work for reconciliation. A prepared upload belongs to the collection
+and locale that prepared it.
+
+`ReplaceFile` and `AddFile` publish in the manager's own transaction instead:
+commit the model, its text and metadata first, then publish files and inspect
+`Result.Publication` when an error is returned. Both forms accept any
+`attachments.FileSource`, such as `foundryhttp.UploadedFile`,
 and open and close it within the call; request cleanup still owns the spooled
 file. The client content type is only the existing text hint, with parameters
 dropped. `attachments.AddFiles(ctx, x.Galleries, article, files)` publishes files
@@ -259,7 +303,8 @@ files before a failure stay published.
 ## Request input and validation
 
 Translated input needs no new DTO type. A `map[i18n.LocaleID]string` field is a
-JSON object keyed by locale, and a multipart form carries it as a JSON part
+JSON object keyed by locale (a [`LocaleMap<string>`](client-contracts.md) of the
+catalog's supported locales in the TypeScript client), and a multipart form carries it as a JSON part
 (`form:",json"`); use `value.Optional` of the map for PATCH omission. Validation
 comes from the slot:
 
@@ -325,13 +370,62 @@ APIs.
 
 ## Deletion cleanup
 
-Each declaration registers a hard-delete observer on the extension store's
-database. Its `Deleted` callback runs the existing metadata, translation and
-attachment cleanup for every configured manager inside the deletion transaction,
-so a parent rollback keeps the data and suppresses file deletion. Soft deletion
-keeps the data for restoration; force deletion removes it. Models with slots must
-be written through the extension store's database, because cleanup joins the
-owner's transaction.
+Each declaration registers a deletion observer (`lifecycle.NewDeletionObserver`)
+on every configured database connection. Its `Deleted` callback runs the existing
+metadata, translation and attachment cleanup for every configured manager. Soft
+deletion keeps the data for restoration; force deletion removes it. A deletion
+observer takes part only in deletions: creates, updates, `UpdateAll` and
+`Increment` keep their unhooked paths on every connection, while per-model
+deletions take the observed path and set-based deletions (`DeleteAll`,
+`ForceDeleteAll`), which would skip cleanup, still need `WithoutModelHooks()`.
+
+When the model is deleted through the extension store's connection, cleanup joins
+the deletion transaction, so a parent rollback keeps the data and suppresses file
+deletion. Through any other connection it cannot share that transaction: it runs
+after the deletion commits, in a store transaction that first checks the owner is
+still gone, so an owner deleted and created again keeps its data. A rolled-back
+deletion schedules nothing. By default that cleanup is process-local after-commit
+work: a failure is returned as the committed deletion's after-commit error, and a
+crash before it runs leaves orphans for the inspection and pruning commands below.
+The other connection must reach the model's table in the same database, as every
+extension read and owner check already requires.
+
+### Durable cleanup through the outbox
+
+Set `features.extension_cleanup.jobs` to a job connection to make that cleanup
+crash-safe, much as Laravel's database queue is when its `jobs` table shares the
+transaction's connection, but on every connection:
+
+```toml
+[features.outbox]
+enabled = true
+jobs = { default = "extensions" }
+
+[features.extension_cleanup]
+jobs = "default"
+```
+
+Every configured connection then writes the outbox that the publisher relays, so
+a deletion through another connection enqueues the `foundry.extensions.cleanup`
+job (`slots.CleanupRequest`: owner name and persisted identity) inside its own
+transaction. A rollback leaves no job, a commit keeps it, and a crash loses
+nothing: the job waits in the outbox until a worker consuming the connection's
+default queue runs it. The handler is idempotent. In a store transaction it skips
+an owner that exists again and otherwise runs every configured manager's cleanup
+(`CleanupIdentity`), which finds nothing left on a repeated delivery. Retries
+follow the default job policy; an exhausted or permanently failed job appears in
+[failed-job inspection](jobs-operations.md#inspect-and-explicitly-retry) and can be
+retried there, and an unknown owner or malformed identity fails permanently.
+
+Build refuses the setting unless `features.extensions` and `features.outbox` are
+enabled and `features.outbox.jobs` has a destination for the connection, which
+needs a durable job backend. Startup checks that every configured database
+connection reaches the outbox's database and server, so a connection elsewhere
+fails `Start` instead of writing rows nothing publishes. Deletions through the
+extension store's own connection still clean up inside their transaction. Direct
+assembly declares `slots.DefineCleanupJob(...).Declare(runtime)`, binds one
+producer per pool with `ToOutbox`, and sets `Runtime.CleanupQueue` for the deletion
+observers only, since descriptors never need it.
 
 Remove any hand-written cleanup hook when adopting slots; a duplicate cleanup
 after deletion is harmless. Bulk model deletes skip observers, so the existing

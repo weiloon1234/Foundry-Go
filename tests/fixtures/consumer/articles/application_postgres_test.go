@@ -30,10 +30,9 @@ type fixture struct {
 	schema   string
 }
 
-// startApplication assembles the consumer the way an application does: typed
-// settings plus Models(articles.FoundryExtensions()...). Migrations are applied
-// explicitly; startup never creates schemas or tables.
-func startApplication(t *testing.T) fixture {
+// articleSettings configures the consumer's features over the test database
+// and a new retained schema name, then applies configure.
+func articleSettings(t *testing.T, configure ...func(*application.Settings)) (application.Settings, string) {
 	t.Helper()
 	s := application.DefaultSettings()
 	s.HTTP.Enabled = false
@@ -51,6 +50,18 @@ func startApplication(t *testing.T) fixture {
 	s.Features.Locales.Enabled = true
 	s.Features.Locales.Locales = []i18n.LocaleID{"en", "ms", "zh"}
 	s.Features.Attachments.Enabled = true
+	for _, change := range configure {
+		change(&s)
+	}
+	return s, schema
+}
+
+// startApplication assembles the consumer the way an application does: typed
+// settings plus Models(articles.FoundryExtensions()...). Migrations are applied
+// explicitly; startup never creates schemas or tables.
+func startApplication(t *testing.T, configure ...func(*application.Settings)) fixture {
+	t.Helper()
+	s, schema := articleSettings(t, configure...)
 	app, err := application.New(s, application.WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))).
 		Models(articles.FoundryExtensions()...).
 		Build(t.Context())
@@ -102,6 +113,28 @@ func startApplication(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	return fixture{app: app, services: services, store: store, schema: schema}
+}
+
+// withWriter adds "writer", a second pool on the test database, so a test can
+// delete through a connection other than the extension store's.
+func withWriter(s *application.Settings) {
+	s.Services.Database.Connections["writer"] = s.Services.Database.Connections["default"]
+}
+
+// throughWriter runs run in a transaction of the "writer" pool, whose search
+// path selects the fixture's schema.
+func (f fixture) throughWriter(t *testing.T, run func(context.Context, *database.Tx) error) error {
+	t.Helper()
+	writer, err := f.services.Databases.Connection("writer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return writer.Transaction(t.Context(), func(tx *database.Tx) error {
+		if _, err := tx.Exec(t.Context(), `SET LOCAL search_path TO "`+f.schema+`"`); err != nil {
+			return err
+		}
+		return run(t.Context(), tx)
+	})
 }
 
 // createArticle writes one author and article in the store's schema.

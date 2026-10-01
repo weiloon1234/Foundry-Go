@@ -184,6 +184,11 @@ assert.equal(response.large, source.large); assert.equal(response.counter, sourc
 assert.equal(response.quoted, source.quoted); assert.equal(response.amount, source.amount); assert.equal(response.natural, "MY");
 assert.equal(response.keys[source.large], "max"); assert.equal(response.when, source.when);
 assert.equal(closes, beforeEchoClose + 1);
+// Locale-keyed input round-trips; the descriptor addresses entries by locale.
+const titled = await api.itemsEcho({ ...request, body: { ...payload, titles: { en: "Hello", ms: "Helo" } } });
+assert.deepEqual({ ...titled.titles }, { en: "Hello", ms: "Helo" });
+assert.equal(echoDescriptor.field("body", "titles").at("ms").path, "/body/titles/ms");
+assert.throws(() => echoDescriptor.field("body", "titles").field("en"), sdk.ContractError);
 for (const duration of ["P1Y2M3W4DT5H6M7.000008S", "@ 1 year 2 mons 3 days 4 hours 5 mins 6.000007 secs", "1-2 3 04:05:06.000007", "-1 day -02:03:04", "0"]) {
   const response = await api.itemsEcho({ ...request, body: { ...payload, duration } }); assert.equal(typeof response.duration, "string");
 }
@@ -334,8 +339,11 @@ for (const result of [
 ]) {
   let closed = 0;
   const badClient = sdk.createClient(async () => ({ headers: { "content-type": "application/json" }, ...result, close: () => { closed++; } }));
-  await assert.rejects(badClient.itemsEcho(request), sdk.ContractError); assert.equal(closed, 1);
+  // The server answered, so these are response failures carrying its status.
+  await assert.rejects(badClient.itemsEcho(request), error => error instanceof sdk.ResponseContractError && error instanceof sdk.ContractError && error.status === result.status); assert.equal(closed, 1);
 }
+// A request that never left the client stays an ordinary contract failure.
+await assert.rejects(api.itemsEcho({ ...request, body: { ...request.body, large: 5 } }), error => error instanceof sdk.ContractError && !(error instanceof sdk.ResponseContractError));
 const additiveTransport = async () => ({ status: 201, headers: { "content-type": "application/json" }, body: additive, close: () => {} });
 const additiveResult = await sdk.createClient(additiveTransport).itemsEcho(request);
 assert.ok(additiveResult.state instanceof sdk.UnknownEnumValue); assert.equal(Object.hasOwn(additiveResult, "added"), false);

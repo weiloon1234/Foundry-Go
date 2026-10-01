@@ -280,3 +280,31 @@ func TestExtensionSlotOwnerAndContractDiagnostics(t *testing.T) {
 		})
 	}
 }
+
+// Slot types reached only through an alias package outside the generated
+// package set still select the binding package's export data.
+func TestExtensionSlotTypesThroughAnAliasPackage(t *testing.T) {
+	dir := fixture(t, `package sample
+
+import (
+	"foundry.test/generator/apptypes"
+	"github.com/weiloon1234/Foundry-Go/model"
+)
+
+//foundry:model table=notes
+type Note struct {
+	ID    model.ID[Note]
+	Title apptypes.Text
+}
+`)
+	if err := os.MkdirAll(filepath.Join(dir, "apptypes"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(dir, "apptypes"), "types.go", "package apptypes\n\nimport \"github.com/weiloon1234/Foundry-Go/translations\"\n\n// Text is an application alias for translated text.\ntype Text = translations.Text\n")
+	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+		t.Fatal(err)
+	}
+	if note := generatedSnapshot(t, dir)["note_foundry.gen.go"]; !strings.Contains(note, "func NoteExtensionDeclaration() slots.Declaration") {
+		t.Fatalf("aliased slot did not generate its declaration:\n%s", note)
+	}
+}

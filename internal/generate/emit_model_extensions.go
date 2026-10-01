@@ -154,8 +154,8 @@ func (e *emitter) emitModelExtensions(m model, primary field) {
 		registrations[group] = append(registrations[group], descriptors+"."+slot.name+".Registration()")
 		packages[group] = kinds[slot.kind]
 	}
-	e.line("// %sExtensionDeclaration registers the extension owner and slots of %s, plus a hard-delete observer", m.name, m.name)
-	e.line("// that removes its extension data in the deletion transaction. Register it with application Builder.Models.")
+	e.line("// %sExtensionDeclaration registers the extension owner and slots of %s, plus a deletion observer", m.name, m.name)
+	e.line("// that removes its extension data when a model is hard-deleted through any connection. Register it with application Builder.Models.")
 	e.line("func %sExtensionDeclaration()%s.Declaration{", m.name, slots)
 	e.line("%s:=%sExtensions()", descriptors, m.name)
 	e.line("%s:=%s.Parts{", parts, slots)
@@ -172,7 +172,10 @@ func (e *emitter) emitModelExtensions(m model, primary field) {
 	e.line("}")
 	e.line("return %s.Declare(%sExtensionOwner().Registration(),%s,func(%s *%s.Registrar,%s %s.Key[*%s.DB],%s %s.ResolveRuntime)error{", slots, m.name, parts, registrar, foundation, pool, foundation, database, resolve, slots)
 	e.line("%s,%s:=%s.ObserverName[%s]();if %s!=nil{return %s}", name, errName, slots, m.name, errName, errName)
-	e.line("return Register%sObserver(%s,%s,New%sObserver(%s),func(%s %s.Resolver)(func()%sHooks,error){", m.name, registrar, pool, m.name, name, resolver, foundation, m.name)
+	// A deletion observer leaves creates, updates and set-based updates on
+	// their unhooked paths on every connection it is registered on.
+	lifecycle := e.use(framework + "/database/lifecycle")
+	e.line("return Register%sObserver(%s,%s,%s.NewDeletionObserver[%s,%sHooks](%s),func(%s %s.Resolver)(func()%sHooks,error){", m.name, registrar, pool, lifecycle, m.name, m.name, name, resolver, foundation, m.name)
 	e.line("%s,%s:=%s(%s);if %s!=nil{return nil,%s}", runtime, errName, resolve, resolver, errName, errName)
 	e.line("%s,%s:=%s.NewCleanup(%s,%sExtensionOwner(),%s,%s.FoundryReference);if %s!=nil{return nil,%s}", cleanup, errName, slots, runtime, m.name, parts, m.name, errName, errName)
 	e.line("%s:=%sHooks{Deleted:func(%s %s.Context,%s *%s.Tx,%s %sChanges)error{return %s.Deleted(%s,%s,%s.Before(),%s.Operation())}}", hooks, m.name, ctx, context, tx, database, changes, m.name, cleanup, ctx, tx, changes, changes)

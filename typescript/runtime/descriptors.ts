@@ -16,13 +16,15 @@ type IsUnion<T, Whole = T> = T extends Whole ? [Whole] extends [T] ? false : tru
 type MapKeys<T> = Extract<keyof NonNullable<T>, string>;
 /** Maps keyed by model IDs have branded Identity keys, not property names. */
 type IdentityKeyed<T> = [MapKeys<T>] extends [never] ? false : [MapKeys<T>] extends [Identity<string>] ? true : false;
-type ObjectFields<T> = NonNullable<T> extends string | number | boolean | readonly unknown[] | Blob | Upload ? never : true extends IsUnion<NonNullable<T>> ? never : string extends keyof NonNullable<T> ? never : IdentityKeyed<T> extends true ? never : MapKeys<T>;
+/** A LocaleMap is keyed by supported locales: a collection, not declared fields. */
+type LocaleKeyed<T> = NonNullable<T> extends object ? typeof localeKeyed extends keyof NonNullable<T> ? true : false : false;
+type ObjectFields<T> = NonNullable<T> extends string | number | boolean | readonly unknown[] | Blob | Upload ? never : true extends IsUnion<NonNullable<T>> ? never : string extends keyof NonNullable<T> ? never : IdentityKeyed<T> extends true ? never : LocaleKeyed<T> extends true ? never : MapKeys<T>;
 type SingleLiteral<V> = [V] extends [string] ? string extends V ? false : true extends IsUnion<V> ? false : true : false;
 type TagsEveryMember<T, K extends string> = false extends (T extends unknown ? K extends keyof T ? SingleLiteral<T[K]> : false : never) ? false : true;
 /** A key whose value is one string literal in every member: each variant's tag. An enum-typed property of a plain object is not one. */
 type Discriminator<T> = { [K in Extract<keyof NonNullable<T>, string>]: TagsEveryMember<NonNullable<T>, K> extends true ? K : never }[Extract<keyof NonNullable<T>, string>];
-type IsCollection<T> = NonNullable<T> extends readonly unknown[] ? true : string extends keyof NonNullable<T> ? true : IdentityKeyed<T>;
-type CollectionKey<T> = NonNullable<T> extends readonly unknown[] ? number : IdentityKeyed<T> extends true ? MapKeys<T> : string;
+type IsCollection<T> = NonNullable<T> extends readonly unknown[] ? true : string extends keyof NonNullable<T> ? true : IdentityKeyed<T> extends true ? true : LocaleKeyed<T>;
+type CollectionKey<T> = NonNullable<T> extends readonly unknown[] ? number : IdentityKeyed<T> extends true ? MapKeys<T> : LocaleKeyed<T> extends true ? MapKeys<T> : string;
 type ElementValue<T> = NonNullable<T> extends readonly (infer V)[] ? V : Exclude<NonNullable<T>[MapKeys<T>], undefined>;
 declare const descriptorType: unique symbol;
 /** Value/owner identity prevents fields of different operations or types being interchanged. */
@@ -51,6 +53,8 @@ export interface OperationDescriptor<K extends keyof Operations> {
   readonly validation: ValidationMetadata | undefined;
   readonly preparation: boolean;
   field<L extends Extract<keyof OperationInputs[K], string>, F extends ObjectFields<OperationInputs[K][L]>>(location: L, name: F): FieldDescriptor<NonNullable<OperationInputs[K][L]>[F], readonly [K, L, F]>;
+  /** The JSON request body from its root, including a union, array or map body. */
+  body(this: K extends keyof OperationJSONBodies ? OperationDescriptor<K> : never): FieldDescriptor<OperationJSONBodies[K & keyof OperationJSONBodies], readonly [K, "body"]>;
   validate(input: Operations[K]["request"], options?: ClientOptions): ValidationReport;
   call(client: API, input: Operations[K]["request"], options?: CallOptions): Promise<Operations[K]["response"]>;
 }
@@ -160,8 +164,15 @@ function describeOperation(name: string): unknown {
   if (typeof name !== "string") reject("", "unknown_operation");
   const op = descriptorDocument().http.find(op => op.name === name);
   if (!op) reject("", "unknown_operation");
+  // A JSON body is one typed value: its root descriptor serves both body()
+  // and field("body", name). Form and multipart bodies are named parameters.
+  const bodyRoot = (): { field(name: string): unknown } => {
+    if (!op.body?.type) reject("", "unknown_location");
+    return describeField(op.body.type, true, "/body", undefined, undefined, false, { operation: op.name, segments: ["body"], guards: [] }) as { field(name: string): unknown };
+  };
   return Object.freeze({
     name, metadata: op, validation: op.validation, preparation: op.preparation === true,
+    body: bodyRoot,
     field(location: string, name: string): unknown {
       if (typeof name !== "string") reject("", "unknown_field");
       let parameters: readonly (URLParameter | MultipartPart)[] | undefined;
@@ -169,10 +180,7 @@ function describeOperation(name: string): unknown {
         case "path": parameters = op.path; break;
         case "query": parameters = op.query; break;
         case "body":
-          if (op.body?.type) {
-            const descriptor = describeField(op.body.type, true, "/body", undefined, undefined, false, { operation: op.name, segments: ["body"], guards: [] }) as { field(name: string): unknown };
-            return descriptor.field(name);
-          }
+          if (op.body?.type) return bodyRoot().field(name);
           parameters = op.body?.parts ?? op.body?.fields; break;
         default: reject("", "unknown_location");
       }

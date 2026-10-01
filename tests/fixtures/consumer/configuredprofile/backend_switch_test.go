@@ -7,14 +7,11 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cloud/credentials"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
-	"github.com/weiloon1234/Foundry-Go/redis"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
-	"net"
+	redistest "github.com/weiloon1234/Foundry-Go/testkit/redis"
 	"net/url"
-	"os"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -35,23 +32,7 @@ func TestCacheDriverSwitchKeepsTypedConsumer(t *testing.T) {
 				s.Services.Database.Connections = infrastructure.DatabaseConnections{"default": connection}
 			}
 			if driver == infrastructure.RedisCache {
-				address := os.Getenv("FOUNDRY_TEST_REDIS_ADDR")
-				if address == "" {
-					if os.Getenv("FOUNDRY_TEST_REDIS_REQUIRED") == "1" {
-						t.Fatal("required Redis endpoint missing")
-					}
-					t.Skip("native Redis is opt-in")
-				}
-				host, port, err := net.SplitHostPort(address)
-				if err != nil {
-					t.Fatal("invalid Redis test endpoint")
-				}
-				number, err := strconv.ParseUint(port, 10, 16)
-				if err != nil {
-					t.Fatal("invalid Redis test port")
-				}
-				connection := infrastructure.DefaultRedisConnectionSettings()
-				connection.Host, connection.Port, connection.TLS = host, uint16(number), redis.DisableTLS
+				connection := infrastructure.RedisSettingsFromConfig(redistest.Config(t))
 				s.Services.Redis.Connections = infrastructure.RedisConnections{"default": connection}
 			}
 			for name, item := range s.Services.Cache.Stores {

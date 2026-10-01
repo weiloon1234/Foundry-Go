@@ -36,14 +36,17 @@ renders a UI nor owns credentials. Create a controller per screen/request.
 DTOs. Snapshots are owned, bounded and immutable. `field(descriptor)` preserves
 its operation and value type; a reusable schema descriptor or another operation's
 field is rejected. Root request containers (`body`, `query`, `path`) and nested
-parents must exist before editing their children. `reset(newDraft)` establishes
+parents must exist before editing their children. A JSON body whose root is a
+union, array or map binds through `endpoint.body()`, then the same `variant`,
+`at` and `field` steps. `reset(newDraft)` establishes
 new initial values, including any explicit idempotency key or signed URL.
 
 Fields expose `set`, `unset`, `setText`, `parse`, `touch` and `getSnapshot`.
 Unset, null, zero, false and an empty string remain distinct. Dirty state compares
 against the reset baseline; pending text is dirty even if its parsed value has
 not changed. Set replaces that field and clears its pending descendant text.
-Changes invalidate previous validation/server issues and async results.
+Changes invalidate previous validation/server issues and async results (a task
+can [declare](#async-options-and-checks) which fields it reads).
 
 ## Parsing and nested fields
 
@@ -100,11 +103,18 @@ signal abort a request. The result is then `{ status: "canceled", outcome }`:
 `not_sent` means it never left the client, and `unknown` means the server may
 still have processed it, so reconcile (for example through an idempotency key)
 before retrying. A transport that completes anyway still reports its result.
+A `failed` result carries the same kind of `outcome`: `not_sent` for a request that
+failed its own contract in the SDK before sending, `error_response` for a declared
+server error, and `unknown` for a transport failure, a response that broke its
+contract, or a `ContractError` thrown by application code such as a wrapped client
+or custom transport, which proves nothing about what the server did.
 `pending` stays true until the actual invocation exits. A successful file or
 event-stream response is owned by the caller and must be consumed/closed, even
 when the draft changed meanwhile. `signal` must be a real `AbortSignal`. A
-response that fails its own contract after the server processed the request is
-also reported as `failed`; that is not evidence of a rollback.
+response that fails its own contract after the server processed the request is a
+`ResponseContractError` (a `ContractError` with the response `status`). The form
+reports it as `failed` with `outcome: "unknown"` and one `form_response` issue,
+not as request-field issues; it is not evidence of a rollback.
 
 ## Async options and checks
 
@@ -120,7 +130,21 @@ if (name.parse()) await suggestions.run();
 Each task has its own immutable store (`getSnapshot`, `subscribe`) and latest-run
 sequence. Form edits invalidate old work. A run ended by a newer run, an edit,
 `cancel()` or disposal resolves `canceled`, whether or not its callback had
-started, and its late result is discarded. Debounce is explicit and defaults to
+started, and its late result is discarded.
+
+```ts
+const cities = form.task(async (draft, signal) => loadCities(draft.body?.country, signal), {
+  dependsOn: [endpoint.field("body", "country")],
+});
+```
+
+`dependsOn` lists the fields a callback reads, as descriptors of the form's own
+operation; an `.element()` template covers every entry of its collection. Such a
+task is invalidated only by a value write at, above or below one of them, by
+`reset`, `cancel()` or disposal; other edits and unparsed text keep its run and
+result. The callback still receives the whole draft, so declare every field it
+reads. An empty list, more than 64 entries or a descriptor of another operation or
+schema is rejected. Without `dependsOn`, every edit (including text) invalidates it. Debounce is explicit and defaults to
 zero. Results are copied as bounded plain data; this interface is for option/check
 data, not streamed response handles. Use the result to display suggestions or
 advisory checks; it does not replace server validation or mark the request valid.

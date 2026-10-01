@@ -22,9 +22,12 @@ type observerKind uint8
 const (
 	writeObserver observerKind = iota
 	retrievalObserver
+	deletionObserver
 )
 
-func (k observerKind) valid() bool { return k == writeObserver || k == retrievalObserver }
+func (k observerKind) valid() bool {
+	return k == writeObserver || k == retrievalObserver || k == deletionObserver
+}
 
 // NewObserver declares a factory for a model's normal write pipeline.
 func NewObserver[M, H any](name string) Observer[M, H] { return Observer[M, H]{name: name} }
@@ -34,6 +37,15 @@ func NewObserver[M, H any](name string) Observer[M, H] { return Observer[M, H]{n
 // excluded from write lookup. Declaration and inspection never invoke factories.
 func NewRetrievalObserver[M, H any](name string) Observer[M, H] {
 	return Observer[M, H]{name: name, kind: retrievalObserver}
+}
+
+// NewDeletionObserver declares a write factory that observes only deletions:
+// delete, soft delete and force delete. Other writes neither construct it nor
+// take the hooked path because of it, and set-based writes other than
+// deletions need no WithoutModelHooks for it. Its hooks share the model's
+// write hook type; only their deletion callbacks run.
+func NewDeletionObserver[M, H any](name string) Observer[M, H] {
+	return Observer[M, H]{name: name, kind: deletionObserver}
 }
 
 func (o Observer[M, H]) Name() string { return o.name }
@@ -80,11 +92,14 @@ type observerGroup struct {
 }
 
 // Observers is an immutable set of explicitly declared factories, grouped by
-// exact model type and write/retrieval kind, retaining declaration order within
-// each group. Its zero value is empty.
+// exact model type and write/retrieval/deletion kind, retaining declaration
+// order within each group. Its zero value is empty.
 // It holds no mutable registration API or process-global application state.
 type Observers struct {
 	groups map[observerGroupKey]observerGroup
+	// deletions is the view deletion writes dispatch: each model's write
+	// group joined by its deletion observers, in declaration order.
+	deletions *Observers
 }
 
 // NewObservers validates the complete set before publication. It neither runs
@@ -93,6 +108,7 @@ type Observers struct {
 // Write and retrieval factories for the same model may have different types.
 func NewObservers(declarations ...Declaration) (Observers, error) {
 	set := Observers{groups: make(map[observerGroupKey]observerGroup)}
+	deletions := Observers{groups: make(map[observerGroupKey]observerGroup)}
 	names := make(map[string]struct{}, len(declarations))
 	for _, item := range declarations {
 		if !identifier.Semantic(item.name) || item.model == nil || item.hooks == nil || item.factory == nil || !item.kind.valid() {
@@ -110,14 +126,43 @@ func NewObservers(declarations ...Declaration) (Observers, error) {
 		group.hooks = item.hooks
 		group.factories = append(group.factories, item.factory)
 		set.groups[key] = group
+		// Deletions dispatch write and deletion observers as one write group,
+		// so both kinds of one model must share its generated hook type.
+		view := key
+		if item.kind == deletionObserver {
+			view.kind = writeObserver
+		}
+		merged, exists := deletions.groups[view]
+		if exists && merged.hooks != item.hooks {
+			return Observers{}, fault.New(fault.Invalid, "model observers have incompatible hook declarations")
+		}
+		merged.hooks = item.hooks
+		merged.factories = append(merged.factories, item.factory)
+		deletions.groups[view] = merged
 	}
+	set.deletions = &deletions
 	return set, nil
+}
+
+// ForDeletion is the set a deletion dispatches: write observers joined by
+// deletion observers. Other writes use the set itself, which excludes them.
+func (s Observers) ForDeletion() Observers {
+	if s.deletions == nil {
+		return s
+	}
+	return *s.deletions
 }
 
 // HasObservers reports write registrations for exactly M without invoking
 // factories. A retrieval-only model does not enter the write-hook pipeline.
 func HasObservers[M any](set Observers) bool {
 	return hasObservers[M](set, writeObserver)
+}
+
+// HasDeletionObservers reports registrations that observe deletions of exactly
+// M: write observers and deletion observers.
+func HasDeletionObservers[M any](set Observers) bool {
+	return hasObservers[M](set, writeObserver) || hasObservers[M](set, deletionObserver)
 }
 
 // HasRetrievalObservers reports retrieval registrations for exactly M without

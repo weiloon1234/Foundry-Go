@@ -190,8 +190,8 @@ func (s slotDefinition[M, K, S]) files(ctx context.Context, executor database.Ex
 			return nil, err
 		}
 		result := make([]value.Optional[[]File[M]], len(part))
-		for i, reference := range references {
-			attachments, err := batch.Get(reference)
+		for i := range references {
+			attachments, err := batch.getAt(i)
 			if errors.Is(err, database.NotFound) {
 				continue
 			}

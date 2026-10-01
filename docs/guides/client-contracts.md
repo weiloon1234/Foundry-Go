@@ -170,6 +170,16 @@ properties; typed map keys retain their canonical domain syntax. An explicit map
 schema without a key descriptor accepts arbitrary string names while retaining its
 declared value type, nullability and wire limits in both Go and TypeScript.
 
+The generated `Locale` type is the union of the exported locale catalog's
+supported locales (`"en" | "ms"`), or `string` when no catalog is exported. A
+request map keyed by `i18n.LocaleID`, such as translated slot input, is a
+`LocaleMap<V>`: TypeScript rejects a locale outside the catalog, and descriptors
+bind its entries with `.at(locale)` and `.element()`. The server still validates
+locales against its current catalog. Received values keep `string` keys, because
+a newer server may support more locales than the client was generated with; a
+schema reachable from server output that contains such a map therefore has a
+`...Received` variant. OpenAPI keeps its open object keys.
+
 ## Tolerant server output
 
 Deployed clients, especially mobile applications, often outlive the server
@@ -263,8 +273,13 @@ It never creates signatures or exports signing keys.
 
 `APIError` carries the declared status, code and decoded framework error envelope.
 `ContractError` reports invalid inputs, unexpected statuses and malformed network
-payloads. An intermediary returning HTML or a mismatched error code/status cannot
-silently become a typed DTO. Transport failures remain transport failures. No
+payloads. A failure found after the server answered (an undeclared status, a
+malformed error envelope, wrong media type or a body, file or event stream that
+breaks its contract) is its subclass `ResponseContractError`, carrying the received
+`status` (0 when the transport reported no usable status). The request may already
+have taken effect, so reconcile before retrying; a plain `ContractError` from the
+SDK's own input checks means nothing was sent. An intermediary
+returning HTML or a mismatched error code/status cannot silently become a typed DTO. Transport failures remain transport failures. No
 automatic mutation retries occur. A cache adapter must resolve a JSON `304` to
 its stored representation and successful status before returning it to the SDK.
 

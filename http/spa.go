@@ -21,8 +21,9 @@ type spaFallback struct {
 // WithSPA returns an independent router view sharing the immutable native route
 // table. The fallback answers a native unmatched 404, and an asset mount with a
 // less specific or equal prefix defers to it: a more specific SPA owns its
-// subtree below the mount, including what it declines, and an equal one answers
-// the mount's misses. Declared routes and more specific mounts keep precedence.
+// subtree below the mount, including what it declines, and answers before the
+// mount's middleware; an equal one answers the mount's misses inside it.
+// Declared routes and more specific mounts keep precedence.
 // The original router is unchanged; no endpoint error response is intercepted
 // or rewritten.
 func (r *Router) WithSPA(id RouteID, assets *Assets, config SPAConfig) (*Router, error) {

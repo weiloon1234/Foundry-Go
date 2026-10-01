@@ -91,6 +91,16 @@ export function typedConsumer(): void {
   const wrongGenericPresence: GenericUser = { ...genericUser, data: { ...genericUser.data, note: undefined } };
   void [genericName, genericSequence, genericTitle, wrongEnvelope, wrongGenericID, wrongGenericPresence];
   void api.itemsEcho({ path: { key: "9223372036854775807" }, query: { q: "text", tag: ["one"] }, body: payload });
+  // Request maps keyed by i18n.LocaleID take the catalog's supported locales.
+  const supported: readonly sdk.Locale[] = ["en", "ms", "ar"];
+  const titles: sdk.Operations["itemsEcho"]["request"]["body"]["titles"] = { en: "Hello", ms: "Helo" };
+  // @ts-expect-error A locale outside the catalog is not a request key.
+  const unsupported: sdk.Operations["itemsEcho"]["request"]["body"]["titles"] = { fr: "Bonjour" };
+  // Received values keep open string keys: a newer server may support more locales.
+  void api.itemsEcho({ path: { key: "9223372036854775807" }, body: { ...payload, titles } });
+  const echoed = null as unknown as sdk.Operations["itemsEcho"]["response"];
+  const receivedTitle: string | undefined = echoed.titles?.["fr"];
+  void [supported, unsupported, receivedTitle];
   void api.membersIndex({ query: { page: "1", per_page: "20" } });
   void api.membersSecure({ query: { page: "1", per_page: "20" } });
   void api.membersSecureSimple({ query: { per_page: "20" } });
@@ -189,10 +199,23 @@ export async function descriptorConsumer(): Promise<void> {
   echo.call(api, { body: payload });
   // @ts-expect-error Descriptor metadata is read-only.
   echo.metadata.route.path = "/changed";
-  void [decimal, empty, absent, text, mapText, absentElement, result, report, lossy, otherOwner, otherField];
+  // A JSON body is described from its root, including a union root.
+  const method = sdk.operation("unionsMethod").body(), rootCard = method.variant("kind", "card");
+  const rootToken: sdk.FieldValue<ReturnType<typeof rootCard.field<"token">>> = "token";
+  // @ts-expect-error Select the root union's variant before its fields.
+  method.field("token");
+  // @ts-expect-error A form body has named fields, not a JSON root.
+  sdk.operation("formsSubmit").body();
+  void [decimal, empty, absent, text, mapText, absentElement, result, report, lossy, otherOwner, otherField, rootToken];
 }
 
 async function typedForms() {
+  // A form binds a JSON body root and a field below its union variant.
+  const methodOp = sdk.operation("unionsMethod");
+  const methodForm = sdk.createForm(methodOp, { body: { kind: "card", token: "t", sequence: "1" } });
+  methodForm.field(methodOp.body()).set({ kind: "bank_transfer", reference: "r" });
+  methodForm.field(methodOp.body().variant("kind", "card").field("token")).set("next");
+  methodForm.dispose();
   const op = sdk.operation("itemsEcho");
   const form = sdk.createForm(op, { body: {}, path: { key: "1" } });
   const amount = form.field(op.field("body", "amount"));
@@ -211,6 +234,12 @@ async function typedForms() {
   form.field(unionOp.field("body", "method").variant("kind", "card").field("token"));
   const task = form.task(async (draft, signal) => { void signal; return [draft.body?.amount ?? ""]; });
   const options: readonly string[] | undefined = task.getSnapshot().value;
+  // A scoped task lists fields of its own operation, whatever their value types.
+  const scoped = form.task(async draft => draft.body?.amount ?? "", { dependsOn: [op.field("body", "amount"), op.field("body", "tags").element(), op.field("path", "key")] });
+  // @ts-expect-error Dependencies are fields of this form's operation.
+  form.task(async () => null, { dependsOn: [unionOp.field("body", "method")] });
+  // @ts-expect-error DTO descriptors are not fields of an operation.
+  form.task(async () => null, { dependsOn: [sdk.schema("foundry.test/consumer/clientcontracts.Payload").field("amount")] });
   // @ts-expect-error Task results are immutable snapshots.
   task.getSnapshot().value?.push("mutation");
   const result = await form.submit(api);
@@ -231,5 +260,5 @@ async function typedForms() {
   form.getSnapshot().values.body.amount = "1";
   // @ts-expect-error Initial draft retains operation keys.
   sdk.createForm(op, { wrongLocation: {} });
-  void [exact, report, options];
+  void [exact, report, options, scoped];
 }

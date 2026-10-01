@@ -58,9 +58,12 @@ more specific than a matching mount owns its subtree below it, so a root
 what that SPA declines (a missing script, an excluded path) is 404 rather than a
 lookup in `public/`. A SPA with the same prefix as a mount answers the mount's
 misses: a portal at `/` beside a root `public/` mount serves `robots.txt` from
-`public/`, its own bundles from its build and its entry for client routes. A SPA
-reached through a mount responds inside that mount's route middleware, so keep
-mount middleware free of assumptions about which directory answers.
+`public/`, its own bundles from its build and its entry for client routes. A more
+specific SPA answers outside the matching mount, as it answers an unmatched
+request: the mount's route middleware, budget and route metadata do not apply,
+and `MatchedRoute` reports the SPA. A SPA with the same prefix extends the mount,
+so it answers the mount's misses inside that mount's route middleware; keep that
+middleware free of assumptions about which directory answers.
 
 Successful asset lookups are cached for one second (at most 4,096 entries), so a
 replaced file in a directory source is observed within that window; misses are

@@ -193,8 +193,8 @@ func (s TextSlot[M, K]) fetch(ctx context.Context, executor database.Executor, p
 			return nil, err
 		}
 		result := make([]Text, len(part))
-		for i, reference := range references {
-			values, err := batch.Get(reference)
+		for i := range references {
+			values, err := batch.getAt(i)
 			if errors.Is(err, database.NotFound) {
 				continue
 			}

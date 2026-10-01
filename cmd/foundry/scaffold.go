@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/cli"
+	"github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
 	"github.com/weiloon1234/Foundry-Go/internal/generate"
 )
 
@@ -33,7 +34,7 @@ func runMake(ctx context.Context, args []string, stdout, stderr io.Writer) error
 		positional = args[1]
 		args = append([]string{args[0]}, args[2:]...)
 	}
-	options := generate.ScaffoldOptions{Kind: generate.ScaffoldKind(args[0])}
+	options := generate.ScaffoldOptions{Kind: generate.ScaffoldKind(args[0]), Framework: frameworkinfo.CurrentBuild()}
 	flags := flag.NewFlagSet("make "+args[0], flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.StringVar(&options.Dir, "dir", ".", "existing consumer Go package directory")
@@ -41,8 +42,17 @@ func runMake(ctx context.Context, args []string, stdout, stderr io.Writer) error
 	if options.Kind != generate.ModelScaffold && options.Kind != generate.DTOScaffold && options.Kind != generate.EnumScaffold {
 		flags.StringVar(&options.ID, "id", "", "stable semantic declaration ID")
 	}
+	var translated, attachment, attachments, metadata string
 	if options.Kind == generate.ModelScaffold {
 		flags.StringVar(&options.Table, "table", "", "explicit persisted table name")
+		flags.StringVar(&translated, "translated", "", "comma-separated translations.Text slot field names")
+		flags.StringVar(&attachment, "attachment", "", "comma-separated attachments.One slot field names")
+		flags.StringVar(&attachments, "attachments", "", "comma-separated attachments.Many slot field names")
+		flags.StringVar(&metadata, "metadata", "", "comma-separated metadata.Value slot field names, each with a new DTO")
+		flags.StringVar(&options.Disk, "disk", "", "storage disk ID of the attachment slots")
+	}
+	if options.Kind == generate.ModelScaffold || options.Kind == generate.EndpointScaffold || options.Kind == generate.NotificationScaffold {
+		flags.BoolVar(&options.FieldDocumentation, "field-docs", false, "maintain managed field behavior notes in the generation this scaffold runs, as foundry generate --field-docs does")
 	}
 	if options.Kind == generate.JobScaffold {
 		flags.StringVar(&options.Queue, "queue", "default", "typed job routing queue")
@@ -82,6 +92,14 @@ func runMake(ctx context.Context, args []string, stdout, stderr io.Writer) error
 	if cases != "" {
 		options.Cases = strings.Split(cases, ",")
 	}
+	for _, list := range []struct {
+		text   string
+		target *[]string
+	}{{translated, &options.Translated}, {attachment, &options.Attachment}, {attachments, &options.Attachments}, {metadata, &options.Metadata}} {
+		if list.text != "" {
+			*list.target = strings.Split(list.text, ",")
+		}
+	}
 	if err := generate.ValidateScaffold(options); err != nil {
 		return cli.InvalidArguments(err)
 	}
@@ -93,6 +111,11 @@ func runMake(ctx context.Context, args []string, stdout, stderr io.Writer) error
 	switch options.Kind {
 	case generate.ModelScaffold, generate.DTOScaffold:
 		message = "Add domain fields, then run foundry generate for this package."
+		if len(options.Attachment)+len(options.Attachments) != 0 {
+			message = "Its slot declarations were generated. List each attachment policy's accepted media types, configure the disk, then register the package's FoundryExtensions() with application.Builder.Models."
+		} else if len(options.Translated)+len(options.Metadata) != 0 {
+			message = "Its slot declarations were generated. Add domain fields, run foundry generate after changes, and register the package's FoundryExtensions() with application.Builder.Models."
+		}
 	case generate.EnumScaffold:
 		message = "Run foundry generate for this package to create its codecs."
 	case generate.EndpointScaffold, generate.NotificationScaffold:

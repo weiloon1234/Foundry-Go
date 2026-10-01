@@ -64,6 +64,29 @@ export interface EventStreamResult<T> extends AsyncIterable<ServerEvent<T>> { re
 export class APIError<T = unknown> extends Error {
   constructor(readonly status: number, readonly code: string, readonly response: T | undefined, readonly retryAfterSeconds?: number) { super("API request failed"); this.name = "APIError"; }
 }
+/**
+ * The server answered, but its response broke this operation's contract: its
+ * status, headers, error envelope or body. The request may already have taken
+ * effect, so reconcile before retrying. status is the HTTP status received, or
+ * 0 when the transport reported no usable status.
+ */
+export class ResponseContractError extends ContractError {
+  constructor(readonly status: number, issues: readonly Issue[]) { super(issues); this.name = "ResponseContractError"; }
+}
+// Contract failures after the transport returned belong to the response. The
+// status may be the very value just rejected, so keep only an integer one.
+function responseFailure(status: unknown, error: unknown): unknown {
+  const received = typeof status === "number" && Number.isInteger(status) ? status : 0;
+  return error instanceof ContractError && !(error instanceof ResponseContractError) ? new ResponseContractError(received, error.issues) : error;
+}
+// Failures the invoker raised before calling its transport: only these prove a
+// request never left this client. The set is private, so an error thrown by
+// application code (a wrapped client or transport) can never claim it.
+const unsentFailures = new WeakSet<object>();
+function beforeSending<T>(run: () => T): T {
+  try { return run(); }
+  catch (error) { if (error !== null && typeof error === "object") unsentFailures.add(error); throw error; }
+}
 function checkAbort(signal?: AbortSignal): void { if (signal?.aborted) throw signal.reason ?? new DOMException("Request aborted", "AbortError"); }
 function mergeHeaders(...sources: readonly (Readonly<Record<string, string>> | undefined)[]): Record<string, string> {
   const result: Record<string, string> = Object.create(null);
@@ -305,8 +328,11 @@ function createHTTPInvoker(document: RuntimeDocument, transport: HTTPTransport, 
   return {
     validate(name: string, request: unknown): ValidationReport { return prepare(name, request, {}).validation; },
     async invoke(name: string, request: unknown, call: CallOptions = {}): Promise<unknown> {
-      const prepared = prepare(name, request, call), { operation } = prepared;
-      if (prepared.validation.issues.length) throw new ContractError(prepared.validation.issues);
+      const prepared = beforeSending(() => {
+        const next = prepare(name, request, call);
+        if (next.validation.issues.length) throw new ContractError(next.validation.issues);
+        return next;
+      }), { operation } = prepared;
       const response = await transport(prepared.request);
       let transferred = false, closed = false, failed = false;
       const close = async (): Promise<void> => { if (!closed) { closed = true; await response.close(); } };
@@ -340,7 +366,7 @@ function createHTTPInvoker(document: RuntimeDocument, transport: HTTPTransport, 
         const stream = async function* (): AsyncIterable<Uint8Array> {
           if (consumed || closed) reject("", "response_consumed"); consumed = true; let failed = false;
           try { yield* boundedBody(response.body, operation.file_transfer_bytes!, call.signal); }
-          catch (error) { failed = true; throw error; }
+          catch (error) { failed = true; throw responseFailure(response.status, error); }
           finally { await finish(failed); }
         };
         transferred = true; return { status: response.status, headers, body: stream(), close } satisfies FileResult;
@@ -353,7 +379,7 @@ function createHTTPInvoker(document: RuntimeDocument, transport: HTTPTransport, 
         const events = async function* (): AsyncIterable<ServerEvent<unknown>> {
           if (consumed || closed) reject("", "response_consumed"); consumed = true; let failed = false;
           try { if (operation.route.method !== "HEAD") yield* serverEvents(response.body, data => codec.decode(type, data, operation.limits.Response, tolerant), operation.limits.Response.Bytes, call.signal); }
-          catch (error) { failed = true; throw error; }
+          catch (error) { failed = true; throw responseFailure(response.status, error); }
           finally { await finish(failed); }
         };
         transferred = true;
@@ -369,7 +395,7 @@ function createHTTPInvoker(document: RuntimeDocument, transport: HTTPTransport, 
       if (!operation.response || operation.route.method === "HEAD") { await collectBody(response.body, 0, call.signal); return undefined; }
       requireJSON(headers); const decoded = codec.decode(operation.response.type!, await collectBody(response.body, operation.limits.Response.Bytes, call.signal), operation.limits.Response, tolerant);
       return operation.statuses ? Object.freeze({ status: response.status, body: decoded }) satisfies StatusResult<number, unknown> : decoded;
-      } catch (error) { failed = true; throw error; }
+      } catch (error) { failed = true; throw responseFailure(response.status, error); }
       finally { if (!transferred) await finish(failed); }
     },
   };

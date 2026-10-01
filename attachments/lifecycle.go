@@ -28,6 +28,31 @@ func Cleanup[M any, K comparable](ctx context.Context, tx *database.Tx, m *Manag
 	if operation != lifecycle.Delete && operation != lifecycle.ForceDelete {
 		return invalid()
 	}
+	subject, err := owner.Subject(reference)
+	if err != nil {
+		return err
+	}
+	identity, err := subject.Identity.Decode()
+	if err != nil {
+		return err
+	}
+	return m.cleanupSubject(ctx, tx, owner.Name(), subject, identity, queue)
+}
+
+// CleanupIdentity is Cleanup for an owner known by its registered name and
+// persisted identity, such as a durable cleanup job's request. It joins tx,
+// rejects an owner that still exists and deletes stored objects after commit.
+func CleanupIdentity(ctx context.Context, tx *database.Tx, m *Manager, owner extensions.OwnerName, identity model.Identity, queue *Queue) error {
+	if err := m.Validate(); err != nil {
+		return err
+	}
+	subject, err := m.store.Registry().Subject(owner, identity)
+	if err != nil {
+		return err
+	}
+	return m.cleanupSubject(ctx, tx, owner, subject, identity, queue)
+}
+func (m *Manager) cleanupSubject(ctx context.Context, tx *database.Tx, owner extensions.OwnerName, subject extensions.Subject, identity model.Identity, queue *Queue) error {
 	if queue != nil {
 		if err := queue.Validate(); err != nil {
 			return err
@@ -35,15 +60,7 @@ func Cleanup[M any, K comparable](ctx context.Context, tx *database.Tx, m *Manag
 	}
 	return m.owners.Run(ctx, "attachment owner cleanup", func(ctx context.Context) error {
 		return m.store.Join(ctx, tx, func(ctx context.Context, child *database.Tx) error {
-			subject, err := owner.Subject(reference)
-			if err != nil {
-				return err
-			}
-			identity, err := subject.Identity.Decode()
-			if err != nil {
-				return err
-			}
-			retained, err := m.store.Registry().RetainedSubjects(ctx, child, owner.Name(), []model.Identity{identity})
+			retained, err := m.store.Registry().RetainedSubjects(ctx, child, owner, []model.Identity{identity})
 			if err != nil {
 				return err
 			}

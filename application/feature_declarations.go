@@ -38,8 +38,10 @@ type Features func(Services) (FeatureDeclarations, error)
 
 // Models registers generated model extension declarations, such as a model
 // package's FoundryExtensions(). Each registers its owner, its translated,
-// attachment and metadata slots, and a hard-delete cleanup observer on the
-// extension store's database, which must also write the owning models.
+// attachment and metadata slots, and a hard-delete cleanup observer on every
+// configured database connection: on the extension store's it cleans inside the
+// deletion transaction, on another after the deletion commits, or through the
+// features.extension_cleanup job.
 func (b *Builder) Models(declarations ...slots.Declaration) *Builder {
 	b.mutate(func() {
 		for _, declaration := range declarations {

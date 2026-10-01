@@ -218,7 +218,10 @@ type RouteRegistration struct {
 	handler     stdhttp.Handler
 	endpoint    func() EndpointInfo
 	errors      []ErrorDefinition
-	err         error
+	// handoff runs before this route's context, budget and middleware; true
+	// means a more specific owner answered the request instead.
+	handoff func(stdhttp.ResponseWriter, *stdhttp.Request) bool
+	err     error
 }
 
 func (r Route[P]) info(segments []pathSegment, raw bool) RouteInfo {

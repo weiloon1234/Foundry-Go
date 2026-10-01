@@ -96,6 +96,9 @@ func (d *tableDefinition[S, R, A]) initialize() error {
 	if err != nil {
 		return err
 	}
+	if err := contract.RejectPasswordOutput(row, "table row"); err != nil {
+		return err
+	}
 	request, err := RequestJSON().Description()
 	if err != nil {
 		return err

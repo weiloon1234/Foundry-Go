@@ -2,6 +2,76 @@
 
 ## Unreleased
 
+### Client, routing and extension-slot follow-ups
+
+- The TypeScript SDK reports a response that breaks its contract after the server
+  answered (an undeclared status, malformed error envelope, wrong media type or
+  invalid body, file or event stream) as `ResponseContractError`, a
+  `ContractError` subclass carrying the received `status`. Form submissions add
+  `outcome` to `failed` results: `not_sent`, `error_response` or `unknown`; a
+  response contract failure is `unknown` with one `form_response` issue.
+- `operation(name).body()` describes a JSON request body from its root, so a body
+  that is a union, array or map can be navigated and bound in forms
+  (`OperationJSONBodies` lists the operations that have one).
+- Form tasks accept `dependsOn`: descriptors of the fields the callback reads
+  (an `.element()` template covers every entry). Such a task is invalidated only
+  by an overlapping value write, reset, cancel or disposal; unparsed text and
+  other edits keep its run and result. Tasks without it are unchanged.
+- The generated `Locale` type is the union of the exported catalog's supported
+  locales (`string` without a catalog). Request maps keyed by `i18n.LocaleID` are
+  `LocaleMap<V>`, which rejects other locales and binds entries with `.at(locale)`;
+  received values keep `string` keys through a `...Received` variant.
+- Password-hinted outputs now fail at registration for datatable rows,
+  notification inbox and realtime payloads, WebSocket presence members and
+  server-to-client events, as they already did for HTTP responses.
+- A SPA more specific than a matching asset mount now answers outside that
+  mount's route middleware, budget and metadata, as an unmatched request does; an
+  equal-prefix SPA still extends the mount inside its middleware.
+- `foundry make model` accepts `--translated`, `--attachment`, `--attachments`,
+  `--metadata` and `--disk`, checks the model together with the slot declarations
+  generation creates for it, then generates them. Attachment policies accept
+  nothing until the application lists their media types.
+- Generated slot cleanup observers are registered on every configured database
+  connection. A model deleted through a connection other than the extension
+  store's is cleaned after the deletion commits, skipping an owner that exists
+  again; `slots.Runtime.Store` enables this for direct assembly. The observer is
+  a `lifecycle.NewDeletionObserver`: only deletions take the observed path for
+  it, so creates, updates, `UpdateAll` and `Increment` keep their unhooked paths
+  on every connection, while set-based deletions still need `WithoutModelHooks()`.
+- Attachments publish inside a caller's transaction in two phases:
+  `PrepareFile`/`Prepare` read, check and store the file (locking an existing
+  owner) before the transaction begins, and `ReplaceIn`/`AddIn` publish the
+  prepared upload using only that transaction, at any isolation level; a model
+  created there can own it, a rollback leaves it for another attempt, and
+  `Discard` or `ReconcilePending` reclaims an unpublished one. Replaced files are
+  cleaned after the commit. `attachments.Collection` has the same methods.
+- Slot loading derives each owner's subject key once per batch
+  (`extensions.Owner.ActiveSubjects`), about 9% faster at 1000 parents.
+- Generation loads export data for `extensions/slots` when a slot type is reached
+  only through an alias package.
+- `features.extension_cleanup.jobs` makes cleanup after deletions through another
+  connection crash-safe: every database connection gets an outbox producer, and
+  the deletion enqueues the idempotent `foundry.extensions.cleanup` job
+  (`slots.CleanupJob`, `slots.CleanupRequest`) in its own transaction; failures
+  surface through failed-job inspection. Build requires the outbox destination,
+  and startup refuses a connection that reaches another database.
+  `metadata.CleanupIdentity`, `translations.CleanupIdentity` and
+  `attachments.CleanupIdentity` clean up by owner name and persisted identity,
+  sharing the typed `Cleanup` logic; `slots.Runtime.CleanupQueue` enables the
+  job for direct assembly.
+- `foundry make model` (with slots), `make endpoint` and `make notification`
+  accept `--field-docs` and run their generation with the tool's framework
+  build, as `foundry generate` does. A slot model's scaffold check reuses the
+  first package load instead of listing packages again.
+- `contract.RejectPasswordOutput` is the one password-output refusal that
+  responses, event streams, table rows, notification payloads, presence and
+  server events share; `testkit/redis.Config` reads the Redis acceptance
+  endpoint for application and consumer tests.
+- `websocket.Hub.Stop` no longer returns while a closing connection's observation
+  is still active: the connection ends its observation before it leaves the
+  Hub's connection index, so no completion check can find the Hub drained
+  first. This pre-existing race failed an observability test intermittently.
+
 ### SPA fallbacks with application.New
 
 - `application.Builder.SPA(id, assetsKey, config)` declares a browser portal's

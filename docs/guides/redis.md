@@ -240,6 +240,10 @@ Optional `FOUNDRY_TEST_REDIS_USER` and `FOUNDRY_TEST_REDIS_PASSWORD` configure t
 connection. Do not put credentials in tracked files. Without an address, ordinary
 test runs skip the external-service cases; the required flag makes that an error.
 Tests use unique Foundry-Go namespaces and delete only their exact owned keys.
+Application and consumer tests read the same endpoint with
+`testkit/redis.Config(t)`, a plaintext `redis.Config` that skips or fails under
+the same variables; `infrastructure.RedisSettingsFromConfig` turns it into
+connection settings.
 They never flush, scan or reconfigure a shared server. Owned protocol fixtures test
 lost replies, safe error formatting, stalled responses and shutdown independently
 of the real service.

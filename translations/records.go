@@ -217,16 +217,33 @@ func Cleanup[M any, K comparable](ctx context.Context, tx *database.Tx, m *Manag
 	if operation != lifecycle.Delete && operation != lifecycle.ForceDelete {
 		return invalid()
 	}
+	subject, err := owner.Subject(reference)
+	if err != nil {
+		return err
+	}
+	identity, err := subject.Identity.Decode()
+	if err != nil {
+		return err
+	}
+	return cleanupSubject(ctx, tx, m, owner.Name(), subject, identity)
+}
+
+// CleanupIdentity is Cleanup for an owner known by its registered name and
+// persisted identity, such as a durable cleanup job's request. It joins tx and
+// rejects an owner that still exists.
+func CleanupIdentity(ctx context.Context, tx *database.Tx, m *Manager, owner extensions.OwnerName, identity model.Identity) error {
+	if err := m.Validate(); err != nil {
+		return err
+	}
+	subject, err := m.store.Registry().Subject(owner, identity)
+	if err != nil {
+		return err
+	}
+	return cleanupSubject(ctx, tx, m, owner, subject, identity)
+}
+func cleanupSubject(ctx context.Context, tx *database.Tx, m *Manager, owner extensions.OwnerName, subject extensions.Subject, identity model.Identity) error {
 	return m.store.Join(ctx, tx, func(ctx context.Context, tx *database.Tx) error {
-		subject, err := owner.Subject(reference)
-		if err != nil {
-			return err
-		}
-		identity, err := subject.Identity.Decode()
-		if err != nil {
-			return err
-		}
-		retained, err := m.store.Registry().RetainedSubjects(ctx, tx, owner.Name(), []model.Identity{identity})
+		retained, err := m.store.Registry().RetainedSubjects(ctx, tx, owner, []model.Identity{identity})
 		if err != nil {
 			return err
 		}

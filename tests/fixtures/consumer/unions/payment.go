@@ -47,7 +47,18 @@ var Echo = http.DefineEndpoint(
 	http.EmptyQuery(), http.JSONBody(PaymentRequestJSON()), http.JSONResponse(200, genericdto.EnvelopeJSON(PaymentRequestJSON())),
 )
 
+// Method echoes a request body whose root is the union itself.
+var Method = http.DefineEndpoint(
+	http.DefineRoute(http.RouteSpec{ID: "unions.method", Method: http.POST, Access: http.Public}, http.StaticPath("/unions/method")),
+	http.EmptyQuery(), http.JSONBody(PaymentMethodJSON()), http.JSONResponse(200, PaymentMethodJSON()),
+)
+
 type EchoInput = http.Input[http.NoPath, http.NoQuery, PaymentRequest]
+
+// HandleMethod returns the union body unchanged.
+func HandleMethod(_ context.Context, input http.Input[http.NoPath, http.NoQuery, PaymentMethod]) (PaymentMethod, error) {
+	return input.Body, nil
+}
 
 func Handle(_ context.Context, input EchoInput) (genericdto.Envelope[PaymentRequest], error) {
 	return genericdto.Envelope[PaymentRequest]{Data: input.Body, Trace: "union"}, nil

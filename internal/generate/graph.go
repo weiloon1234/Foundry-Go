@@ -40,6 +40,11 @@ type packageGraph struct {
 	framework *listedModule
 	// fieldDocumentation opts into managed notes in handwritten model files.
 	fieldDocumentation bool
+	// overlay adds proposed handwritten files, by absolute path, to their
+	// package for a validation-only generation that publishes nothing.
+	overlay map[string][]byte
+	// exports locates compiled export data by import path.
+	exports map[string]string
 
 	compiledMu sync.Mutex
 	compiled   types.Importer
@@ -150,18 +155,46 @@ func loadGraph(ctx context.Context, dir string, recursive bool, tree *generation
 	}); err != nil {
 		return nil, err
 	}
-	g.compiled = importer.ForCompiler(g.fset, "gc", func(path string) (io.ReadCloser, error) {
-		file, ok := exports[path]
-		if !ok {
-			return nil, fmt.Errorf("dependency %s has no compiled export data; include its package with --recursive or resolve its build errors", path)
+	// Slot field types can reach a package only through an alias declared
+	// outside the generated set. The export closure then holds an extension
+	// package without the binding package generated declarations import.
+	slotsPath := framework + "/extensions/slots"
+	if _, listed := exports[slotsPath]; !listed && (exports[framework+"/translations"] != "" || exports[framework+"/attachments"] != "" || exports[framework+"/metadata"] != "") {
+		arguments = append(append([]string{"list"}, g.scope.listFlags()...), "-e", "-deps", "-export", "-json=ImportPath,Export,Module", slotsPath)
+		if err := g.goList(ctx, arguments, func(pkg listedPackage) {
+			if pkg.Export != "" {
+				exports[pkg.ImportPath] = pkg.Export
+			}
+		}); err != nil {
+			return nil, err
 		}
-		return os.Open(file)
-	})
+	}
+	g.exports = exports
+	g.compiled = g.exportImporter()
 	g.order, err = packageOrder(g.packages)
 	if err != nil {
 		return nil, err
 	}
 	return g, nil
+}
+
+func (g *packageGraph) exportImporter() types.Importer {
+	return importer.ForCompiler(g.fset, "gc", func(path string) (io.ReadCloser, error) {
+		file, ok := g.exports[path]
+		if !ok {
+			return nil, fmt.Errorf("dependency %s has no compiled export data; include its package with --recursive or resolve its build errors", path)
+		}
+		return os.Open(file)
+	})
+}
+
+// withOverlay returns an independent graph over g's package listing and
+// export data that adds proposed handwritten files, by absolute path, for a
+// validation-only generation. It has its own importer and type-check results.
+func (g *packageGraph) withOverlay(files map[string][]byte) *packageGraph {
+	clone := &packageGraph{root: g.root, scope: g.scope, recursive: g.recursive, packages: g.packages, order: g.order, snapshot: g.snapshot, moduleFiles: g.moduleFiles, fset: g.fset, framework: g.framework, fieldDocumentation: g.fieldDocumentation, overlay: files, exports: g.exports, checked: make(map[string]*types.Package)}
+	clone.compiled = clone.exportImporter()
+	return clone
 }
 
 func (g *packageGraph) goList(ctx context.Context, arguments []string, receive func(listedPackage)) error {

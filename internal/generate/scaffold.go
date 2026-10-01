@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"slices"
 
+	"github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
@@ -65,6 +66,28 @@ type ScaffoldOptions struct {
 	Event    string
 	Subject  string
 	Resource string
+	// Model extension slots: the Go field names of each slot kind, and the
+	// storage disk ID that attachment slots use.
+	Translated  []string
+	Attachment  []string
+	Attachments []string
+	Metadata    []string
+	Disk        string
+	// FieldDocumentation and Framework apply to the generation a scaffold runs
+	// (a model with slots, an endpoint or a notification), as they do to
+	// foundry generate.
+	FieldDocumentation bool
+	Framework          frameworkinfo.Build
+}
+
+// generates reports whether the scaffold runs generation for its package.
+func (o ScaffoldOptions) generates() bool {
+	return o.Kind == EndpointScaffold || o.Kind == NotificationScaffold || o.Kind == ModelScaffold && o.hasSlots()
+}
+
+// generation is the generation the scaffold runs for its package.
+func (o ScaffoldOptions) generation() Options {
+	return Options{Dir: o.Dir, FieldDocumentation: o.FieldDocumentation, Framework: o.Framework}
 }
 
 var legacyScaffoldName = regexp.MustCompile(`^[\pL\pN_]+_(migration|seeder)\.go$`)
@@ -84,7 +107,16 @@ func Scaffold(ctx context.Context, options ScaffoldOptions) (string, error) {
 	if options.Kind == EndpointScaffold || options.Kind == NotificationScaffold {
 		return scaffoldWithContracts(ctx, options)
 	}
-	return scaffoldFile(ctx, options, imports)
+	path, err := scaffoldFile(ctx, options, imports)
+	if err != nil || !options.hasSlots() {
+		return path, err
+	}
+	// The model's DefineExtensions returns the generated extension set, so its
+	// declarations are generated now; the package compiles again afterwards.
+	if _, err := Generate(ctx, options.generation()); err != nil {
+		return path, fmt.Errorf("model %s was created; run foundry generate to create its slot declarations: %w", path, err)
+	}
+	return path, nil
 }
 
 // scaffoldFile creates the single declaration file of options.
@@ -125,7 +157,13 @@ func scaffoldFile(ctx context.Context, options ScaffoldOptions, imports []string
 		overlay[name] = data
 	}
 	overlay[name] = data
-	if err := input.check(overlay, nil); err != nil {
+	if options.hasSlots() {
+		// DefineExtensions returns the extension set generation creates for the
+		// new file, so check the file with the output generated for it.
+		if err := checkWithGeneration(ctx, graph, name, data); err != nil {
+			return "", err
+		}
+	} else if err := input.check(overlay, nil); err != nil {
 		return "", err
 	}
 	plan := writePlan{changes: map[string][]byte{name: data}, before: map[string]oldFile{name: {}}, scaffold: true}
@@ -138,6 +176,16 @@ func scaffoldFile(ctx context.Context, options ScaffoldOptions, imports []string
 		return "", err
 	}
 	return filepath.Join(input.dir, name), nil
+}
+
+// checkWithGeneration generates the package in memory with the proposed file
+// added, which type-checks the file together with the output it needs. It
+// publishes nothing.
+// It reuses graph's package listing and export data, so it runs no go list.
+func checkWithGeneration(ctx context.Context, graph *packageGraph, name string, data []byte) error {
+	// The graph's root is the package directory as go list reports it.
+	_, err := graph.withOverlay(map[string][]byte{filepath.Join(graph.root, name): data}).prepare(ctx)
+	return err
 }
 
 // ValidateScaffold checks options without loading packages or touching files.
@@ -158,6 +206,12 @@ func scaffoldImports(options ScaffoldOptions) ([]string, error) {
 	}
 	if options.Kind != MigrationScaffold && (options.Origin != "" || options.Version != "" || options.Create != "") {
 		return nil, fmt.Errorf("migration origin, version and --create are only valid for a migration")
+	}
+	if options.Kind != ModelScaffold && (options.hasSlots() || options.Disk != "") {
+		return nil, fmt.Errorf("extension slot flags and --disk are only valid for a model")
+	}
+	if options.FieldDocumentation && !options.generates() {
+		return nil, fmt.Errorf("--field-docs applies only to scaffolds that run generation: a model with slots, an endpoint or a notification")
 	}
 	if err := validateComponentOptions(options); err != nil {
 		return nil, err

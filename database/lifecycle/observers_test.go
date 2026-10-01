@@ -108,3 +108,50 @@ func TestObserverSetRejectsInvalidDuplicateAndConflictingDeclarations(t *testing
 		t.Fatal("zero set is not empty", err)
 	}
 }
+
+// A deletion observer takes part only in deletions: the ordinary set neither
+// reports nor dispatches it, and the deletion view joins it to the model's
+// write observers in declaration order. Both kinds share the hook type.
+func TestDeletionObserversJoinOnlyDeletions(t *testing.T) {
+	declare := func(observer lifecycle.Observer[observerModel, observerHooks]) lifecycle.Declaration {
+		t.Helper()
+		item, err := observer.Declare(func() observerHooks { return observerHooks{Name: observer.Name()} })
+		if err != nil {
+			t.Fatal(err)
+		}
+		return item
+	}
+	deletion := declare(lifecycle.NewDeletionObserver[observerModel, observerHooks]("cleanup"))
+	only, err := lifecycle.NewObservers(deletion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lifecycle.HasObservers[observerModel](only) || !lifecycle.HasDeletionObservers[observerModel](only) {
+		t.Fatal("a deletion observer must count only for deletions")
+	}
+	if factories, err := lifecycle.ObserverFactories[observerModel, observerHooks](only); err != nil || len(factories) != 0 {
+		t.Fatal("other writes dispatched a deletion observer", err)
+	}
+	set, err := lifecycle.NewObservers(declare(lifecycle.NewObserver[observerModel, observerHooks]("audit")), deletion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	factories, err := lifecycle.ObserverFactories[observerModel, observerHooks](set.ForDeletion())
+	if err != nil || len(factories) != 2 || factories[0]().Name != "audit" || factories[1]().Name != "cleanup" {
+		t.Fatal("the deletion view lost an observer or its order", err)
+	}
+	if writes, err := lifecycle.ObserverFactories[observerModel, observerHooks](set); err != nil || len(writes) != 1 {
+		t.Fatal("ordinary writes must dispatch only write observers", err)
+	}
+	conflicting, err := lifecycle.NewDeletionObserver[observerModel, otherObserverHooks]("other").Declare(func() otherObserverHooks { return otherObserverHooks{} })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := lifecycle.NewObservers(declare(lifecycle.NewObserver[observerModel, observerHooks]("audit")), conflicting); !errors.Is(err, fault.Invalid) {
+		t.Fatal("write and deletion observers with different hook types were accepted", err)
+	}
+	var empty lifecycle.Observers
+	if lifecycle.HasDeletionObservers[observerModel](empty.ForDeletion()) {
+		t.Fatal("the zero set observes nothing")
+	}
+}

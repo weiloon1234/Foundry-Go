@@ -8,6 +8,7 @@ import (
 	"foundry.test/consumer/localization"
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/decimal"
+	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -34,6 +35,8 @@ type Payload struct {
 	Bytes    []byte                                 `json:"bytes"`
 	Keys     map[int64]string                       `json:"keys"`
 	Tags     []string                               `json:"tags"`
+	// Titles is keyed by the catalog's supported locales in client requests.
+	Titles value.Optional[map[i18n.LocaleID]string] `json:"titles,omitzero"`
 }
 
 // OwnerIndex is a schema-only DTO for descriptor navigation: entries keyed by

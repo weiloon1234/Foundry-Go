@@ -69,6 +69,8 @@ type Batch[M any, K comparable] struct {
 	field  Field[M, K]
 	active map[string]bool
 	values map[string]Values
+	// subjects are the subject keys of the loaded owners, in load order.
+	subjects []string
 }
 
 func (b Batch[M, K]) Get(owner model.Reference[M, K]) (Values, error) {
@@ -79,6 +81,18 @@ func (b Batch[M, K]) Get(owner model.Reference[M, K]) (Values, error) {
 	if err != nil {
 		return Values{}, err
 	}
+	return b.get(subject)
+}
+
+// getAt returns the values of the i-th loaded owner with the subject key
+// derived while loading.
+func (b Batch[M, K]) getAt(i int) (Values, error) {
+	if b.active == nil || b.values == nil || i < 0 || i >= len(b.subjects) {
+		return Values{}, invalid()
+	}
+	return b.get(b.subjects[i])
+}
+func (b Batch[M, K]) get(subject string) (Values, error) {
 	if !b.active[subject] {
 		return Values{}, database.NotFound
 	}
@@ -117,11 +131,11 @@ func (f Field[M, K]) loadIn(ctx context.Context, tx *database.Tx, m *Manager, ow
 	if err != nil {
 		return Batch[M, K]{}, err
 	}
-	active, err := f.definition.owner.Active(ctx, tx, m.store.Registry(), owners)
+	active, subjects, err := f.definition.owner.ActiveSubjects(ctx, tx, m.store.Registry(), owners)
 	if err != nil {
 		return Batch[M, K]{}, err
 	}
-	result := Batch[M, K]{field: f, active: active, values: make(map[string]Values, len(active))}
+	result := Batch[M, K]{field: f, active: active, values: make(map[string]Values, len(active)), subjects: subjects}
 	if len(active) == 0 {
 		return result, nil
 	}

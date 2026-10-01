@@ -84,6 +84,8 @@ type Batch[M any, K comparable, V any] struct {
 	key    Key[M, K, V]
 	active map[string]bool
 	values map[string]value.JSON[json.RawMessage]
+	// subjects are the subject keys of the loaded owners, in load order.
+	subjects []string
 }
 
 func (Batch[M, K, V]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("metadata batch")) }
@@ -98,6 +100,21 @@ func (b Batch[M, K, V]) Get(ctx context.Context, owner model.Reference[M, K]) (v
 	if err != nil {
 		return value.Optional[V]{}, err
 	}
+	return b.get(ctx, subject)
+}
+
+// getAt returns the value of the i-th loaded owner with the subject key
+// derived while loading.
+func (b Batch[M, K, V]) getAt(ctx context.Context, i int) (value.Optional[V], error) {
+	if ctx == nil || b.active == nil || b.values == nil || i < 0 || i >= len(b.subjects) {
+		return value.Optional[V]{}, invalid()
+	}
+	if err := ctx.Err(); err != nil {
+		return value.Optional[V]{}, err
+	}
+	return b.get(ctx, b.subjects[i])
+}
+func (b Batch[M, K, V]) get(ctx context.Context, subject string) (value.Optional[V], error) {
 	if !b.active[subject] {
 		return value.Optional[V]{}, database.NotFound
 	}
@@ -130,11 +147,11 @@ func (k Key[M, K, V]) Load(ctx context.Context, m *Manager, owners []model.Refer
 // loadIn reads one owner batch inside tx, which is either the store's own
 // read-only snapshot or a savepoint joined to the caller's transaction.
 func (k Key[M, K, V]) loadIn(ctx context.Context, tx *database.Tx, m *Manager, owners []model.Reference[M, K]) (Batch[M, K, V], error) {
-	active, err := k.definition.owner.Active(ctx, tx, m.store.Registry(), owners)
+	active, subjects, err := k.definition.owner.ActiveSubjects(ctx, tx, m.store.Registry(), owners)
 	if err != nil {
 		return Batch[M, K, V]{}, err
 	}
-	result := Batch[M, K, V]{key: k, active: active, values: make(map[string]value.JSON[json.RawMessage])}
+	result := Batch[M, K, V]{key: k, active: active, values: make(map[string]value.JSON[json.RawMessage]), subjects: subjects}
 	if len(active) == 0 {
 		return result, nil
 	}

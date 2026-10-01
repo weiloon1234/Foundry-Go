@@ -168,8 +168,8 @@ func (s ValueSlot[M, K, V]) fetch(ctx context.Context, executor database.Executo
 			return nil, err
 		}
 		result := make([]Value[V], len(part))
-		for i, reference := range references {
-			stored, err := batch.Get(ctx, reference)
+		for i := range references {
+			stored, err := batch.getAt(ctx, i)
 			if errors.Is(err, database.NotFound) {
 				continue
 			}

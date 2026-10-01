@@ -2,6 +2,7 @@ package application
 
 import (
 	"github.com/weiloon1234/Foundry-Go/clock"
+	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/extensions/slots"
 	"github.com/weiloon1234/Foundry-Go/foundation"
@@ -11,24 +12,45 @@ import (
 	"github.com/weiloon1234/Foundry-Go/translations"
 )
 
-func registerExtensions(builder *foundation.Builder, s FeatureSettings, source clock.Clock, models []slots.Declaration) {
+func registerExtensions(builder *foundation.Builder, s FeatureSettings, source clock.Clock, models []slots.Declaration, pools []database.ConnectionName) {
 	c := s.Extensions
+	if s.ExtensionCleanup.Jobs != "" {
+		registerExtensionCleanup(builder, s, pools)
+	}
 	if len(models) > 0 {
-		// Cleanup observers join the owner's deletion transaction, so they
-		// belong to the extension store's pool. Observer registration must
-		// happen here, before the pool binds its frozen observer set.
-		pool := infrastructure.DatabaseKey(c.Database)
-		builder.Register(foundation.Module{Name: "foundry.application.model-extensions", Requires: []foundation.ProviderID{infrastructure.DatabaseProvider(c.Database)}, OnRegister: func(r *foundation.Registrar) error {
+		// A model can be deleted through any configured pool. On the extension
+		// store's pool, cleanup joins the deletion transaction; on another it
+		// runs after commit. Each configured connection is one pool, so every
+		// pool receives each observer once. Observer registration must happen
+		// here, before the pools bind their frozen observer sets.
+		requires := make([]foundation.ProviderID, 0, len(pools))
+		for _, name := range pools {
+			requires = append(requires, infrastructure.DatabaseProvider(name))
+		}
+		durable := s.ExtensionCleanup.Jobs != ""
+		if durable {
+			requires = append(requires, extensionCleanupProvider)
+		}
+		builder.Register(foundation.Module{Name: "foundry.application.model-extensions", Requires: requires, OnRegister: func(r *foundation.Registrar) error {
+			// Only deletion observers receive the cleanup queue: descriptors
+			// bound in application jobs never depend on the job dispatcher.
 			resolve := func(resolver foundation.Resolver) (slots.Runtime, error) {
 				services, err := FromResolver(resolver)
 				if err != nil {
 					return slots.Runtime{}, err
 				}
-				return services.ModelExtensions()
+				runtime, err := services.ModelExtensions()
+				if err != nil || !durable {
+					return runtime, err
+				}
+				runtime.CleanupQueue, err = foundation.Resolve(resolver, extensionCleanupKey)
+				return runtime, err
 			}
-			for _, declaration := range models {
-				if err := declaration.Register(r, pool, resolve); err != nil {
-					return err
+			for _, name := range pools {
+				for _, declaration := range models {
+					if err := declaration.Register(r, infrastructure.DatabaseKey(name), resolve); err != nil {
+						return err
+					}
 				}
 			}
 			return nil

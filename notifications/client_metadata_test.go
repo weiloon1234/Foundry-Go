@@ -3,8 +3,13 @@ package notifications
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/weiloon1234/Foundry-Go/contract"
+	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
 func TestNotificationClientMetadataExcludesPrivateInputsAndTransports(t *testing.T) {
@@ -41,4 +46,31 @@ func TestNotificationClientMetadataExcludesPrivateInputsAndTransports(t *testing
 	if _, err := (*Registry)(nil).ClientDescriptions(); err == nil {
 		t.Fatal("nil registry accepted")
 	}
+}
+
+// Inbox and realtime payloads are output: one reaching a password hint fails
+// registration, whether or not clients are exported. Notification inputs and
+// private transport payloads are not client output.
+func TestNotificationOutputsRejectPasswordPresentation(t *testing.T) {
+	a := newAuthority(t)
+	render := func(context.Context, Member, DeliveryContext, Input) (InboxData, error) { return InboxData{}, nil }
+	inbox := Database("inbox", passwordSchema[InboxData](), render)
+	if _, err := NewRegistry(Bind(Define("notice", 1, textSchema[Input]()), a.recipient, inbox.Channel()).Registration()); !errors.Is(err, fault.Invalid) {
+		t.Fatal("password inbox payload registered", err)
+	}
+	private := Custom("private.transport", passwordSchema[InboxData](), render, transportFunc[InboxData](func(context.Context, DeliveryID, InboxData) (Outcome, error) {
+		return Accepted, nil
+	}))
+	if _, err := NewRegistry(Bind(Define("notice", 1, passwordSchema[Input]()), a.recipient, private).Registration()); err != nil {
+		t.Fatal("password input or private transport rejected", err)
+	}
+}
+
+func passwordSchema[T any]() contract.JSON[T] {
+	typ := reflect.TypeFor[T]()
+	id := contract.TypeID(typ.PkgPath() + "." + typ.Name())
+	return contract.DefineJSON[T](contract.Schema{Root: id, Types: []contract.Type{
+		{ID: id, Kind: contract.ObjectKind, Properties: []contract.Property{{Name: "text", Type: "string", Required: true, Presentation: contract.Presentation{Kind: contract.PasswordPresentation}}}},
+		{ID: "string", Kind: contract.StringKind},
+	}})
 }

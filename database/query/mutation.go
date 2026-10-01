@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
+	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 )
 
 // Assignment is one model-owned mutation value. Ordinary consumers use generated
@@ -71,6 +72,29 @@ const (
 	restoreModel
 	forceDeleteModel
 )
+
+// deletes reports the kinds deletion observers observe: delete, soft delete
+// and force delete.
+func (k mutationKind) deletes() bool {
+	return k == deleteModel || k == softDeleteModel || k == forceDeleteModel
+}
+
+// observedBy reports whether observers registered for M take part in a write
+// of kind; deletion observers take part only in deletions.
+func observedBy[M any](set lifecycle.Observers, kind mutationKind) bool {
+	if kind.deletes() {
+		return lifecycle.HasDeletionObservers[M](set)
+	}
+	return lifecycle.HasObservers[M](set)
+}
+
+// observersFor is the observer set a write of kind dispatches.
+func observersFor(set lifecycle.Observers, kind mutationKind) lifecycle.Observers {
+	if kind.deletes() {
+		return set.ForDeletion()
+	}
+	return set
+}
 
 // mutationPlan uses the same expression AST, model metadata, codecs and compiler
 // as reads. There is no model-specific SQL implementation.

@@ -92,6 +92,13 @@ func TestPasswordTypesFollowEveryOutputPath(t *testing.T) {
 	if sensitive["plain"] || sensitive["string"] {
 		t.Fatal("unrelated types were marked sensitive")
 	}
+	// Output owners share one refusal, naming their output kind.
+	if err := RejectPasswordOutput(Schema{Root: "tree", Types: types}, "table row"); err == nil || !strings.Contains(err.Error(), "table row output") {
+		t.Fatal("password output accepted or unnamed", err)
+	}
+	if err := RejectPasswordOutput(Schema{Root: "plain", Types: types}, "table row"); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestPresentationRegistrationNamesTheContradictingField(t *testing.T) {

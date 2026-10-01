@@ -10,38 +10,12 @@ import (
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/outbox"
-	"github.com/weiloon1234/Foundry-Go/redis"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
-	"net"
-	"os"
-	"strconv"
+	redistest "github.com/weiloon1234/Foundry-Go/testkit/redis"
 	"testing"
 	"time"
 )
 
-func nativeRedis(t *testing.T) infrastructure.RedisConnectionSettings {
-	t.Helper()
-	address := os.Getenv("FOUNDRY_TEST_REDIS_ADDR")
-	if address == "" {
-		if os.Getenv("FOUNDRY_TEST_REDIS_REQUIRED") == "1" {
-			t.Fatal("required Redis endpoint missing")
-		}
-		t.Skip("native Redis is opt-in")
-	}
-	host, port, err := net.SplitHostPort(address)
-	if err != nil {
-		t.Fatal(err)
-	}
-	number, err := strconv.ParseUint(port, 10, 16)
-	if err != nil {
-		t.Fatal(err)
-	}
-	c := infrastructure.DefaultRedisConnectionSettings()
-	c.Host = host
-	c.Port = uint16(number)
-	c.TLS = redis.DisableTLS
-	return c
-}
 func TestConfiguredOutboxKeepsTransactionSchemaAndNamedQueue(t *testing.T) {
 	migrationDB := pgtest.Open(t)
 	schema := pgtest.Namespace(t, migrationDB)
@@ -51,7 +25,7 @@ func TestConfiguredOutboxKeepsTransactionSchemaAndNamedQueue(t *testing.T) {
 	databaseConfig := infrastructure.DefaultConnectionSettings()
 	databaseConfig.Primary = infrastructure.PostgreSQLSettingsFromConfig(pgtest.Config(t))
 	s.Services.Database.Connections = infrastructure.DatabaseConnections{"default": databaseConfig, "other": databaseConfig}
-	s.Services.Redis.Connections = infrastructure.RedisConnections{"default": nativeRedis(t)}
+	s.Services.Redis.Connections = infrastructure.RedisConnections{"default": infrastructure.RedisSettingsFromConfig(redistest.Config(t))}
 	connection := infrastructure.DefaultJobConnectionSettings()
 	connection.Driver = infrastructure.RedisJobs
 	connection.DefaultQueue = "configured"

@@ -31,6 +31,25 @@ type ClientNotificationInfo struct {
 	Channels  []ClientChannelInfo `json:"channels"`
 }
 
+// outputPresentation rejects an inbox or realtime payload whose graph reaches a
+// password hint. Password hints are input-only; the registry checks each
+// client-facing channel once, whether or not clients are exported.
+func (r *registration) outputPresentation() error {
+	for _, channel := range r.channels {
+		if channel.client == nil {
+			continue
+		}
+		schema, err := channel.client()
+		if err != nil {
+			return err
+		}
+		if err := contract.RejectPasswordOutput(schema, "notification"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ClientDescriptions returns deterministic owned metadata from the same typed
 // bindings used for delivery, without resolving recipients or running renderers.
 // Bindings with no client-facing channel are omitted.

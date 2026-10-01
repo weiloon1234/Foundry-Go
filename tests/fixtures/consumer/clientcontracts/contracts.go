@@ -135,6 +135,7 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 	router, err := foundryhttp.NewRouter(append(append(pluralRoutes, transportRoutes(signer)...),
 		requestflow.Submit.Handle(requestflow.Handle),
 		unions.Echo.Handle(unions.Handle),
+		unions.Method.Handle(unions.HandleMethod),
 		genericdto.Echo.Handle(genericdto.HandleEcho),
 		genericdto.ShowProject.Handle(genericdto.HandleProject),
 		Echo.Handle(func(_ context.Context, input foundryhttp.Input[ItemPath, Filters, Payload]) (Payload, error) {

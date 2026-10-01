@@ -38,7 +38,10 @@ export interface FormField<T> {
   /** Explicit parsing through the existing codec, or an application parser. */
   parse(parser?: (text: string) => Exclude<T, undefined>): boolean;
 }
-type DescriptorOperation<O> = O extends readonly [infer First, ...unknown[]] ? First extends readonly unknown[] ? DescriptorOperation<First> : O extends readonly [infer K, unknown, unknown] ? K : never : never;
+/** Owner paths rooted at operation K: field() or body(), then field/variant/at/element steps. */
+type FormOwner<K> = readonly [K, string, string] | readonly [K, "body"] | readonly [FormOwner<K>, unknown] | readonly [FormOwner<K>, unknown, unknown];
+/** Any field of operation K, whatever its value type. */
+export interface FormDependency<K extends keyof Operations> { readonly [descriptorType]: (value: never, owner: never) => readonly [unknown, FormOwner<K>]; readonly path: string }
 export interface FormOptions {
   readonly limits?: JSONLimits;
   readonly validation?: ClientOptions;
@@ -47,11 +50,23 @@ export interface FormOptions {
 }
 /**
  * A completed request always reports its actual result; `changed` means the draft
- * was edited, reset or disposed after it was sent. Cancellation only ends this
- * client's wait: `unknown` means the server may still have processed the request.
+ * was edited, reset or disposed after it was sent. A failure's `outcome` says what
+ * the client knows: `not_sent` (it never left the client), `error_response` (the
+ * server answered with a declared error) or `unknown` (the transport failed or
+ * the response broke its contract, so the server may have acted). Cancellation
+ * only ends this client's wait; `unknown` again means it may have been processed.
  */
-export type FormSubmission<T> = { readonly status: "succeeded"; readonly value: T; readonly changed: boolean } | { readonly status: "invalid"; readonly report: ValidationReport } | { readonly status: "failed"; readonly error: unknown; readonly changed: boolean } | { readonly status: "canceled"; readonly outcome: "not_sent" | "unknown" };
-export interface FormTaskOptions { readonly debounceMS?: number }
+export type FormSubmission<T> = { readonly status: "succeeded"; readonly value: T; readonly changed: boolean } | { readonly status: "invalid"; readonly report: ValidationReport } | { readonly status: "failed"; readonly error: unknown; readonly changed: boolean; readonly outcome: "not_sent" | "error_response" | "unknown" } | { readonly status: "canceled"; readonly outcome: "not_sent" | "unknown" };
+export interface FormTaskOptions<K extends keyof Operations = keyof Operations> {
+  readonly debounceMS?: number;
+  /**
+   * The fields the callback reads; an element() template covers every entry.
+   * Omitted, every edit invalidates the task. Declared, only a value write at,
+   * above or below one of them does; unparsed text never does. Reset, cancel()
+   * and disposal always do.
+   */
+  readonly dependsOn?: readonly FormDependency<K>[];
+}
 export interface FormTaskSnapshot<T> { readonly status: "idle" | "pending" | "succeeded" | "failed" | "canceled" | "disposed"; readonly value: FormReadonly<T> | undefined; readonly error: unknown; readonly pending: number }
 /** `canceled`: a newer run, an edit, cancel() or disposal ended this run, whether or not its callback had started. */
 export type FormTaskResult<T> = { readonly status: "succeeded"; readonly value: FormReadonly<T> } | { readonly status: "failed"; readonly error: unknown } | { readonly status: "canceled" };
@@ -62,19 +77,28 @@ export interface FormTask<T> extends FormStore<FormTaskSnapshot<T>> {
 }
 export interface FormController<K extends keyof Operations> extends FormStore<FormSnapshot<K>> {
   readonly operation: OperationDescriptor<K>;
-  field<T, O>(descriptor: FieldDescriptor<T, O> & ([DescriptorOperation<O>] extends [never] ? never : [DescriptorOperation<O>] extends [K] ? unknown : never)): FormField<T>;
+  field<T, O>(descriptor: FieldDescriptor<T, O> & ([O] extends [FormOwner<K>] ? unknown : never)): FormField<T>;
   validate(): ValidationReport;
   /** Exactly one invocation at a time. No implicit retries or replacement. Edits never abort it; cancel() and dispose() do. */
   submit(client: API, options?: CallOptions): Promise<FormSubmission<Operations[K]["response"]>>;
   reset(values?: FormDraft<Operations[K]["request"]>): void;
   cancel(): void;
   dispose(): void;
-  /** Latest result wins; edits/reset/cancel/disposal invalidate earlier work. */
-  task<T>(load: (values: FormDraft<Operations[K]["request"]>, signal: AbortSignal) => Promise<T>, options?: FormTaskOptions): FormTask<T>;
+  /** Latest result wins; edits (or only those dependsOn declares), reset, cancel and disposal invalidate earlier work. */
+  task<T>(load: (values: FormDraft<Operations[K]["request"]>, signal: AbortSignal) => Promise<T>, options?: FormTaskOptions<K>): FormTask<T>;
 }
 // Form bookkeeping has independent bounds; wire/validation limits remain owned
 // by the operation. Async capacity counts callbacks until their actual exit.
-const formPolicy = Object.freeze({ listeners: 1024, tasks: 32, active: 4, debounceMS: 60000 });
+const formPolicy = Object.freeze({ listeners: 1024, tasks: 32, active: 4, debounceMS: 60000, dependencies: 64 });
+// What an edit changed: everything (reset, cancel, disposal), only unparsed text,
+// or the value at one concrete path.
+type FormChange = undefined | "text" | readonly (string | number)[];
+// A write at, above or below a dependency changes what it reads; a null
+// (element template) segment matches every entry.
+function formOverlaps(changed: readonly (string | number)[], dependency: readonly (string | number | null)[]): boolean {
+  for (let i = 0; i < changed.length && i < dependency.length; i++) if (dependency[i] !== null && dependency[i] !== changed[i]) return false;
+  return true;
+}
 
 function formCopy<T>(input: T, limits: JSONLimits): T {
   let nodes = 0, bytes = 0;
@@ -206,7 +230,7 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
   let text: Readonly<Record<string, string>> = Object.freeze(Object.create(null));
   let touched: readonly string[] = Object.freeze([]), issues: readonly Issue[] = Object.freeze([]), validation: ValidationReport | undefined;
   let status: FormStatus = "idle", error: unknown, submission: AbortController | undefined, taskNotifying = false;
-  const tasks = new Set<{ invalidate(): void; dispose(): void }>();
+  const tasks = new Set<{ invalidate(change: FormChange): void; dispose(): void }>();
   let activeTasks = 0;
   const snapshot = (): FormSnapshot<K> => Object.freeze({ values, text, touched, dirty: !formEqual(values, baseline) || Object.keys(text).length > 0, issues, validation, status, pending: submission !== undefined, error, revision });
   const store = formStore(snapshot(), onListenerError);
@@ -215,9 +239,9 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
   // Callers store their new state first: task abort listeners run synchronously
   // and must observe current values with the new revision. Edits never abort a
   // submission; only cancel() and dispose() do.
-  const invalidate = (): void => {
+  const invalidate = (change?: FormChange): void => {
     revision++; issues = Object.freeze([]); validation = undefined; error = undefined; status = "idle";
-    for (const task of [...tasks]) task.invalidate();
+    for (const task of [...tasks]) task.invalidate(change);
   };
   const checked = (descriptor: object): DescriptorReference => {
     const reference = descriptorReferences.get(descriptor);
@@ -245,7 +269,7 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
       const guard = formPayloadGuard(reference);
       if (!remove && guard) value = Object.assign(Object.create(null), value, { [guard.discriminator]: guard.tag });
       const next = formCopy(formWrite(values, reference.segments, value, remove), limits) as Draft;
-      values = next; clearText(); touched = Object.freeze(touched.filter(key => !key.startsWith(path + "/"))); invalidate(); emit();
+      values = next; clearText(); touched = Object.freeze(touched.filter(key => !key.startsWith(path + "/"))); invalidate(reference.segments as readonly (string | number)[]); emit();
     };
     return Object.freeze({
       path,
@@ -258,7 +282,7 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
       touch(): void { live(); checked(descriptor); if (!touched.includes(path)) { touched = formCopy([...touched, path], limits); emit(); } },
       setText(value: string): void {
         live(); checked(descriptor); if (typeof value !== "string") reject(path, "type");
-        text = formCopy({ ...text, [path]: value }, limits); invalidate(); emit();
+        text = formCopy({ ...text, [path]: value }, limits); invalidate("text"); emit();
       },
       parse(parser?: (text: string) => Exclude<T, undefined>): boolean {
         live(); const reference = checked(descriptor); if (!Object.hasOwn(text, path)) return true;
@@ -322,11 +346,18 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
           return { status: "canceled", outcome: sent ? "unknown" : "not_sent" };
         }
         const late = changed();
+        // Only a contract failure the SDK raised before calling its transport
+        // never left the client; a declared API error is the server's answer;
+        // anything else, including a response that broke its contract or a
+        // ContractError thrown by application code, leaves the outcome unknown.
+        const outcome = caught instanceof APIError ? "error_response" : caught instanceof ContractError && unsentFailures.has(caught) ? "not_sent" : "unknown";
         // Server issues describe the request that was sent; a changed draft keeps
         // its own, newer state and the caller receives the failure.
         if (!late) {
           status = "failed"; error = caught;
-          if (caught instanceof ContractError) issues = formCopy(caught.issues, limits);
+          // Response issues point into the response, not at request fields.
+          if (caught instanceof ResponseContractError) issues = Object.freeze([{ path: "", code: "form_response" }]);
+          else if (caught instanceof ContractError) issues = formCopy(caught.issues, limits);
           else if (caught instanceof APIError && caught.response !== undefined) {
             // The SDK already decoded the shared error envelope. Validate wrapped
             // clients too before accepting its field pointers into form state.
@@ -336,7 +367,7 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
             } catch { issues = Object.freeze([{ path: "", code: "form_request" }]); }
           } else issues = Object.freeze([{ path: "", code: "form_request" }]);
         }
-        return { status: "failed", error: caught, changed: late };
+        return { status: "failed", error: caught, changed: late, outcome };
       } finally {
         // Release the guard first; nothing after it can keep the form busy.
         submission = undefined; signal?.removeEventListener("abort", aborted);
@@ -352,10 +383,26 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
       if (disposed) return; live(); invalidate(); disposed = true; status = "disposed"; submission?.abort();
       for (const task of [...tasks]) task.dispose(); emit(); store.clear();
     },
-    task<T>(load: (values: Draft, signal: AbortSignal) => Promise<T>, taskOptions: FormTaskOptions = {}): FormTask<T> {
+    task<T>(load: (values: Draft, signal: AbortSignal) => Promise<T>, taskOptions: FormTaskOptions<K> = {}): FormTask<T> {
       live(); if (typeof load !== "function" || tasks.size >= formPolicy.tasks) reject("", "form_task_limit");
       const debounce = taskOptions.debounceMS ?? 0;
       if (!Number.isSafeInteger(debounce) || debounce < 0 || debounce > formPolicy.debounceMS) reject("", "form_debounce");
+      // Snapshot the declared paths once. An empty list would silently ignore
+      // every edit; omit dependsOn to depend on the whole draft.
+      const declared: unknown = taskOptions.dependsOn;
+      let dependencies: readonly (readonly (string | number | null)[])[] | undefined;
+      if (declared !== undefined) {
+        if (!Array.isArray(declared) || declared.length === 0 || declared.length > formPolicy.dependencies) reject("", "form_task_dependencies");
+        const paths: (readonly (string | number | null)[])[] = [];
+        for (const descriptor of [...declared] as unknown[]) {
+          const reference = descriptor !== null && typeof descriptor === "object" ? descriptorReferences.get(descriptor) : undefined;
+          if (!reference || reference.operation !== operation.name) reject("", "form_field_owner");
+          if (reference.segments.length > limits.Depth) reject("", "limit");
+          paths.push(Object.freeze([...reference.segments]));
+        }
+        dependencies = Object.freeze(paths);
+      }
+      const affected = (change: FormChange): boolean => !dependencies || change === undefined || (change !== "text" && dependencies.some(path => formOverlaps(change, path)));
       interface TaskRun { readonly abort: AbortController; started: boolean; released: boolean }
       let sequence = 0, dead = false, current: TaskRun | undefined, pending = 0;
       let taskStatus: FormTaskSnapshot<T>["status"] = "idle", taskValue: FormReadonly<T> | undefined, taskError: unknown;
@@ -375,7 +422,7 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
         return run;
       };
       const invalidateTask = (): void => { const run = stop(); taskStatus = "canceled"; taskValue = undefined; taskError = undefined; run?.abort.abort(); taskEmit(); };
-      const owner = { invalidate: invalidateTask, dispose(): void { if (dead) return; invalidateTask(); dead = true; taskStatus = "disposed"; taskEmit(); taskStore.clear(); tasks.delete(owner); } };
+      const owner = { invalidate(change: FormChange): void { if (affected(change)) invalidateTask(); }, dispose(): void { if (dead) return; invalidateTask(); dead = true; taskStatus = "disposed"; taskEmit(); taskStore.clear(); tasks.delete(owner); } };
       tasks.add(owner);
       return Object.freeze({
         getSnapshot: taskStore.getSnapshot,
@@ -387,10 +434,10 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
           // Replacing this task's own not-yet-started run frees its capacity.
           if (activeTasks - (current && !current.started ? 1 : 0) >= formPolicy.active) reject("", "form_task_busy");
           const previous = stop(), run: TaskRun = { abort: new AbortController(), started: false, released: false };
-          const token = ++sequence, version = revision, request = values, abort = run.abort;
+          const token = ++sequence, request = values, abort = run.abort;
           // Every path that supersedes a run also aborts it, so one check covers
-          // a newer run, an edit, cancel() and disposal at any stage.
-          const ended = (): boolean => abort.signal.aborted || dead || disposed || token !== sequence || version !== revision;
+          // a newer run, an affecting edit, cancel() and disposal at any stage.
+          const ended = (): boolean => abort.signal.aborted || dead || disposed || token !== sequence;
           current = run; pending++; activeTasks++; taskStatus = "pending"; taskValue = undefined; taskError = undefined;
           previous?.abort.abort(); taskEmit();
           try {

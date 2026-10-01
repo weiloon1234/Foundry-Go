@@ -62,6 +62,16 @@ its translations and metadata first, then publishes files; the existing
 `Result.Publication` states whether each file was published, unpublished or
 uncertain.
 
+Follow-up delivered on 2026-09-30 and revised on 2026-10-01 after review:
+publication inside a caller's transaction is two-phase. `PrepareFile`/`Prepare`
+keep the recoverable intent, storage and pin steps in the manager's own
+transactions before the transaction begins, locking an existing owner while
+counting its intents. `ReplaceIn`/`AddIn` publish the `Prepared` upload through a
+savepoint of the caller's transaction, using only its connection, and recount
+under the owner lock. A failed or rolled-back publication leaves the upload
+`stored` for another attempt, `Discard` or `ReconcilePending`; old-file cleanup
+and unqueued variants run after commit.
+
 - `attachments.FileSource` is a small interface with `Open(context.Context)
   (io.ReadSeekCloser, error)`, `Name() string` and `ClientContentType() string`.
   `foundryhttp.UploadedFile` already satisfies it, so `attachments` does not import
@@ -105,7 +115,9 @@ supported-locale union narrowing `i18n.LocaleID` keys in
 [TypeScript](../../typescript/render.go) and OpenAPI was not delivered in this
 series: it changes client and manifest compatibility and needs its own
 [compatibility](../../docs/compatibility.md) review. The server rule is
-authoritative.
+authoritative. Follow-up delivered on 2026-09-30: TypeScript emits `Locale` from
+the manifest's supported locales and `LocaleMap<V>` for request maps keyed by
+`i18n.LocaleID`; received values keep string keys and OpenAPI is unchanged.
 
 ## Acceptance
 

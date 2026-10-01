@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
@@ -55,4 +56,36 @@ func TestPresenceRejectsModelsAndPrivateChannelsNeedBoundGuard(t *testing.T) {
 	if _, err := ws.NewRegistry(ws.Registration{}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("empty registration accepted")
 	}
+}
+
+// Server-sent payloads reaching a password hint fail registration, even with no
+// client export; the same DTO remains a valid client-to-server input.
+func TestPasswordPresentationIsNotServerOutput(t *testing.T) {
+	channel := publicChannel()
+	secret := passwordContract[Echo]("text")
+	if _, err := ws.NewRegistry(ws.Register(channel, ws.DefineOutgoing(channel, "echo", echoContract()).Registration())); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ws.NewRegistry(ws.Register(channel, ws.DefineOutgoing(channel, "secret", secret).Registration())); !errors.Is(err, fault.Invalid) {
+		t.Fatal("password event output registered", err)
+	}
+	login := ws.DefineIncoming(channel, "login", secret).Handle(func(context.Context, ws.MessageContext[int64, ws.Anonymous], Echo) error { return nil })
+	if _, err := ws.NewRegistry(ws.Register(channel, login)); err != nil {
+		t.Fatal("password event input rejected", err)
+	}
+	a := authentication(t)
+	private := ws.Private[PresenceOwner]("private", ws.DefineRooms(foundryhttp.IntegerPath[int64]()), a.users, func(context.Context, Account, ws.Target[int64]) error { return nil })
+	member := func(context.Context, Account) (SafeMember, error) { return SafeMember{}, nil }
+	if _, err := ws.NewRegistry(ws.Register(ws.WithPresence(private, textContract[SafeMember]("display"), member).Channel())); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ws.NewRegistry(ws.Register(ws.WithPresence(private, passwordContract[SafeMember]("display"), member).Channel())); !errors.Is(err, fault.Invalid) {
+		t.Fatal("password presence registered", err)
+	}
+}
+
+func passwordContract[T any](name string) contract.JSON[T] {
+	typ := reflect.TypeFor[T]()
+	root := contract.TypeID(typ.PkgPath() + "." + typ.Name())
+	return contract.DefineJSON[T](contract.Schema{Root: root, Types: []contract.Type{{ID: root, Kind: contract.ObjectKind, Properties: []contract.Property{{Name: name, Type: "text", Required: true, Presentation: contract.Presentation{Kind: contract.PasswordPresentation}}}}, {ID: "text", Kind: contract.StringKind}}})
 }

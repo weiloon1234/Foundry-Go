@@ -48,7 +48,7 @@ func scaffoldWithContracts(ctx context.Context, options ScaffoldOptions) (string
 		if _, err := Scaffold(ctx, ScaffoldOptions{Dir: options.Dir, Kind: DTOScaffold, Name: name}); err != nil {
 			return "", err
 		}
-		if _, err := Generate(ctx, Options{Dir: options.Dir}); err != nil {
+		if _, err := Generate(ctx, options.generation()); err != nil {
 			return "", fmt.Errorf("generate contracts for the %s scaffold: %w", options.Kind, err)
 		}
 	}

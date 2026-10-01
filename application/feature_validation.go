@@ -124,6 +124,16 @@ func prepareFeatureSettings(s Settings, source clock.Clock) (FeatureSettings, er
 			}
 		}
 	}
+	if name := f.ExtensionCleanup.Jobs; name != "" {
+		// The cleanup job is enqueued through the job connection's outbox and
+		// cleans through the extension store.
+		if !f.Extensions.Enabled || !f.Outbox.Enabled {
+			return f, fault.New(fault.Invalid, "features.extension_cleanup requires features.extensions and features.outbox")
+		}
+		if _, ok := f.Outbox.Jobs[name]; !ok {
+			return f, fault.New(fault.Missing, "features.extension_cleanup.jobs has no features.outbox.jobs destination")
+		}
+	}
 	if f.Locales.Enabled {
 		locales, err := i18n.NewLocaleSet(f.Locales.Default, f.Locales.Locales...)
 		if err != nil {

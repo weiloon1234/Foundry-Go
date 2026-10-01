@@ -5,7 +5,6 @@ import (
 	"database/sql/driver"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
@@ -120,7 +119,7 @@ func (q Query[M]) setWrite(ctx context.Context, writer database.Transactor, kind
 	if q.definition == nil {
 		return 0, fault.New(fault.Invalid, "set-based writes require model metadata")
 	}
-	if err := q.setWriteLifecycle(writer); err != nil {
+	if err := q.setWriteLifecycle(writer, kind); err != nil {
 		return 0, err
 	}
 	if _, err := q.modelWriteCompiler(kind, false); err != nil {
@@ -140,12 +139,12 @@ func (q Query[M]) setWrite(ctx context.Context, writer database.Transactor, kind
 // setWriteLifecycle rejects a set-based write that would silently skip
 // declared hooks or registered observers unless WithoutModelHooks acknowledges
 // it. An executor that cannot prove observers absent counts as observed.
-func (q Query[M]) setWriteLifecycle(writer database.Transactor) error {
+func (q Query[M]) setWriteLifecycle(writer database.Transactor, kind mutationKind) error {
 	if q.skipModelHooks {
 		return nil
 	}
 	observers, known := writerObservers(writer)
-	if q.definition.hasWriteHooks || !known || lifecycle.HasObservers[M](observers) {
+	if q.definition.hasWriteHooks || !known || observedBy[M](observers, kind) {
 		return fault.New(fault.Invalid, "set-based writes skip per-model hooks and observers; use the Each methods or acknowledge with WithoutModelHooks")
 	}
 	return nil

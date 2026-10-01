@@ -86,12 +86,18 @@ func NewRouter(registrations ...RouteRegistration) (*Router, error) {
 		}
 		state := &matchedRoute{info: info, errors: declaredErrors, typed: registration.endpoint != nil, budget: routeBudget{timeout: info.Timeout, bodyBytes: info.MaxBodyBytes}}
 		router.bodyCeiling = max(router.bodyCeiling, info.MaxBodyBytes)
+		handoff := registration.handoff
 		matched := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, request *stdhttp.Request) {
 			// The native mux received the router's fallback probe. A matched
 			// route continues with the original writer and its capabilities.
 			if probe, ok := w.(*routingResponse); ok {
 				probe.matched = true
 				w = probe.native
+			}
+			// A more specific owner answers outside this route, as an unmatched
+			// request would reach it: no route state, budget or middleware.
+			if handoff != nil && handoff(w, request) {
+				return
 			}
 			var kernel *requestBudget
 			if scope := requestScopeFrom(request.Context()); scope != nil {

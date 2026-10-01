@@ -891,8 +891,8 @@ func (s ArticleExtensionSlots) All() []foundryquery.Relation[Article] {
 	return []foundryquery.Relation[Article]{s.Title, s.Summary, s.Logo, s.Galleries, s.SEO}
 }
 
-// ArticleExtensionDeclaration registers the extension owner and slots of Article, plus a hard-delete observer
-// that removes its extension data in the deletion transaction. Register it with application Builder.Models.
+// ArticleExtensionDeclaration registers the extension owner and slots of Article, plus a deletion observer
+// that removes its extension data when a model is hard-deleted through any connection. Register it with application Builder.Models.
 func ArticleExtensionDeclaration() slots.Declaration {
 	s := ArticleExtensions()
 	parts := slots.Parts{
@@ -906,7 +906,7 @@ func ArticleExtensionDeclaration() slots.Declaration {
 		if err != nil {
 			return err
 		}
-		return RegisterArticleObserver(registrar, pool, NewArticleObserver(name), func(resolver foundation.Resolver) (func() ArticleHooks, error) {
+		return RegisterArticleObserver(registrar, pool, lifecycle.NewDeletionObserver[Article, ArticleHooks](name), func(resolver foundation.Resolver) (func() ArticleHooks, error) {
 			runtime, err := resolve(resolver)
 			if err != nil {
 				return nil, err

@@ -163,6 +163,9 @@ func NewRegistry(items ...Registration) (*Registry, error) {
 		if err := d.validate(); err != nil {
 			return nil, err
 		}
+		if err := d.outputPresentation(); err != nil {
+			return nil, err
+		}
 		if _, exists := r.entries[d.key]; exists {
 			return nil, fault.New(fault.Duplicate, "notification binding is already registered")
 		}

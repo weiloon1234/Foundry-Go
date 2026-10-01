@@ -134,7 +134,12 @@ func (h *Hub) ServeHTTP(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		base = observed
 	}
 	outcome := observability.Rejected
-	defer func() { span.End(observability.Result{Outcome: outcome}) }()
+	// Span.End is idempotent. A registered connection ends its observation
+	// before it leaves the Hub's connection index, so no completion check can
+	// find the Hub drained while that observation is active; other paths end
+	// it on return.
+	end := func() { span.End(observability.Result{Outcome: outcome}) }
+	defer end()
 	ctx, operationCancel := context.WithCancel(base)
 	transportContext, transportCancel := context.WithCancel(context.Background())
 	cancel := func() { operationCancel(); transportCancel() }
@@ -153,6 +158,7 @@ func (h *Hub) ServeHTTP(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	defer func() {
 		cancel()
 		c.cleanup()
+		end()
 		h.mu.Lock()
 		delete(h.connections, id)
 		h.ipConnections[c.ip]--

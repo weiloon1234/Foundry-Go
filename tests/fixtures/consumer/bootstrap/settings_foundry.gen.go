@@ -470,19 +470,20 @@ type SettingsAppRealtimeHTTPConfigKeySet struct {
 
 // SettingsAppFeaturesConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppFeaturesConfigKeySet struct {
-	Idempotency   SettingsAppFeaturesIdempotencyConfigKeySet
-	Auth          SettingsAppFeaturesAuthConfigKeySet
-	Events        SettingsAppFeaturesEventsConfigKeySet
-	Outbox        SettingsAppFeaturesOutboxConfigKeySet
-	Audit         SettingsAppFeaturesAuditConfigKeySet
-	Locales       SettingsAppFeaturesLocalesConfigKeySet
-	Extensions    SettingsAppFeaturesExtensionsConfigKeySet
-	Notifications SettingsAppFeaturesNotificationsConfigKeySet
-	Attachments   SettingsAppFeaturesAttachmentsConfigKeySet
-	Reports       SettingsAppFeaturesReportsConfigKeySet
-	Health        SettingsAppFeaturesHealthConfigKeySet
-	Observability SettingsAppFeaturesObservabilityConfigKeySet
-	Maintenance   SettingsAppFeaturesMaintenanceConfigKeySet
+	Idempotency      SettingsAppFeaturesIdempotencyConfigKeySet
+	Auth             SettingsAppFeaturesAuthConfigKeySet
+	Events           SettingsAppFeaturesEventsConfigKeySet
+	Outbox           SettingsAppFeaturesOutboxConfigKeySet
+	Audit            SettingsAppFeaturesAuditConfigKeySet
+	Locales          SettingsAppFeaturesLocalesConfigKeySet
+	Extensions       SettingsAppFeaturesExtensionsConfigKeySet
+	ExtensionCleanup SettingsAppFeaturesExtensionCleanupConfigKeySet
+	Notifications    SettingsAppFeaturesNotificationsConfigKeySet
+	Attachments      SettingsAppFeaturesAttachmentsConfigKeySet
+	Reports          SettingsAppFeaturesReportsConfigKeySet
+	Health           SettingsAppFeaturesHealthConfigKeySet
+	Observability    SettingsAppFeaturesObservabilityConfigKeySet
+	Maintenance      SettingsAppFeaturesMaintenanceConfigKeySet
 }
 
 // SettingsAppFeaturesIdempotencyConfigKeySet exposes compiler-checked configuration overrides.
@@ -819,6 +820,12 @@ type SettingsAppFeaturesExtensionsConfigKeySet struct {
 	MaxActive config.Key[Settings, int]
 	// Timeout selects app.features.extensions.timeout. Set accepts time.Duration.
 	Timeout config.Key[Settings, time.Duration]
+}
+
+// SettingsAppFeaturesExtensionCleanupConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsAppFeaturesExtensionCleanupConfigKeySet struct {
+	// Jobs selects app.features.extension_cleanup.jobs. Set accepts jobs.ConnectionName.
+	Jobs config.Key[Settings, jobs.ConnectionName]
 }
 
 // SettingsAppFeaturesNotificationsConfigKeySet exposes compiler-checked configuration overrides.
@@ -1639,6 +1646,9 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 					MaxActive: config.Scalar[Settings, int]("app.features.extensions.max_active", func(settings *Settings) *int { return &settings.App.Features.Extensions.MaxActive }),
 					Timeout:   config.Duration[Settings]("app.features.extensions.timeout", func(settings *Settings) *time.Duration { return &settings.App.Features.Extensions.Timeout }),
 				},
+				ExtensionCleanup: SettingsAppFeaturesExtensionCleanupConfigKeySet{
+					Jobs: config.Scalar[Settings, jobs.ConnectionName]("app.features.extension_cleanup.jobs", func(settings *Settings) *jobs.ConnectionName { return &settings.App.Features.ExtensionCleanup.Jobs }),
+				},
 				Notifications: SettingsAppFeaturesNotificationsConfigKeySet{
 					Enabled: config.Scalar[Settings, bool]("app.features.notifications.enabled", func(settings *Settings) *bool { return &settings.App.Features.Notifications.Enabled }),
 					Database: config.Scalar[Settings, database.ConnectionName]("app.features.notifications.database", func(settings *Settings) *database.ConnectionName {
@@ -2105,6 +2115,7 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.App.Features.Extensions.Schema,
 		keys.App.Features.Extensions.MaxActive,
 		keys.App.Features.Extensions.Timeout,
+		keys.App.Features.ExtensionCleanup.Jobs,
 		keys.App.Features.Notifications.Enabled,
 		keys.App.Features.Notifications.Database,
 		keys.App.Features.Notifications.Schema,

@@ -100,7 +100,24 @@ The workflow commits a `writing` intent before `Put` with an absence condition.
 Successful storage is pinned by ETag and optional version, then journaled as
 `stored`. A separate owner-locked transaction publishes `ready` membership and
 retires superseded files as `cleanup`. Old files are deleted only after that
-transaction's commit is confirmed, using their exact validators/versions. A
+transaction's commit is confirmed, using their exact validators/versions.
+
+To publish inside a caller's transaction, split the workflow in two.
+`Prepare` runs the intent, storage and pin steps in the manager's own
+transactions before that transaction begins and returns a `Prepared` upload; it
+locks an existing owner while recording the intent, so the per-owner bound stays
+exact, and accepts a model the transaction will create, with its key chosen
+first. `ReplaceIn` and `AddIn` then publish it inside the caller's transaction
+of the extension store's pool, joined through a savepoint, using only that
+transaction's connection and at any isolation level, since the upload was
+committed before its snapshot. They lock the owner, recount its intents and
+publish; the attachment is part of the caller's commit. A failed or rolled-back
+publication leaves the upload `stored`, ready for another attempt; `Discard`
+reclaims it at once, and `ReconcilePending` cleans it after `StoredGrace`. Old-file
+cleanup and unqueued variant generation run after the commit, so a failure there
+is the transaction's after-commit error and leaves `cleanup` intents for
+reconciliation. `Publication` is `Published` once the savepoint succeeds, subject
+to that commit. A
 retained version ID is deleted by version alone (it already selects one
 immutable object, and providers such as AWS cannot combine a delete condition
 with a version); without a version the ETag condition preserves a concurrent

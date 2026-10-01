@@ -105,19 +105,31 @@ func (s OutboxSettings) runtime(source clock.Clock) publisher.Config {
 	return publisher.Config{MaxAttempts: s.MaxAttempts, RetryDelay: s.RetryDelay, MaxRetryDelay: s.MaxRetryDelay, Jitter: s.Jitter, OperationTimeout: s.OperationTimeout, PollInterval: s.PollInterval, MaxPollInterval: s.MaxPollInterval, MaxInFlight: s.MaxInFlight, Clock: source}
 }
 
+// ExtensionCleanupSettings makes the cleanup of models with extension slots
+// deleted through a database connection other than the extension store's
+// crash-durable (features.extension_cleanup).
+type ExtensionCleanupSettings struct {
+	// Jobs names the job connection that runs the cleanup job. The deletion
+	// enqueues it in its own transaction through the outbox, so it needs a
+	// destination in features.outbox.jobs and a worker consuming the
+	// connection's default queue. Empty keeps process-local after-commit cleanup.
+	Jobs jobs.ConnectionName
+}
+
 type FeatureSettings struct {
-	Idempotency   IdempotencySettings
-	Auth          AuthSettings
-	Events        EventsSettings
-	Outbox        OutboxSettings
-	Audit         AuditSettings
-	Locales       LocaleSettings
-	Extensions    StoreSettings
-	Notifications StoreSettings
-	Attachments   AttachmentSettings
-	Reports       ReportSettings
-	Health        HealthSettings
-	Observability ObservabilitySettings
+	Idempotency      IdempotencySettings
+	Auth             AuthSettings
+	Events           EventsSettings
+	Outbox           OutboxSettings
+	Audit            AuditSettings
+	Locales          LocaleSettings
+	Extensions       StoreSettings
+	ExtensionCleanup ExtensionCleanupSettings
+	Notifications    StoreSettings
+	Attachments      AttachmentSettings
+	Reports          ReportSettings
+	Health           HealthSettings
+	Observability    ObservabilitySettings
 	// Maintenance schedules framework housekeeping (features.maintenance).
 	Maintenance MaintenanceScheduleSettings
 }

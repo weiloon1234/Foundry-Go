@@ -28,8 +28,12 @@ Tagged unions require `.variant(discriminator, tag)` before selecting payload
 fields; the discriminator must be the key that tags every variant, so an
 enum-typed property of a plain object is not accepted. A variant descriptor describes the payload without the discriminator,
 which belongs to the parent union. Enum-keyed maps retain their explicit keys.
-A request body is navigated from its object properties; a body whose root is
-itself a union, array or map has no root descriptor.
+`operation(name).body()` describes a JSON request body from its root at
+`/body`, so a body that is itself a union, array or map is navigated with the same
+`variant`, `at`, `element` and `field` steps; `field("body", name)` remains the
+shortcut for an object body's property. Form, multipart and raw bodies have named
+parts or no JSON root: `body()` is a type error there and a `ContractError` at
+runtime.
 
 `schema(typeID)` describes an explicitly public schema without a route or submit
 method. `operation(name).metadata` exposes route identity, access, media types,
@@ -79,10 +83,13 @@ conflicting presentation/validation label keys (including a comparison's other
 field) and opposed email/URL rule hints, per element for repeated inputs.
 
 Presentation contains no values, defaults, examples, scripts or component names.
-Password hints are input-only. Route registration rejects a JSON or event-stream
-response whose graph reaches a password hint, whether or not clients are
-exported. Exported contracts also reject them as notification, table, presence
-or realtime server-event outputs, and reject credential body examples and
+Password hints are input-only. Registration rejects every output whose graph
+reaches a password hint, whether or not clients are exported: route registration
+for JSON and event-stream responses, the table declaration for its rows, the
+notification registry for inbox and realtime payloads, and the WebSocket registry
+for presence members and server-to-client events. Client-to-server events,
+notification inputs and private transport payloads remain inputs. Exported
+contracts re-check these outputs and reject credential body examples and
 defaults. Credentials never travel in URLs, which proxies, logs and browsers
 retain: path parameters and endpoint query parameters reject password hints,
 and manifests reject them on any path, query or realtime room parameter.

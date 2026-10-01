@@ -25,12 +25,20 @@ import (
 )
 
 // Runtime borrows the managers that bound slot descriptors use. A nil manager
-// leaves slots of that kind unbound; using one reports fault.Missing. The
-// application owns the managers' lifetimes; Runtime owns nothing.
+// leaves slots of that kind unbound; using one reports fault.Missing. Store is
+// the managers' extension store; with it, deletion cleanup also handles owners
+// deleted through another pool. CleanupQueue makes that cleanup durable by
+// enqueueing CleanupJob in the deletion's transaction; without it the cleanup
+// is process-local after-commit work. Only deletion observers need it:
+// application assembly leaves it nil in the runtime ModelExtensions returns,
+// so descriptors bound in job handlers never depend on the job dispatcher.
+// The application owns these lifetimes; Runtime owns nothing.
 type Runtime struct {
 	Translations *translations.Manager
 	Attachments  *attachments.Manager
 	Metadata     *metadata.Manager
+	Store        *extensions.Store
+	CleanupQueue *CleanupQueue
 }
 
 func (Runtime) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("model extension runtime")) }
@@ -99,9 +107,10 @@ func (d Declaration) Validate() error {
 	return nil
 }
 
-// Register installs the deletion-cleanup observer on the pool that writes the
-// owning model. The pool must be the extension store's database, because
-// cleanup joins the owner's deletion transaction.
+// Register installs the deletion-cleanup observer on a pool that writes the
+// owning model. On the extension store's pool, cleanup joins the owner's
+// deletion transaction; on another pool it runs after that transaction
+// commits, which requires Runtime.Store.
 func (d Declaration) Register(r *foundation.Registrar, pool foundation.Key[*database.DB], resolve ResolveRuntime) error {
 	if err := d.Validate(); err != nil {
 		return err
@@ -127,10 +136,18 @@ func ObserverName[M any]() (string, error) {
 	return "foundry.extensions." + hex.EncodeToString(digest[:]), nil
 }
 
-// Cleanup removes one hard-deleted owner's extension data inside its deletion
-// transaction. It runs the existing metadata, translation and attachment
-// cleanup for every configured manager, so data written through the explicit
-// APIs with the same owner is removed too. Soft deletion preserves data.
+// Cleanup removes one hard-deleted owner's extension data. It runs the existing
+// metadata, translation and attachment cleanup for every configured manager, so
+// data written through the explicit APIs with the same owner is removed too.
+// Soft deletion preserves data. When the deletion transaction belongs to the
+// extension store's pool, cleanup joins it and rolls back with it. Otherwise it
+// cannot share that transaction. With Runtime.CleanupQueue it enqueues
+// CleanupJob in the deletion's transaction, which commits or rolls back with
+// the deletion and survives a crash. Without it, cleanup runs after the
+// deletion commits, in a store transaction that skips an owner that exists
+// again; a failure there is the committed deletion's after-commit error, and
+// the orphan inspection and pruning commands are the backstop, including for a
+// crash before it ran.
 type Cleanup[M any] struct {
 	run func(context.Context, *database.Tx, M, lifecycle.Operation) error
 }
@@ -151,9 +168,23 @@ func NewCleanup[M any, K comparable](runtime Runtime, owner extensions.Owner[M, 
 		return Cleanup[M]{}, missing(owner.Name(), "attachments")
 	case len(parts.Metadata) > 0 && runtime.Metadata == nil:
 		return Cleanup[M]{}, missing(owner.Name(), "metadata")
+	case runtime.CleanupQueue != nil && runtime.Store == nil:
+		return Cleanup[M]{}, fault.New(fault.Invalid, "model extension cleanup queue requires the extension store")
 	}
-	return Cleanup[M]{run: func(ctx context.Context, tx *database.Tx, before M, operation lifecycle.Operation) error {
-		ref := reference(before)
+	if runtime.CleanupQueue != nil {
+		if err := runtime.CleanupQueue.Validate(); err != nil {
+			return Cleanup[M]{}, err
+		}
+	}
+	if runtime.Store != nil {
+		// Cleanup through another pool names the owner by its registered
+		// declaration after the deletion commits, so check that declaration
+		// now, as the joined cleanup checks it inside the deletion.
+		if err := owner.Check(runtime.Store.Registry()); err != nil {
+			return Cleanup[M]{}, err
+		}
+	}
+	clean := func(ctx context.Context, tx *database.Tx, ref model.Reference[M, K], operation lifecycle.Operation) error {
 		if runtime.Metadata != nil {
 			if err := metadata.Cleanup(ctx, tx, runtime.Metadata, owner, ref, operation); err != nil {
 				return err
@@ -168,6 +199,35 @@ func NewCleanup[M any, K comparable](runtime Runtime, owner extensions.Owner[M, 
 			return attachments.Cleanup(ctx, tx, runtime.Attachments, owner, ref, operation, nil)
 		}
 		return nil
+	}
+	return Cleanup[M]{run: func(ctx context.Context, tx *database.Tx, before M, operation lifecycle.Operation) error {
+		ref := reference(before)
+		if runtime.Store == nil || tx.BelongsTo(runtime.Store.Database()) {
+			return clean(ctx, tx, ref, operation)
+		}
+		if operation == lifecycle.SoftDelete {
+			return nil
+		}
+		if operation != lifecycle.Delete && operation != lifecycle.ForceDelete {
+			return fault.New(fault.Invalid, "model extension cleanup requires a deletion")
+		}
+		subject, err := owner.Subject(ref)
+		if err != nil {
+			return err
+		}
+		identity, err := subject.Identity.Decode()
+		if err != nil {
+			return err
+		}
+		if runtime.CleanupQueue != nil {
+			return runtime.CleanupQueue.enqueue(ctx, tx, owner.Name(), identity)
+		}
+		return tx.AfterCommit(func(ctx context.Context) error {
+			// The deletion is committed: a caller that stops waiting does not
+			// cancel its cleanup, whose steps the store's call timeout and
+			// shutdown bound.
+			return runtime.settle(context.WithoutCancel(ctx), owner.Name(), identity)
+		})
 	}}, nil
 }
 

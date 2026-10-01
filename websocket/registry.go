@@ -63,6 +63,11 @@ func Register[C, R, S any](channel Channel[C, R, S], events ...EventRegistration
 		if err := channel.Validate(); err != nil {
 			return err
 		}
+		if channel.presence != nil {
+			if err := outputPresentation(channel.presence.description, "presence"); err != nil {
+				return err
+			}
+		}
 		if len(owned) > MaxChannelEvents {
 			return fault.New(fault.Invalid, "too many channel events")
 		}
@@ -78,6 +83,11 @@ func Register[C, R, S any](channel Channel[C, R, S], events ...EventRegistration
 			seen[e.id] = true
 			if err := e.validate(); err != nil {
 				return err
+			}
+			if e.direction == ServerToClient && !e.dynamic {
+				if err := outputPresentation(e.description, "event"); err != nil {
+					return err
+				}
 			}
 		}
 		for _, item := range owned {
@@ -157,6 +167,17 @@ func Register[C, R, S any](channel Channel[C, R, S], events ...EventRegistration
 type Registry struct {
 	channels map[ChannelID]*channelDefinition
 	ordered  []*channelDefinition
+}
+
+// outputPresentation rejects a server-sent payload whose graph reaches a
+// password hint. Password hints are input-only; the registry checks each
+// payload once, whether or not clients are exported.
+func outputPresentation(describe func() (contract.Schema, error), output string) error {
+	schema, err := describe()
+	if err != nil {
+		return err
+	}
+	return contract.RejectPasswordOutput(schema, output)
 }
 
 func NewRegistry(registrations ...Registration) (*Registry, error) {

@@ -69,6 +69,16 @@ Within each callback stage, callbacks from model-local hooks run first, followed
 
 Models without `hooks=Factory` can still have registered observers. Observer sets belong to a specific pool and survive sessions, nested savepoints, and custom transactor wrappers. A wrapper's actual supplied `*database.Tx` determines ownership. Framework owners without applicable hooks retain the ordinary mutation path; an unknown wrapper may need to enter its transaction before completing required-field validation, because a registered hook can supply those fields. A manually constructed or stale model definition without its observer adapter reports an error when registrations exist rather than skipping them. Regenerate models when upgrading the generated API.
 
+An observer that only reacts to deletions can be declared with
+`lifecycle.NewDeletionObserver[M, H](name)` instead of `New<Model>Observer` and
+registered through the same `Register<Model>Observer`. It runs only for delete,
+soft delete and force delete, through the same hooks type. Creates, updates,
+restores and set-based updates neither construct it nor take the observed path
+because of it, so a model observed only for deletions keeps its unhooked create
+and update paths; set-based deletions still require `WithoutModelHooks()`.
+Generated [model extension slot](model-extension-slots.md#deletion-cleanup)
+cleanup uses it on every connection.
+
 The [independent observer consumer](../../tests/fixtures/consumer/observerqueries/observers_postgres_test.go) exercises automatic writes, multiple providers, stage ordering, transactional effects, cancellation, bulk behavior and concurrent operation-local factories.
 
 ## Callback contracts

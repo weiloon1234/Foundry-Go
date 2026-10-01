@@ -84,12 +84,20 @@ The other kinds follow the same pattern:
 | `make rule Slug --id notes.slug` | A `validation.Custom` string rule. |
 | `make notification NoteShared --id notes.shared` | A `NoteSharedPayload` DTO, its codec and the `notifications.Definition`. |
 | `make migration CreateNotes --id ... --origin app --version v1.0.0 --create notes` | A migration starting from a reviewed `CREATE TABLE` with a UUID key and timestamps. |
+| `make model Article --table articles --translated Title,Summary --attachment Logo --attachments Galleries --metadata SEO --disk public` | A model with [extension slot](model-extension-slots.md) fields: `translations.Text`, `attachments.One`/`Many` and `metadata.Value` of a new empty `ArticleSEO` DTO. Attachment slots add an `ArticleDisk` declaration of the named storage disk and a `DefineExtensions` whose policies accept nothing until you list their media types, so assembly refuses them until then. `--disk` is required exactly when attachment slots are requested. |
 
 Endpoint and notification scaffolds check every target first, then create each
 DTO, run generation for the package and create the component file; each step
 publishes through the same guarded path, so a later failure leaves earlier,
 valid files in place. Test files and factories remain handwritten: they are not
-package declarations the scaffold type checker can verify.
+package declarations the scaffold type checker can verify. A model with slots is
+checked together with the declarations generation creates for it (its
+`DefineExtensions` returns the generated `<Model>ExtensionSet`), created, then
+generated at once so the package compiles; if that generation fails, the model
+file remains and `foundry generate` completes it. These scaffolds run generation
+with the tool's framework build, as `foundry generate` does; add `--field-docs`
+when the project maintains managed field notes, so that generation writes them
+for the new declarations too. Other scaffolds run no generation and refuse it.
 
 These commands create one consumer-owned artifact, never an application project.
 Existing migration/seeder scaffolds use the same path checks and publisher.

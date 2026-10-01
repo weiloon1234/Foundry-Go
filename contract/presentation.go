@@ -3,6 +3,7 @@ package contract
 import (
 	"slices"
 
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 )
@@ -101,6 +102,18 @@ func (p Presentation) ValidateSchema(schema Schema) error {
 		typ = compiled.types[typ.Element]
 	}
 	return p.ValidateType(typ)
+}
+
+// RejectPasswordOutput refuses an output schema whose root value can contain a
+// property hinted as a password. Every output owner (HTTP responses and event
+// streams, table rows, notification payloads, presence members and server
+// events) calls it when a declaration registers, whether or not clients are
+// exported; output names the owner's kind in the error.
+func RejectPasswordOutput(schema Schema, output string) error {
+	if PasswordTypes(schema.Types)[schema.Root] {
+		return fault.New(fault.Invalid, "password presentation is input-only; it cannot be "+output+" output")
+	}
+	return nil
 }
 
 // PasswordTypes returns the types whose values can contain a property hinted as

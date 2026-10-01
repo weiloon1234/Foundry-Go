@@ -20,7 +20,7 @@ func TestCommandValidation(t *testing.T) {
 }
 
 func TestScaffoldCommandValidation(t *testing.T) {
-	for _, args := range [][]string{{"make"}, {"make", "model"}, {"make", "migration"}, {"make", "seeder", "Unexpected"}, {"make", "seeder", "--origin", "app"}, {"make", "migration", "--force"}} {
+	for _, args := range [][]string{{"make"}, {"make", "model"}, {"make", "migration"}, {"make", "seeder", "Unexpected"}, {"make", "seeder", "--origin", "app"}, {"make", "migration", "--force"}, {"make", "model", "Article", "--table", "articles", "--attachment", "Logo"}, {"make", "model", "Article", "--table", "articles", "--translated", "Title", "--disk", "public"}, {"make", "dto", "Article", "--translated", "Title"}, {"make", "model", "Plain", "--table", "plains", "--field-docs"}, {"make", "job", "Deliver", "--id", "jobs.deliver", "--field-docs"}} {
 		if err := run(t.Context(), args, io.Discard, io.Discard); cli.Status(err) != cli.InvalidUsage {
 			t.Fatalf("invalid scaffold command lost usage status: %v: %v", args, err)
 		}

@@ -246,31 +246,41 @@ func (o Owner[M, K]) Lock(ctx context.Context, tx *database.Tx, registry *Regist
 // policy, as RetainedSubjects does for maintenance. The keys are opaque
 // Subject.Key values, not application IDs; match a reference with SubjectKey.
 func (o Owner[M, K]) Active(ctx context.Context, executor database.Executor, registry *Registry, references []model.Reference[M, K]) (map[string]bool, error) {
+	active, _, err := o.ActiveSubjects(ctx, executor, registry, references)
+	return active, err
+}
+
+// ActiveSubjects is Active that also returns each reference's subject key, in
+// order, as SubjectKey derives it. A batch reader matches its own owners with
+// them instead of deriving every key again.
+func (o Owner[M, K]) ActiveSubjects(ctx context.Context, executor database.Executor, registry *Registry, references []model.Reference[M, K]) (map[string]bool, []string, error) {
 	if err := o.Check(registry); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(references) > query.MaxIdentityBatch {
-		return nil, invalid("owner batch exceeds its limit")
+		return nil, nil, invalid("owner batch exceeds its limit")
 	}
 	keys := make([]K, len(references))
+	ordered := make([]string, len(references))
 	subjects := make(map[K]string, len(references))
 	for i, ref := range references {
 		identity, err := ref.Identity()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		parsed, err := o.Parse(identity)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		keys[i] = parsed.Key()
-		if subjects[keys[i]], err = o.keySubject(keys[i]); err != nil {
-			return nil, err
+		if ordered[i], err = o.keySubject(keys[i]); err != nil {
+			return nil, nil, err
 		}
+		subjects[keys[i]] = ordered[i]
 	}
 	found, err := o.definition.source.ActiveKeys(ctx, executor, keys)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	result := make(map[string]bool, len(found))
 	for _, key := range found {
@@ -279,12 +289,12 @@ func (o Owner[M, K]) Active(ctx context.Context, executor database.Executor, reg
 		subject, ok := subjects[key]
 		if !ok {
 			if subject, err = o.SubjectKey(o.Reference(key)); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		}
 		result[subject] = true
 	}
-	return result, nil
+	return result, ordered, nil
 }
 
 // Digest is the shared unambiguous hashing boundary for infrastructure scopes

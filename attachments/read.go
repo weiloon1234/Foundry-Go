@@ -32,6 +32,8 @@ type Batch[M any, K comparable] struct {
 	collection Collection[M, K]
 	active     map[string]bool
 	files      map[string][]Attachment[M, K]
+	// subjects are the subject keys of the loaded owners, in load order.
+	subjects []string
 }
 
 func (b Batch[M, K]) Get(owner model.Reference[M, K]) ([]Attachment[M, K], error) {
@@ -42,6 +44,18 @@ func (b Batch[M, K]) Get(owner model.Reference[M, K]) ([]Attachment[M, K], error
 	if err != nil {
 		return nil, err
 	}
+	return b.get(subject)
+}
+
+// getAt returns the files of the i-th loaded owner with the subject key
+// derived while loading.
+func (b Batch[M, K]) getAt(i int) ([]Attachment[M, K], error) {
+	if b.active == nil || b.files == nil || i < 0 || i >= len(b.subjects) {
+		return nil, invalid()
+	}
+	return b.get(b.subjects[i])
+}
+func (b Batch[M, K]) get(subject string) ([]Attachment[M, K], error) {
 	if !b.active[subject] {
 		return nil, database.NotFound
 	}
@@ -84,11 +98,11 @@ func (c Collection[M, K]) scanRows(ctx context.Context, tx *database.Tx, m *Mana
 	if id, ok := only.Get(); ok && id.IsZero() {
 		return Batch[M, K]{}, invalid()
 	}
-	active, err := c.definition.owner.Active(ctx, tx, m.store.Registry(), owners)
+	active, subjects, err := c.definition.owner.ActiveSubjects(ctx, tx, m.store.Registry(), owners)
 	if err != nil {
 		return Batch[M, K]{}, err
 	}
-	result := Batch[M, K]{collection: c, active: active, files: make(map[string][]Attachment[M, K], len(active))}
+	result := Batch[M, K]{collection: c, active: active, files: make(map[string][]Attachment[M, K], len(active)), subjects: subjects}
 	if len(active) == 0 {
 		return result, nil
 	}

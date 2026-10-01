@@ -42,6 +42,13 @@ for (const op of metadata.http) {
   }
 }
 assert.equal(sdk.operation("accountShow").metadata.route.authentication.credential.name, "fixture_session");
+// A JSON body is described from its root; a form body has no JSON root.
+const methodOp = sdk.operation("unionsMethod");
+assert.equal(methodOp.body().path, "/body");
+assert.equal(methodOp.body().variant("kind", "card").field("token").path, "/body/token");
+assert.throws(() => methodOp.body().field("token"), sdk.ContractError);
+assert.throws(() => sdk.operation("formsSubmit").body(), sdk.ContractError);
+assert.equal(echo.body().field("amount").path, echo.field("body", "amount").path);
 // Bound collection entries use the codec's own key rules and declared lengths.
 const index = sdk.schema("foundry.test/consumer/clientcontracts.OwnerIndex"), user = "0190a8f0-0000-7000-8000-000000000001";
 assert.equal(index.field("owners").at(user).path, `/owners/${user}`);
