@@ -167,6 +167,13 @@ formatText(messages, "auth.lockout", { minutes: 5 }, { plural: "minutes" });
 Both use the fallback catalog and return the key when no text renders. Number
 arguments may be numbers or exact decimal strings.
 
+In an application with [portal surfaces](client-contracts.md#portal-surfaces),
+import `formatMessage` and `contractMetadata` from the portal's own entry. Its
+embedded manifest is the portal's projection, while the full entry's carries
+every operation and schema into the bundle. `catalogTranslations` and
+`formatText` come from the shared runtime, so any entry's export is the same
+function.
+
 ## Resolution and fallback
 
 `Catalog.Resolve(preferred, acceptLanguage)` first considers an explicit locale,
