@@ -97,16 +97,23 @@ bundle carries only its own operations, channels and schemas:
 
 ```go
 export, err := typescript.ExportCommand("contracts.export", api, sources,
-    typescript.Surface{Name: "admin", Routes: []http.RouteID{"admin"}, Channels: []websocket.ChannelID{"admin"}},
+    typescript.Surface{Name: "admin", Paths: []string{"/api/admin"}, Channels: []websocket.ChannelID{"admin"}},
     typescript.Surface{Name: "web", Routes: []http.RouteID{"web", "health.live"}})
 ```
 
 `typescript.Options.Surfaces` takes the same declarations. Each surface publishes
 `contracts_<name>_foundry.gen.ts` beside the full entry, with the same API
-restricted to its selection. An entry selects the route or channel with exactly
-that ID and every ID continuing it after a dot: `admin` selects `admin.login` and
-`admin.orders.list`, not `administration.list`. Its embedded manifest is a
-projection (`manifest.Manifest.Project`) containing:
+restricted to its selection, which combines three kinds of entry:
+
+- `Routes` and `Channels` select the ID itself and every ID continuing it after
+  a dot: `admin` selects `admin.login` and `admin.orders.list`, not
+  `administration.list`.
+- `Paths` selects routes below a literal path prefix by whole segments:
+  `/api/admin` selects `/api/admin/orders/{id}`, not `/api/administration`. A
+  prefix has no parameters or trailing slash, and `/` selects every route. This
+  suits applications whose route IDs are named by feature rather than portal.
+
+The embedded manifest is a projection (`manifest.Manifest.Project`) containing:
 
 - the selected operations and channels and the schemas they reach;
 - the tables whose row or request schema those operations reach;
@@ -138,6 +145,29 @@ channels, 2026-10-02:
 
 The remaining cost is the core runtime: lossless codecs, request validation and
 the HTTP invoker.
+
+To publish the generated directory as a workspace package, map the entries
+through `exports` and block the runtime modules, which entries import by
+relative path:
+
+```json
+{
+  "exports": {
+    ".": "./dist/generated/contracts_foundry.gen.js",
+    "./portal/runtime": null,
+    "./portal/runtime*": null,
+    "./portal/*": "./dist/generated/contracts_*_foundry.gen.js"
+  },
+  "sideEffects": false
+}
+```
+
+Node's `*` matches at least one character, so `./portal/runtime*` does not block
+`./portal/runtime`; keep both keys. Keep the pattern under a subpath such as
+`./portal/`, since a bare `./*` would also expose every other file of the
+package. `sideEffects: false` lets a bundler resolve a shared name such as
+`APIError` imported from the full entry straight to the runtime module, without
+the full entry's operation table.
 
 ## Operation documentation, examples and servers
 

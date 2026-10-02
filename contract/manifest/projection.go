@@ -1,22 +1,28 @@
 package manifest
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/internal/httppath"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
 // Selection names the operations and channels of one client surface, such as
-// one portal. Each entry selects the route or channel with exactly that ID and
-// every ID continuing it after a dot: "admin" selects admin.login and
-// admin.orders.list, not administration.list.
+// one portal; the entries' selections are combined. A Routes or Channels entry
+// selects the route or channel with exactly that ID and every ID continuing it
+// after a dot: "admin" selects admin.login and admin.orders.list, not
+// administration.list. A Paths entry is a literal path prefix selecting the
+// routes whose path equals it or continues it after a slash: "/api/admin"
+// selects /api/admin/orders/{id}, not /api/administration.
 type Selection struct {
 	Routes   []foundryhttp.RouteID
 	Channels []websocket.ChannelID
+	Paths    []string
 }
 
 // Project returns the manifest restricted to selection: the selected operations,
@@ -29,25 +35,34 @@ func (m *Manifest) Project(selection Selection) (*Manifest, error) {
 	if err != nil {
 		return nil, err
 	}
-	routes, err := selector(selection.Routes)
+	routes, err := namespaces(selection.Routes)
 	if err != nil {
 		return nil, err
 	}
-	channels, err := selector(selection.Channels)
+	channels, err := namespaces(selection.Channels)
 	if err != nil {
 		return nil, err
 	}
-	if len(routes.entries) == 0 && len(channels.entries) == 0 {
+	paths, err := pathPrefixes(selection.Paths)
+	if err != nil {
+		return nil, err
+	}
+	if len(routes.entries)+len(channels.entries)+len(paths.entries) == 0 {
 		return nil, invalid("a projection selects no route or channel")
+	}
+	// Both selectors run so that every entry matching a route is marked used.
+	selectsRoute := func(route foundryhttp.RouteInfo) bool {
+		byID, byPath := routes.selects(string(route.ID)), paths.selects(route.Path)
+		return byID || byPath
 	}
 	result := Document{Version: document.Version, Roots: document.Roots, ErrorType: document.ErrorType, Errors: document.Errors, Locales: document.Locales, Enums: document.Enums, Permissions: document.Permissions}
 	for _, op := range document.HTTP {
-		if routes.selects(string(op.Route.ID)) {
+		if selectsRoute(op.Route) {
 			result.HTTP = append(result.HTTP, op)
 		}
 	}
 	for _, route := range document.RawRoutes {
-		if routes.selects(string(route.ID)) {
+		if selectsRoute(route) {
 			result.RawRoutes = append(result.RawRoutes, route)
 		}
 	}
@@ -64,7 +79,7 @@ func (m *Manifest) Project(selection Selection) (*Manifest, error) {
 			result.Realtime = &realtime
 		}
 	}
-	for _, entry := range append(routes.entries, channels.entries...) {
+	for _, entry := range slices.Concat(routes.entries, channels.entries, paths.entries) {
 		if !entry.used {
 			return nil, fault.New(fault.Missing, "invalid client contract: projection entry "+entry.id+" selects nothing")
 		}
@@ -166,16 +181,45 @@ type selectionEntry struct {
 	used bool
 }
 
-type selection struct{ entries []*selectionEntry }
+type selection struct {
+	entries []*selectionEntry
+	match   func(entry, candidate string) bool
+}
 
-func selector[T ~string](ids []T) (selection, error) {
+// namespaces selects semantic IDs and their dotted namespaces.
+func namespaces[T ~string](ids []T) (selection, error) {
+	return selector(ids, identifier.Semantic, func(entry, id string) bool {
+		return id == entry || strings.HasPrefix(id, entry+".")
+	})
+}
+
+// pathPrefixes selects route paths by whole literal segments. A prefix uses the
+// route grammar without parameters or a trailing slash; "/" selects every path.
+func pathPrefixes(paths []string) (selection, error) {
+	return selector(paths, func(path string) bool {
+		segments, err := httppath.Parse(path)
+		if err != nil || path != "/" && strings.HasSuffix(path, "/") {
+			return false
+		}
+		for _, segment := range segments {
+			if segment.Name != "" {
+				return false
+			}
+		}
+		return true
+	}, func(prefix, path string) bool {
+		return prefix == "/" || path == prefix || strings.HasPrefix(path, prefix+"/")
+	})
+}
+
+func selector[T ~string](ids []T, valid func(string) bool, match func(entry, candidate string) bool) (selection, error) {
 	if len(ids) > MaxOperations {
 		return selection{}, invalid("too many projection entries")
 	}
-	var result selection
+	result := selection{match: match}
 	seen := make(map[string]bool, len(ids))
 	for _, id := range ids {
-		if !identifier.Semantic(string(id)) {
+		if !valid(string(id)) {
 			return selection{}, invalid("invalid projection entry")
 		}
 		if seen[string(id)] {
@@ -187,11 +231,11 @@ func selector[T ~string](ids []T) (selection, error) {
 	return result, nil
 }
 
-// selects marks every entry naming id or one of its dotted namespaces.
-func (s selection) selects(id string) bool {
+// selects marks every entry matching candidate.
+func (s selection) selects(candidate string) bool {
 	found := false
 	for _, entry := range s.entries {
-		if id == entry.id || strings.HasPrefix(id, entry.id+".") {
+		if s.match(entry.id, candidate) {
 			entry.used, found = true, true
 		}
 	}

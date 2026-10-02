@@ -151,6 +151,18 @@ func TestProjectionSelectsNamespacesAndTheirReachableContract(t *testing.T) {
 	if !slices.Equal(routeIDs(audit), []string{"administration.audit"}) {
 		t.Fatal("exact selection", routeIDs(audit))
 	}
+	// Path prefixes select whole segments and combine with ID namespaces.
+	byPath := project(t, source, manifest.Selection{Paths: []string{"/admin"}})
+	if !slices.Equal(routeIDs(byPath), []string{"admin", "admin.orders.list"}) {
+		t.Fatal("path prefix selection", routeIDs(byPath))
+	}
+	combined := project(t, source, manifest.Selection{Routes: []foundryhttp.RouteID{"web.login"}, Paths: []string{"/profile", "/admin/orders"}})
+	if !slices.Equal(routeIDs(combined), []string{"admin.orders.list", "web.login", "web.profile"}) {
+		t.Fatal("combined selection", routeIDs(combined))
+	}
+	if every := project(t, source, manifest.Selection{Paths: []string{"/"}}); len(every.HTTP) != 5 {
+		t.Fatal("root path prefix", routeIDs(every))
+	}
 	after, err := source.JSON()
 	if err != nil || !bytes.Equal(before, after) {
 		t.Fatal("projection changed its source", err)
@@ -170,6 +182,14 @@ func TestProjectionRejectsUnknownRepeatedAndEmptySelections(t *testing.T) {
 		"repeated":         {manifest.Selection{Routes: []foundryhttp.RouteID{"admin", "admin"}}, fault.Duplicate},
 		"invalid":          {manifest.Selection{Routes: []foundryhttp.RouteID{"not semantic"}}, fault.Invalid},
 		"overlap is valid": {manifest.Selection{Routes: []foundryhttp.RouteID{"admin", "admin.orders"}}, nil},
+		"overlapping path": {manifest.Selection{Routes: []foundryhttp.RouteID{"admin"}, Paths: []string{"/admin"}}, nil},
+		"partial segment":  {manifest.Selection{Paths: []string{"/adm"}}, fault.Missing},
+		"unknown path":     {manifest.Selection{Paths: []string{"/merchant"}}, fault.Missing},
+		"repeated path":    {manifest.Selection{Paths: []string{"/admin", "/admin"}}, fault.Duplicate},
+		"trailing slash":   {manifest.Selection{Paths: []string{"/admin/"}}, fault.Invalid},
+		"parameter":        {manifest.Selection{Paths: []string{"/admin/{id}"}}, fault.Invalid},
+		"relative path":    {manifest.Selection{Paths: []string{"admin"}}, fault.Invalid},
+		"dot segment":      {manifest.Selection{Paths: []string{"/admin/.."}}, fault.Invalid},
 	} {
 		_, err := source.Project(test.selection)
 		if test.want == nil && err != nil || test.want != nil && !errors.Is(err, test.want) {

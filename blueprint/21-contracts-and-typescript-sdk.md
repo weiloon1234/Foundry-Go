@@ -101,7 +101,10 @@ typescript.Options{Dir: dir, Surfaces: []typescript.Surface{
 `typescript.ExportCommand` takes the same declarations, so `contracts:export`
 and its `--check` cover every surface. An entry selects the route or channel with
 exactly that ID and every ID that continues it after a `.`, so `admin` selects
-`admin.login` and `admin.orders.list` but not `administration.x`. Every entry must
+`admin.login` and `admin.orders.list` but not `administration.x`. After the
+starter adopted surfaces with feature-named route IDs, a `Paths` entry was added:
+a literal route path prefix selecting whole segments, so `/api/admin` selects
+`/api/admin/orders/{id}` but not `/api/administration`. Every entry must
 select something, and an unknown entry fails generation. A surface needs at least
 one route or channel. Surfaces may overlap. Names follow the prefix pattern, are
 unique, and exclude the artifact names `manifest`, `openapi`, `react`, `vue` and

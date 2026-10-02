@@ -11,7 +11,8 @@ This document is the single source of truth for milestone status. Subsystem blue
 ## Client surfaces and shared runtime modules (starter F-G06) — 2026-10-02
 
 Status: **implemented; full gate pending**. `typescript.Surface` publishes one
-client entry per portal, selected by route and channel ID namespace, embedding
+client entry per portal, selected by route and channel ID namespace or route
+path prefix, embedding
 only its projection from the new `manifest.Manifest.Project`. Entries import
 shared side-effect-free runtime modules and embed compact JSON; the full SDK's
 API and `typescript.Render`'s single module are unchanged.

@@ -8,7 +8,9 @@
   the variadic surfaces of `typescript.ExportCommand` publish
   `<prefix>_<name>_foundry.gen.ts` beside the full entry, with the same API
   restricted to route and channel ID namespaces (`admin` selects `admin.login`,
-  not `administration.list`). Each embeds only its projection of the manifest,
+  not `administration.list`) and literal route path prefixes (`Paths:
+  []string{"/api/admin"}` selects `/api/admin/orders/{id}`, not
+  `/api/administration`). Each embeds only its projection of the manifest,
   built by the new `manifest.Manifest.Project` and `manifest.Selection`.
 - Generated entries import the shared runtime modules
   `<prefix>_runtime_foundry.gen.ts` and `<prefix>_runtime_realtime_foundry.gen.ts`,

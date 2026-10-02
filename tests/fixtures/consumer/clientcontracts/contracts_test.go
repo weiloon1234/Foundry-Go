@@ -302,10 +302,10 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 	bundles(t, node, compiler, dir)
 }
 
-// surfaces are two portals of the fixture: member pages, and the account with
-// its realtime channels.
+// surfaces are two portals of the fixture: the member pages below /members, and
+// the account with its realtime channels.
 var surfaces = []typescript.Surface{
-	{Name: "members", Routes: []foundryhttp.RouteID{"members"}},
+	{Name: "members", Paths: []string{"/members"}},
 	{Name: "live", Routes: []foundryhttp.RouteID{"account.show"}, Channels: []websocket.ChannelID{"accounts", "updates"}},
 }
 

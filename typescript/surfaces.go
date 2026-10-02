@@ -14,14 +14,16 @@ import (
 const MaxSurfaces = 64
 
 // Surface declares one client entry, such as a portal, with the same API as the
-// full SDK restricted to its operations and channels. Each entry selects the ID
-// it names and every ID continuing it after a dot (see manifest.Selection). It
-// is published as <prefix>_<Name>_foundry.gen.ts, embedding only its projection
-// of the manifest; the realtime runtime is imported only when it has channels.
+// full SDK restricted to its operations and channels. Routes and Channels select
+// IDs and their dotted namespaces, and Paths selects routes below literal path
+// prefixes such as "/api/admin" (see manifest.Selection). It is published as
+// <prefix>_<Name>_foundry.gen.ts, embedding only its projection of the
+// manifest; the realtime runtime is imported only when it has channels.
 type Surface struct {
 	Name     string
 	Routes   []foundryhttp.RouteID
 	Channels []websocket.ChannelID
+	Paths    []string
 }
 
 // reservedSurfaceNames are artifact names of the same prefix. Names beginning
@@ -45,11 +47,11 @@ func validateSurfaces(surfaces []Surface) ([]Surface, error) {
 			return nil, fault.New(fault.Duplicate, "client surface name is repeated")
 		}
 		seen[folded] = true
-		result[i] = Surface{Name: surface.Name, Routes: slices.Clone(surface.Routes), Channels: slices.Clone(surface.Channels)}
+		result[i] = Surface{Name: surface.Name, Routes: slices.Clone(surface.Routes), Channels: slices.Clone(surface.Channels), Paths: slices.Clone(surface.Paths)}
 	}
 	return result, nil
 }
 
 func (s Surface) selection() manifest.Selection {
-	return manifest.Selection{Routes: s.Routes, Channels: s.Channels}
+	return manifest.Selection{Routes: s.Routes, Channels: s.Channels, Paths: s.Paths}
 }
