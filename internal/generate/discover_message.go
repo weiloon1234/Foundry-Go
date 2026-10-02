@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/types"
+	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/i18n"
@@ -73,11 +74,28 @@ func validateEnumCaseLabels(e enum) error {
 	}
 	seen := make(map[i18n.MessageKey]bool, len(e.values))
 	for _, value := range e.values {
-		key := i18n.MessageKey(e.labels + "." + snake(value.name))
+		key, err := e.labelKey(value)
+		if err != nil {
+			return err
+		}
 		if key.Validate() != nil || seen[key] {
 			return fmt.Errorf("enum label keys are invalid or repeated")
 		}
 		seen[key] = true
 	}
 	return nil
+}
+
+// labelKey is a case's message key: the labels prefix and the case's
+// snake-case Go name, without the enum type's name when trimType is set.
+func (e enum) labelKey(value enumValue) (i18n.MessageKey, error) {
+	name := value.name
+	if e.trimType {
+		rest, found := strings.CutPrefix(name, e.name)
+		if !found || rest == "" || !(rest[0] >= 'A' && rest[0] <= 'Z' || rest[0] >= '0' && rest[0] <= '9') {
+			return "", fmt.Errorf("enum %s derives label keys with trim_type=true, but constant %s does not begin with %s followed by a word", e.name, value.name, e.name)
+		}
+		name = rest
+	}
+	return i18n.MessageKey(e.labels + "." + snake(name)), nil
 }

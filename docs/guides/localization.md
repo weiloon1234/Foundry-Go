@@ -213,6 +213,12 @@ receive runtime signature checks rather than generated Go argument typing.
 
 - `//foundry:enum labels=enum.account.status` emits a label key for each actual
   constant, using its snake-case Go name. Unannotated enum output remains unchanged.
+  When constants repeat their type's name, as in a shared enums package,
+  `//foundry:enum labels=projects.status trim_type=true` drops it from the keys:
+  `ProjectStatusDraft` gets `projects.status.draft`. Every case must then begin
+  with the type name followed by a capitalized word or digit, or generation fails
+  naming the constant. Case names in descriptors and the manifest stay the Go
+  names.
   `Descriptor.LabelDefinitions()` contributes parameter-free catalog entries once
   per distinct key, so explicit cases can share a label;
   `Definition().Cases` includes the same labels and exact wire values. `Label` and

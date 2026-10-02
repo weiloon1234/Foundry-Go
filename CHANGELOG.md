@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Enum label keys for type-prefixed constants
+
+- `//foundry:enum labels=prefix trim_type=true` derives label keys without the
+  enum type's name, so `ProjectStatusDraft` of `ProjectStatus` gets
+  `prefix.draft` instead of `prefix.project_status_draft`. It is opt-in; existing
+  keys are unchanged. A case that does not begin with the type name fails
+  generation, and case names in descriptors and the manifest stay the Go names.
+
 ### Client surfaces and shared runtime modules
 
 - `typescript.Surface` declares a portal's client entry: `Options.Surfaces` and

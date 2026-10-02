@@ -25,10 +25,11 @@ type enumConstant struct {
 
 func discoverEnum(p *packageInput, spec *ast.TypeSpec, named *types.Named, args map[string]string) (enum, error) {
 	e := enum{name: spec.Name.Name, typ: named, position: p.fset.Position(spec.Pos())}
-	if len(args) != 0 && (len(args) != 1 || args["labels"] == "") {
-		return e, p.diagnostic(spec.Pos(), "enum directive only accepts labels=message.prefix")
+	trim, trimmed := args["trim_type"]
+	if len(args) != 0 && (args["labels"] == "" || len(args) != 1 && (len(args) != 2 || !trimmed)) || trimmed && trim != "true" {
+		return e, p.diagnostic(spec.Pos(), "enum directive only accepts labels=message.prefix and trim_type=true")
 	}
-	e.labels = args["labels"]
+	e.labels, e.trimType = args["labels"], trimmed
 	if err := validateEnumLabels(e.labels); err != nil {
 		return e, p.diagnostic(spec.Pos(), err.Error())
 	}

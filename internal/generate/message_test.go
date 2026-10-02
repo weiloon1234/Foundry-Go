@@ -16,6 +16,9 @@ type Label struct{}
 //foundry:enum labels=enum.status
 type Status string
 const(Ready Status="ready";PendingReview Status="pending")
+//foundry:enum labels=projects.status trim_type=true
+type ProjectStatus string
+const(ProjectStatusDraft ProjectStatus="draft";ProjectStatusInReview ProjectStatus="review";ProjectStatus2FA ProjectStatus="2fa")
 `
 
 func TestMessageGenerationSharesDTOContractAndTypedArguments(t *testing.T) {
@@ -32,6 +35,12 @@ func TestMessageGenerationSharesDTOContractAndTypedArguments(t *testing.T) {
 	if !strings.Contains(first["status_foundry.gen.go"], `LabelKey: "enum.status.pending_review"`) {
 		t.Fatal("enum label did not follow the actual case list")
 	}
+	// trim_type drops the type name from label keys; case names stay the Go names.
+	for _, want := range []string{`Name: "ProjectStatusDraft", Value: ProjectStatusDraft, LabelKey: "projects.status.draft"`, `LabelKey: "projects.status.in_review"`} {
+		if !strings.Contains(first["project_status_foundry.gen.go"], want) {
+			t.Fatal("trimmed enum label", want)
+		}
+	}
 	if report, err := Generate(t.Context(), Options{Dir: dir}); err != nil || len(report.Written) != 0 || !reflect.DeepEqual(first, generatedSnapshot(t, dir)) {
 		t.Fatal("message generation is not stable", err)
 	}
@@ -45,6 +54,7 @@ func TestGeneratedMessage(t *testing.T){
  catalog,err:=message.Load(t.Context(),fstest.MapFS{"en/main.json":{Data:[]byte("{\"cart.items\":{\"$plural\":{\"one\":\"{{name}} has one\",\"other\":\"{{name}} has {{count}}\"}},\"label\":\"Label\"}")}},locales,i18n.CatalogOptions{},sample.ItemsArgsMessage().Registration(),sample.LabelMessage().Registration());if err!=nil{t.Fatal(err)}
  result,err:=sample.ItemsArgsMessage().Format(t.Context(),catalog,"en",sample.ItemsArgs{Name:"Ada",Count:decimal.FromInt64(2)});if err!=nil||result.Text!="Ada has 2"{t.Fatal(result,err)}
  key,err:=sample.PendingReview.EnumDescriptor().LabelKey(sample.PendingReview);if err!=nil||key!="enum.status.pending_review"{t.Fatal(key,err)}
+ key,err=sample.ProjectStatusDraft.EnumDescriptor().LabelKey(sample.ProjectStatusDraft);if err!=nil||key!="projects.status.draft"{t.Fatal(key,err)}
 }
 `)
 	command := exec.CommandContext(t.Context(), "go", "test", ".")
@@ -63,20 +73,26 @@ func TestGeneratedMessage(t *testing.T){
 
 func TestMessageGenerationRejectsInvalidParametersWithoutPublishing(t *testing.T) {
 	for name, source := range map[string]string{
-		"missing key":      "//foundry:message\ntype Args struct{}",
-		"bad key":          "//foundry:message key=Upper\ntype Args struct{}",
-		"unknown option":   "//foundry:message key=label guessed=true\ntype Args struct{}",
-		"plural absent":    "//foundry:message key=count plural=count\ntype Args struct{}",
-		"plural text":      "//foundry:message key=count plural=count\ntype Args struct{Count string `json:\"count\"`}",
-		"plural kind":      "//foundry:message key=count kind=ordinal\ntype Args struct{}",
-		"float":            "//foundry:message key=count\ntype Args struct{Count float64}",
-		"pointer":          "//foundry:message key=count\ntype Args struct{Count *int}",
-		"optional":         "//foundry:message key=count\ntype Args struct{Count int `json:\"count,omitempty\"`}",
-		"structured":       "//foundry:message key=count\ntype Args struct{Counts []int}",
-		"bad parameter":    "//foundry:message key=count\ntype Args struct{Count int `json:\"bad.name\"`}",
-		"duplicate key":    "//foundry:message key=label\ntype One struct{}\n//foundry:message key=label\ntype Two struct{}",
-		"symbol collision": "//foundry:message key=label\ntype Args struct{}\nfunc ArgsMessage(){}",
-		"enum prefix":      "//foundry:enum labels=Upper\ntype State string\nconst Ready State=\"ready\"",
+		"missing key":       "//foundry:message\ntype Args struct{}",
+		"bad key":           "//foundry:message key=Upper\ntype Args struct{}",
+		"unknown option":    "//foundry:message key=label guessed=true\ntype Args struct{}",
+		"plural absent":     "//foundry:message key=count plural=count\ntype Args struct{}",
+		"plural text":       "//foundry:message key=count plural=count\ntype Args struct{Count string `json:\"count\"`}",
+		"plural kind":       "//foundry:message key=count kind=ordinal\ntype Args struct{}",
+		"float":             "//foundry:message key=count\ntype Args struct{Count float64}",
+		"pointer":           "//foundry:message key=count\ntype Args struct{Count *int}",
+		"optional":          "//foundry:message key=count\ntype Args struct{Count int `json:\"count,omitempty\"`}",
+		"structured":        "//foundry:message key=count\ntype Args struct{Counts []int}",
+		"bad parameter":     "//foundry:message key=count\ntype Args struct{Count int `json:\"bad.name\"`}",
+		"duplicate key":     "//foundry:message key=label\ntype One struct{}\n//foundry:message key=label\ntype Two struct{}",
+		"symbol collision":  "//foundry:message key=label\ntype Args struct{}\nfunc ArgsMessage(){}",
+		"enum prefix":       "//foundry:enum labels=Upper\ntype State string\nconst Ready State=\"ready\"",
+		"trim without type": "//foundry:enum labels=state trim_type=true\ntype State string\nconst(StateReady State=\"ready\";Pending State=\"pending\")",
+		"trim inside word":  "//foundry:enum labels=state trim_type=true\ntype State string\nconst Statement State=\"statement\"",
+		"trim to nothing":   "//foundry:enum labels=state trim_type=true\ntype State string\nconst State_ State=\"x\"",
+		"trim value":        "//foundry:enum labels=state trim_type=yes\ntype State string\nconst StateReady State=\"ready\"",
+		"trim no labels":    "//foundry:enum trim_type=true\ntype State string\nconst StateReady State=\"ready\"",
+		"enum option":       "//foundry:enum labels=state guessed=true\ntype State string\nconst StateReady State=\"ready\"",
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := fixture(t, "package sample\n"+source+"\n")

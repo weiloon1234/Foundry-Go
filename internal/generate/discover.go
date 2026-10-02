@@ -50,8 +50,11 @@ type field struct {
 	position                token.Position
 }
 type enum struct {
-	name     string
-	labels   string
+	name   string
+	labels string
+	// trimType derives label keys without the enum type's name, which
+	// type-prefixed constants such as StatusDraft repeat.
+	trimType bool
 	typ      *types.Named
 	base     *types.Basic
 	values   []enumValue

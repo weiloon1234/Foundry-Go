@@ -269,12 +269,10 @@ func emitEnum(p *packageInput, enum enum) ([]byte, error) {
 	e.line("func(%s)EnumDescriptor()%s.Descriptor[%s]{return foundry%sEnumDescriptor()}", enum.name, enumPackage, enum.name, enum.name)
 	e.line("var foundry%sEnumDescriptor=%s.OnceValue(func()%s.Descriptor[%s]{return %s.Describe(%q,%q,", enum.name, e.use("sync"), enumPackage, enum.name, enumPackage, p.path, enum.name)
 	for _, v := range enum.values {
-		label := ""
-		if enum.labels != "" {
-			label = enum.labels + "." + snake(v.name)
-		}
 		suffix := ""
-		if label != "" {
+		if enum.labels != "" {
+			// Discovery validated every case's key.
+			label, _ := enum.labelKey(v)
 			suffix = fmt.Sprintf(",LabelKey:%q", label)
 		}
 		e.line("%s.Case[%s]{Name:%q,Value:%s%s},", enumPackage, enum.name, v.name, v.name, suffix)
