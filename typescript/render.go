@@ -445,6 +445,16 @@ func (r *renderer) types() {
 		locales = strings.Join(values, " | ")
 	}
 	fmt.Fprintf(&r.out, "/** The locale catalog's supported locales; any string when none is exported. */\nexport type Locale = %s;\n", locales)
+	// A frozen literal of its own: importing it never loads the embedded manifest.
+	catalog := "undefined"
+	if r.document.Locales != nil {
+		supported := make([]string, 0, len(r.document.Locales.Supported))
+		for _, locale := range r.document.Locales.Supported {
+			supported = append(supported, quote(string(locale)))
+		}
+		catalog = fmt.Sprintf("/* @__PURE__ */ Object.freeze({ default: %s, supported: /* @__PURE__ */ Object.freeze([%s] as const) })", quote(string(r.document.Locales.Default)), strings.Join(supported, ", "))
+	}
+	fmt.Fprintf(&r.out, "/** The exported catalog's default and supported locales, without parsing the manifest; undefined when no catalog is exported. */\nexport const catalogLocales: { readonly default: Locale; readonly supported: readonly Locale[] } | undefined = %s;\n", catalog)
 	fmt.Fprintf(&r.out, "/** Input keyed by supported locales; descriptors bind its entries with at() and element(). Received values keep string keys. */\nexport type LocaleMap<V> = Readonly<Partial<Record<Locale, V>>> & { readonly [%s]?: never };\n\n", r.ref("localeKeyed"))
 	for _, typ := range r.document.Types {
 		fmt.Fprintf(&r.out, "export type %s = %s;\n", r.typeName(typ.ID), r.expression(typ))

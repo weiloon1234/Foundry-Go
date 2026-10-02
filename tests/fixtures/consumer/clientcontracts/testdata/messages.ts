@@ -1,4 +1,4 @@
-import { formatMessage, formatText, type CatalogMessageKey, type ValidationMessages } from "./contracts_foundry.gen.js";
+import { catalogLocales, formatMessage, formatText, type CatalogMessageKey, type Locale, type ValidationMessages } from "./contracts_foundry.gen.js";
 
 declare const messages: ValidationMessages;
 export function messageConsumer(): void {
@@ -15,4 +15,8 @@ export function messageConsumer(): void {
   void formatText(messages, "auth.lockout", { minutes: 5 }, { plural: "minutes" });
   const key: CatalogMessageKey = "welcome";
   void key;
+  // The server's configured locales, typed as the catalog's Locale union.
+  const fallback: Locale | undefined = catalogLocales?.default;
+  const supported: readonly Locale[] = catalogLocales?.supported ?? [];
+  void fallback; void supported;
 }

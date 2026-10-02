@@ -31,6 +31,10 @@ for (const files of [
   [{ a: { $plural: { one: "x" } } }], [{ a: { $plural: { other: "x", many: 2 } } }], [{ a: { $plural: { other: "x", bogus: "y" } } }],
   [{ a: { $plural: { other: "x" }, b: "y" } }], [{ "a.b": "x" }, { a: { b: "y" } }], [{ a: "x\u0000" }],
 ]) assert.throws(() => sdk.catalogTranslations(files), sdk.ContractError);
+// The server's configured locales are a frozen literal in every entry.
+assert.deepEqual(sdk.catalogLocales, { default: "en", supported: ["ar", "en", "ms"] });
+assert.ok(Object.isFrozen(sdk.catalogLocales) && Object.isFrozen(sdk.catalogLocales.supported));
+assert.deepEqual(members.catalogLocales, sdk.catalogLocales);
 // Surfaces keep every declared message and share the runtime renderer.
 assert.equal(members.formatMessage(messages, "welcome", { name: "Ada" }), "Helo Ada");
 assert.equal(members.formatText, sdk.formatText);

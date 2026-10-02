@@ -15,6 +15,9 @@
   parameter from the declaration.
 - The semantic identifier grammar and message limits are emitted from Go into
   the runtime, where realtime frames and catalog keys share one check.
+- Every generated entry exports `catalogLocales`, the catalog's default and
+  supported locales as a frozen literal (or `undefined` without a catalog), which
+  bundles without the embedded manifest.
 
 ### Enum label keys for type-prefixed constants
 

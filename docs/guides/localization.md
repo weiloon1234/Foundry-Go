@@ -167,6 +167,12 @@ formatText(messages, "auth.lockout", { minutes: 5 }, { plural: "minutes" });
 Both use the fallback catalog and return the key when no text renders. Number
 arguments may be numbers or exact decimal strings.
 
+`catalogLocales` holds the server's configured default and supported locales as
+a frozen `{ default, supported }` typed by `Locale`, or `undefined` when no
+catalog is exported. Choose a portal's language from it rather than from the
+translation folders that exist. It is a literal of its own, so importing it does
+not bundle the embedded manifest or the runtime.
+
 In an application with [portal surfaces](client-contracts.md#portal-surfaces),
 import `formatMessage` and `contractMetadata` from the portal's own entry. Its
 embedded manifest is the portal's projection, while the full entry's carries

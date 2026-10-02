@@ -329,6 +329,7 @@ func bundles(t *testing.T, node, compiler, dir string) {
 		"members_forms": `import { createClient, createForm, operation } from "../contracts_members_foundry.gen.js"; console.log(createClient, createForm, operation);`,
 		"live_realtime": `import { createClient, createRealtime } from "../contracts_live_foundry.gen.js"; console.log(createClient, createRealtime);`,
 		"full_all":      `import { createClient, createForm, createRealtime, operation } from "../contracts_foundry.gen.js"; console.log(createClient, createForm, createRealtime, operation);`,
+		"locales_only":  `import { catalogLocales } from "../contracts_members_foundry.gen.js"; console.log(catalogLocales);`,
 	}
 	if err := os.Mkdir(filepath.Join(dir, "apps"), 0700); err != nil {
 		t.Fatal(err)
@@ -371,5 +372,10 @@ func bundles(t *testing.T, node, compiler, dir string) {
 	}
 	if sizes["members_http"][1] >= sizes["full_http"][1] {
 		t.Fatal("a surface bundle is not smaller than the full SDK's", sizes["members_http"], sizes["full_http"])
+	}
+	// The locale literal stands alone: no embedded manifest or runtime follows it.
+	const manifest = `"error_type":`
+	if !strings.Contains(contents["members_http"], manifest) || strings.Contains(contents["locales_only"], manifest) || !strings.Contains(contents["locales_only"], `"ms"`) || sizes["locales_only"][0] > 512 {
+		t.Fatal("catalogLocales pulled in the manifest or runtime", sizes["locales_only"])
 	}
 }

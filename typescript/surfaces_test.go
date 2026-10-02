@@ -117,6 +117,9 @@ func TestSurfacesPublishPortalEntriesBesideSharedRuntimeModules(t *testing.T) {
 			t.Fatal("schema name differs between entries")
 		}
 	}
+	if !strings.Contains(admin, "export const catalogLocales: { readonly default: Locale; readonly supported: readonly Locale[] } | undefined = undefined;") {
+		t.Fatal("an entry without a catalog exports locales")
+	}
 	if !strings.Contains(read("api_runtime_foundry.gen.ts"), "export { runtimePolicy, defaultJSONLimits };") || !strings.Contains(read("api_runtime_realtime_foundry.gen.ts"), core) {
 		t.Fatal("runtime modules are not wired to each other")
 	}
