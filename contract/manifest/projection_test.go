@@ -2,16 +2,22 @@ package manifest_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"slices"
 	"testing"
 
+	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
+	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/notifications"
+	"github.com/weiloon1234/Foundry-Go/secret"
+	"github.com/weiloon1234/Foundry-Go/value"
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
@@ -199,5 +205,113 @@ func TestProjectionRejectsUnknownRepeatedAndEmptySelections(t *testing.T) {
 	var missing *manifest.Manifest
 	if _, err := missing.Project(manifest.Selection{Routes: []foundryhttp.RouteID{"admin"}}); err == nil {
 		t.Fatal("uninitialized manifest projected")
+	}
+}
+
+type operator struct{ ID int64 }
+
+func (o operator) FoundryReference() model.Reference[operator, int64] {
+	return model.NewReference[operator]("operators", o.ID, codec.Signed[int64]())
+}
+func (o operator) FoundryIdentity() (model.Identity, error) { return o.FoundryReference().Identity() }
+
+func operatorGuard(name auth.GuardName) auth.Guard[operator] {
+	provider := auth.DefineProvider(auth.ProviderName(name+".operators"), operator{}.FoundryReference(), func(_ context.Context, id int64) (value.Optional[operator], error) {
+		return value.Set(operator{id}), nil
+	}, func(context.Context, operator) (bool, error) { return true, nil })
+	strategy := auth.DefineStrategy(auth.CredentialName(name+".bearer"), func(context.Context, secret.String) (value.Optional[auth.Proof[operator, int64]], error) {
+		return value.Optional[auth.Proof[operator, int64]]{}, nil
+	})
+	return auth.DefineGuard(name, provider, strategy)
+}
+
+// guardedPortals has routes guarded by admin.api and billing.api, a public
+// route, private channels for admin.api and staff.api, and a public channel.
+// billing.api guards a route but no channel; staff.api a channel but no route.
+func guardedPortals(t *testing.T) *manifest.Manifest {
+	t.Helper()
+	admin, staff, billing := operatorGuard("admin.api"), operatorGuard("staff.api"), operatorGuard("billing.api")
+	guarded := func(id foundryhttp.RouteID, path string, guard auth.Guard[operator]) foundryhttp.RouteRegistration {
+		registry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration())
+		if err != nil {
+			t.Fatal(err)
+		}
+		transport, err := foundryhttp.NewAuthentication(registry, foundryhttp.BearerCredential(guard.Source()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		endpoint := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath(path)), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, contract.StringJSON[string]()))
+		return foundryhttp.RequireAuthentication(endpoint, transport, guard).Handle(func(context.Context, operator, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (string, error) {
+			t.Fatal("metadata invoked handler")
+			return "", nil
+		})
+	}
+	router, err := foundryhttp.NewRouter(guarded("admin.orders", "/admin/orders", admin), guarded("billing.invoices", "/billing/invoices", billing), endpoint(t, "web.home", "/home"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rooms := websocket.DefineRooms(foundryhttp.StringPath[string]())
+	allow := func(context.Context, operator, websocket.Target[string]) error { return nil }
+	adminFeed := websocket.Private[struct{}]("admin.feed", rooms, admin, allow)
+	staffFeed := websocket.Private[struct{}]("staff.feed", rooms, staff, allow)
+	news := websocket.Public[struct{}]("news", rooms)
+	registry, err := websocket.NewRegistry(
+		websocket.Register(adminFeed, websocket.DefineOutgoing(adminFeed, "posted", contract.StringJSON[string]()).Registration()),
+		websocket.Register(staffFeed, websocket.DefineOutgoing(staffFeed, "posted", contract.StringJSON[string]()).Registration()),
+		websocket.Register(news, websocket.DefineOutgoing(news, "posted", contract.StringJSON[string]()).Registration()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	realtime, err := websocket.DescribeClient(registry, websocket.DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := manifest.Build(t.Context(), manifest.Sources{HTTP: router, Realtime: &realtime})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return source
+}
+
+func channelIDs(document manifest.Document) []string {
+	var ids []string
+	if document.Realtime != nil {
+		for _, channel := range document.Realtime.Channels {
+			ids = append(ids, string(channel.ID))
+		}
+	}
+	slices.Sort(ids)
+	return ids
+}
+
+func TestProjectionSelectsTheChannelsOfAGuard(t *testing.T) {
+	source := guardedPortals(t)
+	admin := project(t, source, manifest.Selection{Paths: []string{"/admin"}, Guards: []auth.GuardName{"admin.api"}})
+	if !slices.Equal(routeIDs(admin), []string{"admin.orders"}) || !slices.Equal(channelIDs(admin), []string{"admin.feed"}) {
+		t.Fatal("admin portal", routeIDs(admin), channelIDs(admin))
+	}
+	// A guard combines with explicit channels; public channels have no guard.
+	staff := project(t, source, manifest.Selection{Channels: []websocket.ChannelID{"news"}, Guards: []auth.GuardName{"staff.api"}})
+	if len(staff.HTTP) != 0 || !slices.Equal(channelIDs(staff), []string{"news", "staff.feed"}) {
+		t.Fatal("staff portal", routeIDs(staff), channelIDs(staff))
+	}
+	// A known guard without channels selects none; the portal still exports.
+	billing := project(t, source, manifest.Selection{Paths: []string{"/billing"}, Guards: []auth.GuardName{"billing.api"}})
+	if !slices.Equal(routeIDs(billing), []string{"billing.invoices"}) || billing.Realtime != nil {
+		t.Fatal("billing portal", routeIDs(billing), channelIDs(billing))
+	}
+	for name, test := range map[string]struct {
+		selection manifest.Selection
+		want      error
+	}{
+		"unknown guard":   {manifest.Selection{Paths: []string{"/admin"}, Guards: []auth.GuardName{"merchant.api"}}, fault.Missing},
+		"selects nothing": {manifest.Selection{Guards: []auth.GuardName{"billing.api"}}, fault.Missing},
+		"repeated guard":  {manifest.Selection{Guards: []auth.GuardName{"admin.api", "admin.api"}}, fault.Duplicate},
+		"invalid guard":   {manifest.Selection{Guards: []auth.GuardName{"not semantic"}}, fault.Invalid},
+	} {
+		if _, err := source.Project(test.selection); !errors.Is(err, test.want) {
+			t.Fatalf("%s: %v", name, err)
+		}
 	}
 }

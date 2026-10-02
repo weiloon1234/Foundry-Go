@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
@@ -18,11 +19,14 @@ import (
 // after a dot: "admin" selects admin.login and admin.orders.list, not
 // administration.list. A Paths entry is a literal path prefix selecting the
 // routes whose path equals it or continues it after a slash: "/api/admin"
-// selects /api/admin/orders/{id}, not /api/administration.
+// selects /api/admin/orders/{id}, not /api/administration. A Guards entry
+// selects every channel declared for that guard; the guard must occur in the
+// manifest, but need not have a channel yet.
 type Selection struct {
 	Routes   []foundryhttp.RouteID
 	Channels []websocket.ChannelID
 	Paths    []string
+	Guards   []auth.GuardName
 }
 
 // Project returns the manifest restricted to selection: the selected operations,
@@ -47,8 +51,28 @@ func (m *Manifest) Project(selection Selection) (*Manifest, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(routes.entries)+len(channels.entries)+len(paths.entries) == 0 {
+	guards, err := selector(selection.Guards, identifier.Semantic, func(entry, guard string) bool { return entry == guard })
+	if err != nil {
+		return nil, err
+	}
+	if len(routes.entries)+len(channels.entries)+len(paths.entries)+len(guards.entries) == 0 {
 		return nil, invalid("a projection selects no route or channel")
+	}
+	known := make(map[auth.GuardName]bool)
+	for _, op := range document.HTTP {
+		if op.Route.Authentication != nil {
+			known[op.Route.Authentication.Guard] = true
+		}
+	}
+	if document.Realtime != nil {
+		for _, channel := range document.Realtime.Channels {
+			known[channel.Guard] = true
+		}
+	}
+	for _, entry := range guards.entries {
+		if !known[auth.GuardName(entry.id)] {
+			return nil, fault.New(fault.Missing, "invalid client contract: projection guard "+entry.id+" guards no route or channel")
+		}
 	}
 	// Both selectors run so that every entry matching a route is marked used.
 	selectsRoute := func(route foundryhttp.RouteInfo) bool {
@@ -70,7 +94,8 @@ func (m *Manifest) Project(selection Selection) (*Manifest, error) {
 	if document.Realtime != nil {
 		realtime := Realtime{Protocol: document.Realtime.Protocol, Limits: document.Realtime.Limits}
 		for _, channel := range document.Realtime.Channels {
-			if channels.selects(string(channel.ID)) {
+			byID, byGuard := channels.selects(string(channel.ID)), channel.Guard != "" && guards.selects(string(channel.Guard))
+			if byID || byGuard {
 				realtime.Channels = append(realtime.Channels, channel)
 				selected[channel.ID] = true
 			}
@@ -83,6 +108,9 @@ func (m *Manifest) Project(selection Selection) (*Manifest, error) {
 		if !entry.used {
 			return nil, fault.New(fault.Missing, "invalid client contract: projection entry "+entry.id+" selects nothing")
 		}
+	}
+	if len(result.HTTP) == 0 && result.Realtime == nil {
+		return nil, fault.New(fault.Missing, "invalid client contract: projection selects no operation or channel")
 	}
 	types := make(typeIndex, len(document.Types))
 	for _, typ := range document.Types {

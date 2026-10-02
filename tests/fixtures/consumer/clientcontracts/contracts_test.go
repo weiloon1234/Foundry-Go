@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"foundry.test/consumer/clientcontracts"
+	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/openapi"
@@ -303,10 +304,10 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 }
 
 // surfaces are two portals of the fixture: the member pages below /members, and
-// the account with its realtime channels.
+// the account with its guard's private channel and the public updates channel.
 var surfaces = []typescript.Surface{
 	{Name: "members", Paths: []string{"/members"}},
-	{Name: "live", Routes: []foundryhttp.RouteID{"account.show"}, Channels: []websocket.ChannelID{"accounts", "updates"}},
+	{Name: "live", Routes: []foundryhttp.RouteID{"account.show"}, Channels: []websocket.ChannelID{"updates"}, Guards: []auth.GuardName{"client_accounts"}},
 }
 
 // bundles minifies application entry points with the development esbuild

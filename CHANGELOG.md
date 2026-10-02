@@ -18,8 +18,9 @@
   restricted to route and channel ID namespaces (`admin` selects `admin.login`,
   not `administration.list`) and literal route path prefixes (`Paths:
   []string{"/api/admin"}` selects `/api/admin/orders/{id}`, not
-  `/api/administration`). Each embeds only its projection of the manifest,
-  built by the new `manifest.Manifest.Project` and `manifest.Selection`.
+  `/api/administration`) and guards (`Guards` selects every channel declared for
+  a guard that occurs in the manifest). Each embeds only its projection of the
+  manifest, built by the new `manifest.Manifest.Project` and `manifest.Selection`.
 - Generated entries import the shared runtime modules
   `<prefix>_runtime_foundry.gen.ts` and `<prefix>_runtime_realtime_foundry.gen.ts`,
   which have no top-level side effects, so bundlers drop unused features. A

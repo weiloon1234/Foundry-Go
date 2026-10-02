@@ -104,8 +104,11 @@ exactly that ID and every ID that continues it after a `.`, so `admin` selects
 `admin.login` and `admin.orders.list` but not `administration.x`. After the
 starter adopted surfaces with feature-named route IDs, a `Paths` entry was added:
 a literal route path prefix selecting whole segments, so `/api/admin` selects
-`/api/admin/orders/{id}` but not `/api/administration`. Every entry must
-select something, and an unknown entry fails generation. A surface needs at least
+`/api/admin/orders/{id}` but not `/api/administration`. A `Guards` entry then
+selected the channels declared for a guard, replacing the starter's own guard
+matching; the guard must occur in the manifest but need not have a channel yet,
+and the surface must still contain an operation or channel. Every other entry
+must select something, and an unknown entry fails generation. A surface needs at least
 one route or channel. Surfaces may overlap. Names follow the prefix pattern, are
 unique, and exclude the artifact names `manifest`, `openapi`, `react`, `vue` and
 `runtime`, so generated file names never collide.

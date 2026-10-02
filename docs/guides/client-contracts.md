@@ -97,13 +97,13 @@ bundle carries only its own operations, channels and schemas:
 
 ```go
 export, err := typescript.ExportCommand("contracts.export", api, sources,
-    typescript.Surface{Name: "admin", Paths: []string{"/api/admin"}, Channels: []websocket.ChannelID{"admin"}},
+    typescript.Surface{Name: "admin", Paths: []string{"/api/admin"}, Guards: []auth.GuardName{"admin.api"}},
     typescript.Surface{Name: "web", Routes: []http.RouteID{"web", "health.live"}})
 ```
 
 `typescript.Options.Surfaces` takes the same declarations. Each surface publishes
 `contracts_<name>_foundry.gen.ts` beside the full entry, with the same API
-restricted to its selection, which combines three kinds of entry:
+restricted to its selection, which combines four kinds of entry:
 
 - `Routes` and `Channels` select the ID itself and every ID continuing it after
   a dot: `admin` selects `admin.login` and `admin.orders.list`, not
@@ -112,6 +112,12 @@ restricted to its selection, which combines three kinds of entry:
   `/api/admin` selects `/api/admin/orders/{id}`, not `/api/administration`. A
   prefix has no parameters or trailing slash, and `/` selects every route. This
   suits applications whose route IDs are named by feature rather than portal.
+- `Guards` selects every channel declared for a guard, such as
+  `websocket.Private(id, rooms, adminGuard, authorize)`, so a portal picks up its
+  guard's new channels without listing them. The guard must guard some route or
+  channel in the manifest, but need not have a channel yet. Public channels have
+  no guard; select them by ID. Operations are selected by path or ID, since a
+  portal's login and refresh routes are public.
 
 The embedded manifest is a projection (`manifest.Manifest.Project`) containing:
 
@@ -127,8 +133,10 @@ shared modules, so values pass between entries of one directory. A surface
 without channels neither imports the realtime module nor exports
 `createRealtime`. Surface names follow the prefix pattern and are unique ignoring
 case. `manifest`, `openapi`, `react`, `vue` and names beginning with `runtime`
-are reserved, and at most 64 surfaces are allowed. Every selection entry must
-select something. Removing a surface removes its file.
+are reserved, and at most 64 surfaces are allowed. Every `Routes`, `Channels`
+and `Paths` entry must select something, every guard must be known, and a
+surface must contain an operation or a channel. Removing a surface removes its
+file.
 
 The runtime modules have no top-level side effects, so bundlers drop the runtime
 features an application does not import. Measured with esbuild 0.28.2 (minified
