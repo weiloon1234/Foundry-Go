@@ -1,4 +1,4 @@
-import { ContractError, JSONNumber, WireCodec, checkAbort, immutable, integerPattern, object, ownInput, parseWire, reject, runtimePolicy, textBytes, urlValue, uuidPattern, writeWire } from "./runtime.js";
+import { ContractError, JSONNumber, WireCodec, checkAbort, immutable, integerPattern, object, ownInput, parseWire, reject, runtimePolicy, semanticID, textBytes, urlValue, uuidPattern, writeWire } from "./runtime.js";
 import type { CallOptions, CodecOptions, JSONLimits, RealtimeChannel, RealtimeEvent, RuntimeDocument } from "./runtime.js";
 /** Supply an already-open connection which negotiated the exported subprotocol. */
 export interface RealtimeTransport {
@@ -31,7 +31,6 @@ function wireInteger(value: unknown): number {
   if (!(value instanceof JSONNumber) || !integerPattern.test(value.text)) reject("", "protocol");
   const number = Number(value.text); if (!Number.isSafeInteger(number)) reject("", "protocol"); return number;
 }
-function semanticID(value: unknown): value is string { return typeof value === "string" && value.length <= 128 && /^[a-z0-9][a-z0-9_.-]*$/.test(value); }
 function createRealtimeEngine(document: RuntimeDocument, transport: RealtimeTransport, options: RealtimeOptions) {
   const description = document.realtime; if (!description || transport.protocol !== description.protocol.subprotocol) reject("", "protocol");
   const { protocol, limits } = description, responses = protocol.responses, actions = protocol.actions, codec = new WireCodec(document.types);

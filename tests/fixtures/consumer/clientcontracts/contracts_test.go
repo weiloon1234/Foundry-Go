@@ -224,7 +224,7 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "non_streaming.ts"), nonStreaming, 0600); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"types.ts", "runtime.mjs", "forms.mjs", "surfaces.ts", "surfaces.mjs"} {
+	for _, name := range []string{"types.ts", "runtime.mjs", "forms.mjs", "surfaces.ts", "surfaces.mjs", "messages.ts", "messages.mjs"} {
 		data, err := os.ReadFile(filepath.Join("testdata", name))
 		if err != nil {
 			t.Fatal(err)
@@ -300,6 +300,7 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 		entries = append(entries, filepath.Join(dir, "dist", name+"_foundry.gen.js"))
 	}
 	run("surface clients against real HTTP/WebSocket", append(append([]string{filepath.Join(dir, "surfaces.mjs")}, entries...), server.URL)...)
+	run("catalog translations and message formatting", filepath.Join(dir, "messages.mjs"), entries[0], entries[1])
 	bundles(t, node, compiler, dir)
 }
 

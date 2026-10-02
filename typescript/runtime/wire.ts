@@ -6,6 +6,8 @@ export class ContractError extends Error {
   constructor(readonly issues: readonly Issue[] = [{ path: "", code: "invalid" }]) { super("Invalid client contract value"); this.name = "ContractError"; }
 }
 function reject(path = "", code = "invalid"): never { throw new ContractError([{ path, code }]); }
+// semanticPattern is emitted from the Go identifier grammar beside runtimePolicy.
+function semanticID(value: unknown): value is string { return typeof value === "string" && value.length <= runtimePolicy.semanticBytes && semanticPattern.test(value); }
 function pointer(path: string, key: string): string { return path + "/" + key.replace(/~/g, "~0").replace(/\//g, "~1"); }
 const encoder = /* @__PURE__ */ new TextEncoder();
 const decoder = /* @__PURE__ */ new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
@@ -134,7 +136,7 @@ interface WireType {
 /** Custom URL syntax must be provided explicitly. Payload schema validation still runs. */
 export interface URLCodec { format(value: unknown): string }
 export interface CodecOptions { readonly urlCodecs?: Readonly<Record<string, URLCodec>> }
-interface RuntimePolicy { readonly maxDepth: number; readonly decimalDigits: number; readonly metadataBytes: number; readonly messageBytes: number }
+interface RuntimePolicy { readonly maxDepth: number; readonly decimalDigits: number; readonly metadataBytes: number; readonly messageBytes: number; readonly maxMessages: number; readonly semanticBytes: number }
 // runtimePolicy is emitted from Go-owned constants beside the manifest.
 
 class WireCodec {
@@ -278,5 +280,5 @@ function immutable<T>(value: T): T {
   }
   return value;
 }
-export { WireCodec, immutable, integerPattern, limitsValid, numberPattern, object, parseWire, pointer, reject, textBytes, validUnicode, writeWire };
+export { WireCodec, immutable, integerPattern, limitsValid, numberPattern, object, parseWire, pointer, reject, semanticID, textBytes, validUnicode, writeWire };
 export type { WireType };

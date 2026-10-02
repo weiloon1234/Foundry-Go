@@ -21,6 +21,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/idempotency"
 	"github.com/weiloon1234/Foundry-Go/internal/contractname"
 	"github.com/weiloon1234/Foundry-Go/internal/generate"
+	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
@@ -138,7 +139,8 @@ func newNaming(document manifest.Document) (naming, error) {
 func preamble(module bool) string {
 	var out strings.Builder
 	fmt.Fprintf(&out, "export const manifestVersion = %d as const;\n", manifest.Version)
-	fmt.Fprintf(&out, "const runtimePolicy: RuntimePolicy = { maxDepth: %d, decimalDigits: %d, metadataBytes: %d, messageBytes: %d };\n", contract.MaxJSONDepth, decimal.MaxDigits, manifest.MaxBytes, i18n.MaxTextBytes)
+	fmt.Fprintf(&out, "const runtimePolicy: RuntimePolicy = { maxDepth: %d, decimalDigits: %d, metadataBytes: %d, messageBytes: %d, maxMessages: %d, semanticBytes: %d };\n", contract.MaxJSONDepth, decimal.MaxDigits, manifest.MaxBytes, i18n.MaxTextBytes, i18n.MaxMessages, identifier.MaxSemanticBytes)
+	fmt.Fprintf(&out, "const semanticPattern = /* @__PURE__ */ new RegExp(%s);\n", quote(identifier.SemanticPattern))
 	fmt.Fprintf(&out, "const idempotencyKeyPattern = %s;\n", quote(idempotency.KeyPattern(idempotency.MaxKeyBytes)))
 	defaults, _ := json.Marshal(foundryhttp.DefaultEndpointLimits().Response)
 	fmt.Fprintf(&out, "const defaultJSONLimits: JSONLimits = /* @__PURE__ */ Object.freeze(%s);\n", defaults)
@@ -176,8 +178,48 @@ func (r *renderer) body(source *manifest.Manifest) error {
 	r.types()
 	r.http()
 	r.descriptors()
+	r.messages()
 	r.realtime()
 	return nil
+}
+
+// messages types each declared catalog message's arguments from its parameter
+// kinds and formats it with the shared renderer, taking the plural parameter
+// from the declaration. Frontend-only keys use the runtime's formatText.
+func (r *renderer) messages() {
+	r.out.WriteString("\n/** Arguments of each declared catalog message; numbers may also be exact decimal strings. */\nexport interface CatalogMessageArguments {\n")
+	if r.document.Locales != nil {
+		for _, definition := range r.document.Locales.Messages {
+			fields := make([]string, 0, len(definition.Parameters))
+			for _, parameter := range definition.Parameters {
+				typ := "string"
+				switch parameter.Kind {
+				case i18n.NumberParameter:
+					typ = "number | string"
+				case i18n.BooleanParameter:
+					typ = "boolean"
+				}
+				fields = append(fields, "readonly "+quote(parameter.Name)+": "+typ)
+			}
+			arguments := "Readonly<Record<string, never>>"
+			if len(fields) != 0 {
+				arguments = "{ " + strings.Join(fields, "; ") + " }"
+			}
+			fmt.Fprintf(&r.out, "  readonly %s: %s;\n", quote(string(definition.Key)), arguments)
+		}
+	}
+	fmt.Fprintf(&r.out, `}
+export type CatalogMessageKey = keyof CatalogMessageArguments;
+let catalogDefinitionsCache: ReadonlyMap<string, { readonly plural?: string; readonly plural_kind?: "cardinal" | "ordinal" }> | undefined;
+function catalogDefinitions(): ReadonlyMap<string, { readonly plural?: string; readonly plural_kind?: "cardinal" | "ordinal" }> {
+  return catalogDefinitionsCache ??= new Map((runtimeDocument().locales?.messages ?? []).map(definition => [definition.key, definition]));
+}
+/** Format a declared catalog message with typed arguments; its plural parameter comes from its declaration. Missing or unrenderable text returns the key. Use formatText for keys only a frontend catalog declares. */
+export function formatMessage<K extends CatalogMessageKey>(messages: %s | undefined, key: K, ...args: {} extends CatalogMessageArguments[K] ? [args?: CatalogMessageArguments[K]] : [args: CatalogMessageArguments[K]]): string {
+  const definition = catalogDefinitions().get(key);
+  return %s(messages, key, (args[0] ?? {}) as Readonly<Record<string, string | number | boolean>>, { plural: definition?.plural, pluralKind: definition?.plural_kind });
+}
+`, r.ref("ValidationMessages"), r.ref("formatText"))
 }
 
 func quote(value string) string                        { data, _ := json.Marshal(value); return string(data) }

@@ -121,6 +121,52 @@ handles must implement `fs.ReadDirFile` so enumeration can be bounded; `embed.FS
 `os.DirFS` and `os.Root.FS` support this. Choose `os.Root.FS` when the filesystem
 root itself needs confinement against concurrent path replacement.
 
+### Application-declared catalogs
+
+`i18n.ReadTemplates(ctx, files, locales)` reads the same tree with the same
+layout, limits and errors, but without message definitions, and returns the
+templates by locale and key. An application can then declare keys of its own,
+for example a parameter-free definition for each label its JSON catalog
+defines, and compile both with `i18n.NewCatalog`, or pass the templates as
+`application.FeatureDeclarations.Catalog` with the definitions in `Messages`.
+Compilation still rejects a placeholder the declaration lacks and plural forms on
+a key declared without a plural parameter, naming the locale and key. Templates
+from `ReadTemplates` carry no file names into those later errors.
+
+### Browser catalogs
+
+Generated clients format the same JSON with the runtime renderer that localizes
+validation messages, so a browser applies Go's placeholder, plural and fallback
+rules without a second implementation:
+
+```typescript
+import { catalogTranslations, formatMessage, formatText } from "./generated/contracts_foundry.gen.js";
+import enAuth from "../lang/shared/en/auth.json";
+import msAuth from "../lang/shared/ms/auth.json";
+
+const messages = {
+  locale: "ms", translations: catalogTranslations([msAuth]),
+  fallback: { locale: "en", translations: catalogTranslations([enAuth]) },
+};
+formatMessage(messages, "cart.items", { name: "Ada", count: 2 });
+formatText(messages, "auth.lockout", { minutes: 5 }, { plural: "minutes" });
+```
+
+- `catalogTranslations(files)` flattens one locale's catalog files under the Go
+  rules: semantic keys, string or `$plural` leaves with known forms including
+  `other`, bounded text and no key defined twice. A violation throws
+  `ContractError` naming the file index and key. The same `messages` object can
+  be passed as `ClientOptions.validationMessages`.
+- `formatMessage(messages, key, args)` formats a key the exported catalog
+  declares. `CatalogMessageKey` and `CatalogMessageArguments` type its key and
+  arguments, so a misspelled key or missing argument fails to compile. The
+  plural parameter and its kind come from the declaration.
+- `formatText(messages, key, args, { plural, pluralKind })` formats a key only a
+  frontend catalog defines, naming its plural argument explicitly.
+
+Both use the fallback catalog and return the key when no text renders. Number
+arguments may be numbers or exact decimal strings.
+
 ## Resolution and fallback
 
 `Catalog.Resolve(preferred, acceptLanguage)` first considers an explicit locale,

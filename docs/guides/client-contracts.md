@@ -496,7 +496,9 @@ when no issues were found. The server always remains the validation authority.
 message argument definitions, enum case labels, permission labels, validation
 trees, rendered notification payload references and datatable columns/filters.
 Numeric metadata tokens use `JSONNumber`. Locale metadata describes contracts;
-it does not bundle translations or an i18n renderer. Permission labels and table
+it does not bundle translations. The runtime's `catalogTranslations`,
+`formatMessage` and `formatText` format an application's own JSON catalogs; see
+[browser catalogs](localization.md#browser-catalogs). Permission labels and table
 capabilities support UI presentation; server authorization still decides access.
 
 React and Vue can share the generated module and one transport adapter. Keep

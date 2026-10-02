@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### JSON catalogs shared by Go and browser clients
+
+- `i18n.ReadTemplates` reads a catalog tree with `Load`'s layout, limits and
+  errors but without definitions, so an application can declare its own keys
+  before `NewCatalog` compiles the templates. `Load` now uses it.
+- Generated clients export `catalogTranslations`, which flattens imported JSON
+  catalog files under the Go rules, and `formatText`, which formats any key with
+  the validation message renderer and an explicit plural argument. They also
+  export `formatMessage`, typed by the new `CatalogMessageKey` and
+  `CatalogMessageArguments` from the exported catalog, which takes the plural
+  parameter from the declaration.
+- The semantic identifier grammar and message limits are emitted from Go into
+  the runtime, where realtime frames and catalog keys share one check.
+
 ### Enum label keys for type-prefixed constants
 
 - `//foundry:enum labels=prefix trim_type=true` derives label keys without the

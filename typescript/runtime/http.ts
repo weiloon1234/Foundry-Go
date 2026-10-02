@@ -23,6 +23,7 @@ interface RealtimeDescription {
 }
 interface RuntimeDocument {
   readonly version: number; readonly types: readonly WireType[]; readonly http: readonly Operation[]; readonly error_type: string;
+  readonly locales?: { readonly messages: readonly { readonly key: string; readonly plural?: string; readonly plural_kind?: "cardinal" | "ordinal" }[] };
   readonly errors: readonly { readonly error_code: string; readonly status: number; readonly message: string }[]; readonly realtime?: RealtimeDescription;
 }
 declare const idempotencyKeyBrand: unique symbol;

@@ -4,7 +4,10 @@ package identifier
 
 import "regexp"
 
-var semantic = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]*$`)
+// SemanticPattern is the identifier grammar, shared with generated clients.
+const SemanticPattern = `^[a-z0-9][a-z0-9_.-]*$`
+
+var semantic = regexp.MustCompile(SemanticPattern)
 
 // MaxSemanticBytes bounds a semantic identifier, including message keys.
 const MaxSemanticBytes = 128
