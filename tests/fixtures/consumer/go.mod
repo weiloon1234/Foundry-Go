@@ -7,7 +7,7 @@ tool github.com/weiloon1234/Foundry-Go/cmd/foundry
 require (
 	foundry.test/pluginbase v0.0.0
 	foundry.test/plugindep v0.0.0
-	github.com/andybalholm/brotli v1.2.4
+	github.com/andybalholm/brotli v1.2.5
 	github.com/weiloon1234/Foundry-Go v0.0.0
 )
 
