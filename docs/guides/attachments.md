@@ -13,6 +13,10 @@ ordinary generated infrastructure models, and explicit versioned migrations.
 Apply `attachments.Migrations()` through the normal migration runner. The
 constructor performs no migration, storage write, seeding or worker startup.
 
+AVIF uploads can use the same image policies and variants with
+`Accepted: []storage.MediaType{"image/avif"}`. The portable engine handles
+still AVIF and explicit animation plans without an OS codec installation.
+
 ## Declare collection policy once
 
 ```go
@@ -273,6 +277,12 @@ pins the stored version and accepts signed response overrides such as a download
 `ResponseContentDisposition`. Authorize access before creating any link. A URL
 remains subject to the provider's capabilities and access policy.
 Attachments reject implicit JSON serialization; map authorized data to a DTO.
+For email, pass an authorized file, owned attachment or loaded single-file model
+slot to `message.AttachStored(...)`. Its `EmailAttachment()` method also returns
+a pinned `email.Attachment` for a typed queue payload. The framework resolves the
+bytes through the configured disk; consumers do not convert them to blobs.
+See [email attachment sources](email.md#storage-attachments-and-limits) for
+browser uploads, lifetime requirements and provider-independent examples.
 
 Localized collections require `Localized: true` and an injected
 `i18n.LocaleCatalog`. Use `ForLocale(id)` for exact writes and reads. No process
@@ -334,3 +344,11 @@ does not abandon a borrowed reader, codec or provider callback. `Close(ctx)`
 cancels all three pools together and bounds its caller's wait while actual work
 retains capacity; `attachments.Module` drains it before completing dependency
 shutdown.
+
+Native image formats use the same configured imaging engine as direct processing.
+With the [libvips backend](imaging.md#optional-libvips-backend), collections can
+accept HEIF/HEIC, JPEG 2000, JPEG XL or SVG and produce ordinary named raster
+variants. Image inspection uses the engine's capabilities, including when an
+original is retained and only variants are transformed. HEIC/HEIF media aliases
+share acceptance rules. Backend availability and plan compatibility are checked
+when constructing the attachment manager; no codec import is needed in consumers.

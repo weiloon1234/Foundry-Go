@@ -222,6 +222,13 @@ subject-reference revocation and guarded diagnostics. These additions passed
 milestone 15 verification and consumer review.
 
 
+The [mail provider configuration](mailing/testdata/mailers.toml) and its
+[test](mailing/configured_test.go) exercise named Cloudflare/Resend selection,
+environment secrets and safe failover through `application.New`.
+[Browser upload mail](mailing/uploads_test.go) and
+[stored model mail](articles/email_postgres_test.go) use one provider-independent
+message API without manually reading blobs.
+
 Milestone 16 adds [mailing](mailing/welcome.go): typed template data, immediate
 sending, a foundation mailer module, an ordinary email job declaration and shared
 transactional enqueue, plus a generated recipient DTO using the shared address
@@ -270,3 +277,17 @@ concrete actor adapters for all three page modes. Compiler cases reject mismatch
 actors, scopes, permissions and authorization callbacks. The existing
 [client fixture](clientcontracts/contracts.go) registers real guarded pages and
 checks manifest/OpenAPI security, strict TypeScript and authenticated HTTP calls.
+
+The profile AVIF upload regression uses only Foundry to create an AVIF image,
+inspect decoder capabilities and run the existing avatar plan into PNG, including
+alpha preservation. See [avif_images_test.go](profiles/avif_images_test.go).
+
+[Image encoding plans](profiles/image_encoding.go) select PNG/APNG compression
+and AVIF search effort/alpha quality using only Foundry types. The compiler
+fixture rejects a resampling mode used as a PNG compression level, and real
+gopls probes cover the fluent encoder methods.
+
+The profiles consumer also demonstrates optional native imaging through ordinary
+application configuration in `profiles/native_images.go`. Build the native test
+with cgo and `-tags foundry_vips` after installing libvips; codec dependencies remain
+inside Foundry. Typed compiler cases cover backend and crop-interest declarations.

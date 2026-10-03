@@ -10,7 +10,8 @@ safe 500 responses.
 
 Enable `settings.Features.Locales.Enabled` and configure its `Default`, `Locales`
 and optional `Fallback`. The HTTP kernel automatically applies `http.Locale` and
-registers `validation.MessageDefinitions()` and `http.MessageDefinitions()`.
+registers `validation.MessageDefinitions()`, `http.MessageDefinitions()` and
+`pagination.MessageDefinitions()`.
 Supply translations through `application.FeatureDeclarations.Catalog`; only your
 own additional message signatures go in `Messages`.
 
@@ -45,6 +46,8 @@ with the rule's declared message as English fallback, and its `attribute`/`other
 arguments must be text like other validation messages.
 HTTP envelope keys are `http.error.<error_code>`; parameter-free decoding keys are
 `http.input.type`, `key`, `null`, `required`, `unknown`, `value` and `length`.
+Pagination labels its page number and size parameters with `http.pagination.page`
+("Page") and `http.pagination.size` ("Page size").
 
 A generated field's `WithLabel` supplies its public name; `WithLabelKey` selects
 a parameter-free catalog message with that static name as fallback. Unlabeled

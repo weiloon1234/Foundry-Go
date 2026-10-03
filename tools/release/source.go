@@ -80,6 +80,21 @@ func (policy sourcePolicy) sourceName(path string) bool {
 	case ".go", ".md", ".lua", ".json", ".ts", ".sh", ".version", ".html", ".css", ".mjs", ".tab", ".py":
 		return true
 	}
+	// Reviewed imaging codec fixtures and their upstream patent notice. Keep
+	// binary allowance scoped to these test directories, never arbitrary assets.
+	relative := filepath.ToSlash(path)
+	if strings.HasPrefix(relative, "imaging/testdata/avif/") {
+		return filepath.Ext(name) == ".avif" || name == "PATENTS"
+	}
+	if strings.HasPrefix(relative, "imaging/testdata/webp/") {
+		return filepath.Ext(name) == ".png" || filepath.Ext(name) == ".webp"
+	}
+	if strings.HasPrefix(relative, "imaging/testdata/native/") {
+		switch filepath.Ext(name) {
+		case ".png", ".jpg", ".icc", ".jxl":
+			return true
+		}
+	}
 	// Go's checked-in fuzz corpus uses extensionless hexadecimal filenames.
 	return strings.Contains(filepath.ToSlash(path), "testdata/fuzz/")
 }

@@ -3,7 +3,6 @@ module github.com/weiloon1234/Foundry-Go
 go 1.27.1
 
 require (
-	github.com/HugoSmits86/nativewebp v1.3.0
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/andybalholm/brotli v1.2.4
 	github.com/aws/aws-sdk-go-v2 v1.47.0
@@ -14,6 +13,7 @@ require (
 	github.com/coder/websocket v1.8.15
 	github.com/disintegration/gift v1.2.1
 	github.com/gen2brain/gav1d v0.2.5
+	github.com/gen2brain/vpx v0.2.1
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/pelletier/go-toml/v2 v2.4.3

@@ -1,0 +1,1515 @@
+{
+  "date": "2026-10-03",
+  "status": "complete",
+  "scope": "Expand first-class imaging toward Intervention Image coverage with a portable default and optional libvips backend.",
+  "stages": {
+    "everyday_editing": "Implemented and accepted; final make verify passed after audit corrections.",
+    "text_and_drawing": "Implemented and accepted; make verify, race, fuzz, consumers, editor probes, existing PostgreSQL attachment checks and visual inspection passed.",
+    "portable_formats_and_animation": "Accepted, including portable lossy/lossless WebP output. Full make verify with PostgreSQL and real-gopls passed, plus imaging races, 208840 encoder fuzz cases, independent libwebp decoding, compiler/consumer and CGO-disabled checks.",
+    "optional_native_backend": "Accepted: portable/native build matrix, format/color/metadata round trips, smart cropping, native first-frame input, bounded SVG, configured consumer, validation, PostgreSQL, race/fuzz/editor/compiler and full make verify all passed.",
+    "final_expansion_acceptance": "Accepted on final source. Full make verify passed with required PostgreSQL and real gopls; all 157 recorded source and fixture fingerprints match."
+  },
+  "checks": [
+    {
+      "command": "go test ./imaging",
+      "result": "passed before audit corrections"
+    },
+    {
+      "command": "go test ./profiles . -run 'TestProfileCardUsesOnlyFoundryImageAPIs|TestInvalidPublicContractsFailCompilation/imaging_' -count=1",
+      "directory": "tests/fixtures/consumer",
+      "result": "passed"
+    },
+    {
+      "command": "FOUNDRY_TEST_GOPLS=$PWD/bin/gopls go test ./internal/agent -run '^TestRealGoplsConsumer$/^image-' -count=1 -v",
+      "result": "passed all 3 imaging probes (completion, hover, definition)"
+    },
+    {
+      "command": "make verify",
+      "log": ".cache/imaging-expansion-20261003/stage1-verify.log",
+      "result": "passed; audit corrections were applied during this run, so a final source gate is required"
+    },
+    {
+      "command": "go test -race ./imaging -count=1",
+      "result": "passed, 13.206s, after audit corrections"
+    },
+    {
+      "command": "go test ./imaging -run '^$' -fuzz '^FuzzGeometryPreflight$' -fuzztime=15s -parallel=2",
+      "result": "passed, 37066 executions, after audit corrections"
+    },
+    {
+      "command": "FOUNDRY_TEST_POSTGRES_REQUIRED=1 go test -race ./attachments -run '^TestPostgresAttachment(ImagePolicy|Variant)' -count=1",
+      "environment": "Existing .env.test loaded without printing values; isolated retained test schemas.",
+      "result": "passed, 3.424s, after audit corrections"
+    },
+    {
+      "command": "make verify",
+      "log": ".cache/imaging-expansion-20261003/stage1-final-verify.log",
+      "result": "passed; exec session 55057 exited 0; complete root/consumer/compiler/generation/docs/release-tools gate"
+    },
+    {
+      "stage": 2,
+      "command": "go test ./imaging -count=1",
+      "result": "passed, 5.751s"
+    },
+    {
+      "stage": 2,
+      "command": "go test ./profiles . -run 'TestProfile(Card|Label)|TestInvalidPublicContractsFailCompilation/imaging_' -count=1",
+      "directory": "tests/fixtures/consumer",
+      "result": "passed"
+    },
+    {
+      "stage": 2,
+      "command": "FOUNDRY_TEST_GOPLS=$PWD/bin/gopls go test ./internal/agent -run '^TestRealGoplsConsumer$/^image-' -count=1 -v",
+      "result": "passed all 5 imaging probes, including new text and shape APIs"
+    },
+    {
+      "stage": 2,
+      "command": "go test -race ./imaging -count=1",
+      "result": "passed, 12.559s"
+    },
+    {
+      "stage": 2,
+      "command": "go test ./imaging -run '^$' -fuzz '^FuzzTextAndPathPlans$' -fuzztime=15s -parallel=2",
+      "result": "passed, 72129 executions, 16.490s"
+    },
+    {
+      "stage": 2,
+      "command": "make docs-check",
+      "result": "passed"
+    },
+    {
+      "stage": 2,
+      "command": "go run /private/tmp/foundry-imaging-text-demo.go",
+      "result": "passed; rendered 960x500 PNG inspected visually for text, alpha, shape borders, curves and wrapping",
+      "preview": "/private/tmp/foundry-imaging-text-demo.png"
+    },
+    {
+      "stage": 2,
+      "command": "make verify",
+      "log": ".cache/imaging-expansion-20261003/stage2-verify.log",
+      "result": "passed; exec session 52352 exited 0; source fingerprints unchanged during the full gate"
+    },
+    {
+      "stage": 2,
+      "command": "FOUNDRY_TEST_POSTGRES_REQUIRED=1 go test -race ./attachments -run '^TestPostgresAttachment(ImagePolicy|Variant)' -count=1",
+      "result": "passed, 3.294s",
+      "environment": "Existing private .env.test loaded without printing; isolated retained test schemas."
+    },
+    {
+      "stage": "3-animation",
+      "command": "go test ./imaging -count=1",
+      "result": "passed, 5.814s, before audit additions"
+    },
+    {
+      "stage": "3-animation",
+      "command": "go test ./profiles . -run 'TestAnimatedAvatar|TestProfile(Card|Label)|TestInvalidPublicContractsFailCompilation/imaging_' -count=1",
+      "directory": "tests/fixtures/consumer",
+      "result": "passed"
+    },
+    {
+      "stage": "3-animation",
+      "command": "FOUNDRY_TEST_GOPLS=$PWD/bin/gopls go test ./internal/agent -run '^TestRealGoplsConsumer$/^image-' -count=1 -v",
+      "result": "passed all 6 imaging probes"
+    },
+    {
+      "stage": "3-animation",
+      "command": "go test -race ./imaging -count=1",
+      "result": "passed, 12.255s, after palette and container audit corrections"
+    },
+    {
+      "stage": "3-animation",
+      "command": "go test ./imaging -run '^$' -fuzz '^FuzzAnimationContainers$' -fuzztime=15s -parallel=2",
+      "result": "passed, 332702 executions, 16.485s"
+    },
+    {
+      "stage": "3-animation",
+      "command": "FOUNDRY_TEST_POSTGRES_REQUIRED=1 go test -race ./attachments -run '^TestPostgresAttachment(ImagePolicy|Variant)' -count=1",
+      "result": "passed, 2.999s, including persisted APNG animation timing and exact frame colors",
+      "environment": "Existing private .env.test loaded without printing; isolated retained test schemas."
+    },
+    {
+      "stage": "3-animation",
+      "command": "go run /private/tmp/foundry-imaging-animation-check.go; independent verification with bundled Pillow",
+      "result": "passed; both PNG and GIF independently decoded with 4 frames, exact timing/loops/colors, restore-previous and background disposal pixels"
+    },
+    {
+      "stage": "3-animation",
+      "command": "make docs-check",
+      "result": "passed before final reporting edits"
+    },
+    {
+      "stage": "3-animation",
+      "command": "make verify",
+      "log": ".cache/imaging-expansion-20261003/stage3-animation-verify.log",
+      "result": "passed; exec session 60570 exited 0; final source fingerprints match"
+    },
+    {
+      "stage": "3-avif",
+      "command": "go test ./imaging -count=1",
+      "result": "Initial failure: cropped 10-bit fixture differed by one 8-bit level due to GIFT rounding versus codec truncation. Corrected only transformed high-depth comparison; untouched high-depth values are asserted exactly."
+    },
+    {
+      "stage": "3-avif",
+      "command": "go test ./profiles -run 'TestAVIFUploadUsesExistingFoundryPlan|TestAnimatedAvatar' -count=1",
+      "result": "Passed independent consumer, 0.559s; tests/fixtures/consumer directory."
+    },
+    {
+      "stage": "3-avif",
+      "command": "FOUNDRY_TEST_POSTGRES_REQUIRED=1 go test -race ./attachments -run '^TestPostgresAttachmentVariantAcceptsAVIF$' -count=1",
+      "result": "Passed, 1.795s; existing private .env.test loaded quietly, isolated retained schema. Persisted PNG variant dimensions and alpha asserted."
+    },
+    {
+      "stage": "3-avif",
+      "command": "go test -race ./imaging -count=1",
+      "result": "Passed, 14.630s; runtime source unchanged since this pass. Later test-only additions assert untouched high-bit-depth channels exactly."
+    },
+    {
+      "stage": "3-avif",
+      "command": "go test ./imaging -run '^$' -fuzz '^FuzzAVIFContainers$' -fuzztime=15s -parallel=2",
+      "result": "Passed, 724045 executions, 16.492s; private parser called directly so panic containment cannot mask defects."
+    },
+    {
+      "stage": "3-avif",
+      "command": "go test ./imaging -run '^TestAVIF|^$' -bench '^BenchmarkAVIFDecodeWorkspace$' -benchtime=3x -count=1",
+      "result": "Passed, 0.746s. Go 1.27.1 darwin/arm64 Apple M4 Max, warm caches. Alpha decode 64x64: 1677474 B/op, 2754270 admitted bytes. 1024x768: 9053765 B/op, 127986672 admitted bytes. Allocation totals are not peak RSS."
+    },
+    {
+      "stage": "3-avif",
+      "command": "CGO_ENABLED=0 go test ./imaging -run '^TestAVIF' -count=1",
+      "result": "Passed, 0.682s; portable build needs no OS codec library."
+    },
+    {
+      "stage": "3-avif",
+      "command": "go run /private/tmp/foundry-avif-check.go; independent Pillow/libavif check",
+      "result": "Passed dimensions, frame counts and alpha for 26 fixtures; 5-frame sequence timing passed. Clean aperture applied mathematically before Pillow EXIF transpose. RGB conversion is not bit-identical: maximum channel differences 0\u201315, maximum per-channel mean differences 0\u20134.042; matrix/subsampling/high-depth conversion differences retained as a limitation, not reported as exact pixel parity."
+    },
+    {
+      "stage": "3-avif",
+      "command": "make verify (initial)",
+      "result": "Failed obsolete TestVariantDeclarationsRequireImagesAndUniqueNames, which still expected AVIF rejection; updated AVIF positive acceptance and retained unsupported SVG rejection. Log: .cache/imaging-expansion-20261003/stage3-avif-initial-verify.log."
+    },
+    {
+      "stage": "3-avif",
+      "command": "make verify",
+      "result": "Passed; exec session 41714 exited 0. Final source fingerprints match.",
+      "log": ".cache/imaging-expansion-20261003/stage3-avif-verify.log"
+    },
+    {
+      "stage": "3-avif",
+      "command": "make docs-check; git diff --check",
+      "result": "Passed after final status/evidence updates."
+    },
+    {
+      "stage": "3-encoding",
+      "command": "go test ./imaging -count=1",
+      "result": "Passed, 6.008s; PNG levels preserve pixels, APNG applies compression to every frame without timeline changes, AVIF zero speed/alpha quality verified against actual encoded output."
+    },
+    {
+      "stage": "3-encoding",
+      "command": "go test ./profiles . -run 'TestImageEncodingPlansUseFoundryControls|TestInvalidPublicContractsFailCompilation/imaging_compression' -count=1",
+      "result": "Passed; independent consumer profiles 0.528s, compiler failure catalog 0.849s."
+    },
+    {
+      "stage": "3-encoding",
+      "command": "FOUNDRY_TEST_GOPLS=$PWD/bin/gopls go test ./internal/agent -run '^TestRealGoplsConsumer$/^image-(png-compression|avif-speed)$' -count=1 -v",
+      "result": "Passed both real completion/hover/definition probes, 3.061s."
+    },
+    {
+      "stage": "3-encoding",
+      "command": "FOUNDRY_TEST_POSTGRES_REQUIRED=1 go test -race ./attachments -run '^TestPostgresAttachment(ImagePolicy|Variant)' -count=1",
+      "result": "Passed, 3.702s, before writer audit correction; private .env.test loaded quietly; isolated retained schemas."
+    },
+    {
+      "stage": "3-encoding",
+      "command": "go test -race ./imaging -count=1",
+      "result": "Passed 15.033s before writer audit; final 15.574s after sticky bounded-writer failure correction and eight-codec output-limit regressions."
+    },
+    {
+      "stage": "3-encoding",
+      "command": "make verify (initial)",
+      "result": "Passed; exec session 7040 exited 0. Sticky writer correction was made during this run, so a final full-source gate is running separately.",
+      "log": ".cache/imaging-expansion-20261003/stage3-encoding-verify.log"
+    },
+    {
+      "stage": "3-encoding",
+      "command": "make verify (writer audit)",
+      "result": "Passed; session 93117 exited 0. WebP coded-dimension correction added during this run; final full-source gate required.",
+      "log": ".cache/imaging-expansion-20261003/stage3-encoding-writer-verify.log"
+    },
+    {
+      "stage": "3-encoding",
+      "command": "go test -race ./imaging -count=1",
+      "result": "Passed 15.332s after WebP coded-dimension correction."
+    },
+    {
+      "stage": "3-encoding",
+      "command": "FOUNDRY_TEST_POSTGRES_REQUIRED=1 go test -race ./attachments -run '^TestPostgresAttachment(ImagePolicy|Variant)' -count=1",
+      "result": "Passed 4.651s after sticky writer correction, before WebP header comparison. AVIF/PNG paths under test unchanged by header comparison."
+    },
+    {
+      "stage": "3-encoding",
+      "command": "go test ./imaging -run '^$' -fuzz '^FuzzWebPHeaders$' -fuzztime=15s -parallel=2",
+      "result": "Passed; 543771 executions, 16.100s, after direct coded-header admission correction."
+    },
+    {
+      "stage": "3-encoding",
+      "command": "make verify (final)",
+      "result": "Passed; session 55162 exited 0. Full source fingerprints match after writer-error and coded-dimension audit corrections.",
+      "log": ".cache/imaging-expansion-20261003/stage3-encoding-final-verify.log"
+    },
+    {
+      "stage": "3-encoding",
+      "command": "make docs-check; git diff --check",
+      "result": "Passed after final reporting/status changes."
+    },
+    {
+      "stage": "3-webp",
+      "command": "go test ./imaging -count=1",
+      "result": "Passed 6.079s initially; passed 6.069s after color/workspace audit corrections."
+    },
+    {
+      "stage": "3-webp",
+      "command": "go test ./profiles -run 'TestAnimatedAvatar' -count=1",
+      "directory": "tests/fixtures/consumer",
+      "result": "Passed 0.593s; both public PNG and WebP avatar plans."
+    },
+    {
+      "stage": "3-webp",
+      "command": "go test -race ./imaging -count=1",
+      "result": "Passed 14.732s after audit corrections."
+    },
+    {
+      "stage": "3-webp",
+      "command": "go test ./imaging -run '^$' -fuzz '^FuzzWebPHeaders$' -fuzztime=15s -parallel=2",
+      "result": "Passed 772370 executions, 16.536s; raw RIFF/header parsing without public panic containment."
+    },
+    {
+      "stage": "3-webp",
+      "command": "go test ./imaging -run '^$' -fuzz '^FuzzAnimationContainers$' -fuzztime=15s -parallel=2",
+      "result": "Passed 171436 executions, 16.265s; bounded full pipeline with GIF/APNG and lossy/lossless WebP seeds."
+    },
+    {
+      "stage": "3-webp",
+      "command": "CGO_ENABLED=0 go test ./imaging -count=1",
+      "result": "Passed 6.059s."
+    },
+    {
+      "stage": "3-webp",
+      "command": "FOUNDRY_TEST_POSTGRES_REQUIRED=1 go test -race ./attachments -run '^TestPostgresAttachment(ImagePolicy|Variant)' -count=1",
+      "environment": "Existing .env.test loaded privately; isolated test schemas retained.",
+      "result": "Passed 3.242s after audit corrections; animated PNG/WebP variants persisted and decoded back with timing, loops and pixel assertions."
+    },
+    {
+      "stage": "3-webp",
+      "command": "go test ./imaging -run '^$' -bench '^BenchmarkWebPAnimationWorkspace$' -benchtime=3x -count=1",
+      "result": "Passed; Go 1.27.1 darwin/arm64 Apple M4 Max, four synthetic frames and 1 MiB output allowance. 64x32: 3.938ms/op, 18076677 B/op, 778 allocations; 512x256: 106.621ms/op, 49947253 B/op, 807 allocations. B/op measures total allocations across all frames, not peak live heap or RSS."
+    },
+    {
+      "stage": "3-webp",
+      "command": "go run /private/tmp/foundry-webp-check.go; existing bundled Pillow/libwebp independent decode",
+      "result": "Passed every WebP/APNG output frame (2 input encodings x 4 frames), 16x12 dimensions, exact alpha/visible RGB, loop 2 and 30/70/110/130ms durations. Final maximum visible RGB difference was 0 for both synthetic input encodings. Prior audit found up to 131 channel-level difference, fixed by BT.601 range conversion and centered chroma interpolation. Regression permits up to 3 for codec rounding; no general bit-exact lossy-decoder claim.",
+      "report": "/private/tmp/foundry-webp-check/independent-verification.json"
+    },
+    {
+      "stage": "3-webp",
+      "command": "FOUNDRY_TEST_GOPLS=$PWD/bin/gopls FOUNDRY_TEST_POSTGRES_REQUIRED=1 make verify",
+      "environment": "Existing .env.test PostgreSQL configuration loaded without printing it; existing gopls executable and warm Go caches.",
+      "result": "Passed; exec session 13492 exited 0. Full framework/independent consumer/compiler/generation/docs/release-tools checks passed. Entire real-gopls agent suite 287.132s; generator suite 193.764s. All 112 WebP milestone source fingerprints matched after the gate.",
+      "log": ".cache/imaging-expansion-20261003/stage3-webp-verify.log"
+    },
+    {
+      "stage": "3-webp",
+      "command": "make docs-check; git diff --check",
+      "result": "Passed after final milestone/evidence status updates."
+    },
+    {
+      "stage": "5-configured-consumer",
+      "command": "FOUNDRY_TEST_POSTGRES_REQUIRED=1 go test -race ./bootstrap -run '^TestIndependentBootstrapHTTPActorsAndUpload$' -count=1",
+      "directory": "tests/fixtures/consumer",
+      "environment": "Existing PostgreSQL test configuration; isolated retained schema and local HTTP listener.",
+      "result": "Passed 1.911s. Public Services.Image engine processes authenticated multipart upload, enlarges 16x8 input to a 32x16 image on a 32x32 white canvas, persists red/blue pixels, and drains/closes with application shutdown. Framework runtime unchanged since accepted WebP gate."
+    },
+    {
+      "stage": "5-configured-consumer",
+      "command": "go run ./cmd/foundry generate --recursive --field-docs --check --dir tests/fixtures/consumer; make docs-check; git diff --check",
+      "result": "Passed; generated output remains current."
+    },
+    {
+      "stage": "5-configured-consumer",
+      "command": "FOUNDRY_TEST_GOPLS=$PWD/bin/gopls go test ./internal/agent -run '^TestRealGoplsConsumer$/^bootstrap-image-service$' -count=1 -v",
+      "result": "Passed 2.858s; concrete Engine return type, completion, hover and definition from the changed configured upload consumer."
+    },
+    {
+      "stage": "5-configured-consumer",
+      "command": "make docs-check; git diff --check",
+      "result": "Passed after final configured-consumer status/evidence updates."
+    },
+    {
+      "stage": 4,
+      "command": "make test-imaging-portable test-imaging-native",
+      "result": "Passed portable, tagged CGO-disabled explicit-unavailable, native suite and configured consumer; native suite now also includes validation/imaging."
+    },
+    {
+      "stage": 4,
+      "command": "CGO_ENABLED=1 FOUNDRY_TEST_VIPS_REQUIRED=1 FOUNDRY_TEST_POSTGRES_REQUIRED=1 go test -race -tags foundry_vips ./imaging ./attachments ./application",
+      "result": "Passed imaging 15.731s, attachments 7.194s, application 10.196s; private configuration loaded quietly; retained isolated PostgreSQL schemas."
+    },
+    {
+      "stage": 4,
+      "command": "FOUNDRY_TEST_GOPLS=$PWD/bin/gopls go test ./internal/agent -run ^TestRealGoplsConsumer$/^image-native- -count=1 -v",
+      "result": "Both new completion/hover/definition probes passed, 2.900s."
+    },
+    {
+      "stage": 4,
+      "command": "go test ./profiles . -run TestConfiguredNativeImageService|TestInvalidPublicContractsFailCompilation/imaging_(backend|interest)",
+      "directory": "tests/fixtures/consumer",
+      "result": "Compiler cases passed in 1.423s. Native consumer is build-tagged and passed separately under test-imaging-native."
+    },
+    {
+      "stage": 4,
+      "command": "go test ./imaging -run ^$ -fuzz ^FuzzNativeImageHeaders$ -fuzztime=30s -parallel=2",
+      "result": "Passed 1088268 executions; following split-token SVG audit correction, repeated 15s fuzz passed 323715 executions."
+    },
+    {
+      "stage": 4,
+      "command": "CGO_ENABLED=1 FOUNDRY_TEST_VIPS_REQUIRED=1 go test -race -tags foundry_vips ./imaging -run ^TestNative|^TestSVG",
+      "result": "Passed after final native/SVG audit corrections, 2.341s."
+    },
+    {
+      "stage": 4,
+      "command": "CGO_ENABLED=1 go vet -tags foundry_vips ./imaging ./validation/imaging ./attachments ./application && CGO_ENABLED=1 go test -race -tags foundry_vips ./validation/imaging",
+      "result": "Passed native static analysis and validation race check (1.645s)."
+    },
+    {
+      "stage": 4,
+      "command": "go test ./imaging -run ^TestSVGReferencesAndDocumentBounds$ && go test ./imaging -run ^$ -fuzz ^FuzzNativeImageHeaders$ -fuzztime=15s -parallel=2",
+      "result": "Passed final escaped-CSS attribute regression, then 294038 fuzz executions in 15.591s."
+    },
+    {
+      "stage": 4,
+      "command": "make test-imaging-native && CGO_ENABLED=1 go test -race -tags foundry_vips ./imaging -run ^TestSVG|^TestNativeInFlightCancellation",
+      "result": "Passed on final source: imaging 6.229s; native upload validation 0.968s; configured consumer 0.771s; focused race 1.724s."
+    },
+    {
+      "stage": 4,
+      "command": "FOUNDRY_TEST_POSTGRES_REQUIRED=1 FOUNDRY_TEST_GOPLS=$PWD/bin/gopls make verify",
+      "log": ".cache/imaging-expansion-20261003/native-final-verify.log",
+      "result": "Passed, session 56171 exit 0. Final escaped-CSS parser correction was applied during this run; repeat full gate required for its final source."
+    },
+    {
+      "stage": 5,
+      "command": "FOUNDRY_TEST_POSTGRES_REQUIRED=1 FOUNDRY_TEST_GOPLS=$PWD/bin/gopls make verify",
+      "log": ".cache/imaging-expansion-20261003/expansion-final-verify.log",
+      "result": "Passed, session 34424 exit 0, after all runtime audit corrections. Entire root/consumer/compiler/generation/documentation/release-tools gate; all 157 source fingerprints match afterward."
+    },
+    {
+      "stage": 5,
+      "command": "make docs-check && git diff --check",
+      "result": "Passed after final acceptance/status/guide updates; no runtime source changed."
+    }
+  ],
+  "audit_corrections": [
+    "Redact plan formatting when it contains prepared image results.",
+    "Account for resampling weights and filter rows/columns on thin images.",
+    "Apply the aggregate input allowance while reading, counting prepared layers before consuming the source."
+  ],
+  "setup_corrections": [
+    "Initial unprivileged go test could not write the shared Go build cache; reran using approved existing cache access.",
+    "Initial required PostgreSQL invocation lacked exported test settings; reran with existing private test configuration loaded."
+  ],
+  "dependency_changes": "Approved vips/pkgconf installed and WebP module replaced; see dependency_approval_resolution. Consumers import Foundry APIs only; optional native builds require the OS libraries.",
+  "stage1_source_sha256": {
+    "imaging/composite.go": "88be52189c926e0640a5ae359b50f2a6c193f25899bc8304e591eb8a79a5d74d",
+    "imaging/composite_test.go": "375e1b96ada3a1eef40babb5dad45f0d6778e244357b1a6bef3d655c4d80a8c0",
+    "imaging/create.go": "825af22f3d14ad053ac693a3d3e443c623188b803b438dc30d004ed00e666168",
+    "imaging/effects.go": "a974b494579164310e65fad12176f9cd07ef50c50d505c20ea401e634d6042a2",
+    "imaging/effects_test.go": "6f4f147998ab2e9e0a200f52ae72f00efb43b6f2e5c890f30fac4f66a1a163eb",
+    "imaging/engine.go": "dc96460d665a1b9f8291189e0238ed5414a6c6f242af69dda1ce2f4e75a72760",
+    "imaging/engine_test.go": "e27da91134dff381e8f0ec074c05b15e17688e9d8319b54222928b5c8246c766",
+    "imaging/format.go": "65273bf47495b8a81b0668b5cbd5de3626376ff26ae275a0cd713ec1ddea6591",
+    "imaging/geometry.go": "ed833b99452a831afd30b9f743555f634b5202343b8efb138b310731764cec72",
+    "imaging/geometry_fuzz_test.go": "30348c35fbcd18bdc706d8001d92f52280492bcb66553c254ddb608627c024c9",
+    "imaging/geometry_test.go": "dc9d9e7c72396c1d60d2827d65d2f2462c08896143a8c742390b607b9098e0dd",
+    "imaging/icon.go": "7873e0b182aa79e6a391ebc6a8a78b2f1c85236cb57394b32d8999510f65841e",
+    "imaging/icon_test.go": "3fc6b2ea4295ecfe55a7455559067c02f3202a71b31481c0075b550ecc823baa",
+    "imaging/inspect.go": "3c230b9025b784412278ca5efd34dbdf845840bc27373c1e63bca365f7151608",
+    "imaging/inspect_fuzz_test.go": "80d0152d6a337b05c0b42d4fcfcb6636142d6dd325c0ea310f0f2b51a40418bc",
+    "imaging/limits.go": "27f23a4118c38b13a15c4f1cc49e21f0e0f43da1a3f264227140312caecc87f6",
+    "imaging/limits_test.go": "8f7c6721c77e37dcb39b4b22ee411dcd99edee0797a6d14a6fdff058064327aa",
+    "imaging/module.go": "04fa786b19786b8672830146b6d8c1f9eda0322ec77fecde68051e3384bf1392",
+    "imaging/orientation.go": "8b50235108562af39d0a8b0ce934d6fdfeedb52bc35990e781348db3010b8a40",
+    "imaging/plan.go": "3d214257dd7e439e3574ab63a6fbcd5f197e5f5e1d536eb4d3dfda41c4c615a7",
+    "imaging/transform.go": "c5ba608660f3ee6b27a7a948c6855b9a6b74b589348c718ce7e642df30b14898",
+    "imaging/transform_test.go": "797b581b0bf0e247383e8dfe84c30990116dbf34422008d83ab35b1534960980",
+    "attachments/composite_variant_postgres_test.go": "0d10c5219187550af255639ce313a36851223d1523151b4562bb770348479587",
+    "tests/fixtures/consumer/profiles/images.go": "7151d5da7bf5070c9b312f2a866bb3282729531a9dff426b6df32adad9871364",
+    "tests/fixtures/consumer/profiles/images_test.go": "8497e98be3057d7ec71edef4af94ac02795b4263928c9cbc33c6772bca864ecf",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_position/invalid.go": "86866455d1cb9829f1ebd83968ce161d1e71fe79dad0a13086e4fc516fab6a6a",
+    "tests/fixtures/consumer/types_test.go": "64c303a346ea037c1accf2cf1b0dc7c22e962ed37dbfbac4eb258aee53905872",
+    "internal/agent/gopls_acceptance_test.go": "028e86cc092be36f1cac4209c8c8d456474204eb2d6eb1b33cbec1e023e13802"
+  },
+  "stage2_source_sha256": {
+    "attachments/composite_variant_postgres_test.go": "0d10c5219187550af255639ce313a36851223d1523151b4562bb770348479587",
+    "imaging/composite.go": "d9aa8c5f48e4c1eb2e8a4439a4611222c798808d9e3fdb84d893b5a9984fcd46",
+    "imaging/composite_test.go": "375e1b96ada3a1eef40babb5dad45f0d6778e244357b1a6bef3d655c4d80a8c0",
+    "imaging/create.go": "fbc578ecfdc496f8e7ff542203bfb1ff7c03635d681c9dcf8c5f6768a75adf38",
+    "imaging/drawing.go": "33a15ecf29caea9552621779d7faaaf1e9b0162cc4d00b2cfdd590d3ecc95420",
+    "imaging/drawing_fuzz_test.go": "b0ebfab6e475cd762467c827412dc8ebd4ed6c06741c54d34950d21d7c0051b8",
+    "imaging/drawing_test.go": "400b695545617c1f22428b801bbacec07ce2df55e3843286452b815f6b159f6d",
+    "imaging/effects.go": "a974b494579164310e65fad12176f9cd07ef50c50d505c20ea401e634d6042a2",
+    "imaging/effects_test.go": "6f4f147998ab2e9e0a200f52ae72f00efb43b6f2e5c890f30fac4f66a1a163eb",
+    "imaging/engine.go": "f6e00f124c20387631f5354edeb1f53c147536c7aad10c3bb27bbe4b29fb5bd7",
+    "imaging/engine_test.go": "e27da91134dff381e8f0ec074c05b15e17688e9d8319b54222928b5c8246c766",
+    "imaging/font.go": "e83dcb89d76ed95ee76c73c5bd065f157679901bd04dca232baaa1a0c4c3ffca",
+    "imaging/format.go": "65273bf47495b8a81b0668b5cbd5de3626376ff26ae275a0cd713ec1ddea6591",
+    "imaging/geometry.go": "73bd3d12daa10c59338d252933f5399a04cd7bf598ad6a8e67abd9b5fc45018c",
+    "imaging/geometry_fuzz_test.go": "30348c35fbcd18bdc706d8001d92f52280492bcb66553c254ddb608627c024c9",
+    "imaging/geometry_test.go": "dc9d9e7c72396c1d60d2827d65d2f2462c08896143a8c742390b607b9098e0dd",
+    "imaging/icon.go": "7873e0b182aa79e6a391ebc6a8a78b2f1c85236cb57394b32d8999510f65841e",
+    "imaging/icon_test.go": "3fc6b2ea4295ecfe55a7455559067c02f3202a71b31481c0075b550ecc823baa",
+    "imaging/inspect.go": "3c230b9025b784412278ca5efd34dbdf845840bc27373c1e63bca365f7151608",
+    "imaging/inspect_fuzz_test.go": "80d0152d6a337b05c0b42d4fcfcb6636142d6dd325c0ea310f0f2b51a40418bc",
+    "imaging/limits.go": "27f23a4118c38b13a15c4f1cc49e21f0e0f43da1a3f264227140312caecc87f6",
+    "imaging/limits_test.go": "0d3f6c399f46fb0a9a2a565bd7433088cf777c5d4b4e66c90fb71dc59b151745",
+    "imaging/module.go": "04fa786b19786b8672830146b6d8c1f9eda0322ec77fecde68051e3384bf1392",
+    "imaging/orientation.go": "8b50235108562af39d0a8b0ce934d6fdfeedb52bc35990e781348db3010b8a40",
+    "imaging/path.go": "76dfc600e7e5359f66c6cdb76a87e52a5c45373247a6b0583934f85c21e0b1d5",
+    "imaging/plan.go": "2d091fb9066cb41844a459f3a7c8b181156c8fac9308e4d7a362774e580da58e",
+    "imaging/text.go": "b35d702a369ffcebe92dda3a93af3f643511d6c448a43be5647a3aeb590dd2a3",
+    "imaging/text_test.go": "83b340f823f622f700800a816238b17904e9833cde20d7c96f47863169ce75df",
+    "imaging/transform.go": "2287c7631629a6fb85bc1f4d1dce6df96f38c7fcdc054dae9ea028118c48fe8d",
+    "imaging/transform_test.go": "797b581b0bf0e247383e8dfe84c30990116dbf34422008d83ab35b1534960980",
+    "internal/agent/gopls_acceptance_test.go": "c5438732331882ae0312297e9a39b7255f1f9d5540db051eb86ab8faf2222dcb",
+    "tests/fixtures/consumer/profiles/image_labels.go": "580f70f7204daf147479dfbdd3c9518ad18c2d6716398b5b450601504e8759b3",
+    "tests/fixtures/consumer/profiles/image_labels_test.go": "af6071a996cadd5934a9e5689dd0ef09ddde7f8c9b5864e4dd9ccdf1c3172837",
+    "tests/fixtures/consumer/profiles/images.go": "7151d5da7bf5070c9b312f2a866bb3282729531a9dff426b6df32adad9871364",
+    "tests/fixtures/consumer/profiles/images_test.go": "8497e98be3057d7ec71edef4af94ac02795b4263928c9cbc33c6772bca864ecf",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_font/invalid.go": "1e391db8db754302dbec3d423928a0e02f9007d70bb264ed74fd928d8398aef4",
+    "tests/fixtures/consumer/types_test.go": "fe1f0162523600705446d232d82acab2bae4b017f5805cb96442f43bd160be6d"
+  },
+  "stage2_audit": "Reviewed immutable font/path capture, safe diagnostics, workspace admission before decode, cancellation and shared stroke opacity. No additional runtime corrections required after the passing focused suite. Final full gate verified matching source.",
+  "stage3_animation_source_sha256": {
+    "attachments/animated_variant_postgres_test.go": "1a45a63ebb37226b46df8d1f1461e68d850e456be0eada8de48a4c9b3c602706",
+    "attachments/composite_variant_postgres_test.go": "0d10c5219187550af255639ce313a36851223d1523151b4562bb770348479587",
+    "imaging/animation.go": "5064509f78ba43b6acc7f52c268c9edc39636e23ea151ab9009f52bc50ed7ef1",
+    "imaging/animation_fuzz_test.go": "dfe61c384c0b4bd31edf6913e2aa7cf8fa9cdb90a6192b977ce0548e75966836",
+    "imaging/animation_test.go": "507eb6a18ca764caf152684fe946a9969562bca2045146c4e8b7e56f2b30eae5",
+    "imaging/capabilities.go": "ac7403ee32058a3ffa790e4c4b02c86ae204e7775f00a80c352d35e18dd17c34",
+    "imaging/composite.go": "d9aa8c5f48e4c1eb2e8a4439a4611222c798808d9e3fdb84d893b5a9984fcd46",
+    "imaging/composite_test.go": "375e1b96ada3a1eef40babb5dad45f0d6778e244357b1a6bef3d655c4d80a8c0",
+    "imaging/create.go": "fbc578ecfdc496f8e7ff542203bfb1ff7c03635d681c9dcf8c5f6768a75adf38",
+    "imaging/drawing.go": "33a15ecf29caea9552621779d7faaaf1e9b0162cc4d00b2cfdd590d3ecc95420",
+    "imaging/drawing_fuzz_test.go": "b0ebfab6e475cd762467c827412dc8ebd4ed6c06741c54d34950d21d7c0051b8",
+    "imaging/drawing_test.go": "400b695545617c1f22428b801bbacec07ce2df55e3843286452b815f6b159f6d",
+    "imaging/effects.go": "a974b494579164310e65fad12176f9cd07ef50c50d505c20ea401e634d6042a2",
+    "imaging/effects_test.go": "6f4f147998ab2e9e0a200f52ae72f00efb43b6f2e5c890f30fac4f66a1a163eb",
+    "imaging/engine.go": "a8fff5ee8c05c5dd2e7d7aab9c6e53ee85b54cb29bd4c9749f4f7513a7b476e2",
+    "imaging/engine_test.go": "e27da91134dff381e8f0ec074c05b15e17688e9d8319b54222928b5c8246c766",
+    "imaging/font.go": "e83dcb89d76ed95ee76c73c5bd065f157679901bd04dca232baaa1a0c4c3ffca",
+    "imaging/format.go": "e5cfdb84ed4fd78e5b30719b279bc40599adbe44cc65dac73209ee7dd2d37012",
+    "imaging/geometry.go": "73bd3d12daa10c59338d252933f5399a04cd7bf598ad6a8e67abd9b5fc45018c",
+    "imaging/geometry_fuzz_test.go": "30348c35fbcd18bdc706d8001d92f52280492bcb66553c254ddb608627c024c9",
+    "imaging/geometry_test.go": "dc9d9e7c72396c1d60d2827d65d2f2462c08896143a8c742390b607b9098e0dd",
+    "imaging/icon.go": "19879a911987e73408f3110bf4aaf47e9bcd659c4a5e0f32671d79e4be996d8f",
+    "imaging/icon_test.go": "3fc6b2ea4295ecfe55a7455559067c02f3202a71b31481c0075b550ecc823baa",
+    "imaging/inspect.go": "0d7c7c161b4a2f5b4bc6dd190910b3fc46bd661524e6b1e0438f0d4df84a7102",
+    "imaging/inspect_fuzz_test.go": "80d0152d6a337b05c0b42d4fcfcb6636142d6dd325c0ea310f0f2b51a40418bc",
+    "imaging/limits.go": "27f23a4118c38b13a15c4f1cc49e21f0e0f43da1a3f264227140312caecc87f6",
+    "imaging/limits_test.go": "0d3f6c399f46fb0a9a2a565bd7433088cf777c5d4b4e66c90fb71dc59b151745",
+    "imaging/module.go": "04fa786b19786b8672830146b6d8c1f9eda0322ec77fecde68051e3384bf1392",
+    "imaging/orientation.go": "8b50235108562af39d0a8b0ce934d6fdfeedb52bc35990e781348db3010b8a40",
+    "imaging/path.go": "76dfc600e7e5359f66c6cdb76a87e52a5c45373247a6b0583934f85c21e0b1d5",
+    "imaging/plan.go": "d7ed76e9eba5a5ba48db1fa09d39beec19df441948a09e8599896f01e5ae52e2",
+    "imaging/png_animation.go": "c880c0def3dbdb9b6e2caf27c8fe8ef3b9d184ec07682ac468b1bc93ea83aa20",
+    "imaging/png_container.go": "4307cf9db9f69230c937ecc58d5f936e32d2ff9868fe65e5beaa1d934eb75c3e",
+    "imaging/text.go": "b35d702a369ffcebe92dda3a93af3f643511d6c448a43be5647a3aeb590dd2a3",
+    "imaging/text_test.go": "83b340f823f622f700800a816238b17904e9833cde20d7c96f47863169ce75df",
+    "imaging/transform.go": "728111585adf4acaf1a39ef1ba8b05ef9bc90e7255529b97ca675f9fd313a11a",
+    "imaging/transform_test.go": "797b581b0bf0e247383e8dfe84c30990116dbf34422008d83ab35b1534960980",
+    "internal/agent/gopls_acceptance_test.go": "2f28a565f43629f37fb4f911c451a095bf13130eca2334b2c20156e8a2730f8e",
+    "tests/fixtures/consumer/profiles/animated_images.go": "fd1511dee781d982b5354101d548404656a32d5334582afb532aa3bae81288cc",
+    "tests/fixtures/consumer/profiles/animated_images_test.go": "fe92cbbdd9e44c76761410ee58245926fb0f91e892c3c6c5f759687efdb5d01c",
+    "tests/fixtures/consumer/profiles/image_labels.go": "580f70f7204daf147479dfbdd3c9518ad18c2d6716398b5b450601504e8759b3",
+    "tests/fixtures/consumer/profiles/image_labels_test.go": "af6071a996cadd5934a9e5689dd0ef09ddde7f8c9b5864e4dd9ccdf1c3172837",
+    "tests/fixtures/consumer/profiles/images.go": "7151d5da7bf5070c9b312f2a866bb3282729531a9dff426b6df32adad9871364",
+    "tests/fixtures/consumer/profiles/images_test.go": "8497e98be3057d7ec71edef4af94ac02795b4263928c9cbc33c6772bca864ecf",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_font/invalid.go": "1e391db8db754302dbec3d423928a0e02f9007d70bb264ed74fd928d8398aef4",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_format/invalid.go": "d9568df2f494450f57b21518a8ba004e1b7525f3e5e202d1aa8445669561c9a1",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_frames/invalid.go": "f3f11d035082ce4aac5c07747a2fc19b6d032c3d5bee1843d0dd215069845182",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_position/invalid.go": "86866455d1cb9829f1ebd83968ce161d1e71fe79dad0a13086e4fc516fab6a6a",
+    "tests/fixtures/consumer/types_test.go": "819b5932e2e4b413e300fb2299f4d3d031783ca3e69137df75308ce1657ed983"
+  },
+  "stage3_animation_audit": [
+    "PNG chunk names and reserved bits reject malformed containers before decoding.",
+    "Animated GIF uses exact palettes where possible and keeps white in the fallback palette.",
+    "Regression coverage proves retained animation memory admission, opaque GIF backgrounds and persisted animation colors."
+  ],
+  "remaining_implementation": [],
+  "avif_audit": [
+    "Private inspection retains codec admission details without changing the public Info struct layout; shared decode/plan/layer/animation paths use the same workspace calculation.",
+    "AVIF item extents, metadata entries, sample/timing tables, grid dimensions and low-overhead OBU framing are bounded before invoking the codec. Decoder frame area is explicitly capped.",
+    "Resource admission counts every frame unit against the largest permitted coded frame area, plus grids, alpha, metadata and gathered bytes; validates decoded sequence dimensions, sample counts and exact rational timeline.",
+    "DecodeAll silently falls back to a still on sequence errors; wrapper rejects fallback including one-frame sequences by requiring positive declared timing. AVIF output remains still-only.",
+    "No public owner/signature additions in the AVIF slice; existing plans, capabilities and attachment variant APIs are exercised by independent consumer and PostgreSQL tests.",
+    "Inspected new files for duplicate ownership and naming; container, item metadata, sample tables and decoding live in separate focused private files. Runtime codecs remain existing dependencies."
+  ],
+  "stage3_avif_source_sha256": {
+    "attachments/animated_variant_postgres_test.go": "1a45a63ebb37226b46df8d1f1461e68d850e456be0eada8de48a4c9b3c602706",
+    "attachments/avif_variant_postgres_test.go": "1ab262e0f31d062aee2d0945e3f74d871b02b5f625fbfeefcf953fb408db95d1",
+    "attachments/composite_variant_postgres_test.go": "0d10c5219187550af255639ce313a36851223d1523151b4562bb770348479587",
+    "attachments/variants.go": "0cdb8bd5c51fbe933cca3835060ad28be529c55c2dabb35a9bcad7169c5c0456",
+    "attachments/variants_postgres_test.go": "5eaad07e9c0bbee59143f1454f9c9467a032e83570c4d34b660034d6a659f969",
+    "go.mod": "a9bed05356085487b2754c36bbc73f0bba0899c4ee797d471698f35b8b071102",
+    "go.sum": "021bee3b4b6ff2caf3743a1e77065d8c38be1e3b6d061452fdc1ac7730f2f8b2",
+    "imaging/animation.go": "6882f63fe26696273e62555290351eff0a03055762f4a4c476c9d747798cd241",
+    "imaging/animation_fuzz_test.go": "dfe61c384c0b4bd31edf6913e2aa7cf8fa9cdb90a6192b977ce0548e75966836",
+    "imaging/animation_test.go": "1b72e8c2d4d60ddcb98d72a24f2c6a0e5642454738375dc9e61e30b7ca2adf29",
+    "imaging/avif_container.go": "d8ea72ce92f56a1da6f33a801ddccd5c0e9bfd9ef55b91a1691e3fe24506a6dd",
+    "imaging/avif_decode.go": "4f57a553ede41033529f3ae31ad4648fd50e3f9aa8982efd105c1c390700ee2a",
+    "imaging/avif_fuzz_test.go": "1ae204e3d572f1b368e235ad4af33c2262dd7ffa5fffb3e9107f8bd77fbc1b45",
+    "imaging/avif_items.go": "09b82af8a6494d433f60007c8f9b442308a5c06980e3cddc0e3f0f03293d6024",
+    "imaging/avif_sequence.go": "1bfc77320f82a43f65991de98adbeb8cf2b5a101c3cb584a83fd3cd0c0de910f",
+    "imaging/avif_test.go": "f2adabe2dd56c4e2be568e740c1ded6b37f13d13fe612287a02b31a573293a1c",
+    "imaging/capabilities.go": "f14a014e998aa772cbd4293768ac1a1aca7d1006a5fa3962224f935ab610ec5a",
+    "imaging/composite.go": "f7effa8d76a4c98e4e95c1617ef8ed555aa20bd890cd5dadc86aef7085416422",
+    "imaging/composite_test.go": "375e1b96ada3a1eef40babb5dad45f0d6778e244357b1a6bef3d655c4d80a8c0",
+    "imaging/create.go": "0f04f2981f957204587fe0b007d9d69af92d421ad40cb7637ce7f4f3527a90f8",
+    "imaging/drawing.go": "33a15ecf29caea9552621779d7faaaf1e9b0162cc4d00b2cfdd590d3ecc95420",
+    "imaging/drawing_fuzz_test.go": "b0ebfab6e475cd762467c827412dc8ebd4ed6c06741c54d34950d21d7c0051b8",
+    "imaging/drawing_test.go": "400b695545617c1f22428b801bbacec07ce2df55e3843286452b815f6b159f6d",
+    "imaging/effects.go": "a974b494579164310e65fad12176f9cd07ef50c50d505c20ea401e634d6042a2",
+    "imaging/effects_test.go": "6f4f147998ab2e9e0a200f52ae72f00efb43b6f2e5c890f30fac4f66a1a163eb",
+    "imaging/engine.go": "ab81c696fe2bf874d00f7bea499847f74904e080e1d299b14c754730dfafc59f",
+    "imaging/engine_test.go": "b0bf63b12a5b21e495b5e0e8259c4be1f1be79d34982d19f543a5eb35b1f0d8c",
+    "imaging/font.go": "e83dcb89d76ed95ee76c73c5bd065f157679901bd04dca232baaa1a0c4c3ffca",
+    "imaging/format.go": "c026c705cb365c132b2745ed47b31d42a60f1b6b60502c94d75cdbca26a8ae93",
+    "imaging/geometry.go": "73bd3d12daa10c59338d252933f5399a04cd7bf598ad6a8e67abd9b5fc45018c",
+    "imaging/geometry_fuzz_test.go": "30348c35fbcd18bdc706d8001d92f52280492bcb66553c254ddb608627c024c9",
+    "imaging/geometry_test.go": "dc9d9e7c72396c1d60d2827d65d2f2462c08896143a8c742390b607b9098e0dd",
+    "imaging/icon.go": "19879a911987e73408f3110bf4aaf47e9bcd659c4a5e0f32671d79e4be996d8f",
+    "imaging/icon_test.go": "3fc6b2ea4295ecfe55a7455559067c02f3202a71b31481c0075b550ecc823baa",
+    "imaging/inspect.go": "1ac7b8de3d4389cf007c7e438bb238b7d2773343ddb726c9bf40443f2f6a2b69",
+    "imaging/inspect_fuzz_test.go": "80d0152d6a337b05c0b42d4fcfcb6636142d6dd325c0ea310f0f2b51a40418bc",
+    "imaging/limits.go": "efc9a55ef7671a632e8ca44eba29857cd27cbd348a921a585e34a6ccd411292c",
+    "imaging/limits_test.go": "254c1d8ce6bf3f748ca1d458911f4228ba012a8a05beb76423e09e0206cd0d77",
+    "imaging/module.go": "04fa786b19786b8672830146b6d8c1f9eda0322ec77fecde68051e3384bf1392",
+    "imaging/orientation.go": "8b50235108562af39d0a8b0ce934d6fdfeedb52bc35990e781348db3010b8a40",
+    "imaging/path.go": "76dfc600e7e5359f66c6cdb76a87e52a5c45373247a6b0583934f85c21e0b1d5",
+    "imaging/plan.go": "d7ed76e9eba5a5ba48db1fa09d39beec19df441948a09e8599896f01e5ae52e2",
+    "imaging/png_animation.go": "c880c0def3dbdb9b6e2caf27c8fe8ef3b9d184ec07682ac468b1bc93ea83aa20",
+    "imaging/png_container.go": "4307cf9db9f69230c937ecc58d5f936e32d2ff9868fe65e5beaa1d934eb75c3e",
+    "imaging/testdata/avif/COPYING": "be086bd51ed0881cae958b54d4bf5428ab0d4b09dad435310d9940075d194325",
+    "imaging/testdata/avif/PATENTS": "335eca574598bf4ca181b12f708d6669e5a5e78c8e1513e5b35fa1f03901484b",
+    "imaging/testdata/avif/README.md": "4667ec167f94071a9824a17f0201167711e087810bff975a2d8087583d4cb6ce",
+    "imaging/testdata/avif/alpha-420.avif": "4c5fd8becccf1b30d0296239ba223c63b87d302869c16667911aa18e2402e097",
+    "imaging/testdata/avif/alpha-444.avif": "c62557442c473fdf4cd262fd310381cf0d42ce476a3d137df6af7fa6f89dab36",
+    "imaging/testdata/avif/anim.avif": "333eba0a604987cfc8725c45238ea3db242cf7f594ff39a62c973e900c94c449",
+    "imaging/testdata/avif/bt2020-422.avif": "0d2c5354ba3caf045d0697eca053a364365ce243f3fcd05a3977f16b719717bd",
+    "imaging/testdata/avif/bt709-full.avif": "98e595135a62bc6dcf263f40ad124f724f429632319877e0de39fa0f19177c7a",
+    "imaging/testdata/avif/bt709-limited.avif": "245c11ce848c99a27b5ab1cde675b38783249730d61ebb7f49f1393b1e97eded",
+    "imaging/testdata/avif/clap-10.avif": "1b03532390fbd9e6d0ba85fdfbe371266f0150719611081dda4be76dd5c9c8ab",
+    "imaging/testdata/avif/clap-crop.avif": "483966fefd0c87ac7f9bf257df6be2a56d70dc4e88fa36281c04c0280a32fe2d",
+    "imaging/testdata/avif/clap-irot.avif": "80ed4fdc336cef753b56291240f488f9b6e2f2d4aa0288b14fa68132f32f5a47",
+    "imaging/testdata/avif/grid-2x2.avif": "c6a511c61c2c477a4bfaf39d82ad3bfe3fbc4d2c18247ec383a56069eef66144",
+    "imaging/testdata/avif/identity-444.avif": "4a862f503d05393f3c502cdb9fd1f6b8ae4ffaa81a18f4830b6db127e6a59645",
+    "imaging/testdata/avif/imir0.avif": "4819d08076aa61807dc3237fbcb47b5660513038fee86b55b2f33e299a0d475f",
+    "imaging/testdata/avif/irot1.avif": "f3f7aa33df642ec8d173a3bad9e953c919b33a26e6f3c9de2237f1a01c6ad6c7",
+    "imaging/testdata/avif/irot2.avif": "5f8ec6e6eee8bee98afd0e15abcac085a92eaae5d8f9b28ef9b4eaf2b794a43b",
+    "imaging/testdata/avif/irot3-imir1.avif": "b299d83f0dd96de4a633c41331e64cb0ca28fd1c08ac1acc7db078e5b42fc273",
+    "imaging/testdata/avif/mono-12.avif": "d71c4bf4c29c43d3bfa7a807dc32442e2c719d1f6a77e8633b7f9b324e512519",
+    "imaging/testdata/avif/mono-8.avif": "dcfdd00c6caf4eb721e26c8c00c07c75b9af6a274e2e12e0fb5c032dac2209e5",
+    "imaging/testdata/avif/unspec-420.avif": "a0aef07311a3c354f7a9d56b6db6a7c043612717d887b77c148807b4e2eb2414",
+    "imaging/testdata/avif/yuv420-10.avif": "193f1791a949ef9795f7b849a2d05ec3b495e64b0cd3f133a85bc8a608c02067",
+    "imaging/testdata/avif/yuv420-8.avif": "9764ac8d6b3ae7c75a83e6ee670276039fc72ea043e5d15882f3e4d2372dd148",
+    "imaging/testdata/avif/yuv420-odd.avif": "10c3c9b61c18673acaab20152daf41f4e509a4e8de8e9ec86a5adf922b1d7391",
+    "imaging/testdata/avif/yuv422-12.avif": "8de44b0b105095abdc3566c1346b6e669c886003fcc53d4c9fd5b5b59c05d257",
+    "imaging/testdata/avif/yuv422-8.avif": "d7a3c83f77ee306d149e2f88c975fb1239c888856310ec3ea8fb7976bc88d661",
+    "imaging/testdata/avif/yuv444-10.avif": "df6b8552434442396679c426a56140f0ac564e3b8257a246dac3906294720c11",
+    "imaging/testdata/avif/yuv444-8.avif": "740cc612242ce74d9851eafc845fc66225f024b35f9bc3e7e9874a48687cee0e",
+    "imaging/testdata/avif/yuv444-odd.avif": "2a1bab9285c0fc60150cc04a55ee414ce2c24112f8118e1869f2eb3ee2523f1b",
+    "imaging/text.go": "b35d702a369ffcebe92dda3a93af3f643511d6c448a43be5647a3aeb590dd2a3",
+    "imaging/text_test.go": "83b340f823f622f700800a816238b17904e9833cde20d7c96f47863169ce75df",
+    "imaging/transform.go": "fc842988967c452efeee946a5d7982e8013b5c87e5f06c446476f7dd4b199e12",
+    "imaging/transform_test.go": "797b581b0bf0e247383e8dfe84c30990116dbf34422008d83ab35b1534960980",
+    "internal/agent/gopls_acceptance_test.go": "2f28a565f43629f37fb4f911c451a095bf13130eca2334b2c20156e8a2730f8e",
+    "tests/fixtures/consumer/profiles/animated_images.go": "fd1511dee781d982b5354101d548404656a32d5334582afb532aa3bae81288cc",
+    "tests/fixtures/consumer/profiles/animated_images_test.go": "fe92cbbdd9e44c76761410ee58245926fb0f91e892c3c6c5f759687efdb5d01c",
+    "tests/fixtures/consumer/profiles/avif_images_test.go": "f578496b56dcafc11475973510864dcbe3355aa4d00c98c3b34b4dc3bdb92804",
+    "tests/fixtures/consumer/profiles/image_labels.go": "580f70f7204daf147479dfbdd3c9518ad18c2d6716398b5b450601504e8759b3",
+    "tests/fixtures/consumer/profiles/image_labels_test.go": "af6071a996cadd5934a9e5689dd0ef09ddde7f8c9b5864e4dd9ccdf1c3172837",
+    "tests/fixtures/consumer/profiles/images.go": "7151d5da7bf5070c9b312f2a866bb3282729531a9dff426b6df32adad9871364",
+    "tests/fixtures/consumer/profiles/images_test.go": "8497e98be3057d7ec71edef4af94ac02795b4263928c9cbc33c6772bca864ecf",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_font/invalid.go": "1e391db8db754302dbec3d423928a0e02f9007d70bb264ed74fd928d8398aef4",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_format/invalid.go": "d9568df2f494450f57b21518a8ba004e1b7525f3e5e202d1aa8445669561c9a1",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_frames/invalid.go": "f3f11d035082ce4aac5c07747a2fc19b6d032c3d5bee1843d0dd215069845182",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_position/invalid.go": "86866455d1cb9829f1ebd83968ce161d1e71fe79dad0a13086e4fc516fab6a6a",
+    "tests/fixtures/consumer/types_test.go": "819b5932e2e4b413e300fb2299f4d3d031783ca3e69137df75308ce1657ed983"
+  },
+  "stage3_encoding_audit": [
+    "Encoder dispatch moved into encoding.go; static PNG and APNG share one compression option owner.",
+    "Explicit zero AVIF speed and PNG default compression use existing value.Optional, preserving omission semantics and independent plan values.",
+    "Format-specific controls require the intended explicit format and validate at declaration time; independent compile-fail rejects a Resampling value used as PNGCompression.",
+    "Corrected maximum-quality AVIF documentation: codec still converts RGB and subsamples 4:2:0; lowest quantizer does not imply an exact RGB round trip.",
+    "Existing nativewebp encoder ignores io.Writer errors. boundedOutput now retains its first failure; static and animation publication inspect that failure even if a codec returns nil. All eight output codecs must return no Result when output exceeds its cap.",
+    "Existing nativewebp also offers lossless animation encoding, and x/image/webp can decode individual VP8/VP8L frames. A bounded RIFF compositor/writer can add portable animation without installing dependencies; lossy output still needs the pending replacement approval. Avoid EncodeAll directly: it gathers all frame payloads and does not expose frame source-replacement blending.",
+    "Reading x/image/webp showed DecodeConfig returns the VP8X canvas without checking VP8/VP8L coded dimensions. Added direct bounded coded-header inspection before pixel allocation, rejecting mismatches/duplicate still image chunks; regressions exercise both coded formats and a real extended lossless round trip."
+  ],
+  "stage3_encoding_source_sha256": {
+    "attachments/animated_variant_postgres_test.go": "1a45a63ebb37226b46df8d1f1461e68d850e456be0eada8de48a4c9b3c602706",
+    "attachments/avif_variant_postgres_test.go": "1ab262e0f31d062aee2d0945e3f74d871b02b5f625fbfeefcf953fb408db95d1",
+    "attachments/composite_variant_postgres_test.go": "0d10c5219187550af255639ce313a36851223d1523151b4562bb770348479587",
+    "attachments/variants.go": "0cdb8bd5c51fbe933cca3835060ad28be529c55c2dabb35a9bcad7169c5c0456",
+    "attachments/variants_postgres_test.go": "5eaad07e9c0bbee59143f1454f9c9467a032e83570c4d34b660034d6a659f969",
+    "go.mod": "a9bed05356085487b2754c36bbc73f0bba0899c4ee797d471698f35b8b071102",
+    "go.sum": "021bee3b4b6ff2caf3743a1e77065d8c38be1e3b6d061452fdc1ac7730f2f8b2",
+    "imaging/animation.go": "7e24598016b45a31ff7a3926ca4b74304cb9cd9137ddb17ad597b6697c111f27",
+    "imaging/animation_fuzz_test.go": "dfe61c384c0b4bd31edf6913e2aa7cf8fa9cdb90a6192b977ce0548e75966836",
+    "imaging/animation_test.go": "1b72e8c2d4d60ddcb98d72a24f2c6a0e5642454738375dc9e61e30b7ca2adf29",
+    "imaging/avif_container.go": "d8ea72ce92f56a1da6f33a801ddccd5c0e9bfd9ef55b91a1691e3fe24506a6dd",
+    "imaging/avif_decode.go": "4f57a553ede41033529f3ae31ad4648fd50e3f9aa8982efd105c1c390700ee2a",
+    "imaging/avif_fuzz_test.go": "1ae204e3d572f1b368e235ad4af33c2262dd7ffa5fffb3e9107f8bd77fbc1b45",
+    "imaging/avif_items.go": "09b82af8a6494d433f60007c8f9b442308a5c06980e3cddc0e3f0f03293d6024",
+    "imaging/avif_sequence.go": "1bfc77320f82a43f65991de98adbeb8cf2b5a101c3cb584a83fd3cd0c0de910f",
+    "imaging/avif_test.go": "f2adabe2dd56c4e2be568e740c1ded6b37f13d13fe612287a02b31a573293a1c",
+    "imaging/capabilities.go": "f14a014e998aa772cbd4293768ac1a1aca7d1006a5fa3962224f935ab610ec5a",
+    "imaging/composite.go": "f7effa8d76a4c98e4e95c1617ef8ed555aa20bd890cd5dadc86aef7085416422",
+    "imaging/composite_test.go": "375e1b96ada3a1eef40babb5dad45f0d6778e244357b1a6bef3d655c4d80a8c0",
+    "imaging/create.go": "0f04f2981f957204587fe0b007d9d69af92d421ad40cb7637ce7f4f3527a90f8",
+    "imaging/drawing.go": "33a15ecf29caea9552621779d7faaaf1e9b0162cc4d00b2cfdd590d3ecc95420",
+    "imaging/drawing_fuzz_test.go": "b0ebfab6e475cd762467c827412dc8ebd4ed6c06741c54d34950d21d7c0051b8",
+    "imaging/drawing_test.go": "400b695545617c1f22428b801bbacec07ce2df55e3843286452b815f6b159f6d",
+    "imaging/effects.go": "a974b494579164310e65fad12176f9cd07ef50c50d505c20ea401e634d6042a2",
+    "imaging/effects_test.go": "6f4f147998ab2e9e0a200f52ae72f00efb43b6f2e5c890f30fac4f66a1a163eb",
+    "imaging/encoding.go": "54832eabeece89d89335a5ae1d656e0170389862f8276787e975abd613ed6f35",
+    "imaging/encoding_test.go": "ae283b37f0005a2b9251132f29b5f41c23170839562b6c79e9e62fd8642290fe",
+    "imaging/engine.go": "19f77811147fc03f2d8ec3e6e9b10960175ce879aa0b0c813fc6e83eb41471a6",
+    "imaging/engine_test.go": "b0bf63b12a5b21e495b5e0e8259c4be1f1be79d34982d19f543a5eb35b1f0d8c",
+    "imaging/font.go": "e83dcb89d76ed95ee76c73c5bd065f157679901bd04dca232baaa1a0c4c3ffca",
+    "imaging/format.go": "c026c705cb365c132b2745ed47b31d42a60f1b6b60502c94d75cdbca26a8ae93",
+    "imaging/geometry.go": "73bd3d12daa10c59338d252933f5399a04cd7bf598ad6a8e67abd9b5fc45018c",
+    "imaging/geometry_fuzz_test.go": "30348c35fbcd18bdc706d8001d92f52280492bcb66553c254ddb608627c024c9",
+    "imaging/geometry_test.go": "dc9d9e7c72396c1d60d2827d65d2f2462c08896143a8c742390b607b9098e0dd",
+    "imaging/icon.go": "19879a911987e73408f3110bf4aaf47e9bcd659c4a5e0f32671d79e4be996d8f",
+    "imaging/icon_test.go": "3fc6b2ea4295ecfe55a7455559067c02f3202a71b31481c0075b550ecc823baa",
+    "imaging/inspect.go": "04104022987db7fd073510326d471687644617145a59a2d05ff279265c4c3052",
+    "imaging/inspect_fuzz_test.go": "80d0152d6a337b05c0b42d4fcfcb6636142d6dd325c0ea310f0f2b51a40418bc",
+    "imaging/limits.go": "efc9a55ef7671a632e8ca44eba29857cd27cbd348a921a585e34a6ccd411292c",
+    "imaging/limits_test.go": "254c1d8ce6bf3f748ca1d458911f4228ba012a8a05beb76423e09e0206cd0d77",
+    "imaging/module.go": "04fa786b19786b8672830146b6d8c1f9eda0322ec77fecde68051e3384bf1392",
+    "imaging/orientation.go": "8b50235108562af39d0a8b0ce934d6fdfeedb52bc35990e781348db3010b8a40",
+    "imaging/path.go": "76dfc600e7e5359f66c6cdb76a87e52a5c45373247a6b0583934f85c21e0b1d5",
+    "imaging/plan.go": "e2a673f30d1a901c79b3b6514dfeb08afe8112f370be0b857845dd5f9fa75e95",
+    "imaging/png_animation.go": "3e9693e967761927b638f868017dc5cf6051e7ba9b0b5ef065607ac8a748095e",
+    "imaging/png_container.go": "4307cf9db9f69230c937ecc58d5f936e32d2ff9868fe65e5beaa1d934eb75c3e",
+    "imaging/testdata/avif/COPYING": "be086bd51ed0881cae958b54d4bf5428ab0d4b09dad435310d9940075d194325",
+    "imaging/testdata/avif/PATENTS": "335eca574598bf4ca181b12f708d6669e5a5e78c8e1513e5b35fa1f03901484b",
+    "imaging/testdata/avif/README.md": "4667ec167f94071a9824a17f0201167711e087810bff975a2d8087583d4cb6ce",
+    "imaging/testdata/avif/alpha-420.avif": "4c5fd8becccf1b30d0296239ba223c63b87d302869c16667911aa18e2402e097",
+    "imaging/testdata/avif/alpha-444.avif": "c62557442c473fdf4cd262fd310381cf0d42ce476a3d137df6af7fa6f89dab36",
+    "imaging/testdata/avif/anim.avif": "333eba0a604987cfc8725c45238ea3db242cf7f594ff39a62c973e900c94c449",
+    "imaging/testdata/avif/bt2020-422.avif": "0d2c5354ba3caf045d0697eca053a364365ce243f3fcd05a3977f16b719717bd",
+    "imaging/testdata/avif/bt709-full.avif": "98e595135a62bc6dcf263f40ad124f724f429632319877e0de39fa0f19177c7a",
+    "imaging/testdata/avif/bt709-limited.avif": "245c11ce848c99a27b5ab1cde675b38783249730d61ebb7f49f1393b1e97eded",
+    "imaging/testdata/avif/clap-10.avif": "1b03532390fbd9e6d0ba85fdfbe371266f0150719611081dda4be76dd5c9c8ab",
+    "imaging/testdata/avif/clap-crop.avif": "483966fefd0c87ac7f9bf257df6be2a56d70dc4e88fa36281c04c0280a32fe2d",
+    "imaging/testdata/avif/clap-irot.avif": "80ed4fdc336cef753b56291240f488f9b6e2f2d4aa0288b14fa68132f32f5a47",
+    "imaging/testdata/avif/grid-2x2.avif": "c6a511c61c2c477a4bfaf39d82ad3bfe3fbc4d2c18247ec383a56069eef66144",
+    "imaging/testdata/avif/identity-444.avif": "4a862f503d05393f3c502cdb9fd1f6b8ae4ffaa81a18f4830b6db127e6a59645",
+    "imaging/testdata/avif/imir0.avif": "4819d08076aa61807dc3237fbcb47b5660513038fee86b55b2f33e299a0d475f",
+    "imaging/testdata/avif/irot1.avif": "f3f7aa33df642ec8d173a3bad9e953c919b33a26e6f3c9de2237f1a01c6ad6c7",
+    "imaging/testdata/avif/irot2.avif": "5f8ec6e6eee8bee98afd0e15abcac085a92eaae5d8f9b28ef9b4eaf2b794a43b",
+    "imaging/testdata/avif/irot3-imir1.avif": "b299d83f0dd96de4a633c41331e64cb0ca28fd1c08ac1acc7db078e5b42fc273",
+    "imaging/testdata/avif/mono-12.avif": "d71c4bf4c29c43d3bfa7a807dc32442e2c719d1f6a77e8633b7f9b324e512519",
+    "imaging/testdata/avif/mono-8.avif": "dcfdd00c6caf4eb721e26c8c00c07c75b9af6a274e2e12e0fb5c032dac2209e5",
+    "imaging/testdata/avif/unspec-420.avif": "a0aef07311a3c354f7a9d56b6db6a7c043612717d887b77c148807b4e2eb2414",
+    "imaging/testdata/avif/yuv420-10.avif": "193f1791a949ef9795f7b849a2d05ec3b495e64b0cd3f133a85bc8a608c02067",
+    "imaging/testdata/avif/yuv420-8.avif": "9764ac8d6b3ae7c75a83e6ee670276039fc72ea043e5d15882f3e4d2372dd148",
+    "imaging/testdata/avif/yuv420-odd.avif": "10c3c9b61c18673acaab20152daf41f4e509a4e8de8e9ec86a5adf922b1d7391",
+    "imaging/testdata/avif/yuv422-12.avif": "8de44b0b105095abdc3566c1346b6e669c886003fcc53d4c9fd5b5b59c05d257",
+    "imaging/testdata/avif/yuv422-8.avif": "d7a3c83f77ee306d149e2f88c975fb1239c888856310ec3ea8fb7976bc88d661",
+    "imaging/testdata/avif/yuv444-10.avif": "df6b8552434442396679c426a56140f0ac564e3b8257a246dac3906294720c11",
+    "imaging/testdata/avif/yuv444-8.avif": "740cc612242ce74d9851eafc845fc66225f024b35f9bc3e7e9874a48687cee0e",
+    "imaging/testdata/avif/yuv444-odd.avif": "2a1bab9285c0fc60150cc04a55ee414ce2c24112f8118e1869f2eb3ee2523f1b",
+    "imaging/text.go": "b35d702a369ffcebe92dda3a93af3f643511d6c448a43be5647a3aeb590dd2a3",
+    "imaging/text_test.go": "83b340f823f622f700800a816238b17904e9833cde20d7c96f47863169ce75df",
+    "imaging/transform.go": "fc842988967c452efeee946a5d7982e8013b5c87e5f06c446476f7dd4b199e12",
+    "imaging/transform_test.go": "9f805b5f0212e3a592559ab03a16355f31ce728ae08379c9dfd269408a672833",
+    "imaging/webp_container.go": "38513270f9203ef842ffb88bc95ec58fe91cee003e67c0a3eff7aa63249e02b5",
+    "imaging/webp_container_test.go": "bbcdf3c5af53ab27c5c1b33299842a0924fb3afdaf52a2dd2bd6cf818a70798f",
+    "internal/agent/gopls_acceptance_test.go": "241ef12a93815737f9935cb9e59ae7420a61062a2dd1cc93cf9280fd6cf7ef14",
+    "tests/fixtures/consumer/profiles/animated_images.go": "fd1511dee781d982b5354101d548404656a32d5334582afb532aa3bae81288cc",
+    "tests/fixtures/consumer/profiles/animated_images_test.go": "fe92cbbdd9e44c76761410ee58245926fb0f91e892c3c6c5f759687efdb5d01c",
+    "tests/fixtures/consumer/profiles/avif_images_test.go": "f578496b56dcafc11475973510864dcbe3355aa4d00c98c3b34b4dc3bdb92804",
+    "tests/fixtures/consumer/profiles/image_encoding.go": "fa6db05f75350dab778f1d10a956e76e1eeb2512d0208ba4e22eb7463f77e536",
+    "tests/fixtures/consumer/profiles/image_encoding_test.go": "9bc9ac76d678a365a809f9b468f6643615ff9f0a11cd0c24aaa51ba0848bde56",
+    "tests/fixtures/consumer/profiles/image_labels.go": "580f70f7204daf147479dfbdd3c9518ad18c2d6716398b5b450601504e8759b3",
+    "tests/fixtures/consumer/profiles/image_labels_test.go": "af6071a996cadd5934a9e5689dd0ef09ddde7f8c9b5864e4dd9ccdf1c3172837",
+    "tests/fixtures/consumer/profiles/images.go": "7151d5da7bf5070c9b312f2a866bb3282729531a9dff426b6df32adad9871364",
+    "tests/fixtures/consumer/profiles/images_test.go": "8497e98be3057d7ec71edef4af94ac02795b4263928c9cbc33c6772bca864ecf",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_compression/invalid.go": "49533b4ae5f05b74295947dc5b9f9af006976ec98059e9a1d5e02d8e9efe436d",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_font/invalid.go": "1e391db8db754302dbec3d423928a0e02f9007d70bb264ed74fd928d8398aef4",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_format/invalid.go": "d9568df2f494450f57b21518a8ba004e1b7525f3e5e202d1aa8445669561c9a1",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_frames/invalid.go": "f3f11d035082ce4aac5c07747a2fc19b6d032c3d5bee1843d0dd215069845182",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_position/invalid.go": "86866455d1cb9829f1ebd83968ce161d1e71fe79dad0a13086e4fc516fab6a6a",
+    "tests/fixtures/consumer/types_test.go": "dcfe36099675c9b0b9312c05224b71d40c12f74976ec9e6008f8a130306577b8"
+  },
+  "webp_followup_notes": {
+    "specification": "https://developers.google.com/speed/webp/docs/riff_container",
+    "independent_fixtures": "/private/tmp/foundry-webp-fixtures: synthetic 16x12 four-frame lossless/lossy WebP files generated with existing bundled Pillow/libwebp; source PNG canvases retained. Durations 30/70/110/130 ms, loop 2; nonzero offsets, both blend flags and disposal-to-background exercised.",
+    "decoder_boundary": "x/image/webp rejects valid extended VP8L+alpha; decode validated VP8L payloads directly in the new container/frame path. VP8 with ALPH still needs its correctly sized VP8X wrapper. Keep raw coded-dimension checks before decoding.",
+    "encoder_boundary": "Use bounded per-frame encoding and write RIFF/ANMF explicitly with full-canvas source replacement. nativewebp.EncodeAll buffers all frames and lacks a public source-replacement blend option.",
+    "timing_followup": "Reduce out-of-range rational delays before deciding APNG cannot represent an AVIF timeline (for example 100000/1000000 seconds is 1/10)."
+  },
+  "stage3_webp_source_sha256": {
+    "attachments/animated_variant_postgres_test.go": "eaf6442881df2cfdf813bc3d745b3f3d3d56e5ebc8ed2677d915418927e2971f",
+    "attachments/avif_variant_postgres_test.go": "1ab262e0f31d062aee2d0945e3f74d871b02b5f625fbfeefcf953fb408db95d1",
+    "attachments/composite_variant_postgres_test.go": "0d10c5219187550af255639ce313a36851223d1523151b4562bb770348479587",
+    "attachments/variants.go": "0cdb8bd5c51fbe933cca3835060ad28be529c55c2dabb35a9bcad7169c5c0456",
+    "attachments/variants_postgres_test.go": "5eaad07e9c0bbee59143f1454f9c9467a032e83570c4d34b660034d6a659f969",
+    "go.mod": "a9bed05356085487b2754c36bbc73f0bba0899c4ee797d471698f35b8b071102",
+    "go.sum": "021bee3b4b6ff2caf3743a1e77065d8c38be1e3b6d061452fdc1ac7730f2f8b2",
+    "imaging/animation.go": "3af33a708dde5a4fddd9bb42fcfd117504df4028eb0a89a678af265044249d06",
+    "imaging/animation_fuzz_test.go": "3436ec24526d7566914cfdc8a86f8d438c1a9b544b6322836c15d50c57c81646",
+    "imaging/animation_test.go": "1b72e8c2d4d60ddcb98d72a24f2c6a0e5642454738375dc9e61e30b7ca2adf29",
+    "imaging/avif_container.go": "d8ea72ce92f56a1da6f33a801ddccd5c0e9bfd9ef55b91a1691e3fe24506a6dd",
+    "imaging/avif_decode.go": "4f57a553ede41033529f3ae31ad4648fd50e3f9aa8982efd105c1c390700ee2a",
+    "imaging/avif_fuzz_test.go": "1ae204e3d572f1b368e235ad4af33c2262dd7ffa5fffb3e9107f8bd77fbc1b45",
+    "imaging/avif_items.go": "09b82af8a6494d433f60007c8f9b442308a5c06980e3cddc0e3f0f03293d6024",
+    "imaging/avif_sequence.go": "1bfc77320f82a43f65991de98adbeb8cf2b5a101c3cb584a83fd3cd0c0de910f",
+    "imaging/avif_test.go": "f2adabe2dd56c4e2be568e740c1ded6b37f13d13fe612287a02b31a573293a1c",
+    "imaging/capabilities.go": "d36ef02d9357890ac7d527bda72e5880d3def46337d91990c9761932c6778a29",
+    "imaging/composite.go": "82f35114231c6430cd33827ea676a54a7d6f33332c5bfb703f4c7b9dcf1a1167",
+    "imaging/composite_test.go": "375e1b96ada3a1eef40babb5dad45f0d6778e244357b1a6bef3d655c4d80a8c0",
+    "imaging/create.go": "0f04f2981f957204587fe0b007d9d69af92d421ad40cb7637ce7f4f3527a90f8",
+    "imaging/drawing.go": "33a15ecf29caea9552621779d7faaaf1e9b0162cc4d00b2cfdd590d3ecc95420",
+    "imaging/drawing_fuzz_test.go": "b0ebfab6e475cd762467c827412dc8ebd4ed6c06741c54d34950d21d7c0051b8",
+    "imaging/drawing_test.go": "400b695545617c1f22428b801bbacec07ce2df55e3843286452b815f6b159f6d",
+    "imaging/effects.go": "a974b494579164310e65fad12176f9cd07ef50c50d505c20ea401e634d6042a2",
+    "imaging/effects_test.go": "6f4f147998ab2e9e0a200f52ae72f00efb43b6f2e5c890f30fac4f66a1a163eb",
+    "imaging/encoding.go": "54832eabeece89d89335a5ae1d656e0170389862f8276787e975abd613ed6f35",
+    "imaging/encoding_test.go": "ae283b37f0005a2b9251132f29b5f41c23170839562b6c79e9e62fd8642290fe",
+    "imaging/engine.go": "686fb19f3a3945c6404bb9564659519ae0871c611a8f94530e5d120f7ee4b2b3",
+    "imaging/engine_test.go": "b0bf63b12a5b21e495b5e0e8259c4be1f1be79d34982d19f543a5eb35b1f0d8c",
+    "imaging/font.go": "e83dcb89d76ed95ee76c73c5bd065f157679901bd04dca232baaa1a0c4c3ffca",
+    "imaging/format.go": "c026c705cb365c132b2745ed47b31d42a60f1b6b60502c94d75cdbca26a8ae93",
+    "imaging/geometry.go": "73bd3d12daa10c59338d252933f5399a04cd7bf598ad6a8e67abd9b5fc45018c",
+    "imaging/geometry_fuzz_test.go": "30348c35fbcd18bdc706d8001d92f52280492bcb66553c254ddb608627c024c9",
+    "imaging/geometry_test.go": "dc9d9e7c72396c1d60d2827d65d2f2462c08896143a8c742390b607b9098e0dd",
+    "imaging/icon.go": "19879a911987e73408f3110bf4aaf47e9bcd659c4a5e0f32671d79e4be996d8f",
+    "imaging/icon_test.go": "3fc6b2ea4295ecfe55a7455559067c02f3202a71b31481c0075b550ecc823baa",
+    "imaging/inspect.go": "0908acbd84fc52b74cd5b2bbc4013130dc086fcae62447f8e829a278505c255d",
+    "imaging/inspect_fuzz_test.go": "80d0152d6a337b05c0b42d4fcfcb6636142d6dd325c0ea310f0f2b51a40418bc",
+    "imaging/limits.go": "ec70aa8fb193f6de2aaffedbf797804bfc8c09e3222d11e05e4d41956413ba7c",
+    "imaging/limits_test.go": "254c1d8ce6bf3f748ca1d458911f4228ba012a8a05beb76423e09e0206cd0d77",
+    "imaging/module.go": "04fa786b19786b8672830146b6d8c1f9eda0322ec77fecde68051e3384bf1392",
+    "imaging/orientation.go": "8b50235108562af39d0a8b0ce934d6fdfeedb52bc35990e781348db3010b8a40",
+    "imaging/path.go": "76dfc600e7e5359f66c6cdb76a87e52a5c45373247a6b0583934f85c21e0b1d5",
+    "imaging/plan.go": "e2a673f30d1a901c79b3b6514dfeb08afe8112f370be0b857845dd5f9fa75e95",
+    "imaging/png_animation.go": "15e79c7a0eae8b401f38d3bc745b463213d872104f1d46db41acc16885332618",
+    "imaging/png_container.go": "4307cf9db9f69230c937ecc58d5f936e32d2ff9868fe65e5beaa1d934eb75c3e",
+    "imaging/testdata/avif/COPYING": "be086bd51ed0881cae958b54d4bf5428ab0d4b09dad435310d9940075d194325",
+    "imaging/testdata/avif/PATENTS": "335eca574598bf4ca181b12f708d6669e5a5e78c8e1513e5b35fa1f03901484b",
+    "imaging/testdata/avif/README.md": "4667ec167f94071a9824a17f0201167711e087810bff975a2d8087583d4cb6ce",
+    "imaging/testdata/avif/alpha-420.avif": "4c5fd8becccf1b30d0296239ba223c63b87d302869c16667911aa18e2402e097",
+    "imaging/testdata/avif/alpha-444.avif": "c62557442c473fdf4cd262fd310381cf0d42ce476a3d137df6af7fa6f89dab36",
+    "imaging/testdata/avif/anim.avif": "333eba0a604987cfc8725c45238ea3db242cf7f594ff39a62c973e900c94c449",
+    "imaging/testdata/avif/bt2020-422.avif": "0d2c5354ba3caf045d0697eca053a364365ce243f3fcd05a3977f16b719717bd",
+    "imaging/testdata/avif/bt709-full.avif": "98e595135a62bc6dcf263f40ad124f724f429632319877e0de39fa0f19177c7a",
+    "imaging/testdata/avif/bt709-limited.avif": "245c11ce848c99a27b5ab1cde675b38783249730d61ebb7f49f1393b1e97eded",
+    "imaging/testdata/avif/clap-10.avif": "1b03532390fbd9e6d0ba85fdfbe371266f0150719611081dda4be76dd5c9c8ab",
+    "imaging/testdata/avif/clap-crop.avif": "483966fefd0c87ac7f9bf257df6be2a56d70dc4e88fa36281c04c0280a32fe2d",
+    "imaging/testdata/avif/clap-irot.avif": "80ed4fdc336cef753b56291240f488f9b6e2f2d4aa0288b14fa68132f32f5a47",
+    "imaging/testdata/avif/grid-2x2.avif": "c6a511c61c2c477a4bfaf39d82ad3bfe3fbc4d2c18247ec383a56069eef66144",
+    "imaging/testdata/avif/identity-444.avif": "4a862f503d05393f3c502cdb9fd1f6b8ae4ffaa81a18f4830b6db127e6a59645",
+    "imaging/testdata/avif/imir0.avif": "4819d08076aa61807dc3237fbcb47b5660513038fee86b55b2f33e299a0d475f",
+    "imaging/testdata/avif/irot1.avif": "f3f7aa33df642ec8d173a3bad9e953c919b33a26e6f3c9de2237f1a01c6ad6c7",
+    "imaging/testdata/avif/irot2.avif": "5f8ec6e6eee8bee98afd0e15abcac085a92eaae5d8f9b28ef9b4eaf2b794a43b",
+    "imaging/testdata/avif/irot3-imir1.avif": "b299d83f0dd96de4a633c41331e64cb0ca28fd1c08ac1acc7db078e5b42fc273",
+    "imaging/testdata/avif/mono-12.avif": "d71c4bf4c29c43d3bfa7a807dc32442e2c719d1f6a77e8633b7f9b324e512519",
+    "imaging/testdata/avif/mono-8.avif": "dcfdd00c6caf4eb721e26c8c00c07c75b9af6a274e2e12e0fb5c032dac2209e5",
+    "imaging/testdata/avif/unspec-420.avif": "a0aef07311a3c354f7a9d56b6db6a7c043612717d887b77c148807b4e2eb2414",
+    "imaging/testdata/avif/yuv420-10.avif": "193f1791a949ef9795f7b849a2d05ec3b495e64b0cd3f133a85bc8a608c02067",
+    "imaging/testdata/avif/yuv420-8.avif": "9764ac8d6b3ae7c75a83e6ee670276039fc72ea043e5d15882f3e4d2372dd148",
+    "imaging/testdata/avif/yuv420-odd.avif": "10c3c9b61c18673acaab20152daf41f4e509a4e8de8e9ec86a5adf922b1d7391",
+    "imaging/testdata/avif/yuv422-12.avif": "8de44b0b105095abdc3566c1346b6e669c886003fcc53d4c9fd5b5b59c05d257",
+    "imaging/testdata/avif/yuv422-8.avif": "d7a3c83f77ee306d149e2f88c975fb1239c888856310ec3ea8fb7976bc88d661",
+    "imaging/testdata/avif/yuv444-10.avif": "df6b8552434442396679c426a56140f0ac564e3b8257a246dac3906294720c11",
+    "imaging/testdata/avif/yuv444-8.avif": "740cc612242ce74d9851eafc845fc66225f024b35f9bc3e7e9874a48687cee0e",
+    "imaging/testdata/avif/yuv444-odd.avif": "2a1bab9285c0fc60150cc04a55ee414ce2c24112f8118e1869f2eb3ee2523f1b",
+    "imaging/testdata/webp/README.md": "e5fbf37c9bcc924a85d82d4ace2dc152b0ebd1eeab32afa4bd5973b44a240711",
+    "imaging/testdata/webp/animation-lossless.webp": "763b0410c46974902a6a1d07018545c09dd0df8b5a69d23ec02fad7585047d7e",
+    "imaging/testdata/webp/animation-lossy.webp": "d0ca23a646534dbe76baf995dad3368a4a3408d15367825c835321cff84ca80f",
+    "imaging/testdata/webp/lossless-0.png": "e4b5b79a3f5b293069b14b30530929f9e23511c850c9ca179d1673eb05db93b6",
+    "imaging/testdata/webp/lossless-1.png": "b3a87b774c595ee4f338624149e084a7033595a6da3f34f58324af0488063b2d",
+    "imaging/testdata/webp/lossless-2.png": "d469ba0ba21653e8c1f639a6ac37289dbafccbd639ce338fbca06d46d4fcd076",
+    "imaging/testdata/webp/lossless-3.png": "6bd1d4473e75225eb14afa70865c225c34e70ed438f2079a6ba560ac79c71cea",
+    "imaging/testdata/webp/lossy-0.png": "d88562dbb22fe72e090bfc88c561a1f938e95a2463b229baae0201e54eb301ca",
+    "imaging/testdata/webp/lossy-1.png": "74e0fcf1a1936868898564e1f03caa5aa5d49ee626b8aa0e0bda8495d5dd810b",
+    "imaging/testdata/webp/lossy-2.png": "ff49a297947f535d5d28377368978c7d2a8353ef65780322a8fadd7e6e1d26b4",
+    "imaging/testdata/webp/lossy-3.png": "6bd1d4473e75225eb14afa70865c225c34e70ed438f2079a6ba560ac79c71cea",
+    "imaging/text.go": "b35d702a369ffcebe92dda3a93af3f643511d6c448a43be5647a3aeb590dd2a3",
+    "imaging/text_test.go": "83b340f823f622f700800a816238b17904e9833cde20d7c96f47863169ce75df",
+    "imaging/transform.go": "fc842988967c452efeee946a5d7982e8013b5c87e5f06c446476f7dd4b199e12",
+    "imaging/transform_test.go": "9f805b5f0212e3a592559ab03a16355f31ce728ae08379c9dfd269408a672833",
+    "imaging/webp_animation.go": "3a0390514badf9e71a1857d7572bfff7f80ca257cee920afaff23cc1fcfd53e1",
+    "imaging/webp_animation_test.go": "873e12a7019f7ce854e4400b89a5e8a839f3a19b702b995bdb15a2cdcbe1923d",
+    "imaging/webp_color.go": "6fd3b7f145e84aa1e2b3fbeb5be7d96cb167189ca9b93e86aaf92ffdbc7b07c8",
+    "imaging/webp_container.go": "68d126ce89493b4e363ba75adeeaac4a678dd1c2dbaaeb7ffbf01428d06a2a91",
+    "imaging/webp_container_test.go": "89f02e5ed01e70ccc99cb49f14fca5a50c871a35836043eb07c8fd3cdae1f17f",
+    "imaging/webp_decode.go": "2c94dab8bde9e1f143038cd863b78997f2d76f73287fb9c9f1408594b42ae057",
+    "internal/agent/gopls_acceptance_test.go": "241ef12a93815737f9935cb9e59ae7420a61062a2dd1cc93cf9280fd6cf7ef14",
+    "tests/fixtures/consumer/profiles/animated_images.go": "42f2b327639e5a5eb62576c96422e33dc50cb3745ef01005fa0716fe754cce26",
+    "tests/fixtures/consumer/profiles/animated_images_test.go": "60bfa62c162451469212b085af568c766a86374664d55404f55b1eb12261b862",
+    "tests/fixtures/consumer/profiles/avif_images_test.go": "f578496b56dcafc11475973510864dcbe3355aa4d00c98c3b34b4dc3bdb92804",
+    "tests/fixtures/consumer/profiles/image_encoding.go": "fa6db05f75350dab778f1d10a956e76e1eeb2512d0208ba4e22eb7463f77e536",
+    "tests/fixtures/consumer/profiles/image_encoding_test.go": "9bc9ac76d678a365a809f9b468f6643615ff9f0a11cd0c24aaa51ba0848bde56",
+    "tests/fixtures/consumer/profiles/image_labels.go": "580f70f7204daf147479dfbdd3c9518ad18c2d6716398b5b450601504e8759b3",
+    "tests/fixtures/consumer/profiles/image_labels_test.go": "af6071a996cadd5934a9e5689dd0ef09ddde7f8c9b5864e4dd9ccdf1c3172837",
+    "tests/fixtures/consumer/profiles/images.go": "7151d5da7bf5070c9b312f2a866bb3282729531a9dff426b6df32adad9871364",
+    "tests/fixtures/consumer/profiles/images_test.go": "8497e98be3057d7ec71edef4af94ac02795b4263928c9cbc33c6772bca864ecf",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_compression/invalid.go": "49533b4ae5f05b74295947dc5b9f9af006976ec98059e9a1d5e02d8e9efe436d",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_font/invalid.go": "1e391db8db754302dbec3d423928a0e02f9007d70bb264ed74fd928d8398aef4",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_format/invalid.go": "d9568df2f494450f57b21518a8ba004e1b7525f3e5e202d1aa8445669561c9a1",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_frames/invalid.go": "f3f11d035082ce4aac5c07747a2fc19b6d032c3d5bee1843d0dd215069845182",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_position/invalid.go": "86866455d1cb9829f1ebd83968ce161d1e71fe79dad0a13086e4fc516fab6a6a",
+    "tests/fixtures/consumer/types_test.go": "dcfe36099675c9b0b9312c05224b71d40c12f74976ec9e6008f8a130306577b8"
+  },
+  "stage3_webp_audit": [
+    "No new dependency. All WebP admission and decoding share one bounded container owner; both static and animation coded dimensions are checked before decoding. Input slices are borrowed for the synchronous operation.",
+    "Frames include offsets, overwrite/over blending, background disposal, durations and total plays. FirstFrame renders only its selected frame onto the logical canvas. Output uses full replacement canvases, including transparency.",
+    "Output uses bounded per-frame encoding and streaming RIFF assembly rather than the dependency EncodeAll buffer. Sticky writer failures prevent publishing partial files. Unrepresentable loop counts/durations/output dimensions reject.",
+    "Independent decoding exposed an existing static-codec color issue: VP8 video-range samples passed through Go image.YCbCr full-range conversion. The shared WebP path now performs BT.601 range/matrix conversion with centered bilinear chroma interpolation. Both static and animation regressions cover it; this does not claim ICC color management.",
+    "Source inspection and allocation sampling found fixed lossless-encoder hash tables. Admission now reserves 4 MiB in addition to pixel-dependent workspace. VP8 decode admission includes padded macroblocks, even on narrow images.",
+    "Shared integer delay rounding preserves millisecond/centisecond timing; APNG reduces high-frequency fractions before its 16-bit representability check.",
+    "Independent Pillow/libwebp 1.6.0 decoding verifies every output WebP/APNG frame, alpha, timing and loops. Final lossless and lossy RGB are exact on these synthetic fixtures (maximum visible channel difference 0); regression allows 3 for decoder rounding and makes no general bit-exact lossy claim. Invisible RGB is not compared.",
+    "Consumer plans use public Foundry types only. PostgreSQL variants now exercise both animated PNG and WebP persistence/readback."
+  ],
+  "configured_image_consumer_source_sha256": {
+    "tests/fixtures/consumer/bootstrap/routes.go": "bae8f8e48ac16ffdbd79e0f0e03ad0bd85c44e5dbe07e1429cbdfc4406d002fb",
+    "tests/fixtures/consumer/bootstrap/bootstrap_test.go": "39a32d13984ad0be1c80636195e388474d48061a86a29ca111d00d924b7bb27c"
+  },
+  "configured_image_consumer_review": "Updated the existing configured HTTP fixture instead of introducing another engine factory or duplicate service API. The guide now leads with application.New, Image.Enabled and Services.Image; standalone New/Module remain documented. Final expansion acceptance still requires lossy WebP/native completion. Final expansion acceptance now also covers native application ownership, upload dimensions and attachment variants.",
+  "dependency_blocker_audit": {
+    "condition": "Native vips/pkgconf development dependencies absent and portable lossy WebP codec replacement not approved; both installation/replacement questions remain unanswered.",
+    "authorization": "The user approved the portable default plus optional libvips architecture. Their separate global instruction requires asking before installing new dependencies. No install/replacement approval was found in the current thread history.",
+    "consecutive_goal_turns_observed": [
+      "01a10035-8d47-7720-804b-2b62f309bb12",
+      "01a10062-5a87-7c21-9c0b-5a57199a1a41",
+      "01a100a4-6364-70a0-9a2f-fd811e195a6d",
+      "01a100ca-843e-7201-95a5-6a5112cf29c2"
+    ],
+    "revalidation": "Current command lookup found brew, but no vips/pkg-config/pkgconf; no vips headers/pkg-config metadata found. go.mod/go.sum contain no gen2brain/vpx replacement. Accepted WebP runtime fingerprints match.",
+    "independent_work_completed": "Everyday editing, text/drawing, portable GIF/APNG/AVIF/WebP animation, encoding controls and configured HTTP/attachment integration evidence. Lossy output, native formats/ICC/metadata/smart cropping and final whole-expansion acceptance remain incomplete.",
+    "next_action": "Obtain the two pending dependency approvals; a consolidated approval question has been presented. Then implement and verify the codec/native milestones and run the final expansion audit.",
+    "resolved_by": "User approve for install; preserved preceding blocker evidence is historical."
+  },
+  "dependency_approval_resolution": {
+    "user": "approve for install",
+    "approved": [
+      "Homebrew vips and pkgconf",
+      "Replace nativewebp with gen2brain/vpx/webp"
+    ],
+    "installed": {
+      "vips": "8.18.7",
+      "pkgconf": "3.0.7"
+    },
+    "selected_webp_module": "github.com/gen2brain/vpx v0.2.1",
+    "result": "Installed and verified; portable lossy WebP accepted and native implementation is in final verification."
+  },
+  "stage3_lossy_webp_source_sha256": {
+    "attachments/animated_variant_postgres_test.go": "55d6289f7a0e321409a5d2d6a44dbdaa53459fa69a6c9fdfa30c597b2894039d",
+    "attachments/avif_variant_postgres_test.go": "1ab262e0f31d062aee2d0945e3f74d871b02b5f625fbfeefcf953fb408db95d1",
+    "attachments/composite_variant_postgres_test.go": "0d10c5219187550af255639ce313a36851223d1523151b4562bb770348479587",
+    "attachments/variants.go": "0cdb8bd5c51fbe933cca3835060ad28be529c55c2dabb35a9bcad7169c5c0456",
+    "attachments/variants_postgres_test.go": "5eaad07e9c0bbee59143f1454f9c9467a032e83570c4d34b660034d6a659f969",
+    "go.mod": "0364181cebdc6a293463bbd630d4bee129c4d9f3549b481f1977d8d55df23aad",
+    "go.sum": "622463d58e754886396611cde1f12582882306d0338cc58c332c32f685e79c9d",
+    "imaging/animation.go": "3af33a708dde5a4fddd9bb42fcfd117504df4028eb0a89a678af265044249d06",
+    "imaging/animation_fuzz_test.go": "3436ec24526d7566914cfdc8a86f8d438c1a9b544b6322836c15d50c57c81646",
+    "imaging/animation_test.go": "1b72e8c2d4d60ddcb98d72a24f2c6a0e5642454738375dc9e61e30b7ca2adf29",
+    "imaging/avif_container.go": "d8ea72ce92f56a1da6f33a801ddccd5c0e9bfd9ef55b91a1691e3fe24506a6dd",
+    "imaging/avif_decode.go": "4f57a553ede41033529f3ae31ad4648fd50e3f9aa8982efd105c1c390700ee2a",
+    "imaging/avif_fuzz_test.go": "1ae204e3d572f1b368e235ad4af33c2262dd7ffa5fffb3e9107f8bd77fbc1b45",
+    "imaging/avif_items.go": "09b82af8a6494d433f60007c8f9b442308a5c06980e3cddc0e3f0f03293d6024",
+    "imaging/avif_sequence.go": "1bfc77320f82a43f65991de98adbeb8cf2b5a101c3cb584a83fd3cd0c0de910f",
+    "imaging/avif_test.go": "f2adabe2dd56c4e2be568e740c1ded6b37f13d13fe612287a02b31a573293a1c",
+    "imaging/capabilities.go": "d36ef02d9357890ac7d527bda72e5880d3def46337d91990c9761932c6778a29",
+    "imaging/composite.go": "82f35114231c6430cd33827ea676a54a7d6f33332c5bfb703f4c7b9dcf1a1167",
+    "imaging/composite_test.go": "375e1b96ada3a1eef40babb5dad45f0d6778e244357b1a6bef3d655c4d80a8c0",
+    "imaging/create.go": "0f04f2981f957204587fe0b007d9d69af92d421ad40cb7637ce7f4f3527a90f8",
+    "imaging/drawing.go": "33a15ecf29caea9552621779d7faaaf1e9b0162cc4d00b2cfdd590d3ecc95420",
+    "imaging/drawing_fuzz_test.go": "b0ebfab6e475cd762467c827412dc8ebd4ed6c06741c54d34950d21d7c0051b8",
+    "imaging/drawing_test.go": "400b695545617c1f22428b801bbacec07ce2df55e3843286452b815f6b159f6d",
+    "imaging/effects.go": "a974b494579164310e65fad12176f9cd07ef50c50d505c20ea401e634d6042a2",
+    "imaging/effects_test.go": "6f4f147998ab2e9e0a200f52ae72f00efb43b6f2e5c890f30fac4f66a1a163eb",
+    "imaging/encoding.go": "95ce841a50e0d03f9b55b307491a195e794ca1b17754cfb4388646e593dde391",
+    "imaging/encoding_test.go": "ae283b37f0005a2b9251132f29b5f41c23170839562b6c79e9e62fd8642290fe",
+    "imaging/engine.go": "b38eb406f5b6d284f1d74888a5360ae9114c067adbaae5df862da26e377e7c76",
+    "imaging/engine_test.go": "b0bf63b12a5b21e495b5e0e8259c4be1f1be79d34982d19f543a5eb35b1f0d8c",
+    "imaging/font.go": "e83dcb89d76ed95ee76c73c5bd065f157679901bd04dca232baaa1a0c4c3ffca",
+    "imaging/format.go": "c026c705cb365c132b2745ed47b31d42a60f1b6b60502c94d75cdbca26a8ae93",
+    "imaging/geometry.go": "73bd3d12daa10c59338d252933f5399a04cd7bf598ad6a8e67abd9b5fc45018c",
+    "imaging/geometry_fuzz_test.go": "30348c35fbcd18bdc706d8001d92f52280492bcb66553c254ddb608627c024c9",
+    "imaging/geometry_test.go": "dc9d9e7c72396c1d60d2827d65d2f2462c08896143a8c742390b607b9098e0dd",
+    "imaging/icon.go": "19879a911987e73408f3110bf4aaf47e9bcd659c4a5e0f32671d79e4be996d8f",
+    "imaging/icon_test.go": "3fc6b2ea4295ecfe55a7455559067c02f3202a71b31481c0075b550ecc823baa",
+    "imaging/inspect.go": "0908acbd84fc52b74cd5b2bbc4013130dc086fcae62447f8e829a278505c255d",
+    "imaging/inspect_fuzz_test.go": "80d0152d6a337b05c0b42d4fcfcb6636142d6dd325c0ea310f0f2b51a40418bc",
+    "imaging/limits.go": "c89a1b42f51e04c4c8debf890a6c59d33aa3eb99934e267b782f0c38bcf41693",
+    "imaging/limits_test.go": "aa1e67316a854e883b4ab2560b8e3af28f2ea5828a0ceb4024f16cd6d455310e",
+    "imaging/module.go": "04fa786b19786b8672830146b6d8c1f9eda0322ec77fecde68051e3384bf1392",
+    "imaging/orientation.go": "8b50235108562af39d0a8b0ce934d6fdfeedb52bc35990e781348db3010b8a40",
+    "imaging/path.go": "76dfc600e7e5359f66c6cdb76a87e52a5c45373247a6b0583934f85c21e0b1d5",
+    "imaging/plan.go": "065fd133c436d2c4962c117668e019c17e7409db30637af3cc8fea02c419be22",
+    "imaging/png_animation.go": "15e79c7a0eae8b401f38d3bc745b463213d872104f1d46db41acc16885332618",
+    "imaging/png_container.go": "4307cf9db9f69230c937ecc58d5f936e32d2ff9868fe65e5beaa1d934eb75c3e",
+    "imaging/testdata/avif/COPYING": "be086bd51ed0881cae958b54d4bf5428ab0d4b09dad435310d9940075d194325",
+    "imaging/testdata/avif/PATENTS": "335eca574598bf4ca181b12f708d6669e5a5e78c8e1513e5b35fa1f03901484b",
+    "imaging/testdata/avif/README.md": "4667ec167f94071a9824a17f0201167711e087810bff975a2d8087583d4cb6ce",
+    "imaging/testdata/avif/alpha-420.avif": "4c5fd8becccf1b30d0296239ba223c63b87d302869c16667911aa18e2402e097",
+    "imaging/testdata/avif/alpha-444.avif": "c62557442c473fdf4cd262fd310381cf0d42ce476a3d137df6af7fa6f89dab36",
+    "imaging/testdata/avif/anim.avif": "333eba0a604987cfc8725c45238ea3db242cf7f594ff39a62c973e900c94c449",
+    "imaging/testdata/avif/bt2020-422.avif": "0d2c5354ba3caf045d0697eca053a364365ce243f3fcd05a3977f16b719717bd",
+    "imaging/testdata/avif/bt709-full.avif": "98e595135a62bc6dcf263f40ad124f724f429632319877e0de39fa0f19177c7a",
+    "imaging/testdata/avif/bt709-limited.avif": "245c11ce848c99a27b5ab1cde675b38783249730d61ebb7f49f1393b1e97eded",
+    "imaging/testdata/avif/clap-10.avif": "1b03532390fbd9e6d0ba85fdfbe371266f0150719611081dda4be76dd5c9c8ab",
+    "imaging/testdata/avif/clap-crop.avif": "483966fefd0c87ac7f9bf257df6be2a56d70dc4e88fa36281c04c0280a32fe2d",
+    "imaging/testdata/avif/clap-irot.avif": "80ed4fdc336cef753b56291240f488f9b6e2f2d4aa0288b14fa68132f32f5a47",
+    "imaging/testdata/avif/grid-2x2.avif": "c6a511c61c2c477a4bfaf39d82ad3bfe3fbc4d2c18247ec383a56069eef66144",
+    "imaging/testdata/avif/identity-444.avif": "4a862f503d05393f3c502cdb9fd1f6b8ae4ffaa81a18f4830b6db127e6a59645",
+    "imaging/testdata/avif/imir0.avif": "4819d08076aa61807dc3237fbcb47b5660513038fee86b55b2f33e299a0d475f",
+    "imaging/testdata/avif/irot1.avif": "f3f7aa33df642ec8d173a3bad9e953c919b33a26e6f3c9de2237f1a01c6ad6c7",
+    "imaging/testdata/avif/irot2.avif": "5f8ec6e6eee8bee98afd0e15abcac085a92eaae5d8f9b28ef9b4eaf2b794a43b",
+    "imaging/testdata/avif/irot3-imir1.avif": "b299d83f0dd96de4a633c41331e64cb0ca28fd1c08ac1acc7db078e5b42fc273",
+    "imaging/testdata/avif/mono-12.avif": "d71c4bf4c29c43d3bfa7a807dc32442e2c719d1f6a77e8633b7f9b324e512519",
+    "imaging/testdata/avif/mono-8.avif": "dcfdd00c6caf4eb721e26c8c00c07c75b9af6a274e2e12e0fb5c032dac2209e5",
+    "imaging/testdata/avif/unspec-420.avif": "a0aef07311a3c354f7a9d56b6db6a7c043612717d887b77c148807b4e2eb2414",
+    "imaging/testdata/avif/yuv420-10.avif": "193f1791a949ef9795f7b849a2d05ec3b495e64b0cd3f133a85bc8a608c02067",
+    "imaging/testdata/avif/yuv420-8.avif": "9764ac8d6b3ae7c75a83e6ee670276039fc72ea043e5d15882f3e4d2372dd148",
+    "imaging/testdata/avif/yuv420-odd.avif": "10c3c9b61c18673acaab20152daf41f4e509a4e8de8e9ec86a5adf922b1d7391",
+    "imaging/testdata/avif/yuv422-12.avif": "8de44b0b105095abdc3566c1346b6e669c886003fcc53d4c9fd5b5b59c05d257",
+    "imaging/testdata/avif/yuv422-8.avif": "d7a3c83f77ee306d149e2f88c975fb1239c888856310ec3ea8fb7976bc88d661",
+    "imaging/testdata/avif/yuv444-10.avif": "df6b8552434442396679c426a56140f0ac564e3b8257a246dac3906294720c11",
+    "imaging/testdata/avif/yuv444-8.avif": "740cc612242ce74d9851eafc845fc66225f024b35f9bc3e7e9874a48687cee0e",
+    "imaging/testdata/avif/yuv444-odd.avif": "2a1bab9285c0fc60150cc04a55ee414ce2c24112f8118e1869f2eb3ee2523f1b",
+    "imaging/testdata/webp/README.md": "e5fbf37c9bcc924a85d82d4ace2dc152b0ebd1eeab32afa4bd5973b44a240711",
+    "imaging/testdata/webp/animation-lossless.webp": "763b0410c46974902a6a1d07018545c09dd0df8b5a69d23ec02fad7585047d7e",
+    "imaging/testdata/webp/animation-lossy.webp": "d0ca23a646534dbe76baf995dad3368a4a3408d15367825c835321cff84ca80f",
+    "imaging/testdata/webp/lossless-0.png": "e4b5b79a3f5b293069b14b30530929f9e23511c850c9ca179d1673eb05db93b6",
+    "imaging/testdata/webp/lossless-1.png": "b3a87b774c595ee4f338624149e084a7033595a6da3f34f58324af0488063b2d",
+    "imaging/testdata/webp/lossless-2.png": "d469ba0ba21653e8c1f639a6ac37289dbafccbd639ce338fbca06d46d4fcd076",
+    "imaging/testdata/webp/lossless-3.png": "6bd1d4473e75225eb14afa70865c225c34e70ed438f2079a6ba560ac79c71cea",
+    "imaging/testdata/webp/lossy-0.png": "d88562dbb22fe72e090bfc88c561a1f938e95a2463b229baae0201e54eb301ca",
+    "imaging/testdata/webp/lossy-1.png": "74e0fcf1a1936868898564e1f03caa5aa5d49ee626b8aa0e0bda8495d5dd810b",
+    "imaging/testdata/webp/lossy-2.png": "ff49a297947f535d5d28377368978c7d2a8353ef65780322a8fadd7e6e1d26b4",
+    "imaging/testdata/webp/lossy-3.png": "6bd1d4473e75225eb14afa70865c225c34e70ed438f2079a6ba560ac79c71cea",
+    "imaging/text.go": "b35d702a369ffcebe92dda3a93af3f643511d6c448a43be5647a3aeb590dd2a3",
+    "imaging/text_test.go": "83b340f823f622f700800a816238b17904e9833cde20d7c96f47863169ce75df",
+    "imaging/transform.go": "fc842988967c452efeee946a5d7982e8013b5c87e5f06c446476f7dd4b199e12",
+    "imaging/transform_test.go": "9f805b5f0212e3a592559ab03a16355f31ce728ae08379c9dfd269408a672833",
+    "imaging/webp_animation.go": "5a0cc5d236dfb1359361c6cbb626105d0323d74d06a0259ed9eb88f2afc1c02c",
+    "imaging/webp_animation_test.go": "831b99fae732f692df6d587130a91b1317b7f704fcd23fd53e7da99e5bd84832",
+    "imaging/webp_color.go": "6fd3b7f145e84aa1e2b3fbeb5be7d96cb167189ca9b93e86aaf92ffdbc7b07c8",
+    "imaging/webp_container.go": "68d126ce89493b4e363ba75adeeaac4a678dd1c2dbaaeb7ffbf01428d06a2a91",
+    "imaging/webp_container_test.go": "89f02e5ed01e70ccc99cb49f14fca5a50c871a35836043eb07c8fd3cdae1f17f",
+    "imaging/webp_decode.go": "2c94dab8bde9e1f143038cd863b78997f2d76f73287fb9c9f1408594b42ae057",
+    "imaging/webp_encoding_test.go": "068ed31552b17378195e8e396a2e0f48bfb6b0a95c114d53eda985d953f1df30",
+    "imaging/webp_output.go": "e4612dd44536a91f661c914df2c3c26bb645b21894d7bcb6498140852d2c3e07",
+    "internal/agent/gopls_acceptance_test.go": "098c1891491cb7d9c7ad2daae38e1a488a9c88aa5391fe8e80c5653d9de993d6",
+    "tests/fixtures/consumer/go.mod": "976a5fffff3f9216bbaa5217106027cc3a6a5868cc78243de84afd39d3388b16",
+    "tests/fixtures/consumer/go.sum": "622463d58e754886396611cde1f12582882306d0338cc58c332c32f685e79c9d",
+    "tests/fixtures/consumer/profiles/animated_images.go": "42f2b327639e5a5eb62576c96422e33dc50cb3745ef01005fa0716fe754cce26",
+    "tests/fixtures/consumer/profiles/animated_images_test.go": "60bfa62c162451469212b085af568c766a86374664d55404f55b1eb12261b862",
+    "tests/fixtures/consumer/profiles/avif_images_test.go": "f578496b56dcafc11475973510864dcbe3355aa4d00c98c3b34b4dc3bdb92804",
+    "tests/fixtures/consumer/profiles/image_encoding.go": "deb79da0fce86451b903d35bab764fdd3b48247b4dd62bc70d6401663bf88476",
+    "tests/fixtures/consumer/profiles/image_encoding_test.go": "051243dfe3080f33a15789f157f64f93494a6f29258b8d02d726bc584e938eb8",
+    "tests/fixtures/consumer/profiles/image_labels.go": "580f70f7204daf147479dfbdd3c9518ad18c2d6716398b5b450601504e8759b3",
+    "tests/fixtures/consumer/profiles/image_labels_test.go": "af6071a996cadd5934a9e5689dd0ef09ddde7f8c9b5864e4dd9ccdf1c3172837",
+    "tests/fixtures/consumer/profiles/images.go": "7151d5da7bf5070c9b312f2a866bb3282729531a9dff426b6df32adad9871364",
+    "tests/fixtures/consumer/profiles/images_test.go": "8497e98be3057d7ec71edef4af94ac02795b4263928c9cbc33c6772bca864ecf",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_compression/invalid.go": "49533b4ae5f05b74295947dc5b9f9af006976ec98059e9a1d5e02d8e9efe436d",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_font/invalid.go": "1e391db8db754302dbec3d423928a0e02f9007d70bb264ed74fd928d8398aef4",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_format/invalid.go": "d9568df2f494450f57b21518a8ba004e1b7525f3e5e202d1aa8445669561c9a1",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_frames/invalid.go": "f3f11d035082ce4aac5c07747a2fc19b6d032c3d5bee1843d0dd215069845182",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_position/invalid.go": "86866455d1cb9829f1ebd83968ce161d1e71fe79dad0a13086e4fc516fab6a6a",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_webp_mode/invalid.go": "e35c9c8e43a8e465ee98fd0dbbe9b0ff1c457ec82bde9b7a805a1fc729a9f045",
+    "tests/fixtures/consumer/types_test.go": "b292b7e6f8279ee11bd34b25982f93c251e9df8ee52f5dab429c763b4fd4e111"
+  },
+  "stage3_lossy_webp_audit": {
+    "codec": "github.com/gen2brain/vpx v0.2.1; no native or WASM dependency",
+    "corrections": [
+      "Canonicalize the encoder's nonzero RIFF padding with a bounded streaming writer; input validation remains strict.",
+      "Convert Go full-range YCbCr JPEG sources to RGB before using the codec's video-range lossy pipeline.",
+      "Reserve padded macroblock and entropy-search workspace; preserve exact transparent RGB and one codec worker per operation."
+    ],
+    "independent_verification": {
+      "decoder": "Pillow/libwebp 1.6.0",
+      "stills": [
+        {
+          "name": "mode0-method0.webp",
+          "size": 372,
+          "alpha_exact": true,
+          "rgba_exact": true
+        },
+        {
+          "name": "mode0-method4.webp",
+          "size": 66,
+          "alpha_exact": true,
+          "rgba_exact": true
+        },
+        {
+          "name": "mode0-method6.webp",
+          "size": 72,
+          "alpha_exact": true,
+          "rgba_exact": true
+        },
+        {
+          "name": "mode1-method0.webp",
+          "size": 1258,
+          "alpha_exact": true,
+          "rgba_exact": false
+        },
+        {
+          "name": "mode1-method4.webp",
+          "size": 1144,
+          "alpha_exact": true,
+          "rgba_exact": false
+        },
+        {
+          "name": "mode1-method6.webp",
+          "size": 1126,
+          "alpha_exact": true,
+          "rgba_exact": false
+        }
+      ],
+      "animation": {
+        "frames": [
+          {
+            "size": [
+              16,
+              12
+            ],
+            "duration": 30
+          },
+          {
+            "size": [
+              16,
+              12
+            ],
+            "duration": 70
+          },
+          {
+            "size": [
+              16,
+              12
+            ],
+            "duration": 110
+          },
+          {
+            "size": [
+              16,
+              12
+            ],
+            "duration": 130
+          }
+        ],
+        "loop": 2
+      }
+    },
+    "checks": [
+      "go test ./imaging passed (6.102s)",
+      "Independent consumer plans and imaging compiler contracts passed",
+      "Focused imaging/attachment race tests passed with required existing PostgreSQL (1.738s / 2.104s)",
+      "CGO_ENABLED=0 imaging suite passed (6.004s)",
+      "Real gopls WebP-mode completion/hover/definition passed (2.733s)",
+      "Complete imaging races passed (14.653s)",
+      "30s FuzzWebPEncoding passed: 208840 executions"
+    ],
+    "benchmark": {
+      "command": "go test ./imaging -run ^$ -bench ^BenchmarkWebPEncodingWorkspace$ -benchmem -benchtime=1x -count=1",
+      "environment": "Go 1.27.1 darwin/arm64 Apple M4 Max; one 256x256 synthetic RGBA frame; total allocations, not peak RSS",
+      "bytes_per_operation": {
+        "lossless_method0": 1206952,
+        "lossless_method4": 6650752,
+        "lossless_method6": 6649760,
+        "lossy_method0": 3442424,
+        "lossy_method4": 6938784,
+        "lossy_method6": 11202336
+      }
+    },
+    "full_gate": "Passed, exit 0: FOUNDRY_TEST_POSTGRES_REQUIRED=1 FOUNDRY_TEST_GOPLS=$PWD/bin/gopls make verify; .cache/imaging-expansion-20261003/stage3-lossy-webp-verify.log. All 117 source fingerprints matched after completion."
+  },
+  "stage4_native_source_sha256": {
+    "Makefile": "9153e2b5cbf0db0824fd318877494fc2b25643f895d1514f805991be0210103d",
+    "application/.foundry-gen.json": "cbc0538c2a24c1f0cc32afbed02c19fe49d7f6ae679649ff9c6d65da9ca58046",
+    "application/settings_foundry.gen.go": "139fe435ffa16b2f166c2ef86ea0e2657b6920a31bc0e95fdbfa1e22c4c62bcb",
+    "attachments/animated_variant_postgres_test.go": "55d6289f7a0e321409a5d2d6a44dbdaa53459fa69a6c9fdfa30c597b2894039d",
+    "attachments/avif_variant_postgres_test.go": "1ab262e0f31d062aee2d0945e3f74d871b02b5f625fbfeefcf953fb408db95d1",
+    "attachments/composite_variant_postgres_test.go": "0d10c5219187550af255639ce313a36851223d1523151b4562bb770348479587",
+    "attachments/images_postgres_test.go": "0ff5c00f8900cefdf6bf6ba56c40294f0df0c2e5c12b1e2b8e013d21f6ea0843",
+    "attachments/manager.go": "497891397c217df700b672fc1d524ea5d5a26150ca86877b3e2c5b4a09a30b12",
+    "attachments/native_variant_postgres_test.go": "beaeea26868c6c5c6c6e430ee0ea5ec40d235ba406584e29d7a94c59b8fe09b2",
+    "attachments/slot_write.go": "708fa4a1105312db923ea0799af11bc3fc04f626e619aca73e02c799eb60d9bf",
+    "attachments/upload.go": "1908319c9baa9978b0c7dd9d7ef2b7ce8daaad30f26970f1a026bd011bded711",
+    "attachments/variants.go": "c78619621e156fe4e2694ed97d9d58cd5edd54aca3614d08652724dada422b4b",
+    "attachments/variants_postgres_test.go": "87960a89ecebea08bf1fa2cfb7dbfcbf6249b0659987b03fa80a944e0a2782fd",
+    "go.mod": "0364181cebdc6a293463bbd630d4bee129c4d9f3549b481f1977d8d55df23aad",
+    "go.sum": "622463d58e754886396611cde1f12582882306d0338cc58c332c32f685e79c9d",
+    "imaging/animation.go": "fff0e0fb79d4682275c6538f5710053b2a48133d8b29f6fcfde9871b731c4833",
+    "imaging/animation_fuzz_test.go": "3436ec24526d7566914cfdc8a86f8d438c1a9b544b6322836c15d50c57c81646",
+    "imaging/animation_test.go": "1b72e8c2d4d60ddcb98d72a24f2c6a0e5642454738375dc9e61e30b7ca2adf29",
+    "imaging/avif_container.go": "d8ea72ce92f56a1da6f33a801ddccd5c0e9bfd9ef55b91a1691e3fe24506a6dd",
+    "imaging/avif_decode.go": "4f57a553ede41033529f3ae31ad4648fd50e3f9aa8982efd105c1c390700ee2a",
+    "imaging/avif_fuzz_test.go": "1ae204e3d572f1b368e235ad4af33c2262dd7ffa5fffb3e9107f8bd77fbc1b45",
+    "imaging/avif_items.go": "09b82af8a6494d433f60007c8f9b442308a5c06980e3cddc0e3f0f03293d6024",
+    "imaging/avif_sequence.go": "1bfc77320f82a43f65991de98adbeb8cf2b5a101c3cb584a83fd3cd0c0de910f",
+    "imaging/avif_test.go": "f2adabe2dd56c4e2be568e740c1ded6b37f13d13fe612287a02b31a573293a1c",
+    "imaging/backend.go": "c296ab5b85003d18cf11cc4bb783668c7dea00e4c8e335480b9e3eb793f2b326",
+    "imaging/backend_test.go": "04be575d31c9b9f50b1254ddd0db4da1d45955e67e4c28edd589bbe99d199249",
+    "imaging/capabilities.go": "ab245428294b075780f2cb4295b4a1510f55447f51b76090fa2d5cb40a7bf630",
+    "imaging/composite.go": "fa0d5108dee1e406eead5cb543b7284a5fa314a446ed4813373bda20dd1a3328",
+    "imaging/composite_test.go": "375e1b96ada3a1eef40babb5dad45f0d6778e244357b1a6bef3d655c4d80a8c0",
+    "imaging/create.go": "10b5bc03eac2ba0e52a7bdc3602ceae17f28955a9e9671ebdda8427d6f9dd2e8",
+    "imaging/drawing.go": "33a15ecf29caea9552621779d7faaaf1e9b0162cc4d00b2cfdd590d3ecc95420",
+    "imaging/drawing_fuzz_test.go": "b0ebfab6e475cd762467c827412dc8ebd4ed6c06741c54d34950d21d7c0051b8",
+    "imaging/drawing_test.go": "400b695545617c1f22428b801bbacec07ce2df55e3843286452b815f6b159f6d",
+    "imaging/effects.go": "a974b494579164310e65fad12176f9cd07ef50c50d505c20ea401e634d6042a2",
+    "imaging/effects_test.go": "6f4f147998ab2e9e0a200f52ae72f00efb43b6f2e5c890f30fac4f66a1a163eb",
+    "imaging/encoding.go": "95ce841a50e0d03f9b55b307491a195e794ca1b17754cfb4388646e593dde391",
+    "imaging/encoding_test.go": "ae283b37f0005a2b9251132f29b5f41c23170839562b6c79e9e62fd8642290fe",
+    "imaging/engine.go": "14ea6e759a6104b1eb83684761369d7b05ac8737738ff42b5fde91fc8b74517e",
+    "imaging/engine_test.go": "b0bf63b12a5b21e495b5e0e8259c4be1f1be79d34982d19f543a5eb35b1f0d8c",
+    "imaging/font.go": "e83dcb89d76ed95ee76c73c5bd065f157679901bd04dca232baaa1a0c4c3ffca",
+    "imaging/format.go": "ed621f85ae9a957eaed5b39aa63f9ec5ab29c9ef30171f80d632b0190d48d13f",
+    "imaging/geometry.go": "b1dbde9f2f28e121552d875be5d5b69a96da2688635591cd5deaf9f251337d36",
+    "imaging/geometry_fuzz_test.go": "30348c35fbcd18bdc706d8001d92f52280492bcb66553c254ddb608627c024c9",
+    "imaging/geometry_test.go": "dc9d9e7c72396c1d60d2827d65d2f2462c08896143a8c742390b607b9098e0dd",
+    "imaging/icon.go": "19879a911987e73408f3110bf4aaf47e9bcd659c4a5e0f32671d79e4be996d8f",
+    "imaging/icon_test.go": "3fc6b2ea4295ecfe55a7455559067c02f3202a71b31481c0075b550ecc823baa",
+    "imaging/inspect.go": "5e3fc80efc8a194baaa3182de9f71e30a5c350cccf218341d1275eee022b98ed",
+    "imaging/inspect_fuzz_test.go": "80d0152d6a337b05c0b42d4fcfcb6636142d6dd325c0ea310f0f2b51a40418bc",
+    "imaging/limits.go": "c081122d441c5ab549c247d97a28ee48b5e99161b83b9dc3715b6d61a33b75d6",
+    "imaging/limits_test.go": "896eef965b39390d4743e2ec7375e9b90a30b7e818d95d3817f2a5a83844b94b",
+    "imaging/module.go": "1238505a81029950abed6b9ed723f872825f78d4f60c79eba3cf5e3467315251",
+    "imaging/native_callbacks.go": "c6a1f74cfb2b17df618e469ab10d9c67f2b5f99c7388cd945170415deb6f0b83",
+    "imaging/native_encoding.go": "831de37da5c7a538ab4104bfab6d12a6705732b5a3c25d9d6402a06b11ea5a7f",
+    "imaging/native_input.go": "739e52749a2050f40ee0a2d84c32edeeeb0bfea1bbfa3c402e28e073607c9a53",
+    "imaging/native_unavailable.go": "2c514d01cf8916c5b4bf811f496ae0cb3b5c683dedc253c0ecb1f0a1d39ac267",
+    "imaging/native_unavailable_test.go": "b76eccd2349a6e4e5903d6d28cfc76e76ecfcd628cab10f65d28c20133e845b2",
+    "imaging/native_vips.go": "96f2660a2297f83f714f0cdb00c668cad224c13f35044ebe22e4d707cbb62b14",
+    "imaging/native_vips_test.go": "fcecd794a9e34bd702b842c8e18e70a759df4e2b2630f66160bdf2b74e2e9ad8",
+    "imaging/orientation.go": "8b50235108562af39d0a8b0ce934d6fdfeedb52bc35990e781348db3010b8a40",
+    "imaging/path.go": "76dfc600e7e5359f66c6cdb76a87e52a5c45373247a6b0583934f85c21e0b1d5",
+    "imaging/plan.go": "6bb94499cbd7da2d7c9446a45026b7ee799cb645985749388c89f7931daea768",
+    "imaging/png_animation.go": "15e79c7a0eae8b401f38d3bc745b463213d872104f1d46db41acc16885332618",
+    "imaging/png_container.go": "4307cf9db9f69230c937ecc58d5f936e32d2ff9868fe65e5beaa1d934eb75c3e",
+    "imaging/testdata/avif/COPYING": "be086bd51ed0881cae958b54d4bf5428ab0d4b09dad435310d9940075d194325",
+    "imaging/testdata/avif/PATENTS": "335eca574598bf4ca181b12f708d6669e5a5e78c8e1513e5b35fa1f03901484b",
+    "imaging/testdata/avif/README.md": "4667ec167f94071a9824a17f0201167711e087810bff975a2d8087583d4cb6ce",
+    "imaging/testdata/avif/alpha-420.avif": "4c5fd8becccf1b30d0296239ba223c63b87d302869c16667911aa18e2402e097",
+    "imaging/testdata/avif/alpha-444.avif": "c62557442c473fdf4cd262fd310381cf0d42ce476a3d137df6af7fa6f89dab36",
+    "imaging/testdata/avif/anim.avif": "333eba0a604987cfc8725c45238ea3db242cf7f594ff39a62c973e900c94c449",
+    "imaging/testdata/avif/bt2020-422.avif": "0d2c5354ba3caf045d0697eca053a364365ce243f3fcd05a3977f16b719717bd",
+    "imaging/testdata/avif/bt709-full.avif": "98e595135a62bc6dcf263f40ad124f724f429632319877e0de39fa0f19177c7a",
+    "imaging/testdata/avif/bt709-limited.avif": "245c11ce848c99a27b5ab1cde675b38783249730d61ebb7f49f1393b1e97eded",
+    "imaging/testdata/avif/clap-10.avif": "1b03532390fbd9e6d0ba85fdfbe371266f0150719611081dda4be76dd5c9c8ab",
+    "imaging/testdata/avif/clap-crop.avif": "483966fefd0c87ac7f9bf257df6be2a56d70dc4e88fa36281c04c0280a32fe2d",
+    "imaging/testdata/avif/clap-irot.avif": "80ed4fdc336cef753b56291240f488f9b6e2f2d4aa0288b14fa68132f32f5a47",
+    "imaging/testdata/avif/grid-2x2.avif": "c6a511c61c2c477a4bfaf39d82ad3bfe3fbc4d2c18247ec383a56069eef66144",
+    "imaging/testdata/avif/identity-444.avif": "4a862f503d05393f3c502cdb9fd1f6b8ae4ffaa81a18f4830b6db127e6a59645",
+    "imaging/testdata/avif/imir0.avif": "4819d08076aa61807dc3237fbcb47b5660513038fee86b55b2f33e299a0d475f",
+    "imaging/testdata/avif/irot1.avif": "f3f7aa33df642ec8d173a3bad9e953c919b33a26e6f3c9de2237f1a01c6ad6c7",
+    "imaging/testdata/avif/irot2.avif": "5f8ec6e6eee8bee98afd0e15abcac085a92eaae5d8f9b28ef9b4eaf2b794a43b",
+    "imaging/testdata/avif/irot3-imir1.avif": "b299d83f0dd96de4a633c41331e64cb0ca28fd1c08ac1acc7db078e5b42fc273",
+    "imaging/testdata/avif/mono-12.avif": "d71c4bf4c29c43d3bfa7a807dc32442e2c719d1f6a77e8633b7f9b324e512519",
+    "imaging/testdata/avif/mono-8.avif": "dcfdd00c6caf4eb721e26c8c00c07c75b9af6a274e2e12e0fb5c032dac2209e5",
+    "imaging/testdata/avif/unspec-420.avif": "a0aef07311a3c354f7a9d56b6db6a7c043612717d887b77c148807b4e2eb2414",
+    "imaging/testdata/avif/yuv420-10.avif": "193f1791a949ef9795f7b849a2d05ec3b495e64b0cd3f133a85bc8a608c02067",
+    "imaging/testdata/avif/yuv420-8.avif": "9764ac8d6b3ae7c75a83e6ee670276039fc72ea043e5d15882f3e4d2372dd148",
+    "imaging/testdata/avif/yuv420-odd.avif": "10c3c9b61c18673acaab20152daf41f4e509a4e8de8e9ec86a5adf922b1d7391",
+    "imaging/testdata/avif/yuv422-12.avif": "8de44b0b105095abdc3566c1346b6e669c886003fcc53d4c9fd5b5b59c05d257",
+    "imaging/testdata/avif/yuv422-8.avif": "d7a3c83f77ee306d149e2f88c975fb1239c888856310ec3ea8fb7976bc88d661",
+    "imaging/testdata/avif/yuv444-10.avif": "df6b8552434442396679c426a56140f0ac564e3b8257a246dac3906294720c11",
+    "imaging/testdata/avif/yuv444-8.avif": "740cc612242ce74d9851eafc845fc66225f024b35f9bc3e7e9874a48687cee0e",
+    "imaging/testdata/avif/yuv444-odd.avif": "2a1bab9285c0fc60150cc04a55ee414ce2c24112f8118e1869f2eb3ee2523f1b",
+    "imaging/testdata/native/README.md": "3638c00f46ba20c7fa8f1c42865837ad8a2ccb3305f292558c73072bef3afa18",
+    "imaging/testdata/native/animated.jxl": "84cf5e03e02420ff7f08a24e718e1729846719663ae79ed96c203c0270be9730",
+    "imaging/testdata/native/converted-srgb.png": "95c2e7854e97c462dddd6e023152f35b5cf1006cf194a3bdce16b889f5baf971",
+    "imaging/testdata/native/linear-srgb.icc": "33dfcfab64ec3a45c36109b009669a260ddf7b0cc5e536d762bcc4ee4005ff70",
+    "imaging/testdata/native/linear-srgb.png": "fd177f462a44d09ada80b868a93c788373aef28bec268c1ab9bc0f26a17fffc7",
+    "imaging/testdata/native/oriented-exif.jpg": "56cbca68548ceeede5cbc1fdc69fa768b7a71e6a2e58c4cf5f0138a68caa5e43",
+    "imaging/testdata/webp/README.md": "e5fbf37c9bcc924a85d82d4ace2dc152b0ebd1eeab32afa4bd5973b44a240711",
+    "imaging/testdata/webp/animation-lossless.webp": "763b0410c46974902a6a1d07018545c09dd0df8b5a69d23ec02fad7585047d7e",
+    "imaging/testdata/webp/animation-lossy.webp": "d0ca23a646534dbe76baf995dad3368a4a3408d15367825c835321cff84ca80f",
+    "imaging/testdata/webp/lossless-0.png": "e4b5b79a3f5b293069b14b30530929f9e23511c850c9ca179d1673eb05db93b6",
+    "imaging/testdata/webp/lossless-1.png": "b3a87b774c595ee4f338624149e084a7033595a6da3f34f58324af0488063b2d",
+    "imaging/testdata/webp/lossless-2.png": "d469ba0ba21653e8c1f639a6ac37289dbafccbd639ce338fbca06d46d4fcd076",
+    "imaging/testdata/webp/lossless-3.png": "6bd1d4473e75225eb14afa70865c225c34e70ed438f2079a6ba560ac79c71cea",
+    "imaging/testdata/webp/lossy-0.png": "d88562dbb22fe72e090bfc88c561a1f938e95a2463b229baae0201e54eb301ca",
+    "imaging/testdata/webp/lossy-1.png": "74e0fcf1a1936868898564e1f03caa5aa5d49ee626b8aa0e0bda8495d5dd810b",
+    "imaging/testdata/webp/lossy-2.png": "ff49a297947f535d5d28377368978c7d2a8353ef65780322a8fadd7e6e1d26b4",
+    "imaging/testdata/webp/lossy-3.png": "6bd1d4473e75225eb14afa70865c225c34e70ed438f2079a6ba560ac79c71cea",
+    "imaging/text.go": "b35d702a369ffcebe92dda3a93af3f643511d6c448a43be5647a3aeb590dd2a3",
+    "imaging/text_test.go": "83b340f823f622f700800a816238b17904e9833cde20d7c96f47863169ce75df",
+    "imaging/transform.go": "61fd24d197237916ae388d3deeba24a72ecc249ea5f49948a07359d22e9318a9",
+    "imaging/transform_test.go": "9f805b5f0212e3a592559ab03a16355f31ce728ae08379c9dfd269408a672833",
+    "imaging/webp_animation.go": "5a0cc5d236dfb1359361c6cbb626105d0323d74d06a0259ed9eb88f2afc1c02c",
+    "imaging/webp_animation_test.go": "831b99fae732f692df6d587130a91b1317b7f704fcd23fd53e7da99e5bd84832",
+    "imaging/webp_color.go": "6fd3b7f145e84aa1e2b3fbeb5be7d96cb167189ca9b93e86aaf92ffdbc7b07c8",
+    "imaging/webp_container.go": "68d126ce89493b4e363ba75adeeaac4a678dd1c2dbaaeb7ffbf01428d06a2a91",
+    "imaging/webp_container_test.go": "89f02e5ed01e70ccc99cb49f14fca5a50c871a35836043eb07c8fd3cdae1f17f",
+    "imaging/webp_decode.go": "2c94dab8bde9e1f143038cd863b78997f2d76f73287fb9c9f1408594b42ae057",
+    "imaging/webp_encoding_test.go": "068ed31552b17378195e8e396a2e0f48bfb6b0a95c114d53eda985d953f1df30",
+    "imaging/webp_output.go": "e4612dd44536a91f661c914df2c3c26bb645b21894d7bcb6498140852d2c3e07",
+    "internal/agent/gopls_acceptance_test.go": "ccb0b0d7093ecae93efea736a790b12be7fcd0e0c4e6f3ee73087ee5fb37e8d1",
+    "tests/fixtures/consumer/bootstrap/.foundry-gen.json": "4329fc784d31b9f9e00b9600bcd9388ae092dcb727bff311619a3ebe55badbe0",
+    "tests/fixtures/consumer/bootstrap/settings_foundry.gen.go": "972d81ff34fda9ad8f07a356ad66cdbcee5e362d475e12c22e1a99fda563d635",
+    "tests/fixtures/consumer/go.mod": "976a5fffff3f9216bbaa5217106027cc3a6a5868cc78243de84afd39d3388b16",
+    "tests/fixtures/consumer/go.sum": "622463d58e754886396611cde1f12582882306d0338cc58c332c32f685e79c9d",
+    "tests/fixtures/consumer/profiles/.foundry-gen.json": "f8646830d339cfdb9b8bce45400918c3e9ff614888b7c23f92c543c7ea7b129b",
+    "tests/fixtures/consumer/profiles/.foundry-generate.guard": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tests/fixtures/consumer/profiles/animated_images.go": "42f2b327639e5a5eb62576c96422e33dc50cb3745ef01005fa0716fe754cce26",
+    "tests/fixtures/consumer/profiles/animated_images_test.go": "60bfa62c162451469212b085af568c766a86374664d55404f55b1eb12261b862",
+    "tests/fixtures/consumer/profiles/avif_images_test.go": "f578496b56dcafc11475973510864dcbe3355aa4d00c98c3b34b4dc3bdb92804",
+    "tests/fixtures/consumer/profiles/image_encoding.go": "deb79da0fce86451b903d35bab764fdd3b48247b4dd62bc70d6401663bf88476",
+    "tests/fixtures/consumer/profiles/image_encoding_test.go": "051243dfe3080f33a15789f157f64f93494a6f29258b8d02d726bc584e938eb8",
+    "tests/fixtures/consumer/profiles/image_labels.go": "580f70f7204daf147479dfbdd3c9518ad18c2d6716398b5b450601504e8759b3",
+    "tests/fixtures/consumer/profiles/image_labels_test.go": "af6071a996cadd5934a9e5689dd0ef09ddde7f8c9b5864e4dd9ccdf1c3172837",
+    "tests/fixtures/consumer/profiles/images.go": "7151d5da7bf5070c9b312f2a866bb3282729531a9dff426b6df32adad9871364",
+    "tests/fixtures/consumer/profiles/images_test.go": "8497e98be3057d7ec71edef4af94ac02795b4263928c9cbc33c6772bca864ecf",
+    "tests/fixtures/consumer/profiles/native_images.go": "0278c0a814af7fdc708aa8cdac1380c25ab93143adbb9bd9540250f5a7776bdd",
+    "tests/fixtures/consumer/profiles/native_images_test.go": "58ea89115f34d6eaa40c707e022deca2936d3adb2c83cfbc8b6b5481b2fa9136",
+    "tests/fixtures/consumer/profiles/preferences_foundry.gen.go": "edd41d4ff4949537e85c1f55c2be7844df1c8f90af37cd3ef179a22865dc67e1",
+    "tests/fixtures/consumer/profiles/profile.go": "ee275bba44d1a9878d5140c763d1a18d62aa6d74b34f5c2ee3819914f5556fb9",
+    "tests/fixtures/consumer/profiles/profile_foundry.gen.go": "62a9614f6f7c3ecfea974f8c201cea4ab9bd537092ed6a92b6a9b4948ff43e6b",
+    "tests/fixtures/consumer/profiles/profile_test.go": "1ca3746e8fd753c397283c565f81e7bf947f6508194c9371e2396918acfba4b2",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_backend/invalid.go": "ecca91ec351002c5e8607422ec055827bafa3fc570a034054178ca5e1451876d",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_compression/invalid.go": "49533b4ae5f05b74295947dc5b9f9af006976ec98059e9a1d5e02d8e9efe436d",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_font/invalid.go": "1e391db8db754302dbec3d423928a0e02f9007d70bb264ed74fd928d8398aef4",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_format/invalid.go": "d9568df2f494450f57b21518a8ba004e1b7525f3e5e202d1aa8445669561c9a1",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_frames/invalid.go": "f3f11d035082ce4aac5c07747a2fc19b6d032c3d5bee1843d0dd215069845182",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_interest/invalid.go": "655cda5d2563bf0e031fc7cf1854ce7ff8e33bcf59f37904f9faac20060ab036",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_position/invalid.go": "86866455d1cb9829f1ebd83968ce161d1e71fe79dad0a13086e4fc516fab6a6a",
+    "tests/fixtures/consumer/testdata/compilefail/imaging_webp_mode/invalid.go": "e35c9c8e43a8e465ee98fd0dbbe9b0ff1c457ec82bde9b7a805a1fc729a9f045",
+    "tests/fixtures/consumer/types_test.go": "14e972a183f077f488b9d32b84ce3416638416bd7b8bea56e1f7f62c7d551ceb",
+    "tools/release/release_test.go": "988a417a513e0a84af237547df9b9f768623b18bad6f5a4be9940f7950e3e6af",
+    "tools/release/source.go": "f51e96362a822cf37ad931a8b7170a39effb16e441161c4177667183aa7c65b5",
+    "validation/imaging/dimensions.go": "f23431e30cee419ff7d0635b026324171699610b71ccf9389ad85863447c183b",
+    "validation/imaging/dimensions_test.go": "6506b15df7268abd5b5f878e5f48977baf5b962eeb7eedf662b8ca66b17c0a2f",
+    "validation/imaging/native_dimensions_test.go": "f0c7ae4e1c29f6a385396ff253c5c85b06b07ccc88fc72ce9d63e320ff332276"
+  },
+  "stage4_native_audit": {
+    "corrections": [
+      "Use the installed libvips version macros.",
+      "Validate embedded ICC profiles, including preservation-only requests.",
+      "Probe real ICC round trips before advertising WriteMetadata; JPEG 2000 preservation rejects on this installation.",
+      "Honor FirstFrame for native animations; reject ICC/metadata animation combinations explicitly.",
+      "Validate SVG style text after concatenating XML character/CDATA tokens to prevent split-token resource references.",
+      "Native images and encoded input copies retain explicit ownership until synchronous C calls exit; remove progress handlers before deleting Go handles; no global shutdown/cache/concurrency mutation.",
+      "Integrate engine-specific inspection in attachments and upload dimension validation, keeping existing portable APIs.",
+      "Review and scope binary fixture source packaging to imaging testdata directories, including AVIF patent notices.",
+      "Reject CSS escape sequences in presentation attributes, which can conceal literal url tokens; add a dedicated regression."
+    ],
+    "native_version": "8.18.7",
+    "pkgconf_version": "3.0.7",
+    "build_tag": "foundry_vips",
+    "capabilities": {
+      "Backend": 1,
+      "Formats": [
+        {
+          "Format": "jpeg",
+          "Read": true,
+          "Write": true,
+          "ReadAnimation": false,
+          "WriteAnimation": false,
+          "WriteMetadata": true
+        },
+        {
+          "Format": "png",
+          "Read": true,
+          "Write": true,
+          "ReadAnimation": true,
+          "WriteAnimation": true,
+          "WriteMetadata": true
+        },
+        {
+          "Format": "webp",
+          "Read": true,
+          "Write": true,
+          "ReadAnimation": true,
+          "WriteAnimation": true,
+          "WriteMetadata": true
+        },
+        {
+          "Format": "gif",
+          "Read": true,
+          "Write": true,
+          "ReadAnimation": true,
+          "WriteAnimation": true,
+          "WriteMetadata": false
+        },
+        {
+          "Format": "bmp",
+          "Read": true,
+          "Write": true,
+          "ReadAnimation": false,
+          "WriteAnimation": false,
+          "WriteMetadata": false
+        },
+        {
+          "Format": "tiff",
+          "Read": true,
+          "Write": true,
+          "ReadAnimation": false,
+          "WriteAnimation": false,
+          "WriteMetadata": true
+        },
+        {
+          "Format": "avif",
+          "Read": true,
+          "Write": true,
+          "ReadAnimation": true,
+          "WriteAnimation": false,
+          "WriteMetadata": true
+        },
+        {
+          "Format": "ico",
+          "Read": true,
+          "Write": true,
+          "ReadAnimation": false,
+          "WriteAnimation": false,
+          "WriteMetadata": false
+        },
+        {
+          "Format": "heif",
+          "Read": true,
+          "Write": true,
+          "ReadAnimation": false,
+          "WriteAnimation": false,
+          "WriteMetadata": true
+        },
+        {
+          "Format": "jp2",
+          "Read": true,
+          "Write": true,
+          "ReadAnimation": false,
+          "WriteAnimation": false,
+          "WriteMetadata": false
+        },
+        {
+          "Format": "jxl",
+          "Read": true,
+          "Write": true,
+          "ReadAnimation": false,
+          "WriteAnimation": false,
+          "WriteMetadata": true
+        },
+        {
+          "Format": "svg",
+          "Read": true,
+          "Write": false,
+          "ReadAnimation": false,
+          "WriteAnimation": false,
+          "WriteMetadata": false
+        }
+      ],
+      "ColorManagement": true,
+      "MetadataPreservation": true,
+      "SmartCrop": true
+    },
+    "independent_output_check": {
+      "heif": {
+        "size": [
+          1024,
+          512
+        ],
+        "rgba_sample": [
+          180,
+          90,
+          30,
+          170
+        ],
+        "encoded_bytes": 1180
+      },
+      "jp2": {
+        "size": [
+          1024,
+          512
+        ],
+        "rgba_sample": [
+          180,
+          90,
+          30,
+          170
+        ],
+        "encoded_bytes": 579
+      },
+      "jxl": {
+        "size": [
+          1024,
+          512
+        ],
+        "rgba_sample": [
+          180,
+          90,
+          30,
+          170
+        ],
+        "encoded_bytes": 733
+      },
+      "stripped": {
+        "max_channel_difference": 0,
+        "icc_bytes": 0
+      },
+      "profiled": {
+        "max_channel_difference": 0,
+        "icc_bytes": 480
+      }
+    },
+    "measurement": {
+      "environment": "Go 1.27.1 darwin/arm64, Apple M4 Max; native tools and warm cache",
+      "workload": "1024x512 solid RGBA output to HEIF/JP2/JXL, then two 24x16 ICC conversions; isolated built executable including native initialization",
+      "maximum_resident_set_bytes": 221331456,
+      "peak_footprint_bytes": 195691456,
+      "elapsed_seconds": 0.82,
+      "limit": "Process measurement includes runtime/native-library initialization. Go benchmark allocations exclude C allocations; WorkingBytes is admission, not a process-memory quota."
+    },
+    "benchmark_1024x512_to_512x512": {
+      "HEIF": {
+        "ns_op": 173000375,
+        "go_bytes_op": 5452976
+      },
+      "JPEG2000": {
+        "ns_op": 21319542,
+        "go_bytes_op": 5453584
+      },
+      "JPEGXL": {
+        "ns_op": 60596875,
+        "go_bytes_op": 5408568
+      }
+    },
+    "final_integration_review": [
+      "Ordinary application service ownership, configured native example, generated typed Backend field and shutdown are exercised.",
+      "Attachment originals, native media aliases, variants, manager declaration rejection, and persisted transformed bytes use the configured engine.",
+      "Upload dimension validation borrows the engine; portable constructors keep portable semantics.",
+      "Typed backend/crop-interest misuse rejects in the independent compiler harness, and native plan completion/hover/definition use real gopls.",
+      "Existing stage 1-3 transformations, fonts, drawing, animation and encoders remain shared across backends; original accepted evidence is retained separately.",
+      "Native format/control limits, still-only ICC/metadata, unsupported ICC writers, restricted SVG and non-AI upscaling are documented."
+    ]
+  },
+  "final_acceptance": {
+    "source_fingerprints": "stage4_native_source_sha256",
+    "source_files": 157,
+    "full_gate_exit": 0,
+    "full_gate_session": 34424,
+    "native_gate": "Passed on final source; details in stage 4 checks.",
+    "limits": [
+      "Ordinary upscaling is resampling; AI super-resolution remains separately deferred.",
+      "Native deployment requires cgo, foundry_vips build tag and libvips >= 8.18; available codecs are probed.",
+      "Native additions are still outputs; native animation input supports explicit FirstFrame, while portable GIF/APNG/WebP animation preservation remains available.",
+      "ICC and metadata processing require still input and supported native readers/writers; JPEG 2000 metadata preservation rejects on the installed library.",
+      "SVG is a bounded self-contained subset; transforms use 8-bit RGBA, and WorkingBytes is an admission budget rather than an OS quota."
+    ],
+    "version_control": "No commits, pushes, merges, tags or publishing performed."
+  }
+}

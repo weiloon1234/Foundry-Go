@@ -61,7 +61,7 @@ func prepare(ctx context.Context, m *Manager, policy Policy, input Upload) (prep
 	if int64(len(body)) > policy.MaxBytes {
 		return prepared{}, storage.Failure(storage.LimitExceeded, storage.PutOperation, storage.Unchanged, nil)
 	}
-	detected, err := acceptMedia(m, policy, body, input.ContentType)
+	detected, err := acceptMedia(ctx, m, policy, body, input.ContentType)
 	if err != nil {
 		return prepared{}, err
 	}
@@ -94,20 +94,20 @@ func prepare(ctx context.Context, m *Manager, policy Policy, input Upload) (prep
 // it, so request validation and writes agree. A client hint may specialize
 // generic text (for example to text/csv) only when the policy accepts that
 // specialization; otherwise the byte-detected type stands.
-func acceptMedia(m *Manager, policy Policy, body []byte, hint storage.MediaType) (storage.MediaType, error) {
+func acceptMedia(ctx context.Context, m *Manager, policy Policy, body []byte, hint storage.MediaType) (storage.MediaType, error) {
 	detected := storage.MediaType(mediatype.Detect(body, ""))
 	if specialized := storage.MediaType(mediatype.Detect(body, string(hint))); specialized != detected && accepted(policy, specialized) {
 		detected = specialized
 	}
-	if policy.Image.IsSet() {
-		inspected, err := imaging.Inspect(body, m.image.Limits())
+	if policy.Image.IsSet() || len(policy.Variants) > 0 {
+		inspected, err := m.image.Inspect(ctx, body)
 		if err != nil {
 			return "", err
 		}
 		if !accepted(policy, storage.MediaType(inspected.Format.MediaType())) {
 			return "", invalid()
 		}
-		return detected, nil
+		return storage.MediaType(inspected.Format.MediaType()), nil
 	}
 	if !accepted(policy, detected) {
 		return "", invalid()
@@ -122,6 +122,13 @@ func accepted(policy Policy, media storage.MediaType) bool {
 	for _, allowed := range policy.Accepted {
 		if allowed == media {
 			return true
+		}
+		if policy.Image.IsSet() || len(policy.Variants) > 0 {
+			expected, e1 := imaging.ParseMediaType(string(allowed))
+			actual, e2 := imaging.ParseMediaType(string(media))
+			if e1 == nil && e2 == nil && expected == actual {
+				return true
+			}
 		}
 	}
 	return false

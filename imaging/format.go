@@ -21,15 +21,19 @@ const (
 	TIFF Format = "tiff"
 	AVIF Format = "avif"
 	ICO  Format = "ico"
+	HEIF Format = "heif"
+	// HEIC is HEIF encoded with HEVC; both names use the canonical HEIF format.
+	HEIC     Format = HEIF
+	JPEG2000 Format = "jp2"
+	JPEGXL   Format = "jxl"
+	SVG      Format = "svg"
 )
 
 func (f Format) Validate() error {
-	switch f {
-	case JPEG, PNG, WebP, GIF, BMP, TIFF, AVIF, ICO:
+	if _, ok := portableFormat(f); ok || f.native() {
 		return nil
-	default:
-		return invalid("unknown image format")
 	}
+	return invalid("unknown image format")
 }
 func (f Format) Extension() string {
 	if f == JPEG {
@@ -55,6 +59,14 @@ func (f Format) MediaType() string {
 		return "image/avif"
 	case ICO:
 		return "image/vnd.microsoft.icon"
+	case HEIF:
+		return "image/heif"
+	case JPEG2000:
+		return "image/jp2"
+	case JPEGXL:
+		return "image/jxl"
+	case SVG:
+		return "image/svg+xml"
 	default:
 		return ""
 	}
@@ -68,16 +80,47 @@ func ParseExtension(extension string) (Format, error) {
 		value = "jpeg"
 	case "tif":
 		value = "tiff"
+	case "heic":
+		value = string(HEIF)
+	case "j2k", "j2c", "jpc":
+		value = string(JPEG2000)
+	case "apng":
+		value = "png"
 	}
 	f := Format(value)
 	return f, f.Validate()
 }
 
-// CanDecode is explicit: AVIF is an encoding format, matching the reference
-// framework's default codec build. AVIF input is rejected before a decoder runs.
-func (f Format) CanDecode() bool { return f.Validate() == nil && f != AVIF }
+// CanDecode reports whether the portable engine can read this format.
+func (f Format) CanDecode() bool {
+	capability, ok := portableFormat(f)
+	return ok && capability.Read
+}
 
 func invalid(message string) error        { return fault.New(fault.Invalid, message) }
 func limited() error                      { return fault.New(fault.Invalid, "image exceeds configured resource limits") }
 func unsupported() error                  { return fault.New(fault.Invalid, "unsupported image encoding or container") }
 func safeFormat(s fmt.State, text string) { _, _ = s.Write([]byte(text)) }
+
+// ParseMediaType recognizes image media types. Recognition does not imply that
+// a particular engine can read or write the format; consult its Capabilities.
+func ParseMediaType(media string) (Format, error) {
+	media = strings.ToLower(strings.TrimSpace(media))
+	switch media {
+	case "image/heic":
+		return HEIF, nil
+	case "image/j2k", "image/jpx":
+		return JPEG2000, nil
+	}
+	for _, capability := range portableFormats() {
+		if capability.Format.MediaType() == media {
+			return capability.Format, nil
+		}
+	}
+	for _, format := range nativeFormats() {
+		if format.MediaType() == media {
+			return format, nil
+		}
+	}
+	return "", unsupported()
+}

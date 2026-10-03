@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/filename"
+	"github.com/weiloon1234/Foundry-Go/internal/upload"
 	"github.com/weiloon1234/Foundry-Go/internal/workscope"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
@@ -19,11 +20,7 @@ import (
 // its reader before returning; the caller keeps owning the underlying file.
 // Detected bytes decide acceptance: Name is display metadata and
 // ClientContentType only the existing text-specialization hint.
-type FileSource interface {
-	Open(context.Context) (io.ReadSeekCloser, error)
-	Name() string
-	ClientContentType() string
-}
+type FileSource = upload.Source
 
 // ReplaceFile replaces owner's collection with file, publishing in the
 // manager's own transaction, so commit the owner first; inspect
@@ -132,7 +129,7 @@ func (s slotDefinition[M, K, S]) Accepts(ctx context.Context, file FileSource) (
 		if int64(len(body)) > policy.MaxBytes {
 			return nil
 		}
-		if _, err := acceptMedia(m, policy, body, hintOf(file)); err != nil {
+		if _, err := acceptMedia(ctx, m, policy, body, hintOf(file)); err != nil {
 			if errors.Is(err, fault.Invalid) {
 				return nil
 			}

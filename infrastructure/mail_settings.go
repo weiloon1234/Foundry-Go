@@ -12,13 +12,14 @@ import (
 type MailDriver string
 
 const (
-	LogMail      MailDriver = "log"
-	MemoryMail   MailDriver = "memory"
-	SMTPMail     MailDriver = "smtp"
-	SESMail      MailDriver = "ses"
-	ResendMail   MailDriver = "resend"
-	PostmarkMail MailDriver = "postmark"
-	MailgunMail  MailDriver = "mailgun"
+	LogMail        MailDriver = "log"
+	MemoryMail     MailDriver = "memory"
+	SMTPMail       MailDriver = "smtp"
+	SESMail        MailDriver = "ses"
+	ResendMail     MailDriver = "resend"
+	CloudflareMail MailDriver = "cloudflare"
+	PostmarkMail   MailDriver = "postmark"
+	MailgunMail    MailDriver = "mailgun"
 	// FailoverMail tries Transports in order; RoundRobinMail starts each send at
 	// the next one. Both move on only after a known non-acceptance (Transient).
 	FailoverMail   MailDriver = "failover"
@@ -47,6 +48,7 @@ type MailAPISettings struct {
 	Endpoint         string
 	Timeout          time.Duration
 	Token            secret.String
+	AccountID        string
 	Domain           string
 	MessageStream    string
 	Region           string

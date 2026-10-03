@@ -36,14 +36,14 @@ func pageQuery[F any](filters foundryhttp.Query[F], config Config) foundryhttp.Q
 	return foundryhttp.MergeQueries(
 		foundryhttp.EmbedQuery(filters, func(input *Parameters[F]) *F { return &input.Filters }),
 		foundryhttp.DefineQuery(
-			foundryhttp.DefaultQueryParam(config.NumberParam, foundryhttp.IntegerQuery[int](), 1, func(input *Parameters[F]) *int { return &input.Page.Number }),
-			foundryhttp.DefaultQueryParam(config.SizeParam, foundryhttp.IntegerQuery[int](), config.DefaultSize, func(input *Parameters[F]) *int { return &input.Page.Size }),
+			foundryhttp.DefaultQueryParam(config.NumberParam, foundryhttp.IntegerQuery[int](), 1, func(input *Parameters[F]) *int { return &input.Page.Number }).WithPresentation(labelPresentation(NumberLabelKey)),
+			foundryhttp.DefaultQueryParam(config.SizeParam, foundryhttp.IntegerQuery[int](), config.DefaultSize, func(input *Parameters[F]) *int { return &input.Page.Size }).WithPresentation(labelPresentation(SizeLabelKey)),
 		),
 	)
 }
 func pageRules[F any](config Config) validation.Rule[Parameters[F]] {
-	number := validation.DefineField(config.NumberParam, func(request query.PageRequest) int { return request.Number })
-	size := validation.DefineField(config.SizeParam, func(request query.PageRequest) int { return request.Size })
+	number := validation.DefineField(config.NumberParam, func(request query.PageRequest) int { return request.Number }).WithLabel(numberLabel).WithLabelKey(NumberLabelKey)
+	size := validation.DefineField(config.SizeParam, func(request query.PageRequest) int { return request.Size }).WithLabel(sizeLabel).WithLabelKey(SizeLabelKey)
 	rule := validation.Bail(
 		number.Rules(validation.Min(1), validation.Max(config.maximumPage())),
 		size.Rules(validation.Min(1), validation.Max(config.MaximumSize)),

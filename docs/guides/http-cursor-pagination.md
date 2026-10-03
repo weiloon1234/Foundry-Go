@@ -44,6 +44,7 @@ names and bounds with `CursorConfig`. Omit both cursor directions for the first
 page. A supplied empty or malformed token fails decoding; supplying both valid
 directions fails validation. Explicit invalid sizes are rejected rather than
 replaced or clamped. Ordinary endpoint query-byte and pair limits still apply.
+The size carries the [page size label](http-pagination.md) `http.pagination.size`.
 
 `in.Page` is `query.CursorRequest[Source]`, directly usable by the model paginator.
 For projections, joins, CTEs and complete result queries, declare their actual

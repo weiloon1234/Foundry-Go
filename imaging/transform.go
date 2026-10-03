@@ -8,6 +8,22 @@ import (
 	"github.com/disintegration/gift"
 )
 
+func applyImageOrientation(ctx context.Context, img image.Image, p Plan, info inspection, l Limits) (image.Image, error) {
+	if p.orientation == ApplyOrientation {
+		if info.avif != nil && !info.avif.crop.Empty() {
+			var err error
+			img, err = drawFilter(ctx, img, gift.Crop(info.avif.crop), l)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if filter := orientationFilter(info.Orientation); filter != nil {
+			return drawFilter(ctx, img, filter, l)
+		}
+	}
+	return img, nil
+}
+
 func orientationFilter(o uint8) gift.Filter {
 	switch o {
 	case 2:
@@ -29,7 +45,7 @@ func orientationFilter(o uint8) gift.Filter {
 	}
 }
 
-func applyStep(ctx context.Context, img image.Image, s step, l Limits) (image.Image, error) {
+func applyStep(ctx context.Context, img image.Image, s step, l Limits, backend Backend) (image.Image, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -39,12 +55,16 @@ func applyStep(ctx context.Context, img image.Image, s step, l Limits) (image.Im
 	}
 	var filter gift.Filter
 	switch s.kind {
-	case resizeExact, resizeFit:
-		filter = gift.Resize(b.Dx(), b.Dy(), gift.LanczosResampling)
-	case resizeFill:
-		filter = gift.ResizeToFill(b.Dx(), b.Dy(), gift.LanczosResampling, gift.CenterAnchor)
+	case resizeExact, resizeDown, resizeFit, resizeWidth, resizeHeight:
+		filter = gift.Resize(b.Dx(), b.Dy(), s.resampling.filter())
+	case resizeFill, resizePad, resizeSmart:
+		return resizeOntoCanvas(ctx, img, s, b, l)
+	case resizeCanvas, resizeCanvasRelative:
+		return drawCanvas(ctx, img, b, s.background, s.position)
 	case crop:
 		filter = gift.Crop(image.Rect(s.x, s.y, s.x+s.width, s.y+s.height).Add(img.Bounds().Min))
+	case cropPositioned:
+		filter = gift.Crop(b.Add(s.position.point(img.Bounds(), b)))
 	case blur:
 		filter = gift.GaussianBlur(float32(s.number))
 	case grayscale:
@@ -62,6 +82,30 @@ func applyStep(ctx context.Context, img image.Image, s step, l Limits) (image.Im
 		filter = gift.FlipHorizontal()
 	case flipVertical:
 		filter = gift.FlipVertical()
+	case rotateDegrees:
+		filter = s.rotationFilter()
+	case invert:
+		filter = gift.Invert()
+	case gamma:
+		filter = gift.Gamma(float32(s.number))
+	case saturation:
+		filter = gift.Saturation(float32(s.number))
+	case hue:
+		filter = gift.Hue(float32(s.number))
+	case sepia:
+		filter = gift.Sepia(float32(s.number))
+	case threshold:
+		filter = gift.Threshold(float32(s.number))
+	case pixelate:
+		filter = gift.Pixelate(s.width)
+	case sharpen:
+		filter = gift.UnsharpMask(float32(s.number), float32(s.amount), float32(s.threshold))
+	case insert, mask:
+		return composite(ctx, img, s, l, backend)
+	case drawPath:
+		return drawShape(ctx, img, s)
+	case drawText:
+		return drawLabel(ctx, img, s, l)
 	case brightness, contrast:
 		return adjustPixels(ctx, img, s)
 	default:

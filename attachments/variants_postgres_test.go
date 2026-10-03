@@ -377,14 +377,13 @@ func TestVariantDeclarationsRequireImagesAndUniqueNames(t *testing.T) {
 		{Disk: testDisk, Cardinality: Single, Accepted: []storage.MediaType{"text/plain"}, Variants: []Variant{thumbnail}},
 		{Disk: testDisk, Cardinality: Single, AnyMedia: true, Variants: []Variant{thumbnail}},
 		{Disk: testDisk, Cardinality: Single, Accepted: []storage.MediaType{"image/png"}, Variants: []Variant{thumbnail, thumbnail}},
-		{Disk: testDisk, Cardinality: Single, Accepted: []storage.MediaType{"image/avif"}, Variants: []Variant{thumbnail}},
 		{Disk: testDisk, Cardinality: Single, Accepted: []storage.MediaType{"image/png"}, Variants: []Variant{DefineVariant("Bad Name", imaging.NewPlan())}},
 	} {
 		if policy.normalized().Validate() == nil {
 			t.Fatal("invalid variant policy accepted")
 		}
 	}
-	if err := (Policy{Disk: testDisk, Cardinality: Single, Accepted: []storage.MediaType{"image/png", "image/jpeg"}, Variants: []Variant{thumbnail}}).normalized().Validate(); err != nil {
+	if err := (Policy{Disk: testDisk, Cardinality: Single, Accepted: []storage.MediaType{"image/png", "image/jpeg", "image/avif", "image/svg+xml", "image/heic"}, Variants: []Variant{thumbnail}}).normalized().Validate(); err != nil {
 		t.Fatal(err)
 	}
 }

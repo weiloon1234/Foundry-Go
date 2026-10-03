@@ -53,11 +53,11 @@ func selectIcon(data []byte, l Limits) (iconEntry, int, error) {
 			if err != nil || cfg.Width != w || cfg.Height != h {
 				return iconEntry{}, 0, unsupported()
 			}
-			frames, orientation, err := pngDetails(entry.data)
-			if err != nil || frames != 1 {
+			container, err := parsePNG(entry.data, l)
+			if err != nil || container.animated {
 				return iconEntry{}, 0, unsupported()
 			}
-			entry.orientation = orientation
+			entry.orientation = container.orientation
 		} else if _, err := iconBitmap(entry, false); err != nil {
 			return iconEntry{}, 0, err
 		}

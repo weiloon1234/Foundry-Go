@@ -13,11 +13,8 @@ import (
 	"io"
 	"slices"
 
-	"github.com/HugoSmits86/nativewebp"
-	"github.com/gen2brain/gav1d/avif"
 	"golang.org/x/image/bmp"
 	"golang.org/x/image/tiff"
-	"golang.org/x/image/webp"
 
 	"github.com/weiloon1234/Foundry-Go/internal/workscope"
 )
@@ -27,19 +24,29 @@ import (
 // Codec/transform calls are synchronous. Cancellation is observed between codec
 // operations and rows; a codec already running retains its capacity until exit.
 type Engine struct {
-	config Config
-	calls  *workscope.Group
+	config       Config
+	calls        *workscope.Group
+	capabilities Capabilities
 }
 
 func New(config Config) (*Engine, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
+	formats := portableFormats()
+	capabilities := Capabilities{Formats: formats[:]}
+	if config.Backend == LibvipsBackend {
+		var err error
+		capabilities, err = nativeCapabilities()
+		if err != nil {
+			return nil, err
+		}
+	}
 	calls, err := workscope.New(config.MaxActive, config.Timeout)
 	if err != nil {
 		return nil, err
 	}
-	return &Engine{config: config, calls: calls}, nil
+	return &Engine{config: config, calls: calls, capabilities: capabilities}, nil
 }
 func (e *Engine) Validate() error {
 	if e == nil || e.calls == nil {
@@ -84,8 +91,9 @@ func (Result) MarshalJSON() ([]byte, error) {
 	return nil, invalid("image result requires explicit byte export")
 }
 
-// Process reads at most InputBytes+1, checks the complete declared plan before
-// decoding pixels, and publishes no output on failure. It does not close source.
+// Process reads at most the remaining InputBytes+1 after accounting for layers,
+// checks the complete plan before decoding pixels, and publishes no output on
+// failure. It does not close source.
 func (e *Engine) Process(ctx context.Context, source io.Reader, plan Plan) (Result, error) {
 	if err := e.Validate(); err != nil {
 		return Result{}, err
@@ -93,14 +101,22 @@ func (e *Engine) Process(ctx context.Context, source io.Reader, plan Plan) (Resu
 	if source == nil {
 		return Result{}, invalid("image input requires a reader")
 	}
-	if err := plan.Validate(); err != nil {
+	if err := e.ValidatePlan(plan); err != nil {
 		return Result{}, err
 	}
+	retained, err := plan.retainedInput(0, e.config.Limits)
+	if err != nil {
+		return Result{}, err
+	}
+	inputBudget := e.config.Limits.InputBytes - retained
 	var result Result
-	err := e.calls.Run(ctx, "process image", func(ctx context.Context) error {
-		data, err := io.ReadAll(io.LimitReader(workscope.Reader(ctx, source), e.config.Limits.InputBytes+1))
+	err = e.calls.Run(ctx, "process image", func(ctx context.Context) error {
+		data, err := io.ReadAll(io.LimitReader(workscope.Reader(ctx, source), inputBudget+1))
 		if err != nil {
 			return err
+		}
+		if int64(len(data)) > inputBudget {
+			return limited()
 		}
 		if err := ctx.Err(); err != nil {
 			return err
@@ -120,13 +136,13 @@ func (e *Engine) ProcessBytes(ctx context.Context, data []byte, plan Plan) (Resu
 	if err := e.Validate(); err != nil {
 		return Result{}, err
 	}
-	if err := plan.Validate(); err != nil {
+	if err := e.ValidatePlan(plan); err != nil {
 		return Result{}, err
 	}
 	var result Result
 	err := e.calls.Run(ctx, "process image", func(ctx context.Context) error {
-		if int64(len(data)) > e.config.Limits.InputBytes {
-			return limited()
+		if _, err := plan.retainedInput(int64(len(data)), e.config.Limits); err != nil {
+			return err
 		}
 		var err error
 		result, err = e.process(ctx, data, plan)
@@ -140,63 +156,112 @@ func (e *Engine) ProcessBytes(ctx context.Context, data []byte, plan Plan) (Resu
 
 func (e *Engine) process(ctx context.Context, data []byte, p Plan) (Result, error) {
 	l := e.config.Limits
-	info, err := inspect(data, l)
+	info, err := inspectForBackend(ctx, data, l, e.config.Backend)
 	if err != nil {
 		return Result{}, err
 	}
-	if p.frames == RejectAnimation && (info.Animated || info.Format == TIFF && info.Images > 1) {
-		return Result{}, invalid("multiple image frames require an explicit first-frame policy")
+	if p.frames == RejectAnimation && (info.Animated || (info.Format == TIFF || info.native) && info.Images > 1) {
+		return Result{}, invalid("multiple image frames require an explicit frame policy")
 	}
-	format := p.output
-	if format == "" {
-		format = info.Format
-	}
-	if p.quality != 0 && format != JPEG {
-		return Result{}, invalid("quality applies only to JPEG; WebP output is lossless")
-	}
-	bounds, err := p.admit(info, format, int64(len(data)), l)
+	format, err := p.encodingFormat(info.Format)
 	if err != nil {
 		return Result{}, err
 	}
-	if format == ICO && (bounds.Dx() > 256 || bounds.Dy() > 256) {
-		return Result{}, invalid("ICO dimensions must not exceed 256")
+	if p.frames == PreserveAnimation && (info.Format == TIFF || info.native) && info.Images > 1 {
+		return Result{}, invalid("this native or multipage input cannot preserve animation")
 	}
-	if err := ctx.Err(); err != nil {
+	if err := e.validateOutput(p, format); err != nil {
 		return Result{}, err
 	}
-	img, err := decode(data, info.Format, l)
-	if err != nil {
-		return Result{}, invalid("image pixel decoding failed")
+	if p.frames == PreserveAnimation && info.Animated {
+		return e.processAnimation(ctx, data, info, p, format)
 	}
-	if img == nil || img.Bounds().Dx() != info.Width || img.Bounds().Dy() != info.Height {
-		return Result{}, invalid("decoded image dimensions differ from its header")
-	}
-	if err := ctx.Err(); err != nil {
-		return Result{}, err
-	}
-	if p.orientation == ApplyOrientation {
-		if filter := orientationFilter(info.Orientation); filter != nil {
-			img, err = drawFilter(ctx, img, filter, l)
-			if err != nil {
-				return Result{}, err
-			}
+	if p.nativePixels(info) {
+		if info.Animated && (p.srgb || p.metadata != StripMetadata) {
+			return Result{}, invalid("ICC conversion and metadata preservation require a still image")
 		}
-	}
-	for _, s := range p.steps {
-		img, err = applyStep(ctx, img, s, l)
+		if (info.Format == HEIF || info.Format == AVIF) && p.orientation == IgnoreOrientation {
+			return Result{}, invalid("libvips cannot ignore HEIF container orientation")
+		}
+		info, err = inspectNative(ctx, data, info.Format, l)
 		if err != nil {
 			return Result{}, err
 		}
 	}
+	if _, err := p.admit(ctx, info, format, int64(len(data)), l, e.config.Backend); err != nil {
+		return Result{}, err
+	}
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
+	}
+	var img image.Image
+	var source nativeSource
+	if p.nativePixels(info) {
+		if info.Animated && p.frames != FirstFrame {
+			return Result{}, invalid("native color and metadata require a single frame")
+		}
+		source, err = openNative(ctx, data, info, l)
+		if err != nil {
+			return Result{}, err
+		}
+		defer source.close()
+		img, err = source.decode(ctx, p, l)
+	} else {
+		img, err = decodeChecked(ctx, data, info, l)
+	}
+	if err != nil {
+		return Result{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
+	img, err = applyImageOrientation(ctx, img, p, info, l)
+	if err != nil {
+		return Result{}, err
+	}
+	return e.transformAndEncode(ctx, img, p, format, source)
+}
+
+func (e *Engine) transformImage(ctx context.Context, img image.Image, p Plan) (image.Image, error) {
+	l := e.config.Limits
+	var err error
+	for _, s := range p.steps {
+		s.resampling = p.resampling
+		img, err = applyStep(ctx, img, s, l, e.config.Backend)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	if p.flatten {
 		img = flatten(img, p.background)
 	}
-	output := boundedOutput{maximum: l.OutputBytes, ctx: ctx}
-	if err := encode(&output, img, format, p.quality, p.avifQuality, l.OutputBytes); err != nil {
+	return img, nil
+}
+
+func (e *Engine) transformAndEncode(ctx context.Context, img image.Image, p Plan, format Format, source nativeSource) (Result, error) {
+	l := e.config.Limits
+	img, err := e.transformImage(ctx, img, p)
+	if err != nil {
 		return Result{}, err
+	}
+	output := boundedOutput{maximum: l.OutputBytes, ctx: ctx}
+	if p.nativeOutput(format) {
+		if source != nil {
+			err = source.encode(ctx, &output, img, p, format, l)
+		} else {
+			err = encodeNative(ctx, &output, img, p, format, l)
+		}
+	} else {
+		err = p.encode(&output, img, format, l.OutputBytes)
+	}
+	if err != nil {
+		return Result{}, err
+	}
+	if output.err != nil {
+		return Result{}, output.err
 	}
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
@@ -208,13 +273,36 @@ func (e *Engine) process(ctx context.Context, data []byte, p Plan) (Result, erro
 // decoded and returns the final canvas. Each phase is admitted separately: the
 // decoded image is replaced by the first transform, and only the final canvas
 // remains while encoding.
-func (p Plan) admit(info Info, format Format, input int64, l Limits) (image.Rectangle, error) {
+func (p Plan) admit(ctx context.Context, info inspection, format Format, input int64, l Limits, backend Backend) (image.Rectangle, error) {
+	sourceBytes := input
+	input, err := p.retainedInput(input, l)
+	if err != nil {
+		return image.Rectangle{}, err
+	}
+	if p.nativePixels(info) {
+		// The native source owns its encoded copy and codec buffers through output
+		// metadata transfer. Reserve them throughout every subsequent phase.
+		info.native = true
+		input += sourceBytes + info.decodeWorkspace()
+	} else if err := l.admit(input, info.decodeWorkspace()); err != nil {
+		return image.Rectangle{}, err
+	}
+	if err := l.admit(input, 0); err != nil {
+		return image.Rectangle{}, err
+	}
 	bounds := image.Rect(0, 0, info.Width, info.Height)
 	current := info.Format.decodedBytes()
+	if p.orientation == ApplyOrientation && info.avif != nil && !info.avif.crop.Empty() {
+		next := image.Rect(0, 0, info.avif.crop.Dx(), info.avif.crop.Dy())
+		if err := l.admit(input, int64(bounds.Dx())*int64(bounds.Dy())*current+int64(next.Dx())*int64(next.Dy())*transformBytes); err != nil {
+			return image.Rectangle{}, err
+		}
+		bounds, current = next, transformBytes
+	}
 	if p.orientation == ApplyOrientation && orientationFilter(info.Orientation) != nil {
 		next := bounds
 		if info.Orientation >= 5 {
-			next = image.Rect(0, 0, info.Height, info.Width)
+			next = image.Rect(0, 0, bounds.Dy(), bounds.Dx())
 		}
 		if err := l.dimensions(next.Dx(), next.Dy()); err != nil {
 			return image.Rectangle{}, err
@@ -226,9 +314,19 @@ func (p Plan) admit(info Info, format Format, input int64, l Limits) (image.Rect
 		bounds, current = next, transformBytes
 	}
 	for _, s := range p.steps {
+		if err := ctx.Err(); err != nil {
+			return image.Rectangle{}, err
+		}
 		before := int64(bounds.Dx()) * int64(bounds.Dy())
+		s.resampling = p.resampling
+		auxiliary, err := s.auxiliaryBytes(bounds)
+		if err != nil {
+			return image.Rectangle{}, err
+		}
+		if err := s.admitLayer(ctx, l, input, before*current, backend); err != nil {
+			return image.Rectangle{}, err
+		}
 		var peak int64
-		var err error
 		bounds, peak, err = s.dimensions(bounds, l)
 		if err != nil {
 			return image.Rectangle{}, err
@@ -240,13 +338,28 @@ func (p Plan) admit(info Info, format Format, input int64, l Limits) (image.Rect
 			return image.Rectangle{}, limited()
 		}
 		after := int64(bounds.Dx()) * int64(bounds.Dy())
-		if err := l.admit(input, before*current+after*transformBytes+peak*s.scratch()); err != nil {
+		if err := l.admit(input, before*current+after*transformBytes+peak*s.scratch()+auxiliary); err != nil {
+			return image.Rectangle{}, err
+		}
+		if err := s.preflightDrawing(ctx, l); err != nil {
 			return image.Rectangle{}, err
 		}
 		current = transformBytes
 	}
+	if format == ICO && (bounds.Dx() > 256 || bounds.Dy() > 256) {
+		return image.Rectangle{}, invalid("ICO dimensions must not exceed 256")
+	}
+	if format == WebP {
+		maximum := 16384
+		if p.encoding.webpLossy() {
+			maximum = 16383
+		}
+		if bounds.Dx() > maximum || bounds.Dy() > maximum {
+			return image.Rectangle{}, invalid("image dimensions exceed the selected WebP mode")
+		}
+	}
 	final := int64(bounds.Dx()) * int64(bounds.Dy())
-	encoding := final*(current+format.encodeBytes()) + l.OutputBytes
+	encoding := final*current + p.encodeWorkspace(format, bounds) + l.OutputBytes
 	if p.flatten {
 		encoding += final * transformBytes
 	}
@@ -255,6 +368,33 @@ func (p Plan) admit(info Info, format Format, input int64, l Limits) (image.Rect
 	}
 	return bounds, nil
 }
+func decodeChecked(ctx context.Context, data []byte, info inspection, l Limits) (image.Image, error) {
+	var img image.Image
+	var err error
+	if info.webp != nil {
+		if info.webp.animated {
+			var sequence imageSequence
+			sequence, err = decodeWebPSequence(ctx, info.webp, true)
+			if err == nil {
+				img = sequence.frames[0]
+			}
+		} else {
+			img, err = decodeWebPFrame(ctx, info.webp.frames[0])
+		}
+	} else if info.avif != nil {
+		img, err = decodeAVIF(data, info.avif)
+	} else {
+		img, err = decode(data, info.Format, l)
+	}
+	if err != nil {
+		return nil, invalid("image pixel decoding failed")
+	}
+	if img == nil || img.Bounds().Dx() != info.Width || img.Bounds().Dy() != info.Height {
+		return nil, invalid("decoded image dimensions differ from its header")
+	}
+	return img, nil
+}
+
 func decode(data []byte, f Format, l Limits) (image.Image, error) {
 	r := bytes.NewReader(data)
 	switch f {
@@ -278,45 +418,12 @@ func decode(data []byte, f Format, l Limits) (image.Image, error) {
 		return bmp.Decode(r)
 	case TIFF:
 		return tiff.Decode(r)
-	case WebP:
-		return webp.Decode(r)
 	case ICO:
 		return decodeIcon(data, l)
 	default:
 		return nil, unsupported()
 	}
 }
-func encode(w io.Writer, img image.Image, f Format, quality, avifQuality int, maximum int64) error {
-	switch f {
-	case JPEG:
-		if quality == 0 {
-			quality = 85
-		}
-		return jpeg.Encode(w, img, &jpeg.Options{Quality: quality})
-	case PNG:
-		return png.Encode(w, img)
-	case GIF:
-		return gif.Encode(w, img, &gif.Options{NumColors: 256})
-	case BMP:
-		return bmp.Encode(w, img)
-	case TIFF:
-		return tiff.Encode(w, img, &tiff.Options{Compression: tiff.Deflate, Predictor: true})
-	case WebP:
-		return nativewebp.Encode(w, img, nil)
-	case AVIF:
-		if avifQuality == 0 {
-			avifQuality = DefaultAVIFQuality
-		}
-		return avif.Encode(w, img, avif.EncodeOptions{Quality: avifQuality, Speed: 10})
-	case ICO:
-		return encodeIcon(w, img, maximum)
-	default:
-		return unsupported()
-	}
-}
-
-// DefaultAVIFQuality is used unless a plan selects AVIFQuality.
-const DefaultAVIFQuality = 60
 
 // flatten composites an image over an opaque background, so formats without
 // alpha (such as JPEG) do not turn transparent pixels black.
@@ -329,19 +436,25 @@ func flatten(img image.Image, background color.NRGBA) image.Image {
 }
 
 type boundedOutput struct {
+	err     error // First failure survives codecs that ignore io.Writer errors.
 	data    []byte
 	maximum int64
 	ctx     context.Context
 }
 
 func (b *boundedOutput) Write(p []byte) (int, error) {
+	if b.err != nil {
+		return 0, b.err
+	}
 	if b.ctx != nil {
 		if err := b.ctx.Err(); err != nil {
+			b.err = err
 			return 0, err
 		}
 	}
 	if int64(len(p)) > b.maximum-int64(len(b.data)) {
-		return 0, limited()
+		b.err = limited()
+		return 0, b.err
 	}
 	b.data = append(b.data, p...)
 	return len(p), nil

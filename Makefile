@@ -104,3 +104,13 @@ security-check:
 
 security-tools-check:
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p '*_test.py'
+
+# Optional imaging matrix; the ordinary verify target remains portable.
+.PHONY: test-imaging-portable test-imaging-native
+test-imaging-portable:
+	CGO_ENABLED=0 $(GO) test ./imaging
+	CGO_ENABLED=0 $(GO) test -tags foundry_vips ./imaging -run '^TestNativeBackendUnavailableIsExplicit$$'
+
+test-imaging-native:
+	CGO_ENABLED=1 FOUNDRY_TEST_VIPS_REQUIRED=1 $(GO) test -tags foundry_vips ./imaging ./validation/imaging
+	cd tests/fixtures/consumer && CGO_ENABLED=1 $(GO) test -tags foundry_vips ./profiles -run '^TestConfiguredNativeImageService$$'

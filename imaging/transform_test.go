@@ -76,7 +76,7 @@ func TestColorAdjustmentsMatchPerPixelFormula(t *testing.T) {
 func TestBackgroundFlattensTransparencyBeforeJPEG(t *testing.T) {
 	transparent := image.NewNRGBA(image.Rect(0, 0, 8, 8))
 	var input bytes.Buffer
-	if err := encode(&input, transparent, PNG, 0, 0, 1<<20); err != nil {
+	if err := NewPlan().encode(&input, transparent, PNG, 1<<20); err != nil {
 		t.Fatal(err)
 	}
 	e := testEngine(t, DefaultConfig())

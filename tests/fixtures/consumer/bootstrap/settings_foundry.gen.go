@@ -17,6 +17,7 @@ import (
 	http "github.com/weiloon1234/Foundry-Go/http"
 	httpclient "github.com/weiloon1234/Foundry-Go/httpclient"
 	i18n "github.com/weiloon1234/Foundry-Go/i18n"
+	imaging "github.com/weiloon1234/Foundry-Go/imaging"
 	infrastructure "github.com/weiloon1234/Foundry-Go/infrastructure"
 	jobs "github.com/weiloon1234/Foundry-Go/jobs"
 	logging "github.com/weiloon1234/Foundry-Go/logging"
@@ -1173,7 +1174,9 @@ type SettingsAppImageConfigKeySet struct {
 
 // SettingsAppImageConfigConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppImageConfigConfigKeySet struct {
-	Limits SettingsAppImageConfigLimitsConfigKeySet
+	// Backend selects app.image.config.backend. Set accepts imaging.Backend.
+	Backend config.Key[Settings, imaging.Backend]
+	Limits  SettingsAppImageConfigLimitsConfigKeySet
 	// MaxActive selects app.image.config.max_active. Set accepts int.
 	MaxActive config.Key[Settings, int]
 	// Timeout selects app.image.config.timeout. Set accepts time.Duration.
@@ -1840,6 +1843,7 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 			Image: SettingsAppImageConfigKeySet{
 				Enabled: config.Scalar[Settings, bool]("app.image.enabled", func(settings *Settings) *bool { return &settings.App.Image.Enabled }),
 				Config: SettingsAppImageConfigConfigKeySet{
+					Backend: config.Scalar[Settings, imaging.Backend]("app.image.config.backend", func(settings *Settings) *imaging.Backend { return &settings.App.Image.Config.Backend }),
 					Limits: SettingsAppImageConfigLimitsConfigKeySet{
 						InputBytes:   config.Scalar[Settings, int64]("app.image.config.limits.input_bytes", func(settings *Settings) *int64 { return &settings.App.Image.Config.Limits.InputBytes }),
 						OutputBytes:  config.Scalar[Settings, int64]("app.image.config.limits.output_bytes", func(settings *Settings) *int64 { return &settings.App.Image.Config.Limits.OutputBytes }),
@@ -2246,6 +2250,7 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.App.Features.Maintenance.Custom.Timeout,
 		keys.App.Features.Maintenance.Custom.Retention,
 		keys.App.Image.Enabled,
+		keys.App.Image.Config.Backend,
 		keys.App.Image.Config.Limits.InputBytes,
 		keys.App.Image.Config.Limits.OutputBytes,
 		keys.App.Image.Config.Limits.Width,

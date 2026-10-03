@@ -1,6 +1,9 @@
 package imaging
 
-import "time"
+import (
+	"image"
+	"time"
+)
 
 // Limits apply before pixel decoding, before each transform, and to output.
 // WorkingBytes bounds the admitted workspace of each pipeline phase: the
@@ -73,31 +76,40 @@ func (f Format) decodePeakBytes() int64 {
 // decodedBytes bounds the decoded image retained after decoding.
 func (f Format) decodedBytes() int64 {
 	switch f {
-	case PNG, TIFF:
+	case PNG, TIFF, AVIF:
 		return 8
 	default:
 		return 4
 	}
 }
 
-// encodeBytes bounds an encoder's working copies per output pixel, excluding
-// the owned output allowance. The pure-Go lossless WebP encoder measured about
-// 52–58 bytes per pixel; AVIF about 4.4; JPEG, PNG, GIF, BMP and TIFF encode
-// from bounded row/block buffers.
-func (f Format) encodeBytes() int64 {
+// encodeWorkspace bounds an encoder's working copies, excluding
+// the owned output allowance. WebP includes color/alpha planes, references,
+// entropy searches, internal compressed buffers and fixed histograms. Lossy
+// macroblock storage is rounded up even for very narrow images.
+func (p Plan) encodeWorkspace(f Format, bounds image.Rectangle) int64 {
+	pixels := int64(bounds.Dx()) * int64(bounds.Dy())
+	if p.nativeOutput(f) {
+		return pixels*128 + 16<<20
+	}
 	switch f {
 	case WebP:
-		return 60
+		if p.encoding.webpLossy() {
+			padded := int64((bounds.Dx()+15)/16*16) * int64((bounds.Dy()+15)/16*16)
+			return padded*192 + 16<<20
+		}
+		return pixels*128 + 16<<20
 	case AVIF:
-		return 6
+		return pixels * 6
 	case ICO:
-		return 8
+		return pixels * 8
 	default:
-		return 2
+		return pixels * 2
 	}
 }
 
 type Config struct {
+	Backend   Backend
 	Limits    Limits
 	MaxActive int
 	Timeout   time.Duration
@@ -110,7 +122,7 @@ func (c Config) Validate() error {
 	if err := c.Limits.Validate(); err != nil {
 		return err
 	}
-	if c.MaxActive < 1 || c.MaxActive > 64 || c.Timeout <= 0 || c.Timeout > 10*time.Minute {
+	if c.Backend > LibvipsBackend || c.MaxActive < 1 || c.MaxActive > 64 || c.Timeout <= 0 || c.Timeout > 10*time.Minute {
 		return invalid("invalid image engine configuration")
 	}
 	return nil

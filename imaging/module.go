@@ -7,7 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/foundation"
 )
 
-// Module constructs an engine without I/O and drains its actual operations at
+// Module constructs the configured engine and drains its actual operations at
 // shutdown. Applications borrow the resolved engine; the module closes it.
 func Module(name foundation.ProviderID, key foundation.Key[*Engine], config Config) foundation.Module {
 	return foundation.Module{Name: name, OnRegister: func(r *foundation.Registrar) error {

@@ -441,9 +441,9 @@ Numbering is the default implementation order. A prerequisite is a gate, not per
 | 13 | [Scheduler](13-scheduler-kernel.md) | 09, 12 | Complete — calendar/interval schedules, bounded execution, shared Redis coordination, typed job targets and native acceptance/consumer review passed |
 | 14 | [WebSocket channels and protocol](14-websocket-channels-and-protocol.md) | 03, 08, 10 | Complete — typed protocol/runtime, fresh auth and room ownership, safe local presence, native kernel and full acceptance/consumer review passed |
 | 15 | [Distributed WebSocket behavior](15-websocket-distributed-behavior.md) | 09, 12, 14 | Complete — Redis fan-out/replay/presence, limits/revocation, diagnostics, native full gate and consumer review passed |
-| 16 | [Email](16-email.md) | 11, 12 | Complete — native provider fixtures, typed jobs/outbox, lifecycle and consumer review passed; real-account smoke gap recorded |
+| 16 | [Email](16-email.md) | 11, 12 | Complete — native provider fixtures, typed jobs/outbox, lifecycle and consumer review passed; [2026-10-03 Cloudflare and attachment source follow-up](../docs/evidence/mail-system-20261003.json) passed full verification, PostgreSQL/races and real editor probes; real-account smoke gap recorded |
 | 17 | [Notifications](17-notifications.md) | 07, 10, 12, 15, 16 | Complete — native persistent channel/inbox, queue/private realtime and consumer review passed |
-| 18 | [Imaging and model extensions](18-imaging-and-model-extensions.md) | 06, 07, 11, 12 | Complete — native imaging, durable attachments, typed model extensions, reference seeding and consumer review passed |
+| 18 | [Imaging and model extensions](18-imaging-and-model-extensions.md) | 06, 07, 11, 12 | Complete, including the accepted [imaging expansion](18-imaging-and-model-extensions.md#imaging-expansion--2026-10-03): editing, drawing, AVIF input, GIF/APNG/WebP animation, lossy WebP, optional libvips formats/color/metadata/smart cropping, configured consumers, upload validation and attachments; final full gate passed |
 | 19 | [Datatables and reporting](19-datatables-and-reporting.md) | 06, 08, 10, 11 | Complete — typed reporting, scoped pages/counts, bounded CSV/XLSX, HTTP/jobs/storage composition and native consumer review passed |
 | 20 | [Localization and supporting APIs](20-localization-and-supporting-apis.md) | 02, 03, 08, 09 | Complete — typed localization, shared labels, bounded outbound HTTP and supporting APIs passed native verification and consumer review |
 | 21 | [Contracts and TypeScript](21-contracts-and-typescript-sdk.md) | 03, 08, 10, 15, 17, 19, 20 | Complete — versioned manifest, OpenAPI, exact typed HTTP/realtime SDK, publication/recovery and native consumer acceptance passed |
@@ -3411,7 +3411,8 @@ storage. Owner identity, codecs, query scopes, lifecycle transactions and contra
 schemas reuse their existing sources; no second ORM or queue was introduced.
 
 Immutable image plans support JPEG, PNG, lossless WebP, GIF, BMP, TIFF, ICO and
-AVIF output. AVIF remains output-only, matching the Rust default build. Inspection
+AVIF output. AVIF was output-only at the original acceptance; the imaging
+expansion in blueprint 18 supersedes that boundary. Inspection
 checks input/container bounds, dimensions, frames/pages, EXIF orientation and
 resampling intermediates before pixel work; re-encoding strips metadata. The
 admitted workspace estimate is not a process heap quota. Actual codec/reader

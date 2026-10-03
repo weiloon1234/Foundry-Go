@@ -1,0 +1,26 @@
+[http]
+enabled = false
+
+[services.mail]
+default = "transactional"
+
+[services.mail.mailers.transactional]
+driver = "cloudflare"
+[services.mail.mailers.transactional.config]
+from = "Example <hello@example.test>"
+[services.mail.mailers.transactional.api]
+account_id = "0123456789abcdef0123456789abcdef"
+
+[services.mail.mailers.backup]
+driver = "resend"
+[services.mail.mailers.backup.config]
+from = "Example <hello@example.test>"
+
+[services.mail.mailers.delivery]
+driver = "failover"
+transports = ["transactional", "backup"]
+[services.mail.mailers.delivery.config]
+from = "Example <hello@example.test>"
+
+# Tokens are supplied by APP__SERVICES__MAIL__MAILERS__TRANSACTIONAL__API__TOKEN
+# and APP__SERVICES__MAIL__MAILERS__BACKUP__API__TOKEN (or their _FILE forms).

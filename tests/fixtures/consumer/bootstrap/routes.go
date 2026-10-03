@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/imaging"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/validation"
+	"image/color"
 )
 
 //foundry:dto
@@ -27,7 +28,12 @@ type UploadResult struct {
 }
 
 var profiles = cache.Define("bootstrap.profiles", cache.StringKeys[string](), cache.JSON[Profile]())
-var avatar = imaging.NewPlan().Fit(32, 32, false).Format(imaging.PNG)
+
+// The configured engine applies the same declaration to ordinary HTTP uploads.
+// Contain enlarges small uploads, preserves aspect ratio and pads a square avatar.
+var avatar = imaging.NewPlan().
+	Contain(32, 32, color.NRGBA{R: 255, G: 255, B: 255, A: 255}, imaging.Center).
+	Format(imaging.PNG)
 
 type MemberProfileInput = http.Input[http.NoPath, http.NoQuery, http.NoBody]
 

@@ -44,12 +44,12 @@ func cursorParameters[F, M any](filters foundryhttp.Query[F], config CursorConfi
 			foundryhttp.OptionalQueryParam(config.BeforeParam, codec, func(in *parameters[F, query.CursorRequest[M]]) *value.Optional[query.Cursor[M]] {
 				return &in.Page.Before
 			}),
-			foundryhttp.DefaultQueryParam(config.SizeParam, foundryhttp.IntegerQuery[int](), config.DefaultSize, func(in *parameters[F, query.CursorRequest[M]]) *int { return &in.Page.Size }),
+			foundryhttp.DefaultQueryParam(config.SizeParam, foundryhttp.IntegerQuery[int](), config.DefaultSize, func(in *parameters[F, query.CursorRequest[M]]) *int { return &in.Page.Size }).WithPresentation(labelPresentation(SizeLabelKey)),
 		),
 	)
 }
 func cursorRules[F, M any](config CursorConfig) validation.Rule[parameters[F, query.CursorRequest[M]]] {
-	size := validation.DefineField(config.SizeParam, func(in query.CursorRequest[M]) int { return in.Size })
+	size := validation.DefineField(config.SizeParam, func(in query.CursorRequest[M]) int { return in.Size }).WithLabel(sizeLabel).WithLabelKey(SizeLabelKey)
 	valid := validation.Custom[query.CursorRequest[M]](validation.Spec{ID: "pagination.cursor_request", Message: "Supply at most one valid cursor direction."}, func(_ context.Context, in query.CursorRequest[M]) (bool, error) { return in.Validate() == nil, nil })
 	return validation.Embed(validation.Bail(size.Rules(validation.Min(1), validation.Max(config.MaximumSize)), valid), func(in parameters[F, query.CursorRequest[M]]) query.CursorRequest[M] { return in.Page })
 }

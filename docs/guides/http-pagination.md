@@ -91,6 +91,16 @@ errors retain their actual `/query/<name>` path. Pagination bounds remain active
 when additional filter rules are registered. Defaults and validation rules appear
 in the same endpoint metadata used by later contract export.
 
+The page number and size carry the label keys `pagination.NumberLabelKey`
+(`http.pagination.page`, "Page") and `pagination.SizeLabelKey`
+(`http.pagination.size`, "Page size"), so a 422 names them in the request's
+language. A Malay catalog can then read "Halaman mesti sekurang-kurangnya 1"
+rather than "page mesti …". The English
+labels are built in. Configured applications register
+`pagination.MessageDefinitions()`, so a catalog translates the keys, English
+included. An application building its own catalog adds those definitions. The
+exported query parameters carry the same keys.
+
 ## Responses and navigation
 
 A numbered response has `data`, `meta` and `links`. Metadata contains

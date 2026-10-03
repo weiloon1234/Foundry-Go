@@ -37,7 +37,8 @@ func TestContractsCommandPublicationAndReadOnlyCheck(t *testing.T) {
 	if err := run(t.Context(), args, &output, &output); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(output.String(), "Generated 3 client artifact") {
+	// The entry, two shared runtime modules, manifest and OpenAPI are emitted.
+	if !strings.Contains(output.String(), "Generated 5 client artifact") {
 		t.Fatal(output.String())
 	}
 	before, err := os.ReadDir(dir)

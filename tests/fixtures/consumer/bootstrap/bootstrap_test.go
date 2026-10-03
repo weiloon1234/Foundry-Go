@@ -9,12 +9,14 @@ import (
 	"github.com/weiloon1234/Foundry-Go/config"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/imaging"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 	"image"
+	"image/color"
 	"image/png"
 	"io"
 	"log/slog"
@@ -146,7 +148,20 @@ func TestIndependentBootstrapHTTPActorsAndUpload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := png.Encode(part, image.NewRGBA(image.Rect(0, 0, 64, 64))); err != nil {
+	// A small non-square upload must enlarge and pad through the configured
+	// engine. Solid regions make the persisted pixel assertions independent
+	// of the resampling filter's edge interpolation.
+	source := image.NewNRGBA(image.Rect(0, 0, 16, 8))
+	for y := 0; y < 8; y++ {
+		for x := 0; x < 16; x++ {
+			c := color.NRGBA{R: 255, A: 255}
+			if x >= 8 {
+				c = color.NRGBA{B: 255, A: 255}
+			}
+			source.SetNRGBA(x, y, c)
+		}
+	}
+	if err := png.Encode(part, source); err != nil {
 		t.Fatal(err)
 	}
 	if err := form.Close(); err != nil {
@@ -176,8 +191,25 @@ func TestIndependentBootstrapHTTPActorsAndUpload(t *testing.T) {
 	}
 	decoded, err := png.Decode(reader)
 	_ = reader.Close()
-	if err != nil || decoded.Bounds().Dx() != 32 {
+	if err != nil || decoded.Bounds().Size() != image.Pt(32, 32) {
 		t.Fatal("stored image incorrect", err)
+	}
+	for _, check := range []struct {
+		point image.Point
+		want  color.NRGBA
+	}{
+		{image.Pt(4, 2), color.NRGBA{R: 255, G: 255, B: 255, A: 255}},
+		{image.Pt(4, 12), color.NRGBA{R: 255, A: 255}},
+		{image.Pt(28, 12), color.NRGBA{B: 255, A: 255}},
+		{image.Pt(28, 29), color.NRGBA{R: 255, G: 255, B: 255, A: 255}},
+	} {
+		if got := color.NRGBAModel.Convert(decoded.At(check.point.X, check.point.Y)).(color.NRGBA); got != check.want {
+			t.Fatalf("configured image pixel %v: got %v want %v", check.point, got, check.want)
+		}
+	}
+	images, err := app.Resources().Image()
+	if err != nil {
+		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -188,6 +220,14 @@ func TestIndependentBootstrapHTTPActorsAndUpload(t *testing.T) {
 	case <-done:
 	case <-ctx.Done():
 		t.Fatal("HTTP did not stop")
+	}
+	select {
+	case <-images.Done():
+	default:
+		t.Fatal("application shutdown did not close its image engine")
+	}
+	if result, err := images.Create(t.Context(), 1, 1, color.NRGBA{}, imaging.NewPlan()); err == nil || result.Size() != 0 {
+		t.Fatal("stopped application admitted image work")
 	}
 }
 func TestGeneratedApplicationConfigurationIsTyped(t *testing.T) {

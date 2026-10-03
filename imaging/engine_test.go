@@ -61,14 +61,13 @@ func TestFormatsAndTransforms(t *testing.T) {
 				t.Fatal("incorrect output metadata")
 			}
 			if f == AVIF {
-				// Verify the actual encoded bitstream with the codec, even though the
-				// public untrusted-input pipeline intentionally does not accept AVIF.
+				// Verify the encoded bitstream independently of the public pipeline.
 				img, err := avif.Decode(result.Reader(), avif.Options{FrameSizeLimit: 12})
 				if err != nil || img.Bounds().Dx() != 4 || img.Bounds().Dy() != 3 {
 					t.Fatal("AVIF output does not decode", err)
 				}
-				if _, err := e.ProcessBytes(t.Context(), result.Bytes(), NewPlan()); err == nil {
-					t.Fatal("AVIF input enabled implicitly")
+				if _, err := e.ProcessBytes(t.Context(), result.Bytes(), NewPlan()); err != nil {
+					t.Fatal("AVIF input cannot round trip", err)
 				}
 			} else {
 				info, err := Inspect(result.Bytes(), DefaultLimits())

@@ -54,3 +54,18 @@ func TestPostgresAttachmentImagePolicyTransformsDetectedBytes(t *testing.T) {
 		t.Fatal("failed image removed prior ownership", err)
 	}
 }
+
+func TestPostgresAttachmentImageDeclarationsRespectEngineCapabilities(t *testing.T) {
+	f := openAttachments(t)
+	for _, policy := range []Policy{
+		{Disk: testDisk, Cardinality: Single, Accepted: []storage.MediaType{"image/svg+xml"}, Variants: []Variant{DefineVariant("preview", imaging.NewPlan().Format(imaging.PNG))}},
+		{Disk: testDisk, Cardinality: Single, Accepted: []storage.MediaType{"image/png"}, Image: value.Set(imaging.NewPlan().ToSRGB())},
+		{Disk: testDisk, Cardinality: Single, Accepted: []storage.MediaType{"image/png"}, Variants: []Variant{DefineVariant("preview", imaging.NewPlan().Format(imaging.HEIF))}},
+	} {
+		collection := Define(extensiontest.Members, "native-unsupported", policy)
+		manager, err := New(Dependencies{Store: f.Store, Disks: f.registry, Image: f.image}, DefaultConfig(), collection.Registration())
+		if err == nil || manager != nil {
+			t.Fatal("portable manager accepted a native declaration")
+		}
+	}
+}

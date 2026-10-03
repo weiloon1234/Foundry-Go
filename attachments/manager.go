@@ -123,6 +123,28 @@ func New(dependencies Dependencies, config Config, collections ...Registration) 
 			if err := dependencies.Image.Validate(); err != nil {
 				return nil, err
 			}
+			if plan, set := collection.policy.Image.Get(); set {
+				if err := dependencies.Image.ValidatePlan(plan); err != nil {
+					return nil, err
+				}
+			}
+			for _, variant := range collection.policy.Variants {
+				if err := dependencies.Image.ValidatePlan(variant.plan); err != nil {
+					return nil, err
+				}
+			}
+			if !collection.policy.AnyMedia {
+				for _, media := range collection.policy.Accepted {
+					format, err := imaging.ParseMediaType(string(media))
+					if err != nil {
+						return nil, invalid()
+					}
+					capability, ok := dependencies.Image.Capabilities().ForFormat(format)
+					if !ok || !capability.Read {
+						return nil, invalid()
+					}
+				}
+			}
 		}
 		if collection.policy.Localized {
 			if err := i18n.ValidateLocaleCatalog(dependencies.Locales); err != nil {

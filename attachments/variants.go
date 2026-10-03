@@ -131,14 +131,11 @@ func (p Policy) validateVariants() error {
 	return nil
 }
 
-// decodableImage reports an accepted media type the imaging engine can decode.
+// Image media declarations are validated here; the injected engine's actual
+// capabilities are checked when its manager is constructed.
 func decodableImage(media storage.MediaType) bool {
-	for _, format := range []imaging.Format{imaging.JPEG, imaging.PNG, imaging.WebP, imaging.GIF, imaging.BMP, imaging.TIFF, imaging.ICO} {
-		if format.CanDecode() && string(media) == format.MediaType() {
-			return true
-		}
-	}
-	return false
+	_, err := imaging.ParseMediaType(string(media))
+	return err == nil
 }
 
 func (p Policy) variant(name VariantName) (Variant, bool) {

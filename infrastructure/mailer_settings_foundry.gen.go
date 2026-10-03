@@ -72,6 +72,8 @@ type MailerSettingsAPIConfigKeySet struct {
 	Timeout config.Key[MailerSettings, time.Duration]
 	// Token selects api.token. Set accepts secret.String.
 	Token config.Key[MailerSettings, secret.String]
+	// AccountID selects api.account_id. Set accepts string.
+	AccountID config.Key[MailerSettings, string]
 	// Domain selects api.domain. Set accepts string.
 	Domain config.Key[MailerSettings, string]
 	// MessageStream selects api.message_stream. Set accepts string.
@@ -113,6 +115,7 @@ var foundryMailerSettingsConfigKeys = sync.OnceValue(func() MailerSettingsConfig
 			Endpoint:         config.Scalar[MailerSettings, string]("api.endpoint", func(settings *MailerSettings) *string { return &settings.API.Endpoint }),
 			Timeout:          config.Duration[MailerSettings]("api.timeout", func(settings *MailerSettings) *time.Duration { return &settings.API.Timeout }),
 			Token:            config.Secret[MailerSettings]("api.token", func(settings *MailerSettings) *secret.String { return &settings.API.Token }).Sensitive(),
+			AccountID:        config.Scalar[MailerSettings, string]("api.account_id", func(settings *MailerSettings) *string { return &settings.API.AccountID }),
 			Domain:           config.Scalar[MailerSettings, string]("api.domain", func(settings *MailerSettings) *string { return &settings.API.Domain }),
 			MessageStream:    config.Scalar[MailerSettings, string]("api.message_stream", func(settings *MailerSettings) *string { return &settings.API.MessageStream }),
 			Region:           config.Scalar[MailerSettings, string]("api.region", func(settings *MailerSettings) *string { return &settings.API.Region }),
@@ -147,6 +150,7 @@ func MailerSettingsConfigSchema() (*config.Schema[MailerSettings], error) {
 		keys1.API.Endpoint,
 		keys1.API.Timeout,
 		keys1.API.Token,
+		keys1.API.AccountID,
 		keys1.API.Domain,
 		keys1.API.MessageStream,
 		keys1.API.Region,

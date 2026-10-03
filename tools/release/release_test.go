@@ -160,3 +160,17 @@ func TestReleaseRejectsUnknownAssetsLinksAndReplacements(t *testing.T) {
 		})
 	}
 }
+
+func TestSourcePolicyIncludesOnlyReviewedImagingAssets(t *testing.T) {
+	_, policy := sourceFixture(t)
+	for _, name := range []string{"imaging/testdata/avif/anim.avif", "imaging/testdata/avif/PATENTS", "imaging/testdata/webp/frame.png", "imaging/testdata/webp/animation.webp", "imaging/testdata/native/profile.icc", "imaging/testdata/native/oriented.jpg", "imaging/testdata/native/animated.jxl"} {
+		if !policy.sourceName(filepath.FromSlash(name)) {
+			t.Fatal("reviewed fixture excluded", name)
+		}
+	}
+	for _, name := range []string{"private.jpg", "imaging/testdata/native/private.pem", "other/testdata/profile.icc", "imaging/testdata/native/.private.png", "imaging/testdata/avif/plugin.so"} {
+		if policy.sourceName(filepath.FromSlash(name)) {
+			t.Fatal("unreviewed asset allowed", name)
+		}
+	}
+}

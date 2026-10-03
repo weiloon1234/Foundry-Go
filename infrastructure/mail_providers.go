@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/weiloon1234/Foundry-Go/cloud/credentials"
 	"github.com/weiloon1234/Foundry-Go/email"
+	"github.com/weiloon1234/Foundry-Go/email/cloudflare"
 	"github.com/weiloon1234/Foundry-Go/email/failover"
 	emaillog "github.com/weiloon1234/Foundry-Go/email/log"
 	"github.com/weiloon1234/Foundry-Go/email/mailgun"
@@ -21,7 +22,7 @@ import (
 
 func builtInMailDriver(driver MailDriver) bool {
 	switch driver {
-	case LogMail, PreviewMail, MemoryMail, SMTPMail, SESMail, ResendMail, PostmarkMail, MailgunMail, FailoverMail, RoundRobinMail:
+	case LogMail, PreviewMail, MemoryMail, SMTPMail, SESMail, ResendMail, CloudflareMail, PostmarkMail, MailgunMail, FailoverMail, RoundRobinMail:
 		return true
 	}
 	return false
@@ -115,6 +116,13 @@ func (p *Plan) mailAdapter(s MailerSettings, credential func(credentials.Name) (
 		result.close = func(context.Context) error { driver.Close(); return nil }
 	case ResendMail:
 		driver, err := resend.New(resend.Config{HTTP: http, Token: s.API.Token})
+		if err != nil {
+			return nil, err
+		}
+		result.value = driver
+		result.close = func(context.Context) error { driver.Close(); return nil }
+	case CloudflareMail:
+		driver, err := cloudflare.New(cloudflare.Config{HTTP: http, AccountID: s.API.AccountID, Token: s.API.Token})
 		if err != nil {
 			return nil, err
 		}

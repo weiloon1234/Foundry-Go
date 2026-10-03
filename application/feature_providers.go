@@ -17,6 +17,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/health"
 	"github.com/weiloon1234/Foundry-Go/health/checks"
 	"github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/http/pagination"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/metadata"
@@ -69,7 +70,7 @@ func registerFeatures(ctx context.Context, builder *foundation.Builder, settings
 				if err != nil {
 					return nil, err
 				}
-				definitions := append(validation.MessageDefinitions(), http.MessageDefinitions()...)
+				definitions := slices.Concat(validation.MessageDefinitions(), http.MessageDefinitions(), pagination.MessageDefinitions())
 				definitions = append(definitions, d.Messages...)
 				return i18n.NewCatalog(ctx, locales, i18n.CatalogOptions{Fallback: s.Locales.Fallback}, definitions, d.Catalog)
 			})

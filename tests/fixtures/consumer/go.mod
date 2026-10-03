@@ -12,7 +12,6 @@ require (
 )
 
 require (
-	github.com/HugoSmits86/nativewebp v1.3.0 // indirect
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.47.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.20 // indirect
@@ -37,6 +36,7 @@ require (
 	github.com/coder/websocket v1.8.15 // indirect
 	github.com/disintegration/gift v1.2.1 // indirect
 	github.com/gen2brain/gav1d v0.2.5 // indirect
+	github.com/gen2brain/vpx v0.2.1 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect

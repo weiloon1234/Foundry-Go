@@ -7,7 +7,7 @@
     "disk_settings_foundry.gen.go": "1f164de02afffb6ab70a49c37321f069c6e8af8023b8c71a2934ac231de1a0a7",
     "http_client_settings_foundry.gen.go": "d3b89b4f101279fd2544ffa3003f4106c43e5e66a94311c2307592af23ee0db5",
     "job_connection_settings_foundry.gen.go": "aed2e27bacc787cb6f56263d1069299e23f83bd3473adcd20ebbfe1f1aaff668",
-    "mailer_settings_foundry.gen.go": "f5cb2163391cb41869a317155a2199e31f0038bcdc6e1fcbf2d1fbb0379ed4fe",
+    "mailer_settings_foundry.gen.go": "4afa3bdaed9c3fa7130924d2f3aef495603fbffbafdcd73d8b10f26510e0d935",
     "realtime_connection_settings_foundry.gen.go": "4ac014ae329100aa96996b8cbb031b03f258a813a7dfe7ec90e3f06c1e855395",
     "redis_connection_settings_foundry.gen.go": "f2e6445b5e7d3c07e6dff0979067c5980a6e3b2778f9c74d0ca119707dfe5146",
     "settings_foundry.gen.go": "ed331a7da118ea1a75e44642e824841121a9458b8a98f42a38835521909aa2ea"

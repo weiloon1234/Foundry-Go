@@ -2,8 +2,67 @@
 
 Milestone 16 passed native verification and consumer review. Real-account provider
 smoke sends remain an explicit verification gap. The stable blueprint contract is [email](../../blueprint/16-email.md).
+The Cloudflare and direct attachment source additions passed the
+[2026-10-03 follow-up checks](../evidence/mail-system-20261003.json).
 
 `email` owns validated addresses, immutable message builders, typed templates, bounded attachment resolution and MIME. A `Mailer` borrows a transport and the existing storage registry. Use the ordinary [jobs](jobs.md) API for queued data and transactional publication; there is no separate email queue.
+
+## Consumer configuration and provider selection
+
+Configure mailers under `application.Settings.Services.Mail`; `application.New`
+constructs and drains their transports. Each entry starts with
+`infrastructure.DefaultMailerSettings()` and needs a sender. The default aliases
+one named mailer. Empty mailers disable email, and unknown explicit names fail.
+
+```toml
+[services.mail]
+default = "transactional"
+
+[services.mail.mailers.transactional]
+driver = "cloudflare"
+[services.mail.mailers.transactional.config]
+from = "Example <hello@example.com>"
+[services.mail.mailers.transactional.api]
+account_id = "0123456789abcdef0123456789abcdef"
+```
+
+Supply the token using `APP__SERVICES__MAIL__MAILERS__TRANSACTIONAL__API__TOKEN`
+or its `_FILE` form. Load with `config.Inputs[application.Settings]{Prefix:
+"APP", Environment: os.LookupEnv, Environ: os.Environ}` so per-entry environment
+overrides merge with file configuration. See [named services](named-services.md#typed-configuration-tables).
+The [executable configuration](../../tests/fixtures/consumer/mailing/testdata/mailers.toml)
+adds a Resend backup and a failover mailer; its
+[consumer test](../../tests/fixtures/consumer/mailing/configured_test.go) loads
+the file, injects secrets and sends through `application.New`.
+
+| `driver` / typed Go constant | Entry settings in addition to `config.from` |
+| --- | --- |
+| `smtp` / `infrastructure.SMTPMail` | `smtp.address`, `smtp.security`, optional `smtp.username` and secret `smtp.password` |
+| `resend` / `infrastructure.ResendMail` | Secret `api.token` |
+| `cloudflare` / `infrastructure.CloudflareMail` | `api.account_id` and secret `api.token` |
+| `postmark` / `infrastructure.PostmarkMail` | Secret `api.token`, optional `api.message_stream` |
+| `mailgun` / `infrastructure.MailgunMail` | `api.domain` and secret `api.token`; optional EU `api.endpoint` |
+| `ses` / `infrastructure.SESMail` | `api.region`, `api.credentials` naming a configured credential source, optional `api.configuration_set` |
+
+For typed Go configuration use `infrastructure.Mailers` keyed by
+`email.MailerName`, `MailerSettings.Driver` and the provider's fields under
+`SMTP` or `API`. `MailerSettingsConfigKeys()` provides generated typed overrides,
+including `API.AccountID` and `API.Token`. Driver-specific settings affect
+transport only; messages, templates and attachment APIs stay the same.
+
+```go
+const Transactional email.MailerName = "transactional"
+services := app.Resources()
+mailer, err := services.Mailers.Mailer(Transactional)
+if err != nil { return err }
+// services.Mailers.Default() selects services.mail.default.
+message := mailer.Message("Welcome", recipient).Text("Hello")
+result, err := mailer.Send(ctx, message, email.SendOptions{})
+```
+
+Resolve the mailer once in a domain constructor and retain that concrete handle.
+Consumers may also register their own transport with `application.WithMailDriver`
+under a distinct `infrastructure.MailDriver`; built-in names cannot be overridden.
 
 ## Typed messages and templates
 
@@ -43,6 +102,51 @@ as shown by the consumer `RecipientRequest`; runtime parsing stays in email.
 
 ## Storage attachments and limits
 
+Consumers do not convert uploads or model attachments into provider-specific
+blobs. These helpers feed the same attachment preparation used by every adapter:
+
+```go
+// input.Document is http.UploadedFile from a multipart request.
+message, err = message.AttachUpload(ctx, input.Document)
+if err != nil { return err }
+
+// row.Attachment is a loaded attachments.One[YourModel] slot.
+message, err = message.AttachStored(row.Attachment)
+if err != nil { return err }
+
+// Loaded collections expose files; each retains its concrete model type.
+for _, file := range row.Documents.All() {
+    message, err = message.AttachStored(file)
+    if err != nil { return err }
+}
+result, err := mailer.Send(ctx, message, email.SendOptions{})
+```
+
+`AttachUpload` opens, reads up to `MaxDataAttachmentBytes` (10 MiB), and closes
+the upload reader before returning. It snapshots the bytes, so subsequent HTTP
+request cleanup does not invalidate the returned message. It uses the shared
+byte-based media detector; browser content type is only a compatible text hint.
+It does not create an attachment record or storage object. Cancellation, invalid
+metadata, empty/oversized content, read/close failures and extension panic/Goexit
+produce a safe error with no partial message. Custom sources must honor context;
+the helper waits until they actually exit. Mailer size limits still apply at Send.
+
+`AttachStored` accepts `attachments.File[M]`, `attachments.Attachment[M, K]` or a
+loaded `attachments.One[M]`. It captures metadata and an immutable version (or
+conditional ETag), without reading bytes. An empty/unloaded slot fails instead
+of silently omitting the file. The mailer needs the same storage disk registered;
+configured application mailers receive it automatically. Authorize the record
+before attaching it. See the real [browser upload](../../tests/fixtures/consumer/mailing/uploads_test.go)
+and [stored model](../../tests/fixtures/consumer/articles/email_postgres_test.go)
+consumer examples.
+
+For queued DTOs, `file.EmailAttachment()` (also available on a single-file slot)
+returns a pinned `email.Attachment` to put in a concrete payload. Runtime upload
+bytes cannot be queued or snapshotted: persist them through the existing storage
+or attachment system first. Retain that object until delivery/reconciliation is
+finished; a reference does not prevent deletion. Deleted or changed content fails
+preparation before any provider submission.
+
 An `email.Attachment` contains a typed disk ID, `storage.ObjectKey`, filename, media type, optional content ID and optional immutable version or conditional ETag. It contains no OS path, URL downloader or open reader. Use a [local storage disk](storage.md) for local files. An inline reference needs a nonempty HTML body and a unique content ID; reference it with `cid:your-id` in trusted markup.
 
 Mailer resolves each reference through the borrowed registry, bounds reads even when metadata lies, and closes readers before transport submission or on failure. Defaults allow 64 active sends, 5 MiB per attachment, 10 MiB total encoded MIME and a 30-second operation timeout. The hard configurable MIME ceiling is 32 MiB. Encoding overhead counts against the total, so an attachment near the raw-byte ceiling can still exceed the MIME budget. Active operations retain their slot until all callbacks really return. A send beyond `MaxActive` waits briefly (bounded by its context, the operation timeout and the shared five-second admission wait) and then fails as `Transient` joined with `fault.Overloaded`, so queued email retries and HTTP callers receive a retryable 503; a nested send from an active send never waits. Memory retained by application inputs, adapter encoding and optional recorders is additional to the encoded-MIME budget; this is not a process RSS limit.
@@ -57,6 +161,7 @@ Every transport has a pure constructor. `email.New(driver, disks, config, observ
 | --- | --- |
 | `email/smtp` | Explicit host:port and `STARTTLS`, implicit `TLS`, or loopback-only `PlainLoopback`. TLS verifies certificates, requires TLS 1.2+, and uses an optional cloned TLS config. `Auth` selects `plain` (default with a username), `login` or `xoauth2` (the password is the OAuth 2.0 access token), all over TLS only; a server that does not advertise the mechanism, or rejects it with 5xx (including 504), is a `Permanent` configuration failure, while 4xx is `Transient`. `LocalName` sets the EHLO identity; empty uses the machine host name (never `localhost`) or the local address literal. `MaxIdle` > 0 keeps up to that many authenticated connections for `IdleTimeout` (default 30s) and resets them with `RSET` before reuse; a pooled session that fails its first command before any reply is replaced once. Zero opens one connection per message. Configured mailers default to `MaxIdle` 2. All RCPT commands must succeed before DATA. A final DATA acceptance survives later connection-close failure. |
 | `email/resend` | Token, default `https://api.resend.com`; JSON recipient arrays, headers and base64 attachments/inline content IDs. Forwards `SendOptions.IdempotencyKey`. |
+| `email/cloudflare` | Cloudflare Email Service account ID (32 hexadecimal characters) and API token, default `https://api.cloudflare.com/client/v4`; submits shared MIME to `/accounts/{account_id}/email/sending/send_raw` with explicit To/CC/BCC envelope addresses. Requires `success: true` and a valid message ID. Enforces the general 5 MiB MIME limit including attachments. Uses the shared no-retry/no-redirect HTTP transport; stable MIME Message-ID is not provider idempotency. |
 | `email/postmark` | Server token, optional message stream, default `https://api.postmarkapp.com`; header **arrays**, base64 attachments and `cid:` inline IDs. Checks both HTTP status and `ErrorCode`. |
 | `email/mailgun` | API key and sending domain, default US `https://api.mailgun.net`; use `https://api.eu.mailgun.net` for EU. Multipart body, `h:` headers, ordinary/inline files. Inline multipart filename uses ContentID, matching Mailgun's `cid:filename` convention. Header option bytes are capped at 16 KiB. |
 | `email/ses` | Explicit AWS region and existing `aws.CredentialsProvider`; existing AWS SDK SigV4 signs `SendRawEmail`, including session credentials. Sends shared MIME/attachments and explicit envelope destinations. Optional configuration set. SES has its own 10 MiB raw-message limit. |
@@ -65,6 +170,17 @@ Every transport has a pure constructor. `email.New(driver, disks, config, observ
 | `email/log` | Injected slog logger; records recipient count, MIME byte count and attachment count only. Simulated acceptance; no delivery. `log.NewPreview(logger, maxBytes)` (configured as `driver = "preview"`) is the development variant: it logs the rendered message (sender, To/Cc addresses, BCC count, subject, locale, headers, bounded text and HTML bodies, attachment names, types and sizes) with credential-like header values (authorization, token, secret, key, password, signature, cookie, session) redacted and attachment bytes omitted. It records private content; use it only locally. |
 
 Provider contracts are based on [Postmark email API](https://postmarkapp.com/developer/api/email-api), [Postmark errors](https://postmarkapp.com/developer/api/overview), [Resend send API](https://resend.com/docs/api-reference/emails/send-email), [Resend inline attachments](https://resend.com/docs/dashboard/emails/embed-inline-images), [Mailgun message API](https://documentation.mailgun.com/docs/mailgun/api-reference/send/mailgun/messages/post-v3--domain-name--messages), and [SES SendRawEmail](https://docs.aws.amazon.com/ses/latest/APIReference/API_SendRawEmail.html). Provider-side verified sender, sandbox, account, quota and attachment-type policies still apply.
+
+The Cloudflare adapter follows [SendRaw](https://developers.cloudflare.com/api/resources/email_sending/methods/send_raw/),
+[REST errors](https://developers.cloudflare.com/email-service/api/send-emails/rest-api/)
+and [sending limits](https://developers.cloudflare.com/email-service/platform/limits/).
+It requires Email Sending access and an onboarded sending domain. A successful
+submission can include bounced or suppressed recipients; `Accepted` remains
+provider acceptance, so the framework does not resend the whole message. Consult
+provider delivery logs for recipient outcomes. HTTP 429 and the explicit 503
+authentication-upstream rejection (10100) are transient; other server failures
+and malformed/contradictory success envelopes are ambiguous. The adapter does not
+assume Cloudflare's larger allowance for verified destination addresses.
 
 ## Outcomes and retries
 

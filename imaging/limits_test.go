@@ -52,15 +52,15 @@ func TestDefaultLimitsAdmitAdvertisedPixelBudget(t *testing.T) {
 			if err := limits.admit(input, int64(large.Width)*int64(large.Height)*format.decodePeakBytes()); err != nil {
 				t.Fatal("default limits reject decoding the advertised pixel budget", format)
 			}
-			if _, err := plan.admit(large, plan.output, input, limits); err != nil {
+			if _, err := plan.admit(t.Context(), inspection{Info: large}, plan.output, input, limits, PortableBackend); err != nil {
 				t.Fatal("default limits reject a 25 MP pipeline", format, plan.output, err)
 			}
 		}
 	}
-	// The pure-Go lossless WebP encoder needs about 60 bytes per pixel, so a
+	// The pure-Go lossless WebP encoder reserves 128 bytes per pixel plus fixed workspace, so a
 	// full-size 25 MP WebP re-encode exceeds the default budget (documented).
 	full := Info{Format: JPEG, Width: 5000, Height: 5000, Images: 1, Orientation: 1}
-	if _, err := NewPlan().Format(WebP).admit(full, WebP, input, limits); err == nil {
+	if _, err := NewPlan().Format(WebP).admit(t.Context(), inspection{Info: full}, WebP, input, limits, PortableBackend); err == nil {
 		t.Fatal("full-size lossless WebP encoding was admitted beyond its measured cost")
 	}
 	over := jpegWithDimensions(t, 5001, 5000)
@@ -77,5 +77,23 @@ func TestTwelveMegapixelPhotoIsProcessedWithDefaults(t *testing.T) {
 	result, err := testEngine(t, DefaultConfig()).ProcessBytes(t.Context(), b.Bytes(), NewPlan().Fit(1024, 1024, false).Format(JPEG))
 	if err != nil || result.Info().Width != 1024 || result.Info().Height != 768 {
 		t.Fatal("ordinary phone photo rejected", err)
+	}
+}
+
+func TestThinImageResamplingAndBlurIncludeWeightsAndRows(t *testing.T) {
+	config := DefaultConfig()
+	config.Limits.WorkingBytes = 32 << 10
+	config.Limits.OutputBytes = 2048
+	e := testEngine(t, config)
+	input := pngInput(t, 1, 1000)
+	// Pixel canvases fit this budget, but Lanczos weights and blur's float32
+	// rows do not. Nearest-neighbor needs neither and remains available.
+	for _, plan := range []Plan{NewPlan().Resize(1, 999), NewPlan().Blur(1)} {
+		if result, err := e.ProcessBytes(t.Context(), input, plan); err == nil || result.Size() != 0 {
+			t.Fatal("thin-image filter escaped its workspace budget")
+		}
+	}
+	if _, err := e.ProcessBytes(t.Context(), input, NewPlan().Resize(1, 999).Resampling(NearestNeighbor)); err != nil {
+		t.Fatal("bounded nearest-neighbor processing rejected", err)
 	}
 }

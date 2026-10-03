@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -164,7 +165,12 @@ func TestSMTPProtocolSecurityEnvelopeAndOutcomes(t *testing.T) {
 				ctx, cancel = context.WithTimeout(ctx, 30*time.Millisecond)
 				defer cancel()
 			}
-			result, err := m.Send(ctx, message(t).Bcc(address(t, "hidden@example.test")), email.SendOptions{})
+			reader := &mailUploadReader{Reader: strings.NewReader("runtime upload")}
+			msg, err := message(t).Bcc(address(t, "hidden@example.test")).AttachUpload(t.Context(), mailUpload{name: "runtime.txt", hint: "text/plain", open: func(context.Context) (io.ReadSeekCloser, error) { return reader, nil }})
+			if err != nil || !reader.closed {
+				t.Fatal("upload preparation failed", err)
+			}
+			result, err := m.Send(ctx, msg, email.SendOptions{})
 			if test.want == "" {
 				if err != nil || !result.Accepted {
 					t.Fatal("SMTP did not accept", err)
@@ -179,6 +185,9 @@ func TestSMTPProtocolSecurityEnvelopeAndOutcomes(t *testing.T) {
 				}
 			}
 			if result.Accepted {
+				if !bytes.Contains(observed.data, []byte("cnVudGltZSB1cGxvYWQ=")) {
+					t.Fatal("SMTP upload attachment missing")
+				}
 				if observed.recipients != 2 || len(observed.data) == 0 || bytes.Contains(observed.data, []byte("hidden@example.test")) {
 					t.Fatal("SMTP envelope/BCC incorrect")
 				}

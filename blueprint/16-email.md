@@ -43,3 +43,12 @@ Milestone 16 passed native verification and consumer review. [The email guide](.
 No dependency was added: MIME/SMTP/templates use the standard library, SES reuses the existing AWS SDK signer and credential interface. Rust's transport coverage is preserved with Postmark header arrays and SES raw MIME attachment support. External account smoke sends remain an explicit verification gap until approved credentials, sender and recipient are available. Milestones 17–24 and the final whole-framework audit remain required.
 
 The [master evidence](00-master-architecture-and-parity.md#milestone-16-verification-and-consumer-review) records acceptance, review corrections and the real-provider smoke gap.
+
+The October 2026 extension adds Cloudflare Email Service as the sixth provider,
+using the same named mailer configuration and MIME/attachment preparation.
+`Message.AttachUpload` captures a browser upload for immediate mail, and
+`Message.AttachStored` accepts a loaded model attachment with a pinned storage
+reference. The [email guide](../docs/guides/email.md) owns these concrete APIs and
+their queue lifetime rules. [Follow-up evidence](../docs/evidence/mail-system-20261003.json)
+records full verification, PostgreSQL/races, typed consumer rejection and real
+editor checks. Real-account delivery remains separately unverified.

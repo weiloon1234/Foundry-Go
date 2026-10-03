@@ -371,6 +371,17 @@ swap width and height. Absent, oversized, unsupported or malformed files reject;
 open/read failures are execution failures. `validation.Dimensions` accepts any
 `ImageMeasurer` for other file sources.
 
+To include the configured native codecs, borrow the application's image engine:
+
+```go
+dimensions := imagingvalidation.DimensionsWithEngine[foundryhttp.UploadedFile](engine,
+    validation.DimensionConstraints{MaxWidth: 4096, MaxHeight: 4096})
+```
+
+This uses the engine's inspection, limits and lifecycle, including HEIF, JPEG XL
+and other available native formats. The rule does not close the engine.
+`NewEngineMeasurer` exposes the same adapter for `validation.Dimensions`.
+
 ## Advisory database rules
 
 Import `validation/database` as `databasevalidation`. The adapter composes the

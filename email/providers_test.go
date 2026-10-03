@@ -14,6 +14,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/cloud/credentials"
 	"github.com/weiloon1234/Foundry-Go/email"
+	"github.com/weiloon1234/Foundry-Go/email/cloudflare"
 	"github.com/weiloon1234/Foundry-Go/email/mailgun"
 	"github.com/weiloon1234/Foundry-Go/email/postmark"
 	"github.com/weiloon1234/Foundry-Go/email/resend"
@@ -32,6 +33,9 @@ type providerCase struct {
 
 func providers() []providerCase {
 	return []providerCase{
+		{"cloudflare", "/accounts/0123456789abcdef0123456789abcdef/email/sending/send_raw", `{"success":true,"errors":[],"result":{"message_id":"provider-id"}}`, func(c email.HTTPConfig) (apiDriver, error) {
+			return cloudflare.New(cloudflare.Config{HTTP: c, AccountID: "0123456789abcdef0123456789abcdef", Token: secret.New("fixture-token")})
+		}},
 		{"resend", "/emails", `{"id":"provider-id"}`, func(c email.HTTPConfig) (apiDriver, error) {
 			return resend.New(resend.Config{HTTP: c, Token: secret.New("fixture-token")})
 		}},
@@ -60,6 +64,21 @@ func TestProviderRequestContracts(t *testing.T) {
 					t.Error("wrong API operation")
 				}
 				switch provider.name {
+				case "cloudflare":
+					if r.Header.Get("Authorization") != "Bearer fixture-token" || r.Header.Get("Content-Type") != "application/json" {
+						t.Error("missing Cloudflare authentication or content type")
+					}
+					var body struct {
+						From       string   `json:"from"`
+						Recipients []string `json:"recipients"`
+						MIME       string   `json:"mime_message"`
+					}
+					if json.NewDecoder(r.Body).Decode(&body) != nil || body.From != message(t).From().Mailbox() || len(body.Recipients) != 2 || body.Recipients[1] != "hidden@example.test" {
+						t.Error("invalid Cloudflare envelope")
+					}
+					if strings.Contains(body.MIME, "hidden@example.test") || !strings.Contains(strings.ToLower(body.MIME), "content-id: <inline-logo>") || !strings.Contains(body.MIME, "X-Custom: original") || !strings.Contains(body.MIME, base64.StdEncoding.EncodeToString([]byte("private attachment"))) || !strings.Contains(body.MIME, base64.StdEncoding.EncodeToString([]byte("runtime upload"))) {
+						t.Error("invalid Cloudflare MIME")
+					}
 				case "resend":
 					if r.Header.Get("Authorization") != "Bearer fixture-token" || r.Header.Get("Idempotency-Key") != "fixture-key" {
 						t.Error("missing authentication or stable key")
@@ -73,10 +92,13 @@ func TestProviderRequestContracts(t *testing.T) {
 							ContentID         string `json:"content_id"`
 						}
 					}
-					if json.NewDecoder(r.Body).Decode(&body) != nil || len(body.To) != 1 || len(body.BCC) != 1 || body.Headers["X-Custom"] != "original" || len(body.Attachments) != 1 || body.Attachments[0].ContentID != "inline-logo" {
+					if json.NewDecoder(r.Body).Decode(&body) != nil || len(body.To) != 1 || len(body.BCC) != 1 || body.Headers["X-Custom"] != "original" || len(body.Attachments) != 2 || body.Attachments[0].ContentID != "inline-logo" {
 						t.Error("invalid Resend envelope")
 					}
-					if len(body.Attachments) == 1 {
+					if len(body.Attachments) == 2 {
+						if body.Attachments[1].Content != base64.StdEncoding.EncodeToString([]byte("runtime upload")) {
+							t.Error("runtime attachment lost")
+						}
 						data, err := base64.StdEncoding.DecodeString(body.Attachments[0].Content)
 						if err != nil || string(data) != "private attachment" {
 							t.Error("invalid Resend attachment")
@@ -91,7 +113,7 @@ func TestProviderRequestContracts(t *testing.T) {
 						Headers     []struct{ Name, Value string }
 						Attachments []struct{ Content, ContentID string }
 					}
-					if json.NewDecoder(r.Body).Decode(&body) != nil || body.Bcc == "" || len(body.Headers) != 1 || body.Headers[0].Name != "X-Custom" || len(body.Attachments) != 1 || body.Attachments[0].ContentID != "cid:inline-logo" {
+					if json.NewDecoder(r.Body).Decode(&body) != nil || body.Bcc == "" || len(body.Headers) != 1 || body.Headers[0].Name != "X-Custom" || len(body.Attachments) != 2 || body.Attachments[0].ContentID != "cid:inline-logo" || body.Attachments[1].Content != base64.StdEncoding.EncodeToString([]byte("runtime upload")) {
 						t.Error("invalid Postmark contract")
 					}
 				case "mailgun":
@@ -107,6 +129,16 @@ func TestProviderRequestContracts(t *testing.T) {
 					if r.FormValue("bcc") == "" || r.FormValue("h:X-Custom") != "original" || len(r.MultipartForm.File["inline"]) != 1 || r.MultipartForm.File["inline"][0].Filename != "inline-logo" {
 						t.Error("invalid Mailgun envelope/inline contract")
 					}
+					file, _, err := r.FormFile("attachment")
+					if err != nil {
+						t.Error("runtime Mailgun attachment missing")
+						return
+					}
+					data, err := io.ReadAll(file)
+					_ = file.Close()
+					if err != nil || string(data) != "runtime upload" {
+						t.Error("runtime Mailgun attachment lost")
+					}
 				case "ses":
 					if !strings.Contains(r.Header.Get("Authorization"), "/us-east-1/ses/aws4_request") || r.Header.Get("X-Amz-Security-Token") != "fixture-session" {
 						t.Error("SES shared SDK signature missing")
@@ -115,7 +147,7 @@ func TestProviderRequestContracts(t *testing.T) {
 						t.Error("invalid SES action/envelope")
 					}
 					wire, err := base64.StdEncoding.DecodeString(r.FormValue("RawMessage.Data"))
-					if err != nil || strings.Contains(string(wire), "hidden@example.test") || !strings.Contains(strings.ToLower(string(wire)), "content-id: <inline-logo>") {
+					if err != nil || strings.Contains(string(wire), "hidden@example.test") || !strings.Contains(strings.ToLower(string(wire)), "content-id: <inline-logo>") || !strings.Contains(string(wire), base64.StdEncoding.EncodeToString([]byte("runtime upload"))) {
 						t.Error("invalid SES MIME")
 					}
 				}
@@ -130,7 +162,15 @@ func TestProviderRequestContracts(t *testing.T) {
 			}
 			defer driver.Close()
 			m := mailer(t, driver, registry, nil)
-			msg := message(t).HTML(`<img src="cid:inline-logo">`).Bcc(address(t, "hidden@example.test")).Header("X-Custom", "original").Attach(attachment)
+			msg, err := message(t).HTML(`<img src="cid:inline-logo">`).Bcc(address(t, "hidden@example.test")).Header("X-Custom", "original").AttachStored(storedMailFile{attachment})
+			if err != nil {
+				t.Fatal(err)
+			}
+			reader := &mailUploadReader{Reader: strings.NewReader("runtime upload")}
+			msg, err = msg.AttachUpload(t.Context(), mailUpload{name: "runtime.txt", hint: "text/plain", open: func(context.Context) (io.ReadSeekCloser, error) { return reader, nil }})
+			if err != nil || !reader.closed {
+				t.Fatal("upload preparation failed", err)
+			}
 			result, err := m.Send(t.Context(), msg, email.SendOptions{IdempotencyKey: "fixture-key"})
 			if err != nil || !result.Accepted || result.Receipt.MessageID != "provider-id" || requests.Load() != 1 {
 				t.Fatal("provider did not accept one request", err)

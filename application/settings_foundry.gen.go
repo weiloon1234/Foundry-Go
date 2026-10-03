@@ -16,6 +16,7 @@ import (
 	http "github.com/weiloon1234/Foundry-Go/http"
 	httpclient "github.com/weiloon1234/Foundry-Go/httpclient"
 	i18n "github.com/weiloon1234/Foundry-Go/i18n"
+	imaging "github.com/weiloon1234/Foundry-Go/imaging"
 	infrastructure "github.com/weiloon1234/Foundry-Go/infrastructure"
 	jobs "github.com/weiloon1234/Foundry-Go/jobs"
 	logging "github.com/weiloon1234/Foundry-Go/logging"
@@ -1154,7 +1155,9 @@ type SettingsImageConfigKeySet struct {
 
 // SettingsImageConfigConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsImageConfigConfigKeySet struct {
-	Limits SettingsImageConfigLimitsConfigKeySet
+	// Backend selects image.config.backend. Set accepts imaging.Backend.
+	Backend config.Key[Settings, imaging.Backend]
+	Limits  SettingsImageConfigLimitsConfigKeySet
 	// MaxActive selects image.config.max_active. Set accepts int.
 	MaxActive config.Key[Settings, int]
 	// Timeout selects image.config.timeout. Set accepts time.Duration.
@@ -1762,6 +1765,7 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 		Image: SettingsImageConfigKeySet{
 			Enabled: config.Scalar[Settings, bool]("image.enabled", func(settings *Settings) *bool { return &settings.Image.Enabled }),
 			Config: SettingsImageConfigConfigKeySet{
+				Backend: config.Scalar[Settings, imaging.Backend]("image.config.backend", func(settings *Settings) *imaging.Backend { return &settings.Image.Config.Backend }),
 				Limits: SettingsImageConfigLimitsConfigKeySet{
 					InputBytes:   config.Scalar[Settings, int64]("image.config.limits.input_bytes", func(settings *Settings) *int64 { return &settings.Image.Config.Limits.InputBytes }),
 					OutputBytes:  config.Scalar[Settings, int64]("image.config.limits.output_bytes", func(settings *Settings) *int64 { return &settings.Image.Config.Limits.OutputBytes }),
@@ -2161,6 +2165,7 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.Features.Maintenance.Custom.Timeout,
 		keys.Features.Maintenance.Custom.Retention,
 		keys.Image.Enabled,
+		keys.Image.Config.Backend,
 		keys.Image.Config.Limits.InputBytes,
 		keys.Image.Config.Limits.OutputBytes,
 		keys.Image.Config.Limits.Width,

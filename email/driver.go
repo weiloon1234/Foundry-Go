@@ -70,7 +70,7 @@ func (o Outbound) Validate() error {
 // StructuredDriver is optional. A provider API that submits native fields
 // (bodies, headers, attachments) rather than the rendered MIME document
 // reports true, so Mailer skips MIME rendering; Outbound.MIME is then empty.
-// SMTP, SES, memory and log drivers receive the full MIME document.
+// SMTP, SES, Cloudflare, memory and log drivers receive the full MIME document.
 type StructuredDriver interface {
 	StructuredSubmission() bool
 }

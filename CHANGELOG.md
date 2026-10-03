@@ -2,6 +2,99 @@
 
 ## Unreleased
 
+- Adds an optional, explicitly selected libvips imaging backend behind the
+  `foundry_vips` build tag: HEIF/HEIC, JPEG 2000, JPEG XL, bounded SVG rasterization,
+  ICC-to-sRGB conversion, metadata policies and attention/entropy smart cropping.
+  Configured application services, attachment variants and upload dimension rules
+  share backend-aware inspection. Portable builds remain independent of OS libraries.
+
+- Adds portable lossy WebP output for stills and animations, typed lossless/lossy
+  mode, quality and search effort controls. Lossless remains the default, alpha
+  stays exact, and consumers continue to import only Foundry. Replaces the
+  lossless-only codec and accounts for the new encoder's working buffers.
+
+### Portable image editing expansion
+
+- Extends immutable imaging plans with positioned fill/crop, one-axis resizing,
+  downsize-only resize, padding with or without enlargement, absolute/relative
+  canvas sizing, resampling selection and arbitrary clockwise rotation.
+- Adds image creation, reusable image insertion with positioning/opacity and eight
+  blend modes, alpha/luminance masks, plus invert, gamma, saturation, hue, sepia,
+  threshold, pixelation and unsharp masking. Consumers use Foundry types and the
+  existing attachment variant API; no new dependency is required for this stage.
+- Preflights aggregate source/layer bytes, retained canvas and layer decoding,
+  resized canvases and filter scratch before pixel processing. Plans and prepared
+  layers are safe to reuse concurrently; failures return no partial image.
+- Adds owned built-in/custom fonts, antialiased text with wrapping, kerning,
+  alignment and positioning, plus filled/stroked shapes and immutable Bézier paths.
+  Text, fonts and drawing scratch share the engine's bounds and attachment plans.
+  The portable renderer provides left-to-right outline text; complex script shaping
+  and color emoji are not implied. This stage adds no dependency.
+- Adds explicit GIF/APNG animation preservation, including frame disposal,
+  blending, timing, looping and transformations on each displayed canvas. Animated
+  output is supported in GIF and PNG; unsupported outputs fail explicitly. Engine
+  capability snapshots distinguish format reading, writing and animation support.
+  Aggregate frames, pixels and retained buffers are admitted before decoding.
+
+- Adds portable AVIF input, including 8/10/12-bit images, alpha, grids,
+  clean-aperture cropping, rotation/mirroring and image sequences. Existing plans
+  and attachment variants accept AVIF without consumer dependencies or OS libraries.
+  Bounded container/bitstream admission precedes decoding; sequence counts,
+  dimensions and timing are checked to reject silent codec fallback.
+
+- Adds typed PNG/APNG compression selection and AVIF speed/independent alpha
+  quality controls. Explicit zero AVIF speed is preserved; incompatible output
+  formats fail validation. Clarifies that maximum AVIF quality still performs
+  RGB conversion and 4:2:0 subsampling rather than guaranteeing exact RGB pixels.
+- Preserves bounded-writer failures even when a codec ignores write errors,
+  preventing oversized WebP output from being reported as a successful partial file.
+- Checks extended WebP canvas dimensions against the coded VP8/VP8L header before
+  decoding, so conflicting headers cannot bypass input pixel/workspace admission.
+
+- Adds portable animated WebP input (lossy/lossless) and lossless output, with
+  frame placement, alpha blending, disposal, timing, looping and complete plan
+  transforms. The existing frame policy and attachment variant API apply.
+  Checks nested coded dimensions and RIFF bounds before decoding, retains writer
+  failures and rejects unrepresentable output dimensions/timing/loop counts.
+- Corrects lossy WebP video-range color conversion and chroma interpolation;
+  accounts for padded decoder macroblocks and fixed encoder hash-table scratch.
+- Reduces fractional animation delays before APNG encoding when needed, allowing
+  exact conversions from higher-frequency source clocks.
+
+- Documents the configured `application.New` / `Services.Image()` path as the
+  ordinary consumer entry point. The independent authenticated upload fixture now
+  verifies image enlargement/padding, persisted colors and application-owned
+  engine shutdown.
+
+### Configured Cloudflare mail and direct attachment sources
+
+- Adds `email/cloudflare` and `infrastructure.CloudflareMail` with generated
+  `API.AccountID` configuration. Consumers choose Cloudflare alongside SMTP,
+  Resend, Postmark, Mailgun and SES through the existing named mailer settings,
+  including failover. The adapter reuses MIME, storage and bounded HTTP handling;
+  it checks response envelopes and the general 5 MiB message limit, and never
+  retries an uncertain submission automatically.
+- `Message.AttachUpload(ctx, http.UploadedFile)` captures a browser upload without
+  storing it, closes its reader, and uses shared media detection. The resulting
+  message survives request cleanup and works with every mail adapter.
+- `Message.AttachStored(file)` accepts a Foundry attachment file, owned attachment
+  or loaded single-file model slot. `EmailAttachment()` exposes its pinned
+  reference for typed queue DTOs. Stored bytes resolve through the mailer's disk
+  registry; runtime upload bytes still require persistence before queueing.
+- Documents consumer provider configuration, environment secrets and the common
+  attachment API, with executable application, HTTP and stored-model fixtures.
+
+### Translatable pagination labels
+
+- Numbered, simple and cursor pagination label their page number and size
+  parameters with `pagination.NumberLabelKey` (`http.pagination.page`, "Page")
+  and `pagination.SizeLabelKey` (`http.pagination.size`, "Page size"). Their 422
+  issues and messages name the field in the request's language instead of the
+  wire name, and exported query metadata carries the keys.
+- `pagination.MessageDefinitions()` declares them; configured applications
+  register them beside the validation and HTTP messages. Untranslated English
+  messages now say "Page" and "Page size" rather than `page` and `per_page`.
+
 ### JSON catalogs shared by Go and browser clients
 
 - `i18n.ReadTemplates` reads a catalog tree with `Load`'s layout, limits and

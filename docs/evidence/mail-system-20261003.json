@@ -1,0 +1,96 @@
+{
+  "format": 1,
+  "date": "2026-10-03",
+  "status": "accepted",
+  "scope": "Cloudflare Email Service adapter, configured provider selection and provider-independent browser/stored attachment sources.",
+  "behavior": [
+    "Cloudflare uses shared bounded HTTP and raw MIME, explicit envelope recipients, validated account/token settings, a 5 MiB MIME ceiling and conservative acceptance/error classification.",
+    "Named configured mailers and failover use the existing application assembly and generated schema, including environment token overrides.",
+    "Message.AttachUpload snapshots a bounded captured upload, detects its media type and closes its reader; no attachment record or storage object is required.",
+    "Message.AttachStored accepts stored File, Attachment and loaded One model slots; EmailAttachment exposes a version/ETag-pinned reference for typed queue payloads.",
+    "Every adapter consumes the shared prepared attachment representation; consumers do not encode provider blobs.",
+    "Runtime upload bytes remain unsuitable for durable queue snapshots until persisted; stored references do not prevent object deletion."
+  ],
+  "checks": {
+    "generation": {
+      "command": "go run ./cmd/foundry generate --recursive --field-docs --dir infrastructure",
+      "exit_code": 0,
+      "result": "Generated one owned configuration file and its manifest; final make verify confirmed all generated output current."
+    },
+    "full_gate": {
+      "command": "make verify",
+      "exit_code": 0,
+      "log_sha256": "cc33a7180fbe4386a255c5ad25d3ed895b300876f2e836e29989b4638202a9ee",
+      "result": "Native Go 1.27.1 darwin/arm64; formatting, vet, root tests, independent fixtures/compiler cases, generation, documentation and release tools passed."
+    },
+    "focused_races_postgres": {
+      "command": "FOUNDRY_TEST_POSTGRES_REQUIRED=1 go test -race ./email/... ./attachments ./infrastructure ./internal/upload",
+      "directory": ".",
+      "exit_code": 0,
+      "log_sha256": "79add49a7783a1abe884cf6de3cf790086657b8d6502b3367a49aee9ea63318b",
+      "environment": "Existing .env.test loaded privately; PostgreSQL required; retained isolated test namespaces and temporary storage."
+    },
+    "consumer_races_postgres": {
+      "command": "FOUNDRY_TEST_POSTGRES_REQUIRED=1 go test -race ./mailing ./articles -run 'Test(ConfiguredMailProvidersAndFailover|BrowserUploadCanBeEmailedWithoutAttachmentStorage|StoredModelAttachmentsCanBeEmailed)$'",
+      "directory": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "log_sha256": "588f531867444dc69cc0552449e797870eea41ccc6966fdb7a5cfbfff2dfb1a5",
+      "environment": "Existing .env.test loaded privately; PostgreSQL required. Refreshed after concurrent imaging source edits."
+    },
+    "compiler_rejections": {
+      "command": "go test -run '^TestInvalidPublicContractsFailCompilation/(email_upload_source|email_stored_source)$' .",
+      "directory": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "result": "Raw readers and string paths fail at their intended attachment interfaces; also included in the full fixture gate."
+    },
+    "editor": {
+      "command": "FOUNDRY_TEST_GOPLS=\"$PWD/bin/gopls\" go test -count=1 -v ./internal/agent -run '^TestRealGoplsConsumer/(email-cloudflare-driver|email-cloudflare-config|email-upload-attachment|email-stored-attachment)$'",
+      "exit_code": 0,
+      "log_sha256": "7ceafd4ec95265420c698025711160cf76fa711cf53e8bcaeefb8232555df12c",
+      "result": "All four real gopls completion/hover/definition probes passed."
+    }
+  },
+  "failures_and_corrections": [
+    "The initial stored-reference unit fixture used an invalid unquoted ETag; corrected the fixture to the existing storage contract without relaxing runtime validation.",
+    "Early race/consumer attempts encountered concurrent incomplete imaging edits. They were preserved; the final required checks passed after those source definitions became available.",
+    "The first full gate exposed a stale CLI test expecting three generated client artifacts. Verified the current entry, two runtime modules, manifest and OpenAPI output and corrected that test to five; the subsequent complete gate passed."
+  ],
+  "review": [
+    "No new dependencies or parallel mail/queue/storage implementations.",
+    "Attachment source interfaces share the existing upload owner; HTTP is not imported by email.",
+    "Readers close on success, read/open/close failure, cancellation and isolated panic/Goexit; no partial message is exposed on helper failure.",
+    "BCC stays in the envelope and out of MIME; provider identity and credential settings remain instance-owned.",
+    "Ambiguous submission does not trigger failover; recipient bounces do not undo known provider acceptance.",
+    "Independent browser and PostgreSQL model consumers prove the public path, including post-request cleanup and missing stored content before submission."
+  ],
+  "verification_limits": [
+    "Real-account provider delivery was not tested and no external email was sent.",
+    "Concurrent imaging and pagination work outside this mail scope was preserved; this is not an audit of those features."
+  ],
+  "source_sha256": {
+    "attachments/email.go": "4a1f594d2541203f4cb5e364519cae63ace6c58e7d18d3b50c4abb508a14a90d",
+    "attachments/email_test.go": "ab2564cca6eee93bc866c7087b2e0ae626e422cad7e89e3545e0385743be19fd",
+    "attachments/slot_write.go": "3f927e1e122c3668126731dc12d13fae6219590a960bf5deda9bd26990f1cf5f",
+    "cmd/foundry/contracts_test.go": "21cb40fcb132297737c122d2368d57f34d84fe2a5ef5c899a001f7c45516f185",
+    "email/attachment_sources.go": "e5cd14b4870a8e887b88fa22bd50e2396db75264b495649f3962b8f3d103f8b1",
+    "email/attachment_sources_test.go": "dd0f4f21e8842454df08e553a3a895c8975e2c5b5cda0183d70cad4c5b26139a",
+    "email/cloudflare/driver.go": "c4f4c343d5de82e81c9d9a27fa66e48a769546b3fb16390514f1522a7a147293",
+    "email/cloudflare_test.go": "ccdec6d039adb58c00980b195034cad283b06ed1ccf7d1a7c8eb3bdb18ed9974",
+    "email/driver.go": "3bfda9b1f7830fd38984c6de9b653a1f33422ec17750bcc7f6b97abb36310daa",
+    "email/providers_test.go": "b5a0946cb49843c0200ccc061dc3355be98f5613e3acd22648a81a6690cc33ff",
+    "email/smtp_test.go": "08bd57e946332ae5db3ce15a8d2c9a2f45c4418818529f3b4d672994741e1694",
+    "infrastructure/.foundry-gen.json": "6d7bc7bf23f6fcd93f477d9a88a65845276b95899e1338d99071c6ef9a8614c2",
+    "infrastructure/mail_providers.go": "aa84359c22eae3df0245bf06a24b67aa4071f324c0be90ebea4973ce6398bfb5",
+    "infrastructure/mail_settings.go": "04db913fe981fa9d341db49f1330dbd85c3c56af58ee774b2616e9d594f8d006",
+    "infrastructure/mailer_settings_foundry.gen.go": "4afa3bdaed9c3fa7130924d2f3aef495603fbffbafdcd73d8b10f26510e0d935",
+    "internal/agent/gopls_acceptance_test.go": "028e86cc092be36f1cac4209c8c8d456474204eb2d6eb1b33cbec1e023e13802",
+    "internal/upload/source.go": "2bfcc6d58ca5e20170fce9e5a0e9b0a1efcb5c6969a4e4afce9aa4f49a4dd95e",
+    "tests/fixtures/consumer/articles/email_postgres_test.go": "cb63715cad996a9fc40f07f40ebb55bb157c42d90d0f50f5f705d5d5f448ea34",
+    "tests/fixtures/consumer/mailing/configured_test.go": "ada2bc9f1212ff0668d5a0abf5dd372490e6be77409da65fcf6239ba89c67d4e",
+    "tests/fixtures/consumer/mailing/testdata/mailers.toml": "5293c2b35a73e6128b0992542c05981090f4fc6100328391f921fcac17e30388",
+    "tests/fixtures/consumer/mailing/uploads_test.go": "8592b43e255b038e2dd2cd1d2dc89b80424714f28ed1768650f6ce9a9cb6db57",
+    "tests/fixtures/consumer/testdata/compilefail/email_stored_source/invalid.go": "0b6606fa7a3a612deb09cc177bb1016ab9abfe3856956993cd1224b2de5fb6cf",
+    "tests/fixtures/consumer/testdata/compilefail/email_upload_source/invalid.go": "db4ac270d74e165efc7e57509fc08a86914e0e651e64eb316926a020476e3fc5",
+    "tests/fixtures/consumer/types_test.go": "64c303a346ea037c1accf2cf1b0dc7c22e962ed37dbfbac4eb258aee53905872"
+  }
+}
