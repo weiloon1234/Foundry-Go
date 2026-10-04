@@ -10,8 +10,9 @@ safe 500 responses.
 
 Enable `settings.Features.Locales.Enabled` and configure its `Default`, `Locales`
 and optional `Fallback`. The HTTP kernel automatically applies `http.Locale` and
-registers `validation.MessageDefinitions()`, `http.MessageDefinitions()` and
-`pagination.MessageDefinitions()`.
+registers `application.MessageDefinitions()`: the validation, HTTP and pagination
+messages. An application that builds its own catalog declares the same set by
+calling it, so a message the framework adds later is not missed.
 Supply translations through `application.FeatureDeclarations.Catalog`; only your
 own additional message signatures go in `Messages`.
 

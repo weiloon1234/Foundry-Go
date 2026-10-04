@@ -98,8 +98,9 @@ language. A Malay catalog can then read "Halaman mesti sekurang-kurangnya 1"
 rather than "page mesti …". The English
 labels are built in. Configured applications register
 `pagination.MessageDefinitions()`, so a catalog translates the keys, English
-included. An application building its own catalog adds those definitions. The
-exported query parameters carry the same keys.
+included. An application building its own catalog adds them through
+`application.MessageDefinitions()`. The exported query parameters carry the same
+keys.
 
 ## Responses and navigation
 

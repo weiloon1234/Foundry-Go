@@ -129,6 +129,9 @@ templates by locale and key. An application can then declare keys of its own,
 for example a parameter-free definition for each label its JSON catalog
 defines, and compile both with `i18n.NewCatalog`, or pass the templates as
 `application.FeatureDeclarations.Catalog` with the definitions in `Messages`.
+A catalog built with `i18n.NewCatalog` also needs the framework's own messages:
+`application.MessageDefinitions()` returns the set a configured application
+registers.
 Compilation still rejects a placeholder the declaration lacks and plural forms on
 a key declared without a plural parameter, naming the locale and key. Templates
 from `ReadTemplates` carry no file names into those later errors.

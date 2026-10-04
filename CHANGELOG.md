@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Framework message definitions in one set
+
+- `application.MessageDefinitions()` returns the framework message definitions a
+  configured catalog registers: validation, HTTP and pagination messages. An
+  application building its own catalog declares them through it, so a message the
+  framework adds later cannot be missed. The configured catalog uses the same
+  function.
+
 - Automatically discovers an installed libvips runtime without custom build tags,
   libvips development headers or build-time linkage: HEIF/HEIC, JPEG 2000, JPEG XL, bounded SVG rasterization,
   ICC-to-sRGB conversion, metadata policies and attention/entropy smart cropping.
