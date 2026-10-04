@@ -1,9 +1,10 @@
-//go:build foundry_vips && cgo
+//go:build cgo && (darwin || linux || freebsd || windows)
 
 package profiles_test
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"foundry.test/consumer/profiles"
@@ -33,7 +34,10 @@ func TestConfiguredNativeImageService(t *testing.T) {
 		t.Fatal(err)
 	}
 	if engine.Capabilities().Backend != imaging.LibvipsBackend {
-		t.Fatal("configured backend ignored")
+		if os.Getenv("FOUNDRY_TEST_VIPS_REQUIRED") == "1" {
+			t.Fatal("required native backend unavailable", engine.NativeError())
+		}
+		t.Skip("libvips runtime unavailable")
 	}
 	rule := imagingvalidation.DimensionsWithEngine[foundryhttp.UploadedFile](engine, validation.DimensionConstraints{MaxWidth: 1024, MaxHeight: 1024})
 	if err := rule.Validate(); err != nil {

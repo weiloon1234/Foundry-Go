@@ -27,6 +27,9 @@ func Module(name foundation.ProviderID, key foundation.Key[*Engine], config Conf
 		}); err != nil {
 			return errors.Join(err, engine.Close(ctx))
 		}
+		if config.Backend == AutoBackend && engine.NativeError() != nil {
+			r.Logger().WarnContext(ctx, "native image features are unavailable; portable imaging remains available", "reason", engine.NativeError())
+		}
 		return nil
 	}}
 }

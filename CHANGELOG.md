@@ -2,11 +2,15 @@
 
 ## Unreleased
 
-- Adds an optional, explicitly selected libvips imaging backend behind the
-  `foundry_vips` build tag: HEIF/HEIC, JPEG 2000, JPEG XL, bounded SVG rasterization,
+- Automatically discovers an installed libvips runtime without custom build tags,
+  libvips development headers or build-time linkage: HEIF/HEIC, JPEG 2000, JPEG XL, bounded SVG rasterization,
   ICC-to-sRGB conversion, metadata policies and attention/entropy smart cropping.
   Configured application services, attachment variants and upload dimension rules
-  share backend-aware inspection. Portable builds remain independent of OS libraries.
+  share backend-aware inspection. Missing libraries leave portable imaging usable,
+  emit a configured startup warning and return `imaging.ErrNativeUnavailable` for native
+  requests. `NativeError()` explains discovery failures; explicit portable and
+  required-native modes remain available. Native calls require cgo, while
+  `CGO_ENABLED=0` builds remain portable.
 
 - Adds portable lossy WebP output for stills and animations, typed lossless/lossy
   mode, quality and search effort controls. Lossless remains the default, alpha

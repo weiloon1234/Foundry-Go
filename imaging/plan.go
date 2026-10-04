@@ -22,7 +22,7 @@ const (
 )
 
 // Metadata selects retention after transformation. The default strips metadata.
-// Preservation requires LibvipsBackend and an output with WriteMetadata support.
+// Preservation requires an available libvips runtime and an output with WriteMetadata support.
 // PreserveMetadata includes EXIF (including GPS), XMP, IPTC and ICC where supported;
 // obsolete EXIF orientation, dimensions and thumbnails are normalized on output.
 type Metadata uint8

@@ -1,5 +1,24 @@
 # 18 — Imaging and model extensions
 
+## Runtime loading follow-up — 2026-10-04
+
+The user requested native image APIs in ordinary builds, with runtime errors or
+startup warnings when libvips is absent. The implementation replaces custom
+build-tag/link-time selection with runtime loading, makes `AutoBackend` the
+default, retains explicit portable/required-native modes and exposes `NativeError`.
+The cgo bridge uses opaque native objects and checks the ABI before initialization;
+no libvips development headers or pkg-config are required to build. CGO-disabled
+binaries retain the portable path. Missing-library consumers use isolated processes
+so installed native libraries never need to be removed or renamed.
+
+Status: accepted. Ordinary native and CGO-disabled builds, installed/missing/
+invalid-library consumers, runtime and consumer races, PostgreSQL attachments,
+real gopls, compiler contracts and final `make verify` all passed. The consumer
+binary has no libvips link dependency and builds without pkg-config. All 158
+source fingerprints match. See [runtime-loading evidence](../docs/evidence/imaging-runtime-loading-20261004.json).
+Native execution was verified on macOS arm64; other platform loader branches
+remain unexecuted here. Earlier expansion evidence below remains historical.
+
 ## Imaging expansion — 2026-10-03
 
 The requested continuation expands the existing public `imaging` package toward

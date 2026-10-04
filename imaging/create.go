@@ -29,7 +29,7 @@ func (e *Engine) Create(ctx context.Context, width, height int, background color
 	var result Result
 	err = e.calls.Run(ctx, "create image", func(ctx context.Context) error {
 		info := Info{Format: PNG, Width: width, Height: height, Images: 1, Orientation: 1}
-		if _, err := plan.admit(ctx, inspection{Info: info}, format, 0, e.config.Limits, e.config.Backend); err != nil {
+		if _, err := plan.admit(ctx, inspection{Info: info}, format, 0, e.config.Limits, e.capabilities.Backend); err != nil {
 			return err
 		}
 		if err := ctx.Err(); err != nil {

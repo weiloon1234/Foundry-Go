@@ -7,18 +7,18 @@ type nativeEncoding struct {
 }
 
 // HEIFQuality selects HEVC quality 1..100, default 85. Requires explicit HEIF
-// output and LibvipsBackend. A quality of 100 is not a lossless guarantee.
+// output and an available libvips runtime. A quality of 100 is not a lossless guarantee.
 func (p Plan) HEIFQuality(quality int) Plan { p.nativeEncoding.heif = value.Set(quality); return p }
 
 // JPEG2000Quality selects lossy quality 1..100 for explicit JPEG2000 output.
-// Omitting it keeps the default lossless encoding. Requires LibvipsBackend.
+// Omitting it keeps the default lossless encoding. Requires an available libvips runtime.
 func (p Plan) JPEG2000Quality(quality int) Plan {
 	p.nativeEncoding.jpeg2000 = value.Set(quality)
 	return p
 }
 
 // JPEGXLQuality selects lossy quality 1..100 for explicit JPEGXL output.
-// Omitting it keeps the default lossless encoding. Requires LibvipsBackend.
+// Omitting it keeps the default lossless encoding. Requires an available libvips runtime.
 func (p Plan) JPEGXLQuality(quality int) Plan { p.nativeEncoding.jpegxl = value.Set(quality); return p }
 
 func (o nativeEncoding) validate(format Format) error {

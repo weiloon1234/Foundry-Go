@@ -1,4 +1,4 @@
-//go:build foundry_vips && cgo
+//go:build cgo && (darwin || linux || freebsd || windows)
 
 package imaging
 
@@ -22,6 +22,12 @@ func nativeEngine(t *testing.T) *Engine {
 	t.Helper()
 	config := DefaultConfig()
 	config.Backend = LibvipsBackend
+	if _, err := nativeCapabilities(); err != nil {
+		if os.Getenv("FOUNDRY_TEST_VIPS_REQUIRED") == "1" {
+			t.Fatal(err)
+		}
+		t.Skip("libvips runtime unavailable")
+	}
 	return testEngine(t, config)
 }
 func requireNativeFormat(t *testing.T, e *Engine, format Format) {
@@ -44,7 +50,11 @@ func nativeFixture(t testing.TB, name string) []byte {
 }
 
 func TestNativeCapabilitiesAndFormatRoundTrips(t *testing.T) {
-	e := nativeEngine(t)
+	_ = nativeEngine(t)
+	e := testEngine(t, DefaultConfig())
+	if e.NativeError() != nil {
+		t.Fatal("default engine did not discover the native runtime", e.NativeError())
+	}
 	caps := e.Capabilities()
 	if caps.Backend != LibvipsBackend || !caps.ColorManagement || !caps.MetadataPreservation || !caps.SmartCrop {
 		t.Fatal("native capabilities incomplete", caps)
@@ -418,6 +428,7 @@ func TestNativeCloseRetainsActualReaderLifetime(t *testing.T) {
 }
 
 func TestNativeInFlightCancellationLeavesEngineUsable(t *testing.T) {
+	_ = nativeEngine(t)
 	config := DefaultConfig()
 	config.Backend, config.MaxActive = LibvipsBackend, 1
 	e := testEngine(t, config)

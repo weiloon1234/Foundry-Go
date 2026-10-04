@@ -5,6 +5,8 @@ Milestone 18 passed native verification and consumer review. The
 records the checks and operational limits.
 The [imaging expansion](../../blueprint/18-imaging-and-model-extensions.md#imaging-expansion--2026-10-03)
 also passed its final portable/native, consumer and framework verification gates.
+The [runtime-loading follow-up](../evidence/imaging-runtime-loading-20261004.json)
+passed ordinary native builds, missing-library consumers and the full gate.
 
 An image plan owns transformation policy and can be reused by an attachment
 collection. In an ordinary configured application, enable the built-in engine:
@@ -255,7 +257,7 @@ decode allowance also includes its logical canvas and bounded frame metadata.
 Cancellation or a failed frame returns no partial animation. See the executable
 [animated avatar](../../tests/fixtures/consumer/profiles/animated_images.go).
 
-The optional libvips backend adds the capabilities described below.
+An automatically discovered libvips runtime adds the capabilities described below.
 
 ## Formats and metadata
 
@@ -404,24 +406,52 @@ Dependency review used the standard image codecs plus
 [gav1d AVIF codec](https://github.com/gen2brain/gav1d). The reviewed versions are installed and aligned across the framework and
 consumer; focused round trips for all eight output formats passed.
 
-## Optional libvips backend
+## Automatically discovered libvips runtime
 
-Consumers still import only Foundry. Install libvips 8.18 or later and pkg-config
-(for example, `brew install vips pkgconf` on macOS), build with
-`CGO_ENABLED=1 go build -tags foundry_vips`, and select the backend:
+Consumers import only Foundry and build normally; no custom build tag, libvips
+headers or pkg-config is required. `DefaultConfig()` selects `AutoBackend`.
+Enabling the configured image service is enough:
 
 ```go
 settings.Image.Enabled = true
-settings.Image.Config.Backend = imaging.LibvipsBackend
 ```
 
-The ordinary build and `imaging.PortableBackend` keep the portable behavior.
-Selecting libvips in a build without the tag or without cgo returns an explicit
-construction error. Native codecs vary with the installed library; inspect
-`engine.Capabilities()` and its `ForFormat` results. Native linkage and codecs
-are a deployment responsibility, while Foundry owns their public API and calls.
-The executable [native consumer](../../tests/fixtures/consumer/profiles/native_images.go)
-uses ordinary application configuration and `Services.Image()`.
+On first engine construction, Foundry looks for a compatible libvips 8.x runtime
+(version 8.18 or later). When installed, its available codecs and operations join
+the portable capabilities automatically. For example, `brew install vips` supplies
+the runtime on macOS. The executable
+[native consumer](../../tests/fixtures/consumer/profiles/native_images.go) uses
+ordinary application configuration and `Services.Image()`.
+
+When the runtime is missing, unloadable or incompatible:
+
+- Application startup continues with portable imaging and emits one warning for
+  the configured image service. A standalone `imaging.New` does not log.
+- Portable operations continue to work. Calling a native-only operation or format
+  returns an error matching `imaging.ErrNativeUnavailable`, with no partial image result.
+- `engine.NativeError()` gives the discovery reason. `engine.Capabilities()` and
+  `ForFormat` report actual usable features; installed codecs can vary.
+
+Use `settings.Image.Config.Backend = imaging.LibvipsBackend` to require the native
+runtime and fail construction/startup if it cannot load. Use `PortableBackend`
+to disable discovery deliberately and suppress the missing-runtime warning.
+These selections use the same Foundry API.
+
+The native bridge requires a cgo-enabled binary on macOS, Linux, FreeBSD or Windows;
+ordinary native Go builds enable cgo when a C compiler is available.
+`CGO_ENABLED=0` builds remain supported: portable imaging works and native requests
+return `imaging.ErrNativeUnavailable`. Cross-compiling the native bridge requires the matching
+C toolchain. No libvips library is linked into the executable at build time.
+
+Discovery uses the OS shared-library loader (`libvips.so.42`,
+`libvips.42.dylib`, or `libvips-42.dll`), plus standard Homebrew library locations
+on macOS. Windows uses the application/system safe DLL search directories.
+For a custom installation, set `FOUNDRY_VIPS_LIBRARY` to an absolute shared-library
+path before starting the process; an unusable explicit path does not fall back to
+another installation. Its transitive native dependencies must also be loadable.
+Library discovery and capability probes run once per process. Restart after
+installing/upgrading the runtime or changing its path. Closing an engine drains
+its operations; it does not unload a library shared by other engines.
 
 | Additional format | Read | Write |
 | --- | --- | --- |

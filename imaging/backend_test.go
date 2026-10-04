@@ -7,7 +7,9 @@ import (
 )
 
 func TestPortableBackendRejectsNativePlans(t *testing.T) {
-	e := testEngine(t, DefaultConfig())
+	portable := DefaultConfig()
+	portable.Backend = PortableBackend
+	e := testEngine(t, portable)
 	for _, plan := range []Plan{
 		NewPlan().Format(HEIF), NewPlan().Format(JPEG2000), NewPlan().Format(JPEGXL), NewPlan().Format(SVG),
 		NewPlan().ToSRGB(), NewPlan().Metadata(PreserveMetadata), NewPlan().Metadata(PreserveColorProfile),

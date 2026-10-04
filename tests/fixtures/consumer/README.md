@@ -288,6 +288,9 @@ fixture rejects a resampling mode used as a PNG compression level, and real
 gopls probes cover the fluent encoder methods.
 
 The profiles consumer also demonstrates optional native imaging through ordinary
-application configuration in `profiles/native_images.go`. Build the native test
-with cgo and `-tags foundry_vips` after installing libvips; codec dependencies remain
-inside Foundry. Typed compiler cases cover backend and crop-interest declarations.
+application configuration in `profiles/native_images.go`. Ordinary cgo builds
+automatically discover an installed libvips runtime without custom tags or
+development headers. `image_runtime_test.go` proves missing/unloadable-library
+startup warnings, portable operation, explicit native errors and required-native
+startup failure in isolated processes. Codec dependencies remain inside Foundry.
+Typed compiler cases cover backend and crop-interest declarations.

@@ -6,12 +6,11 @@ import (
 )
 
 // NativeImageSettings enables the optional backend through ordinary application
-// configuration. The executable is built with cgo and -tags foundry_vips.
+// configuration. AutoBackend discovers an installed runtime without custom tags.
 func NativeImageSettings() application.Settings {
 	settings := application.DefaultSettings()
 	settings.HTTP.Enabled = false
 	settings.Image.Enabled = true
-	settings.Image.Config.Backend = imaging.LibvipsBackend
 	return settings
 }
 

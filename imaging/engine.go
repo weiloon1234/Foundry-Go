@@ -27,6 +27,7 @@ type Engine struct {
 	config       Config
 	calls        *workscope.Group
 	capabilities Capabilities
+	nativeErr    error
 }
 
 func New(config Config) (*Engine, error) {
@@ -35,18 +36,23 @@ func New(config Config) (*Engine, error) {
 	}
 	formats := portableFormats()
 	capabilities := Capabilities{Formats: formats[:]}
-	if config.Backend == LibvipsBackend {
-		var err error
-		capabilities, err = nativeCapabilities()
+	var nativeErr error
+	if config.Backend != PortableBackend {
+		native, err := nativeCapabilities()
 		if err != nil {
-			return nil, err
+			if config.Backend == LibvipsBackend {
+				return nil, err
+			}
+			nativeErr = err
+		} else {
+			capabilities = native
 		}
 	}
 	calls, err := workscope.New(config.MaxActive, config.Timeout)
 	if err != nil {
 		return nil, err
 	}
-	return &Engine{config: config, calls: calls, capabilities: capabilities}, nil
+	return &Engine{config: config, calls: calls, capabilities: capabilities, nativeErr: nativeErr}, nil
 }
 func (e *Engine) Validate() error {
 	if e == nil || e.calls == nil {
@@ -156,7 +162,7 @@ func (e *Engine) ProcessBytes(ctx context.Context, data []byte, plan Plan) (Resu
 
 func (e *Engine) process(ctx context.Context, data []byte, p Plan) (Result, error) {
 	l := e.config.Limits
-	info, err := inspectForBackend(ctx, data, l, e.config.Backend)
+	info, err := e.inspect(ctx, data)
 	if err != nil {
 		return Result{}, err
 	}
@@ -188,7 +194,7 @@ func (e *Engine) process(ctx context.Context, data []byte, p Plan) (Result, erro
 			return Result{}, err
 		}
 	}
-	if _, err := p.admit(ctx, info, format, int64(len(data)), l, e.config.Backend); err != nil {
+	if _, err := p.admit(ctx, info, format, int64(len(data)), l, e.capabilities.Backend); err != nil {
 		return Result{}, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -227,7 +233,7 @@ func (e *Engine) transformImage(ctx context.Context, img image.Image, p Plan) (i
 	var err error
 	for _, s := range p.steps {
 		s.resampling = p.resampling
-		img, err = applyStep(ctx, img, s, l, e.config.Backend)
+		img, err = applyStep(ctx, img, s, l, e.capabilities.Backend)
 		if err != nil {
 			return nil, err
 		}

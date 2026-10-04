@@ -57,6 +57,14 @@ func TestPostgresAttachmentImagePolicyTransformsDetectedBytes(t *testing.T) {
 
 func TestPostgresAttachmentImageDeclarationsRespectEngineCapabilities(t *testing.T) {
 	f := openAttachments(t)
+	portable := imaging.DefaultConfig()
+	portable.Backend = imaging.PortableBackend
+	engine, err := imaging.New(portable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer engine.Close(t.Context())
+	f.image = engine
 	for _, policy := range []Policy{
 		{Disk: testDisk, Cardinality: Single, Accepted: []storage.MediaType{"image/svg+xml"}, Variants: []Variant{DefineVariant("preview", imaging.NewPlan().Format(imaging.PNG))}},
 		{Disk: testDisk, Cardinality: Single, Accepted: []storage.MediaType{"image/png"}, Image: value.Set(imaging.NewPlan().ToSRGB())},

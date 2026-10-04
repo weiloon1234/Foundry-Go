@@ -50,7 +50,7 @@ func (e *Engine) processAnimation(ctx context.Context, data []byte, info inspect
 	if !format.animationEncoding() {
 		return Result{}, invalid("output format cannot preserve animation")
 	}
-	final, err := p.admit(ctx, info, format, int64(len(data)), l, e.config.Backend)
+	final, err := p.admit(ctx, info, format, int64(len(data)), l, e.capabilities.Backend)
 	if err != nil {
 		return Result{}, err
 	}
@@ -68,7 +68,7 @@ func (e *Engine) processAnimation(ctx context.Context, data []byte, info inspect
 	}
 	remaining := l
 	remaining.WorkingBytes -= reserved
-	if _, err := p.admit(ctx, info, format, int64(len(data)), remaining, e.config.Backend); err != nil {
+	if _, err := p.admit(ctx, info, format, int64(len(data)), remaining, e.capabilities.Backend); err != nil {
 		return Result{}, err
 	}
 	sequence, err := decodeSequence(ctx, data, info, l)

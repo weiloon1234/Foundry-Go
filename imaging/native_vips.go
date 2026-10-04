@@ -1,41 +1,192 @@
-//go:build foundry_vips && cgo
+//go:build cgo && (darwin || linux || freebsd || windows)
 
 package imaging
 
 /*
-#cgo pkg-config: vips
-#include <vips/vips.h>
+#cgo linux LDFLAGS: -ldl
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-
-#if VIPS_MAJOR_VERSION < 8 || (VIPS_MAJOR_VERSION == 8 && VIPS_MINOR_VERSION < 18)
-#error Foundry requires libvips 8.18 or later
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <dlfcn.h>
 #endif
+
+// Bind the libvips 8 C ABI without its development headers or link-time library.
+// All objects stay opaque; never depend on a native struct's memory layout.
+// Version and required symbols are checked before initialization or processing.
+typedef struct _VipsImage VipsImage;
+typedef struct _VipsBlob VipsBlob;
+typedef struct _VipsArea VipsArea;
+typedef struct _VipsTargetCustom VipsTargetCustom;
+typedef struct _VipsTarget VipsTarget;
+typedef void VipsProgress;
+typedef int64_t gint64;
+typedef int VipsForeignKeep;
+typedef void (*FoundryCallback)(void);
+typedef void (*FoundryClosureNotify)(void*, void*);
+typedef int (*FoundryVipsFree)(void*, void*);
+
+#define TRUE 1
+#define VIPS_META_EXIF_NAME "exif-data"
+#define VIPS_META_XMP_NAME "xmp-data"
+#define VIPS_META_IPTC_NAME "iptc-data"
+#define VIPS_META_ICC_NAME "icc-profile-data"
+#define VIPS_META_ORIENTATION "orientation"
+#define VIPS_META_CONCURRENCY "concurrency"
+#define VIPS_AREA(p) ((VipsArea*)(p))
+#define VIPS_TARGET(p) ((VipsTarget*)(p))
+#define G_CALLBACK(p) ((FoundryCallback)(p))
+enum {
+ VIPS_INTERPRETATION_RGB=17, VIPS_INTERPRETATION_sRGB=22, VIPS_INTERPRETATION_RGB16=25,
+ VIPS_FORMAT_UCHAR=0, VIPS_FAIL_ON_ERROR=2,
+ VIPS_FOREIGN_KEEP_NONE=0, VIPS_FOREIGN_KEEP_ICC=8, VIPS_FOREIGN_KEEP_ALL=63,
+ VIPS_FOREIGN_TIFF_COMPRESSION_DEFLATE=2,
+ VIPS_FOREIGN_HEIF_COMPRESSION_HEVC=1, VIPS_FOREIGN_HEIF_COMPRESSION_AV1=4,
+ VIPS_INTERESTING_ENTROPY=2, VIPS_INTERESTING_ATTENTION=3
+};
+
+#define FOUNDRY_VIPS_SYMBOLS(X) \
+ X(int,vips_init,(const char*)) \
+ X(int,vips_version,(int)) \
+ X(int,vips_call,(const char*,...)) \
+ X(int,vips_addalpha,(VipsImage*,VipsImage**,...)) \
+ X(void,vips_thread_shutdown,(void)) \
+ X(void,vips_error_clear,(void)) \
+ X(uintptr_t,vips_type_find,(const char*,const char*)) \
+ X(void,vips_foreign_load_invalidate,(VipsImage*)) \
+ X(void,vips_image_invalidate_all,(VipsImage*)) \
+ X(void,vips_image_set_kill,(VipsImage*,int)) \
+ X(void,vips_image_set_progress,(VipsImage*,int)) \
+ X(void,vips_image_set_int,(VipsImage*,const char*,int)) \
+ X(uintptr_t,vips_image_get_typeof,(const VipsImage*,const char*)) \
+ X(int,vips_image_get_blob,(const VipsImage*,const char*,const void**,size_t*)) \
+ X(void,vips_image_set_blob_copy,(VipsImage*,const char*,const void*,size_t)) \
+ X(int,vips_image_remove,(VipsImage*,const char*)) \
+ X(int,vips_image_get_width,(const VipsImage*)) \
+ X(int,vips_image_get_height,(const VipsImage*)) \
+ X(int,vips_image_get_bands,(const VipsImage*)) \
+ X(int,vips_image_get_format,(const VipsImage*)) \
+ X(int,vips_image_get_interpretation,(const VipsImage*)) \
+ X(int,vips_image_get_n_pages,(VipsImage*)) \
+ X(int,vips_image_get_orientation,(VipsImage*)) \
+ X(void*,vips_image_write_to_memory,(VipsImage*,size_t*)) \
+ X(VipsImage*,vips_image_new_from_memory_copy,(const void*,size_t,int,int,int,int)) \
+ X(void,vips_image_init_fields,(VipsImage*,int,int,int,int,int,int,double,double)) \
+ X(VipsTargetCustom*,vips_target_custom_new,(void)) \
+ X(int,vips_profile_load,(const char*,VipsBlob**,...)) \
+ X(VipsBlob*,vips_blob_new,(FoundryVipsFree,const void*,size_t)) \
+ X(const void*,vips_blob_get,(VipsBlob*,size_t*)) \
+ X(void,vips_area_unref,(VipsArea*)) \
+ X(int,vips_icc_present,(void)) \
+ X(int,vips_icc_is_compatible_profile,(VipsImage*,const void*,size_t)) \
+ X(void,g_object_unref,(void*)) \
+ X(void,g_free,(void*)) \
+ X(unsigned long,g_signal_connect_data,(void*,const char*,FoundryCallback,void*,FoundryClosureNotify,unsigned int)) \
+ X(unsigned int,g_signal_handlers_disconnect_matched,(void*,unsigned int,unsigned int,unsigned int,void*,void*,void*))
+
+#define FOUNDRY_DECLARE(return_type,name,args) return_type (*name) args;
+static struct { FOUNDRY_VIPS_SYMBOLS(FOUNDRY_DECLARE) } fv;
+#undef FOUNDRY_DECLARE
+
+#ifdef _WIN32
+static HMODULE foundry_vips_library;
+static HMODULE foundry_vips_open(const char *path, int absolute) {
+ wchar_t wide[4096];
+ if (!MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,path,-1,wide,4096)) return NULL;
+ DWORD flags=LOAD_LIBRARY_SEARCH_DEFAULT_DIRS;
+ if (absolute) flags|=LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR;
+ return LoadLibraryExW(wide,NULL,flags);
+}
+static void *foundry_vips_symbol(const char *name) {
+ FARPROC address=GetProcAddress(foundry_vips_library,name);
+ if (!address) {
+  const wchar_t *dependencies[]={L"libgobject-2.0-0.dll",L"libglib-2.0-0.dll"};
+  for (int i=0;i<2 && !address;i++) {
+   HMODULE dependency=GetModuleHandleW(dependencies[i]);
+   if (dependency) address=GetProcAddress(dependency,name);
+  }
+ }
+ return (void*)address;
+}
+#else
+static void *foundry_vips_library;
+static void *foundry_vips_open(const char *path, int absolute) {
+ (void)absolute;
+ return dlopen(path,RTLD_NOW|RTLD_LOCAL);
+}
+static void *foundry_vips_symbol(const char *name) {
+ return dlsym(foundry_vips_library,name);
+}
+#endif
+
+// Libraries stay loaded for process lifetime, just like libvips initialization.
+// Never unload code while native workers or another engine might still use it.
+// Go's sync.OnceValue owns publication, so these pointers are immutable after init.
+static int foundry_vips_runtime_init(const char *explicit_path) {
+ if (explicit_path && explicit_path[0]) {
+  foundry_vips_library=foundry_vips_open(explicit_path,1);
+ } else {
+#ifdef _WIN32
+  const char *names[]={"libvips-42.dll",NULL};
+#elif defined(__APPLE__)
+  const char *names[]={"libvips.42.dylib","/opt/homebrew/lib/libvips.42.dylib","/usr/local/lib/libvips.42.dylib",NULL};
+#else
+  const char *names[]={"libvips.so.42",NULL};
+#endif
+  for (int i=0;names[i] && !foundry_vips_library;i++)
+   foundry_vips_library=foundry_vips_open(names[i],0);
+ }
+ if (!foundry_vips_library) return 1;
+#define FOUNDRY_BIND(return_type,name,args) \
+ do { void *symbol=foundry_vips_symbol(#name); \
+ if (!symbol || sizeof(fv.name)!=sizeof(symbol)) return 2; \
+ memcpy(&fv.name,&symbol,sizeof(fv.name)); } while (0);
+ FOUNDRY_VIPS_SYMBOLS(FOUNDRY_BIND)
+#undef FOUNDRY_BIND
+ if (fv.vips_version(0)!=8 || fv.vips_version(1)<18 ||
+     fv.vips_version(3)-fv.vips_version(5)!=42) return 3;
+ int status=fv.vips_init("foundry-imaging");
+ fv.vips_error_clear();
+ fv.vips_thread_shutdown();
+ return status ? 4 : 0;
+}
+
+static void foundry_vips_thread_done(void) { fv.vips_error_clear();fv.vips_thread_shutdown(); }
+static int foundry_vips_width(VipsImage *image) { return fv.vips_image_get_width(image); }
+static int foundry_vips_height(VipsImage *image) { return fv.vips_image_get_height(image); }
+static int foundry_vips_pages(VipsImage *image) { return fv.vips_image_get_n_pages(image); }
+static int foundry_vips_orientation(VipsImage *image) { return fv.vips_image_get_orientation(image); }
+static void *foundry_vips_pixels(VipsImage *image,size_t *length) { return fv.vips_image_write_to_memory(image,length); }
+static void foundry_vips_free(void *p) { fv.g_free(p); }
+static int foundry_vips_icc_present(void) { return fv.vips_icc_present(); }
+static void foundry_vips_signal(void *image,const char *signal,FoundryCallback callback,void *id) {
+ fv.g_signal_connect_data(image,signal,callback,id,NULL,0);
+}
 
 extern int foundryVipsCanceled(uintptr_t id);
 extern int64_t foundryVipsWrite(uintptr_t id, void *data, int64_t length);
 extern int64_t foundryVipsRead(uintptr_t id, void *data, int64_t length);
 extern int64_t foundryVipsSeek(uintptr_t id, int64_t offset, int whence);
 
-static int foundry_vips_init(void) { return VIPS_INIT("foundry-imaging"); }
 static void foundry_vips_release(VipsImage *image) {
  if (image) {
-  vips_foreign_load_invalidate(image);
-  vips_image_invalidate_all(image);
-  g_object_unref(image);
+  fv.vips_foreign_load_invalidate(image);
+  fv.vips_image_invalidate_all(image);
+  fv.g_object_unref(image);
  }
 }
 static void foundry_vips_eval(VipsImage *image, VipsProgress *progress, void *id) {
- if (foundryVipsCanceled((uintptr_t)id)) vips_image_set_kill(image, TRUE);
+ if (foundryVipsCanceled((uintptr_t)id)) fv.vips_image_set_kill(image, TRUE);
 }
 static void foundry_vips_watch(VipsImage *image, uintptr_t id) {
- vips_image_set_int(image, VIPS_META_CONCURRENCY, 1);
- vips_image_set_progress(image, TRUE);
- g_signal_connect(image, "eval", G_CALLBACK(foundry_vips_eval), (void*)id);
+ fv.vips_image_set_int(image, VIPS_META_CONCURRENCY, 1);
+ fv.vips_image_set_progress(image, TRUE);
+ foundry_vips_signal(image, "eval", G_CALLBACK(foundry_vips_eval), (void*)id);
 }
 static void foundry_vips_unwatch(VipsImage *image, uintptr_t id) {
- if (image) g_signal_handlers_disconnect_by_data(image,(void*)id);
+ if (image) fv.g_signal_handlers_disconnect_matched(image,16,0,0,NULL,NULL,(void*)id);
 }
 static gint64 foundry_vips_write(VipsTargetCustom *target, const void *data, gint64 length, void *id) {
  return foundryVipsWrite((uintptr_t)id, (void*)data, length);
@@ -47,73 +198,71 @@ static gint64 foundry_vips_seek(VipsTargetCustom *target, gint64 offset, int whe
  return foundryVipsSeek((uintptr_t)id, offset, whence);
 }
 static VipsTarget *foundry_vips_target(uintptr_t id) {
- VipsTargetCustom *target = vips_target_custom_new();
- g_signal_connect(target, "write", G_CALLBACK(foundry_vips_write), (void*)id);
- g_signal_connect(target, "read", G_CALLBACK(foundry_vips_read), (void*)id);
- g_signal_connect(target, "seek", G_CALLBACK(foundry_vips_seek), (void*)id);
+ VipsTargetCustom *target = fv.vips_target_custom_new();
+ foundry_vips_signal(target, "write", G_CALLBACK(foundry_vips_write), (void*)id);
+ foundry_vips_signal(target, "read", G_CALLBACK(foundry_vips_read), (void*)id);
+ foundry_vips_signal(target, "seek", G_CALLBACK(foundry_vips_seek), (void*)id);
  return VIPS_TARGET(target);
 }
 static VipsImage *foundry_vips_load(void *data, size_t length, int format) {
  VipsImage *out = NULL;
  int status = -1;
  // Use individual buffer loaders, never generic filename/operation dispatch.
- switch (format) {
- case 1: status=vips_jpegload_buffer(data,length,&out,"fail_on",VIPS_FAIL_ON_ERROR,NULL);break;
- case 2: status=vips_pngload_buffer(data,length,&out,"fail_on",VIPS_FAIL_ON_ERROR,NULL);break;
- case 3: status=vips_webpload_buffer(data,length,&out,"n",1,"fail_on",VIPS_FAIL_ON_ERROR,NULL);break;
- case 4: status=vips_tiffload_buffer(data,length,&out,"n",1,"fail_on",VIPS_FAIL_ON_ERROR,NULL);break;
- case 5: case 6: status=vips_heifload_buffer(data,length,&out,"n",1,"fail_on",VIPS_FAIL_ON_ERROR,NULL);break;
- case 7: status=vips_jp2kload_buffer(data,length,&out,"fail_on",VIPS_FAIL_ON_ERROR,NULL);break;
- case 8: status=vips_jxlload_buffer(data,length,&out,"n",1,"fail_on",VIPS_FAIL_ON_ERROR,NULL);break;
- case 9: status=vips_svgload_buffer(data,length,&out,"fail_on",VIPS_FAIL_ON_ERROR,NULL);break;
- case 10: status=vips_gifload_buffer(data,length,&out,"n",1,"fail_on",VIPS_FAIL_ON_ERROR,NULL);break;
+ VipsBlob *blob=fv.vips_blob_new(NULL,data,length);
+ if (!blob) return NULL;
+ const char *loaders[]={NULL,"jpegload_buffer","pngload_buffer","webpload_buffer","tiffload_buffer","heifload_buffer","heifload_buffer","jp2kload_buffer","jxlload_buffer","svgload_buffer","gifload_buffer"};
+ if (format>=1 && format<=10) {
+  if (format==3 || format==4 || format==5 || format==6 || format==8 || format==10)
+   status=fv.vips_call(loaders[format],blob,&out,"n",1,"fail_on",VIPS_FAIL_ON_ERROR,NULL);
+  else status=fv.vips_call(loaders[format],blob,&out,"fail_on",VIPS_FAIL_ON_ERROR,NULL);
  }
+ fv.vips_area_unref(VIPS_AREA(blob));
  if (status) { foundry_vips_release(out);return NULL; }
- vips_image_set_int(out,VIPS_META_CONCURRENCY,1);
+ fv.vips_image_set_int(out,VIPS_META_CONCURRENCY,1);
  return out;
 }
-static int foundry_vips_profile_present(VipsImage *image) { return vips_image_get_typeof(image,VIPS_META_ICC_NAME)!=0; }
-static int foundry_vips_has(const char *operation) { return vips_type_find("VipsOperation",operation)!=0; }
+static int foundry_vips_profile_present(VipsImage *image) { return fv.vips_image_get_typeof(image,VIPS_META_ICC_NAME)!=0; }
+static int foundry_vips_has(const char *operation) { return fv.vips_type_find("VipsOperation",operation)!=0; }
 static int foundry_vips_srgb_profile(VipsImage *image) {
  VipsBlob *profile=NULL;
  size_t length;
  const void *data;
- if (vips_profile_load("srgb",&profile,NULL)) return -1;
- data=vips_blob_get(profile,&length);
- vips_image_set_blob_copy(image,VIPS_META_ICC_NAME,data,length);
- vips_area_unref(VIPS_AREA(profile));
+ if (fv.vips_profile_load("srgb",&profile,NULL)) return -1;
+ data=fv.vips_blob_get(profile,&length);
+ fv.vips_image_set_blob_copy(image,VIPS_META_ICC_NAME,data,length);
+ fv.vips_area_unref(VIPS_AREA(profile));
  return 0;
 }
 static VipsImage *foundry_vips_rgba(VipsImage *in, int srgb, int preserve, uintptr_t id) {
  VipsImage *color=NULL, *rgba=NULL;
- if ((srgb || preserve) && vips_image_get_typeof(in,VIPS_META_ICC_NAME)) {
+ if ((srgb || preserve) && fv.vips_image_get_typeof(in,VIPS_META_ICC_NAME)) {
   const void *profile;size_t length;
-  if (vips_image_get_blob(in,VIPS_META_ICC_NAME,&profile,&length) ||
-      !vips_icc_is_compatible_profile(in,profile,length)) return NULL;
+  if (fv.vips_image_get_blob(in,VIPS_META_ICC_NAME,&profile,&length) ||
+      !fv.vips_icc_is_compatible_profile(in,profile,length)) return NULL;
  }
  // An ICC profile for CMYK/gray cannot describe the RGB pixels produced by
  // the shared renderer. Convert it together with its pixels when preserving.
- if (preserve && vips_image_get_typeof(in,VIPS_META_ICC_NAME) &&
-     vips_image_get_interpretation(in)!=VIPS_INTERPRETATION_sRGB &&
-     vips_image_get_interpretation(in)!=VIPS_INTERPRETATION_RGB &&
-     vips_image_get_interpretation(in)!=VIPS_INTERPRETATION_RGB16) srgb=1;
- if (srgb && vips_image_get_typeof(in,VIPS_META_ICC_NAME)) {
-  if (vips_icc_transform(in,&color,"srgb","embedded",TRUE,"depth",8,NULL)) return NULL;
- } else if (vips_colourspace(in,&color,VIPS_INTERPRETATION_sRGB,NULL)) return NULL;
+ if (preserve && fv.vips_image_get_typeof(in,VIPS_META_ICC_NAME) &&
+     fv.vips_image_get_interpretation(in)!=VIPS_INTERPRETATION_sRGB &&
+     fv.vips_image_get_interpretation(in)!=VIPS_INTERPRETATION_RGB &&
+     fv.vips_image_get_interpretation(in)!=VIPS_INTERPRETATION_RGB16) srgb=1;
+ if (srgb && fv.vips_image_get_typeof(in,VIPS_META_ICC_NAME)) {
+  if (fv.vips_call("icc_transform",in,&color,"srgb","embedded",TRUE,"depth",8,NULL)) return NULL;
+ } else if (fv.vips_call("colourspace",in,&color,VIPS_INTERPRETATION_sRGB,NULL)) return NULL;
  if (srgb && foundry_vips_srgb_profile(color)) { foundry_vips_release(color);return NULL; }
- if (vips_image_get_bands(color)==3) {
-  if (vips_addalpha(color,&rgba,NULL)) { foundry_vips_release(color);return NULL; }
-  g_object_unref(color);
+ if (fv.vips_image_get_bands(color)==3) {
+  if (fv.vips_addalpha(color,&rgba,NULL)) { foundry_vips_release(color);return NULL; }
+  fv.g_object_unref(color);
  } else rgba=color;
- if (vips_image_get_bands(rgba)!=4 || vips_image_get_format(rgba)!=VIPS_FORMAT_UCHAR) { foundry_vips_release(rgba);return NULL; }
+ if (fv.vips_image_get_bands(rgba)!=4 || fv.vips_image_get_format(rgba)!=VIPS_FORMAT_UCHAR) { foundry_vips_release(rgba);return NULL; }
  foundry_vips_watch(rgba,id);
  return rgba;
 }
 static VipsImage *foundry_vips_memory(const void *pixels, size_t length, int width, int height) {
- VipsImage *image=vips_image_new_from_memory_copy(pixels,length,width,height,4,VIPS_FORMAT_UCHAR);
+ VipsImage *image=fv.vips_image_new_from_memory_copy(pixels,length,width,height,4,VIPS_FORMAT_UCHAR);
  if (image) {
-  image->Type=VIPS_INTERPRETATION_sRGB;
-  vips_image_set_int(image,VIPS_META_CONCURRENCY,1);
+  fv.vips_image_init_fields(image,width,height,4,VIPS_FORMAT_UCHAR,0,VIPS_INTERPRETATION_sRGB,1.0,1.0);
+  fv.vips_image_set_int(image,VIPS_META_CONCURRENCY,1);
  }
  return image;
 }
@@ -122,14 +271,14 @@ static void foundry_vips_metadata(VipsImage *out,VipsImage *source,int keep) {
  if (source && keep) {
   for (int i=0;i<4;i++) {
    const void *data;size_t length;
-   if ((keep==1 || i==3) && vips_image_get_typeof(source,names[i]) && !vips_image_get_blob(source,names[i],&data,&length))
-    vips_image_set_blob_copy(out,names[i],data,length);
+   if ((keep==1 || i==3) && fv.vips_image_get_typeof(source,names[i]) && !fv.vips_image_get_blob(source,names[i],&data,&length))
+    fv.vips_image_set_blob_copy(out,names[i],data,length);
   }
  }
  // EXIF serialization updates dimensions and orientation and removes the old
  // thumbnail when jpeg-thumbnail-data is absent.
- vips_image_set_int(out,VIPS_META_ORIENTATION,1);
- vips_image_remove(out,"jpeg-thumbnail-data");
+ fv.vips_image_set_int(out,VIPS_META_ORIENTATION,1);
+ fv.vips_image_remove(out,"jpeg-thumbnail-data");
 }
 typedef struct {
  int format, quality, effort, lossless, compression, keep;
@@ -140,21 +289,21 @@ static int foundry_vips_save(VipsImage *image,uintptr_t id,FoundryVipsEncoding o
  VipsForeignKeep keep=o.keep==0 ? VIPS_FOREIGN_KEEP_NONE : (o.keep==2 ? VIPS_FOREIGN_KEEP_ICC : VIPS_FOREIGN_KEEP_ALL);
  foundry_vips_watch(image,id);
  switch (o.format) {
- case 1: status=vips_jpegsave_target(image,target,"Q",o.quality,"keep",keep,NULL);break;
- case 2: status=vips_pngsave_target(image,target,"compression",o.compression,"keep",keep,NULL);break;
- case 3: status=vips_webpsave_target(image,target,"Q",o.quality,"effort",o.effort,"lossless",o.lossless,"exact",TRUE,"alpha_q",100,"keep",keep,NULL);break;
- case 4: status=vips_tiffsave_target(image,target,"compression",VIPS_FOREIGN_TIFF_COMPRESSION_DEFLATE,"keep",keep,NULL);break;
- case 5: case 6: status=vips_heifsave_target(image,target,"compression",o.format==5 ? VIPS_FOREIGN_HEIF_COMPRESSION_AV1 : VIPS_FOREIGN_HEIF_COMPRESSION_HEVC,"Q",o.quality,"effort",o.effort,"keep",keep,NULL);break;
- case 7: status=vips_jp2ksave_target(image,target,"Q",o.quality,"lossless",o.lossless,"keep",keep,NULL);break;
- case 8: status=vips_jxlsave_target(image,target,"Q",o.quality,"lossless",o.lossless,"effort",o.effort,"keep",keep,NULL);break;
+ case 1: status=fv.vips_call("jpegsave_target",image,target,"Q",o.quality,"keep",keep,NULL);break;
+ case 2: status=fv.vips_call("pngsave_target",image,target,"compression",o.compression,"keep",keep,NULL);break;
+ case 3: status=fv.vips_call("webpsave_target",image,target,"Q",o.quality,"effort",o.effort,"lossless",o.lossless,"exact",TRUE,"alpha_q",100,"keep",keep,NULL);break;
+ case 4: status=fv.vips_call("tiffsave_target",image,target,"compression",VIPS_FOREIGN_TIFF_COMPRESSION_DEFLATE,"keep",keep,NULL);break;
+ case 5: case 6: status=fv.vips_call("heifsave_target",image,target,"compression",o.format==5 ? VIPS_FOREIGN_HEIF_COMPRESSION_AV1 : VIPS_FOREIGN_HEIF_COMPRESSION_HEVC,"Q",o.quality,"effort",o.effort,"keep",keep,NULL);break;
+ case 7: status=fv.vips_call("jp2ksave_target",image,target,"Q",o.quality,"lossless",o.lossless,"keep",keep,NULL);break;
+ case 8: status=fv.vips_call("jxlsave_target",image,target,"Q",o.quality,"lossless",o.lossless,"effort",o.effort,"keep",keep,NULL);break;
  }
- g_object_unref(target);
+ fv.g_object_unref(target);
  return status;
 }
 static VipsImage *foundry_vips_crop(VipsImage *image,int width,int height,int interest,uintptr_t id) {
  VipsImage *out=NULL;
  foundry_vips_watch(image,id);
- if (vips_smartcrop(image,&out,width,height,"interesting",interest==0 ? VIPS_INTERESTING_ATTENTION : VIPS_INTERESTING_ENTROPY,NULL)) return NULL;
+ if (fv.vips_call("smartcrop",image,&out,width,height,"interesting",interest==0 ? VIPS_INTERESTING_ATTENTION : VIPS_INTERESTING_ENTROPY,NULL)) return NULL;
  foundry_vips_watch(out,id);
  return out;
 }
@@ -165,30 +314,45 @@ import (
 	"context"
 	"image"
 	"image/draw"
+	"os"
+	"path/filepath"
 	"runtime"
 	"runtime/cgo"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
 )
 
 var initializeVips = sync.OnceValue(func() error {
+	library := os.Getenv("FOUNDRY_VIPS_LIBRARY")
+	if library != "" && (!filepath.IsAbs(library) || len(library) > 4096 || strings.ContainsRune(library, 0)) {
+		return nativeFailure("FOUNDRY_VIPS_LIBRARY must be an absolute shared-library path")
+	}
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	defer C.vips_thread_shutdown()
-	if C.foundry_vips_init() != 0 {
-		C.vips_error_clear()
-		return invalid("libvips initialization failed")
+	path := C.CString(library)
+	defer C.free(unsafe.Pointer(path))
+	switch C.foundry_vips_runtime_init(path) {
+	case 0:
+		return nil
+	case 1:
+		return nativeFailure("libvips runtime is not installed or could not be loaded; install libvips 8.18+ or set FOUNDRY_VIPS_LIBRARY")
+	case 2:
+		return nativeFailure("libvips runtime is missing required native functions")
+	case 3:
+		return nativeFailure("libvips runtime requires a compatible 8.x release, version 8.18 or later with ABI 42")
+	default:
+		return nativeFailure("libvips runtime initialization failed")
 	}
-	return nil
 })
 
 // Each call flushes its thread-local state. Never shut down the process-wide
 // library or change global concurrency/cache configuration from an engine.
 func nativeThread() func() {
 	runtime.LockOSThread()
-	return func() { C.vips_error_clear(); C.vips_thread_shutdown(); runtime.UnlockOSThread() }
+	return func() { C.foundry_vips_thread_done(); runtime.UnlockOSThread() }
 }
 
 func nativeFormatID(f Format) C.int {
@@ -256,7 +420,7 @@ func loadNative(ctx context.Context, data []byte, format Format, l Limits) (*vip
 		return nil, invalid("native image header decoding failed")
 	}
 	source := &vipsSource{image: img, data: buffer, profileDeclared: declaresColorProfile(data, format)}
-	info := inspection{Info: Info{Format: format, Width: int(C.vips_image_get_width(img)), Height: int(C.vips_image_get_height(img)), Images: int(C.vips_image_get_n_pages(img)), Orientation: uint8(C.vips_image_get_orientation(img))}, native: true}
+	info := inspection{Info: Info{Format: format, Width: int(C.foundry_vips_width(img)), Height: int(C.foundry_vips_height(img)), Images: int(C.foundry_vips_pages(img)), Orientation: uint8(C.foundry_vips_orientation(img))}, native: true}
 	if info.Images < 1 {
 		info.Images = 1
 	}
@@ -344,19 +508,19 @@ func (s *vipsSource) decode(ctx context.Context, p Plan, l Limits) (image.Image,
 }
 
 func nativePixels(ctx context.Context, img *C.VipsImage, l Limits) (image.Image, error) {
-	w, h := int(C.vips_image_get_width(img)), int(C.vips_image_get_height(img))
+	w, h := int(C.foundry_vips_width(img)), int(C.foundry_vips_height(img))
 	if err := l.dimensions(w, h); err != nil {
 		return nil, err
 	}
 	var length C.size_t
-	pixels := C.vips_image_write_to_memory(img, &length)
+	pixels := C.foundry_vips_pixels(img, &length)
 	if pixels == nil {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		return nil, invalid("native image pixel decoding failed")
 	}
-	defer C.g_free(C.gpointer(pixels))
+	defer C.foundry_vips_free(pixels)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -514,7 +678,7 @@ var inspectVipsCapabilities = sync.OnceValues(func() (Capabilities, error) {
 		defer C.free(unsafe.Pointer(text))
 		return C.foundry_vips_has(text) != 0
 	}
-	capabilities.ColorManagement = C.vips_icc_present() != 0
+	capabilities.ColorManagement = C.foundry_vips_icc_present() != 0
 	capabilities.SmartCrop = has("smartcrop")
 	for _, codec := range []struct {
 		format     Format

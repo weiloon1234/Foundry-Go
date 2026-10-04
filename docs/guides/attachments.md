@@ -346,7 +346,7 @@ retains capacity; `attachments.Module` drains it before completing dependency
 shutdown.
 
 Native image formats use the same configured imaging engine as direct processing.
-With the [libvips backend](imaging.md#optional-libvips-backend), collections can
+With the [libvips backend](imaging.md#automatically-discovered-libvips-runtime), collections can
 accept HEIF/HEIC, JPEG 2000, JPEG XL or SVG and produce ordinary named raster
 variants. Image inspection uses the engine's capabilities, including when an
 original is retained and only variants are transformed. HEIC/HEIF media aliases

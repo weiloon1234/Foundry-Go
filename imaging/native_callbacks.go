@@ -1,4 +1,4 @@
-//go:build foundry_vips && cgo
+//go:build cgo && (darwin || linux || freebsd || windows)
 
 package imaging
 

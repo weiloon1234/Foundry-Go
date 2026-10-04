@@ -119,7 +119,7 @@ func TestPlanValidationAndAllocationPreflight(t *testing.T) {
 		NewPlan().Format(WebP).JPEGQuality(80), NewPlan().JPEGQuality(101), NewPlan().Format("unknown"),
 		NewPlan().Resize(0, 1), NewPlan().Crop(4, 0, 1, 1), NewPlan().Fill(100, 100, false), NewPlan().Rotate(45),
 		NewPlan().Blur(math.NaN()), NewPlan().Blur(math.Inf(1)), NewPlan().Blur(101), NewPlan().Contrast(-101),
-		NewPlan().Orientation(Orientation(9)), NewPlan().Frames(Frames(9)), NewPlan().Metadata(Metadata(1)),
+		NewPlan().Orientation(Orientation(9)), NewPlan().Frames(Frames(9)), NewPlan().Metadata(Metadata(255)),
 		NewPlan().Resize(257, 1).Format(ICO),
 	} {
 		if result, err := e.ProcessBytes(t.Context(), input, p); err == nil || result.Size() != 0 {

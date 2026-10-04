@@ -116,13 +116,13 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{Limits: DefaultLimits(), MaxActive: 2, Timeout: time.Minute}
+	return Config{Backend: AutoBackend, Limits: DefaultLimits(), MaxActive: 2, Timeout: time.Minute}
 }
 func (c Config) Validate() error {
 	if err := c.Limits.Validate(); err != nil {
 		return err
 	}
-	if c.Backend > LibvipsBackend || c.MaxActive < 1 || c.MaxActive > 64 || c.Timeout <= 0 || c.Timeout > 10*time.Minute {
+	if c.Backend > AutoBackend || c.MaxActive < 1 || c.MaxActive > 64 || c.Timeout <= 0 || c.Timeout > 10*time.Minute {
 		return invalid("invalid image engine configuration")
 	}
 	return nil

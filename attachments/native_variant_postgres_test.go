@@ -1,10 +1,11 @@
-//go:build foundry_vips && cgo
+//go:build cgo && (darwin || linux || freebsd || windows)
 
 package attachments
 
 import (
 	"context"
 	"image/color"
+	"os"
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/imaging"
@@ -18,7 +19,10 @@ func TestPostgresNativeImageOriginalAndVariant(t *testing.T) {
 	config.Backend = imaging.LibvipsBackend
 	engine, err := imaging.New(config)
 	if err != nil {
-		t.Fatal(err)
+		if os.Getenv("FOUNDRY_TEST_VIPS_REQUIRED") == "1" {
+			t.Fatal(err)
+		}
+		t.Skip("libvips runtime unavailable")
 	}
 	t.Cleanup(func() {
 		if err := engine.Close(context.Background()); err != nil {

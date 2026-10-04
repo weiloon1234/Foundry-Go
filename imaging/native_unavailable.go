@@ -1,4 +1,4 @@
-//go:build !foundry_vips || !cgo
+//go:build !cgo || !(darwin || linux || freebsd || windows)
 
 package imaging
 
@@ -7,19 +7,19 @@ import (
 	"image"
 )
 
-func nativeUnavailable() error {
-	return invalid("libvips backend requires cgo, the foundry_vips build tag and libvips")
+func nativeBuildUnavailable() error {
+	return nativeFailure("native image support is unavailable in this binary; use a cgo-enabled build on a supported platform")
 }
-func nativeCapabilities() (Capabilities, error) { return Capabilities{}, nativeUnavailable() }
+func nativeCapabilities() (Capabilities, error) { return Capabilities{}, nativeBuildUnavailable() }
 func inspectNative(context.Context, []byte, Format, Limits) (inspection, error) {
-	return inspection{}, nativeUnavailable()
+	return inspection{}, nativeBuildUnavailable()
 }
 func openNative(context.Context, []byte, inspection, Limits) (nativeSource, error) {
-	return nil, nativeUnavailable()
+	return nil, nativeBuildUnavailable()
 }
 func encodeNative(context.Context, *boundedOutput, image.Image, Plan, Format, Limits) error {
-	return nativeUnavailable()
+	return nativeBuildUnavailable()
 }
 func smartCropNative(context.Context, image.Image, int, int, CropInterest, Limits) (image.Image, error) {
-	return nil, nativeUnavailable()
+	return nil, nativeBuildUnavailable()
 }

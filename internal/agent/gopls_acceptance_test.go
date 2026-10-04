@@ -314,6 +314,7 @@ func consumerEditorProbes() []consumerEditorProbe {
 		{"image-webp-mode", "profiles/image_encoding.go", "\t\t", "WebPMode", []string{"WebPMode", "WebPQuality", "WebPMethod"}, []string{"WebPMode", "Plan"}, "/imaging/encoding.go"},
 		{"image-native-crop", "profiles/native_images.go", "\t\t", "SmartFill", []string{"SmartFill", "ToSRGB", "Format"}, []string{"CropInterest", "Plan"}, "/imaging/backend.go"},
 		{"image-native-color", "profiles/native_images.go", "\t\t", "ToSRGB", []string{"ToSRGB", "SmartFill", "Metadata"}, []string{"Plan"}, "/imaging/backend.go"},
+		{"image-native-status", "profiles/image_runtime_test.go", "engine.", "NativeError", []string{"NativeError", "Capabilities", "Inspect", "ProcessBytes"}, []string{"error"}, "/imaging/backend.go"},
 		{"country-typed-lookup", "profiles/profile_test.go", "countries.", "Find", []string{"Find", "Seed", "Seeder", "CountryFields"}, []string{"Code", "Country", "error"}, "/countries/queries.go"},
 
 		{"notification-typed-capture", "notifying/orders.go", "binding.", "Capture", []string{"Capture", "Send", "Registration"}, []string{"Reference", "PendingNotification", "error"}, "/notifications/capture.go"},
