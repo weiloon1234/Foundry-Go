@@ -42,11 +42,13 @@ func TestServerFailuresAreReportedWithRedactedDiagnostics(t *testing.T) {
 }
 
 func TestOverloadIsRetryableUnavailable(t *testing.T) {
-	recorder := httptest.NewRecorder()
-	if err := WriteError(recorder, httptest.NewRequest("GET", "/", nil), fault.New(fault.Overloaded, "capacity")); err != nil {
-		t.Fatal(err)
-	}
-	if recorder.Code != 503 || recorder.Header().Get("Retry-After") != "1" || decodeFailure(t, recorder).Code != Unavailable {
-		t.Fatal("overload was not a retryable 503", recorder.Code, recorder.Header())
+	for _, failure := range []error{fault.New(fault.Overloaded, "capacity"), Unavailable.WithCause(fault.New(fault.Overloaded, "capacity"))} {
+		recorder := httptest.NewRecorder()
+		if err := WriteError(recorder, httptest.NewRequest("GET", "/", nil), failure); err != nil {
+			t.Fatal(err)
+		}
+		if recorder.Code != 503 || recorder.Header().Get("Retry-After") != "1" || decodeFailure(t, recorder).Code != Unavailable {
+			t.Fatal("overload was not a retryable 503", recorder.Code, recorder.Header())
+		}
 	}
 }

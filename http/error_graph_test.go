@@ -80,6 +80,7 @@ func TestHTTPClassificationAndRetrySearchesBoundCyclicCauses(t *testing.T) {
 		retry   string
 	}{
 		{"explicit", BadRequest.WithCause, BadRequest, ""},
+		{"unavailable without retry", Unavailable.WithCause, Unavailable, ""},
 		{"rate limit without retry", RateLimited.WithCause, RateLimited, ""},
 		{"idempotency without retry", IdempotencyInProgress.WithCause, IdempotencyInProgress.definition.Code, ""},
 		{"idempotency with retry", func(cause error) error {
@@ -99,6 +100,26 @@ func TestHTTPClassificationAndRetrySearchesBoundCyclicCauses(t *testing.T) {
 				t.Fatal("retry search exceeded its traversal budget", n)
 			}
 		})
+	}
+}
+
+func TestHTTPUnavailableRetryOmitsUnreachableOverload(t *testing.T) {
+	cycle := new(cyclicHTTPError)
+	wide := make([]error, 256)
+	for i := range wide {
+		wide[i] = fault.Overloaded
+	}
+	for _, cause := range []error{errors.Join(cycle, fault.Overloaded), errors.Join(wide...)} {
+		response := httptest.NewRecorder()
+		if err := WriteError(response, httptest.NewRequest("GET", "/", nil), Unavailable.WithCause(cause)); err != nil {
+			t.Fatal(err)
+		}
+		if response.Code != 503 || decodeFailure(t, response).Code != Unavailable || response.Header().Get("Retry-After") != "" {
+			t.Fatal("incomplete retry traversal established overload metadata")
+		}
+	}
+	if cycle.visits.Load() > 256 {
+		t.Fatal("retry search exceeded its traversal budget")
 	}
 }
 

@@ -16,7 +16,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// Config bounds manager work. MaxActive admits uploads and other mutations;
+// Config bounds manager work. MaxActive admits uploads and other mutations,
+// including the complete remote download, validation and persistence lifetime;
 // MaxReads separately admits loads, lookups, reads and link signing, so a burst
 // of reads cannot starve writes (or the reverse). Both queue briefly (at most
 // min(Timeout, 5s)) before failing as retryable overload. Owner-delete cleanup

@@ -3,6 +3,8 @@ package attachments
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"io"
 	"mime"
 	"net/url"
 	"path"
@@ -26,8 +28,9 @@ type RemoteSource struct {
 // AddFromURL downloads one remote file within the collection's MaxBytes and
 // adds it exactly like Add. Acceptance is detected from the downloaded bytes;
 // the response Content-Type is only a hint. Redirects and non-2xx responses
-// fail without adding a file. The download completes before manager admission
-// and holds no upload slot.
+// fail without adding a file. Manager admission covers the complete download,
+// validation, storage and publication, retaining one bounded input buffer. Image
+// processing remains subject to the image engine's separate limits.
 func (c Collection[M, K]) AddFromURL(ctx context.Context, m *Manager, owner model.Reference[M, K], source RemoteSource) (Result[M, K], error) {
 	if err := c.check(m); err != nil {
 		return Result[M, K]{}, err
@@ -39,20 +42,38 @@ func (c Collection[M, K]) AddFromURL(ctx context.Context, m *Manager, owner mode
 	if err := request.Validate(); err != nil {
 		return Result[M, K]{}, err
 	}
-	var body bytes.Buffer
-	downloaded, err := source.Client.Download(ctx, request, &body, c.definition.policy.MaxBytes)
-	if err != nil {
-		return Result[M, K]{}, err
-	}
 	name := source.OriginalName
 	if name == "" {
 		name = remoteName(source.URL)
 	}
-	var hint storage.MediaType
-	if media, _, err := mime.ParseMediaType(downloaded.Headers.Get("Content-Type")); err == nil && storage.MediaType(media).Validate() == nil {
-		hint = storage.MediaType(media)
-	}
-	return c.Add(ctx, m, owner, Upload{Source: bytes.NewReader(body.Bytes()), OriginalName: name, ContentType: hint})
+	var result Result[M, K]
+	err := m.calls.Run(ctx, "attachment remote upload", func(ctx context.Context) error {
+		locale, err := c.localeName(ctx, m)
+		if err != nil {
+			return err
+		}
+		input, err := prepareMetadata(Upload{OriginalName: name})
+		if err != nil {
+			return err
+		}
+		var body bytes.Buffer
+		digest := sha256.New()
+		downloaded, err := source.Client.Download(ctx, request, io.MultiWriter(&body, digest), c.definition.policy.MaxBytes)
+		if err != nil {
+			return err
+		}
+		if media, _, err := mime.ParseMediaType(downloaded.Headers.Get("Content-Type")); err == nil && storage.MediaType(media).Validate() == nil {
+			input.ContentType = storage.MediaType(media)
+		}
+		var checksum storage.SHA256
+		copy(checksum[:], digest.Sum(nil))
+		candidate, err := prepareBytes(ctx, m, c.definition.policy, input, body.Bytes(), checksum)
+		if err != nil {
+			return err
+		}
+		return c.writePrepared(ctx, m, owner, locale, candidate, false, &result)
+	})
+	return result, err
 }
 
 // remoteName derives a display name from the URL's last path segment.

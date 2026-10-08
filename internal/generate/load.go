@@ -57,7 +57,7 @@ type packageInput struct {
 
 // A selected package can lack compiled exports on a fresh checkout. Analyze its
 // handwritten declarations using already checked in-memory dependencies first.
-// Files are parsed once with module-relative names, so every diagnostic names
+// Full syntax is parsed once with module-relative names, so every diagnostic names
 // the actual source path rather than an ambiguous basename.
 func (g *packageGraph) loadPackage(path string) (*packageInput, error) {
 	target := g.packages[path]

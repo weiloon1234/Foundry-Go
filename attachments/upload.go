@@ -38,16 +38,10 @@ type prepared struct {
 }
 
 func prepare(ctx context.Context, m *Manager, policy Policy, input Upload) (prepared, error) {
-	input.OriginalName = filename.StripInvisible(input.OriginalName)
-	if input.Source == nil || !validFilename(input.OriginalName) {
+	if input.Source == nil {
 		return prepared{}, invalid()
 	}
-	if input.ContentType != "" {
-		if err := input.ContentType.Validate(); err != nil {
-			return prepared{}, err
-		}
-	}
-	properties, err := normalizeProperties(input.Properties)
+	input, err := prepareMetadata(input)
 	if err != nil {
 		return prepared{}, err
 	}
@@ -58,6 +52,33 @@ func prepare(ctx context.Context, m *Manager, policy Policy, input Upload) (prep
 	if err != nil {
 		return prepared{}, err
 	}
+	var checksum storage.SHA256
+	copy(checksum[:], digest.Sum(nil))
+	return prepareBytes(ctx, m, policy, input, body, checksum)
+}
+
+// prepareMetadata validates upload hints before reading source bytes.
+func prepareMetadata(input Upload) (Upload, error) {
+	input.OriginalName = filename.StripInvisible(input.OriginalName)
+	if !validFilename(input.OriginalName) {
+		return Upload{}, invalid()
+	}
+	if input.ContentType != "" {
+		if err := input.ContentType.Validate(); err != nil {
+			return Upload{}, err
+		}
+	}
+	properties, err := normalizeProperties(input.Properties)
+	if err != nil {
+		return Upload{}, err
+	}
+	input.Properties = properties
+	return input, nil
+}
+
+// prepareBytes borrows already owned bytes through validation and storage. Both
+// ordinary uploads and downloads use the same acceptance and image policy.
+func prepareBytes(ctx context.Context, m *Manager, policy Policy, input Upload, body []byte, checksum storage.SHA256) (prepared, error) {
 	if int64(len(body)) > policy.MaxBytes {
 		return prepared{}, storage.Failure(storage.LimitExceeded, storage.PutOperation, storage.Unchanged, nil)
 	}
@@ -65,7 +86,7 @@ func prepare(ctx context.Context, m *Manager, policy Policy, input Upload) (prep
 	if err != nil {
 		return prepared{}, err
 	}
-	result := prepared{open: func() io.Reader { return bytes.NewReader(body) }, info: UploadInfo{OriginalName: input.OriginalName, MediaType: detected, Size: int64(len(body))}, properties: properties}
+	result := prepared{open: func() io.Reader { return bytes.NewReader(body) }, info: UploadInfo{OriginalName: input.OriginalName, MediaType: detected, Size: int64(len(body))}, properties: input.Properties, digest: checksum}
 	if plan, imageRequired := policy.Image.Get(); imageRequired {
 		transformed, err := m.image.ProcessBytes(ctx, body, plan)
 		if err != nil {
@@ -73,10 +94,11 @@ func prepare(ctx context.Context, m *Manager, policy Policy, input Upload) (prep
 		}
 		info := transformed.Info()
 		result.open = transformed.Reader
-		digest.Reset()
+		digest := sha256.New()
 		if _, err := io.Copy(digest, transformed.Reader()); err != nil {
 			return prepared{}, err
 		}
+		copy(result.digest[:], digest.Sum(nil))
 		result.info.MediaType = storage.MediaType(info.Format.MediaType())
 		result.info.Size = transformed.Size()
 		result.info.Width = info.Width
@@ -85,7 +107,6 @@ func prepare(ctx context.Context, m *Manager, policy Policy, input Upload) (prep
 	if result.info.Size > policy.MaxStoredBytes {
 		return prepared{}, storage.Failure(storage.LimitExceeded, storage.PutOperation, storage.Unchanged, nil)
 	}
-	copy(result.digest[:], digest.Sum(nil))
 	return result, nil
 }
 

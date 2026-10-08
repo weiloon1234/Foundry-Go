@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Security scan corrections
+
+- Generator dependency discovery rejects option-shaped imports before export
+  loading and separates package operands from Go command flags. Generation and
+  scaffolding still support declarations awaiting their generated definitions.
+- Remote attachment imports acquire `Manager.MaxActive` admission before
+  downloading and retain it through validation, storage and publication. The
+  upload preparer reuses the owned download bytes instead of copying the body.
+- Unavailable HTTP responses contain panics from custom error methods during
+  overload retry classification, preserving the safe 503 response and omitting
+  `Retry-After` when classification fails.
+
 ### Framework message definitions in one set
 
 - `application.MessageDefinitions()` returns the framework message definitions a

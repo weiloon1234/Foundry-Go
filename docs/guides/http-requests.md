@@ -66,11 +66,13 @@ and the optional `request_id`. Header and JSON correlation come from the same
 attribution. HEAD responses omit the body. Nil errors are rejected.
 
 Each framework error search visits at most 256 nodes and 64 nested levels.
-Exhausting classification produces a safe internal error; exhausting a retry
-lookup retains an already-selected status and omits `Retry-After`. Explicit
-outer HTTP errors and reached retry metadata retain precedence. Custom error
-methods still must return and support concurrent calls; the framework owns them
-until they finish and contains panic/Goexit before writing a response. The same
+Exhausting classification produces a safe internal error; a panic or exhausted
+retry lookup retains an already-selected status and omits `Retry-After`. Explicit
+outer HTTP errors and reached retry metadata retain precedence, including the
+one-second retry hint for a confirmed overload. `WriteError` contains panics from
+custom error methods on the calling goroutine; `runtime.Goexit` ends that goroutine
+before the response is committed. Methods must terminate and support concurrent
+calls, and the framework retains ownership until they finish. The same
 bounds protect cursor-handler and custom asset-filesystem classification; an
 unclassified filesystem failure does not establish a missing asset for SPA fallback.
 

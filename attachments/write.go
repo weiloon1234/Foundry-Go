@@ -34,60 +34,73 @@ func (c Collection[M, K]) write(ctx context.Context, m *Manager, owner model.Ref
 	}
 	var result Result[M, K]
 	err := m.calls.Run(ctx, "attachment upload", func(ctx context.Context) error {
-		id, release, err := c.storeUpload(ctx, m, owner, upload, true)
-		if release != nil {
-			defer release()
-		}
-		if !id.IsZero() {
-			result.Operation = operationID(id)
-		}
+		locale, err := c.localeName(ctx, m)
 		if err != nil {
 			return err
 		}
-		attachment, old, err := c.publish(ctx, nil, m, id, owner, replace || c.definition.policy.Cardinality == Single)
-		outcome := transactionOutcome(err)
-		if err != nil && outcome != database.Committed {
-			if outcome == database.Unknown {
-				result.Publication = PublicationUnknown
-				return err
-			}
-			cleanupCtx, cancel := m.cleanupContext(ctx)
-			defer cancel()
-			journalErr := m.scheduleCleanup(cleanupCtx, id, c.queue, "publication_failed")
-			if journalErr != nil {
-				result.PendingCleanup = append(result.PendingCleanup, operationID(id))
-				return errors.Join(err, journalErr)
-			}
-			status, cleanupErr := m.reconcile(cleanupCtx, id, false)
-			if status.State != Cleaned {
-				result.PendingCleanup = append(result.PendingCleanup, operationID(id))
-			}
-			return errors.Join(err, cleanupErr)
+		candidate, err := prepare(ctx, m, c.definition.policy, upload)
+		if err != nil {
+			return err
 		}
-		result.Publication = Published
-		result.Attachment = value.Set(attachment)
-		cleanupCtx, cancel := m.cleanupContext(ctx)
-		defer cancel()
-		cleanupErr := err
-		pending, nextErr := m.cleanupMany(cleanupCtx, old)
-		result.PendingCleanup = append(result.PendingCleanup, pending...)
-		cleanupErr = errors.Join(cleanupErr, nextErr)
-		if len(c.definition.policy.Variants) > 0 {
-			// Queued variants were enqueued by the publication transaction.
-			// Otherwise generate them now; a failure never unpublishes.
-			result.PendingVariants = c.variantQueue != nil
-			if c.variantQueue == nil {
-				if variantErr := m.generate(ctx, id, false); variantErr != nil {
-					result.PendingVariants = true
-					cleanupErr = errors.Join(cleanupErr, variantErr)
-				} else if refreshed, err := c.withVariants(ctx, m, attachment); err == nil {
-					result.Attachment = value.Set(refreshed)
-				}
-			}
-		}
-		return cleanupErr
+		return c.writePrepared(ctx, m, owner, locale, candidate, replace, &result)
 	})
 	return result, err
+}
+
+// writePrepared shares storage, publication and recovery for an admitted upload.
+func (c Collection[M, K]) writePrepared(ctx context.Context, m *Manager, owner model.Reference[M, K], locale string, candidate prepared, replace bool, result *Result[M, K]) error {
+	id, release, err := c.storePrepared(ctx, m, owner, locale, candidate, true)
+	if release != nil {
+		defer release()
+	}
+	if !id.IsZero() {
+		result.Operation = operationID(id)
+	}
+	if err != nil {
+		return err
+	}
+	attachment, old, err := c.publish(ctx, nil, m, id, owner, replace || c.definition.policy.Cardinality == Single)
+	outcome := transactionOutcome(err)
+	if err != nil && outcome != database.Committed {
+		if outcome == database.Unknown {
+			result.Publication = PublicationUnknown
+			return err
+		}
+		cleanupCtx, cancel := m.cleanupContext(ctx)
+		defer cancel()
+		journalErr := m.scheduleCleanup(cleanupCtx, id, c.queue, "publication_failed")
+		if journalErr != nil {
+			result.PendingCleanup = append(result.PendingCleanup, operationID(id))
+			return errors.Join(err, journalErr)
+		}
+		status, cleanupErr := m.reconcile(cleanupCtx, id, false)
+		if status.State != Cleaned {
+			result.PendingCleanup = append(result.PendingCleanup, operationID(id))
+		}
+		return errors.Join(err, cleanupErr)
+	}
+	result.Publication = Published
+	result.Attachment = value.Set(attachment)
+	cleanupCtx, cancel := m.cleanupContext(ctx)
+	defer cancel()
+	cleanupErr := err
+	pending, nextErr := m.cleanupMany(cleanupCtx, old)
+	result.PendingCleanup = append(result.PendingCleanup, pending...)
+	cleanupErr = errors.Join(cleanupErr, nextErr)
+	if len(c.definition.policy.Variants) > 0 {
+		// Queued variants were enqueued by the publication transaction.
+		// Otherwise generate them now; a failure never unpublishes.
+		result.PendingVariants = c.variantQueue != nil
+		if c.variantQueue == nil {
+			if variantErr := m.generate(ctx, id, false); variantErr != nil {
+				result.PendingVariants = true
+				cleanupErr = errors.Join(cleanupErr, variantErr)
+			} else if refreshed, err := c.withVariants(ctx, m, attachment); err == nil {
+				result.Attachment = value.Set(refreshed)
+			}
+		}
+	}
+	return cleanupErr
 }
 
 // storeUpload reads and checks upload, records its intent and stores its
@@ -104,6 +117,11 @@ func (c Collection[M, K]) storeUpload(ctx context.Context, m *Manager, owner mod
 	if err != nil {
 		return model.ID[store.File]{}, nil, err
 	}
+	return c.storePrepared(ctx, m, owner, locale, candidate, ownerRequired)
+}
+
+// storePrepared records and stores validated bytes without reading them again.
+func (c Collection[M, K]) storePrepared(ctx context.Context, m *Manager, owner model.Reference[M, K], locale string, candidate prepared, ownerRequired bool) (model.ID[store.File], func(), error) {
 	hookContext := BeforeContext[M, K]{Owner: owner, Collection: c.Name(), Locale: c.locale, Upload: candidate.info}
 	for _, hook := range c.definition.hooks {
 		if hook.Before != nil {

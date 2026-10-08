@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"go/importer"
+	"go/parser"
 	"go/token"
 	"go/types"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"reflect"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -95,7 +97,7 @@ func loadGraph(ctx context.Context, dir string, recursive bool, tree *generation
 		pattern = "./..."
 	}
 	arguments := append([]string{"list"}, g.scope.listFlags()...)
-	arguments = append(arguments, "-e", "-json=Dir,ImportPath,Name,GoFiles,CgoFiles,IgnoredGoFiles,Imports,Match,Error", pattern)
+	arguments = append(arguments, "-e", "-json=Dir,ImportPath,Name,GoFiles,CgoFiles,IgnoredGoFiles,Imports,Match,Error", "--", pattern)
 	var listed []listedPackage
 	if err := g.goList(ctx, arguments, func(pkg listedPackage) { listed = append(listed, pkg) }); err != nil {
 		return nil, err
@@ -124,7 +126,11 @@ func loadGraph(ctx context.Context, dir string, recursive bool, tree *generation
 		return nil, fmt.Errorf("%s: no Go packages found", g.scope.display(g.root))
 	}
 	external := make(map[string]bool)
-	for _, pkg := range g.packages {
+	for _, path := range sortedNames(g.packages) {
+		pkg := g.packages[path]
+		if err := g.checkSourceImportOptions(ctx, pkg); err != nil {
+			return nil, err
+		}
 		for _, dependency := range pkg.Imports {
 			if _, selected := g.packages[dependency]; !selected && dependency != "C" && dependency != "unsafe" {
 				external[dependency] = true
@@ -140,8 +146,14 @@ func loadGraph(ctx context.Context, dir string, recursive bool, tree *generation
 		targets = append(targets, framework+"/extensions/slots")
 	}
 	targets = append(targets, extraImports...)
+	// Check metadata and scaffold imports as well as the selected source files.
+	for _, target := range targets {
+		if err := checkImportOption(target); err != nil {
+			return nil, fmt.Errorf("%s: %w", g.scope.display(g.root), err)
+		}
+	}
 	arguments = append([]string{"list"}, g.scope.listFlags()...)
-	arguments = append(arguments, "-e", "-deps", "-export", "-json=ImportPath,Export,Module")
+	arguments = append(arguments, "-e", "-deps", "-export", "-json=ImportPath,Export,Module", "--")
 	arguments = append(arguments, targets...)
 	exports := make(map[string]string)
 	if err := g.goList(ctx, arguments, func(pkg listedPackage) {
@@ -160,7 +172,7 @@ func loadGraph(ctx context.Context, dir string, recursive bool, tree *generation
 	// package without the binding package generated declarations import.
 	slotsPath := framework + "/extensions/slots"
 	if _, listed := exports[slotsPath]; !listed && (exports[framework+"/translations"] != "" || exports[framework+"/attachments"] != "" || exports[framework+"/metadata"] != "") {
-		arguments = append(append([]string{"list"}, g.scope.listFlags()...), "-e", "-deps", "-export", "-json=ImportPath,Export,Module", slotsPath)
+		arguments = append(append([]string{"list"}, g.scope.listFlags()...), "-e", "-deps", "-export", "-json=ImportPath,Export,Module", "--", slotsPath)
 		if err := g.goList(ctx, arguments, func(pkg listedPackage) {
 			if pkg.Export != "" {
 				exports[pkg.ImportPath] = pkg.Export
@@ -176,6 +188,46 @@ func loadGraph(ctx context.Context, dir string, recursive bool, tree *generation
 		return nil, err
 	}
 	return g, nil
+}
+
+// checkSourceImportOptions rejects flag-shaped imports even when tolerant Go
+// metadata omits their paths. Inspect imports in selected generated files too,
+// but leave ordinary parse/type errors to the source and generated overlay
+// checks: stale generated declarations must remain replaceable.
+func (g *packageGraph) checkSourceImportOptions(ctx context.Context, pkg listedPackage) error {
+	names := slices.Clone(pkg.GoFiles)
+	slices.Sort(names)
+	for _, name := range names {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		path := g.scope.display(filepath.Join(pkg.Dir, name))
+		data, err := os.ReadFile(filepath.Join(pkg.Dir, name))
+		if err != nil {
+			return err
+		}
+		syntax, _ := parser.ParseFile(g.fset, path, data, parser.ImportsOnly)
+		if syntax == nil {
+			continue
+		}
+		for _, imported := range syntax.Imports {
+			path, err := strconv.Unquote(imported.Path.Value)
+			if err != nil {
+				continue
+			}
+			if err := checkImportOption(path); err != nil {
+				return fmt.Errorf("%s: %w", g.fset.Position(imported.Path.Pos()), err)
+			}
+		}
+	}
+	return nil
+}
+
+func checkImportOption(path string) error {
+	if strings.HasPrefix(path, "-") {
+		return fmt.Errorf("invalid Go import path %q: leading dash", path)
+	}
+	return nil
 }
 
 func (g *packageGraph) exportImporter() types.Importer {

@@ -222,7 +222,8 @@ func localizedErrorResponse(ctx context.Context, err error, presenter *errorPres
 // errors are rejected. Internal causes are retained by their originating error,
 // never exposed in JSON. Raw handlers may use this explicit transport adapter.
 // Classification runs custom error methods on the caller's goroutine; a panic
-// becomes a safe internal response before any headers or body are written, and
+// becomes a safe internal response before any headers or body are written;
+// a panic during retry lookup retains the selected response and omits its hint.
 // runtime.Goexit ends the calling goroutine as any Go call does. Error
 // methods must terminate and be safe for concurrent classification calls. Each
 // search is bounded to 256 nodes and 64 nested levels; exhausted classification
@@ -265,9 +266,18 @@ func WriteError(w stdhttp.ResponseWriter, r *stdhttp.Request, err error) error {
 			logRouteFailure(r, "HTTP lockout retry classification failed", retryErr)
 		}
 	}
-	if payload.Code == Unavailable && header.Get("Retry-After") == "" && errorgraph.Is(err, fault.Overloaded) {
-		// Capacity waits already queued this request; a short retry is useful.
-		header.Set("Retry-After", "1")
+	if payload.Code == Unavailable && header.Get("Retry-After") == "" {
+		var overloaded bool
+		failure := callback.Invoke("HTTP overload retry classification", func() error {
+			overloaded = errorgraph.Is(err, fault.Overloaded)
+			return nil
+		})
+		if failure != nil {
+			logRouteFailure(r, "HTTP overload retry classification failed", failure)
+		} else if overloaded {
+			// Capacity waits already queued this request; a short retry is useful.
+			header.Set("Retry-After", "1")
+		}
 	}
 	if payload.Code == IdempotencyInProgress.definition.Code || payload.Code == IdempotencyCapacity.definition.Code || payload.Code == IdempotencyUnavailable.definition.Code {
 		var retry time.Duration

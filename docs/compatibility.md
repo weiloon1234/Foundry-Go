@@ -113,6 +113,15 @@ must preserve a reader capable of consuming formats already written.
 
 ## Operational behavior
 
+Remote attachment imports now share `Manager.MaxActive` and its operation timeout
+from the start of the download through publication. Imports waiting for capacity
+do not contact the remote server or retain its body. Size limits, destination
+restrictions and publication outcomes keep their existing contracts. Generator
+discovery refuses import values that could be interpreted as Go command flags;
+ordinary generation of declarations awaiting generated definitions still works.
+Unavailable error responses omit `Retry-After` if custom error methods panic
+during overload classification, while retaining the safe 503 response.
+
 A SPA more specific than a matching asset mount no longer runs inside that
 mount's route middleware or budget; move middleware that must cover SPA
 responses to the kernel or router. Model extension cleanup observers are

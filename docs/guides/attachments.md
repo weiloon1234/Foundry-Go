@@ -86,10 +86,15 @@ name such as `invoice<RLO>fdp.exe` cannot render as `invoiceexe.pdf`.
 OriginalName})` imports a remote file for untrusted URLs. `Client` must enforce a
 restricted destination policy (see [restricting destinations](http-client.md#restricting-destinations-from-untrusted-input));
 an unrestricted client is rejected as invalid. The file is downloaded within the
-collection's `MaxBytes` before manager admission, then added exactly like `Add`:
-acceptance is detected from the bytes and the response Content-Type is only a
-hint. Redirects, non-2xx responses and oversized bodies fail without adding a
-file. `OriginalName` defaults to the URL's last path segment.
+collection's `MaxBytes` inside the manager's `MaxActive` admission, which covers
+its download, validation, storage, publication and follow-up work. The manager
+timeout and shutdown cancel admitted downloads; publication cleanup retains its
+separate `CleanupTimeout`. One bounded input buffer is reused for validation and
+storage; image processing has its own engine limits. A queued import sends no
+request until admitted. Acceptance is detected from the bytes and the response
+Content-Type is only a hint. Redirects, non-2xx responses, truncated and oversized
+bodies fail without adding a file. `OriginalName` defaults to the URL's last path
+segment.
 
 Before hooks run in declaration order with detected metadata and the typed
 owner. AfterStored hooks run after storage acknowledgement inside the ownership
