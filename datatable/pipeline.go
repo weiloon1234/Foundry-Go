@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/database/query"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
 type prepared[S any] struct {
@@ -36,7 +37,7 @@ type requestBudget struct{ nodes, bytes int }
 
 func (b *requestBudget) text(text string, maximum int) error {
 	if len(text) > maximum || !utf8.ValidString(text) || len(text) > MaxRequestBytes-b.bytes {
-		return invalid("datatable request exceeds its text bounds")
+		return requestInvalid("datatable request exceeds its text bounds")
 	}
 	b.bytes += len(text)
 	return nil
@@ -48,10 +49,10 @@ func (d *tableDefinition[S, R, A]) prepare(request Request, config Config) (prep
 		return result, err
 	}
 	if page.Size > config.MaxPageSize || (page.Number-1) > config.MaxOffset/page.Size {
-		return result, invalid("datatable page exceeds its configured bound")
+		return result, requestInvalid("datatable page exceeds its configured bound")
 	}
 	if err := d.validateSort(request.Sort); err != nil {
-		return result, err
+		return result, foundryhttp.BadRequest.WithCause(err)
 	}
 	budget := requestBudget{}
 	for _, sort := range request.Sort {
@@ -89,7 +90,7 @@ func (d *tableDefinition[S, R, A]) prepare(request Request, config Config) (prep
 			}
 		}
 		if len(children) == 0 {
-			return prepared[S]{}, invalid("table does not declare searchable columns")
+			return prepared[S]{}, requestInvalid("table does not declare searchable columns")
 		}
 		c, err := combineConditions(Any, children)
 		if err != nil {
@@ -110,14 +111,14 @@ func (d *tableDefinition[S, R, A]) prepare(request Request, config Config) (prep
 }
 func (d *tableDefinition[S, R, A]) validateFilter(filter Filter, depth int, budget *requestBudget) error {
 	if depth > MaxFilterDepth || budget.nodes >= MaxFilters {
-		return invalid("datatable filter tree exceeds its structural bound")
+		return requestInvalid("datatable filter tree exceeds its structural bound")
 	}
 	budget.nodes++
 	if err := budget.text(filter.Column, 128); err != nil {
 		return err
 	}
 	if len(filter.Values) > MaxFilterValues {
-		return invalid("too many filter values")
+		return requestInvalid("too many filter values")
 	}
 	for _, text := range filter.Values {
 		if err := budget.text(text, MaxScalarBytes); err != nil {
@@ -127,7 +128,7 @@ func (d *tableDefinition[S, R, A]) validateFilter(filter Filter, depth int, budg
 	switch filter.Op {
 	case All, Any, Not:
 		if filter.Column != "" || len(filter.Values) != 0 || len(filter.Children) == 0 || filter.Op == Not && len(filter.Children) != 1 {
-			return invalid("invalid datatable filter group")
+			return requestInvalid("invalid datatable filter group")
 		}
 		for _, child := range filter.Children {
 			if err := d.validateFilter(child, depth+1, budget); err != nil {
@@ -137,7 +138,7 @@ func (d *tableDefinition[S, R, A]) validateFilter(filter Filter, depth int, budg
 	default:
 		declaration, ok := d.filters[filter.Column]
 		if !ok || len(filter.Children) != 0 || !slices.Contains(declaration.info.Operators, filter.Op) {
-			return invalid("invalid or undeclared datatable filter")
+			return requestInvalid("invalid or undeclared datatable filter")
 		}
 		return filterArity(filter.Op, len(filter.Values))
 	}
@@ -168,11 +169,11 @@ func combineConditions[S any](op Operator, children []condition[S]) (condition[S
 		return result, nil
 	}
 	if len(result.where) != 0 && len(result.having) != 0 {
-		return condition[S]{}, invalid("OR and NOT cannot mix WHERE and HAVING phases")
+		return condition[S]{}, requestInvalid("OR and NOT cannot mix WHERE and HAVING phases")
 	}
 	if op == Not {
 		if len(children) != 1 || children[0].complement == nil {
-			return condition[S]{}, invalid("invalid datatable filter group")
+			return condition[S]{}, requestInvalid("invalid datatable filter group")
 		}
 		return children[0].complement(), nil
 	}

@@ -113,6 +113,14 @@ must preserve a reader capable of consuming formats already written.
 
 ## Operational behavior
 
+Datatable client-input rejection now matches `http.BadRequest` as well as the
+existing `fault.Invalid`. HTTP handlers returning these errors unchanged receive
+400 instead of 500. Remove blanket `fault.Invalid`-to-400 mappings when adopting:
+server declaration/configuration and source failures must remain 500. There is no
+persisted, generated-schema or catalog change. Table-specific request errors use
+the existing generic public message; direct decoder causes/issue paths remain
+available to Go callers.
+
 Remote attachment imports now share `Manager.MaxActive` and its operation timeout
 from the start of the download through publication. Imports waiting for capacity
 do not contact the remote server or retain its body. Size limits, destination

@@ -187,7 +187,7 @@ func (t Table[S, R, A]) Export(ctx context.Context, m *Manager, subject A, reque
 		return nil, invalid("table does not permit exports")
 	}
 	if options.Format != CSV && options.Format != XLSX || len(options.Name) > filename.MaxBytes || options.ByteOrderMark && options.Format != CSV {
-		return nil, invalid("invalid datatable export options")
+		return nil, requestInvalid("invalid datatable export options")
 	}
 	if ctx == nil {
 		return nil, invalid("datatable export requires a context")
@@ -231,17 +231,17 @@ func (t Table[S, R, A]) Export(ctx context.Context, m *Manager, subject A, reque
 			presentation.Locale = locales.Default()
 		}
 		if presentation.Locale.Validate() != nil || !locales.Contains(presentation.Locale) {
-			return invalid("export locale is not supported")
+			return requestInvalid("export locale is not supported")
 		}
 		if presentation.TimeZone == "" {
 			presentation.TimeZone = string(m.config.TimeZone)
 		}
 		if len(presentation.TimeZone) > maxTimeZoneBytes {
-			return invalid("invalid export time zone")
+			return requestInvalid("invalid export time zone")
 		}
 		location, err := presentation.Location()
 		if err != nil {
-			return err
+			return foundryhttp.BadRequest.WithCause(err)
 		}
 		units := math.MaxInt
 		if options.Format == XLSX {

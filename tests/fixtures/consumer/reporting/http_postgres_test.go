@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"net/http/httptest"
 	"os"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/datatable"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/http/pagination"
 )
 
 func assertNoExportFiles(t *testing.T, f *fixture) {
@@ -105,6 +107,56 @@ func TestPublicReportDownloadOwnsFrozenFilterTree(t *testing.T) {
 	rows, err := csv.NewReader(bytes.NewReader(response.Body.Bytes())).ReadAll()
 	if err != nil || response.Code != 200 || len(rows) != 3 || rows[1][0] != f.members[0].String() || rows[2][0] != f.members[1].String() {
 		t.Fatal("deferred download reused caller-owned filter buffers", response.Code, rows, err)
+	}
+	assertNoExportFiles(t, f)
+}
+
+func TestPublicReportQueryReturnsRequestErrorsUnchanged(t *testing.T) {
+	f := openFixture(t)
+	transport, err := foundryhttp.NewAuthentication(f.registry, foundryhttp.BearerCredential("report.test"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	router, err := foundryhttp.NewRouter(reporting.QueryRoute(f.manager, transport, f.guard))
+	if err != nil {
+		t.Fatal(err)
+	}
+	post := func(body string, authenticated bool) *httptest.ResponseRecorder {
+		request := httptest.NewRequest("POST", "/reports/members/query", strings.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		if authenticated {
+			request.Header.Set("Authorization", "Bearer report-fixture")
+		}
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		return response
+	}
+	for _, body := range []string{
+		`{"page":-1}`, `{"size":1001}`,
+		`{"sort":[{"column":"private-canary","direction":"asc"}]}`,
+		`{"filters":[{"column":"state","op":"eq","values":["private-canary"]}]}`,
+	} {
+		response := post(body, true)
+		if response.Code != 400 || !strings.Contains(response.Body.String(), `"error_code":"bad_request"`) || strings.Contains(response.Body.String(), "private-canary") {
+			t.Fatal("unmodified table error did not produce safe HTTP 400", response.Code, response.Body.String())
+		}
+	}
+	if response := post(`{}`, false); response.Code != 401 {
+		t.Fatal("anonymous query admitted", response.Code)
+	}
+	response := post(`{}`, true)
+	var page pagination.NumberedResponse[reporting.MemberRow]
+	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil || response.Code != 200 || page.Meta.Total != 3 || len(page.Data) != 3 {
+		t.Fatal("healthy scoped query failed after rejection", response.Code, err)
+	}
+	if err := f.transaction(t.Context(), func(tx *database.Tx) error {
+		_, err := tx.Exec(t.Context(), `UPDATE report_operators SET can_view=false`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if response := post(`{}`, true); response.Code != 403 {
+		t.Fatal("fresh policy failure became bad request", response.Code)
 	}
 	assertNoExportFiles(t, f)
 }

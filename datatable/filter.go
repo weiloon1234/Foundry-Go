@@ -227,7 +227,7 @@ func makeFilter[S, V, P any](codec foundryhttp.QueryCodec[V], source comparisons
 	result.build = func(op Operator, raw []string) (condition[S], error) {
 		build, ok := operators[op]
 		if !ok {
-			return condition[S]{}, invalid("filter operator is not declared")
+			return condition[S]{}, requestInvalid("filter operator is not declared")
 		}
 		if err := filterArity(op, len(raw)); err != nil {
 			return condition[S]{}, err
@@ -236,7 +236,7 @@ func makeFilter[S, V, P any](codec foundryhttp.QueryCodec[V], source comparisons
 		for i, text := range raw {
 			v, err := codec.Parse(text)
 			if err != nil {
-				return condition[S]{}, invalid("filter scalar is invalid")
+				return condition[S]{}, requestInvalid("filter scalar is invalid")
 			}
 			values[i] = v
 		}
@@ -306,7 +306,7 @@ func (s FilterSource[S, V]) enabled() func(Operator, []string) (condition[S], er
 	allowed, build := slices.Clone(s.info.Operators), s.build
 	return func(op Operator, values []string) (condition[S], error) {
 		if !slices.Contains(allowed, op) {
-			return condition[S]{}, invalid("filter operator is not declared")
+			return condition[S]{}, requestInvalid("filter operator is not declared")
 		}
 		return build(op, values)
 	}
@@ -347,10 +347,10 @@ func filterArity(op Operator, n int) error {
 		if n >= 1 && n <= MaxFilterValues {
 			return nil
 		}
-		return invalid("invalid filter value count")
+		return requestInvalid("invalid filter value count")
 	}
 	if n != want {
-		return invalid("invalid filter value count")
+		return requestInvalid("invalid filter value count")
 	}
 	return nil
 }

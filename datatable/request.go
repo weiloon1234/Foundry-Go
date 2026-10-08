@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
 // TableID is a semantic registration identity, never a SQL table name.
@@ -89,8 +90,15 @@ const (
 // DecodeRequest rejects unknown/duplicate JSON keys, invalid Unicode, incorrect
 // scalar representations and documents exceeding the shared bounded decoder.
 // Table validation then checks the declaration-specific allowlist before SQL.
+// Rejected input matches http.BadRequest and retains *contract.DecodeError for
+// internal diagnostics. Cancellation and decoder infrastructure faults are not
+// client rejection.
 func DecodeRequest(ctx context.Context, data []byte) (Request, error) {
-	return RequestJSON().Decode(ctx, data, requestLimits())
+	request, err := RequestJSON().Decode(ctx, data, requestLimits())
+	if _, rejected := err.(*contract.DecodeError); rejected {
+		return Request{}, foundryhttp.BadRequest.WithCause(err)
+	}
+	return request, err
 }
 func requestLimits() contract.JSONLimits {
 	return contract.JSONLimits{Bytes: MaxRequestBytes, Depth: 32, Nodes: 4096, Steps: 16384, Issues: 16}
@@ -103,6 +111,16 @@ func (r Request) page() (query.PageRequest, error) {
 		r.Size = DefaultPageSize
 	}
 	p := query.PageRequest{Number: r.Page, Size: r.Size}
-	return p, p.Validate()
+	if err := p.Validate(); err != nil {
+		return p, foundryhttp.BadRequest.WithCause(err)
+	}
+	return p, nil
 }
 func invalid(message string) error { return fault.New(fault.Invalid, message) }
+
+// requestInvalid marks only rejected client input. Declaration/configuration and
+// extension failures must not use this helper: plain fault.Invalid remains an
+// internal error over HTTP. Preserve the original fault for existing Go callers.
+func requestInvalid(message string) error {
+	return foundryhttp.BadRequest.WithCause(invalid(message))
+}

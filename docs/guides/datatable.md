@@ -85,6 +85,21 @@ For example:
 }
 ```
 
+Rejected table request names, operators, values and bounds return an error matching
+`http.BadRequest` and `fault.Invalid`. Return that error unchanged from a handler:
+HTTP sends the existing localized `bad_request` response (400) without private
+error text. The same classification applies to malformed `DecodeRequest` input
+and invalid export format/presentation options. Decoding retains the underlying
+`contract.DecodeError` and its owned issues for Go callers. A generated endpoint's
+body decoder continues to provide its normal field paths in the public response;
+table-specific rejections currently use the generic message.
+
+Declaration/configuration faults, server source errors and output resource limits
+remain internal failures; authorization, cancellation and capacity keep their
+existing classifications. Never map every `fault.Invalid` to 400. No new DTO,
+manifest version, database migration or catalog message is required. See the
+[authenticated query consumer](../../tests/fixtures/consumer/reporting/http.go).
+
 Zero/omitted page and size default to 1 and 20. Other invalid values are rejected,
 not clamped. Sort names and directions use the declaration allowlist; repeated
 sort columns fail. Client sorts replace the default sort, then the table appends

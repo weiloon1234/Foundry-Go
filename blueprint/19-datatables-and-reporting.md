@@ -36,6 +36,13 @@ milestone 21; no independent TypeScript schema generator is introduced here.
 
 ## Failure behavior
 
+The 2026-10-08 request-classification correction reuses `http.BadRequest` for
+client-input rejection while retaining `fault.Invalid` inspection. Declaration,
+configuration, source and output-limit failures remain server errors. This fixes
+consumer handlers that otherwise had to treat every invalid fault as client
+input; the authenticated reporting query fixture returns errors unchanged.
+The [datatable guide](../docs/guides/datatable.md) owns the exact runtime contract.
+
 Reject unknown columns, unsupported operators and invalid scalar values before SQL. Prevent expensive unbounded requests with row/filter/depth limits. Exports must apply exactly the same authorization and soft-delete scope as interactive queries.
 
 Protect spreadsheet output from formula injection under a documented escaping policy. Report streaming/export failures without leaving files marked complete; close database and storage streams on cancellation. Long-running export jobs reuse the job system rather than creating ad hoc background goroutines.

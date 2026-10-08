@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Datatable request rejection
+
+- Datatable request bounds, undeclared sorts/filters, invalid scalar values,
+  malformed direct request decoding and invalid export options now match
+  `http.BadRequest`, so ordinary handlers return them unchanged as a localized
+  HTTP 400. They retain `fault.Invalid` and underlying decoder diagnostics for
+  Go callers. Declaration/configuration, source and infrastructure failures keep
+  their existing classification; applications should remove broad
+  `fault.Invalid`-to-400 mappings after adopting this revision.
+
 ### Security scan corrections
 
 - Generator dependency discovery rejects option-shaped imports before export

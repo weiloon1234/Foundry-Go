@@ -1,0 +1,66 @@
+{
+  "date": "2026-10-08",
+  "status": "complete",
+  "scope": "Distinguish datatable client request rejection from declaration/configuration and runtime server faults using the existing http.BadRequest classification.",
+  "base_revision": "5478ec9bbed4d9ac003fb1acc625317c5f36d411",
+  "compatibility": [
+    "Existing fault.Invalid matching is retained; decoder causes remain inspectable with errors.As.",
+    "No public type, DTO, generated schema, catalog message, storage schema or dependency change.",
+    "Applications return table errors unchanged after adoption. Audit other input/URL encoding boundaries separately before removing a shared blanket fault.Invalid mapping.",
+    "Starter remains on its published pin; no tracked local replacement is introduced. Publication and Git remain with the user."
+  ],
+  "source_sha256": {
+    "datatable/request.go": "5db29b491688e052883f75d4be105e8ad8fc4e682ef9c3882b80022fdc8df8fb",
+    "datatable/pipeline.go": "41f59c5c1f5c3b668a4936719faf961c32b3caa65d0ac79fd1e35bc2eb67fe24",
+    "datatable/filter.go": "a9c7efe5668d0b01349735955672dedf44abf5ef656a1b971d06fc87196e1270",
+    "datatable/export.go": "d569940e6a6bbb4feb3f3996bdd9eda8a4ee36c551f9a1ad3d488621f66a548e",
+    "datatable/request_http_test.go": "a99612aec63b19e80c748368530c7a1c535d6ecd86659a8b1fbbfdf13682266e",
+    "tests/fixtures/consumer/reporting/http.go": "dc4ecf913e2e09f3961f3b4143faa2b09eaa698aa9df82b5b7689d25b6d8fbda",
+    "tests/fixtures/consumer/reporting/http_postgres_test.go": "f2315734ae910acb4fcef22b485f86df81f9b04aefc9cbb13958c01792d58693"
+  },
+  "checks": [
+    {
+      "command": "go test -overlay=<temporary original-source overlay> ./datatable -run ^TestTableRequestFailuresHaveDistinctHTTPClassification$ -count=1",
+      "expected_exit_code": 1,
+      "exit_code": 1,
+      "result": "Original source returned HTTP 500 for rejected input; regression failed as expected. Overlay removed without modifying the checkout."
+    },
+    {
+      "command": "FOUNDRY_TEST_POSTGRES_REQUIRED=1 go test -race ./datatable ./http ./http/pagination -timeout=5m",
+      "exit_code": 0,
+      "result": "Current request classification, privacy, declaration/source errors, cancellation, query/count/simple/export/download, artifact cleanup and healthy subsequent query passed."
+    },
+    {
+      "command": "FOUNDRY_TEST_POSTGRES_REQUIRED=1 go test -race ./reporting -timeout=5m",
+      "working_directory": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "result": "Independent authenticated HTTP consumer returned table errors unchanged: invalid input 400, anonymous 401, current policy 403 and scoped rows 200."
+    },
+    {
+      "command": "FOUNDRY_TEST_POSTGRES_REQUIRED=1 FOUNDRY_TEST_GOPLS=<existing bin/gopls> make verify",
+      "exit_code": 0,
+      "log": ".cache/datatable-request-errors-20261008/verify-final.log",
+      "log_sha256": "a05b65a6cf275bfe4a35d56d4f4a99581c724b60718961ee495dd1756a56beea",
+      "result": "Formatting, vet, framework tests, real gopls/editor checks, independent fixtures/compiler cases, deterministic generation, documentation and release tooling passed."
+    },
+    {
+      "command": "GOWORK=off FOUNDRY_TEST_POSTGRES_REQUIRED=1 go test -modfile=<temporary modfile with local framework replacement> -race ./internal/bootstrap -run Table -count=1 -timeout=5m",
+      "working_directory": "../Foundry-Go-Starter",
+      "exit_code": 0,
+      "log": "/private/tmp/foundry-datatable-starter-compatibility-20261008.log",
+      "result": "Starter admin table and joined/grouped example integrations passed (7.643s); temporary modfile/sum removed and tracked dependency files unchanged."
+    }
+  ],
+  "verification_corrections": [
+    "Consumer formatting was rerun in its own nested Go module after the root go fmt invocation rejected that module path.",
+    "The first make verify attempt stopped at external-input fingerprinting because the selected starter TypeScript node_modules contains a workspace symlink. The setup also lacks esbuild/Vue/jsdom adapter peers. The final gate used existing PostgreSQL/gopls, with optional native TypeScript tools unselected; no dependencies were installed."
+  ],
+  "not_run": [
+    "Optional native TypeScript bundle/React/Vue runtime checks",
+    "Redis integration (not configured)",
+    "Linux execution",
+    "Private package/release or deployment acceptance"
+  ],
+  "review": "Manual simplification retained one requestInvalid helper at the existing datatable request owner and the shared sort validator for declaration defaults. No new error API or HTTP status/catalog map was added. Runtime and consumer sources stayed unchanged during the full gate; final blueprint/evidence updates are documentation only.",
+  "safety": "Existing PostgreSQL with isolated retained test schemas; no database reset/drop, credential changes, new dependencies, publication, deployment, git commit/push/merge."
+}
