@@ -34,8 +34,10 @@ var HTTPKey = foundation.NewKey[*http.Server]("foundry.application.http")
 // Resolve is the explicit extension boundary for application-specific services.
 type Services struct {
 	*infrastructure.Services
-	Logger   *slog.Logger
-	Logs     *logging.Channels
+	Logger *slog.Logger
+	Logs   *logging.Channels
+	// LogFiles borrows the existing logger owner for authorized file controls.
+	LogFiles *logging.ChannelSet
 	image    *imaging.Engine
 	resolver foundation.Resolver
 	features FeatureSettings

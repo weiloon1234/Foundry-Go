@@ -89,7 +89,11 @@ func (o *requestObservation) complete(ctx context.Context, method Method, respon
 	diagnostic := o.diagnostic
 	o.diagnosticMu.Unlock()
 	if o.span != nil {
-		o.span.EndWithDiagnostic(result, diagnostic)
+		var declared attribution.Route
+		if matched := o.route.Load(); matched != nil {
+			declared = attribution.Route{Method: string(matched.info.Method), Name: string(matched.info.ID)}
+		}
+		o.span.EndWithRoute(result, diagnostic, declared)
 	}
 	// Native requests can carry extension methods; a fixed label avoids retaining
 	// attacker-controlled method text in automatic diagnostic records.
@@ -101,6 +105,13 @@ func (o *requestObservation) complete(ctx context.Context, method Method, respon
 		scope.log().InfoContext(ctx, "HTTP request completed", slog.String("method", string(event.Method)), slog.String("route", string(event.Route)), slog.Int("status", result.Status), slog.String("outcome", string(result.Outcome)), slog.Duration("duration", event.Duration), slog.Int64("bytes", event.Bytes), slog.Bool("hijacked", event.Hijacked))
 	}
 	for _, observer := range observers {
+		if security, ok := observer.(SecurityRequestObserver); ok && o.security != nil {
+			owned := *o.security
+			owned.Request = event
+			if err := callback.Isolated("HTTP security observer", func() error { security.ObserveSecurityRequest(ctx, owned); return nil }); err != nil {
+				scope.log().ErrorContext(ctx, "HTTP security observer failed", slog.Any("error", err))
+			}
+		}
 		if err := callback.Isolated("HTTP request observer", func() error { observer.ObserveRequest(ctx, event); return nil }); err != nil {
 			scope.log().ErrorContext(ctx, "HTTP request observer failed", slog.Any("error", err))
 		}

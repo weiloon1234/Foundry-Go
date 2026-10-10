@@ -97,6 +97,17 @@ func (o *handlerLifetime) wrap(handler stdhttp.Handler, logger *slog.Logger, con
 		var capture *observedResponse
 		if observation != nil {
 			observation.started = time.Now()
+			for _, observer := range observers {
+				if _, ok := observer.(SecurityRequestObserver); ok {
+					ip := PeerIP(r)
+					if o.proxy != nil {
+						ip = o.proxy.clientIP(r)
+					}
+					path, truncated := boundedSecurityPath(r.URL.EscapedPath())
+					observation.security = &SecurityRequestEvent{ClientIP: ip, Path: path, PathTruncated: truncated}
+					break
+				}
+			}
 			scope.observation = observation
 			capture = &observedResponse{native: w}
 			w = responseCapabilities(capture)

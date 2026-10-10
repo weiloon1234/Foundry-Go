@@ -167,8 +167,9 @@ type sinkState struct {
 }
 
 type asyncRecord struct {
-	data  []byte
-	level slog.Level
+	data    []byte
+	level   slog.Level
+	barrier chan struct{}
 }
 
 // destination writes one complete record. Severity-aware destinations use the
@@ -342,6 +343,10 @@ func (state *sinkState) deliver(target destination, data []byte, level slog.Leve
 func (state *sinkState) runAsync(target destination, queue <-chan asyncRecord) {
 	defer close(state.writerDone)
 	for record := range queue {
+		if record.barrier != nil {
+			close(record.barrier)
+			continue
+		}
 		_, _ = state.deliver(target, record.data, record.level)
 		state.queuedBytes.Add(-int64(len(record.data)))
 	}

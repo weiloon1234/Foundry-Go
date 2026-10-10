@@ -238,6 +238,12 @@ func (s *Span) End(result Result) { s.EndWithDiagnostic(result, fault.Diagnostic
 // EndWithDiagnostic completes the span and attaches a redacted failure summary
 // to the error report produced for a failed, panicked or timed-out result.
 func (s *Span) EndWithDiagnostic(result Result, diagnostic fault.Diagnostic) {
+	s.EndWithRoute(result, diagnostic, attribution.Route{})
+}
+
+// EndWithRoute adds a validated declared route at completion, when HTTP matching
+// has finished. Invalid metadata is omitted; it never changes the operation.
+func (s *Span) EndWithRoute(result Result, diagnostic fault.Diagnostic, route attribution.Route) {
 	if s == nil || s.recorder == nil {
 		return
 	}
@@ -247,6 +253,9 @@ func (s *Span) EndWithDiagnostic(result Result, diagnostic fault.Diagnostic) {
 		// the last admitted span has released after sealing.
 		defer r.release()
 		entry := s.entry
+		if route.Validate() == nil {
+			entry.Route = route
+		}
 		entry.Duration = max(time.Duration(0), time.Since(s.started))
 		normalized, err := result.normalize(entry.Operation.Kind)
 		if err != nil {

@@ -237,3 +237,27 @@ and redaction rule. Durations and times travel as text. Trace context has its ow
 explicit propagation form: `tracing.Context` marshals as `traceparent` JSON and
 `tracing.WithContext` restores it. Only put correlation identifiers and safe
 scalar labels in these fields, never credentials or personal data.
+
+## Authorized log file controls
+
+Resolve `Services.LogFiles` at composition, then borrow an existing owner with
+`FileSink(channel)`. Only rotating file leaves support this capability; stacks,
+streams, custom/borrowed loggers and nonrotating files are unavailable. The
+framework grants no HTTP authority: applications must authorize every read and
+maintenance action, confirm destructive intent and keep a separate audit trail.
+
+`Files(ctx)` returns basenames and opaque generation IDs. `ReadFile(ctx,
+logging.FileRead{ID: id, Offset: -1, Limit: 65536})` tails at most the requested
+bytes (maximum 1 MiB); ordinary nonnegative offsets continue a range. Chunks may
+split lines, so render text safely and buffer only bounded incomplete records.
+`RotateFile`, `ClearFile` and `DeleteArchive` require a listed ID. Clear truncates
+the active descriptor and invalidates its generation; it never unlinks its name.
+Only a closed archive can be deleted. IDs expire when the process restarts.
+
+Controls stop admission and drain accepted async records before operating.
+Pre-barrier cancellation makes no change. Once native I/O starts its actual
+outcome must be reconciled; a caller deadline is not proof of rollback. Retention
+can remove a listed archive before it is read. Absolute paths, arbitrary names,
+symlinks and rotation locks are never accepted as control inputs. The owning
+process alone controls its files; do not build a second writer or use external
+unlink/copytruncate against a live sink.

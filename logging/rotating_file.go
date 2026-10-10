@@ -28,15 +28,17 @@ const pruneInterval = time.Hour
 // released only after the active descriptor closes and the worker exits.
 // Never unlink the lock.
 type rotatingFile struct {
-	root   *os.Root
-	lock   *os.File
-	file   *os.File
-	name   string
-	policy RotationConfig
-	size   int64
-	day    int
-	zone   *time.Location
-	events *sinkEvents
+	root       *os.Root
+	lock       *os.File
+	file       *os.File
+	name       string
+	session    string
+	generation uint64
+	policy     RotationConfig
+	size       int64
+	day        int
+	zone       *time.Location
+	events     *sinkEvents
 	// Rotation retry state is owned by the serialized writer.
 	rotateAfter    time.Time
 	rotateFailures int
@@ -57,8 +59,13 @@ func openRotatingFile(path string, policy RotationConfig, now time.Time, zone *t
 	if err != nil {
 		return nil, fault.Wrap(fault.Invalid, "cannot open log directory", err)
 	}
+	var session [16]byte
+	if _, err := rand.Read(session[:]); err != nil {
+		_ = root.Close()
+		return nil, err
+	}
 	ownedZone := *zone
-	f := &rotatingFile{root: root, name: filepath.Base(path), policy: policy.resolved(), zone: &ownedZone, events: events}
+	f := &rotatingFile{root: root, name: filepath.Base(path), policy: policy.resolved(), zone: &ownedZone, events: events, session: hex.EncodeToString(session[:])}
 	defer func() {
 		if result != nil {
 			result = errors.Join(result, f.Close())
@@ -246,6 +253,7 @@ func (f *rotatingFile) openActive(now time.Time) error {
 		return err
 	}
 	f.file, f.size, f.day = file, 0, calendarDay(now, f.zone)
+	f.generation++
 	return nil
 }
 

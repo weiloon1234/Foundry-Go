@@ -237,7 +237,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 		return channels.Start(ctx)
 	}})
 	plan.Register(builder)
-	registerResources(builder, s.Image, logger, channels.Channels(), s.Features, configured.clock, recorder, dates, calendar)
+	registerResources(builder, s.Image, logger, channels, s.Features, configured.clock, recorder, dates, calendar)
 	builder.Register(providers...).RegisterPlugin(plugins...)
 	if err := registerFeatures(ctx, builder, s, configured.clock, features, models, keys); err != nil {
 		return nil, err

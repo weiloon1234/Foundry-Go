@@ -14,7 +14,8 @@ import (
 )
 
 type requestObservation struct {
-	started time.Time
+	started  time.Time
+	security *SecurityRequestEvent
 	// route is published by the matched route's handler goroutine and read
 	// after the handler returns; the pointer is immutable per-route state.
 	route        atomic.Pointer[matchedRoute]

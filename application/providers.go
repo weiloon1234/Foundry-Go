@@ -18,7 +18,7 @@ import (
 	"slices"
 )
 
-func registerResources(builder *foundation.Builder, image ImageSettings, logger *slog.Logger, channels *logging.Channels, features FeatureSettings, source clock.Clock, recorder *observability.Recorder, dates temporal.Service, calendar schedule.Calendar) {
+func registerResources(builder *foundation.Builder, image ImageSettings, logger *slog.Logger, channels *logging.ChannelSet, features FeatureSettings, source clock.Clock, recorder *observability.Recorder, dates temporal.Service, calendar schedule.Calendar) {
 	requires := []foundation.ProviderID{infrastructure.Provider}
 	if image.Enabled {
 		builder.Register(imaging.Module(ImageProvider, ImageKey, image.Config))
@@ -30,7 +30,7 @@ func registerResources(builder *foundation.Builder, image ImageSettings, logger 
 			if err != nil {
 				return Services{}, err
 			}
-			result := Services{Services: resources, Logger: logger, Logs: channels, features: features, clock: source, recorder: recorder, dates: dates, calendar: calendar}
+			result := Services{Services: resources, Logger: logger, Logs: channels.Channels(), LogFiles: channels, features: features, clock: source, recorder: recorder, dates: dates, calendar: calendar}
 			if image.Enabled {
 				result.image, err = foundation.Resolve(r, ImageKey)
 			}

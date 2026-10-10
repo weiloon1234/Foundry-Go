@@ -304,3 +304,30 @@ formatting domain error text. Cyclic or excessively large/deep error graphs are
 classified as failed operations, so reporting can release the operation span.
 Custom `Is`/`Unwrap` methods still must return, and `Is` must compare shallowly;
 panics and `runtime.Goexit` remain isolated and classified as callback failures.
+
+## Route windows and security observations
+
+`http.NewRequestMetrics(512)` constructs a bounded `RequestObserver`; register
+it with `Builder.ObserveHTTP`. `Snapshot` returns owned cumulative histograms;
+`Drain` atomically returns and resets an interval. Applications may persist
+intervals in their own typed models off the request path. Do not drain an owner
+also used for cumulative Prometheus scraping: use independent observers for the
+two retention contracts. `WritePrometheus` exports declared route/method/status
+labels; unmatched routes share one category and unknown methods use OTHER.
+`observability.EstimateQuantile` consumes combined cumulative buckets and counts;
+it reports missing samples and overflow rather than inventing exact percentiles.
+
+An observer can additionally implement `SecurityRequestObserver`. Its extra
+callback explicitly receives a bounded path without query text and a client IP
+resolved through the configured trusted proxy. Paths still contain untrusted,
+possibly private values: classify and redact before retaining them. Never use
+paths, IPs, request IDs or trace IDs as metric labels. Both callbacks retain
+request ownership and must return promptly without database/network I/O. The
+ordinary `RequestEvent` remains payload-free. HTTP error/trace entries now carry
+the validated declared route at completion, including failures before handlers.
+
+`Recorder.CollectSamples()` provides owned structured runtime/process and
+registered gauge/counter samples using the same validated collector owner as
+Prometheus output. This lets an authenticated console display them without
+scraping its own HTTP server or parsing text exposition. Collection is bounded
+by the existing collector limits and performs no additional network I/O.

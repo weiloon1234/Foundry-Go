@@ -92,6 +92,7 @@ type metricFamily struct {
 // exposition accumulates families so every sample of one metric name shares a
 // single HELP/TYPE block, as the text format requires.
 type exposition struct {
+	samples  []MetricSample
 	families map[string]*metricFamily
 	order    []string
 }
@@ -113,6 +114,9 @@ func (e *exposition) family(name, help, kind string, reserved bool) (*metricFami
 func (e *exposition) builtin(name, help, kind, labels string, value string) {
 	family, _ := e.family(name, help, kind, true)
 	family.samples = append(family.samples, name+labels+" "+value)
+	if parsed, err := strconv.ParseFloat(value, 64); err == nil {
+		e.samples = append(e.samples, MetricSample{Name: name, Help: help, Kind: kind, Labels: labels, Value: parsed})
+	}
 }
 
 // MetricWriter validates and escapes collector samples. Invalid samples are
@@ -174,6 +178,7 @@ func (w *MetricWriter) emit(kind, name, help string, value float64, labels []Lab
 	}
 	family.keys[rendered] = true
 	family.samples = append(family.samples, name+rendered+" "+strconv.FormatFloat(value, 'g', -1, 64))
+	w.target.samples = append(w.target.samples, MetricSample{Name: name, Help: help, Kind: kind, Labels: rendered, Value: value})
 	w.samples++
 }
 
@@ -399,4 +404,25 @@ func writeProcessMetrics(output *exposition) {
 	if stats.hasResidentMem {
 		output.builtin("process_resident_memory_bytes", "Resident memory size in bytes.", "gauge", "", formatFloat(stats.residentBytes))
 	}
+}
+
+// MetricSample is a structured gauge/counter sample from the existing runtime,
+// process and registered collectors. Labels is the bounded, escaped Prometheus
+// label representation; consumers must not interpret it as markup.
+type MetricSample struct {
+	Name, Help, Kind, Labels string
+	Value                    float64
+}
+
+// CollectSamples reuses the existing collectors without parsing text exposition
+// or retaining operation/correlation history. Every result is owned by the caller.
+func (r *Recorder) CollectSamples() []MetricSample {
+	if r == nil {
+		return nil
+	}
+	output := &exposition{families: make(map[string]*metricFamily)}
+	writeRuntimeMetrics(output)
+	writeProcessMetrics(output)
+	r.collect(output)
+	return slices.Clone(output.samples)
 }

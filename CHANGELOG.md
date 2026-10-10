@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Developer operations primitives
+
+- Owned rotating log sinks support bounded file listing/reading, rotation,
+  descriptor-preserving clearing and closed-archive deletion. Generation IDs,
+  async write barriers and existing rotation locks preserve ownership.
+  `application.Services.LogFiles` borrows the existing channel owner.
+- `http.RequestMetrics` provides bounded route histograms, owned interval drains
+  and Prometheus output. `observability.EstimateQuantile` estimates window
+  percentiles and exposes missing samples and overflow.
+- Opt-in `http.SecurityRequestObserver` receives bounded query-free paths and
+  trusted client addresses, including early rejections. Default completion
+  events remain payload-free. Error reports retain validated declared routes.
+
 ### Datatable request rejection
 
 - Datatable request bounds, undeclared sorts/filters, invalid scalar values,

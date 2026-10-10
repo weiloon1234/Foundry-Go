@@ -102,6 +102,7 @@ type Entry struct {
 	SpanID    tracing.SpanID        `json:"span_id"`
 	ParentID  tracing.SpanID        `json:"parent_id"`
 	RequestID attribution.RequestID `json:"request_id,omitempty"`
+	Route     attribution.Route     `json:"route,omitzero"`
 }
 
 // ErrorReport describes one failed operation. Diagnostic is a redacted summary
