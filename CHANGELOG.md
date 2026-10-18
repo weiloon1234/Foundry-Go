@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Transactional setting defaults
+
+- `settings.Key.EnsureIn` initializes a missing setting within a caller's
+  transaction, preserving existing values, versions and configured presentation.
+  It reuses `Ensure` semantics and the existing savepoint/cache invalidation path,
+  so parent rollback includes initialization and presentation updates.
+
 ### Developer operations primitives
 
 - Owned rotating log sinks support bounded file listing/reading, rotation,

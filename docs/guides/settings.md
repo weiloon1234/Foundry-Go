@@ -31,8 +31,16 @@ goroutines or database resources of its own.
 `Create` fails if the key exists. `Ensure` creates it if absent and preserves an
 existing value and version. `Set` updates an existing value, returning
 `database.NotFound` for a missing key. `Upsert` atomically creates or updates the
-value and version, preserving existing presentation. `SetIn` and `UpsertIn` join
-the caller's transaction through a savepoint; parent rollback includes settings.
+value and version, preserving existing presentation. `EnsureIn`, `SetIn` and
+`UpsertIn` join the caller's transaction through a savepoint; parent rollback
+includes settings. Transactional seeders use `EnsureIn` with their supplied `tx`
+to initialize defaults without replacing existing admin values:
+
+```go
+err = SiteName.EnsureIn(ctx, tx, manager, "My site")
+```
+
+The joined methods reject a nil transaction or one from another database pool.
 No operation automatically retries an uncertain commit.
 
 `Get` returns an omitted optional only for a missing row. `GetOr` uses its default
