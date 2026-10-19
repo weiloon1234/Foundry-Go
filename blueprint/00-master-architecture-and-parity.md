@@ -10,17 +10,25 @@ This document is the single source of truth for milestone status. Subsystem blue
 
 ## Configured queued event outboxes (starter B26) — 2026-10-19
 
-Status: **integrated; current-source acceptance pending**.
+Status: **accepted on combined source `25721dbef0b3`**.
 `application.EventOutbox` plus `features.outbox.events` joins declared typed
 producers to named durable job connections, framework delivery-job contributions
 and configured publisher routes. The
 [supporting-services blueprint](consumer-startup/04-supporting-services.md#configured-event-outbox-bridge-b26)
 owns the design; the [events guide](../docs/guides/events.md#durable-events-with-applicationnew)
-documents adoption. This integration preserves the shared query engine and the
-geographic-expression/transactional-setting capabilities already used by consumers.
-The earlier B26 worktree's acceptance on `43a10d9` does not verify this combined
-source. Current generation, full source gate and relevant PostgreSQL/Redis races
-remain pending. No commit, publication or consumer pin upgrade is implied.
+documents adoption. The shared query engine and existing geographic-expression/
+transactional-setting capabilities are preserved.
+
+Native `make verify` passed on unchanged source, including deterministic
+settings generation, independent consumers, 1,026 compiler rejections and real
+gopls/TypeScript clients. Required PostgreSQL/Redis races passed for typed queries,
+application assembly, events, settings, outbox/publisher and the independent event
+and scalar consumers. They verify zero listeners, separate queued listener jobs,
+stable retry identity, transaction rollback, geographic SQL and setting defaults.
+The [evidence](../docs/evidence/queued-event-outbox-20261019.json) records current
+fingerprints, exact commands and limits. Earlier B26-worktree acceptance on
+`43a10d9` is not used as proof of this combined source. Application upgrades and
+Linux/full framework-wide race acceptance remain separate checks.
 
 ## Shared query engine and cache churn — 2026-10-19
 

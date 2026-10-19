@@ -1,0 +1,93 @@
+{
+  "date": "2026-10-19",
+  "status": "accepted-combined-source",
+  "framework_commit": "25721dbef0b33ec3692e615aac37325dbcac2a17",
+  "framework_version": "v0.0.0-20261019134603-25721dbef0b3",
+  "scope": "B26 configured queued event outboxes integrated onto the shared query engine; existing geographic expressions and transaction-aware setting defaults retained.",
+  "source_fingerprints": {
+    "all_verified_source_sha256": "9d9afd194a779101127b6eb88f0be39483d82e8ca169e69e65a6d4d6ffc33c13",
+    "file_count": 4570,
+    "files": {
+      "application/builder.go": "dabf25e252dd68572a7ccf67afd24e4ed897652c44b993981d5a802fa455ee0d",
+      "application/declarations.go": "af88d4152192084916f12d60314c3979bbcd6c7f28f6a836f22bc62289fd25f9",
+      "application/event_outbox.go": "00adc189e724b53f2ea58d187198df60a50b7ba3e538efed308aba3ee8c3f8d7",
+      "application/event_outbox_test.go": "bbcb9eb013c90e7b33b2783e0b07d8860315881db06021c046a0e82f9043e157",
+      "application/feature_settings.go": "b5ef2c0a6f8c5bb9bd7ef10f061bc53bec67c3ef7dea7d10a004b788c7ff60ef",
+      "application/outbox_providers.go": "c2989940c10292d6876c0b047e6359bde1490df900d5171ac074ee0ab6e4e32e",
+      "application/settings_foundry.gen.go": "bc398a7f62a67935243c23c3208b7ad9b7e65d1fae27f7bbe42123da2d963703",
+      "database/query/geographic_expression.go": "6ae103122a92cc892a8303606a23e14fdce054b5b62e0677597d635f09662057",
+      "database/query/geographic_expression_test.go": "dc4bc3dcbeed5acf463ddb3a2846e7cdeae33de224c9df8b29c19b17a8d81feb",
+      "database/query/scalar_operation.go": "89ea684f08f0f2247569f3a244f50397b5d203bd0140cd48bd2d8389afa315cb",
+      "events/queued_outbox.go": "e7997b330c4da92e18c598c996844d16d69964b2fef39245ab330ce6b027f184",
+      "internal/agent/gopls_acceptance_test.go": "79998efed1cd3f804e67c7a5f67e6d1f53f184ea37dd581279710c24b9743e92",
+      "internal/querycore/geographic_expression.go": "704ebc50e58f7c1b44b03ab0da74b9727861c044da41a621aa2b1e9fe121e87c",
+      "internal/querycore/scalar_operation.go": "bb11afe538f30f1e25781c30a3a870a64cac388b415b62d97d70f1cef075e819",
+      "settings/ensure_in_postgres_test.go": "3c5ec168d81a2c3f4bf32e7b59ba4f38f0eeb688c03aa3875164e257b6cade7f",
+      "settings/values.go": "d57b6b13bce58c9bd1c7159b88aeed6681d81a76356e79ad06d2127c1926bd0a",
+      "tests/fixtures/consumer/bootstrap/settings_foundry.gen.go": "f59cbd9a9d8431ea362722f055fdd0efa666f6f89f15fe4e52fed3a60184367b",
+      "tests/fixtures/consumer/eventqueries/configured_outbox.go": "e49a870fae0e9772a66231d84f3d9a901b7d980cf6298324b63d8a937d96f703",
+      "tests/fixtures/consumer/eventqueries/configured_outbox_postgres_test.go": "27a619896381f44bed842665f8ccc5f4274b1b79c3099746260ecd833f37c932",
+      "tests/fixtures/consumer/scalarqueries/geographic_test.go": "a2cec81a62e32bfb906b8fc53b972d441a8def24bbb795e0d89a6876704ea071",
+      "tests/fixtures/consumer/testdata/compilefail/application_event_outbox_key/invalid.go": "ce5f20812ca3476a51017bfd4b3c7c30ce62d74d67034be3f0791f9aee309a5d",
+      "tests/fixtures/consumer/testdata/compilefail/geographic_owner/invalid.go": "dc1ef3e97f4c59204b6b67dcb9305a04761b162836ae58a11b71c3bad325e312",
+      "tests/fixtures/consumer/types_test.go": "75f4cd3e8f91581b9361f4264c16e160135f90d9072c9d77b5d83bf12c112c37"
+    }
+  },
+  "verification": {
+    "generate": {
+      "command": "GOFLAGS='-mod=readonly -p=2' make generate",
+      "exit_code": 0,
+      "generated_owners": "Application and consumer bootstrap settings; matching ownership manifests regenerated."
+    },
+    "make_verify": {
+      "command": "make verify",
+      "exit_code": 0,
+      "seconds": 986.91,
+      "conditions": "Native Go; warm shared cache; GOFLAGS=-mod=readonly -p=2; real gopls/Node/TypeScript required; existing Redis required; no cache cleanup"
+    },
+    "required_races": {
+      "commands": [
+        "go test -race -count=1 -timeout=20m ./database/query ./application ./events ./settings ./outbox/...",
+        "cd tests/fixtures/consumer && go test -race -count=1 -timeout=20m ./eventqueries ./scalarqueries"
+      ],
+      "exit_code": 0,
+      "conditions": "GOFLAGS=-mod=readonly -p=1; PostgreSQL and Redis required; existing private PostgreSQL configuration and existing local Redis; isolated retained schemas/namespaces; no resets or server startup.",
+      "root_seconds": 227.73,
+      "consumer_seconds": 90.89
+    },
+    "compiler_rejection_cases": 1026,
+    "documentation": {
+      "command": "GOFLAGS='-mod=readonly -p=1' make docs-check",
+      "exit_code": 0,
+      "scope": "Final acceptance documentation and local links; verified code unchanged."
+    }
+  },
+  "audit": [
+    "Declaration/configuration joins and durable connections validate before resource registration.",
+    "Destinations share one definition per configured connection; default selection and unknown explicit names follow the named-service owner.",
+    "Producer keys remain typed; public registration reuses the private delivery payload and existing wire identity.",
+    "Settings and declarations retain application-owned snapshots; repeated resolutions share a producer while separate applications remain isolated.",
+    "Actual PostgreSQL/Redis worker coverage verifies zero-listener success, separate queued listener jobs, stable retry identity and transaction rollback.",
+    "Geographic SQL compiles once in internal/querycore, with typed owner/nullable expressions retained; real PostgreSQL checks cover nulls, poles and antimeridian.",
+    "EnsureIn retains parent rollback, existing admin values/presentation and concurrent initialization.",
+    "Manual simplification review retained existing registration, publisher, job and query owners; no second implementation was introduced."
+  ],
+  "merge_resolution": {
+    "conflicted_files": 21,
+    "result": "Kept the reviewed combined implementation; no unmerged entries. Runtime query/outbox/settings files matched the pre-merge combined source. User performed the merge commit and publication."
+  },
+  "logs": {
+    ".cache/integrate-b26-20261019/generate.log": "c6a7c937f4e9438b94d308c11ce41bddb7764e3515c3f7aca0ca0987d9d98a1a",
+    ".cache/integrate-b26-20261019/merge-targeted.log": "5f087add56bd83375defa9ee445ce422e1f7cf23f2f02819cbd60c768c8e0113",
+    ".cache/integrate-b26-20261019/merge-profile.log": "b689da26f4f2b3cc9e1a164197c520e5c6b7c47c5b45c6e7e03e937fdae82415",
+    ".cache/integrate-b26-20261019/merge-docs.log": "fd85898d49c4c9b114d0251a950b2b369f7138485ca00565be369f6c6c8979fb",
+    ".cache/integrate-b26-20261019/required-races.log": "7143d6ee9f17e0c68b411374fb60b74fa69748af8d935eb8a6197baba7028271",
+    ".cache/integrate-b26-20261019/verify.log": "5031be5869aaf20bdc2a5c7dd5b231bcd23b39600835d2f86dd260945a5c23fd",
+    ".cache/integrate-b26-20261019/final-docs.log": "fd85898d49c4c9b114d0251a950b2b369f7138485ca00565be369f6c6c8979fb"
+  },
+  "limits": [
+    "The full framework-wide race matrix and Linux acceptance were not rerun; required backend races cover the changed guarantees.",
+    "Performance measurements remain scoped to the historical sources and workloads in query-build-resources-20261019.json; no new cold cache measurement was requested.",
+    "Application upgrades have their own independent gates and evidence."
+  ]
+}
