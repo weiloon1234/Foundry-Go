@@ -75,7 +75,11 @@ func registerOutbox(builder *foundation.Builder, s OutboxSettings, source clock.
 	}})
 	// The module logs publication failures through the application logger and
 	// runs the publisher only under the configured kernels.
-	builder.Register(publisher.KernelModule(OutboxProvider, OutboxKey, s.Kernels, []foundation.ProviderID{producerProvider, FeatureDeclarationsProvider}, func(r foundation.Resolver) (*publisher.Publisher, error) {
+	publisherRequires := []foundation.ProviderID{producerProvider, FeatureDeclarationsProvider}
+	if len(s.Events) > 0 {
+		publisherRequires = append(publisherRequires, EventOutboxProvider)
+	}
+	builder.Register(publisher.KernelModule(OutboxProvider, OutboxKey, s.Kernels, publisherRequires, func(r foundation.Resolver) (*publisher.Publisher, error) {
 		db, err := foundation.Resolve(r, infrastructure.DatabaseKey(s.Database))
 		if err != nil {
 			return nil, err
@@ -89,6 +93,13 @@ func registerOutbox(builder *foundation.Builder, s OutboxSettings, source clock.
 			return nil, err
 		}
 		routes := slices.Clone(d.Outbox)
+		if len(s.Events) > 0 {
+			eventRoutes, err := foundation.Resolve(r, eventOutboxRoutesKey)
+			if err != nil {
+				return nil, err
+			}
+			routes = append(routes, eventRoutes...)
+		}
 		for _, name := range names {
 			route, err := producers[name].PublicationRoute()
 			if err != nil {

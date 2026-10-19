@@ -161,6 +161,8 @@ const jsonUnquoteOperation = querycore.JsonUnquoteOperation
 
 const jsonArrayLengthOperation = querycore.JsonArrayLengthOperation
 
+const sphericalDistanceOperation = querycore.SphericalDistanceOperation
+
 type operationSpec = querycore.OperationSpec
 
 type operationArgument = querycore.OperationArgument

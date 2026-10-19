@@ -340,11 +340,20 @@ The publisher retains failed rows and bounded reason classifications; optional
 distinguishes committed progress from a transaction error/unknown outcome.
 `publisher.Module` owns its polling task through foundation shutdown.
 
-For events, `events.NewQueuedOutbox(policy, producers...)` creates one job declaration
-and a publication route per explicit event destination. Register that declaration
-in the job registry. Existing typed event `Enqueue` then delivers through workers,
-with fresh payloads for listeners and `Topic.OutboxID(ctx)` for stable idempotency.
-Earlier successful listeners can run again if a later listener fails.
+For configured applications, declare `application.EventOutbox(key, destination)`
+through `Builder.Events` and map the destination to a durable connection in
+`features.outbox.events`. Foundry constructs `events.QueuedOutbox`, registers its
+delivery job on that connection's default queue and adds its publisher routes.
+See [durable event assembly](events.md#durable-events-with-applicationnew) for the
+TOML and typed producer example, including zero-listener topics and queued listeners.
+
+For advanced composition, `events.NewQueuedOutbox(policy, producers...)` creates
+one job declaration and a publication route per destination. Use
+`events.QueuedOutboxDefinition(policy)` with `jobs.RegisterJob` and return that
+instance's `Declaration` from its constructor, preserving identity, payload type
+and policy validation without naming the private payload. Typed event `Enqueue`
+then delivers through workers with fresh listener payloads and `Topic.OutboxID(ctx)`
+for stable inline idempotency. Earlier listeners can run again after a later failure.
 
 ## Verification
 

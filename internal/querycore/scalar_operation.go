@@ -86,6 +86,7 @@ const (
 	JsonScalarOperation
 	JsonUnquoteOperation
 	JsonArrayLengthOperation
+	SphericalDistanceOperation
 )
 
 // Operation names and arities are private, closed compiler metadata. Public
@@ -98,6 +99,8 @@ type OperationSpec struct {
 
 func (op ScalarOperation) Spec() (OperationSpec, bool) {
 	switch op {
+	case SphericalDistanceOperation:
+		return OperationSpec{"", 4, 4, false}, true
 	case AddOperation:
 		return OperationSpec{"+", 2, 2, true}, true
 	case SubtractOperation:
@@ -180,6 +183,17 @@ func (n OperationNode) Validate() error {
 		if _, err := ParameterSQLType(a.Kind); err != nil {
 			return err
 		}
+	}
+	if n.Kind == SphericalDistanceOperation {
+		if n.Result != codec.TypeFloat {
+			return fault.New(fault.Invalid, "distance requires a floating result")
+		}
+		for _, a := range n.Arguments {
+			if a.Kind != codec.TypeFloat {
+				return fault.New(fault.Invalid, "distance requires floating coordinates")
+			}
+		}
+		return nil
 	}
 	if n.Kind >= JsonContainsOperation {
 		return n.ValidateJSON()
@@ -285,6 +299,9 @@ func (c *Compiler) OperationSQL(n OperationNode, grouped map[FieldRef]bool, grou
 	args, err := c.OperationArguments(n, grouped, grouping)
 	if err != nil {
 		return "", err
+	}
+	if n.Kind == SphericalDistanceOperation {
+		return sphericalDistanceSQL(args), nil
 	}
 	if n.Kind >= JsonContainsOperation {
 		return JsonOperationSQL(n, args)

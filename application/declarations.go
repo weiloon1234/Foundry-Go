@@ -62,6 +62,7 @@ func (b *Builder) Jobs(declarations ...JobDeclaration) *Builder {
 
 type EventDeclaration struct {
 	install func(*foundation.Registrar) error
+	outbox  *eventOutboxDeclaration
 }
 
 func Listen[E any](topic events.Topic[E], name events.ListenerID, construct func(Services) (events.Handler[E], error)) EventDeclaration {

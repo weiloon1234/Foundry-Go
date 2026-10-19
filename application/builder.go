@@ -163,6 +163,10 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if err := validateModelExtensions(settings.Features, models); err != nil {
 		return nil, err
 	}
+	eventOutboxes, err := prepareEventOutboxes(settings, eventDeclarations)
+	if err != nil {
+		return nil, err
+	}
 	s := settings
 	if s.TimeZone == "" {
 		s.TimeZone = temporal.UTC
@@ -245,6 +249,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if err := registerKernelDeclarations(builder, plan, s, configured.clock, jobDeclarations, eventDeclarations, schedules, realtime); err != nil {
 		return nil, err
 	}
+	registerEventOutboxes(builder, eventOutboxes)
 	registerMaintenance(builder, s.Maintenance, gate, logger)
 	if probes, err := registerProbes(builder, s); err != nil {
 		return nil, err

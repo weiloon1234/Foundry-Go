@@ -8,6 +8,20 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts.
 
+## Configured queued event outboxes (starter B26) — 2026-10-19
+
+Status: **integrated; current-source acceptance pending**.
+`application.EventOutbox` plus `features.outbox.events` joins declared typed
+producers to named durable job connections, framework delivery-job contributions
+and configured publisher routes. The
+[supporting-services blueprint](consumer-startup/04-supporting-services.md#configured-event-outbox-bridge-b26)
+owns the design; the [events guide](../docs/guides/events.md#durable-events-with-applicationnew)
+documents adoption. This integration preserves the shared query engine and the
+geographic-expression/transactional-setting capabilities already used by consumers.
+The earlier B26 worktree's acceptance on `43a10d9` does not verify this combined
+source. Current generation, full source gate and relevant PostgreSQL/Redis races
+remain pending. No commit, publication or consumer pin upgrade is implied.
+
 ## Shared query engine and cache churn — 2026-10-19
 
 Status: **accepted** for this framework refactor. Typed public query facades lower

@@ -86,10 +86,14 @@ type LocaleSettings struct {
 // kernels also run the publisher; empty runs it under every kernel. Prefer the
 // worker and/or scheduler kernels so CLI commands and HTTP replicas do not poll.
 type OutboxSettings struct {
-	Enabled                                    bool
-	Database                                   database.ConnectionName
-	Schema                                     string
-	Jobs                                       map[jobs.ConnectionName]outbox.Destination `config:",json"`
+	Enabled  bool
+	Database database.ConnectionName
+	Schema   string
+	Jobs     map[jobs.ConnectionName]outbox.Destination `config:",json"`
+	// Events maps declared EventOutbox destinations to durable job connections.
+	// Empty connection selects the default. Each connection uses its default
+	// queue and jobs.DefaultPolicy for the framework event delivery job.
+	Events                                     map[outbox.Destination]jobs.ConnectionName `config:",json"`
 	Kernels                                    []foundation.KernelKind                    `config:",json"`
 	MaxAttempts                                uint32
 	RetryDelay, OperationTimeout, PollInterval time.Duration

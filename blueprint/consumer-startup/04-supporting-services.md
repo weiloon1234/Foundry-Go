@@ -111,6 +111,31 @@ explicit command. Neither construction nor normal boot applies them. Maintenance
 observability and readiness remain per application; this work adds no automatic
 public administration endpoint. Disabled features acquire no resources.
 
+### Configured event outbox bridge (B26)
+
+`application.EventOutbox(key, destination)` contributes an `events.Outbox` producer
+alongside typed topics/listeners. `features.outbox.events` maps each destination to
+a named durable job connection (empty selects the default). This follows the
+existing Go declaration/deployment setting split: application constructors resolve
+their declared producer key; settings choose its delivery infrastructure.
+
+Build validates the complete destination/declaration join and enabled events/outbox
+before resources open. Destinations and producer keys are unique and bounded to
+128. Unknown destinations/connections and process-local connections fail. The
+application groups destinations by connection, constructs `events.QueuedOutbox`
+over the registered producers, registers `events.QueuedOutboxDefinition(policy)`
+through `jobs.RegisterJob` and adds each `PublicationRoute` to the configured
+publisher. It reuses the configured connection's default queue and
+`jobs.DefaultPolicy`, with no second bus or resource graph. The private delivery
+payload and its existing identity/wire format remain framework-owned.
+
+Zero-listener delivery succeeds. Inline failures retry with the stable
+`Topic.OutboxID`; queued listeners retain their separate listener-job delivery.
+Ordinary `events.RegisterOutbox` remains the direct composition path. The
+[event guide](../../docs/guides/events.md#durable-events-with-applicationnew) and
+[independent consumer](../../tests/fixtures/consumer/eventqueries/configured_outbox_postgres_test.go)
+own the executable usage/behavior; the master records current acceptance.
+
 ### Acceptance batch
 
 Add package and independent-consumer proof for each registry's default identity,

@@ -183,6 +183,12 @@ The [event consumer](eventqueries/events.go) connects generated model observers 
 
 The [durable event consumer](eventqueries/durable.go) enqueues a concrete event from a generated model observer. Its [PostgreSQL tests](eventqueries/durable_postgres_test.go) verify model/message commit and rollback, failure after enqueue, missing storage, and a generated model field containing `outbox.ID[RecordCreated]`. See the [outbox guide](../../../docs/guides/outbox.md).
 
+The [configured event outbox](eventqueries/configured_outbox.go) replaces producer
+modules with `application.EventOutbox` and TOML destination/connection settings.
+Its [PostgreSQL/Redis worker test](eventqueries/configured_outbox_postgres_test.go)
+covers zero listeners, separate queued-listener jobs, stable retry identity and
+outer rollback through an ordinary configured application.
+
 The [authentication consumer](authenticating/accounts.go) reuses generated model
 references and typed queries, shares one provider between guards, checks concrete
 order policies and receives a concrete user in a guarded HTTP handler. Its test

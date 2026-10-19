@@ -140,8 +140,79 @@ later transaction callbacks still run. The
 [PostgreSQL consumer](../../tests/fixtures/consumer/eventqueries/events_postgres_test.go)
 checks the stored model after an injected listener failure.
 
-These callbacks are process-local and have no crash durability. Milestone 07's
-outbox will persist an enqueue record with the business write; milestone 12 supplies
-its at-least-once delivery runtime. Job/WebSocket listener adapters arrive with
-their owning subsystems, and milestone 23 consolidates typed event fakes and test
-assertions. Runtime, consumer and failure tests accompany this event increment.
+These callbacks are process-local and have no crash durability. Use the
+transactional event outbox below for required durable delivery.
+
+## Durable events with application.New
+
+Declare a producer key and its destination alongside the typed topic:
+
+```go
+var Publications = foundation.NewKey[*events.Outbox]("app.publications")
+
+builder := application.New(settings).Events(
+    application.Topic(Created),
+    application.EventOutbox(Publications, "app.publications"),
+)
+// In a domain service constructor (services is application.Services):
+producer, err := application.Resolve(services, Publications)
+// Inject producer; inside the business transaction:
+id, err := Created.Enqueue(ctx, tx, producer, RecordCreated{ID: record.ID})
+```
+
+Configure the destination's job connection in TOML. Here `publications` is an
+existing named Redis job connection whose default queue the worker consumes:
+
+```toml
+[features.events]
+enabled = true
+[features.outbox]
+enabled = true
+database = 'default'
+schema = 'public'
+kernels = ['worker']
+[features.outbox.events]
+'app.publications' = 'publications'
+[worker]
+enabled = true
+connection = 'publications'
+```
+
+`OutboxSettings.Events` is a `map[outbox.Destination]jobs.ConnectionName`. An empty
+connection selects the configured default; an unknown explicit connection fails.
+Applications embedding `application.Settings` regenerate their settings with the
+matching framework revision to expose this new configuration key.
+Every configured destination needs exactly one `EventOutbox` declaration, and
+every declaration needs a configured destination. Build rejects unknown or
+duplicate destinations/producer keys, missing or non-durable connections, disabled
+events/outbox and more than 128 destinations before acquiring runtime resources.
+
+Foundry registers each producer through `events.RegisterOutbox`, groups destinations
+by connection, and registers one `events.QueuedOutbox` delivery job per connection
+through `jobs.RegisterJob`. Its name/version is `foundry.events.deliver` v1; its
+policy is `jobs.DefaultPolicy(connection.DefaultQueue)`. That identity is reserved
+on those connections. The configured publisher owns its publication routes. No
+application job payload, placeholder listener or additional provider graph is needed.
+An intentional topic with zero listeners still produces a successful delivery job.
+Other job outboxes in `features.outbox.jobs` retain their existing job-message routes.
+
+Apply the existing outbox migrations explicitly before startup. `Topic.Enqueue`
+uses the caller's transaction/schema: it must reach the configured outbox table.
+Rollback removes both the business write and event row and never enqueues a job.
+Published means Redis accepted the job; it does not mean listeners finished.
+Delivery remains at least once. Inline listeners use `Topic.OutboxID(ctx)` for
+idempotency; its value is stable across delivery retries. Earlier successful
+listeners may run again after a later listener fails.
+
+With `features.events.queued_listeners`, each `application.ListenQueued` listener
+is enqueued as its own `foundry.events.listener` job and follows that job's retry
+policy. A queued listener has its own job identity; it does not inherit the inline
+delivery's `OutboxID`. Its configured queue also needs a worker subscription.
+
+The [configured consumer](../../tests/fixtures/consumer/eventqueries/configured_outbox.go)
+and [PostgreSQL/Redis test](../../tests/fixtures/consumer/eventqueries/configured_outbox_postgres_test.go)
+exercise the complete path. For advanced direct composition, `events.RegisterOutbox`
+remains available. `events.QueuedOutboxDefinition(policy)` exposes the existing
+framework definition for inferred `jobs.RegisterJob` calls without naming its
+private payload; construct `NewQueuedOutbox` with the same policy and register its
+`Declaration` and `PublicationRoute` through the existing graph.

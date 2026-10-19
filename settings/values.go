@@ -30,6 +30,15 @@ func (k Key[V]) Ensure(ctx context.Context, m *Manager, input V) error {
 	return k.write(ctx, m, nil, input, ensureValue)
 }
 
+// EnsureIn applies Ensure within the caller's transaction through a savepoint.
+// Parent rollback includes initialization and declaration-owned presentation changes.
+func (k Key[V]) EnsureIn(ctx context.Context, tx *database.Tx, m *Manager, input V) error {
+	if tx == nil {
+		return invalid()
+	}
+	return k.write(ctx, m, tx, input, ensureValue)
+}
+
 // Upsert atomically creates or replaces the value/version. Existing presentation
 // is preserved; Configure changes presentation explicitly.
 func (k Key[V]) Upsert(ctx context.Context, m *Manager, input V) error {

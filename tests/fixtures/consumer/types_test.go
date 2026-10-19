@@ -4,6 +4,8 @@ package consumer_test
 // diagnostic. Batch execution and named subtest selection use this one catalogue.
 func compilerCases() []compilerCase {
 	return []compilerCase{
+		{"application_event_outbox_key", "cannot use"},
+		{"geographic_owner", "does not match"},
 		{"validation_message_arguments", "does not match inferred type"},
 		{"validation_message_rule_owner", "cannot use"},
 		{"application_timezone", "cannot use"},

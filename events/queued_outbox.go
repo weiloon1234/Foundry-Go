@@ -31,11 +31,18 @@ type QueuedOutbox struct {
 	producers  map[outbox.Destination]*Outbox
 }
 
+// QueuedOutboxDefinition is the schema used by QueuedOutbox.Declaration. The
+// private payload stays framework-owned; callers can pass this definition to
+// jobs.RegisterJob using type inference, just like ListenerDefinition.
+func QueuedOutboxDefinition(policy jobs.Policy) jobs.Definition[queuedEvent] {
+	return jobs.Define[queuedEvent]("foundry.events.deliver", 1, policy)
+}
+
 func NewQueuedOutbox(policy jobs.Policy, producers ...*Outbox) (*QueuedOutbox, error) {
 	if len(producers) == 0 || len(producers) > 128 {
 		return nil, fault.New(fault.Invalid, "queued events require 1 to 128 outbox destinations")
 	}
-	result := &QueuedOutbox{definition: jobs.Define[queuedEvent]("foundry.events.deliver", 1, policy), producers: make(map[outbox.Destination]*Outbox)}
+	result := &QueuedOutbox{definition: QueuedOutboxDefinition(policy), producers: make(map[outbox.Destination]*Outbox)}
 	if err := result.definition.Validate(); err != nil {
 		return nil, err
 	}

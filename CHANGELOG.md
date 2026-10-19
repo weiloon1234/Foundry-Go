@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Configured queued event outboxes (B26)
+
+- `application.EventOutbox(key, destination)` and `features.outbox.events` bind
+  typed event producers, framework delivery jobs and publisher routes to named
+  durable job connections. Build validates destinations, feature enablement and
+  durability before startup. Connections share one delivery job using their
+  default queue/policy; zero-listener topics succeed and queued listeners keep
+  their separate jobs. Existing direct composition remains supported, with
+  `events.QueuedOutboxDefinition` exposing the private payload's registration
+  definition through type inference. No wire format or migration changes.
+
+### Existing consumer capabilities retained
+
+- Preserve the typed spherical-distance expressions and validated geographic
+  points introduced in `43a10d9`, with SQL compilation in the shared query engine.
+  See [geographic distance](docs/guides/geographic-distance.md).
+- Preserve `settings.Key.EnsureIn` from `38a8be6` so transactional seeders initialize
+  defaults without replacing existing values. Parent rollback includes the
+  initialization; see [settings](docs/guides/settings.md).
+
 ### Query compilation footprint
 
 - Preserve the typed query API while isolating the non-generic SQL/planning
