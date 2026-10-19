@@ -40,4 +40,3 @@ func SphericalDistanceNullable[S any, V numericValue](latitude, longitude RowVal
 func SphericalDistanceNullableValue[S any](latitude, longitude Expression[S, value.Nullable[float64]], origin GeographicPoint) Expression[S, value.Nullable[float64]] {
 	return operationValue[S](sphericalDistanceOperation, codec.Nullable(codec.Float[float64]()), operationArg(latitude), operationArg(longitude), operationArg(latitude.Param(value.Of(origin.latitude)).Value()), operationArg(longitude.Param(value.Of(origin.longitude)).Value()))
 }
-
