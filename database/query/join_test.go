@@ -43,7 +43,7 @@ func TestJoinSourceWindowsAndParameterOrder(t *testing.T) {
 	on := On(x, y).WhereLeft(x.Ne(5)).WhereRight(y.Ne(6))
 	j := LeftJoin(a, b, on)
 	left, right := scopedID(LeftScope(j, a.Scope())), nullableScopedID(NullableRightScope(j, b.Scope()))
-	q := pairProjection(j, Nullable(left.Value()), right.Value()).Where(left.Ne(7)).OrderBy(left.Asc()).Limit(4)
+	q := pairProjection(j, Nullable(Value(left)), Value(right)).Where(left.Ne(7)).OrderBy(left.Asc()).Limit(4)
 	s, err := q.Compile()
 	if err != nil {
 		t.Fatal(err)
@@ -65,7 +65,7 @@ func TestJoinSourceWindowsAndParameterOrder(t *testing.T) {
 	chain := InnerJoin(j, c, On(right, scopedID(c.Scope())))
 	chainRight := nullableScopedID(LeftNullableScope(chain, NullableRightScope(j, b.Scope())))
 	chainLeft := scopedID(LeftScope(chain, LeftScope(j, a.Scope())))
-	if _, err := pairProjection(chain, Nullable(chainLeft.Value()), chainRight.Value()).Compile(); err != nil {
+	if _, err := pairProjection(chain, Nullable(Value(chainLeft)), Value(chainRight)).Compile(); err != nil {
 		t.Fatal(err)
 	}
 	original, err := q.Compile()
@@ -89,7 +89,7 @@ func TestJoinInvalidAliasesScopesAndDescriptors(t *testing.T) {
 		"eager input":         InnerJoin(a, As[secondAlias](cursorQuery().With(testRelation(cursorQuery(), cursorQuery())), "b"), On(x, y)),
 	} {
 		l, r := scopedID(LeftScope(source, a.Scope())), scopedID(RightScope(source, b.Scope()))
-		if _, err := pairProjection(source, Nullable(l.Value()), Nullable(r.Value())).Compile(); !errors.Is(err, fault.Invalid) {
+		if _, err := pairProjection(source, Nullable(Value(l)), Nullable(Value(r))).Compile(); !errors.Is(err, fault.Invalid) {
 			t.Fatal(name, err)
 		}
 	}
@@ -102,10 +102,10 @@ func TestJoinInvalidAliasesScopesAndDescriptors(t *testing.T) {
 	// to a source it does not belong to, including through a join scope helper.
 	wrong := scopedID(LeftScope(valid, duplicate.Scope()))
 	right := scopedID(RightScope(valid, b.Scope()))
-	if _, err := pairProjection(valid, Nullable(wrong.Value()), Nullable(right.Value())).Compile(); !errors.Is(err, fault.Invalid) {
+	if _, err := pairProjection(valid, Nullable(Value(wrong)), Nullable(Value(right))).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("unregistered alias contributed fields", err)
 	}
-	plain := pairProjection(a, Nullable(x.Value()), Nullable(x.Value()))
+	plain := pairProjection(a, Nullable(Value(x)), Nullable(Value(x)))
 	if _, err := plain.Where(scopedID(duplicate.Scope()).Eq(1)).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("same-tag wrong alias predicate compiled", err)
 	}

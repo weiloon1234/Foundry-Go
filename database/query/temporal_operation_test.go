@@ -27,8 +27,8 @@ func TestTemporalOperationsValidateBeforeZeroLimit(t *testing.T) {
 		"nil row":                Year[cursorRecord, temporal.Date](nil).Value().node,
 		"wrong representation":   Year(badDate).Value().node,
 		"nil scope":              TransactionTime[cursorRecord](nil).Value().node,
-		"wrong result":           operationNode{kind: extractYearOperation, result: codec.TypeText, arguments: []operationArgument{operationArg(date.Value())}},
-		"wrong extraction input": operationNode{kind: extractYearOperation, result: codec.TypeInteger, arguments: []operationArgument{operationArg(at.Value())}},
+		"wrong result":           operationNode{kind: extractYearOperation, result: codec.TypeText, arguments: []operationArgument{operationArg(Value(date))}},
+		"wrong extraction input": operationNode{kind: extractYearOperation, result: codec.TypeInteger, arguments: []operationArgument{operationArg(Value(at))}},
 		"missing arguments":      operationNode{kind: truncateInstantOperation, result: codec.TypeDateTime},
 	} {
 		if _, err := SelectValue(cursorQuery().Limit(0), Expression[cursorRecord, int64]{node: node, codec: codec.Signed[int64]()}).Compile(); !errors.Is(err, fault.Invalid) {
@@ -72,7 +72,7 @@ func TestTemporalCompilerRetainsScopePhaseAndParameters(t *testing.T) {
 	if _, err := SelectValue(cursorQuery(), Count[cursorRecord]().Value()).Having(OrderValue(UnixMillisecondsValue(windowTime)).Gt(0)).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("temporal conversion hid a window in HAVING", err)
 	}
-	if _, err := SelectValue(cursorQuery(), UnixMillisecondsNullableValue(at.Min().Value())).Having(OrderNullableValue(UnixMillisecondsNullableValue(at.Min().Value())).Gt(0)).Compile(); err != nil {
+	if _, err := SelectValue(cursorQuery(), UnixMillisecondsNullableValue(Min(at).Value())).Having(OrderNullableValue(UnixMillisecondsNullableValue(Min(at).Value())).Gt(0)).Compile(); err != nil {
 		t.Fatal("temporal conversion lost aggregate ownership", err)
 	}
 }

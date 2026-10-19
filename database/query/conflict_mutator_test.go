@@ -75,7 +75,7 @@ func TestConflictMutatorsRejectComputedBypassBeforeUserCode(t *testing.T) {
 		SetConflictValue(name, stored),
 		SetConflictValue(name, Lower(proposed)),
 		SetConflictValue(note, NullableRow(proposed)),
-		SetConflictValue(name, proposed.Param("literal expression")),
+		SetConflictValue(name, Param(proposed, "literal expression")),
 	} {
 		policy := OnConflict(name).DoUpdate(update)
 		plan := insertPlan[user]{query: q, rows: []Mutation[user]{Change(Assign[user]("users", "name", codec.String[string](), "input"))}, conflict: &policy}

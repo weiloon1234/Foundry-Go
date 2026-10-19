@@ -12,7 +12,7 @@ import (
 
 func TestComputedGroupKeyBindingsAndBoundaries(t *testing.T) {
 	id := NewExactField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
-	key := When(id.Gt(1), id.Param(2)).Else(id.Param(3))
+	key := When(id.Gt(1), Param(id, 2)).Else(Param(id, 3))
 	q := SelectValue(cursorQuery(), key.Value()).GroupBy(key.Group()).Having(Grouped(key.Ne(0))).OrderBy(key.Desc())
 	s, err := q.Compile()
 	if err != nil {
@@ -22,21 +22,21 @@ func TestComputedGroupKeyBindingsAndBoundaries(t *testing.T) {
 	if strings.Count(s.SQL(), fragment) != 4 || !reflect.DeepEqual(s.Arguments(), []any{int64(1), int64(2), int64(3), int64(0)}) {
 		t.Fatal("group key lost parameter identity", s.SQL(), s.Arguments())
 	}
-	if _, err := SelectValue(cursorQuery(), id.Value()).GroupBy(key.Group()).Compile(); !errors.Is(err, fault.Invalid) {
+	if _, err := SelectValue(cursorQuery(), Value(id)).GroupBy(key.Group()).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("computed grouping made input columns selectable", err)
 	}
-	equal := When(id.Gt(1), id.Param(2)).Else(id.Param(3))
+	equal := When(id.Gt(1), Param(id, 2)).Else(Param(id, 3))
 	if _, err := SelectValue(cursorQuery(), equal.Value()).GroupBy(key.Group()).Compile(); err != nil {
 		t.Fatal("equivalent declaration did not match", err)
 	}
-	different := When(id.Gt(1), id.Param(2)).Else(id.Param(4))
+	different := When(id.Gt(1), Param(id, 2)).Else(Param(id, 4))
 	if _, err := SelectValue(cursorQuery(), different.Value()).GroupBy(key.Group()).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("group identity ignored parameters", err)
 	}
 	if _, err := q.GroupBy(equal.Group()).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("duplicate computed group accepted", err)
 	}
-	outer := NullIf(key, id.Param(2))
+	outer := NullIf(key, Param(id, 2))
 	if _, err := SelectValue(cursorQuery(), outer.Value()).GroupBy(key.Group()).Compile(); err != nil {
 		t.Fatal("grouped subexpression was not recognized", err)
 	}
@@ -44,13 +44,13 @@ func TestComputedGroupKeyBindingsAndBoundaries(t *testing.T) {
 
 func TestComputedDistinctAndPartitionKeys(t *testing.T) {
 	id := NewExactField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
-	key := When(id.Gt(1), id.Param(2)).Else(id.Param(3))
+	key := When(id.Gt(1), Param(id, 2)).Else(Param(id, 3))
 	q := cursorQuery().DistinctOn(key.Group()).OrderBy(key.Asc(), id.Desc())
 	s, err := q.Compile()
 	if err != nil || len(s.Arguments()) != 3 || !strings.Contains(s.SQL(), "DISTINCT ON (CASE") {
 		t.Fatal("computed DISTINCT ON lost bindings", s.SQL(), s.Arguments(), err)
 	}
-	other := When(id.Gt(1), id.Param(2)).Else(id.Param(4))
+	other := When(id.Gt(1), Param(id, 2)).Else(Param(id, 4))
 	if _, err := cursorQuery().DistinctOn(key.Group()).OrderBy(other.Asc()).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("DISTINCT ordering ignored key parameters", err)
 	}
@@ -65,7 +65,7 @@ func TestComputedDistinctAndPartitionKeys(t *testing.T) {
 	if _, err := SelectValue(cursorQuery(), RowNumber(WindowFor(cursorQuery()).PartitionByValues(count.Value().Key()))).Compile(); err != nil {
 		t.Fatal("aggregate partition did not establish grouping", err)
 	}
-	if _, err := SelectValue(cursorQuery(), id.Value()).DistinctOnValues(count.Value().Key()).Compile(); !errors.Is(err, fault.Invalid) {
+	if _, err := SelectValue(cursorQuery(), Value(id)).DistinctOnValues(count.Value().Key()).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("aggregate DISTINCT key failed to establish grouping", err)
 	}
 	if _, err := SelectValue(cursorQuery(), count.Value()).DistinctOnValues(count.Value().Key()).Compile(); err != nil {
@@ -78,15 +78,15 @@ func TestComputedDistinctAndPartitionKeys(t *testing.T) {
 
 func TestGroupedKeyReuseInsideDistinctAndEmptyMembership(t *testing.T) {
 	id := NewExactField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
-	key := When(id.Gt(1), id.Param(2)).Else(id.Param(3))
-	outer := NullIf(key, id.Param(4)).Value()
+	key := When(id.Gt(1), Param(id, 2)).Else(Param(id, 3))
+	outer := NullIf(key, Param(id, 4)).Value()
 	q := SelectValue(cursorQuery(), outer).GroupBy(key.Group()).DistinctOnValues(outer.Key()).OrderBy(outer.Asc())
 	s, err := q.Compile()
 	if err != nil || len(s.Arguments()) != 4 {
 		t.Fatal("distinct expression rebound its grouped child", s.SQL(), s.Arguments(), err)
 	}
-	constant := id.Param(1)
-	choice := When(constant.In(), id.Param(9)).Else(id.Param(7))
+	constant := Param(id, 1)
+	choice := When(constant.In(), Param(id, 9)).Else(Param(id, 7))
 	s, err = SelectValue(cursorQuery(), choice.Value()).GroupBy(constant.Group()).Compile()
 	if err != nil || !reflect.DeepEqual(s.Arguments(), []any{int64(9), int64(7), int64(1)}) || !strings.Contains(s.SQL(), "GROUP BY CAST($3 AS bigint)") {
 		t.Fatal("discarded operand left a cached parameter reference", s.SQL(), s.Arguments(), err)
@@ -98,7 +98,7 @@ func TestGroupedKeyReuseInsideDistinctAndEmptyMembership(t *testing.T) {
 
 func TestCanonicalValuePlanningIsIsolated(t *testing.T) {
 	input := `"$10", 'it''s $11', $123`
-	p := NewScalarField[cursorRecord, string]("records", "unused", codec.String[string]()).Param(input)
+	p := Param(NewScalarField[cursorRecord, string]("records", "unused", codec.String[string]()), input)
 	c := compiler{arguments: []any{int64(8)}}
 	plan, err := c.planValue(p.Value().node)
 	if err != nil || plan.sql != "CAST($1 AS text)" || !reflect.DeepEqual(plan.arguments, []any{input}) || !reflect.DeepEqual(c.arguments, []any{int64(8)}) {

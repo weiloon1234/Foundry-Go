@@ -7,5 +7,5 @@ import (
 
 func invalid() {
 	link := query.Correlate(models.QueryUsers(), models.QueryOrders())
-	_ = query.SelectValue(link, models.OrderFields().ID.Value())
+	_ = query.SelectValue(link, query.Value(models.OrderFields().ID))
 }

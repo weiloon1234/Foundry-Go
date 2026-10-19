@@ -559,7 +559,7 @@ func (q Queue) ReplayFailed(ctx context.Context, endpoint value.Optional[Endpoin
 				}
 				endpoints = endpoints.Where(e.ID.Eq(row.ID))
 			}
-			active, err := query.SelectValue(endpoints.OrderBy(e.ID.Asc()).Limit(q.service.config.MaxEndpoints+1), e.ID.Value()).All(ctx, tx)
+			active, err := query.SelectValue(endpoints.OrderBy(e.ID.Asc()).Limit(q.service.config.MaxEndpoints+1), query.Value(e.ID)).All(ctx, tx)
 			if err != nil || len(active) == 0 {
 				return err
 			}
@@ -672,7 +672,7 @@ func (s *Service) PruneDeliveries(ctx context.Context, olderThan time.Duration, 
 				return err
 			}
 			f := store.DeliveryFields()
-			ids, err := query.SelectValue(store.QueryFoundryWebhookDeliveries().Where(f.State.In(string(Succeeded), string(Failed)), f.UpdatedAt.Lt(cutoff)).OrderBy(f.UpdatedAt.Asc(), f.ID.Asc()).Limit(limit), f.ID.Value()).All(ctx, tx)
+			ids, err := query.SelectValue(store.QueryFoundryWebhookDeliveries().Where(f.State.In(string(Succeeded), string(Failed)), f.UpdatedAt.Lt(cutoff)).OrderBy(f.UpdatedAt.Asc(), f.ID.Asc()).Limit(limit), query.Value(f.ID)).All(ctx, tx)
 			if err != nil || len(ids) == 0 {
 				return err
 			}

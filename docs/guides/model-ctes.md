@@ -13,7 +13,7 @@ eligible := query.CTE("eligible_users",
 )
 source := query.As[eligibleAlias](eligible, "eligible")
 fields := models.UserFieldsAt(source.Scope())
-ids := query.SelectValue(source, fields.ID.Value())
+ids := query.SelectValue(source, query.Value(fields.ID))
 
 users, err := models.QueryUsers().Where(u.ID.InQuery(ids)).All(ctx, db)
 ```
@@ -36,7 +36,7 @@ second := query.As[secondAlias](eligible, "second_user")
 a, b := models.UserFieldsAt(first.Scope()), models.UserFieldsAt(second.Scope())
 joined := query.InnerJoin(first, second, query.On(a.ID, b.ID))
 fields := models.UserFieldsAt(query.LeftScope(joined, first.Scope()))
-emails, err := query.SelectValue(joined, fields.Email.Value()).All(ctx, db)
+emails, err := query.SelectValue(joined, query.Value(fields.Email)).All(ctx, db)
 ```
 
 References carry their definition. Foundry emits each reused descriptor once and places dependencies before their consumers. A definition can itself consume another CTE, including through nested projections and subqueries. There is no separate string-based registration list.
@@ -51,16 +51,16 @@ The default leaves materialization to PostgreSQL. Explicit materialization can a
 type totalsAlias struct{}
 o := models.OrderFields()
 totals := reports.ProjectBuyerTotals(models.QueryOrders()).
-    SelectBuyerID(o.BuyerID.Value()).
-    SelectTotal(o.TotalCents.Sum().Value()).
+    SelectBuyerID(query.Value(o.BuyerID)).
+    SelectTotal(query.Sum(o.TotalCents).Value()).
     SelectOrders(query.Count[models.Order]().Value()).
-    SelectAverage(o.TotalCents.Avg().Value()).
+    SelectAverage(query.Avg(o.TotalCents).Value()).
     Query().GroupBy(o.BuyerID.Group()).
     Having(query.Count[models.Order]().Gte(2)).Limit(1)
 
 source := query.As[totalsAlias](query.CTE("buyer_totals", totals), "totals")
 fields := reports.BuyerTotalsFieldsAt(source.Scope())
-amounts, err := query.SelectValue(source, fields.Total.Value()).All(ctx, db)
+amounts, err := query.SelectValue(source, query.Value(fields.Total)).All(ctx, db)
 ```
 
 `amounts` is `[]value.Nullable[decimal.Decimal]`. Output column names, IDs, enums, codecs and field operators come from the declared record. Grouping, HAVING and the selected window stay inside the CTE. For deterministic window selection, order the input explicitly. Ordering inside a CTE does not promise the final result's order; order the consuming query too.

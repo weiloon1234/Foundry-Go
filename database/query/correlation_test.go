@@ -15,7 +15,7 @@ func TestCorrelationSQLAndNestedOwnership(t *testing.T) {
 	link := Correlate(outer, inner)
 	p := scopedID(OuterScope(link, outer.Scope()))
 	c := scopedID(InnerScope(link, inner.Scope()))
-	values := SelectCorrelatedValue(link, c.Value()).Where(c.EqColumn(p), c.Ne(2)).Limit(1)
+	values := SelectCorrelatedValue(link, Value(c)).Where(c.EqColumn(p), c.Ne(2)).Limit(1)
 	expression := CorrelatedScalarQuery(values)
 	s, err := SelectValue(outer, expression).Where(scopedID(outer.Scope()).Ne(8)).OrderBy(expression.Asc()).Compile()
 	if err != nil {
@@ -30,7 +30,7 @@ func TestCorrelationSQLAndNestedOwnership(t *testing.T) {
 	parent := scopedID(OuterScope(nested, InnerScope(link, inner.Scope())))
 	child := scopedID(InnerScope(nested, third.Scope()))
 	predicate := nested.Where(child.EqColumn(parent), child.NeColumn(grandparent)).Exists()
-	if s, err := SelectValue(outer, scopedID(outer.Scope()).Value()).Where(link.Where(predicate).Exists()).Compile(); err != nil || !strings.Contains(s.SQL(), `("grandchild"."id" <> "parent"."id")`) {
+	if s, err := SelectValue(outer, Value(scopedID(outer.Scope()))).Where(link.Where(predicate).Exists()).Compile(); err != nil || !strings.Contains(s.SQL(), `("grandchild"."id" <> "parent"."id")`) {
 		t.Fatal("nested correlation lost enclosing scopes", s.SQL(), err)
 	}
 }
@@ -39,7 +39,7 @@ func TestCorrelationGroupingAndIsolation(t *testing.T) {
 	a, b := As[firstAlias](cursorQuery(), "parent"), As[secondAlias](cursorQuery(), "child")
 	c := Correlate(a, b)
 	x, y := scopedID(OuterScope(c, a.Scope())), scopedID(InnerScope(c, b.Scope()))
-	count := SelectCorrelatedValue(c, y.Count().Value()).Where(y.EqColumn(x))
+	count := SelectCorrelatedValue(c, CountField(y).Value()).Where(y.EqColumn(x))
 	expression := CorrelatedScalarQuery(count)
 	if _, err := SelectValue(a, expression).GroupBy(scopedID(a.Scope()).Group()).Compile(); err != nil {
 		t.Fatal(err)
@@ -54,13 +54,13 @@ func TestCorrelationGroupingAndIsolation(t *testing.T) {
 	if _, err := SelectValue(a, Count[Alias[firstAlias, cursorRecord]]().Value()).Where(c.Where(y.EqColumn(x)).Exists()).Compile(); err != nil {
 		t.Fatal("row filter incorrectly requires grouped outer columns", err)
 	}
-	if _, err := SelectValue(a, CorrelatedScalarQuery(SelectCorrelatedValue(c, x.Count().Value()))).Compile(); !errors.Is(err, fault.Invalid) {
+	if _, err := SelectValue(a, CorrelatedScalarQuery(SelectCorrelatedValue(c, CountField(x).Value()))).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("outer-only aggregate silently changed SQL ownership", err)
 	}
 	// Ordinary nested SELECTs remain isolated, including inside a correlation.
-	bad := ValueQuery[Correlation[Alias[firstAlias, cursorRecord], Alias[secondAlias, cursorRecord]], int64]{query: SelectValue(c.source, x.Value()).query}
+	bad := ValueQuery[Correlation[Alias[firstAlias, cursorRecord], Alias[secondAlias, cursorRecord]], int64]{query: SelectValue(c.source, Value(x)).query}
 	isolated := ExistsQuery(c.source, bad)
-	if _, err := SelectValue(a, scopedID(a.Scope()).Value()).Where(c.Where(isolated).Exists()).Compile(); !errors.Is(err, fault.Invalid) {
+	if _, err := SelectValue(a, Value(scopedID(a.Scope()))).Where(c.Where(isolated).Exists()).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("uncorrelated SELECT inherited parent visibility", err)
 	}
 }
@@ -76,7 +76,7 @@ func TestCorrelationInvalidBoundariesAndRequalification(t *testing.T) {
 		t.Fatal("qualification mutated original scope")
 	}
 	alias := As[firstAlias](cursorQuery(), "parent_alias")
-	project := SelectValue(alias, scopedID(alias.Scope()).Value())
+	project := SelectValue(alias, Value(scopedID(alias.Scope())))
 	project.query.source.node.predicates = []expression{qualified}
 	s, err := project.Compile()
 	if err != nil || !strings.Contains(s.SQL(), `("child"."id" = "parent_alias"."id")`) {
@@ -93,7 +93,7 @@ func TestCorrelationInvalidBoundariesAndRequalification(t *testing.T) {
 	}
 	wrong := As[firstAlias](cursorQuery(), "wrong")
 	link := Correlate(alias, inner)
-	if _, err := SelectValue(wrong, scopedID(wrong.Scope()).Value()).Where(link.Exists()).Compile(); !errors.Is(err, fault.Invalid) {
+	if _, err := SelectValue(wrong, Value(scopedID(wrong.Scope()))).Where(link.Exists()).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("runtime outer alias identity mismatch accepted", err)
 	}
 }

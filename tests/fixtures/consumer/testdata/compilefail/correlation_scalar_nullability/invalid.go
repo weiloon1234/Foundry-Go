@@ -10,6 +10,6 @@ func invalid() {
 	link := query.Correlate(models.QueryUsers(), models.QueryOrders())
 	buyer := models.UserFieldsAt(query.OuterScope(link, models.QueryUsers().Scope()))
 	order := models.OrderFieldsAt(query.InnerScope(link, models.QueryOrders().Scope()))
-	values := query.SelectCorrelatedValue(link, order.BuyerID.Value()).Where(order.BuyerID.EqColumn(buyer.ID))
+	values := query.SelectCorrelatedValue(link, query.Value(order.BuyerID)).Where(order.BuyerID.EqColumn(buyer.ID))
 	_ = reports.ProjectUserSummary(models.QueryUsers()).SelectID(query.CorrelatedScalarQuery(values))
 }

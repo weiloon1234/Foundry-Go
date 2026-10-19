@@ -26,7 +26,7 @@ func Report() {
  j:=query.LeftJoin(a,b,query.On(af.Parent,bf.ID))
  l:=UserFieldsAt(query.LeftScope(j,a.Scope()))
  r:=UserNullableFieldsAt(query.NullableRightScope(j,b.Scope()))
- _=ProjectRow(j).SelectName(l.Name.Value()).SelectParentName(r.Name.Value()).Query()
+ _=ProjectRow(j).SelectName(query.Value(l.Name)).SelectParentName(query.Value(r.Name)).Query()
 }
 `
 
@@ -55,7 +55,7 @@ func TestFreshTypedJoinGenerationAndScopeNames(t *testing.T) {
 func TestInvalidOuterScopeCannotPublishGeneratedFiles(t *testing.T) {
 	for _, source := range []string{
 		strings.Replace(joinedGenerationSource, "UserNullableFieldsAt(query.NullableRightScope", "UserFieldsAt(query.NullableRightScope", 1),
-		strings.Replace(joinedGenerationSource, "SelectParentName(r.Name.Value())", "SelectName(r.Name.Value())", 1),
+		strings.Replace(joinedGenerationSource, "SelectParentName(query.Value(r.Name))", "SelectName(query.Value(r.Name))", 1),
 		strings.Replace(joinedGenerationSource, "query.NullableRightScope(j,b.Scope())", "query.RightScope(j,b.Scope())", 1),
 	} {
 		dir := fixture(t, source)

@@ -12,7 +12,7 @@ type b struct{}
 
 var source = query.AsTransaction[a](query.TransactionOf(f.QueryRecords()), "records_alias")
 var fields = f.RecordFieldsAt(source.Scope())
-var selected = query.SelectTransactionValue(source, fields.ID.Value())
+var selected = query.SelectTransactionValue(source, query.Value(fields.ID))
 var _ context.Context
 var _ *database.Tx
 

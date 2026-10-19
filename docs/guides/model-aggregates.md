@@ -18,8 +18,8 @@ These slots are excluded from SQL columns, write drafts and model row decoders. 
 func (User) DefineAggregates() UserAggregateSet {
     return UserAggregateSet{
         OrderCount: query.Related(UserRelations().Orders, query.Count[Order]()),
-        OrderTotal: query.Related(UserRelations().Orders, OrderFields().TotalCents.Sum()),
-        OrderAverage: query.Related(UserRelations().Orders, OrderFields().TotalCents.Avg()),
+        OrderTotal: query.Related(UserRelations().Orders, query.Sum(OrderFields().TotalCents)),
+        OrderAverage: query.Related(UserRelations().Orders, query.Avg(OrderFields().TotalCents)),
         // Supply the other declared slots in this model as well.
     }
 }
@@ -43,12 +43,12 @@ Use the same model-owned `With` as ordinary relations. `Find`, `First`, paginati
 | Operation | Result type | Empty/all-NULL behavior |
 | --- | --- | --- |
 | `query.Count[Model]()` | `int64` | Counts rows; zero when absent |
-| `field.Count()` | `int64` | Counts non-NULL field values |
-| `field.CountDistinct()` | `int64` | Counts distinct non-NULL field values |
+| `query.CountField(field)` | `int64` | Counts non-NULL field values |
+| `query.CountDistinctField(field)` | `int64` | Counts distinct non-NULL field values |
 | `query.Exists[Model]()` | `bool` | False for an absent group |
-| Integer/decimal `Sum()` and `Avg()` | `value.Nullable[decimal.Decimal]` | SQL NULL |
-| Float `Sum()` and `Avg()` | `value.Nullable[float64]` | SQL NULL |
-| Ordered-field `Min()` and `Max()` | `value.Nullable[FieldType]` | SQL NULL |
+| Integer/decimal `query.Sum(field)` and `query.Avg(field)` | `value.Nullable[decimal.Decimal]` | SQL NULL |
+| Float `query.Sum(field)` and `query.Avg(field)` | `value.Nullable[float64]` | SQL NULL |
+| Ordered-field `query.Min(field)` and `query.Max(field)` | `value.Nullable[FieldType]` | SQL NULL |
 
 Numeric operations appear only on generated numeric fields. Text, temporal and enum fields cannot request sums/averages. Ordered fields retain their concrete type through extrema, including named text types and temporal values. Enum and model-ID scalar fields support counts but do not gain numeric operations.
 
@@ -84,7 +84,7 @@ Without a model slot, `query.RelatedValue` computes the same typed aggregate as 
 
 ```go
 headcount := query.RelatedValue(OfficeRelations().Colleagues, query.Count[Employee]())
-payroll := query.RelatedValue(OfficeRelations().Colleagues, EmployeeFields().Salary.Sum())
+payroll := query.RelatedValue(OfficeRelations().Colleagues, query.Sum(EmployeeFields().Salary))
 
 busiest := QueryOffices().OrderBy(headcount.Desc())            // order by relation count
 large := QueryOffices().Where(query.OrderRow(headcount).Gte(10)) // filter by relation count
@@ -99,8 +99,8 @@ The relationship itself measures targets. `Pivot()` selects the concrete pivot i
 
 ```go
 GroupCount: query.Related(UserRelations().Groups, query.Count[Group]()),
-GroupDistinct: query.Related(UserRelations().Groups, GroupFields().Code.CountDistinct()),
-GroupPriority: query.Related(UserRelations().Groups.Pivot(), MembershipFields().Priority.Sum()),
+GroupDistinct: query.Related(UserRelations().Groups, query.CountDistinctField(GroupFields().Code)),
+GroupPriority: query.Related(UserRelations().Groups.Pivot(), query.Sum(MembershipFields().Priority)),
 ```
 
 A row count includes distinct pivot edges, even when several point to the same target. Use `CountDistinct` on the target key for the number of different targets. Null pivot keys, missing targets and filtered-out targets do not produce joined rows. Singular aggregates enforce at most one target; many-to-many aggregates compare joined row counts with distinct pivot primary keys and reject ambiguous joins with `database.TooManyRows`.

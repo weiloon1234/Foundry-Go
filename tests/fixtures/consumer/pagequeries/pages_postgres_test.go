@@ -33,7 +33,7 @@ func (e *pageExecutor) Query(ctx context.Context, sql string, args ...any) (*dat
 
 func summaries() query.ProjectionQuery[models.User, reports.UserSummary] {
 	u := models.UserFields()
-	return reports.SelectUserSummary(models.QueryUsers(), reports.UserSummarySelection[models.User]{ID: u.ID.Value(), Email: u.Email.Value(), Nickname: u.Nickname.Value(), Status: u.Status.Value()}).OrderBy(u.Email.Asc(), u.ID.Asc())
+	return reports.SelectUserSummary(models.QueryUsers(), reports.UserSummarySelection[models.User]{ID: query.Value(u.ID), Email: query.Value(u.Email), Nickname: query.Value(u.Nickname), Status: query.Value(u.Status)}).OrderBy(u.Email.Asc(), u.ID.Asc())
 }
 
 func TestPostgresSimpleModelsAndEagerLookahead(t *testing.T) {
@@ -150,7 +150,7 @@ type orderAlias struct{}
 func TestPostgresPagesRetainRelationalSemantics(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
 		o := models.OrderFields()
-		grouped := reports.SelectBuyerTotals(models.QueryOrders(), reports.BuyerTotalsSelection[models.Order]{BuyerID: o.BuyerID.Value(), Total: o.TotalCents.Sum().Value(), Orders: query.Count[models.Order]().Value(), Average: o.TotalCents.Avg().Value()}).GroupBy(o.BuyerID.Group()).Having(query.Count[models.Order]().Gt(0)).OrderBy(o.BuyerID.Asc())
+		grouped := reports.SelectBuyerTotals(models.QueryOrders(), reports.BuyerTotalsSelection[models.Order]{BuyerID: query.Value(o.BuyerID), Total: query.Sum(o.TotalCents).Value(), Orders: query.Count[models.Order]().Value(), Average: query.Avg(o.TotalCents).Value()}).GroupBy(o.BuyerID.Group()).Having(query.Count[models.Order]().Gt(0)).OrderBy(o.BuyerID.Asc())
 		p, err := grouped.Paginate(t.Context(), tx, query.PageRequest{Number: 1, Size: 1})
 		if err != nil {
 			return err
@@ -180,7 +180,7 @@ func TestPostgresPagesRetainRelationalSemantics(t *testing.T) {
 		if simple, err := combined.SimplePaginate(t.Context(), tx, query.PageRequest{Number: 1, Size: 2}); err != nil || !simple.HasMore {
 			t.Fatal("set simple page failed", err)
 		}
-		values := query.SelectValue(models.QueryUsers(), models.UserFields().Nickname.Value()).Distinct().OrderBy(models.UserFields().Nickname.Asc())
+		values := query.SelectValue(models.QueryUsers(), query.Value(models.UserFields().Nickname)).Distinct().OrderBy(models.UserFields().Nickname.Asc())
 		vp, err := values.Paginate(t.Context(), tx, query.PageRequest{Number: 1, Size: 1})
 		if err != nil || vp.Total != 2 || len(vp.Items) != 1 || vp.Items[0] != value.Of("Bee") {
 			t.Fatal("distinct/nullable value page failed", err)

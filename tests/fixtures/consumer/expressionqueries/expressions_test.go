@@ -12,8 +12,8 @@ import (
 func TestTypedConditionalSQL(t *testing.T) {
 	u := models.UserFields()
 	display := query.Coalesce(u.Nickname, u.Email)
-	choice := query.When(u.Age.Gt(20), u.Email.Param("older"))
-	label := choice.When(u.Age.Eq(20), u.Email).Else(u.Email.Param("unknown"))
+	choice := query.When(u.Age.Gt(20), query.Param(u.Email, "older"))
+	label := choice.When(u.Age.Eq(20), u.Email).Else(query.Param(u.Email, "unknown"))
 	statement, err := query.SelectValue(models.QueryUsers().Where(display.Ne("")), label.Value()).OrderBy(label.Asc()).Compile()
 	if err != nil {
 		t.Fatal(err)
@@ -24,7 +24,7 @@ func TestTypedConditionalSQL(t *testing.T) {
 		}
 	}
 	orders := models.QueryOrders()
-	total := models.OrderFields().TotalCents.Sum()
+	total := query.Sum(models.OrderFields().TotalCents)
 	computed := query.CoalesceValue(total.Value(), total.Param(decimal.FromInt64(0)).Value())
 	if _, err := query.SelectValue(orders, computed).Compile(); err != nil {
 		t.Fatal(err)

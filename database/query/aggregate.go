@@ -58,33 +58,14 @@ func Exists[M any]() Aggregate[M, bool] {
 	return Aggregate[M, bool]{node: aggregateNode{kind: existsValues}, codec: codec.Bool[bool]()}
 }
 
-// Count counts non-NULL values in this field. CountDistinct also removes duplicates.
-func (f valueField[M, V]) Count() OrderedAggregate[M, int64] {
-	return OrderedAggregate[M, int64]{Aggregate[M, int64]{node: aggregateNode{kind: countValues, field: f.ref}, codec: codec.Signed[int64]()}}
+// countField has no field-value type parameter: all stored types use the same
+// owner-bound int64 aggregate and shared codec.
+func countField[M any](field fieldRef, kind aggregateKind) OrderedAggregate[M, int64] {
+	return OrderedAggregate[M, int64]{Aggregate[M, int64]{node: aggregateNode{kind: kind, field: field}, codec: codec.Signed[int64]()}}
 }
-func (f valueField[M, V]) CountDistinct() OrderedAggregate[M, int64] {
-	return OrderedAggregate[M, int64]{Aggregate[M, int64]{node: aggregateNode{kind: countDistinct, field: f.ref}, codec: codec.Signed[int64]()}}
-}
+
 func fieldExtremum[M any, V comparable](f ScalarField[M, V], kind aggregateKind) NullableOrderedAggregate[M, V] {
 	return nullableOrderedAggregate[M](aggregateNode{kind: kind, field: f.ref}, f.codec)
-}
-
-func fieldSummary[M any, V comparable, R any](f ScalarField[M, V], kind aggregateKind, cast aggregateCast, c codec.Codec[R]) NullableOrderedAggregate[M, R] {
-	return nullableOrderedAggregate[M](aggregateNode{kind: kind, field: f.ref, cast: cast}, c)
-}
-
-// Min preserves the field type and returns SQL NULL for an empty/all-NULL group.
-func (f OrderedField[M, V]) Min() NullableOrderedAggregate[M, V] {
-	return fieldExtremum(f.ScalarField, minimumValue)
-}
-func (f OrderedField[M, V]) Max() NullableOrderedAggregate[M, V] {
-	return fieldExtremum(f.ScalarField, maximumValue)
-}
-func (f NullableOrderedField[M, V]) Min() NullableOrderedAggregate[M, V] {
-	return fieldExtremum(f.ScalarField, minimumValue)
-}
-func (f NullableOrderedField[M, V]) Max() NullableOrderedAggregate[M, V] {
-	return fieldExtremum(f.ScalarField, maximumValue)
 }
 
 func (a aggregateNode) validate(field func(fieldRef) error) error {

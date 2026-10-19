@@ -17,7 +17,7 @@ func TestCTESharedDefinitionsAndBindings(t *testing.T) {
 	x, y := scopedID(left.Scope()), scopedID(right.Scope())
 	joined := InnerJoin(left, right, On(x, y))
 	field := scopedID(LeftScope(joined, left.Scope()))
-	q := SelectValue(joined, field.Value()).Where(field.Ne(9))
+	q := SelectValue(joined, Value(field)).Where(field.Ne(9))
 	s, err := q.Compile()
 	if err != nil {
 		t.Fatal(err)
@@ -42,7 +42,7 @@ func TestCTEDependenciesAndValidation(t *testing.T) {
 	first := CTE("first_rows", cursorQuery()).NotMaterialized()
 	second := CTE("second_rows", first)
 	source := As[firstAlias](second, "result")
-	s, err := SelectValue(source, scopedID(source.Scope()).Value()).Compile()
+	s, err := SelectValue(source, Value(scopedID(source.Scope()))).Compile()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,13 +51,13 @@ func TestCTEDependenciesAndValidation(t *testing.T) {
 	}
 	for _, table := range []CommonTable[cursorRecord]{CommonTable[cursorRecord]{}, CTE[cursorRecord]("empty", nil), CTE("bad.name", cursorQuery()), CTE("records", cursorQuery()), CTE("eager", cursorQuery().With(testRelation(cursorQuery(), cursorQuery())))} {
 		a := As[firstAlias](table, "a")
-		if s, err := SelectValue(a, scopedID(a.Scope()).Value()).Compile(); !errors.Is(err, fault.Invalid) || s.SQL() != "" {
+		if s, err := SelectValue(a, Value(scopedID(a.Scope()))).Compile(); !errors.Is(err, fault.Invalid) || s.SQL() != "" {
 			t.Fatal("invalid CTE accepted", err)
 		}
 	}
 	a, b := As[firstAlias](first, "a"), As[secondAlias](first.Materialized(), "b")
 	joined := InnerJoin(a, b, On(scopedID(a.Scope()), scopedID(b.Scope())))
-	if _, err := SelectValue(joined, scopedID(LeftScope(joined, a.Scope())).Value()).Compile(); !errors.Is(err, fault.Invalid) {
+	if _, err := SelectValue(joined, Value(scopedID(LeftScope(joined, a.Scope())))).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("conflicting CTE definitions accepted", err)
 	}
 }
@@ -73,7 +73,7 @@ func TestCTECyclesAndSharedParameterBound(t *testing.T) {
 	base := cursorQuery()
 	definition := CTE("wide", base.Where(wideScoped(base.Scope(), MaxParameters/2+1)))
 	a := As[firstAlias](definition, "a")
-	inner := SelectValue(a, scopedID(a.Scope()).Value())
+	inner := SelectValue(a, Value(scopedID(a.Scope())))
 	if s, err := cursorQuery().Where(id.InQuery(inner), wideScoped(base.Scope(), MaxParameters/2+1)).Compile(); !errors.Is(err, fault.Invalid) || s.SQL() != "" || len(s.Arguments()) != 0 {
 		t.Fatal("CTE bypassed shared parameter bound", err)
 	}

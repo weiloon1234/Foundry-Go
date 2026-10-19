@@ -16,24 +16,24 @@ import (
 func TestPostgresRowValueComparisons(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, _ []models.User) error {
 		f := models.UserFields()
-		nextAge := query.Add(f.Age, f.Age.Param(1))
+		nextAge := query.Add(f.Age, query.Param(f.Age, 1))
 		for _, test := range []struct {
 			name      string
 			condition query.Predicate[models.User]
 			ages      []int
 		}{
-			{"equal", query.Equal(nextAge, f.Age.Param(22)), []int{21}},
-			{"not equal", query.NotEqual(nextAge, f.Age.Param(22)), []int{20, 22}},
-			{"less", query.Less(nextAge, f.Age.Param(22)), []int{20}},
-			{"less equal", query.LessOrEqual(nextAge, f.Age.Param(22)), []int{20, 21}},
-			{"greater", query.Greater(nextAge, f.Age.Param(22)), []int{22}},
-			{"greater equal", query.GreaterOrEqual(nextAge, f.Age.Param(22)), []int{21, 22}},
-			{"text pattern", query.Like(query.Lower(f.Email), f.Email.Param("a%@example.test")), []int{20}},
-			{"nullable pattern", query.LikeNullable(query.LowerNullable(f.Nickname), query.NullableRow(f.Email.Param("b%"))), []int{21}},
+			{"equal", query.Equal(nextAge, query.Param(f.Age, 22)), []int{21}},
+			{"not equal", query.NotEqual(nextAge, query.Param(f.Age, 22)), []int{20, 22}},
+			{"less", query.Less(nextAge, query.Param(f.Age, 22)), []int{20}},
+			{"less equal", query.LessOrEqual(nextAge, query.Param(f.Age, 22)), []int{20, 21}},
+			{"greater", query.Greater(nextAge, query.Param(f.Age, 22)), []int{22}},
+			{"greater equal", query.GreaterOrEqual(nextAge, query.Param(f.Age, 22)), []int{21, 22}},
+			{"text pattern", query.Like(query.Lower(f.Email), query.Param(f.Email, "a%@example.test")), []int{20}},
+			{"nullable pattern", query.LikeNullable(query.LowerNullable(f.Nickname), query.NullableRow(query.Param(f.Email, "b%"))), []int{21}},
 			{"null equality is unknown", query.Equal(f.Nickname, query.NullFor(f.Email)), []int{}},
 			{"null equal", query.NotDistinctFrom(f.Nickname, query.NullFor(f.Email)), []int{20, 22}},
 			{"null distinct", query.DistinctFrom(f.Nickname, query.NullFor(f.Email)), []int{21}},
-			{"nullable range", query.LessNullable(query.NullableRow(f.Age), query.NullableRow(f.Age.Param(22))), []int{20, 21}},
+			{"nullable range", query.LessNullable(query.NullableRow(f.Age), query.NullableRow(query.Param(f.Age, 22))), []int{20, 21}},
 		} {
 			rows, err := models.QueryUsers().Where(test.condition).OrderBy(f.Age.Asc()).All(t.Context(), tx)
 			if err != nil {
@@ -48,11 +48,11 @@ func TestPostgresRowValueComparisons(t *testing.T) {
 			}
 		}
 		// Binary conditions also compose with mutation filters and conditional values.
-		row, err := models.QueryUsers().Where(query.Equal(nextAge, f.Age.Param(21))).RequireFirst(t.Context(), tx)
+		row, err := models.QueryUsers().Where(query.Equal(nextAge, query.Param(f.Age, 21))).RequireFirst(t.Context(), tx)
 		if err != nil {
 			return err
 		}
-		_, err = models.QueryUsers().Where(query.Equal(nextAge, f.Age.Param(21))).Update(t.Context(), tx, row.ID, models.UserDraft{}.SetAge(25))
+		_, err = models.QueryUsers().Where(query.Equal(nextAge, query.Param(f.Age, 21))).Update(t.Context(), tx, row.ID, models.UserDraft{}.SetAge(25))
 		return err
 	})
 }
@@ -72,20 +72,20 @@ func TestPostgresSelectedValueComparisons(t *testing.T) {
 				t.Fatal(rows, err)
 			}
 		}
-		email := query.LowerValue(f.Email.Value())
-		rows, err := query.SelectValue(q, email).GroupBy(f.Email.Group()).Having(query.LikeValue(email, f.Email.Param("a%").Value())).All(t.Context(), tx)
+		email := query.LowerValue(query.Value(f.Email))
+		rows, err := query.SelectValue(q, email).GroupBy(f.Email.Group()).Having(query.LikeValue(email, query.Param(f.Email, "a%").Value())).All(t.Context(), tx)
 		if err != nil || !reflect.DeepEqual(rows, []string{"a@example.test"}) {
 			t.Fatal(rows, err)
 		}
-		nickname := query.LowerNullableValue(f.Nickname.Value())
-		nullable, err := query.SelectValue(q, nickname).GroupBy(f.Nickname.Group()).Having(query.LikeNullableValue(nickname, query.Nullable(f.Email.Param("b%").Value()))).All(t.Context(), tx)
+		nickname := query.LowerNullableValue(query.Value(f.Nickname))
+		nullable, err := query.SelectValue(q, nickname).GroupBy(f.Nickname.Group()).Having(query.LikeNullableValue(nickname, query.Nullable(query.Param(f.Email, "b%").Value()))).All(t.Context(), tx)
 		if err != nil || len(nullable) != 1 {
 			t.Fatal(nullable, err)
 		}
 		if got, present := nullable[0].Get(); !present || got != "bee" {
 			t.Fatal(nullable)
 		}
-		sum := f.Age.Sum()
+		sum := query.Sum(f.Age)
 		totals, err := query.SelectValue(q, sum.Value()).Having(query.GreaterNullableValue(sum.Value(), query.Nullable(sum.Param(decimal.FromInt64(60)).Value()))).All(t.Context(), tx)
 		if err != nil || len(totals) != 1 {
 			t.Fatal(totals, err)
@@ -102,12 +102,12 @@ func TestComparisonFailuresBeforeExecution(t *testing.T) {
 	f := models.UserFields()
 	link := query.Correlate(q, models.QueryOrders())
 	outer := models.UserFieldsAt(query.OuterScope(link, q.Scope()))
-	outerOnly := query.CorrelatedScalarRowQuery(query.SelectCorrelatedValue(link, outer.ID.Count().Value()))
+	outerOnly := query.CorrelatedScalarRowQuery(query.SelectCorrelatedValue(link, query.CountField(outer.ID).Value()))
 	for _, condition := range []query.Predicate[models.User]{
 		query.Equal[models.User, int](nil, f.Age),
-		query.Equal(f.Email, f.Email.Param("\x00")),
+		query.Equal(f.Email, query.Param(f.Email, "\x00")),
 		query.Equal(query.NullableRow(f.Age), query.ScalarRowQuery[models.User, int](q, nil)),
-		query.ScalarRowQuery(q, query.SelectValue(q, f.Nickname.Value())).IsNull(),
+		query.ScalarRowQuery(q, query.SelectValue(q, query.Value(f.Nickname))).IsNull(),
 		query.Equal(outerOnly, query.NullableRow(query.Count[models.User]().Param(1))),
 	} {
 		if _, err := q.Limit(0).Where(condition).All(t.Context(), queryfixture.NoQueries(t)); !errors.Is(err, fault.Invalid) {

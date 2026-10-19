@@ -18,7 +18,7 @@ func TestLateralSourceScopeWindowsAndNullability(t *testing.T) {
 	j := LeftJoinLateral(a, latest)
 	x := scopedID(LeftScope(j, a.Scope()))
 	y := nullableScopedID(NullableRightScope(j, latest.Scope()))
-	pairs := pairProjection(j, Nullable(x.Value()), y.Value())
+	pairs := pairProjection(j, Nullable(Value(x)), Value(y))
 	statement, err := pairs.Compile()
 	if err != nil {
 		t.Fatal(err)
@@ -56,7 +56,7 @@ func TestLateralRejectsMissingOrForwardScopesEvenWithZeroLimit(t *testing.T) {
 	latest := AsLateral[thirdAlias](record, "latest")
 	j := LeftJoinLateral(a, latest)
 	x := scopedID(LeftScope(j, a.Scope()))
-	valid := SelectValue(j, x.Value())
+	valid := SelectValue(j, Value(x))
 	for _, name := range []string{"right", "full", "not derived", "self", "forward", "missing", "cross ON"} {
 		t.Run(name, func(t *testing.T) {
 			bad := valid

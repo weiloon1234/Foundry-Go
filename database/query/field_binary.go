@@ -27,9 +27,53 @@ func (f NullableBinaryField[M, V]) IsNotNull() Predicate[M] { return f.compare(i
 func (f NullableBinaryField[M, V]) SetNull() ConflictUpdate[M] {
 	return ConflictUpdate[M]{field: f.ref, null: true}
 }
-func (f NullableBinaryField[M, V]) Value() Expression[M, value.Nullable[V]] {
-	return Expression[M, value.Nullable[V]]{node: f.ref, codec: codec.Nullable(f.codec)}
+
+func (f BinaryField[M, V]) Group() Group[M] { return Group[M]{node: f.ref} }
+
+func (f BinaryField[M, V]) InCorrelatedQuery(source CorrelatedValueSource[M, V]) Predicate[M] {
+	return f.inSubquery(correlatedValueOf(source).subquery)
 }
-func (f NullableBinaryField[M, V]) rowValue() RowExpression[M, value.Nullable[V]] {
-	return RowExpression[M, value.Nullable[V]]{f.Value()}
+
+func (f BinaryField[M, V]) InNullableCorrelatedQuery(source CorrelatedValueSource[M, value.Nullable[V]]) Predicate[M] {
+	return f.inSubquery(correlatedValueOf(source).subquery)
 }
+
+func (f BinaryField[M, V]) Eq(value V) Predicate[M] { return f.compare(equal, value) }
+
+func (f BinaryField[M, V]) Ne(value V) Predicate[M] { return f.compare(notEqual, value) }
+
+func (f BinaryField[M, V]) In(values ...V) Predicate[M] { return f.compare(in, values...) }
+
+func (f BinaryField[M, V]) Asc() Order[M] { return Order[M]{field: f.ref} }
+
+func (f BinaryField[M, V]) Desc() Order[M] { return Order[M]{field: f.ref, descending: true} }
+
+func (f BinaryField[M, V]) compare(op operator, values ...V) Predicate[M] {
+	return Predicate[M]{expression: typedComparison(f.ref, op, f.codec, values)}
+}
+
+func (f BinaryField[M, V]) conflictColumn() conflictColumn[M] {
+	return conflictColumn[M]{field: f.ref}
+}
+
+func (f BinaryField[M, V]) Incoming() ConflictUpdate[M] {
+	return ConflictUpdate[M]{field: f.ref, incoming: true}
+}
+
+func (f BinaryField[M, V]) Set(v V) ConflictUpdate[M] {
+	return literalConflict[M](f.ref, captureAssignment(f.codec, v))
+}
+
+func (f BinaryField[M, V]) InQuery(source ValueQuerySource[V]) Predicate[M] {
+	return f.inSubquery(valueSource(source).subquery)
+}
+
+func (f BinaryField[M, V]) InNullableQuery(source ValueQuerySource[value.Nullable[V]]) Predicate[M] {
+	return f.inSubquery(valueSource(source).subquery)
+}
+
+func (f BinaryField[M, V]) inSubquery(q subquery) Predicate[M] {
+	return Predicate[M]{expression: subqueryPredicate{query: q, operand: f.ref}}
+}
+
+func (f BinaryField[M, V]) NotIn(values ...V) Predicate[M] { return f.compare(notIn, values...) }

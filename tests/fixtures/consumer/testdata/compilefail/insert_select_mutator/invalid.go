@@ -1,7 +1,10 @@
 package invalid
 
-import "foundry.test/consumer/linkqueries"
+import (
+	"foundry.test/consumer/linkqueries"
+	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
+)
 
 func invalid() {
-	_ = linkqueries.InsertArchiveFrom(linkqueries.QueryLinkMembers()).SelectTag(linkqueries.MemberFields().Name.Value())
+	_ = linkqueries.InsertArchiveFrom(linkqueries.QueryLinkMembers()).SelectTag(foundryquery.Value(linkqueries.MemberFields().Name))
 }

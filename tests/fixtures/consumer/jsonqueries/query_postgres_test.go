@@ -30,7 +30,7 @@ func TestPostgresJSONPredicatesAndProjections(t *testing.T) {
 				t.Fatal("unexpected JSON filter count", count, test.count, err)
 			}
 		}
-		selected := jsonqueries.ProjectSnapshot(q.OrderBy(f.ID.Asc())).SelectID(f.ID.Value()).SelectSettings(f.Settings.Value()).SelectKind(f.Settings.Kind().Value()).SelectBackupKind(f.Backup.Kind().Value()).SelectMatches(query.JSONContainsNullable(f.Backup, query.NullableRow(f.Settings.Param(filter))).Value())
+		selected := jsonqueries.ProjectSnapshot(q.OrderBy(f.ID.Asc())).SelectID(query.Value(f.ID)).SelectSettings(query.Value(f.Settings)).SelectKind(f.Settings.Kind().Value()).SelectBackupKind(f.Backup.Kind().Value()).SelectMatches(query.JSONContainsNullable(f.Backup, query.NullableRow(query.Param(f.Settings, filter))).Value())
 		rows, err := selected.Query().All(t.Context(), tx)
 		if err != nil || len(rows) != 3 {
 			t.Fatal(rows, err)
@@ -49,7 +49,7 @@ func TestPostgresJSONPredicatesAndProjections(t *testing.T) {
 		if matched, ok := rows[2].Matches.Get(); !ok || !matched {
 			t.Fatal(rows[2])
 		}
-		grouped := query.SelectValue(q, f.Settings.Kind().Value()).GroupBy(f.Settings.Group()).Having(query.CompareValue(query.JSONContainsValue(f.Settings.Value(), f.Settings.Param(filter).Value())).Eq(true))
+		grouped := query.SelectValue(q, f.Settings.Kind().Value()).GroupBy(f.Settings.Group()).Having(query.CompareValue(query.JSONContainsValue(query.Value(f.Settings), query.Param(f.Settings, filter).Value())).Eq(true))
 		if kinds, err := grouped.All(t.Context(), tx); err != nil || len(kinds) != 1 || kinds[0] != query.JSONObject {
 			t.Fatal(kinds, err)
 		}

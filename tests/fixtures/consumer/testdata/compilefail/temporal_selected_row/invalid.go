@@ -7,5 +7,5 @@ import (
 
 func invalid() {
 	f := temporalqueries.SampleFields()
-	_ = query.Year(f.Date.Max().Value())
+	_ = query.Year(query.Max(f.Date).Value())
 }

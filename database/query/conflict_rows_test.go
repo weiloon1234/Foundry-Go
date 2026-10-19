@@ -28,7 +28,7 @@ func TestConflictRowCalculationsAndConditions(t *testing.T) {
 	proposed := NewOrderedField[ConflictRow[user], int64](rows.Proposed().Table(), "count", codec.Signed[int64]())
 	proposedNote := NewNullableTextField[ConflictRow[user], string](rows.Proposed().Table(), "note", codec.String[string]())
 	policy := OnConflict(name).DoUpdate(
-		SetConflictValue(count, Add(stored, Add(proposed, proposed.Param(2)))),
+		SetConflictValue(count, Add(stored, Add(proposed, Param(proposed, 2)))),
 		SetConflictValue(note, proposedNote),
 	).Where(name.Ne("blocked")).WhereRows(Greater(proposed, stored))
 	plan := insertPlan[user]{query: q, rows: []Mutation[user]{Change(Assign[user](q.Table(), "name", codec.String[string](), "counter"))}, conflict: &policy}
@@ -107,7 +107,7 @@ func TestConflictAssignmentDiscoversCTEAndCorrelatedScope(t *testing.T) {
 	inner := InnerScope(correlated, lookup.Scope())
 	stored := NewOrderedField[Correlation[ConflictRow[user], Alias[conflictAlias, user]], int64](outer.Table(), "count", codec.Signed[int64]())
 	found := NewOrderedField[Correlation[ConflictRow[user], Alias[conflictAlias, user]], int64](inner.Table(), "count", codec.Signed[int64]())
-	selected := SelectCorrelatedValue(correlated, found.Value()).Where(Greater(found, stored)).Limit(1)
+	selected := SelectCorrelatedValue(correlated, Value(found)).Where(Greater(found, stored)).Limit(1)
 	proposed := NewOrderedField[ConflictRow[user], int64](rows.Proposed().Table(), "count", codec.Signed[int64]())
 	policy := OnConflict(name).DoUpdate(SetConflictValue(count, Coalesce(CorrelatedScalarRowQuery(selected), proposed)))
 	s, err := (insertPlan[user]{query: q, rows: []Mutation[user]{Change(Assign[user](q.Table(), "name", codec.String[string](), "counter"))}, conflict: &policy}).compile()

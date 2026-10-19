@@ -39,7 +39,7 @@ func checkSharedCTEs(t *testing.T, tx *database.Tx, users []models.User) error {
 	a, b := models.UserFieldsAt(first.Scope()), models.UserFieldsAt(second.Scope())
 	joined := query.InnerJoin(first, second, query.On(a.ID, b.ID))
 	fields := models.UserFieldsAt(query.LeftScope(joined, first.Scope()))
-	names := query.SelectValue(joined, fields.Email.Value()).OrderBy(fields.Email.Asc())
+	names := query.SelectValue(joined, query.Value(fields.Email)).OrderBy(fields.Email.Asc())
 	s, err := names.Compile()
 	if err != nil {
 		return err
@@ -58,7 +58,7 @@ func checkSharedCTEs(t *testing.T, tx *database.Tx, users []models.User) error {
 	dependent := query.CTE("dependent_users", eligible)
 	d := query.As[eligibleAlias](dependent, "dependent")
 	df := models.UserFieldsAt(d.Scope())
-	statuses := query.SelectValue(d, df.Status.Value()).Where(df.Status.Eq(models.StatusActive))
+	statuses := query.SelectValue(d, query.Value(df.Status)).Where(df.Status.Eq(models.StatusActive))
 	if n, err := statuses.Count(t.Context(), tx); err != nil || n != 2 {
 		t.Error("dependent CTE lost enum codec or input", err)
 	}
@@ -82,14 +82,14 @@ func checkSharedCTEs(t *testing.T, tx *database.Tx, users []models.User) error {
 
 func checkProjectedCTEs(t *testing.T, tx *database.Tx, users []models.User) error {
 	o := models.OrderFields()
-	totals := reports.ProjectBuyerTotals(models.QueryOrders()).SelectBuyerID(o.BuyerID.Value()).
-		SelectTotal(o.TotalCents.Sum().Value()).SelectOrders(query.Count[models.Order]().Value()).
-		SelectAverage(o.TotalCents.Avg().Value()).Query().GroupBy(o.BuyerID.Group()).
+	totals := reports.ProjectBuyerTotals(models.QueryOrders()).SelectBuyerID(query.Value(o.BuyerID)).
+		SelectTotal(query.Sum(o.TotalCents).Value()).SelectOrders(query.Count[models.Order]().Value()).
+		SelectAverage(query.Avg(o.TotalCents).Value()).Query().GroupBy(o.BuyerID.Group()).
 		Having(query.Count[models.Order]().Gte(2)).OrderBy(query.Count[models.Order]().Desc()).Limit(1)
 	definition := query.CTE("buyer_totals", totals).NotMaterialized()
 	source := query.As[totalsAlias](definition, "totals")
 	f := reports.BuyerTotalsFieldsAt(source.Scope())
-	buyers := query.SelectValue(source, f.BuyerID.Value()).Where(f.Total.Gt(decimal.FromInt64(2)))
+	buyers := query.SelectValue(source, query.Value(f.BuyerID)).Where(f.Total.Gt(decimal.FromInt64(2)))
 	selected, err := models.QueryUsers().Where(models.UserFields().ID.InQuery(buyers)).All(t.Context(), tx)
 	if err != nil {
 		return err
@@ -102,8 +102,8 @@ func checkProjectedCTEs(t *testing.T, tx *database.Tx, users []models.User) erro
 	joined := query.LeftJoin(u, source, query.On(models.UserFieldsAt(u.Scope()).ID, f.BuyerID))
 	user := models.UserFieldsAt(query.LeftScope(joined, u.Scope()))
 	stats := reports.BuyerTotalsNullableFieldsAt(query.NullableRightScope(joined, source.Scope()))
-	report := reports.ProjectUserOrderStats(joined).SelectID(user.ID.Value()).SelectEmail(user.Email.Value()).
-		SelectTotal(stats.Total.Value()).SelectOrders(stats.Orders.Value()).Query().OrderBy(user.Email.Asc())
+	report := reports.ProjectUserOrderStats(joined).SelectID(query.Value(user.ID)).SelectEmail(query.Value(user.Email)).
+		SelectTotal(query.Value(stats.Total)).SelectOrders(query.Value(stats.Orders)).Query().OrderBy(user.Email.Asc())
 	rows, err := report.All(t.Context(), tx)
 	if err != nil {
 		return err
@@ -123,7 +123,7 @@ func checkProjectedCTEs(t *testing.T, tx *database.Tx, users []models.User) erro
 	// Hoisted definitions may contain their own explicit row correlations.
 	filtered := query.CTE("buyers_with_orders", models.QueryUsers().WhereHas(models.UserRelations().Orders.Where(o.TotalCents.Gt(2))))
 	a := query.As[otherAlias](filtered, "filtered")
-	if ids, err := query.SelectValue(a, models.UserFieldsAt(a.Scope()).ID.Value()).All(t.Context(), tx); err != nil || len(ids) != 1 || ids[0] != users[1].ID {
+	if ids, err := query.SelectValue(a, query.Value(models.UserFieldsAt(a.Scope()).ID)).All(t.Context(), tx); err != nil || len(ids) != 1 || ids[0] != users[1].ID {
 		t.Error("CTE lost its internal relationship correlation", err)
 	}
 	return nil
@@ -134,7 +134,7 @@ func checkCTEModelFilters(t *testing.T, tx *database.Tx, users []models.User) er
 	eligible := query.CTE("eligible_users", models.QueryUsers().Where(u.Age.Gte(21)))
 	a := query.As[eligibleAlias](eligible, "eligible")
 	f := models.UserFieldsAt(a.Scope())
-	ids := query.SelectValue(a, f.ID.Value())
+	ids := query.SelectValue(a, query.Value(f.ID))
 	// CTE references can live in an explicitly correlated inner query.
 	correlation := query.Correlate(models.QueryOrders(), a)
 	inner := models.UserFieldsAt(query.InnerScope(correlation, a.Scope()))
@@ -201,7 +201,7 @@ func TestInvalidCTEsNeverExecute(t *testing.T) {
 		query.CTE("bad", models.QueryUsers().Where(models.UserFields().Status.Eq(models.Status("invalid")))),
 	} {
 		source := query.As[eligibleAlias](definition, "eligible")
-		ids := query.SelectValue(source, models.UserFieldsAt(source.Scope()).ID.Value())
+		ids := query.SelectValue(source, query.Value(models.UserFieldsAt(source.Scope()).ID))
 		if rows, err := ids.All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
 			t.Error("invalid CTE reached executor", err)
 		}
@@ -210,7 +210,7 @@ func TestInvalidCTEsNeverExecute(t *testing.T) {
 	second := query.CTE("same_name", models.QueryUsers().Where(models.UserFields().Age.Gt(18)))
 	a, b := query.As[eligibleAlias](first, "a"), query.As[otherAlias](second, "b")
 	joined := query.InnerJoin(a, b, query.On(models.UserFieldsAt(a.Scope()).ID, models.UserFieldsAt(b.Scope()).ID))
-	ids := query.SelectValue(joined, models.UserFieldsAt(query.LeftScope(joined, a.Scope())).ID.Value())
+	ids := query.SelectValue(joined, query.Value(models.UserFieldsAt(query.LeftScope(joined, a.Scope())).ID))
 	if rows, err := ids.All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
 		t.Error("conflicting CTE definitions reached executor", err)
 	}

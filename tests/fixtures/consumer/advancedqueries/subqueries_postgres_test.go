@@ -32,13 +32,13 @@ func TestPostgresTypedSubqueries(t *testing.T) {
 
 func checkDerivedReports(t *testing.T, tx *database.Tx, users []models.User) error {
 	o := models.OrderFields()
-	totals := reports.ProjectBuyerTotals(models.QueryOrders()).SelectBuyerID(o.BuyerID.Value()).
-		SelectTotal(o.TotalCents.Sum().Value()).SelectOrders(query.Count[models.Order]().Value()).
-		SelectAverage(o.TotalCents.Avg().Value()).Query().GroupBy(o.BuyerID.Group())
+	totals := reports.ProjectBuyerTotals(models.QueryOrders()).SelectBuyerID(query.Value(o.BuyerID)).
+		SelectTotal(query.Sum(o.TotalCents).Value()).SelectOrders(query.Count[models.Order]().Value()).
+		SelectAverage(query.Avg(o.TotalCents).Value()).Query().GroupBy(o.BuyerID.Group())
 	// Grouping, HAVING and a selected window remain inside the derived source.
 	source := query.As[totalsAlias](totals.Having(query.Count[models.Order]().Gte(2)).OrderBy(query.Count[models.Order]().Desc()).Limit(1), "totals")
 	fields := reports.BuyerTotalsFieldsAt(source.Scope())
-	values := query.SelectValue(source, fields.Total.Value()).Where(fields.Total.Gt(decimal.FromInt64(2)))
+	values := query.SelectValue(source, query.Value(fields.Total)).Where(fields.Total.Gt(decimal.FromInt64(2)))
 	amounts, err := values.All(t.Context(), tx)
 	if err != nil {
 		return err
@@ -54,8 +54,8 @@ func checkDerivedReports(t *testing.T, tx *database.Tx, users []models.User) err
 	joined := query.LeftJoin(u, source, query.On(models.UserFieldsAt(u.Scope()).ID, fields.BuyerID))
 	buyer := models.UserFieldsAt(query.LeftScope(joined, u.Scope()))
 	stats := reports.BuyerTotalsNullableFieldsAt(query.NullableRightScope(joined, source.Scope()))
-	report := reports.ProjectUserOrderStats(joined).SelectID(buyer.ID.Value()).SelectEmail(buyer.Email.Value()).
-		SelectTotal(stats.Total.Value()).SelectOrders(stats.Orders.Value()).Query().OrderBy(buyer.Email.Asc())
+	report := reports.ProjectUserOrderStats(joined).SelectID(query.Value(buyer.ID)).SelectEmail(query.Value(buyer.Email)).
+		SelectTotal(query.Value(stats.Total)).SelectOrders(query.Value(stats.Orders)).Query().OrderBy(buyer.Email.Asc())
 	rows, err := report.All(t.Context(), tx)
 	if err != nil {
 		return err
@@ -74,15 +74,15 @@ func checkDerivedReports(t *testing.T, tx *database.Tx, users []models.User) err
 	df := reports.UserOrderStatsFieldsAt(derived.Scope())
 	again := query.InnerJoin(u, derived, query.On(models.UserFieldsAt(u.Scope()).ID, df.ID))
 	joinedFields := reports.UserOrderStatsFieldsAt(query.RightScope(again, derived.Scope()))
-	if emails, err := query.SelectValue(again, joinedFields.Email.Value()).OrderBy(joinedFields.Email.Asc()).All(t.Context(), tx); err != nil || len(emails) != 3 || emails[0] != users[0].Email {
+	if emails, err := query.SelectValue(again, query.Value(joinedFields.Email)).OrderBy(joinedFields.Email.Asc()).All(t.Context(), tx); err != nil || len(emails) != 3 || emails[0] != users[0].Email {
 		t.Error("declared joined result could not be joined again", err)
 	}
 	// Derived enum fields retain enum operators and decoders, including output aliases.
 	base := models.UserFields()
-	summary := reports.ProjectUserSummary(models.QueryUsers()).SelectID(base.ID.Value()).SelectEmail(base.Email.Value()).SelectNickname(base.Nickname.Value()).SelectStatus(base.Status.Value()).Query()
+	summary := reports.ProjectUserSummary(models.QueryUsers()).SelectID(query.Value(base.ID)).SelectEmail(query.Value(base.Email)).SelectNickname(query.Value(base.Nickname)).SelectStatus(query.Value(base.Status)).Query()
 	names := query.As[reportAlias](summary, "summary")
 	nf := reports.UserSummaryFieldsAt(names.Scope())
-	if emails, err := query.SelectValue(names, nf.Email.Value()).Where(nf.Status.Eq(models.StatusActive)).OrderBy(nf.Email.Asc()).All(t.Context(), tx); err != nil || len(emails) != 3 {
+	if emails, err := query.SelectValue(names, query.Value(nf.Email)).Where(nf.Status.Eq(models.StatusActive)).OrderBy(nf.Email.Asc()).All(t.Context(), tx); err != nil || len(emails) != 3 {
 		t.Error("derived enum or renamed column failed", err)
 	}
 	return nil
@@ -90,7 +90,7 @@ func checkDerivedReports(t *testing.T, tx *database.Tx, users []models.User) err
 
 func checkSubqueryValues(t *testing.T, tx *database.Tx, users []models.User) error {
 	u, o := models.UserFields(), models.OrderFields()
-	buyers := query.SelectValue(models.QueryOrders(), o.BuyerID.Value()).Where(o.TotalCents.Gte(2))
+	buyers := query.SelectValue(models.QueryOrders(), query.Value(o.BuyerID)).Where(o.TotalCents.Gte(2))
 	matched, err := models.QueryUsers().Where(u.ID.InQuery(buyers)).OrderBy(u.Email.Asc()).All(t.Context(), tx)
 	if err != nil {
 		return err
@@ -99,7 +99,7 @@ func checkSubqueryValues(t *testing.T, tx *database.Tx, users []models.User) err
 		t.Error("typed membership results changed")
 	}
 	// SQL NULL remains unknown under NOT IN; explicitly remove it when desired.
-	introducers := query.SelectValue(models.QueryUsers(), u.IntroducerID.Value())
+	introducers := query.SelectValue(models.QueryUsers(), query.Value(u.IntroducerID))
 	for _, test := range []struct {
 		predicate query.Predicate[models.User]
 		want      int64
@@ -126,8 +126,8 @@ func checkSubqueryValues(t *testing.T, tx *database.Tx, users []models.User) err
 		t.Error("EXISTS lost HAVING", err)
 	}
 	last := buyers.OrderBy(o.TotalCents.Desc()).Limit(1)
-	nicknames := query.SelectValue(models.QueryUsers().Where(u.ID.Eq(users[1].ID)), u.Nickname.Value())
-	report := reports.ProjectScalarReport(models.QueryUsers()).SelectID(u.ID.Value()).
+	nicknames := query.SelectValue(models.QueryUsers().Where(u.ID.Eq(users[1].ID)), query.Value(u.Nickname))
+	report := reports.ProjectScalarReport(models.QueryUsers()).SelectID(query.Value(u.ID)).
 		SelectBuyerID(query.ScalarQuery(models.QueryUsers(), last)).
 		SelectNickname(query.ScalarNullableQuery(models.QueryUsers(), nicknames)).
 		SelectOrders(query.ScalarQuery(models.QueryUsers(), count)).Query().OrderBy(u.Email.Asc())
@@ -149,19 +149,19 @@ func checkSubqueryValues(t *testing.T, tx *database.Tx, users []models.User) err
 			t.Error("scalar aggregate zero became NULL")
 		}
 	}
-	emptyEmails := query.SelectValue(models.QueryUsers().Where(u.ID.Eq(users[0].ID)), u.Email.Value()).Limit(0)
+	emptyEmails := query.SelectValue(models.QueryUsers().Where(u.ID.Eq(users[0].ID)), query.Value(u.Email)).Limit(0)
 	result, err := query.SelectValue(models.QueryUsers(), query.ScalarQuery(models.QueryUsers(), emptyEmails)).All(t.Context(), tx)
 	if err != nil || len(result) != 3 || !result[0].IsNull() {
 		t.Error("empty scalar did not become NULL", err)
 	}
-	nullNickname := query.SelectValue(models.QueryUsers().Where(u.ID.Eq(users[0].ID)), u.Nickname.Value())
+	nullNickname := query.SelectValue(models.QueryUsers().Where(u.ID.Eq(users[0].ID)), query.Value(u.Nickname))
 	for _, nullableInput := range []query.ValueQuery[models.User, value.Nullable[string]]{nullNickname, nicknames.Limit(0)} {
 		result, err := query.SelectValue(models.QueryUsers(), query.ScalarNullableQuery(models.QueryUsers(), nullableInput)).All(t.Context(), tx)
 		if err != nil || len(result) != 3 || !result[0].IsNull() {
 			t.Error("nullable scalar did not preserve NULL/empty input", err)
 		}
 	}
-	input := query.SelectValue(models.QueryUsers(), u.ID.Value())
+	input := query.SelectValue(models.QueryUsers(), query.Value(u.ID))
 	err = tx.Savepoint(t.Context(), func(child *database.Tx) error {
 		rows, err := query.SelectValue(models.QueryUsers(), query.ScalarQuery(models.QueryUsers(), input)).All(t.Context(), child)
 		var detail *database.Error
@@ -186,7 +186,7 @@ func checkSubqueryValues(t *testing.T, tx *database.Tx, users []models.User) err
 	if _, err := tx.Exec(t.Context(), `UPDATE users SET status='invalid' WHERE email_address=$1`, users[2].Email); err != nil {
 		return err
 	}
-	statuses := query.SelectValue(models.QueryUsers().OrderBy(u.Email.Asc()), u.Status.Value())
+	statuses := query.SelectValue(models.QueryUsers().OrderBy(u.Email.Asc()), query.Value(u.Status))
 	if values, err := statuses.All(t.Context(), tx); values != nil || !errors.Is(err, fault.Invalid) {
 		t.Error("malformed value exposed partial results", err)
 	}

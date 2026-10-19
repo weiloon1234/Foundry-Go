@@ -3,7 +3,7 @@ package query
 // NotIn excludes the listed values. SQL NULL never satisfies NotIn; combine it
 // with IsNull on nullable operands when NULL rows must also match. An empty
 // list matches every non-excluded row (TRUE).
-func (f valueField[M, V]) NotIn(values ...V) Predicate[M] { return f.compare(notIn, values...) }
+func (f ScalarField[M, V]) NotIn(values ...V) Predicate[M] { return f.compare(notIn, values...) }
 
 // NotIn excludes the listed values; SQL NULL never matches.
 func (e RowExpression[S, V]) NotIn(v ...V) Predicate[S] { return e.compare(notIn, v...) }

@@ -6,6 +6,6 @@ import (
 )
 
 func wrong() {
-	p, _ := query.SelectValue(models.QueryUsers(), models.UserFields().Nickname.Value()).SimplePaginate(nil, nil, query.PageRequest{})
+	p, _ := query.SelectValue(models.QueryUsers(), query.Value(models.UserFields().Nickname)).SimplePaginate(nil, nil, query.PageRequest{})
 	var _ query.SimplePage[string] = p
 }

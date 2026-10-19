@@ -29,16 +29,16 @@ func NewNullableJSONField[M any, V jsonValue](table, column string, c codec.Code
 // Contains uses PostgreSQL JSONB containment. Array order and repeated elements
 // do not affect containment; equality still preserves array order.
 func (f JSONField[M, V]) Contains(v V) Predicate[M] {
-	return JSONContains(f, f.Param(v)).Eq(true)
+	return JSONContains(f, Param(f, v)).Eq(true)
 }
 func (f JSONField[M, V]) ContainedBy(v V) Predicate[M] {
-	return JSONContainedBy(f, f.Param(v)).Eq(true)
+	return JSONContainedBy(f, Param(f, v)).Eq(true)
 }
 func (f NullableJSONField[M, V]) Contains(v V) Predicate[M] {
-	return JSONContainsNullable(f, NullableRow(f.Param(v))).Eq(value.Of(true))
+	return JSONContainsNullable(f, NullableRow(Param(f, v))).Eq(value.Of(true))
 }
 func (f NullableJSONField[M, V]) ContainedBy(v V) Predicate[M] {
-	return JSONContainedByNullable(f, NullableRow(f.Param(v))).Eq(value.Of(true))
+	return JSONContainedByNullable(f, NullableRow(Param(f, v))).Eq(value.Of(true))
 }
 
 // Kind distinguishes the six JSON kinds. JSON null has kind JSONNull.

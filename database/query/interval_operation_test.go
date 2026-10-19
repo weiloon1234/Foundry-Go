@@ -15,18 +15,18 @@ func TestIntervalSQLValidationAndAggregates(t *testing.T) {
 	q := cursorQuery()
 	for _, node := range []valueExpression{
 		operationNode{kind: addIntervalsOperation, result: codec.TypeInterval},
-		operationNode{kind: intervalMonthsOperation, result: codec.TypeText, arguments: []operationArgument{operationArg(f.Value())}},
-		operationNode{kind: instantDifferenceOperation, result: codec.TypeInterval, arguments: []operationArgument{operationArg(f.Value()), operationArg(f.Value())}},
+		operationNode{kind: intervalMonthsOperation, result: codec.TypeText, arguments: []operationArgument{operationArg(Value(f))}},
+		operationNode{kind: instantDifferenceOperation, result: codec.TypeInterval, arguments: []operationArgument{operationArg(Value(f)), operationArg(Value(f))}},
 	} {
 		if _, err := SelectValue(q.Limit(0), Expression[cursorRecord, temporal.Interval]{node: node, codec: codec.Interval()}).Compile(); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
 	}
-	if statement, err := SelectValue(q, f.Sum().Value()).Having(f.Sum().Gt(temporal.Interval{})).Compile(); err != nil || !strings.Contains(statement.SQL(), "SUM(CAST(") || !strings.Contains(statement.SQL(), "AS interval)") {
+	if statement, err := SelectValue(q, Sum(f).Value()).Having(Sum(f).Gt(temporal.Interval{})).Compile(); err != nil || !strings.Contains(statement.SQL(), "SUM(CAST(") || !strings.Contains(statement.SQL(), "AS interval)") {
 		t.Fatal(statement.SQL(), err)
 	}
 	window := WindowFor(q).OrderBy(f.Asc())
-	if _, err := SelectValue(q, f.Avg().Filter(f.Ne(temporal.Interval{})).Over(window)).Compile(); err != nil {
+	if _, err := SelectValue(q, Avg(f).Filter(f.Ne(temporal.Interval{})).Over(window)).Compile(); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -56,7 +56,7 @@ func TestIntervalScalarExpansionHasBoundedWork(t *testing.T) {
 
 func TestScalarSQLPlanningSharesCompilationBudget(t *testing.T) {
 	f := NewIntervalField[cursorRecord, temporal.Interval]("records", "rank", codec.Interval())
-	expr := IntervalMonths(f.Param(temporal.Months(1))).Value().node
+	expr := IntervalMonths(Param(f, temporal.Months(1))).Value().node
 	var c compiler
 	if _, err := c.planValue(expr); err != nil || c.scalarSQLBytes == 0 {
 		t.Fatal("planning discarded scalar compilation work", err)

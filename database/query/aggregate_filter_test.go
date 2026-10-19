@@ -14,7 +14,7 @@ import (
 
 func TestAggregateFilterIsolationAndBindings(t *testing.T) {
 	f := NewExactField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
-	base := f.Sum()
+	base := Sum(f)
 	filtered := base.Filter(f.Gt(2)).Filter(Or(f.Lt(8), f.Eq(10)))
 	q := SelectValue(cursorQuery().Where(f.Ne(4)), filtered.Value()).Having(filtered.Gt(decimal.FromInt64(5))).OrderBy(filtered.Desc())
 	s, err := q.Compile()
@@ -81,7 +81,7 @@ func TestAggregateFilterCorrelationOwnership(t *testing.T) {
 		"outer only":     count.Filter(x.Ne(0)),
 		"local":          count.Filter(y.Ne(0)),
 		"mixed":          count.Filter(y.EqColumn(x)),
-		"local argument": y.Count().Filter(x.Ne(0)),
+		"local argument": CountField(y).Filter(x.Ne(0)),
 	} {
 		_, err := SelectValue(a, CorrelatedScalarQuery(SelectCorrelatedValue(link, aggregate.Value()))).Compile()
 		if name == "outer only" {
@@ -115,7 +115,7 @@ func TestAggregateFilterRelationQualificationAndCTEDiscovery(t *testing.T) {
 	f := NewExactField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
 	common := As[firstAlias](CTE("eligible", cursorQuery().Where(f.Gt(2))), "eligible_source")
 	eligible := scopedID(common.Scope())
-	filtered := f.Sum().Filter(f.InQuery(SelectValue(common, eligible.Value())))
+	filtered := Sum(f).Filter(f.InQuery(SelectValue(common, Value(eligible))))
 	statement, err := compileRelationAggregate(t.Context(), testThrough().aggregateInput(), filtered.node, []driver.Value{int64(1)}, 9)
 	if err != nil {
 		t.Fatal(err)

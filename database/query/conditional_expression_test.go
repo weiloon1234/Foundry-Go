@@ -15,9 +15,9 @@ import (
 func TestConditionalValuesBindingsAndImmutability(t *testing.T) {
 	id := NewExactField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
 	rank := NewNullableOrderedField[cursorRecord, int64]("records", "rank", codec.Signed[int64]())
-	base := When(id.Eq(1), id.Param(10))
-	first := base.Else(id.Param(20))
-	second := base.When(id.Eq(2), id.Param(30)).Else(id.Param(40))
+	base := When(id.Eq(1), Param(id, 10))
+	first := base.Else(Param(id, 20))
+	second := base.When(id.Eq(2), Param(id, 30)).Else(Param(id, 40))
 	if len(base.builder.branches) != 1 || len(first.Value().node.(caseNode).branches) != 1 || len(second.Value().node.(caseNode).branches) != 2 {
 		t.Fatal("CASE derivation mutated branches")
 	}
@@ -124,7 +124,7 @@ func TestParameterCaptureAndCodecTypes(t *testing.T) {
 			t.Fatal("invalid parameter metadata accepted", err)
 		}
 	}
-	invalid := NewScalarField[cursorRecord, string]("records", "unused", codec.String[string]()).Param("\x00")
+	invalid := Param(NewScalarField[cursorRecord, string]("records", "unused", codec.String[string]()), "\x00")
 	if _, err := SelectValue(cursorQuery(), invalid.Value()).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("invalid parameter value accepted", err)
 	}
@@ -139,13 +139,13 @@ func TestParameterCaptureAndCodecTypes(t *testing.T) {
 
 func TestEmptyMembershipDiscardsComputedBindings(t *testing.T) {
 	id := NewExactField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
-	choice := When(id.Gt(1), id.Param(2)).Else(id.Param(3))
-	q := SelectValue(cursorQuery().Where(id.Eq(4), choice.In().Not(), id.Eq(5)), id.Param(6).Value())
+	choice := When(id.Gt(1), Param(id, 2)).Else(Param(id, 3))
+	q := SelectValue(cursorQuery().Where(id.Eq(4), choice.In().Not(), id.Eq(5)), Param(id, 6).Value())
 	s, err := q.Compile()
 	if err != nil || !reflect.DeepEqual(s.Arguments(), []any{int64(6), int64(4), int64(5)}) || !strings.Contains(s.SQL(), `"records"."id" = $3`) || strings.Contains(s.SQL(), "CASE") {
 		t.Fatal("empty IN retained discarded operand bindings", s.SQL(), s.Arguments(), err)
 	}
-	invalid := NewScalarField[cursorRecord, string]("records", "unused", codec.String[string]()).Param("\x00")
+	invalid := Param(NewScalarField[cursorRecord, string]("records", "unused", codec.String[string]()), "\x00")
 	if _, err := cursorQuery().Where(invalid.In()).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("empty IN concealed invalid operand", err)
 	}

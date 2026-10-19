@@ -12,5 +12,5 @@ type other struct{}
 func invalid() {
 	source := query.As[alias](reports.ProjectUserSummary(models.QueryUsers()).Query(), "summary")
 	f := reports.UserSummaryFieldsAt(source.Scope())
-	_ = query.SelectValue(source, f.Email.Value()).Where(models.UserFields().Email.Eq("x"))
+	_ = query.SelectValue(source, query.Value(f.Email)).Where(models.UserFields().Email.Eq("x"))
 }

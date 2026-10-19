@@ -13,7 +13,7 @@ import (
 
 func TestSubqueriesShareScopesAndParameterOrder(t *testing.T) {
 	id := NewOrderedField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
-	inner := SelectValue(cursorQuery(), id.Value()).Where(id.Gt(2)).OrderBy(id.Asc()).Limit(3)
+	inner := SelectValue(cursorQuery(), Value(id)).Where(id.Gt(2)).OrderBy(id.Asc()).Limit(3)
 	scalar := ScalarQuery(cursorQuery(), inner)
 	outer := SelectValue(cursorQuery().Where(id.Ne(9)), scalar).Where(id.InQuery(inner)).OrderBy(scalar.Asc()).Limit(4)
 	s, err := outer.Compile()
@@ -46,7 +46,7 @@ func TestSubqueryValidationAndResourceBounds(t *testing.T) {
 	id := NewScalarField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
 	var absent *ValueQuery[cursorRecord, int64]
 	var absentOuter *Query[cursorRecord]
-	valid := SelectValue(cursorQuery(), id.Value())
+	valid := SelectValue(cursorQuery(), Value(id))
 	for name, q := range map[string]ValueQuery[cursorRecord, value.Nullable[int64]]{
 		"nil inner":       SelectValue(cursorQuery(), ScalarQuery(cursorQuery(), absent)),
 		"zero inner":      SelectValue(cursorQuery(), ScalarQuery(cursorQuery(), ValueQuery[cursorRecord, int64]{})),
@@ -67,11 +67,11 @@ func TestSubqueryValidationAndResourceBounds(t *testing.T) {
 			t.Fatal(name, err)
 		}
 	}
-	if _, err := SelectValue(cursorQuery(), ScalarQuery(cursorQuery(), SelectValue(cursorQuery(), Nullable(id.Value())))).Compile(); !errors.Is(err, fault.Invalid) {
+	if _, err := SelectValue(cursorQuery(), ScalarQuery(cursorQuery(), SelectValue(cursorQuery(), Nullable(Value(id))))).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("nested nullable scalar was accepted", err)
 	}
 	for i := 0; i < MaxExpressionDepth; i++ {
-		valid = SelectValue(cursorQuery().Where(id.InQuery(valid)), id.Value())
+		valid = SelectValue(cursorQuery().Where(id.InQuery(valid)), Value(id))
 	}
 	if _, err := valid.Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("deep predicate subquery accepted", err)
@@ -93,7 +93,7 @@ func TestSubqueryValidationAndResourceBounds(t *testing.T) {
 func TestSubqueriesShareTheParameterBudget(t *testing.T) {
 	id := NewScalarField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
 	base := cursorQuery()
-	inner := SelectValue(base.Where(wideScoped(base.Scope(), MaxParameters/2+1)), id.Value())
+	inner := SelectValue(base.Where(wideScoped(base.Scope(), MaxParameters/2+1)), Value(id))
 	outer := base.Where(wideScoped(base.Scope(), MaxParameters/2+1), id.InQuery(inner))
 	if s, err := outer.Compile(); !errors.Is(err, fault.Invalid) || s.SQL() != "" || len(s.Arguments()) != 0 {
 		t.Fatal("nested statements bypassed the shared parameter bound", err)
@@ -111,7 +111,7 @@ func TestSubqueryScopesDoNotAccidentallyCorrelate(t *testing.T) {
 	// Independent SELECT scopes may reuse names and retain outer state afterward.
 	a := As[firstAlias](cursorQuery(), "records")
 	id := scopedID(a.Scope())
-	s, err := SelectValue(a, ScalarQuery(a, SelectValue(cursorQuery(), NewScalarField[cursorRecord, int64]("records", "id", codec.Signed[int64]()).Value()).Limit(1))).Where(id.Eq(4)).Compile()
+	s, err := SelectValue(a, ScalarQuery(a, SelectValue(cursorQuery(), Value(NewScalarField[cursorRecord, int64]("records", "id", codec.Signed[int64]()))).Limit(1))).Where(id.Eq(4)).Compile()
 	if err != nil || !strings.Contains(s.SQL(), `WHERE ("records"."id" = $2)`) {
 		t.Fatal("inner scope leaked into outer query", s.SQL(), err)
 	}

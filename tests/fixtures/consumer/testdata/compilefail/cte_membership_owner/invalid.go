@@ -8,5 +8,5 @@ import (
 type alias struct{}
 
 var source = query.As[alias](query.CTE("users_copy", models.QueryUsers()), "u")
-var ids = query.SelectValue(source, models.UserFieldsAt(source.Scope()).ID.Value())
+var ids = query.SelectValue(source, query.Value(models.UserFieldsAt(source.Scope()).ID))
 var _ = models.OrderFields().ID.InQuery(ids)

@@ -32,7 +32,7 @@ func archiveValues(t *testing.T) linkqueries.ArchiveDraft {
 
 func archiveMembers(source linkqueries.MemberQuery) linkqueries.ArchiveInsertFromBuilder[linkqueries.Member] {
 	fields := linkqueries.MemberFields()
-	return linkqueries.InsertArchiveFrom(source).SelectMemberID(fields.ID.Value()).SelectName(fields.Name.Value()).SelectAlias(fields.Alias.Value())
+	return linkqueries.InsertArchiveFrom(source).SelectMemberID(query.Value(fields.ID)).SelectName(query.Value(fields.Name)).SelectAlias(query.Value(fields.Alias))
 }
 
 func TestPostgresInsertSelectPreservesTypesDefaultsAndBulkSemantics(t *testing.T) {
@@ -179,7 +179,7 @@ func TestPostgresInsertSelectScopesWindowsCTEsAndEmptySources(t *testing.T) {
 		cte := query.CTE("archivable", linkqueries.QueryLinkMembers().OnlyTrashed())
 		aliased := query.As[archiveSourceAlias](cte, "archived_member")
 		f := linkqueries.MemberFieldsAt(aliased.Scope())
-		count, err := linkqueries.InsertArchiveFrom(aliased).SelectMemberID(f.ID.Value()).SelectName(f.Name.Value()).SelectAlias(f.Alias.Value()).Values(archiveValues(t)).Exec(t.Context(), tx)
+		count, err := linkqueries.InsertArchiveFrom(aliased).SelectMemberID(query.Value(f.ID)).SelectName(query.Value(f.Name)).SelectAlias(query.Value(f.Alias)).Values(archiveValues(t)).Exec(t.Context(), tx)
 		if err != nil || count != 1 {
 			return errors.New("insert selection lost aliased CTE or explicit deleted scope")
 		}

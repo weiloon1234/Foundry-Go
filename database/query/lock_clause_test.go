@@ -67,7 +67,7 @@ func TestLockClauseStrengthsAndOwnedInputs(t *testing.T) {
 		}
 	}
 	field := NewOrderedField[Alias[lockLeft, cursorRecord], int64]("a", "id", codec.Signed[int64]())
-	values := SelectValue(source, field.Value()).LockRows(KeyShareLock(scope))
+	values := SelectValue(source, Value(field)).LockRows(KeyShareLock(scope))
 	if s, err := values.Compile(); err != nil || !strings.HasSuffix(s.SQL(), ` FOR KEY SHARE OF "a"`) {
 		t.Fatal(s, err)
 	}
@@ -125,10 +125,10 @@ func TestLockClausesRejectWindowsInsideCalculations(t *testing.T) {
 	rank := RowNumber(WindowFor(base))
 	id := NewOrderedField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
 	calculation := AddValue(rank, rank)
-	conditional := WhenValue(EqualValue(rank, rank), id.Value()).Else(id.Value())
+	conditional := WhenValue(EqualValue(rank, rank), Value(id)).Else(Value(id))
 	for _, selected := range []ValueQuery[cursorRecord, int64]{
 		SelectValue(base, calculation), SelectValue(base, conditional),
-		SelectValue(base, id.Value()).OrderBy(calculation.Asc()),
+		SelectValue(base, Value(id)).OrderBy(calculation.Asc()),
 	} {
 		if _, err := selected.Compile(); err != nil {
 			t.Fatal("ordinary window calculation failed", err)

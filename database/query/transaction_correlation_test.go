@@ -21,7 +21,7 @@ func TestTransactionCorrelatedLocksRejectOrdinaryExecution(t *testing.T) {
 	child := AsTransaction[transactionCorrelationInner](TransactionOf(transactionTestModel()), "child")
 	c := TransactionCorrelate(parent, child)
 	field := NewOrderedField[pair, int64]("child", "id", codec.Signed[int64]())
-	values := SelectTransactionCorrelatedValue(c, field.Value()).ForUpdate()
+	values := SelectTransactionCorrelatedValue(c, Value(field)).ForUpdate()
 	ordinary := ForModel(Define("outer_records", "id", []Column{{Name: "id"}}, func(row database.Row) (outerOwner, error) {
 		var ignored int64
 		err := row.Scan(&ignored)
@@ -57,7 +57,7 @@ func TestTransactionCorrelatedSourceValidationAndImmutability(t *testing.T) {
 	child := AsTransaction[transactionCorrelationInner](TransactionOf(transactionTestModel()), "child")
 	c := TransactionCorrelate(parent, child)
 	field := NewOrderedField[pair, int64]("child", "id", codec.Signed[int64]())
-	base := SelectTransactionCorrelatedValue(c, field.Value())
+	base := SelectTransactionCorrelatedValue(c, Value(field))
 	locked := base.ForUpdate().Of(InnerScope(c, child.Scope()))
 	first, err := SelectTransactionRecord(parent, parent.Scope()).Where(locked.Exists()).Compile()
 	if err != nil {

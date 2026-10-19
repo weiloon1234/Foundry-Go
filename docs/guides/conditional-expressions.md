@@ -26,9 +26,9 @@ Computed row values expose `Eq`, `Ne`, `In`, `IsNull` and `IsNotNull`. Literal c
 
 ```go
 u := models.UserFields()
-label := query.When(u.Age.Gt(20), u.Email.Param("older")).
-    When(u.Age.Eq(20), u.Email.Param("twenty")).
-    Else(u.Email.Param("younger"))
+label := query.When(u.Age.Gt(20), query.Param(u.Email, "older")).
+    When(u.Age.Eq(20), query.Param(u.Email, "twenty")).
+    Else(query.Param(u.Email, "younger"))
 
 labels, err := query.SelectValue(models.QueryUsers(), label.Value()).All(ctx, db)
 ```
@@ -43,7 +43,7 @@ The corresponding selected-value operations are `CoalesceValue`, `CoalesceNullab
 
 ```go
 o := models.OrderFields()
-total := o.TotalCents.Sum()
+total := query.Sum(o.TotalCents)
 amount := query.CoalesceValue(
     total.Value(),
     total.Param(decimal.FromInt64(0)).Value(),
@@ -57,7 +57,7 @@ Supported subqueries and CTEs remain discoverable inside conditions and selected
 
 ## Bound parameters and codecs
 
-`field.Param(v)` captures the field's non-nullable Go type and codec without adding a column reference. `RowExpression.Param(v)` and `Expression.Param(v)` use their exact result type; nullable ordered aggregates accept their concrete comparison type, as shown above. `NullFor` provides typed NULL parameters.
+`query.Param(field, v)` captures the field's non-nullable Go type and codec without adding a column reference. `RowExpression.Param(v)` and `Expression.Param(v)` use their exact result type; nullable ordered aggregates accept their concrete comparison type, as shown above. `NullFor` provides typed NULL parameters.
 
 Encoding occurs once when the parameter is constructed, owning any returned byte buffer. Construction errors are retained and returned before execution. All parameters must be valid even if a CASE branch would not be selected. SQL CASE is also not a general shield against planning-time errors or earlier aggregate evaluation. [PostgreSQL evaluation rules](https://www.postgresql.org/docs/18/sql-expressions.html#SYNTAX-EXP-EVAL)
 

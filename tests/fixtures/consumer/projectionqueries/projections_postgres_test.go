@@ -19,7 +19,7 @@ import (
 
 func userSummarySelection() reports.UserSummarySelection[models.User] {
 	f := models.UserFields()
-	return reports.UserSummarySelection[models.User]{ID: f.ID.Value(), Email: f.Email.Value(), Nickname: f.Nickname.Value(), Status: f.Status.Value()}
+	return reports.UserSummarySelection[models.User]{ID: query.Value(f.ID), Email: query.Value(f.Email), Nickname: query.Value(f.Nickname), Status: query.Value(f.Status)}
 }
 
 func TestPostgresDeclaredProjections(t *testing.T) {
@@ -77,7 +77,7 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 			t.Error("projection lost model-owned IDs, nullable values or imported enum codec")
 		}
 		widened := userSummarySelection()
-		widened.Nickname = query.Nullable(models.UserFields().Email.Value())
+		widened.Nickname = query.Nullable(query.Value(models.UserFields().Email))
 		promoted, err := reports.SelectUserSummary(base, widened).RequireFirst(t.Context(), counter)
 		if err != nil {
 			return err
@@ -120,7 +120,7 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 			return err
 		}
 		fields := models.OrderFields()
-		selection := reports.BuyerTotalsSelection[models.Order]{BuyerID: fields.BuyerID.Value(), Total: fields.TotalCents.Sum().Value(), Orders: query.Count[models.Order]().Value(), Average: fields.TotalCents.Avg().Value()}
+		selection := reports.BuyerTotalsSelection[models.Order]{BuyerID: query.Value(fields.BuyerID), Total: query.Sum(fields.TotalCents).Value(), Orders: query.Count[models.Order]().Value(), Average: query.Avg(fields.TotalCents).Value()}
 		totals := reports.SelectBuyerTotals(models.QueryOrders(), selection).GroupBy(fields.BuyerID.Group()).OrderBy(fields.BuyerID.Asc())
 		grouped, err := totals.All(t.Context(), counter)
 		if err != nil {
@@ -149,7 +149,7 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 			t.Error("grouped projection lost typed input filters", err)
 		}
 		ranked := reports.SelectBuyerTotals(models.QueryOrders(), selection).
-			GroupBy(fields.BuyerID.Group()).OrderBy(fields.TotalCents.Sum().Desc(), fields.BuyerID.Asc())
+			GroupBy(fields.BuyerID.Group()).OrderBy(query.Sum(fields.TotalCents).Desc(), fields.BuyerID.Asc())
 		ranking, err := ranked.All(t.Context(), counter)
 		if err != nil {
 			return err
@@ -157,7 +157,7 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 		if len(ranking) != 2 || ranking[0].BuyerID != second || ranking[1].BuyerID != first {
 			t.Error("aggregate ordering did not rank totals")
 		}
-		qualified := ranked.Having(query.HavingAnd(query.Count[models.Order]().Gte(2), fields.TotalCents.Sum().Gt(decimal.FromInt64(4))))
+		qualified := ranked.Having(query.HavingAnd(query.Count[models.Order]().Gte(2), query.Sum(fields.TotalCents).Gt(decimal.FromInt64(4))))
 		qualifiedRows, err := qualified.All(t.Context(), counter)
 		if err != nil {
 			return err
@@ -172,7 +172,7 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 			t.Error("Exists ignored filtered window", err)
 		}
 		mixed := ranked.Where(fields.TotalCents.Gt(2)).Having(query.HavingOr(
-			query.Grouped(fields.BuyerID.Eq(first)), fields.TotalCents.Sum().Lt(decimal.FromInt64(9)),
+			query.Grouped(fields.BuyerID.Eq(first)), query.Sum(fields.TotalCents).Lt(decimal.FromInt64(9)),
 		))
 		mixedRows, err := mixed.All(t.Context(), counter)
 		if err != nil {
@@ -190,7 +190,7 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 		if n, err := ranked.Having(query.Count[models.Order]().In()).Count(t.Context(), counter); err != nil || n != 0 {
 			t.Error("empty aggregate membership matched groups", err)
 		}
-		scalar := reports.SelectOrderSummary(models.QueryOrders(), reports.OrderSummarySelection[models.Order]{Total: fields.TotalCents.Sum().Value(), Count: query.Count[models.Order]().Value()})
+		scalar := reports.SelectOrderSummary(models.QueryOrders(), reports.OrderSummarySelection[models.Order]{Total: query.Sum(fields.TotalCents).Value(), Count: query.Count[models.Order]().Value()})
 		summary, err := scalar.RequireFirst(t.Context(), counter)
 		if err != nil {
 			return err
@@ -214,9 +214,9 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 			condition query.HavingPredicate[models.Order]
 			count     int64
 		}{
-			{fields.TotalCents.Sum().IsNull(), 1}, {fields.TotalCents.Sum().IsNotNull(), 0},
-			{fields.TotalCents.Sum().Ne(decimal.FromInt64(0)), 0},
-			{fields.TotalCents.Sum().Gt(decimal.FromInt64(0)).Not(), 0},
+			{query.Sum(fields.TotalCents).IsNull(), 1}, {query.Sum(fields.TotalCents).IsNotNull(), 0},
+			{query.Sum(fields.TotalCents).Ne(decimal.FromInt64(0)), 0},
+			{query.Sum(fields.TotalCents).Gt(decimal.FromInt64(0)).Not(), 0},
 			{query.Count[models.Order]().Eq(0), 1}, {query.Exists[models.Order]().Eq(false), 1},
 		} {
 			if n, err := emptyScalar.Having(check.condition).Count(t.Context(), counter); err != nil || n != check.count {

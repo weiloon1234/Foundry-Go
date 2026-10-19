@@ -21,7 +21,7 @@ func sourceWriteFixture() (Query[insertSource], Query[insertArchive], SourceKey[
 	id := NewOrderedField[insertSource, int64]("source_records", "id", codec.Signed[int64]())
 	name := NewTextField[insertArchive, string]("archives", "name", codec.String[string]())
 	input := NewTextField[insertSource, string]("source_records", "name", codec.String[string]())
-	return source, destination, MatchSource(key, id.Value()), MapUpdate(name, input.Value())
+	return source, destination, MatchSource(key, Value(id)), MapUpdate(name, Value(input))
 }
 
 func TestSourceWritePreservesWindowsBindingsAndCountBoundary(t *testing.T) {
@@ -84,7 +84,7 @@ func TestSourceWriteRejectsInvalidShapesBeforeTransaction(t *testing.T) {
 		"key type":           base.Match(badType),
 		"duplicate":          base.Select(mapping),
 		"overlap":            base.Values(Change(Assign[insertArchive]("archives", "name", codec.String[string](), "repeat"))),
-		"primary mapping":    base.Select(MapUpdate(id, input.Value())),
+		"primary mapping":    base.Select(MapUpdate(id, Value(input))),
 		"primary literal":    base.Values(Change(Assign[insertArchive]("archives", "id", codec.Signed[int64](), int64(1)))),
 		"wrong scope":        UpdateFrom(destination, source).Match(key).Select(wrongScope),
 		"destination window": UpdateFrom(destination.Limit(1), source).Match(key).Select(mapping),
@@ -132,13 +132,13 @@ func TestSourceWritesShareLiteralMutatorsAndSoftDeleteConventions(t *testing.T) 
 	}
 	tag := NewTextField[insertArchive, string]("archives", "tag", codec.String[string]())
 	input := NewTextField[insertSource, string]("source_records", "name", codec.String[string]())
-	if _, err := UpdateFrom(destination, source).Match(key).Select(MapUpdate(tag, input.Value())).Exec(t.Context(), &untouchedRelationWriter{}); !errors.Is(err, fault.Invalid) || calls != 2 {
+	if _, err := UpdateFrom(destination, source).Match(key).Select(MapUpdate(tag, Value(input))).Exec(t.Context(), &untouchedRelationWriter{}); !errors.Is(err, fault.Invalid) || calls != 2 {
 		t.Fatal("source SQL bypassed Go mutator", err)
 	}
 	soft := softQuery()
 	id := softID()
 	clock := &timestampClock{now: time.Date(2033, 1, 2, 3, 4, 5, 123456789, time.UTC)}
-	deletion := DeleteUsing(soft.WithTrashed(), soft.WithTrashed()).Match(MatchSource(id, id.Value()))
+	deletion := DeleteUsing(soft.WithTrashed(), soft.WithTrashed()).Match(MatchSource(id, Value(id)))
 	prepared, err := deletion.plan.prepareValues(t.Context(), clock)
 	if err != nil {
 		t.Fatal(err)
@@ -147,7 +147,7 @@ func TestSourceWritesShareLiteralMutatorsAndSoftDeleteConventions(t *testing.T) 
 	if err != nil || !strings.Contains(statement.SQL(), `UPDATE "soft_records" SET "deleted_on" = $1 FROM`) || !strings.Contains(statement.SQL(), `"soft_records"."deleted_on" IS NULL`) || !reflect.DeepEqual(statement.Arguments(), []any{clock.now.UTC().Truncate(time.Microsecond)}) || clock.calls != 1 {
 		t.Fatal("source removal lost active-only scope or owning clock", statement, err)
 	}
-	force := ForceDeleteUsing(soft.WithTrashed(), soft.WithTrashed()).Match(MatchSource(id, id.Value()))
+	force := ForceDeleteUsing(soft.WithTrashed(), soft.WithTrashed()).Match(MatchSource(id, Value(id)))
 	prepared, err = force.plan.prepareValues(t.Context(), clock)
 	if err != nil {
 		t.Fatal(err)
@@ -190,7 +190,7 @@ func TestSourceWriteCTEsAvoidPrivateNameCollisions(t *testing.T) {
 	name := NewTextField[Alias[conflictAlias, insertSource], string]("foundry_selected_rows", "name", codec.String[string]())
 	key := NewOrderedField[insertArchive, int64]("archives", "id", codec.Signed[int64]())
 	targetName := NewTextField[insertArchive, string]("archives", "name", codec.String[string]())
-	statement, err := UpdateFrom(destination, aliased).Match(MatchSource(key, id.Value())).Select(MapUpdate(targetName, name.Value())).plan.compile(false)
+	statement, err := UpdateFrom(destination, aliased).Match(MatchSource(key, Value(id))).Select(MapUpdate(targetName, Value(name))).plan.compile(false)
 	if err != nil || !strings.HasPrefix(statement.SQL(), `WITH "foundry_write_source"`) || !strings.Contains(statement.SQL(), `"foundry_write_source_2"`) || !reflect.DeepEqual(statement.Arguments(), []any{"cte-input"}) {
 		t.Fatal("source write lost CTE dependency or private alias isolation", statement, err)
 	}
@@ -204,7 +204,7 @@ func TestSourceWriteUsesManagedUpdateTimeWithoutChangingCreation(t *testing.T) {
 	created := NewOrderedField[timestampRecord, time.Time]("timed_records", "created_on", codec.Time())
 	updated := NewOrderedField[timestampRecord, temporal.DateTime]("timed_records", "modified_on", codec.DateTime())
 	clock := &timestampClock{now: time.Date(2034, 1, 2, 3, 4, 5, 123456789, time.UTC)}
-	plan := UpdateFrom(q, q).Match(MatchSource(id, id.Value())).Select(MapUpdate(created, created.Value()))
+	plan := UpdateFrom(q, q).Match(MatchSource(id, Value(id))).Select(MapUpdate(created, Value(created)))
 	prepared, err := plan.plan.prepareValues(t.Context(), clock)
 	if err != nil {
 		t.Fatal(err)
@@ -213,7 +213,7 @@ func TestSourceWriteUsesManagedUpdateTimeWithoutChangingCreation(t *testing.T) {
 	if err != nil || clock.calls != 1 || !reflect.DeepEqual(statement.Arguments(), []any{clock.now.UTC().Truncate(time.Microsecond)}) || !strings.Contains(statement.SQL(), `"created_on" = "foundry_write_matches"."created_on"`) || len(plan.plan.values.assignments) != 0 {
 		t.Fatal("source update lost timestamp ownership or changed original", statement, err)
 	}
-	if _, err := plan.Select(MapUpdate(updated, updated.Value())).plan.prepareValues(t.Context(), clock); !errors.Is(err, fault.Invalid) || clock.calls != 1 {
+	if _, err := plan.Select(MapUpdate(updated, Value(updated))).plan.prepareValues(t.Context(), clock); !errors.Is(err, fault.Invalid) || clock.calls != 1 {
 		t.Fatal("mapped update timestamp bypassed owning clock", err)
 	}
 }

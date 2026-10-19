@@ -44,7 +44,7 @@ func TestInsertSelectUsesSharedSourceCompilerAndBindings(t *testing.T) {
 	input := NewTextField[insertSource, string]("source_records", "name", codec.String[string]())
 	name := NewTextField[insertArchive, string]("archives", "name", codec.String[string]())
 	note := NewNullableTextField[insertArchive, string]("archives", "note", codec.String[string]())
-	plan := InsertFrom(source.Where(input.Eq("literal '; --")).OrderBy(input.Asc()).Limit(3).Offset(2), destination, MapInsert(name, input.Value()), MapInsert(note, Nullable(input.Value()))).
+	plan := InsertFrom(source.Where(input.Eq("literal '; --")).OrderBy(input.Asc()).Limit(3).Offset(2), destination, MapInsert(name, Value(input)), MapInsert(note, Nullable(Value(input)))).
 		Values(Change(Assign[insertArchive]("archives", "tag", codec.String[string](), " batch ")))
 	statement, err := plan.compile(true)
 	if err != nil {
@@ -71,7 +71,7 @@ func TestInsertSelectUsesSharedSourceCompilerAndBindings(t *testing.T) {
 	cte := CTE("picked", source.Where(input.Eq("in cte")))
 	aliased := As[conflictAlias](cte, "picked_records")
 	aliasedName := NewTextField[Alias[conflictAlias, insertSource], string]("picked_records", "name", codec.String[string]())
-	fromCTE := InsertFrom(aliased, destination, MapInsert(name, aliasedName.Value())).Values(Change(Assign[insertArchive]("archives", "tag", codec.String[string](), "outside")))
+	fromCTE := InsertFrom(aliased, destination, MapInsert(name, Value(aliasedName))).Values(Change(Assign[insertArchive]("archives", "tag", codec.String[string](), "outside")))
 	statement, err = fromCTE.compile(false)
 	if err != nil || !strings.HasPrefix(statement.SQL(), `WITH "picked"`) || !reflect.DeepEqual(statement.Arguments(), []any{"in cte", "outside"}) {
 		t.Fatal("insert source lost CTE dependency binding order", statement, err)
@@ -82,7 +82,7 @@ func TestInsertSelectRejectsIncompleteAndInvalidPlansBeforeTransaction(t *testin
 	source, destination := insertSelectFixture()
 	input := NewTextField[insertSource, string]("source_records", "name", codec.String[string]())
 	name := NewTextField[insertArchive, string]("archives", "name", codec.String[string]())
-	mapping := MapInsert(name, input.Value())
+	mapping := MapInsert(name, Value(input))
 	badTable := NewTextField[insertArchive, string]("wrong", "name", codec.String[string]())
 	badType := NewOrderedField[insertArchive, int64]("archives", "name", codec.Signed[int64]())
 	badInput := NewTextField[insertSource, string]("wrong", "name", codec.String[string]())
@@ -95,10 +95,10 @@ func TestInsertSelectRejectsIncompleteAndInvalidPlansBeforeTransaction(t *testin
 		"filtered destination":   InsertFrom(source, destination.Where(name.Eq("filter")), mapping),
 		"duplicate":              InsertFrom(source, destination, mapping, mapping),
 		"literal collision":      InsertFrom(source, destination, mapping).Values(Change(Assign[insertArchive]("archives", "name", codec.String[string](), "literal"))),
-		"wrong destination":      InsertFrom(source, destination, MapInsert(badTable, input.Value())),
-		"wrong declared type":    InsertFrom(source, destination, MapInsert(badType, NewOrderedField[insertSource, int64]("source_records", "id", codec.Signed[int64]()).Value())),
+		"wrong destination":      InsertFrom(source, destination, MapInsert(badTable, Value(input))),
+		"wrong declared type":    InsertFrom(source, destination, MapInsert(badType, Value(NewOrderedField[insertSource, int64]("source_records", "id", codec.Signed[int64]())))),
 		"empty expression":       InsertFrom(source, destination, MapInsert(name, Expression[insertSource, string]{})),
-		"wrong SQL scope":        InsertFrom(source, destination, MapInsert(name, badInput.Value())),
+		"wrong SQL scope":        InsertFrom(source, destination, MapInsert(name, Value(badInput))),
 		"negative source window": InsertFrom(source.Limit(-1), destination, mapping),
 		"invalid literal NULL":   InsertFrom(source, destination, mapping).Values(Change(Assign[insertArchive]("archives", "tag", codec.Nullable(codec.String[string]()), value.Null[string]()))),
 	} {
@@ -136,7 +136,7 @@ func TestInsertSelectLiteralInputsNormalizeOnceWithoutBypass(t *testing.T) {
 	input := NewTextField[insertSource, string]("source_records", "name", codec.String[string]())
 	name := NewTextField[insertArchive, string]("archives", "name", codec.String[string]())
 	tag := NewTextField[insertArchive, string]("archives", "tag", codec.String[string]())
-	plan := InsertFrom(source, destination, MapInsert(name, input.Value())).Values(Change(AssignInput[insertArchive]("archives", "tag", insertTagInput{" tag "})))
+	plan := InsertFrom(source, destination, MapInsert(name, Value(input))).Values(Change(AssignInput[insertArchive]("archives", "tag", insertTagInput{" tag "})))
 	for range 2 {
 		prepared, err := plan.prepareValues(t.Context(), nil)
 		if err != nil {
@@ -150,7 +150,7 @@ func TestInsertSelectLiteralInputsNormalizeOnceWithoutBypass(t *testing.T) {
 	if calls != 2 || plan.values.assignments[0].value != (insertTagInput{" tag "}) {
 		t.Fatal("input transformed repeatedly or original mutated", calls)
 	}
-	bad := InsertFrom(source, destination, MapInsert(name, input.Value()), MapInsert(tag, input.Value()))
+	bad := InsertFrom(source, destination, MapInsert(name, Value(input)), MapInsert(tag, Value(input)))
 	if _, err := bad.Exec(t.Context(), &untouchedRelationWriter{}); !errors.Is(err, fault.Invalid) || calls != 2 {
 		t.Fatal("SQL source bypassed Go field mutator", err)
 	}
@@ -164,7 +164,7 @@ func TestInsertSelectTimestampsRespectMappedCreationAndManagedUpdate(t *testing.
 	created := NewOrderedField[timestampRecord, time.Time]("timed_records", "created_on", codec.Time())
 	modified := NewOrderedField[timestampRecord, temporal.DateTime]("timed_records", "modified_on", codec.DateTime())
 	sourceClock := &timestampClock{now: time.Date(2030, 1, 2, 3, 4, 5, 123456789, time.UTC)}
-	plan := InsertFrom(destination, destination, MapInsert(name, name.Value()), MapInsert(created, created.Value()))
+	plan := InsertFrom(destination, destination, MapInsert(name, Value(name)), MapInsert(created, Value(created)))
 	prepared, err := plan.prepareValues(t.Context(), sourceClock)
 	if err != nil {
 		t.Fatal(err)
@@ -176,7 +176,7 @@ func TestInsertSelectTimestampsRespectMappedCreationAndManagedUpdate(t *testing.
 	if len(plan.values.assignments) != 0 || sourceClock.calls != 1 || calls != 1 {
 		t.Fatal("timestamp ownership changed input plan or sampled repeatedly")
 	}
-	if _, err := plan.Select(MapInsert(modified, modified.Value())).prepareValues(t.Context(), sourceClock); !errors.Is(err, fault.Invalid) || sourceClock.calls != 1 {
+	if _, err := plan.Select(MapInsert(modified, Value(modified))).prepareValues(t.Context(), sourceClock); !errors.Is(err, fault.Invalid) || sourceClock.calls != 1 {
 		t.Fatal("invalid managed mapping sampled clock", err)
 	}
 }

@@ -26,7 +26,7 @@ func TestPostgresTemporalTruncationAndZones(t *testing.T) {
 			{query.DateQuarter, "2024-01-01"}, {query.DateYear, "2024-01-01"}, {query.DateDecade, "2020-01-01"},
 			{query.DateCentury, "2001-01-01"}, {query.DateMillennium, "2001-01-01"},
 		} {
-			if got := temporalOne(t, tx, query.TruncateDate(f.Date.Param(samples[0].Date), test.unit).Value()).String(); got != test.want {
+			if got := temporalOne(t, tx, query.TruncateDate(query.Param(f.Date, samples[0].Date), test.unit).Value()).String(); got != test.want {
 				t.Fatal(test.unit, got, test.want)
 			}
 		}
@@ -46,11 +46,11 @@ func TestPostgresTemporalTruncationAndZones(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			if got := temporalOne(t, tx, query.TruncateLocal(f.Local.Param(samples[0].Local), test.unit).Value()); got != want {
+			if got := temporalOne(t, tx, query.TruncateLocal(query.Param(f.Local, samples[0].Local), test.unit).Value()); got != want {
 				t.Fatal(test.unit, got, want)
 			}
 		}
-		at := f.At.Param(samples[0].At)
+		at := query.Param(f.At, samples[0].At)
 		for _, test := range []struct {
 			zone query.TimeZone
 			hour int
@@ -63,10 +63,10 @@ func TestPostgresTemporalTruncationAndZones(t *testing.T) {
 		if got := temporalOne(t, tx, query.LocalAt(at, ny).Value()); got != samples[0].Local {
 			t.Fatal(got, samples[0].Local)
 		}
-		if got := temporalOne(t, tx, query.LocalAt(f.Instant.Param(samples[0].Instant), ny).Value()); got != samples[0].Local {
+		if got := temporalOne(t, tx, query.LocalAt(query.Param(f.Instant, samples[0].Instant), ny).Value()); got != samples[0].Local {
 			t.Fatal(got)
 		}
-		if got := temporalOne(t, tx, query.TruncateInstant(f.Instant.Param(samples[0].Instant), query.TimestampDay, ny).Value()); !got.UTC().Equal(time.Date(2024, 3, 9, 5, 0, 0, 0, time.UTC)) {
+		if got := temporalOne(t, tx, query.TruncateInstant(query.Param(f.Instant, samples[0].Instant), query.TimestampDay, ny).Value()); !got.UTC().Equal(time.Date(2024, 3, 9, 5, 0, 0, 0, time.UTC)) {
 			t.Fatal(got)
 		}
 		for _, test := range []struct{ local, instant string }{
@@ -81,7 +81,7 @@ func TestPostgresTemporalTruncationAndZones(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			got := temporalOne(t, tx, query.ResolveLocal(f.Local.Param(local), ny, query.PostgresStandardTime).Value())
+			got := temporalOne(t, tx, query.ResolveLocal(query.Param(f.Local, local), ny, query.PostgresStandardTime).Value())
 			if !got.UTC().Equal(want) {
 				t.Fatal(test.local, got, want)
 			}
@@ -115,7 +115,7 @@ func TestPostgresTemporalCalendarAndElapsedArithmetic(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		at := f.At.Param(samples[0].At)
+		at := query.Param(f.At, samples[0].At)
 		day := query.AddInstantInterval(at, temporal.Days(1), ny)
 		if got := temporalOne(t, tx, day.Value()); !got.Equal(samples[1].At) || got.Sub(samples[0].At) != 23*time.Hour {
 			t.Fatal("calendar day across DST", got)
@@ -129,26 +129,26 @@ func TestPostgresTemporalCalendarAndElapsedArithmetic(t *testing.T) {
 		if got := temporalOne(t, tx, query.SubtractInstantInterval(query.AddInstantInterval(at, elapsed, ny), elapsed, ny).Value()); !got.Equal(samples[0].At) {
 			t.Fatal("subtract elapsed", got)
 		}
-		if got := temporalOne(t, tx, query.AddInstantInterval(f.Instant.Param(samples[0].Instant), temporal.Days(1), ny).Value()); got != samples[1].Instant {
+		if got := temporalOne(t, tx, query.AddInstantInterval(query.Param(f.Instant, samples[0].Instant), temporal.Days(1), ny).Value()); got != samples[1].Instant {
 			t.Fatal("Foundry instant", got)
 		}
 		jan, err := temporal.ParseDate("2024-01-31")
 		if err != nil {
 			return err
 		}
-		if got := temporalOne(t, tx, query.AddDateInterval(f.Date.Param(jan), temporal.Months(1)).Value()).String(); got != "2024-02-29T00:00:00" {
+		if got := temporalOne(t, tx, query.AddDateInterval(query.Param(f.Date, jan), temporal.Months(1)).Value()).String(); got != "2024-02-29T00:00:00" {
 			t.Fatal("end-of-month clipping", got)
 		}
-		if got := temporalOne(t, tx, query.SubtractDateInterval(f.Date.Param(jan), temporal.Days(1)).Value()).String(); got != "2024-01-30T00:00:00" {
+		if got := temporalOne(t, tx, query.SubtractDateInterval(query.Param(f.Date, jan), temporal.Days(1)).Value()).String(); got != "2024-01-30T00:00:00" {
 			t.Fatal(got)
 		}
-		if got := temporalOne(t, tx, query.AddDateDays(f.Date.Param(jan), 29).Value()).String(); got != "2024-02-29" {
+		if got := temporalOne(t, tx, query.AddDateDays(query.Param(f.Date, jan), 29).Value()).String(); got != "2024-02-29" {
 			t.Fatal(got)
 		}
-		if got := temporalOne(t, tx, query.DateDifference(query.AddDateDays(f.Date.Param(jan), -29), f.Date.Param(jan)).Value()); got != -29 {
+		if got := temporalOne(t, tx, query.DateDifference(query.AddDateDays(query.Param(f.Date, jan), -29), query.Param(f.Date, jan)).Value()); got != -29 {
 			t.Fatal(got)
 		}
-		local := f.Local.Param(samples[0].Local)
+		local := query.Param(f.Local, samples[0].Local)
 		if got := temporalOne(t, tx, query.AddLocalInterval(local, temporal.Days(1)).Value()); got != samples[1].Local {
 			t.Fatal("local calendar arithmetic", got)
 		}
@@ -163,9 +163,9 @@ func TestPostgresTemporalCalendarAndElapsedArithmetic(t *testing.T) {
 			expression query.Expression[temporalqueries.Sample, temporal.Time]
 			want       string
 		}{
-			{query.AddClockElapsed(f.Clock.Param(midnight), -time.Microsecond).Value(), "23:59:59.999999"},
-			{query.SubtractClockElapsed(f.Clock.Param(midnight), time.Microsecond).Value(), "23:59:59.999999"},
-			{query.AddClockElapsed(f.Clock.Param(midnight), 48*time.Hour).Value(), "00:00:00"},
+			{query.AddClockElapsed(query.Param(f.Clock, midnight), -time.Microsecond).Value(), "23:59:59.999999"},
+			{query.SubtractClockElapsed(query.Param(f.Clock, midnight), time.Microsecond).Value(), "23:59:59.999999"},
+			{query.AddClockElapsed(query.Param(f.Clock, midnight), 48*time.Hour).Value(), "00:00:00"},
 		} {
 			if got := temporalOne(t, tx, test.expression).String(); got != test.want {
 				t.Fatal(got, test.want)

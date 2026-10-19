@@ -15,11 +15,11 @@ type Record struct{ID int64;Name string;Note value.Nullable[string];Tag string;C
 func(Record)MutateTag(v string)(string,error){return strings.TrimSpace(v),nil}
 func examples(ctx context.Context,db database.Transactor){
  f:=RecordFields();q:=QueryRecords()
- update:=UpdateRecordFrom(q.Where(f.Name.Ne("excluded")),q.Limit(3)).MatchID(f.ID.Value()).SelectName(f.Name.Value()).SelectNote(f.Note.Value()).Values(RecordDraft{}.SetTag(" tag "))
+ update:=UpdateRecordFrom(q.Where(f.Name.Ne("excluded")),q.Limit(3)).MatchID(query.Value(f.ID)).SelectName(query.Value(f.Name)).SelectNote(query.Value(f.Note)).Values(RecordDraft{}.SetTag(" tag "))
  var count int64;count,_=update.Exec(ctx,db);_=count
  var rows []Record;rows,_=update.Returning(ctx,db,10);_=rows
- _,_=DeleteRecordUsing(q,q).MatchNullableID(query.Nullable(f.ID.Value())).Exec(ctx,db)
- _,_=ForceDeleteRecordUsing(q.WithTrashed(),q.WithTrashed()).MatchID(f.ID.Value()).Returning(ctx,db,10)
+ _,_=DeleteRecordUsing(q,q).MatchNullableID(query.Nullable(query.Value(f.ID))).Exec(ctx,db)
+ _,_=ForceDeleteRecordUsing(q.WithTrashed(),q.WithTrashed()).MatchID(query.Value(f.ID)).Returning(ctx,db,10)
 }
 `)
 	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {

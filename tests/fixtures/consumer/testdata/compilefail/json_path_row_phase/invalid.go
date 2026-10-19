@@ -6,5 +6,5 @@ import (
 )
 
 func invalid() {
-	_ = query.JSONRoot(jsonqueries.DocumentFields().Settings.Value())
+	_ = query.JSONRoot(query.Value(jsonqueries.DocumentFields().Settings))
 }

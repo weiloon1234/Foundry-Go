@@ -13,7 +13,7 @@ type conflictColumn[M any] struct {
 // different value types can form one composite target without losing ownership.
 type ConflictField[M any] interface{ conflictColumn() conflictColumn[M] }
 
-func (f valueField[M, V]) conflictColumn() conflictColumn[M] {
+func (f ScalarField[M, V]) conflictColumn() conflictColumn[M] {
 	return conflictColumn[M]{field: f.ref}
 }
 
@@ -31,12 +31,12 @@ type ConflictUpdate[M any] struct {
 
 // Incoming copies this field from PostgreSQL's proposed (EXCLUDED) row,
 // including database defaults and BEFORE INSERT trigger changes.
-func (f valueField[M, V]) Incoming() ConflictUpdate[M] {
+func (f ScalarField[M, V]) Incoming() ConflictUpdate[M] {
 	return ConflictUpdate[M]{field: f.ref, incoming: true}
 }
 
 // Set assigns a concrete typed value when the insert conflicts.
-func (f valueField[M, V]) Set(v V) ConflictUpdate[M] {
+func (f ScalarField[M, V]) Set(v V) ConflictUpdate[M] {
 	return literalConflict[M](f.ref, captureAssignment(f.codec, v))
 }
 

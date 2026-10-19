@@ -34,7 +34,7 @@ func TestDistinctKeepsSelectedRowsAndParameters(t *testing.T) {
 	if s, err := combined.Distinct().Compile(); err != nil || strings.Count(s.SQL(), "SELECT DISTINCT ") != 2 {
 		t.Fatal("set lost distinct", err)
 	}
-	values := SelectValue(base, id.Value())
+	values := SelectValue(base, Value(id))
 	if s, err := values.UnionAll(values).Distinct().Compile(); err != nil || !strings.HasPrefix(s.SQL(), "SELECT DISTINCT ") {
 		t.Fatal("value set lost distinct", err)
 	}
@@ -43,7 +43,7 @@ func TestDistinctKeepsSelectedRowsAndParameters(t *testing.T) {
 func TestDistinctOrderingReusesSelectedScalarBindings(t *testing.T) {
 	base := cursorQuery()
 	id := scopedID(base.Scope())
-	inner := SelectValue(base.Where(id.Ne(9)), id.Value()).Limit(1)
+	inner := SelectValue(base.Where(id.Ne(9)), Value(id)).Limit(1)
 	scalar := ScalarQuery(base, inner)
 	q := SelectValue(base.Where(id.Eq(7)), scalar).Distinct().OrderBy(scalar.Desc()).Limit(2)
 	s, err := q.Compile()
@@ -53,7 +53,7 @@ func TestDistinctOrderingReusesSelectedScalarBindings(t *testing.T) {
 	if strings.Count(s.SQL(), `SELECT "records"."id" AS "value"`) != 1 || !strings.Contains(s.SQL(), "ORDER BY 1 DESC") || !reflect.DeepEqual(s.Arguments(), []any{int64(9), int64(1), int64(7), int64(2)}) {
 		t.Fatal("DISTINCT ordered by a separately bound scalar", s.SQL(), s.Arguments())
 	}
-	wrong := ScalarQuery(base, SelectValue(base.Where(id.Ne(8)), id.Value()).Limit(1))
+	wrong := ScalarQuery(base, SelectValue(base.Where(id.Ne(8)), Value(id)).Limit(1))
 	if _, err := SelectValue(base, scalar).Distinct().OrderBy(wrong.Asc()).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("different scalar binding matched selection", err)
 	}
@@ -121,10 +121,10 @@ func TestDistinctRejectsInvalidSelectionsBeforeExecution(t *testing.T) {
 	if _, err := base.DistinctOn(rank.Group()).OrderBy(id.Asc(), rank.Asc()).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("invalid prefix accepted", err)
 	}
-	if _, err := SelectValue(base, id.Value()).Distinct().OrderBy(rank.Asc()).Compile(); !errors.Is(err, fault.Invalid) {
+	if _, err := SelectValue(base, Value(id)).Distinct().OrderBy(rank.Asc()).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("unselected DISTINCT ordering accepted", err)
 	}
-	if _, err := SelectValue(base, id.Value()).GroupBy(id.Group()).DistinctOn(rank.Group()).Compile(); !errors.Is(err, fault.Invalid) {
+	if _, err := SelectValue(base, Value(id)).GroupBy(id.Group()).DistinctOn(rank.Group()).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("ungrouped key accepted", err)
 	}
 	q := base.Distinct()
@@ -140,7 +140,7 @@ func TestDistinctCorrelatedKeysFollowOuterQualification(t *testing.T) {
 	link := Correlate(base, a)
 	outer := scopedID(OuterScope(link, base.Scope()))
 	inner := scopedID(InnerScope(link, a.Scope()))
-	q := SelectCorrelatedValue(link, inner.Value()).Where(inner.EqColumn(outer)).DistinctOn(outer.Group()).OrderBy(outer.Asc(), inner.Asc())
+	q := SelectCorrelatedValue(link, Value(inner)).Where(inner.EqColumn(outer)).DistinctOn(outer.Group()).OrderBy(outer.Asc(), inner.Asc())
 	sub := q.correlatedValue().value.subquery
 	changed := requalifyCorrelation(sub, "qualified")
 	if changed.node.distinct.keys[0].(fieldRef).table != "qualified" || sub.node.distinct.keys[0].(fieldRef).table != "records" {
@@ -154,7 +154,7 @@ func TestDistinctCorrelatedKeysFollowOuterQualification(t *testing.T) {
 func TestDistinctOrderMatchingIsBounded(t *testing.T) {
 	base := cursorQuery()
 	id := scopedID(base.Scope())
-	scalar := ScalarQuery(base, SelectValue(base.Where(id.Eq(1)), id.Value()))
+	scalar := ScalarQuery(base, SelectValue(base.Where(id.Eq(1)), Value(id)))
 	var c compiler
 	c.sources = map[string]map[string]Column{"records": {"id": {Name: "id"}}}
 	text, err := c.selectedExpression(scalar.node, nil, false)

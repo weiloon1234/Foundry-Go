@@ -123,7 +123,7 @@ func TestRecursiveCTERejectsSelfPlacement(t *testing.T) {
 			a := As[firstAlias](self, "a")
 			id := scopedID(a.Scope())
 			rank := NewNullableField[Alias[firstAlias, cursorRecord], int64]("a", "rank", codec.Signed[int64]())
-			return SelectRecord(a, a.Scope()).GroupBy(id.Group(), rank.Group()).OrderBy(id.Count().Asc())
+			return SelectRecord(a, a.Scope()).GroupBy(id.Group(), rank.Group()).OrderBy(CountField(id).Asc())
 		},
 		"later nullable join": func(self RecursiveSelf[cursorRecord]) RecordQuerySource[cursorRecord] {
 			a, b, c := As[firstAlias](self, "a"), As[secondAlias](base, "b"), As[thirdAlias](base, "c")

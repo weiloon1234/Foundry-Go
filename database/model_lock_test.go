@@ -86,7 +86,7 @@ func TestLockedFirstSharesOrderingAndCallerTransaction(t *testing.T) {
 		t.Fatal("canceled query changed error", err)
 	}
 	id := query.NewOrderedField[mutationRecord, int64]("records", "id", codec.Signed[int64]())
-	if _, err := query.SelectValue(mutationModel(), id.Value()).ForUpdate().All(t.Context(), nil); !errors.Is(err, fault.Invalid) {
+	if _, err := query.SelectValue(mutationModel(), query.Value(id)).ForUpdate().All(t.Context(), nil); !errors.Is(err, fault.Invalid) {
 		t.Fatal("scalar locked read accepted nil transaction", err)
 	}
 }

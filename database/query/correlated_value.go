@@ -84,12 +84,12 @@ func CorrelatedScalarNullableQuery[O, V any](source CorrelatedValueSource[O, val
 }
 
 // InCorrelatedQuery compares the field with values bound to this outer scope.
-func (f valueField[M, V]) InCorrelatedQuery(source CorrelatedValueSource[M, V]) Predicate[M] {
+func (f ScalarField[M, V]) InCorrelatedQuery(source CorrelatedValueSource[M, V]) Predicate[M] {
 	return f.inSubquery(correlatedValueOf(source).subquery)
 }
 
 // InNullableCorrelatedQuery explicitly admits nullable inner values without
 // removing NULL rows or changing SQL's three-valued membership semantics.
-func (f valueField[M, V]) InNullableCorrelatedQuery(source CorrelatedValueSource[M, value.Nullable[V]]) Predicate[M] {
+func (f ScalarField[M, V]) InNullableCorrelatedQuery(source CorrelatedValueSource[M, value.Nullable[V]]) Predicate[M] {
 	return f.inSubquery(correlatedValueOf(source).subquery)
 }

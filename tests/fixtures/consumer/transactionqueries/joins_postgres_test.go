@@ -23,17 +23,17 @@ func TestPostgresTransactionOuterAndCrossJoins(t *testing.T) {
 					joined := query.TransactionLeftJoin(left, right, on)
 					a := RecordFieldsAt(query.LeftScope(joined, left.Scope()))
 					b := RecordNullableFieldsAt(query.NullableRightScope(joined, right.Scope()))
-					pairs, err = ProjectTransactionPair(joined).SelectLeft(query.NullableRow(a.ID).Value()).SelectRight(b.ID.Value()).Query().All(ctx, tx)
+					pairs, err = ProjectTransactionPair(joined).SelectLeft(query.NullableRow(a.ID).Value()).SelectRight(query.Value(b.ID)).Query().All(ctx, tx)
 				case "right":
 					joined := query.TransactionRightJoin(left, right, on)
 					a := RecordNullableFieldsAt(query.NullableLeftScope(joined, left.Scope()))
 					b := RecordFieldsAt(query.RightScope(joined, right.Scope()))
-					pairs, err = ProjectTransactionPair(joined).SelectLeft(a.ID.Value()).SelectRight(query.NullableRow(b.ID).Value()).Query().All(ctx, tx)
+					pairs, err = ProjectTransactionPair(joined).SelectLeft(query.Value(a.ID)).SelectRight(query.NullableRow(b.ID).Value()).Query().All(ctx, tx)
 				case "full":
 					joined := query.TransactionFullJoin(left, right, on)
 					a := RecordNullableFieldsAt(query.NullableLeftScope(joined, left.Scope()))
 					b := RecordNullableFieldsAt(query.NullableRightScope(joined, right.Scope()))
-					pairs, err = ProjectTransactionPair(joined).SelectLeft(a.ID.Value()).SelectRight(b.ID.Value()).Query().All(ctx, tx)
+					pairs, err = ProjectTransactionPair(joined).SelectLeft(query.Value(a.ID)).SelectRight(query.Value(b.ID)).Query().All(ctx, tx)
 				case "cross":
 					joined := query.TransactionCrossJoin(left, right)
 					a := RecordFieldsAt(query.LeftScope(joined, left.Scope()))

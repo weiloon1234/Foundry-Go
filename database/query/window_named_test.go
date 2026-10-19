@@ -66,7 +66,7 @@ func TestNamedWindowInheritanceAndCycles(t *testing.T) {
 	if _, err := SelectValue(q, RowNumber(grouped)).Compile(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SelectValue(q, f.Value()).OrderBy(RowNumber(grouped).Asc()).Compile(); !errors.Is(err, fault.Invalid) {
+	if _, err := SelectValue(q, Value(f)).OrderBy(RowNumber(grouped).Asc()).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("named aggregate partition did not group input", err)
 	}
 }

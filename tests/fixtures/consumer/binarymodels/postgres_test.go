@@ -48,7 +48,7 @@ func TestPostgresBinaryModelsAndProjections(t *testing.T) {
 		if len(rows) != 1 || rows[0].ID != 1 {
 			return errors.New("binary membership retained caller input")
 		}
-		view := binarymodels.SelectView(binarymodels.QueryBinaryRecords().Where(fields.ID.Eq(2)), binarymodels.ViewSelection[binarymodels.Record]{Body: fields.Body.Value(), Note: fields.Note.Value()})
+		view := binarymodels.SelectView(binarymodels.QueryBinaryRecords().Where(fields.ID.Eq(2)), binarymodels.ViewSelection[binarymodels.Record]{Body: query.Value(fields.Body), Note: query.Value(fields.Note)})
 		projected, err := view.RequireFirst(t.Context(), tx)
 		if err != nil {
 			return err

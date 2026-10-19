@@ -31,15 +31,15 @@ func literalTextCases() map[string]ValueQuery[literalTextRecord, int64] {
 	id := NewOrderedField[literalTextRecord, int64]("literal_text_records", "id", codec.Signed[int64]())
 	name := NewTextField[literalTextRecord, string]("literal_text_records", "name", codec.String[string]())
 	note := NewNullableTextField[literalTextRecord, string]("literal_text_records", "note", codec.String[string]())
-	selected := SelectValue(q, id.Value())
+	selected := SelectValue(q, Value(id))
 	grouped := selected.GroupBy(id.Group(), name.Group(), note.Group())
 	return map[string]ValueQuery[literalTextRecord, int64]{
 		"field":                 selected.Where(name.IContains("aLPHa %_!")),
 		"nullable field":        selected.Where(note.IContains("aLPHa %_!")),
 		"computed row":          selected.Where(Trim(name).IContains("aLPHa %_!")),
 		"nullable computed row": selected.Where(TrimNullable(note).IContains("aLPHa %_!")),
-		"group":                 grouped.Having(TextValue(name.Value()).IContains("aLPHa %_!")),
-		"nullable group":        grouped.Having(TextNullableValue(note.Value()).IContains("aLPHa %_!")),
+		"group":                 grouped.Having(TextValue(Value(name)).IContains("aLPHa %_!")),
+		"nullable group":        grouped.Having(TextNullableValue(Value(note)).IContains("aLPHa %_!")),
 	}
 }
 

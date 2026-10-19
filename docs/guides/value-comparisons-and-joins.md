@@ -4,9 +4,9 @@ Use generated field methods such as `fields.Age.Gte(18)` for literal conditions.
 
 ```go
 f := models.UserFields()
-nextAge := query.Add(f.Age, f.Age.Param(1))
+nextAge := query.Add(f.Age, query.Param(f.Age, 1))
 users, err := models.QueryUsers().
-    Where(query.GreaterOrEqual(nextAge, f.Age.Param(21))).
+    Where(query.GreaterOrEqual(nextAge, query.Param(f.Age, 21))).
     OrderBy(f.Age.Asc()).
     All(ctx, db)
 ```
@@ -45,7 +45,7 @@ older := query.As[olderAlias](models.QueryUsers(), "older")
 y := models.UserFieldsAt(younger.Scope())
 o := models.UserFieldsAt(older.Scope())
 
-on := query.OnEqual(query.Add(y.Age, y.Age.Param(1)), o.Age)
+on := query.OnEqual(query.Add(y.Age, query.Param(y.Age, 1)), o.Age)
 joined := query.LeftJoin(younger, older, on)
 ```
 

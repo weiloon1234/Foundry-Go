@@ -29,9 +29,9 @@ func TestPostgresTypedJoins(t *testing.T) {
 		referral := models.UserFieldsAt(referralScope)
 		sponsor := models.UserNullableFieldsAt(sponsorScope)
 		selection := reports.ProjectReferralRow(joined)
-		report := selection.SelectID(referral.ID.Value()).SelectEmail(referral.Email.Value()).
-			SelectIntroducerID(sponsor.ID.Value()).SelectIntroducerEmail(sponsor.Email.Value()).
-			SelectIntroducerNickname(sponsor.Nickname.Value()).SelectIntroducerStatus(sponsor.Status.Value()).
+		report := selection.SelectID(query.Value(referral.ID)).SelectEmail(query.Value(referral.Email)).
+			SelectIntroducerID(query.Value(sponsor.ID)).SelectIntroducerEmail(query.Value(sponsor.Email)).
+			SelectIntroducerNickname(query.Value(sponsor.Nickname)).SelectIntroducerStatus(query.Value(sponsor.Status)).
 			Query().OrderBy(referral.Email.Asc())
 		rows, err := report.All(t.Context(), counter)
 		if err != nil {
@@ -67,7 +67,7 @@ func TestPostgresTypedJoins(t *testing.T) {
 		filteredJoin := query.LeftJoin(referrals, filtered, query.On(r.IntroducerID, models.UserFieldsAt(filtered.Scope()).ID))
 		fr := models.UserFieldsAt(query.LeftScope(filteredJoin, referrals.Scope()))
 		fs := models.UserNullableFieldsAt(query.NullableRightScope(filteredJoin, filtered.Scope()))
-		filteredReport := reports.ProjectUserPair(filteredJoin).SelectLeftID(query.Nullable(fr.ID.Value())).SelectRightID(fs.ID.Value()).Query()
+		filteredReport := reports.ProjectUserPair(filteredJoin).SelectLeftID(query.Nullable(query.Value(fr.ID))).SelectRightID(query.Value(fs.ID)).Query()
 		filteredRows, err := filteredReport.All(t.Context(), counter)
 		if err != nil {
 			return err
@@ -92,7 +92,7 @@ func TestPostgresTypedJoins(t *testing.T) {
 		onJoin := query.LeftJoin(referrals, sponsors, query.On(r.IntroducerID, s.ID).WhereRight(s.Status.Eq(models.StatusDisabled)))
 		onLeft := models.UserFieldsAt(query.LeftScope(onJoin, referrals.Scope()))
 		onRight := models.UserNullableFieldsAt(query.NullableRightScope(onJoin, sponsors.Scope()))
-		onReport := reports.ProjectUserPair(onJoin).SelectLeftID(query.Nullable(onLeft.ID.Value())).SelectRightID(onRight.ID.Value()).Query()
+		onReport := reports.ProjectUserPair(onJoin).SelectLeftID(query.Nullable(query.Value(onLeft.ID))).SelectRightID(query.Value(onRight.ID)).Query()
 		if n, err := onReport.Count(t.Context(), counter); err != nil || n != 4 {
 			t.Error("ON scope discarded outer rows", err)
 		}
@@ -102,14 +102,14 @@ func TestPostgresTypedJoins(t *testing.T) {
 		composite := query.LeftJoin(referrals, sponsors, query.OnAnd(query.On(r.IntroducerID, s.ID), query.On(r.Status, s.Status)))
 		cl := models.UserFieldsAt(query.LeftScope(composite, referrals.Scope()))
 		csp := models.UserNullableFieldsAt(query.NullableRightScope(composite, sponsors.Scope()))
-		compositeReport := reports.ProjectUserPair(composite).SelectLeftID(query.Nullable(cl.ID.Value())).SelectRightID(csp.ID.Value()).Query()
+		compositeReport := reports.ProjectUserPair(composite).SelectLeftID(query.Nullable(query.Value(cl.ID))).SelectRightID(query.Value(csp.ID)).Query()
 		if n, err := compositeReport.Where(csp.ID.IsNotNull()).Count(t.Context(), counter); err != nil || n != 1 {
 			t.Error("composite typed join did not preserve AND semantics", err)
 		}
 		alternative := query.InnerJoin(referrals, sponsors, query.OnOr(query.On(r.IntroducerID, s.ID), query.On(r.ID, s.ID)))
 		al := models.UserFieldsAt(query.LeftScope(alternative, referrals.Scope()))
 		ar := models.UserFieldsAt(query.RightScope(alternative, sponsors.Scope()))
-		alternativeReport := reports.ProjectUserPair(alternative).SelectLeftID(query.Nullable(al.ID.Value())).SelectRightID(query.Nullable(ar.ID.Value())).Query()
+		alternativeReport := reports.ProjectUserPair(alternative).SelectLeftID(query.Nullable(query.Value(al.ID))).SelectRightID(query.Nullable(query.Value(ar.ID))).Query()
 		if n, err := alternativeReport.Count(t.Context(), counter); err != nil || n != 7 {
 			t.Error("alternative typed join did not preserve OR semantics", err)
 		}

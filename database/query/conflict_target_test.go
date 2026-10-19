@@ -50,7 +50,7 @@ func TestConflictIndexRejectsInvalidTargets(t *testing.T) {
 	name := NewTextField[user, string](q.Table(), "name", codec.String[string]())
 	other := NewTextField[user, string]("another_table", "name", codec.String[string]())
 	var absent *TextField[user, string]
-	scalar := ScalarRowQuery(q, SelectValue(q, name.Value()).Limit(1))
+	scalar := ScalarRowQuery(q, SelectValue(q, Value(name)).Limit(1))
 	hidden := Group[user]{node: caseNode{
 		branches:  []caseBranch{{condition: ExistsQuery(q, q).expression, result: name.ref}},
 		otherwise: name.ref,

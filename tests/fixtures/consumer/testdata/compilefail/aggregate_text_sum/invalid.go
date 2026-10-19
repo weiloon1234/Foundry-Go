@@ -1,5 +1,8 @@
 package invalid
 
-import "foundry.test/consumer/models"
+import (
+	"foundry.test/consumer/models"
+	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
+)
 
-var invalid = models.UserFields().Email.Sum()
+var invalid = foundryquery.Sum(models.UserFields().Email)

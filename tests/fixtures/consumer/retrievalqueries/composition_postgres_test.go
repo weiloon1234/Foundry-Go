@@ -34,7 +34,7 @@ func TestPostgresRetrievalCompositionAndProjectionBoundaries(t *testing.T) {
 		cursor := query.CursorFor(selected)
 		cf := retrievalqueries.MemberFieldsAt(cursor.Scope())
 		cursor = cursor.UniqueBy(cf.ID.Group())
-		projection := retrievalqueries.SelectMemberLabel(q, retrievalqueries.MemberLabelSelection[retrievalqueries.Member]{ID: f.ID.Value(), Name: f.Name.Value()})
+		projection := retrievalqueries.SelectMemberLabel(q, retrievalqueries.MemberLabelSelection[retrievalqueries.Member]{ID: query.Value(f.ID), Name: query.Value(f.Name)})
 
 		for _, test := range []struct {
 			name     string
@@ -46,7 +46,7 @@ func TestPostgresRetrievalCompositionAndProjectionBoundaries(t *testing.T) {
 			{"find", 1, func(ctx context.Context) error { _, err := q.Find(ctx, tx, root.ID); return err }},
 			{"count", 0, func(ctx context.Context) error { _, err := q.Count(ctx, tx); return err }},
 			{"scalar", 0, func(ctx context.Context) error {
-				_, err := query.SelectValue(q, f.Name.Value()).All(ctx, tx)
+				_, err := query.SelectValue(q, query.Value(f.Name)).All(ctx, tx)
 				return err
 			}},
 			{"declared-dto", 0, func(ctx context.Context) error {

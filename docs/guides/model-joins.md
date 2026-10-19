@@ -52,12 +52,12 @@ referral := models.UserFieldsAt(query.LeftScope(joined, referrals.Scope()))
 sponsor := models.UserNullableFieldsAt(query.NullableRightScope(joined, sponsors.Scope()))
 
 report := reports.ProjectReferralRow(joined).
-    SelectID(referral.ID.Value()).
-    SelectEmail(referral.Email.Value()).
-    SelectIntroducerID(sponsor.ID.Value()).
-    SelectIntroducerEmail(sponsor.Email.Value()).
-    SelectIntroducerNickname(sponsor.Nickname.Value()).
-    SelectIntroducerStatus(sponsor.Status.Value()).
+    SelectID(query.Value(referral.ID)).
+    SelectEmail(query.Value(referral.Email)).
+    SelectIntroducerID(query.Value(sponsor.ID)).
+    SelectIntroducerEmail(query.Value(sponsor.Email)).
+    SelectIntroducerNickname(query.Value(sponsor.Nickname)).
+    SelectIntroducerStatus(query.Value(sponsor.Status)).
     Query().OrderBy(referral.Email.Asc())
 rows, err := report.All(ctx, db)
 ```
@@ -97,7 +97,7 @@ Join formation itself exposes no model `All`, writes or hidden hydration. Eager-
 
 Append a new aliased model to the right of an existing chain. Build `On` with fields in the previous joined scope and the new alias's scope. Lift retained scopes through the new join before selecting/filtering the final result. The consumer fixture joins referrals to their sponsors and then to sponsor orders, preserving nullable sponsor fields with `LeftNullableScope`.
 
-Joins retain SQL row multiplicity: two matching orders produce two rows, and multiple branches can multiply rows. Projections do not deduplicate by model ID. Grouping, typed HAVING, aggregate ordering, `Each`, `First`, `Count`, `Exists` and limit/offset use the same projection runtime. `Count` counts result rows/groups in the selected window. To count matching related rows in an outer join, aggregate a nullable right-side key with `field.Count()`; it excludes unmatched NULL values.
+Joins retain SQL row multiplicity: two matching orders produce two rows, and multiple branches can multiply rows. Projections do not deduplicate by model ID. Grouping, typed HAVING, aggregate ordering, `Each`, `First`, `Count`, `Exists` and limit/offset use the same projection runtime. `Count` counts result rows/groups in the selected window. To count matching related rows in an outer join, aggregate a nullable right-side key with `query.CountField(field)`; it excludes unmatched NULL values.
 
 The compiler owns source naming, binding and nested SELECT scope. Derived sources cannot accidentally reference the outer query. Expression/parameter limits span nested compilation; depth checks reject cyclic or excessively nested private ASTs. Invalid alias identities, missing mappings, out-of-scope fields and ungrouped columns fail before SQL. Canceled contexts avoid execution; callback/decoding failures close rows, and `All` discards partial collected results. Callers choose bounded collection windows or streaming for large joins.
 

@@ -2,6 +2,7 @@ package invalid
 
 import (
 	"foundry.test/consumer/jsonqueries"
+	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
 )
 
-func invalid() { _ = jsonqueries.DocumentFields().Settings.Sum() }
+func invalid() { _ = foundryquery.Sum(jsonqueries.DocumentFields().Settings) }

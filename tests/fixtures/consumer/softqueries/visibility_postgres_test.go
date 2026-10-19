@@ -138,7 +138,7 @@ func TestPostgresSoftDeleteRelationsAggregatesAndOuterJoins(t *testing.T) {
 		if visited != 2 {
 			return errors.New("keyset iteration discarded explicit visibility")
 		}
-		labels, err := softqueries.ProjectMemberLabel(childQuery).SelectID(f.ID.Value()).SelectName(f.Name.Value()).Query().All(ctx, tx)
+		labels, err := softqueries.ProjectMemberLabel(childQuery).SelectID(query.Value(f.ID)).SelectName(query.Value(f.Name)).Query().All(ctx, tx)
 		if err != nil {
 			return err
 		}

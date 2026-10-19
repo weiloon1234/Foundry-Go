@@ -6,7 +6,7 @@ Typed row expressions can supply `GROUP BY`, `DISTINCT ON` and window partition 
 
 ```go
 u := models.UserFields()
-bucket := query.When(u.Age.Gt(20), u.Age.Param(1)).Else(u.Age.Param(0))
+bucket := query.When(u.Age.Gt(20), query.Param(u.Age, 1)).Else(query.Param(u.Age, 0))
 
 counts, err := query.SelectValue(
     models.QueryUsers(), query.Count[models.User]().Value(),

@@ -125,7 +125,7 @@ func TestProjectionGetterValidation(t *testing.T) {
 
 func TestNullableCursorTerminalBoundaryCompilesFalse(t *testing.T) {
 	rank := NewNullableOrderedField[cursorRecord, int64]("records", "rank", codec.Signed[int64]())
-	values := SelectValue(cursorQuery(), rank.Value()).Distinct()
+	values := SelectValue(cursorQuery(), Value(rank)).Distinct()
 	c := ValueCursorFor(values)
 	q, _, _, err := c.UniqueBy(c.Key()).canonical()
 	if err != nil {

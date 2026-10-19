@@ -357,7 +357,7 @@ func TestBulkAuditSemanticsAndPerModelAlternative(t *testing.T) {
 		}
 		f := auditqueries.LabelFields()
 		q := auditqueries.QueryAuditedLabels().Where(f.Code.Eq(label.Code))
-		if _, err := auditqueries.UpdateLabelFrom(q, q).MatchCode(f.Code.Value()).Values(auditqueries.LabelDraft{}.SetName("bulk")).Exec(ctx, tx); err != nil {
+		if _, err := auditqueries.UpdateLabelFrom(q, q).MatchCode(query.Value(f.Code)).Values(auditqueries.LabelDraft{}.SetName("bulk")).Exec(ctx, tx); err != nil {
 			return err
 		}
 		page, err := audit.ModelHistory(ctx, tx, c.recorder, label.FoundryReference(), query.PageRequest{Number: 1, Size: 10})

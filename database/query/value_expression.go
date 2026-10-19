@@ -24,14 +24,6 @@ type Expression[S, V any] struct {
 	codec codec.Codec[V]
 }
 
-// Value selects the concrete field type. Nullable field wrappers override this
-// method so SQL NULL cannot be projected into an ordinary non-nullable field.
-func (f valueField[M, V]) Value() Expression[M, V] {
-	return Expression[M, V]{node: f.ref, codec: f.codec}
-}
-func (f NullableField[M, V]) Value() Expression[M, value.Nullable[V]] {
-	return Expression[M, value.Nullable[V]]{node: f.ref, codec: codec.Nullable(f.codec)}
-}
 func (a Aggregate[M, V]) Value() Expression[M, V] {
 	return Expression[M, V]{node: a.node, codec: a.codec}
 }
@@ -49,7 +41,7 @@ type Group[S any] struct {
 	node valueExpression
 }
 
-func (f valueField[M, V]) Group() Group[M] { return Group[M]{node: f.ref} }
+func (f ScalarField[M, V]) Group() Group[M] { return Group[M]{node: f.ref} }
 
 func columnSelections(table string, columns []Column) []selectItem {
 	result := make([]selectItem, len(columns))

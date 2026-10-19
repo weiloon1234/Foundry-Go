@@ -6,7 +6,7 @@
 
 ```go
 u := models.UserFields()
-statuses, err := query.SelectValue(models.QueryUsers(), u.Status.Value()).
+statuses, err := query.SelectValue(models.QueryUsers(), query.Value(u.Status)).
     Distinct().All(ctx, db) // []models.Status
 
 users, err := models.QueryUsers().Distinct().

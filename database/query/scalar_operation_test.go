@@ -15,12 +15,12 @@ func TestScalarOperationsComposeAndBind(t *testing.T) {
 	q := cursorQuery()
 	id := NewExactField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
 	text := NewTextField[cursorRecord, string]("records", "rank", codec.String[string]())
-	calculation := Multiply(Add(id, id.Param(2)), id.Param(3))
+	calculation := Multiply(Add(id, Param(id, 2)), Param(id, 3))
 	statement, err := q.Where(calculation.Gte(20)).OrderBy(calculation.Desc()).Compile()
 	if err != nil || !strings.Contains(statement.SQL(), " + ") || !strings.Contains(statement.SQL(), " * ") || !reflect.DeepEqual(statement.Arguments(), []any{int64(2), int64(3), int64(20), int64(2), int64(3)}) {
 		t.Fatal(statement.SQL(), statement.Arguments(), err)
 	}
-	label := Lower(Trim(Concat(text, text.Param("_%"))))
+	label := Lower(Trim(Concat(text, Param(text, "_%"))))
 	s, err := SelectValue(q.Where(label.Contains("_%")), label.Value()).Compile()
 	if err != nil || !strings.Contains(s.SQL(), "LOWER(") || !strings.Contains(s.SQL(), "BTRIM(") || !reflect.DeepEqual(s.Arguments(), []any{"_%", "_%", "%!_!%%"}) {
 		t.Fatal(s.SQL(), s.Arguments(), err)
@@ -45,7 +45,7 @@ func TestScalarOperationsRejectInvalidDeclarations(t *testing.T) {
 	for name, node := range map[string]valueExpression{
 		"zero":              operationNode{},
 		"arity":             operationNode{kind: addOperation, result: codec.TypeInteger},
-		"result":            operationNode{kind: lowerOperation, result: codec.TypeInteger, arguments: []operationArgument{operationArg(text.Value())}},
+		"result":            operationNode{kind: lowerOperation, result: codec.TypeInteger, arguments: []operationArgument{operationArg(Value(text))}},
 		"type":              Add(id, badRepresentation).Value().node,
 		"null descriptor":   Add[cursorRecord, int64](nil, id).Value().node,
 		"negative count":    Substring(text, 1, -1).Value().node,
@@ -56,16 +56,16 @@ func TestScalarOperationsRejectInvalidDeclarations(t *testing.T) {
 			t.Fatal(name, err)
 		}
 	}
-	window := AddValue(RowNumber(WindowFor(cursorQuery())), id.Param(1).Value())
+	window := AddValue(RowNumber(WindowFor(cursorQuery())), Param(id, 1).Value())
 	if _, err := SelectValue(cursorQuery(), Count[cursorRecord]().Value()).Having(OrderValue(window).Gt(1)).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("arithmetic hid a window in HAVING", err)
 	}
 	if _, err := SelectValue(cursorQuery(), RowNumber(WindowFor(cursorQuery()).OrderBy(window.Asc()))).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("arithmetic hid a nested window", err)
 	}
-	deep := id.Param(1)
+	deep := Param(id, 1)
 	for range MaxExpressionDepth + 1 {
-		deep = Add(deep, id.Param(1)).RowExpression
+		deep = Add(deep, Param(id, 1)).RowExpression
 	}
 	if _, err := SelectValue(cursorQuery(), deep.Value()).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("unbounded arithmetic accepted", err)
@@ -74,13 +74,13 @@ func TestScalarOperationsRejectInvalidDeclarations(t *testing.T) {
 
 func TestScalarOrderPaginationAndAliasPreservation(t *testing.T) {
 	id := NewExactField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
-	computed := Add(id, id.Param(1))
+	computed := Add(id, Param(id, 1))
 	order := computed.Asc()
 	copy := order
 	if order != copy {
 		t.Fatal("copied order lost identity")
 	}
-	q := cursorQuery().OrderBy(computed.Desc(), Subtract(id, id.Param(2)).Asc())
+	q := cursorQuery().OrderBy(computed.Desc(), Subtract(id, Param(id, 2)).Asc())
 	ordered, err := q.stableModelOrder()
 	if err != nil || len(ordered.orders) != 3 || ordered.orders[2].field.column != "id" {
 		t.Fatal("computed ordering lost primary tie-breaker", err)

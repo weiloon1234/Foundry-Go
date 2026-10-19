@@ -19,13 +19,13 @@ func TestPostgresTransactionLateralRowsAndLocks(t *testing.T) {
 	c := query.TransactionCorrelate(parent, child)
 	p, f := RecordFieldsAt(query.OuterScope(c, parent.Scope())), RecordFieldsAt(query.InnerScope(c, child.Scope()))
 	c = c.Where(query.Greater(f.ID, p.ID))
-	report := ProjectTransactionCorrelatedSummary(c).SelectID(f.ID.Value()).SelectName(p.Name.Value()).Query().OrderBy(f.ID.Asc()).Limit(1).ForNoKeyUpdate().Of(query.InnerScope(c, child.Scope()))
+	report := ProjectTransactionCorrelatedSummary(c).SelectID(query.Value(f.ID)).SelectName(query.Value(p.Name)).Query().OrderBy(f.ID.Asc()).Limit(1).ForNoKeyUpdate().Of(query.InnerScope(c, child.Scope()))
 	lateral := query.AsTransactionLateral[correlatedLateralAlias](report, "chosen")
 	left := query.TransactionLeftJoinLateral(parent, lateral)
 	rightFields := SummaryNullableFieldsAt(query.NullableRightScope(left, lateral.Scope()))
 	parentFields := RecordFieldsAt(query.LeftScope(left, parent.Scope()))
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
-		rows, err := query.SelectTransactionValue(left, rightFields.ID.Value()).OrderBy(parentFields.ID.Asc()).All(ctx, tx)
+		rows, err := query.SelectTransactionValue(left, query.Value(rightFields.ID)).OrderBy(parentFields.ID.Asc()).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -110,8 +110,8 @@ func TestPostgresTransactionNestedCorrelatedLocks(t *testing.T) {
 	middle := RecordFieldsAt(query.OuterScope(nested, query.InnerScope(c, child.Scope())))
 	grand := RecordFieldsAt(query.InnerScope(nested, grandchild.Scope()))
 	nested = nested.Where(query.Greater(grand.ID, middle.ID), query.Greater(grand.ID, ancestor.ID))
-	condition := query.SelectTransactionCorrelatedValue(nested, grand.ID.Value()).ForUpdate().Exists()
-	selected := query.SelectTransactionCorrelatedValue(c.Where(query.Greater(f.ID, p.ID), condition), f.ID.Value()).ForShare()
+	condition := query.SelectTransactionCorrelatedValue(nested, query.Value(grand.ID)).ForUpdate().Exists()
+	selected := query.SelectTransactionCorrelatedValue(c.Where(query.Greater(f.ID, p.ID), condition), query.Value(f.ID)).ForShare()
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
 		rows, err := query.SelectTransactionValue(parent, query.TransactionCorrelatedScalarQuery(selected)).All(ctx, tx)
 		if err != nil {
@@ -139,7 +139,7 @@ func TestPostgresTransactionCorrelatedScalarFailuresAndMembership(t *testing.T) 
 	child := query.AsTransaction[otherAlias](query.TransactionOf(QueryRecords()), "child")
 	c := query.TransactionCorrelate(parent, child)
 	p, f := RecordFieldsAt(query.OuterScope(c, parent.Scope())), RecordFieldsAt(query.InnerScope(c, child.Scope()))
-	base := query.SelectTransactionCorrelatedValue(c.Where(query.Greater(f.ID, p.ID)), f.ID.Value())
+	base := query.SelectTransactionCorrelatedValue(c.Where(query.Greater(f.ID, p.ID)), query.Value(f.ID))
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
 		scalar := query.TransactionCorrelatedScalarQuery(base.ForUpdate())
 		err := tx.Transaction(ctx, func(nested *database.Tx) error {
@@ -151,7 +151,7 @@ func TestPostgresTransactionCorrelatedScalarFailuresAndMembership(t *testing.T) 
 			return errors.New("correlated scalar hid multiple rows")
 		}
 		assertIndependentLock(t, ctx, db, path, QueryRecords().ForUpdate(), 2, false)
-		member := query.TransactionInCorrelatedQuery(query.Add(RecordFieldsAt(parent.Scope()).ID, RecordFieldsAt(parent.Scope()).ID.Param(1)), base.ForShare())
+		member := query.TransactionInCorrelatedQuery(query.Add(RecordFieldsAt(parent.Scope()).ID, query.Param(RecordFieldsAt(parent.Scope()).ID, 1)), base.ForShare())
 		rows, err := query.SelectTransactionRecord(parent, parent.Scope()).Where(member).All(ctx, tx)
 		if err != nil {
 			return err
@@ -166,7 +166,7 @@ func TestPostgresTransactionCorrelatedScalarFailuresAndMembership(t *testing.T) 
 		if _, err := query.SelectTransactionRecord(parent, parent.Scope()).Where(wrongTarget.Exists()).All(ctx, tx); !errors.Is(err, fault.Invalid) {
 			return errors.New("correlated lock accepted outer target")
 		}
-		grouped := query.SelectTransactionCorrelatedValue(c, f.ID.Count().Value()).ForUpdate()
+		grouped := query.SelectTransactionCorrelatedValue(c, query.CountField(f.ID).Value()).ForUpdate()
 		if _, err := query.SelectTransactionValue(parent, query.TransactionCorrelatedScalarQuery(grouped)).All(ctx, tx); !errors.Is(err, fault.Invalid) {
 			return errors.New("correlated aggregate lock reached SQL")
 		}
@@ -183,16 +183,16 @@ func TestPostgresTransactionCorrelationFromNullableLateral(t *testing.T) {
 	child := query.AsTransaction[otherAlias](query.TransactionOf(QueryRecords()), "child")
 	c := query.TransactionCorrelate(parent, child)
 	p, f := RecordFieldsAt(query.OuterScope(c, parent.Scope())), RecordFieldsAt(query.InnerScope(c, child.Scope()))
-	c = c.Where(query.Equal(f.ID, query.Add(p.ID, p.ID.Param(1))))
-	report := ProjectTransactionCorrelatedSummary(c).SelectID(f.ID.Value()).SelectName(f.Name.Value()).Query().ForShare()
+	c = c.Where(query.Equal(f.ID, query.Add(p.ID, query.Param(p.ID, 1))))
+	report := ProjectTransactionCorrelatedSummary(c).SelectID(query.Value(f.ID)).SelectName(query.Value(f.Name)).Query().ForShare()
 	lateral := query.AsTransactionLateral[correlatedLateralAlias](report, "chosen")
 	joined := query.TransactionLeftJoinLateral(parent, lateral)
 	next := query.AsTransaction[correlatedGrandchildAlias](query.TransactionOf(QueryRecords()), "next_record")
 	follow := query.TransactionCorrelate(joined, next)
 	previous := SummaryNullableFieldsAt(query.OuterNullableScope(follow, query.NullableRightScope(joined, lateral.Scope())))
 	candidate := RecordFieldsAt(query.InnerScope(follow, next.Scope()))
-	follow = follow.Where(query.Equal(query.NullableRow(query.Subtract(candidate.ID, candidate.ID.Param(1))), previous.ID))
-	scalar := query.TransactionCorrelatedScalarQuery(query.SelectTransactionCorrelatedValue(follow, candidate.ID.Value()).ForKeyShare())
+	follow = follow.Where(query.Equal(query.NullableRow(query.Subtract(candidate.ID, query.Param(candidate.ID, 1))), previous.ID))
+	scalar := query.TransactionCorrelatedScalarQuery(query.SelectTransactionCorrelatedValue(follow, query.Value(candidate.ID)).ForKeyShare())
 	order := RecordFieldsAt(query.LeftScope(joined, parent.Scope())).ID.Asc()
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
 		rows, err := query.SelectTransactionValue(joined, scalar).OrderBy(order).All(ctx, tx)

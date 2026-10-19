@@ -25,7 +25,7 @@ func selections(input value.JSON[Preferences]) {
  _ = AccountDraft{}.SetSettings(input).SetBackup(input).ClearBackup()
  _ = q.Where(f.Settings.Contains(input),f.Backup.IsJSONNull())
  _ = q.Where(f.Settings.Properties().Theme.Scalar().Like("%go%"),f.Settings.Properties().Tags.At(-1).Scalar().Eq("go"))
- _ = ProjectSnapshot(q).SelectSettings(f.Settings.Value()).SelectKind(f.Settings.Kind().Value()).SelectBackup(f.Backup.Value())
+ _ = ProjectSnapshot(q).SelectSettings(query.Value(f.Settings)).SelectKind(f.Settings.Kind().Value()).SelectBackup(query.Value(f.Backup))
 }
 
 `)
@@ -69,7 +69,7 @@ func usage() {
  f:=AccountFields();p:=f.Settings.Properties()
  _=QueryAccounts().Where(p.Promoted.Scalar().Eq("go"),p.Next.Properties().Promoted.Scalar().Eq("nested"),p.Scores.At(-1).Scalar().Gt(0),p.Map.At(2).Scalar().Eq("go"),p.State.Scalar().Eq(value.Of(Active)),p.Count.Scalar().Eq(42))
  var _ query.RowExpression[Account,value.Nullable[value.JSON[*value.Optional[string]]]]=p.Maybe.JSON()
- selected:=ProjectSnapshot(QueryAccounts()).SelectSettings(f.Settings.Value()).Query()
+ selected:=ProjectSnapshot(QueryAccounts()).SelectSettings(query.Value(f.Settings)).Query()
  source:=query.As[snapshotAlias](selected,"snap")
  _=SnapshotFieldsAt(source.Scope()).Settings.Properties().Promoted.Scalar().Eq("go")
 }

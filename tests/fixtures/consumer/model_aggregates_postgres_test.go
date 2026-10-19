@@ -176,7 +176,7 @@ func TestPostgresGeneratedRelationAggregates(t *testing.T) {
 			t.Error("empty aggregate exists is not false")
 		}
 		pivotScope := models.UserRelations().Groups.Where(models.GroupFields().Code.Eq("a")).WherePivot(models.MembershipFields().Priority.Gt(1))
-		scopedPriority := aggregates.GroupPriority.Using(query.Related(pivotScope.Pivot(), models.MembershipFields().Priority.Sum()))
+		scopedPriority := aggregates.GroupPriority.Using(query.Related(pivotScope.Pivot(), query.Sum(models.MembershipFields().Priority)))
 		one, err := base.With(scopedPriority).Load(t.Context(), counter, users[:1])
 		if err != nil {
 			return err
@@ -237,8 +237,8 @@ func assertFilteredThroughAggregates(t *testing.T, tx *database.Tx, users []mode
 	ownersWithOrders := link.Where(order.BuyerID.EqColumn(group.OwnerID)).Exists()
 	rows, err := models.QueryUsers().With(
 		a.GroupCount.Using(query.Related(r.Groups, query.Count[models.Group]().Filter(g.Code.Eq("a")))),
-		a.GroupDistinct.Using(query.Related(r.Groups, g.Code.CountDistinct().Filter(ownersWithOrders))),
-		a.GroupPriority.Using(query.Related(r.Groups.Pivot(), p.Priority.Sum().Filter(p.Priority.Gt(1)))),
+		a.GroupDistinct.Using(query.Related(r.Groups, query.CountDistinctField(g.Code).Filter(ownersWithOrders))),
+		a.GroupPriority.Using(query.Related(r.Groups.Pivot(), query.Sum(p.Priority).Filter(p.Priority.Gt(1)))),
 	).Load(t.Context(), tx, users)
 	if err != nil {
 		return err
@@ -251,12 +251,12 @@ func assertFilteredThroughAggregates(t *testing.T, tx *database.Tx, users []mode
 	assertDecimalAggregate(t, rows[0].GroupPriority, "5")
 	// Conditional values must follow target/pivot qualification, including
 	// outer fields captured inside a correlated conditional predicate.
-	ownerMatch := query.When(order.BuyerID.EqColumn(group.OwnerID), group.Code).Else(group.Code.Param("missing"))
+	ownerMatch := query.When(order.BuyerID.EqColumn(group.OwnerID), group.Code).Else(query.Param(group.Code, "missing"))
 	conditionalOwners := link.Where(ownerMatch.Ne("missing")).Exists()
 	rows, err = models.QueryUsers().With(
-		a.GroupCount.Using(query.Related(r.Groups, query.Count[models.Group]().Filter(query.When(g.Code.Eq("a"), g.Code).Else(g.Code.Param("other")).Eq("a")))),
-		a.GroupDistinct.Using(query.Related(r.Groups, g.Code.CountDistinct().Filter(conditionalOwners))),
-		a.GroupPriority.Using(query.Related(r.Groups.Pivot(), p.Priority.Sum().Filter(query.When(p.Priority.Gt(1), p.Priority.Param(1)).Else(p.Priority.Param(0)).Eq(1)))),
+		a.GroupCount.Using(query.Related(r.Groups, query.Count[models.Group]().Filter(query.When(g.Code.Eq("a"), g.Code).Else(query.Param(g.Code, "other")).Eq("a")))),
+		a.GroupDistinct.Using(query.Related(r.Groups, query.CountDistinctField(g.Code).Filter(conditionalOwners))),
+		a.GroupPriority.Using(query.Related(r.Groups.Pivot(), query.Sum(p.Priority).Filter(query.When(p.Priority.Gt(1), query.Param(p.Priority, 1)).Else(query.Param(p.Priority, 0)).Eq(1)))),
 	).Load(t.Context(), tx, users)
 	if err != nil {
 		return err

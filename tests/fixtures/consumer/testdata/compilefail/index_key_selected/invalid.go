@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
-var _ = query.OnConflictKeys[models.User](models.UserFields().Age.Value().Key())
+var _ = query.OnConflictKeys[models.User](query.Value(models.UserFields().Age).Key())

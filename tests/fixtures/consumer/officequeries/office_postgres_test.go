@@ -169,7 +169,7 @@ func TestOneOfManyAndAdHocAggregates(t *testing.T) {
 		t.Fatal("filters take part in the one-of-many choice", err)
 	}
 	headcount := query.RelatedValue(r.Colleagues, query.Count[officequeries.Employee]())
-	payroll := query.RelatedValue(r.Colleagues, e.Salary.Sum())
+	payroll := query.RelatedValue(r.Colleagues, query.Sum(e.Salary))
 	ranked, err := query.WithValue(officequeries.QueryOfficeOffices().OrderBy(headcount.Desc(), officequeries.OfficeFields().Name.Asc()).Query, payroll).All(ctx, f.db)
 	if err != nil || len(ranked) != 3 || ranked[0].Model.ID != f.alpha.ID {
 		t.Fatal("ordering by relation count", ranked, err)

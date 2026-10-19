@@ -15,7 +15,7 @@ import (
 func groupedReport() ProjectionQuery[cursorRecord, reportRecord] {
 	id := NewExactField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
 	return Project(cursorQuery(), reportDefinition(),
-		Map(NewProjectionField[reportRecord, int64]("id"), id.Value()),
+		Map(NewProjectionField[reportRecord, int64]("id"), Value(id)),
 		Map(NewProjectionField[reportRecord, int64]("count"), Count[cursorRecord]().Value()),
 	).GroupBy(id.Group())
 }
@@ -24,7 +24,7 @@ func TestHavingAndAggregateOrderingShareSelectCompiler(t *testing.T) {
 	id := NewExactField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
 	values := []int64{1, 2}
 	condition := HavingAnd(Count[cursorRecord]().Gt(2), HavingOr(
-		id.Sum().Gt(decimal.FromInt64(5)), Grouped(id.In(values...)).Not(),
+		Sum(id).Gt(decimal.FromInt64(5)), Grouped(id.In(values...)).Not(),
 	))
 	q := groupedReport().Where(id.Gt(0)).Having(condition).
 		OrderBy(Count[cursorRecord]().Desc(), id.Asc()).Limit(4)
@@ -40,7 +40,7 @@ func TestHavingAndAggregateOrderingShareSelectCompiler(t *testing.T) {
 	if !reflect.DeepEqual(s.Arguments(), []any{int64(0), int64(2), "5", "{1,2}", int64(4)}) {
 		t.Fatal("WHERE/HAVING/window parameters or captured values changed", s.Arguments())
 	}
-	derived, err := q.Having(id.Sum().IsNotNull()).OrderBy(id.Sum().Asc()).Compile()
+	derived, err := q.Having(Sum(id).IsNotNull()).OrderBy(Sum(id).Asc()).Compile()
 	if err != nil || !strings.Contains(derived.SQL(), "IS NOT NULL") {
 		t.Fatal("derived group condition lost", err)
 	}
@@ -59,12 +59,12 @@ func TestHavingRejectsInvalidScopeStructureAndBindings(t *testing.T) {
 	for _, q := range []ProjectionQuery[cursorRecord, reportRecord]{
 		groupedReport().Having(HavingPredicate[cursorRecord]{}),
 		groupedReport().Having(Grouped(text.Eq("not grouped"))),
-		groupedReport().Having(other.Sum().Gt(decimal.FromInt64(1))),
-		groupedReport().Having(floating.Avg().Gt(math.Inf(1))),
+		groupedReport().Having(Sum(other).Gt(decimal.FromInt64(1))),
+		groupedReport().Having(Avg(floating).Gt(math.Inf(1))),
 		groupedReport().OrderBy(nil), groupedReport().OrderBy(absent),
 		groupedReport().OrderBy(Expression[cursorRecord, int64]{}.Desc()),
-		groupedReport().OrderBy(other.Sum().Asc()),
-		groupedReport().Where(Predicate[cursorRecord]{expression: id.Sum().Gt(decimal.FromInt64(0)).expression}),
+		groupedReport().OrderBy(Sum(other).Asc()),
+		groupedReport().Where(Predicate[cursorRecord]{expression: Sum(id).Gt(decimal.FromInt64(0)).expression}),
 	} {
 		if _, err := q.Compile(); err == nil {
 			t.Fatal("invalid group condition/order accepted")

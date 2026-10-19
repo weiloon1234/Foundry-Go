@@ -7,7 +7,9 @@ import "github.com/weiloon1234/Foundry-Go/database/codec"
 // generated code; they do not verify a physical database schema.
 type ScalarField[M any, V comparable] struct{ valueField[M, V] }
 
-// valueField owns operations that do not require a comparable Go key.
+// valueField is typed storage only. Public scalar and binary adapters reuse
+// the existing operation functions directly, avoiding a redundant embedded
+// method set for every owner/value pair.
 type valueField[M, V any] struct {
 	ref   fieldRef
 	codec codec.Codec[V]
@@ -22,14 +24,14 @@ func (f ScalarField[M, V]) relationKey() ScalarField[M, V] { return f }
 func NewScalarField[M any, V comparable](table, column string, c codec.Codec[V]) ScalarField[M, V] {
 	return ScalarField[M, V]{valueField[M, V]{fieldRef{table, column}, c}}
 }
-func (f valueField[M, V]) Eq(value V) Predicate[M] { return f.compare(equal, value) }
-func (f valueField[M, V]) Ne(value V) Predicate[M] { return f.compare(notEqual, value) }
+func (f ScalarField[M, V]) Eq(value V) Predicate[M] { return f.compare(equal, value) }
+func (f ScalarField[M, V]) Ne(value V) Predicate[M] { return f.compare(notEqual, value) }
 
 // In copies the values. An empty membership set represents no matching rows.
-func (f valueField[M, V]) In(values ...V) Predicate[M] { return f.compare(in, values...) }
-func (f valueField[M, V]) Asc() Order[M]               { return Order[M]{field: f.ref} }
-func (f valueField[M, V]) Desc() Order[M]              { return Order[M]{field: f.ref, descending: true} }
-func (f valueField[M, V]) compare(op operator, values ...V) Predicate[M] {
+func (f ScalarField[M, V]) In(values ...V) Predicate[M] { return f.compare(in, values...) }
+func (f ScalarField[M, V]) Asc() Order[M]               { return Order[M]{field: f.ref} }
+func (f ScalarField[M, V]) Desc() Order[M]              { return Order[M]{field: f.ref, descending: true} }
+func (f ScalarField[M, V]) compare(op operator, values ...V) Predicate[M] {
 	return Predicate[M]{expression: typedComparison(f.ref, op, f.codec, values)}
 }
 

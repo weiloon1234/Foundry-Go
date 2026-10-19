@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
-var _ = models.UserFields().ID.InQuery(query.SelectValue(models.QueryUsers(), models.UserFields().Email.Value()).Distinct())
+var _ = models.UserFields().ID.InQuery(query.SelectValue(models.QueryUsers(), query.Value(models.UserFields().Email)).Distinct())

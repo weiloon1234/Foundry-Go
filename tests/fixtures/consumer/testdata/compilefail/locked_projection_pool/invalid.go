@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
-var _, _ = query.SelectValue(models.QueryUsers(), models.UserFields().Email.Value()).ForUpdate().All(nil, (*database.DB)(nil))
+var _, _ = query.SelectValue(models.QueryUsers(), query.Value(models.UserFields().Email)).ForUpdate().All(nil, (*database.DB)(nil))

@@ -30,11 +30,11 @@ func memberTable() datatable.Table[Member, MemberRow, Authority] {
 	return datatable.Define(datatable.Spec[Member, MemberRow, Authority]{
 		ID: "reports.members", Row: MemberRowJSON(), Exports: true,
 		Columns: []datatable.ColumnRegistration[Member, MemberRow]{
-			datatable.DefineColumn[Member](wire.ID, MemberIDLabel).SortBy(fields.ID.Value()).ExportAs(datatable.ScalarCell(foundryhttp.ModelIDQuery[Member]())).Registration(),
+			datatable.DefineColumn[Member](wire.ID, MemberIDLabel).SortBy(query.Value(fields.ID)).ExportAs(datatable.ScalarCell(foundryhttp.ModelIDQuery[Member]())).Registration(),
 			datatable.DefineColumn[Member](wire.Name, MemberNameLabel).SortBy(name.Value()).FilterBy(datatable.Where(text, name)).Searchable().ExportAs(datatable.ScalarCell(text)).Registration(),
-			datatable.DefineColumn[Member](wire.Nickname, NicknameLabel).SortBy(fields.Nickname.Value()).FilterBy(datatable.NullableWhere(text, fields.Nickname)).ExportAs(datatable.NullableCell(text)).Registration(),
+			datatable.DefineColumn[Member](wire.Nickname, NicknameLabel).SortBy(query.Value(fields.Nickname)).FilterBy(datatable.NullableWhere(text, fields.Nickname)).ExportAs(datatable.NullableCell(text)).Registration(),
 			datatable.DefineColumn[Member](wire.State, StateLabel).FilterBy(datatable.Where(state, fields.State)).ExportAs(datatable.ScalarCell(state)).Registration(),
-			datatable.DefineColumn[Member](wire.Balance, BalanceLabel).SortBy(fields.Balance.Value()).FilterBy(datatable.Where(amount, fields.Balance)).ExportAs(datatable.ScalarCell(amount)).Registration(),
+			datatable.DefineColumn[Member](wire.Balance, BalanceLabel).SortBy(query.Value(fields.Balance)).FilterBy(datatable.Where(amount, fields.Balance)).ExportAs(datatable.ScalarCell(amount)).Registration(),
 		},
 		Filters: []datatable.FilterRegistration[Member]{
 			datatable.DefineFilter("orderLabel", OrderLabel, datatable.Related(datatable.Where(text, OrderFields().Label), func(predicate query.Predicate[Order]) query.Predicate[Member] {
@@ -49,7 +49,7 @@ func memberTable() datatable.Table[Member, MemberRow, Authority] {
 			if err != nil {
 				return query.ProjectionQuery[Member, MemberRow]{}, err
 			}
-			return SelectMemberRow(QueryReportMembers().Where(fields.TenantID.Eq(actor.TenantID)), MemberRowSelection[Member]{ID: fields.ID.Value(), Name: name.Value(), Nickname: fields.Nickname.Value(), State: fields.State.Value(), Balance: fields.Balance.Value()}), nil
+			return SelectMemberRow(QueryReportMembers().Where(fields.TenantID.Eq(actor.TenantID)), MemberRowSelection[Member]{ID: query.Value(fields.ID), Name: name.Value(), Nickname: query.Value(fields.Nickname), State: query.Value(fields.State), Balance: query.Value(fields.Balance)}), nil
 		},
 	})
 }

@@ -31,8 +31,8 @@ A transaction correlation can be the outer scope of another correlation. Its vis
 
 ```go
 selected := ProjectTransactionCorrelatedSummary(link).
-    SelectID(childFields.ID.Value()).
-    SelectName(parentFields.Name.Value()).
+    SelectID(query.Value(childFields.ID)).
+    SelectName(query.Value(parentFields.Name)).
     Query().
     OrderBy(childFields.ID.Asc()).Limit(1).
     ForUpdate().Of(childScope).SkipLocked()
@@ -42,7 +42,7 @@ joined := query.TransactionLeftJoinLateral(parent, lateral)
 fields := SummaryNullableFieldsAt(
     query.NullableRightScope(joined, lateral.Scope()))
 
-ids, err := query.SelectTransactionValue(joined, fields.ID.Value()).All(ctx, tx)
+ids, err := query.SelectTransactionValue(joined, query.Value(fields.ID)).All(ctx, tx)
 ```
 
 `ids` is `[]value.Nullable[int64]`. Each parent requests its own first available child. An unmatched parent remains in a left lateral result with NULL child fields. The child projection can combine explicitly scoped parent and child values.
@@ -56,7 +56,7 @@ Conditions inside the correlated query, ON conditions and final result filters o
 ## Correlated scalars and membership
 
 ```go
-values := query.SelectTransactionCorrelatedValue(link, childFields.ID.Value()).
+values := query.SelectTransactionCorrelatedValue(link, query.Value(childFields.ID)).
     OrderBy(childFields.ID.Asc()).Limit(1).ForShare()
 
 scalar := query.TransactionCorrelatedScalarQuery(values)

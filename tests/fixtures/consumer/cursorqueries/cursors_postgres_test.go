@@ -19,7 +19,7 @@ import (
 
 func summaries() query.ProjectionQuery[models.User, reports.UserSummary] {
 	u := models.UserFields()
-	return reports.SelectUserSummary(models.QueryUsers(), reports.UserSummarySelection[models.User]{ID: u.ID.Value(), Email: u.Email.Value(), Nickname: u.Nickname.Value(), Status: u.Status.Value()})
+	return reports.SelectUserSummary(models.QueryUsers(), reports.UserSummarySelection[models.User]{ID: query.Value(u.ID), Email: query.Value(u.Email), Nickname: query.Value(u.Nickname), Status: query.Value(u.Status)})
 }
 
 // Traverse both directions, including an empty page after the terminal row.
@@ -148,10 +148,10 @@ func TestPostgresRecursiveResultCursor(t *testing.T) {
 func TestPostgresGroupedAndJoinedCursors(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, _ []models.User) error {
 		o := models.OrderFields()
-		grouped := reports.SelectBuyerTotals(models.QueryOrders(), reports.BuyerTotalsSelection[models.Order]{BuyerID: o.BuyerID.Value(), Total: o.TotalCents.Sum().Value(), Orders: query.Count[models.Order]().Value(), Average: o.TotalCents.Avg().Value()}).GroupBy(o.BuyerID.Group()).Having(query.Count[models.Order]().Gt(0))
+		grouped := reports.SelectBuyerTotals(models.QueryOrders(), reports.BuyerTotalsSelection[models.Order]{BuyerID: query.Value(o.BuyerID), Total: query.Sum(o.TotalCents).Value(), Orders: query.Count[models.Order]().Value(), Average: query.Avg(o.TotalCents).Value()}).GroupBy(o.BuyerID.Group()).Having(query.Count[models.Order]().Gt(0))
 		cursor := query.CursorFor(grouped)
 		f := reports.BuyerTotalsFieldsAt(cursor.Scope())
-		want, err := grouped.OrderBy(o.TotalCents.Sum().Desc(), o.BuyerID.Asc()).All(t.Context(), tx)
+		want, err := grouped.OrderBy(query.Sum(o.TotalCents).Desc(), o.BuyerID.Asc()).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -161,7 +161,7 @@ func TestPostgresGroupedAndJoinedCursors(t *testing.T) {
 		joined := query.InnerJoin(buyers, orders, query.On(models.UserFieldsAt(buyers.Scope()).ID, models.OrderFieldsAt(orders.Scope()).BuyerID))
 		left, right := query.LeftScope(joined, buyers.Scope()), query.RightScope(joined, orders.Scope())
 		bf, of := models.UserFieldsAt(left), models.OrderFieldsAt(right)
-		pairs := reports.ProjectOrderBuyerRow(joined).SelectBuyerID(bf.ID.Value()).SelectOrderID(of.ID.Value()).SelectBuyerEmail(bf.Email.Value()).SelectTotalCents(of.TotalCents.Value()).Query()
+		pairs := reports.ProjectOrderBuyerRow(joined).SelectBuyerID(query.Value(bf.ID)).SelectOrderID(query.Value(of.ID)).SelectBuyerEmail(query.Value(bf.Email)).SelectTotalCents(query.Value(of.TotalCents)).Query()
 		pairCursor := query.CursorFor(pairs)
 		pf := reports.OrderBuyerRowFieldsAt(pairCursor.Scope())
 		pairWant, err := pairs.OrderBy(bf.ID.Asc(), of.ID.Asc()).All(t.Context(), tx)
@@ -215,7 +215,7 @@ func TestPostgresGroupedAndJoinedCursors(t *testing.T) {
 
 func TestPostgresScalarCursorNullEndpointsAndWindows(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, _ []models.User) error {
-		values := query.SelectValue(models.QueryUsers(), models.UserFields().Nickname.Value()).Distinct()
+		values := query.SelectValue(models.QueryUsers(), query.Value(models.UserFields().Nickname)).Distinct()
 		for _, source := range []query.ValueQuerySource[value.Nullable[string]]{values, values.Union(values)} {
 			c := query.ValueCursorFor(source)
 			checkTraversal(t, tx, c.OrderBy(c.Value().Asc()).UniqueBy(c.Key()), []value.Nullable[string]{value.Of("Bee"), {}})

@@ -6,4 +6,4 @@ import (
 )
 
 var fields = models.UserFieldsAt(models.QueryUsers().ConflictRows().Proposed())
-var _ = query.SetConflictValue(models.UserFields().Age, fields.Age.Value())
+var _ = query.SetConflictValue(models.UserFields().Age, query.Value(fields.Age))

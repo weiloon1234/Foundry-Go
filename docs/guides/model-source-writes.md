@@ -14,9 +14,9 @@ updated, err := linkqueries.UpdateMemberFrom(
     linkqueries.QueryLinkMembers().Where(m.Name.Ne("protected")),
     linkqueries.QueryLinkArchives().Where(a.Tag.Eq("approved")),
 ).
-    MatchID(a.MemberID.Value()).
-    SelectName(a.Name.Value()).
-    SelectAlias(a.Alias.Value()).
+    MatchID(query.Value(a.MemberID)).
+    SelectName(query.Value(a.Name)).
+    SelectAlias(query.Value(a.Alias)).
     Returning(ctx, db, 100)
 ```
 
@@ -34,7 +34,7 @@ count, err := linkqueries.UpdateMembershipFrom(
     linkqueries.QueryLinkMemberships(),
     linkqueries.QueryLinkMemberships().Where(fields.Role.Eq("reader")),
 ).
-    MatchID(fields.ID.Value()).
+    MatchID(query.Value(fields.ID)).
     Values(linkqueries.MembershipDraft{}.SetRole(" EDITOR ")).
     Exec(ctx, db)
 ```
@@ -60,7 +60,7 @@ fields := linkqueries.MembershipFields()
 count, err := linkqueries.DeleteGroupUsing(
     linkqueries.QueryLinkGroups(),
     linkqueries.QueryLinkMemberships().Where(fields.Role.Eq("obsolete")),
-).MatchCode(fields.GroupCode.Value()).Exec(ctx, db)
+).MatchCode(query.Value(fields.GroupCode)).Exec(ctx, db)
 ```
 
 Ordinary removal soft-deletes configured models, including the normal active-only protection and clock conventions. `ForceDelete<Model>Using` exists only for soft-delete models and physically deletes within the destination's explicit visibility; `WithTrashed` includes already deleted records. A model without soft deletion uses physical [DELETE USING](https://www.postgresql.org/docs/18/sql-delete.html). Physical deletion's `Returning` provides complete old models.

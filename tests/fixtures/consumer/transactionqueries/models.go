@@ -37,7 +37,7 @@ func Claimed(ctx context.Context, tx *database.Tx) ([]Summary, error) {
 	source := query.AsTransaction[claimedAlias](definition, "candidate")
 	fields := RecordFieldsAt(source.Scope())
 	return ProjectTransactionSummary(source).
-		SelectID(fields.ID.Value()).SelectName(fields.Name.Value()).Query().All(ctx, tx)
+		SelectID(query.Value(fields.ID)).SelectName(query.Value(fields.Name)).Query().All(ctx, tx)
 }
 
 func Joined(ctx context.Context, tx *database.Tx) ([]Summary, error) {
@@ -48,12 +48,12 @@ func Joined(ctx context.Context, tx *database.Tx) ([]Summary, error) {
 	joined := query.TransactionInnerJoin(left, right, query.On(a.ID, b.ID))
 	fields := RecordFieldsAt(query.LeftScope(joined, left.Scope()))
 	return ProjectTransactionSummary(joined).
-		SelectID(fields.ID.Value()).SelectName(fields.Name.Value()).Query().All(ctx, tx)
+		SelectID(query.Value(fields.ID)).SelectName(query.Value(fields.Name)).Query().All(ctx, tx)
 }
 
 func CountClaimed(ctx context.Context, tx *database.Tx) (Totals, error) {
 	definition := query.TransactionCTE("claimed", QueryRecords().ForUpdate())
 	source := query.AsTransaction[claimedAlias](definition, "candidate")
 	fields := RecordFieldsAt(source.Scope())
-	return ProjectTransactionTotals(source).SelectCount(fields.ID.Count().Value()).Query().RequireFirst(ctx, tx)
+	return ProjectTransactionTotals(source).SelectCount(query.CountField(fields.ID).Value()).Query().RequireFirst(ctx, tx)
 }

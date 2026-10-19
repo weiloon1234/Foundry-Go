@@ -9,21 +9,21 @@ import (
 // RowValue is a sealed value evaluated before grouping/window evaluation.
 // Generated fields and RowExpression implement it. Selected aggregate/window
 // expressions deliberately do not, preserving the row-predicate boundary.
-type RowValue[S, V any] interface{ rowValue() RowExpression[S, V] }
+type RowValue[S, V any] interface{ rowValue() rowValueData[S, V] }
 
 // RowExpression is a computed row value with concrete owner and result types.
 // Value promotes it to a selected expression; Eq/Ne/In remain row predicates.
 type RowExpression[S, V any] struct{ expression Expression[S, V] }
 
-func (e RowExpression[S, V]) rowValue() RowExpression[S, V] { return e }
-func (e RowExpression[S, V]) Value() Expression[S, V]       { return e.expression }
-func (e RowExpression[S, V]) Asc() Order[S]                 { return rowOrder[S](e.expression.node, false) }
-func (e RowExpression[S, V]) Desc() Order[S]                { return rowOrder[S](e.expression.node, true) }
-func (e RowExpression[S, V]) Eq(v V) Predicate[S]           { return e.compare(equal, v) }
-func (e RowExpression[S, V]) Ne(v V) Predicate[S]           { return e.compare(notEqual, v) }
-func (e RowExpression[S, V]) In(v ...V) Predicate[S]        { return e.compare(in, v...) }
-func (e RowExpression[S, V]) IsNull() Predicate[S]          { return e.compare(isNull) }
-func (e RowExpression[S, V]) IsNotNull() Predicate[S]       { return e.compare(isNotNull) }
+func (e RowExpression[S, V]) rowValue() rowValueData[S, V] { return rowValueData[S, V](e.expression) }
+func (e RowExpression[S, V]) Value() Expression[S, V]      { return e.expression }
+func (e RowExpression[S, V]) Asc() Order[S]                { return rowOrder[S](e.expression.node, false) }
+func (e RowExpression[S, V]) Desc() Order[S]               { return rowOrder[S](e.expression.node, true) }
+func (e RowExpression[S, V]) Eq(v V) Predicate[S]          { return e.compare(equal, v) }
+func (e RowExpression[S, V]) Ne(v V) Predicate[S]          { return e.compare(notEqual, v) }
+func (e RowExpression[S, V]) In(v ...V) Predicate[S]       { return e.compare(in, v...) }
+func (e RowExpression[S, V]) IsNull() Predicate[S]         { return e.compare(isNull) }
+func (e RowExpression[S, V]) IsNotNull() Predicate[S]      { return e.compare(isNotNull) }
 func (e RowExpression[S, V]) compare(op operator, v ...V) Predicate[S] {
 	return Predicate[S]{expression: typedComparison(e.expression.node, op, e.expression.codec, v)}
 }
@@ -32,17 +32,8 @@ func rowInput[S, V any](source RowValue[S, V]) RowExpression[S, V] {
 	if nilDescriptor(source) {
 		return RowExpression[S, V]{}
 	}
-	return source.rowValue()
+	return RowExpression[S, V]{Expression[S, V](source.rowValue())}
 }
-func (f valueField[M, V]) rowValue() RowExpression[M, V] { return RowExpression[M, V]{f.Value()} }
-func (f NullableField[M, V]) rowValue() RowExpression[M, value.Nullable[V]] {
-	return RowExpression[M, value.Nullable[V]]{f.Value()}
-}
-
-// Param captures a bound value using the field's concrete type and codec. It
-// does not read the field or add a SQL column reference. On nullable fields it
-// takes the same non-NULL value type as Eq; NullFor creates an explicit NULL.
-func (f valueField[M, V]) Param(v V) RowExpression[M, V] { return parameterExpression[M](v, f.codec) }
 
 // Param captures a value of this expression's exact type, including nullability.
 // Encoding happens once at construction to own mutable driver buffers; an

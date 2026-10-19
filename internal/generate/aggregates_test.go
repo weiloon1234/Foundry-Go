@@ -19,7 +19,7 @@ func(User)DefineRelations()UserRelationSet { return UserRelationSet{Children:que
 func(User)DefineAggregates()UserAggregateSet {
  return UserAggregateSet{
   ChildCount:query.Related(UserRelations().Children,query.Count[User]()),
-  ChildSum:query.Related(UserRelations().Children,UserFields().ID.Sum()),
+  ChildSum:query.Related(UserRelations().Children,query.Sum(UserFields().ID)),
  }
 }
 `
@@ -49,7 +49,7 @@ func TestInvalidAggregateGenerationDoesNotPublish(t *testing.T) {
 		strings.Replace(aggregateSource, "ChildCount relation.Value[int64]", "ChildCount relation.Value[int64] `foundry:\"column=count\"`", 1),
 		strings.Replace(aggregateSource, "ChildCount relation.Value[int64]", "ChildCount relation.Value[string]", 1),
 		strings.Replace(aggregateSource, "DefineAggregates()", "WrongMethod()", 1),
-		strings.Replace(aggregateSource, "UserFields().ID.Sum()", "UserFields().ParentID.Eq(1)", 1),
+		strings.Replace(aggregateSource, "query.Sum(UserFields().ID)", "UserFields().ParentID.Eq(1)", 1),
 	} {
 		dir := fixture(t, source)
 		if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil {

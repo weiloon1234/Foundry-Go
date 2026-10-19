@@ -92,7 +92,7 @@ func TestConflictConditionDiscoversCTEsAndAllocatesTargetAlias(t *testing.T) {
 	cte := CTE("foundry_upsert", q.Where(name.Eq("eligible")))
 	source := As[conflictAlias](cte, "eligible")
 	f := NewTextField[Alias[conflictAlias, user], string]("eligible", "name", codec.String[string]())
-	policy := OnConflict(name).Update(name).Where(name.InQuery(SelectValue(source, f.Value())))
+	policy := OnConflict(name).Update(name).Where(name.InQuery(SelectValue(source, Value(f))))
 	s, err := (insertPlan[user]{query: q, rows: []Mutation[user]{Change(Assign[user]("users", "name", codec.String[string](), "incoming"))}, conflict: &policy}).compile()
 	if err != nil || !strings.HasPrefix(s.SQL(), `WITH "foundry_upsert"`) || !strings.Contains(s.SQL(), `INSERT INTO "users" AS "foundry_upsert_2"`) || !reflect.DeepEqual(s.Arguments(), []any{"eligible", "incoming"}) {
 		t.Fatal("conflict condition lost CTE scope or parameter order", s, err)

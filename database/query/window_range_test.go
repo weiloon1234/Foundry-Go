@@ -20,7 +20,7 @@ func TestRangeDistanceCaptureAndOwnership(t *testing.T) {
 	calls := 0
 	c := codec.New(func(decimal.Decimal) (driver.Value, error) { calls++; return encoded, nil }, func(any) (decimal.Decimal, error) { return decimal.Decimal{}, nil }).WithParameterType(codec.TypeDecimal)
 	f := NewExactField[cursorRecord, decimal.Decimal]("records", "rank", c)
-	r := NumericRange(WindowFor(cursorQuery()), f.Value())
+	r := NumericRange(WindowFor(cursorQuery()), Value(f))
 	bound := r.Preceding(decimal.FromInt64(1))
 	encoded[0] = '9'
 	q := SelectValue(cursorQuery(), RowNumber(r.Between(bound, r.CurrentRow())))
@@ -36,7 +36,7 @@ func TestRangeDistanceCaptureAndOwnership(t *testing.T) {
 func TestTypedNumericRangeFrames(t *testing.T) {
 	q := cursorQuery()
 	id := scopedID(q.Scope())
-	r := NumericRange(WindowFor(q), id.Value()).Desc()
+	r := NumericRange(WindowFor(q), Value(id)).Desc()
 	w := r.Between(r.Preceding(2), r.Following(3))
 	s, err := SelectValue(q, Count[cursorRecord]().Over(w)).Compile()
 	if err != nil || !strings.Contains(s.SQL(), `ORDER BY "records"."id" DESC RANGE BETWEEN CAST($1 AS bigint) PRECEDING AND CAST($2 AS bigint) FOLLOWING`) || !reflect.DeepEqual(s.Arguments(), []any{int64(2), int64(3)}) {
@@ -46,7 +46,7 @@ func TestTypedNumericRangeFrames(t *testing.T) {
 		r.Between(r.Preceding(-1), r.CurrentRow()),
 		r.Between(r.CurrentRow(), r.Preceding(1)),
 		w.OrderBy(id.Asc()),
-		NumericRange(WindowFor(q).OrderBy(id.Asc()), id.Value()).Between(r.CurrentRow(), r.UnboundedFollowing()),
+		NumericRange(WindowFor(q).OrderBy(id.Asc()), Value(id)).Between(r.CurrentRow(), r.UnboundedFollowing()),
 		(RangeWindow[cursorRecord, int64]{}).Between(r.CurrentRow(), r.CurrentRow()),
 	} {
 		if _, err := SelectValue(q, Count[cursorRecord]().Over(w)).Compile(); !errors.Is(err, fault.Invalid) {
@@ -54,7 +54,7 @@ func TestTypedNumericRangeFrames(t *testing.T) {
 		}
 	}
 	f := NewFloatField[cursorRecord, float64]("records", "rank", codec.Float[float64]())
-	fr := NumericRange(WindowFor(q), f.Value())
+	fr := NumericRange(WindowFor(q), Value(f))
 	for _, v := range []float64{-1, math.Inf(1), math.NaN()} {
 		if _, err := SelectValue(q, RowNumber(fr.Between(fr.Preceding(v), fr.CurrentRow()))).Compile(); !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid float distance compiled", err)
@@ -65,7 +65,7 @@ func TestTypedNumericRangeFrames(t *testing.T) {
 func TestTemporalRangeComponentsAndSign(t *testing.T) {
 	q := cursorQuery()
 	f := NewOrderedField[cursorRecord, temporal.Date]("records", "rank", codec.Date())
-	r := TemporalRange(WindowFor(q), f.Value())
+	r := TemporalRange(WindowFor(q), Value(f))
 	mixed, err := temporal.NewInterval(-1, 31, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -80,7 +80,7 @@ func TestTemporalRangeComponentsAndSign(t *testing.T) {
 		}
 	}
 	clock := NewOrderedField[cursorRecord, temporal.Time]("records", "rank", codec.WallTime())
-	tr := TemporalRange(WindowFor(q), clock.Value())
+	tr := TemporalRange(WindowFor(q), Value(clock))
 	if _, err := SelectValue(q, RowNumber(tr.Between(tr.Preceding(temporal.Days(1)), tr.CurrentRow()))).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("wall time silently ignored calendar components", err)
 	}

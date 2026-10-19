@@ -109,7 +109,7 @@ var _ = query.OnConflict(UserFields().Key).DoUpdate(UserFields().Name.Set(FreshN
 var _ = UserFields().Name.Incoming()
 var _ = query.On(UserFields().Key,UserFields().Key)
 var _ = QueryUsers().Where(UserFields().Name.Like(StoredName("%name%")))
-var _ = query.SelectValue(QueryUsers(),UserFields().Name.Value())
+var _ = query.SelectValue(QueryUsers(),query.Value(UserFields().Name))
 `
 
 func TestModelMutationInputGeneration(t *testing.T) {

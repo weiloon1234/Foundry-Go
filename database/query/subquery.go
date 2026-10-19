@@ -45,16 +45,16 @@ func (scalarSubquery) valueNode() {}
 
 // InQuery compares compatible values from a single-column query. SQL NULL keeps
 // its three-valued semantics, including when this predicate is negated.
-func (f valueField[M, V]) InQuery(source ValueQuerySource[V]) Predicate[M] {
+func (f ScalarField[M, V]) InQuery(source ValueQuerySource[V]) Predicate[M] {
 	return f.inSubquery(valueSource(source).subquery)
 }
 
 // InNullableQuery explicitly accepts a nullable result of the same base type.
 // It does not remove NULL rows or replace them with Go zero values.
-func (f valueField[M, V]) InNullableQuery(source ValueQuerySource[value.Nullable[V]]) Predicate[M] {
+func (f ScalarField[M, V]) InNullableQuery(source ValueQuerySource[value.Nullable[V]]) Predicate[M] {
 	return f.inSubquery(valueSource(source).subquery)
 }
-func (f valueField[M, V]) inSubquery(q subquery) Predicate[M] {
+func (f ScalarField[M, V]) inSubquery(q subquery) Predicate[M] {
 	return Predicate[M]{expression: subqueryPredicate{query: q, operand: f.ref}}
 }
 

@@ -4,7 +4,7 @@ Row calculations preserve their model or alias scope and compose with generated 
 
 ```go
 f := models.UserFields()
-nextAge := query.Add(f.Age, f.Age.Param(1))
+nextAge := query.Add(f.Age, query.Param(f.Age, 1))
 email := query.Lower(query.Trim(f.Email))
 
 users, err := models.QueryUsers().

@@ -46,7 +46,7 @@ running := window.RowsBetween(query.UnboundedPreceding(), query.CurrentRow())
 moving := window.RowsBetween(query.Preceding(2), query.CurrentRow())
 whole := window.RowsBetween(query.UnboundedPreceding(), query.UnboundedFollowing())
 
-totals, err := query.SelectValue(orders, o.TotalCents.Sum().Over(running)).All(ctx, db)
+totals, err := query.SelectValue(orders, query.Sum(o.TotalCents).Over(running)).All(ctx, db)
 // totals is []value.Nullable[decimal.Decimal]
 ```
 

@@ -9,5 +9,5 @@ type alias struct{}
 type other struct{}
 
 func invalid() {
-	_ = query.SelectValue(models.QueryOrders(), models.UserFields().ID.Value())
+	_ = query.SelectValue(models.QueryOrders(), query.Value(models.UserFields().ID))
 }

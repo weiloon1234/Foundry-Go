@@ -20,11 +20,11 @@ func TestPostgresFilteredGroupsAndWindows(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
 		o := models.OrderFields()
 		base := models.QueryOrders()
-		filtered := o.TotalCents.Sum().Filter(o.TotalCents.Gt(1))
+		filtered := query.Sum(o.TotalCents).Filter(o.TotalCents.Gt(1))
 		q := reports.SelectBuyerTotals(base, reports.BuyerTotalsSelection[models.Order]{
-			BuyerID: o.BuyerID.Value(), Total: filtered.Value(),
+			BuyerID: query.Value(o.BuyerID), Total: filtered.Value(),
 			Orders:  query.Count[models.Order]().Value(),
-			Average: o.TotalCents.Avg().Filter(o.TotalCents.Lt(3)).Value(),
+			Average: query.Avg(o.TotalCents).Filter(o.TotalCents.Lt(3)).Value(),
 		}).GroupBy(o.BuyerID.Group()).Having(filtered.Gt(decimal.FromInt64(1)))
 		rows, err := q.All(t.Context(), tx)
 		if err != nil {
@@ -48,7 +48,7 @@ func TestPostgresFilteredGroupsAndWindows(t *testing.T) {
 		}
 		w := query.WindowFor(base).OrderBy(o.TotalCents.Asc()).RowsBetween(query.UnboundedPreceding(), query.CurrentRow())
 		window := windowqueries.SelectWindowTotal(base, windowqueries.WindowTotalSelection[models.Order]{
-			Amount: o.TotalCents.Value(), Running: filtered.Over(w),
+			Amount: query.Value(o.TotalCents), Running: filtered.Over(w),
 			Count: query.Count[models.Order]().Filter(o.TotalCents.Gt(1)).Over(w),
 			Any:   query.Exists[models.Order]().Filter(o.TotalCents.Gt(2)).Over(w),
 		}).OrderBy(o.TotalCents.Asc())
@@ -79,8 +79,8 @@ func TestPostgresFilteredNullsAndRelations(t *testing.T) {
 		u, o := models.UserFields(), models.OrderFields()
 		people := models.QueryUsers()
 		for name, computation := range map[string]query.OrderedAggregate[models.User, int64]{
-			"non-null": u.Nickname.Count().Filter(u.Nickname.Like("B%")),
-			"distinct": u.Nickname.CountDistinct().Filter(u.Age.Gt(0)),
+			"non-null": query.CountField(u.Nickname).Filter(u.Nickname.Like("B%")),
+			"distinct": query.CountDistinctField(u.Nickname).Filter(u.Age.Gt(0)),
 			"unknown":  query.Count[models.User]().Filter(u.Nickname.Like("Z%")),
 		} {
 			got, err := query.SelectValue(people, computation.Value()).RequireFirst(t.Context(), tx)
@@ -92,7 +92,7 @@ func TestPostgresFilteredNullsAndRelations(t *testing.T) {
 				t.Fatal(name, got, err)
 			}
 		}
-		if got, err := query.SelectValue(people, u.Age.Min().Filter(u.Age.Lt(0)).Value()).RequireFirst(t.Context(), tx); err != nil || !got.IsNull() {
+		if got, err := query.SelectValue(people, query.Min(u.Age).Filter(u.Age.Lt(0)).Value()).RequireFirst(t.Context(), tx); err != nil || !got.IsNull() {
 			t.Fatal("filtered empty extrema", got, err)
 		}
 		if got, err := query.SelectValue(people, query.Exists[models.User]().Filter(u.Age.Lt(0)).Value()).RequireFirst(t.Context(), tx); err != nil || got {
@@ -100,7 +100,7 @@ func TestPostgresFilteredNullsAndRelations(t *testing.T) {
 		}
 		aggregates, relations := models.UserAggregates(), models.UserRelations()
 		count := aggregates.OrderCount.Using(query.Related(relations.Orders, query.Count[models.Order]().Filter(o.TotalCents.Gt(2))))
-		total := aggregates.OrderTotal.Using(query.Related(relations.Orders, o.TotalCents.Sum().Filter(o.TotalCents.Gt(2))))
+		total := aggregates.OrderTotal.Using(query.Related(relations.Orders, query.Sum(o.TotalCents).Filter(o.TotalCents.Gt(2))))
 		rows, err := people.With(count, total).OrderBy(u.Email.Asc()).All(t.Context(), tx)
 		if err != nil {
 			return err
@@ -133,7 +133,7 @@ func TestPostgresFilteredCTEsAndCorrelations(t *testing.T) {
 		base, o := models.QueryOrders(), models.OrderFields()
 		common := query.As[orderAlias](query.CTE("eligible", base.Where(o.TotalCents.Gt(1))), "eligible_source")
 		f := models.OrderFieldsAt(common.Scope())
-		eligible := o.ID.InQuery(query.SelectValue(common, f.ID.Value()))
+		eligible := o.ID.InQuery(query.SelectValue(common, query.Value(f.ID)))
 		if count, err := query.SelectValue(base, query.Count[models.Order]().Filter(eligible).Value()).RequireFirst(t.Context(), tx); err != nil || count != 2 {
 			t.Fatal("CTE dependency only in FILTER", count, err)
 		}

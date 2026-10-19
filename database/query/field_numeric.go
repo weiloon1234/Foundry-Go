@@ -38,30 +38,18 @@ func NewNullableFloatField[M any, V floatingNumber](table, column string, c code
 	return NullableFloatField[M, V]{NewNullableOrderedField[M, V](table, column, c)}
 }
 
-// Sum returns the exact sum of non-NULL values, or SQL NULL for an empty group.
-func (f ExactField[M, V]) Sum() NullableOrderedAggregate[M, decimal.Decimal] {
-	return fieldSummary(f.ScalarField, sumValues, exactNumberCast, codec.Decimal())
+func (f ExactField[M, V]) summaryData() summaryData[M, decimal.Decimal] {
+	return summaryData[M, decimal.Decimal]{field: f.ref, cast: exactNumberCast, codec: codec.Decimal()}
 }
 
-// Avg preserves PostgreSQL's decimal result and its finite division precision.
-func (f ExactField[M, V]) Avg() NullableOrderedAggregate[M, decimal.Decimal] {
-	return fieldSummary(f.ScalarField, averageValues, exactNumberCast, codec.Decimal())
+func (f NullableExactField[M, V]) summaryData() summaryData[M, decimal.Decimal] {
+	return summaryData[M, decimal.Decimal]{field: f.ref, cast: exactNumberCast, codec: codec.Decimal()}
 }
-func (f NullableExactField[M, V]) Sum() NullableOrderedAggregate[M, decimal.Decimal] {
-	return fieldSummary(f.ScalarField, sumValues, exactNumberCast, codec.Decimal())
+
+func (f FloatField[M, V]) summaryData() summaryData[M, float64] {
+	return summaryData[M, float64]{field: f.ref, cast: floatNumberCast, codec: codec.Float[float64]()}
 }
-func (f NullableExactField[M, V]) Avg() NullableOrderedAggregate[M, decimal.Decimal] {
-	return fieldSummary(f.ScalarField, averageValues, exactNumberCast, codec.Decimal())
-}
-func (f FloatField[M, V]) Sum() NullableOrderedAggregate[M, float64] {
-	return fieldSummary(f.ScalarField, sumValues, floatNumberCast, codec.Float[float64]())
-}
-func (f FloatField[M, V]) Avg() NullableOrderedAggregate[M, float64] {
-	return fieldSummary(f.ScalarField, averageValues, floatNumberCast, codec.Float[float64]())
-}
-func (f NullableFloatField[M, V]) Sum() NullableOrderedAggregate[M, float64] {
-	return fieldSummary(f.ScalarField, sumValues, floatNumberCast, codec.Float[float64]())
-}
-func (f NullableFloatField[M, V]) Avg() NullableOrderedAggregate[M, float64] {
-	return fieldSummary(f.ScalarField, averageValues, floatNumberCast, codec.Float[float64]())
+
+func (f NullableFloatField[M, V]) summaryData() summaryData[M, float64] {
+	return summaryData[M, float64]{field: f.ref, cast: floatNumberCast, codec: codec.Float[float64]()}
 }

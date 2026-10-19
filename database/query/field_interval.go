@@ -20,18 +20,10 @@ func NewNullableIntervalField[M any, V intervalValue](table, column string, c co
 	return NullableIntervalField[M, V]{NewNullableOrderedField[M, V](table, column, c)}
 }
 
-// Sum retains interval components and returns NULL for an empty/all-NULL group.
-func (f IntervalField[M, V]) Sum() NullableOrderedAggregate[M, V] {
-	return fieldSummary(f.ScalarField, sumValues, intervalValueCast, f.codec)
+func (f IntervalField[M, V]) summaryData() summaryData[M, V] {
+	return summaryData[M, V]{field: f.ref, cast: intervalValueCast, codec: f.codec}
 }
 
-// Avg uses PostgreSQL interval division and its whole-microsecond precision.
-func (f IntervalField[M, V]) Avg() NullableOrderedAggregate[M, V] {
-	return fieldSummary(f.ScalarField, averageValues, intervalValueCast, f.codec)
-}
-func (f NullableIntervalField[M, V]) Sum() NullableOrderedAggregate[M, V] {
-	return fieldSummary(f.ScalarField, sumValues, intervalValueCast, f.codec)
-}
-func (f NullableIntervalField[M, V]) Avg() NullableOrderedAggregate[M, V] {
-	return fieldSummary(f.ScalarField, averageValues, intervalValueCast, f.codec)
+func (f NullableIntervalField[M, V]) summaryData() summaryData[M, V] {
+	return summaryData[M, V]{field: f.ref, cast: intervalValueCast, codec: f.codec}
 }

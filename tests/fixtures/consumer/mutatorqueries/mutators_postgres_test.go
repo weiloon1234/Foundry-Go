@@ -144,7 +144,7 @@ func TestPostgresAutomaticModelMutators(t *testing.T) {
 			}
 		}
 		proposed := mutatorqueries.MemberFieldsAt(q.ConflictRows().Proposed())
-		computedPolicy := query.OnConflict[mutatorqueries.Member](f.Email).DoUpdate(query.SetConflictValue(f.Attempts, query.Add(proposed.Attempts, proposed.Attempts.Param(1))))
+		computedPolicy := query.OnConflict[mutatorqueries.Member](f.Email).DoUpdate(query.SetConflictValue(f.Attempts, query.Add(proposed.Attempts, query.Param(proposed.Attempts, 1))))
 		if _, err := q.Upsert(t.Context(), tx, mutatorqueries.MemberDraft{}.SetEmail(" CONSTANT@EXAMPLE.TEST "), computedPolicy); !errors.Is(err, fault.Invalid) {
 			t.Fatalf("SQL calculation bypassed a Go field mutator: %v", err)
 		}

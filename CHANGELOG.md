@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Typed field compilation (breaking API change)
+
+- Optional field computations now use `query.Value(field)`, `query.Param(field, v)`,
+  `query.CountField(field)`, `query.CountDistinctField(field)`, `query.Min(field)`,
+  `query.Max(field)`, `query.Sum(field)` and `query.Avg(field)`. Computed row
+  expressions and aggregates keep their `Value`/`Param` methods; selected values
+  retain `Param`, and `query.Count[M]()` still counts rows. Framework consumers and compiler/editor examples use the new functions.
+- Sealed data descriptors defer expression/aggregate instantiation until use.
+  Shared scalar/binary storage has no capability method set. Model ownership,
+  concrete result types, numeric capabilities, NULL handling, expression phases,
+  key comparability and transaction contracts remain enforced.
+- See [typed field computations](docs/guides/typed-field-computations.md) for migration.
+
+### Typed geographic distance
+
+- Query expressions calculate spherical great-circle metres from typed numeric
+  coordinates and a validated origin, including NULL propagation, bounded SQL,
+  filtering and stable server-side distance ordering without PostGIS.
+
 ### Transactional setting defaults
 
 - `settings.Key.EnsureIn` initializes a missing setting within a caller's

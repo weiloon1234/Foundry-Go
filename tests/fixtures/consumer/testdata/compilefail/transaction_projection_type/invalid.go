@@ -15,4 +15,4 @@ var selected = query.SelectTransactionRecord(source, source.Scope())
 var _ context.Context
 var _ *database.Tx
 
-var _ = f.ProjectTransactionSummary(source).SelectID(f.RecordFieldsAt(source.Scope()).Name.Value())
+var _ = f.ProjectTransactionSummary(source).SelectID(query.Value(f.RecordFieldsAt(source.Scope()).Name))

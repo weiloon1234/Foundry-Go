@@ -9,10 +9,10 @@ Declare and select a complete [projection record](model-projections.md), then al
 ```go
 o := models.OrderFields()
 totals := reports.ProjectBuyerTotals(models.QueryOrders()).
-    SelectBuyerID(o.BuyerID.Value()).
-    SelectTotal(o.TotalCents.Sum().Value()).
+    SelectBuyerID(query.Value(o.BuyerID)).
+    SelectTotal(query.Sum(o.TotalCents).Value()).
     SelectOrders(query.Count[models.Order]().Value()).
-    SelectAverage(o.TotalCents.Avg().Value()).
+    SelectAverage(query.Avg(o.TotalCents).Value()).
     Query().GroupBy(o.BuyerID.Group())
 
 type totalsAlias struct{}
@@ -22,7 +22,7 @@ source := query.As[totalsAlias](
     "totals",
 )
 fields := reports.BuyerTotalsFieldsAt(source.Scope())
-amounts, err := query.SelectValue(source, fields.Total.Value()).
+amounts, err := query.SelectValue(source, query.Value(fields.Total)).
     Where(fields.Total.Gt(decimal.FromInt64(2))).All(ctx, db)
 ```
 
@@ -46,8 +46,8 @@ buyer := models.UserFieldsAt(query.LeftScope(joined, buyers.Scope()))
 stats := reports.BuyerTotalsNullableFieldsAt(
     query.NullableRightScope(joined, source.Scope()))
 report := reports.ProjectUserOrderStats(joined).
-    SelectID(buyer.ID.Value()).SelectEmail(buyer.Email.Value()).
-    SelectTotal(stats.Total.Value()).SelectOrders(stats.Orders.Value()).
+    SelectID(query.Value(buyer.ID)).SelectEmail(query.Value(buyer.Email)).
+    SelectTotal(query.Value(stats.Total)).SelectOrders(query.Value(stats.Orders)).
     Query().OrderBy(buyer.Email.Asc())
 ```
 
@@ -61,7 +61,7 @@ A complete projection of a joined query may itself be aliased and joined again, 
 
 ```go
 u, o := models.UserFields(), models.OrderFields()
-buyers := query.SelectValue(models.QueryOrders(), o.BuyerID.Value()).
+buyers := query.SelectValue(models.QueryOrders(), query.Value(o.BuyerID)).
     Where(o.TotalCents.Gte(2))
 users, err := models.QueryUsers().Where(u.ID.InQuery(buyers)).All(ctx, db)
 ```
@@ -71,7 +71,7 @@ users, err := models.QueryUsers().Where(u.ID.InQuery(buyers)).All(ctx, db)
 `InNullableQuery` explicitly accepts a nullable output of the same base type:
 
 ```go
-introducers := query.SelectValue(models.QueryUsers(), u.IntroducerID.Value())
+introducers := query.SelectValue(models.QueryUsers(), query.Value(u.IntroducerID))
 predicate := u.ID.InNullableQuery(introducers)
 ```
 

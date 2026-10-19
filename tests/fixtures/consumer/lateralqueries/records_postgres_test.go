@@ -39,7 +39,7 @@ func TestPostgresLateralPerParentRecords(t *testing.T) {
 		joined := query.LeftJoinLateral(outer, latest)
 		u := models.UserFieldsAt(query.LeftScope(joined, outer.Scope()))
 		r := models.OrderNullableFieldsAt(query.NullableRightScope(joined, latest.Scope()))
-		results := lateralqueries.ProjectUserOrder(joined).SelectUserID(u.ID.Value()).SelectOrderID(r.ID.Value()).SelectTotal(r.TotalCents.Value()).Query().OrderBy(u.Age.Asc())
+		results := lateralqueries.ProjectUserOrder(joined).SelectUserID(query.Value(u.ID)).SelectOrderID(query.Value(r.ID)).SelectTotal(query.Value(r.TotalCents)).Query().OrderBy(u.Age.Asc())
 		counter := &queryfixture.QueryCounter{Executor: tx}
 		rows, err := results.All(t.Context(), counter)
 		if err != nil || len(rows) != 4 || counter.Queries.Load() != 1 {
@@ -81,7 +81,7 @@ func TestPostgresLateralPerParentRecords(t *testing.T) {
 		on := query.On(uf.ID, of.BuyerID).WhereRight(of.TotalCents.Gt(2))
 		filteredJoin := query.LeftJoinLateral(outer, latest, on)
 		filtered := models.OrderNullableFieldsAt(query.NullableRightScope(filteredJoin, latest.Scope()))
-		values, err := query.SelectValue(filteredJoin, filtered.ID.Value()).All(t.Context(), tx)
+		values, err := query.SelectValue(filteredJoin, query.Value(filtered.ID)).All(t.Context(), tx)
 		if err != nil || len(values) != 4 {
 			t.Fatal(values, err)
 		}

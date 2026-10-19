@@ -44,8 +44,8 @@ records, err := query.SelectTransactionRecord(source, source.Scope()).All(ctx, t
 ```go
 fields := RecordFieldsAt(source.Scope())
 summaries, err := ProjectTransactionSummary(source).
-    SelectID(fields.ID.Value()).
-    SelectName(fields.Name.Value()).
+    SelectID(query.Value(fields.ID)).
+    SelectName(query.Value(fields.Name)).
     Query().All(ctx, tx)
 ```
 
@@ -78,11 +78,11 @@ records, err := query.SelectTransactionRecord(joined, scope).All(ctx, tx)
 inner := query.AsTransaction[otherAlias](
     query.TransactionOf(QueryRecords()), "inner_records")
 a, b := RecordFieldsAt(source.Scope()), RecordFieldsAt(inner.Scope())
-values := query.SelectTransactionValue(inner, b.ID.Value()).
+values := query.SelectTransactionValue(inner, query.Value(b.ID)).
     Where(b.ID.Eq(2)).ForUpdate()
 
 records, err := query.SelectTransactionRecord(source, source.Scope()).
-    Where(query.TransactionInQuery(query.Add(a.ID, a.ID.Param(1)), values)).
+    Where(query.TransactionInQuery(query.Add(a.ID, query.Param(a.ID, 1)), values)).
     All(ctx, tx)
 ```
 

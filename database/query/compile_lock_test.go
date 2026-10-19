@@ -88,7 +88,7 @@ func TestLockedProjectionScopesAndDerivedSourceValidation(t *testing.T) {
 		}
 	}
 	id := NewOrderedField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
-	values := SelectValue(base, id.Value())
+	values := SelectValue(base, Value(id))
 	for _, q := range []LockedResult[cursorRecord, int64]{
 		values.Distinct().ForUpdate(), values.GroupBy(id.Group()).ForUpdate(),
 		SelectValue(base, Count[cursorRecord]().Value()).ForUpdate(),

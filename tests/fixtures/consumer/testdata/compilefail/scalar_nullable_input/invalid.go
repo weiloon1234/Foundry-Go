@@ -9,5 +9,5 @@ type alias struct{}
 type other struct{}
 
 func invalid() {
-	_ = query.ScalarNullableQuery(models.QueryUsers(), query.SelectValue(models.QueryUsers(), models.UserFields().ID.Value()))
+	_ = query.ScalarNullableQuery(models.QueryUsers(), query.SelectValue(models.QueryUsers(), query.Value(models.UserFields().ID)))
 }
