@@ -256,3 +256,54 @@ configured and full-consumer profiles, five-sample before/after cache and stream
 measurements, and three-sample runtime checks. Its [native evidence](../evidence/performance-security-native.json)
 retains cold, unchanged and edited builds, real editor timings and RSS. Historical
 C05 numbers above remain unchanged.
+## Typed field capability regression
+
+The handwritten `productionprofile.CheckJoinedFields` fixture covers aliases and
+nullable self-join fields. `productionprofile/cmd/queryresources` exercises both
+query builders and the existing email template engine, keeping reflection method
+retention present in a linked consumer. `BenchmarkProfileQueryShapes` covers the
+same query AST work without opening services.
+
+Stored field computations are opt-in [typed functions](typed-field-computations.md).
+Their sealed descriptors contain data, not public expression/aggregate capabilities.
+This reduces compiler instantiation and promoted concrete/pointer method wrappers;
+the PostgreSQL compiler itself remains shared. The independent consumer's negative
+catalogue verifies owner, value, NULL, phase and transaction restrictions.
+
+Use the existing native runner to record sequential builds against one source
+workload and SDK. Keep the ordinary Go cache warm; archive and binary sizes can be
+compared from retained artifacts. An uncached package compile with warm dependencies
+is not a cold toolchain measurement. Do not claim build-time speedups from runs with
+different cache states, compare a historical app binary as if it were matched source,
+or confuse inline names with actual compiled function records.
+
+### Historical field capability results — 2026-10-19
+
+These results describe the field-capability change delivered in `43a10d9`, before
+the shared query-engine refactor. They do not verify the combined source. See
+[query build resources](query-build-resources.md) for the subsequent engine/cache
+measurements and their source fingerprints.
+
+[Recorded local evidence](../evidence/typed-field-compilation-20261019.json) uses
+Go 1.27.1 on Apple M4 Max, ordinary optimization, the existing warm cache,
+`-p=1` and `GOMAXPROCS=2`. The same query/template workload is retained.
+
+| Matched artifact | Before | After | Reduction |
+| --- | ---: | ---: | ---: |
+| Consumer archive | 148.9 MiB | 115.7 MiB | 22.3% |
+| Executable | 26.0 MiB | 21.7 MiB | 16.4% |
+| Actual compiled query functions | 10,454 | 6,793 | 35.0% |
+
+The query-building benchmark retains 449 allocations and 27,643 bytes per
+iteration. Individual field-function microbenchmarks cost approximately 16 ns
+more than former methods in this sample; full-workload timings were similar.
+The rejected interface-based prototype added an allocation; concrete source
+constraints remove it. No wall-time speedup is inferred from cached builds.
+
+Full SDK verification still peaked around 11.2 GiB in a compiler process. Its
+many fixture/source/race variants, including retained pre-change artifacts, leave
+a large shared cache. This reduces per-artifact cost; it does not eliminate
+multi-gigabyte verification or immediately shrink an existing cache. On that
+source, PostgreSQL/Redis, all 1,022 invalid-type cases, deterministic generation,
+native editor probes and local Boss Club integration passed. Publication, independent
+published-pin adoption, Linux and a full race suite remain separate checks.
