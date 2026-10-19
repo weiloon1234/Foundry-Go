@@ -760,6 +760,8 @@ type SettingsAppFeaturesOutboxConfigKeySet struct {
 	Schema config.Key[Settings, string]
 	// Jobs selects app.features.outbox.jobs. Set accepts map[jobs.ConnectionName]outbox.Destination.
 	Jobs config.Key[Settings, map[jobs.ConnectionName]outbox.Destination]
+	// Events selects app.features.outbox.events. Set accepts map[outbox.Destination]jobs.ConnectionName.
+	Events config.Key[Settings, map[outbox.Destination]jobs.ConnectionName]
 	// Kernels selects app.features.outbox.kernels. Set accepts []foundation.KernelKind.
 	Kernels config.Key[Settings, []foundation.KernelKind]
 	// MaxAttempts selects app.features.outbox.max_attempts. Set accepts uint32.
@@ -1624,6 +1626,9 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 					Jobs: config.JSON[Settings, map[jobs.ConnectionName]outbox.Destination]("app.features.outbox.jobs", func(settings *Settings) *map[jobs.ConnectionName]outbox.Destination {
 						return &settings.App.Features.Outbox.Jobs
 					}),
+					Events: config.JSON[Settings, map[outbox.Destination]jobs.ConnectionName]("app.features.outbox.events", func(settings *Settings) *map[outbox.Destination]jobs.ConnectionName {
+						return &settings.App.Features.Outbox.Events
+					}),
 					Kernels:          config.JSON[Settings, []foundation.KernelKind]("app.features.outbox.kernels", func(settings *Settings) *[]foundation.KernelKind { return &settings.App.Features.Outbox.Kernels }),
 					MaxAttempts:      config.Scalar[Settings, uint32]("app.features.outbox.max_attempts", func(settings *Settings) *uint32 { return &settings.App.Features.Outbox.MaxAttempts }),
 					RetryDelay:       config.Duration[Settings]("app.features.outbox.retry_delay", func(settings *Settings) *time.Duration { return &settings.App.Features.Outbox.RetryDelay }),
@@ -2105,6 +2110,7 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.App.Features.Outbox.Database,
 		keys.App.Features.Outbox.Schema,
 		keys.App.Features.Outbox.Jobs,
+		keys.App.Features.Outbox.Events,
 		keys.App.Features.Outbox.Kernels,
 		keys.App.Features.Outbox.MaxAttempts,
 		keys.App.Features.Outbox.RetryDelay,

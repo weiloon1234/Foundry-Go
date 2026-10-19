@@ -741,6 +741,8 @@ type SettingsFeaturesOutboxConfigKeySet struct {
 	Schema config.Key[Settings, string]
 	// Jobs selects features.outbox.jobs. Set accepts map[jobs.ConnectionName]outbox.Destination.
 	Jobs config.Key[Settings, map[jobs.ConnectionName]outbox.Destination]
+	// Events selects features.outbox.events. Set accepts map[outbox.Destination]jobs.ConnectionName.
+	Events config.Key[Settings, map[outbox.Destination]jobs.ConnectionName]
 	// Kernels selects features.outbox.kernels. Set accepts []foundation.KernelKind.
 	Kernels config.Key[Settings, []foundation.KernelKind]
 	// MaxAttempts selects features.outbox.max_attempts. Set accepts uint32.
@@ -1564,6 +1566,9 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 				Jobs: config.JSON[Settings, map[jobs.ConnectionName]outbox.Destination]("features.outbox.jobs", func(settings *Settings) *map[jobs.ConnectionName]outbox.Destination {
 					return &settings.Features.Outbox.Jobs
 				}),
+				Events: config.JSON[Settings, map[outbox.Destination]jobs.ConnectionName]("features.outbox.events", func(settings *Settings) *map[outbox.Destination]jobs.ConnectionName {
+					return &settings.Features.Outbox.Events
+				}),
 				Kernels:          config.JSON[Settings, []foundation.KernelKind]("features.outbox.kernels", func(settings *Settings) *[]foundation.KernelKind { return &settings.Features.Outbox.Kernels }),
 				MaxAttempts:      config.Scalar[Settings, uint32]("features.outbox.max_attempts", func(settings *Settings) *uint32 { return &settings.Features.Outbox.MaxAttempts }),
 				RetryDelay:       config.Duration[Settings]("features.outbox.retry_delay", func(settings *Settings) *time.Duration { return &settings.Features.Outbox.RetryDelay }),
@@ -2020,6 +2025,7 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.Features.Outbox.Database,
 		keys.Features.Outbox.Schema,
 		keys.Features.Outbox.Jobs,
+		keys.Features.Outbox.Events,
 		keys.Features.Outbox.Kernels,
 		keys.Features.Outbox.MaxAttempts,
 		keys.Features.Outbox.RetryDelay,
