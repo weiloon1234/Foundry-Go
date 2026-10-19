@@ -35,14 +35,14 @@ func (l ValueLookup[M, V]) Validate() error {
 		return l.err
 	}
 	q := l.source
-	if q.definition == nil || q.limit.IsSet() || q.offset != 0 || len(q.orders) != 0 || len(q.relations) != 0 || q.relationLimits != nil {
+	if q.definition == nil || q.queryCore.Limit.IsSet() || q.queryCore.Offset != 0 || len(q.queryCore.Orders) != 0 || len(q.relations) != 0 || q.relationLimits != nil {
 		return fault.New(fault.Invalid, "model lookup requires an unpaginated model scope without ordering or eager loading")
 	}
 	var zero V
 	if err := q.Where(l.field.Eq(zero)).Validate(); err != nil {
 		return err
 	}
-	if _, ok := q.definition.modelField(l.field.ref.column); !ok {
+	if _, ok := q.definition.modelField(l.field.ref.Column); !ok {
 		return fault.New(fault.Invalid, "model lookup field is not a stored model field")
 	}
 	return nil

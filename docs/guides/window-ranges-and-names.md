@@ -9,10 +9,10 @@ orders := models.QueryOrders()
 o := models.OrderFields()
 r := query.NumericRange(
     query.WindowFor(orders).PartitionBy(o.BuyerID.Group()),
-    o.TotalCents.Value(),
+    query.Value(o.TotalCents),
 )
 window := r.Between(r.Preceding(500), r.CurrentRow())
-totals, err := query.SelectValue(orders, o.TotalCents.Sum().Over(window)).All(ctx, db)
+totals, err := query.SelectValue(orders, query.Sum(o.TotalCents).Over(window)).All(ctx, db)
 ```
 
 `NumericRange` retains the ordering expression's exact Go type in its distance API. An integer, exact decimal and floating-point value have different `Preceding`/`Following` arguments. `NullableNumericRange` accepts a nullable ordering expression while retaining non-nullable distances. Both support computed selected numeric values, including ordinary aggregates over grouped rows. Nested windows remain invalid at the same SELECT level.
@@ -26,7 +26,7 @@ Distances are encoded once, bound as parameters and explicitly cast using the co
 ## Calendar and elapsed distances
 
 ```go
-r := query.TemporalRange(query.WindowFor(samples), fields.At.Value())
+r := query.TemporalRange(query.WindowFor(samples), query.Value(fields.At))
 calendarDay := r.Between(r.Preceding(temporal.Days(1)), r.CurrentRow())
 
 elapsed, err := temporal.Elapsed(24 * time.Hour)
@@ -55,7 +55,7 @@ ordered := base.OrderBy(o.TotalCents.Asc(), o.ID.Asc()).Named("ordered")
 recent := ordered.RowsBetween(query.Preceding(2), query.CurrentRow()).Named("recent")
 
 count := query.Count[models.Order]().Over(recent)
-total := o.TotalCents.Sum().Over(recent)
+total := query.Sum(o.TotalCents).Over(recent)
 ```
 
 Each descriptor carries its definition. Reusing `recent` emits one WINDOW definition, with dependencies before dependents, and uses `OVER "recent"`. The scope remains typed. Define a name once and share the returned descriptor; different declarations with the same name in one SELECT are rejected. Names are validated and quoted at the declaration boundary. There are no string-based lookups when using a descriptor.

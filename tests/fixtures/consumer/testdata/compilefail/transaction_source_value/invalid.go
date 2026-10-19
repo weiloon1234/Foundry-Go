@@ -15,4 +15,4 @@ var selected = query.SelectTransactionRecord(source, source.Scope())
 var _ context.Context
 var _ *database.Tx
 
-var _ = query.SelectValue(source, f.RecordFieldsAt(source.Scope()).ID.Value())
+var _ = query.SelectValue(source, query.Value(f.RecordFieldsAt(source.Scope()).ID))

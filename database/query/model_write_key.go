@@ -10,11 +10,11 @@ func modelWritePredicate[M any](q Query[M], model M) (Predicate[M], error) {
 	if q.definition == nil {
 		return Predicate[M]{}, fault.New(fault.Invalid, "model write requires model metadata")
 	}
-	return modelWriteFieldPredicate(q, fieldRef{q.table, q.definition.primary}, model)
+	return modelWriteFieldPredicate(q, fieldRef{Table: q.queryCore.Table, Column: q.definition.modelDefinition.Primary}, model)
 }
 
 func modelWriteFieldPredicate[M any](q Query[M], ref fieldRef, model M) (Predicate[M], error) {
-	field, ok := q.definition.modelField(ref.column)
+	field, ok := q.definition.modelField(ref.Column)
 	if !ok {
 		return Predicate[M]{}, fault.New(fault.Invalid, "model write requires a declared key field")
 	}
@@ -25,5 +25,5 @@ func modelWriteFieldPredicate[M any](q Query[M], ref fieldRef, model M) (Predica
 	if raw == nil {
 		return Predicate[M]{}, fault.New(fault.Missing, "model write requires a non-null key")
 	}
-	return Predicate[M]{expression: comparison{operand: fieldRef{q.table, field.column}, operator: equal, values: []any{raw}, bind: field.decode}}, nil
+	return Predicate[M]{expression: comparison{Operand: fieldRef{Table: q.queryCore.Table, Column: field.column}, Operator: equal, Values: []any{raw}, Bind: field.decode}}, nil
 }

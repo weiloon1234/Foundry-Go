@@ -28,6 +28,7 @@ type RelationLimits struct{ BatchSize, MaxRows, MaxDepth int }
 func DefaultRelationLimits() RelationLimits {
 	return RelationLimits{BatchSize: 500, MaxRows: 10000, MaxDepth: 8}
 }
+
 func (l RelationLimits) validate() error {
 	if l.BatchSize < 1 || l.BatchSize > 1000 || l.MaxRows < 1 || l.MaxRows > 1000000 || l.MaxDepth < 1 || l.MaxDepth > 32 {
 		return fault.New(fault.Invalid, "invalid relation resource limits")
@@ -51,11 +52,14 @@ func (s *relationLoadState) attach(count int) error {
 
 type invalidRelation[M any] struct{}
 
-func (invalidRelation[M]) relationName() string        { return "" }
+func (invalidRelation[M]) relationName() string { return "" }
+
 func (r invalidRelation[M]) copyRelation() Relation[M] { return r }
+
 func (invalidRelation[M]) validateRelation(string, int, RelationLimits) error {
 	return fault.New(fault.Invalid, "nil relation descriptor")
 }
+
 func (invalidRelation[M]) loadRelation(context.Context, database.Executor, []M, *relationLoadState, int, bool) ([]M, error) {
 	return nil, fault.New(fault.Invalid, "nil relation descriptor")
 }
@@ -87,6 +91,7 @@ func (q Query[M]) WithRelationLimits(limits RelationLimits) Query[M] {
 	q.relationLimits = &limits
 	return q
 }
+
 func (q Query[M]) loadLimits() RelationLimits {
 	if q.relationLimits != nil {
 		return *q.relationLimits
@@ -106,7 +111,7 @@ func (q Query[M]) validateAt(depth int, limits RelationLimits) error {
 	}
 	seen := make(map[string]bool, len(q.relations))
 	for _, r := range q.relations {
-		if err := r.validateRelation(q.table, depth+1, limits); err != nil {
+		if err := r.validateRelation(q.queryCore.Table, depth+1, limits); err != nil {
 			return err
 		}
 		if seen[r.relationName()] {
@@ -127,6 +132,7 @@ func (q Query[M]) Load(ctx context.Context, executor database.Executor, parents 
 func (q Query[M]) LoadMissing(ctx context.Context, executor database.Executor, parents []M) ([]M, error) {
 	return q.load(ctx, executor, parents, true)
 }
+
 func (q Query[M]) load(ctx context.Context, executor database.Executor, parents []M, missing bool) ([]M, error) {
 	if err := executionContext(ctx, executor); err != nil {
 		return nil, err
@@ -141,6 +147,7 @@ func (q Query[M]) load(ctx context.Context, executor database.Executor, parents 
 	limits := q.loadLimits()
 	return q.loadRelations(ctx, executor, parents, &relationLoadState{limits: limits, remaining: limits.MaxRows, attachments: limits.MaxRows}, 0, missing)
 }
+
 func (q Query[M]) loadRelations(ctx context.Context, executor database.Executor, parents []M, state *relationLoadState, depth int, missing bool) ([]M, error) {
 	result := slices.Clone(parents)
 	for _, r := range q.relations {

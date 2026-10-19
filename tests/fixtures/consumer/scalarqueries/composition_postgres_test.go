@@ -21,7 +21,7 @@ func TestPostgresScalarProjectionAndDerivedAggregation(t *testing.T) {
 		q := scalarqueries.QueryCalculationSamples()
 		f := scalarqueries.SampleFields()
 		selected := scalarqueries.SelectCalculation(q, scalarqueries.CalculationSelection[scalarqueries.Sample]{
-			ID: f.ID.Value(), Caption: query.Lower(query.Trim(f.Name)).Value(),
+			ID: query.Value(f.ID), Caption: query.Lower(query.Trim(f.Name)).Value(),
 			LineTotal:     query.Multiply(query.DecimalOf(f.Quantity), f.Amount).Value(),
 			AmountWithTax: query.AddNullable(query.NullableRow(f.Amount), f.Tax).Value(),
 		})
@@ -38,7 +38,7 @@ func TestPostgresScalarProjectionAndDerivedAggregation(t *testing.T) {
 		derived := query.As[computedLines](query.CTE("computed_lines", selected), "lines")
 		line := scalarqueries.CalculationFieldsAt(derived.Scope())
 		want, _ := decimal.Parse("18014398509481997.45")
-		total, err := query.SelectValue(derived, line.LineTotal.Sum().Value()).RequireFirst(t.Context(), tx)
+		total, err := query.SelectValue(derived, query.Sum(line.LineTotal).Value()).RequireFirst(t.Context(), tx)
 		got, present := total.Get()
 		if err != nil || !present || got != want {
 			t.Fatal("exact derived arithmetic aggregation", got, err)
@@ -53,7 +53,7 @@ func TestPostgresScalarCTEDiscoveryAndCorrelations(t *testing.T) {
 		f := scalarqueries.SampleFields()
 		matching := query.As[matchingSample](query.CTE("positive_quantity", q.Where(query.Abs(f.Quantity).Gt(2))), "matching")
 		m := scalarqueries.SampleFieldsAt(matching.Scope())
-		matched := query.When(f.ID.InQuery(query.SelectValue(matching, m.ID.Value())), f.ID.Param(10)).Else(f.ID.Param(0))
+		matched := query.When(f.ID.InQuery(query.SelectValue(matching, query.Value(m.ID))), query.Param(f.ID, 10)).Else(query.Param(f.ID, 0))
 		scalarValues(t, tx, query.Add(matched, f.ID).Value(), []int{1, 12, 13})
 		previous := query.As[previousSample](q, "previous")
 		link := query.Correlate(q, previous)

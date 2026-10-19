@@ -15,10 +15,10 @@ import (
 func TestConditionalValuesBindingsAndImmutability(t *testing.T) {
 	id := NewExactField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
 	rank := NewNullableOrderedField[cursorRecord, int64]("records", "rank", codec.Signed[int64]())
-	base := When(id.Eq(1), id.Param(10))
-	first := base.Else(id.Param(20))
-	second := base.When(id.Eq(2), id.Param(30)).Else(id.Param(40))
-	if len(base.builder.branches) != 1 || len(first.Value().node.(caseNode).branches) != 1 || len(second.Value().node.(caseNode).branches) != 2 {
+	base := When(id.Eq(1), Param(id, 10))
+	first := base.Else(Param(id, 20))
+	second := base.When(id.Eq(2), Param(id, 30)).Else(Param(id, 40))
+	if len(base.builder.branches) != 1 || len(first.Value().node.(caseNode).Branches) != 1 || len(second.Value().node.(caseNode).Branches) != 2 {
 		t.Fatal("CASE derivation mutated branches")
 	}
 	s, err := SelectValue(cursorQuery().Where(Coalesce(rank, id).Eq(5)), first.Value()).OrderBy(first.Asc()).Compile()
@@ -73,18 +73,18 @@ func TestConditionalValuePhaseAndBounds(t *testing.T) {
 	}
 	for name, node := range map[string]valueExpression{
 		"empty CASE":       caseNode{},
-		"empty coalesce":   conditionalNode{kind: coalesceValues},
-		"invalid NULLIF":   conditionalNode{kind: nullIfValues, arguments: []valueExpression{id.ref}},
-		"nested aggregate": conditionalNode{kind: coalesceValues, arguments: []valueExpression{count.node}},
-		"nested window":    conditionalNode{kind: coalesceValues, arguments: []valueExpression{window.node}},
+		"empty coalesce":   conditionalNode{Kind: coalesceValues},
+		"invalid NULLIF":   conditionalNode{Kind: nullIfValues, Arguments: []valueExpression{id.ref}},
+		"nested aggregate": conditionalNode{Kind: coalesceValues, Arguments: []valueExpression{count.node}},
+		"nested window":    conditionalNode{Kind: coalesceValues, Arguments: []valueExpression{window.node}},
 	} {
 		predicate := Predicate[cursorRecord]{expression: typedComparison(node, equal, codec.Signed[int64](), []int64{1})}
 		if _, err := q.Where(predicate).Compile(); !errors.Is(err, fault.Invalid) {
 			t.Fatal(name, err)
 		}
 	}
-	cyclic := conditionalNode{kind: coalesceValues, arguments: make([]valueExpression, 1)}
-	cyclic.arguments[0] = cyclic
+	cyclic := conditionalNode{Kind: coalesceValues, Arguments: make([]valueExpression, 1)}
+	cyclic.Arguments[0] = cyclic
 	if _, err := SelectValue(q, Expression[cursorRecord, int64]{node: cyclic, codec: codec.Signed[int64]()}).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("conditional cycle accepted", err)
 	}
@@ -92,7 +92,7 @@ func TestConditionalValuePhaseAndBounds(t *testing.T) {
 		t.Fatal("row-value cycle accepted", err)
 	}
 	items := make([]valueExpression, MaxExpressionNodes+1)
-	if _, err := SelectValue(q, Expression[cursorRecord, int64]{node: conditionalNode{kind: coalesceValues, arguments: items}, codec: codec.Signed[int64]()}).Compile(); !errors.Is(err, fault.Invalid) {
+	if _, err := SelectValue(q, Expression[cursorRecord, int64]{node: conditionalNode{Kind: coalesceValues, Arguments: items}, codec: codec.Signed[int64]()}).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("unbounded arguments accepted", err)
 	}
 	if _, err := SelectValue(q, When(id.Eq(1), NullableRow(id)).ElseNull().Value()).Compile(); !errors.Is(err, fault.Invalid) {
@@ -124,7 +124,7 @@ func TestParameterCaptureAndCodecTypes(t *testing.T) {
 			t.Fatal("invalid parameter metadata accepted", err)
 		}
 	}
-	invalid := NewScalarField[cursorRecord, string]("records", "unused", codec.String[string]()).Param("\x00")
+	invalid := Param(NewScalarField[cursorRecord, string]("records", "unused", codec.String[string]()), "\x00")
 	if _, err := SelectValue(cursorQuery(), invalid.Value()).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("invalid parameter value accepted", err)
 	}
@@ -139,13 +139,13 @@ func TestParameterCaptureAndCodecTypes(t *testing.T) {
 
 func TestEmptyMembershipDiscardsComputedBindings(t *testing.T) {
 	id := NewExactField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
-	choice := When(id.Gt(1), id.Param(2)).Else(id.Param(3))
-	q := SelectValue(cursorQuery().Where(id.Eq(4), choice.In().Not(), id.Eq(5)), id.Param(6).Value())
+	choice := When(id.Gt(1), Param(id, 2)).Else(Param(id, 3))
+	q := SelectValue(cursorQuery().Where(id.Eq(4), choice.In().Not(), id.Eq(5)), Param(id, 6).Value())
 	s, err := q.Compile()
 	if err != nil || !reflect.DeepEqual(s.Arguments(), []any{int64(6), int64(4), int64(5)}) || !strings.Contains(s.SQL(), `"records"."id" = $3`) || strings.Contains(s.SQL(), "CASE") {
 		t.Fatal("empty IN retained discarded operand bindings", s.SQL(), s.Arguments(), err)
 	}
-	invalid := NewScalarField[cursorRecord, string]("records", "unused", codec.String[string]()).Param("\x00")
+	invalid := Param(NewScalarField[cursorRecord, string]("records", "unused", codec.String[string]()), "\x00")
 	if _, err := cursorQuery().Where(invalid.In()).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("empty IN concealed invalid operand", err)
 	}

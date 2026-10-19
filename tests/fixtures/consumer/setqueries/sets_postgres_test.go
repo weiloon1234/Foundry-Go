@@ -34,7 +34,7 @@ func TestPostgresTypedSets(t *testing.T) {
 
 func checkValueSets(t *testing.T, tx *database.Tx) error {
 	u := models.UserFields()
-	ages := query.SelectValue(models.QueryUsers(), u.Age.Value())
+	ages := query.SelectValue(models.QueryUsers(), query.Value(u.Age))
 	left := ages.Where(u.Age.Lte(21)).UnionAll(ages.Where(u.Age.Eq(21)))  // 20,21,21
 	right := ages.Where(u.Age.Gte(21)).UnionAll(ages.Where(u.Age.Eq(22))) // 21,22,22
 	for _, test := range []struct {
@@ -102,7 +102,7 @@ func checkValueSets(t *testing.T, tx *database.Tx) error {
 	if rows, err := inputWindows.OrderBy(inputWindows.Value().Asc()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(rows, []int{20, 22}) {
 		t.Error("input windows moved after union", rows, err)
 	}
-	nicknames := query.SelectValue(models.QueryUsers(), u.Nickname.Value())
+	nicknames := query.SelectValue(models.QueryUsers(), query.Value(u.Nickname))
 	for _, test := range []struct {
 		q    query.ValueSetQuery[value.Nullable[string]]
 		want int64
@@ -142,8 +142,8 @@ func checkRecordSets(t *testing.T, tx *database.Tx, users []models.User) error {
 		t.Error("correlation over combined records failed", err)
 	}
 	// Both reports return BuyerTotals while selecting from different model scopes.
-	orders := reports.ProjectBuyerTotals(models.QueryOrders()).SelectBuyerID(o.BuyerID.Value()).SelectTotal(o.TotalCents.Sum().Value()).SelectOrders(query.Count[models.Order]().Value()).SelectAverage(o.TotalCents.Avg().Value()).Query().GroupBy(o.BuyerID.Group())
-	people := reports.ProjectBuyerTotals(models.QueryUsers()).SelectBuyerID(u.ID.Value()).SelectTotal(u.Age.Sum().Value()).SelectOrders(query.Count[models.User]().Value()).SelectAverage(u.Age.Avg().Value()).Query().GroupBy(u.ID.Group())
+	orders := reports.ProjectBuyerTotals(models.QueryOrders()).SelectBuyerID(query.Value(o.BuyerID)).SelectTotal(query.Sum(o.TotalCents).Value()).SelectOrders(query.Count[models.Order]().Value()).SelectAverage(query.Avg(o.TotalCents).Value()).Query().GroupBy(o.BuyerID.Group())
+	people := reports.ProjectBuyerTotals(models.QueryUsers()).SelectBuyerID(query.Value(u.ID)).SelectTotal(query.Sum(u.Age).Value()).SelectOrders(query.Count[models.User]().Value()).SelectAverage(query.Avg(u.Age).Value()).Query().GroupBy(u.ID.Group())
 	reportsQuery := orders.UnionAll(people)
 	rf := reports.BuyerTotalsFieldsAt(reportsQuery.Scope())
 	results, err := reportsQuery.Where(rf.Total.Gte(decimal.FromInt64(20))).OrderBy(rf.Total.Asc()).All(t.Context(), tx)
@@ -157,7 +157,7 @@ func checkRecordSets(t *testing.T, tx *database.Tx, users []models.User) error {
 		t.Error("set changed exact decimal codec")
 	}
 	// Project and group the combined result through the same projection runtime.
-	summary := reports.ProjectOrderSummary(reportsQuery).SelectTotal(rf.Total.Sum().Value()).SelectCount(query.Count[query.Set[reports.BuyerTotals]]().Value()).Query()
+	summary := reports.ProjectOrderSummary(reportsQuery).SelectTotal(query.Sum(rf.Total).Value()).SelectCount(query.Count[query.Set[reports.BuyerTotals]]().Value()).Query()
 	row, err := summary.RequireFirst(t.Context(), tx)
 	if err != nil {
 		return err
@@ -187,14 +187,14 @@ func checkSetComposition(t *testing.T, tx *database.Tx, users []models.User) err
 	b := query.As[userAlias](models.QueryUsers(), "original")
 	joined := query.InnerJoin(a, b, query.On(models.UserFieldsAt(a.Scope()).ID, models.UserFieldsAt(b.Scope()).ID))
 	fields := models.UserFieldsAt(query.LeftScope(joined, a.Scope()))
-	ids := query.SelectValue(joined, fields.ID.Value())
+	ids := query.SelectValue(joined, query.Value(fields.ID))
 	if n, err := ids.Count(t.Context(), tx); err != nil || n != 2 {
 		t.Error("CTE/set join mismatch", err)
 	}
 	if n, err := models.QueryUsers().WhereHas(models.UserRelations().Referrals.Where(u.ID.InQuery(ids))).Count(t.Context(), tx); err != nil || n != 1 {
 		t.Error("relation filter lost nested set/CTE", err)
 	}
-	buyers := query.SelectValue(models.QueryOrders(), o.BuyerID.Value())
+	buyers := query.SelectValue(models.QueryOrders(), query.Value(o.BuyerID))
 	filtered := buyers.Where(o.TotalCents.Lt(3)).Union(buyers.Where(o.TotalCents.Gte(3)))
 	if changed, err := models.QueryUsers().Where(u.ID.InQuery(filtered)).Update(t.Context(), tx, users[0].ID, models.UserDraft{}.SetAge(30)); err != nil || changed.Age != 30 {
 		t.Error("set subquery failed to constrain typed update", err)
@@ -223,7 +223,7 @@ func checkSetComposition(t *testing.T, tx *database.Tx, users []models.User) err
 }
 
 func TestInvalidSetsNeverExecute(t *testing.T) {
-	ages := query.SelectValue(models.QueryUsers(), models.UserFields().Age.Value())
+	ages := query.SelectValue(models.QueryUsers(), query.Value(models.UserFields().Age))
 	combined := ages.Union(ages)
 	if rows, err := query.SelectValue(combined, (query.ValueSetQuery[int]{}).Value()).All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
 		t.Error("zero set expression reached executor", err)

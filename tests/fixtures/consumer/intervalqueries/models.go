@@ -43,7 +43,7 @@ func (Plan) DefineRelations() PlanRelationSet {
 }
 func (Plan) DefineAggregates() PlanAggregateSet {
 	r := PlanRelations()
-	return PlanAggregateSet{SampleCount: query.Related(r.Samples, query.Count[Sample]()), TotalPeriod: query.Related(r.Samples, SampleFields().Period.Sum())}
+	return PlanAggregateSet{SampleCount: query.Related(r.Samples, query.Count[Sample]()), TotalPeriod: query.Related(r.Samples, query.Sum(SampleFields().Period))}
 }
 
 //foundry:model table=interval_labels primary=ID

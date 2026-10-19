@@ -42,6 +42,7 @@ func softOne() OneRelation[softRecord, softRecord] {
 	q, id := softQuery(), softID()
 	return HasOne(id, id).Bind("Child", q, q, func(softRecord) relation.One[softRecord] { return relation.One[softRecord]{} }, func(r softRecord, _ relation.One[softRecord]) softRecord { return r })
 }
+
 func softThrough() ThroughRelation[softRecord, softRecord, softRecord] {
 	q, id := softQuery(), softID()
 	return ManyToMany(id, id, id, id).Bind("Links", q, q, q, func(softRecord) relation.Through[softRecord, softRecord] {
@@ -78,7 +79,7 @@ func TestSoftDeleteScopesPreserveExplicitFilters(t *testing.T) {
 	if err != nil || !strings.Contains(explicit.SQL(), `("soft_records"."deleted_on" IS NOT NULL)`) {
 		t.Fatal("including trashed removed an explicit filter", err)
 	}
-	if base.softDeleteScope != activeRecords || len(base.predicates) != 1 {
+	if base.queryCore.SoftDeleteScope != activeRecords || len(base.queryCore.Predicates) != 1 {
 		t.Fatal("derivation mutated the reusable base query")
 	}
 }
@@ -91,7 +92,7 @@ func TestSoftDeleteScopesReachAliasesAndModelMutations(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		filtered := source.softDeleteScope != allRecords
+		filtered := source.queryCore.SoftDeleteScope != allRecords
 		if strings.Contains(statement.SQL(), `"deleted_on" IS `) != filtered {
 			t.Fatal("alias dropped default scope", statement.SQL())
 		}
@@ -171,7 +172,7 @@ func TestSoftDeleteRelationsScopeTargetsAndPivotsIndependently(t *testing.T) {
 	if err := q.With(rebound).Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if rebound.spec.target.softDeleteScope != allRecords {
+	if rebound.spec.target.queryCore.SoftDeleteScope != allRecords {
 		t.Fatal("binding discarded descriptor visibility")
 	}
 	invalid := relation.Bind("Child", q, q.WithTrashed(), relation.get, relation.set)
@@ -189,7 +190,7 @@ func TestSoftDeleteMetadataAndUnsupportedScopeFailExplicitly(t *testing.T) {
 		}
 	}
 	plain := *q.definition
-	plain.softDelete = nil
+	plain.modelDefinition.SoftDelete = nil
 	for _, query := range []Query[softRecord]{ForModel(plain).WithTrashed(), ForModel(plain).OnlyTrashed(), For[softRecord]("soft_records").WithTrashed()} {
 		if _, err := query.Compile(); !errors.Is(err, fault.Invalid) {
 			t.Fatal("unsupported scope accepted", err)

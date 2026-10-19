@@ -16,7 +16,7 @@ import (
 func TestSoftDeleteConventionsShareTimeAndRunMutatorsOnce(t *testing.T) {
 	q := softQuery()
 	d := *q.definition
-	d.columns = append(append([]Column(nil), d.columns...), Column{Name: "created_on"}, Column{Name: "updated_on"})
+	d.modelDefinition.Columns = append(append([]columnData(nil), d.modelDefinition.Columns...), columnData{Name: "created_on"}, columnData{Name: "updated_on"})
 	d.modelFields = append([]ModelField[softRecord](nil), d.modelFields...)
 	calls := 0
 	d.modelFields[2] = NewNullableMutatedModelField("deleted_on", codec.Time(), func(r softRecord) value.Nullable[time.Time] { return r.deleted }, func(v time.Time) (time.Time, error) { calls++; return v.Add(time.Minute), nil })
@@ -34,7 +34,7 @@ func TestSoftDeleteConventionsShareTimeAndRunMutatorsOnce(t *testing.T) {
 	if !strings.HasPrefix(statement.SQL(), `UPDATE "soft_records" SET`) || !reflect.DeepEqual(statement.Arguments(), []any{now.Add(time.Minute), now, int64(4)}) || source.calls != 1 || calls != 1 {
 		t.Fatal("soft deletion lost its single sample or field mutator", statement.SQL(), statement.Arguments(), source.calls, calls)
 	}
-	if plan.kind.operation() != lifecycle.SoftDelete || len(plan.mutation.assignments) != 2 {
+	if plan.kind.Operation() != lifecycle.SoftDelete || len(plan.mutation.assignments) != 2 {
 		t.Fatal("soft deletion lost event identity or effective assignments")
 	}
 	source.now = source.now.Add(time.Hour)
@@ -46,7 +46,7 @@ func TestSoftDeleteConventionsShareTimeAndRunMutatorsOnce(t *testing.T) {
 	if !reflect.DeepEqual(statement.Arguments(), []any{nil, source.now.Truncate(time.Microsecond), int64(4)}) || source.calls != 2 || calls != 1 || !strings.Contains(statement.SQL(), `"deleted_on" IS NOT NULL`) {
 		t.Fatal("restoration lost null or applied a scalar mutator", statement.Arguments(), source.calls, calls)
 	}
-	if plan.kind.operation() != lifecycle.Restore {
+	if plan.kind.Operation() != lifecycle.Restore {
 		t.Fatal("restore reported an ordinary update")
 	}
 	plan = mutationPlan[softRecord]{query: q.WithTrashed().Where(softID().Eq(4)), kind: forceDeleteModel}
@@ -54,7 +54,7 @@ func TestSoftDeleteConventionsShareTimeAndRunMutatorsOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(statement.SQL(), `DELETE FROM "soft_records"`) || source.calls != 2 || calls != 1 || len(plan.mutation.assignments) != 0 || plan.kind.operation() != lifecycle.ForceDelete {
+	if !strings.HasPrefix(statement.SQL(), `DELETE FROM "soft_records"`) || source.calls != 2 || calls != 1 || len(plan.mutation.assignments) != 0 || plan.kind.Operation() != lifecycle.ForceDelete {
 		t.Fatal("force deletion applied update conventions", statement.SQL())
 	}
 }
@@ -68,7 +68,7 @@ func TestSoftDeleteRestoreWithoutTimestampsDoesNotReadClock(t *testing.T) {
 	}
 	for _, kind := range []mutationKind{softDeleteModel, restoreModel, forceDeleteModel, 255} {
 		plain := *q.definition
-		plain.softDelete = nil
+		plain.modelDefinition.SoftDelete = nil
 		plan = mutationPlan[softRecord]{query: ForModel(plain).Where(softID().Eq(8)), kind: kind}
 		if _, err := prepareMutation(t.Context(), &plan, nil, nil); !errors.Is(err, fault.Invalid) {
 			t.Fatal("special write accepted an unsupported model or kind", kind, err)

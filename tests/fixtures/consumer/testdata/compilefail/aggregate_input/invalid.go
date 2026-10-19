@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
-var invalid = query.Related(models.UserRelations().Orders, models.UserFields().Age.Sum())
+var invalid = query.Related(models.UserRelations().Orders, query.Sum(models.UserFields().Age))

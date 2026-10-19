@@ -168,11 +168,11 @@ func lockedModelWriteCandidates[M any](ctx context.Context, tx *database.Tx, q Q
 	if _, err := q.modelWriteCompiler(kind, false); err != nil {
 		return nil, err
 	}
-	primary, ok := q.definition.modelField(q.definition.primary)
+	primary, ok := q.definition.modelField(q.definition.modelDefinition.Primary)
 	if !ok || primary.get == nil {
 		return nil, fault.New(fault.Invalid, "per-model write requires a primary-key codec")
 	}
-	statement, err := q.OrderBy(Order[M]{field: fieldRef{q.table, q.definition.primary}}).ForUpdate().Limit(limit + 1).Compile()
+	statement, err := q.OrderBy(Order[M]{field: fieldRef{Table: q.queryCore.Table, Column: q.definition.modelDefinition.Primary}}).ForUpdate().Limit(limit + 1).Compile()
 	if err != nil {
 		return nil, err
 	}

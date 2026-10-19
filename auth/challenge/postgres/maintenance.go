@@ -1,5 +1,7 @@
 package postgres
 
+import foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
+
 import (
 	"context"
 
@@ -57,7 +59,7 @@ func (b *Backend) Prune(ctx context.Context, address challenge.Address, limit in
 			return err
 		}
 		fields := challengestore.EntryFields()
-		candidates, err := challengestore.ProjectPruneCandidate(entries(scope, "")).SelectID(fields.ID.Value()).SelectSubjectKey(fields.SubjectKey.Value()).Query().Where(fields.ExpiresAt.Lte(now)).OrderBy(fields.SubjectKey.Asc(), fields.ID.Asc()).Limit(limit).All(ctx, tx)
+		candidates, err := challengestore.ProjectPruneCandidate(entries(scope, "")).SelectID(foundryquery.Value(fields.ID)).SelectSubjectKey(foundryquery.Value(fields.SubjectKey)).Query().Where(fields.ExpiresAt.Lte(now)).OrderBy(fields.SubjectKey.Asc(), fields.ID.Asc()).Limit(limit).All(ctx, tx)
 		if err != nil {
 			return err
 		}

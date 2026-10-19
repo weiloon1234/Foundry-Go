@@ -41,7 +41,7 @@ joined := query.LeftJoinLateral(buyers, latest)
 nullable := models.OrderNullableFieldsAt(
     query.NullableRightScope(joined, latest.Scope()),
 )
-totals, err := query.SelectValue(joined, nullable.TotalCents.Value()).All(ctx, db)
+totals, err := query.SelectValue(joined, query.Value(nullable.TotalCents)).All(ctx, db)
 ```
 
 `totals` is `[]value.Nullable[int64]`. Use a declared projection to include buyer fields beside nullable order fields. A left lateral join retains a buyer when the right query yields no rows or its ON conditions reject every candidate. `LeftNullableScope` preserves an already-nullable field through a later join; `OuterNullableScope` brings it into another explicit correlation.
@@ -56,8 +56,8 @@ Each generated projection has `ProjectCorrelatedReport(source)` and `SelectCorre
 type statsAlias struct{}
 
 summary := reports.ProjectCorrelatedOrderSummary(link).
-    SelectTotal(order.TotalCents.Sum().Value()).
-    SelectCount(order.ID.Count().Value()).Query()
+    SelectTotal(query.Sum(order.TotalCents).Value()).
+    SelectCount(query.CountField(order.ID).Value()).Query()
 
 stats := query.AsLateral[statsAlias](summary, "stats")
 joined := query.CrossJoinLateral(buyers, stats)

@@ -67,7 +67,7 @@ func TestLockClauseStrengthsAndOwnedInputs(t *testing.T) {
 		}
 	}
 	field := NewOrderedField[Alias[lockLeft, cursorRecord], int64]("a", "id", codec.Signed[int64]())
-	values := SelectValue(source, field.Value()).LockRows(KeyShareLock(scope))
+	values := SelectValue(source, Value(field)).LockRows(KeyShareLock(scope))
 	if s, err := values.Compile(); err != nil || !strings.HasSuffix(s.SQL(), ` FOR KEY SHARE OF "a"`) {
 		t.Fatal(s, err)
 	}
@@ -96,26 +96,26 @@ func TestLockClausesRejectNullableTargetsAndBoundCombinedWork(t *testing.T) {
 	if _, err := SelectRecord(joined, left).LockRows(UpdateLock(left), ShareLock(forged)).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("nullable clause reached SQL", err)
 	}
-	node := selectNode{source: tableSource{table: "records"}}
+	node := selectNode{Source: tableSource{Table: "records"}}
 	var walk selectWalk
-	walk.selectNode(node, 0)
-	if walk.err != nil || walk.nodes < 2 {
+	walk.SelectNode(node, 0)
+	if walk.Err != nil || walk.Nodes < 2 {
 		t.Fatal("invalid budget fixture", walk)
 	}
-	specs := make([]lockSpec, MaxExpressionNodes/walk.nodes+1)
+	specs := make([]lockSpec, MaxExpressionNodes/walk.Nodes+1)
 	for i := range specs {
-		specs[i] = lockSpec{strength: lockUpdate}
+		specs[i] = lockSpec{Strength: lockUpdate}
 	}
-	if _, err := (&compiler{}).compileLocks(node, specs[:len(specs)-1]); err != nil {
+	if _, err := (&compiler{}).CompileLocks(node, specs[:len(specs)-1]); err != nil {
 		t.Fatal("bounded clauses failed", err)
 	}
-	if _, err := (&compiler{}).compileLocks(node, specs); !errors.Is(err, fault.Invalid) {
+	if _, err := (&compiler{}).CompileLocks(node, specs); !errors.Is(err, fault.Invalid) {
 		t.Fatal("combined lock work unbounded", err)
 	}
-	if _, err := (&compiler{}).compileLocks(node, make([]lockSpec, MaxExpressionNodes+1)); !errors.Is(err, fault.Invalid) {
+	if _, err := (&compiler{}).CompileLocks(node, make([]lockSpec, MaxExpressionNodes+1)); !errors.Is(err, fault.Invalid) {
 		t.Fatal("clause count unbounded", err)
 	}
-	if _, err := (&compiler{}).compileLocks(node, nil); !errors.Is(err, fault.Invalid) {
+	if _, err := (&compiler{}).CompileLocks(node, nil); !errors.Is(err, fault.Invalid) {
 		t.Fatal("empty clauses compiled", err)
 	}
 }
@@ -125,10 +125,10 @@ func TestLockClausesRejectWindowsInsideCalculations(t *testing.T) {
 	rank := RowNumber(WindowFor(base))
 	id := NewOrderedField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
 	calculation := AddValue(rank, rank)
-	conditional := WhenValue(EqualValue(rank, rank), id.Value()).Else(id.Value())
+	conditional := WhenValue(EqualValue(rank, rank), Value(id)).Else(Value(id))
 	for _, selected := range []ValueQuery[cursorRecord, int64]{
 		SelectValue(base, calculation), SelectValue(base, conditional),
-		SelectValue(base, id.Value()).OrderBy(calculation.Asc()),
+		SelectValue(base, Value(id)).OrderBy(calculation.Asc()),
 	} {
 		if _, err := selected.Compile(); err != nil {
 			t.Fatal("ordinary window calculation failed", err)

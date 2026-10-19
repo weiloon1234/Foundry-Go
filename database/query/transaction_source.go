@@ -1,6 +1,8 @@
 package query
 
-import "github.com/weiloon1234/Foundry-Go/fault"
+import (
+	"github.com/weiloon1234/Foundry-Go/fault"
+)
 
 // TransactionScope marks expression owners in transaction-required query composition.
 // Source interfaces and execution checks preserve the transaction boundary as well.
@@ -34,20 +36,22 @@ func TransactionOf[R any](source RecordQuerySource[R]) TransactionRecord[R] {
 	}
 	return TransactionRecord[R]{record: source.recordQuery()}
 }
+
 func (r TransactionRecord[R]) transactionRecord() recordQuery[R] { return r.record }
 
 func (q LockedQuery[M]) transactionRecord() recordQuery[M] {
 	r := q.query.recordQuery()
-	r.node.locks = []lockSpec{q.lock}
+	r.node.Locks = []lockSpec{q.lock}
 	r.directSource = false
 	return r
 }
+
 func (q LockedResult[S, R]) transactionRecord() recordQuery[R] {
 	r := q.query.recordQuery()
 	if len(q.locks) == 0 && r.err == nil {
 		r.err = fault.New(fault.Invalid, "locked result requires at least one lock clause")
 	}
-	r.node.locks = q.locks
+	r.node.Locks = q.locks
 	r.directSource = false
 	return r
 }

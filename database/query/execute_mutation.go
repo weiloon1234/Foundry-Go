@@ -25,9 +25,12 @@ type WriteError[M any] struct {
 func (e *WriteError[M]) Error() string {
 	return "model write requires transaction outcome reconciliation"
 }
+
 func (e *WriteError[M]) GoString() string { return e.Error() }
-func (e *WriteError[M]) Unwrap() error    { return e.cause }
-func (e *WriteError[M]) Candidate() M     { return e.candidate }
+
+func (e *WriteError[M]) Unwrap() error { return e.cause }
+
+func (e *WriteError[M]) Candidate() M { return e.candidate }
 
 // Insert creates one complete model. Generated Create methods construct the
 // model-specific mutation and defaults; this is the shared execution boundary.
@@ -52,10 +55,10 @@ func (q Query[M]) Remove(ctx context.Context, writer database.Transactor) (M, er
 // removal shares active-only deletion selection with relation writes.
 func (q Query[M]) removal() (Query[M], mutationKind) {
 	kind := deleteModel
-	if q.hasSoftDeletes() {
+	if q.queryCore.HasSoftDeletes() {
 		kind = softDeleteModel
-		if q.softDeleteScope == trashedRecords {
-			q = q.Where(Predicate[M]{expression: q.deletionPredicate(isNull)})
+		if q.queryCore.SoftDeleteScope == trashedRecords {
+			q = q.Where(Predicate[M]{expression: q.queryCore.DeletionPredicate(isNull)})
 		} else {
 			q = q.WithoutTrashed()
 		}
@@ -75,7 +78,7 @@ func executeMutation[M any](ctx context.Context, writer database.Transactor, pla
 		return *new(M), err
 	}
 	plan.query = plan.query.inContext(ctx)
-	if plan.query.skipModelHooks {
+	if plan.query.queryCore.SkipModelHooks {
 		return *new(M), fault.New(fault.Invalid, "WithoutModelHooks applies only to set-based writes; per-model writes always run hooks")
 	}
 	observers, known := writerObservers(writer)
@@ -91,7 +94,7 @@ func executeMutation[M any](ctx context.Context, writer database.Transactor, pla
 			return executeAutocommitInsert(ctx, owner.FoundryAutocommitQuery, owner.Clock(), plan)
 		}
 	}
-	mutate := plan.kind.sqlKind() != deleteModel && (plan.query.hasFieldMutators() || plan.needsConventions() || plan.mutation.encrypted())
+	mutate := plan.kind.SqlKind() != deleteModel && (plan.query.hasFieldMutators() || plan.needsConventions() || plan.mutation.encrypted())
 	return executeModelStatement(ctx, writer, mutate, func(ctx context.Context, tx *database.Tx) (Statement, error) {
 		return prepareMutation(ctx, &plan, transactionClock(tx), transactionKeys(tx))
 	}, func(ctx context.Context, tx *database.Tx, s Statement) (M, error) {
@@ -107,7 +110,7 @@ func prepareMutation[M any](ctx context.Context, plan *mutationPlan[M], source c
 		return Statement{}, err
 	}
 
-	if plan.kind.sqlKind() != deleteModel && plan.query.hasFieldMutators() {
+	if plan.kind.SqlKind() != deleteModel && plan.query.hasFieldMutators() {
 		c, err := plan.query.modelWriteCompiler(plan.kind, !plan.setBased)
 		if err != nil {
 			return Statement{}, err

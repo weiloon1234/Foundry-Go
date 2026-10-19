@@ -69,7 +69,7 @@ func TestTypedPasswordModelPersistsHydratesAndComparesWithoutDisclosure(t *testi
 		if strings.Contains(string(encoded), "$argon2id$") || strings.Contains(string(encoded), "exact password") {
 			return errors.New("model JSON disclosed password data")
 		}
-		projection, err := passwords.ProjectCredentialProjection(q).SelectDigest(f.Digest.Value()).Query().RequireFirst(ctx, tx)
+		projection, err := passwords.ProjectCredentialProjection(q).SelectDigest(query.Value(f.Digest)).Query().RequireFirst(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -154,7 +154,7 @@ func TestTypedPasswordModelPersistsHydratesAndComparesWithoutDisclosure(t *testi
 		if _, err := q.OrderBy(f.Digest.Asc()).CursorPaginate(ctx, tx, query.CursorRequest[passwords.Account]{Size: 1}); !errors.Is(err, fault.Invalid) {
 			return errors.New("model cursor accepted sensitive sort key")
 		}
-		result := query.CursorFor(passwords.ProjectCredentialProjection(q).SelectDigest(f.Digest.Value()).Query())
+		result := query.CursorFor(passwords.ProjectCredentialProjection(q).SelectDigest(query.Value(f.Digest)).Query())
 		rf := passwords.CredentialProjectionFieldsAt(result.Scope())
 		if _, err := result.OrderBy(rf.Digest.Asc()).UniqueBy(rf.Digest.Group()).Compile(); !errors.Is(err, fault.Invalid) {
 			return errors.New("projection cursor accepted sensitive key")

@@ -20,7 +20,7 @@ func TestPostgresLateralAggregateAndWindowReports(t *testing.T) {
 		c, scope := userOrders(outer, outer.Scope())
 		o := models.OrderFieldsAt(scope)
 		selected := reports.ProjectCorrelatedOrderSummary(c).
-			SelectTotal(o.TotalCents.Sum().Value()).SelectCount(o.ID.Count().Value()).Query()
+			SelectTotal(query.Sum(o.TotalCents).Value()).SelectCount(query.CountField(o.ID).Value()).Query()
 		stats := query.AsLateral[statsAlias](selected, "stats")
 		joined := query.CrossJoinLateral(outer, stats)
 		u := models.UserFieldsAt(query.LeftScope(joined, outer.Scope()))
@@ -37,13 +37,13 @@ func TestPostgresLateralAggregateAndWindowReports(t *testing.T) {
 			}
 		}
 		// HAVING can remove the otherwise present aggregate row for an empty input.
-		filtered := query.AsLateral[statsAlias](selected.Having(o.ID.Count().Gt(0)), "nonempty")
+		filtered := query.AsLateral[statsAlias](selected.Having(query.CountField(o.ID).Gt(0)), "nonempty")
 		filteredJoin := query.CrossJoinLateral(outer, filtered)
 		if n, err := query.SelectRecord(filteredJoin, query.RightScope(filteredJoin, filtered.Scope())).Count(t.Context(), tx); err != nil || n != 2 {
 			t.Fatal(n, err)
 		}
 		window := query.WindowFor(c).OrderBy(o.TotalCents.Desc(), o.ID.Asc())
-		ranked := lateralqueries.ProjectCorrelatedRankedOrder(c).SelectID(o.ID.Value()).SelectTotal(o.TotalCents.Value()).SelectRank(query.RowNumber(window)).Query().OrderBy(o.TotalCents.Desc()).Limit(2)
+		ranked := lateralqueries.ProjectCorrelatedRankedOrder(c).SelectID(query.Value(o.ID)).SelectTotal(query.Value(o.TotalCents)).SelectRank(query.RowNumber(window)).Query().OrderBy(o.TotalCents.Desc()).Limit(2)
 		ranking := query.AsLateral[latestAlias](ranked, "ranked")
 		rankingJoin := query.CrossJoinLateral(outer, ranking)
 		ranks, err := query.SelectRecord(rankingJoin, query.RightScope(rankingJoin, ranking.Scope())).All(t.Context(), tx)
@@ -92,7 +92,7 @@ func TestPostgresLateralChainedNullableScopes(t *testing.T) {
 		chain := query.LeftJoinLateral(first, matched)
 		retained := models.OrderNullableFieldsAt(query.LeftNullableScope(chain, query.NullableRightScope(first, latest.Scope())))
 		found := models.UserNullableFieldsAt(query.NullableRightScope(chain, matched.Scope()))
-		pairs, err := reports.ProjectUserPair(chain).SelectLeftID(retained.BuyerID.Value()).SelectRightID(found.ID.Value()).Query().All(t.Context(), tx)
+		pairs, err := reports.ProjectUserPair(chain).SelectLeftID(query.Value(retained.BuyerID)).SelectRightID(query.Value(found.ID)).Query().All(t.Context(), tx)
 		if err != nil || len(pairs) != 4 {
 			t.Fatal(pairs, err)
 		}

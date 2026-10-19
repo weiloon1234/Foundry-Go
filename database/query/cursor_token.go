@@ -11,14 +11,13 @@ import (
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlvalue"
 )
 
-// Cursor limits bound token decoding and lexicographic predicate construction.
-const (
-	MaxCursorBytes  = 64 * 1024
-	MaxCursorFields = 16
-)
+const MaxCursorBytes = querycore.MaxCursorBytes
+
+const MaxCursorFields = querycore.MaxCursorFields
 
 // Cursor is an opaque model/result-owned position. Tokens are versioned and scoped to
 // the query but are not signed/encrypted credentials. Apply authorization on
@@ -28,8 +27,10 @@ type Cursor[M any] struct {
 	token string
 }
 
-func (c Cursor[M]) Token() string    { return c.token }
-func (c Cursor[M]) String() string   { return "[cursor]" }
+func (c Cursor[M]) Token() string { return c.token }
+
+func (c Cursor[M]) String() string { return "[cursor]" }
+
 func (c Cursor[M]) GoString() string { return c.String() }
 
 // ParseCursor validates bounded transport structure. CursorPaginate additionally
@@ -46,9 +47,11 @@ type cursorEnvelope struct {
 	Scope   string        `json:"scope"`
 	Values  []cursorValue `json:"values"`
 }
+
 type cursorValue sqlvalue.Value
 
 func invalidCursor() error { return fault.New(fault.Invalid, "invalid cursor token or query scope") }
+
 func encodeCursorValue(v driver.Value) (cursorValue, error) {
 	encoded, err := sqlvalue.Encode(v)
 	if err != nil {
@@ -56,6 +59,7 @@ func encodeCursorValue(v driver.Value) (cursorValue, error) {
 	}
 	return cursorValue(encoded), nil
 }
+
 func (v cursorValue) decode() (driver.Value, error) {
 	decoded, err := sqlvalue.Value(v).Decode()
 	if err != nil {
@@ -102,6 +106,11 @@ func cursorScope[M any](q Query[M]) (string, error) {
 }
 
 func cursorStatementScope[M any](statement Statement, identity ...string) (string, error) {
+	typ := reflect.TypeFor[M]()
+	return cursorStatementScopeFor(typ.PkgPath()+"/"+typ.String(), statement, identity)
+}
+
+func cursorStatementScopeFor(modelIdentity string, statement Statement, identity []string) (string, error) {
 	values := make([]cursorValue, len(statement.arguments))
 	for i, v := range statement.arguments {
 		encoded, err := encodeCursorValue(v)
@@ -110,12 +119,11 @@ func cursorStatementScope[M any](statement Statement, identity ...string) (strin
 		}
 		values[i] = encoded
 	}
-	typ := reflect.TypeFor[M]()
 	data, err := json.Marshal(struct {
 		Model, SQL string
 		Arguments  []cursorValue
 		Identity   []string `json:",omitempty"`
-	}{typ.PkgPath() + "/" + typ.String(), statement.sql, values, identity})
+	}{modelIdentity, statement.sql, values, identity})
 	if err != nil {
 		return "", invalidCursor()
 	}

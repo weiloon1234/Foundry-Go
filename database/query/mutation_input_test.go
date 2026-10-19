@@ -18,7 +18,9 @@ import (
 // These fixture values deliberately have distinct representations. The input
 // is a concrete struct with no SQL codec; normalization returns stored text.
 type inputName struct{ supplied string }
+
 type storedName string
+
 type inputRecord struct {
 	ID   int
 	Name storedName
@@ -46,7 +48,7 @@ func TestMutationInputTransformsBeforeBindingAndRemainsReusable(t *testing.T) {
 	name := AssignInput[inputRecord]("input_records", "name", inputName{" ADA "})
 	mutation := Change(Assign[inputRecord]("input_records", "id", codec.Signed[int](), 1), name,
 		AssignInput[inputRecord]("input_records", "note", value.Of(inputName{" memo "})))
-	if _, err := name.bind(); !errors.Is(err, fault.Invalid) {
+	if _, err := name.mutationAssignment.AssignmentValue.Bind(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("untransformed input reached binding", err)
 	}
 	plain := *q.definition
@@ -88,7 +90,7 @@ func TestMutationInputPreservesNullOmissionAndRejectsStoredValues(t *testing.T) 
 	for _, includeNull := range []bool{false, true} {
 		mutation := Change(Assign[inputRecord]("input_records", "id", codec.Signed[int](), 1), AssignInput[inputRecord]("input_records", "name", inputName{}))
 		if includeNull {
-			mutation.assignments = append(mutation.assignments, AssignInput[inputRecord]("input_records", "note", value.Null[inputName]()))
+			mutation.assignments = append(mutation.assignments, AssignInput[inputRecord]("input_records", "note", value.Null[inputName]()).mutationAssignment)
 		}
 		calls = nil
 		statement, err := (insertPlan[inputRecord]{query: q, rows: []Mutation[inputRecord]{mutation}}).prepare(t.Context(), nil)

@@ -7,6 +7,7 @@ func lateralInput[S, O, R any](record correlatedRecord[O, R], alias string) (joi
 	input, metadata := aliasInput[S](record.query, alias)
 	return input, metadata, queryScope[O]{scopeRequirement: record.outer}
 }
+
 func buildLateralInputs[S, L, R any](left JoinInput[L], right joinInput[R], outer queryScope[L], conditions []JoinOn[L, R], kind joinKind) joinedSource[S, L, R] {
 	var on JoinOn[L, R]
 	if len(conditions) != 0 {
@@ -14,7 +15,7 @@ func buildLateralInputs[S, L, R any](left JoinInput[L], right joinInput[R], oute
 	}
 	result := buildJoin[S](left, lateralTable[R]{right}, on, kind)
 	if result.input.err == nil {
-		result.input.node.joins[len(result.input.node.joins)-1].lateral = &outer.scopeRequirement
+		result.input.node.Joins[len(result.input.node.Joins)-1].Lateral = &outer.scopeRequirement
 	}
 	return result
 }

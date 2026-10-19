@@ -46,7 +46,7 @@ func Draft(id int, input Input) RecordDraft {
 
 func Matching(body Payload) query.Predicate[Record] { return RecordFields().Body.Eq(body) }
 func NullableView() query.Expression[Record, value.Nullable[Payload]] {
-	return RecordFields().Note.Value()
+	return query.Value(RecordFields().Note)
 }
 func Nulls() query.Predicate[Record]                      { return RecordFields().Note.IsNull() }
 func ChangeBody(input Input) query.ConflictUpdate[Record] { return RecordFields().Body.Set(input) }

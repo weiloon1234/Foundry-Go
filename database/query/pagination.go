@@ -85,7 +85,7 @@ func (q Query[M]) paginationBase() (Query[M], error) {
 	if err != nil {
 		return Query[M]{}, err
 	}
-	if q.limit.IsSet() || q.offset != 0 {
+	if q.queryCore.Limit.IsSet() || q.queryCore.Offset != 0 {
 		return Query[M]{}, fault.New(fault.Invalid, "pagination requires an unpaginated query")
 	}
 	return q, nil
@@ -96,24 +96,11 @@ func (q Query[M]) stableModelOrder() (Query[M], error) {
 	if err := q.Validate(); err != nil {
 		return Query[M]{}, err
 	}
-	if q.definition == nil {
-		return Query[M]{}, fault.New(fault.Invalid, "ordered model reads require model metadata")
+	core, err := q.queryCore.StableOrder()
+	if err != nil {
+		return Query[M]{}, err
 	}
-	seen := make(map[string]bool, len(q.orders))
-	for _, order := range q.orders {
-		// A computed key does not prove primary-key uniqueness. Preserve it and
-		// append the actual primary field as the final tie-breaker below.
-		if order.computed != nil {
-			continue
-		}
-		if seen[order.field.column] {
-			return Query[M]{}, fault.New(fault.Invalid, "ordered model reads cannot repeat an ordered column")
-		}
-		seen[order.field.column] = true
-	}
-	if !seen[q.definition.primary] {
-		q = q.OrderBy(Order[M]{field: fieldRef{q.table, q.definition.primary}})
-	}
+	q.queryCore = core
 	return q, nil
 }
 
@@ -138,7 +125,7 @@ func (q Query[M]) Paginate(ctx context.Context, executor database.Executor, requ
 		return Page[M]{}, err
 	}
 	countQuery := q
-	countQuery.orders = nil
+	countQuery.queryCore.Orders = nil
 	return readPage(request, func() (int64, error) { return countQuery.Count(ctx, executor) },
 		func() ([]M, error) { return window.All(ctx, executor) })
 }

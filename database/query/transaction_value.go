@@ -21,15 +21,18 @@ type TransactionValue[V any] struct{ value valueSubquery[V] }
 func TransactionValueOf[V any](source ValueQuerySource[V]) TransactionValue[V] {
 	return TransactionValue[V]{value: valueSource(source)}
 }
+
 func (q TransactionValue[V]) transactionValue() valueSubquery[V] { return q.value }
-func (q TransactionValue[V]) transactionSubquery() subquery      { return q.value.subquery }
+
+func (q TransactionValue[V]) transactionSubquery() subquery { return q.value.subquery }
 
 type transactionValueAdapter[V any] struct{ value valueSubquery[V] }
 
 func (a transactionValueAdapter[V]) valueQuery() valueSubquery[V] { return a.value }
+
 func transactionValueOf[V any](source TransactionValueSource[V]) valueSubquery[V] {
 	if nilDescriptor(source) {
-		return valueSubquery[V]{subquery: subquery{err: fault.New(fault.Invalid, "transaction value requires a source")}}
+		return valueSubquery[V]{subquery: subquery{Err: fault.New(fault.Invalid, "transaction value requires a source")}}
 	}
 	return source.transactionValue()
 }
@@ -42,31 +45,40 @@ type TransactionValueQuery[S TransactionScope, V any] struct{ query ValueQuery[S
 func SelectTransactionValue[S TransactionScope, V any](source TransactionProjectionSource[S], expression Expression[S, V]) TransactionValueQuery[S, V] {
 	return TransactionValueQuery[S, V]{query: SelectValue(transactionProjection(source), expression)}
 }
+
 func (q TransactionValueQuery[S, V]) reader() TransactionQuery[S, V] {
 	return TransactionQuery[S, V]{query: q.query.query}
 }
+
 func (q TransactionValueQuery[S, V]) transactionValue() valueSubquery[V] { return q.query.valueQuery() }
-func (q TransactionValueQuery[S, V]) transactionSubquery() subquery      { return q.query.subquery() }
+
+func (q TransactionValueQuery[S, V]) transactionSubquery() subquery { return q.query.subquery() }
+
 func (q TransactionValueQuery[S, V]) Where(predicates ...Predicate[S]) TransactionValueQuery[S, V] {
 	q.query = q.query.Where(predicates...)
 	return q
 }
+
 func (q TransactionValueQuery[S, V]) OrderBy(orders ...ProjectionOrder[S]) TransactionValueQuery[S, V] {
 	q.query = q.query.OrderBy(orders...)
 	return q
 }
+
 func (q TransactionValueQuery[S, V]) GroupBy(groups ...Group[S]) TransactionValueQuery[S, V] {
 	q.query = q.query.GroupBy(groups...)
 	return q
 }
+
 func (q TransactionValueQuery[S, V]) Having(predicates ...HavingPredicate[S]) TransactionValueQuery[S, V] {
 	q.query = q.query.Having(predicates...)
 	return q
 }
+
 func (q TransactionValueQuery[S, V]) Limit(count int) TransactionValueQuery[S, V] {
 	q.query = q.query.Limit(count)
 	return q
 }
+
 func (q TransactionValueQuery[S, V]) Offset(count int) TransactionValueQuery[S, V] {
 	q.query = q.query.Offset(count)
 	return q

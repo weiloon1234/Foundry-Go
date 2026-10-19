@@ -40,22 +40,22 @@ func (q Query[M]) cursorPlan(request CursorRequest[M]) (cursorPlan[M], error) {
 	if err != nil {
 		return cursorPlan[M]{}, err
 	}
-	if len(q.orders) > MaxCursorFields {
+	if len(q.queryCore.Orders) > MaxCursorFields {
 		return cursorPlan[M]{}, fault.New(fault.Invalid, "cursor ordering exceeds its field bound")
 	}
-	if err := validateKeysetOrders(q.orders); err != nil {
+	if err := validateKeysetOrders(q.queryCore.Orders); err != nil {
 		return cursorPlan[M]{}, err
 	}
 	byName := make(map[string]ModelField[M], len(q.definition.modelFields))
 	for _, field := range q.definition.modelFields {
 		byName[field.column] = field
 	}
-	fields := make([]ModelField[M], len(q.orders))
-	for i, order := range q.orders {
-		if order.computed != nil {
+	fields := make([]ModelField[M], len(q.queryCore.Orders))
+	for i, order := range q.queryCore.Orders {
+		if order.Computed != nil {
 			return cursorPlan[M]{}, fault.New(fault.Invalid, "computed cursor keys require a declared projection and CursorFor")
 		}
-		field, ok := byName[order.field.column]
+		field, ok := byName[order.Field.Column]
 		if !ok {
 			return cursorPlan[M]{}, fault.New(fault.Invalid, "cursor ordering requires generated field codecs and getters")
 		}
@@ -67,15 +67,15 @@ func (q Query[M]) cursorPlan(request CursorRequest[M]) (cursorPlan[M], error) {
 	}
 	required := make([]bool, len(fields))
 	for i, field := range fields {
-		required[i] = field.column == q.definition.primary
+		required[i] = field.column == q.definition.modelDefinition.Primary
 	}
 	navigation, err := readCursorBoundary(request, scope, fields, required)
 	if err != nil {
 		return cursorPlan[M]{}, err
 	}
-	q.orders = cursorOrders(q.orders, navigation.backward)
+	q.queryCore.Orders = cursorOrders(q.queryCore.Orders, navigation.backward)
 	if navigation.present {
-		q = q.Where(cursorPredicate(q.orders, navigation.keys, q.definition.nullableOrder))
+		q.queryCore.Predicates = append(append([]expression(nil), q.queryCore.Predicates...), cursorPredicate(q.queryCore.Orders, navigation.keys, q.definition.modelDefinition.NullableOrder))
 	}
 	return cursorPlan[M]{query: q.Limit(request.Size + 1), fields: fields, scope: scope, backward: navigation.backward, boundary: navigation.present}, nil
 }
@@ -86,48 +86,48 @@ func (q Query[M]) cursorPlan(request CursorRequest[M]) (cursorPlan[M], error) {
 // IS NULL alternative. When every key is NOT NULL and all keys share one
 // direction, the equivalent row comparison (a, id) > ($1, $2) is emitted so
 // PostgreSQL can use one composite index range.
-func cursorPredicate[M any](orders []Order[M], keys []driver.Value, nullable func(Order[M]) bool) Predicate[M] {
+func cursorPredicate(orders []queryOrder, keys []driver.Value, nullable func(queryOrder) bool) expression {
 	if rowKeyset(orders, keys, nullable) {
 		operands := make([]valueExpression, len(orders))
 		for i, order := range orders {
-			operands[i] = order.field
+			operands[i] = order.Field
 		}
 		op := greater
-		if orders[0].descending {
+		if orders[0].Descending {
 			op = less
 		}
-		return Predicate[M]{expression: rowComparison{operands: operands, operator: op, values: slices.Clone(keys)}}
+		return rowComparison{Operands: operands, Operator: op, Values: slices.Clone(keys)}
 	}
-	var alternatives []Predicate[M]
-	var prefix []Predicate[M]
+	var alternatives []expression
+	var prefix []expression
 	for i, order := range orders {
 		key := keys[i]
-		compare := func(op operator) Predicate[M] {
-			p := comparison{operand: order.field, operator: op}
+		compare := func(op operator) expression {
+			p := comparison{Operand: order.Field, Operator: op}
 			if op != isNull && op != isNotNull {
-				p.values = []any{key}
-				p.bind = func(raw any) (driver.Value, error) { return raw, nil }
+				p.Values = []any{key}
+				p.Bind = func(raw any) (driver.Value, error) { return raw, nil }
 			}
-			return Predicate[M]{expression: p}
+			return p
 		}
-		var after Predicate[M]
+		var after expression
 		if key == nil {
-			if order.descending {
+			if order.Descending {
 				after = compare(isNotNull)
 			}
 		} else {
 			op := greater
-			if order.descending {
+			if order.Descending {
 				op = less
 			}
 			after = compare(op)
-			if !order.descending && nullable(order) {
-				after = Or(after, compare(isNull))
+			if !order.Descending && nullable(order) {
+				after = junction{Any: true, Children: []expression{after, compare(isNull)}}
 			}
 		}
-		if after.expression != nil {
+		if after != nil {
 			terms := append(slices.Clone(prefix), after)
-			alternatives = append(alternatives, And(terms...))
+			alternatives = append(alternatives, junction{Children: terms})
 		}
 		if key == nil {
 			prefix = append(prefix, compare(isNull))
@@ -138,47 +138,33 @@ func cursorPredicate[M any](orders []Order[M], keys []driver.Value, nullable fun
 	if len(alternatives) == 0 {
 		// All ascending keys can be NULL for a declared result identity. There
 		// is then no following position. Reuse empty membership's FALSE node.
-		return Predicate[M]{expression: comparison{operand: orders[0].field, operator: in, bind: func(v any) (driver.Value, error) { return v, nil }}}
+		return comparison{Operand: orders[0].Field, Operator: in, Bind: func(v any) (driver.Value, error) { return v, nil }}
 	}
-	return Or(alternatives...)
+	return junction{Any: true, Children: alternatives}
 }
 
 // rowKeyset allows a row comparison only for two or more plain NOT NULL keys
 // with present values, one shared direction and default NULL placement.
-func rowKeyset[M any](orders []Order[M], keys []driver.Value, nullable func(Order[M]) bool) bool {
+func rowKeyset(orders []queryOrder, keys []driver.Value, nullable func(queryOrder) bool) bool {
 	if len(orders) < 2 || len(orders) != len(keys) {
 		return false
 	}
 	for i, order := range orders {
-		if order.computed != nil || order.nulls != nullsDefault || order.descending != orders[0].descending || keys[i] == nil || nullable(order) {
+		if order.Computed != nil || order.Nulls != nullsDefault || order.Descending != orders[0].Descending || keys[i] == nil || nullable(order) {
 			return false
 		}
 	}
 	return true
 }
 
-// nullableOrder reports whether a model order key may be NULL. Computed keys
-// and undeclared columns are treated as nullable.
-func (d *Definition[M]) nullableOrder(order Order[M]) bool {
-	if d == nil || order.computed != nil {
-		return true
-	}
-	for _, column := range d.columns {
-		if column.Name == order.field.column {
-			return column.Nullable
-		}
-	}
-	return true
-}
-
 // anyNullable is the conservative nullability used by result cursors.
-func anyNullable[M any](Order[M]) bool { return true }
+func anyNullable(queryOrder) bool { return true }
 
 // validateKeysetOrders rejects explicit NULL placement, which the shared
 // keyset predicates do not model.
-func validateKeysetOrders[M any](orders []Order[M]) error {
+func validateKeysetOrders(orders []queryOrder) error {
 	for _, order := range orders {
-		if order.nulls != nullsDefault {
+		if order.Nulls != nullsDefault {
 			return fault.New(fault.Invalid, "cursor and keyset ordering cannot use explicit NULLS FIRST/LAST")
 		}
 	}

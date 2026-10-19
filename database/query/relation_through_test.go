@@ -47,12 +47,12 @@ func TestThroughAliasedScopesAndStableOrder(t *testing.T) {
 	if !reflect.DeepEqual(s.Arguments(), []any{int64(1), int64(2), int64(3), "{4,5}", int64(6)}) {
 		t.Fatal("joined bindings lost order")
 	}
-	if len(base.orders) != 0 || len(base.spec.target.predicates) != 0 || len(base.pivot.predicates) != 0 {
+	if len(base.orders) != 0 || len(base.spec.target.queryCore.Predicates) != 0 || len(base.pivot.queryCore.Predicates) != 0 {
 		t.Fatal("derivation mutated base")
 	}
 	captured := cursorQuery().With(&r)
 	r = r.WherePivot(id.Eq(9))
-	if len(captured.relations[0].(ThroughRelation[cursorRecord, cursorRecord, cursorRecord]).pivot.predicates) != 1 {
+	if len(captured.relations[0].(ThroughRelation[cursorRecord, cursorRecord, cursorRecord]).pivot.queryCore.Predicates) != 1 {
 		t.Fatal("captured mutable relation pointer")
 	}
 }
@@ -101,6 +101,7 @@ func (r *joinedTestRow) Scan(dest ...any) error {
 	}
 	return nil
 }
+
 func TestJoinedHydrationPublishesOnlyCompleteTuple(t *testing.T) {
 	d := Define("records", "id", []Column{{Name: "id"}}, func(row database.Row) (cursorRecord, error) {
 		var m cursorRecord

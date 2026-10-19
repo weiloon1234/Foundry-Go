@@ -13,7 +13,7 @@ func On[L, R any, K comparable](left KeyField[L, K], right KeyField[R, K]) JoinO
 	if nilDescriptor(left) || nilDescriptor(right) {
 		return JoinOn[L, R]{}
 	}
-	return JoinOn[L, R]{expression: binaryComparison{left.relationKey().ref, right.relationKey().ref, equal}}
+	return JoinOn[L, R]{expression: binaryComparison{Left: left.relationKey().ref, Right: right.relationKey().ref, Operator: equal}}
 }
 
 // OnAnd combines compatible join conditions, including composite join keys.
@@ -25,14 +25,18 @@ func OnAnd[L, R any](conditions ...JoinOn[L, R]) JoinOn[L, R] {
 func OnOr[L, R any](conditions ...JoinOn[L, R]) JoinOn[L, R] {
 	return combineOn(true, conditions)
 }
+
 func combineOn[L, R any](any bool, conditions []JoinOn[L, R]) JoinOn[L, R] {
 	children := make([]expression, len(conditions))
 	for i, c := range conditions {
 		children[i] = c.expression
 	}
-	return JoinOn[L, R]{expression: junction{any: any, children: children}}
+	return JoinOn[L, R]{expression: junction{Any: any, Children: children}}
 }
-func (on JoinOn[L, R]) Not() JoinOn[L, R] { return JoinOn[L, R]{expression: negation{on.expression}} }
+
+func (on JoinOn[L, R]) Not() JoinOn[L, R] {
+	return JoinOn[L, R]{expression: negation{Child: on.expression}}
+}
 
 // WhereLeft adds an ON condition on the preceding left input, preserving outer rows.
 func (on JoinOn[L, R]) WhereLeft(predicates ...Predicate[L]) JoinOn[L, R] {
@@ -40,7 +44,7 @@ func (on JoinOn[L, R]) WhereLeft(predicates ...Predicate[L]) JoinOn[L, R] {
 	for _, p := range predicates {
 		children = append(children, p.expression)
 	}
-	on.expression = junction{children: children}
+	on.expression = junction{Children: children}
 	return on
 }
 
@@ -50,6 +54,6 @@ func (on JoinOn[L, R]) WhereRight(predicates ...Predicate[R]) JoinOn[L, R] {
 	for _, p := range predicates {
 		children = append(children, p.expression)
 	}
-	on.expression = junction{children: children}
+	on.expression = junction{Children: children}
 	return on
 }

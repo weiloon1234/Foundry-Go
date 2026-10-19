@@ -17,31 +17,31 @@ import (
 // When the result is ordered only by its primary key over plain columns, later
 // batches continue after the last delivered key; other orders use OFFSET.
 func (q readResult[R]) retrievalChunks(ctx context.Context, executor database.Executor, yield func(R) error) error {
-	if q.lifecycle == nil || q.lifecycle.primaryIndex < 0 || q.lifecycle.primaryIndex >= len(q.node.selections) {
+	if q.lifecycle == nil || q.lifecycle.primaryIndex < 0 || q.lifecycle.primaryIndex >= len(q.node.Selections) {
 		return fault.New(fault.Invalid, "retrieval batches require complete model primary metadata")
 	}
-	q.node.orders = slices.Clone(q.node.orders)
-	primary := q.node.selections[q.lifecycle.primaryIndex].expression
+	q.node.Orders = slices.Clone(q.node.Orders)
+	primary := q.node.Selections[q.lifecycle.primaryIndex].Expression
 	// Complete-model selections retain field references. Compare only those
 	// comparable nodes; arbitrary computed expressions can contain slices.
 	present := false
 	if key, ok := primary.(fieldRef); ok {
-		for _, order := range q.node.orders {
-			if field, ok := order.expression.(fieldRef); ok && field == key {
+		for _, order := range q.node.Orders {
+			if field, ok := order.Expression.(fieldRef); ok && field == key {
 				present = true
 				break
 			}
 		}
 	}
 	if !present {
-		q.node.orders = append(q.node.orders, orderNode{expression: primary})
+		q.node.Orders = append(q.node.Orders, orderNode{Expression: primary})
 	}
 	if _, err := q.Compile(); err != nil {
 		return err
 	}
 	keyed := q.lifecycle.primaryKey != nil && primaryKeyset(q.node, primary)
-	predicates := q.node.predicates
-	remaining := q.node.limit
+	predicates := q.node.Predicates
+	remaining := q.node.Limit
 	for {
 		size := DefaultChunkSize
 		if n, bounded := remaining.Get(); bounded {
@@ -50,7 +50,7 @@ func (q readResult[R]) retrievalChunks(ctx context.Context, executor database.Ex
 		if size == 0 {
 			return nil
 		}
-		q.node.limit = value.Set(size)
+		q.node.Limit = value.Set(size)
 		items, err := q.All(ctx, executor)
 		if err != nil {
 			return err
@@ -74,17 +74,17 @@ func (q readResult[R]) retrievalChunks(ctx context.Context, executor database.Ex
 				return fault.New(fault.Invalid, "retrieval batch primary key cannot be NULL")
 			}
 			op := greater
-			if q.node.orders[0].descending {
+			if q.node.Orders[0].Descending {
 				op = less
 			}
-			after := comparison{operand: primary, operator: op, values: []any{key}, bind: func(raw any) (driver.Value, error) { return raw, nil }}
-			q.node.predicates = append(slices.Clip(predicates), after)
-			q.node.offset = 0
+			after := comparison{Operand: primary, Operator: op, Values: []any{key}, Bind: func(raw any) (driver.Value, error) { return raw, nil }}
+			q.node.Predicates = append(slices.Clip(predicates), after)
+			q.node.Offset = 0
 		} else if more {
-			if q.node.offset > math.MaxInt-len(items) {
+			if q.node.Offset > math.MaxInt-len(items) {
 				return fault.New(fault.Invalid, "retrieval batch offset overflow")
 			}
-			q.node.offset += len(items)
+			q.node.Offset += len(items)
 		}
 		if err := eachBatch(ctx, yield)(items); err != nil {
 			return err
@@ -104,14 +104,14 @@ func (q readResult[R]) retrievalChunks(ctx context.Context, executor database.Ex
 // plain column and nothing groups or deduplicates rows.
 func primaryKeyset(node selectNode, primary valueExpression) bool {
 	key, ok := primary.(fieldRef)
-	if !ok || len(node.orders) != 1 || node.orders[0].nulls != nullsDefault || len(node.joins) != 0 || len(node.groupBy) != 0 || len(node.having) != 0 || node.distinct.kind != noDistinct {
+	if !ok || len(node.Orders) != 1 || node.Orders[0].Nulls != nullsDefault || len(node.Joins) != 0 || len(node.GroupBy) != 0 || len(node.Having) != 0 || node.Distinct.Kind != noDistinct {
 		return false
 	}
-	if field, ok := node.orders[0].expression.(fieldRef); !ok || field != key {
+	if field, ok := node.Orders[0].Expression.(fieldRef); !ok || field != key {
 		return false
 	}
-	for _, selection := range node.selections {
-		if _, ok := selection.expression.(fieldRef); !ok {
+	for _, selection := range node.Selections {
+		if _, ok := selection.Expression.(fieldRef); !ok {
 			return false
 		}
 	}

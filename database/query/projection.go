@@ -12,6 +12,7 @@ import (
 // ProjectionSource retains the input scope of a query separately from its result.
 // Generated model queries implement it through their embedded Query value.
 type ProjectionSource[S any] interface{ projectionSource() projectionSource[S] }
+
 type projectionSource[S any] struct {
 	_    [0]*S
 	node selectNode
@@ -24,7 +25,7 @@ func (q Query[M]) projectionSource() projectionSource[M] {
 		s.err = fault.New(fault.Invalid, "projection source requires model metadata")
 		return s
 	}
-	if err := q.validateSoftDeleteScope(); err != nil {
+	if err := q.queryCore.ValidateSoftDeleteScope(); err != nil {
 		s.err = err
 		return s
 	}
@@ -33,7 +34,7 @@ func (q Query[M]) projectionSource() projectionSource[M] {
 		s.err = fault.New(fault.Invalid, "projection source cannot request eager-loaded model values")
 	}
 	s.node = q.modelSelect()
-	s.node.selections = nil
+	s.node.Selections = nil
 	return s
 }
 
@@ -42,14 +43,18 @@ func (q Query[M]) projectionSource() projectionSource[M] {
 type ProjectionQuery[S, P any] struct {
 	source     projectionSource[S]
 	definition ProjectionDefinition[P]
-	mappings   []ProjectionMapping[S, P]
+	mappings   []projectionMapping
 	record     *recordSelection[P]
 }
 
 // Project is the generated selection boundary. Every result field must have
 // exactly one type-compatible expression; mapping order never changes decoding.
 func Project[S, P any](source ProjectionSource[S], definition ProjectionDefinition[P], mappings ...ProjectionMapping[S, P]) ProjectionQuery[S, P] {
-	q := ProjectionQuery[S, P]{definition: definition, mappings: slices.Clone(mappings)}
+	lowered := make([]projectionMapping, len(mappings))
+	for i, m := range mappings {
+		lowered[i] = projectionMapping{Column: projectionColumn{Name: m.column.name, Typ: m.column.typ, Nullable: m.column.nullable}, Expression: m.expression}
+	}
+	q := ProjectionQuery[S, P]{definition: definition, mappings: lowered}
 	if nilDescriptor(source) {
 		q.source.err = fault.New(fault.Invalid, "projection requires a source")
 		return q
@@ -57,47 +62,53 @@ func Project[S, P any](source ProjectionSource[S], definition ProjectionDefiniti
 	q.source = source.projectionSource()
 	return q
 }
+
 func (q ProjectionQuery[S, P]) Where(predicates ...Predicate[S]) ProjectionQuery[S, P] {
 	q.source = q.source.where(predicates...)
 	return q
 }
+
 func (s projectionSource[S]) where(predicates ...Predicate[S]) projectionSource[S] {
-	s.node.predicates = slices.Clone(s.node.predicates)
+	s.node.Predicates = slices.Clone(s.node.Predicates)
 	for _, p := range predicates {
-		s.node.predicates = append(s.node.predicates, p.expression)
+		s.node.Predicates = append(s.node.Predicates, p.expression)
 	}
 	return s
 }
+
 func (q ProjectionQuery[S, P]) OrderBy(orders ...ProjectionOrder[S]) ProjectionQuery[S, P] {
-	q.source.node.orders = slices.Clone(q.source.node.orders)
+	q.source.node.Orders = slices.Clone(q.source.node.Orders)
 	for _, o := range orders {
 		if nilDescriptor(o) {
 			q.source.err = fault.New(fault.Invalid, "projection ordering requires an expression")
 			continue
 		}
-		q.source.node.orders = append(q.source.node.orders, o.projectionOrder().node)
+		q.source.node.Orders = append(q.source.node.Orders, o.projectionOrder().node)
 	}
 	return q
 }
 
 // Having appends group filters, independently of the source's row-level Where.
 func (q ProjectionQuery[S, P]) Having(predicates ...HavingPredicate[S]) ProjectionQuery[S, P] {
-	q.source.node.having = slices.Clone(q.source.node.having)
+	q.source.node.Having = slices.Clone(q.source.node.Having)
 	for _, p := range predicates {
-		q.source.node.having = append(q.source.node.having, p.expression)
+		q.source.node.Having = append(q.source.node.Having, p.expression)
 	}
 	return q
 }
+
 func (q ProjectionQuery[S, P]) GroupBy(groups ...Group[S]) ProjectionQuery[S, P] {
-	q.source.node.groupBy = append(slices.Clone(q.source.node.groupBy), keyExpressions(groups)...)
+	q.source.node.GroupBy = append(slices.Clone(q.source.node.GroupBy), keyExpressions(groups)...)
 	return q
 }
+
 func (q ProjectionQuery[S, P]) Limit(count int) ProjectionQuery[S, P] {
-	q.source.node.limit = value.Set(count)
+	q.source.node.Limit = value.Set(count)
 	return q
 }
+
 func (q ProjectionQuery[S, P]) Offset(count int) ProjectionQuery[S, P] {
-	q.source.node.offset = count
+	q.source.node.Offset = count
 	return q
 }
 
@@ -111,27 +122,9 @@ func (q ProjectionQuery[S, P]) selectNode() (selectNode, error) {
 	if err := q.definition.Validate(); err != nil {
 		return selectNode{}, err
 	}
-	if len(q.mappings) != len(q.definition.columns) {
-		return selectNode{}, fault.New(fault.Invalid, "projection must select every declared result field exactly once")
-	}
-	byName := make(map[string]ProjectionMapping[S, P], len(q.mappings))
-	for _, m := range q.mappings {
-		if _, exists := byName[m.column.name]; exists {
-			return selectNode{}, fault.New(fault.Invalid, "repeated projection field mapping")
-		}
-		byName[m.column.name] = m
-	}
-	node := q.source.node
-	node.selections = make([]selectItem, len(q.definition.columns))
-	for i, column := range q.definition.columns {
-		mapping, exists := byName[column.name]
-		if !exists || mapping.column.typ != column.typ {
-			return selectNode{}, fault.New(fault.Invalid, "projection mapping does not match its declared field")
-		}
-		node.selections[i] = selectItem{expression: mapping.expression, alias: column.name}
-	}
-	return node, nil
+	return selectProjection(q.source.node, q.definition.columns, q.mappings)
 }
+
 func (q ProjectionQuery[S, P]) reader() readResult[P] {
 	node, err := q.selectNode()
 	metadata := q.recordMetadata()

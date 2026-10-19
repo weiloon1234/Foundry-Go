@@ -158,7 +158,7 @@ func (q Query[M]) ownUniqueViolation(ctx context.Context, tx *database.Tx, state
 		return false, err
 	}
 	var owned bool
-	err := database.ScanOne(ctx, tx, `SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_index i JOIN pg_catalog.pg_class c ON c.oid = i.indexrelid WHERE i.indisunique AND i.indrelid = to_regclass($1) AND c.relname = $2)`, []any{quotedTable(q.table), constraint}, &owned)
+	err := database.ScanOne(ctx, tx, `SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_index i JOIN pg_catalog.pg_class c ON c.oid = i.indexrelid WHERE i.indisunique AND i.indrelid = to_regclass($1) AND c.relname = $2)`, []any{quotedTable(q.queryCore.Table), constraint}, &owned)
 	return owned, err
 }
 
@@ -210,45 +210,45 @@ func (q Query[M]) lookupDefaults(ctx context.Context) (Mutation[M], error) {
 	collect = func(e expression) error {
 		switch e := e.(type) {
 		case junction:
-			if e.any {
+			if e.Any {
 				return nil
 			}
-			for _, child := range e.children {
+			for _, child := range e.Children {
 				if err := collect(child); err != nil {
 					return err
 				}
 			}
 		case scopeNode:
-			resolved, err := e.resolved(ctx)
+			resolved, err := e.Resolved(ctx)
 			if err != nil {
 				return err
 			}
 			return collect(resolved)
 		case comparison:
-			field, ok := e.operand.(fieldRef)
-			if !ok || field.table != q.table || e.operator != equal || len(e.values) != 1 || e.bind == nil {
+			field, ok := e.Operand.(fieldRef)
+			if !ok || field.Table != q.queryCore.Table || e.Operator != equal || len(e.Values) != 1 || e.Bind == nil {
 				return nil
 			}
-			declared, found := q.definition.modelField(field.column)
+			declared, found := q.definition.modelField(field.Column)
 			if !found || declared.assignment == nil || declared.mutator.apply != nil {
 				return nil
 			}
-			raw, err := e.bind(e.values[0])
+			raw, err := e.Bind(e.Values[0])
 			if err != nil || raw == nil {
 				return err
 			}
-			if previous, seen := values[field.column]; seen {
+			if previous, seen := values[field.Column]; seen {
 				if !driverValuesEqual(previous, raw) {
-					conflicted[field.column] = true
+					conflicted[field.Column] = true
 				}
 				return nil
 			}
-			values[field.column] = raw
-			order = append(order, field.column)
+			values[field.Column] = raw
+			order = append(order, field.Column)
 		}
 		return nil
 	}
-	for _, e := range append(slices.Clone(q.predicates), q.scopePredicates()...) {
+	for _, e := range append(slices.Clone(q.queryCore.Predicates), q.queryCore.ScopePredicates()...) {
 		if err := collect(e); err != nil {
 			return Mutation[M]{}, err
 		}

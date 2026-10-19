@@ -23,24 +23,25 @@ func bindCorrelation[S, O, I any](outer ScopeSource[O], inner ProjectionSource[I
 	input := inner.projectionSource()
 	r.inner = scopeOf(input)
 	r.source = projectionSource[S]{node: input.node, err: input.err}
-	if r.outer.err != nil {
-		r.source.err = r.outer.err
+	if r.outer.scopeRequirement.Err != nil {
+		r.source.err = r.outer.scopeRequirement.Err
 	}
-	if r.inner.err != nil {
-		r.source.err = r.inner.err
+	if r.inner.scopeRequirement.Err != nil {
+		r.source.err = r.inner.scopeRequirement.Err
 	}
-	for name := range r.inner.sources {
-		if _, exists := r.outer.sources[name]; exists {
+	for name := range r.inner.scopeRequirement.Sources {
+		if _, exists := r.outer.scopeRequirement.Sources[name]; exists {
 			r.source.err = fault.New(fault.Invalid, "correlation shadows an outer source; use distinct aliases")
 		}
 	}
 	return r
 }
+
 func combinedCorrelationScope[S any](outer, inner scopeRequirement, err error) queryScope[S] {
-	sources := maps.Clone(outer.sources)
+	sources := maps.Clone(outer.Sources)
 	if sources == nil {
-		sources = make(map[string][]Column)
+		sources = make(map[string][]columnData)
 	}
-	maps.Copy(sources, inner.sources)
-	return queryScope[S]{scopeRequirement: scopeRequirement{sources: sources, err: err}}
+	maps.Copy(sources, inner.Sources)
+	return queryScope[S]{scopeRequirement: scopeRequirement{Sources: sources, Err: err}}
 }

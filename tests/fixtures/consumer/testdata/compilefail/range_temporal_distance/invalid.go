@@ -6,4 +6,4 @@ import (
 	"time"
 )
 
-var _ = query.NullableTemporalRange(query.WindowFor(models.QueryUsers()), models.UserFields().Birthday.Value()).Preceding(time.Hour)
+var _ = query.NullableTemporalRange(query.WindowFor(models.QueryUsers()), query.Value(models.UserFields().Birthday)).Preceding(time.Hour)

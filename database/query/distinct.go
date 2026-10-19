@@ -1,22 +1,23 @@
 package query
 
-type distinctKind uint8
-
-const (
-	noDistinct distinctKind = iota
-	distinctRows
-	distinctOn
+import (
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
-type distinctSpec struct {
-	kind distinctKind
-	keys []valueExpression
-}
+type distinctKind = querycore.DistinctKind
+
+const noDistinct = querycore.NoDistinct
+
+const distinctRows = querycore.DistinctRows
+
+const distinctOn = querycore.DistinctOn
+
+type distinctSpec = querycore.DistinctSpec
 
 // Distinct removes duplicate selected records before Limit/Offset. It replaces
 // any earlier DistinctOn clause without changing the declared result type.
 func (q ProjectionQuery[S, P]) Distinct() ProjectionQuery[S, P] {
-	q.source.node.distinct = distinctSpec{kind: distinctRows}
+	q.source.node.Distinct = distinctSpec{Kind: distinctRows}
 	return q
 }
 
@@ -35,7 +36,7 @@ func (q ProjectionQuery[S, P]) DistinctOnValues(keys ...ProjectionKey[S]) Projec
 }
 
 func (q ProjectionQuery[S, P]) distinctOn(keys []valueExpression) ProjectionQuery[S, P] {
-	q.source.node.distinct = distinctSpec{kind: distinctOn, keys: keys}
+	q.source.node.Distinct = distinctSpec{Kind: distinctOn, Keys: keys}
 	return q
 }
 

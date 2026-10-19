@@ -18,7 +18,7 @@ import (
 func TestTypedAggregateSQLAndResultRepresentations(t *testing.T) {
 	integer := NewExactField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
 	input := testThrough().Where(integer.Gt(2)).WherePivot(integer.Lt(20)).aggregateInput()
-	statement, err := compileRelationAggregate(t.Context(), input, integer.Avg().node, []driver.Value{int64(3), int64(4)}, 9)
+	statement, err := compileRelationAggregate(t.Context(), input, Avg(integer).node, []driver.Value{int64(3), int64(4)}, 9)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,21 +36,21 @@ func TestTypedAggregateSQLAndResultRepresentations(t *testing.T) {
 	if strings.Contains(statement.SQL(), "ORDER BY") {
 		t.Fatal("aggregate retained unrelated row ordering")
 	}
-	result, err := integer.Avg().codec.Decode("1.5000000000000000")
+	result, err := Avg(integer).codec.Decode("1.5000000000000000")
 	d, present := result.Get()
 	if err != nil || !present || d.String() != "1.5" {
 		t.Fatal("integer average lost decimal precision", err)
 	}
-	if v, err := integer.Sum().codec.Decode(nil); err != nil || !v.IsNull() {
+	if v, err := Sum(integer).codec.Decode(nil); err != nil || !v.IsNull() {
 		t.Fatal("aggregate NULL became zero")
 	}
 	floating := NewFloatField[cursorRecord, float32]("records", "id", codec.Float[float32]())
-	floatValue, err := floating.Avg().codec.Decode(float64(1.5))
+	floatValue, err := Avg(floating).codec.Decode(float64(1.5))
 	f, ok := floatValue.Get()
 	if err != nil || !ok || f != 1.5 {
 		t.Fatal("float average result is not float64")
 	}
-	if _, err := integer.Sum().codec.Decode(float64(1.5)); err == nil {
+	if _, err := Sum(integer).codec.Decode(float64(1.5)); err == nil {
 		t.Fatal("approximate driver result accepted as exact decimal")
 	}
 }
@@ -58,6 +58,7 @@ func TestTypedAggregateSQLAndResultRepresentations(t *testing.T) {
 func aggregateSlot(r AggregateRelation[cursorRecord, int64]) AggregateRelation[cursorRecord, int64] {
 	return r.Bind("Count", cursorQuery(), func(cursorRecord) relation.Value[int64] { return relation.Value[int64]{} }, func(m cursorRecord, _ relation.Value[int64]) cursorRecord { return m })
 }
+
 func TestAggregateValidationAndCapturedScopes(t *testing.T) {
 	r := testThrough()
 	count := aggregateSlot(Related(r, Count[cursorRecord]()))
@@ -70,7 +71,7 @@ func TestAggregateValidationAndCapturedScopes(t *testing.T) {
 		cursorQuery().With(count, count),
 		cursorQuery().With(aggregateSlot(Related(missing, Count[cursorRecord]()))),
 		cursorQuery().With(aggregateSlot(Related(r, Aggregate[cursorRecord, int64]{}))),
-		cursorQuery().With(aggregateSlot(Related(r, badField.Count()))),
+		cursorQuery().With(aggregateSlot(Related(r, CountField(badField)))),
 		cursorQuery().With(aggregateSlot(Related(r.WithPivot(testRelation(cursorQuery(), cursorQuery())), Count[cursorRecord]()))),
 		cursorQuery().With(aggregateSlot(Related(r.With(testRelation(cursorQuery(), cursorQuery())), Count[cursorRecord]()))),
 	} {

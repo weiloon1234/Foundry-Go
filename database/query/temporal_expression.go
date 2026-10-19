@@ -397,11 +397,11 @@ func TransactionTime[S any](source ScopeSource[S]) OrderedRowExpression[S, tempo
 	if nilDescriptor(source) {
 		err = fault.New(fault.Invalid, "database time requires a source scope")
 	} else {
-		err = source.scopeSource().err
+		err = source.scopeSource().scopeRequirement.Err
 	}
 	if err != nil {
 		node := result.node.(operationNode)
-		node.err = err
+		node.Err = err
 		result.node = node
 	}
 	return orderedRow(result)

@@ -10,18 +10,18 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/encrypted"
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// sealer encrypts one captured plaintext for the row it is written to.
-type sealer func(context.Context, *encryption.Keyring, encryption.Context) (assignmentValue, error)
+type sealer = querycore.Sealer
 
 // AssignEncrypted captures an encrypted field's plaintext. The write path seals
 // it inside the write transaction with the database key ring, bound to the
 // written row's table, column and primary key; it is never bound unsealed.
 func AssignEncrypted[M any, V encrypted.Value[V]](table, column string, c codec.Codec[V], v V) Assignment[M] {
 	assignment := Assign[M](table, column, c, v)
-	assignment.seal = func(ctx context.Context, keys *encryption.Keyring, binding encryption.Context) (assignmentValue, error) {
+	assignment.mutationAssignment.Seal = func(ctx context.Context, keys *encryption.Keyring, binding encryption.Context) (assignmentValue, error) {
 		sealed, err := v.Seal(ctx, keys, binding)
 		if err != nil {
 			return assignmentValue{}, err
@@ -35,7 +35,7 @@ func AssignEncrypted[M any, V encrypted.Value[V]](table, column string, c codec.
 // explicit NULL is stored without encryption.
 func AssignNullableEncrypted[M any, V encrypted.Value[V]](table, column string, c codec.Codec[value.Nullable[V]], v value.Nullable[V]) Assignment[M] {
 	assignment := Assign[M](table, column, c, v)
-	assignment.seal = func(ctx context.Context, keys *encryption.Keyring, binding encryption.Context) (assignmentValue, error) {
+	assignment.mutationAssignment.Seal = func(ctx context.Context, keys *encryption.Keyring, binding encryption.Context) (assignmentValue, error) {
 		item, present := v.Get()
 		if !present {
 			return captureAssignment(c, v), nil
@@ -51,7 +51,7 @@ func AssignNullableEncrypted[M any, V encrypted.Value[V]](table, column string, 
 
 func (m Mutation[M]) encrypted() bool {
 	for _, assignment := range m.assignments {
-		if assignment.seal != nil {
+		if assignment.Seal != nil {
 			return true
 		}
 	}
@@ -71,20 +71,20 @@ func sealMutation[M any](ctx context.Context, keys *encryption.Keyring, table st
 	if err != nil {
 		return Mutation[M]{}, err
 	}
-	result := Change(mutation.assignments...)
+	result := mutation.clone()
 	for i, assignment := range result.assignments {
-		if assignment.seal == nil {
+		if assignment.Seal == nil {
 			continue
 		}
-		binding, err := encrypted.Binding(table, assignment.field.column, row)
+		binding, err := encrypted.Binding(table, assignment.Field.Column, row)
 		if err != nil {
 			return Mutation[M]{}, err
 		}
-		sealed, err := assignment.seal(ctx, keys, binding)
+		sealed, err := assignment.Seal(ctx, keys, binding)
 		if err != nil {
 			return Mutation[M]{}, err
 		}
-		result.assignments[i].assignmentValue, result.assignments[i].seal = sealed, nil
+		result.assignments[i].AssignmentValue, result.assignments[i].Seal = sealed, nil
 	}
 	return result, nil
 }
@@ -93,8 +93,8 @@ func sealMutation[M any](ctx context.Context, keys *encryption.Keyring, table st
 func assignedKey[M any](primary string, mutation Mutation[M]) func() (driver.Value, error) {
 	return func() (driver.Value, error) {
 		for _, assignment := range mutation.assignments {
-			if assignment.field.column == primary {
-				return assignment.bind()
+			if assignment.Field.Column == primary {
+				return assignment.Bind()
 			}
 		}
 		return nil, fault.New(fault.Invalid, "encrypted fields require an assigned primary key")
@@ -138,14 +138,14 @@ func primaryEqualities(predicates []expression, primary string, visit func(drive
 	for _, predicate := range predicates {
 		switch predicate := predicate.(type) {
 		case comparison:
-			field, ok := predicate.operand.(fieldRef)
-			if !ok || field.column != primary || predicate.operator != equal {
+			field, ok := predicate.Operand.(fieldRef)
+			if !ok || field.Column != primary || predicate.Operator != equal {
 				continue
 			}
-			if len(predicate.values) != 1 || predicate.bind == nil {
+			if len(predicate.Values) != 1 || predicate.Bind == nil {
 				return fault.New(fault.Invalid, "encrypted fields require one primary key per write")
 			}
-			bound, err := predicate.bind(predicate.values[0])
+			bound, err := predicate.Bind(predicate.Values[0])
 			if err != nil {
 				return err
 			}
@@ -153,8 +153,8 @@ func primaryEqualities(predicates []expression, primary string, visit func(drive
 				return err
 			}
 		case junction:
-			if !predicate.any {
-				if err := primaryEqualities(predicate.children, primary, visit); err != nil {
+			if !predicate.Any {
+				if err := primaryEqualities(predicate.Children, primary, visit); err != nil {
 					return err
 				}
 			}
@@ -171,11 +171,11 @@ func (p *mutationPlan[M]) seal(ctx context.Context, keys *encryption.Keyring) er
 	if p.setBased || p.query.definition == nil {
 		return errSetEncrypted()
 	}
-	key := predicateKey(p.query.predicates, p.query.definition.primary)
+	key := predicateKey(p.query.queryCore.Predicates, p.query.definition.modelDefinition.Primary)
 	if p.kind == insertModel {
-		key = assignedKey(p.query.definition.primary, p.mutation)
+		key = assignedKey(p.query.definition.modelDefinition.Primary, p.mutation)
 	}
-	sealed, err := sealMutation(ctx, keys, p.query.definition.table, p.mutation, key)
+	sealed, err := sealMutation(ctx, keys, p.query.definition.modelDefinition.Table, p.mutation, key)
 	if err != nil {
 		return err
 	}
@@ -202,7 +202,7 @@ func (p insertPlan[M]) sealRows(ctx context.Context, keys *encryption.Keyring) (
 	}
 	rows := make([]Mutation[M], len(p.rows))
 	for i, row := range p.rows {
-		sealed, err := sealMutation(ctx, keys, p.query.definition.table, row, assignedKey(p.query.definition.primary, row))
+		sealed, err := sealMutation(ctx, keys, p.query.definition.modelDefinition.Table, row, assignedKey(p.query.definition.modelDefinition.Primary, row))
 		if err != nil {
 			return insertPlan[M]{}, err
 		}
@@ -273,7 +273,7 @@ func openScope[K any](row database.Row, table, column string, key codec.Codec[K]
 type EncryptedField[M, V any] struct{ ref fieldRef }
 
 func NewEncryptedField[M, V any](table, column string, _ codec.Codec[V]) EncryptedField[M, V] {
-	return EncryptedField[M, V]{fieldRef{table, column}}
+	return EncryptedField[M, V]{fieldRef{Table: table, Column: column}}
 }
 
 // NullableEncryptedField adds only the NULL predicates, which do not reveal or
@@ -284,11 +284,13 @@ type NullableEncryptedField[M, V any] struct {
 }
 
 func NewNullableEncryptedField[M, V any](table, column string, c codec.Codec[V]) NullableEncryptedField[M, V] {
-	return NullableEncryptedField[M, V]{fieldRef{table, column}, c}
+	return NullableEncryptedField[M, V]{fieldRef{Table: table, Column: column}, c}
 }
+
 func (f NullableEncryptedField[M, V]) IsNull() Predicate[M] {
 	return Predicate[M]{expression: typedComparison(f.ref, isNull, f.codec, nil)}
 }
+
 func (f NullableEncryptedField[M, V]) IsNotNull() Predicate[M] {
 	return Predicate[M]{expression: typedComparison(f.ref, isNotNull, f.codec, nil)}
 }

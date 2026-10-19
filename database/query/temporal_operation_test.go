@@ -27,9 +27,9 @@ func TestTemporalOperationsValidateBeforeZeroLimit(t *testing.T) {
 		"nil row":                Year[cursorRecord, temporal.Date](nil).Value().node,
 		"wrong representation":   Year(badDate).Value().node,
 		"nil scope":              TransactionTime[cursorRecord](nil).Value().node,
-		"wrong result":           operationNode{kind: extractYearOperation, result: codec.TypeText, arguments: []operationArgument{operationArg(date.Value())}},
-		"wrong extraction input": operationNode{kind: extractYearOperation, result: codec.TypeInteger, arguments: []operationArgument{operationArg(at.Value())}},
-		"missing arguments":      operationNode{kind: truncateInstantOperation, result: codec.TypeDateTime},
+		"wrong result":           operationNode{Kind: extractYearOperation, Result: codec.TypeText, Arguments: []operationArgument{operationArg(Value(date))}},
+		"wrong extraction input": operationNode{Kind: extractYearOperation, Result: codec.TypeInteger, Arguments: []operationArgument{operationArg(Value(at))}},
+		"missing arguments":      operationNode{Kind: truncateInstantOperation, Result: codec.TypeDateTime},
 	} {
 		if _, err := SelectValue(cursorQuery().Limit(0), Expression[cursorRecord, int64]{node: node, codec: codec.Signed[int64]()}).Compile(); !errors.Is(err, fault.Invalid) {
 			t.Fatal(name, err)
@@ -60,19 +60,19 @@ func TestTemporalCompilerRetainsScopePhaseAndParameters(t *testing.T) {
 		}
 	}
 	renamed := requalifyValue(year.Value().node, "qualified").(operationNode)
-	input := renamed.arguments[0].value.(operationNode)
-	if input.arguments[1].value.(fieldRef).table != "qualified" {
+	input := renamed.Arguments[0].Value.(operationNode)
+	if input.Arguments[1].Value.(fieldRef).Table != "qualified" {
 		t.Fatal(input)
 	}
-	original := year.Value().node.(operationNode).arguments[0].value.(operationNode)
-	if original.arguments[1].value.(fieldRef).table != "records" {
+	original := year.Value().node.(operationNode).Arguments[0].Value.(operationNode)
+	if original.Arguments[1].Value.(fieldRef).Table != "records" {
 		t.Fatal("original temporal input mutated")
 	}
 	windowTime := FromUnixMillisValue(RowNumber(WindowFor(cursorQuery())))
 	if _, err := SelectValue(cursorQuery(), Count[cursorRecord]().Value()).Having(OrderValue(UnixMillisecondsValue(windowTime)).Gt(0)).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("temporal conversion hid a window in HAVING", err)
 	}
-	if _, err := SelectValue(cursorQuery(), UnixMillisecondsNullableValue(at.Min().Value())).Having(OrderNullableValue(UnixMillisecondsNullableValue(at.Min().Value())).Gt(0)).Compile(); err != nil {
+	if _, err := SelectValue(cursorQuery(), UnixMillisecondsNullableValue(Min(at).Value())).Having(OrderNullableValue(UnixMillisecondsNullableValue(Min(at).Value())).Gt(0)).Compile(); err != nil {
 		t.Fatal("temporal conversion lost aggregate ownership", err)
 	}
 }

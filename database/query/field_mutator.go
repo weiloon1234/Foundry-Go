@@ -41,7 +41,7 @@ type fieldMutator struct {
 
 func newFieldMutator[I, V any](column string, c codec.Codec[V], mutate func(I) (V, error)) fieldMutator {
 	return fieldMutator{input: reflect.TypeFor[I](), output: reflect.TypeFor[V](), apply: func(a assignmentValue) (assignmentValue, error) {
-		input, ok := a.inputValue().(I)
+		input, ok := a.InputValue().(I)
 		if !ok {
 			return assignmentValue{}, fault.New(fault.Invalid, "mutation value does not match its declared field type")
 		}
@@ -101,15 +101,15 @@ func (q Query[M]) mutateFields(ctx context.Context, mutation Mutation[M]) (Mutat
 }
 
 func (q Query[M]) mutateAssignments(ctx context.Context, mutation Mutation[M], conflict bool) (Mutation[M], error) {
-	result := Change(mutation.assignments...)
+	result := mutation.clone()
 	indices := make(map[string]int, len(result.assignments))
 	for i, assignment := range result.assignments {
-		indices[assignment.field.column] = i
+		indices[assignment.Field.Column] = i
 	}
 	// Check all participating value types before invoking any user code.
 	for _, field := range q.definition.modelFields {
 		mutator := field.mutatorFor(conflict)
-		if i, set := indices[field.column]; set && mutator.apply != nil && reflect.TypeOf(result.assignments[i].value) != mutator.input {
+		if i, set := indices[field.column]; set && mutator.apply != nil && reflect.TypeOf(result.assignments[i].Value) != mutator.input {
 			return Mutation[M]{}, fault.New(fault.Invalid, "mutation value does not match its declared field type")
 		}
 	}
@@ -125,11 +125,11 @@ func (q Query[M]) mutateAssignments(ctx context.Context, mutation Mutation[M], c
 		if err := ctx.Err(); err != nil {
 			return Mutation[M]{}, err
 		}
-		assignment, err := mutator.apply(result.assignments[i].assignmentValue)
+		assignment, err := mutator.apply(result.assignments[i].AssignmentValue)
 		if err != nil {
 			return Mutation[M]{}, err
 		}
-		result.assignments[i].assignmentValue = assignment
+		result.assignments[i].AssignmentValue = assignment
 	}
 	if err := ctx.Err(); err != nil {
 		return Mutation[M]{}, err

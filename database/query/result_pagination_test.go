@@ -49,7 +49,7 @@ func TestResultPageValidationAndImmutableWindows(t *testing.T) {
 	if original.SQL() != unchanged.SQL() || !reflect.DeepEqual(original.Arguments(), unchanged.Arguments()) {
 		t.Fatal("pagination mutated base")
 	}
-	for _, bad := range []ProjectionQuery[cursorRecord, cursorRecord]{q.Limit(0), q.Offset(1), q.Offset(-1), SelectRecord(base, base.Scope()), {}, q.OrderBy(Order[cursorRecord]{field: fieldRef{"wrong", "id"}})} {
+	for _, bad := range []ProjectionQuery[cursorRecord, cursorRecord]{q.Limit(0), q.Offset(1), q.Offset(-1), SelectRecord(base, base.Scope()), {}, q.OrderBy(Order[cursorRecord]{field: fieldRef{Table: "wrong", Column: "id"}})} {
 		executor := &pageFailureExecutor{err: errors.New("unexpected executor access")}
 		if p, err := bad.Paginate(t.Context(), executor, PageRequest{1, 2}); err == nil || p.Items != nil || p.Total != 0 {
 			t.Fatal("invalid numbered page returned", err)

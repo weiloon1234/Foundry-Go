@@ -18,21 +18,26 @@ type LockedTransactionValue[S TransactionScope, V any] struct {
 func (q LockedTransactionValue[S, V]) transactionSubquery() subquery {
 	return q.query.transactionSubquery()
 }
+
 func (q LockedTransactionValue[S, V]) transactionValue() valueSubquery[V] {
 	return valueSubquery[V]{subquery: q.transactionSubquery(), codec: q.codec}
 }
+
 func (q LockedTransactionValue[S, V]) Where(predicates ...Predicate[S]) LockedTransactionValue[S, V] {
 	q.query = q.query.Where(predicates...)
 	return q
 }
+
 func (q LockedTransactionValue[S, V]) OrderBy(orders ...ProjectionOrder[S]) LockedTransactionValue[S, V] {
 	q.query = q.query.OrderBy(orders...)
 	return q
 }
+
 func (q LockedTransactionValue[S, V]) Limit(count int) LockedTransactionValue[S, V] {
 	q.query = q.query.Limit(count)
 	return q
 }
+
 func (q LockedTransactionValue[S, V]) Offset(count int) LockedTransactionValue[S, V] {
 	q.query = q.query.Offset(count)
 	return q

@@ -20,6 +20,7 @@ type timestampRecord struct {
 	created time.Time
 	updated temporal.DateTime
 }
+
 type timestampClock struct {
 	now   time.Time
 	calls int
@@ -75,7 +76,7 @@ func TestModelTimestampsPreserveExplicitCreationAndSkipPhysicalDelete(t *testing
 	if err != nil || !strings.Contains(statement.SQL(), `SET "modified_on" = $1 WHERE`) {
 		t.Fatal("timestamp-only update failed", err)
 	}
-	if len(plan.mutation.assignments) != 1 || plan.mutation.assignments[0].field.column != "modified_on" {
+	if len(plan.mutation.assignments) != 1 || plan.mutation.assignments[0].Field.Column != "modified_on" {
 		t.Fatal("update assigned the creation time")
 	}
 	plan = mutationPlan[timestampRecord]{query: q.Where(id.Eq(3)), kind: deleteModel}

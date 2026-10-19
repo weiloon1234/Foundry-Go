@@ -50,7 +50,7 @@ func TestFieldMutatorsPreserveAssignmentStateAndOrder(t *testing.T) {
 			t.Fatalf("mutators lost values, order or once-per-write behavior: %v %v", statement.Arguments(), calls)
 		}
 	}
-	if got, _ := input.assignments[1].bind(); got != "" {
+	if got, _ := input.assignments[1].Bind(); got != "" {
 		t.Fatal("mutation preparation changed the caller's input")
 	}
 	for _, mutation := range []Mutation[mutatorRecord]{

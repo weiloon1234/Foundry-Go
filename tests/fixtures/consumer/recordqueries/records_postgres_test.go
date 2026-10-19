@@ -103,7 +103,7 @@ func TestPostgresCompleteRecordsFromJoins(t *testing.T) {
 
 func checkProjectionRecord(t *testing.T, tx *database.Tx, users []models.User) error {
 	u := models.UserFields()
-	report := reports.SelectUserSummary(models.QueryUsers(), reports.UserSummarySelection[models.User]{ID: u.ID.Value(), Email: u.Email.Value(), Nickname: u.Nickname.Value(), Status: u.Status.Value()})
+	report := reports.SelectUserSummary(models.QueryUsers(), reports.UserSummarySelection[models.User]{ID: query.Value(u.ID), Email: query.Value(u.Email), Nickname: query.Value(u.Nickname), Status: query.Value(u.Status)})
 	summaries := query.As[reportAlias](report, "summary")
 	orders := query.As[orderAlias](models.QueryOrders(), "purchase")
 	sf := reports.UserSummaryFieldsAt(summaries.Scope())

@@ -10,5 +10,5 @@ type alias struct{}
 type other struct{}
 
 func invalid() {
-	_ = reports.ProjectUserSummary(models.QueryUsers()).SelectID(query.ScalarQuery(models.QueryUsers(), query.SelectValue(models.QueryUsers(), models.UserFields().ID.Value())))
+	_ = reports.ProjectUserSummary(models.QueryUsers()).SelectID(query.ScalarQuery(models.QueryUsers(), query.SelectValue(models.QueryUsers(), query.Value(models.UserFields().ID))))
 }

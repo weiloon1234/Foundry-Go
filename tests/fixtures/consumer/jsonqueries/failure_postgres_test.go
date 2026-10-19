@@ -18,7 +18,7 @@ func TestPostgresJSONInvalidStoredShapeDiscardsCollectedRows(t *testing.T) {
 		if rows, err := q.OrderBy(f.ID.Asc()).All(t.Context(), tx); err == nil || rows != nil {
 			t.Fatal("bad shape returned partial models", rows, err)
 		}
-		if rows, err := query.SelectValue(q.OrderBy(f.ID.Asc()), f.Settings.Value()).All(t.Context(), tx); err == nil || rows != nil {
+		if rows, err := query.SelectValue(q.OrderBy(f.ID.Asc()), query.Value(f.Settings)).All(t.Context(), tx); err == nil || rows != nil {
 			t.Fatal("bad shape returned partial JSON values", rows, err)
 		}
 		// A decode error is not a SQL transaction error; subsequent valid reads work.

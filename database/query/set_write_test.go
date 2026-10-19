@@ -23,9 +23,9 @@ func TestSetBasedMutationsCompileWithoutPrimaryKeys(t *testing.T) {
 	}{
 		{mutationPlan[cursorRecord]{query: q, kind: updateModel, mutation: assign, setBased: true, countOnly: true},
 			`UPDATE "records" SET "rank" = $1 WHERE ("records"."id" > $2) AND ("records"."rank" > $3)`, []any{int64(3), int64(10), int64(0)}},
-		{mutationPlan[cursorRecord]{query: q, kind: updateModel, setBased: true, countOnly: true, adjust: &adjustment{field: rank.ref, bind: rank.By(2).bind}},
+		{mutationPlan[cursorRecord]{query: q, kind: updateModel, setBased: true, countOnly: true, adjust: &adjustment{Field: rank.ref, Bind: rank.By(2).bind}},
 			`UPDATE "records" SET "rank" = "rank" + $1 WHERE`, []any{int64(2), int64(10), int64(0)}},
-		{mutationPlan[cursorRecord]{query: q, kind: updateModel, setBased: true, countOnly: true, adjust: &adjustment{field: rank.ref, bind: rank.By(2).bind, subtract: true}},
+		{mutationPlan[cursorRecord]{query: q, kind: updateModel, setBased: true, countOnly: true, adjust: &adjustment{Field: rank.ref, Bind: rank.By(2).bind, Subtract: true}},
 			`SET "rank" = "rank" - $1`, []any{int64(2), int64(10), int64(0)}},
 		{mutationPlan[cursorRecord]{query: q, kind: deleteModel, setBased: true, countOnly: true},
 			`DELETE FROM "records" WHERE ("records"."id" > $1) AND ("records"."rank" > $2)`, []any{int64(10), int64(0)}},
@@ -37,8 +37,8 @@ func TestSetBasedMutationsCompileWithoutPrimaryKeys(t *testing.T) {
 	}
 	// Adjusting an assigned column, the key or nothing at all is rejected.
 	for _, bad := range []mutationPlan[cursorRecord]{
-		{query: q, kind: updateModel, mutation: assign, setBased: true, adjust: &adjustment{field: rank.ref, bind: rank.By(1).bind}},
-		{query: q, kind: updateModel, setBased: true, adjust: &adjustment{field: id.ref, bind: rank.By(1).bind}},
+		{query: q, kind: updateModel, mutation: assign, setBased: true, adjust: &adjustment{Field: rank.ref, Bind: rank.By(1).bind}},
+		{query: q, kind: updateModel, setBased: true, adjust: &adjustment{Field: id.ref, Bind: rank.By(1).bind}},
 		{query: q, kind: updateModel, setBased: true},
 		{query: q.OrderBy(id.Asc()), kind: deleteModel, setBased: true},
 	} {

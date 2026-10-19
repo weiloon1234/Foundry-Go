@@ -77,7 +77,7 @@ func TestPostgresIndexConstantsStayIndependentOfExecutionBindings(t *testing.T) 
 		q, f := models.QueryWriteRecords(), models.WriteRecordFields()
 		suffix := "'\\κ"
 		note := "O'Reilly\\path"
-		key := query.Concat(query.Lower(f.Name), f.Name.Param(suffix))
+		key := query.Concat(query.Lower(f.Name), query.Param(f.Name, suffix))
 		policy := query.OnConflictKeys(key.Group()).TargetWhere(f.Enabled.Eq(true), f.Note.Eq(note)).Update(f.Name)
 		initial, err := q.Create(t.Context(), tx, models.WriteRecordDraft{}.SetName("Case").SetNote(note))
 		if err != nil {

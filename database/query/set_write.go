@@ -6,7 +6,10 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
+
+type adjustment = querycore.Adjustment
 
 // Adjustment is a typed delta for one stored numeric column in a set-based
 // Increment or Decrement: column = column + delta (or - delta). SQL NULL
@@ -31,45 +34,10 @@ func (f FloatField[M, V]) By(delta V) Adjustment[M] {
 	return Adjustment[M]{field: f.ref, bind: func() (driver.Value, error) { return f.codec.Bind(delta) }}
 }
 
-type adjustment struct {
-	field    fieldRef
-	bind     func() (driver.Value, error)
-	subtract bool
-}
-
-// adjustSet compiles "column" = "column" + $n for a declared, non-key column
-// that the same statement does not also assign.
-func (p mutationPlan[M]) adjustSet(c *compiler, assigned map[string]Assignment[M]) (string, error) {
-	a := p.adjust
-	if err := a.field.validate(p.query.table); err != nil {
-		return "", err
-	}
-	column, declared := c.columns[a.field.column]
-	if _, repeated := assigned[a.field.column]; !declared || repeated || a.field.column == p.query.definition.primary || a.bind == nil {
-		return "", fault.New(fault.Invalid, "numeric adjustment requires a declared, unassigned non-key field")
-	}
-	bound, err := a.bind()
-	if err != nil {
-		return "", err
-	}
-	if bound == nil {
-		return "", fault.New(fault.Invalid, "numeric adjustment requires a non-NULL delta")
-	}
-	parameter, err := c.parameter(bound)
-	if err != nil {
-		return "", err
-	}
-	op := " + "
-	if a.subtract {
-		op = " - "
-	}
-	return quoted(column.Name) + " = " + quoted(column.Name) + op + parameter, nil
-}
-
 // validate applies the shared mutation rules; a set-based adjustment may be
 // the only change of an update.
-func (p mutationPlan[M]) validate(c *compiler) (map[string]Assignment[M], error) {
-	if p.adjust != nil && p.kind.sqlKind() == updateModel {
+func (p mutationPlan[M]) validate(c *compiler) (map[string]mutationAssignment, error) {
+	if p.adjust != nil && p.kind.SqlKind() == updateModel {
 		return p.query.validateMutationShape(p.kind, p.mutation, c)
 	}
 	return p.query.validateMutation(p.kind, p.mutation, c)
@@ -80,7 +48,7 @@ func (p mutationPlan[M]) validate(c *compiler) (map[string]Assignment[M], error)
 // statement without per-model hooks, provider observers or change capture on
 // a model that declares them. It has no other effect; per-model writes on such
 // a query are rejected so the option cannot be mistaken for disabling hooks.
-func (q Query[M]) WithoutModelHooks() Query[M] { q.skipModelHooks = true; return q }
+func (q Query[M]) WithoutModelHooks() Query[M] { q.queryCore.SkipModelHooks = true; return q }
 
 // PatchAll assigns the mutation to every row matching the query's filters,
 // global scopes and soft-delete visibility in one UPDATE, applying managed
@@ -95,7 +63,7 @@ func (q Query[M]) AdjustAll(ctx context.Context, writer database.Transactor, adj
 	if adjust.bind == nil {
 		return 0, fault.New(fault.Invalid, "numeric adjustment requires a generated field")
 	}
-	return q.setWrite(ctx, writer, updateModel, mutation, &adjustment{field: adjust.field, bind: adjust.bind, subtract: subtract})
+	return q.setWrite(ctx, writer, updateModel, mutation, &adjustment{Field: adjust.field, Bind: adjust.bind, Subtract: subtract})
 }
 
 // RemoveAll soft-deletes every matching active row of a soft-delete model, or
@@ -143,7 +111,7 @@ func (q Query[M]) setWrite(ctx context.Context, writer database.Transactor, kind
 // declared hooks or registered observers unless WithoutModelHooks acknowledges
 // it. An executor that cannot prove observers absent counts as observed.
 func (q Query[M]) setWriteLifecycle(writer database.Transactor, kind mutationKind) error {
-	if q.skipModelHooks {
+	if q.queryCore.SkipModelHooks {
 		return nil
 	}
 	observers, known := writerObservers(writer)

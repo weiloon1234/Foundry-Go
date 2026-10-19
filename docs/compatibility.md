@@ -111,6 +111,18 @@ directions with retained old fixtures before calling a change compatible. Keep
 all readers compatible with retained data before enabling new writers. Rollback
 must preserve a reader capable of consuming formats already written.
 
+## Typed query compilation footprint
+
+Stored fields use typed functions for optional expression/aggregate construction:
+`query.Value(f)`, `query.Param(f, v)`, `query.CountField(f)`,
+`query.CountDistinctField(f)`, `query.Min(f)`, `query.Max(f)`, `query.Sum(f)` and
+`query.Avg(f)` replace the corresponding stored-field methods. Update handwritten
+calls with the framework version; see [typed field computations](guides/typed-field-computations.md).
+Computed expressions/aggregates retain their methods, and query filtering,
+execution, generated declarations and database schemas are unchanged. The
+[build measurements](guides/query-build-resources.md) distinguish shared-core
+extraction from field method-set reduction and accumulated cache storage.
+
 ## Operational behavior
 
 Datatable client-input rejection now matches `http.BadRequest` as well as the

@@ -28,8 +28,8 @@ type relationSpec[M, N any] struct {
 }
 
 func (q Query[M]) hasQueryOptions() bool {
-	return q.softDeleteScope != activeRecords || len(q.predicates) != 0 || len(q.orders) != 0 || len(q.relations) != 0 || q.limit.IsSet() || q.offset != 0 || q.relationLimits != nil ||
-		len(q.withoutScopes) != 0 || q.allScopesOff || q.skipModelHooks
+	return q.queryCore.SoftDeleteScope != activeRecords || len(q.queryCore.Predicates) != 0 || len(q.queryCore.Orders) != 0 || len(q.relations) != 0 || q.queryCore.Limit.IsSet() || q.queryCore.Offset != 0 || q.relationLimits != nil ||
+		len(q.queryCore.WithoutScopes) != 0 || q.queryCore.AllScopesOff || q.queryCore.SkipModelHooks
 }
 
 func (s relationSpec[M, N]) bind(name string, source Query[M], target Query[N]) relationSpec[M, N] {
@@ -39,8 +39,7 @@ func (s relationSpec[M, N]) bind(name string, source Query[M], target Query[N]) 
 	}
 	s.name = name
 	s.source = source
-	s.target.table = target.table
-	s.target.definition = target.definition
+	s.target = s.target.bindModel(target)
 	return s
 }
 
@@ -67,22 +66,22 @@ func (s relationSpec[M, N]) validateMetadata(source string, depth int, limits Re
 	if err := s.source.validateCore(); err != nil {
 		return err
 	}
-	if err := s.local.validate(source); err != nil {
+	if err := s.local.Validate(source); err != nil {
 		return err
 	}
-	if err := s.local.validate(s.source.table); err != nil {
+	if err := s.local.Validate(s.source.queryCore.Table); err != nil {
 		return err
 	}
-	if err := s.foreign.validate(s.target.table); err != nil {
+	if err := s.foreign.Validate(s.target.queryCore.Table); err != nil {
 		return err
 	}
-	if _, ok := s.source.definition.modelField(s.local.column); !ok {
+	if _, ok := s.source.definition.modelField(s.local.Column); !ok {
 		return fault.New(fault.Invalid, "relation source key is not a generated model field")
 	}
-	if _, ok := s.target.definition.modelField(s.foreign.column); !ok {
+	if _, ok := s.target.definition.modelField(s.foreign.Column); !ok {
 		return fault.New(fault.Invalid, "relation target key is not a generated model field")
 	}
-	if s.target.limit.IsSet() || s.target.offset != 0 {
+	if s.target.queryCore.Limit.IsSet() || s.target.queryCore.Offset != 0 {
 		return fault.New(fault.Invalid, "relation scopes cannot use global limits or offsets")
 	}
 	if s.hop != nil {
@@ -115,9 +114,11 @@ type ManyRelation[M, N any] struct {
 func BelongsTo[M, N any, K comparable](local KeyField[M, K], foreign KeyField[N, K]) OneRelation[M, N] {
 	return OneRelation[M, N]{spec: directSpec(local, foreign)}
 }
+
 func HasOne[M, N any, K comparable](local KeyField[M, K], foreign KeyField[N, K]) OneRelation[M, N] {
 	return OneRelation[M, N]{spec: directSpec(local, foreign)}
 }
+
 func HasMany[M, N any, K comparable](local KeyField[M, K], foreign KeyField[N, K]) ManyRelation[M, N] {
 	return ManyRelation[M, N]{spec: directSpec(local, foreign)}
 }
@@ -131,7 +132,7 @@ func directSpec[M, N any, K comparable](local KeyField[M, K], foreign KeyField[N
 		if err := ctx.Err(); err != nil {
 			return Query[N]{}, false, err
 		}
-		metadata, _ := source.definition.modelField(a.ref.column)
+		metadata, _ := source.definition.modelField(a.ref.Column)
 		selected, err := readRelationKey(metadata, a, parent)
 		if err != nil {
 			return Query[N]{}, false, err
@@ -154,40 +155,52 @@ func (r OneRelation[M, N]) Bind(name string, source Query[M], target Query[N], g
 	r.set = set
 	return r
 }
+
 func (r ManyRelation[M, N]) Bind(name string, source Query[M], target Query[N], get func(M) relation.Many[N], set func(M, relation.Many[N]) M) ManyRelation[M, N] {
 	r.spec = r.spec.bind(name, source, target)
 	r.get = get
 	r.set = set
 	return r
 }
+
 func (r OneRelation[M, N]) Where(predicates ...Predicate[N]) OneRelation[M, N] {
 	r.spec.target = r.spec.target.Where(predicates...)
 	return r
 }
+
 func (r ManyRelation[M, N]) Where(predicates ...Predicate[N]) ManyRelation[M, N] {
 	r.spec.target = r.spec.target.Where(predicates...)
 	return r
 }
+
 func (r OneRelation[M, N]) OrderBy(orders ...Order[N]) OneRelation[M, N] {
 	r.spec.target = r.spec.target.OrderBy(orders...)
 	return r
 }
+
 func (r ManyRelation[M, N]) OrderBy(orders ...Order[N]) ManyRelation[M, N] {
 	r.spec.target = r.spec.target.OrderBy(orders...)
 	return r
 }
+
 func (r OneRelation[M, N]) With(children ...Relation[N]) OneRelation[M, N] {
 	r.spec.target = r.spec.target.With(children...)
 	return r
 }
+
 func (r ManyRelation[M, N]) With(children ...Relation[N]) ManyRelation[M, N] {
 	r.spec.target = r.spec.target.With(children...)
 	return r
 }
-func (r OneRelation[M, N]) relationName() string       { return r.spec.name }
-func (r ManyRelation[M, N]) relationName() string      { return r.spec.name }
-func (r OneRelation[M, N]) copyRelation() Relation[M]  { return r }
+
+func (r OneRelation[M, N]) relationName() string { return r.spec.name }
+
+func (r ManyRelation[M, N]) relationName() string { return r.spec.name }
+
+func (r OneRelation[M, N]) copyRelation() Relation[M] { return r }
+
 func (r ManyRelation[M, N]) copyRelation() Relation[M] { return r }
+
 func (r OneRelation[M, N]) validateRelation(source string, depth int, limits RelationLimits) error {
 	if r.get == nil || r.set == nil {
 		return fault.New(fault.Invalid, "singular relation requires a typed slot")
@@ -197,6 +210,7 @@ func (r OneRelation[M, N]) validateRelation(source string, depth int, limits Rel
 	}
 	return r.spec.validate(source, depth, limits)
 }
+
 func (r ManyRelation[M, N]) validateRelation(source string, depth int, limits RelationLimits) error {
 	if r.get == nil || r.set == nil {
 		return fault.New(fault.Invalid, "collection relation requires a typed slot")
@@ -215,6 +229,7 @@ func selectedParents[M any](parents []M, skip func(M) bool) ([]M, []int) {
 	}
 	return selected, indices
 }
+
 func (r OneRelation[M, N]) loadRelation(ctx context.Context, executor database.Executor, parents []M, state *relationLoadState, depth int, missing bool) ([]M, error) {
 	selected, indices := selectedParents(parents, func(m M) bool { return missing && r.get(m).IsLoaded() })
 	groups, err := r.spec.fetch(ctx, executor, r.spec.source, r.oneOfManyTarget(), selected, state, depth)
@@ -241,6 +256,7 @@ func (r OneRelation[M, N]) loadRelation(ctx context.Context, executor database.E
 	}
 	return result, nil
 }
+
 func (r ManyRelation[M, N]) loadRelation(ctx context.Context, executor database.Executor, parents []M, state *relationLoadState, depth int, missing bool) ([]M, error) {
 	selected, indices := selectedParents(parents, func(m M) bool { return missing && r.get(m).IsLoaded() })
 	groups, err := r.spec.fetch(ctx, executor, r.spec.source, r.spec.target, selected, state, depth)
@@ -311,8 +327,8 @@ func relationKeys[M any, K comparable](ctx context.Context, metadata ModelField[
 }
 
 func fetchDirect[M, N any, K comparable](ctx context.Context, executor database.Executor, source Query[M], target Query[N], local ScalarField[M, K], foreign ScalarField[N, K], parents []M, state *relationLoadState, depth int) ([][]N, error) {
-	localMeta, _ := source.definition.modelField(local.ref.column)
-	foreignMeta, _ := target.definition.modelField(foreign.ref.column)
+	localMeta, _ := source.definition.modelField(local.ref.Column)
+	foreignMeta, _ := target.definition.modelField(foreign.ref.Column)
 	positions, keys, seen, err := relationKeys(ctx, localMeta, local, parents, state.limits.BatchSize)
 	if err != nil {
 		return nil, err

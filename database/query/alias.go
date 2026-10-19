@@ -54,23 +54,27 @@ func aliasInput[S, M any](q recordQuery[M], alias string) (joinInput[S], *record
 		input.err = q.err
 		return input, nil
 	}
-	table := tableSource{alias: alias, columns: q.columns, query: &q.node}
-	if q.directSource && len(q.node.locks) == 0 {
-		table = q.node.source
-		table.alias = alias
+	table := tableSource{Alias: alias, Columns: q.columns, Query: &q.node}
+	if q.directSource && len(q.node.Locks) == 0 {
+		table = q.node.Source
+		table.Alias = alias
 	}
-	input.node.source = table
+	input.node.Source = table
 	input.aliases = map[string]reflect.Type{alias: reflect.TypeFor[S]()}
 	return input, q.metadata()
 }
+
 func (a AliasedSource[A, M]) Scope() ModelScope[Alias[A, M], M] {
 	if a.input.err != nil {
 		return ModelScope[Alias[A, M], M]{}
 	}
-	return ModelScope[Alias[A, M], M]{table: a.input.node.source.name(), record: a.record}
+	return ModelScope[Alias[A, M], M]{table: a.input.node.Source.Name(), record: a.record}
 }
+
 func (a AliasedSource[A, M]) joinInput() joinInput[Alias[A, M]] { return a.input }
+
 func (a AliasedSource[A, M]) joinTable() joinInput[Alias[A, M]] { return a.input }
+
 func (a AliasedSource[A, M]) projectionSource() projectionSource[Alias[A, M]] {
 	return projectionSource[Alias[A, M]]{node: a.input.node, err: a.input.err}
 }

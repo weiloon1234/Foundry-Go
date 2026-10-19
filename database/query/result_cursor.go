@@ -20,7 +20,7 @@ type CursorScope[R any] struct{ _ [0]*R }
 type CursorQuery[R any] struct {
 	node     selectNode
 	metadata *recordMetadata[R]
-	orders   []Order[CursorScope[R]]
+	orders   []queryOrder
 	unique   []fieldRef
 	err      error
 }
@@ -41,7 +41,7 @@ func cursorForRecord[R any](source recordQuery[R]) CursorQuery[R] {
 	if q.err != nil {
 		return q
 	}
-	if len(source.columns) == 0 || len(source.columns) != len(source.node.selections) || len(source.columns) > MaxExpressionNodes || source.scan == nil {
+	if len(source.columns) == 0 || len(source.columns) != len(source.node.Selections) || len(source.columns) > MaxExpressionNodes || source.scan == nil {
 		q.err = fault.New(fault.Invalid, "cursor result requires bounded columns and a complete decoder")
 		return q
 	}
@@ -50,13 +50,13 @@ func cursorForRecord[R any](source recordQuery[R]) CursorQuery[R] {
 		q.err = err
 		return q
 	}
-	alias := names.allocate("foundry_cursor")
+	alias := names.Allocate("foundry_cursor")
 	inner := source.node
-	inner.selections = slices.Clone(inner.selections)
+	inner.Selections = slices.Clone(inner.Selections)
 	for i, column := range source.columns {
-		inner.selections[i].alias = column.Name
+		inner.Selections[i].Alias = column.Name
 	}
-	q.node = selectNode{source: tableSource{query: &inner, alias: alias, columns: source.columns}, selections: columnSelections(alias, source.columns)}
+	q.node = selectNode{Source: tableSource{Query: &inner, Alias: alias, Columns: source.columns}, Selections: columnSelections(alias, source.columns)}
 	return q
 }
 
@@ -65,12 +65,12 @@ func (q CursorQuery[R]) Scope() RecordScope[CursorScope[R], R] {
 	if q.err != nil || q.metadata == nil {
 		return RecordScope[CursorScope[R], R]{}
 	}
-	return RecordScope[CursorScope[R], R]{table: q.node.source.name(), record: q.metadata}
+	return RecordScope[CursorScope[R], R]{table: q.node.Source.Name(), record: q.metadata}
 }
 
 // Where filters completed output rows; source filters/grouping remain inside.
 func (q CursorQuery[R]) Where(predicates ...Predicate[CursorScope[R]]) CursorQuery[R] {
-	q.node.predicates = appendPredicates(q.node.predicates, predicates)
+	q.node.Predicates = appendPredicates(q.node.Predicates, predicates)
 	return q
 }
 
@@ -84,12 +84,12 @@ func (q CursorQuery[R]) OrderBy(orders ...ProjectionOrder[CursorScope[R]]) Curso
 			continue
 		}
 		node := order.projectionOrder().node
-		field, ok := node.expression.(fieldRef)
+		field, ok := node.Expression.(fieldRef)
 		if !ok {
 			q.err = fault.New(fault.Invalid, "cursor ordering requires output fields")
 			continue
 		}
-		q.orders = append(q.orders, Order[CursorScope[R]]{field: field, descending: node.descending})
+		q.orders = append(q.orders, queryOrder{Field: field, Descending: node.Descending})
 	}
 	return q
 }
@@ -117,31 +117,31 @@ func (q CursorQuery[R]) canonical() (CursorQuery[R], []RecordField[R], []bool, e
 	if q.err != nil {
 		return fail(q.err)
 	}
-	if q.metadata == nil || q.metadata.scan == nil || q.node.source.query == nil || len(q.unique) == 0 || len(q.unique) > MaxCursorFields || len(q.orders) > MaxCursorFields {
+	if q.metadata == nil || q.metadata.scan == nil || q.node.Source.Query == nil || len(q.unique) == 0 || len(q.unique) > MaxCursorFields || len(q.orders) > MaxCursorFields {
 		return fail(fault.New(fault.Invalid, "cursor result requires metadata and a bounded UniqueBy declaration"))
 	}
-	columns := make(map[string]Column, len(q.metadata.columns))
+	columns := make(map[string]columnData, len(q.metadata.columns))
 	for _, column := range q.metadata.columns {
 		columns[column.Name] = column
 	}
 	seen := make(map[string]bool, len(q.orders))
-	valid := func(f fieldRef) bool { _, ok := columns[f.column]; return ok && f.table == q.node.source.name() }
+	valid := func(f fieldRef) bool { _, ok := columns[f.Column]; return ok && f.Table == q.node.Source.Name() }
 	for _, order := range q.orders {
-		if !valid(order.field) || seen[order.field.column] {
+		if !valid(order.Field) || seen[order.Field.Column] {
 			return fail(fault.New(fault.Invalid, "cursor order uses an unknown or repeated output field"))
 		}
-		seen[order.field.column] = true
+		seen[order.Field.Column] = true
 	}
 	q.orders = slices.Clone(q.orders)
 	keys := make(map[string]bool, len(q.unique))
 	for _, key := range q.unique {
-		if !valid(key) || keys[key.column] {
+		if !valid(key) || keys[key.Column] {
 			return fail(fault.New(fault.Invalid, "cursor identity uses an unknown or repeated output field"))
 		}
-		keys[key.column] = true
-		if !seen[key.column] {
-			q.orders = append(q.orders, Order[CursorScope[R]]{field: key})
-			seen[key.column] = true
+		keys[key.Column] = true
+		if !seen[key.Column] {
+			q.orders = append(q.orders, queryOrder{Field: key})
+			seen[key.Column] = true
 		}
 	}
 	if len(q.orders) > MaxCursorFields || len(q.metadata.fields) > len(q.metadata.columns) {
@@ -160,7 +160,7 @@ func (q CursorQuery[R]) canonical() (CursorQuery[R], []RecordField[R], []bool, e
 	fields := make([]RecordField[R], len(q.orders))
 	required := make([]bool, len(q.orders))
 	for i, order := range q.orders {
-		field, ok := getters[order.field.column]
+		field, ok := getters[order.Field.Column]
 		if !ok {
 			return fail(fault.New(fault.Invalid, "cursor result requires generated codecs and getters for every ordered field"))
 		}
@@ -170,7 +170,7 @@ func (q CursorQuery[R]) canonical() (CursorQuery[R], []RecordField[R], []bool, e
 		fields[i] = field
 		required[i] = !columns[field.column].Nullable
 	}
-	q.node.orders = orderNodes(q.orders)
+	q.node.Orders = orderNodes(q.orders)
 	return q, fields, required, nil
 }
 
@@ -213,7 +213,7 @@ func (q CursorQuery[R]) Paginate(ctx context.Context, executor database.Executor
 	}
 	identity := []string{"result-cursor"}
 	for _, key := range q.unique {
-		identity = append(identity, key.column)
+		identity = append(identity, key.Column)
 	}
 	scope, err := cursorStatementScope[R](statement, identity...)
 	if err != nil {
@@ -227,11 +227,11 @@ func (q CursorQuery[R]) Paginate(ctx context.Context, executor database.Executor
 		return CursorPage[R]{}, err
 	}
 	orders := cursorOrders(q.orders, navigation.backward)
-	q.node.orders = orderNodes(orders)
+	q.node.Orders = orderNodes(orders)
 	if navigation.present {
-		q.node.predicates = append(slices.Clone(q.node.predicates), cursorPredicate(orders, navigation.keys, anyNullable[CursorScope[R]]).expression)
+		q.node.Predicates = append(slices.Clone(q.node.Predicates), cursorPredicate(orders, navigation.keys, anyNullable))
 	}
-	q.node.limit = value.Set(request.Size + 1)
+	q.node.Limit = value.Set(request.Size + 1)
 	items, err := q.reader().All(ctx, executor)
 	if err != nil {
 		return CursorPage[R]{}, err
@@ -257,10 +257,10 @@ func ValueCursorFor[V any](source ValueQuerySource[V]) ValueCursorQuery[V] {
 
 // Value retains the exact value type and codec for ordering the completed result.
 func (q ValueCursorQuery[V]) Value() Expression[CursorScope[V], V] {
-	return Expression[CursorScope[V], V]{node: fieldRef{q.node.source.name(), valueColumnName}, codec: q.codec}
+	return Expression[CursorScope[V], V]{node: fieldRef{Table: q.node.Source.Name(), Column: valueColumnName}, codec: q.codec}
 }
 
 // Key is the single output column, suitable for an explicit UniqueBy declaration.
 func (q ValueCursorQuery[V]) Key() Group[CursorScope[V]] {
-	return Group[CursorScope[V]]{node: fieldRef{q.node.source.name(), valueColumnName}}
+	return Group[CursorScope[V]]{node: fieldRef{Table: q.node.Source.Name(), Column: valueColumnName}}
 }

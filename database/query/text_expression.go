@@ -301,7 +301,7 @@ func SubstringValue[S any, V ~string](input Expression[S, V], start int32, count
 	result := operationValue[S](substringOperation, codec.String[string](), args...)
 	if count < 0 {
 		n := result.node.(operationNode)
-		n.err = fault.New(fault.Invalid, "substring count cannot be negative")
+		n.Err = fault.New(fault.Invalid, "substring count cannot be negative")
 		result.node = n
 	}
 	return result
@@ -320,7 +320,7 @@ func SubstringNullableValue[S any, V ~string](input Expression[S, value.Nullable
 	result := operationValue[S](substringOperation, codec.Nullable(codec.String[string]()), args...)
 	if count < 0 {
 		n := result.node.(operationNode)
-		n.err = fault.New(fault.Invalid, "substring count cannot be negative")
+		n.Err = fault.New(fault.Invalid, "substring count cannot be negative")
 		result.node = n
 	}
 	return result

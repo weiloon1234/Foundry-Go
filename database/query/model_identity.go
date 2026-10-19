@@ -28,6 +28,7 @@ func IdentityOf[M any, K comparable](q Query[M], primary KeyField[M, K]) ModelId
 	}
 	return ModelIdentity[M, K]{query: q, primary: primary.relationKey()}
 }
+
 func (d ModelIdentity[M, K]) Validate() error {
 	if d.query.definition == nil || d.query.hasQueryOptions() {
 		return fault.New(fault.Invalid, "model identity requires a bare generated query")
@@ -35,22 +36,25 @@ func (d ModelIdentity[M, K]) Validate() error {
 	if err := d.query.Validate(); err != nil {
 		return err
 	}
-	if err := d.primary.ref.validate(d.query.table); err != nil {
+	if err := d.primary.ref.Validate(d.query.queryCore.Table); err != nil {
 		return err
 	}
 	if err := d.primary.codec.Validate(); err != nil {
 		return err
 	}
-	field, ok := d.query.definition.modelField(d.primary.ref.column)
-	if !ok || d.primary.ref.column != d.query.definition.primary || field.typ != reflect.TypeFor[K]() || field.kind != d.primary.codec.ParameterType() || field.sensitive || d.primary.codec.SensitiveValues() {
+	field, ok := d.query.definition.modelField(d.primary.ref.Column)
+	if !ok || d.primary.ref.Column != d.query.definition.modelDefinition.Primary || field.typ != reflect.TypeFor[K]() || field.kind != d.primary.codec.ParameterType() || field.sensitive || d.primary.codec.SensitiveValues() {
 		return fault.New(fault.Invalid, "model identity requires its declared non-sensitive primary field")
 	}
 	return nil
 }
-func (d ModelIdentity[M, K]) ModelName() string { return d.query.table }
+
+func (d ModelIdentity[M, K]) ModelName() string { return d.query.queryCore.Table }
+
 func (d ModelIdentity[M, K]) Reference(key K) model.Reference[M, K] {
-	return model.NewReference[M](d.query.table, key, d.primary.codec)
+	return model.NewReference[M](d.query.queryCore.Table, key, d.primary.codec)
 }
+
 func (d ModelIdentity[M, K]) Parse(identity model.Identity) (model.Reference[M, K], error) {
 	if err := d.Validate(); err != nil {
 		return model.Reference[M, K]{}, err
@@ -74,7 +78,7 @@ func (d ModelIdentity[M, K]) KeyToken(key K) (string, error) {
 		if raw == nil {
 			return fault.New(fault.Invalid, "model identity key cannot be null")
 		}
-		field, _ := d.query.definition.modelField(d.primary.ref.column)
+		field, _ := d.query.definition.modelField(d.primary.ref.Column)
 		encoded, err := field.equalityKey(raw)
 		if err != nil {
 			return err
@@ -101,13 +105,13 @@ func (d ModelIdentity[M, K]) reader(keys []K, retained, lock bool) readResult[K]
 		return r
 	}
 	q := d.query.Where(d.primary.In(keys...)).OrderBy(d.primary.Asc())
-	if retained && q.hasSoftDeletes() {
+	if retained && q.queryCore.HasSoftDeletes() {
 		q = q.WithTrashed()
 	}
 	r.node = q.modelSelect()
-	r.node.selections = []selectItem{{expression: d.primary.ref}}
+	r.node.Selections = []selectItem{{Expression: d.primary.ref}}
 	if lock {
-		r.node.locks = []lockSpec{{strength: lockUpdate}}
+		r.node.Locks = []lockSpec{{Strength: lockUpdate}}
 	}
 	r.scan = func(row database.Row) (K, error) {
 		var key K
@@ -128,6 +132,7 @@ func (d ModelIdentity[M, K]) ActiveKeys(ctx context.Context, executor database.E
 func (d ModelIdentity[M, K]) RetainedKeys(ctx context.Context, executor database.Executor, keys []K) ([]K, error) {
 	return d.keys(ctx, executor, keys, true)
 }
+
 func (d ModelIdentity[M, K]) keys(ctx context.Context, executor database.Executor, keys []K, retained bool) ([]K, error) {
 	r := d.reader(keys, retained, false)
 	if r.err != nil {

@@ -45,6 +45,7 @@ func TestLockedModelCompilerStrengthsWindowsAndImmutability(t *testing.T) {
 }
 
 type lockLeft struct{}
+
 type lockRight struct{}
 
 func TestLockedProjectionScopesAndDerivedSourceValidation(t *testing.T) {
@@ -88,7 +89,7 @@ func TestLockedProjectionScopesAndDerivedSourceValidation(t *testing.T) {
 		}
 	}
 	id := NewOrderedField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
-	values := SelectValue(base, id.Value())
+	values := SelectValue(base, Value(id))
 	for _, q := range []LockedResult[cursorRecord, int64]{
 		values.Distinct().ForUpdate(), values.GroupBy(id.Group()).ForUpdate(),
 		SelectValue(base, Count[cursorRecord]().Value()).ForUpdate(),
@@ -109,26 +110,26 @@ func TestLockedProjectionScopesAndDerivedSourceValidation(t *testing.T) {
 }
 
 func TestLockCompilerQualifiedTargetsAndLaterNullableSides(t *testing.T) {
-	source := tableSource{table: "domain.records"}
-	node := selectNode{source: source}
-	s, err := compileLock(node, lockSpec{strength: lockUpdate, explicit: true, targets: []string{"domain.records"}})
+	source := tableSource{Table: "domain.records"}
+	node := selectNode{Source: source}
+	s, err := compileLock(node, lockSpec{Strength: lockUpdate, Explicit: true, Targets: []string{"domain.records"}})
 	if err != nil || s != ` FOR UPDATE OF "records"` {
 		t.Fatal("qualified OF is not a bare relation reference", s, err)
 	}
-	node.joins = []joinNode{{source: tableSource{table: "other.records"}, kind: innerJoin}}
-	if _, err := compileLock(node, lockSpec{strength: lockUpdate, explicit: true, targets: []string{"domain.records"}}); !errors.Is(err, fault.Invalid) {
+	node.Joins = []joinNode{{Source: tableSource{Table: "other.records"}, Kind: innerJoin}}
+	if _, err := compileLock(node, lockSpec{Strength: lockUpdate, Explicit: true, Targets: []string{"domain.records"}}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("ambiguous schema targets compiled", err)
 	}
-	node.joins = []joinNode{{source: tableSource{table: "other", alias: "b"}, kind: leftJoin}, {source: tableSource{table: "last", alias: "c"}, kind: rightJoin}}
-	if _, err := compileLock(node, lockSpec{strength: lockUpdate, explicit: true, targets: []string{"domain.records"}}); !errors.Is(err, fault.Invalid) {
+	node.Joins = []joinNode{{Source: tableSource{Table: "other", Alias: "b"}, Kind: leftJoin}, {Source: tableSource{Table: "last", Alias: "c"}, Kind: rightJoin}}
+	if _, err := compileLock(node, lockSpec{Strength: lockUpdate, Explicit: true, Targets: []string{"domain.records"}}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("later RIGHT JOIN did not null-extend earlier side", err)
 	}
-	if _, err := compileLock(node, lockSpec{strength: lockUpdate, explicit: true, targets: []string{"c"}}); err != nil {
+	if _, err := compileLock(node, lockSpec{Strength: lockUpdate, Explicit: true, Targets: []string{"c"}}); err != nil {
 		t.Fatal("preserved RIGHT JOIN side cannot lock", err)
 	}
-	cteOnly := selectNode{source: tableSource{cte: &cteNode{name: "input"}}}
-	node.joins = []joinNode{{source: tableSource{query: &cteOnly, alias: "derived"}, kind: innerJoin}}
-	if _, err := compileLock(node, lockSpec{strength: lockUpdate, explicit: true, targets: []string{"domain.records", "derived"}}); !errors.Is(err, fault.Invalid) {
+	cteOnly := selectNode{Source: tableSource{Cte: &cteNode{Name: "input"}}}
+	node.Joins = []joinNode{{Source: tableSource{Query: &cteOnly, Alias: "derived"}, Kind: innerJoin}}
+	if _, err := compileLock(node, lockSpec{Strength: lockUpdate, Explicit: true, Targets: []string{"domain.records", "derived"}}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("explicit derived CTE target silently acquired no lock", err)
 	}
 }

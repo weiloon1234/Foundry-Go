@@ -30,7 +30,7 @@ func (s LateralSource[A, O, R]) Scope() RecordScope[Alias[A, R], R] {
 	if s.input.err != nil {
 		return RecordScope[Alias[A, R], R]{}
 	}
-	return RecordScope[Alias[A, R], R]{table: s.input.node.source.name(), record: s.record}
+	return RecordScope[Alias[A, R], R]{table: s.input.node.Source.Name(), record: s.record}
 }
 
 // CrossJoinLateral evaluates right for each preceding left row. An empty right

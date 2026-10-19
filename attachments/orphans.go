@@ -169,7 +169,7 @@ func InspectUndeclared(ctx context.Context, m *Manager, owner extensions.OwnerNa
 	}
 	return extensionmaintenance.InspectUndeclared(ctx, m.store, owner, func(ctx context.Context, tx *database.Tx, scope string, limit int) ([]string, error) {
 		f := store.FileFields()
-		return query.SelectValue(store.QueryFoundryAttachments().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)), f.Collection.Value()).Distinct().OrderBy(f.Collection.Asc()).Limit(limit).All(ctx, tx)
+		return query.SelectValue(store.QueryFoundryAttachments().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)), query.Value(f.Collection)).Distinct().OrderBy(f.Collection.Asc()).Limit(limit).All(ctx, tx)
 	}, func(scope, name string) bool {
 		_, declared := m.collections[extensions.Digest(scope, name)]
 		return declared

@@ -99,11 +99,11 @@ func TestSelectRecordRejectsInvalidScopesAndLayouts(t *testing.T) {
 	// Exercise runtime defense separately from public compile-time join scopes.
 	b := As[secondAlias](base, "b")
 	for _, j := range []joinNode{
-		{source: b.input.node.source, kind: rightJoin},
-		{source: b.input.node.source, kind: fullJoin},
+		{Source: b.input.node.Source, Kind: rightJoin},
+		{Source: b.input.node.Source, Kind: fullJoin},
 	} {
 		node := a.input.node
-		node.joins = []joinNode{j}
+		node.Joins = []joinNode{j}
 		selection := recordSelection[cursorRecord]{table: "a", metadata: a.record}
 		if _, err := selection.selectNode(node); !errors.Is(err, fault.Invalid) {
 			t.Fatal("later join made a selected record nullable", err)
@@ -111,7 +111,7 @@ func TestSelectRecordRejectsInvalidScopesAndLayouts(t *testing.T) {
 	}
 	for _, kind := range []joinKind{leftJoin, fullJoin} {
 		node := a.input.node
-		node.joins = []joinNode{{source: b.input.node.source, kind: kind}}
+		node.Joins = []joinNode{{Source: b.input.node.Source, Kind: kind}}
 		selection := recordSelection[cursorRecord]{table: "b", metadata: b.record}
 		if _, err := selection.selectNode(node); !errors.Is(err, fault.Invalid) {
 			t.Fatal("nullable right source became a complete model", err)

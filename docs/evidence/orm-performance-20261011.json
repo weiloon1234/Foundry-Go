@@ -1,0 +1,1050 @@
+{
+  "format": 1,
+  "date": "2026-10-11",
+  "status": "verified",
+  "scope": "Measure and optimize Foundry typed ORM query construction and PostgreSQL reads while preserving public/generated APIs",
+  "working_tree_base": "b091c8524db8ba391cbfc9ff404aea5e2ab0ea18",
+  "distribution": "Local changes only; no Git commit, push, merge, publication or dependency installation",
+  "environment": {
+    "postgres": "18.6 (Homebrew)",
+    "go": "go version go1.27.1 darwin/arm64",
+    "benchmark_environment": {
+      "GOFLAGS": null,
+      "GOGC": null,
+      "GOMEMLIMIT": null,
+      "GOMAXPROCS": null,
+      "CGO_ENABLED": null,
+      "GOTOOLCHAIN": null
+    },
+    "machine": "Apple M4 Max",
+    "memory_bytes": 68719476736,
+    "logical_cpus_in_benchmark": 16,
+    "cache": "Existing native warm Go caches; no cold cache created",
+    "backend": "Existing local PostgreSQL; private configuration read without disclosure; unique retained schemas; no reset/drop or new database server",
+    "verification_environment": {
+      "FOUNDRY_TEST_POSTGRES_REQUIRED": "1",
+      "FOUNDRY_TEST_GOPLS": "Existing repository bin/gopls",
+      "GOWORK": "off",
+      "GOFLAGS": "-p=1",
+      "GOMEMLIMIT": "4GiB"
+    }
+  },
+  "workload": {
+    "model": "Existing generated models.User: 8 persisted columns (UUID, text, integer, nullable text/date/UUID and validated enums), with unloaded relation slots",
+    "seed_rows": 1000,
+    "order": "Indexed age ascending; age >= 1 and active status; limit 1, 100 or 1000",
+    "variants": [
+      "Direct database/sql through the same Foundry pgx connector and equivalent concrete codecs",
+      "Framework precompiled SQL using the same typed scanner",
+      "Freshly built and compiled generated typed ORM query per operation"
+    ],
+    "pool": "One retained connection per measured pool; same driver statement cache and schema checkout policy",
+    "warmup": "Warm buffers and statement cache before each sample",
+    "agreement": "Complete generated model equality at all sizes plus exactly one application SELECT per typed list; driver scope checks are separate"
+  },
+  "changes": [
+    "Reduce private sql.Scanner from a full Codec copy to its decoder and typed destination; preserve both-direction declaration validity and publish only after successful decoding",
+    "Memoize immutable ordered selections with the existing owned Definition validation check; alias/set/cursor rewriting still copies before mutation",
+    "Remove the unused mutation column map from model SELECT compilation",
+    "Quote qualified identifiers without Split/temporary slices; share the immutable LIKE escaping grammar through strings.Replacer"
+  ],
+  "profiling": {
+    "compile": "LIKE Replacer building accounted for 28.62% of alloc_space in the baseline mixed compile profile; columnSelections 6.20%, newCompiler 4.88%, and identifier splitting also allocated repeatedly",
+    "read": "Result-slice growth and complete model storage dominated the 1000-row allocation profile. Smaller scanner interface boxes save 32 bytes per column",
+    "tool": "Bundled native Go pprof source executed with -mod=vendor from the SDK command module; no tool installed",
+    "logs": [
+      ".cache/orm-performance-20261011/compile-allocation-profile.txt",
+      ".cache/orm-performance-20261011/read-allocation-profile.txt"
+    ]
+  },
+  "measurement": {
+    "command": "make benchmark-orm",
+    "initial_count": 5,
+    "final_sampling": "After all verification processes exited, alternate baseline and optimized non-race binaries for five rounds; reverse order in even rounds. Each benchmark uses -test.benchtime=1s -test.count=1 -test.benchmem",
+    "baseline_binary": "Saved before runtime edits; profiling flags disabled for final measurement",
+    "limits": "Read latency is host/database/cache dependent; 1000-row direct and ORM timing ranges overlap. No claim about other ORM libraries, remote I/O, concurrent saturation, transaction/hook writes, or Go build time",
+    "samples": {
+      "baseline": {
+        "BenchmarkORMPostgresReads/1/direct-sql": {
+          "samples": [
+            {
+              "ns_per_op": 63031.0,
+              "bytes_per_op": 4643,
+              "allocs_per_op": 66
+            },
+            {
+              "ns_per_op": 62891.0,
+              "bytes_per_op": 4642,
+              "allocs_per_op": 66
+            },
+            {
+              "ns_per_op": 62866.0,
+              "bytes_per_op": 4642,
+              "allocs_per_op": 66
+            },
+            {
+              "ns_per_op": 62044.0,
+              "bytes_per_op": 4643,
+              "allocs_per_op": 66
+            },
+            {
+              "ns_per_op": 62353.0,
+              "bytes_per_op": 4642,
+              "allocs_per_op": 66
+            }
+          ],
+          "median": {
+            "ns_per_op": 62866.0,
+            "bytes_per_op": 4642,
+            "allocs_per_op": 66
+          },
+          "ns_range": [
+            62044.0,
+            63031.0
+          ]
+        },
+        "BenchmarkORMPostgresReads/1/framework-sql": {
+          "samples": [
+            {
+              "ns_per_op": 63890.0,
+              "bytes_per_op": 5858,
+              "allocs_per_op": 82
+            },
+            {
+              "ns_per_op": 63657.0,
+              "bytes_per_op": 5859,
+              "allocs_per_op": 82
+            },
+            {
+              "ns_per_op": 63130.0,
+              "bytes_per_op": 5859,
+              "allocs_per_op": 82
+            },
+            {
+              "ns_per_op": 62561.0,
+              "bytes_per_op": 5858,
+              "allocs_per_op": 82
+            },
+            {
+              "ns_per_op": 63564.0,
+              "bytes_per_op": 5859,
+              "allocs_per_op": 82
+            }
+          ],
+          "median": {
+            "ns_per_op": 63564.0,
+            "bytes_per_op": 5859,
+            "allocs_per_op": 82
+          },
+          "ns_range": [
+            62561.0,
+            63890.0
+          ]
+        },
+        "BenchmarkORMPostgresReads/1/typed-orm": {
+          "samples": [
+            {
+              "ns_per_op": 68457.0,
+              "bytes_per_op": 11328,
+              "allocs_per_op": 192
+            },
+            {
+              "ns_per_op": 69235.0,
+              "bytes_per_op": 11330,
+              "allocs_per_op": 192
+            },
+            {
+              "ns_per_op": 69090.0,
+              "bytes_per_op": 11331,
+              "allocs_per_op": 192
+            },
+            {
+              "ns_per_op": 69348.0,
+              "bytes_per_op": 11329,
+              "allocs_per_op": 192
+            },
+            {
+              "ns_per_op": 68500.0,
+              "bytes_per_op": 11326,
+              "allocs_per_op": 192
+            }
+          ],
+          "median": {
+            "ns_per_op": 69090.0,
+            "bytes_per_op": 11329,
+            "allocs_per_op": 192
+          },
+          "ns_range": [
+            68457.0,
+            69348.0
+          ]
+        },
+        "BenchmarkORMPostgresReads/100/direct-sql": {
+          "samples": [
+            {
+              "ns_per_op": 204587.0,
+              "bytes_per_op": 331044,
+              "allocs_per_op": 1811
+            },
+            {
+              "ns_per_op": 201027.0,
+              "bytes_per_op": 331015,
+              "allocs_per_op": 1810
+            },
+            {
+              "ns_per_op": 200650.0,
+              "bytes_per_op": 331026,
+              "allocs_per_op": 1811
+            },
+            {
+              "ns_per_op": 203170.0,
+              "bytes_per_op": 331038,
+              "allocs_per_op": 1810
+            },
+            {
+              "ns_per_op": 204327.0,
+              "bytes_per_op": 331039,
+              "allocs_per_op": 1811
+            }
+          ],
+          "median": {
+            "ns_per_op": 203170.0,
+            "bytes_per_op": 331038,
+            "allocs_per_op": 1811
+          },
+          "ns_range": [
+            200650.0,
+            204587.0
+          ]
+        },
+        "BenchmarkORMPostgresReads/100/framework-sql": {
+          "samples": [
+            {
+              "ns_per_op": 207204.0,
+              "bytes_per_op": 332234,
+              "allocs_per_op": 1826
+            },
+            {
+              "ns_per_op": 206748.0,
+              "bytes_per_op": 332211,
+              "allocs_per_op": 1826
+            },
+            {
+              "ns_per_op": 205009.0,
+              "bytes_per_op": 332226,
+              "allocs_per_op": 1826
+            },
+            {
+              "ns_per_op": 206779.0,
+              "bytes_per_op": 332224,
+              "allocs_per_op": 1826
+            },
+            {
+              "ns_per_op": 205744.0,
+              "bytes_per_op": 332219,
+              "allocs_per_op": 1826
+            }
+          ],
+          "median": {
+            "ns_per_op": 206748.0,
+            "bytes_per_op": 332224,
+            "allocs_per_op": 1826
+          },
+          "ns_range": [
+            205009.0,
+            207204.0
+          ]
+        },
+        "BenchmarkORMPostgresReads/100/typed-orm": {
+          "samples": [
+            {
+              "ns_per_op": 236463.0,
+              "bytes_per_op": 338189,
+              "allocs_per_op": 1938
+            },
+            {
+              "ns_per_op": 221710.0,
+              "bytes_per_op": 338179,
+              "allocs_per_op": 1938
+            },
+            {
+              "ns_per_op": 215852.0,
+              "bytes_per_op": 338206,
+              "allocs_per_op": 1938
+            },
+            {
+              "ns_per_op": 216019.0,
+              "bytes_per_op": 338215,
+              "allocs_per_op": 1938
+            },
+            {
+              "ns_per_op": 217958.0,
+              "bytes_per_op": 338201,
+              "allocs_per_op": 1938
+            }
+          ],
+          "median": {
+            "ns_per_op": 217958.0,
+            "bytes_per_op": 338201,
+            "allocs_per_op": 1938
+          },
+          "ns_range": [
+            215852.0,
+            236463.0
+          ]
+        },
+        "BenchmarkORMPostgresReads/1000/direct-sql": {
+          "samples": [
+            {
+              "ns_per_op": 1203318.0,
+              "bytes_per_op": 3622127,
+              "allocs_per_op": 18317
+            },
+            {
+              "ns_per_op": 1217516.0,
+              "bytes_per_op": 3622124,
+              "allocs_per_op": 18317
+            },
+            {
+              "ns_per_op": 1220683.0,
+              "bytes_per_op": 3622132,
+              "allocs_per_op": 18317
+            },
+            {
+              "ns_per_op": 1231252.0,
+              "bytes_per_op": 3622112,
+              "allocs_per_op": 18317
+            },
+            {
+              "ns_per_op": 1263405.0,
+              "bytes_per_op": 3622118,
+              "allocs_per_op": 18317
+            }
+          ],
+          "median": {
+            "ns_per_op": 1220683.0,
+            "bytes_per_op": 3622124,
+            "allocs_per_op": 18317
+          },
+          "ns_range": [
+            1203318.0,
+            1263405.0
+          ]
+        },
+        "BenchmarkORMPostgresReads/1000/framework-sql": {
+          "samples": [
+            {
+              "ns_per_op": 1191952.0,
+              "bytes_per_op": 3623251,
+              "allocs_per_op": 18333
+            },
+            {
+              "ns_per_op": 1215073.0,
+              "bytes_per_op": 3623326,
+              "allocs_per_op": 18333
+            },
+            {
+              "ns_per_op": 1195351.0,
+              "bytes_per_op": 3623269,
+              "allocs_per_op": 18333
+            },
+            {
+              "ns_per_op": 1217704.0,
+              "bytes_per_op": 3623294,
+              "allocs_per_op": 18333
+            },
+            {
+              "ns_per_op": 1213028.0,
+              "bytes_per_op": 3623337,
+              "allocs_per_op": 18333
+            }
+          ],
+          "median": {
+            "ns_per_op": 1213028.0,
+            "bytes_per_op": 3623294,
+            "allocs_per_op": 18333
+          },
+          "ns_range": [
+            1191952.0,
+            1217704.0
+          ]
+        },
+        "BenchmarkORMPostgresReads/1000/typed-orm": {
+          "samples": [
+            {
+              "ns_per_op": 1219511.0,
+              "bytes_per_op": 3631282,
+              "allocs_per_op": 18449
+            },
+            {
+              "ns_per_op": 1232146.0,
+              "bytes_per_op": 3631281,
+              "allocs_per_op": 18449
+            },
+            {
+              "ns_per_op": 1208464.0,
+              "bytes_per_op": 3631253,
+              "allocs_per_op": 18448
+            },
+            {
+              "ns_per_op": 1229482.0,
+              "bytes_per_op": 3631294,
+              "allocs_per_op": 18449
+            },
+            {
+              "ns_per_op": 1219749.0,
+              "bytes_per_op": 3631285,
+              "allocs_per_op": 18449
+            }
+          ],
+          "median": {
+            "ns_per_op": 1219749.0,
+            "bytes_per_op": 3631282,
+            "allocs_per_op": 18449
+          },
+          "ns_range": [
+            1208464.0,
+            1232146.0
+          ]
+        },
+        "BenchmarkORMCompile/list": {
+          "samples": [
+            {
+              "ns_per_op": 3466.0,
+              "bytes_per_op": 5335,
+              "allocs_per_op": 106
+            },
+            {
+              "ns_per_op": 3552.0,
+              "bytes_per_op": 5336,
+              "allocs_per_op": 106
+            },
+            {
+              "ns_per_op": 3571.0,
+              "bytes_per_op": 5335,
+              "allocs_per_op": 106
+            },
+            {
+              "ns_per_op": 3577.0,
+              "bytes_per_op": 5335,
+              "allocs_per_op": 106
+            },
+            {
+              "ns_per_op": 3572.0,
+              "bytes_per_op": 5336,
+              "allocs_per_op": 106
+            }
+          ],
+          "median": {
+            "ns_per_op": 3571.0,
+            "bytes_per_op": 5335,
+            "allocs_per_op": 106
+          },
+          "ns_range": [
+            3466.0,
+            3577.0
+          ]
+        },
+        "BenchmarkORMCompile/filters": {
+          "samples": [
+            {
+              "ns_per_op": 5972.0,
+              "bytes_per_op": 14086,
+              "allocs_per_op": 153
+            },
+            {
+              "ns_per_op": 6061.0,
+              "bytes_per_op": 14086,
+              "allocs_per_op": 153
+            },
+            {
+              "ns_per_op": 6043.0,
+              "bytes_per_op": 14085,
+              "allocs_per_op": 153
+            },
+            {
+              "ns_per_op": 6075.0,
+              "bytes_per_op": 14086,
+              "allocs_per_op": 153
+            },
+            {
+              "ns_per_op": 6163.0,
+              "bytes_per_op": 14086,
+              "allocs_per_op": 153
+            }
+          ],
+          "median": {
+            "ns_per_op": 6061.0,
+            "bytes_per_op": 14086,
+            "allocs_per_op": 153
+          },
+          "ns_range": [
+            5972.0,
+            6163.0
+          ]
+        }
+      },
+      "optimized": {
+        "BenchmarkORMPostgresReads/1/direct-sql": {
+          "samples": [
+            {
+              "ns_per_op": 62368.0,
+              "bytes_per_op": 4385,
+              "allocs_per_op": 66
+            },
+            {
+              "ns_per_op": 60325.0,
+              "bytes_per_op": 4386,
+              "allocs_per_op": 66
+            },
+            {
+              "ns_per_op": 62827.0,
+              "bytes_per_op": 4386,
+              "allocs_per_op": 66
+            },
+            {
+              "ns_per_op": 62078.0,
+              "bytes_per_op": 4387,
+              "allocs_per_op": 66
+            },
+            {
+              "ns_per_op": 63021.0,
+              "bytes_per_op": 4385,
+              "allocs_per_op": 66
+            }
+          ],
+          "median": {
+            "ns_per_op": 62368.0,
+            "bytes_per_op": 4386,
+            "allocs_per_op": 66
+          },
+          "ns_range": [
+            60325.0,
+            63021.0
+          ]
+        },
+        "BenchmarkORMPostgresReads/1/framework-sql": {
+          "samples": [
+            {
+              "ns_per_op": 63042.0,
+              "bytes_per_op": 5600,
+              "allocs_per_op": 82
+            },
+            {
+              "ns_per_op": 61862.0,
+              "bytes_per_op": 5602,
+              "allocs_per_op": 82
+            },
+            {
+              "ns_per_op": 64221.0,
+              "bytes_per_op": 5602,
+              "allocs_per_op": 82
+            },
+            {
+              "ns_per_op": 63229.0,
+              "bytes_per_op": 5600,
+              "allocs_per_op": 82
+            },
+            {
+              "ns_per_op": 63356.0,
+              "bytes_per_op": 5603,
+              "allocs_per_op": 82
+            }
+          ],
+          "median": {
+            "ns_per_op": 63229.0,
+            "bytes_per_op": 5602,
+            "allocs_per_op": 82
+          },
+          "ns_range": [
+            61862.0,
+            64221.0
+          ]
+        },
+        "BenchmarkORMPostgresReads/1/typed-orm": {
+          "samples": [
+            {
+              "ns_per_op": 68091.0,
+              "bytes_per_op": 9862,
+              "allocs_per_op": 158
+            },
+            {
+              "ns_per_op": 66809.0,
+              "bytes_per_op": 9858,
+              "allocs_per_op": 158
+            },
+            {
+              "ns_per_op": 68381.0,
+              "bytes_per_op": 9861,
+              "allocs_per_op": 158
+            },
+            {
+              "ns_per_op": 67397.0,
+              "bytes_per_op": 9861,
+              "allocs_per_op": 158
+            },
+            {
+              "ns_per_op": 65525.0,
+              "bytes_per_op": 9862,
+              "allocs_per_op": 158
+            }
+          ],
+          "median": {
+            "ns_per_op": 67397.0,
+            "bytes_per_op": 9861,
+            "allocs_per_op": 158
+          },
+          "ns_range": [
+            65525.0,
+            68381.0
+          ]
+        },
+        "BenchmarkORMPostgresReads/100/direct-sql": {
+          "samples": [
+            {
+              "ns_per_op": 198878.0,
+              "bytes_per_op": 305353,
+              "allocs_per_op": 1810
+            },
+            {
+              "ns_per_op": 194974.0,
+              "bytes_per_op": 305335,
+              "allocs_per_op": 1810
+            },
+            {
+              "ns_per_op": 197297.0,
+              "bytes_per_op": 305330,
+              "allocs_per_op": 1810
+            },
+            {
+              "ns_per_op": 195070.0,
+              "bytes_per_op": 305353,
+              "allocs_per_op": 1810
+            },
+            {
+              "ns_per_op": 197122.0,
+              "bytes_per_op": 305332,
+              "allocs_per_op": 1810
+            }
+          ],
+          "median": {
+            "ns_per_op": 197122.0,
+            "bytes_per_op": 305335,
+            "allocs_per_op": 1810
+          },
+          "ns_range": [
+            194974.0,
+            198878.0
+          ]
+        },
+        "BenchmarkORMPostgresReads/100/framework-sql": {
+          "samples": [
+            {
+              "ns_per_op": 200755.0,
+              "bytes_per_op": 306539,
+              "allocs_per_op": 1826
+            },
+            {
+              "ns_per_op": 196006.0,
+              "bytes_per_op": 306518,
+              "allocs_per_op": 1826
+            },
+            {
+              "ns_per_op": 199728.0,
+              "bytes_per_op": 306524,
+              "allocs_per_op": 1826
+            },
+            {
+              "ns_per_op": 196678.0,
+              "bytes_per_op": 306527,
+              "allocs_per_op": 1826
+            },
+            {
+              "ns_per_op": 199686.0,
+              "bytes_per_op": 306515,
+              "allocs_per_op": 1826
+            }
+          ],
+          "median": {
+            "ns_per_op": 199686.0,
+            "bytes_per_op": 306524,
+            "allocs_per_op": 1826
+          },
+          "ns_range": [
+            196006.0,
+            200755.0
+          ]
+        },
+        "BenchmarkORMPostgresReads/100/typed-orm": {
+          "samples": [
+            {
+              "ns_per_op": 207505.0,
+              "bytes_per_op": 311243,
+              "allocs_per_op": 1904
+            },
+            {
+              "ns_per_op": 204821.0,
+              "bytes_per_op": 311298,
+              "allocs_per_op": 1904
+            },
+            {
+              "ns_per_op": 205384.0,
+              "bytes_per_op": 311242,
+              "allocs_per_op": 1904
+            },
+            {
+              "ns_per_op": 204166.0,
+              "bytes_per_op": 311227,
+              "allocs_per_op": 1904
+            },
+            {
+              "ns_per_op": 204340.0,
+              "bytes_per_op": 311217,
+              "allocs_per_op": 1904
+            }
+          ],
+          "median": {
+            "ns_per_op": 204821.0,
+            "bytes_per_op": 311242,
+            "allocs_per_op": 1904
+          },
+          "ns_range": [
+            204166.0,
+            207505.0
+          ]
+        },
+        "BenchmarkORMPostgresReads/1000/direct-sql": {
+          "samples": [
+            {
+              "ns_per_op": 1189602.0,
+              "bytes_per_op": 3366122,
+              "allocs_per_op": 18317
+            },
+            {
+              "ns_per_op": 1194109.0,
+              "bytes_per_op": 3366127,
+              "allocs_per_op": 18317
+            },
+            {
+              "ns_per_op": 1160838.0,
+              "bytes_per_op": 3366127,
+              "allocs_per_op": 18317
+            },
+            {
+              "ns_per_op": 1202801.0,
+              "bytes_per_op": 3366122,
+              "allocs_per_op": 18317
+            },
+            {
+              "ns_per_op": 1153637.0,
+              "bytes_per_op": 3366128,
+              "allocs_per_op": 18317
+            }
+          ],
+          "median": {
+            "ns_per_op": 1189602.0,
+            "bytes_per_op": 3366127,
+            "allocs_per_op": 18317
+          },
+          "ns_range": [
+            1153637.0,
+            1202801.0
+          ]
+        },
+        "BenchmarkORMPostgresReads/1000/framework-sql": {
+          "samples": [
+            {
+              "ns_per_op": 1157444.0,
+              "bytes_per_op": 3367295,
+              "allocs_per_op": 18333
+            },
+            {
+              "ns_per_op": 1180934.0,
+              "bytes_per_op": 3367313,
+              "allocs_per_op": 18333
+            },
+            {
+              "ns_per_op": 1186913.0,
+              "bytes_per_op": 3367353,
+              "allocs_per_op": 18333
+            },
+            {
+              "ns_per_op": 1174874.0,
+              "bytes_per_op": 3367341,
+              "allocs_per_op": 18333
+            },
+            {
+              "ns_per_op": 1185600.0,
+              "bytes_per_op": 3367346,
+              "allocs_per_op": 18333
+            }
+          ],
+          "median": {
+            "ns_per_op": 1180934.0,
+            "bytes_per_op": 3367341,
+            "allocs_per_op": 18333
+          },
+          "ns_range": [
+            1157444.0,
+            1186913.0
+          ]
+        },
+        "BenchmarkORMPostgresReads/1000/typed-orm": {
+          "samples": [
+            {
+              "ns_per_op": 1159558.0,
+              "bytes_per_op": 3374104,
+              "allocs_per_op": 18415
+            },
+            {
+              "ns_per_op": 1170421.0,
+              "bytes_per_op": 3374141,
+              "allocs_per_op": 18415
+            },
+            {
+              "ns_per_op": 1161692.0,
+              "bytes_per_op": 3374106,
+              "allocs_per_op": 18415
+            },
+            {
+              "ns_per_op": 1178485.0,
+              "bytes_per_op": 3374097,
+              "allocs_per_op": 18415
+            },
+            {
+              "ns_per_op": 1171615.0,
+              "bytes_per_op": 3374088,
+              "allocs_per_op": 18414
+            }
+          ],
+          "median": {
+            "ns_per_op": 1170421.0,
+            "bytes_per_op": 3374104,
+            "allocs_per_op": 18415
+          },
+          "ns_range": [
+            1159558.0,
+            1178485.0
+          ]
+        },
+        "BenchmarkORMCompile/list": {
+          "samples": [
+            {
+              "ns_per_op": 2961.0,
+              "bytes_per_op": 4125,
+              "allocs_per_op": 72
+            },
+            {
+              "ns_per_op": 2974.0,
+              "bytes_per_op": 4125,
+              "allocs_per_op": 72
+            },
+            {
+              "ns_per_op": 3010.0,
+              "bytes_per_op": 4125,
+              "allocs_per_op": 72
+            },
+            {
+              "ns_per_op": 3024.0,
+              "bytes_per_op": 4126,
+              "allocs_per_op": 72
+            },
+            {
+              "ns_per_op": 3047.0,
+              "bytes_per_op": 4125,
+              "allocs_per_op": 72
+            }
+          ],
+          "median": {
+            "ns_per_op": 3010.0,
+            "bytes_per_op": 4125,
+            "allocs_per_op": 72
+          },
+          "ns_range": [
+            2961.0,
+            3047.0
+          ]
+        },
+        "BenchmarkORMCompile/filters": {
+          "samples": [
+            {
+              "ns_per_op": 4204.0,
+              "bytes_per_op": 6057,
+              "allocs_per_op": 106
+            },
+            {
+              "ns_per_op": 4231.0,
+              "bytes_per_op": 6057,
+              "allocs_per_op": 106
+            },
+            {
+              "ns_per_op": 4262.0,
+              "bytes_per_op": 6057,
+              "allocs_per_op": 106
+            },
+            {
+              "ns_per_op": 4265.0,
+              "bytes_per_op": 6057,
+              "allocs_per_op": 106
+            },
+            {
+              "ns_per_op": 4297.0,
+              "bytes_per_op": 6057,
+              "allocs_per_op": 106
+            }
+          ],
+          "median": {
+            "ns_per_op": 4262.0,
+            "bytes_per_op": 6057,
+            "allocs_per_op": 106
+          },
+          "ns_range": [
+            4204.0,
+            4297.0
+          ]
+        }
+      }
+    },
+    "rounds": [
+      {
+        "round": 1,
+        "variant": "baseline",
+        "exit_code": 0,
+        "seconds": 13.57
+      },
+      {
+        "round": 1,
+        "variant": "optimized",
+        "exit_code": 0,
+        "seconds": 14.05
+      },
+      {
+        "round": 2,
+        "variant": "optimized",
+        "exit_code": 0,
+        "seconds": 13.36
+      },
+      {
+        "round": 2,
+        "variant": "baseline",
+        "exit_code": 0,
+        "seconds": 13.21
+      },
+      {
+        "round": 3,
+        "variant": "baseline",
+        "exit_code": 0,
+        "seconds": 13.17
+      },
+      {
+        "round": 3,
+        "variant": "optimized",
+        "exit_code": 0,
+        "seconds": 13.37
+      },
+      {
+        "round": 4,
+        "variant": "optimized",
+        "exit_code": 0,
+        "seconds": 13.26
+      },
+      {
+        "round": 4,
+        "variant": "baseline",
+        "exit_code": 0,
+        "seconds": 13.15
+      },
+      {
+        "round": 5,
+        "variant": "baseline",
+        "exit_code": 0,
+        "seconds": 13.13
+      },
+      {
+        "round": 5,
+        "variant": "optimized",
+        "exit_code": 0,
+        "seconds": 13.22
+      }
+    ]
+  },
+  "checks": [
+    {
+      "log": "verify.log",
+      "command": [
+        "make",
+        "verify"
+      ],
+      "directory": ".",
+      "exit_code": 0,
+      "seconds": 1525.97
+    },
+    {
+      "log": "database-race.log",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-count=1",
+        "-timeout=20m",
+        "./database/..."
+      ],
+      "directory": ".",
+      "exit_code": 0,
+      "seconds": 255.79
+    },
+    {
+      "log": "consumer-race.log",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-count=1",
+        "-timeout=20m",
+        ".",
+        "./tenantqueries",
+        "./retrievalqueries",
+        "./setqueries",
+        "./projectionqueries",
+        "./cursorqueries",
+        "./observerqueries"
+      ],
+      "directory": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "seconds": 280.86
+    }
+  ],
+  "audit": {
+    "public_api": "Only private runtime representation/implementation changed; existing generated model files and public signatures unchanged; full independent consumers and current generation passed",
+    "semantics": "Incomplete codecs reject scans without changing destinations. Existing NULL/enum/UUID/date, invalid input, write outcome, tenant/context scope and resource cleanup tests passed",
+    "ownership": "New concurrent regression compiles set/cursor derivations without changing base selections; copied definitions validate/build their own metadata. Source review found every element rewrite clones or replaces selections; append-only paths receive an exact-capacity shared slice",
+    "verification_scope": "Full Makefile gate, all database package races, and seven independent consumer race packages with required real PostgreSQL. Redis/native image/TypeScript opt-in certification not selected for this unchanged surface; no full-framework release claim"
+  },
+  "source_identity": {
+    "matched_input_count": 4408,
+    "before_after_match": true,
+    "sha256_of_sorted_input_manifest": "ef115e60d0df1139fddc5568ae32438f5f517312f9dd99fe174a18af53711fd5",
+    "selected_final_sha256": {
+      "Makefile": "6fdb101bdaca64c7c1690145fdf9efce3b7aa7822f0535bc833508bc88237681",
+      "database/codec/codec.go": "7435b07b27fee654ae791e5479f54a91bf7122d758b932c11e5bcf87ae573fbd",
+      "database/query/compiler.go": "443b48279ff1ffb444921aea02af6b0fc53477b16c2af3e868ec5b1bc3185c83",
+      "database/query/definition.go": "9caa4fabed6af8ef9312178ef548c3dd1be836a150bcee4f3a1e23c33903769a",
+      "database/codec/validation_test.go": "fafa8cd61e6390f1c03b9fe72281de1c9f1d4c43381f9de763201839835aaf7c",
+      "database/query/definition_test.go": "1f7ecbab1769e3644ba0e33679956518f8a144048f3137857cd0a40ffb5da1ba",
+      "tests/fixtures/consumer/orm_benchmark_test.go": "759bb814f9fb40a2f03de040ed2a4f345ac9a5348f07f5f950eae01f6fae0ba2"
+    },
+    "baseline_runtime_sha256": {
+      "database/codec/codec.go": "c3a1c4b1a39ec72ff2d5a3522738f868372fea6de86e8f7859cf2231689800ab",
+      "database/query/compiler.go": "c707072002f7dcb97051bdddd2b41ad24506224458ec88c914ed4ae9543dac08",
+      "database/query/definition.go": "264f07c308e70763c1bc1b313af9fcc587528b370211c763493b8aa555278543"
+    },
+    "note": "4408 Go/module/client/tool/Makefile inputs stayed unchanged across the full verification and races, and were rechecked after final samples. Final changes only add documentation and evidence."
+  },
+  "logs": [
+    ".cache/orm-performance-20261011/verify.log",
+    ".cache/orm-performance-20261011/database-race.log",
+    ".cache/orm-performance-20261011/consumer-race.log",
+    ".cache/orm-performance-20261011/balanced-baseline.log",
+    ".cache/orm-performance-20261011/balanced-optimized.log"
+  ]
+}

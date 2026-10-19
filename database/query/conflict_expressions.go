@@ -9,37 +9,37 @@ import (
 // One dependency node exposes index targets, assignment subqueries and update
 // predicates to the existing bounded alias allocator and statement-wide CTE planner.
 func (p Conflict[M]) dependencies(node selectNode) selectNode {
-	node.predicates = append(slices.Clone(p.condition), p.rowCondition...)
-	node.predicates = append(node.predicates, p.targetCondition...)
-	node.selections = slices.Clone(node.selections)
+	node.Predicates = append(slices.Clone(p.condition), p.rowCondition...)
+	node.Predicates = append(node.Predicates, p.targetCondition...)
+	node.Selections = slices.Clone(node.Selections)
 	for _, key := range p.keys {
-		node.selections = append(node.selections, selectItem{expression: key})
+		node.Selections = append(node.Selections, selectItem{Expression: key})
 	}
 	for _, u := range p.updates {
 		if u.value != nil {
-			node.selections = append(node.selections, selectItem{expression: u.value})
+			node.Selections = append(node.Selections, selectItem{Expression: u.value})
 		}
 	}
 	return node
 }
 
 func (p Conflict[M]) validateRows(c *compiler) error {
-	sources := c.sources
-	c.sources = map[string]map[string]Column{
-		conflictStoredTable:   c.columns,
-		conflictProposedTable: c.columns,
+	sources := c.Sources
+	c.Sources = map[string]map[string]columnData{
+		conflictStoredTable:   c.Columns,
+		conflictProposedTable: c.Columns,
 	}
-	defer func() { c.sources = sources }()
+	defer func() { c.Sources = sources }()
 	nodes := 0
 	for _, u := range p.updates {
 		if u.value != nil {
-			if err := validateRowValue(u.value, c.declaredField, 0, &nodes); err != nil {
+			if err := validateRowValue(u.value, c.DeclaredField, 0, &nodes); err != nil {
 				return err
 			}
 		}
 	}
 	for _, condition := range p.rowCondition {
-		if err := validateExpressionFields(condition, c.declaredField, 0, &nodes); err != nil {
+		if err := validateExpressionFields(condition, c.DeclaredField, 0, &nodes); err != nil {
 			return err
 		}
 	}
@@ -55,7 +55,7 @@ func (u ConflictUpdate[M]) validMode() bool {
 		count++
 	}
 	if u.literal != nil {
-		if u.literal.bind == nil {
+		if u.literal.Bind == nil {
 			return false
 		}
 		count++
@@ -68,23 +68,23 @@ func (u ConflictUpdate[M]) validMode() bool {
 
 func (u ConflictUpdate[M]) compileValue(c *compiler, rename *correlationRenamer) (string, error) {
 	if u.null {
-		if !c.columns[u.field.column].Nullable {
+		if !c.Columns[u.field.Column].Nullable {
 			return "", fault.New(fault.Invalid, "NULL conflict assignment requires a nullable model field")
 		}
-		return c.parameter(nil)
+		return c.Parameter(nil)
 	}
 	if u.incoming {
-		return qualified(fieldRef{conflictProposedTable, u.field.column}), nil
+		return qualified(fieldRef{Table: conflictProposedTable, Column: u.field.Column}), nil
 	}
 	if u.value != nil {
 		expression := rename.value(u.value, 0)
 		if rename.err != nil {
 			return "", rename.err
 		}
-		return c.selectedExpression(expression, nil, false)
+		return c.SelectedExpression(expression, nil, false)
 	}
-	if u.literal == nil || u.literal.bind == nil {
+	if u.literal == nil || u.literal.Bind == nil {
 		return "", fault.New(fault.Invalid, "conflict assignment has no value")
 	}
-	return c.assignmentParameter(u.field.column, u.literal.bind)
+	return c.AssignmentParameter(u.field.Column, u.literal.Bind)
 }

@@ -12,7 +12,9 @@ import (
 )
 
 const MaxPlanBytes = 4 << 20
+
 const MaxPlanNodes = 4096
+
 const MaxPlanDepth = 24
 
 // PlanNode is a typed snapshot of PostgreSQL's common plan fields. Actual
@@ -55,15 +57,22 @@ type Plan struct {
 	nodes    int
 }
 
-func (p Plan) Analyzed() bool                                 { return p.analyzed }
-func (p Plan) NodeCount() int                                 { return p.nodes }
-func (p Plan) Root() PlanNode                                 { return clonePlanNode(p.document.Plan) }
-func (p Plan) PlanningMilliseconds() value.Optional[float64]  { return p.document.PlanningTime }
+func (p Plan) Analyzed() bool { return p.analyzed }
+
+func (p Plan) NodeCount() int { return p.nodes }
+
+func (p Plan) Root() PlanNode { return clonePlanNode(p.document.Plan) }
+
+func (p Plan) PlanningMilliseconds() value.Optional[float64] { return p.document.PlanningTime }
+
 func (p Plan) ExecutionMilliseconds() value.Optional[float64] { return p.document.ExecutionTime }
-func (p Plan) JSON() []byte                                   { return slices.Clone(p.json) }
+
+func (p Plan) JSON() []byte { return slices.Clone(p.json) }
+
 func (p Plan) Format(state fmt.State, _ rune) {
 	_, _ = fmt.Fprintf(state, "query plan (nodes %d, analyzed %t)", p.nodes, p.analyzed)
 }
+
 func clonePlanNode(node PlanNode) PlanNode {
 	node.Plans = slices.Clone(node.Plans)
 	for i := range node.Plans {
@@ -106,6 +115,7 @@ func explain(ctx context.Context, executor database.Executor, source planSource,
 	}
 	return result, nil
 }
+
 func explainTransaction(ctx context.Context, tx *database.Tx, source planSource, analyze bool) (Plan, error) {
 	if err := lockContext(ctx, tx); err != nil {
 		return Plan{}, err
@@ -134,6 +144,7 @@ func (p *planBytes) Scan(source any) error {
 	p.data = data
 	return nil
 }
+
 func invalidPlan() error {
 	return fault.New(fault.Invalid, "invalid or oversized PostgreSQL query plan")
 }
@@ -149,27 +160,35 @@ func (q Query[M]) Explain(ctx context.Context, executor database.Executor) (Plan
 func (q Query[M]) ExplainAnalyze(ctx context.Context, executor database.Executor) (Plan, error) {
 	return explain(ctx, executor, q, true)
 }
+
 func (q ProjectionQuery[S, P]) Explain(ctx context.Context, executor database.Executor) (Plan, error) {
 	return explain(ctx, executor, q, false)
 }
+
 func (q ProjectionQuery[S, P]) ExplainAnalyze(ctx context.Context, executor database.Executor) (Plan, error) {
 	return explain(ctx, executor, q, true)
 }
+
 func (q SetQuery[R]) Explain(ctx context.Context, executor database.Executor) (Plan, error) {
 	return explain(ctx, executor, q, false)
 }
+
 func (q SetQuery[R]) ExplainAnalyze(ctx context.Context, executor database.Executor) (Plan, error) {
 	return explain(ctx, executor, q, true)
 }
+
 func (q ValueQuery[S, V]) Explain(ctx context.Context, executor database.Executor) (Plan, error) {
 	return explain(ctx, executor, q, false)
 }
+
 func (q ValueQuery[S, V]) ExplainAnalyze(ctx context.Context, executor database.Executor) (Plan, error) {
 	return explain(ctx, executor, q, true)
 }
+
 func (q ValueSetQuery[V]) Explain(ctx context.Context, executor database.Executor) (Plan, error) {
 	return explain(ctx, executor, q, false)
 }
+
 func (q ValueSetQuery[V]) ExplainAnalyze(ctx context.Context, executor database.Executor) (Plan, error) {
 	return explain(ctx, executor, q, true)
 }
@@ -178,6 +197,7 @@ func (q ValueSetQuery[V]) ExplainAnalyze(ctx context.Context, executor database.
 func (q CursorQuery[R]) Explain(ctx context.Context, executor database.Executor) (Plan, error) {
 	return explain(ctx, executor, q, false)
 }
+
 func (q CursorQuery[R]) ExplainAnalyze(ctx context.Context, executor database.Executor) (Plan, error) {
 	return explain(ctx, executor, q, true)
 }
@@ -188,30 +208,39 @@ func (q CursorQuery[R]) ExplainAnalyze(ctx context.Context, executor database.Ex
 func (q LockedQuery[M]) Explain(ctx context.Context, tx *database.Tx) (Plan, error) {
 	return explainTransaction(ctx, tx, q, false)
 }
+
 func (q LockedQuery[M]) ExplainAnalyze(ctx context.Context, tx *database.Tx) (Plan, error) {
 	return explainTransaction(ctx, tx, q, true)
 }
+
 func (q LockedResult[S, R]) Explain(ctx context.Context, tx *database.Tx) (Plan, error) {
 	return explainTransaction(ctx, tx, q, false)
 }
+
 func (q LockedResult[S, R]) ExplainAnalyze(ctx context.Context, tx *database.Tx) (Plan, error) {
 	return explainTransaction(ctx, tx, q, true)
 }
+
 func (q TransactionQuery[S, R]) Explain(ctx context.Context, tx *database.Tx) (Plan, error) {
 	return explainTransaction(ctx, tx, q, false)
 }
+
 func (q TransactionQuery[S, R]) ExplainAnalyze(ctx context.Context, tx *database.Tx) (Plan, error) {
 	return explainTransaction(ctx, tx, q, true)
 }
+
 func (q TransactionValueQuery[S, V]) Explain(ctx context.Context, tx *database.Tx) (Plan, error) {
 	return explainTransaction(ctx, tx, q, false)
 }
+
 func (q TransactionValueQuery[S, V]) ExplainAnalyze(ctx context.Context, tx *database.Tx) (Plan, error) {
 	return explainTransaction(ctx, tx, q, true)
 }
+
 func (q LockedTransactionValue[S, V]) Explain(ctx context.Context, tx *database.Tx) (Plan, error) {
 	return explainTransaction(ctx, tx, q, false)
 }
+
 func (q LockedTransactionValue[S, V]) ExplainAnalyze(ctx context.Context, tx *database.Tx) (Plan, error) {
 	return explainTransaction(ctx, tx, q, true)
 }

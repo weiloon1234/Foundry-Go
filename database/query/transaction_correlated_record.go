@@ -17,38 +17,47 @@ func SelectTransactionCorrelatedRecord[O, I TransactionScope, R any](source Tran
 func ProjectTransactionCorrelated[O, I TransactionScope, R any](source TransactionCorrelatedSource[O, I], definition ProjectionDefinition[R], mappings ...ProjectionMapping[TransactionCorrelation[O, I], R]) TransactionCorrelatedRecordQuery[O, I, R] {
 	return TransactionCorrelatedRecordQuery[O, I, R]{query: Project(source.source, definition, mappings...), outer: source.outer.scopeRequirement}
 }
+
 func (q TransactionCorrelatedRecordQuery[O, I, R]) Where(predicates ...Predicate[TransactionCorrelation[O, I]]) TransactionCorrelatedRecordQuery[O, I, R] {
 	q.query = q.query.Where(predicates...)
 	return q
 }
+
 func (q TransactionCorrelatedRecordQuery[O, I, R]) OrderBy(orders ...ProjectionOrder[TransactionCorrelation[O, I]]) TransactionCorrelatedRecordQuery[O, I, R] {
 	q.query = q.query.OrderBy(orders...)
 	return q
 }
+
 func (q TransactionCorrelatedRecordQuery[O, I, R]) GroupBy(groups ...Group[TransactionCorrelation[O, I]]) TransactionCorrelatedRecordQuery[O, I, R] {
 	q.query = q.query.GroupBy(groups...)
 	return q
 }
+
 func (q TransactionCorrelatedRecordQuery[O, I, R]) Having(predicates ...HavingPredicate[TransactionCorrelation[O, I]]) TransactionCorrelatedRecordQuery[O, I, R] {
 	q.query = q.query.Having(predicates...)
 	return q
 }
+
 func (q TransactionCorrelatedRecordQuery[O, I, R]) Limit(count int) TransactionCorrelatedRecordQuery[O, I, R] {
 	q.query = q.query.Limit(count)
 	return q
 }
+
 func (q TransactionCorrelatedRecordQuery[O, I, R]) Offset(count int) TransactionCorrelatedRecordQuery[O, I, R] {
 	q.query = q.query.Offset(count)
 	return q
 }
+
 func (q TransactionCorrelatedRecordQuery[O, I, R]) Distinct() TransactionCorrelatedRecordQuery[O, I, R] {
 	q.query = q.query.Distinct()
 	return q
 }
+
 func (q TransactionCorrelatedRecordQuery[O, I, R]) DistinctOn(keys ...Group[TransactionCorrelation[O, I]]) TransactionCorrelatedRecordQuery[O, I, R] {
 	q.query = q.query.DistinctOn(keys...)
 	return q
 }
+
 func (q TransactionCorrelatedRecordQuery[O, I, R]) DistinctOnValues(keys ...ProjectionKey[TransactionCorrelation[O, I]]) TransactionCorrelatedRecordQuery[O, I, R] {
 	q.query = q.query.DistinctOnValues(keys...)
 	return q
@@ -64,5 +73,5 @@ func (q TransactionCorrelatedRecordQuery[O, I, R]) transactionCorrelatedRecord()
 // Exists yields a Tx-owned parent predicate and retains this SELECT's locks.
 func (q TransactionCorrelatedRecordQuery[O, I, R]) Exists() Predicate[O] {
 	r := q.transactionCorrelatedRecord()
-	return Predicate[O]{expression: subqueryPredicate{query: subquery{node: r.query.node, err: r.query.err, correlation: &r.outer}}}
+	return Predicate[O]{expression: subqueryPredicate{Query: subquery{Node: r.query.node, Err: r.query.err, Correlation: &r.outer}}}
 }

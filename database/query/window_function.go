@@ -1,45 +1,42 @@
 package query
 
 import (
-	"database/sql/driver"
-
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-type windowFunction uint8
+type windowFunction = querycore.WindowFunction
 
-const (
-	rowNumberWindow windowFunction = iota + 1
-	rankWindow
-	denseRankWindow
-	percentRankWindow
-	cumeDistWindow
-	ntileWindow
-	lagWindow
-	leadWindow
-	firstValueWindow
-	lastValueWindow
-	nthValueWindow
-	aggregateWindow
-)
+const rowNumberWindow = querycore.RowNumberWindow
 
-type windowNode struct {
-	kind        windowFunction
-	window      windowSpec
-	input       valueExpression
-	aggregate   aggregateNode
-	n           int32
-	fallback    driver.Value
-	hasFallback bool
-	err         error
-}
+const rankWindow = querycore.RankWindow
 
-func (windowNode) valueNode() {}
+const denseRankWindow = querycore.DenseRankWindow
+
+const percentRankWindow = querycore.PercentRankWindow
+
+const cumeDistWindow = querycore.CumeDistWindow
+
+const ntileWindow = querycore.NtileWindow
+
+const lagWindow = querycore.LagWindow
+
+const leadWindow = querycore.LeadWindow
+
+const firstValueWindow = querycore.FirstValueWindow
+
+const lastValueWindow = querycore.LastValueWindow
+
+const nthValueWindow = querycore.NthValueWindow
+
+const aggregateWindow = querycore.AggregateWindow
+
+type windowNode = querycore.WindowNode
 
 func windowExpression[S, V any](kind windowFunction, w Window[S], c codec.Codec[V]) Expression[S, V] {
-	return Expression[S, V]{node: windowNode{kind: kind, window: w.node}, codec: c}
+	return Expression[S, V]{node: windowNode{Kind: kind, Window: w.node}, codec: c}
 }
 
 // RowNumber numbers partition rows from one. Order with a unique tie-breaker for stability.
@@ -71,7 +68,7 @@ func CumeDist[S any](w Window[S]) Expression[S, float64] {
 func NTile[S any](buckets int32, w Window[S]) Expression[S, int32] {
 	e := windowExpression(ntileWindow, w, codec.Signed[int32]())
 	n := e.node.(windowNode)
-	n.n = buckets
+	n.N = buckets
 	e.node = n
 	return e
 }
@@ -79,17 +76,18 @@ func NTile[S any](buckets int32, w Window[S]) Expression[S, int32] {
 // Over evaluates this aggregate for each row's window frame, preserving its
 // codec and nullability. PostgreSQL does not support CountDistinct as a window.
 func (a Aggregate[S, V]) Over(w Window[S]) Expression[S, V] {
-	return Expression[S, V]{node: windowNode{kind: aggregateWindow, window: w.node, aggregate: a.node}, codec: a.codec}
+	return Expression[S, V]{node: windowNode{Kind: aggregateWindow, Window: w.node, Aggregate: a.node}, codec: a.codec}
 }
 
 func windowValue[S, V any](kind windowFunction, input Expression[S, V], n int32, w Window[S]) Expression[S, V] {
-	return Expression[S, V]{node: windowNode{kind: kind, input: input.node, n: n, window: w.node}, codec: input.codec}
+	return Expression[S, V]{node: windowNode{Kind: kind, Input: input.node, N: n, Window: w.node}, codec: input.codec}
 }
+
 func nullableWindowValue[S, V any](kind windowFunction, input Expression[S, V], n int32, w Window[S]) Expression[S, value.Nullable[V]] {
 	e := windowValue(kind, input, n, w)
 	node := e.node.(windowNode)
 	if value.IsNullableType[V]() {
-		node.err = fault.New(fault.Invalid, "nullable window input requires its nullable value helper")
+		node.Err = fault.New(fault.Invalid, "nullable window input requires its nullable value helper")
 	}
 	return Expression[S, value.Nullable[V]]{node: node, codec: codec.Nullable(input.codec)}
 }
@@ -118,8 +116,8 @@ func LeadNullable[S, V any](input Expression[S, value.Nullable[V]], offset int32
 func windowFallback[S, V any](kind windowFunction, input Expression[S, V], offset int32, fallback V, w Window[S]) Expression[S, V] {
 	e := windowValue(kind, input, offset, w)
 	n := e.node.(windowNode)
-	n.hasFallback = true
-	n.fallback, n.err = input.codec.Bind(fallback)
+	n.HasFallback = true
+	n.Fallback, n.Err = input.codec.Bind(fallback)
 	e.node = n
 	return e
 }

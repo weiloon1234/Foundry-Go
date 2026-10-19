@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
-func invalid() { _ = query.NegateInterval(intervalqueries.SampleFields().Period.Sum().Value()) }
+func invalid() { _ = query.NegateInterval(query.Sum(intervalqueries.SampleFields().Period).Value()) }

@@ -1,6 +1,8 @@
 package query
 
-import "slices"
+import (
+	"slices"
+)
 
 // RowLock declares one lock clause over preserved inputs of scope S.
 // Clause targets and wait behavior stay independent of other clauses.
@@ -12,32 +14,32 @@ type RowLock[S any] struct {
 // UpdateLock requests FOR UPDATE on the specified non-nullable input scopes.
 // A descriptor must name at least one target; use ForUpdate for all inputs.
 func UpdateLock[S any](targets ...LockTarget[S]) RowLock[S] {
-	return RowLock[S]{spec: lockOf(lockSpec{strength: lockUpdate}, targets)}
+	return RowLock[S]{spec: lockOf(lockSpec{Strength: lockUpdate}, targets)}
 }
 
 // NoKeyUpdateLock requests FOR NO KEY UPDATE on the specified input scopes.
 func NoKeyUpdateLock[S any](targets ...LockTarget[S]) RowLock[S] {
-	return RowLock[S]{spec: lockOf(lockSpec{strength: lockNoKeyUpdate}, targets)}
+	return RowLock[S]{spec: lockOf(lockSpec{Strength: lockNoKeyUpdate}, targets)}
 }
 
 // ShareLock requests FOR SHARE on the specified input scopes.
 func ShareLock[S any](targets ...LockTarget[S]) RowLock[S] {
-	return RowLock[S]{spec: lockOf(lockSpec{strength: lockShare}, targets)}
+	return RowLock[S]{spec: lockOf(lockSpec{Strength: lockShare}, targets)}
 }
 
 // KeyShareLock requests FOR KEY SHARE on the specified input scopes.
 func KeyShareLock[S any](targets ...LockTarget[S]) RowLock[S] {
-	return RowLock[S]{spec: lockOf(lockSpec{strength: lockKeyShare}, targets)}
+	return RowLock[S]{spec: lockOf(lockSpec{Strength: lockKeyShare}, targets)}
 }
 
 // NoWait reports conflicting row locks immediately for this clause.
-func (l RowLock[S]) NoWait() RowLock[S] { l.spec.behavior = lockNoWait; return l }
+func (l RowLock[S]) NoWait() RowLock[S] { l.spec.Behavior = lockNoWait; return l }
 
 // SkipLocked skips conflicting row locks for this clause.
-func (l RowLock[S]) SkipLocked() RowLock[S] { l.spec.behavior = lockSkip; return l }
+func (l RowLock[S]) SkipLocked() RowLock[S] { l.spec.Behavior = lockSkip; return l }
 
 // Wait restores ordinary context-bounded waiting for this clause.
-func (l RowLock[S]) Wait() RowLock[S] { l.spec.behavior = lockWait; return l }
+func (l RowLock[S]) Wait() RowLock[S] { l.spec.Behavior = lockWait; return l }
 
 // LockRows selects explicit per-input clauses and requires a transaction for
 // execution. PostgreSQL combines overlapping clauses using its strongest lock
@@ -58,7 +60,7 @@ func (q ValueQuery[S, V]) LockRows(clauses ...RowLock[S]) LockedResult[S, V] {
 func withLockBehavior(specs []lockSpec, behavior lockBehavior) []lockSpec {
 	specs = slices.Clone(specs)
 	for i := range specs {
-		specs[i].behavior = behavior
+		specs[i].Behavior = behavior
 	}
 	return specs
 }

@@ -70,7 +70,7 @@ Calendar months clip to the destination month's final day. A calendar day across
 
 Each temporal operation has a nullable counterpart, such as `YearNullable` and `AddInstantIntervalNullable`. SQL NULL propagates. Binary nullable operations require explicit widening of any non-null input using `NullableRow`. Use `Coalesce` for a declared fallback.
 
-The `Value` forms accept selected expressions, including aggregates and windows. For example, `YearNullableValue(f.Date.Max().Value())` retains aggregate semantics, while `UnixMillisecondsValue(FromUnixMillisValue(query.RowNumber(window)))` retains window semantics. Row constructors cannot accept selected expressions. Existing grouping, HAVING and nested SELECT checks still apply.
+The `Value` forms accept selected expressions, including aggregates and windows. For example, `YearNullableValue(query.Max(f.Date).Value())` retains aggregate semantics, while `UnixMillisecondsValue(FromUnixMillisValue(query.RowNumber(window)))` retains window semantics. Row constructors cannot accept selected expressions. Existing grouping, HAVING and nested SELECT checks still apply.
 
 Dates and timestamps retain Foundry's years 1–9999 and whole-microsecond codec contracts. PostgreSQL can represent values outside this range, but result decoding rejects them and collected reads publish no partial slice. Database arithmetic overflow remains a database error; callers can use a savepoint when recovering within a transaction. Invalid units, zero zones, unsupported resolution policies and sub-microsecond elapsed values fail before I/O. Cancellation follows the normal query runtime.
 

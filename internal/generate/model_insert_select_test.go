@@ -9,7 +9,7 @@ import (
 
 func TestInsertSelectGeneration(t *testing.T) {
 	dir := fixture(t, `package sample
-import("context";"strings";"time";"github.com/weiloon1234/Foundry-Go/database";"github.com/weiloon1234/Foundry-Go/value")
+import("context";"strings";"time";"github.com/weiloon1234/Foundry-Go/database";"github.com/weiloon1234/Foundry-Go/value";"github.com/weiloon1234/Foundry-Go/database/query")
 //foundry:model table=records primary=ID
 type Record struct{ID int64;Name string;Note value.Nullable[string];CreatedAt time.Time;UpdatedAt time.Time}
 //foundry:model table=archives primary=ID
@@ -17,7 +17,7 @@ type Archive struct{ID int64;Name string;Note value.Nullable[string];Tag string;
 func(Archive)MutateTag(v string)(string,error){return strings.TrimSpace(v),nil}
 func examples(ctx context.Context,db database.Transactor){
  f:=RecordFields()
- insert:=InsertArchiveFrom(QueryRecords().Where(f.ID.Gt(2))).SelectID(f.ID.Value()).SelectName(f.Name.Value()).SelectNote(f.Note.Value()).SelectCreatedAt(f.CreatedAt.Value()).Values(ArchiveDraft{}.SetTag(" batch "))
+ insert:=InsertArchiveFrom(QueryRecords().Where(f.ID.Gt(2))).SelectID(query.Value(f.ID)).SelectName(query.Value(f.Name)).SelectNote(query.Value(f.Note)).SelectCreatedAt(query.Value(f.CreatedAt)).Values(ArchiveDraft{}.SetTag(" batch "))
  var count int64;count,_=insert.Exec(ctx,db);_=count
  var rows []Archive;rows,_=insert.Returning(ctx,db,10);_=rows
 }

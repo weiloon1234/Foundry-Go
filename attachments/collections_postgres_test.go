@@ -175,7 +175,7 @@ func TestPostgresAttachmentLocalizedBatchAndTypedScopes(t *testing.T) {
 	err = f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		q := extensiontest.MemberQuery().Where(predicate)
 		var err error
-		keys, err = query.SelectValue(q, extensiontest.MemberIDField().Value()).All(ctx, tx)
+		keys, err = query.SelectValue(q, query.Value(extensiontest.MemberIDField())).All(ctx, tx)
 		return err
 	})
 	if err != nil || len(keys) != 1 || keys[0] != 1 {

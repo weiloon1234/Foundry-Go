@@ -32,9 +32,9 @@ type TranslationIndex struct {
 
 func MetadataIndex(q MetaQuery) query.ProjectionQuery[Meta, MetaIndex] {
 	f := MetaFields()
-	return SelectMetaIndex(q, MetaIndexSelection[Meta]{Key: f.Key.Value(), Owner: f.Owner.Value(), Scope: f.Scope.Value(), SubjectKey: f.SubjectKey.Value(), Identity: f.Identity.Value(), Name: f.Name.Value(), Version: f.Version.Value()})
+	return SelectMetaIndex(q, MetaIndexSelection[Meta]{Key: query.Value(f.Key), Owner: query.Value(f.Owner), Scope: query.Value(f.Scope), SubjectKey: query.Value(f.SubjectKey), Identity: query.Value(f.Identity), Name: query.Value(f.Name), Version: query.Value(f.Version)})
 }
 func TranslationsIndex(q TranslationQuery) query.ProjectionQuery[Translation, TranslationIndex] {
 	f := TranslationFields()
-	return SelectTranslationIndex(q, TranslationIndexSelection[Translation]{Key: f.Key.Value(), Owner: f.Owner.Value(), Scope: f.Scope.Value(), SubjectKey: f.SubjectKey.Value(), Identity: f.Identity.Value(), Field: f.Field.Value(), Locale: f.Locale.Value()})
+	return SelectTranslationIndex(q, TranslationIndexSelection[Translation]{Key: query.Value(f.Key), Owner: query.Value(f.Owner), Scope: query.Value(f.Scope), SubjectKey: query.Value(f.SubjectKey), Identity: query.Value(f.Identity), Field: query.Value(f.Field), Locale: query.Value(f.Locale)})
 }

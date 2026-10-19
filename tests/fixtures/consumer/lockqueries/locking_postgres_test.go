@@ -291,7 +291,7 @@ func TestPostgresLockTypedJoinTargetsAndValues(t *testing.T) {
 	}
 	finish()
 	if err := inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		values := query.SelectValue(models.QueryCountries(), models.CountryFields().Code.Value()).OrderBy(models.CountryFields().Code.Asc())
+		values := query.SelectValue(models.QueryCountries(), query.Value(models.CountryFields().Code)).OrderBy(models.CountryFields().Code.Asc())
 		codes, err := values.ForKeyShare().All(ctx, tx)
 		if err != nil {
 			return err
@@ -358,7 +358,7 @@ func TestPostgresLockDerivedSourcesCTEPredicatesAndReadOnlyFailure(t *testing.T)
 	if err := inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
 		definition := query.CTE("eligible", models.QueryCountries().Where(f.Code.Eq(models.CountryCode("A"))))
 		source := query.As[countryAlias](definition, "eligible_rows")
-		codes := query.SelectValue(source, models.CountryFieldsAt(source.Scope()).Code.Value())
+		codes := query.SelectValue(source, query.Value(models.CountryFieldsAt(source.Scope()).Code))
 		row, err := models.QueryCountries().Where(f.Code.InQuery(codes)).ForUpdate().RequireFirst(ctx, tx)
 		if err != nil {
 			return err

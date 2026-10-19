@@ -198,7 +198,7 @@ func deleteSubject(ctx context.Context, tx *database.Tx, subject extensions.Subj
 // lock the owner first (or run after its deletion); per-owner rows are bounded
 // by MaxRowsPerOwner at write time.
 func deleteRows(ctx context.Context, tx *database.Tx, q store.TranslationQuery) (int, error) {
-	count, err := store.DeleteTranslationUsing(q, q).MatchKey(store.TranslationFields().Key.Value()).Exec(ctx, tx)
+	count, err := store.DeleteTranslationUsing(q, q).MatchKey(query.Value(store.TranslationFields().Key)).Exec(ctx, tx)
 	if err != nil {
 		return 0, err
 	}

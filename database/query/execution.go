@@ -28,6 +28,7 @@ func (q Query[M]) Each(ctx context.Context, executor database.Executor, yield fu
 	}
 	return q.eachRows(ctx, executor, yield)
 }
+
 func (q Query[M]) eachRows(ctx context.Context, executor database.Executor, yield func(M) error) error {
 	if err := executionContext(ctx, executor); err != nil {
 		return err
@@ -55,6 +56,7 @@ func (q Query[M]) All(ctx context.Context, executor database.Executor) ([]M, err
 	}
 	return q.Load(ctx, executor, result)
 }
+
 func (q Query[M]) allRows(ctx context.Context, executor database.Executor) ([]M, error) {
 	if err := executionContext(ctx, executor); err != nil {
 		return nil, err
@@ -68,7 +70,7 @@ func (q Query[M]) allRows(ctx context.Context, executor database.Executor) ([]M,
 }
 
 func (q Query[M]) atMostOne() Query[M] {
-	if limit, set := q.limit.Get(); !set || limit > 1 {
+	if limit, set := q.queryCore.Limit.Get(); !set || limit > 1 {
 		return q.Limit(1)
 	}
 	return q
@@ -76,8 +78,8 @@ func (q Query[M]) atMostOne() Query[M] {
 
 func (q Query[M]) firstQuery() Query[M] {
 	q = q.atMostOne()
-	if len(q.orders) == 0 && q.definition != nil {
-		q = q.OrderBy(Order[M]{field: fieldRef{q.table, q.definition.primary}})
+	if len(q.queryCore.Orders) == 0 && q.definition != nil {
+		q = q.OrderBy(Order[M]{field: fieldRef{Table: q.queryCore.Table, Column: q.definition.modelDefinition.Primary}})
 	}
 	return q
 }

@@ -8,14 +8,14 @@ The [independent consumer examples](../../tests/fixtures/consumer/filterqueries/
 
 ```go
 o := models.OrderFields()
-filtered := o.TotalCents.Sum().Filter(o.TotalCents.Gt(1))
+filtered := query.Sum(o.TotalCents).Filter(o.TotalCents.Gt(1))
 
 rows, err := reports.SelectBuyerTotals(models.QueryOrders(),
     reports.BuyerTotalsSelection[models.Order]{
-        BuyerID: o.BuyerID.Value(),
+        BuyerID: query.Value(o.BuyerID),
         Total:   filtered.Value(),
         Orders:  query.Count[models.Order]().Value(),
-        Average: o.TotalCents.Avg().Filter(o.TotalCents.Lt(3)).Value(),
+        Average: query.Avg(o.TotalCents).Filter(o.TotalCents.Lt(3)).Value(),
     }).
     GroupBy(o.BuyerID.Group()).
     Having(filtered.Gt(decimal.FromInt64(1))).
@@ -37,7 +37,7 @@ window := query.WindowFor(base).
     OrderBy(o.TotalCents.Asc(), o.ID.Asc()).
     RowsBetween(query.UnboundedPreceding(), query.CurrentRow())
 
-running := o.TotalCents.Sum().Filter(o.TotalCents.Gt(1)).Over(window)
+running := query.Sum(o.TotalCents).Filter(o.TotalCents.Gt(1)).Over(window)
 values, err := query.SelectValue(base, running).
     OrderBy(o.TotalCents.Asc(), o.ID.Asc()).All(ctx, db)
 ```

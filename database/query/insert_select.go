@@ -47,7 +47,7 @@ func (p InsertSelect[S, M]) Select(mappings ...InsertMapping[S, M]) InsertSelect
 // Values replaces the literal inputs applied to every selected row. Inputs are
 // normalized once inside the owning transaction, never once per source row.
 func (p InsertSelect[S, M]) Values(values Mutation[M]) InsertSelect[S, M] {
-	p.values = Change(values.assignments...)
+	p.values = values.clone()
 	return p
 }
 

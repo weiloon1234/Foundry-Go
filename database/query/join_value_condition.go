@@ -1,9 +1,11 @@
 package query
 
-import "github.com/weiloon1234/Foundry-Go/value"
+import (
+	"github.com/weiloon1234/Foundry-Go/value"
+)
 
 func compareJoinValues[L, R, V any](left RowValue[L, V], right RowValue[R, V], op operator) JoinOn[L, R] {
-	return JoinOn[L, R]{expression: binaryComparison{rowInput(left).Value().node, rowInput(right).Value().node, op}}
+	return JoinOn[L, R]{expression: binaryComparison{Left: rowInput(left).Value().node, Right: rowInput(right).Value().node, Operator: op}}
 }
 
 // OnEqual compares equal SQL values; NULL makes the condition unknown.

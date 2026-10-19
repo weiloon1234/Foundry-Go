@@ -15,7 +15,8 @@ func (e RowExpression[S, V]) Group() Group[S] { return Group[S]{node: e.expressi
 // selected key list. Windows still cannot nest in another window's partition.
 func (e Expression[S, V]) Key() ProjectionKey[S] { return ProjectionKey[S]{node: e.node} }
 
-func (g Group[S]) keyExpression() valueExpression         { return g.node }
+func (g Group[S]) keyExpression() valueExpression { return g.node }
+
 func (g ProjectionKey[S]) keyExpression() valueExpression { return g.node }
 
 func keyExpressions[K interface{ keyExpression() valueExpression }](keys []K) []valueExpression {

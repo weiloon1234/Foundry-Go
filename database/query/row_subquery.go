@@ -1,6 +1,8 @@
 package query
 
-import "github.com/weiloon1234/Foundry-Go/value"
+import (
+	"github.com/weiloon1234/Foundry-Go/value"
+)
 
 // ScalarRowQuery evaluates an independent scalar subquery in a row expression.
 // Empty results become NULL; multiple rows remain a database cardinality error.

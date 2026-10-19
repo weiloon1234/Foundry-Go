@@ -32,13 +32,16 @@ func JSONNullableRoot[S, P any](input RowValue[S, value.Nullable[value.JSON[P]]]
 func (p JSONPath[S, P]) JSON() RowExpression[S, value.Nullable[value.JSON[P]]] {
 	return RowExpression[S, value.Nullable[value.JSON[P]]]{p.expression}
 }
+
 func (p JSONPath[S, P]) Kind() RowExpression[S, value.Nullable[JSONKind]] {
 	return JSONTypeNullable(p.JSON())
 }
 
 // Exists includes a present JSON null. A missing or SQL-null ancestor is absent.
-func (p JSONPath[S, P]) Exists() Predicate[S]     { return p.JSON().IsNotNull() }
-func (p JSONPath[S, P]) IsMissing() Predicate[S]  { return p.JSON().IsNull() }
+func (p JSONPath[S, P]) Exists() Predicate[S] { return p.JSON().IsNotNull() }
+
+func (p JSONPath[S, P]) IsMissing() Predicate[S] { return p.JSON().IsNull() }
+
 func (p JSONPath[S, P]) IsJSONNull() Predicate[S] { return p.Kind().Eq(value.Of(JSONNull)) }
 
 // NewJSONProperty is a generator declaration boundary. Name is a JSON wire
@@ -85,7 +88,7 @@ func NewJSONMapEntry[S, P, C any, K comparable](parent JSONPath[S, P], key K) JS
 		}
 	}
 	if err != nil {
-		return JSONPath[S, C]{Expression[S, value.Nullable[value.JSON[C]]]{node: parameterNode{err: fault.New(fault.Invalid, "invalid JSON map key")}, codec: codec.Nullable(codec.JSON[C]())}}
+		return JSONPath[S, C]{Expression[S, value.Nullable[value.JSON[C]]]{node: parameterNode{Err: fault.New(fault.Invalid, "invalid JSON map key")}, codec: codec.Nullable(codec.JSON[C]())}}
 	}
 	return jsonProperty[S, P, C](parent, name, false, false)
 }
@@ -96,11 +99,11 @@ func NewJSONMapEntry[S, P, C any, K comparable](parent JSONPath[S, P], key K) JS
 func jsonPathKey[S any](name string, literal bool) RowExpression[S, string] {
 	result := parameterExpression[S](name, codec.String[string]())
 	if node, ok := result.expression.node.(parameterNode); ok && literal {
-		node.literal = true
+		node.Literal = true
 		result.expression.node = node
 	}
 	if len(name) > value.JSONMaxBytes || !utf8.ValidString(name) || strings.ContainsRune(name, 0) {
-		result.expression.node = parameterNode{err: fault.New(fault.Invalid, "invalid JSON property name")}
+		result.expression.node = parameterNode{Err: fault.New(fault.Invalid, "invalid JSON property name")}
 	}
 	return result
 }

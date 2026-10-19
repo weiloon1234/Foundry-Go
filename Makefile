@@ -32,7 +32,7 @@ set -eu; for task_generate_dir in $(GENERATION_DIRS); do \
 done
 endef
 
-.PHONY: toolchain-check fmt fmt-check vet test race fixture-check generate generate-check gopls-install agent-smoke typescript-check test-postgres test-redis docs-check release-tools-check security-check security-tools-check verify
+.PHONY: toolchain-check fmt fmt-check vet test race fixture-check generate generate-check gopls-install agent-smoke typescript-check test-postgres test-redis benchmark-orm benchmark-typescript docs-check release-tools-check security-check security-tools-check verify
 
 toolchain-check:
 	$(GO) version
@@ -93,6 +93,18 @@ typescript-check:
 
 test-postgres:
 	$(GO) run ./internal/cmd/testpostgres --go $(GO) --race --batch-size $(TEST_PACKAGE_BATCH_SIZE) --timeout $(TEST_TIMEOUT)
+
+# Use an explicitly configured private PostgreSQL URL, as testkit/postgres owns.
+# Each repetition retains its own isolated schema; no reset or cold cache.
+ORM_BENCH_TIME ?= 1s
+ORM_BENCH_COUNT ?= 5
+benchmark-orm:
+	cd tests/fixtures/consumer && FOUNDRY_TEST_POSTGRES_REQUIRED=1 $(GO) test -timeout=$(TEST_TIMEOUT) -run '^TestORMBenchmarkReadsAgree$$' -bench '^BenchmarkORM' -benchmem -benchtime=$(ORM_BENCH_TIME) -count=$(ORM_BENCH_COUNT) .
+
+TYPESCRIPT_BENCH_TIME ?= 1s
+TYPESCRIPT_BENCH_COUNT ?= 5
+benchmark-typescript:
+	$(GO) test -timeout=$(TEST_TIMEOUT) -run '^TestRenderPerformanceFixtures$$' -bench '^(BenchmarkRender|BenchmarkRenderModules|BenchmarkReceivedNaming|BenchmarkGenerateCheck)$$' -benchmem -benchtime=$(TYPESCRIPT_BENCH_TIME) -count=$(TYPESCRIPT_BENCH_COUNT) ./typescript
 
 verify: toolchain-check fmt-check vet test fixture-check generate-check docs-check release-tools-check
 

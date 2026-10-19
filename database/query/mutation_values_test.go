@@ -39,7 +39,7 @@ func TestMutationValuesPreserveTypedInputsWithoutBinding(t *testing.T) {
 	if calls != 0 {
 		t.Fatal("reading mutation inputs invoked a codec")
 	}
-	mutation.assignments[0] = note
+	mutation.assignments[0] = note.mutationAssignment
 	if !inputs.Has("records", "name") {
 		t.Fatal("index retained caller's assignment slice")
 	}

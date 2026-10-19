@@ -21,35 +21,43 @@ func ProjectTransaction[S TransactionScope, R any](source TransactionProjectionS
 func SelectTransactionRecord[S TransactionScope, R any](source TransactionProjectionSource[S], scope RecordScope[S, R]) TransactionQuery[S, R] {
 	return TransactionQuery[S, R]{query: SelectRecord(transactionProjection(source), scope)}
 }
+
 func (q TransactionQuery[S, R]) Where(predicates ...Predicate[S]) TransactionQuery[S, R] {
 	q.query = q.query.Where(predicates...)
 	return q
 }
+
 func (q TransactionQuery[S, R]) OrderBy(orders ...ProjectionOrder[S]) TransactionQuery[S, R] {
 	q.query = q.query.OrderBy(orders...)
 	return q
 }
+
 func (q TransactionQuery[S, R]) GroupBy(groups ...Group[S]) TransactionQuery[S, R] {
 	q.query = q.query.GroupBy(groups...)
 	return q
 }
+
 func (q TransactionQuery[S, R]) Having(predicates ...HavingPredicate[S]) TransactionQuery[S, R] {
 	q.query = q.query.Having(predicates...)
 	return q
 }
+
 func (q TransactionQuery[S, R]) Limit(count int) TransactionQuery[S, R] {
 	q.query = q.query.Limit(count)
 	return q
 }
+
 func (q TransactionQuery[S, R]) Offset(count int) TransactionQuery[S, R] {
 	q.query = q.query.Offset(count)
 	return q
 }
+
 func (q TransactionQuery[S, R]) reader() readResult[R] {
 	r := q.query.reader()
 	r.transaction = true
 	return r
 }
+
 func (q TransactionQuery[S, R]) transactionRecord() recordQuery[R] { return q.query.recordQuery() }
 
 // Compile retains all nested locks and validates the complete statement.

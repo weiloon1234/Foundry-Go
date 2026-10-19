@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
-func invalid() { _ = query.JSONType(jsonqueries.DocumentFields().Settings.Value()) }
+func invalid() { _ = query.JSONType(query.Value(jsonqueries.DocumentFields().Settings)) }

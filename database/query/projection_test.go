@@ -19,12 +19,13 @@ func reportDefinition() ProjectionDefinition[reportRecord] {
 	count := NewProjectionField[reportRecord, int64]("count")
 	return DefineProjection([]ProjectionColumn[reportRecord]{id.Column(), count.Column()}, func(database.Row) (reportRecord, error) { return reportRecord{}, nil })
 }
+
 func TestProjectionCompleteTypedMappingAndSourceIsolation(t *testing.T) {
-	field := cursorQuery().OrderBy(Order[cursorRecord]{field: fieldRef{"records", "id"}})
+	field := cursorQuery().OrderBy(Order[cursorRecord]{field: fieldRef{Table: "records", Column: "id"}})
 	id := NewProjectionField[reportRecord, int64]("id")
 	count := NewProjectionField[reportRecord, int64]("count")
-	input := Expression[cursorRecord, int64]{node: fieldRef{"records", "id"}}
-	group := Group[cursorRecord]{node: fieldRef{"records", "id"}}
+	input := Expression[cursorRecord, int64]{node: fieldRef{Table: "records", Column: "id"}}
+	group := Group[cursorRecord]{node: fieldRef{Table: "records", Column: "id"}}
 	mappings := []ProjectionMapping[cursorRecord, reportRecord]{Map(count, Count[cursorRecord]().Value()), Map(id, input)}
 	q := Project(field, reportDefinition(), mappings...).GroupBy(group)
 	mappings[0] = ProjectionMapping[cursorRecord, reportRecord]{}
@@ -47,7 +48,7 @@ func TestProjectionCompleteTypedMappingAndSourceIsolation(t *testing.T) {
 		t.Fatal("derived projection mutated source")
 	}
 	badType := NewProjectionField[reportRecord, string]("id")
-	badValue := Expression[cursorRecord, string]{node: fieldRef{"records", "id"}}
+	badValue := Expression[cursorRecord, string]{node: fieldRef{Table: "records", Column: "id"}}
 	for _, q := range []ProjectionQuery[cursorRecord, reportRecord]{
 		Project(field, reportDefinition(), Map(id, input)),
 		Project(field, reportDefinition(), Map(id, input), Map(id, input)),

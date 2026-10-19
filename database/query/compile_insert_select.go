@@ -9,7 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
-func (p InsertSelect[S, M]) validateShape(allowManaged bool) (compiler, map[string]InsertMapping[S, M], map[string]Assignment[M], error) {
+func (p InsertSelect[S, M]) validateShape(allowManaged bool) (compiler, map[string]InsertMapping[S, M], map[string]mutationAssignment, error) {
 	q := p.destination
 	c, err := q.mutationCompiler(insertModel)
 	if err != nil {
@@ -18,7 +18,7 @@ func (p InsertSelect[S, M]) validateShape(allowManaged bool) (compiler, map[stri
 	if p.source.err != nil {
 		return c, nil, nil, p.source.err
 	}
-	if len(p.mappings) > len(c.columns) {
+	if len(p.mappings) > len(c.Columns) {
 		return c, nil, nil, fault.New(fault.Invalid, "insert mapping exceeds its field bound")
 	}
 	values, err := q.validateMutationShape(insertModel, p.values, &c)
@@ -43,10 +43,10 @@ func (p InsertSelect[S, M]) validateShape(allowManaged bool) (compiler, map[stri
 			return c, nil, nil, fault.New(fault.Invalid, "insert values require declared field codec metadata")
 		}
 	}
-	err = q.requireInsertFields(func(name string) bool {
+	err = q.queryCore.RequireInsertFields(func(name string) bool {
 		_, mapping := mapped[name]
 		_, literal := values[name]
-		managed := allowManaged && q.hasTimestamps() && (name == q.definition.timestamps.created || name == q.definition.timestamps.updated)
+		managed := allowManaged && q.hasTimestamps() && (name == q.definition.modelDefinition.Timestamps.Created || name == q.definition.modelDefinition.Timestamps.Updated)
 		return mapping || literal || managed
 	})
 	if err != nil {
@@ -113,36 +113,36 @@ func (p InsertSelect[S, M]) compile(returning bool) (Statement, error) {
 	}
 	q := p.destination
 	node := p.source.node
-	node.selections = make([]selectItem, 0, len(mapped)+len(values))
-	columns := make([]string, 0, cap(node.selections))
-	for _, column := range q.definition.columns {
+	node.Selections = make([]selectItem, 0, len(mapped)+len(values))
+	columns := make([]string, 0, cap(node.Selections))
+	for _, column := range q.definition.modelDefinition.Columns {
 		var expression valueExpression
 		if mapping, ok := mapped[column.Name]; ok {
 			expression = mapping.expression
 		} else if assignment, ok := values[column.Name]; ok {
-			bound, err := bindAssignment(column, assignment.bind)
+			bound, err := bindAssignment(column, assignment.Bind)
 			if err != nil {
 				return Statement{}, err
 			}
 			field, _ := q.definition.modelField(column.Name)
-			expression = parameterNode{kind: field.kind, value: bound}
+			expression = parameterNode{Kind: field.kind, Value: bound}
 		} else {
 			continue
 		}
 		columns = append(columns, quoted(column.Name))
-		node.selections = append(node.selections, selectItem{expression: expression, alias: column.Name})
+		node.Selections = append(node.Selections, selectItem{Expression: expression, Alias: column.Name})
 	}
-	prefix, err := c.compileCTEs(node)
+	prefix, err := c.CompileCTEs(node)
 	if err != nil {
 		return Statement{}, err
 	}
-	selected, err := c.selectSQL(node)
+	selected, err := c.SelectSQL(node)
 	if err != nil {
 		return Statement{}, err
 	}
-	sql := prefix + "INSERT INTO " + quotedTable(q.table) + " (" + strings.Join(columns, ", ") + ") " + selected
+	sql := prefix + "INSERT INTO " + quotedTable(q.queryCore.Table) + " (" + strings.Join(columns, ", ") + ") " + selected
 	if returning {
-		sql += " RETURNING " + selectedColumns(q.table, q.definition.columns)
+		sql += " RETURNING " + selectedColumns(q.queryCore.Table, q.definition.modelDefinition.Columns)
 	}
-	return Statement{sql: sql, arguments: c.arguments}, nil
+	return Statement{sql: sql, arguments: c.Arguments}, nil
 }

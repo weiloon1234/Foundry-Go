@@ -17,7 +17,7 @@ func TestQueryAndBindingsAreIndependent(t *testing.T) {
 	values := []int{1, 2}
 	p := age.In(values...)
 	values[0] = 99
-	if p.expression.(comparison).values[0] != 1 {
+	if p.expression.(comparison).Values[0] != 1 {
 		t.Fatal("membership inputs alias query")
 	}
 	base := For[user]("users").Where(name.Eq("base")).OrderBy(name.Asc())
@@ -28,13 +28,13 @@ func TestQueryAndBindingsAreIndependent(t *testing.T) {
 			if err := q.Validate(); err != nil {
 				t.Error(err)
 			}
-			if len(q.predicates) != 2 || len(q.orders) != 2 {
+			if len(q.queryCore.Predicates) != 2 || len(q.queryCore.Orders) != 2 {
 				t.Error("derived query lost expressions")
 			}
 		})
 	}
 	wg.Wait()
-	if len(base.predicates) != 1 || len(base.orders) != 1 {
+	if len(base.queryCore.Predicates) != 1 || len(base.queryCore.Orders) != 1 {
 		t.Fatal("base query mutated")
 	}
 	if err := For[user]("users").Where(Or(name.Contains("literal_%"), And(age.Gt(1), age.Lt(10)).Not())).Validate(); err != nil {

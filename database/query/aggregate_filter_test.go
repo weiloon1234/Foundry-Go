@@ -14,7 +14,7 @@ import (
 
 func TestAggregateFilterIsolationAndBindings(t *testing.T) {
 	f := NewExactField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
-	base := f.Sum()
+	base := Sum(f)
 	filtered := base.Filter(f.Gt(2)).Filter(Or(f.Lt(8), f.Eq(10)))
 	q := SelectValue(cursorQuery().Where(f.Ne(4)), filtered.Value()).Having(filtered.Gt(decimal.FromInt64(5))).OrderBy(filtered.Desc())
 	s, err := q.Compile()
@@ -25,11 +25,11 @@ func TestAggregateFilterIsolationAndBindings(t *testing.T) {
 	if !strings.Contains(s.SQL(), want) || !reflect.DeepEqual(s.Arguments(), []any{int64(2), int64(8), int64(10), int64(4), int64(2), int64(8), int64(10), "5", int64(2), int64(8), int64(10)}) {
 		t.Fatal("aggregate-local filters lost placement/bindings", s.SQL(), s.Arguments())
 	}
-	if base.node.filter != nil || base.Filter().node.filter != nil || len(filtered.node.filter.predicates) != 2 {
+	if base.node.Filter != nil || base.Filter().node.Filter != nil || len(filtered.node.Filter.Predicates) != 2 {
 		t.Fatal("Filter mutated its source")
 	}
 	left, right := filtered.Filter(f.Eq(6)), filtered.Filter(f.Eq(7))
-	if reflect.DeepEqual(left.node.filter, right.node.filter) || len(filtered.node.filter.predicates) != 2 {
+	if reflect.DeepEqual(left.node.Filter, right.node.Filter) || len(filtered.node.Filter.Predicates) != 2 {
 		t.Fatal("derived filters share mutable storage")
 	}
 	count := Count[cursorRecord]().Filter(f.Gt(0))
@@ -57,7 +57,7 @@ func TestAggregateFilterWindowAndValidation(t *testing.T) {
 	for name, bad := range map[string]Predicate[cursorRecord]{
 		"zero": {}, "foreign": foreign.Gt(0),
 		"aggregate": {expression: Count[cursorRecord]().Gt(0).expression},
-		"window":    {expression: comparison{operand: RowNumber(w).node, operator: isNull}},
+		"window":    {expression: comparison{Operand: RowNumber(w).node, Operator: isNull}},
 	} {
 		if _, err := SelectValue(q, Count[cursorRecord]().Filter(bad).Value()).Compile(); !errors.Is(err, fault.Invalid) {
 			t.Fatal(name, err)
@@ -81,7 +81,7 @@ func TestAggregateFilterCorrelationOwnership(t *testing.T) {
 		"outer only":     count.Filter(x.Ne(0)),
 		"local":          count.Filter(y.Ne(0)),
 		"mixed":          count.Filter(y.EqColumn(x)),
-		"local argument": y.Count().Filter(x.Ne(0)),
+		"local argument": CountField(y).Filter(x.Ne(0)),
 	} {
 		_, err := SelectValue(a, CorrelatedScalarQuery(SelectCorrelatedValue(link, aggregate.Value()))).Compile()
 		if name == "outer only" {
@@ -115,7 +115,7 @@ func TestAggregateFilterRelationQualificationAndCTEDiscovery(t *testing.T) {
 	f := NewExactField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
 	common := As[firstAlias](CTE("eligible", cursorQuery().Where(f.Gt(2))), "eligible_source")
 	eligible := scopedID(common.Scope())
-	filtered := f.Sum().Filter(f.InQuery(SelectValue(common, eligible.Value())))
+	filtered := Sum(f).Filter(f.InQuery(SelectValue(common, Value(eligible))))
 	statement, err := compileRelationAggregate(t.Context(), testThrough().aggregateInput(), filtered.node, []driver.Value{int64(1)}, 9)
 	if err != nil {
 		t.Fatal(err)
@@ -132,7 +132,7 @@ func TestAggregateFilterRelationQualificationAndCTEDiscovery(t *testing.T) {
 	if _, err := compileRelationAggregate(t.Context(), testThrough().aggregateInput(), Count[cursorRecord]().Filter(bad.Eq(1)).node, nil, 9); !errors.Is(err, fault.Invalid) {
 		t.Fatal("relation requalification concealed wrong owner", err)
 	}
-	if filtered.node.field.table != "records" {
+	if filtered.node.Field.Table != "records" {
 		t.Fatal("relation compilation mutated aggregate")
 	}
 }

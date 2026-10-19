@@ -22,10 +22,10 @@ func captureModelMapping[S, M, V any](field ModelValueField[M, V], expression Ex
 }
 
 func (q Query[M]) validateSQLMapping(mapping modelValueMapping) (string, error) {
-	if err := mapping.field.validate(q.table); err != nil {
+	if err := mapping.field.Validate(q.queryCore.Table); err != nil {
 		return "", err
 	}
-	name := mapping.field.column
+	name := mapping.field.Column
 	field, declared := q.definition.modelField(name)
 	if !declared || mapping.typ != field.typ || mapping.expression == nil {
 		return "", fault.New(fault.Invalid, "SQL mapping has an undeclared or incompatible field")
@@ -33,7 +33,7 @@ func (q Query[M]) validateSQLMapping(mapping modelValueMapping) (string, error) 
 	if field.mutator.apply != nil {
 		return "", fault.New(fault.Invalid, "SQL mapping cannot bypass a Go field mutator; supply a literal draft input")
 	}
-	if q.hasTimestamps() && name == q.definition.timestamps.updated {
+	if q.hasTimestamps() && name == q.definition.modelDefinition.Timestamps.Updated {
 		return "", fault.New(fault.Invalid, "SQL mapping cannot replace a managed update timestamp")
 	}
 	return name, nil

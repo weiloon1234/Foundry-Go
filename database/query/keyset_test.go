@@ -29,28 +29,28 @@ func TestCountOmitsOrderingThatCannotChangeIt(t *testing.T) {
 func TestKeysetPredicateUsesRowComparisonOnlyForNotNullKeys(t *testing.T) {
 	id := NewOrderedField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
 	rank := NewNullableOrderedField[cursorRecord, int64]("records", "rank", codec.Signed[int64]())
-	notNull := func(Order[cursorRecord]) bool { return false }
-	compile := func(p Predicate[cursorRecord]) string {
-		statement, err := cursorQuery().Where(p).Compile()
+	notNull := func(queryOrder) bool { return false }
+	compile := func(p expression) string {
+		statement, err := cursorQuery().Where(Predicate[cursorRecord]{expression: p}).Compile()
 		if err != nil {
 			t.Fatal(err)
 		}
 		return statement.SQL()
 	}
 	keys := []driver.Value{int64(7), int64(42)}
-	sql := compile(cursorPredicate([]Order[cursorRecord]{rank.Asc(), id.Asc()}, keys, notNull))
+	sql := compile(cursorPredicate(appendQueryOrders(nil, []Order[cursorRecord]{rank.Asc(), id.Asc()}), keys, notNull))
 	if !strings.Contains(sql, `(("records"."rank", "records"."id") > ($1, $2))`) {
 		t.Fatal("NOT NULL keys in one direction did not use a row comparison", sql)
 	}
-	sql = compile(cursorPredicate([]Order[cursorRecord]{rank.Desc(), id.Desc()}, keys, notNull))
+	sql = compile(cursorPredicate(appendQueryOrders(nil, []Order[cursorRecord]{rank.Desc(), id.Desc()}), keys, notNull))
 	if !strings.Contains(sql, `(("records"."rank", "records"."id") < ($1, $2))`) {
 		t.Fatal("descending row comparison", sql)
 	}
-	sql = compile(cursorPredicate([]Order[cursorRecord]{rank.Asc(), id.Desc()}, keys, notNull))
+	sql = compile(cursorPredicate(appendQueryOrders(nil, []Order[cursorRecord]{rank.Asc(), id.Desc()}), keys, notNull))
 	if strings.Contains(sql, ") > (") || strings.Contains(sql, "IS NULL") {
 		t.Fatal("mixed directions must expand without NULL alternatives for NOT NULL keys", sql)
 	}
-	sql = compile(cursorPredicate([]Order[cursorRecord]{rank.Asc(), id.Asc()}, keys, cursorQuery().definition.nullableOrder))
+	sql = compile(cursorPredicate(appendQueryOrders(nil, []Order[cursorRecord]{rank.Asc(), id.Asc()}), keys, cursorQuery().definition.modelDefinition.NullableOrder))
 	if strings.Contains(sql, ") > (") || !strings.Contains(sql, `"records"."rank" IS NULL`) {
 		t.Fatal("nullable key lost its NULL alternative", sql)
 	}

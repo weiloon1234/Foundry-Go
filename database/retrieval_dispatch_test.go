@@ -406,7 +406,7 @@ func TestRetrievalDispatchExcludesScalarsAndDeclaredDTOs(t *testing.T) {
 		err := row.Scan(&item.ID, &item.Name)
 		return item, err
 	})
-	projection := query.Project(q, definition, query.Map(pid, id.Value()), query.Map(pname, name.Value()))
+	projection := query.Project(q, definition, query.Map(pid, query.Value(id)), query.Map(pname, query.Value(name)))
 	if items, err := projection.All(t.Context(), db); err != nil || len(items) != 1 || factories != 0 {
 		t.Fatal("scalar/DTO reads acquired model retrieval callbacks", factories, err)
 	}

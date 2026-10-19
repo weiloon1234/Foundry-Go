@@ -287,7 +287,7 @@ func (s *Store) Prune(ctx context.Context, cutoff time.Time, limit int) (int, er
 	err = s.within(ctx, func(tx *database.Tx) error {
 		// One bounded DELETE ... WHERE id IN (SELECT id ... LIMIT n): no row
 		// (envelope included) is loaded to choose the batch.
-		oldest := query.SelectValue(jobarchive.QueryFoundryFailedJobs().Where(fields.FailedAt.Lt(before)).OrderBy(fields.FailedAt.Asc(), fields.ID.Asc()).Limit(limit), fields.ID.Value())
+		oldest := query.SelectValue(jobarchive.QueryFoundryFailedJobs().Where(fields.FailedAt.Lt(before)).OrderBy(fields.FailedAt.Asc(), fields.ID.Asc()).Limit(limit), query.Value(fields.ID))
 		removed, err := jobarchive.QueryFoundryFailedJobs().Where(fields.ID.InQuery(oldest)).DeleteAll(ctx, tx)
 		deleted = int(removed)
 		return err

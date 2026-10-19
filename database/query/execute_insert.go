@@ -89,7 +89,7 @@ func (q Query[M]) insertMany(ctx context.Context, writer database.Transactor, mu
 // skipped. The write fails, so the caller learns the key belongs to rows it
 // may not change, instead of silently receiving no result.
 func (q Query[M]) conflictScopeViolation(conflict *Conflict[M], requested, returned int) error {
-	if conflict == nil || conflict.action != conflictUpdate || len(conflict.condition) != 0 || len(conflict.rowCondition) != 0 || returned >= requested || len(q.scopePredicates()) == 0 {
+	if conflict == nil || conflict.action != conflictUpdate || len(conflict.condition) != 0 || len(conflict.rowCondition) != 0 || returned >= requested || len(q.queryCore.ScopePredicates()) == 0 {
 		return nil
 	}
 	return fault.New(fault.Conflict, "upsert conflicts with a row outside the model's global scopes")

@@ -19,9 +19,9 @@ type Summary struct { Total value.Nullable[temporal.Interval]; Shifted temporal.
 var initial = PeriodDraft{}.SetID(temporal.Months(1)).SetLength(temporal.Days(2)).ClearMaybeLength()
 func selections() {
  q,f:=QueryPeriods(),PeriodFields()
- _ = query.SelectValue(q,f.Length.Sum().Value())
- _ = query.SelectValue(q,f.MaybeLength.Avg().Value())
- _ = ProjectSummary(q).SelectTotal(f.Length.Sum().Value()).SelectShifted(query.ShiftDate(f.Date,f.Length).Value())
+ _ = query.SelectValue(q,query.Sum(f.Length).Value())
+ _ = query.SelectValue(q,query.Avg(f.MaybeLength).Value())
+ _ = ProjectSummary(q).SelectTotal(query.Sum(f.Length).Value()).SelectShifted(query.ShiftDate(f.Date,f.Length).Value())
 }
 `)
 	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {

@@ -26,7 +26,7 @@ func TestPostgresRowConditionalResults(t *testing.T) {
 		if got, err := base.Where(display.Eq("Bee")).RequireFirst(t.Context(), tx); err != nil || got.ID != users[1].ID {
 			t.Fatal("computed row predicate", err)
 		}
-		label := query.When(u.Age.Eq(20), u.Age.Param(2)).When(u.Age.Gt(20), u.Age.Param(10)).Else(u.Age.Param(0))
+		label := query.When(u.Age.Eq(20), query.Param(u.Age, 2)).When(u.Age.Gt(20), query.Param(u.Age, 10)).Else(query.Param(u.Age, 0))
 		// All result branches are parameters: PostgreSQL must compare numbers, not text.
 		if got, err := query.SelectValue(models.QueryUsers(), label.Value()).Distinct().OrderBy(label.Asc()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int{2, 10}) {
 			t.Fatal("CASE parameters lost numeric type", got, err)
@@ -34,10 +34,10 @@ func TestPostgresRowConditionalResults(t *testing.T) {
 		if got, err := base.Where(label.In()).Count(t.Context(), tx); err != nil || got != 0 {
 			t.Fatal("empty computed IN", got, err)
 		}
-		if got, err := query.SelectValue(base.Where(label.In().Not(), u.Age.Eq(21)), u.Email.Param("kept").Value()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []string{"kept"}) {
+		if got, err := query.SelectValue(base.Where(label.In().Not(), u.Age.Eq(21)), query.Param(u.Email, "kept").Value()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []string{"kept"}) {
 			t.Fatal("empty IN disrupted surrounding bindings", got, err)
 		}
-		first := query.When(u.Age.Gte(20), u.Email.Param("first")).When(u.Age.Gte(21), u.Email.Param("later")).Else(u.Email.Param("none"))
+		first := query.When(u.Age.Gte(20), query.Param(u.Email, "first")).When(u.Age.Gte(21), query.Param(u.Email, "later")).Else(query.Param(u.Email, "none"))
 		if got, err := query.SelectValue(base, first.Value()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []string{"first", "first", "first"}) {
 			t.Fatal("CASE branch order", got, err)
 		}
@@ -45,14 +45,14 @@ func TestPostgresRowConditionalResults(t *testing.T) {
 		if got, err := query.SelectValue(base, optional.Value()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []value.Nullable[int]{value.Null[int](), value.Of(21), value.Null[int]()}) {
 			t.Fatal("CASE unknown condition/ELSE NULL", got, err)
 		}
-		removed := query.NullIf(display, u.Email.Param("Bee"))
+		removed := query.NullIf(display, query.Param(u.Email, "Bee"))
 		if got, err := query.SelectValue(base, removed.Value()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []value.Nullable[string]{value.Of(users[0].Email), value.Null[string](), value.Of(users[2].Email)}) {
 			t.Fatal("NULLIF semantics", got, err)
 		}
 		if got, err := base.Where(removed.IsNull()).RequireFirst(t.Context(), tx); err != nil || got.ID != users[1].ID {
 			t.Fatal("nullable computed predicate", err)
 		}
-		nullable := query.NullIfNullable(u.Nickname, query.NullableRow(u.Email.Param("Bee")))
+		nullable := query.NullIfNullable(u.Nickname, query.NullableRow(query.Param(u.Email, "Bee")))
 		if got, err := query.SelectValue(base, query.CoalesceNullable(nullable, query.NullFor(u.Email)).Value()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []value.Nullable[string]{value.Null[string](), value.Null[string](), value.Null[string]()}) {
 			t.Fatal("nullable result layers", got, err)
 		}
@@ -70,7 +70,7 @@ func TestPostgresSelectedConditionalValues(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
 		o := models.OrderFields()
 		orders := models.QueryOrders()
-		total := o.TotalCents.Sum()
+		total := query.Sum(o.TotalCents)
 		fallback := query.CoalesceValue(total.Value(), total.Param(decimal.FromInt64(0)).Value())
 		if got, err := query.SelectValue(orders.Where(o.TotalCents.Lt(0)), fallback).RequireFirst(t.Context(), tx); err != nil || got != decimal.FromInt64(0) {
 			t.Fatal("empty aggregate fallback", got, err)
@@ -90,7 +90,7 @@ func TestPostgresSelectedConditionalValues(t *testing.T) {
 		if got, err := query.SelectValue(orders, query.LagOr(selected, 1, int64(-1), query.WindowFor(orders).OrderBy(count.Desc()))).GroupBy(o.BuyerID.Group()).OrderBy(count.Desc()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int64{-1, 2}) {
 			t.Fatal("conditional aggregate did not establish window input grouping", got, err)
 		}
-		filtered := query.Count[models.Order]().Filter(query.When(o.TotalCents.Gt(1), o.TotalCents.Param(1)).Else(o.TotalCents.Param(0)).Eq(1))
+		filtered := query.Count[models.Order]().Filter(query.When(o.TotalCents.Gt(1), query.Param(o.TotalCents, 1)).Else(query.Param(o.TotalCents, 0)).Eq(1))
 		if got, err := query.SelectValue(orders, filtered.Value()).RequireFirst(t.Context(), tx); err != nil || got != 2 {
 			t.Fatal("computed aggregate filter", got, err)
 		}
@@ -107,14 +107,14 @@ func TestPostgresConditionalCompositionAndFailures(t *testing.T) {
 		people := models.QueryUsers()
 		common := query.As[selectedAlias](query.CTE("eligible", people.Where(u.Age.Gt(20))), "selected")
 		f := models.UserFieldsAt(common.Scope())
-		label := query.When(u.ID.InQuery(query.SelectValue(common, f.ID.Value())), u.Email.Param("yes")).Else(u.Email.Param("no"))
+		label := query.When(u.ID.InQuery(query.SelectValue(common, query.Value(f.ID))), query.Param(u.Email, "yes")).Else(query.Param(u.Email, "no"))
 		if got, err := query.SelectValue(people, label.Value()).OrderBy(u.Email.Asc()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []string{"no", "yes", "yes"}) {
 			t.Fatal("conditional CTE discovery", got, err)
 		}
 		// A selected scalar owns its grouping and discovers dependencies even
 		// when the only reference to its CTE is inside a conditional value.
-		chosen := query.SelectValue(common, f.Age.Value()).OrderBy(f.Age.Desc()).Limit(1)
-		age := query.CoalesceValue(query.ScalarQuery(people, chosen), u.Age.Param(-1).Value())
+		chosen := query.SelectValue(common, query.Value(f.Age)).OrderBy(f.Age.Desc()).Limit(1)
+		age := query.CoalesceValue(query.ScalarQuery(people, chosen), query.Param(u.Age, -1).Value())
 		if got, err := query.SelectValue(people, age).OrderBy(u.Email.Asc()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int{22, 22, 22}) {
 			t.Fatal("conditional scalar/CTE composition", got, err)
 		}
@@ -123,19 +123,19 @@ func TestPostgresConditionalCompositionAndFailures(t *testing.T) {
 		parent := models.UserFieldsAt(query.OuterScope(link, people.Scope()))
 		child := models.OrderFieldsAt(query.InnerScope(link, orders.Scope()))
 		bought := link.Where(child.BuyerID.EqColumn(parent.ID)).Exists()
-		withOrders := query.When(bought, u.Email.Param("yes")).Else(u.Email.Param("no"))
+		withOrders := query.When(bought, query.Param(u.Email, "yes")).Else(query.Param(u.Email, "no"))
 		if got, err := query.SelectValue(people, withOrders.Value()).OrderBy(u.Email.Asc()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []string{"yes", "yes", "no"}) {
 			t.Fatal("conditional correlation", got, err)
 		}
 		display := query.Coalesce(u.Nickname, u.Email)
-		projection := reports.SelectUserSummary(people, reports.UserSummarySelection[models.User]{ID: u.ID.Value(), Email: display.Value(), Nickname: u.Nickname.Value(), Status: u.Status.Value()})
+		projection := reports.SelectUserSummary(people, reports.UserSummarySelection[models.User]{ID: query.Value(u.ID), Email: display.Value(), Nickname: query.Value(u.Nickname), Status: query.Value(u.Status)})
 		alias := query.As[selectedAlias](projection, "displayed")
 		fields := reports.UserSummaryFieldsAt(alias.Scope())
-		if got, err := query.SelectValue(alias, fields.Email.Value()).Where(fields.Email.Eq("Bee")).RequireFirst(t.Context(), tx); err != nil || got != "Bee" {
+		if got, err := query.SelectValue(alias, query.Value(fields.Email)).Where(fields.Email.Eq("Bee")).RequireFirst(t.Context(), tx); err != nil || got != "Bee" {
 			t.Fatal("typed projected conditional output", got, err)
 		}
 		r := models.UserRelations()
-		computation := query.Count[models.Order]().Filter(query.When(o.TotalCents.Gt(1), o.TotalCents.Param(1)).Else(o.TotalCents.Param(0)).Eq(1))
+		computation := query.Count[models.Order]().Filter(query.When(o.TotalCents.Gt(1), query.Param(o.TotalCents, 1)).Else(query.Param(o.TotalCents, 0)).Eq(1))
 		slot := models.UserAggregates().OrderCount.Using(query.Related(r.Orders, computation))
 		rows, err := people.With(slot).OrderBy(u.Email.Asc()).All(t.Context(), tx)
 		if err != nil {
@@ -148,7 +148,7 @@ func TestPostgresConditionalCompositionAndFailures(t *testing.T) {
 			}
 		}
 		// Even unreachable parameters must pass their codec before any I/O.
-		invalid := query.When(u.Age.Gt(0), u.Status).Else(u.Status.Param(models.Status("invalid")))
+		invalid := query.When(u.Age.Gt(0), u.Status).Else(query.Param(u.Status, models.Status("invalid")))
 		if got, err := query.SelectValue(people, invalid.Value()).All(t.Context(), queryfixture.NoQueries(t)); !errors.Is(err, fault.Invalid) || got != nil {
 			t.Fatal("invalid parameter reached execution", err)
 		}

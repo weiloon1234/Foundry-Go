@@ -19,6 +19,7 @@ import (
 type cyclicQueryError struct{ visits atomic.Int32 }
 
 func (*cyclicQueryError) Error() string { panic("private query failure must not be formatted") }
+
 func (e *cyclicQueryError) Unwrap() error {
 	if e.visits.Add(1) > 4096 {
 		return nil
@@ -29,6 +30,7 @@ func (e *cyclicQueryError) Unwrap() error {
 type abnormalOutcomeError string
 
 func (abnormalOutcomeError) Error() string { panic("private outcome failure must not be formatted") }
+
 func (e abnormalOutcomeError) As(target any) bool {
 	switch e {
 	case "panic":

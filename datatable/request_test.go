@@ -137,7 +137,7 @@ func TestLikeRequiresExplicitOptIn(t *testing.T) {
 	if _, err := table.definition.prepare(Request{Filters: []Filter{{Op: Like, Column: "name", Values: []string{"A%"}}}}, DefaultConfig()); !errors.Is(err, fault.Invalid) {
 		t.Fatal("request used an undeclared like filter", err)
 	}
-	spec.Columns[1] = DefineColumn[reportRecord](validation.DefineField("name", func(row ReportRow) string { return row.Name }), "reports.name").SortBy(name.Value()).FilterBy(Where(text, name).AllowLike()).Registration()
+	spec.Columns[1] = DefineColumn[reportRecord](validation.DefineField("name", func(row ReportRow) string { return row.Name }), "reports.name").SortBy(query.Value(name)).FilterBy(Where(text, name).AllowLike()).Registration()
 	table = Define(spec)
 	if err := table.Validate(); err != nil {
 		t.Fatal(err)

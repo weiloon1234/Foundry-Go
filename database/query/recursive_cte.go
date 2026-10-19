@@ -3,20 +3,13 @@ package query
 import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
-// Pointer identity binds the working table to one recursive declaration without
-// making the AST cyclic or giving an escaped self-reference a new definition.
-type recursiveReference struct {
-	name    string
-	columns []Column
-}
-type recursiveCTE struct {
-	reference *recursiveReference
-	step      selectNode
-	operator  setOperator
-}
+type recursiveReference = querycore.RecursiveReference
+
+type recursiveCTE = querycore.RecursiveCTE
 
 // RecursiveSelf is the current working table inside a recursive CTE's step.
 // Use As to obtain a typed scope. A reference captured outside its owning step
@@ -35,8 +28,8 @@ func (s RecursiveSelf[R]) recordQuery() recordQuery[R] {
 	}
 	r := s.reference
 	return recordQuery[R]{node: selectNode{
-		source: tableSource{self: r, columns: r.columns}, selections: columnSelections(r.name, r.columns),
-	}, columns: r.columns, scan: s.scan, fields: s.fields, lifecycle: s.lifecycle, directSource: true}
+		Source: tableSource{Self: r, Columns: r.Columns}, Selections: columnSelections(r.Name, r.Columns),
+	}, columns: r.Columns, scan: s.scan, fields: s.fields, lifecycle: s.lifecycle, directSource: true}
 }
 
 // RecursiveCTE combines an anchor with a recursive step using UNION. Duplicate
@@ -63,7 +56,7 @@ func recursiveTable[R any](name string, anchor RecordQuerySource[R], step func(R
 	if a.err != nil {
 		return CommonTable[R]{err: a.err}
 	}
-	reference := &recursiveReference{name: name, columns: a.columns}
+	reference := &recursiveReference{Name: name, Columns: a.columns}
 	result := step(RecursiveSelf[R]{reference: reference, scan: a.scan, fields: a.fields, lifecycle: a.lifecycle})
 	if nilDescriptor(result) {
 		return CommonTable[R]{err: fault.New(fault.Invalid, "recursive CTE step requires a record query")}
@@ -73,7 +66,7 @@ func recursiveTable[R any](name string, anchor RecordQuerySource[R], step func(R
 		return CommonTable[R]{err: err}
 	}
 	return CommonTable[R]{definition: &cteNode{
-		name: name, query: a.node, columns: a.columns,
-		recursion: &recursiveCTE{reference: reference, step: b.node, operator: operator},
+		Name: name, Query: a.node, Columns: a.columns,
+		Recursion: &recursiveCTE{Reference: reference, Step: b.node, Operator: operator},
 	}, scan: a.scan, fields: a.fields, lifecycle: a.lifecycle}
 }

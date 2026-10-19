@@ -13,15 +13,15 @@ func (q readResult[R]) pageWindow(request PageRequest, lookahead bool) (readResu
 	if err != nil {
 		return readResult[R]{}, err
 	}
-	if q.node.limit.IsSet() || q.node.offset != 0 || len(q.node.orders) == 0 {
+	if q.node.Limit.IsSet() || q.node.Offset != 0 || len(q.node.Orders) == 0 {
 		return readResult[R]{}, fault.New(fault.Invalid, "result pagination requires explicit ordering and no outer Limit/Offset")
 	}
 	size := request.Size
 	if lookahead {
 		size++
 	}
-	q.node.limit = value.Set(size)
-	q.node.offset = offset
+	q.node.Limit = value.Set(size)
+	q.node.Offset = offset
 	if _, err := q.Compile(); err != nil {
 		return readResult[R]{}, err
 	}

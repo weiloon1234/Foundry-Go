@@ -50,5 +50,5 @@ type SettingState struct {
 
 func SettingStates(q SettingQuery) query.ProjectionQuery[Setting, SettingState] {
 	f := SettingFields()
-	return SelectSettingState(q, SettingStateSelection[Setting]{Name: f.Name.Value(), Version: f.Version.Value(), Kind: f.Kind.Value(), Parameters: f.Parameters.Value(), GroupName: f.GroupName.Value(), Label: f.Label.Value(), Description: f.Description.Value(), SortOrder: f.SortOrder.Value(), IsPublic: f.IsPublic.Value(), PresentationDeclared: f.PresentationDeclared.Value()})
+	return SelectSettingState(q, SettingStateSelection[Setting]{Name: query.Value(f.Name), Version: query.Value(f.Version), Kind: query.Value(f.Kind), Parameters: query.Value(f.Parameters), GroupName: query.Value(f.GroupName), Label: query.Value(f.Label), Description: query.Value(f.Description), SortOrder: query.Value(f.SortOrder), IsPublic: query.Value(f.IsPublic), PresentationDeclared: query.Value(f.PresentationDeclared)})
 }

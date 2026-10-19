@@ -1,6 +1,8 @@
 package query
 
-import "github.com/weiloon1234/Foundry-Go/fault"
+import (
+	"github.com/weiloon1234/Foundry-Go/fault"
+)
 
 // TransactionCommonTable is a reusable complete-record CTE whose consumers
 // require an active transaction. Its SELECT retains its own row-lock clauses.
@@ -31,6 +33,7 @@ func (c TransactionCommonTable[R]) NotMaterialized() TransactionCommonTable[R] {
 	c.definition = c.definition.NotMaterialized()
 	return c
 }
+
 func (c TransactionCommonTable[R]) transactionRecord() recordQuery[R] {
 	return c.definition.recordQuery()
 }

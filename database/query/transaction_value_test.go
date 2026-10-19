@@ -19,13 +19,13 @@ func TestTransactionValueCompositionGuardsOrdinaryExecution(t *testing.T) {
 	inner := AsTransaction[transactionValueInner](TransactionOf(transactionTestModel()), "inner_records")
 	left := NewOrderedField[owner, int64]("outer_records", "id", codec.Signed[int64]())
 	right := NewOrderedField[TransactionAlias[transactionValueInner, transactionTestRecord], int64]("inner_records", "id", codec.Signed[int64]())
-	locked := SelectTransactionValue(inner, right.Value()).ForUpdate()
+	locked := SelectTransactionValue(inner, Value(right)).ForUpdate()
 	ordinary := ForModel(Define("outer_records", "id", []Column{{Name: "id"}}, func(row database.Row) (owner, error) {
 		var ignored int64
 		err := row.Scan(&ignored)
 		return owner{}, err
 	}))
-	member := TransactionInQuery(Add(left, left.Param(1)), locked)
+	member := TransactionInQuery(Add(left, Param(left, 1)), locked)
 	exists := TransactionExistsQuery(outer, locked)
 	for _, p := range []Predicate[owner]{member, exists} {
 		for _, kind := range []readKind{readModels, readCount, readExists} {
@@ -49,8 +49,8 @@ func TestTransactionComputedMembershipQualificationAndBindings(t *testing.T) {
 	outer := AsTransaction[transactionTestAlias](TransactionOf(transactionTestModel()), "outer_records")
 	field := NewOrderedField[owner, int64]("outer_records", "id", codec.Signed[int64]())
 	baseField := NewOrderedField[transactionTestRecord, int64]("records", "id", codec.Signed[int64]())
-	inner := TransactionValueOf(SelectValue(transactionTestModel(), baseField.Value()).Where(baseField.Gt(9)))
-	predicate := TransactionInQuery(Add(field, field.Param(7)), inner)
+	inner := TransactionValueOf(SelectValue(transactionTestModel(), Value(baseField)).Where(baseField.Gt(9)))
+	predicate := TransactionInQuery(Add(field, Param(field, 7)), inner)
 	q := SelectTransactionRecord(outer, outer.Scope()).Where(predicate)
 	statement, err := q.Compile()
 	if err != nil || !reflect.DeepEqual(statement.Arguments(), []any{int64(7), int64(9)}) {
@@ -62,13 +62,13 @@ func TestTransactionComputedMembershipQualificationAndBindings(t *testing.T) {
 		want  string
 	}{{predicate.expression, "outer_records"}, {changed, "renamed"}} {
 		var fields []string
-		walk := selectWalk{localSelect: true, field: func(f fieldRef) { fields = append(fields, f.table) }}
-		walk.expression(test.input, 0)
-		if walk.err != nil || !reflect.DeepEqual(fields, []string{test.want}) {
-			t.Fatal("membership qualification crossed SELECT phases", fields, walk.err)
+		walk := selectWalk{LocalSelect: true, Field: func(f fieldRef) { fields = append(fields, f.Table) }}
+		walk.Expression(test.input, 0)
+		if walk.Err != nil || !reflect.DeepEqual(fields, []string{test.want}) {
+			t.Fatal("membership qualification crossed SELECT phases", fields, walk.Err)
 		}
 	}
-	if changed.(subqueryPredicate).query.node.source.table != "records" {
+	if changed.(subqueryPredicate).Query.Node.Source.Table != "records" {
 		t.Fatal("membership renamed independent inner SELECT")
 	}
 	after, err := q.Compile()

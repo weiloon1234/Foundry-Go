@@ -8,8 +8,8 @@
 u := models.UserFields()
 report := reports.SelectUserSummary(models.QueryUsers(),
     reports.UserSummarySelection[models.User]{
-        ID: u.ID.Value(), Email: u.Email.Value(),
-        Nickname: u.Nickname.Value(), Status: u.Status.Value(),
+        ID: query.Value(u.ID), Email: query.Value(u.Email),
+        Nickname: query.Value(u.Nickname), Status: query.Value(u.Status),
     })
 cursor := query.CursorFor(report)
 fields := reports.UserSummaryFieldsAt(cursor.Scope())
@@ -38,7 +38,7 @@ The outer order is explicit and independent of an inner order. An inner order ma
 ## Nullable values and navigation
 
 ```go
-values := query.SelectValue(models.QueryUsers(), u.Nickname.Value()).Distinct()
+values := query.SelectValue(models.QueryUsers(), query.Value(u.Nickname)).Distinct()
 cursor := query.ValueCursorFor(values)
 ordered := cursor.OrderBy(cursor.Value().Asc()).UniqueBy(cursor.Key())
 page, err := ordered.Paginate(ctx, db,

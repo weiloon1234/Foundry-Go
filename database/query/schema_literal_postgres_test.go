@@ -30,7 +30,7 @@ func TestPostgresSchemaLiteralRoundTrips(t *testing.T) {
 				{time.Date(1900, 1, 2, 3, 4, 5, 123456000, time.FixedZone("seconds", 8*3600+21)), "timestamptz"},
 			} {
 				var c compiler
-				literal, err := c.schemaLiteral(test.value)
+				literal, err := c.SchemaLiteral(test.value)
 				if err != nil {
 					return err
 				}

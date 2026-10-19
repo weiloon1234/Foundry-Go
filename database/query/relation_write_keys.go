@@ -33,11 +33,11 @@ func (r ThroughRelation[M, N, P]) writeKeys(source M, target N) (relationWriteKe
 	if err != nil {
 		return relationWriteKeys[P]{}, err
 	}
-	defaults, err := r.pivot.withModelValue(Mutation[P]{}, r.pivotLocal.column, left)
+	defaults, err := r.pivot.withModelValue(Mutation[P]{}, r.pivotLocal.Column, left)
 	if err != nil {
 		return relationWriteKeys[P]{}, err
 	}
-	defaults, err = r.pivot.withModelValue(defaults, r.pivotForeign.column, right)
+	defaults, err = r.pivot.withModelValue(defaults, r.pivotForeign.Column, right)
 	if err != nil {
 		return relationWriteKeys[P]{}, err
 	}
@@ -50,11 +50,11 @@ func (r ThroughRelation[M, N, P]) writeKeys(source M, target N) (relationWriteKe
 }
 
 func relationPivotKey[M, P any](source Query[M], sourceRef fieldRef, model M, pivot Query[P], pivotRef fieldRef) (driver.Value, Predicate[P], error) {
-	sourceField, ok := source.definition.modelField(sourceRef.column)
+	sourceField, ok := source.definition.modelField(sourceRef.Column)
 	if !ok {
 		return nil, Predicate[P]{}, fault.New(fault.Invalid, "relation source key has no declared codec")
 	}
-	pivotField, ok := pivot.definition.modelField(pivotRef.column)
+	pivotField, ok := pivot.definition.modelField(pivotRef.Column)
 	if !ok {
 		return nil, Predicate[P]{}, fault.New(fault.Invalid, "relation pivot key has no assignment codec")
 	}
@@ -66,7 +66,7 @@ func relationPivotKey[M, P any](source Query[M], sourceRef fieldRef, model M, pi
 		return nil, Predicate[P]{}, fault.New(fault.Missing, "relation writes require non-null endpoint keys")
 	}
 	// The same codec validates the comparison and automatic draft default.
-	predicate := Predicate[P]{expression: comparison{operand: pivotRef, operator: equal, values: []any{raw}, bind: pivotField.decode}}
+	predicate := Predicate[P]{expression: comparison{Operand: pivotRef, Operator: equal, Values: []any{raw}, Bind: pivotField.decode}}
 	return raw, predicate, nil
 }
 
@@ -97,7 +97,7 @@ func (r ThroughRelation[M, N, P]) writeEndpoints(ctx context.Context, tx *databa
 	// A non-primary target key still has to identify at most one target within
 	// this relation, matching through-loader cardinality rather than concealing
 	// an ambiguous link behind the supplied model's primary-key predicate.
-	if r.spec.foreign.column != r.spec.target.definition.primary {
+	if r.spec.foreign.Column != r.spec.target.definition.modelDefinition.Primary {
 		match, err := modelWriteFieldPredicate(targetScope, r.spec.foreign, target)
 		if err != nil {
 			return r, keys, err

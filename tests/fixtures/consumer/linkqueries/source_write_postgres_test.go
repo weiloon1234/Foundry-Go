@@ -61,7 +61,7 @@ func TestPostgresSourceUpdateAmbiguityRollsBackBothTerminals(t *testing.T) {
 		}
 		a := linkqueries.ArchiveFields()
 		m := linkqueries.MemberFields()
-		plan := linkqueries.UpdateMemberFrom(linkqueries.QueryLinkMembers(), linkqueries.QueryLinkArchives()).MatchID(a.MemberID.Value()).SelectName(a.Name.Value())
+		plan := linkqueries.UpdateMemberFrom(linkqueries.QueryLinkMembers(), linkqueries.QueryLinkArchives()).MatchID(query.Value(a.MemberID)).SelectName(query.Value(a.Name))
 		if n, err := plan.Exec(t.Context(), wrappedTransactor{tx}); !errors.Is(err, database.TooManyRows) || n != 0 {
 			return errors.New("count-only source update committed an ambiguous source match")
 		}
@@ -78,7 +78,7 @@ func TestPostgresSourceUpdateAmbiguityRollsBackBothTerminals(t *testing.T) {
 			}
 		}
 		// An excluded target cannot make the remaining write ambiguous.
-		selected := linkqueries.UpdateMemberFrom(linkqueries.QueryLinkMembers().Where(m.ID.Eq(members[1].ID)), linkqueries.QueryLinkArchives()).MatchID(a.MemberID.Value()).SelectName(a.Name.Value())
+		selected := linkqueries.UpdateMemberFrom(linkqueries.QueryLinkMembers().Where(m.ID.Eq(members[1].ID)), linkqueries.QueryLinkArchives()).MatchID(query.Value(a.MemberID)).SelectName(query.Value(a.Name))
 		rows, err := selected.Returning(t.Context(), tx, 1)
 		if err != nil {
 			return err
@@ -87,7 +87,7 @@ func TestPostgresSourceUpdateAmbiguityRollsBackBothTerminals(t *testing.T) {
 			return errors.New("destination scope was not preserved")
 		}
 		// Literal-only changes have the same value for every match, so duplicates are valid.
-		fixed := linkqueries.UpdateMemberFrom(linkqueries.QueryLinkMembers(), linkqueries.QueryLinkArchives()).MatchID(a.MemberID.Value()).Values(linkqueries.MemberDraft{}.SetName("fixed"))
+		fixed := linkqueries.UpdateMemberFrom(linkqueries.QueryLinkMembers(), linkqueries.QueryLinkArchives()).MatchID(query.Value(a.MemberID)).Values(linkqueries.MemberDraft{}.SetName("fixed"))
 		n, err := fixed.Exec(t.Context(), tx)
 		if err != nil {
 			return err
@@ -112,7 +112,7 @@ func TestPostgresSourceWriteWindowsNullsAndReturningBounds(t *testing.T) {
 		m := linkqueries.MemberFields()
 		// The entire duplicate group has two rows, but this explicit window contains one.
 		source := linkqueries.QueryLinkArchives().Where(a.MemberID.Eq(members[0].ID)).OrderBy(a.Name.Asc()).Limit(1)
-		rows, err := linkqueries.UpdateMemberFrom(linkqueries.QueryLinkMembers(), source).MatchID(a.MemberID.Value()).SelectName(a.Name.Value()).Returning(t.Context(), tx, 1)
+		rows, err := linkqueries.UpdateMemberFrom(linkqueries.QueryLinkMembers(), source).MatchID(query.Value(a.MemberID)).SelectName(query.Value(a.Name)).Returning(t.Context(), tx, 1)
 		if err != nil {
 			return err
 		}
@@ -124,7 +124,7 @@ func TestPostgresSourceWriteWindowsNullsAndReturningBounds(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		fixed := linkqueries.UpdateMemberFrom(linkqueries.QueryLinkMembers(), linkqueries.QueryLinkArchives()).MatchNullableID(query.Nullable(a.MemberID.Value())).Values(linkqueries.MemberDraft{}.SetName("too-many"))
+		fixed := linkqueries.UpdateMemberFrom(linkqueries.QueryLinkMembers(), linkqueries.QueryLinkArchives()).MatchNullableID(query.Nullable(query.Value(a.MemberID))).Values(linkqueries.MemberDraft{}.SetName("too-many"))
 		if rows, err := fixed.Returning(t.Context(), tx, 1); !errors.Is(err, database.TooManyRows) || rows != nil {
 			return errors.New("source returning silently truncated multiple affected models")
 		}
@@ -144,7 +144,7 @@ func TestPostgresSourceWriteWindowsNullsAndReturningBounds(t *testing.T) {
 		joinedArchiveFields := linkqueries.ArchiveFieldsAt(archiveSource.Scope())
 		missing := query.LeftJoin(memberSource, archiveSource, query.On(memberFields.ID, joinedArchiveFields.MemberID))
 		archiveFields := linkqueries.ArchiveNullableFieldsAt(query.NullableRightScope(missing, archiveSource.Scope()))
-		n, err := linkqueries.UpdateMemberFrom(linkqueries.QueryLinkMembers(), missing).MatchNullableID(archiveFields.MemberID.Value()).Values(linkqueries.MemberDraft{}.SetName("must-not-match")).Exec(t.Context(), tx)
+		n, err := linkqueries.UpdateMemberFrom(linkqueries.QueryLinkMembers(), missing).MatchNullableID(query.Value(archiveFields.MemberID)).Values(linkqueries.MemberDraft{}.SetName("must-not-match")).Exec(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -169,7 +169,7 @@ func TestPostgresSourceWriteSharesSettersClocksAndDeletionVisibility(t *testing.
 		clock.Advance(time.Hour)
 		ctx := linkqueries.WithTrace(t.Context(), trace)
 		fields := linkqueries.MembershipFields()
-		rows, err := linkqueries.UpdateMembershipFrom(linkqueries.QueryLinkMemberships(), linkqueries.QueryLinkMemberships()).MatchID(fields.ID.Value()).Values(linkqueries.MembershipDraft{}.SetRole(" EDITOR ")).Returning(ctx, wrappedTransactor{tx}, 1)
+		rows, err := linkqueries.UpdateMembershipFrom(linkqueries.QueryLinkMemberships(), linkqueries.QueryLinkMemberships()).MatchID(query.Value(fields.ID)).Values(linkqueries.MembershipDraft{}.SetRole(" EDITOR ")).Returning(ctx, wrappedTransactor{tx}, 1)
 		if err != nil {
 			return err
 		}
@@ -177,7 +177,7 @@ func TestPostgresSourceWriteSharesSettersClocksAndDeletionVisibility(t *testing.
 			return errors.New("source update bypassed setters/clocks or dispatched per-model observers")
 		}
 		// Natural primary keys retain their named Go type across the source match.
-		n, err := linkqueries.DeleteGroupUsing(linkqueries.QueryLinkGroups(), linkqueries.QueryLinkMemberships()).MatchCode(fields.GroupCode.Value()).Exec(ctx, tx)
+		n, err := linkqueries.DeleteGroupUsing(linkqueries.QueryLinkGroups(), linkqueries.QueryLinkMemberships()).MatchCode(query.Value(fields.GroupCode)).Exec(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -185,21 +185,21 @@ func TestPostgresSourceWriteSharesSettersClocksAndDeletionVisibility(t *testing.
 			return errors.New("source deletion did not match natural key")
 		}
 		g := linkqueries.GroupFields()
-		n, err = linkqueries.DeleteGroupUsing(linkqueries.QueryLinkGroups().WithTrashed(), linkqueries.QueryLinkGroups().WithTrashed()).MatchCode(g.Code.Value()).Exec(ctx, tx)
+		n, err = linkqueries.DeleteGroupUsing(linkqueries.QueryLinkGroups().WithTrashed(), linkqueries.QueryLinkGroups().WithTrashed()).MatchCode(query.Value(g.Code)).Exec(ctx, tx)
 		if err != nil {
 			return err
 		}
 		if n != 0 {
 			return errors.New("ordinary source deletion re-deleted trashed model")
 		}
-		deleted, err := linkqueries.DeleteMembershipUsing(linkqueries.QueryLinkMemberships(), linkqueries.QueryLinkMemberships()).MatchID(fields.ID.Value()).Returning(ctx, tx, 1)
+		deleted, err := linkqueries.DeleteMembershipUsing(linkqueries.QueryLinkMemberships(), linkqueries.QueryLinkMemberships()).MatchID(query.Value(fields.ID)).Returning(ctx, tx, 1)
 		if err != nil {
 			return err
 		}
 		if len(deleted) != 1 || deleted[0].DeletedAt.IsNull() {
 			return errors.New("source soft deletion returned an active model")
 		}
-		n, err = linkqueries.ForceDeleteMembershipUsing(linkqueries.QueryLinkMemberships().WithTrashed(), linkqueries.QueryLinkMemberships().WithTrashed()).MatchID(fields.ID.Value()).Exec(ctx, tx)
+		n, err = linkqueries.ForceDeleteMembershipUsing(linkqueries.QueryLinkMemberships().WithTrashed(), linkqueries.QueryLinkMemberships().WithTrashed()).MatchID(query.Value(fields.ID)).Exec(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -230,7 +230,7 @@ func TestPostgresSourceUpdateJoinsCTEsAndStoredNullableValues(t *testing.T) {
 		if _, err := linkqueries.QueryLinkMembers().Update(t.Context(), tx, members[0].ID, linkqueries.MemberDraft{}.SetAlias("old")); err != nil {
 			return err
 		}
-		rows, err := linkqueries.UpdateMemberFrom(linkqueries.QueryLinkMembers(), aliased).MatchID(fields.MemberID.Value()).SelectName(fields.Name.Value()).SelectAlias(fields.Alias.Value()).Returning(t.Context(), tx, 1)
+		rows, err := linkqueries.UpdateMemberFrom(linkqueries.QueryLinkMembers(), aliased).MatchID(query.Value(fields.MemberID)).SelectName(query.Value(fields.Name)).SelectAlias(query.Value(fields.Alias)).Returning(t.Context(), tx, 1)
 		if err != nil {
 			return err
 		}
@@ -245,7 +245,7 @@ func TestPostgresSourceUpdateJoinsCTEsAndStoredNullableValues(t *testing.T) {
 		left := linkqueries.MemberFieldsAt(query.LeftScope(joined, memberSource.Scope()))
 		right := linkqueries.ArchiveFieldsAt(query.RightScope(joined, archiveSource.Scope()))
 		clock.Advance(time.Hour)
-		archives, err := linkqueries.UpdateArchiveFrom(linkqueries.QueryLinkArchives(), joined).MatchID(right.ID.Value()).SelectName(left.Name.Value()).Values(linkqueries.ArchiveDraft{}.SetTag(linkqueries.ArchiveTagInput{Text: " JOINED "})).Returning(t.Context(), tx, 1)
+		archives, err := linkqueries.UpdateArchiveFrom(linkqueries.QueryLinkArchives(), joined).MatchID(query.Value(right.ID)).SelectName(query.Value(left.Name)).Values(linkqueries.ArchiveDraft{}.SetTag(linkqueries.ArchiveTagInput{Text: " JOINED "})).Returning(t.Context(), tx, 1)
 		if err != nil {
 			return err
 		}
@@ -253,7 +253,7 @@ func TestPostgresSourceUpdateJoinsCTEsAndStoredNullableValues(t *testing.T) {
 			return errors.New("joined source lost model identity, SQL field, distinct setter input or clock")
 		}
 		// A model without soft deletion uses physical DELETE USING and returns old values.
-		removed, err := linkqueries.DeleteArchiveUsing(linkqueries.QueryLinkArchives(), linkqueries.QueryLinkArchives().Where(a.MemberID.Eq(members[0].ID))).MatchID(a.ID.Value()).Returning(t.Context(), tx, 1)
+		removed, err := linkqueries.DeleteArchiveUsing(linkqueries.QueryLinkArchives(), linkqueries.QueryLinkArchives().Where(a.MemberID.Eq(members[0].ID))).MatchID(query.Value(a.ID)).Returning(t.Context(), tx, 1)
 		if err != nil {
 			return err
 		}
@@ -282,7 +282,7 @@ func TestPostgresSourceUpdateTriggerSuppressionCountsOnlyAffectedModels(t *testi
 			}
 		}
 		a := linkqueries.ArchiveFields()
-		plan := linkqueries.UpdateMemberFrom(linkqueries.QueryLinkMembers(), linkqueries.QueryLinkArchives()).MatchID(a.MemberID.Value()).SelectName(a.Name.Value())
+		plan := linkqueries.UpdateMemberFrom(linkqueries.QueryLinkMembers(), linkqueries.QueryLinkArchives()).MatchID(query.Value(a.MemberID)).SelectName(query.Value(a.Name))
 		n, err := plan.Exec(t.Context(), tx)
 		if err != nil {
 			return err

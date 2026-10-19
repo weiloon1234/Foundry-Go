@@ -5,29 +5,34 @@ type correlationBoundary[S, Input any] struct {
 	_     [0]*Input
 	scope scopeRequirement
 }
+
 type outerCorrelationSource[S, O any] interface {
 	outerCorrelation() correlationBoundary[S, O]
 }
+
 type innerCorrelationSource[S, I any] interface {
 	innerCorrelation() correlationBoundary[S, I]
 }
 
 func (b correlationBoundary[S, Input]) table(name string) string {
-	if b.scope.err != nil {
+	if b.scope.Err != nil {
 		return ""
 	}
-	if _, ok := b.scope.sources[name]; !ok {
+	if _, ok := b.scope.Sources[name]; !ok {
 		return ""
 	}
 	return name
 }
+
 func correlationBoundaryFor[S, Input any](scope scopeRequirement, err error) correlationBoundary[S, Input] {
-	scope.err = err
+	scope.Err = err
 	return correlationBoundary[S, Input]{scope: scope}
 }
+
 func (s CorrelatedSource[O, I]) outerCorrelation() correlationBoundary[Correlation[O, I], O] {
 	return correlationBoundaryFor[Correlation[O, I], O](s.outer.scopeRequirement, s.source.err)
 }
+
 func (s CorrelatedSource[O, I]) innerCorrelation() correlationBoundary[Correlation[O, I], I] {
 	return correlationBoundaryFor[Correlation[O, I], I](s.inner.scopeRequirement, s.source.err)
 }

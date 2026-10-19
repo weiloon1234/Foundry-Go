@@ -11,9 +11,11 @@ import (
 type calendarValue interface {
 	temporal.Date | temporal.LocalDateTime
 }
+
 type clockValue interface {
 	temporal.Time | temporal.LocalDateTime
 }
+
 type instantValue interface{ time.Time | temporal.DateTime }
 
 type temporalUnit uint8
@@ -89,7 +91,8 @@ func LoadTimeZone(name string) (TimeZone, error) {
 }
 
 // UTCZone selects UTC without loading an application or session default.
-func UTCZone() TimeZone           { return TimeZone{name: "UTC"} }
+func UTCZone() TimeZone { return TimeZone{name: "UTC"} }
+
 func (z TimeZone) String() string { return z.name }
 
 // LocalResolution makes PostgreSQL's choice at DST gaps/overlaps explicit.
@@ -101,10 +104,11 @@ const PostgresStandardTime LocalResolution = 1
 func textOperationArgument[S any](text string, err error) operationArgument {
 	e := parameterExpression[S](text, codec.String[string]()).Value()
 	if err != nil {
-		e.node = parameterNode{err: err}
+		e.node = parameterNode{Err: err}
 	}
 	return operationArg(e)
 }
+
 func unitArgument[S any](unit, minimum temporalUnit) operationArgument {
 	var err error
 	if unit < minimum || unit > unitMillennium {
@@ -112,6 +116,7 @@ func unitArgument[S any](unit, minimum temporalUnit) operationArgument {
 	}
 	return textOperationArgument[S](unit.name(), err)
 }
+
 func zoneArgument[S any](zone TimeZone) operationArgument {
 	var err error
 	if zone.name == "" {
@@ -119,6 +124,7 @@ func zoneArgument[S any](zone TimeZone) operationArgument {
 	}
 	return textOperationArgument[S](zone.name, err)
 }
+
 func resolutionArgument[S any](zone TimeZone, policy LocalResolution) operationArgument {
 	if policy != PostgresStandardTime {
 		return textOperationArgument[S]("", fault.New(fault.Invalid, "local resolution requires an explicit supported DST policy"))
@@ -129,11 +135,12 @@ func resolutionArgument[S any](zone TimeZone, policy LocalResolution) operationA
 func intervalArgument[S any](interval temporal.Interval) operationArgument {
 	return operationArg(parameterExpression[S](interval, codec.Interval()).Value())
 }
+
 func elapsedArgument[S any](duration time.Duration) operationArgument {
 	interval, err := temporal.Elapsed(duration)
 	arg := intervalArgument[S](interval)
 	if err != nil {
-		arg.value = parameterNode{kind: codec.TypeInterval, err: err}
+		arg.Value = parameterNode{Kind: codec.TypeInterval, Err: err}
 	}
 	return arg
 }

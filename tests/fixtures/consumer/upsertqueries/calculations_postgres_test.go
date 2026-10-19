@@ -100,7 +100,7 @@ func TestPostgresConflictScalarAndCorrelatedAssignments(t *testing.T) {
 		link := query.Correlate(rows, lookup)
 		outer := models.WriteRecordFieldsAt(query.OuterScope(link, rows.Stored()))
 		inner := models.WriteRecordFieldsAt(query.InnerScope(link, lookup.Scope()))
-		selected := query.SelectCorrelatedValue(link, inner.Amount.Value()).Where(query.Greater(inner.Amount, outer.Amount)).Limit(1)
+		selected := query.SelectCorrelatedValue(link, query.Value(inner.Amount)).Where(query.Greater(inner.Amount, outer.Amount)).Limit(1)
 		policy := query.OnConflict(f.Name).DoUpdate(query.SetConflictValue(f.Amount, query.Coalesce(query.CorrelatedScalarRowQuery(selected), proposed.Amount)))
 		result, err := q.Upsert(t.Context(), tx, models.WriteRecordDraft{}.SetName("counter"), policy)
 		if err != nil {
@@ -123,7 +123,7 @@ func TestPostgresConflictScalarAndCorrelatedAssignments(t *testing.T) {
 		// A scalar with multiple results must preserve the database error and roll back.
 		allLink := query.Correlate(rows, q)
 		allFields := models.WriteRecordFieldsAt(query.InnerScope(allLink, q.Scope()))
-		multiple := query.SelectCorrelatedValue(allLink, allFields.Amount.Value())
+		multiple := query.SelectCorrelatedValue(allLink, query.Value(allFields.Amount))
 		invalid := query.OnConflict(f.Name).DoUpdate(query.SetConflictValue(f.Amount, query.Coalesce(query.CorrelatedScalarRowQuery(multiple), proposed.Amount)))
 		_, err = q.Upsert(t.Context(), tx, models.WriteRecordDraft{}.SetName("counter"), invalid)
 		var dbErr *database.Error
@@ -138,8 +138,8 @@ func TestPostgresConflictScalarAndCorrelatedAssignments(t *testing.T) {
 		if !present || kept.Amount.String() != "2.5" {
 			t.Fatal("failed calculation persisted")
 		}
-		independent := query.ConflictScalarRowQuery(rows, query.SelectValue(q.Where(f.Name.Eq("reference")), f.Amount.Value()))
-		nullable := query.ConflictScalarNullableRowQuery(rows, query.SelectValue(q.Where(f.Name.Eq("reference")), f.Note.Value()))
+		independent := query.ConflictScalarRowQuery(rows, query.SelectValue(q.Where(f.Name.Eq("reference")), query.Value(f.Amount)))
+		nullable := query.ConflictScalarNullableRowQuery(rows, query.SelectValue(q.Where(f.Name.Eq("reference")), query.Value(f.Note)))
 		result, err = q.Upsert(t.Context(), tx, models.WriteRecordDraft{}.SetName("counter"),
 			query.OnConflict(f.Name).DoUpdate(query.SetConflictValue(f.Amount, query.Coalesce(independent, proposed.Amount)), query.SetConflictValue(f.Note, nullable)))
 		if err != nil {

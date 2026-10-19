@@ -11,6 +11,7 @@ import (
 )
 
 type transactionTestRecord struct{ ID int64 }
+
 type transactionTestAlias struct{}
 
 func transactionTestModel() Query[transactionTestRecord] {
@@ -20,6 +21,7 @@ func transactionTestModel() Query[transactionTestRecord] {
 		return result, err
 	}, NewModelField("id", codec.Signed[int64](), func(v transactionTestRecord) int64 { return v.ID })))
 }
+
 func TestTransactionNestedLocksRejectOrdinaryGenericQueries(t *testing.T) {
 	base := transactionTestModel()
 	inner := base.ForUpdate().transactionRecord()
@@ -28,7 +30,7 @@ func TestTransactionNestedLocksRejectOrdinaryGenericQueries(t *testing.T) {
 		var ignored int64
 		err := row.Scan(&ignored)
 		return owner{}, err
-	})).Where(Predicate[owner]{expression: subqueryPredicate{query: subquery{node: inner.node}}})
+	})).Where(Predicate[owner]{expression: subqueryPredicate{Query: subquery{Node: inner.node}}})
 	for _, kind := range []readKind{readModels, readCount, readExists} {
 		statement, err := ordinary.compile(kind)
 		if !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "transaction-scoped") || statement.SQL() != "" {
@@ -41,6 +43,7 @@ func TestTransactionNestedLocksRejectOrdinaryGenericQueries(t *testing.T) {
 		t.Fatal("ordinary projection accepted private transaction adapter", err)
 	}
 }
+
 func TestTransactionCTEPreservesInnerLocksAndOuterAggregates(t *testing.T) {
 	base := transactionTestModel()
 	source := AsTransaction[transactionTestAlias](TransactionCTE("claimed", base.Limit(2).ForUpdate().SkipLocked()), "c")
@@ -64,19 +67,20 @@ func TestTransactionCTEPreservesInnerLocksAndOuterAggregates(t *testing.T) {
 		t.Fatal("outer lock claimed to protect CTE references", err)
 	}
 }
+
 func TestTransactionLockValidationSharesStatementBudget(t *testing.T) {
-	node := selectNode{source: tableSource{table: "records"}}
+	node := selectNode{Source: tableSource{Table: "records"}}
 	var walk selectWalk
-	walk.selectNode(node, 0)
-	specs := make([]lockSpec, MaxExpressionNodes/walk.nodes)
+	walk.SelectNode(node, 0)
+	specs := make([]lockSpec, MaxExpressionNodes/walk.Nodes)
 	for i := range specs {
-		specs[i] = lockSpec{strength: lockUpdate}
+		specs[i] = lockSpec{Strength: lockUpdate}
 	}
 	var c compiler
-	if _, err := c.compileLocks(node, specs); err != nil {
+	if _, err := c.CompileLocks(node, specs); err != nil {
 		t.Fatal("first bounded lock work failed", err)
 	}
-	if _, err := c.compileLocks(node, specs[:1]); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "nested") {
+	if _, err := c.CompileLocks(node, specs[:1]); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "nested") {
 		t.Fatal("statement lock work was reset", err)
 	}
 }

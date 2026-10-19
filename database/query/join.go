@@ -2,7 +2,6 @@ package query
 
 import (
 	"reflect"
-	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
@@ -12,6 +11,7 @@ type JoinInput[S any] interface{ joinInput() joinInput[S] }
 
 // JoinTable is an aliased model or declared projection appended to a join chain.
 type JoinTable[S any] interface{ joinTable() joinInput[S] }
+
 type joinInput[S any] struct {
 	_       [0]*S
 	node    selectNode
@@ -26,16 +26,19 @@ type Inner[L, R any] struct {
 	_ [0]*R
 	_ [0]struct{ inner bool }
 }
+
 type Left[L, R any] struct {
 	_ [0]*L
 	_ [0]*R
 	_ [0]struct{ left bool }
 }
+
 type Right[L, R any] struct {
 	_ [0]*L
 	_ [0]*R
 	_ [0]struct{ right bool }
 }
+
 type Full[L, R any] struct {
 	_ [0]*L
 	_ [0]*R
@@ -55,6 +58,7 @@ type joinedSource[S, L, R any] struct {
 }
 
 func (j joinedSource[S, L, R]) joinInput() joinInput[S] { return j.input }
+
 func (j joinedSource[S, L, R]) projectionSource() projectionSource[S] {
 	return projectionSource[S]{node: j.input.node, err: j.input.err}
 }
@@ -89,9 +93,11 @@ func CrossJoin[L, R any](left JoinInput[L], right JoinTable[R]) CrossJoined[L, R
 func InnerJoin[L, R any](left JoinInput[L], right JoinTable[R], on JoinOn[L, R]) InnerJoined[L, R] {
 	return InnerJoined[L, R]{buildJoin[Inner[L, R]](left, right, on, innerJoin)}
 }
+
 func LeftJoin[L, R any](left JoinInput[L], right JoinTable[R], on JoinOn[L, R]) LeftJoined[L, R] {
 	return LeftJoined[L, R]{buildJoin[Left[L, R]](left, right, on, leftJoin)}
 }
+
 func RightJoin[L, R any](left JoinInput[L], right JoinTable[R], on JoinOn[L, R]) RightJoined[L, R] {
 	return RightJoined[L, R]{buildJoin[Right[L, R]](left, right, on, rightJoin)}
 }
@@ -111,26 +117,7 @@ func buildJoin[S, L, R any](left JoinInput[L], right JoinTable[R], on JoinOn[L, 
 	}
 	l, r := left.joinInput(), right.joinTable()
 	result.left, result.right = l.aliases, r.aliases
-	result.input.err = l.err
-	if result.input.err == nil {
-		result.input.err = r.err
-	}
-	if result.input.err != nil {
-		return result
-	}
-	aliases := make(map[string]reflect.Type, len(l.aliases)+len(r.aliases))
-	identities := make(map[reflect.Type]bool)
-	for _, side := range []map[string]reflect.Type{l.aliases, r.aliases} {
-		for name, identity := range side {
-			if aliases[name] != nil || identities[identity] {
-				result.input.err = fault.New(fault.Invalid, "join repeats an alias name or typed alias identity")
-				return result
-			}
-			aliases[name], identities[identity] = identity, true
-		}
-	}
-	result.input.node = l.node
-	result.input.node.joins = append(slices.Clone(l.node.joins), joinNode{source: r.node.source, on: on.expression, kind: kind})
-	result.input.aliases = aliases
+	joined := joinNodes(l.node, r.node, l.aliases, r.aliases, l.err, r.err, on.expression, kind)
+	result.input = joinInput[S]{node: joined.Node, aliases: joined.Aliases, err: joined.Err}
 	return result
 }

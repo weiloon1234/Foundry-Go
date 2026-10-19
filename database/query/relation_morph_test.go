@@ -15,13 +15,18 @@ type morphNote struct {
 	Kind      MorphName
 	SubjectID int64
 }
+
 type goodMorph struct{ ID int64 }
+
 type namespacedMorph struct{ ID int64 }
+
 type hyphenMorph struct{ ID int64 }
 
-func (goodMorph) MorphName() MorphName       { return "post" }
+func (goodMorph) MorphName() MorphName { return "post" }
+
 func (namespacedMorph) MorphName() MorphName { return `App\Models\Post` }
-func (hyphenMorph) MorphName() MorphName     { return "blog-post" }
+
+func (hyphenMorph) MorphName() MorphName { return "blog-post" }
 
 func morphTable[M any](table string, id func(M) int64) Query[M] {
 	return ForModel(Define(table, "id", []Column{{Name: "id"}}, func(database.Row) (M, error) { return *new(M), nil },

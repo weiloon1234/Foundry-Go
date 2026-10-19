@@ -1,10 +1,12 @@
 package query
 
 import (
-	"strings"
-
-	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
+
+func hasPrimaryEquality(predicates []expression, primary string) bool {
+	return querycore.HasPrimaryEquality(predicates, primary)
+}
 
 func (p mutationPlan[M]) compile() (Statement, error) {
 	q := p.query
@@ -19,57 +21,6 @@ func (p mutationPlan[M]) compile() (Statement, error) {
 	if err != nil {
 		return Statement{}, err
 	}
-	prefix, err := c.compileCTEs(q.modelSelect())
-	if err != nil {
-		return Statement{}, err
-	}
-	sets := make([]string, 0, len(assigned))
-	for _, assignment := range p.mutation.assignments {
-		column := c.columns[assignment.field.column]
-		parameter, err := c.assignmentParameter(column.Name, assignment.bind)
-		if err != nil {
-			return Statement{}, err
-		}
-		sets = append(sets, quoted(column.Name)+" = "+parameter)
-	}
-	if p.adjust != nil {
-		set, err := p.adjustSet(&c, assigned)
-		if err != nil {
-			return Statement{}, err
-		}
-		sets = append(sets, set)
-	}
-	var sql strings.Builder
-	sql.WriteString(prefix)
-	switch p.kind.sqlKind() {
-	case updateModel:
-		sql.WriteString("UPDATE " + quotedTable(q.table) + " SET " + strings.Join(sets, ", "))
-	case deleteModel:
-		sql.WriteString("DELETE FROM " + quotedTable(q.table))
-	default:
-		return Statement{}, fault.New(fault.Invalid, "invalid model mutation kind")
-	}
-	if err := c.where(&sql, q.effectivePredicates()); err != nil {
-		return Statement{}, err
-	}
-	if !p.countOnly {
-		sql.WriteString(" RETURNING " + selectedColumns(q.table, q.definition.columns))
-	}
-	return Statement{sql: sql.String(), arguments: c.arguments}, nil
-}
-
-func hasPrimaryEquality(predicates []expression, primary string) bool {
-	for _, predicate := range predicates {
-		switch predicate := predicate.(type) {
-		case comparison:
-			if field, ok := predicate.operand.(fieldRef); ok && field.column == primary && predicate.operator == equal {
-				return true
-			}
-		case junction:
-			if !predicate.any && hasPrimaryEquality(predicate.children, primary) {
-				return true
-			}
-		}
-	}
-	return false
+	result, err := q.queryCore.CompileMutation(c, q.modelSelect(), p.kind, p.mutation.assignments, assigned, p.adjust, p.countOnly)
+	return statementFromCore(result), err
 }

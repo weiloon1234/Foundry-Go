@@ -25,11 +25,11 @@ func TestJSONOperationsBindAndValidate(t *testing.T) {
 	}
 	badRepresentation := NewJSONField[cursorRecord, value.JSON[[]string]]("records", "rank", codec.JSON[[]string]().WithParameterType(codec.TypeText))
 	for _, node := range []valueExpression{
-		operationNode{kind: jsonContainsOperation, result: codec.TypeBoolean},
-		operationNode{kind: jsonKindOperation, result: codec.TypeInteger, arguments: []operationArgument{operationArg(f.Value())}},
+		operationNode{Kind: jsonContainsOperation, Result: codec.TypeBoolean},
+		operationNode{Kind: jsonKindOperation, Result: codec.TypeInteger, Arguments: []operationArgument{operationArg(Value(f))}},
 		JSONType(badRepresentation).Value().node,
 		JSONType[cursorRecord, value.JSON[[]string]](nil).Value().node,
-		JSONContains(f, f.Param(value.JSON[[]string]{})).Value().node,
+		JSONContains(f, Param(f, value.JSON[[]string]{})).Value().node,
 	} {
 		if _, err := SelectValue(cursorQuery().Limit(0), Expression[cursorRecord, bool]{node: node, codec: codec.Bool[bool]()}).Compile(); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)

@@ -8,6 +8,7 @@ import (
 )
 
 type binaryRecord struct{}
+
 type binaryInput []byte
 
 func TestBinaryPredicatesOwnLazyBindings(t *testing.T) {
@@ -17,7 +18,7 @@ func TestBinaryPredicatesOwnLazyBindings(t *testing.T) {
 	input[0] = 9
 	for _, p := range predicates {
 		comparison := p.expression.(comparison)
-		bound, err := comparison.bind(comparison.values[0])
+		bound, err := comparison.Bind(comparison.Values[0])
 		if err != nil || !bytes.Equal(bound.([]byte), []byte{1, 2}) {
 			t.Fatal("predicate did not capture binary data", err)
 		}
@@ -53,11 +54,11 @@ func TestBinaryAssignmentsAndMutatorsOwnReusableInputs(t *testing.T) {
 		}
 		mutator := newFieldMutator("body", c, func(v binaryInput) (binaryInput, error) { v[0]++; return v, nil })
 		for range 2 {
-			result, err := mutator.apply(a.assignmentValue)
+			result, err := mutator.apply(a.mutationAssignment.AssignmentValue)
 			if err != nil {
 				t.Fatal(err)
 			}
-			bound, err := result.bind()
+			bound, err := result.Bind()
 			if err != nil || !bytes.Equal(bound.([]byte), []byte{2, 2}) {
 				t.Fatal("reused mutation changed its original input", err)
 			}

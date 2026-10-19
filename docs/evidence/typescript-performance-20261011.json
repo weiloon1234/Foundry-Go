@@ -1,0 +1,1353 @@
+{
+  "date": "2026-10-11",
+  "scope": "Go-to-TypeScript renderer performance; public and generated APIs unchanged",
+  "environment": {
+    "go": "go version go1.27.1 darwin/arm64",
+    "os": "macOS darwin/arm64",
+    "cpu": "Apple M4 Max",
+    "memory_gib": 64,
+    "gomaxprocs": 16,
+    "cache": "Existing native Go build cache; steady-state rendering after process-local immutable metadata initialization",
+    "node": "v24.21.0",
+    "typescript": "5.9.3"
+  },
+  "method": {
+    "samples_per_revision": 5,
+    "benchtime": "1s",
+    "order": "baseline,optimized; optimized,baseline; repeated for five pairs",
+    "baseline": "Read-only Go source overlays for the two renderer files; all other framework and benchmark source matches optimized revision",
+    "source_inputs": 4410,
+    "source_inputs_sha256": "a57109d0486ffedb48e10eafa3e06d9491b7c192cad2ab7ab58940fa80ff937a",
+    "baseline_renderers_sha256": {
+      "typescript/render.go": "cab481ece24f0f0f013b53f03fcf5f88f419d94d6ab8f250d38e4b2617ab8bc7",
+      "typescript/render_modules.go": "a1ca01f2f83c189e9d45dc527599ed9825049e5727c40528dc3ef6a77f16cbd7"
+    },
+    "baseline_binary_sha256": "d6b2e45931c7f6edfac1874e45fb597e3a705daa7ad34887b84883a8b243d8db",
+    "optimized_binary_sha256": "1dc422651da329508176ddbf428fbb91c6ee6c0d2a68143c9a2474bde563b024",
+    "measurement_binary_args": [
+      "-test.run=^$",
+      "-test.bench=^(BenchmarkRender|BenchmarkRenderModules|BenchmarkReceivedNaming|BenchmarkGenerateCheck)$",
+      "-test.benchmem",
+      "-test.benchtime=1s",
+      "-test.count=1"
+    ],
+    "reproduce_command": "make benchmark-typescript"
+  },
+  "summary": [
+    {
+      "benchmark": "BenchmarkRender/Small",
+      "statistics": {
+        "baseline": {
+          "ns": {
+            "median": 503685,
+            "min": 501724,
+            "max": 510431
+          },
+          "bytes": {
+            "median": 1705086,
+            "min": 1704780,
+            "max": 1705479
+          },
+          "allocations": {
+            "median": 3582,
+            "min": 3581,
+            "max": 3582
+          }
+        },
+        "optimized": {
+          "ns": {
+            "median": 360350,
+            "min": 357410,
+            "max": 361715
+          },
+          "bytes": {
+            "median": 1082007,
+            "min": 1081760,
+            "max": 1082426
+          },
+          "allocations": {
+            "median": 3333,
+            "min": 3332,
+            "max": 3334
+          }
+        }
+      },
+      "time_reduction_percent": 28.46,
+      "byte_reduction_percent": 36.54
+    },
+    {
+      "benchmark": "BenchmarkRender/Large",
+      "statistics": {
+        "baseline": {
+          "ns": {
+            "median": 3730763,
+            "min": 3616270,
+            "max": 3757019
+          },
+          "bytes": {
+            "median": 8873753,
+            "min": 8867866,
+            "max": 8875851
+          },
+          "allocations": {
+            "median": 45630,
+            "min": 45629,
+            "max": 45630
+          }
+        },
+        "optimized": {
+          "ns": {
+            "median": 3500591,
+            "min": 3420567,
+            "max": 3515662
+          },
+          "bytes": {
+            "median": 8222510,
+            "min": 8215736,
+            "max": 8223282
+          },
+          "allocations": {
+            "median": 43980,
+            "min": 43979,
+            "max": 43980
+          }
+        }
+      },
+      "time_reduction_percent": 6.17,
+      "byte_reduction_percent": 7.34
+    },
+    {
+      "benchmark": "BenchmarkRender/Deep",
+      "statistics": {
+        "baseline": {
+          "ns": {
+            "median": 13468353,
+            "min": 13188465,
+            "max": 13671446
+          },
+          "bytes": {
+            "median": 21400014,
+            "min": 21398338,
+            "max": 21400274
+          },
+          "allocations": {
+            "median": 443653,
+            "min": 443653,
+            "max": 443654
+          }
+        },
+        "optimized": {
+          "ns": {
+            "median": 2631928,
+            "min": 2589583,
+            "max": 2672422
+          },
+          "bytes": {
+            "median": 5742833,
+            "min": 5742492,
+            "max": 5743728
+          },
+          "allocations": {
+            "median": 39842,
+            "min": 39842,
+            "max": 39843
+          }
+        }
+      },
+      "time_reduction_percent": 80.46,
+      "byte_reduction_percent": 73.16
+    },
+    {
+      "benchmark": "BenchmarkRenderModules/Small",
+      "statistics": {
+        "baseline": {
+          "ns": {
+            "median": 598883,
+            "min": 594060,
+            "max": 604784
+          },
+          "bytes": {
+            "median": 1655880,
+            "min": 1655428,
+            "max": 1656231
+          },
+          "allocations": {
+            "median": 3932,
+            "min": 3932,
+            "max": 3933
+          }
+        },
+        "optimized": {
+          "ns": {
+            "median": 434015,
+            "min": 428486,
+            "max": 435707
+          },
+          "bytes": {
+            "median": 1394707,
+            "min": 1394276,
+            "max": 1395934
+          },
+          "allocations": {
+            "median": 3486,
+            "min": 3484,
+            "max": 3487
+          }
+        }
+      },
+      "time_reduction_percent": 27.53,
+      "byte_reduction_percent": 15.77
+    },
+    {
+      "benchmark": "BenchmarkRenderModules/Large",
+      "statistics": {
+        "baseline": {
+          "ns": {
+            "median": 5169648,
+            "min": 5148532,
+            "max": 5304501
+          },
+          "bytes": {
+            "median": 9915240,
+            "min": 9910413,
+            "max": 9921681
+          },
+          "allocations": {
+            "median": 49732,
+            "min": 49730,
+            "max": 49735
+          }
+        },
+        "optimized": {
+          "ns": {
+            "median": 3638402,
+            "min": 3556182,
+            "max": 3665791
+          },
+          "bytes": {
+            "median": 8868189,
+            "min": 8863701,
+            "max": 8871100
+          },
+          "allocations": {
+            "median": 44117,
+            "min": 44117,
+            "max": 44118
+          }
+        }
+      },
+      "time_reduction_percent": 29.62,
+      "byte_reduction_percent": 10.56
+    },
+    {
+      "benchmark": "BenchmarkRenderModules/MultiSurface",
+      "statistics": {
+        "baseline": {
+          "ns": {
+            "median": 28573919,
+            "min": 28218836,
+            "max": 29087965
+          },
+          "bytes": {
+            "median": 41014711,
+            "min": 40945689,
+            "max": 41088475
+          },
+          "allocations": {
+            "median": 226241,
+            "min": 226207,
+            "max": 226282
+          }
+        },
+        "optimized": {
+          "ns": {
+            "median": 24396891,
+            "min": 24232414,
+            "max": 24661507
+          },
+          "bytes": {
+            "median": 36709914,
+            "min": 36645098,
+            "max": 36780257
+          },
+          "allocations": {
+            "median": 215389,
+            "min": 215347,
+            "max": 215408
+          }
+        }
+      },
+      "time_reduction_percent": 14.62,
+      "byte_reduction_percent": 10.5
+    },
+    {
+      "benchmark": "BenchmarkReceivedNaming",
+      "statistics": {
+        "baseline": {
+          "ns": {
+            "median": 10959636,
+            "min": 10656032,
+            "max": 10995393
+          },
+          "bytes": {
+            "median": 15878398,
+            "min": 15878392,
+            "max": 15878411
+          },
+          "allocations": {
+            "median": 408070,
+            "min": 408070,
+            "max": 408070
+          }
+        },
+        "optimized": {
+          "ns": {
+            "median": 382291,
+            "min": 379729,
+            "max": 386810
+          },
+          "bytes": {
+            "median": 831639,
+            "min": 831639,
+            "max": 831640
+          },
+          "allocations": {
+            "median": 4373,
+            "min": 4373,
+            "max": 4373
+          }
+        }
+      },
+      "time_reduction_percent": 96.51,
+      "byte_reduction_percent": 94.76
+    },
+    {
+      "benchmark": "BenchmarkGenerateCheck",
+      "statistics": {
+        "baseline": {
+          "ns": {
+            "median": 53438046,
+            "min": 52388686,
+            "max": 53570561
+          },
+          "bytes": {
+            "median": 104303462,
+            "min": 104260365,
+            "max": 104434361
+          },
+          "allocations": {
+            "median": 368051,
+            "min": 368033,
+            "max": 368084
+          }
+        },
+        "optimized": {
+          "ns": {
+            "median": 49353781,
+            "min": 48927562,
+            "max": 49556802
+          },
+          "bytes": {
+            "median": 100001890,
+            "min": 99956004,
+            "max": 100129400
+          },
+          "allocations": {
+            "median": 357192,
+            "min": 357173,
+            "max": 357243
+          }
+        }
+      },
+      "time_reduction_percent": 7.64,
+      "byte_reduction_percent": 4.12
+    }
+  ],
+  "samples": [
+    {
+      "revision": "baseline",
+      "run": 1,
+      "benchmark": "BenchmarkRender/Small",
+      "iterations": 2296,
+      "ns": 501882,
+      "bytes": 1705479,
+      "allocations": 3582
+    },
+    {
+      "revision": "baseline",
+      "run": 1,
+      "benchmark": "BenchmarkRender/Large",
+      "iterations": 328,
+      "ns": 3616270,
+      "bytes": 8867866,
+      "allocations": 45630
+    },
+    {
+      "revision": "baseline",
+      "run": 1,
+      "benchmark": "BenchmarkRender/Deep",
+      "iterations": 93,
+      "ns": 13188465,
+      "bytes": 21400014,
+      "allocations": 443654
+    },
+    {
+      "revision": "baseline",
+      "run": 1,
+      "benchmark": "BenchmarkRenderModules/Small",
+      "iterations": 1995,
+      "ns": 604784,
+      "bytes": 1655880,
+      "allocations": 3933
+    },
+    {
+      "revision": "baseline",
+      "run": 1,
+      "benchmark": "BenchmarkRenderModules/Large",
+      "iterations": 234,
+      "ns": 5148532,
+      "bytes": 9910413,
+      "allocations": 49733
+    },
+    {
+      "revision": "baseline",
+      "run": 1,
+      "benchmark": "BenchmarkRenderModules/MultiSurface",
+      "iterations": 42,
+      "ns": 28218836,
+      "bytes": 40945689,
+      "allocations": 226241
+    },
+    {
+      "revision": "baseline",
+      "run": 1,
+      "benchmark": "BenchmarkReceivedNaming",
+      "iterations": 100,
+      "ns": 10656032,
+      "bytes": 15878411,
+      "allocations": 408070
+    },
+    {
+      "revision": "baseline",
+      "run": 1,
+      "benchmark": "BenchmarkGenerateCheck",
+      "iterations": 22,
+      "ns": 52388686,
+      "bytes": 104260365,
+      "allocations": 368033
+    },
+    {
+      "revision": "optimized",
+      "run": 1,
+      "benchmark": "BenchmarkRender/Small",
+      "iterations": 3124,
+      "ns": 357482,
+      "bytes": 1082007,
+      "allocations": 3333
+    },
+    {
+      "revision": "optimized",
+      "run": 1,
+      "benchmark": "BenchmarkRender/Large",
+      "iterations": 349,
+      "ns": 3420567,
+      "bytes": 8223282,
+      "allocations": 43980
+    },
+    {
+      "revision": "optimized",
+      "run": 1,
+      "benchmark": "BenchmarkRender/Deep",
+      "iterations": 457,
+      "ns": 2631928,
+      "bytes": 5743728,
+      "allocations": 39843
+    },
+    {
+      "revision": "optimized",
+      "run": 1,
+      "benchmark": "BenchmarkRenderModules/Small",
+      "iterations": 2658,
+      "ns": 434015,
+      "bytes": 1395934,
+      "allocations": 3487
+    },
+    {
+      "revision": "optimized",
+      "run": 1,
+      "benchmark": "BenchmarkRenderModules/Large",
+      "iterations": 332,
+      "ns": 3582845,
+      "bytes": 8871100,
+      "allocations": 44117
+    },
+    {
+      "revision": "optimized",
+      "run": 1,
+      "benchmark": "BenchmarkRenderModules/MultiSurface",
+      "iterations": 48,
+      "ns": 24396891,
+      "bytes": 36780257,
+      "allocations": 215408
+    },
+    {
+      "revision": "optimized",
+      "run": 1,
+      "benchmark": "BenchmarkReceivedNaming",
+      "iterations": 3194,
+      "ns": 379729,
+      "bytes": 831639,
+      "allocations": 4373
+    },
+    {
+      "revision": "optimized",
+      "run": 1,
+      "benchmark": "BenchmarkGenerateCheck",
+      "iterations": 21,
+      "ns": 49442659,
+      "bytes": 99956004,
+      "allocations": 357192
+    },
+    {
+      "revision": "optimized",
+      "run": 2,
+      "benchmark": "BenchmarkRender/Small",
+      "iterations": 3058,
+      "ns": 360414,
+      "bytes": 1081760,
+      "allocations": 3332
+    },
+    {
+      "revision": "optimized",
+      "run": 2,
+      "benchmark": "BenchmarkRender/Large",
+      "iterations": 349,
+      "ns": 3424882,
+      "bytes": 8221361,
+      "allocations": 43980
+    },
+    {
+      "revision": "optimized",
+      "run": 2,
+      "benchmark": "BenchmarkRender/Deep",
+      "iterations": 459,
+      "ns": 2589583,
+      "bytes": 5742833,
+      "allocations": 39842
+    },
+    {
+      "revision": "optimized",
+      "run": 2,
+      "benchmark": "BenchmarkRenderModules/Small",
+      "iterations": 2744,
+      "ns": 435707,
+      "bytes": 1395620,
+      "allocations": 3487
+    },
+    {
+      "revision": "optimized",
+      "run": 2,
+      "benchmark": "BenchmarkRenderModules/Large",
+      "iterations": 337,
+      "ns": 3556182,
+      "bytes": 8865139,
+      "allocations": 44117
+    },
+    {
+      "revision": "optimized",
+      "run": 2,
+      "benchmark": "BenchmarkRenderModules/MultiSurface",
+      "iterations": 48,
+      "ns": 24284191,
+      "bytes": 36645098,
+      "allocations": 215367
+    },
+    {
+      "revision": "optimized",
+      "run": 2,
+      "benchmark": "BenchmarkReceivedNaming",
+      "iterations": 3144,
+      "ns": 379787,
+      "bytes": 831639,
+      "allocations": 4373
+    },
+    {
+      "revision": "optimized",
+      "run": 2,
+      "benchmark": "BenchmarkGenerateCheck",
+      "iterations": 24,
+      "ns": 48927562,
+      "bytes": 99969508,
+      "allocations": 357178
+    },
+    {
+      "revision": "baseline",
+      "run": 2,
+      "benchmark": "BenchmarkRender/Small",
+      "iterations": 2262,
+      "ns": 501724,
+      "bytes": 1704780,
+      "allocations": 3582
+    },
+    {
+      "revision": "baseline",
+      "run": 2,
+      "benchmark": "BenchmarkRender/Large",
+      "iterations": 326,
+      "ns": 3663106,
+      "bytes": 8873753,
+      "allocations": 45630
+    },
+    {
+      "revision": "baseline",
+      "run": 2,
+      "benchmark": "BenchmarkRender/Deep",
+      "iterations": 92,
+      "ns": 13335248,
+      "bytes": 21400267,
+      "allocations": 443654
+    },
+    {
+      "revision": "baseline",
+      "run": 2,
+      "benchmark": "BenchmarkRenderModules/Small",
+      "iterations": 1987,
+      "ns": 594479,
+      "bytes": 1655428,
+      "allocations": 3932
+    },
+    {
+      "revision": "baseline",
+      "run": 2,
+      "benchmark": "BenchmarkRenderModules/Large",
+      "iterations": 231,
+      "ns": 5167698,
+      "bytes": 9915240,
+      "allocations": 49735
+    },
+    {
+      "revision": "baseline",
+      "run": 2,
+      "benchmark": "BenchmarkRenderModules/MultiSurface",
+      "iterations": 40,
+      "ns": 28372971,
+      "bytes": 41045689,
+      "allocations": 226236
+    },
+    {
+      "revision": "baseline",
+      "run": 2,
+      "benchmark": "BenchmarkReceivedNaming",
+      "iterations": 100,
+      "ns": 10866088,
+      "bytes": 15878398,
+      "allocations": 408070
+    },
+    {
+      "revision": "baseline",
+      "run": 2,
+      "benchmark": "BenchmarkGenerateCheck",
+      "iterations": 19,
+      "ns": 53570561,
+      "bytes": 104285222,
+      "allocations": 368040
+    },
+    {
+      "revision": "baseline",
+      "run": 3,
+      "benchmark": "BenchmarkRender/Small",
+      "iterations": 2222,
+      "ns": 503685,
+      "bytes": 1705086,
+      "allocations": 3581
+    },
+    {
+      "revision": "baseline",
+      "run": 3,
+      "benchmark": "BenchmarkRender/Large",
+      "iterations": 320,
+      "ns": 3736307,
+      "bytes": 8875242,
+      "allocations": 45629
+    },
+    {
+      "revision": "baseline",
+      "run": 3,
+      "benchmark": "BenchmarkRender/Deep",
+      "iterations": 86,
+      "ns": 13671446,
+      "bytes": 21399796,
+      "allocations": 443653
+    },
+    {
+      "revision": "baseline",
+      "run": 3,
+      "benchmark": "BenchmarkRenderModules/Small",
+      "iterations": 1958,
+      "ns": 604452,
+      "bytes": 1655584,
+      "allocations": 3932
+    },
+    {
+      "revision": "baseline",
+      "run": 3,
+      "benchmark": "BenchmarkRenderModules/Large",
+      "iterations": 223,
+      "ns": 5304501,
+      "bytes": 9915100,
+      "allocations": 49732
+    },
+    {
+      "revision": "baseline",
+      "run": 3,
+      "benchmark": "BenchmarkRenderModules/MultiSurface",
+      "iterations": 40,
+      "ns": 28573919,
+      "bytes": 41014711,
+      "allocations": 226207
+    },
+    {
+      "revision": "baseline",
+      "run": 3,
+      "benchmark": "BenchmarkReceivedNaming",
+      "iterations": 100,
+      "ns": 10959636,
+      "bytes": 15878394,
+      "allocations": 408070
+    },
+    {
+      "revision": "baseline",
+      "run": 3,
+      "benchmark": "BenchmarkGenerateCheck",
+      "iterations": 19,
+      "ns": 53438046,
+      "bytes": 104434361,
+      "allocations": 368051
+    },
+    {
+      "revision": "optimized",
+      "run": 3,
+      "benchmark": "BenchmarkRender/Small",
+      "iterations": 3079,
+      "ns": 360350,
+      "bytes": 1082311,
+      "allocations": 3333
+    },
+    {
+      "revision": "optimized",
+      "run": 3,
+      "benchmark": "BenchmarkRender/Large",
+      "iterations": 340,
+      "ns": 3500591,
+      "bytes": 8222510,
+      "allocations": 43979
+    },
+    {
+      "revision": "optimized",
+      "run": 3,
+      "benchmark": "BenchmarkRender/Deep",
+      "iterations": 457,
+      "ns": 2624298,
+      "bytes": 5742492,
+      "allocations": 39842
+    },
+    {
+      "revision": "optimized",
+      "run": 3,
+      "benchmark": "BenchmarkRenderModules/Small",
+      "iterations": 2769,
+      "ns": 434375,
+      "bytes": 1394707,
+      "allocations": 3486
+    },
+    {
+      "revision": "optimized",
+      "run": 3,
+      "benchmark": "BenchmarkRenderModules/Large",
+      "iterations": 327,
+      "ns": 3656353,
+      "bytes": 8863701,
+      "allocations": 44118
+    },
+    {
+      "revision": "optimized",
+      "run": 3,
+      "benchmark": "BenchmarkRenderModules/MultiSurface",
+      "iterations": 48,
+      "ns": 24232414,
+      "bytes": 36685191,
+      "allocations": 215389
+    },
+    {
+      "revision": "optimized",
+      "run": 3,
+      "benchmark": "BenchmarkReceivedNaming",
+      "iterations": 3099,
+      "ns": 382291,
+      "bytes": 831640,
+      "allocations": 4373
+    },
+    {
+      "revision": "optimized",
+      "run": 3,
+      "benchmark": "BenchmarkGenerateCheck",
+      "iterations": 24,
+      "ns": 48940083,
+      "bytes": 100129400,
+      "allocations": 357240
+    },
+    {
+      "revision": "optimized",
+      "run": 4,
+      "benchmark": "BenchmarkRender/Small",
+      "iterations": 3087,
+      "ns": 361715,
+      "bytes": 1081760,
+      "allocations": 3332
+    },
+    {
+      "revision": "optimized",
+      "run": 4,
+      "benchmark": "BenchmarkRender/Large",
+      "iterations": 340,
+      "ns": 3502996,
+      "bytes": 8222652,
+      "allocations": 43980
+    },
+    {
+      "revision": "optimized",
+      "run": 4,
+      "benchmark": "BenchmarkRender/Deep",
+      "iterations": 447,
+      "ns": 2672422,
+      "bytes": 5742538,
+      "allocations": 39842
+    },
+    {
+      "revision": "optimized",
+      "run": 4,
+      "benchmark": "BenchmarkRenderModules/Small",
+      "iterations": 2732,
+      "ns": 431503,
+      "bytes": 1394276,
+      "allocations": 3484
+    },
+    {
+      "revision": "optimized",
+      "run": 4,
+      "benchmark": "BenchmarkRenderModules/Large",
+      "iterations": 326,
+      "ns": 3665791,
+      "bytes": 8868189,
+      "allocations": 44117
+    },
+    {
+      "revision": "optimized",
+      "run": 4,
+      "benchmark": "BenchmarkRenderModules/MultiSurface",
+      "iterations": 46,
+      "ns": 24661496,
+      "bytes": 36754503,
+      "allocations": 215347
+    },
+    {
+      "revision": "optimized",
+      "run": 4,
+      "benchmark": "BenchmarkReceivedNaming",
+      "iterations": 3128,
+      "ns": 382870,
+      "bytes": 831639,
+      "allocations": 4373
+    },
+    {
+      "revision": "optimized",
+      "run": 4,
+      "benchmark": "BenchmarkGenerateCheck",
+      "iterations": 24,
+      "ns": 49353781,
+      "bytes": 100001890,
+      "allocations": 357173
+    },
+    {
+      "revision": "baseline",
+      "run": 4,
+      "benchmark": "BenchmarkRender/Small",
+      "iterations": 2248,
+      "ns": 505409,
+      "bytes": 1705224,
+      "allocations": 3582
+    },
+    {
+      "revision": "baseline",
+      "run": 4,
+      "benchmark": "BenchmarkRender/Large",
+      "iterations": 314,
+      "ns": 3730763,
+      "bytes": 8875851,
+      "allocations": 45630
+    },
+    {
+      "revision": "baseline",
+      "run": 4,
+      "benchmark": "BenchmarkRender/Deep",
+      "iterations": 88,
+      "ns": 13468353,
+      "bytes": 21398338,
+      "allocations": 443653
+    },
+    {
+      "revision": "baseline",
+      "run": 4,
+      "benchmark": "BenchmarkRenderModules/Small",
+      "iterations": 1935,
+      "ns": 598883,
+      "bytes": 1656231,
+      "allocations": 3932
+    },
+    {
+      "revision": "baseline",
+      "run": 4,
+      "benchmark": "BenchmarkRenderModules/Large",
+      "iterations": 231,
+      "ns": 5179505,
+      "bytes": 9921681,
+      "allocations": 49732
+    },
+    {
+      "revision": "baseline",
+      "run": 4,
+      "benchmark": "BenchmarkRenderModules/MultiSurface",
+      "iterations": 40,
+      "ns": 29087965,
+      "bytes": 40993351,
+      "allocations": 226242
+    },
+    {
+      "revision": "baseline",
+      "run": 4,
+      "benchmark": "BenchmarkReceivedNaming",
+      "iterations": 100,
+      "ns": 10995393,
+      "bytes": 15878399,
+      "allocations": 408070
+    },
+    {
+      "revision": "baseline",
+      "run": 4,
+      "benchmark": "BenchmarkGenerateCheck",
+      "iterations": 19,
+      "ns": 53438261,
+      "bytes": 104413618,
+      "allocations": 368084
+    },
+    {
+      "revision": "baseline",
+      "run": 5,
+      "benchmark": "BenchmarkRender/Small",
+      "iterations": 2205,
+      "ns": 510431,
+      "bytes": 1704884,
+      "allocations": 3581
+    },
+    {
+      "revision": "baseline",
+      "run": 5,
+      "benchmark": "BenchmarkRender/Large",
+      "iterations": 319,
+      "ns": 3757019,
+      "bytes": 8872848,
+      "allocations": 45629
+    },
+    {
+      "revision": "baseline",
+      "run": 5,
+      "benchmark": "BenchmarkRender/Deep",
+      "iterations": 87,
+      "ns": 13619725,
+      "bytes": 21400274,
+      "allocations": 443653
+    },
+    {
+      "revision": "baseline",
+      "run": 5,
+      "benchmark": "BenchmarkRenderModules/Small",
+      "iterations": 1916,
+      "ns": 594060,
+      "bytes": 1655942,
+      "allocations": 3932
+    },
+    {
+      "revision": "baseline",
+      "run": 5,
+      "benchmark": "BenchmarkRenderModules/Large",
+      "iterations": 231,
+      "ns": 5169648,
+      "bytes": 9918793,
+      "allocations": 49730
+    },
+    {
+      "revision": "baseline",
+      "run": 5,
+      "benchmark": "BenchmarkRenderModules/MultiSurface",
+      "iterations": 40,
+      "ns": 28979389,
+      "bytes": 41088475,
+      "allocations": 226282
+    },
+    {
+      "revision": "baseline",
+      "run": 5,
+      "benchmark": "BenchmarkReceivedNaming",
+      "iterations": 100,
+      "ns": 10991312,
+      "bytes": 15878392,
+      "allocations": 408070
+    },
+    {
+      "revision": "baseline",
+      "run": 5,
+      "benchmark": "BenchmarkGenerateCheck",
+      "iterations": 19,
+      "ns": 53257664,
+      "bytes": 104303462,
+      "allocations": 368080
+    },
+    {
+      "revision": "optimized",
+      "run": 5,
+      "benchmark": "BenchmarkRender/Small",
+      "iterations": 3084,
+      "ns": 357410,
+      "bytes": 1082426,
+      "allocations": 3334
+    },
+    {
+      "revision": "optimized",
+      "run": 5,
+      "benchmark": "BenchmarkRender/Large",
+      "iterations": 337,
+      "ns": 3515662,
+      "bytes": 8215736,
+      "allocations": 43980
+    },
+    {
+      "revision": "optimized",
+      "run": 5,
+      "benchmark": "BenchmarkRender/Deep",
+      "iterations": 446,
+      "ns": 2641798,
+      "bytes": 5743288,
+      "allocations": 39842
+    },
+    {
+      "revision": "optimized",
+      "run": 5,
+      "benchmark": "BenchmarkRenderModules/Small",
+      "iterations": 2788,
+      "ns": 428486,
+      "bytes": 1394595,
+      "allocations": 3484
+    },
+    {
+      "revision": "optimized",
+      "run": 5,
+      "benchmark": "BenchmarkRenderModules/Large",
+      "iterations": 328,
+      "ns": 3638402,
+      "bytes": 8869217,
+      "allocations": 44117
+    },
+    {
+      "revision": "optimized",
+      "run": 5,
+      "benchmark": "BenchmarkRenderModules/MultiSurface",
+      "iterations": 48,
+      "ns": 24661507,
+      "bytes": 36709914,
+      "allocations": 215406
+    },
+    {
+      "revision": "optimized",
+      "run": 5,
+      "benchmark": "BenchmarkReceivedNaming",
+      "iterations": 3085,
+      "ns": 386810,
+      "bytes": 831640,
+      "allocations": 4373
+    },
+    {
+      "revision": "optimized",
+      "run": 5,
+      "benchmark": "BenchmarkGenerateCheck",
+      "iterations": 24,
+      "ns": 49556802,
+      "bytes": 100027830,
+      "allocations": 357243
+    }
+  ],
+  "output_identity": {
+    "all_baseline_optimized_hashes_match": true,
+    "manifest_and_output_hashes": [
+      {
+        "workload": "Small",
+        "artifact": "manifest",
+        "bytes": 42242,
+        "sha256": "783c02cc5dd070b8e5201528ed37c0285ef65efd6a6d08991148ee8ec357da88"
+      },
+      {
+        "workload": "Small",
+        "artifact": "inlined",
+        "bytes": 200901,
+        "sha256": "230c3cefc77eaa7fbacc2505b41e07a8533c955e5c7e375f7c3eec423063f0c8"
+      },
+      {
+        "workload": "Small",
+        "artifact": "api_foundry.gen.ts",
+        "bytes": 101062,
+        "sha256": "326d345c4c702e4023207682d8ed2ff82c171a0e52dec40ee5d26e0356da8a06"
+      },
+      {
+        "workload": "Small",
+        "artifact": "api_runtime_foundry.gen.ts",
+        "bytes": 84470,
+        "sha256": "320809004634e61403f68c70430069ecfde83522bb9af2e2d83383383c9619f2"
+      },
+      {
+        "workload": "Small",
+        "artifact": "api_runtime_realtime_foundry.gen.ts",
+        "bytes": 18275,
+        "sha256": "5aa8775e378f84767c1aead839df5d21b59556ddfd833e80c1c128d988abb204"
+      },
+      {
+        "workload": "Large",
+        "artifact": "manifest",
+        "bytes": 598322,
+        "sha256": "e6b525b0ce9f2924ecb0b63a3de39b919c48c47b8f378402304344b117681e8f"
+      },
+      {
+        "workload": "Large",
+        "artifact": "inlined",
+        "bytes": 823581,
+        "sha256": "992eb0d3d7f8e5215d41cca0a24ec698e8ad977f92d75208f841178eee89f1a5"
+      },
+      {
+        "workload": "Large",
+        "artifact": "api_foundry.gen.ts",
+        "bytes": 723742,
+        "sha256": "8c222c7444eb23488c30d636376eaba75542e2f74af27c2007895f108b2abffd"
+      },
+      {
+        "workload": "Large",
+        "artifact": "api_runtime_foundry.gen.ts",
+        "bytes": 84470,
+        "sha256": "320809004634e61403f68c70430069ecfde83522bb9af2e2d83383383c9619f2"
+      },
+      {
+        "workload": "Large",
+        "artifact": "api_runtime_realtime_foundry.gen.ts",
+        "bytes": 18275,
+        "sha256": "5aa8775e378f84767c1aead839df5d21b59556ddfd833e80c1c128d988abb204"
+      },
+      {
+        "workload": "MultiSurface",
+        "artifact": "manifest",
+        "bytes": 598322,
+        "sha256": "e6b525b0ce9f2924ecb0b63a3de39b919c48c47b8f378402304344b117681e8f"
+      },
+      {
+        "workload": "MultiSurface",
+        "artifact": "inlined",
+        "bytes": 823581,
+        "sha256": "992eb0d3d7f8e5215d41cca0a24ec698e8ad977f92d75208f841178eee89f1a5"
+      },
+      {
+        "workload": "MultiSurface",
+        "artifact": "api_foundry.gen.ts",
+        "bytes": 723742,
+        "sha256": "8c222c7444eb23488c30d636376eaba75542e2f74af27c2007895f108b2abffd"
+      },
+      {
+        "workload": "MultiSurface",
+        "artifact": "api_portal0_foundry.gen.ts",
+        "bytes": 155849,
+        "sha256": "c26ac37aa033b0b24264aad2fa8ab902fc2e7b2f8abf38bb922736cbc078ac96"
+      },
+      {
+        "workload": "MultiSurface",
+        "artifact": "api_portal1_foundry.gen.ts",
+        "bytes": 156694,
+        "sha256": "7ce8a32f67db64cd1913213102606d1636258b647d04d59c56d52df013064113"
+      },
+      {
+        "workload": "MultiSurface",
+        "artifact": "api_portal2_foundry.gen.ts",
+        "bytes": 156694,
+        "sha256": "5e3861910e6f5f34a81e0be69b2aec68ca7da0d49e8ded5ada3b152da316bb7c"
+      },
+      {
+        "workload": "MultiSurface",
+        "artifact": "api_portal3_foundry.gen.ts",
+        "bytes": 156694,
+        "sha256": "8c74e7c3319fa1a3cb97d5657006caede5237cb23feb242cdfcfc5a1ad542674"
+      },
+      {
+        "workload": "MultiSurface",
+        "artifact": "api_portal4_foundry.gen.ts",
+        "bytes": 155849,
+        "sha256": "3cc6fc23333cabd45c120de32d01c557e90ba87aebbabeded70f1153f559be61"
+      },
+      {
+        "workload": "MultiSurface",
+        "artifact": "api_portal5_foundry.gen.ts",
+        "bytes": 156694,
+        "sha256": "03fbf03c4b3722d090e3459064a45c06d493222c28daea162c0536272245b007"
+      },
+      {
+        "workload": "MultiSurface",
+        "artifact": "api_portal6_foundry.gen.ts",
+        "bytes": 156694,
+        "sha256": "9b4433bcf8fd9e02e45a195381ceed5158abcf8b99cf6391a9e044cf2be5bd10"
+      },
+      {
+        "workload": "MultiSurface",
+        "artifact": "api_portal7_foundry.gen.ts",
+        "bytes": 156694,
+        "sha256": "7251817a9a6f41a3bb3860097053e934f2ce9009ea994208243a3f42b5a0703a"
+      },
+      {
+        "workload": "MultiSurface",
+        "artifact": "api_runtime_foundry.gen.ts",
+        "bytes": 84470,
+        "sha256": "320809004634e61403f68c70430069ecfde83522bb9af2e2d83383383c9619f2"
+      },
+      {
+        "workload": "MultiSurface",
+        "artifact": "api_runtime_realtime_foundry.gen.ts",
+        "bytes": 18275,
+        "sha256": "5aa8775e378f84767c1aead839df5d21b59556ddfd833e80c1c128d988abb204"
+      },
+      {
+        "workload": "Deep",
+        "artifact": "manifest",
+        "bytes": 299552,
+        "sha256": "45fc68154192befb3ff959acee8eb87f95c0036540d92ef47cf191c5ca2f8f6e"
+      },
+      {
+        "workload": "Deep",
+        "artifact": "inlined",
+        "bytes": 598800,
+        "sha256": "24c6eead4312e704ac8ae7bcf1a57ec47356371136cda12a7ddba9460e9e2443"
+      },
+      {
+        "workload": "Deep",
+        "artifact": "api_foundry.gen.ts",
+        "bytes": 498961,
+        "sha256": "e266088e8d8e0da78ce9c26dc77ff7bb37406fea3915c81f9cbbf5b532d8ab1d"
+      },
+      {
+        "workload": "Deep",
+        "artifact": "api_runtime_foundry.gen.ts",
+        "bytes": 84470,
+        "sha256": "320809004634e61403f68c70430069ecfde83522bb9af2e2d83383383c9619f2"
+      },
+      {
+        "workload": "Deep",
+        "artifact": "api_runtime_realtime_foundry.gen.ts",
+        "bytes": 18275,
+        "sha256": "5aa8775e378f84767c1aead839df5d21b59556ddfd833e80c1c128d988abb204"
+      }
+    ]
+  },
+  "source_audit": [
+    "Reverse-edge walks preserve enum/locale reachability, cycles, received naming and collision order.",
+    "Only immutable embedded runtime text is cached; each application manifest, names and output remain instance-owned.",
+    "Existing manifest.Project remains the owner of surface projection and validation.",
+    "Public signatures, runtime TypeScript sources, OpenAPI, publication ownership/limits/recovery are unchanged."
+  ],
+  "verification": [
+    {
+      "log": "verify.log",
+      "command": [
+        "make",
+        "verify"
+      ],
+      "directory": ".",
+      "exit_code": 0,
+      "elapsed_seconds": 574.9
+    },
+    {
+      "log": "renderer-race.log",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-count=1",
+        "-timeout=20m",
+        "./typescript",
+        "./contract/manifest",
+        "./openapi"
+      ],
+      "directory": ".",
+      "exit_code": 0,
+      "elapsed_seconds": 20.47
+    },
+    {
+      "log": "typescript-check.log",
+      "command": [
+        "make",
+        "typescript-check"
+      ],
+      "directory": ".",
+      "exit_code": 0,
+      "elapsed_seconds": 4.47
+    },
+    {
+      "log": "client-race.log",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-count=1",
+        "-timeout=20m",
+        "./clientcontracts"
+      ],
+      "directory": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "elapsed_seconds": 63.4
+    },
+    {
+      "command": [
+        "make",
+        "benchmark-typescript",
+        "TYPESCRIPT_BENCH_TIME=100ms",
+        "TYPESCRIPT_BENCH_COUNT=1"
+      ],
+      "directory": ".",
+      "exit_code": 0,
+      "elapsed_seconds": 2.14,
+      "log": "benchmark-target.log",
+      "purpose": "Makefile target smoke; excluded from comparison medians"
+    }
+  ],
+  "limits": [
+    "Synthetic valid declarations represent scale and reference shape; application declaration and manifest discovery are excluded.",
+    "Renderer benchmarks exclude OpenAPI and filesystem work; GenerateCheck includes OpenAPI, manifest export and current-file checking after initial publication.",
+    "Timings describe warm repeated rendering, not CLI process startup, first-use initialization or fresh-file publication.",
+    "Allocation figures are bytes allocated per operation, not peak RSS or retained memory."
+  ],
+  "verification_conditions": {
+    "native": true,
+    "warm_cache": true,
+    "GOFLAGS": "-p=1",
+    "GOMEMLIMIT": "4GiB",
+    "FOUNDRY_TEST_POSTGRES_REQUIRED": "1",
+    "FOUNDRY_TEST_TYPESCRIPT_REQUIRED": "1",
+    "gopls": "Existing approved bin/gopls",
+    "node": "Existing native v24.21.0",
+    "typescript": "Existing tools/typescript/node_modules/typescript/lib/tsc.js",
+    "database": "Existing private configuration, isolated non-destructive test data; no credentials retained",
+    "source_matches_measurement_and_verification": true,
+    "source_input_count": 4410,
+    "source_inputs_sha256": "a57109d0486ffedb48e10eafa3e06d9491b7c192cad2ab7ab58940fa80ff937a"
+  }
+}

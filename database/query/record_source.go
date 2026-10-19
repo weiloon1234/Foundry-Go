@@ -8,10 +8,11 @@ import (
 // RecordQuerySource exposes a complete model or declared projection as a typed
 // SELECT source. Its record type remains separate from the input query scope.
 type RecordQuerySource[R any] interface{ recordQuery() recordQuery[R] }
+
 type recordQuery[R any] struct {
 	_            [0]*R
 	node         selectNode
-	columns      []Column
+	columns      []columnData
 	scan         func(database.Row) (R, error)
 	fields       []RecordField[R]
 	lifecycle    *readLifecycle[R]
@@ -29,13 +30,14 @@ func (q Query[M]) recordQuery() recordQuery[M] {
 		r.err = fault.New(fault.Invalid, "record sources require model metadata without eager-loading options")
 		return r
 	}
-	r.node, r.columns = q.modelSelect(), q.definition.columns
+	r.node, r.columns = q.modelSelect(), q.definition.modelDefinition.Columns
 	r.scan = q.definition.scan
 	r.fields = q.definition.modelFields
 	r.lifecycle = q.definition.retrieval()
-	r.directSource = len(r.node.predicates) == 0 && len(q.orders) == 0 && !q.limit.IsSet() && q.offset == 0
+	r.directSource = len(r.node.Predicates) == 0 && len(q.queryCore.Orders) == 0 && !q.queryCore.Limit.IsSet() && q.queryCore.Offset == 0
 	return r
 }
+
 func (q ProjectionQuery[S, P]) recordQuery() recordQuery[P] {
 	node, err := q.selectNode()
 	metadata := q.recordMetadata()

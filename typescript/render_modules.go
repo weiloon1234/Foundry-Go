@@ -50,6 +50,33 @@ func withoutModuleLines(data []byte) []byte {
 	return out.Bytes()
 }
 
+type runtimeText struct {
+	inline  []byte
+	imports []string
+}
+
+// Embedded runtime text is immutable and independent of any application.
+// Parse its wiring once; entries copy text into their own output buffers.
+var runtimeTexts = sync.OnceValues(func() (map[string]runtimeText, error) {
+	result := make(map[string]runtimeText)
+	for _, name := range slices.Concat(coreSources, []string{realtimeSource}, entrySources) {
+		data, err := runtimeSource(name)
+		if err != nil {
+			return nil, err
+		}
+		text := runtimeText{inline: withoutModuleLines(data)}
+		for line := range bytes.Lines(data) {
+			if match := importLine.FindSubmatch(bytes.TrimRight(line, "\n")); match != nil {
+				for imported := range strings.SplitSeq(string(match[2]), ",") {
+					text.imports = append(text.imports, strings.TrimSpace(imported))
+				}
+			}
+		}
+		result[name] = text
+	}
+	return result, nil
+})
+
 // runtimeName describes a top-level runtime declaration: its module, whether it
 // exists at run time, and whether entries re-export it as public API.
 type runtimeName struct {
@@ -130,29 +157,22 @@ func realtimeModule(prefix string) ([]byte, error) {
 // entryModule renders one client entry from a full or projected manifest. It
 // imports exactly the runtime names its code refers to and re-exports the
 // public runtime API; the realtime API is re-exported when exportRealtime.
-func entryModule(prefix string, source *manifest.Manifest, names naming, exportRealtime bool) ([]byte, error) {
-	document, err := source.Snapshot()
-	if err != nil {
-		return nil, err
-	}
+func entryModule(prefix string, source *manifest.Manifest, document manifest.Document, names naming, exportRealtime bool) ([]byte, error) {
 	declared, err := runtimeNames()
 	if err != nil {
 		return nil, err
 	}
 	r := renderer{document: document, naming: names, uses: make(map[string]bool)}
+	texts, err := runtimeTexts()
+	if err != nil {
+		return nil, err
+	}
 	for _, name := range entrySources {
-		data, err := runtimeSource(name)
-		if err != nil {
-			return nil, err
+		text := texts[name]
+		for _, imported := range text.imports {
+			r.uses[imported] = true
 		}
-		for line := range bytes.Lines(data) {
-			if match := importLine.FindSubmatch(bytes.TrimRight(line, "\n")); match != nil {
-				for imported := range strings.SplitSeq(string(match[2]), ",") {
-					r.uses[strings.TrimSpace(imported)] = true
-				}
-			}
-		}
-		r.out.Write(withoutModuleLines(data))
+		r.out.Write(text.inline)
 		r.out.WriteByte('\n')
 	}
 	if err := r.body(source); err != nil {
@@ -216,7 +236,7 @@ func renderModules(source *manifest.Manifest, prefix string, surfaces []Surface)
 		return nil, err
 	}
 	// The full entry keeps its complete public API, including realtime types.
-	if files[prefix+"_foundry.gen.ts"], err = entryModule(prefix, source, names, true); err != nil {
+	if files[prefix+"_foundry.gen.ts"], err = entryModule(prefix, source, document, names, true); err != nil {
 		return nil, err
 	}
 	for _, surface := range surfaces {
@@ -228,7 +248,7 @@ func renderModules(source *manifest.Manifest, prefix string, surfaces []Surface)
 		if err != nil {
 			return nil, err
 		}
-		if files[prefix+"_"+surface.Name+"_foundry.gen.ts"], err = entryModule(prefix, projected, names, view.Realtime != nil); err != nil {
+		if files[prefix+"_"+surface.Name+"_foundry.gen.ts"], err = entryModule(prefix, projected, view, names, view.Realtime != nil); err != nil {
 			return nil, err
 		}
 	}

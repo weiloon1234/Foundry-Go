@@ -20,7 +20,7 @@ func TestRelationBindingsAndCapturedValues(t *testing.T) {
 	r := testRelation(q, q)
 	captured := q.With(&r)
 	r = r.Where(field.Eq(1))
-	if len(captured.relations[0].(OneRelation[cursorRecord, cursorRecord]).spec.target.predicates) != 0 {
+	if len(captured.relations[0].(OneRelation[cursorRecord, cursorRecord]).spec.target.queryCore.Predicates) != 0 {
 		t.Fatal("With retained caller's mutable descriptor pointer")
 	}
 	if err := q.With(r).Validate(); err != nil {

@@ -554,6 +554,44 @@ run `make typescript-check`. Set `FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1` with both
 paths for the full `make verify` acceptance gate. Installation is tooling only;
 generated clients have no npm runtime dependency.
 
+`make benchmark-typescript` measures the Go renderer with validated frozen
+manifests: 8 DTOs/16 routes, 128 DTOs/256 routes, eight client surfaces over the
+larger manifest, and a 512-object reference chain ending in an enum. It also
+isolates schema naming for that chain. Manifest construction, OpenAPI and
+filesystem publication are outside the renderer's timed loops. A separate
+`BenchmarkGenerateCheck` includes the larger manifest's eight surfaces, OpenAPI,
+manifest JSON and the publisher's read-only current-file check. Initial
+publication is outside its timed loop. The default is five
+one-second samples; `TYPESCRIPT_BENCH_COUNT` and `TYPESCRIPT_BENCH_TIME` override
+those settings. The fixture test checks repeat output and logs complete output
+hashes with `go test -v ./typescript -run '^TestRenderPerformanceFixtures$'`.
+Received-type naming walks the schema graph's reverse references once for enum
+values and once for locale-keyed maps. Recursive DTOs and shared references keep
+their existing names and tolerant decoding rules. Embedded runtime text is
+parsed once per process; each render owns its output and manifest snapshot.
+Surface selection and validation remain in `manifest.Project`.
+
+Five alternating one-second native samples on an Apple M4 Max, Go 1.27.1,
+darwin/arm64 and `GOMAXPROCS=16` measured these medians:
+
+| Workload | Before | After | Less time | Less allocated bytes |
+| --- | ---: | ---: | ---: | ---: |
+| Inlined client, 8 DTOs/16 routes | 0.504 ms | 0.360 ms | 28.5% | 36.5% |
+| Inlined client, 128 DTOs/256 routes | 3.731 ms | 3.501 ms | 6.2% | 7.3% |
+| Inlined client, 512-object chain | 13.468 ms | 2.632 ms | 80.5% | 73.2% |
+| Module renderer, small manifest | 0.599 ms | 0.434 ms | 27.5% | 15.8% |
+| Module renderer, large manifest | 5.170 ms | 3.638 ms | 29.6% | 10.6% |
+| Module renderer, eight surfaces | 28.574 ms | 24.397 ms | 14.6% | 10.5% |
+| Schema naming, 512-object chain | 10.960 ms | 0.382 ms | 96.5% | 94.8% |
+| Complete generation check, eight surfaces | 53.438 ms | 49.354 ms | 7.6% | 4.1% |
+
+All fixture output hashes matched the original renderer, including full/surface
+entries and shared runtime modules. These are steady-state rendering measurements;
+CLI startup, first-use initialization and fresh-file publication are not timed.
+Allocated bytes describe allocation volume, not peak memory. Exact samples,
+output hashes, source fingerprints and verification are in the
+[performance evidence](../evidence/typescript-performance-20261011.json).
+
 Inbound idempotency uses the [same runtime policy](idempotent-operations.md) for its
 required typed client key and safe outcomes. Version 3 readers must regenerate.
 

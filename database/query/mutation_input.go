@@ -12,11 +12,11 @@ import (
 // codec; the stored result's codec owns final validation and binding. Ordinary
 // application code uses its generated draft's typed setter.
 func AssignInput[M, I any](table, column string, input I) Assignment[M] {
-	return Assignment[M]{field: fieldRef{table, column}, assignmentValue: captureInput(input)}
+	return Assignment[M]{mutationAssignment: mutationAssignment{Field: fieldRef{Table: table, Column: column}, AssignmentValue: captureInput(input)}}
 }
 
 func captureInput[I any](input I) assignmentValue {
-	return assignmentValue{value: input, bind: func() (driver.Value, error) {
+	return assignmentValue{Value: input, Bind: func() (driver.Value, error) {
 		return nil, fault.New(fault.Invalid, "mutation input must be transformed before SQL binding")
 	}}
 }
@@ -25,13 +25,13 @@ func captureInput[I any](input I) assignmentValue {
 // snapshot ownership only: binding, decoding, validation and the field mutator
 // do not run until their ordinary lifecycle phase.
 func AssignClonedInput[M, I any](table, column string, c codec.Codec[I], input I) Assignment[M] {
-	return Assignment[M]{field: fieldRef{table, column}, assignmentValue: captureClonedInput(c, input)}
+	return Assignment[M]{mutationAssignment: mutationAssignment{Field: fieldRef{Table: table, Column: column}, AssignmentValue: captureClonedInput(c, input)}}
 }
 
 func captureClonedInput[I any](c codec.Codec[I], input I) assignmentValue {
 	input = c.Clone(input)
 	a := captureInput(input)
-	a.copyValue = func() any { return c.Clone(input) }
+	a.CopyValue = func() any { return c.Clone(input) }
 	return a
 }
 
@@ -49,13 +49,13 @@ type MutationInputField[M, I any] struct {
 // supplies the table/column from the existing model metadata; no input codec or
 // additional application configuration is required.
 func NewMutationInputField[M, I any](table, column string) MutationInputField[M, I] {
-	return MutationInputField[M, I]{ref: fieldRef{table, column}}
+	return MutationInputField[M, I]{ref: fieldRef{Table: table, Column: column}}
 }
 
 // NewClonedMutationInputField declares the same input capability with codec
 // ownership for mutable inputs. It does not enable binding the input to SQL.
 func NewClonedMutationInputField[M, I any](table, column string, c codec.Codec[I]) MutationInputField[M, I] {
-	return MutationInputField[M, I]{ref: fieldRef{table, column}, cloneCodec: &c}
+	return MutationInputField[M, I]{ref: fieldRef{Table: table, Column: column}, cloneCodec: &c}
 }
 
 // Set captures fresh input for a conflict literal. The normal mutation pipeline

@@ -36,7 +36,7 @@ func TestChunkPlanPreservesWindowAndOwnsProgress(t *testing.T) {
 	if more, err := p.advance([]cursorRecord{{ID: 8}}); err != nil || more {
 		t.Fatal("limit not exhausted", err)
 	}
-	if len(q.orders) != 0 || q.offset != 5 {
+	if len(q.queryCore.Orders) != 0 || q.queryCore.Offset != 5 {
 		t.Fatal("chunk mutated original query")
 	}
 	id := NewOrderedField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
@@ -58,7 +58,7 @@ func TestChunkPlanPreservesWindowAndOwnsProgress(t *testing.T) {
 		if _, err := keyed.advance([]cursorRecord{{ID: int64(7 - i)}, {ID: int64(6 - i)}}); err != nil {
 			t.Fatal(err)
 		}
-		if len(keyed.window().predicates) != 2 {
+		if len(keyed.window().queryCore.Predicates) != 2 {
 			t.Fatal("key predicates accumulated across chunks")
 		}
 	}

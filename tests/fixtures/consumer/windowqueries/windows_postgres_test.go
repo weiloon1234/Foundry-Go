@@ -41,7 +41,7 @@ func ranking() query.ProjectionQuery[models.Order, windowqueries.RankingRow] {
 	peers := query.WindowFor(base).PartitionBy(o.BuyerID.Group()).OrderBy(o.TotalCents.Asc())
 	ordered := peers.OrderBy(o.ID.Asc())
 	return windowqueries.SelectRankingRow(base, windowqueries.RankingRowSelection[models.Order]{
-		ID: o.ID.Value(), BuyerID: o.BuyerID.Value(), Number: query.RowNumber(ordered),
+		ID: query.Value(o.ID), BuyerID: query.Value(o.BuyerID), Number: query.RowNumber(ordered),
 		Rank: query.Rank(peers), Dense: query.DenseRank(peers), Percent: query.PercentRank(peers),
 		Cumulative: query.CumeDist(peers), Bucket: query.NTile(2, ordered),
 	}).OrderBy(o.BuyerID.Asc(), o.TotalCents.Asc(), o.ID.Asc())
@@ -135,7 +135,7 @@ func TestPostgresWindowFramesAndAggregates(t *testing.T) {
 			{"restore exclusion", peers.ExcludeTies().ExcludeNone(), []string{"1", "5", "5", "8"}, []int64{1, 3, 3, 4}},
 			{"legal empty frame", ordered.RowsBetween(query.Preceding(7), query.Preceding(8)), []string{"", "", "", ""}, []int64{0, 0, 0, 0}},
 		} {
-			q := windowqueries.SelectWindowTotal(base, windowqueries.WindowTotalSelection[models.Order]{Amount: o.TotalCents.Value(), Running: o.TotalCents.Sum().Over(test.window), Count: query.Count[models.Order]().Over(test.window), Any: query.Exists[models.Order]().Over(test.window)}).OrderBy(o.TotalCents.Asc(), o.ID.Asc())
+			q := windowqueries.SelectWindowTotal(base, windowqueries.WindowTotalSelection[models.Order]{Amount: query.Value(o.TotalCents), Running: query.Sum(o.TotalCents).Over(test.window), Count: query.Count[models.Order]().Over(test.window), Any: query.Exists[models.Order]().Over(test.window)}).OrderBy(o.TotalCents.Asc(), o.ID.Asc())
 			rows, err := q.All(t.Context(), tx)
 			if err != nil {
 				return err
@@ -151,7 +151,7 @@ func TestPostgresWindowFramesAndAggregates(t *testing.T) {
 			}
 		}
 		whole := ordered.RowsBetween(query.UnboundedPreceding(), query.UnboundedFollowing())
-		average := o.TotalCents.Avg().Over(whole)
+		average := query.Avg(o.TotalCents).Over(whole)
 		if v, err := query.SelectValue(base, average).RequireFirst(t.Context(), tx); err != nil || !reflect.DeepEqual(v, value.Of(decimal.FromInt64(2))) {
 			t.Fatal("exact window average lost decimal codec", err)
 		}
@@ -166,7 +166,7 @@ func TestPostgresWindowNavigationAndNullability(t *testing.T) {
 		ordered := query.WindowFor(base).OrderBy(o.TotalCents.Asc(), o.ID.Asc())
 		whole := ordered.RowsBetween(query.UnboundedPreceding(), query.UnboundedFollowing())
 		single := ordered.RowsBetween(query.CurrentRow(), query.CurrentRow())
-		q := windowqueries.SelectNavigationRow(base, windowqueries.NavigationRowSelection[models.Order]{Amount: o.TotalCents.Value(), Previous: query.Lag(o.TotalCents.Value(), 1, single), Next: query.Lead(o.TotalCents.Value(), 1, single), Fallback: query.LagOr(o.TotalCents.Value(), 1, int64(99), single), First: query.FirstValue(o.TotalCents.Value(), whole), Last: query.LastValue(o.TotalCents.Value(), whole), Nth: query.NthValue(o.TotalCents.Value(), 2, whole)}).OrderBy(o.TotalCents.Asc(), o.ID.Asc())
+		q := windowqueries.SelectNavigationRow(base, windowqueries.NavigationRowSelection[models.Order]{Amount: query.Value(o.TotalCents), Previous: query.Lag(query.Value(o.TotalCents), 1, single), Next: query.Lead(query.Value(o.TotalCents), 1, single), Fallback: query.LagOr(query.Value(o.TotalCents), 1, int64(99), single), First: query.FirstValue(query.Value(o.TotalCents), whole), Last: query.LastValue(query.Value(o.TotalCents), whole), Nth: query.NthValue(query.Value(o.TotalCents), 2, whole)}).OrderBy(o.TotalCents.Asc(), o.ID.Asc())
 		rows, err := q.All(t.Context(), tx)
 		if err != nil {
 			return err
@@ -181,17 +181,17 @@ func TestPostgresWindowNavigationAndNullability(t *testing.T) {
 				t.Fatal("navigation ignored partition/frame/absence distinction", row)
 			}
 		}
-		if values, err := query.SelectValue(base, query.Lag(o.TotalCents.Value(), -1, ordered)).OrderBy(o.TotalCents.Asc(), o.ID.Asc()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(values, []value.Nullable[int64]{value.Of[int64](2), value.Of[int64](2), value.Of[int64](3), value.Null[int64]()}) {
+		if values, err := query.SelectValue(base, query.Lag(query.Value(o.TotalCents), -1, ordered)).OrderBy(o.TotalCents.Asc(), o.ID.Asc()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(values, []value.Nullable[int64]{value.Of[int64](2), value.Of[int64](2), value.Of[int64](3), value.Null[int64]()}) {
 			t.Fatal("negative lag offset changed direction", err)
 		}
 		u := models.UserFields()
 		people := models.QueryUsers().OrderBy(u.Email.Asc())
 		w := query.WindowFor(people).OrderBy(u.Email.Asc())
-		fallback := query.LagOr(u.Nickname.Value(), 1, value.Of("missing"), w)
+		fallback := query.LagOr(query.Value(u.Nickname), 1, value.Of("missing"), w)
 		if values, err := query.SelectValue(people, fallback).All(t.Context(), tx); err != nil || !reflect.DeepEqual(values, []value.Nullable[string]{value.Of("missing"), value.Null[string](), value.Of("Bee")}) {
 			t.Fatal("fallback replaced an existing NULL", err)
 		}
-		if values, err := query.SelectValue(people, query.LeadNullable(u.Nickname.Value(), 1, w)).All(t.Context(), tx); err != nil || !reflect.DeepEqual(values, []value.Nullable[string]{value.Of("Bee"), value.Null[string](), value.Null[string]()}) {
+		if values, err := query.SelectValue(people, query.LeadNullable(query.Value(u.Nickname), 1, w)).All(t.Context(), tx); err != nil || !reflect.DeepEqual(values, []value.Nullable[string]{value.Of("Bee"), value.Null[string](), value.Null[string]()}) {
 			t.Fatal("nullable lead lost single NULL wrapper", err)
 		}
 		return nil
@@ -205,7 +205,7 @@ func TestPostgresCorrelatedAndRecursiveWindows(t *testing.T) {
 		link := query.Correlate(people, orders)
 		p := models.UserFieldsAt(query.OuterScope(link, people.Scope()))
 		o := models.OrderFieldsAt(query.InnerScope(link, orders.Scope()))
-		counts := query.SelectCorrelatedValue(link, p.ID.Count().Over(query.WindowFor(link).PartitionBy(p.Status.Group()))).Where(o.BuyerID.EqColumn(p.ID)).Limit(1)
+		counts := query.SelectCorrelatedValue(link, query.CountField(p.ID).Over(query.WindowFor(link).PartitionBy(p.Status.Group()))).Where(o.BuyerID.EqColumn(p.ID)).Limit(1)
 		if rows, err := query.SelectValue(people, query.CorrelatedScalarQuery(counts)).OrderBy(models.UserFields().Email.Asc()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(rows, []value.Nullable[int64]{value.Of[int64](4), value.Of[int64](1), value.Null[int64]()}) {
 			t.Fatal("correlated window changed aggregate ownership", err)
 		}
@@ -216,7 +216,7 @@ func TestPostgresCorrelatedAndRecursiveWindows(t *testing.T) {
 			joined := query.InnerJoin(child, parent, query.On(cf.IntroducerID, pf.ID))
 			scope := query.LeftScope(joined, child.Scope())
 			f := models.UserFieldsAt(scope)
-			return query.SelectRecord(joined, scope).OrderBy(f.ID.Count().Over(query.WindowFor(joined)).Asc())
+			return query.SelectRecord(joined, scope).OrderBy(query.CountField(f.ID).Over(query.WindowFor(joined)).Asc())
 		})
 		a := query.As[rankedAlias](tree, "tree_result")
 		if n, err := query.SelectRecord(a, a.Scope()).Count(t.Context(), tx); err != nil || n != 2 {
@@ -230,12 +230,12 @@ func TestInvalidWindowsNeverExecute(t *testing.T) {
 	u := models.UserFields()
 	base := models.QueryUsers()
 	w := query.WindowFor(base).OrderBy(u.Email.Asc())
-	for _, expression := range []query.Expression[models.User, int64]{query.RowNumber(w.OrderBy(query.RowNumber(w).Asc())), query.RowNumber(w.RowsBetween(query.Preceding(-1), query.CurrentRow())), u.ID.CountDistinct().Over(w)} {
+	for _, expression := range []query.Expression[models.User, int64]{query.RowNumber(w.OrderBy(query.RowNumber(w).Asc())), query.RowNumber(w.RowsBetween(query.Preceding(-1), query.CurrentRow())), query.CountDistinctField(u.ID).Over(w)} {
 		if rows, err := query.SelectValue(base, expression).All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid window reached executor", err)
 		}
 	}
-	bad := query.LagOr(u.Status.Value(), 1, models.Status("invalid"), w)
+	bad := query.LagOr(query.Value(u.Status), 1, models.Status("invalid"), w)
 	if rows, err := query.SelectValue(base, bad).All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
 		t.Fatal("invalid enum fallback reached executor", err)
 	}

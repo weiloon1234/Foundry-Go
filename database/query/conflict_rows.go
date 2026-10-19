@@ -2,8 +2,11 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
+
+const conflictProposedTable = querycore.ConflictProposedTable
 
 // ConflictRow is the common expression scope of an upsert's stored and proposed
 // records. It is distinct from the model's ordinary query scope.
@@ -20,7 +23,6 @@ type ConflictRows[M any] struct {
 }
 
 const conflictStoredTable = "foundry_conflict_stored"
-const conflictProposedTable = "excluded"
 
 // ConflictRows obtains model metadata for conflict calculations. Query filters
 // do not become conflict conditions; use the policy's Where or WhereRows.
@@ -48,11 +50,11 @@ func (r ConflictRows[M]) recordScope(table string) RecordScope[ConflictRow[M], M
 }
 
 func (r ConflictRows[M]) scopeSource() queryScope[ConflictRow[M]] {
-	scope := scopeRequirement{err: r.err}
+	scope := scopeRequirement{Err: r.err}
 	if r.record == nil || len(r.record.columns) == 0 {
-		scope.err = fault.New(fault.Invalid, "conflict rows require complete model metadata")
+		scope.Err = fault.New(fault.Invalid, "conflict rows require complete model metadata")
 	} else {
-		scope.sources = map[string][]Column{
+		scope.Sources = map[string][]columnData{
 			conflictStoredTable:   r.record.columns,
 			conflictProposedTable: r.record.columns,
 		}
@@ -85,11 +87,11 @@ func (c Conflict[M]) WhereRows(predicates ...Predicate[ConflictRow[M]]) Conflict
 // ConflictScalarRowQuery evaluates an independent scalar SELECT in a conflict
 // calculation. Zero rows become SQL NULL; multiple rows are a database error.
 func ConflictScalarRowQuery[M, V any](rows ConflictRows[M], inner ValueQuerySource[V]) RowExpression[ConflictRow[M], value.Nullable[V]] {
-	return RowExpression[ConflictRow[M], value.Nullable[V]]{scalarQuery[ConflictRow[M]](inner, rows.scopeSource().err)}
+	return RowExpression[ConflictRow[M], value.Nullable[V]]{scalarQuery[ConflictRow[M]](inner, rows.scopeSource().scopeRequirement.Err)}
 }
 
 // ConflictScalarNullableRowQuery preserves one nullable layer for an independent
 // scalar SELECT whose declared value is already nullable.
 func ConflictScalarNullableRowQuery[M, V any](rows ConflictRows[M], inner ValueQuerySource[value.Nullable[V]]) RowExpression[ConflictRow[M], value.Nullable[V]] {
-	return RowExpression[ConflictRow[M], value.Nullable[V]]{scalarNullableQuery[ConflictRow[M]](inner, rows.scopeSource().err)}
+	return RowExpression[ConflictRow[M], value.Nullable[V]]{scalarNullableQuery[ConflictRow[M]](inner, rows.scopeSource().scopeRequirement.Err)}
 }

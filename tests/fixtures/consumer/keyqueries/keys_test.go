@@ -13,14 +13,14 @@ import (
 
 func buckets() query.ProjectionQuery[models.User, keyqueries.BucketCount] {
 	u := models.UserFields()
-	bucket := query.When(u.Age.Gt(20), u.Age.Param(1)).Else(u.Age.Param(0))
+	bucket := query.When(u.Age.Gt(20), query.Param(u.Age, 1)).Else(query.Param(u.Age, 0))
 	return keyqueries.SelectBucketCount(models.QueryUsers(), keyqueries.BucketCountSelection[models.User]{Bucket: bucket.Value(), Count: query.Count[models.User]().Value()}).GroupBy(bucket.Group()).OrderBy(bucket.Asc())
 }
 
 func TestComputedKeyContracts(t *testing.T) {
 	u := models.UserFields()
 	base := models.QueryUsers()
-	bucket := query.When(u.Age.Gt(20), u.Age.Param(1)).Else(u.Age.Param(0))
+	bucket := query.When(u.Age.Gt(20), query.Param(u.Age, 1)).Else(query.Param(u.Age, 0))
 	selected := bucket.Value()
 	window := query.WindowFor(base).PartitionByValues(selected.Key()).OrderBy(u.Age.Asc())
 	if _, err := query.SelectValue(base, query.RowNumber(window)).Compile(); err != nil {
@@ -30,7 +30,7 @@ func TestComputedKeyContracts(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, invalid := range []query.ValueQuery[models.User, int]{
-		query.SelectValue(base, u.Age.Value()).GroupBy(bucket.Group()),
+		query.SelectValue(base, query.Value(u.Age)).GroupBy(bucket.Group()),
 		query.SelectValue(base, bucket.Value()).GroupBy(bucket.Group(), bucket.Group()),
 		query.SelectValue(base, bucket.Value()).DistinctOn(bucket.Group()).OrderBy(u.Age.Asc()),
 		query.SelectValue(base, bucket.Value()).DistinctOnValues(),
@@ -47,7 +47,7 @@ func TestComputedKeyContracts(t *testing.T) {
 	// A computed cursor key must first become a declared output field.
 	cursor := query.CursorFor(buckets())
 	f := keyqueries.BucketCountFieldsAt(cursor.Scope())
-	if _, err := cursor.OrderBy(f.Bucket.Asc()).UniqueBy(f.Bucket.Param(1).Group()).Compile(); !errors.Is(err, fault.Invalid) {
+	if _, err := cursor.OrderBy(f.Bucket.Asc()).UniqueBy(query.Param(f.Bucket, 1).Group()).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("computed cursor key accepted without a declared output field", err)
 	}
 }

@@ -68,18 +68,18 @@ func TestPostgresNumericCalculations(t *testing.T) {
 	runCalculations(t, func(tx *database.Tx) error {
 		f := scalarqueries.SampleFields()
 		quantity := f.Quantity
-		incremented := query.Add(quantity, quantity.Param(1))
+		incremented := query.Add(quantity, query.Param(quantity, 1))
 		if rows, err := scalarqueries.QueryCalculationSamples().Where(incremented.Gte(3)).All(t.Context(), tx); err != nil || len(rows) != 2 {
 			t.Fatal("typed arithmetic predicate", rows, err)
 		}
-		scalarValues(t, tx, query.Add(quantity, quantity.Param(2)).Value(), []int16{4, 5, -1})
-		scalarValues(t, tx, query.Subtract(quantity, quantity.Param(1)).Value(), []int16{1, 2, -4})
+		scalarValues(t, tx, query.Add(quantity, query.Param(quantity, 2)).Value(), []int16{4, 5, -1})
+		scalarValues(t, tx, query.Subtract(quantity, query.Param(quantity, 1)).Value(), []int16{1, 2, -4})
 		scalarValues(t, tx, query.Multiply(quantity, quantity).Value(), []int16{4, 9, 9})
-		scalarValues(t, tx, query.Divide(quantity, quantity.Param(2)).Value(), []int16{1, 1, -1})
-		scalarValues(t, tx, query.Remainder(quantity, quantity.Param(2)).Value(), []int16{0, 1, -1})
+		scalarValues(t, tx, query.Divide(quantity, query.Param(quantity, 2)).Value(), []int16{1, 1, -1})
+		scalarValues(t, tx, query.Remainder(quantity, query.Param(quantity, 2)).Value(), []int16{0, 1, -1})
 		scalarValues(t, tx, query.Negate(quantity).Value(), []int16{-2, -3, 3})
 		scalarValues(t, tx, query.Abs(quantity).Value(), []int16{2, 3, 3})
-		scalarValues(t, tx, query.Add(f.Score, f.Score.Param(0.25)).Value(), []float32{0.75, 0.5, 1})
+		scalarValues(t, tx, query.Add(f.Score, query.Param(f.Score, 0.25)).Value(), []float32{0.75, 0.5, 1})
 		decimalQuantity := query.DecimalOf(quantity)
 		half, _ := decimal.Parse("1.5")
 		negativeHalf, _ := decimal.Parse("-1.5")
@@ -88,7 +88,7 @@ func TestPostgresNumericCalculations(t *testing.T) {
 		large, _ := decimal.Parse("9007199254740993.2")
 		small, _ := decimal.Parse("1.35")
 		negative, _ := decimal.Parse("-2.4")
-		scalarValues(t, tx, query.Add(f.Amount, f.Amount.Param(tenth)).Value(), []decimal.Decimal{large, small, negative})
+		scalarValues(t, tx, query.Add(f.Amount, query.Param(f.Amount, tenth)).Value(), []decimal.Decimal{large, small, negative})
 		nullable := query.AddNullable(query.NullableRow(f.Amount), f.Tax)
 		withTax, _ := decimal.Parse("9007199254740993.3")
 		lastAmount, _ := decimal.Parse("-2.5")
@@ -96,7 +96,7 @@ func TestPostgresNumericCalculations(t *testing.T) {
 		if rows, err := scalarqueries.QueryCalculationSamples().Where(nullable.Gt(decimal.FromInt64(0))).All(t.Context(), tx); err != nil || len(rows) != 1 || rows[0].ID != 1 {
 			t.Fatal("nullable numeric predicate", rows, err)
 		}
-		two := query.NullableRow(quantity.Param(2))
+		two := query.NullableRow(query.Param(quantity, 2))
 		nq := query.NullableRow(quantity)
 		scalarValues(t, tx, query.SubtractNullable(nq, two).Value(), []value.Nullable[int16]{value.Of(int16(0)), value.Of(int16(1)), value.Of(int16(-5))})
 		scalarValues(t, tx, query.MultiplyNullable(nq, two).Value(), []value.Nullable[int16]{value.Of(int16(4)), value.Of(int16(6)), value.Of(int16(-6))})
@@ -128,7 +128,7 @@ func TestPostgresTextCalculations(t *testing.T) {
 		scalarValues(t, tx, query.Replace(trimmed, trimmed.Param("_20%"), trimmed.Param("done")).Value(), []string{"Élandone", "Beta", ""})
 		scalarValues(t, tx, query.Substring(trimmed, 2, 3).Value(), []string{"lan", "eta", ""})
 		scalarValues(t, tx, query.SubstringFrom(trimmed, 3).Value(), []string{"an_20%", "ta", ""})
-		scalarValues(t, tx, query.SubstringAt(trimmed, f.ID.Param(1), f.ID).Value(), []string{"É", "Be", ""})
+		scalarValues(t, tx, query.SubstringAt(trimmed, query.Param(f.ID, 1), f.ID).Value(), []string{"É", "Be", ""})
 		scalarValues(t, tx, query.LowerNullable(f.Note).Value(), []value.Nullable[string]{value.Null[string](), value.Of("écho"), value.Of("")})
 		scalarValues(t, tx, query.LengthNullable(f.Note).Value(), []value.Nullable[int64]{value.Null[int64](), value.Of(int64(4)), value.Of(int64(0))})
 		scalarValues(t, tx, query.SubstringNullable(f.Note, 2, 2).Value(), []value.Nullable[string]{value.Null[string](), value.Of("ch"), value.Of("")})
@@ -196,8 +196,8 @@ func TestPostgresScalarFailureBoundaries(t *testing.T) {
 			name, state string
 			expr        query.Expression[scalarqueries.Sample, int]
 		}{
-			{"division zero", "22012", query.Divide(f.ID, f.ID.Param(0)).Value()},
-			{"bigint overflow", "22003", query.Add(f.ID.Param(math.MaxInt64), f.ID.Param(1)).Value()},
+			{"division zero", "22012", query.Divide(f.ID, query.Param(f.ID, 0)).Value()},
+			{"bigint overflow", "22003", query.Add(query.Param(f.ID, math.MaxInt64), query.Param(f.ID, 1)).Value()},
 		} {
 			if _, err := query.SelectValue(q, test.expr).Compile(); err != nil {
 				t.Fatal("runtime case failed compilation", test.name, err)
@@ -211,7 +211,7 @@ func TestPostgresScalarFailureBoundaries(t *testing.T) {
 				t.Fatal(test.name, err)
 			}
 		}
-		tooSmall := query.Add(f.Quantity.Param(math.MaxInt16), f.Quantity.Param(1))
+		tooSmall := query.Add(query.Param(f.Quantity, math.MaxInt16), query.Param(f.Quantity, 1))
 		if rows, err := query.SelectValue(q, tooSmall.Value()).All(t.Context(), tx); err == nil || rows != nil {
 			t.Fatal("narrow decode published partial results", rows, err)
 		}

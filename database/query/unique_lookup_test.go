@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"testing"
+
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/fault"
-	"strings"
-	"testing"
 )
 
 type uniqueExecutor struct {
@@ -26,6 +27,7 @@ func (e *uniqueExecutor) Query(_ context.Context, sql string, args ...any) (*dat
 	e.args = append([]any(nil), args...)
 	return nil, e.cause
 }
+
 func TestUniqueLookupMetadataAndParameterizedFailure(t *testing.T) {
 	q := cursorQuery()
 	field := NewOrderedField[cursorRecord, int64]("records", "id", codec.Signed[int64]())

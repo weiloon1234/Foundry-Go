@@ -90,15 +90,15 @@ func (q Query[M]) chunkPlan(size int, byID bool) (chunkPlan[M], error) {
 	if err != nil {
 		return chunkPlan[M]{}, err
 	}
-	p := chunkPlan[M]{base: q, remaining: q.limit, size: size, offset: q.offset, byID: byID}
-	if byID && (q.offset != 0 || len(q.orders) != 1 || q.orders[0].computed != nil || q.orders[0].nulls != nullsDefault || q.orders[0].field.column != q.definition.primary) {
+	p := chunkPlan[M]{base: q, remaining: q.queryCore.Limit, size: size, offset: q.queryCore.Offset, byID: byID}
+	if byID && (q.queryCore.Offset != 0 || len(q.queryCore.Orders) != 1 || q.queryCore.Orders[0].Computed != nil || q.queryCore.Orders[0].Nulls != nullsDefault || q.queryCore.Orders[0].Field.Column != q.definition.modelDefinition.Primary) {
 		return chunkPlan[M]{}, fault.New(fault.Invalid, "primary-key chunks require key ordering and no Offset")
 	}
 	p.keys = q.keysetFields()
 	if byID && p.keys == nil {
 		return chunkPlan[M]{}, fault.New(fault.Invalid, "primary-key chunks require a generated key codec and getter")
 	}
-	p.base.limit = value.Optional[int]{}
+	p.base.queryCore.Limit = value.Optional[int]{}
 	// Validate even an empty selected window before promising successful iteration.
 	if _, err := p.window().Compile(); err != nil {
 		return chunkPlan[M]{}, err
@@ -110,15 +110,15 @@ func (q Query[M]) chunkPlan(size int, byID bool) (chunkPlan[M], error) {
 // plain model field with default NULL placement. Nullable keys use the shared
 // NULL-aware cursor predicate. Nil means the ordering cannot be keyed.
 func (q Query[M]) keysetFields() []ModelField[M] {
-	if q.definition == nil || len(q.orders) == 0 || len(q.orders) > MaxCursorFields {
+	if q.definition == nil || len(q.queryCore.Orders) == 0 || len(q.queryCore.Orders) > MaxCursorFields {
 		return nil
 	}
-	fields := make([]ModelField[M], len(q.orders))
-	for i, order := range q.orders {
-		if order.computed != nil || order.nulls != nullsDefault || order.field.table != q.table {
+	fields := make([]ModelField[M], len(q.queryCore.Orders))
+	for i, order := range q.queryCore.Orders {
+		if order.Computed != nil || order.Nulls != nullsDefault || order.Field.Table != q.queryCore.Table {
 			return nil
 		}
-		field, ok := q.definition.modelField(order.field.column)
+		field, ok := q.definition.modelField(order.Field.Column)
 		if !ok || field.get == nil {
 			return nil
 		}
@@ -137,7 +137,7 @@ func (p chunkPlan[M]) take() int {
 func (p chunkPlan[M]) window() Query[M] {
 	q := p.base.Limit(p.take()).Offset(p.offset)
 	if p.after != nil {
-		q = q.Where(cursorPredicate(q.orders, p.after, q.definition.nullableOrder))
+		q.queryCore.Predicates = append(append([]expression(nil), q.queryCore.Predicates...), cursorPredicate(q.queryCore.Orders, p.after, q.definition.modelDefinition.NullableOrder))
 	}
 	return q
 }
@@ -169,7 +169,7 @@ func (p *chunkPlan[M]) advance(items []M) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		if key == nil && field.column == p.base.definition.primary {
+		if key == nil && field.column == p.base.definition.modelDefinition.Primary {
 			return false, fault.New(fault.Invalid, "model chunk primary key cannot be NULL")
 		}
 		after[i] = key

@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
-var _ = query.NumericRange(query.WindowFor(models.QueryUsers()), models.UserFields().Email.Value())
+var _ = query.NumericRange(query.WindowFor(models.QueryUsers()), query.Value(models.UserFields().Email))

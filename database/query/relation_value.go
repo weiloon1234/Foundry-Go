@@ -20,18 +20,18 @@ import (
 //	pairs, err := query.WithValue(QueryUsers(), orders).All(ctx, db)
 func RelatedValue[M, N, V any](source AggregateSource[M, N], computation AggregateExpression[N, V]) RowExpression[M, V] {
 	if nilDescriptor(source) || nilDescriptor(computation) {
-		return RowExpression[M, V]{Expression[M, V]{node: parameterNode{err: fault.New(fault.Invalid, "related value requires a relationship and computation")}}}
+		return RowExpression[M, V]{Expression[M, V]{node: parameterNode{Err: fault.New(fault.Invalid, "related value requires a relationship and computation")}}}
 	}
 	aggregate := computation.aggregateValue()
 	input := source.aggregateInput()
 	result := RowExpression[M, V]{Expression[M, V]{codec: aggregate.codec}}
 	node, err := relatedValueNode(input, aggregate.node)
 	if err != nil {
-		result.expression.node = parameterNode{err: err}
+		result.expression.node = parameterNode{Err: err}
 		return result
 	}
-	result.expression.node = scalarSubquery{query: subquery{node: node, correlation: &scopeRequirement{
-		sources: map[string][]Column{input.source.table: input.source.definition.columns},
+	result.expression.node = scalarSubquery{Query: subquery{Node: node, Correlation: &scopeRequirement{
+		Sources: map[string][]columnData{input.source.queryCore.Table: input.source.definition.modelDefinition.Columns},
 	}}}
 	return result
 }
@@ -46,34 +46,34 @@ func relatedValueNode[M, N any](input aggregateInput[M, N], measure aggregateNod
 	if err := input.validate(0, DefaultRelationLimits()); err != nil {
 		return selectNode{}, err
 	}
-	field := func(f fieldRef) error { return f.validate(input.inputTable) }
-	if err := measure.validate(field); err != nil {
+	field := func(f fieldRef) error { return f.Validate(input.inputTable) }
+	if err := measure.Validate(field); err != nil {
 		return selectNode{}, err
 	}
 	nodes := 0
-	if err := measure.validateFilter(field, &nodes); err != nil {
+	if err := measure.ValidateFilter(field, &nodes); err != nil {
 		return selectNode{}, err
 	}
 	node := input.selectNode()
-	node.selections, node.orders, node.groupBy = nil, nil, nil
+	node.Selections, node.Orders, node.GroupBy = nil, nil, nil
 	alias, group := input.inputAlias, input.group
 	if input.inputAlias == input.inputTable {
 		names, err := namesInSelects(node)
 		if err != nil {
 			return selectNode{}, err
 		}
-		names.used[input.source.table] = true
-		alias = names.allocate("foundry_related")
-		node.source.alias = alias
-		predicates := make([]expression, len(node.predicates))
-		for i, predicate := range node.predicates {
+		names.Used[input.source.queryCore.Table] = true
+		alias = names.Allocate("foundry_related")
+		node.Source.Alias = alias
+		predicates := make([]expression, len(node.Predicates))
+		for i, predicate := range node.Predicates {
 			predicates[i] = requalify(predicate, alias)
 		}
-		node.predicates = predicates
-		group = fieldRef{alias, input.group.column}
+		node.Predicates = predicates
+		group = fieldRef{Table: alias, Column: input.group.Column}
 	}
-	node.selections = []selectItem{{expression: requalifyAggregate(measure, alias)}}
-	node.predicates = append(node.predicates, binaryComparison{left: group, right: input.local, operator: equal})
+	node.Selections = []selectItem{{Expression: requalifyAggregate(measure, alias)}}
+	node.Predicates = append(node.Predicates, binaryComparison{Left: group, Right: input.local, Operator: equal})
 	return node, nil
 }
 
@@ -107,8 +107,8 @@ func (q AnnotatedQuery[M, V]) reader() readResult[Annotated[M, V]] {
 		return r
 	}
 	r.node = q.query.modelSelect()
-	r.node.selections = append(r.node.selections, selectItem{expression: q.value.expression.node, alias: "foundry_value"})
-	columns := len(definition.columns)
+	r.node.Selections = append(r.node.Selections, selectItem{Expression: q.value.expression.node, Alias: "foundry_value"})
+	columns := len(definition.modelDefinition.Columns)
 	codec := q.value.expression.codec
 	r.scan = func(row database.Row) (Annotated[M, V], error) {
 		model, err := definition.scan(partitionedRow{row, 0, columns, columns + 1})

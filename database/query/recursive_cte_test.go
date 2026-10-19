@@ -123,7 +123,7 @@ func TestRecursiveCTERejectsSelfPlacement(t *testing.T) {
 			a := As[firstAlias](self, "a")
 			id := scopedID(a.Scope())
 			rank := NewNullableField[Alias[firstAlias, cursorRecord], int64]("a", "rank", codec.Signed[int64]())
-			return SelectRecord(a, a.Scope()).GroupBy(id.Group(), rank.Group()).OrderBy(id.Count().Asc())
+			return SelectRecord(a, a.Scope()).GroupBy(id.Group(), rank.Group()).OrderBy(CountField(id).Asc())
 		},
 		"later nullable join": func(self RecursiveSelf[cursorRecord]) RecordQuerySource[cursorRecord] {
 			a, b, c := As[firstAlias](self, "a"), As[secondAlias](base, "b"), As[thirdAlias](base, "c")
@@ -148,19 +148,19 @@ func TestRecursiveCTESharedBoundsAndMalformedAST(t *testing.T) {
 		t.Fatal("recursive definitions bypassed shared parameter budget", err)
 	}
 	cyclic := RecursiveCTE("cyclic", base, recursiveRecordStep)
-	node := &cyclic.definition.recursion.step
-	node.source = tableSource{alias: "loop", columns: cyclic.definition.columns, query: node}
+	node := &cyclic.definition.Recursion.Step
+	node.Source = tableSource{Alias: "loop", Columns: cyclic.definition.Columns, Query: node}
 	if _, err := compileRecursiveRecords(cyclic); !errors.Is(err, fault.Invalid) {
 		t.Fatal("private recursive AST cycle was not bounded", err)
 	}
 	for _, mutate := range []func(*recursiveCTE){
-		func(r *recursiveCTE) { r.reference = nil },
-		func(r *recursiveCTE) { r.operator = intersectSet },
-		func(r *recursiveCTE) { r.step.selections = nil },
-		func(r *recursiveCTE) { r.reference = &recursiveReference{name: "wrong", columns: r.reference.columns} },
+		func(r *recursiveCTE) { r.Reference = nil },
+		func(r *recursiveCTE) { r.Operator = intersectSet },
+		func(r *recursiveCTE) { r.Step.Selections = nil },
+		func(r *recursiveCTE) { r.Reference = &recursiveReference{Name: "wrong", Columns: r.Reference.Columns} },
 	} {
 		d := RecursiveCTE("malformed", base, recursiveRecordStep)
-		mutate(d.definition.recursion)
+		mutate(d.definition.Recursion)
 		if _, err := compileRecursiveRecords(d); !errors.Is(err, fault.Invalid) {
 			t.Fatal("malformed recursive declaration accepted", err)
 		}
@@ -180,7 +180,7 @@ func TestRecursiveCTEDependenciesAndAliasAnalysis(t *testing.T) {
 		t.Fatal("recursive CTE dependencies not emitted once in order", s.SQL())
 	}
 	names, err := namesInSelects(consumer.recordQuery().node)
-	if err != nil || !names.used["parent"] || !names.used["child"] {
+	if err != nil || !names.Used["parent"] || !names.Used["child"] {
 		t.Fatal("alias analysis skipped recursive step", err)
 	}
 }

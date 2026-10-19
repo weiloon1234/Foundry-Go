@@ -21,19 +21,9 @@ type readResult[R any] struct {
 }
 
 func (q readResult[R]) Compile() (Statement, error) {
-	if q.err != nil {
-		return Statement{}, q.err
-	}
-	if q.scan == nil {
-		return Statement{}, fault.New(fault.Invalid, "query requires a complete result decoder")
-	}
-	c := compiler{allowLocks: q.transaction, scopeContext: q.scopeContext}
-	sql, err := c.compileSelect(q.node)
-	if err != nil {
-		return Statement{}, err
-	}
-	return Statement{sql: sql, arguments: c.arguments}, nil
+	return compileRead(q.node, q.scopeContext, q.transaction, q.err, q.scan != nil)
 }
+
 func (q readResult[P]) Each(ctx context.Context, executor database.Executor, yield func(P) error) error {
 	if err := executionContext(ctx, executor); err != nil {
 		return err
@@ -51,6 +41,7 @@ func (q readResult[P]) Each(ctx context.Context, executor database.Executor, yie
 	}
 	return database.ForEach(ctx, readExecutor{executor}, s.sql, s.arguments, q.scan, yield)
 }
+
 func (q readResult[P]) All(ctx context.Context, executor database.Executor) ([]P, error) {
 	if err := executionContext(ctx, executor); err != nil {
 		return nil, err
@@ -62,9 +53,10 @@ func (q readResult[P]) All(ctx context.Context, executor database.Executor) ([]P
 	}
 	return collectRead(ctx, executor, s, q.scan, q.lifecycle)
 }
+
 func (q readResult[P]) First(ctx context.Context, executor database.Executor) (value.Optional[P], error) {
-	if n, set := q.node.limit.Get(); !set || n > 1 {
-		q.node.limit = value.Set(1)
+	if n, set := q.node.Limit.Get(); !set || n > 1 {
+		q.node.Limit = value.Set(1)
 	}
 	rows, err := q.All(ctx, executor)
 	if err != nil {
@@ -75,6 +67,7 @@ func (q readResult[P]) First(ctx context.Context, executor database.Executor) (v
 	}
 	return value.Set(rows[0]), nil
 }
+
 func (q readResult[P]) RequireFirst(ctx context.Context, executor database.Executor) (P, error) {
 	row, err := q.First(ctx, executor)
 	if err != nil {
@@ -102,13 +95,14 @@ func (q readResult[P]) Count(ctx context.Context, executor database.Executor) (i
 	err = database.ScanOne(ctx, readExecutor{executor}, `SELECT COUNT(*) FROM (`+s.sql+`) AS "foundry_count"`, s.arguments, codec.Signed[int64]().Scan(&n))
 	return n, err
 }
+
 func (q readResult[P]) Exists(ctx context.Context, executor database.Executor) (bool, error) {
 	if err := executionContext(ctx, executor); err != nil {
 		return false, err
 	}
 	q.scopeContext = ctx
-	if n, set := q.node.limit.Get(); !set || n > 1 {
-		q.node.limit = value.Set(1)
+	if n, set := q.node.Limit.Get(); !set || n > 1 {
+		q.node.Limit = value.Set(1)
 	}
 	s, err := q.Compile()
 	if err != nil {

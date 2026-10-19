@@ -1,6 +1,8 @@
 package query
 
-import "github.com/weiloon1234/Foundry-Go/fault"
+import (
+	"github.com/weiloon1234/Foundry-Go/fault"
+)
 
 // TransactionJoinInput is an alias or joined input whose consumers require Tx.
 type TransactionJoinInput[S TransactionScope] interface{ transactionJoinInput() joinInput[S] }
@@ -11,6 +13,7 @@ type TransactionJoinTable[S TransactionScope] interface{ transactionJoinTable() 
 type transactionJoinAdapter[S TransactionScope] struct{ input joinInput[S] }
 
 func (a transactionJoinAdapter[S]) joinInput() joinInput[S] { return a.input }
+
 func (a transactionJoinAdapter[S]) joinTable() joinInput[S] { return a.input }
 
 // Only transaction interfaces are promoted by the public wrappers below.
@@ -18,12 +21,15 @@ func (a transactionJoinAdapter[S]) joinTable() joinInput[S] { return a.input }
 type transactionJoinedSource[S, L, R TransactionScope] struct{ joined joinedSource[S, L, R] }
 
 func (j transactionJoinedSource[S, L, R]) transactionJoinInput() joinInput[S] { return j.joined.input }
+
 func (j transactionJoinedSource[S, L, R]) transactionProjection() projectionSource[S] {
 	return projectionSource[S]{node: j.joined.input.node, err: j.joined.input.err}
 }
+
 func (j transactionJoinedSource[S, L, R]) leftScope() scopeBoundary[S, L] {
 	return j.joined.leftScope()
 }
+
 func (j transactionJoinedSource[S, L, R]) rightScope() scopeBoundary[S, R] {
 	return j.joined.rightScope()
 }
@@ -41,6 +47,7 @@ func buildTransactionJoin[S, L, R TransactionScope](left TransactionJoinInput[L]
 func (a TransactionAliasedSource[A, R]) transactionJoinInput() joinInput[TransactionAlias[A, R]] {
 	return a.input
 }
+
 func (a TransactionAliasedSource[A, R]) transactionJoinTable() joinInput[TransactionAlias[A, R]] {
 	return a.input
 }

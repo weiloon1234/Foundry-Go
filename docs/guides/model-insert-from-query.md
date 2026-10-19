@@ -14,9 +14,9 @@ source := linkqueries.QueryLinkMembers().
     Where(fields.Name.Like("team%"))
 
 insert := linkqueries.InsertArchiveFrom(source).
-    SelectMemberID(fields.ID.Value()).
-    SelectName(fields.Name.Value()).
-    SelectAlias(fields.Alias.Value()).
+    SelectMemberID(query.Value(fields.ID)).
+    SelectName(query.Value(fields.Name)).
+    SelectAlias(query.Value(fields.Alias)).
     Values(linkqueries.ArchiveDraft{}.
         SetTag(linkqueries.ArchiveTagInput{Text: " IMPORT "}).
         SetAmount(amount).

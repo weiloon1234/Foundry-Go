@@ -26,6 +26,7 @@ func (r partitionedRow) FieldEncryption() (context.Context, *encryption.Keyring)
 type discardColumn struct{}
 
 func (discardColumn) Scan(any) error { return nil }
+
 func (r partitionedRow) Scan(destinations ...any) error {
 	if len(destinations) != r.count || r.start < 0 || r.count < 0 || r.start+r.count > r.total {
 		return fault.New(fault.Invalid, "joined decoder does not match its declared columns")
@@ -44,7 +45,7 @@ func (r partitionedRow) Scan(destinations ...any) error {
 }
 
 func scanJoined[N, P any](row database.Row, target *Definition[N], pivot *Definition[P]) (relation.Link[N, P], error) {
-	n, p := len(target.columns), len(pivot.columns)
+	n, p := len(target.modelDefinition.Columns), len(pivot.modelDefinition.Columns)
 	model, err := target.scan(partitionedRow{row, 0, n, n + p})
 	if err != nil {
 		return relation.Link[N, P]{}, err

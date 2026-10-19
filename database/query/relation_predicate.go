@@ -1,6 +1,8 @@
 package query
 
-import "database/sql/driver"
+import (
+	"database/sql/driver"
+)
 
 // ExistenceRelation is a declared relationship that can filter its parent by
 // matching rows. Computed aggregate slots are not existence relationships.
@@ -42,19 +44,19 @@ func (r ThroughRelation[M, N, P]) Exists() Predicate[M] {
 	r.spec.target = r.spec.target.existenceScope()
 	r.pivot = r.pivot.existenceScope()
 	r.orders = nil
-	if err := r.validateMetadata(r.spec.source.table, 0, DefaultRelationLimits()); err != nil {
-		return existsPredicate[M](subquery{err: err})
+	if err := r.validateMetadata(r.spec.source.queryCore.Table, 0, DefaultRelationLimits()); err != nil {
+		return existsPredicate[M](subquery{Err: err})
 	}
 	names, err := namesInSelects(r.spec.target.modelSelect(), r.pivot.modelSelect())
 	if err != nil {
-		return existsPredicate[M](subquery{err: err})
+		return existsPredicate[M](subquery{Err: err})
 	}
-	names.used[r.spec.source.table] = true
-	target, pivot := names.allocate("foundry_related"), names.allocate("foundry_link")
+	names.Used[r.spec.source.queryCore.Table] = true
+	target, pivot := names.Allocate("foundry_related"), names.Allocate("foundry_link")
 	node := r.throughSelectAt(target, pivot)
-	node.selections, node.orders = nil, nil
-	node.predicates = append(node.predicates, binaryComparison{
-		left: fieldRef{pivot, r.pivotLocal.column}, right: r.spec.local, operator: equal,
+	node.Selections, node.Orders = nil, nil
+	node.Predicates = append(node.Predicates, binaryComparison{
+		Left: fieldRef{Table: pivot, Column: r.pivotLocal.Column}, Right: r.spec.local, Operator: equal,
 	})
 	return r.spec.existencePredicate(node)
 }
@@ -62,51 +64,54 @@ func (r ThroughRelation[M, N, P]) Exists() Predicate[M] {
 // Only filters contribute to existence. Descriptor ordering/loading remains
 // available when the same descriptor is reused in an ordinary With operation.
 func (q Query[M]) existenceScope() Query[M] {
-	q.orders, q.relations, q.relationLimits = nil, nil, nil
+	q.queryCore.Orders, q.relations, q.relationLimits = nil, nil, nil
 	return q
 }
+
 func (s relationSpec[M, N]) exists() Predicate[M] {
 	s.target = s.target.existenceScope()
-	if err := s.validate(s.source.table, 0, DefaultRelationLimits()); err != nil {
-		return existsPredicate[M](subquery{err: err})
+	if err := s.validate(s.source.queryCore.Table, 0, DefaultRelationLimits()); err != nil {
+		return existsPredicate[M](subquery{Err: err})
 	}
 	node := s.target.modelSelect()
-	node.selections = nil
+	node.Selections = nil
 	names, err := namesInSelects(node)
 	if err != nil {
-		return existsPredicate[M](subquery{err: err})
+		return existsPredicate[M](subquery{Err: err})
 	}
-	names.used[s.source.table] = true
-	alias := names.allocate("foundry_related")
-	node.source.alias = alias
-	node.predicates = nil
-	for _, predicate := range s.target.effectivePredicates() {
-		node.predicates = append(node.predicates, requalify(predicate, alias))
+	names.Used[s.source.queryCore.Table] = true
+	alias := names.Allocate("foundry_related")
+	node.Source.Alias = alias
+	node.Predicates = nil
+	for _, predicate := range s.target.queryCore.EffectivePredicates() {
+		node.Predicates = append(node.Predicates, requalify(predicate, alias))
 	}
 	if s.hop != nil {
 		// Through an intermediate: target -> intermediate.second, and the
 		// intermediate's first key correlates with the outer source key.
 		node = s.hop.join(node, alias, s.foreign)
-		node.predicates = append(node.predicates, binaryComparison{
-			left: fieldRef{hopAlias, s.hop.first.column}, right: s.local, operator: equal,
+		node.Predicates = append(node.Predicates, binaryComparison{
+			Left: fieldRef{Table: hopAlias, Column: s.hop.first.Column}, Right: s.local, Operator: equal,
 		})
 		return s.existencePredicate(node)
 	}
-	node.predicates = append(node.predicates, binaryComparison{
-		left: fieldRef{alias, s.foreign.column}, right: s.local, operator: equal,
+	node.Predicates = append(node.Predicates, binaryComparison{
+		Left: fieldRef{Table: alias, Column: s.foreign.Column}, Right: s.local, Operator: equal,
 	})
 	if s.morph != nil {
 		// The outer row must also store this target type's morph name.
-		node.predicates = append(node.predicates, comparison{operand: fieldRef{s.source.table, s.morph.kind.column}, operator: equal,
-			values: []any{string(s.morph.name)}, bind: func(v any) (driver.Value, error) { return v, nil }})
+		node.Predicates = append(node.Predicates, comparison{Operand: fieldRef{Table: s.source.queryCore.Table, Column: s.morph.kind.Column}, Operator: equal,
+			Values: []any{string(s.morph.name)}, Bind: func(v any) (driver.Value, error) { return v, nil }})
 	}
 	return s.existencePredicate(node)
 }
+
 func (s relationSpec[M, N]) existencePredicate(node selectNode) Predicate[M] {
-	return existsPredicate[M](subquery{node: node, correlation: &scopeRequirement{
-		sources: map[string][]Column{s.source.table: s.source.definition.columns},
+	return existsPredicate[M](subquery{Node: node, Correlation: &scopeRequirement{
+		Sources: map[string][]columnData{s.source.queryCore.Table: s.source.definition.modelDefinition.Columns},
 	}})
 }
+
 func existsPredicate[M any](q subquery) Predicate[M] {
-	return Predicate[M]{expression: subqueryPredicate{query: q}}
+	return Predicate[M]{expression: subqueryPredicate{Query: q}}
 }

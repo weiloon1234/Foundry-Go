@@ -19,22 +19,22 @@ type LockedResult[S, R any] struct {
 // ForUpdate locks contributing table rows. For outer joins use Of to select
 // preserved, non-nullable sources. Aggregate/distinct/window results are invalid.
 func (q ProjectionQuery[S, R]) ForUpdate() LockedResult[S, R] {
-	return LockedResult[S, R]{query: q, locks: []lockSpec{{strength: lockUpdate}}}
+	return LockedResult[S, R]{query: q, locks: []lockSpec{{Strength: lockUpdate}}}
 }
 
 // ForNoKeyUpdate requests a row lock compatible with FOR KEY SHARE.
 func (q ProjectionQuery[S, R]) ForNoKeyUpdate() LockedResult[S, R] {
-	return LockedResult[S, R]{query: q, locks: []lockSpec{{strength: lockNoKeyUpdate}}}
+	return LockedResult[S, R]{query: q, locks: []lockSpec{{Strength: lockNoKeyUpdate}}}
 }
 
 // ForShare requests shared row locks on contributing table rows.
 func (q ProjectionQuery[S, R]) ForShare() LockedResult[S, R] {
-	return LockedResult[S, R]{query: q, locks: []lockSpec{{strength: lockShare}}}
+	return LockedResult[S, R]{query: q, locks: []lockSpec{{Strength: lockShare}}}
 }
 
 // ForKeyShare prevents deletion and key-changing updates to contributing rows.
 func (q ProjectionQuery[S, R]) ForKeyShare() LockedResult[S, R] {
-	return LockedResult[S, R]{query: q, locks: []lockSpec{{strength: lockKeyShare}}}
+	return LockedResult[S, R]{query: q, locks: []lockSpec{{Strength: lockKeyShare}}}
 }
 
 // ForUpdate locks the table rows contributing to each selected value.
@@ -84,14 +84,17 @@ func (q LockedResult[S, R]) Where(predicates ...Predicate[S]) LockedResult[S, R]
 	q.query = q.query.Where(predicates...)
 	return q
 }
+
 func (q LockedResult[S, R]) OrderBy(orders ...ProjectionOrder[S]) LockedResult[S, R] {
 	q.query = q.query.OrderBy(orders...)
 	return q
 }
+
 func (q LockedResult[S, R]) Limit(count int) LockedResult[S, R] {
 	q.query = q.query.Limit(count)
 	return q
 }
+
 func (q LockedResult[S, R]) Offset(count int) LockedResult[S, R] {
 	q.query = q.query.Offset(count)
 	return q
@@ -102,7 +105,7 @@ func (q LockedResult[S, R]) reader() readResult[R] {
 	if len(q.locks) == 0 && r.err == nil {
 		r.err = fault.New(fault.Invalid, "locked result requires at least one lock clause")
 	}
-	r.node.locks = q.locks
+	r.node.Locks = q.locks
 	r.transaction = true
 	return r
 }

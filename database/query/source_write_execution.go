@@ -21,7 +21,7 @@ func (p sourceMutation[S, M]) validateExecution(ctx context.Context, writer data
 }
 
 func (p sourceMutation[S, M]) needsPreparation() bool {
-	return p.kind.sqlKind() != deleteModel && (p.destination.hasFieldMutators() || (mutationPlan[M]{query: p.destination, kind: p.kind}).needsConventions())
+	return p.kind.SqlKind() != deleteModel && (p.destination.hasFieldMutators() || (mutationPlan[M]{query: p.destination, kind: p.kind}).needsConventions())
 }
 
 func (p sourceMutation[S, M]) prepare(returning bool) func(context.Context, *database.Tx) (Statement, error) {
@@ -49,7 +49,7 @@ func (p sourceMutation[S, M]) prepareValues(ctx context.Context, source clock.Cl
 		return p, err
 	}
 	p.values = plan.mutation
-	if p.kind.sqlKind() != deleteModel && p.destination.hasFieldMutators() {
+	if p.kind.SqlKind() != deleteModel && p.destination.hasFieldMutators() {
 		mutation, err := p.destination.mutateFields(ctx, p.values)
 		if err != nil {
 			return p, err

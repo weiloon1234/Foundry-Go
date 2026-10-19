@@ -50,12 +50,12 @@ func TestJSONPathParametersAndBoundaries(t *testing.T) {
 func TestJSONPathInvalidOperationMetadata(t *testing.T) {
 	input := parameterExpression[cursorRecord]("x", codec.String[string]()).Value()
 	for _, node := range []operationNode{
-		{kind: jsonPropertyOperation, result: codec.TypeJSON, arguments: []operationArgument{operationArg(input), operationArg(input)}},
-		{kind: jsonScalarOperation, result: codec.TypeJSON, arguments: []operationArgument{{input.node, codec.TypeJSON}}},
-		{kind: jsonScalarOperation, result: codec.TypeBytes, arguments: []operationArgument{{input.node, codec.TypeJSON}}},
-		{kind: jsonIndexOperation, result: codec.TypeJSON, arguments: []operationArgument{{input.node, codec.TypeJSON}, operationArg(input)}},
+		{Kind: jsonPropertyOperation, Result: codec.TypeJSON, Arguments: []operationArgument{operationArg(input), operationArg(input)}},
+		{Kind: jsonScalarOperation, Result: codec.TypeJSON, Arguments: []operationArgument{{Value: input.node, Kind: codec.TypeJSON}}},
+		{Kind: jsonScalarOperation, Result: codec.TypeBytes, Arguments: []operationArgument{{Value: input.node, Kind: codec.TypeJSON}}},
+		{Kind: jsonIndexOperation, Result: codec.TypeJSON, Arguments: []operationArgument{{Value: input.node, Kind: codec.TypeJSON}, operationArg(input)}},
 	} {
-		if err := node.validate(); !errors.Is(err, fault.Invalid) {
+		if err := node.Validate(); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
 	}

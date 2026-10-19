@@ -14,7 +14,7 @@ func (p Conflict[M]) validate(q Query[M], c *compiler) error {
 	if p.named && (!sqlname.Valid(p.constraint) || len(p.keys) != 0) {
 		return fault.New(fault.Invalid, "invalid named conflict constraint")
 	}
-	if len(p.keys) > MaxExpressionNodes || len(p.updates) > len(c.columns) {
+	if len(p.keys) > MaxExpressionNodes || len(p.updates) > len(c.Columns) {
 		return fault.New(fault.Invalid, "conflict columns exceed model metadata")
 	}
 	if err := p.validateTarget(q, c); err != nil {
@@ -31,24 +31,24 @@ func (p Conflict[M]) validate(q Query[M], c *compiler) error {
 	}
 	seen := map[string]bool{}
 	for _, u := range p.updates {
-		if err := u.field.validate(q.table); err != nil {
+		if err := u.field.Validate(q.queryCore.Table); err != nil {
 			return err
 		}
-		_, declared := c.columns[u.field.column]
-		if !declared || seen[u.field.column] || u.field.column == q.definition.primary || !u.validMode() {
+		_, declared := c.Columns[u.field.Column]
+		if !declared || seen[u.field.Column] || u.field.Column == q.definition.modelDefinition.Primary || !u.validMode() {
 			return fault.New(fault.Invalid, "conflict update has an invalid, repeated or primary-key assignment")
 		}
-		if u.null && !c.columns[u.field.column].Nullable {
+		if u.null && !c.Columns[u.field.Column].Nullable {
 			return fault.New(fault.Invalid, "NULL conflict assignment requires a nullable model field")
 		}
-		seen[u.field.column] = true
+		seen[u.field.Column] = true
 		if err := u.validateMutator(q); err != nil {
 			return err
 		}
 	}
 	// Reuse ordinary model expression validation and its bounds before walking
 	// subqueries or requalifying references to the target row's allocated alias.
-	q.predicates = p.condition
+	q.queryCore.Predicates = p.condition
 	if err := q.Validate(); err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func (p Conflict[M]) compile(c *compiler, table, alias string, scopes []expressi
 		if err != nil {
 			return "", err
 		}
-		sets[i] = quoted(u.field.column) + " = " + v
+		sets[i] = quoted(u.field.Column) + " = " + v
 	}
 	sql.WriteString(" DO UPDATE SET " + strings.Join(sets, ", "))
 	conditions := make([]expression, len(p.condition), len(p.condition)+len(p.rowCondition))
@@ -93,7 +93,7 @@ func (p Conflict[M]) compile(c *compiler, table, alias string, scopes []expressi
 	if rename.err != nil {
 		return "", rename.err
 	}
-	if err := c.where(&sql, conditions); err != nil {
+	if err := c.Where(&sql, conditions); err != nil {
 		return "", err
 	}
 	return sql.String(), nil

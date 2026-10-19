@@ -11,26 +11,26 @@ import (
 )
 
 func compileRelationAggregate[M, N any](ctx context.Context, input aggregateInput[M, N], measure aggregateNode, keys []driver.Value, limit int) (Statement, error) {
-	field := func(f fieldRef) error { return f.validate(input.inputTable) }
-	if err := measure.validate(field); err != nil {
+	field := func(f fieldRef) error { return f.Validate(input.inputTable) }
+	if err := measure.Validate(field); err != nil {
 		return Statement{}, err
 	}
 	nodes := 0
-	if err := measure.validateFilter(field, &nodes); err != nil {
+	if err := measure.ValidateFilter(field, &nodes); err != nil {
 		return Statement{}, err
 	}
 	node := input.selectNode()
-	node.selections = []selectItem{{expression: input.group}}
-	node.groupBy = []valueExpression{input.group}
-	node.orders = nil
-	node.limit = value.Set(limit)
+	node.Selections = []selectItem{{Expression: input.group}}
+	node.GroupBy = []valueExpression{input.group}
+	node.Orders = nil
+	node.Limit = value.Set(limit)
 	measure = requalifyAggregate(measure, input.inputAlias)
-	node.selections = append(node.selections, selectItem{expression: measure})
+	node.Selections = append(node.Selections, selectItem{Expression: measure})
 	if input.singular || input.unique != (fieldRef{}) {
-		node.selections = append(node.selections, selectItem{expression: aggregateNode{kind: countAll}})
+		node.Selections = append(node.Selections, selectItem{Expression: aggregateNode{Kind: countAll}})
 	}
 	if input.unique != (fieldRef{}) {
-		node.selections = append(node.selections, selectItem{expression: aggregateNode{kind: countDistinct, field: input.unique}})
+		node.Selections = append(node.Selections, selectItem{Expression: aggregateNode{Kind: countDistinct, Field: input.unique}})
 	}
 	if keys != nil {
 		bindings := make([]any, len(keys))
@@ -39,19 +39,19 @@ func compileRelationAggregate[M, N any](ctx context.Context, input aggregateInpu
 		}
 		// ModelField has already bound/validated the concrete key codec. This
 		// private AST boundary carries driver values, never caller SQL text.
-		node.predicates = append(node.predicates, comparison{operand: input.group, operator: in, values: bindings, bind: func(v any) (driver.Value, error) {
+		node.Predicates = append(node.Predicates, comparison{Operand: input.group, Operator: in, Values: bindings, Bind: func(v any) (driver.Value, error) {
 			if !driver.IsValue(v) {
 				return nil, fault.New(fault.Invalid, "aggregate key is not a database value")
 			}
 			return v, nil
 		}})
 	}
-	c := compiler{scopeContext: ctx, scopeShapeOnly: ctx == nil}
-	sql, err := c.compileSelect(node)
+	c := compiler{ScopeContext: ctx, ScopeShapeOnly: ctx == nil}
+	sql, err := c.CompileSelect(node)
 	if err != nil {
 		return Statement{}, err
 	}
-	return Statement{sql: sql, arguments: c.arguments}, nil
+	return Statement{sql: sql, arguments: c.Arguments}, nil
 }
 
 func aggregateKeys[M any](ctx context.Context, metadata ModelField[M], parents []M, batchSize int) ([]value.Optional[cursorValue], []driver.Value, map[cursorValue]bool, error) {
@@ -90,7 +90,7 @@ type groupedAggregate[V any] struct {
 }
 
 func fetchRelationAggregate[M, N, V any](ctx context.Context, executor database.Executor, input aggregateInput[M, N], aggregate Aggregate[N, V], parents []M, state *relationLoadState) ([]V, error) {
-	metadata, _ := input.source.definition.modelField(input.local.column)
+	metadata, _ := input.source.definition.modelField(input.local.Column)
 	positions, keys, requested, err := aggregateKeys(ctx, metadata, parents, state.limits.BatchSize)
 	if err != nil {
 		return nil, err

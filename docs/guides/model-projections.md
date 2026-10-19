@@ -45,10 +45,10 @@ f := models.UserFields()
 summary := reports.SelectUserSummary(
     models.QueryUsers().OrderBy(f.Email.Asc()),
     reports.UserSummarySelection[models.User]{
-        ID: f.ID.Value(),
-        Email: f.Email.Value(),
-        Nickname: f.Nickname.Value(),
-        Status: f.Status.Value(),
+        ID: query.Value(f.ID),
+        Email: query.Value(f.Email),
+        Nickname: query.Value(f.Nickname),
+        Status: query.Value(f.Status),
     },
 )
 rows, err := summary.Where(f.Status.Eq(models.StatusActive)).All(ctx, db)
@@ -64,17 +64,17 @@ Queries preserve source filters, ordering and limit/offset. Subsequent `Where`, 
 
 ## Grouped and scalar summaries
 
-Generated numeric fields and typed [aggregate expressions](model-aggregates.md#loading-and-result-types) also provide `Value()`. Integer and decimal sums/averages return nullable exact decimals; counts return `int64`.
+Select stored fields with `query.Value(field)`; typed [aggregate expressions](model-aggregates.md#loading-and-result-types) retain their `Value()` method. See [typed field computations](typed-field-computations.md) for migration. Integer and decimal sums/averages return nullable exact decimals; counts return `int64`.
 
 ```go
 f := models.OrderFields()
 totals := reports.SelectBuyerTotals(
     models.QueryOrders(),
     reports.BuyerTotalsSelection[models.Order]{
-        BuyerID: f.BuyerID.Value(),
-        Total: f.TotalCents.Sum().Value(),
+        BuyerID: query.Value(f.BuyerID),
+        Total: query.Sum(f.TotalCents).Value(),
         Orders: query.Count[models.Order]().Value(),
-        Average: f.TotalCents.Avg().Value(),
+        Average: query.Avg(f.TotalCents).Value(),
     },
 ).GroupBy(f.BuyerID.Group()).OrderBy(f.BuyerID.Asc())
 rows, err := totals.All(ctx, db)
@@ -91,7 +91,7 @@ Aggregate comparisons produce `HavingPredicate[Input]`. They cannot be passed to
 ```go
 qualified := totals.Having(query.HavingAnd(
     query.Count[models.Order]().Gte(2),
-    f.TotalCents.Sum().Gt(decimal.FromInt64(4)),
+    query.Sum(f.TotalCents).Gt(decimal.FromInt64(4)),
 ))
 rows, err := qualified.All(ctx, db)
 ```
@@ -107,7 +107,7 @@ Projection `OrderBy` accepts ordinary field orders and typed aggregate/expressio
 ```go
 ranked := reports.SelectBuyerTotals(models.QueryOrders(), selection).
     GroupBy(f.BuyerID.Group()).
-    OrderBy(f.TotalCents.Sum().Desc(), f.BuyerID.Asc())
+    OrderBy(query.Sum(f.TotalCents).Desc(), f.BuyerID.Asc())
 ```
 
 Here `selection` is the complete `BuyerTotalsSelection[models.Order]` shown above. Source orders and later `OrderBy` calls are appended; start with an unordered source when choosing a new primary ranking. Supply a stable tie-breaker when paginating. PostgreSQL's default NULL ordering applies. Model queries still accept only their field-based `Order[Model]`; aggregate ordering requires a projection. An aggregate used only in ordering still makes the SQL query grouped and requires ordinary selected columns to appear in `GroupBy`.

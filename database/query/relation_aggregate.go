@@ -33,7 +33,7 @@ func Related[M, N, V any](source AggregateSource[M, N], computation AggregateExp
 			if input.validate == nil || input.selectNode == nil || input.source.definition == nil {
 				return fault.New(fault.Invalid, "aggregate requires a bound relation input")
 			}
-			if table != input.source.table {
+			if table != input.source.queryCore.Table {
 				return fault.New(fault.Invalid, "aggregate belongs to a different source table")
 			}
 			if err := input.validate(depth, limits); err != nil {
@@ -60,7 +60,7 @@ func (r AggregateRelation[M, V]) Bind(name string, source Query[M], get func(M) 
 	if source.definition == nil {
 		r.bindingError = fault.New(fault.Invalid, "aggregate Bind requires model metadata")
 	}
-	r.name, r.table, r.get, r.set = name, source.table, get, set
+	r.name, r.table, r.get, r.set = name, source.queryCore.Table, get, set
 	return r
 }
 
@@ -71,8 +71,11 @@ func (r AggregateRelation[M, V]) Using(computation AggregateRelation[M, V]) Aggr
 	r.bindingError = errors.Join(r.bindingError, computation.bindingError)
 	return r
 }
-func (r AggregateRelation[M, V]) relationName() string      { return r.name }
+
+func (r AggregateRelation[M, V]) relationName() string { return r.name }
+
 func (r AggregateRelation[M, V]) copyRelation() Relation[M] { return r }
+
 func (r AggregateRelation[M, V]) validateRelation(table string, depth int, limits RelationLimits) error {
 	if r.bindingError != nil {
 		return r.bindingError
@@ -82,6 +85,7 @@ func (r AggregateRelation[M, V]) validateRelation(table string, depth int, limit
 	}
 	return r.validate(table, depth, limits)
 }
+
 func (r AggregateRelation[M, V]) loadRelation(ctx context.Context, executor database.Executor, parents []M, state *relationLoadState, depth int, missing bool) ([]M, error) {
 	selected, indices := selectedParents(parents, func(m M) bool { return missing && r.get(m).IsLoaded() })
 	results, err := r.fetch(ctx, executor, selected, state)

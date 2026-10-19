@@ -1,6 +1,8 @@
 package query
 
-import "github.com/weiloon1234/Foundry-Go/fault"
+import (
+	"github.com/weiloon1234/Foundry-Go/fault"
+)
 
 // TransactionLateralSource is a named correlated record. It can only be joined
 // after its declared parent and cannot execute or enter ordinary source APIs.
@@ -27,7 +29,7 @@ func (s TransactionLateralSource[A, O, R]) Scope() RecordScope[TransactionAlias[
 	if s.input.err != nil {
 		return RecordScope[TransactionAlias[A, R], R]{}
 	}
-	return RecordScope[TransactionAlias[A, R], R]{table: s.input.node.source.name(), record: s.record}
+	return RecordScope[TransactionAlias[A, R], R]{table: s.input.node.Source.Name(), record: s.record}
 }
 
 // TransactionCrossJoinLateral preserves all correlated matches for each parent.
@@ -44,6 +46,7 @@ func TransactionInnerJoinLateral[L TransactionScope, A, R any](left TransactionJ
 func TransactionLeftJoinLateral[L TransactionScope, A, R any](left TransactionJoinInput[L], right TransactionLateralSource[A, L, R], on ...JoinOn[L, TransactionAlias[A, R]]) TransactionLeftJoined[L, TransactionAlias[A, R]] {
 	return TransactionLeftJoined[L, TransactionAlias[A, R]]{buildTransactionLateral[TransactionLeft[L, TransactionAlias[A, R]]](left, right, on, leftJoin)}
 }
+
 func buildTransactionLateral[S, L TransactionScope, A, R any](left TransactionJoinInput[L], right TransactionLateralSource[A, L, R], on []JoinOn[L, TransactionAlias[A, R]], kind joinKind) transactionJoinedSource[S, L, TransactionAlias[A, R]] {
 	var input joinInput[L]
 	if nilDescriptor(left) {

@@ -19,13 +19,15 @@ func (q ValueSetQuery[V]) Value() Expression[Set[V], V] {
 	if q.query.recordQuery().err != nil {
 		return Expression[Set[V], V]{}
 	}
-	return Expression[Set[V], V]{node: fieldRef{setAlias, valueColumnName}, codec: q.codec}
+	return Expression[Set[V], V]{node: fieldRef{Table: setAlias, Column: valueColumnName}, codec: q.codec}
 }
+
 func (q ValueSetQuery[V]) valueQuery() valueSubquery[V] {
 	return valueSubquery[V]{subquery: q.query.subquery(), codec: q.codec}
 }
+
 func recordForValue[V any](q valueSubquery[V]) recordQuery[V] {
-	return recordQuery[V]{node: q.node, err: q.err, columns: []Column{{Name: valueColumnName, Nullable: value.IsNullableType[V]()}},
+	return recordQuery[V]{node: q.subquery.Node, err: q.subquery.Err, columns: []columnData{{Name: valueColumnName, Nullable: value.IsNullableType[V]()}},
 		fields: []RecordField[V]{NewRecordField(valueColumnName, q.codec, func(v V) V { return v })},
 		scan: func(row database.Row) (V, error) {
 			var result V
@@ -33,6 +35,7 @@ func recordForValue[V any](q valueSubquery[V]) recordQuery[V] {
 			return result, err
 		}}
 }
+
 func combineValues[V any](left, right ValueQuerySource[V], operator setOperator) ValueSetQuery[V] {
 	a, b := valueSource(left), valueSource(right)
 	return ValueSetQuery[V]{query: combineRecordQueries(recordForValue(a), recordForValue(b), operator), codec: a.codec}
@@ -123,8 +126,11 @@ func (q ValueSetQuery[V]) ExceptAll(other ValueQuerySource[V]) ValueSetQuery[V] 
 }
 
 func (q ValueSetQuery[V]) recordQuery() recordQuery[V] { return q.query.recordQuery() }
-func (q ValueSetQuery[V]) subquery() subquery          { return q.query.subquery() }
-func (q ValueSetQuery[V]) reader() readResult[V]       { return q.query.reader() }
+
+func (q ValueSetQuery[V]) subquery() subquery { return q.query.subquery() }
+
+func (q ValueSetQuery[V]) reader() readResult[V] { return q.query.reader() }
+
 func (q ValueSetQuery[V]) projectionSource() projectionSource[Set[V]] {
 	return q.query.projectionSource()
 }

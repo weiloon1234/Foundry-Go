@@ -106,7 +106,9 @@ func (r ExtensionSlot[M]) relationName() string {
 	}
 	return r.spec.name
 }
+
 func (r ExtensionSlot[M]) copyRelation() Relation[M] { return r }
+
 func (r ExtensionSlot[M]) validateRelation(table string, depth int, limits RelationLimits) error {
 	if r.spec == nil {
 		return fault.New(fault.Invalid, "extension slot requires a generated descriptor")
@@ -122,6 +124,7 @@ func (r ExtensionSlot[M]) validateRelation(table string, depth int, limits Relat
 	}
 	return nil
 }
+
 func (r ExtensionSlot[M]) loadRelation(ctx context.Context, executor database.Executor, parents []M, state *relationLoadState, _ int, missing bool) ([]M, error) {
 	if r.spec == nil || r.spec.err != nil || r.spec.load == nil {
 		return nil, fault.New(fault.Invalid, "extension slot requires a bound descriptor")

@@ -42,14 +42,14 @@ type readLifecycle[R any] struct {
 
 func (d *Definition[M]) retrieval() *readLifecycle[M] {
 	index := -1
-	for i, column := range d.columns {
-		if column.Name == d.primary {
+	for i, column := range d.modelDefinition.Columns {
+		if column.Name == d.modelDefinition.Primary {
 			index = i
 			break
 		}
 	}
 	var key func(M) (driver.Value, error)
-	if field, ok := d.modelField(d.primary); ok && field.get != nil {
+	if field, ok := d.modelField(d.modelDefinition.Primary); ok && field.get != nil {
 		key = field.get
 	}
 	return &readLifecycle[M]{

@@ -15,7 +15,7 @@ func TestPostgresNamedWindowReuseAndFrames(t *testing.T) {
 	runSamples(t, nil, func(tx *database.Tx) error {
 		q := framequeries.QueryFrameSamples()
 		f := framequeries.SampleFields()
-		base := query.WindowFor(q).PartitionBy(f.ID.Param(1).Group()).Named("all_samples")
+		base := query.WindowFor(q).PartitionBy(query.Param(f.ID, 1).Group()).Named("all_samples")
 		ordered := base.OrderBy(f.ID.Asc()).Named("ordered")
 		framed := ordered.RowsBetween(query.Preceding(1), query.CurrentRow()).Named("framed")
 		count := query.Count[framequeries.Sample]().Over(framed)
@@ -33,9 +33,9 @@ func TestPostgresNamedWindowReuseAndFrames(t *testing.T) {
 		if total, err := result.Count(t.Context(), tx); err != nil || total != 4 {
 			t.Fatal("named result count", total, err)
 		}
-		r := query.NumericRange(base, f.ID.Value())
+		r := query.NumericRange(base, query.Value(f.ID))
 		frameCounts(t, tx, r.Between(r.Preceding(1), r.CurrentRow()).Named("ranged"), []int64{1, 2, 2, 2})
-		bucket := query.When(f.ID.Gt(2), f.ID.Param(1)).Else(f.ID.Param(0))
+		bucket := query.When(f.ID.Gt(2), query.Param(f.ID, 1)).Else(query.Param(f.ID, 0))
 		grouped := query.WindowFor(q).PartitionByValues(query.Count[framequeries.Sample]().Value().Key()).Named("equal_counts")
 		rank := query.RowNumber(grouped)
 		if got, err := query.SelectValue(q, rank).GroupBy(bucket.Group()).OrderBy(rank.Asc()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int64{1, 2}) {
@@ -54,7 +54,7 @@ func TestPostgresNamedWindowScopesAndDependencies(t *testing.T) {
 		f := framequeries.SampleFields()
 		eligible := query.As[eligibleSample](query.CTE("eligible_samples", q.Where(f.ID.Gt(2))), "eligible")
 		e := framequeries.SampleFieldsAt(eligible.Scope())
-		bucket := query.When(f.ID.InQuery(query.SelectValue(eligible, e.ID.Value())), f.ID.Param(1)).Else(f.ID.Param(0))
+		bucket := query.When(f.ID.InQuery(query.SelectValue(eligible, query.Value(e.ID))), query.Param(f.ID, 1)).Else(query.Param(f.ID, 0))
 		w := query.WindowFor(q).PartitionBy(bucket.Group()).OrderBy(f.ID.Asc()).Named("buckets")
 		if got, err := query.SelectValue(q, query.RowNumber(w)).OrderBy(f.ID.Asc()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int64{1, 2, 1, 2}) {
 			t.Fatal("CTE used only inside named definition", got, err)
@@ -69,7 +69,7 @@ func TestPostgresNamedWindowScopesAndDependencies(t *testing.T) {
 		parent := framequeries.SampleFieldsAt(query.OuterScope(link, q.Scope()))
 		child := framequeries.SampleFieldsAt(query.InnerScope(link, earlier.Scope()))
 		perParent := query.WindowFor(link).PartitionBy(parent.ID.Group()).Named("per_parent")
-		counts := query.SelectCorrelatedValue(link, child.ID.Count().Over(perParent)).Where(child.ID.LtColumn(parent.ID)).Limit(1)
+		counts := query.SelectCorrelatedValue(link, query.CountField(child.ID).Over(perParent)).Where(child.ID.LtColumn(parent.ID)).Limit(1)
 		if got, err := query.SelectValue(q, query.CorrelatedScalarQuery(counts)).OrderBy(f.ID.Asc()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []value.Nullable[int64]{value.Null[int64](), value.Of(int64(1)), value.Of(int64(2)), value.Of(int64(3))}) {
 			t.Fatal("named window correlation", got, err)
 		}

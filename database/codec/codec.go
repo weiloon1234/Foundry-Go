@@ -79,18 +79,26 @@ func (c Codec[T]) Decode(source any) (T, error) {
 
 // Scan creates a standard SQL scanner. It changes the destination only after a
 // successful decode; a NULL or malformed value cannot partially replace it.
-func (c Codec[T]) Scan(destination *T) sql.Scanner { return scanner[T]{c, destination} }
+func (c Codec[T]) Scan(destination *T) sql.Scanner {
+	// A scanner only needs decoding. Retain both-direction validity without
+	// copying binding, cloning, equality and metadata into every column scan.
+	decode := c.decode
+	if c.encode == nil {
+		decode = nil
+	}
+	return scanner[T]{decode, destination}
+}
 
 type scanner[T any] struct {
-	codec       Codec[T]
+	decode      func(any) (T, error)
 	destination *T
 }
 
 func (s scanner[T]) Scan(source any) error {
-	if s.destination == nil {
+	if s.destination == nil || s.decode == nil {
 		return invalid()
 	}
-	decoded, err := s.codec.Decode(source)
+	decoded, err := s.decode(source)
 	if err != nil {
 		return err
 	}

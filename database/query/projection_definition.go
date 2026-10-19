@@ -6,7 +6,6 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -26,12 +25,13 @@ type ProjectionColumn[P any] struct {
 func NewProjectionField[P, V any](name string) ProjectionField[P, V] {
 	return ProjectionField[P, V]{column: ProjectionColumn[P]{name: name, typ: reflect.TypeFor[V](), nullable: value.IsNullableType[V]()}}
 }
+
 func (f ProjectionField[P, V]) Column() ProjectionColumn[P] { return f.column }
 
-func (d ProjectionDefinition[P]) sourceColumns() []Column {
-	columns := make([]Column, len(d.columns))
+func (d ProjectionDefinition[P]) sourceColumns() []columnData {
+	columns := make([]columnData, len(d.columns))
 	for i, c := range d.columns {
-		columns[i] = Column{Name: c.name, Nullable: c.nullable}
+		columns[i] = columnData{Name: c.Name, Nullable: c.Nullable}
 	}
 	return columns
 }
@@ -39,31 +39,29 @@ func (d ProjectionDefinition[P]) sourceColumns() []Column {
 // ProjectionDefinition describes a complete declared result record, never a
 // partially hydrated persisted model. Generated code owns the ordered decoder.
 type ProjectionDefinition[P any] struct {
-	columns []ProjectionColumn[P]
+	columns []projectionColumn
 	scan    func(database.Row) (P, error)
 	fields  []RecordField[P]
 }
 
 func DefineProjection[P any](columns []ProjectionColumn[P], scan func(database.Row) (P, error), fields ...RecordField[P]) ProjectionDefinition[P] {
-	return ProjectionDefinition[P]{columns: slices.Clone(columns), scan: scan, fields: slices.Clone(fields)}
-}
-func (d ProjectionDefinition[P]) Validate() error {
-	if len(d.columns) == 0 || len(d.columns) > MaxExpressionNodes || d.scan == nil {
-		return fault.New(fault.Invalid, "projection requires bounded columns and a complete decoder")
+	lowered := make([]projectionColumn, len(columns))
+	for i, c := range columns {
+		lowered[i] = projectionColumn{Name: c.name, Typ: c.typ, Nullable: c.nullable}
 	}
-	seen := make(map[string]bool, len(d.columns))
-	for _, column := range d.columns {
-		if !sqlname.Valid(column.name) || seen[column.name] || column.typ == nil {
-			return fault.New(fault.Invalid, "invalid or repeated projection field")
-		}
-		seen[column.name] = true
+	return ProjectionDefinition[P]{columns: lowered, scan: scan, fields: slices.Clone(fields)}
+}
+
+func (d ProjectionDefinition[P]) Validate() error {
+	if err := validateProjectionColumns(d.columns, d.scan != nil); err != nil {
+		return err
 	}
 	if len(d.fields) > len(d.columns) {
 		return fault.New(fault.Invalid, "too many projection field getters")
 	}
 	types := make(map[string]reflect.Type, len(d.columns))
 	for _, column := range d.columns {
-		types[column.name] = column.typ
+		types[column.Name] = column.Typ
 	}
 	for _, field := range d.fields {
 		if types[field.column] == nil || types[field.column] != field.typ || field.get == nil || field.decode == nil {

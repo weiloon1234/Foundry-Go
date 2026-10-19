@@ -90,11 +90,11 @@ func TestPostgresTypedTemporalExtraction(t *testing.T) {
 		if rows, err := q.Where(year.Eq(2024)).All(t.Context(), tx); err != nil || len(rows) != 2 {
 			t.Fatal(rows, err)
 		}
-		counts := temporalqueries.ProjectCalendarSummary(q).SelectYear(year.Value()).SelectRows(query.Count[temporalqueries.Sample]().Value()).SelectLatest(f.Date.Max().Value()).Query().GroupBy(year.Group()).OrderBy(year.Asc())
+		counts := temporalqueries.ProjectCalendarSummary(q).SelectYear(year.Value()).SelectRows(query.Count[temporalqueries.Sample]().Value()).SelectLatest(query.Max(f.Date).Value()).Query().GroupBy(year.Group()).OrderBy(year.Asc())
 		if rows, err := counts.All(t.Context(), tx); err != nil || len(rows) != 3 || rows[2].Rows != 2 {
 			t.Fatal(rows, err)
 		}
-		latest := query.YearNullableValue(f.Date.Max().Value())
+		latest := query.YearNullableValue(query.Max(f.Date).Value())
 		if v := temporalOne(t, tx, latest); v != value.Of(int64(2024)) {
 			t.Fatal(v)
 		}
@@ -115,7 +115,7 @@ func TestPostgresExactUnixMillisConversion(t *testing.T) {
 		}
 		temporalValues(t, tx, query.FromUnixMillis(f.Millis).Value(), expected)
 		for _, millis := range []int64{-62135596800000, -86400001, -86400000, -1, 0, 1, 86400001, 253402300799999} {
-			converted := query.FromUnixMillis(f.Millis.Param(millis))
+			converted := query.FromUnixMillis(query.Param(f.Millis, millis))
 			if got := temporalOne(t, tx, converted.Value()).UTC(); !got.Equal(time.UnixMilli(millis)) {
 				t.Fatal("exact millisecond conversion", millis, got)
 			}
@@ -124,7 +124,7 @@ func TestPostgresExactUnixMillisConversion(t *testing.T) {
 			}
 		}
 		before, _ := time.Parse(time.RFC3339Nano, "1969-12-31T23:59:59.999500Z")
-		if got := temporalOne(t, tx, query.UnixMilliseconds(f.At.Param(before)).Value()); got != -1 {
+		if got := temporalOne(t, tx, query.UnixMilliseconds(query.Param(f.At, before)).Value()); got != -1 {
 			t.Fatal("negative submillisecond floor", got)
 		}
 		return nil

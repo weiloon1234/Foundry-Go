@@ -148,7 +148,7 @@ func checkRecursiveComposition(t *testing.T, tx *database.Tx, tree query.CommonT
 	if strings.Count(s.SQL(), `"descendants" ("id"`) != 1 {
 		t.Fatal("shared recursive CTE was emitted more than once")
 	}
-	ids := query.SelectValue(combined, fields.ID.Value())
+	ids := query.SelectValue(combined, query.Value(fields.ID))
 	if n, err := models.QueryUsers().WhereHas(models.UserRelations().Referrals.Where(models.UserFields().ID.InQuery(ids))).Count(ctx, tx); err != nil || n != 2 {
 		t.Fatal("relationship predicate lost recursive CTE dependency", err)
 	}
@@ -176,13 +176,13 @@ func checkRecursiveComposition(t *testing.T, tx *database.Tx, tree query.CommonT
 
 func checkRecursiveProjection(t *testing.T, tx *database.Tx, anchor models.UserQuery, users []models.User) error {
 	u := models.UserFields()
-	initial := reports.SelectUserSummary(anchor, reports.UserSummarySelection[models.User]{ID: u.ID.Value(), Email: u.Email.Value(), Nickname: u.Nickname.Value(), Status: u.Status.Value()})
+	initial := reports.SelectUserSummary(anchor, reports.UserSummarySelection[models.User]{ID: query.Value(u.ID), Email: query.Value(u.Email), Nickname: query.Value(u.Nickname), Status: query.Value(u.Status)})
 	tree := query.RecursiveCTE("summaries", initial, func(self query.RecursiveSelf[reports.UserSummary]) query.RecordQuerySource[reports.UserSummary] {
 		parent := query.As[parentAlias](self, "parent")
 		child := query.As[childAlias](models.QueryUsers(), "child")
 		j := query.InnerJoin(child, parent, query.On(models.UserFieldsAt(child.Scope()).IntroducerID, reports.UserSummaryFieldsAt(parent.Scope()).ID))
 		f := models.UserFieldsAt(query.LeftScope(j, child.Scope()))
-		return reports.ProjectUserSummary(j).SelectID(f.ID.Value()).SelectEmail(f.Email.Value()).SelectNickname(f.Nickname.Value()).SelectStatus(f.Status.Value()).Query()
+		return reports.ProjectUserSummary(j).SelectID(query.Value(f.ID)).SelectEmail(query.Value(f.Email)).SelectNickname(query.Value(f.Nickname)).SelectStatus(query.Value(f.Status)).Query()
 	})
 	a := query.As[resultAlias](tree, "result")
 	f := reports.UserSummaryFieldsAt(a.Scope())
@@ -227,7 +227,7 @@ func TestPostgresNaturalKeyRecursionAndCancellation(t *testing.T) {
 		})
 		a := query.As[resultAlias](tree, "result")
 		fields := recursivequeries.NodeFieldsAt(a.Scope())
-		codes, err := query.SelectValue(a, fields.Code.Value()).OrderBy(fields.Code.Asc()).All(t.Context(), session)
+		codes, err := query.SelectValue(a, query.Value(fields.Code)).OrderBy(fields.Code.Asc()).All(t.Context(), session)
 		if err != nil || !reflect.DeepEqual(codes, []recursivequeries.NodeCode{"child", "leaf", "root"}) {
 			t.Fatal("recursive natural-key hierarchy failed", codes, err)
 		}

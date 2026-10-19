@@ -135,7 +135,7 @@ func morphPivot[M, N, P any](r ThroughRelation[M, N, P], kind KeyField[P, MorphN
 		r.spec.declarationError = bindErr
 		return r
 	}
-	r.pivotFixed = append(r.pivotFixed, pivotAssignment{column: field.ref.column, raw: raw})
+	r.pivotFixed = append(r.pivotFixed, pivotAssignment{column: field.ref.Column, raw: raw})
 	return r
 }
 
@@ -155,7 +155,7 @@ type morphSource struct {
 // morphMatches reads the parent's stored morph name through its generated
 // getter; SQL NULL never matches.
 func morphMatches[M any](m *morphSource, source Query[M], parent M) (bool, error) {
-	field, ok := source.definition.modelField(m.kind.column)
+	field, ok := source.definition.modelField(m.kind.Column)
 	if !ok || field.get == nil {
 		return false, fault.New(fault.Invalid, "morph type is not a generated model field")
 	}

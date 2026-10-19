@@ -1,10 +1,11 @@
 package query
 
 import (
+	"time"
+
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
-	"time"
 )
 
 // AddIntervals adds interval components without conflating calendar and elapsed units.

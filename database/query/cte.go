@@ -3,24 +3,19 @@ package query
 import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
-type cteMaterialization uint8
+type cteMaterialization = querycore.CteMaterialization
 
-const (
-	cteDefault cteMaterialization = iota
-	cteMaterialized
-	cteNotMaterialized
-)
+const cteDefault = querycore.CteDefault
 
-type cteNode struct {
-	name            string
-	query           selectNode
-	columns         []Column
-	materialization cteMaterialization
-	recursion       *recursiveCTE
-}
+const cteMaterialized = querycore.CteMaterialized
+
+const cteNotMaterialized = querycore.CteNotMaterialized
+
+type cteNode = querycore.CteNode
 
 // CommonTable declares a reusable, read-only CTE with a complete record type.
 // Use As to give each reference a typed scope for fields, joins and projections.
@@ -41,7 +36,7 @@ func CTE[R any](name string, source RecordQuerySource[R]) CommonTable[R] {
 		return CommonTable[R]{err: fault.New(fault.Invalid, "CTE requires a valid name and record query")}
 	}
 	q := source.recordQuery()
-	return CommonTable[R]{definition: &cteNode{name: name, query: q.node, columns: q.columns}, scan: q.scan, fields: q.fields, lifecycle: q.lifecycle, err: q.err}
+	return CommonTable[R]{definition: &cteNode{Name: name, Query: q.node, Columns: q.columns}, scan: q.scan, fields: q.fields, lifecycle: q.lifecycle, err: q.err}
 }
 
 // Materialized requests PostgreSQL's explicit materialization behavior.
@@ -53,14 +48,16 @@ func (c CommonTable[R]) Materialized() CommonTable[R] { return c.withMaterializa
 func (c CommonTable[R]) NotMaterialized() CommonTable[R] {
 	return c.withMaterialization(cteNotMaterialized)
 }
+
 func (c CommonTable[R]) withMaterialization(mode cteMaterialization) CommonTable[R] {
-	if c.definition != nil && c.definition.materialization != mode {
+	if c.definition != nil && c.definition.Materialization != mode {
 		definition := *c.definition
-		definition.materialization = mode
+		definition.Materialization = mode
 		c.definition = &definition
 	}
 	return c
 }
+
 func (c CommonTable[R]) recordQuery() recordQuery[R] {
 	if c.err != nil {
 		return recordQuery[R]{err: c.err}
@@ -70,6 +67,6 @@ func (c CommonTable[R]) recordQuery() recordQuery[R] {
 	}
 	d := c.definition
 	return recordQuery[R]{node: selectNode{
-		source: tableSource{cte: d, columns: d.columns}, selections: columnSelections(d.name, d.columns),
-	}, columns: d.columns, scan: c.scan, fields: c.fields, lifecycle: c.lifecycle, directSource: true}
+		Source: tableSource{Cte: d, Columns: d.Columns}, Selections: columnSelections(d.Name, d.Columns),
+	}, columns: d.Columns, scan: c.scan, fields: c.fields, lifecycle: c.lifecycle, directSource: true}
 }

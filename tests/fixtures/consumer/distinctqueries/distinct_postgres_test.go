@@ -60,12 +60,12 @@ func TestPostgresDistinctModelsProjectionsAndValues(t *testing.T) {
 		}
 
 		// Declared projections retain their aliases, nullable fields and codecs.
-		report := reports.ProjectUserSummary(joined).SelectID(fields.ID.Value()).SelectEmail(fields.Email.Value()).SelectNickname(fields.Nickname.Value()).SelectStatus(fields.Status.Value()).Query().Distinct()
+		report := reports.ProjectUserSummary(joined).SelectID(query.Value(fields.ID)).SelectEmail(query.Value(fields.Email)).SelectNickname(query.Value(fields.Nickname)).SelectStatus(query.Value(fields.Status)).Query().Distinct()
 		if rows, err := report.All(t.Context(), tx); err != nil || len(rows) != 2 {
 			t.Fatal("projection distinct failed", err)
 		}
 		u := models.UserFields()
-		nicknames := query.SelectValue(models.QueryUsers(), u.Nickname.Value()).Distinct().OrderBy(u.Nickname.Asc())
+		nicknames := query.SelectValue(models.QueryUsers(), query.Value(u.Nickname)).Distinct().OrderBy(u.Nickname.Asc())
 		names, err := nicknames.All(t.Context(), tx)
 		if err != nil {
 			return err
@@ -76,7 +76,7 @@ func TestPostgresDistinctModelsProjectionsAndValues(t *testing.T) {
 		if n, err := nicknames.Count(t.Context(), tx); err != nil || n != 2 {
 			t.Fatal("nullable distinct count changed", err)
 		}
-		statuses := query.SelectValue(models.QueryUsers(), u.Status.Value()).Distinct()
+		statuses := query.SelectValue(models.QueryUsers(), query.Value(u.Status)).Distinct()
 		if rows, err := statuses.All(t.Context(), tx); err != nil || !reflect.DeepEqual(rows, []models.Status{models.StatusActive}) {
 			t.Fatal("distinct enum type or codec lost", err)
 		}
@@ -87,7 +87,7 @@ func TestPostgresDistinctModelsProjectionsAndValues(t *testing.T) {
 		}
 
 		// Reusing a parameterized scalar in ORDER BY must refer to its selected value.
-		last := query.SelectValue(models.QueryUsers().Where(u.Age.Gte(21)), u.Email.Value()).OrderBy(u.Age.Desc()).Limit(1)
+		last := query.SelectValue(models.QueryUsers().Where(u.Age.Gte(21)), query.Value(u.Email)).OrderBy(u.Age.Desc()).Limit(1)
 		scalar := query.ScalarQuery(models.QueryUsers(), last)
 		constant := query.SelectValue(models.QueryUsers(), scalar).Distinct().OrderBy(scalar.Asc())
 		if rows, err := constant.All(t.Context(), tx); err != nil || !reflect.DeepEqual(rows, []value.Nullable[string]{value.Of(users[2].Email)}) {
@@ -100,7 +100,7 @@ func TestPostgresDistinctModelsProjectionsAndValues(t *testing.T) {
 		// CTE dependencies, complete set records and value membership all preserve distinct.
 		common := query.CTE("unique_buyers", unique)
 		a := query.As[resultAlias](common, "chosen")
-		ids := query.SelectValue(a, models.UserFieldsAt(a.Scope()).ID.Value()).Distinct()
+		ids := query.SelectValue(a, query.Value(models.UserFieldsAt(a.Scope()).ID)).Distinct()
 		if rows, err := models.QueryUsers().Where(u.ID.InQuery(ids)).OrderBy(u.Email.Asc()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(rows, users[:2]) {
 			t.Fatal("distinct CTE membership failed", err)
 		}
@@ -144,7 +144,7 @@ func TestPostgresDistinctOnSelectsOrderedCompleteRecords(t *testing.T) {
 			}
 		}
 		// Keys need not be selected; output still has one declared value type.
-		amounts := query.SelectValue(models.QueryOrders(), o.TotalCents.Value()).DistinctOn(o.BuyerID.Group()).OrderBy(o.BuyerID.Asc(), o.TotalCents.Desc())
+		amounts := query.SelectValue(models.QueryOrders(), query.Value(o.TotalCents)).DistinctOn(o.BuyerID.Group()).OrderBy(o.BuyerID.Asc(), o.TotalCents.Desc())
 		if n, err := amounts.Count(t.Context(), tx); err != nil || n != 2 {
 			t.Fatal("unselected distinct key rejected", err)
 		}
@@ -157,7 +157,7 @@ func TestPostgresDistinctOnSelectsOrderedCompleteRecords(t *testing.T) {
 		link := query.Correlate(models.QueryUsers(), a)
 		outer := models.UserFieldsAt(query.OuterScope(link, models.QueryUsers().Scope()))
 		inner := models.OrderFieldsAt(query.InnerScope(link, a.Scope()))
-		matching := query.SelectCorrelatedValue(link, inner.ID.Value()).Where(inner.BuyerID.EqColumn(outer.ID)).DistinctOn(outer.ID.Group()).OrderBy(outer.ID.Asc(), inner.TotalCents.Desc())
+		matching := query.SelectCorrelatedValue(link, query.Value(inner.ID)).Where(inner.BuyerID.EqColumn(outer.ID)).DistinctOn(outer.ID.Group()).OrderBy(outer.ID.Asc(), inner.TotalCents.Desc())
 		if rows, err := models.QueryUsers().Where(matching.Exists()).OrderBy(u.Email.Asc()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(rows, users[:2]) {
 			t.Fatal("correlated distinct key failed", err)
 		}
@@ -177,7 +177,7 @@ func TestInvalidDistinctNeverExecutes(t *testing.T) {
 			t.Fatal("invalid distinct reached executor", err)
 		}
 	}
-	badOrder := query.SelectValue(models.QueryUsers(), u.Email.Value()).Distinct().OrderBy(u.Age.Asc())
+	badOrder := query.SelectValue(models.QueryUsers(), query.Value(u.Email)).Distinct().OrderBy(u.Age.Asc())
 	if rows, err := badOrder.All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
 		t.Fatal("unselected ordering reached executor", err)
 	}

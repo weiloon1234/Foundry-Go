@@ -26,6 +26,7 @@ func identityQuery() Query[identityRecord] {
 		NewModelField("deleted_at", codec.Nullable(codec.DateTime()), func(m identityRecord) value.Nullable[temporal.DateTime] { return m.DeletedAt }),
 	).WithSoftDeletes("deleted_at"))
 }
+
 func TestIdentityDescriptorRejectsNonPrimaryAndScopedQueries(t *testing.T) {
 	q := identityQuery()
 	primary := NewExactField[identityRecord]("identity_records", "id", codec.Signed[int64]())
@@ -64,6 +65,7 @@ func TestIdentityDescriptorRejectsNonPrimaryAndScopedQueries(t *testing.T) {
 		t.Fatal("identity lookup did not preserve key-only lock/visibility semantics", statement.SQL())
 	}
 }
+
 func TestPostgresIdentityBatchVisibilityAndPrimaryOnlyLock(t *testing.T) {
 	db := pgtest.Open(t)
 	schema := pgtest.Namespace(t, db)

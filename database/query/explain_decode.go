@@ -95,7 +95,9 @@ func decodePlan(ctx context.Context, data []byte, analyze bool) (Plan, error) {
 	}
 	return Plan{document: document, json: append([]byte(nil), data...), analyzed: analyze, nodes: count}, nil
 }
+
 func validPlanNumber(n float64) bool { return !math.IsNaN(n) && !math.IsInf(n, 0) && n >= 0 }
+
 func validPlanMeasurement(n value.Optional[float64]) bool {
 	v, ok := n.Get()
 	return !ok || validPlanNumber(v)

@@ -118,7 +118,7 @@ func executeHookedMutation[M any](ctx context.Context, writer database.Transacto
 		if err != nil {
 			return *new(M), err
 		}
-		operation := plan.kind.operation()
+		operation := plan.kind.Operation()
 		if hooks.Before != nil {
 			mutation, err := hooks.Before(ctx, tx, operation, before, plan.mutation)
 			if err != nil {
@@ -138,7 +138,7 @@ func executeHookedMutation[M any](ctx context.Context, writer database.Transacto
 			return *new(M), err
 		}
 		after := value.Set(result)
-		if plan.kind.sqlKind() == deleteModel {
+		if plan.kind.SqlKind() == deleteModel {
 			after = value.Optional[M]{}
 		}
 		if hooks.After != nil {

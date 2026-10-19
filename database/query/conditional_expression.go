@@ -5,35 +5,21 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-type conditionalKind uint8
+type conditionalKind = querycore.ConditionalKind
 
-const (
-	coalesceValues conditionalKind = iota + 1
-	nullIfValues
-)
+const coalesceValues = querycore.CoalesceValues
 
-type conditionalNode struct {
-	kind      conditionalKind
-	arguments []valueExpression
-	err       error
-}
+const nullIfValues = querycore.NullIfValues
 
-func (conditionalNode) valueNode() {}
+type conditionalNode = querycore.ConditionalNode
 
-type caseBranch struct {
-	condition expression
-	result    valueExpression
-}
-type caseNode struct {
-	branches  []caseBranch
-	otherwise valueExpression
-	err       error
-}
+type caseBranch = querycore.CaseBranch
 
-func (caseNode) valueNode() {}
+type caseNode = querycore.CaseNode
 
 // Coalesce returns a non-NULL fallback when the first row value is SQL NULL.
 // A zero/empty value is retained. Owners and concrete value types must match.
@@ -44,9 +30,9 @@ func Coalesce[S, V any](first RowValue[S, value.Nullable[V]], fallback RowValue[
 // CoalesceValue is the selected-value counterpart, accepting aggregate/window
 // results as well as row values. Its result cannot become a row predicate.
 func CoalesceValue[S, V any](first Expression[S, value.Nullable[V]], fallback Expression[S, V]) Expression[S, V] {
-	n := conditionalNode{kind: coalesceValues, arguments: []valueExpression{first.node, fallback.node}}
+	n := conditionalNode{Kind: coalesceValues, Arguments: []valueExpression{first.node, fallback.node}}
 	if value.IsNullableType[V]() {
-		n.err = fault.New(fault.Invalid, "non-null fallback must not be nullable")
+		n.Err = fault.New(fault.Invalid, "non-null fallback must not be nullable")
 	}
 	return Expression[S, V]{node: n, codec: fallback.codec}
 }
@@ -63,9 +49,9 @@ func CoalesceNullable[S, V any](first RowValue[S, value.Nullable[V]], rest ...Ro
 
 // CoalesceNullableValue accepts selected nullable inputs and retains one nullable layer.
 func CoalesceNullableValue[S, V any](first Expression[S, value.Nullable[V]], rest ...Expression[S, value.Nullable[V]]) Expression[S, value.Nullable[V]] {
-	n := conditionalNode{kind: coalesceValues, arguments: []valueExpression{first.node}}
+	n := conditionalNode{Kind: coalesceValues, Arguments: []valueExpression{first.node}}
 	for _, item := range rest {
-		n.arguments = append(n.arguments, item.node)
+		n.Arguments = append(n.Arguments, item.node)
 	}
 	first.node = n
 	return first
@@ -79,9 +65,9 @@ func NullIf[S, V any](first, second RowValue[S, V]) RowExpression[S, value.Nulla
 
 // NullIfValue compares selected values and adds one nullable result layer.
 func NullIfValue[S, V any](first, second Expression[S, V]) Expression[S, value.Nullable[V]] {
-	n := conditionalNode{kind: nullIfValues, arguments: []valueExpression{first.node, second.node}}
+	n := conditionalNode{Kind: nullIfValues, Arguments: []valueExpression{first.node, second.node}}
 	if value.IsNullableType[V]() {
-		n.err = fault.New(fault.Invalid, "nullable NULLIF input requires NullIfNullable")
+		n.Err = fault.New(fault.Invalid, "nullable NULLIF input requires NullIfNullable")
 	}
 	return Expression[S, value.Nullable[V]]{node: n, codec: codec.Nullable(first.codec)}
 }
@@ -93,7 +79,7 @@ func NullIfNullable[S, V any](first, second RowValue[S, value.Nullable[V]]) RowE
 
 // NullIfNullableValue compares selected nullable inputs without nesting wrappers.
 func NullIfNullableValue[S, V any](first, second Expression[S, value.Nullable[V]]) Expression[S, value.Nullable[V]] {
-	first.node = conditionalNode{kind: nullIfValues, arguments: []valueExpression{first.node, second.node}}
+	first.node = conditionalNode{Kind: nullIfValues, Arguments: []valueExpression{first.node, second.node}}
 	return first
 }
 
@@ -104,6 +90,7 @@ type Case[S, V any] struct{ builder caseBuilder[S, V] }
 // ValueCase is a selected CASE whose conditions/results may contain ordinary
 // aggregates. It never exposes row predicate methods.
 type ValueCase[S, V any] struct{ builder caseBuilder[S, V] }
+
 type caseBuilder[S, V any] struct {
 	_        [0]*S
 	branches []caseBranch
@@ -114,13 +101,16 @@ type caseBuilder[S, V any] struct {
 func When[S, V any](condition Predicate[S], result RowValue[S, V]) Case[S, V] {
 	return (Case[S, V]{}).When(condition, result)
 }
+
 func (c Case[S, V]) When(condition Predicate[S], result RowValue[S, V]) Case[S, V] {
 	c.builder = c.builder.append(condition.expression, rowInput(result).Value())
 	return c
 }
+
 func (c Case[S, V]) Else(result RowValue[S, V]) RowExpression[S, V] {
 	return RowExpression[S, V]{c.builder.finish(rowInput(result).Value().node)}
 }
+
 func (c Case[S, V]) ElseNull() RowExpression[S, value.Nullable[V]] {
 	return RowExpression[S, value.Nullable[V]]{c.builder.finishNull()}
 }
@@ -130,29 +120,34 @@ func (c Case[S, V]) ElseNull() RowExpression[S, value.Nullable[V]] {
 func WhenValue[S, V any](condition HavingPredicate[S], result Expression[S, V]) ValueCase[S, V] {
 	return (ValueCase[S, V]{}).When(condition, result)
 }
+
 func (c ValueCase[S, V]) When(condition HavingPredicate[S], result Expression[S, V]) ValueCase[S, V] {
 	c.builder = c.builder.append(condition.expression, result)
 	return c
 }
+
 func (c ValueCase[S, V]) Else(result Expression[S, V]) Expression[S, V] {
 	return c.builder.finish(result.node)
 }
+
 func (c ValueCase[S, V]) ElseNull() Expression[S, value.Nullable[V]] { return c.builder.finishNull() }
 
 func (c caseBuilder[S, V]) append(condition expression, result Expression[S, V]) caseBuilder[S, V] {
 	if len(c.branches) == 0 {
 		c.codec = result.codec
 	}
-	c.branches = append(slices.Clone(c.branches), caseBranch{condition, result.node})
+	c.branches = append(slices.Clone(c.branches), caseBranch{Condition: condition, Result: result.node})
 	return c
 }
+
 func (c caseBuilder[S, V]) finish(otherwise valueExpression) Expression[S, V] {
-	return Expression[S, V]{node: caseNode{branches: c.branches, otherwise: otherwise}, codec: c.codec}
+	return Expression[S, V]{node: caseNode{Branches: c.branches, Otherwise: otherwise}, codec: c.codec}
 }
+
 func (c caseBuilder[S, V]) finishNull() Expression[S, value.Nullable[V]] {
-	n := caseNode{branches: c.branches, otherwise: parameterNode{kind: c.codec.ParameterType()}}
+	n := caseNode{Branches: c.branches, Otherwise: parameterNode{Kind: c.codec.ParameterType()}}
 	if value.IsNullableType[V]() {
-		n.err = fault.New(fault.Invalid, "CASE result is already nullable; provide a nullable Else value")
+		n.Err = fault.New(fault.Invalid, "CASE result is already nullable; provide a nullable Else value")
 	}
 	return Expression[S, value.Nullable[V]]{node: n, codec: codec.Nullable(c.codec)}
 }

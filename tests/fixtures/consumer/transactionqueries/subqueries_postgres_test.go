@@ -13,9 +13,9 @@ func TestPostgresTransactionMembershipAndExists(t *testing.T) {
 	outer := query.AsTransaction[claimedAlias](query.TransactionOf(QueryRecords()), "outer_records")
 	inner := query.AsTransaction[otherAlias](query.TransactionOf(QueryRecords()), "inner_records")
 	a, b := RecordFieldsAt(outer.Scope()), RecordFieldsAt(inner.Scope())
-	values := query.SelectTransactionValue(inner, b.ID.Value()).Where(b.ID.Eq(2)).ForUpdate()
+	values := query.SelectTransactionValue(inner, query.Value(b.ID)).Where(b.ID.Eq(2)).ForUpdate()
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
-		rows, err := query.SelectTransactionRecord(outer, outer.Scope()).Where(query.TransactionInQuery(query.Add(a.ID, a.ID.Param(1)), values)).All(ctx, tx)
+		rows, err := query.SelectTransactionRecord(outer, outer.Scope()).Where(query.TransactionInQuery(query.Add(a.ID, query.Param(a.ID, 1)), values)).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -59,7 +59,7 @@ func TestPostgresTransactionScalarCardinalityAndNulls(t *testing.T) {
 			if mode == "many" {
 				predicate = fields.ID.Gt(1)
 			}
-			values := query.SelectTransactionValue(inner, fields.ID.Value()).Where(predicate).ForUpdate()
+			values := query.SelectTransactionValue(inner, query.Value(fields.ID)).Where(predicate).ForUpdate()
 			scalar := query.TransactionScalarQuery(outer, values)
 			if mode == "nullable" {
 				nullable := query.SelectTransactionValue(inner, query.NullFor(fields.ID).Value()).Where(predicate).ForUpdate()
@@ -123,7 +123,7 @@ func TestPostgresTransactionNullableMembershipAndScalarRow(t *testing.T) {
 		}
 	}
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
-		values := query.SelectTransactionValue(inner, b.ID.Value()).Where(b.ID.Eq(2)).ForUpdate()
+		values := query.SelectTransactionValue(inner, query.Value(b.ID)).Where(b.ID.Eq(2)).ForUpdate()
 		scalar := query.TransactionScalarRowQuery(outer, values)
 		rows, err := query.SelectTransactionRecord(outer, outer.Scope()).Where(query.Equal(query.NullableRow(a.ID), scalar)).All(ctx, tx)
 		if err != nil {

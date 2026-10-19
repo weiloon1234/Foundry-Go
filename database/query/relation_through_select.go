@@ -7,40 +7,42 @@ import (
 )
 
 const throughTargetAlias = "foundry_target"
+
 const throughPivotAlias = "foundry_pivot"
 
 func (r ThroughRelation[M, N, P]) compileThrough(ctx context.Context, keys expression, limit int) (Statement, error) {
 	node := r.throughSelect()
 	if keys != nil {
-		node.predicates = append(node.predicates, requalify(keys, throughPivotAlias))
+		node.Predicates = append(node.Predicates, requalify(keys, throughPivotAlias))
 	}
-	node.limit = value.Set(limit)
+	node.Limit = value.Set(limit)
 	// Declaration validation compiles without a context: context scopes then
 	// stand in as TRUE for shape checks only; execution always resolves them.
-	c := compiler{scopeContext: ctx, scopeShapeOnly: ctx == nil}
-	sql, err := c.compileSelect(node)
+	c := compiler{ScopeContext: ctx, ScopeShapeOnly: ctx == nil}
+	sql, err := c.CompileSelect(node)
 	if err != nil {
 		return Statement{}, err
 	}
-	return Statement{sql: sql, arguments: c.arguments}, nil
+	return Statement{sql: sql, arguments: c.Arguments}, nil
 }
 
 func (r ThroughRelation[M, N, P]) throughSelect() selectNode {
 	return r.throughSelectAt(throughTargetAlias, throughPivotAlias)
 }
+
 func (r ThroughRelation[M, N, P]) throughSelectAt(targetAlias, pivotAlias string) selectNode {
 	target, pivot := r.spec.target, r.pivot
 	node := selectNode{
-		source:     tableSource{table: target.table, alias: targetAlias, columns: target.definition.columns},
-		selections: append(columnSelections(targetAlias, target.definition.columns), columnSelections(pivotAlias, pivot.definition.columns)...),
-		joins: []joinNode{{source: tableSource{table: pivot.table, alias: pivotAlias, columns: pivot.definition.columns},
-			on: binaryComparison{fieldRef{targetAlias, r.spec.foreign.column}, fieldRef{pivotAlias, r.pivotForeign.column}, equal}}},
+		Source:     tableSource{Table: target.queryCore.Table, Alias: targetAlias, Columns: target.definition.modelDefinition.Columns},
+		Selections: append(columnSelections(targetAlias, target.definition.modelDefinition.Columns), columnSelections(pivotAlias, pivot.definition.modelDefinition.Columns)...),
+		Joins: []joinNode{{Source: tableSource{Table: pivot.queryCore.Table, Alias: pivotAlias, Columns: pivot.definition.modelDefinition.Columns},
+			On: binaryComparison{Left: fieldRef{Table: targetAlias, Column: r.spec.foreign.Column}, Right: fieldRef{Table: pivotAlias, Column: r.pivotForeign.Column}, Operator: equal}}},
 	}
-	for _, p := range target.effectivePredicates() {
-		node.predicates = append(node.predicates, requalify(p, targetAlias))
+	for _, p := range target.queryCore.EffectivePredicates() {
+		node.Predicates = append(node.Predicates, requalify(p, targetAlias))
 	}
-	for _, p := range pivot.effectivePredicates() {
-		node.predicates = append(node.predicates, requalify(p, pivotAlias))
+	for _, p := range pivot.queryCore.EffectivePredicates() {
+		node.Predicates = append(node.Predicates, requalify(p, pivotAlias))
 	}
 	seen := make(map[fieldRef]bool, len(r.orders))
 	for _, o := range r.orders {
@@ -49,14 +51,14 @@ func (r ThroughRelation[M, N, P]) throughSelectAt(targetAlias, pivotAlias string
 			alias = pivotAlias
 		}
 		expr := requalifyValue(o.value, alias)
-		node.orders = append(node.orders, orderNode{expr, o.descending, o.nulls})
+		node.Orders = append(node.Orders, orderNode{Expression: expr, Descending: o.descending, Nulls: o.nulls})
 		if field, plain := expr.(fieldRef); plain {
 			seen[field] = true
 		}
 	}
-	for _, f := range []fieldRef{{targetAlias, target.definition.primary}, {pivotAlias, pivot.definition.primary}} {
+	for _, f := range []fieldRef{{Table: targetAlias, Column: target.definition.modelDefinition.Primary}, {Table: pivotAlias, Column: pivot.definition.modelDefinition.Primary}} {
 		if !seen[f] {
-			node.orders = append(node.orders, orderNode{expression: f})
+			node.Orders = append(node.Orders, orderNode{Expression: f})
 		}
 	}
 	return node

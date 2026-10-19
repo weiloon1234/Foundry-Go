@@ -15,7 +15,7 @@ func TestWindowCompilationSharesBindingsAndDistinctOrdering(t *testing.T) {
 	base := cursorQuery()
 	id := scopedID(base.Scope())
 	w := WindowFor(base).PartitionBy(id.Group()).OrderBy(id.Desc()).RowsBetween(Preceding(2), CurrentRow()).ExcludeTies()
-	previous := LagOr(id.Value(), 1, int64(99), w)
+	previous := LagOr(Value(id), 1, int64(99), w)
 	q := SelectValue(base.Where(id.Ne(7)), previous).Distinct().OrderBy(previous.Asc()).Limit(4)
 	s, err := q.Compile()
 	if err != nil {
@@ -41,16 +41,16 @@ func TestWindowAggregatesUseOrdinaryAggregateCompiler(t *testing.T) {
 	w := WindowFor(base).OrderBy(id.Asc())
 	for name, expression := range map[string]valueExpression{
 		"COUNT(*)":                             Count[cursorRecord]().Over(w).node,
-		`COUNT("records"."id")`:                id.Count().Over(w).node,
-		`SUM(CAST("records"."id" AS numeric))`: id.Sum().Over(w).node,
-		`AVG(CAST("records"."id" AS numeric))`: id.Avg().Over(w).node,
-		`MIN("records"."id")`:                  id.Min().Over(w).node,
-		`MAX("records"."id")`:                  id.Max().Over(w).node,
+		`COUNT("records"."id")`:                CountField(id).Over(w).node,
+		`SUM(CAST("records"."id" AS numeric))`: Sum(id).Over(w).node,
+		`AVG(CAST("records"."id" AS numeric))`: Avg(id).Over(w).node,
+		`MIN("records"."id")`:                  Min(id).Over(w).node,
+		`MAX("records"."id")`:                  Max(id).Over(w).node,
 	} {
 		node := base.modelSelect()
-		node.selections = []selectItem{{expression: id.Value().node}, {expression: expression}}
+		node.Selections = []selectItem{{Expression: Value(id).node}, {Expression: expression}}
 		var c compiler
-		s, err := c.compileSelect(node)
+		s, err := c.CompileSelect(node)
 		if err != nil || !strings.Contains(s, name+` OVER (ORDER BY "records"."id" ASC)`) || strings.Contains(s, "GROUP BY") {
 			t.Fatal(name, s, err)
 		}
@@ -99,28 +99,28 @@ func TestWindowValidationRejectsMalformedAndNestedCalls(t *testing.T) {
 	for name, expression := range map[string]valueExpression{
 		"zero kind":          windowNode{},
 		"zero buckets":       NTile(0, w).node,
-		"zero nth":           NthValue(id.Value(), 0, w).node,
+		"zero nth":           NthValue(Value(id), 0, w).node,
 		"nested input":       Lag(RowNumber(w), 1, w).node,
-		"distinct aggregate": id.CountDistinct().Over(w).node,
+		"distinct aggregate": CountDistinctField(id).Over(w).node,
 		"zero value":         FirstValue(Expression[cursorRecord, int64]{}, w).node,
-		"nested null":        Lag(Nullable(id.Value()), 1, w).node,
+		"nested null":        Lag(Nullable(Value(id)), 1, w).node,
 	} {
 		node := base.modelSelect()
-		node.selections = []selectItem{{expression: expression}}
+		node.Selections = []selectItem{{Expression: expression}}
 		var c compiler
-		if _, err := c.compileSelect(node); !errors.Is(err, fault.Invalid) {
+		if _, err := c.CompileSelect(node); !errors.Is(err, fault.Invalid) {
 			t.Fatal(name, err)
 		}
 	}
 	// HAVING is not a window evaluation stage even for privately forged nodes.
 	node := base.modelSelect()
-	node.selections = []selectItem{{expression: Count[cursorRecord]().Value().node}}
-	node.having = []expression{typedComparison(RowNumber(w).node, equal, codec.Signed[int64](), []int64{1})}
+	node.Selections = []selectItem{{Expression: Count[cursorRecord]().Value().node}}
+	node.Having = []expression{typedComparison(RowNumber(w).node, equal, codec.Signed[int64](), []int64{1})}
 	var c compiler
-	if _, err := c.compileSelect(node); !errors.Is(err, fault.Invalid) {
+	if _, err := c.CompileSelect(node); !errors.Is(err, fault.Invalid) {
 		t.Fatal("window in HAVING accepted", err)
 	}
-	if _, err := SelectValue(base, FirstValue(id.Value(), w.RowsBetween(Preceding(7), Preceding(8)))).Compile(); err != nil {
+	if _, err := SelectValue(base, FirstValue(Value(id), w.RowsBetween(Preceding(7), Preceding(8)))).Compile(); err != nil {
 		t.Fatal("legal empty frame rejected", err)
 	}
 }
@@ -135,18 +135,18 @@ func TestWindowSubqueriesAndCorrelationKeepSelectLevels(t *testing.T) {
 	}
 	alias := As[firstAlias](CTE("numbered", base.Where(id.Ne(9))), "a")
 	aid := scopedID(alias.Scope())
-	scalar := ScalarQuery(base, SelectValue(alias, aid.Value()).Limit(1))
+	scalar := ScalarQuery(base, SelectValue(alias, Value(aid)).Limit(1))
 	if s, err := SelectValue(base, RowNumber(WindowFor(base).OrderBy(scalar.Asc()))).Compile(); err != nil || !strings.HasPrefix(s.SQL(), "WITH ") {
 		t.Fatal("window ordering lost CTE dependencies", err)
 	}
 	link := Correlate(base, As[firstAlias](base, "child"))
 	parent := scopedID(OuterScope(link, base.Scope()))
 	child := scopedID(InnerScope(link, As[firstAlias](base, "child").Scope()))
-	correlated := SelectCorrelatedValue(link, parent.Count().Over(WindowFor(link).PartitionBy(parent.Group()).OrderBy(child.Asc()))).Where(child.EqColumn(parent)).Limit(1)
+	correlated := SelectCorrelatedValue(link, CountField(parent).Over(WindowFor(link).PartitionBy(parent.Group()).OrderBy(child.Asc()))).Where(child.EqColumn(parent)).Limit(1)
 	sub := correlated.correlatedValue().value.subquery
 	changed := requalifyCorrelation(sub, "qualified")
-	n := changed.node.selections[0].expression.(windowNode)
-	if n.aggregate.field.table != "qualified" || n.window.partitions[0].(fieldRef).table != "qualified" || sub.node.selections[0].expression.(windowNode).window.partitions[0].(fieldRef).table != "records" {
+	n := changed.Node.Selections[0].Expression.(windowNode)
+	if n.Aggregate.Field.Table != "qualified" || n.Window.Partitions[0].(fieldRef).Table != "qualified" || sub.Node.Selections[0].Expression.(windowNode).Window.Partitions[0].(fieldRef).Table != "records" {
 		t.Fatal("window correlation missed qualifier or mutated source")
 	}
 	if _, err := SelectValue(base, CorrelatedScalarQuery(correlated)).Compile(); err != nil {
@@ -158,22 +158,22 @@ func TestWindowDepthAndParameterBudgets(t *testing.T) {
 	base := cursorQuery()
 	id := scopedID(base.Scope())
 	w := WindowFor(base)
-	q := SelectValue(base, LagOr(id.Value(), 1, int64(2), w))
+	q := SelectValue(base, LagOr(Value(id), 1, int64(2), w))
 	if _, err := q.Where(wideScoped(base.Scope(), MaxParameters)).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("window arguments bypassed parameter budget", err)
 	}
 	var n windowNode
-	n.kind = rowNumberWindow
-	n.window.orders = make([]orderNode, 1)
-	n.window.orders[0].expression = n
+	n.Kind = rowNumberWindow
+	n.Window.Orders = make([]orderNode, 1)
+	n.Window.Orders[0].Expression = n
 	node := base.modelSelect()
-	node.selections = []selectItem{{expression: n}}
+	node.Selections = []selectItem{{Expression: n}}
 	var c compiler
-	if _, err := c.compileSelect(node); !errors.Is(err, fault.Invalid) {
+	if _, err := c.CompileSelect(node); !errors.Is(err, fault.Invalid) {
 		t.Fatal("window cycle bypassed analysis bound", err)
 	}
 	// Nullable helpers retain one result wrapper.
-	nullable := NewNullableField[cursorRecord, int64]("records", "rank", codec.Signed[int64]()).Value()
+	nullable := Value(NewNullableField[cursorRecord, int64]("records", "rank", codec.Signed[int64]()))
 	var _ Expression[cursorRecord, value.Nullable[int64]] = LagNullable(nullable, 1, w)
 	if _, err := SelectValue(base, LeadOr(nullable, 1, value.Of[int64](4), w)).Compile(); err != nil {
 		t.Fatal(err)

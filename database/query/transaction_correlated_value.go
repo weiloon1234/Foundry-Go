@@ -16,26 +16,32 @@ type TransactionCorrelatedValueQuery[O, I TransactionScope, V any] struct {
 func SelectTransactionCorrelatedValue[O, I TransactionScope, V any](source TransactionCorrelatedSource[O, I], expression Expression[TransactionCorrelation[O, I], V]) TransactionCorrelatedValueQuery[O, I, V] {
 	return TransactionCorrelatedValueQuery[O, I, V]{query: SelectValue(source.source, expression), outer: source.outer.scopeRequirement}
 }
+
 func (q TransactionCorrelatedValueQuery[O, I, V]) Where(predicates ...Predicate[TransactionCorrelation[O, I]]) TransactionCorrelatedValueQuery[O, I, V] {
 	q.query = q.query.Where(predicates...)
 	return q
 }
+
 func (q TransactionCorrelatedValueQuery[O, I, V]) OrderBy(orders ...ProjectionOrder[TransactionCorrelation[O, I]]) TransactionCorrelatedValueQuery[O, I, V] {
 	q.query = q.query.OrderBy(orders...)
 	return q
 }
+
 func (q TransactionCorrelatedValueQuery[O, I, V]) GroupBy(groups ...Group[TransactionCorrelation[O, I]]) TransactionCorrelatedValueQuery[O, I, V] {
 	q.query = q.query.GroupBy(groups...)
 	return q
 }
+
 func (q TransactionCorrelatedValueQuery[O, I, V]) Having(predicates ...HavingPredicate[TransactionCorrelation[O, I]]) TransactionCorrelatedValueQuery[O, I, V] {
 	q.query = q.query.Having(predicates...)
 	return q
 }
+
 func (q TransactionCorrelatedValueQuery[O, I, V]) Limit(count int) TransactionCorrelatedValueQuery[O, I, V] {
 	q.query = q.query.Limit(count)
 	return q
 }
+
 func (q TransactionCorrelatedValueQuery[O, I, V]) Offset(count int) TransactionCorrelatedValueQuery[O, I, V] {
 	q.query = q.query.Offset(count)
 	return q
@@ -47,12 +53,13 @@ type TransactionCorrelatedValueSource[O TransactionScope, V any] interface{ tran
 
 func (q TransactionCorrelatedValueQuery[O, I, V]) transactionCorrelatedValue() correlatedValue[O, V] {
 	result := q.query.valueQuery()
-	result.correlation = &q.outer
+	result.subquery.Correlation = &q.outer
 	return correlatedValue[O, V]{value: result}
 }
+
 func transactionCorrelatedValueOf[O TransactionScope, V any](source TransactionCorrelatedValueSource[O, V]) valueSubquery[V] {
 	if nilDescriptor(source) {
-		return valueSubquery[V]{subquery: subquery{err: fault.New(fault.Invalid, "transaction correlated value requires a source")}}
+		return valueSubquery[V]{subquery: subquery{Err: fault.New(fault.Invalid, "transaction correlated value requires a source")}}
 	}
 	return source.transactionCorrelatedValue().value
 }
@@ -65,7 +72,7 @@ func (a transactionCorrelatedValueAdapter[O, V]) correlatedValue() correlatedVal
 
 // Exists retains the parent requirement, inner result window and locks.
 func (q TransactionCorrelatedValueQuery[O, I, V]) Exists() Predicate[O] {
-	return Predicate[O]{expression: subqueryPredicate{query: q.transactionCorrelatedValue().value.subquery}}
+	return Predicate[O]{expression: subqueryPredicate{Query: q.transactionCorrelatedValue().value.subquery}}
 }
 
 // TransactionCorrelatedScalarQuery returns NULL for no row and preserves database cardinality errors.

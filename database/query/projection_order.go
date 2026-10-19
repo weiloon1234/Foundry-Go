@@ -11,16 +11,20 @@ type expressionOrder[S any] struct {
 }
 
 func (o expressionOrder[S]) projectionOrder() expressionOrder[S] { return o }
+
 func (o Order[S]) projectionOrder() expressionOrder[S] {
-	return expressionOrder[S]{node: orderNode{o.value(), o.descending, o.nulls}}
+	return expressionOrder[S]{node: orderNode{Expression: o.value(), Descending: o.descending, Nulls: o.nulls}}
 }
 
 // Asc orders a projected expression. It can be combined with ordinary field orders.
 func (e Expression[S, V]) Asc() ProjectionOrder[S] {
-	return expressionOrder[S]{node: orderNode{expression: e.node}}
+	return expressionOrder[S]{node: orderNode{Expression: e.node}}
 }
+
 func (e Expression[S, V]) Desc() ProjectionOrder[S] {
-	return expressionOrder[S]{node: orderNode{expression: e.node, descending: true}}
+	return expressionOrder[S]{node: orderNode{Expression: e.node, Descending: true}}
 }
-func (a Aggregate[M, V]) Asc() ProjectionOrder[M]  { return a.Value().Asc() }
+
+func (a Aggregate[M, V]) Asc() ProjectionOrder[M] { return a.Value().Asc() }
+
 func (a Aggregate[M, V]) Desc() ProjectionOrder[M] { return a.Value().Desc() }

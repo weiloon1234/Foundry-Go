@@ -24,34 +24,42 @@ func (q CorrelatedRecordQuery[O, I, R]) Where(predicates ...Predicate[Correlatio
 	q.query = q.query.Where(predicates...)
 	return q
 }
+
 func (q CorrelatedRecordQuery[O, I, R]) GroupBy(groups ...Group[Correlation[O, I]]) CorrelatedRecordQuery[O, I, R] {
 	q.query = q.query.GroupBy(groups...)
 	return q
 }
+
 func (q CorrelatedRecordQuery[O, I, R]) Having(predicates ...HavingPredicate[Correlation[O, I]]) CorrelatedRecordQuery[O, I, R] {
 	q.query = q.query.Having(predicates...)
 	return q
 }
+
 func (q CorrelatedRecordQuery[O, I, R]) OrderBy(orders ...ProjectionOrder[Correlation[O, I]]) CorrelatedRecordQuery[O, I, R] {
 	q.query = q.query.OrderBy(orders...)
 	return q
 }
+
 func (q CorrelatedRecordQuery[O, I, R]) Limit(count int) CorrelatedRecordQuery[O, I, R] {
 	q.query = q.query.Limit(count)
 	return q
 }
+
 func (q CorrelatedRecordQuery[O, I, R]) Offset(count int) CorrelatedRecordQuery[O, I, R] {
 	q.query = q.query.Offset(count)
 	return q
 }
+
 func (q CorrelatedRecordQuery[O, I, R]) Distinct() CorrelatedRecordQuery[O, I, R] {
 	q.query = q.query.Distinct()
 	return q
 }
+
 func (q CorrelatedRecordQuery[O, I, R]) DistinctOn(keys ...Group[Correlation[O, I]]) CorrelatedRecordQuery[O, I, R] {
 	q.query = q.query.DistinctOn(keys...)
 	return q
 }
+
 func (q CorrelatedRecordQuery[O, I, R]) DistinctOnValues(keys ...ProjectionKey[Correlation[O, I]]) CorrelatedRecordQuery[O, I, R] {
 	q.query = q.query.DistinctOnValues(keys...)
 	return q
@@ -60,12 +68,13 @@ func (q CorrelatedRecordQuery[O, I, R]) DistinctOnValues(keys ...ProjectionKey[C
 // Exists keeps the selected record's grouping, filters and result window.
 func (q CorrelatedRecordQuery[O, I, R]) Exists() Predicate[O] {
 	r := q.correlatedRecord()
-	return Predicate[O]{expression: subqueryPredicate{query: subquery{node: r.query.node, err: r.query.err, correlation: &r.outer}}}
+	return Predicate[O]{expression: subqueryPredicate{Query: subquery{Node: r.query.node, Err: r.query.err, Correlation: &r.outer}}}
 }
 
 // CorrelatedRecordSource retains both the outer scope and complete record type.
 // It deliberately does not implement RecordQuerySource or ProjectionSource.
 type CorrelatedRecordSource[O, R any] interface{ correlatedRecord() correlatedRecord[O, R] }
+
 type correlatedRecord[O, R any] struct {
 	_     [0]*O
 	query recordQuery[R]

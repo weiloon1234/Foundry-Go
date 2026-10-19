@@ -34,14 +34,14 @@ func orderTable() datatable.Table[OrderScope, OrderRow, Authority] {
 	wire := OrderRowValidationFields()
 	text := foundryhttp.StringQuery[string]()
 	amount := foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal]()
-	base := SelectOrderRow(joined, OrderRowSelection[OrderScope]{ID: order.ID.Value(), MemberName: member.Name.Value(), Label: order.Label.Value(), Amount: order.Amount.Value()})
+	base := SelectOrderRow(joined, OrderRowSelection[OrderScope]{ID: query.Value(order.ID), MemberName: query.Value(member.Name), Label: query.Value(order.Label), Amount: query.Value(order.Amount)})
 	return datatable.Define(datatable.Spec[OrderScope, OrderRow, Authority]{
 		ID: "reports.orders", Row: OrderRowJSON(), Exports: true,
 		Columns: []datatable.ColumnRegistration[OrderScope, OrderRow]{
 			datatable.DefineColumn[OrderScope](wire.ID, OrderIDLabel).ExportAs(datatable.ScalarCell(foundryhttp.ModelIDQuery[Order]())).Registration(),
-			datatable.DefineColumn[OrderScope](wire.MemberName, MemberNameLabel).SortBy(member.Name.Value()).FilterBy(datatable.Where(text, member.Name)).Searchable().ExportAs(datatable.ScalarCell(text)).Registration(),
+			datatable.DefineColumn[OrderScope](wire.MemberName, MemberNameLabel).SortBy(query.Value(member.Name)).FilterBy(datatable.Where(text, member.Name)).Searchable().ExportAs(datatable.ScalarCell(text)).Registration(),
 			datatable.DefineColumn[OrderScope](wire.Label, OrderLabel).FilterBy(datatable.Where(text, order.Label)).Searchable().ExportAs(datatable.ScalarCell(text)).Registration(),
-			datatable.DefineColumn[OrderScope](wire.Amount, AmountLabel).SortBy(order.Amount.Value()).FilterBy(datatable.Where(amount, order.Amount)).ExportAs(datatable.ScalarCell(amount)).Registration(),
+			datatable.DefineColumn[OrderScope](wire.Amount, AmountLabel).SortBy(query.Value(order.Amount)).FilterBy(datatable.Where(amount, order.Amount)).ExportAs(datatable.ScalarCell(amount)).Registration(),
 		},
 		DefaultSort: []datatable.Sort{{Column: wire.MemberName.Name(), Direction: datatable.Ascending}},
 		Stable:      []query.ProjectionOrder[OrderScope]{order.ID.Asc()}, Authorize: authorize,
@@ -57,7 +57,7 @@ func orderTable() datatable.Table[OrderScope, OrderRow, Authority] {
 
 func totalTable() datatable.Table[Order, MemberTotal, Authority] {
 	fields, wire := OrderFields(), MemberTotalValidationFields()
-	count, total := query.Count[Order](), fields.Amount.Sum()
+	count, total := query.Count[Order](), query.Sum(fields.Amount)
 	amount := foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal]()
 	memberID := foundryhttp.ModelIDQuery[Member]()
 	return datatable.Define(datatable.Spec[Order, MemberTotal, Authority]{
@@ -75,7 +75,7 @@ func totalTable() datatable.Table[Order, MemberTotal, Authority] {
 				return query.ProjectionQuery[Order, MemberTotal]{}, err
 			}
 			source := QueryReportOrders().Where(fields.TenantID.Eq(actor.TenantID), OrderRelations().Member.Where(MemberFields().TenantID.Eq(actor.TenantID)).Exists())
-			return SelectMemberTotal(source, MemberTotalSelection[Order]{MemberID: fields.MemberID.Value(), Count: count.Value(), Total: total.Value()}).GroupBy(fields.MemberID.Group()), nil
+			return SelectMemberTotal(source, MemberTotalSelection[Order]{MemberID: query.Value(fields.MemberID), Count: count.Value(), Total: total.Value()}).GroupBy(fields.MemberID.Group()), nil
 		},
 	})
 }

@@ -230,7 +230,7 @@ func (r ThroughRelation[M, N, P]) lockedSourceKey(ctx context.Context, tx *datab
 }
 
 func relationKey[M any](q Query[M], ref fieldRef, model M) (pivotKey, error) {
-	field, ok := q.definition.modelField(ref.column)
+	field, ok := q.definition.modelField(ref.Column)
 	if !ok {
 		return pivotKey{}, fault.New(fault.Invalid, "relation key has no declared codec")
 	}
@@ -257,14 +257,14 @@ func (r ThroughRelation[M, N, P]) lockedTargetKeys(ctx context.Context, tx *data
 		return nil, nil
 	}
 	target := r.spec.target
-	primary, ok := target.definition.modelField(target.definition.primary)
+	primary, ok := target.definition.modelField(target.definition.modelDefinition.Primary)
 	if !ok || primary.get == nil {
 		return nil, fault.New(fault.Invalid, "relation writes require a target primary-key codec")
 	}
 	requested := make([]pivotKey, 0, len(targets))
 	seen := make(map[cursorValue]bool, len(targets))
 	for _, model := range targets {
-		key, err := relationKey(target, fieldRef{target.table, target.definition.primary}, model)
+		key, err := relationKey(target, fieldRef{Table: target.queryCore.Table, Column: target.definition.modelDefinition.Primary}, model)
 		if err != nil {
 			return nil, err
 		}
@@ -273,7 +273,7 @@ func (r ThroughRelation[M, N, P]) lockedTargetKeys(ctx context.Context, tx *data
 			requested = append(requested, key)
 		}
 	}
-	found, err := lockedModels(ctx, tx, target.Where(keyMembership[N](fieldRef{target.table, target.definition.primary}, primary, requested)), len(requested))
+	found, err := lockedModels(ctx, tx, target.Where(keyMembership[N](fieldRef{Table: target.queryCore.Table, Column: target.definition.modelDefinition.Primary}, primary, requested)), len(requested))
 	if err != nil {
 		return nil, err
 	}
@@ -282,7 +282,7 @@ func (r ThroughRelation[M, N, P]) lockedTargetKeys(ctx context.Context, tx *data
 	}
 	byPrimary := make(map[cursorValue]N, len(found))
 	for _, model := range found {
-		key, err := relationKey(target, fieldRef{target.table, target.definition.primary}, model)
+		key, err := relationKey(target, fieldRef{Table: target.queryCore.Table, Column: target.definition.modelDefinition.Primary}, model)
 		if err != nil {
 			return nil, err
 		}
@@ -304,8 +304,8 @@ func (r ThroughRelation[M, N, P]) lockedTargetKeys(ctx context.Context, tx *data
 			result = append(result, foreign)
 		}
 	}
-	if r.spec.foreign.column != target.definition.primary {
-		field, _ := target.definition.modelField(r.spec.foreign.column)
+	if r.spec.foreign.Column != target.definition.modelDefinition.Primary {
+		field, _ := target.definition.modelField(r.spec.foreign.Column)
 		matches, err := r.spec.target.Where(keyMembership[N](r.spec.foreign, field, result)).Count(ctx, tx)
 		if err != nil {
 			return nil, err
@@ -339,17 +339,17 @@ func keyMembership[M any](ref fieldRef, field ModelField[M], keys []pivotKey) Pr
 	for i, key := range keys {
 		values[i] = key.raw
 	}
-	return Predicate[M]{expression: comparison{operand: ref, operator: in, values: values, bind: field.decode, kind: field.kind}}
+	return Predicate[M]{expression: comparison{Operand: ref, Operator: in, Values: values, Bind: field.decode, Kind: field.kind}}
 }
 
 func keyEquality[M any](ref fieldRef, field ModelField[M], key pivotKey) Predicate[M] {
-	return Predicate[M]{expression: comparison{operand: ref, operator: equal, values: []any{key.raw}, bind: field.decode, kind: field.kind}}
+	return Predicate[M]{expression: comparison{Operand: ref, Operator: equal, Values: []any{key.raw}, Bind: field.decode, Kind: field.kind}}
 }
 
 // sourceLinks selects the source's pivots within the pivot filters.
 func (r ThroughRelation[M, N, P]) sourceLinks(source pivotKey) (Query[P], error) {
-	local, ok := r.pivot.definition.modelField(r.pivotLocal.column)
-	_, found := r.pivot.definition.modelField(r.pivotForeign.column)
+	local, ok := r.pivot.definition.modelField(r.pivotLocal.Column)
+	_, found := r.pivot.definition.modelField(r.pivotForeign.Column)
 	if !ok || !found {
 		return Query[P]{}, fault.New(fault.Invalid, "relation pivot keys have no declared codecs")
 	}
@@ -363,7 +363,7 @@ func (r ThroughRelation[M, N, P]) currentLinks(ctx context.Context, tx *database
 	if err != nil {
 		return nil, err
 	}
-	statement, err := links.OrderBy(Order[P]{field: fieldRef{links.table, links.definition.primary}}).ForUpdate().Limit(limit + 1).Compile()
+	statement, err := links.OrderBy(Order[P]{field: fieldRef{Table: links.queryCore.Table, Column: links.definition.modelDefinition.Primary}}).ForUpdate().Limit(limit + 1).Compile()
 	if err != nil {
 		return nil, err
 	}
@@ -427,7 +427,7 @@ func (r ThroughRelation[M, N, P]) linksTo(source pivotKey, keys []pivotKey, all 
 	if err != nil || all {
 		return links, err
 	}
-	foreign, _ := r.pivot.definition.modelField(r.pivotForeign.column)
+	foreign, _ := r.pivot.definition.modelField(r.pivotForeign.Column)
 	return links.Where(keyMembership[P](r.pivotForeign, foreign, keys)), nil
 }
 
@@ -458,11 +458,11 @@ func (r ThroughRelation[M, N, P]) createPivots(ctx context.Context, tx *database
 	pivot := ForModel(*r.pivot.definition).inContext(ctx)
 	mutations := make([]Mutation[P], len(targets))
 	for i, target := range targets {
-		defaults, err := pivot.withModelValue(Mutation[P]{}, r.pivotLocal.column, source.raw)
+		defaults, err := pivot.withModelValue(Mutation[P]{}, r.pivotLocal.Column, source.raw)
 		if err != nil {
 			return nil, err
 		}
-		if defaults, err = pivot.withModelValue(defaults, r.pivotForeign.column, target.raw); err != nil {
+		if defaults, err = pivot.withModelValue(defaults, r.pivotForeign.Column, target.raw); err != nil {
 			return nil, err
 		}
 		for _, fixed := range r.pivotFixed {
@@ -490,20 +490,20 @@ func (r ThroughRelation[M, N, P]) createPivots(ctx context.Context, tx *database
 // requireLinks verifies that every created pivot joins the source to a
 // target within the relation's target and pivot filters.
 func (r ThroughRelation[M, N, P]) requireLinks(ctx context.Context, tx *database.Tx, source pivotKey, created []P) error {
-	primary, ok := r.pivot.definition.modelField(r.pivot.definition.primary)
+	primary, ok := r.pivot.definition.modelField(r.pivot.definition.modelDefinition.Primary)
 	if !ok {
 		return fault.New(fault.Invalid, "relation pivot requires a primary-key codec")
 	}
 	keys := make([]pivotKey, len(created))
 	for i, pivot := range created {
-		key, err := relationKey(r.pivot, fieldRef{r.pivot.table, r.pivot.definition.primary}, pivot)
+		key, err := relationKey(r.pivot, fieldRef{Table: r.pivot.queryCore.Table, Column: r.pivot.definition.modelDefinition.Primary}, pivot)
 		if err != nil {
 			return err
 		}
 		keys[i] = key
 	}
-	local, _ := r.pivot.definition.modelField(r.pivotLocal.column)
-	filter := And(keyMembership[P](fieldRef{r.pivot.table, r.pivot.definition.primary}, primary, keys), keyEquality[P](r.pivotLocal, local, source))
+	local, _ := r.pivot.definition.modelField(r.pivotLocal.Column)
+	filter := And(keyMembership[P](fieldRef{Table: r.pivot.queryCore.Table, Column: r.pivot.definition.modelDefinition.Primary}, primary, keys), keyEquality[P](r.pivotLocal, local, source))
 	statement, err := r.compileThrough(ctx, filter.expression, len(created)+1)
 	if err != nil {
 		return err

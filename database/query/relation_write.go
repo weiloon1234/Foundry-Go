@@ -29,7 +29,7 @@ func (r ThroughRelation[M, N, P]) WithWriteLimit(limit int) ThroughRelation[M, N
 }
 
 func (r ThroughRelation[M, N, P]) validateWrite() (int, error) {
-	if err := r.validateRelation(r.spec.source.table, 0, DefaultRelationLimits()); err != nil {
+	if err := r.validateRelation(r.spec.source.queryCore.Table, 0, DefaultRelationLimits()); err != nil {
 		return 0, err
 	}
 	limit := MaxRelationWriteRows
@@ -39,7 +39,7 @@ func (r ThroughRelation[M, N, P]) validateWrite() (int, error) {
 	if err := validatePerModelWriteLimit(limit); err != nil {
 		return 0, err
 	}
-	if len(r.orders) != 0 || len(r.spec.target.orders) != 0 || len(r.pivot.orders) != 0 ||
+	if len(r.orders) != 0 || len(r.spec.target.queryCore.Orders) != 0 || len(r.pivot.queryCore.Orders) != 0 ||
 		len(r.spec.target.relations) != 0 || len(r.pivot.relations) != 0 ||
 		r.spec.target.relationLimits != nil || r.pivot.relationLimits != nil {
 		return 0, fault.New(fault.Invalid, "relation writes do not accept ordering or eager-loading options")
@@ -119,7 +119,7 @@ func (r ThroughRelation[M, N, P]) detach(ctx context.Context, writer database.Tr
 	if err != nil {
 		return nil, err
 	}
-	if force && !r.pivot.hasSoftDeletes() {
+	if force && !r.pivot.queryCore.HasSoftDeletes() {
 		return nil, fault.New(fault.Invalid, "force detachment requires a soft-delete pivot")
 	}
 	return executeWrite(ctx, writer, func(ctx context.Context, tx *database.Tx) ([]P, error) {

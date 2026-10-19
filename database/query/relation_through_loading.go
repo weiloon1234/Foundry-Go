@@ -9,7 +9,7 @@ import (
 )
 
 func fetchThrough[M, N, P any, A, B comparable](ctx context.Context, executor database.Executor, r ThroughRelation[M, N, P], local ScalarField[M, A], pivotLocal ScalarField[P, A], pivotForeign ScalarField[P, B], foreign ScalarField[N, B], parents []M, state *relationLoadState, depth int) ([][]relation.Link[N, P], error) {
-	localMeta, _ := r.spec.source.definition.modelField(local.ref.column)
+	localMeta, _ := r.spec.source.definition.modelField(local.ref.Column)
 	positions, keys, requested, err := relationKeys(ctx, localMeta, local, parents, state.limits.BatchSize)
 	if err != nil {
 		return nil, err
@@ -36,10 +36,10 @@ func fetchThrough[M, N, P any, A, B comparable](ctx context.Context, executor da
 		state.remaining -= len(batch)
 		rows = append(rows, batch...)
 	}
-	pivotLocalMeta, _ := r.pivot.definition.modelField(pivotLocal.ref.column)
-	pivotForeignMeta, _ := r.pivot.definition.modelField(pivotForeign.ref.column)
-	foreignMeta, _ := r.spec.target.definition.modelField(foreign.ref.column)
-	primaryMeta, _ := r.pivot.definition.modelField(r.pivot.definition.primary)
+	pivotLocalMeta, _ := r.pivot.definition.modelField(pivotLocal.ref.Column)
+	pivotForeignMeta, _ := r.pivot.definition.modelField(pivotForeign.ref.Column)
+	foreignMeta, _ := r.spec.target.definition.modelField(foreign.ref.Column)
+	primaryMeta, _ := r.pivot.definition.modelField(r.pivot.definition.modelDefinition.Primary)
 	seenPivots := make(map[cursorValue]bool, len(rows))
 	owners := make([]cursorValue, len(rows))
 	targets := make([]N, len(rows))

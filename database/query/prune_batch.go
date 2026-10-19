@@ -26,18 +26,18 @@ func (q Query[M]) PruneBatch(ctx context.Context, writer database.Transactor, si
 		return 0, fault.New(fault.Invalid, "pruning requires model metadata")
 	}
 	kind := deleteModel
-	if q.hasSoftDeletes() {
+	if q.queryCore.HasSoftDeletes() {
 		kind = forceDeleteModel
 	}
 	if _, err := q.modelWriteCompiler(kind, false); err != nil {
 		return 0, err
 	}
-	primary, ok := q.definition.modelField(q.definition.primary)
+	primary, ok := q.definition.modelField(q.definition.modelDefinition.Primary)
 	if !ok || primary.get == nil {
 		return 0, fault.New(fault.Invalid, "pruning requires a primary-key codec")
 	}
 	return executeWrite(ctx, writer, func(ctx context.Context, tx *database.Tx) (int64, error) {
-		statement, err := q.OrderBy(Order[M]{field: fieldRef{q.table, q.definition.primary}}).ForUpdate().Limit(size).Compile()
+		statement, err := q.OrderBy(Order[M]{field: fieldRef{Table: q.queryCore.Table, Column: q.definition.modelDefinition.Primary}}).ForUpdate().Limit(size).Compile()
 		if err != nil {
 			return 0, err
 		}
@@ -47,11 +47,11 @@ func (q Query[M]) PruneBatch(ctx context.Context, writer database.Transactor, si
 		}
 		keys := make([]pivotKey, len(candidates))
 		for i, candidate := range candidates {
-			if keys[i], err = relationKey(q, fieldRef{q.table, q.definition.primary}, candidate); err != nil {
+			if keys[i], err = relationKey(q, fieldRef{Table: q.queryCore.Table, Column: q.definition.modelDefinition.Primary}, candidate); err != nil {
 				return 0, err
 			}
 		}
-		selected := q.Where(keyMembership[M](fieldRef{q.table, q.definition.primary}, primary, keys))
+		selected := q.Where(keyMembership[M](fieldRef{Table: q.queryCore.Table, Column: q.definition.modelDefinition.Primary}, primary, keys))
 		if !mass {
 			removed, err := mutateSelectedModels(ctx, tx, selected, kind, size, nil)
 			return int64(len(removed)), err

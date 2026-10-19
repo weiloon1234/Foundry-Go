@@ -38,8 +38,8 @@ Model simple and cursor pages load requested relations only for returned models.
 u := models.UserFields()
 report := reports.SelectUserSummary(models.QueryUsers(),
     reports.UserSummarySelection[models.User]{
-        ID: u.ID.Value(), Email: u.Email.Value(),
-        Nickname: u.Nickname.Value(), Status: u.Status.Value(),
+        ID: query.Value(u.ID), Email: query.Value(u.Email),
+        Nickname: query.Value(u.Nickname), Status: query.Value(u.Status),
     })
 page, err := report.OrderBy(u.Email.Asc(), u.ID.Asc()).
     Paginate(ctx, db, query.PageRequest{Number: 1, Size: 20})

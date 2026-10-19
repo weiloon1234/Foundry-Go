@@ -2,11 +2,11 @@ package query
 
 import (
 	"database/sql/driver"
+	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
-	"slices"
 )
 
 type cursorBoundary struct {
@@ -76,13 +76,13 @@ func readCursorBoundary[R any](request CursorRequest[R], scope string, fields []
 	return b, nil
 }
 
-func cursorOrders[S any](orders []Order[S], backward bool) []Order[S] {
+func cursorOrders(orders []queryOrder, backward bool) []queryOrder {
 	if !backward {
 		return orders
 	}
 	orders = slices.Clone(orders)
 	for i := range orders {
-		orders[i].descending = !orders[i].descending
+		orders[i].Descending = !orders[i].Descending
 	}
 	return orders
 }

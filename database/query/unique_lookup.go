@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"fmt"
+
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -26,19 +27,20 @@ func Unique[M any, K comparable](source ModelQuerySource[M], field KeyField[M, K
 	}
 	return UniqueLookup[M, K]{source: source.modelQuery(), field: field.relationKey()}
 }
+
 func (l UniqueLookup[M, K]) Validate() error {
 	if l.err != nil {
 		return l.err
 	}
 	q := l.source
-	if q.definition == nil || q.limit.IsSet() || q.offset != 0 {
+	if q.definition == nil || q.queryCore.Limit.IsSet() || q.queryCore.Offset != 0 {
 		return fault.New(fault.Invalid, "unique lookup requires an unpaginated model scope")
 	}
 	var zero K
 	if err := q.Where(l.field.Eq(zero)).Validate(); err != nil {
 		return err
 	}
-	if _, ok := q.definition.modelField(l.field.ref.column); !ok {
+	if _, ok := q.definition.modelField(l.field.ref.Column); !ok {
 		return fault.New(fault.Invalid, "unique lookup field is not stored on its model")
 	}
 	return nil
@@ -53,6 +55,7 @@ func (l UniqueLookup[M, K]) Find(ctx context.Context, executor database.Executor
 	}
 	return uniqueModel(ctx, executor, l.source.Where(l.field.Eq(key)))
 }
+
 func uniqueModel[M any](ctx context.Context, executor database.Executor, q Query[M]) (value.Optional[M], error) {
 	rows, err := q.Limit(2).allRows(ctx, executor)
 	if err != nil {

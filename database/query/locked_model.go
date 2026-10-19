@@ -18,51 +18,56 @@ type LockedQuery[M any] struct {
 
 // ForUpdate requests an exclusive row lock, waiting for conflicting row locks.
 func (q Query[M]) ForUpdate() LockedQuery[M] {
-	return LockedQuery[M]{query: q, lock: lockSpec{strength: lockUpdate}}
+	return LockedQuery[M]{query: q, lock: lockSpec{Strength: lockUpdate}}
 }
 
 // ForNoKeyUpdate requests a row lock compatible with FOR KEY SHARE.
 func (q Query[M]) ForNoKeyUpdate() LockedQuery[M] {
-	return LockedQuery[M]{query: q, lock: lockSpec{strength: lockNoKeyUpdate}}
+	return LockedQuery[M]{query: q, lock: lockSpec{Strength: lockNoKeyUpdate}}
 }
 
 // ForShare requests a shared row lock that prevents updates and deletion.
 func (q Query[M]) ForShare() LockedQuery[M] {
-	return LockedQuery[M]{query: q, lock: lockSpec{strength: lockShare}}
+	return LockedQuery[M]{query: q, lock: lockSpec{Strength: lockShare}}
 }
 
 // ForKeyShare prevents deletion and key-changing updates to selected rows.
 func (q Query[M]) ForKeyShare() LockedQuery[M] {
-	return LockedQuery[M]{query: q, lock: lockSpec{strength: lockKeyShare}}
+	return LockedQuery[M]{query: q, lock: lockSpec{Strength: lockKeyShare}}
 }
 
 // NoWait reports a PostgreSQL lock error instead of waiting for a row lock.
-func (q LockedQuery[M]) NoWait() LockedQuery[M] { q.lock.behavior = lockNoWait; return q }
+func (q LockedQuery[M]) NoWait() LockedQuery[M] { q.lock.Behavior = lockNoWait; return q }
 
 // SkipLocked omits rows with conflicting locks. This is useful for queue claims,
 // not a consistent view of all matching records. It replaces any prior NoWait.
-func (q LockedQuery[M]) SkipLocked() LockedQuery[M] { q.lock.behavior = lockSkip; return q }
+func (q LockedQuery[M]) SkipLocked() LockedQuery[M] { q.lock.Behavior = lockSkip; return q }
 
 // Wait restores the default row-lock waiting policy; context cancellation applies.
-func (q LockedQuery[M]) Wait() LockedQuery[M] { q.lock.behavior = lockWait; return q }
+func (q LockedQuery[M]) Wait() LockedQuery[M] { q.lock.Behavior = lockWait; return q }
 
 func (q LockedQuery[M]) Where(predicates ...Predicate[M]) LockedQuery[M] {
 	q.query = q.query.Where(predicates...)
 	return q
 }
+
 func (q LockedQuery[M]) WhereHas(relation ExistenceRelation[M]) LockedQuery[M] {
 	q.query = q.query.WhereHas(relation)
 	return q
 }
+
 func (q LockedQuery[M]) WhereDoesntHave(relation ExistenceRelation[M]) LockedQuery[M] {
 	q.query = q.query.WhereDoesntHave(relation)
 	return q
 }
+
 func (q LockedQuery[M]) OrderBy(orders ...Order[M]) LockedQuery[M] {
 	q.query = q.query.OrderBy(orders...)
 	return q
 }
-func (q LockedQuery[M]) Limit(count int) LockedQuery[M]  { q.query = q.query.Limit(count); return q }
+
+func (q LockedQuery[M]) Limit(count int) LockedQuery[M] { q.query = q.query.Limit(count); return q }
+
 func (q LockedQuery[M]) Offset(count int) LockedQuery[M] { q.query = q.query.Offset(count); return q }
 
 // With eager-loads relations on the same transaction after closing parent rows.
@@ -71,6 +76,7 @@ func (q LockedQuery[M]) With(relations ...Relation[M]) LockedQuery[M] {
 	q.query = q.query.With(relations...)
 	return q
 }
+
 func (q LockedQuery[M]) WithRelationLimits(limits RelationLimits) LockedQuery[M] {
 	q.query = q.query.WithRelationLimits(limits)
 	return q
@@ -87,7 +93,7 @@ func (q LockedQuery[M]) reader() readResult[M] {
 	}
 	r.node, r.scan = q.query.modelSelect(), q.query.definition.scan
 	r.lifecycle = q.query.definition.retrieval()
-	r.node.locks = []lockSpec{q.lock}
+	r.node.Locks = []lockSpec{q.lock}
 	return r
 }
 

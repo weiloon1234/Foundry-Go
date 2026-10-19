@@ -18,7 +18,7 @@ func TestLateralSourceScopeWindowsAndNullability(t *testing.T) {
 	j := LeftJoinLateral(a, latest)
 	x := scopedID(LeftScope(j, a.Scope()))
 	y := nullableScopedID(NullableRightScope(j, latest.Scope()))
-	pairs := pairProjection(j, Nullable(x.Value()), y.Value())
+	pairs := pairProjection(j, Nullable(Value(x)), Value(y))
 	statement, err := pairs.Compile()
 	if err != nil {
 		t.Fatal(err)
@@ -33,8 +33,8 @@ func TestLateralSourceScopeWindowsAndNullability(t *testing.T) {
 	}
 	for _, kind := range []joinKind{innerJoin, crossJoin} {
 		node := pairs.source.node
-		node.joins = append([]joinNode(nil), node.joins...)
-		node.joins[0].kind = kind
+		node.Joins = append([]joinNode(nil), node.Joins...)
+		node.Joins[0].Kind = kind
 		copy := pairs
 		copy.source.node = node
 		if _, err := copy.Compile(); err != nil {
@@ -56,28 +56,28 @@ func TestLateralRejectsMissingOrForwardScopesEvenWithZeroLimit(t *testing.T) {
 	latest := AsLateral[thirdAlias](record, "latest")
 	j := LeftJoinLateral(a, latest)
 	x := scopedID(LeftScope(j, a.Scope()))
-	valid := SelectValue(j, x.Value())
+	valid := SelectValue(j, Value(x))
 	for _, name := range []string{"right", "full", "not derived", "self", "forward", "missing", "cross ON"} {
 		t.Run(name, func(t *testing.T) {
 			bad := valid
-			bad.query.source.node.joins = append([]joinNode(nil), valid.query.source.node.joins...)
-			join := &bad.query.source.node.joins[0]
+			bad.query.source.node.Joins = append([]joinNode(nil), valid.query.source.node.Joins...)
+			join := &bad.query.source.node.Joins[0]
 			switch name {
 			case "right":
-				join.kind = rightJoin
+				join.Kind = rightJoin
 			case "full":
-				join.kind = fullJoin
+				join.Kind = fullJoin
 			case "not derived":
-				join.source.query = nil
+				join.Source.Query = nil
 			case "self":
-				join.lateral = &scopeRequirement{sources: map[string][]Column{"latest": join.source.columns}}
+				join.Lateral = &scopeRequirement{Sources: map[string][]columnData{"latest": join.Source.Columns}}
 			case "forward":
-				join.lateral = &scopeRequirement{sources: map[string][]Column{"future": join.source.columns}}
-				bad.query.source.node.joins = append(bad.query.source.node.joins, joinNode{kind: crossJoin, source: tableSource{table: "records", alias: "future", columns: join.source.columns}})
+				join.Lateral = &scopeRequirement{Sources: map[string][]columnData{"future": join.Source.Columns}}
+				bad.query.source.node.Joins = append(bad.query.source.node.Joins, joinNode{Kind: crossJoin, Source: tableSource{Table: "records", Alias: "future", Columns: join.Source.Columns}})
 			case "missing":
-				join.lateral = &scopeRequirement{}
+				join.Lateral = &scopeRequirement{}
 			case "cross ON":
-				join.kind, join.on = crossJoin, scopedID(a.Scope()).Eq(1).expression
+				join.Kind, join.On = crossJoin, scopedID(a.Scope()).Eq(1).expression
 			}
 			if _, err := bad.Limit(0).Compile(); !errors.Is(err, fault.Invalid) {
 				t.Fatal(err)
@@ -95,29 +95,29 @@ func TestLateralRejectsMissingOrForwardScopesEvenWithZeroLimit(t *testing.T) {
 }
 
 func TestLateralCorrelationQualificationPreservesOriginal(t *testing.T) {
-	columns := []Column{{Name: "id"}}
-	requirement := &scopeRequirement{sources: map[string][]Column{"parent": columns}}
-	nested := selectNode{source: tableSource{table: "records", alias: "inner", columns: columns},
-		predicates: []expression{binaryComparison{fieldRef{"inner", "id"}, fieldRef{"parent", "id"}, equal}}}
-	original := subquery{correlation: requirement, node: selectNode{
-		source: tableSource{table: "records", alias: "child", columns: columns},
-		joins:  []joinNode{{kind: leftJoin, lateral: requirement, source: tableSource{alias: "lateral", columns: columns, query: &nested}}},
+	columns := []columnData{{Name: "id"}}
+	requirement := &scopeRequirement{Sources: map[string][]columnData{"parent": columns}}
+	nested := selectNode{Source: tableSource{Table: "records", Alias: "inner", Columns: columns},
+		Predicates: []expression{binaryComparison{Left: fieldRef{Table: "inner", Column: "id"}, Right: fieldRef{Table: "parent", Column: "id"}, Operator: equal}}}
+	original := subquery{Correlation: requirement, Node: selectNode{
+		Source: tableSource{Table: "records", Alias: "child", Columns: columns},
+		Joins:  []joinNode{{Kind: leftJoin, Lateral: requirement, Source: tableSource{Alias: "lateral", Columns: columns, Query: &nested}}},
 	}}
 	renamed := requalifyCorrelation(original, "qualified")
-	if renamed.err != nil {
-		t.Fatal(renamed.err)
+	if renamed.Err != nil {
+		t.Fatal(renamed.Err)
 	}
-	join := renamed.node.joins[0]
-	if join.lateral.sources["qualified"] == nil || join.lateral.sources["parent"] != nil {
-		t.Fatal(join.lateral)
+	join := renamed.Node.Joins[0]
+	if join.Lateral.Sources["qualified"] == nil || join.Lateral.Sources["parent"] != nil {
+		t.Fatal(join.Lateral)
 	}
-	if got := join.source.query.predicates[0].(binaryComparison).right.(fieldRef).table; got != "qualified" {
+	if got := join.Source.Query.Predicates[0].(binaryComparison).Right.(fieldRef).Table; got != "qualified" {
 		t.Fatal(got)
 	}
-	if got := original.node.joins[0].source.query.predicates[0].(binaryComparison).right.(fieldRef).table; got != "parent" {
+	if got := original.Node.Joins[0].Source.Query.Predicates[0].(binaryComparison).Right.(fieldRef).Table; got != "parent" {
 		t.Fatal("original correlation mutated", got)
 	}
-	if original.node.joins[0].lateral.sources["parent"] == nil {
+	if original.Node.Joins[0].Lateral.Sources["parent"] == nil {
 		t.Fatal("original requirement mutated")
 	}
 }

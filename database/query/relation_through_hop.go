@@ -17,7 +17,7 @@ const hopAlias = "foundry_through"
 // query supplies the intermediate's own filters: soft deletion and scopes.
 type relationHop struct {
 	table         string
-	columns       []Column
+	columns       []columnData
 	predicates    func() []expression
 	first, second fieldRef
 	validate      func() error
@@ -54,28 +54,28 @@ func hopSpec[M any, I ModelQuery[I], N any, A, B comparable](local KeyField[M, A
 	a, f, s, b := local.relationKey(), first.relationKey(), second.relationKey(), foreign.relationKey()
 	var zero I
 	intermediate := zero.FoundryQuery()
-	hop := &relationHop{first: f.ref, second: s.ref, predicates: intermediate.effectivePredicates,
+	hop := &relationHop{first: f.ref, second: s.ref, predicates: intermediate.queryCore.EffectivePredicates,
 		validate: func() error {
-			if intermediate.definition == nil || f.ref.table != intermediate.table || s.ref.table != intermediate.table {
+			if intermediate.definition == nil || f.ref.Table != intermediate.queryCore.Table || s.ref.Table != intermediate.queryCore.Table {
 				return fault.New(fault.Invalid, "through relation keys must belong to the intermediate model")
 			}
-			if _, ok := intermediate.definition.modelField(f.ref.column); !ok {
+			if _, ok := intermediate.definition.modelField(f.ref.Column); !ok {
 				return fault.New(fault.Invalid, "through relation intermediate key is not a generated model field")
 			}
-			if _, ok := intermediate.definition.modelField(s.ref.column); !ok {
+			if _, ok := intermediate.definition.modelField(s.ref.Column); !ok {
 				return fault.New(fault.Invalid, "through relation intermediate key is not a generated model field")
 			}
 			return intermediate.validateCore()
 		}}
 	if intermediate.definition != nil {
-		hop.table, hop.columns = intermediate.table, intermediate.definition.columns
+		hop.table, hop.columns = intermediate.queryCore.Table, intermediate.definition.modelDefinition.Columns
 	}
 	spec := relationSpec[M, N]{local: a.ref, foreign: b.ref, hop: hop}
 	spec.scope = func(ctx context.Context, source Query[M], target Query[N], parent M) (Query[N], bool, error) {
 		if err := ctx.Err(); err != nil {
 			return Query[N]{}, false, err
 		}
-		metadata, _ := source.definition.modelField(a.ref.column)
+		metadata, _ := source.definition.modelField(a.ref.Column)
 		selected, err := readRelationKey(metadata, a, parent)
 		if err != nil {
 			return Query[N]{}, false, err
@@ -85,9 +85,9 @@ func hopSpec[M any, I ModelQuery[I], N any, A, B comparable](local KeyField[M, A
 			return Query[N]{}, false, nil
 		}
 		node := hop.node()
-		node.selections = []selectItem{{expression: fieldRef{hopAlias, s.ref.column}}}
-		node.predicates = append(node.predicates, requalify(f.Eq(key.value).expression, hopAlias))
-		return target.Where(b.inSubquery(subquery{node: node})), true, nil
+		node.Selections = []selectItem{{Expression: fieldRef{Table: hopAlias, Column: s.ref.Column}}}
+		node.Predicates = append(node.Predicates, requalify(f.Eq(key.value).expression, hopAlias))
+		return target.Where(b.inSubquery(subquery{Node: node})), true, nil
 	}
 	spec.fetch = func(ctx context.Context, executor database.Executor, source Query[M], target Query[N], parents []M, state *relationLoadState, depth int) ([][]N, error) {
 		return fetchHop(ctx, executor, source, target, a, f, b, hop, parents, state, depth)
@@ -97,21 +97,21 @@ func hopSpec[M any, I ModelQuery[I], N any, A, B comparable](local KeyField[M, A
 
 // node selects the intermediate model under hopAlias with its own filters.
 func (h *relationHop) node() selectNode {
-	node := selectNode{source: tableSource{table: h.table, alias: hopAlias, columns: h.columns}}
+	node := selectNode{Source: tableSource{Table: h.table, Alias: hopAlias, Columns: h.columns}}
 	for _, predicate := range h.predicates() {
-		node.predicates = append(node.predicates, requalify(predicate, hopAlias))
+		node.Predicates = append(node.Predicates, requalify(predicate, hopAlias))
 	}
 	return node
 }
 
 // join adds the intermediate to a target select aliased as targetAlias.
 func (h *relationHop) join(node selectNode, targetAlias string, foreign fieldRef) selectNode {
-	node.joins = append(node.joins, joinNode{
-		source: tableSource{table: h.table, alias: hopAlias, columns: h.columns},
-		on:     binaryComparison{left: fieldRef{targetAlias, foreign.column}, right: fieldRef{hopAlias, h.second.column}, operator: equal},
+	node.Joins = append(node.Joins, joinNode{
+		Source: tableSource{Table: h.table, Alias: hopAlias, Columns: h.columns},
+		On:     binaryComparison{Left: fieldRef{Table: targetAlias, Column: foreign.Column}, Right: fieldRef{Table: hopAlias, Column: h.second.Column}, Operator: equal},
 	})
 	for _, predicate := range h.predicates() {
-		node.predicates = append(node.predicates, requalify(predicate, hopAlias))
+		node.Predicates = append(node.Predicates, requalify(predicate, hopAlias))
 	}
 	return node
 }
@@ -124,7 +124,7 @@ type hopRow[N any] struct {
 // fetchHop loads targets joined to the intermediate, one parent-key batch per
 // query, and groups each row by the intermediate's first key.
 func fetchHop[M, I, N any, A, B comparable](ctx context.Context, executor database.Executor, source Query[M], target Query[N], local ScalarField[M, A], first ScalarField[I, A], foreign ScalarField[N, B], hop *relationHop, parents []M, state *relationLoadState, depth int) ([][]N, error) {
-	localMeta, _ := source.definition.modelField(local.ref.column)
+	localMeta, _ := source.definition.modelField(local.ref.Column)
 	positions, keys, seen, err := relationKeys(ctx, localMeta, local, parents, state.limits.BatchSize)
 	if err != nil {
 		return nil, err
@@ -136,7 +136,7 @@ func fetchHop[M, I, N any, A, B comparable](ctx context.Context, executor databa
 	if err != nil {
 		return nil, err
 	}
-	columns := len(target.definition.columns)
+	columns := len(target.definition.modelDefinition.Columns)
 	scan := func(row database.Row) (hopRow[N], error) {
 		model, err := target.definition.scan(partitionedRow{row, 0, columns, columns + 1})
 		if err != nil {
@@ -163,10 +163,10 @@ func fetchHop[M, I, N any, A, B comparable](ctx context.Context, executor databa
 	var rows []hopRow[N]
 	for offset := 0; offset < len(keys); offset += state.limits.BatchSize {
 		end := min(offset+state.limits.BatchSize, len(keys))
-		node := hop.join(ordered.modelSelect(), target.table, foreign.ref)
-		node.predicates = append(node.predicates, requalify(first.In(keys[offset:end]...).expression, hopAlias))
-		node.selections = append(node.selections, selectItem{expression: fieldRef{hopAlias, hop.first.column}, alias: "foundry_parent_key"})
-		node.limit = value.Set(state.remaining + 1)
+		node := hop.join(ordered.modelSelect(), target.queryCore.Table, foreign.ref)
+		node.Predicates = append(node.Predicates, requalify(first.In(keys[offset:end]...).expression, hopAlias))
+		node.Selections = append(node.Selections, selectItem{Expression: fieldRef{Table: hopAlias, Column: hop.first.Column}, Alias: "foundry_parent_key"})
+		node.Limit = value.Set(state.remaining + 1)
 		batch, err := readResult[hopRow[N]]{node: node, scan: scan, lifecycle: lifecycle, scopeContext: ctx}.All(ctx, executor)
 		if err != nil {
 			return nil, err
@@ -209,17 +209,17 @@ func fetchHop[M, I, N any, A, B comparable](ctx context.Context, executor databa
 // hopAggregateInput measures targets joined to the intermediate, grouped by
 // the intermediate's first key under the shared through aliases.
 func hopAggregateInput[M, N any](spec relationSpec[M, N], validate func(string, int, RelationLimits) error, singular bool) aggregateInput[M, N] {
-	return aggregateInput[M, N]{source: spec.source, local: spec.local, inputTable: spec.target.table, inputAlias: throughTargetAlias, group: fieldRef{hopAlias, spec.hop.first.column}, singular: singular,
+	return aggregateInput[M, N]{source: spec.source, local: spec.local, inputTable: spec.target.queryCore.Table, inputAlias: throughTargetAlias, group: fieldRef{Table: hopAlias, Column: spec.hop.first.Column}, singular: singular,
 		validate: func(depth int, limits RelationLimits) error {
 			if len(spec.target.relations) != 0 {
 				return fault.New(fault.Invalid, "aggregate input cannot request eager-loaded children")
 			}
-			return validate(spec.source.table, depth, limits)
+			return validate(spec.source.queryCore.Table, depth, limits)
 		},
 		selectNode: func() selectNode {
-			node := selectNode{source: tableSource{table: spec.target.table, alias: throughTargetAlias, columns: spec.target.definition.columns}}
-			for _, predicate := range spec.target.effectivePredicates() {
-				node.predicates = append(node.predicates, requalify(predicate, throughTargetAlias))
+			node := selectNode{Source: tableSource{Table: spec.target.queryCore.Table, Alias: throughTargetAlias, Columns: spec.target.definition.modelDefinition.Columns}}
+			for _, predicate := range spec.target.queryCore.EffectivePredicates() {
+				node.Predicates = append(node.Predicates, requalify(predicate, throughTargetAlias))
 			}
 			return spec.hop.join(node, throughTargetAlias, spec.foreign)
 		},

@@ -24,7 +24,7 @@ func TestPostgresTemporalComposition(t *testing.T) {
 		q := temporalqueries.QueryTemporalSamples()
 		f := temporalqueries.SampleFields()
 		year := query.Year(f.Date)
-		projected := temporalqueries.ProjectCalendarSummary(q).SelectYear(year.Value()).SelectRows(query.Count[temporalqueries.Sample]().Value()).SelectLatest(f.Date.Max().Value()).Query().GroupBy(year.Group())
+		projected := temporalqueries.ProjectCalendarSummary(q).SelectYear(year.Value()).SelectRows(query.Count[temporalqueries.Sample]().Value()).SelectLatest(query.Max(f.Date).Value()).Query().GroupBy(year.Group())
 		derived := query.As[annualSummary](query.CTE("annual", projected), "calendar")
 		columns := temporalqueries.CalendarSummaryFieldsAt(derived.Scope())
 		if rows, err := query.SelectValue(derived, query.YearNullable(columns.Latest).Value()).Where(columns.Rows.Gt(1)).All(t.Context(), tx); err != nil || len(rows) != 1 || rows[0] != value.Of(int64(2024)) {
@@ -75,7 +75,7 @@ func TestPostgresTemporalFailureBoundaries(t *testing.T) {
 		q := temporalqueries.QueryTemporalSamples()
 		f := temporalqueries.SampleFields()
 		err := tx.Savepoint(t.Context(), func(inner *database.Tx) error {
-			_, err := query.SelectValue(q, query.FromUnixMillis(f.Millis.Param(math.MaxInt64)).Value()).All(t.Context(), inner)
+			_, err := query.SelectValue(q, query.FromUnixMillis(query.Param(f.Millis, math.MaxInt64)).Value()).All(t.Context(), inner)
 			return err
 		})
 		var databaseError *database.Error
@@ -83,7 +83,7 @@ func TestPostgresTemporalFailureBoundaries(t *testing.T) {
 			t.Fatal("unrepresentable epoch", err)
 		}
 		for _, millis := range []int64{-62135596800001, 253402300800000} {
-			if rows, err := query.SelectValue(q, query.FromUnixMillis(f.Millis.Param(millis)).Value()).All(t.Context(), tx); err == nil || rows != nil {
+			if rows, err := query.SelectValue(q, query.FromUnixMillis(query.Param(f.Millis, millis)).Value()).All(t.Context(), tx); err == nil || rows != nil {
 				t.Fatal("out-of-contract year published results", rows, err)
 			}
 		}

@@ -94,12 +94,12 @@ func Render(source *manifest.Manifest) ([]byte, error) {
 	r := renderer{document: document, naming: names}
 	fmt.Fprintf(&r.out, "%s\n// Requires ES2022 and DOM transport types; no runtime package imports.\n\n", generate.ArtifactHeader)
 	r.out.WriteString(preamble(false))
+	texts, err := runtimeTexts()
+	if err != nil {
+		return nil, err
+	}
 	for _, name := range slices.Concat(coreSources, []string{realtimeSource}, entrySources) {
-		data, err := runtimeSource(name)
-		if err != nil {
-			return nil, err
-		}
-		r.out.Write(withoutModuleLines(data))
+		r.out.Write(texts[name].inline)
 		r.out.WriteByte('\n')
 	}
 	if err := r.body(source); err != nil {
@@ -240,38 +240,48 @@ func (r *renderer) receivedName(id contract.TypeID) string {
 // additive values and locales. The second result marks the variants that
 // contain enum cases.
 func receivedNames(document manifest.Document, names map[contract.TypeID]string, reserved map[string]bool) (map[contract.TypeID]string, map[contract.TypeID]bool) {
-	types := make(map[contract.TypeID]contract.Type, len(document.Types))
+	children := make(map[contract.TypeID][]contract.TypeID, len(document.Types))
+	parents := make(map[contract.TypeID][]contract.TypeID, len(document.Types))
 	for _, typ := range document.Types {
-		types[typ.ID] = typ
-	}
-	children := func(typ contract.Type) []contract.TypeID {
-		var result []contract.TypeID
+		count := len(typ.Properties) + len(typ.Variants)
+		if typ.Element != "" {
+			count++
+		}
+		if count == 0 {
+			continue
+		}
+		refs := make([]contract.TypeID, 0, count)
 		for _, property := range typ.Properties {
-			result = append(result, property.Type)
+			refs = append(refs, property.Type)
 		}
 		for _, variant := range typ.Variants {
-			result = append(result, variant.Type)
+			refs = append(refs, variant.Type)
 		}
 		if typ.Element != "" {
-			result = append(result, typ.Element)
+			refs = append(refs, typ.Element)
 		}
-		return result
+		children[typ.ID] = refs
+		for _, child := range refs {
+			parents[child] = append(parents[child], typ.ID)
+		}
 	}
 	// containing marks the types whose values can contain a type matching seed.
+	// Walk reverse edges once per seed family instead of rescanning the graph
+	// until a fixed point; deep references and cycles take linear work.
 	containing := func(seed func(contract.Type) bool) map[contract.TypeID]bool {
 		found := make(map[contract.TypeID]bool)
-		for changed := true; changed; {
-			changed = false
-			for _, typ := range document.Types {
-				if found[typ.ID] {
-					continue
-				}
-				contains := seed(typ)
-				for _, child := range children(typ) {
-					contains = contains || found[child]
-				}
-				if contains {
-					found[typ.ID], changed = true, true
+		var queue []contract.TypeID
+		for _, typ := range document.Types {
+			if seed(typ) {
+				found[typ.ID] = true
+				queue = append(queue, typ.ID)
+			}
+		}
+		for head := 0; head < len(queue); head++ {
+			for _, parent := range parents[queue[head]] {
+				if !found[parent] {
+					found[parent] = true
+					queue = append(queue, parent)
 				}
 			}
 		}
@@ -312,14 +322,13 @@ func receivedNames(document manifest.Document, names map[contract.TypeID]string,
 	}
 	queue = append(queue, document.Roots...)
 	reachable := make(map[contract.TypeID]bool)
-	for len(queue) != 0 {
-		id := queue[0]
-		queue = queue[1:]
+	for head := 0; head < len(queue); head++ {
+		id := queue[head]
 		if reachable[id] {
 			continue
 		}
 		reachable[id] = true
-		queue = append(queue, children(types[id])...)
+		queue = append(queue, children[id]...)
 	}
 	taken := make(map[string]bool, len(names))
 	for _, name := range names {

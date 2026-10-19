@@ -43,7 +43,7 @@ func TestRelationWriteKeysPreserveStoredTypesAndNullability(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(statement.Arguments(), []any{int64(4), int64(8)}) {
 		t.Fatal("relation key predicates disagree with captured defaults", err)
 	}
-	r.spec.local = fieldRef{"records", "rank"}
+	r.spec.local = fieldRef{Table: "records", Column: "rank"}
 	if _, err := r.writeKeys(cursorRecord{ID: 4}, cursorRecord{ID: 8}); !errors.Is(err, fault.Missing) {
 		t.Fatal("NULL endpoint key was assigned", err)
 	}

@@ -2,7 +2,9 @@ package codec_test
 
 import (
 	"database/sql/driver"
+	"errors"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"testing"
 )
 
@@ -14,6 +16,10 @@ func TestCodecDeclarationValidationDoesNotInvokeCallbacks(t *testing.T) {
 	for _, invalid := range []codec.Codec[int]{{}, codec.New[int](nil, func(any) (int, error) { return 0, nil }), codec.New[int](func(int) (driver.Value, error) { return int64(1), nil }, nil)} {
 		if invalid.Validate() == nil {
 			t.Fatal("undefined codec accepted")
+		}
+		current := 42
+		if err := invalid.Scan(&current).Scan(int64(1)); !errors.Is(err, fault.Invalid) || current != 42 {
+			t.Fatal("scanner accepted an undefined codec or changed its destination")
 		}
 	}
 }

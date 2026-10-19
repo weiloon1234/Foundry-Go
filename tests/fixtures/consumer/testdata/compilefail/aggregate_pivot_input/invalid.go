@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
-var invalid = query.Related(models.UserRelations().Groups.Pivot(), models.GroupFields().Code.CountDistinct())
+var invalid = query.Related(models.UserRelations().Groups.Pivot(), query.CountDistinctField(models.GroupFields().Code))

@@ -13,8 +13,11 @@ import (
 )
 
 type firstAlias struct{}
+
 type secondAlias struct{}
+
 type thirdAlias struct{}
+
 type joinedPair struct{ Left, Right value.Nullable[int64] }
 
 func scopedID[S any](scope ModelScope[S, cursorRecord]) ScalarField[S, int64] {
@@ -26,9 +29,11 @@ func scopedID[S any](scope ModelScope[S, cursorRecord]) ScalarField[S, int64] {
 func wideScoped[S any](scope ModelScope[S, cursorRecord], n int) Predicate[S] {
 	return NewScalarField[S, float64](scope.Table(), "id", codec.Float[float64]()).In(make([]float64, n)...)
 }
+
 func nullableScopedID[S any](scope NullableModelScope[S, cursorRecord]) NullableField[S, int64] {
 	return NewNullableField[S, int64](scope.Table(), "id", codec.Signed[int64]())
 }
+
 func pairProjection[S any](source ProjectionSource[S], left, right Expression[S, value.Nullable[int64]]) ProjectionQuery[S, joinedPair] {
 	l, r := NewProjectionField[joinedPair, value.Nullable[int64]]("left"), NewProjectionField[joinedPair, value.Nullable[int64]]("right")
 	d := DefineProjection([]ProjectionColumn[joinedPair]{l.Column(), r.Column()}, func(database.Row) (joinedPair, error) { return joinedPair{}, nil })
@@ -43,7 +48,7 @@ func TestJoinSourceWindowsAndParameterOrder(t *testing.T) {
 	on := On(x, y).WhereLeft(x.Ne(5)).WhereRight(y.Ne(6))
 	j := LeftJoin(a, b, on)
 	left, right := scopedID(LeftScope(j, a.Scope())), nullableScopedID(NullableRightScope(j, b.Scope()))
-	q := pairProjection(j, Nullable(left.Value()), right.Value()).Where(left.Ne(7)).OrderBy(left.Asc()).Limit(4)
+	q := pairProjection(j, Nullable(Value(left)), Value(right)).Where(left.Ne(7)).OrderBy(left.Asc()).Limit(4)
 	s, err := q.Compile()
 	if err != nil {
 		t.Fatal(err)
@@ -65,7 +70,7 @@ func TestJoinSourceWindowsAndParameterOrder(t *testing.T) {
 	chain := InnerJoin(j, c, On(right, scopedID(c.Scope())))
 	chainRight := nullableScopedID(LeftNullableScope(chain, NullableRightScope(j, b.Scope())))
 	chainLeft := scopedID(LeftScope(chain, LeftScope(j, a.Scope())))
-	if _, err := pairProjection(chain, Nullable(chainLeft.Value()), chainRight.Value()).Compile(); err != nil {
+	if _, err := pairProjection(chain, Nullable(Value(chainLeft)), Value(chainRight)).Compile(); err != nil {
 		t.Fatal(err)
 	}
 	original, err := q.Compile()
@@ -89,7 +94,7 @@ func TestJoinInvalidAliasesScopesAndDescriptors(t *testing.T) {
 		"eager input":         InnerJoin(a, As[secondAlias](cursorQuery().With(testRelation(cursorQuery(), cursorQuery())), "b"), On(x, y)),
 	} {
 		l, r := scopedID(LeftScope(source, a.Scope())), scopedID(RightScope(source, b.Scope()))
-		if _, err := pairProjection(source, Nullable(l.Value()), Nullable(r.Value())).Compile(); !errors.Is(err, fault.Invalid) {
+		if _, err := pairProjection(source, Nullable(Value(l)), Nullable(Value(r))).Compile(); !errors.Is(err, fault.Invalid) {
 			t.Fatal(name, err)
 		}
 	}
@@ -102,27 +107,27 @@ func TestJoinInvalidAliasesScopesAndDescriptors(t *testing.T) {
 	// to a source it does not belong to, including through a join scope helper.
 	wrong := scopedID(LeftScope(valid, duplicate.Scope()))
 	right := scopedID(RightScope(valid, b.Scope()))
-	if _, err := pairProjection(valid, Nullable(wrong.Value()), Nullable(right.Value())).Compile(); !errors.Is(err, fault.Invalid) {
+	if _, err := pairProjection(valid, Nullable(Value(wrong)), Nullable(Value(right))).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("unregistered alias contributed fields", err)
 	}
-	plain := pairProjection(a, Nullable(x.Value()), Nullable(x.Value()))
+	plain := pairProjection(a, Nullable(Value(x)), Nullable(Value(x)))
 	if _, err := plain.Where(scopedID(duplicate.Scope()).Eq(1)).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("same-tag wrong alias predicate compiled", err)
 	}
 }
 
 func TestDerivedSelectRejectsCyclesAndOuterReferences(t *testing.T) {
-	node := selectNode{source: tableSource{alias: "nested", columns: []Column{{Name: "id"}}}}
-	node.source.query = &node
+	node := selectNode{Source: tableSource{Alias: "nested", Columns: []columnData{{Name: "id"}}}}
+	node.Source.Query = &node
 	var c compiler
-	if _, err := c.selectSQL(node); !errors.Is(err, fault.Invalid) {
+	if _, err := c.SelectSQL(node); !errors.Is(err, fault.Invalid) {
 		t.Fatal("cyclic SELECT was not bounded", err)
 	}
 	inner := cursorQuery().modelSelect()
-	inner.predicates = []expression{NewScalarField[cursorRecord, int64]("outer", "id", codec.Signed[int64]()).Eq(1).expression}
-	outer := selectNode{source: tableSource{alias: "outer", columns: []Column{{Name: "id"}}, query: &inner}}
+	inner.Predicates = []expression{NewScalarField[cursorRecord, int64]("outer", "id", codec.Signed[int64]()).Eq(1).expression}
+	outer := selectNode{Source: tableSource{Alias: "outer", Columns: []columnData{{Name: "id"}}, Query: &inner}}
 	c = compiler{}
-	if _, err := c.selectSQL(outer); !errors.Is(err, fault.Invalid) {
+	if _, err := c.SelectSQL(outer); !errors.Is(err, fault.Invalid) {
 		t.Fatal("derived source accidentally correlated to outer scope", err)
 	}
 }

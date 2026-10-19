@@ -25,9 +25,9 @@ func checkCorrelatedQueries(t *testing.T, tx *database.Tx, users []models.User) 
 	buyer := models.UserFieldsAt(query.OuterScope(link, models.QueryUsers().Scope()))
 	order := models.OrderFieldsAt(query.InnerScope(link, models.QueryOrders().Scope()))
 	matched := link.Where(order.BuyerID.EqColumn(buyer.ID))
-	counts := query.SelectCorrelatedValue(matched, order.ID.Count().Value())
-	totals := query.SelectCorrelatedValue(matched, order.TotalCents.Sum().Value())
-	report := reports.ProjectUserOrderStats(models.QueryUsers()).SelectID(u.ID.Value()).SelectEmail(u.Email.Value()).
+	counts := query.SelectCorrelatedValue(matched, query.CountField(order.ID).Value())
+	totals := query.SelectCorrelatedValue(matched, query.Sum(order.TotalCents).Value())
+	report := reports.ProjectUserOrderStats(models.QueryUsers()).SelectID(query.Value(u.ID)).SelectEmail(query.Value(u.Email)).
 		SelectOrders(query.CorrelatedScalarQuery(counts)).SelectTotal(query.CorrelatedScalarNullableQuery(totals)).Query().OrderBy(u.Email.Asc())
 	rows, err := report.All(t.Context(), tx)
 	if err != nil {
@@ -44,8 +44,8 @@ func checkCorrelatedQueries(t *testing.T, tx *database.Tx, users []models.User) 
 	if sum, ok := rows[0].Total.Get(); !ok || sum.String() != "3" || !rows[2].Total.IsNull() {
 		t.Error("correlated exact sums lost NULL or precision")
 	}
-	ids := query.SelectCorrelatedValue(matched, order.BuyerID.Value())
-	for _, predicate := range []query.Predicate[models.User]{matched.Exists(), ids.Exists(), u.ID.InCorrelatedQuery(ids), u.ID.InNullableCorrelatedQuery(query.SelectCorrelatedValue(matched, query.Nullable(order.BuyerID.Value())))} {
+	ids := query.SelectCorrelatedValue(matched, query.Value(order.BuyerID))
+	for _, predicate := range []query.Predicate[models.User]{matched.Exists(), ids.Exists(), u.ID.InCorrelatedQuery(ids), u.ID.InNullableCorrelatedQuery(query.SelectCorrelatedValue(matched, query.Nullable(query.Value(order.BuyerID))))} {
 		if n, err := models.QueryUsers().Where(predicate).Count(t.Context(), tx); err != nil || n != 2 {
 			t.Error("correlated EXISTS/IN mismatch", n, err)
 		}
@@ -94,12 +94,12 @@ func checkCorrelatedQueries(t *testing.T, tx *database.Tx, users []models.User) 
 	if _, err := query.SelectValue(models.QueryUsers(), query.Count[models.User]().Value()).Having(query.Grouped(matched.Exists())).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Error("ungrouped outer reference reached SQL", err)
 	}
-	if _, err := query.SelectValue(models.QueryUsers(), query.CorrelatedScalarQuery(query.SelectCorrelatedValue(link, buyer.ID.Count().Value()))).Compile(); !errors.Is(err, fault.Invalid) {
+	if _, err := query.SelectValue(models.QueryUsers(), query.CorrelatedScalarQuery(query.SelectCorrelatedValue(link, query.CountField(buyer.ID).Value()))).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Error("outer-only aggregate changed SELECT ownership", err)
 	}
 	// A limited scalar is per outer row. A filtered/limited aliased source retains
 	// its global window before correlation, just as it does before a join.
-	chosen := query.CorrelatedScalarQuery(query.SelectCorrelatedValue(matched, order.ID.Value()).OrderBy(order.TotalCents.Desc()).Limit(1))
+	chosen := query.CorrelatedScalarQuery(query.SelectCorrelatedValue(matched, query.Value(order.ID)).OrderBy(order.TotalCents.Desc()).Limit(1))
 	if selected, err := query.SelectValue(models.QueryUsers(), chosen).OrderBy(u.Email.Asc()).All(t.Context(), tx); err != nil || len(selected) != 3 || selected[0].IsNull() || !selected[2].IsNull() {
 		t.Error("correlated scalar window mismatch", err)
 	}

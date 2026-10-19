@@ -1,6 +1,8 @@
 package query
 
-import "sync"
+import (
+	"sync"
+)
 
 // Memo builds one immutable generated declaration per process on first use.
 // Its zero value is ready, so generated package variables need no initializer

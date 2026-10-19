@@ -41,10 +41,10 @@ func TestPageRequestBounds(t *testing.T) {
 	}
 	base := cursorQuery()
 	q, err := base.paginationBase()
-	if err != nil || len(q.orders) != 1 || q.orders[0].field.column != "id" || len(base.orders) != 0 {
+	if err != nil || len(q.queryCore.Orders) != 1 || q.queryCore.Orders[0].Field.Column != "id" || len(base.queryCore.Orders) != 0 {
 		t.Fatal("pagination did not derive stable ordering")
 	}
-	for _, q := range []Query[cursorRecord]{base.Limit(0), base.Offset(1), base.OrderBy(q.orders[0], q.orders[0])} {
+	for _, q := range []Query[cursorRecord]{base.Limit(0), base.Offset(1), base.OrderBy(NewOrderedField[cursorRecord, int64]("records", "id", codec.Signed[int64]()).Asc(), NewOrderedField[cursorRecord, int64]("records", "id", codec.Signed[int64]()).Asc())} {
 		if _, err := q.paginationBase(); !errors.Is(err, fault.Invalid) {
 			t.Fatal("ambiguous pagination accepted")
 		}

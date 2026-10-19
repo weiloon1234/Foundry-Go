@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"fmt"
+
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
@@ -13,16 +14,18 @@ import (
 // HasMany) retaining both model owners. Through/pivot relationships do not
 // implicitly acquire direct-key semantics.
 type ScopedRelation[P, M any] interface{ lookupRelation() relationLookup[P, M] }
+
 type relationLookup[P, M any] struct {
 	spec     relationSpec[P, M]
 	validate func() error
 }
 
 func (r OneRelation[P, M]) lookupRelation() relationLookup[P, M] {
-	return relationLookup[P, M]{r.spec, func() error { return r.validateRelation(r.spec.source.table, 0, r.spec.target.loadLimits()) }}
+	return relationLookup[P, M]{r.spec, func() error { return r.validateRelation(r.spec.source.queryCore.Table, 0, r.spec.target.loadLimits()) }}
 }
+
 func (r ManyRelation[P, M]) lookupRelation() relationLookup[P, M] {
-	return relationLookup[P, M]{r.spec, func() error { return r.validateRelation(r.spec.source.table, 0, r.spec.target.loadLimits()) }}
+	return relationLookup[P, M]{r.spec, func() error { return r.validateRelation(r.spec.source.queryCore.Table, 0, r.spec.target.loadLimits()) }}
 }
 
 // RelatedLookup keeps the declared relationship scope and unique target field.
@@ -40,6 +43,7 @@ func RelatedUnique[P, M any, K comparable](relation ScopedRelation[P, M], field 
 	}
 	return RelatedLookup[P, M, K]{relation: relation.lookupRelation(), field: field.relationKey()}
 }
+
 func (l RelatedLookup[P, M, K]) Validate() error {
 	if l.err != nil {
 		return l.err
@@ -52,6 +56,7 @@ func (l RelatedLookup[P, M, K]) Validate() error {
 	}
 	return Unique(l.relation.spec.target, l.field).Validate()
 }
+
 func (l RelatedLookup[P, M, K]) Find(ctx context.Context, executor database.Executor, parent P, key K) (value.Optional[M], error) {
 	if err := executionContext(ctx, executor); err != nil {
 		return value.Optional[M]{}, err

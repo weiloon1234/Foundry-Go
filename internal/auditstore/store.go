@@ -21,7 +21,7 @@ func Prune(ctx context.Context, tx *database.Tx, area string, cutoff temporal.Da
 	f := EntryFields()
 	destination := QueryFoundryAudit().Where(f.Area.Eq(area), f.CreatedAt.Lt(cutoff))
 	source := destination.OrderBy(f.CreatedAt.Asc(), f.Sequence.Asc()).Limit(limit)
-	return DeleteEntryUsing(destination, source).MatchID(f.ID.Value()).Exec(ctx, tx)
+	return DeleteEntryUsing(destination, source).MatchID(query.Value(f.ID)).Exec(ctx, tx)
 }
 
 // CountBefore counts the entries Prune would remove for area and cutoff without
@@ -56,9 +56,9 @@ func RecentActivity(ctx context.Context, executor database.Executor, q EntryQuer
 		q = q.Where(f.Sequence.Lt(before))
 	}
 	return SelectActivity(q.OrderBy(f.Sequence.Desc()).Limit(limit), ActivitySelection[Entry]{
-		ID: f.ID.Value(), Sequence: f.Sequence.Value(), Area: f.Area.Value(), Operation: f.Operation.Value(),
-		Action: f.Action.Value(), Version: f.Version.Value(), Subject: f.Subject.Value(), Origin: f.Origin.Value(),
-		Correlation: f.Correlation.Value(), RequestMethod: f.RequestMethod.Value(), RequestRoute: f.RequestRoute.Value(),
-		CreatedAt: f.CreatedAt.Value(),
+		ID: query.Value(f.ID), Sequence: query.Value(f.Sequence), Area: query.Value(f.Area), Operation: query.Value(f.Operation),
+		Action: query.Value(f.Action), Version: query.Value(f.Version), Subject: query.Value(f.Subject), Origin: query.Value(f.Origin),
+		Correlation: query.Value(f.Correlation), RequestMethod: query.Value(f.RequestMethod), RequestRoute: query.Value(f.RequestRoute),
+		CreatedAt: query.Value(f.CreatedAt),
 	}).All(ctx, executor)
 }

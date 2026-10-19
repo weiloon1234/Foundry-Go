@@ -49,8 +49,8 @@ func TestResultCursorCanonicalOrderAndBoundary(t *testing.T) {
 	}
 	orders := cursorOrders(canonical.orders, navigation.backward)
 	read := canonical.reader()
-	read.node.orders = orderNodes(orders)
-	read.node.predicates = []expression{cursorPredicate(orders, navigation.keys, anyNullable[CursorScope[cursorRecord]]).expression}
+	read.node.Orders = orderNodes(orders)
+	read.node.Predicates = []expression{cursorPredicate(orders, navigation.keys, anyNullable)}
 	back, err := read.Compile()
 	if err != nil {
 		t.Fatal(err)
@@ -125,13 +125,13 @@ func TestProjectionGetterValidation(t *testing.T) {
 
 func TestNullableCursorTerminalBoundaryCompilesFalse(t *testing.T) {
 	rank := NewNullableOrderedField[cursorRecord, int64]("records", "rank", codec.Signed[int64]())
-	values := SelectValue(cursorQuery(), rank.Value()).Distinct()
+	values := SelectValue(cursorQuery(), Value(rank)).Distinct()
 	c := ValueCursorFor(values)
 	q, _, _, err := c.UniqueBy(c.Key()).canonical()
 	if err != nil {
 		t.Fatal(err)
 	}
-	q.node.predicates = []expression{cursorPredicate(q.orders, []driver.Value{nil}, anyNullable[CursorScope[value.Nullable[int64]]]).expression}
+	q.node.Predicates = []expression{cursorPredicate(q.orders, []driver.Value{nil}, anyNullable)}
 	s, err := q.reader().Compile()
 	if err != nil || !strings.Contains(s.SQL(), "WHERE FALSE") || len(s.Arguments()) != 0 {
 		t.Fatal("all-NULL terminal boundary not empty", s.SQL(), err)

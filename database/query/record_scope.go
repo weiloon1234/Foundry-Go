@@ -33,5 +33,6 @@ func DeclareModelScope[M any](table string) ModelScope[M, M] {
 
 // Table exposes the qualified source name to generated field constructors.
 // An invalid scope returns an empty name, rejected before SQL execution.
-func (s RecordScope[S, M]) Table() string         { return s.table }
+func (s RecordScope[S, M]) Table() string { return s.table }
+
 func (s NullableRecordScope[S, M]) Table() string { return s.table }

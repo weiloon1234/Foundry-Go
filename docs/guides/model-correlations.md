@@ -23,21 +23,21 @@ buyers, err := users.Where(matching.Exists()).All(ctx, db)
 ## Select a value per outer row
 
 ```go
-counts := query.SelectCorrelatedValue(matching, o.ID.Count().Value())
+counts := query.SelectCorrelatedValue(matching, query.CountField(o.ID).Value())
 perUser, err := query.SelectValue(users, query.CorrelatedScalarQuery(counts)).
     OrderBy(models.UserFields().Email.Asc()).All(ctx, db)
 ```
 
 The output is `[]value.Nullable[int64]`. This particular `COUNT` has one result row per user, including a present zero for no matching orders. A scalar subquery in general can return no row, which becomes NULL, so its type retains nullability. More than one row returns PostgreSQL SQLSTATE 21000. Foundry never silently inserts `LIMIT 1`; add an explicit order and limit when choosing one row is intended.
 
-For an already nullable expression, such as `o.TotalCents.Sum().Value()`, use `CorrelatedScalarNullableQuery`. It preserves one nullable layer and the exact decimal codec. Correlated scalars can fill compatible fields in a [declared projection](model-projections.md), retaining a user's identity beside the computed value.
+For an already nullable expression, such as `query.Sum(o.TotalCents).Value()`, use `CorrelatedScalarNullableQuery`. It preserves one nullable layer and the exact decimal codec. Correlated scalars can fill compatible fields in a [declared projection](model-projections.md), retaining a user's identity beside the computed value.
 
 `SelectCorrelatedValue` supports `Where`, `GroupBy`, `Having`, `OrderBy`, `Limit`, `Offset` and `Exists`. Its output remains bound to the outer scope. It has no standalone `Compile`, `All` or ordinary `ValueQuerySource` interface: executing it without the required outer row is a Go type error.
 
 Typed membership retains that boundary:
 
 ```go
-buyerIDs := query.SelectCorrelatedValue(matching, o.BuyerID.Value())
+buyerIDs := query.SelectCorrelatedValue(matching, query.Value(o.BuyerID))
 selected, err := users.Where(models.UserFields().ID.InCorrelatedQuery(buyerIDs)).
     All(ctx, db)
 ```

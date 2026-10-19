@@ -1,6 +1,8 @@
 package query
 
-import "github.com/weiloon1234/Foundry-Go/fault"
+import (
+	"github.com/weiloon1234/Foundry-Go/fault"
+)
 
 // TransactionAliasedSource names a complete record or CTE while retaining the
 // transaction requirement and a distinct alias owner for generated fields.
@@ -27,8 +29,9 @@ func (a TransactionAliasedSource[A, R]) Scope() ModelScope[TransactionAlias[A, R
 	if a.input.err != nil {
 		return ModelScope[TransactionAlias[A, R], R]{}
 	}
-	return ModelScope[TransactionAlias[A, R], R]{table: a.input.node.source.name(), record: a.record}
+	return ModelScope[TransactionAlias[A, R], R]{table: a.input.node.Source.Name(), record: a.record}
 }
+
 func (a TransactionAliasedSource[A, R]) transactionProjection() projectionSource[TransactionAlias[A, R]] {
 	return projectionSource[TransactionAlias[A, R]]{node: a.input.node, err: a.input.err}
 }

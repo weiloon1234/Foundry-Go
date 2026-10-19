@@ -31,7 +31,7 @@ func TestPostgresOuterAndChainedJoins(t *testing.T) {
 		cr := models.UserFieldsAt(query.LeftScope(chain, referralScope))
 		cs := models.UserNullableFieldsAt(query.LeftNullableScope(chain, sponsorScope))
 		cp := models.OrderNullableFieldsAt(query.NullableRightScope(chain, purchases.Scope()))
-		chainReport := reports.ProjectReferralOrderRow(chain).SelectUserID(cr.ID.Value()).SelectIntroducerID(cs.ID.Value()).SelectIntroducerOrderID(cp.ID.Value()).Query()
+		chainReport := reports.ProjectReferralOrderRow(chain).SelectUserID(query.Value(cr.ID)).SelectIntroducerID(query.Value(cs.ID)).SelectIntroducerOrderID(query.Value(cp.ID)).Query()
 		chainRows, err := chainReport.All(t.Context(), counter)
 		if err != nil {
 			return err
@@ -46,7 +46,7 @@ func TestPostgresOuterAndChainedJoins(t *testing.T) {
 		right := query.RightJoin(referrals, sponsors, query.On(r.IntroducerID, s.ID))
 		rl := models.UserNullableFieldsAt(query.NullableLeftScope(right, referrals.Scope()))
 		rr := models.UserFieldsAt(query.RightScope(right, sponsors.Scope()))
-		rightReport := reports.ProjectUserPair(right).SelectLeftID(rl.ID.Value()).SelectRightID(query.Nullable(rr.ID.Value())).Query()
+		rightReport := reports.ProjectUserPair(right).SelectLeftID(query.Value(rl.ID)).SelectRightID(query.Nullable(query.Value(rr.ID))).Query()
 		if n, err := rightReport.Count(t.Context(), counter); err != nil || n != 5 {
 			t.Error("right join did not preserve unmatched sponsors", err)
 		}
@@ -56,7 +56,7 @@ func TestPostgresOuterAndChainedJoins(t *testing.T) {
 		full := query.FullJoin(referrals, sponsors, query.On(r.IntroducerID, s.ID))
 		fl := models.UserNullableFieldsAt(query.NullableLeftScope(full, referrals.Scope()))
 		fright := models.UserNullableFieldsAt(query.NullableRightScope(full, sponsors.Scope()))
-		fullReport := reports.ProjectUserPair(full).SelectLeftID(fl.ID.Value()).SelectRightID(fright.ID.Value()).Query()
+		fullReport := reports.ProjectUserPair(full).SelectLeftID(query.Value(fl.ID)).SelectRightID(query.Value(fright.ID)).Query()
 		if n, err := fullReport.Count(t.Context(), counter); err != nil || n != 6 {
 			t.Error("full join changed unmatched sides", err)
 		}

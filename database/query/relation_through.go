@@ -55,7 +55,7 @@ func (r ThroughRelation[M, N, P]) Bind(name string, source Query[M], target Quer
 	if pivot.hasQueryOptions() {
 		r.spec.bindingError = fault.New(fault.Invalid, "relation Bind requires bare pivot metadata")
 	}
-	r.pivot.table, r.pivot.definition = pivot.table, pivot.definition
+	r.pivot = r.pivot.bindModel(pivot)
 	r.get, r.set = get, set
 	return r
 }
@@ -102,8 +102,11 @@ func (r ThroughRelation[M, N, P]) WithPivot(children ...Relation[P]) ThroughRela
 	r.pivot = r.pivot.With(children...)
 	return r
 }
-func (r ThroughRelation[M, N, P]) relationName() string      { return r.spec.name }
+
+func (r ThroughRelation[M, N, P]) relationName() string { return r.spec.name }
+
 func (r ThroughRelation[M, N, P]) copyRelation() Relation[M] { return r }
+
 func (r ThroughRelation[M, N, P]) validateRelation(source string, depth int, limits RelationLimits) error {
 	if r.get == nil || r.set == nil {
 		return fault.New(fault.Invalid, "many-to-many requires generated metadata, typed keys and a slot")
@@ -116,6 +119,7 @@ func (r ThroughRelation[M, N, P]) validateRelation(source string, depth int, lim
 	_, err := r.compileThrough(nil, nil, 1)
 	return err
 }
+
 func (r ThroughRelation[M, N, P]) validateMetadata(source string, depth int, limits RelationLimits) error {
 	if r.fetch == nil || r.pivot.definition == nil {
 		return fault.New(fault.Invalid, "many-to-many requires generated metadata and typed keys")
@@ -123,17 +127,17 @@ func (r ThroughRelation[M, N, P]) validateMetadata(source string, depth int, lim
 	if err := r.spec.validateMetadata(source, depth, limits); err != nil {
 		return err
 	}
-	if r.pivot.limit.IsSet() || r.pivot.offset != 0 {
+	if r.pivot.queryCore.Limit.IsSet() || r.pivot.queryCore.Offset != 0 {
 		return fault.New(fault.Invalid, "pivot scopes cannot use global windows")
 	}
 	if err := r.pivot.validateAt(depth, limits); err != nil {
 		return err
 	}
-	for _, f := range []fieldRef{r.pivotLocal, r.pivotForeign, {r.pivot.table, r.pivot.definition.primary}} {
-		if err := f.validate(r.pivot.table); err != nil {
+	for _, f := range []fieldRef{r.pivotLocal, r.pivotForeign, {Table: r.pivot.queryCore.Table, Column: r.pivot.definition.modelDefinition.Primary}} {
+		if err := f.Validate(r.pivot.queryCore.Table); err != nil {
 			return err
 		}
-		if _, ok := r.pivot.definition.modelField(f.column); !ok {
+		if _, ok := r.pivot.definition.modelField(f.Column); !ok {
 			return fault.New(fault.Invalid, "pivot key is not a generated model field")
 		}
 	}
@@ -147,11 +151,11 @@ func (r ThroughRelation[M, N, P]) validateMetadata(source string, depth int, lim
 	seen := make(map[orderedField]bool, len(r.orders))
 	orderNodes := 0
 	for _, o := range r.orders {
-		table := r.spec.target.table
+		table := r.spec.target.queryCore.Table
 		if o.pivot {
-			table = r.pivot.table
+			table = r.pivot.queryCore.Table
 		}
-		if err := validateRowValue(o.value, func(f fieldRef) error { return f.validate(table) }, 0, &orderNodes); err != nil {
+		if err := validateRowValue(o.value, func(f fieldRef) error { return f.Validate(table) }, 0, &orderNodes); err != nil {
 			return err
 		}
 		field, plain := o.value.(fieldRef)

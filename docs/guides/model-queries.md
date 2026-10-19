@@ -2,6 +2,9 @@
 
 Generated model queries now compile and execute PostgreSQL reads through Foundry's [database runtime](database-runtime.md). Handwritten models remain the source of field names, column mappings and value types. The [independent PostgreSQL consumer](../../tests/fixtures/consumer/model_query_postgres_test.go) exercises the complete public flow.
 
+See [ORM performance](orm-performance.md) for reproducible comparisons with
+direct SQL and the internal optimizations that preserve existing consumer APIs.
+
 ## Query construction and execution
 
 ```go
@@ -98,3 +101,19 @@ Partial reads use [declared projection records](model-projections.md), which hav
 This guide covers the read portion of milestone 05. [Model writes](model-writes.md) provide create/update/delete and required/default mutation validation; [pagination](model-pagination.md) provides numbered, simple and cursor model pages. Relations, computed aggregates, declared projections and advanced query composition are described in [milestone 06](../../blueprint/06-relations-and-advanced-queries.md), with current verification status in the master roadmap. Lifecycle integration remains milestone 07 work. Raw parameterized SQL remains available through `database.Executor`.
 
 Compiler tests cover quoting, placeholder ordering, logical grouping, literal substring escaping, cloned bindings, resource bounds and concurrent derivation. Consumer compile-failure assertions include wrong typed `Find` keys after fluent derivation. Real PostgreSQL tests verify complete user/natural-key/decimal model hydration, nullable/self-reference IDs, empty results, filtered lookup, selected-window aggregates, early streaming exit, cancellation and malformed-row rejection. Real gopls checks inspect generated and promoted query methods in the consumer workspace.
+
+## Shared query planning and build resources
+
+Model queries retain their concrete owner, field values, keys, nullable results,
+codecs and callbacks. Private model-independent planning lives in `internal/querycore`: declaration
+checks, SQL ordering, global/soft-delete scopes, stable pagination, keyset
+predicates, SELECT compilation and write eligibility and mutation SQL assembly. Projections, complete
+record selection and joins also lower their checked declarations into shared
+plans. Derived queries retain independent slices and execution always rebinds
+request scopes to its own context.
+
+Query chains and generated declarations retain their signatures. Optional stored-
+field computations move to [typed functions](typed-field-computations.md); update
+those handwritten calls when upgrading. No database migration is required. See the
+[build resource measurements](query-build-resources.md) for measured conditions,
+cache ownership and the distinction between one build and accumulated variants.

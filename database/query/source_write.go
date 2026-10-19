@@ -63,6 +63,7 @@ func ForceDeleteUsing[S, M any](destination ModelQuerySource[M], source Projecti
 func (UpdateSource[S, M]) Format(state fmt.State, _ rune) {
 	_, _ = state.Write([]byte("model update from query"))
 }
+
 func (DeleteSource[S, M]) Format(state fmt.State, _ rune) {
 	_, _ = state.Write([]byte("model delete using query"))
 }
@@ -83,7 +84,7 @@ func (p UpdateSource[S, M]) Select(mappings ...UpdateMapping[S, M]) UpdateSource
 // Values replaces fixed draft inputs, normalized once inside the transaction.
 // Multiple source matches are permitted when there are no SQL value mappings.
 func (p UpdateSource[S, M]) Values(values Mutation[M]) UpdateSource[S, M] {
-	p.plan.values = Change(values.assignments...)
+	p.plan.values = values.clone()
 	return p
 }
 

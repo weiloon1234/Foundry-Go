@@ -1,6 +1,8 @@
 package query
 
-import "context"
+import (
+	"context"
+)
 
 // WithoutGlobalScope removes the target's named scopes for this relation only.
 func (r OneRelation[M, N]) WithoutGlobalScope(scopes ...GlobalScope[N]) OneRelation[M, N] {

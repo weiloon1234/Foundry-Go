@@ -9,6 +9,6 @@ import (
 
 func invalid(ctx context.Context, executor *database.Session) {
 	q := models.QueryUsers()
-	_, _ = query.SelectValue(q, models.UserFields().Email.Value()).
+	_, _ = query.SelectValue(q, query.Value(models.UserFields().Email)).
 		LockRows(query.UpdateLock(q.Scope())).All(ctx, executor)
 }

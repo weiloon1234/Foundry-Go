@@ -11,11 +11,15 @@ import (
 // It never formats a supplied token, decoded sort key or database value.
 type CursorInputError struct{ cause error }
 
-func (*CursorInputError) Error() string        { return "invalid cursor input or query scope" }
-func (e *CursorInputError) GoString() string   { return e.Error() }
-func (e *CursorInputError) Unwrap() error      { return e.cause }
+func (*CursorInputError) Error() string { return "invalid cursor input or query scope" }
+
+func (e *CursorInputError) GoString() string { return e.Error() }
+
+func (e *CursorInputError) Unwrap() error { return e.cause }
+
 func (*CursorInputError) Is(target error) bool { return target == fault.Invalid }
-func cursorInputFailure(cause error) error     { return &CursorInputError{cause: cause} }
+
+func cursorInputFailure(cause error) error { return &CursorInputError{cause: cause} }
 
 // Validate checks the token's bounded structure without database I/O. Query
 // execution still verifies the query fingerprint and every ordered key codec.

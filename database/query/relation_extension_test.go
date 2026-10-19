@@ -21,6 +21,7 @@ type refusingExecutor struct{}
 func (refusingExecutor) Exec(context.Context, string, ...any) (database.Result, error) {
 	return database.Result{}, errors.New("extension slots must not use the parent executor here")
 }
+
 func (refusingExecutor) Query(context.Context, string, ...any) (*database.Rows, error) {
 	return nil, errors.New("extension slots must not use the parent executor here")
 }

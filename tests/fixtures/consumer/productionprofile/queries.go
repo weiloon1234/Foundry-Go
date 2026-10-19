@@ -10,7 +10,7 @@ func Check() error {
 	if _, err := base.Compile(); err != nil {
 		return err
 	}
-	if _, err := query.SelectValue(QueryProfileRecords().Where(f.Active.Eq(true)), f.Score.Sum().Value()).Compile(); err != nil {
+	if _, err := query.SelectValue(QueryProfileRecords().Where(f.Active.Eq(true)), query.Sum(f.Score).Value()).Compile(); err != nil {
 		return err
 	}
 	_ = RecordDraft{}.SetName("profile").SetPayload([]byte("owned"))

@@ -1,6 +1,8 @@
 package query
 
-import "github.com/weiloon1234/Foundry-Go/fault"
+import (
+	"github.com/weiloon1234/Foundry-Go/fault"
+)
 
 type ofManyChoice uint8
 
@@ -38,15 +40,15 @@ func (r OneRelation[M, N]) oneOfManyTarget() Query[N] {
 		return target
 	}
 	if r.ofMany != orderedOfMany {
-		target = target.OrderBy(Order[N]{field: fieldRef{target.table, target.definition.primary}, descending: r.ofMany == latestOfMany})
+		target = target.OrderBy(Order[N]{field: fieldRef{Table: target.queryCore.Table, Column: target.definition.modelDefinition.Primary}, descending: r.ofMany == latestOfMany})
 	}
 	// Choose per parent key: the target key for direct relations, the
 	// intermediate's first key for HasOneThrough.
 	key := r.spec.foreign
 	if r.spec.hop != nil {
-		key = fieldRef{hopAlias, r.spec.hop.first.column}
+		key = fieldRef{Table: hopAlias, Column: r.spec.hop.first.Column}
 	}
-	target.distinctOnKey = &key
+	target.queryCore.DistinctOnKey = &key
 	return target
 }
 
@@ -54,7 +56,7 @@ func (r OneRelation[M, N]) validateOfMany() error {
 	if r.ofMany > oldestOfMany {
 		return fault.New(fault.Invalid, "invalid one-of-many choice")
 	}
-	if r.ofMany == orderedOfMany && len(r.spec.target.orders) == 0 {
+	if r.ofMany == orderedOfMany && len(r.spec.target.queryCore.Orders) == 0 {
 		return fault.New(fault.Invalid, "one-of-many requires at least one order")
 	}
 	return nil

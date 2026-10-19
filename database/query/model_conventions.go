@@ -9,7 +9,7 @@ import (
 )
 
 func (p mutationPlan[M]) needsConventions() bool {
-	return p.kind.sqlKind() != deleteModel && (p.query.hasTimestamps() || p.kind == softDeleteModel || p.kind == restoreModel)
+	return p.kind.SqlKind() != deleteModel && (p.query.hasTimestamps() || p.kind == softDeleteModel || p.kind == restoreModel)
 }
 
 // applyConventions owns one application-time sample for all automatic fields.
@@ -44,12 +44,12 @@ func (p *mutationPlan[M]) applyConventionsFor(ctx context.Context, source clock.
 		if p.kind == softDeleteModel {
 			raw = now
 		}
-		mutation, err = q.withModelValue(mutation, q.definition.softDelete.name, raw)
+		mutation, err = q.withModelValue(mutation, q.definition.modelDefinition.SoftDelete.Name, raw)
 		if err != nil {
 			return err
 		}
 	}
-	mutation, err = q.applyTimestamps(p.kind.sqlKind(), mutation, now)
+	mutation, err = q.applyTimestamps(p.kind.SqlKind(), mutation, now)
 	if err != nil {
 		return err
 	}
@@ -68,10 +68,10 @@ func (q Query[M]) withModelValue(mutation Mutation[M], column string, raw any) (
 	if err != nil {
 		return Mutation[M]{}, err
 	}
-	assignment := Assignment[M]{field: fieldRef{q.table, column}, assignmentValue: v}
-	result := Change(mutation.assignments...)
+	assignment := mutationAssignment{Field: fieldRef{Table: q.queryCore.Table, Column: column}, AssignmentValue: v}
+	result := mutation.clone()
 	for i, existing := range result.assignments {
-		if existing.field.column == column {
+		if existing.Field.Column == column {
 			result.assignments[i] = assignment
 			return result, nil
 		}

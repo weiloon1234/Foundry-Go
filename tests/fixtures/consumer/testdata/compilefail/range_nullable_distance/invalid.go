@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-var _ = query.NullableNumericRange(query.WindowFor(models.QueryMeasurements()), models.MeasurementFields().Score.Value()).Preceding(value.Of(float64(1)))
+var _ = query.NullableNumericRange(query.WindowFor(models.QueryMeasurements()), query.Value(models.MeasurementFields().Score)).Preceding(value.Of(float64(1)))

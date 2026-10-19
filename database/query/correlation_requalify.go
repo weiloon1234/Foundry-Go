@@ -10,18 +10,18 @@ import (
 // Relation loading qualifies a validated single-model predicate. Only explicit
 // correlated outer references follow that rename; isolated inner queries do not.
 func requalifyCorrelation(q subquery, alias string) subquery {
-	if q.correlation == nil {
+	if q.Correlation == nil {
 		return q
 	}
-	if len(q.correlation.sources) != 1 {
-		q.err = fault.New(fault.Invalid, "model correlation requires one outer source when qualified")
+	if len(q.Correlation.Sources) != 1 {
+		q.Err = fault.New(fault.Invalid, "model correlation requires one outer source when qualified")
 		return q
 	}
-	for from := range q.correlation.sources {
+	for from := range q.Correlation.Sources {
 		r := correlationRenamer{from: from, to: alias}
 		q = r.query(q, 0)
 		if r.err != nil {
-			q.err = r.err
+			q.Err = r.err
 		}
 	}
 	return q
@@ -41,68 +41,71 @@ func (r *correlationRenamer) visit(depth int) bool {
 	}
 	return r.err == nil
 }
+
 func (r *correlationRenamer) field(f fieldRef) fieldRef {
-	if f.table == r.from {
-		f.table = r.to
+	if f.Table == r.from {
+		f.Table = r.to
 	}
 	return f
 }
+
 func (r *correlationRenamer) query(q subquery, depth int) subquery {
-	if q.correlation == nil || q.correlation.sources[r.from] == nil || !r.visit(depth) {
+	if q.Correlation == nil || q.Correlation.Sources[r.from] == nil || !r.visit(depth) {
 		return q
 	}
-	if q.node.source.name() == r.from {
+	if q.Node.Source.Name() == r.from {
 		r.err = fault.New(fault.Invalid, "correlation shadows its outer source")
 		return q
 	}
-	for _, j := range q.node.joins {
-		if j.source.name() == r.from {
+	for _, j := range q.Node.Joins {
+		if j.Source.Name() == r.from {
 			r.err = fault.New(fault.Invalid, "correlation shadows its outer source")
 			return q
 		}
 	}
-	required := *q.correlation
-	if r.from != r.to && required.sources[r.to] != nil {
+	required := *q.Correlation
+	if r.from != r.to && required.Sources[r.to] != nil {
 		r.err = fault.New(fault.Invalid, "qualified correlation repeats an outer source")
 		return q
 	}
-	required.sources = maps.Clone(required.sources)
-	required.sources[r.to] = required.sources[r.from]
+	required.Sources = maps.Clone(required.Sources)
+	required.Sources[r.to] = required.Sources[r.from]
 	if r.from != r.to {
-		delete(required.sources, r.from)
+		delete(required.Sources, r.from)
 	}
-	q.correlation = &required
-	q.node.selections = slices.Clone(q.node.selections)
-	for i := range q.node.selections {
-		q.node.selections[i].expression = r.value(q.node.selections[i].expression, depth+1)
+	q.Correlation = &required
+	q.Node.Selections = slices.Clone(q.Node.Selections)
+	for i := range q.Node.Selections {
+		q.Node.Selections[i].Expression = r.value(q.Node.Selections[i].Expression, depth+1)
 	}
-	q.node.orders = slices.Clone(q.node.orders)
-	for i := range q.node.orders {
-		q.node.orders[i].expression = r.value(q.node.orders[i].expression, depth+1)
+	q.Node.Orders = slices.Clone(q.Node.Orders)
+	for i := range q.Node.Orders {
+		q.Node.Orders[i].Expression = r.value(q.Node.Orders[i].Expression, depth+1)
 	}
-	q.node.groupBy = slices.Clone(q.node.groupBy)
-	for i := range q.node.groupBy {
-		q.node.groupBy[i] = r.value(q.node.groupBy[i], depth+1)
+	q.Node.GroupBy = slices.Clone(q.Node.GroupBy)
+	for i := range q.Node.GroupBy {
+		q.Node.GroupBy[i] = r.value(q.Node.GroupBy[i], depth+1)
 	}
-	q.node.distinct.keys = slices.Clone(q.node.distinct.keys)
-	for i := range q.node.distinct.keys {
-		q.node.distinct.keys[i] = r.value(q.node.distinct.keys[i], depth+1)
+	q.Node.Distinct.Keys = slices.Clone(q.Node.Distinct.Keys)
+	for i := range q.Node.Distinct.Keys {
+		q.Node.Distinct.Keys[i] = r.value(q.Node.Distinct.Keys[i], depth+1)
 	}
-	q.node.predicates = r.expressions(q.node.predicates, depth+1)
-	q.node.having = r.expressions(q.node.having, depth+1)
-	q.node.joins = slices.Clone(q.node.joins)
-	for i := range q.node.joins {
-		j := &q.node.joins[i]
-		if j.on != nil {
-			j.on = r.expression(j.on, depth+1)
+	q.Node.Predicates = r.expressions(q.Node.Predicates, depth+1)
+	q.Node.Having = r.expressions(q.Node.Having, depth+1)
+	q.Node.Joins = slices.Clone(q.Node.Joins)
+	for i := range q.Node.Joins {
+		j := &q.Node.Joins[i]
+		if j.On != nil {
+			j.On = r.expression(j.On, depth+1)
 		}
-		if j.lateral != nil && j.source.query != nil {
-			nested := r.query(subquery{node: *j.source.query, correlation: j.lateral}, depth+1)
-			j.source.query, j.lateral = &nested.node, nested.correlation
+		if j.Lateral != nil && j.Source.Query != nil {
+			nested := r.query(subquery{Node: *j.Source.Query, Correlation: j.Lateral}, depth+1)
+			j.Source.Query, j.Lateral = &nested.Node, nested.Correlation
 		}
 	}
 	return q
 }
+
 func (r *correlationRenamer) value(v valueExpression, depth int) valueExpression {
 	if !r.visit(depth) {
 		return v
@@ -114,55 +117,57 @@ func (r *correlationRenamer) value(v valueExpression, depth int) valueExpression
 	case fieldRef:
 		return r.field(v)
 	case aggregateNode:
-		v.field = r.field(v.field)
-		if v.filter != nil {
-			v.filter = &aggregateFilter{predicates: r.expressions(v.filter.predicates, depth+1)}
+		v.Field = r.field(v.Field)
+		if v.Filter != nil {
+			v.Filter = &aggregateFilter{Predicates: r.expressions(v.Filter.Predicates, depth+1)}
 		}
 		return v
 	case scalarSubquery:
-		v.query = r.query(v.query, depth+1)
+		v.Query = r.query(v.Query, depth+1)
 		return v
 	case windowNode:
-		if v.input != nil {
-			v.input = r.value(v.input, depth+1)
+		if v.Input != nil {
+			v.Input = r.value(v.Input, depth+1)
 		}
-		if v.kind == aggregateWindow {
-			v.aggregate = r.value(v.aggregate, depth+1).(aggregateNode)
+		if v.Kind == aggregateWindow {
+			v.Aggregate = r.value(v.Aggregate, depth+1).(aggregateNode)
 		}
-		v.window = r.windowSpec(v.window, depth+1)
+		v.Window = r.windowSpec(v.Window, depth+1)
 		return v
 	default:
 		return v
 	}
 }
+
 func (r *correlationRenamer) windowSpec(w windowSpec, depth int) windowSpec {
 	if !r.visit(depth) {
 		return w
 	}
-	if w.reference != nil {
+	if w.Reference != nil {
 		if r.windows == nil {
 			r.windows = make(map[*namedWindow]*namedWindow)
 		}
-		original := w.reference
+		original := w.Reference
 		if replacement := r.windows[original]; replacement != nil {
-			w.reference = replacement
+			w.Reference = replacement
 		} else {
 			replacement := *original
 			r.windows[original] = &replacement
-			replacement.definition = r.windowSpec(original.definition, depth+1)
-			w.reference = &replacement
+			replacement.Definition = r.windowSpec(original.Definition, depth+1)
+			w.Reference = &replacement
 		}
 	}
-	w.partitions = slices.Clone(w.partitions)
-	for i, v := range w.partitions {
-		w.partitions[i] = r.value(v, depth+1)
+	w.Partitions = slices.Clone(w.Partitions)
+	for i, v := range w.Partitions {
+		w.Partitions[i] = r.value(v, depth+1)
 	}
-	w.orders = slices.Clone(w.orders)
-	for i, o := range w.orders {
-		w.orders[i].expression = r.value(o.expression, depth+1)
+	w.Orders = slices.Clone(w.Orders)
+	for i, o := range w.Orders {
+		w.Orders[i].Expression = r.value(o.Expression, depth+1)
 	}
 	return w
 }
+
 func (r *correlationRenamer) expressions(items []expression, depth int) []expression {
 	result := slices.Clone(items)
 	for i := range result {
@@ -170,42 +175,43 @@ func (r *correlationRenamer) expressions(items []expression, depth int) []expres
 	}
 	return result
 }
+
 func (r *correlationRenamer) expression(e expression, depth int) expression {
 	if !r.visit(depth) {
 		return e
 	}
 	switch e := e.(type) {
 	case comparison:
-		e.operand = r.value(e.operand, depth+1)
+		e.Operand = r.value(e.Operand, depth+1)
 		return e
 	case binaryComparison:
-		e.left, e.right = r.value(e.left, depth+1), r.value(e.right, depth+1)
+		e.Left, e.Right = r.value(e.Left, depth+1), r.value(e.Right, depth+1)
 		return e
 	case rowComparison:
-		operands := make([]valueExpression, len(e.operands))
-		for i, operand := range e.operands {
+		operands := make([]valueExpression, len(e.Operands))
+		for i, operand := range e.Operands {
 			operands[i] = r.value(operand, depth+1)
 		}
-		e.operands = operands
+		e.Operands = operands
 		return e
 	case scopeNode:
 		from, to := r.from, r.to
-		return e.rewrite(func(resolved expression) (expression, error) {
+		return e.Rewrite(func(resolved expression) (expression, error) {
 			renamer := correlationRenamer{from: from, to: to}
 			renamed := renamer.expression(resolved, depth+1)
 			return renamed, renamer.err
 		})
 	case subqueryPredicate:
-		if e.operand != nil {
-			e.operand = r.value(e.operand, depth+1)
+		if e.Operand != nil {
+			e.Operand = r.value(e.Operand, depth+1)
 		}
-		e.query = r.query(e.query, depth+1)
+		e.Query = r.query(e.Query, depth+1)
 		return e
 	case junction:
-		e.children = r.expressions(e.children, depth+1)
+		e.Children = r.expressions(e.Children, depth+1)
 		return e
 	case negation:
-		return negation{r.expression(e.child, depth+1)}
+		return negation{Child: r.expression(e.Child, depth+1)}
 	default:
 		return e
 	}

@@ -54,7 +54,7 @@ func TestRelationPredicatesUseOnlyFilterScopes(t *testing.T) {
 	if strings.Contains(s.SQL(), "ORDER BY") || strings.Count(s.SQL(), "SELECT") != 2 || !reflect.DeepEqual(s.Arguments(), []any{int64(2)}) {
 		t.Fatal("existence used eager/order clauses", s.SQL())
 	}
-	if len(r.spec.target.orders) != 1 || len(r.spec.target.relations) != 1 {
+	if len(r.spec.target.queryCore.Orders) != 1 || len(r.spec.target.relations) != 1 {
 		t.Fatal("existence stripped the reusable descriptor")
 	}
 	var missing *OneRelation[cursorRecord, cursorRecord]
@@ -76,14 +76,14 @@ func TestRelationPredicatesUseOnlyFilterScopes(t *testing.T) {
 func TestRelationshipAliasAnalysisBoundsMalformedTrees(t *testing.T) {
 	base := testRelation(cursorQuery(), cursorQuery())
 	node := cursorQuery().modelSelect()
-	node.predicates = make([]expression, 1)
-	node.predicates[0] = subqueryPredicate{query: subquery{node: node}}
-	base.spec.target.predicates = node.predicates
+	node.Predicates = make([]expression, 1)
+	node.Predicates[0] = subqueryPredicate{Query: subquery{Node: node}}
+	base.spec.target.queryCore.Predicates = node.Predicates
 	if _, err := cursorQuery().WhereHas(base).Compile(); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "resource bound") {
 		t.Fatal("cyclic alias analysis did not terminate", err)
 	}
 	wide := cursorQuery().modelSelect()
-	wide.groupBy = make([]valueExpression, MaxExpressionNodes+1)
+	wide.GroupBy = make([]valueExpression, MaxExpressionNodes+1)
 	if _, err := namesInSelects(wide); !errors.Is(err, fault.Invalid) {
 		t.Fatal("wide alias analysis was not bounded", err)
 	}

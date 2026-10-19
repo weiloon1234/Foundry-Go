@@ -10,31 +10,32 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
-type timestampColumns struct{ created, updated string }
+type timestampColumns = querycore.TimestampColumns
 
 // WithTimestamps is a generated metadata boundary for managed creation/update
 // instants. Columns reuse their model codecs and mutators; applications declare
 // CreatedAt/UpdatedAt on their model rather than configuring column names here.
 func (d Definition[M]) WithTimestamps(created, updated string) Definition[M] {
-	d.timestamps = &timestampColumns{created: created, updated: updated}
+	d.modelDefinition.Timestamps = &timestampColumns{Created: created, Updated: updated}
 	return d
 }
 
 func (d Definition[M]) validateTimestamps() error {
-	if d.timestamps == nil {
+	if d.modelDefinition.Timestamps == nil {
 		return nil
 	}
-	fields := d.timestamps
-	if fields.created == fields.updated {
+	fields := d.modelDefinition.Timestamps
+	if fields.Created == fields.Updated {
 		return fault.New(fault.Invalid, "creation and update timestamps require different columns")
 	}
-	for _, name := range []string{fields.created, fields.updated} {
+	for _, name := range []string{fields.Created, fields.Updated} {
 		field, ok := d.modelField(name)
-		column := slices.IndexFunc(d.columns, func(column Column) bool { return column.Name == name })
-		if !ok || name == d.primary || column < 0 || d.columns[column].Nullable || field.kind != codec.TypeDateTime || field.assignment == nil ||
+		column := slices.IndexFunc(d.modelDefinition.Columns, func(column columnData) bool { return column.Name == name })
+		if !ok || name == d.modelDefinition.Primary || column < 0 || d.modelDefinition.Columns[column].Nullable || field.kind != codec.TypeDateTime || field.assignment == nil ||
 			(field.typ != reflect.TypeFor[time.Time]() && field.typ != reflect.TypeFor[temporal.DateTime]()) {
 			return fault.New(fault.Invalid, "managed timestamps require declared non-null instant fields")
 		}
@@ -45,7 +46,9 @@ func (d Definition[M]) validateTimestamps() error {
 	return nil
 }
 
-func (q Query[M]) hasTimestamps() bool { return q.definition != nil && q.definition.timestamps != nil }
+func (q Query[M]) hasTimestamps() bool {
+	return q.definition != nil && q.definition.modelDefinition.Timestamps != nil
+}
 
 func transactionClock(tx *database.Tx) clock.Clock {
 	if tx == nil {
@@ -75,7 +78,7 @@ func modelTimestamp(ctx context.Context, source clock.Clock) (time.Time, error) 
 
 func (q Query[M]) applyTimestamps(kind mutationKind, mutation Mutation[M], now time.Time) (Mutation[M], error) {
 	return q.applyTimestampsPresent(kind, mutation, now, func(name string) bool {
-		return slices.ContainsFunc(mutation.assignments, func(a Assignment[M]) bool { return a.field.column == name })
+		return slices.ContainsFunc(mutation.assignments, func(a mutationAssignment) bool { return a.Field.Column == name })
 	})
 }
 
@@ -85,8 +88,8 @@ func (q Query[M]) applyTimestampsPresent(kind mutationKind, mutation Mutation[M]
 		return mutation, nil
 	}
 	result := mutation
-	for _, name := range []string{q.definition.timestamps.created, q.definition.timestamps.updated} {
-		if name == q.definition.timestamps.created && (kind != insertModel || present(name)) {
+	for _, name := range []string{q.definition.modelDefinition.Timestamps.Created, q.definition.modelDefinition.Timestamps.Updated} {
+		if name == q.definition.modelDefinition.Timestamps.Created && (kind != insertModel || present(name)) {
 			continue
 		}
 		var err error
@@ -122,9 +125,9 @@ func (p insertPlan[M]) withTimestamps(ctx context.Context, source clock.Clock) (
 	if p.conflict != nil && p.conflict.action == conflictUpdate {
 		policy := *p.conflict
 		policy.updates = slices.Clone(policy.updates)
-		name := p.query.definition.timestamps.updated
-		index := slices.IndexFunc(policy.updates, func(update ConflictUpdate[M]) bool { return update.field.column == name })
-		update := ConflictUpdate[M]{field: fieldRef{p.query.table, name}, incoming: true}
+		name := p.query.definition.modelDefinition.Timestamps.Updated
+		index := slices.IndexFunc(policy.updates, func(update ConflictUpdate[M]) bool { return update.field.Column == name })
+		update := ConflictUpdate[M]{field: fieldRef{Table: p.query.queryCore.Table, Column: name}, incoming: true}
 		if index >= 0 {
 			policy.updates[index] = update
 		} else {

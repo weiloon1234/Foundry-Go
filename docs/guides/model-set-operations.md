@@ -59,7 +59,7 @@ Single-value queries have the same fluent operations and return `ValueSetQuery[V
 
 ```go
 o := models.OrderFields()
-buyers := query.SelectValue(models.QueryOrders(), o.BuyerID.Value())
+buyers := query.SelectValue(models.QueryOrders(), query.Value(o.BuyerID))
 combined := buyers.Where(o.TotalCents.Lt(3)).
     Union(buyers.Where(o.TotalCents.Gte(3)))
 

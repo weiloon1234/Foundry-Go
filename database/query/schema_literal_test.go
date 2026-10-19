@@ -23,8 +23,8 @@ func TestSchemaLiteralRepresentationAndBounds(t *testing.T) {
 		{time.Date(2026, 9, 12, 15, 1, 2, 123456000, time.UTC), "E'2026-09-12T15:01:02.123456Z'"},
 	} {
 		var c compiler
-		got, err := c.schemaLiteral(test.value)
-		if err != nil || got != test.sql || len(c.arguments) != 0 || c.scalarSQLBytes != len(got) {
+		got, err := c.SchemaLiteral(test.value)
+		if err != nil || got != test.sql || len(c.Arguments) != 0 || c.ScalarSQLBytes != len(got) {
 			t.Fatal(got, err)
 		}
 	}
@@ -33,12 +33,12 @@ func TestSchemaLiteralRepresentationAndBounds(t *testing.T) {
 		strings.Repeat("'", MaxScalarSQLBytes/2), make([]byte, MaxScalarSQLBytes/2),
 	} {
 		var c compiler
-		if _, err := c.schemaLiteral(input); !errors.Is(err, fault.Invalid) {
+		if _, err := c.SchemaLiteral(input); !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid or unbounded schema literal accepted", err)
 		}
 	}
-	c := compiler{scalarSQLBytes: MaxScalarSQLBytes - 3}
-	if _, err := c.schemaLiteral(nil); !errors.Is(err, fault.Invalid) {
+	c := compiler{ScalarSQLBytes: MaxScalarSQLBytes - 3}
+	if _, err := c.SchemaLiteral(nil); !errors.Is(err, fault.Invalid) {
 		t.Fatal("constant bypassed shared SQL budget", err)
 	}
 }

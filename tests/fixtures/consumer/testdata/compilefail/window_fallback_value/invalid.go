@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
-var _ = query.LagOr(models.UserFields().Email.Value(), 1, 123, query.WindowFor(models.QueryUsers()))
+var _ = query.LagOr(query.Value(models.UserFields().Email), 1, 123, query.WindowFor(models.QueryUsers()))

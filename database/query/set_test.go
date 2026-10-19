@@ -58,7 +58,7 @@ func TestSetOperatorsAndSharedCTEs(t *testing.T) {
 func TestSetRejectsInvalidLayoutsAndBounds(t *testing.T) {
 	base := cursorQuery()
 	changed := *base.definition
-	changed.columns = []Column{{Name: "id"}, {Name: "different", Nullable: true}}
+	changed.modelDefinition.Columns = []columnData{{Name: "id"}, {Name: "different", Nullable: true}}
 	for _, q := range []SetQuery[cursorRecord]{
 		{}, Union[cursorRecord](nil, base), base.Union(ForModel(changed)),
 		base.Union(base.With(testRelation(base, base))), base.Union(base).Limit(-1),
@@ -68,10 +68,10 @@ func TestSetRejectsInvalidLayoutsAndBounds(t *testing.T) {
 		}
 	}
 	cycle := &setNode{}
-	node := selectNode{source: tableSource{set: cycle, alias: setAlias, columns: base.definition.columns}, selections: columnSelections(setAlias, base.definition.columns)}
-	cycle.left, cycle.right = node, base.modelSelect()
+	node := selectNode{Source: tableSource{Set: cycle, Alias: setAlias, Columns: base.definition.modelDefinition.Columns}, Selections: columnSelections(setAlias, base.definition.modelDefinition.Columns)}
+	cycle.Left, cycle.Right = node, base.modelSelect()
 	var c compiler
-	if _, err := c.compileSelect(node); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "resource bound") {
+	if _, err := c.CompileSelect(node); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "resource bound") {
 		t.Fatal("cyclic set AST escaped resource bounds", err)
 	}
 	wide := base.Where(wideScoped(base.Scope(), MaxParameters/2+1))
@@ -79,7 +79,7 @@ func TestSetRejectsInvalidLayoutsAndBounds(t *testing.T) {
 		t.Fatal("set bypassed shared parameter bound", err)
 	}
 	bad := base.Union(base)
-	bad.record.node.source.set.operator = setOperator(255)
+	bad.record.node.Source.Set.Operator = setOperator(255)
 	if _, err := bad.Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("invalid set operator compiled", err)
 	}

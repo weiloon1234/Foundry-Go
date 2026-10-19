@@ -8,6 +8,28 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts.
 
+## Shared query engine and cache churn — 2026-10-19
+
+Status: **accepted** for this framework refactor. Typed public query facades lower
+SQL AST, validation and planning into a non-generic `internal/querycore` package;
+model/key/value/nullability ownership, concrete hydration, lifecycle callbacks,
+request scope freshness and public metadata type identities are preserved.
+Optional stored-field computations move to typed functions; applications must
+follow the [migration guide](../docs/guides/typed-field-computations.md).
+Generated declarations and database schemas keep their formats.
+
+Final native `make verify` and PostgreSQL/race gates passed, including independent
+consumers, 1,024 compiler rejections, real gopls/TypeScript clients and unchanged
+deterministic generation. Matched cursor scope/token/SQL/binding checks and five
+alternating runtime benchmark samples passed. A controlled private engine edit
+adds 6.33 MiB of cache and rebuilds two packages, versus 8.42 GiB and 159 packages
+with the prior field-capability optimization alone. Combined cold consumer cache
+is 8.65 GiB versus the original 9.94 GiB. The
+[resource guide](../docs/guides/query-build-resources.md) and
+[evidence](../docs/evidence/query-build-resources-20261019.json) retain source hashes,
+commands, runtime tradeoffs and scope limits. Cache retention remains age based;
+this change does not impose a disk quota or publish a release.
+
 ## Client surfaces and shared runtime modules (starter F-G06) — 2026-10-02
 
 Status: **implemented; full gate pending**. `typescript.Surface` publishes one

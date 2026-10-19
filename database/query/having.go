@@ -12,8 +12,9 @@ type HavingPredicate[S any] struct {
 func Grouped[S any](p Predicate[S]) HavingPredicate[S] {
 	return HavingPredicate[S]{expression: p.expression}
 }
+
 func (p HavingPredicate[S]) Not() HavingPredicate[S] {
-	return HavingPredicate[S]{expression: negation{p.expression}}
+	return HavingPredicate[S]{expression: negation{Child: p.expression}}
 }
 
 // HavingAnd requires all group predicates to match. An empty operand list is
@@ -27,10 +28,11 @@ func HavingAnd[S any](predicates ...HavingPredicate[S]) HavingPredicate[S] {
 func HavingOr[S any](predicates ...HavingPredicate[S]) HavingPredicate[S] {
 	return combineHaving(true, predicates)
 }
+
 func combineHaving[S any](any bool, predicates []HavingPredicate[S]) HavingPredicate[S] {
 	children := make([]expression, len(predicates))
 	for i, p := range predicates {
 		children[i] = p.expression
 	}
-	return HavingPredicate[S]{expression: junction{any, children}}
+	return HavingPredicate[S]{expression: junction{Any: any, Children: children}}
 }

@@ -114,12 +114,14 @@ type planExecutor struct {
 func (p *planExecutor) Exec(context.Context, string, ...any) (database.Result, error) {
 	panic("EXPLAIN must query its plan result")
 }
+
 func (p *planExecutor) Query(_ context.Context, sql string, args ...any) (*database.Rows, error) {
 	p.calls++
 	p.sql = sql
 	p.arguments = args
 	return nil, p.failure
 }
+
 func TestExplainRetainsBindingsFailuresAndTransactionCapability(t *testing.T) {
 	sentinel := errors.New("selected executor failed")
 	executor := &planExecutor{failure: sentinel}

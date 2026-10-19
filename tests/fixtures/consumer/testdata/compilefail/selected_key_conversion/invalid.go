@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
-var _ = query.ProjectionKey[models.Order](models.UserFields().Age.Value().Key())
+var _ = query.ProjectionKey[models.Order](query.Value(models.UserFields().Age).Key())
