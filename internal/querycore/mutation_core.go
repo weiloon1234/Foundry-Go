@@ -132,7 +132,7 @@ func (q QueryCore) CompileMutation(c Compiler, node SelectNode, kind MutationKin
 	return Statement{SQLText: sql.String(), Bindings: c.Arguments}, nil
 }
 
-func (q QueryCore) CompileInsert(c Compiler, rows []map[string]MutationAssignment, union map[string]bool, node SelectNode, conflict func(*Compiler, string, string, []Expression) (string, error)) (Statement, error) {
+func (q QueryCore) CompileInsert(c Compiler, rows []map[string]MutationAssignment, union map[string]bool, node SelectNode, conflict *Conflict) (Statement, error) {
 	alias := q.Table
 	if conflict != nil {
 		names, err := NamesInSelects(node)
@@ -170,7 +170,7 @@ func (q QueryCore) CompileInsert(c Compiler, rows []map[string]MutationAssignmen
 	conflictSQL := ""
 	if conflict != nil {
 		c.Sources[ConflictProposedTable] = c.Columns
-		conflictSQL, err = conflict(&c, q.Table, alias, q.ScopePredicates())
+		conflictSQL, err = conflict.Compile(&c, q.Table, alias, q.ScopePredicates())
 		if err != nil {
 			return Statement{}, err
 		}

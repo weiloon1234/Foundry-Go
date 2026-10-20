@@ -30,6 +30,32 @@ fingerprints, exact commands and limits. Earlier B26-worktree acceptance on
 `43a10d9` is not used as proof of this combined source. Application upgrades and
 Linux/full framework-wide race acceptance remain separate checks.
 
+## Further shared write planning — 2026-10-20
+
+Status: **accepted on current native source**. Remaining upsert
+policy/index-target planning, correlation qualification, INSERT SELECT and joined
+UPDATE/DELETE SQL assembly share `internal/querycore`. Model/source/value checks,
+mutators, timestamps, scope freshness and transaction ownership retain their typed
+owners. Public calls and generated declarations are unchanged; this continuation
+adds no consumer migration or deprecated compatibility methods.
+
+Matched native measurements reduce ordinary build cache by 13.2%, its consumer
+package archive by 30.6%, and broad consumer cache by 2.0%. A private upsert
+diagnostic edit rebuilds two packages instead of 160: 119.23 s versus 4.26 s and
+6.54 MiB versus 8.27 GiB of additional cache. No competing Go process was detected
+in those edit segments; overlapping builds invalidate a matched cold-build timing
+claim. Five alternating runtime samples preserve allocation counts for upsert
+and remove one allocation in each tested source-write case.
+
+Native `make verify` and required PostgreSQL/race gates passed on the measured,
+unchanged source, including independent consumers, 1,026 compiler
+rejections, real gopls/TypeScript clients and unchanged deterministic generation.
+The [resource guide](../docs/guides/query-build-resources.md) and
+[continuation evidence](../docs/evidence/query-write-build-resources-20261020.json)
+retain the workloads, source fingerprints, commands and timing limits. This
+acceptance covers the framework refactor; application upgrades and publication
+remain separate work.
+
 ## Shared query engine and cache churn — 2026-10-19
 
 Status: **accepted** for this framework refactor. Typed public query facades lower

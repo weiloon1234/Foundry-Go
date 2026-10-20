@@ -11,25 +11,25 @@ import (
 // A Go mutator cannot transform an unevaluated SQL expression. A literal uses
 // the shared assignment pipeline; the destination's own proposed field already
 // passed through that pipeline and must not be transformed twice.
-func (u ConflictUpdate[M]) validateMutator(q Query[M]) error {
-	field, declared := q.definition.modelField(u.field.Column)
+func (q Query[M]) validateConflictMutator(u conflictUpdate) error {
+	field, declared := q.definition.modelField(u.Field.Column)
 	if !declared || field.conflictMutator.apply == nil {
 		return nil
 	}
-	if u.literal != nil {
+	if u.Literal != nil {
 		expected := field.conflictMutator.input
-		if u.mutatedLiteral {
+		if u.MutatedLiteral {
 			expected = field.conflictMutator.output
 		}
-		if reflect.TypeOf(u.literal.Value) != expected {
+		if reflect.TypeOf(u.Literal.Value) != expected {
 			return fault.New(fault.Invalid, "conflict literal does not match its declared mutated field type")
 		}
 		return nil
 	}
-	if u.incoming || u.null {
+	if u.Incoming || u.Null {
 		return nil
 	}
-	if source, ok := u.value.(fieldRef); ok && source.Table == conflictProposedTable && source.Column == u.field.Column {
+	if source, ok := u.Value.(fieldRef); ok && source.Table == conflictProposedTable && source.Column == u.Field.Column {
 		return nil
 	}
 	return fault.New(fault.Invalid, "conflict field with a Go mutator requires Set, SetNull, or its own proposed value")
@@ -39,9 +39,9 @@ func (u ConflictUpdate[M]) validateMutator(q Query[M]) error {
 // number of proposed rows. The caller's policy and assignments remain reusable.
 func (p Conflict[M]) mutateLiterals(ctx context.Context, q Query[M]) (Conflict[M], error) {
 	var assignments []Assignment[M]
-	for _, update := range p.updates {
-		if update.literal != nil {
-			assignments = append(assignments, Assignment[M]{mutationAssignment: mutationAssignment{Field: update.field, AssignmentValue: *update.literal}})
+	for _, update := range p.state.Updates {
+		if update.Literal != nil {
+			assignments = append(assignments, Assignment[M]{mutationAssignment: mutationAssignment{Field: update.Field, AssignmentValue: *update.Literal}})
 		}
 	}
 	if len(assignments) == 0 {
@@ -51,13 +51,13 @@ func (p Conflict[M]) mutateLiterals(ctx context.Context, q Query[M]) (Conflict[M
 	if err != nil {
 		return Conflict[M]{}, err
 	}
-	p.updates = slices.Clone(p.updates)
+	p.state.Updates = slices.Clone(p.state.Updates)
 	next := 0
-	for i := range p.updates {
-		if p.updates[i].literal != nil {
-			p.updates[i].literal = &mutation.assignments[next].AssignmentValue
-			if field, ok := q.definition.modelField(p.updates[i].field.Column); ok && field.conflictMutator.apply != nil {
-				p.updates[i].mutatedLiteral = true
+	for i := range p.state.Updates {
+		if p.state.Updates[i].Literal != nil {
+			p.state.Updates[i].Literal = &mutation.assignments[next].AssignmentValue
+			if field, ok := q.definition.modelField(p.state.Updates[i].Field.Column); ok && field.conflictMutator.apply != nil {
+				p.state.Updates[i].MutatedLiteral = true
 			}
 			next++
 		}

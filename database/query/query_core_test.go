@@ -80,13 +80,15 @@ func TestTypedFacadesDoNotExposeInternalSQLState(t *testing.T) {
 	for _, typ := range []reflect.Type{
 		reflect.TypeFor[Query[user]](), reflect.TypeFor[Definition[user]](),
 		reflect.TypeFor[GlobalScope[user]](), reflect.TypeFor[Assignment[user]](),
+		reflect.TypeFor[Conflict[user]](), reflect.TypeFor[ConflictUpdate[user]](),
+		reflect.TypeFor[InsertSelect[user, cursorRecord]](), reflect.TypeFor[UpdateSource[user, cursorRecord]](),
 	} {
 		for _, field := range reflect.VisibleFields(typ) {
 			if field.IsExported() {
 				t.Errorf("%v exposes internal SQL field %s", typ, field.Name)
 			}
 		}
-		for _, name := range []string{"CompileModel", "CompileMutation", "CompileInsert", "WriteCompiler", "ModelSelect", "ValidateColumns", "ScopePredicates"} {
+		for _, name := range []string{"CompileModel", "CompileMutation", "CompileInsert", "CompileInsertSelect", "CompileSourceWrite", "ValidateShape", "Dependencies", "WriteCompiler", "ModelSelect", "ValidateColumns", "ScopePredicates"} {
 			if _, ok := typ.MethodByName(name); ok {
 				t.Errorf("%v promotes internal engine method %s", typ, name)
 			}
@@ -98,5 +100,38 @@ func TestPublicSQLDeclarationsKeepTheirNamedIdentity(t *testing.T) {
 		if typ.PkgPath() != "github.com/weiloon1234/Foundry-Go/database/query" {
 			t.Errorf("public declaration moved identity: %v", typ)
 		}
+	}
+}
+
+func TestSharedWritePlanningOwnsCapturedPoliciesDuringConcurrentCompilation(t *testing.T) {
+	q := mutationQuery()
+	name := NewTextField[user, string]("users", "name", codec.String[string]())
+	note := NewNullableTextField[user, string]("users", "note", codec.String[string]())
+	updates := []ConflictUpdate[user]{note.Set("captured")}
+	policy := OnConflictKeys(Lower(name).Group()).TargetWhere(name.Ne("")).DoUpdate(updates...)
+	updates[0] = note.SetNull()
+	rows := []Mutation[user]{Change(Assign[user]("users", "name", codec.String[string](), "inserted"))}
+	original := insertPlan[user]{query: q, rows: rows, conflict: &policy}
+	before, err := original.compile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var group sync.WaitGroup
+	for i := 0; i < 12; i++ {
+		group.Go(func() {
+			derived := policy.Where(name.Eq("allowed")).Update(note)
+			if _, err := (insertPlan[user]{query: q, rows: rows, conflict: &derived}).compile(); err != nil {
+				t.Error(err)
+				return
+			}
+			after, err := original.compile()
+			if err != nil || after.SQL() != before.SQL() || !reflect.DeepEqual(after.Arguments(), before.Arguments()) {
+				t.Error("derived upsert mutated the captured policy", err)
+			}
+		})
+	}
+	group.Wait()
+	if !reflect.DeepEqual(before.Arguments(), []any{"inserted", "captured"}) {
+		t.Fatal("upsert borrowed caller update storage")
 	}
 }

@@ -2,14 +2,14 @@ package query
 
 import (
 	"context"
-	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
-func (p InsertSelect[S, M]) validateShape(allowManaged bool) (compiler, map[string]InsertMapping[S, M], map[string]mutationAssignment, error) {
+func (p InsertSelect[S, M]) validateShape(allowManaged bool) (compiler, map[string]valueExpression, map[string]mutationAssignment, error) {
 	q := p.destination
 	c, err := q.mutationCompiler(insertModel)
 	if err != nil {
@@ -25,7 +25,7 @@ func (p InsertSelect[S, M]) validateShape(allowManaged bool) (compiler, map[stri
 	if err != nil {
 		return c, nil, nil, err
 	}
-	mapped := make(map[string]InsertMapping[S, M], len(p.mappings))
+	mapped := make(map[string]valueExpression, len(p.mappings))
 	for _, mapping := range p.mappings {
 		name, err := q.validateSQLMapping(mapping.modelValueMapping)
 		if err != nil {
@@ -36,7 +36,7 @@ func (p InsertSelect[S, M]) validateShape(allowManaged bool) (compiler, map[stri
 		if repeat || literal {
 			return c, nil, nil, fault.New(fault.Invalid, "insert mapping repeats an assigned field")
 		}
-		mapped[name] = mapping
+		mapped[name] = mapping.expression
 	}
 	for name := range values {
 		if _, declared := q.definition.modelField(name); !declared {
@@ -103,46 +103,15 @@ func (p InsertSelect[S, M]) prepareValues(ctx context.Context, source clock.Cloc
 	return p, ctx.Err()
 }
 
-// The existing SELECT compiler owns source scopes, CTE dependencies, expression
-// validation and bindings. Destination declaration order owns insertion columns.
-// This private compiler accepts only already-prepared literal values.
+// Typed declaration checks precede shared source SQL and literal binding.
 func (p InsertSelect[S, M]) compile(returning bool) (Statement, error) {
 	c, mapped, values, err := p.validateShape(false)
 	if err != nil {
 		return Statement{}, err
 	}
-	q := p.destination
-	node := p.source.node
-	node.Selections = make([]selectItem, 0, len(mapped)+len(values))
-	columns := make([]string, 0, cap(node.Selections))
-	for _, column := range q.definition.modelDefinition.Columns {
-		var expression valueExpression
-		if mapping, ok := mapped[column.Name]; ok {
-			expression = mapping.expression
-		} else if assignment, ok := values[column.Name]; ok {
-			bound, err := bindAssignment(column, assignment.Bind)
-			if err != nil {
-				return Statement{}, err
-			}
-			field, _ := q.definition.modelField(column.Name)
-			expression = parameterNode{Kind: field.kind, Value: bound}
-		} else {
-			continue
-		}
-		columns = append(columns, quoted(column.Name))
-		node.Selections = append(node.Selections, selectItem{Expression: expression, Alias: column.Name})
-	}
-	prefix, err := c.CompileCTEs(node)
-	if err != nil {
-		return Statement{}, err
-	}
-	selected, err := c.SelectSQL(node)
-	if err != nil {
-		return Statement{}, err
-	}
-	sql := prefix + "INSERT INTO " + quotedTable(q.queryCore.Table) + " (" + strings.Join(columns, ", ") + ") " + selected
-	if returning {
-		sql += " RETURNING " + selectedColumns(q.queryCore.Table, q.definition.modelDefinition.Columns)
-	}
-	return Statement{sql: sql, arguments: c.Arguments}, nil
+	result, err := p.destination.queryCore.CompileInsertSelect(c, p.source.node, mapped, values, func(name string) codec.ParameterType {
+		field, _ := p.destination.definition.modelField(name)
+		return field.kind
+	}, returning)
+	return statementFromCore(result), err
 }

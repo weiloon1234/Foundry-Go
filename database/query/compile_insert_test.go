@@ -34,7 +34,7 @@ func TestInsertBatchDefaultsAndConflictBindings(t *testing.T) {
 	}
 	copy := policy.Where(name.Eq("extra"))
 	copy = copy.Update(note)
-	if len(policy.condition) != 1 || len(policy.updates) != 2 || len(copy.condition) != 2 {
+	if len(policy.state.Condition) != 1 || len(policy.state.Updates) != 2 || len(copy.state.Condition) != 2 {
 		t.Fatal("conflict derivation changed source")
 	}
 	for _, p := range []Conflict[user]{OnConflict[user]().DoNothing(), OnConflictConstraint[user]("users_name_key").DoNothing(), OnConflict(name).DoUpdate(note.SetNull())} {

@@ -35,15 +35,5 @@ func (a NullableOrderedAggregate[M, V]) Filter(predicates ...Predicate[M]) Nulla
 }
 
 func requalifyAggregate(a aggregateNode, alias string) aggregateNode {
-	if a.Field != (fieldRef{}) {
-		a.Field.Table = alias
-	}
-	if a.Filter != nil {
-		predicates := make([]expression, len(a.Filter.Predicates))
-		for i, predicate := range a.Filter.Predicates {
-			predicates[i] = requalify(predicate, alias)
-		}
-		a.Filter = &aggregateFilter{Predicates: predicates}
-	}
-	return a
+	return querycore.RequalifyAggregate(a, alias)
 }

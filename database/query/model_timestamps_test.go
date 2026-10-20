@@ -107,7 +107,7 @@ func TestModelTimestampsBulkAndConflictUseNormalizedProposedValue(t *testing.T) 
 		if !strings.Contains(statement.SQL(), `"modified_on" = "excluded"."modified_on"`) {
 			t.Fatal("timestamp conflict failed to copy the normalized proposed value", statement.SQL())
 		}
-		if len(plan.rows[0].assignments) != 1 || len(policy.updates) != 1 {
+		if len(plan.rows[0].assignments) != 1 || len(policy.state.Updates) != 1 {
 			t.Fatal("timestamp batch changed original inputs")
 		}
 		want := []any{"first", source.now, source.now.Add(time.Hour), "first", source.now, source.now.Add(time.Hour)}

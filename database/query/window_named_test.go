@@ -83,11 +83,5 @@ func TestNamedWindowQueryIsolationAndQualification(t *testing.T) {
 	if _, err := SelectValue(q, RowNumber(WindowFor(q).OrderBy(ScalarQuery(q, inner).Asc()).Named("nested_scope"))).Compile(); err != nil {
 		t.Fatal("independent scalar window rejected", err)
 	}
-	definition := WindowFor(q).PartitionBy(f.Group()).Named("shared").node.Reference
-	renamer := correlationRenamer{from: "records", to: "qualified"}
-	one := renamer.windowSpec(windowSpec{Reference: definition}, 0)
-	two := renamer.windowSpec(windowSpec{Reference: definition}, 0)
-	if renamer.err != nil || one.Reference != two.Reference || one.Reference == definition || one.Reference.Definition.Partitions[0].(fieldRef).Table != "qualified" || definition.Definition.Partitions[0].(fieldRef).Table != "records" {
-		t.Fatal("qualification lost named identity or changed source", renamer.err)
-	}
+
 }

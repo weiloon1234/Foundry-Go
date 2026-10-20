@@ -123,6 +123,10 @@ execution, generated declarations and database schemas are unchanged. The
 [build measurements](guides/query-build-resources.md) distinguish shared-core
 extraction from field method-set reduction and accumulated cache storage.
 
+Further shared upsert and source-write planning preserves public query signatures
+and generated declarations. Updating the framework pin needs no additional source,
+database or wire migration; no deprecated compatibility methods are retained.
+
 ## Operational behavior
 
 Datatable client-input rejection now matches `http.BadRequest` as well as the

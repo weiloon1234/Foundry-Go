@@ -27,7 +27,7 @@ func (f NullableBinaryField[M, V]) IsNull() Predicate[M] { return f.compare(isNu
 func (f NullableBinaryField[M, V]) IsNotNull() Predicate[M] { return f.compare(isNotNull) }
 
 func (f NullableBinaryField[M, V]) SetNull() ConflictUpdate[M] {
-	return ConflictUpdate[M]{field: f.ref, null: true}
+	return ConflictUpdate[M]{update: conflictUpdate{Field: f.ref, Null: true}}
 }
 
 func (f BinaryField[M, V]) Group() Group[M] { return Group[M]{node: f.ref} }
@@ -59,7 +59,7 @@ func (f BinaryField[M, V]) conflictColumn() conflictColumn[M] {
 }
 
 func (f BinaryField[M, V]) Incoming() ConflictUpdate[M] {
-	return ConflictUpdate[M]{field: f.ref, incoming: true}
+	return ConflictUpdate[M]{update: conflictUpdate{Field: f.ref, Incoming: true}}
 }
 
 func (f BinaryField[M, V]) Set(v V) ConflictUpdate[M] {

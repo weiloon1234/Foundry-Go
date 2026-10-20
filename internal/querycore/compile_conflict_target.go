@@ -1,4 +1,4 @@
-package query
+package querycore
 
 import (
 	"strings"
@@ -6,23 +6,23 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
-func (p Conflict[M]) validateTarget(q Query[M], c *compiler) error {
-	if len(p.targetCondition) > 0 && (p.named || len(p.keys) == 0) {
+func (p Conflict) validateTarget(q QueryCore, c *Compiler) error {
+	if len(p.TargetCondition) > 0 && (p.Named || len(p.Keys) == 0) {
 		return fault.New(fault.Invalid, "partial conflict targets require index keys")
 	}
 	nodes := 0
-	var walk selectWalk
-	walk.Source = func(tableSource, int) {
+	var walk SelectWalk
+	walk.Source = func(TableSource, int) {
 		walk.Err = fault.New(fault.Invalid, "conflict index targets cannot contain subqueries")
 	}
-	field := func(f fieldRef) error {
-		if err := f.Validate(q.queryCore.Table); err != nil {
+	field := func(f FieldRef) error {
+		if err := f.Validate(q.Table); err != nil {
 			return err
 		}
 		return c.DeclaredField(f)
 	}
-	for _, key := range p.keys {
-		if err := validateRowValue(key, field, 0, &nodes); err != nil {
+	for _, key := range p.Keys {
+		if err := ValidateRowValue(key, field, 0, &nodes); err != nil {
 			return err
 		}
 		walk.Value(key, 0)
@@ -30,8 +30,8 @@ func (p Conflict[M]) validateTarget(q Query[M], c *compiler) error {
 			return walk.Err
 		}
 	}
-	for _, predicate := range p.targetCondition {
-		if err := validateExpressionFields(predicate, field, 0, &nodes); err != nil {
+	for _, predicate := range p.TargetCondition {
+		if err := ValidateExpressionFields(predicate, field, 0, &nodes); err != nil {
 			return err
 		}
 		walk.Expression(predicate, 0)
@@ -45,26 +45,26 @@ func (p Conflict[M]) validateTarget(q Query[M], c *compiler) error {
 // Index inference is a schema boundary. Reuse the expression compiler with a
 // local constant/column rendering mode; execution clauses retain the original
 // compiler and its uninterrupted parameter numbering.
-func (p Conflict[M]) targetSQL(parent *compiler, table string) (string, error) {
-	if p.named {
-		return " ON CONSTRAINT " + quoted(p.constraint), nil
+func (p Conflict) targetSQL(parent *Compiler, table string) (string, error) {
+	if p.Named {
+		return " ON CONSTRAINT " + Quoted(p.Constraint), nil
 	}
-	if len(p.keys) == 0 {
+	if len(p.Keys) == 0 {
 		return "", nil
 	}
 	c := *parent
 	c.IndexTarget = true
 	c.Arguments = nil
 	c.Keys = nil
-	c.Sources = map[string]map[string]columnData{table: c.Columns}
+	c.Sources = map[string]map[string]Column{table: c.Columns}
 	defer func() {
 		parent.ExpressionNodes = c.ExpressionNodes
 		parent.SelectNodes = c.SelectNodes
 		parent.ScalarSQLBytes = c.ScalarSQLBytes
 	}()
-	var index valueIndex
-	keys := make([]string, len(p.keys))
-	for i, key := range p.keys {
+	var index ValueIndex
+	keys := make([]string, len(p.Keys))
+	for i, key := range p.Keys {
 		planned, err := c.PlanValue(key)
 		if err != nil {
 			return "", err
@@ -76,13 +76,13 @@ func (p Conflict[M]) targetSQL(parent *compiler, table string) (string, error) {
 		}
 		index.Add(planned)
 		keys[i] = planned.Sql
-		if _, field := key.(fieldRef); !field {
+		if _, field := key.(FieldRef); !field {
 			keys[i] = "(" + keys[i] + ")"
 		}
 	}
 	var result strings.Builder
 	result.WriteString(" (" + strings.Join(keys, ", ") + ")")
-	if err := c.Where(&result, p.targetCondition); err != nil {
+	if err := c.Where(&result, p.TargetCondition); err != nil {
 		return "", err
 	}
 	if result.Len() > MaxScalarSQLBytes {

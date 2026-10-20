@@ -22,7 +22,7 @@ type ConflictRows[M any] struct {
 	err    error
 }
 
-const conflictStoredTable = "foundry_conflict_stored"
+const conflictStoredTable = querycore.ConflictStoredTable
 
 // ConflictRows obtains model metadata for conflict calculations. Query filters
 // do not become conflict conditions; use the policy's Where or WhereRows.
@@ -74,13 +74,13 @@ func SetConflictValue[M, V any](field ConflictValueField[M, V], v RowValue[Confl
 	if nilDescriptor(field) {
 		return ConflictUpdate[M]{}
 	}
-	return ConflictUpdate[M]{field: field.conflictColumn().field, value: rowInput(v).Value().node}
+	return ConflictUpdate[M]{update: conflictUpdate{Field: field.conflictColumn().field, Value: rowInput(v).Value().node}}
 }
 
 // WhereRows conditionally updates using both records. It is ANDed with existing
 // Where/WhereRows clauses. False conditions skip RETURNING but retain row locks.
 func (c Conflict[M]) WhereRows(predicates ...Predicate[ConflictRow[M]]) Conflict[M] {
-	c.rowCondition = appendPredicates(c.rowCondition, predicates)
+	c.state.RowCondition = appendPredicates(c.state.RowCondition, predicates)
 	return c
 }
 

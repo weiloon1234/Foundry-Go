@@ -140,7 +140,7 @@ func TestMutationInputConflictUsesFreshInputAndCopiesProposedOnce(t *testing.T) 
 			}
 		}
 	}
-	if err := name.Set(storedName("stored")).validateMutator(q); !errors.Is(err, fault.Invalid) {
+	if err := q.validateConflictMutator(name.Set(storedName("stored")).update); !errors.Is(err, fault.Invalid) {
 		t.Fatal("low-level stored conflict literal bypassed input type")
 	}
 }

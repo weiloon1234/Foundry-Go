@@ -39,6 +39,73 @@ must pass the invalid-type consumer gate.
 Queries still own captured declaration/order/mapping slices. Scope callbacks stay
 lazy and isolated, and execution resolves scopes from its own request context.
 
+## Further shared write planning
+
+Upsert policy data, index-target inference, assignment compilation, dependency
+collection and correlation qualification also live in the private shared core.
+INSERT SELECT and joined UPDATE/DELETE lower source/destination-checked mappings
+before SQL assembly, instead of compiling that assembly for every source/model
+combination. Public facades retain private named state; no raw engine fields or
+methods are promoted.
+
+Model-specific validation, literal input types, field mutators, timestamp
+preparation, transaction ownership and complete decoders retain their existing
+owners. Source windows, ambiguity rollback, global/tenant scopes, parameter order,
+partial conflict indexes and resource bounds use the same AST/compiler rules.
+
+This further extraction preserves public calls, generated declarations, wire
+formats and database schemas. Consumers already using the preceding typed-field
+API need only update their framework pin. The earlier stored-field migration
+above still applies when upgrading from an older API; this extraction adds no
+deprecated methods, compatibility wrappers or additional migration steps.
+[Recorded continuation evidence](../evidence/query-write-build-resources-20261020.json)
+retains matched source overlays, commands and structural resource results. This
+baseline already includes the preceding engine/field changes and the current
+consumer fixtures. Compare its matched columns, not absolute totals from the
+older 2026-10-19 workload:
+
+| Matched workload | Before | Further shared planning |
+| --- | ---: | ---: |
+| Ordinary build cache | 260.93 MiB | 226.57 MiB |
+| Ordinary consumer package archive | 112.72 MiB | 78.17 MiB |
+| Broad consumer build cache | 8.78 GiB | 8.60 GiB |
+| Additional cache after private upsert diagnostic edit | 8.27 GiB | 6.54 MiB |
+| Compiler invocations after that edit | 160 | 2 |
+
+The ordinary total cache shrinks by 13.2%, its own package archive by 30.6%, and
+the broad total cache by 2.0%. These totals include dependencies and ordinary
+compiler artifacts; they are not accumulated shared-cache disk usage.
+The diagnostic edit adds no source lines and changes no declarations, valid SQL
+or bindings. Its final rebuild reuses consumer compilation.
+
+The resumed private diagnostic edit took **119.23 s before and 4.26 s after**
+with no other Go build detected during either segment. The final edit rebuilt
+only `internal/querycore` and `database/query`. This isolates a private upsert
+implementation edit whose typed declarations remain unchanged; it does not
+promise the same benefit for model, API, dependency, flag or SDK changes.
+
+Separate Go builds overlapped the initial comparison and the repeated baseline
+cold build. Those timings are retained but do not establish a matched cold-build
+speedup. Completed caches were reused to resume the unfinished segments rather
+than restarting completed compilation. Structural cache/archive sizes reproduce
+across the runs; only uncontended segments support the private-edit timing above.
+
+Five alternating one-second samples from matched precompiled test binaries give:
+
+| Planning operation | Before → after ns/op | Before → after B/op | Before → after allocs/op |
+| --- | ---: | ---: | ---: |
+| Upsert with expression/partial index target | 3,052 → 3,070 | 6,725 → 6,717 | 82 → 82 |
+| INSERT SELECT | 2,243 → 2,187 | 5,688 → 5,264 | 60 → 59 |
+| Joined UPDATE | 7,039 → 6,983 | 16,664 → 16,232 | 162 → 161 |
+
+These are local medians, not end-to-end database throughput claims. Upsert
+allocation count is unchanged; each tested source-write case removes one allocation.
+Both variants pass the same SQL/binding, scope, index, mutator, timestamp and
+rejection contracts. Final native `make verify` and required PostgreSQL/race gates
+passed on the measured, unchanged source, including independent consumers, 1,026
+compiler rejections, real gopls/TypeScript clients and deterministic generation.
+The 2026-10-19 tables below remain historical evidence for the earlier extraction.
+
 ## Measurement conditions
 
 Recorded results use native Go 1.27.1 on darwin/arm64 (Apple M4 Max).

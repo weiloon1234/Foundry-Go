@@ -24,6 +24,14 @@
 
 ### Query compilation footprint
 
+- Share remaining upsert policy/index-target planning, correlation qualification,
+  INSERT SELECT and joined UPDATE/DELETE SQL assembly across concrete model and
+  source types. Keep public query calls, generated declarations, codecs and
+  transaction/lifecycle behavior unchanged; no consumer source migration or
+  deprecated compatibility methods are introduced. Matched ordinary builds use
+  13.2% less cache and a 30.6% smaller consumer archive; see the
+  [continuation measurements](docs/guides/query-build-resources.md#further-shared-write-planning).
+
 - Preserve the typed query API while isolating the non-generic SQL/planning
   engine in `internal/querycore`, sharing model-independent builder state,
   declaration checks, global scopes, ordering, keyset predicates, SELECT planning,

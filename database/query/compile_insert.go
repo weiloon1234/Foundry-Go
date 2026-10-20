@@ -2,6 +2,7 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 // MaxInsertRows bounds one atomic insert/upsert statement. The shared parameter
@@ -78,11 +79,11 @@ func (p insertPlan[M]) compileRows(c compiler, rows []map[string]mutationAssignm
 	q := p.query
 	node := q.modelSelect()
 	if p.conflict != nil {
-		node = p.conflict.dependencies(node)
+		node = p.conflict.state.Dependencies(node)
 	}
-	var conflict func(*compiler, string, string, []expression) (string, error)
+	var conflict *querycore.Conflict
 	if p.conflict != nil {
-		conflict = p.conflict.compile
+		conflict = &p.conflict.state
 	}
 	result, err := q.queryCore.CompileInsert(c, rows, union, node, conflict)
 	return statementFromCore(result), err

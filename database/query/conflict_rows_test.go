@@ -50,7 +50,7 @@ func TestConflictRowCalculationsAndConditions(t *testing.T) {
 		t.Fatal(s.Arguments())
 	}
 	derived := policy.WhereRows(proposed.Gt(10))
-	if len(policy.rowCondition) != 1 || len(derived.rowCondition) != 2 {
+	if len(policy.state.RowCondition) != 1 || len(derived.state.RowCondition) != 2 {
 		t.Fatal("derivation mutated policy")
 	}
 	again, err := plan.compile()
@@ -75,8 +75,8 @@ func TestConflictRowsRejectInvalidExpressions(t *testing.T) {
 		OnConflict(name).DoUpdate(SetConflictValue[user, int64](nil, wrong)),
 		OnConflict(name).DoNothing().WhereRows(wrong.Gt(0)),
 		OnConflict(name).Update(count).WhereRows(Predicate[ConflictRow[user]]{}),
-		OnConflict(name).DoUpdate(ConflictUpdate[user]{field: count.ref, value: aggregateNode{}, incoming: true}),
-		OnConflict(name).DoUpdate(ConflictUpdate[user]{field: count.ref, value: aggregateNode{}}),
+		OnConflict(name).DoUpdate(ConflictUpdate[user]{update: conflictUpdate{Field: count.ref, Value: aggregateNode{}, Incoming: true}}),
+		OnConflict(name).DoUpdate(ConflictUpdate[user]{update: conflictUpdate{Field: count.ref, Value: aggregateNode{}}}),
 	} {
 		for _, inputs := range [][]Mutation[user]{nil, {Change(Assign[user](q.Table(), "name", codec.String[string](), "valid"))}} {
 			if _, err := (insertPlan[user]{query: q, rows: inputs, conflict: &policy}).compile(); !errors.Is(err, fault.Invalid) {

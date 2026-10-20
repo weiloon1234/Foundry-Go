@@ -36,7 +36,7 @@ func TestConflictIndexExpressionsAndSchemaConstants(t *testing.T) {
 		t.Fatal(statement.SQL(), statement.Arguments())
 	}
 	derived := policy.TargetWhere(count.Gt(0))
-	if len(policy.targetCondition) != 2 || len(derived.targetCondition) != 3 {
+	if len(policy.state.TargetCondition) != 2 || len(derived.state.TargetCondition) != 3 {
 		t.Fatal("derivation mutated index predicate")
 	}
 	again, err := plan.compile()
