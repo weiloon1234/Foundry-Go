@@ -47,12 +47,28 @@ type SettingsConfigKeySet struct {
 	Image       SettingsImageConfigKeySet
 	Log         SettingsLogConfigKeySet
 	Maintenance SettingsMaintenanceConfigKeySet
-	Encryption  SettingsEncryptionConfigKeySet
+	//
+	// Encryption is the application key ring (active key plus retained
+	// previous keys) used for MFA factors and encrypted cookies.
+	//
+	Encryption SettingsEncryptionConfigKeySet
 	// ShutdownTimeout selects shutdown_timeout. Set accepts time.Duration.
+	//
+	// ShutdownTimeout is the whole shutdown budget: StopDelay, kernel drain
+	// (such as the HTTP shutdown grace) and every cleanup share it.
+	//
 	ShutdownTimeout config.Key[Settings, time.Duration]
 	// StopDelay selects stop_delay. Set accepts time.Duration.
+	//
+	// StopDelay is a lame-duck period after a shutdown request: readiness
+	// fails while listeners keep serving, then admission closes and kernels
+	// drain. Zero disables it. It must leave room for kernel drain.
+	//
 	StopDelay config.Key[Settings, time.Duration]
 	// StartupTimeout selects startup_timeout. Set accepts time.Duration.
+	//
+	// StartupTimeout bounds provider boot; zero leaves it unbounded.
+	//
 	StartupTimeout config.Key[Settings, time.Duration]
 }
 
@@ -208,32 +224,93 @@ type SettingsHTTPConfigKeySet struct {
 // SettingsHTTPServerConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsHTTPServerConfigKeySet struct {
 	// Address selects http.server.address. Set accepts string.
+	//
+	// Address is a TCP host:port. Port zero allocates a port reported by Ready.
+	//
 	Address config.Key[Settings, string]
 	// ReadHeaderTimeout selects http.server.read_header_timeout. Set accepts time.Duration.
+	//
+	// ReadHeaderTimeout bounds socket time spent reading request headers.
+	//
 	ReadHeaderTimeout config.Key[Settings, time.Duration]
 	// ReadTimeout selects http.server.read_timeout. Set accepts time.Duration.
+	//
+	// ReadTimeout bounds reading the full request, including its body. It does
+	// not terminate handler computations or replace their context deadlines.
+	//
 	ReadTimeout config.Key[Settings, time.Duration]
 	// WriteTimeout selects http.server.write_timeout. Set accepts time.Duration.
+	//
+	// WriteTimeout bounds response socket writes, including streaming writes.
+	// It does not terminate a handler that ignores write errors/cancellation.
+	//
 	WriteTimeout config.Key[Settings, time.Duration]
 	// IdleTimeout selects http.server.idle_timeout. Set accepts time.Duration.
+	//
+	// IdleTimeout bounds waiting for another request on a keep-alive connection.
+	//
 	IdleTimeout config.Key[Settings, time.Duration]
 	// RequestTimeout selects http.server.request_timeout. Set accepts time.Duration.
+	//
+	// RequestTimeout bounds the request context after admission. Cooperative
+	// handlers and database calls observe its cancellation. Ownership lasts
+	// until actual handler exit; raw handlers own their response behavior.
+	// A matched route declared with WithTimeout replaces it for that route.
+	//
 	RequestTimeout config.Key[Settings, time.Duration]
 	// ShutdownTimeout selects http.server.shutdown_timeout. Set accepts time.Duration.
+	//
+	// ShutdownTimeout allows admitted handlers to finish before cancellation and
+	// connection closure. Dependency ownership still lasts until actual exit.
+	//
 	ShutdownTimeout config.Key[Settings, time.Duration]
 	// MaxHeaderBytes selects http.server.max_header_bytes. Set accepts int.
+	//
+	// MaxHeaderBytes configures the native net/http request-header limit.
+	//
 	MaxHeaderBytes config.Key[Settings, int]
 	// MaxBodyBytes selects http.server.max_body_bytes. Set accepts int64.
+	//
+	// MaxBodyBytes is a positive default ceiling for known and streamed bodies.
+	// Increasing it does not preallocate a buffer; raw handlers own their reads.
+	// A matched route declared with WithBodyLimit replaces it for that route only.
+	//
 	MaxBodyBytes config.Key[Settings, int64]
 	// MaxConcurrentRequests selects http.server.max_concurrent_requests. Set accepts int.
+	//
+	// MaxConcurrentRequests bounds handlers that have actually entered the
+	// server. Zero uses DefaultServerConfig's limit. A request waits briefly for
+	// a slot in arrival order (at most min(RequestTimeout, 5s)); exhaustion then
+	// returns 503 with Retry-After. Cancelled handlers retain their slot until
+	// they really return.
+	//
 	MaxConcurrentRequests config.Key[Settings, int]
 	// MaxConnections selects http.server.max_connections. Set accepts int.
+	//
+	// MaxConnections bounds accepted TCP connections, including connections
+	// still reading headers and hijacked connections until their owner closes
+	// them. Zero uses the default. Extra peers wait in the OS listen backlog.
+	//
 	MaxConnections config.Key[Settings, int]
 	// TrustTraceContext selects http.server.trust_trace_context. Set accepts bool.
+	//
+	// TrustTraceContext accepts valid W3C trace headers as correlation metadata.
+	// It grants no identity or sampling authority. False starts a fresh trace
+	// for every request; invalid or duplicate parents also start a fresh trace.
+	//
 	TrustTraceContext config.Key[Settings, bool]
 	// MaintenanceReadPaths selects http.server.maintenance_read_paths. Set accepts []string.
+	//
+	// MaintenanceReadPaths permits GET/HEAD on at most 16 exact static paths
+	// while paused or draining. Use URLs derived from protected diagnostics
+	// routes. This bypasses only maintenance admission: normal route auth,
+	// policies, request limits and actual server shutdown still apply.
+	//
 	MaintenanceReadPaths config.Key[Settings, []string]
 	// AccessLog selects http.server.access_log. Set accepts bool.
+	//
+	// AccessLog emits one metadata-only completion event to the server logger.
+	//
 	AccessLog config.Key[Settings, bool]
 }
 
@@ -248,6 +325,10 @@ type SettingsHTTPProbesConfigKeySet struct {
 	// ReadinessPath selects http.probes.readiness_path. Set accepts string.
 	ReadinessPath config.Key[Settings, string]
 	// ReadinessCache selects http.probes.readiness_cache. Set accepts time.Duration.
+	//
+	// ReadinessCache is how long public readiness reuses one dependency check
+	// (100ms to one minute); lifecycle and maintenance state are read live.
+	//
 	ReadinessCache config.Key[Settings, time.Duration]
 }
 
@@ -335,8 +416,18 @@ type SettingsRealtimeConfigKeySet struct {
 	// Enabled selects realtime.enabled. Set accepts bool.
 	Enabled config.Key[Settings, bool]
 	// Shared selects realtime.shared. Set accepts bool.
+	//
+	// Shared serves upgrades at Path on the application HTTP listener instead
+	// of a dedicated listener and WebSocket kernel; running foundation.HTTP then
+	// serves both. HTTP request/connection limits must accommodate sockets.
+	//
 	Shared config.Key[Settings, bool]
 	// Publisher selects realtime.publisher. Set accepts bool.
+	//
+	// Publisher constructs a managed cross-process publisher for processes
+	// that run no hub, such as workers. It requires a cluster connection and
+	// the same channel declarations as the socket servers.
+	//
 	Publisher config.Key[Settings, bool]
 	// Connection selects realtime.connection. Set accepts websocket.ConnectionName.
 	Connection config.Key[Settings, websocket.ConnectionName]
@@ -357,14 +448,28 @@ type SettingsRealtimeConfigConfigKeySet struct {
 	// MaxFrameBytes selects realtime.config.max_frame_bytes. Set accepts int.
 	MaxFrameBytes config.Key[Settings, int]
 	// InboundQueue selects realtime.config.inbound_queue. Set accepts int.
+	//
+	// InboundQueue bounds frames read but not yet processed. Generated clients
+	// limit their in-flight operations to it; overflowing it closes the socket.
+	//
 	InboundQueue config.Key[Settings, int]
 	// OutboundQueue selects realtime.config.outbound_queue. Set accepts int.
+	//
+	// OutboundQueue bounds queued frames per connection. MaxQueuedBytes bounds
+	// their actual bytes, including inbound frames and pending-admission
+	// buffers; MaxTotalQueuedBytes bounds all connections together. Exceeding
+	// either disconnects the slow connection instead of blocking publishers.
+	//
 	OutboundQueue config.Key[Settings, int]
 	// MaxQueuedBytes selects realtime.config.max_queued_bytes. Set accepts int.
 	MaxQueuedBytes config.Key[Settings, int]
 	// MaxTotalQueuedBytes selects realtime.config.max_total_queued_bytes. Set accepts int64.
 	MaxTotalQueuedBytes config.Key[Settings, int64]
 	// MaxOperations selects realtime.config.max_operations. Set accepts int.
+	//
+	// MaxOperations bounds concurrent trusted publication, presence and
+	// disconnect operations. Callers wait briefly, then receive fault.Overloaded.
+	//
 	MaxOperations config.Key[Settings, int]
 	// MaxPresenceMembers selects realtime.config.max_presence_members. Set accepts int.
 	MaxPresenceMembers config.Key[Settings, int]
@@ -391,6 +496,11 @@ type SettingsRealtimeConfigConfigKeySet struct {
 	MessageRate          SettingsRealtimeConfigMessageRateConfigKeySet
 	Payload              SettingsRealtimeConfigPayloadConfigKeySet
 	// AdditionalOrigins selects realtime.config.additional_origins. Set accepts []http.Origin.
+	//
+	// AdditionalOrigins are exact HTTP(S) origins, never wildcard patterns.
+	// Same-origin is accepted after trusted-proxy handling. Originless clients
+	// must be explicitly allowed; serialized opaque/null origins never are.
+	//
 	AdditionalOrigins config.Key[Settings, []http.Origin]
 	// AllowOriginless selects realtime.config.allow_originless. Set accepts bool.
 	AllowOriginless config.Key[Settings, bool]
@@ -421,32 +531,93 @@ type SettingsRealtimeConfigPayloadConfigKeySet struct {
 // SettingsRealtimeHTTPConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsRealtimeHTTPConfigKeySet struct {
 	// Address selects realtime.http.address. Set accepts string.
+	//
+	// Address is a TCP host:port. Port zero allocates a port reported by Ready.
+	//
 	Address config.Key[Settings, string]
 	// ReadHeaderTimeout selects realtime.http.read_header_timeout. Set accepts time.Duration.
+	//
+	// ReadHeaderTimeout bounds socket time spent reading request headers.
+	//
 	ReadHeaderTimeout config.Key[Settings, time.Duration]
 	// ReadTimeout selects realtime.http.read_timeout. Set accepts time.Duration.
+	//
+	// ReadTimeout bounds reading the full request, including its body. It does
+	// not terminate handler computations or replace their context deadlines.
+	//
 	ReadTimeout config.Key[Settings, time.Duration]
 	// WriteTimeout selects realtime.http.write_timeout. Set accepts time.Duration.
+	//
+	// WriteTimeout bounds response socket writes, including streaming writes.
+	// It does not terminate a handler that ignores write errors/cancellation.
+	//
 	WriteTimeout config.Key[Settings, time.Duration]
 	// IdleTimeout selects realtime.http.idle_timeout. Set accepts time.Duration.
+	//
+	// IdleTimeout bounds waiting for another request on a keep-alive connection.
+	//
 	IdleTimeout config.Key[Settings, time.Duration]
 	// RequestTimeout selects realtime.http.request_timeout. Set accepts time.Duration.
+	//
+	// RequestTimeout bounds the request context after admission. Cooperative
+	// handlers and database calls observe its cancellation. Ownership lasts
+	// until actual handler exit; raw handlers own their response behavior.
+	// A matched route declared with WithTimeout replaces it for that route.
+	//
 	RequestTimeout config.Key[Settings, time.Duration]
 	// ShutdownTimeout selects realtime.http.shutdown_timeout. Set accepts time.Duration.
+	//
+	// ShutdownTimeout allows admitted handlers to finish before cancellation and
+	// connection closure. Dependency ownership still lasts until actual exit.
+	//
 	ShutdownTimeout config.Key[Settings, time.Duration]
 	// MaxHeaderBytes selects realtime.http.max_header_bytes. Set accepts int.
+	//
+	// MaxHeaderBytes configures the native net/http request-header limit.
+	//
 	MaxHeaderBytes config.Key[Settings, int]
 	// MaxBodyBytes selects realtime.http.max_body_bytes. Set accepts int64.
+	//
+	// MaxBodyBytes is a positive default ceiling for known and streamed bodies.
+	// Increasing it does not preallocate a buffer; raw handlers own their reads.
+	// A matched route declared with WithBodyLimit replaces it for that route only.
+	//
 	MaxBodyBytes config.Key[Settings, int64]
 	// MaxConcurrentRequests selects realtime.http.max_concurrent_requests. Set accepts int.
+	//
+	// MaxConcurrentRequests bounds handlers that have actually entered the
+	// server. Zero uses DefaultServerConfig's limit. A request waits briefly for
+	// a slot in arrival order (at most min(RequestTimeout, 5s)); exhaustion then
+	// returns 503 with Retry-After. Cancelled handlers retain their slot until
+	// they really return.
+	//
 	MaxConcurrentRequests config.Key[Settings, int]
 	// MaxConnections selects realtime.http.max_connections. Set accepts int.
+	//
+	// MaxConnections bounds accepted TCP connections, including connections
+	// still reading headers and hijacked connections until their owner closes
+	// them. Zero uses the default. Extra peers wait in the OS listen backlog.
+	//
 	MaxConnections config.Key[Settings, int]
 	// TrustTraceContext selects realtime.http.trust_trace_context. Set accepts bool.
+	//
+	// TrustTraceContext accepts valid W3C trace headers as correlation metadata.
+	// It grants no identity or sampling authority. False starts a fresh trace
+	// for every request; invalid or duplicate parents also start a fresh trace.
+	//
 	TrustTraceContext config.Key[Settings, bool]
 	// MaintenanceReadPaths selects realtime.http.maintenance_read_paths. Set accepts []string.
+	//
+	// MaintenanceReadPaths permits GET/HEAD on at most 16 exact static paths
+	// while paused or draining. Use URLs derived from protected diagnostics
+	// routes. This bypasses only maintenance admission: normal route auth,
+	// policies, request limits and actual server shutdown still apply.
+	//
 	MaintenanceReadPaths config.Key[Settings, []string]
 	// AccessLog selects realtime.http.access_log. Set accepts bool.
+	//
+	// AccessLog emits one metadata-only completion event to the server logger.
+	//
 	AccessLog config.Key[Settings, bool]
 }
 
@@ -465,7 +636,10 @@ type SettingsFeaturesConfigKeySet struct {
 	Reports          SettingsFeaturesReportsConfigKeySet
 	Health           SettingsFeaturesHealthConfigKeySet
 	Observability    SettingsFeaturesObservabilityConfigKeySet
-	Maintenance      SettingsFeaturesMaintenanceConfigKeySet
+	//
+	// Maintenance schedules framework housekeeping (features.maintenance).
+	//
+	Maintenance SettingsFeaturesMaintenanceConfigKeySet
 }
 
 // SettingsFeaturesIdempotencyConfigKeySet exposes compiler-checked configuration overrides.
@@ -742,6 +916,11 @@ type SettingsFeaturesOutboxConfigKeySet struct {
 	// Jobs selects features.outbox.jobs. Set accepts map[jobs.ConnectionName]outbox.Destination.
 	Jobs config.Key[Settings, map[jobs.ConnectionName]outbox.Destination]
 	// Events selects features.outbox.events. Set accepts map[outbox.Destination]jobs.ConnectionName.
+	//
+	// Events maps declared EventOutbox destinations to durable job connections.
+	// Empty connection selects the default. Each connection uses its default
+	// queue and jobs.DefaultPolicy for the framework event delivery job.
+	//
 	Events config.Key[Settings, map[outbox.Destination]jobs.ConnectionName]
 	// Kernels selects features.outbox.kernels. Set accepts []foundation.KernelKind.
 	Kernels config.Key[Settings, []foundation.KernelKind]
@@ -813,6 +992,12 @@ type SettingsFeaturesExtensionsConfigKeySet struct {
 // SettingsFeaturesExtensionCleanupConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsFeaturesExtensionCleanupConfigKeySet struct {
 	// Jobs selects features.extension_cleanup.jobs. Set accepts jobs.ConnectionName.
+	//
+	// Jobs names the job connection that runs the cleanup job. The deletion
+	// enqueues it in its own transaction through the outbox, so it needs a
+	// destination in features.outbox.jobs and a worker consuming the
+	// connection's default queue. Empty keeps process-local after-commit cleanup.
+	//
 	Jobs config.Key[Settings, jobs.ConnectionName]
 }
 
@@ -865,6 +1050,10 @@ type SettingsFeaturesReportsConfigKeySet struct {
 // SettingsFeaturesReportsConfigConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsFeaturesReportsConfigConfigKeySet struct {
 	// TimeZone selects features.reports.config.time_zone. Set accepts temporal.ZoneName.
+	//
+	// TimeZone is the default export presentation zone. Empty means UTC for a
+	// direct manager, or inherits the application timezone during assembly.
+	//
 	TimeZone config.Key[Settings, temporal.ZoneName]
 	// Schema selects features.reports.config.schema. Set accepts string.
 	Schema config.Key[Settings, string]
@@ -881,8 +1070,16 @@ type SettingsFeaturesReportsConfigConfigKeySet struct {
 	// MaxPageBytes selects features.reports.config.max_page_bytes. Set accepts int.
 	MaxPageBytes config.Key[Settings, int]
 	// MaxExports selects features.reports.config.max_exports. Set accepts int.
+	//
+	// MaxExports bounds concurrent export generation (query, formatting and
+	// file writing). A slot is released once the artifact is complete.
+	//
 	MaxExports config.Key[Settings, int]
 	// MaxArtifacts selects features.reports.config.max_artifacts. Set accepts int.
+	//
+	// MaxArtifacts bounds completed artifacts still open for delivery, and so
+	// the private temporary files held on disk. It is at least MaxExports.
+	//
 	MaxArtifacts config.Key[Settings, int]
 	// ExportTimeout selects features.reports.config.export_timeout. Set accepts time.Duration.
 	ExportTimeout config.Key[Settings, time.Duration]
@@ -944,6 +1141,9 @@ type SettingsFeaturesObservabilityConfigKeySet struct {
 	// SampleTraces selects features.observability.sample_traces. Set accepts bool.
 	SampleTraces config.Key[Settings, bool]
 	// TraceSampleRatio selects features.observability.trace_sample_ratio. Set accepts float64.
+	//
+	// TraceSampleRatio selects the sampled fraction of traces; zero means 1.
+	//
 	TraceSampleRatio config.Key[Settings, float64]
 	// TraceQueue selects features.observability.trace_queue. Set accepts int.
 	TraceQueue config.Key[Settings, int]
@@ -973,178 +1173,381 @@ type SettingsFeaturesObservabilityErrorLogConfigKeySet struct {
 // SettingsFeaturesMaintenanceConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsFeaturesMaintenanceConfigKeySet struct {
 	// Enabled selects features.maintenance.enabled. Set accepts bool.
-	Enabled       config.Key[Settings, bool]
-	Defaults      SettingsFeaturesMaintenanceDefaultsConfigKeySet
-	Outbox        SettingsFeaturesMaintenanceOutboxConfigKeySet
-	Idempotency   SettingsFeaturesMaintenanceIdempotencyConfigKeySet
-	Audit         SettingsFeaturesMaintenanceAuditConfigKeySet
-	JobArchive    SettingsFeaturesMaintenanceJobArchiveConfigKeySet
+	Enabled  config.Key[Settings, bool]
+	Defaults SettingsFeaturesMaintenanceDefaultsConfigKeySet
+	//
+	// Outbox removes published outbox rows completed before Retention; pending
+	// and failed rows are never pruned.
+	//
+	Outbox SettingsFeaturesMaintenanceOutboxConfigKeySet
+	//
+	// Idempotency removes expired outcomes, but only while the store's own
+	// pruner is disabled (features.idempotency.config.prune_interval = 0).
+	//
+	Idempotency SettingsFeaturesMaintenanceIdempotencyConfigKeySet
+	//
+	// Audit applies features.audit.config.retention_days to the configured
+	// area; zero retention registers no audit task. MaxBatches does not apply:
+	// one run removes every expired batch within its Timeout.
+	//
+	Audit SettingsFeaturesMaintenanceAuditConfigKeySet
+	//
+	// JobArchive removes archived failed jobs older than Retention.
+	//
+	JobArchive SettingsFeaturesMaintenanceJobArchiveConfigKeySet
+	//
+	// Notifications removes inbox records older than Retention. Unread records
+	// are kept unless NotificationsUnread is set.
+	//
 	Notifications SettingsFeaturesMaintenanceNotificationsConfigKeySet
 	// NotificationsUnread selects features.maintenance.notifications_unread. Set accepts bool.
 	NotificationsUnread config.Key[Settings, bool]
-	Sessions            SettingsFeaturesMaintenanceSessionsConfigKeySet
-	Tokens              SettingsFeaturesMaintenanceTokensConfigKeySet
-	Models              SettingsFeaturesMaintenanceModelsConfigKeySet
-	Custom              SettingsFeaturesMaintenanceCustomConfigKeySet
+	//
+	// Sessions, Tokens, Models and Custom tune declared Pruning of each kind.
+	//
+	Sessions SettingsFeaturesMaintenanceSessionsConfigKeySet
+	Tokens   SettingsFeaturesMaintenanceTokensConfigKeySet
+	Models   SettingsFeaturesMaintenanceModelsConfigKeySet
+	Custom   SettingsFeaturesMaintenanceCustomConfigKeySet
 }
 
 // SettingsFeaturesMaintenanceDefaultsConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsFeaturesMaintenanceDefaultsConfigKeySet struct {
 	// Disabled selects features.maintenance.defaults.disabled. Set accepts bool.
+	//
+	// Disabled turns this task off.
+	//
 	Disabled config.Key[Settings, bool]
 	// Interval selects features.maintenance.defaults.interval. Set accepts time.Duration.
+	//
+	// Interval separates runs. Each task keeps a stable offset within its
+	// interval, so housekeeping does not pile onto the top of every hour.
+	//
 	Interval config.Key[Settings, time.Duration]
 	// Batch selects features.maintenance.defaults.batch. Set accepts int.
+	//
+	// Batch bounds the rows one statement or transaction removes; MaxBatches
+	// bounds the batches of one run, so a backlog continues at the next run.
+	//
 	Batch config.Key[Settings, int]
 	// MaxBatches selects features.maintenance.defaults.max_batches. Set accepts int.
 	MaxBatches config.Key[Settings, int]
 	// Timeout selects features.maintenance.defaults.timeout. Set accepts time.Duration.
+	//
+	// Timeout bounds one run.
+	//
 	Timeout config.Key[Settings, time.Duration]
 	// Retention selects features.maintenance.defaults.retention. Set accepts time.Duration.
+	//
+	// Retention keeps younger rows of stores pruned by age (outbox, job archive
+	// and notification inbox).
+	//
 	Retention config.Key[Settings, time.Duration]
 }
 
 // SettingsFeaturesMaintenanceOutboxConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsFeaturesMaintenanceOutboxConfigKeySet struct {
 	// Disabled selects features.maintenance.outbox.disabled. Set accepts bool.
+	//
+	// Disabled turns this task off.
+	//
 	Disabled config.Key[Settings, bool]
 	// Interval selects features.maintenance.outbox.interval. Set accepts time.Duration.
+	//
+	// Interval separates runs. Each task keeps a stable offset within its
+	// interval, so housekeeping does not pile onto the top of every hour.
+	//
 	Interval config.Key[Settings, time.Duration]
 	// Batch selects features.maintenance.outbox.batch. Set accepts int.
+	//
+	// Batch bounds the rows one statement or transaction removes; MaxBatches
+	// bounds the batches of one run, so a backlog continues at the next run.
+	//
 	Batch config.Key[Settings, int]
 	// MaxBatches selects features.maintenance.outbox.max_batches. Set accepts int.
 	MaxBatches config.Key[Settings, int]
 	// Timeout selects features.maintenance.outbox.timeout. Set accepts time.Duration.
+	//
+	// Timeout bounds one run.
+	//
 	Timeout config.Key[Settings, time.Duration]
 	// Retention selects features.maintenance.outbox.retention. Set accepts time.Duration.
+	//
+	// Retention keeps younger rows of stores pruned by age (outbox, job archive
+	// and notification inbox).
+	//
 	Retention config.Key[Settings, time.Duration]
 }
 
 // SettingsFeaturesMaintenanceIdempotencyConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsFeaturesMaintenanceIdempotencyConfigKeySet struct {
 	// Disabled selects features.maintenance.idempotency.disabled. Set accepts bool.
+	//
+	// Disabled turns this task off.
+	//
 	Disabled config.Key[Settings, bool]
 	// Interval selects features.maintenance.idempotency.interval. Set accepts time.Duration.
+	//
+	// Interval separates runs. Each task keeps a stable offset within its
+	// interval, so housekeeping does not pile onto the top of every hour.
+	//
 	Interval config.Key[Settings, time.Duration]
 	// Batch selects features.maintenance.idempotency.batch. Set accepts int.
+	//
+	// Batch bounds the rows one statement or transaction removes; MaxBatches
+	// bounds the batches of one run, so a backlog continues at the next run.
+	//
 	Batch config.Key[Settings, int]
 	// MaxBatches selects features.maintenance.idempotency.max_batches. Set accepts int.
 	MaxBatches config.Key[Settings, int]
 	// Timeout selects features.maintenance.idempotency.timeout. Set accepts time.Duration.
+	//
+	// Timeout bounds one run.
+	//
 	Timeout config.Key[Settings, time.Duration]
 	// Retention selects features.maintenance.idempotency.retention. Set accepts time.Duration.
+	//
+	// Retention keeps younger rows of stores pruned by age (outbox, job archive
+	// and notification inbox).
+	//
 	Retention config.Key[Settings, time.Duration]
 }
 
 // SettingsFeaturesMaintenanceAuditConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsFeaturesMaintenanceAuditConfigKeySet struct {
 	// Disabled selects features.maintenance.audit.disabled. Set accepts bool.
+	//
+	// Disabled turns this task off.
+	//
 	Disabled config.Key[Settings, bool]
 	// Interval selects features.maintenance.audit.interval. Set accepts time.Duration.
+	//
+	// Interval separates runs. Each task keeps a stable offset within its
+	// interval, so housekeeping does not pile onto the top of every hour.
+	//
 	Interval config.Key[Settings, time.Duration]
 	// Batch selects features.maintenance.audit.batch. Set accepts int.
+	//
+	// Batch bounds the rows one statement or transaction removes; MaxBatches
+	// bounds the batches of one run, so a backlog continues at the next run.
+	//
 	Batch config.Key[Settings, int]
 	// MaxBatches selects features.maintenance.audit.max_batches. Set accepts int.
 	MaxBatches config.Key[Settings, int]
 	// Timeout selects features.maintenance.audit.timeout. Set accepts time.Duration.
+	//
+	// Timeout bounds one run.
+	//
 	Timeout config.Key[Settings, time.Duration]
 	// Retention selects features.maintenance.audit.retention. Set accepts time.Duration.
+	//
+	// Retention keeps younger rows of stores pruned by age (outbox, job archive
+	// and notification inbox).
+	//
 	Retention config.Key[Settings, time.Duration]
 }
 
 // SettingsFeaturesMaintenanceJobArchiveConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsFeaturesMaintenanceJobArchiveConfigKeySet struct {
 	// Disabled selects features.maintenance.job_archive.disabled. Set accepts bool.
+	//
+	// Disabled turns this task off.
+	//
 	Disabled config.Key[Settings, bool]
 	// Interval selects features.maintenance.job_archive.interval. Set accepts time.Duration.
+	//
+	// Interval separates runs. Each task keeps a stable offset within its
+	// interval, so housekeeping does not pile onto the top of every hour.
+	//
 	Interval config.Key[Settings, time.Duration]
 	// Batch selects features.maintenance.job_archive.batch. Set accepts int.
+	//
+	// Batch bounds the rows one statement or transaction removes; MaxBatches
+	// bounds the batches of one run, so a backlog continues at the next run.
+	//
 	Batch config.Key[Settings, int]
 	// MaxBatches selects features.maintenance.job_archive.max_batches. Set accepts int.
 	MaxBatches config.Key[Settings, int]
 	// Timeout selects features.maintenance.job_archive.timeout. Set accepts time.Duration.
+	//
+	// Timeout bounds one run.
+	//
 	Timeout config.Key[Settings, time.Duration]
 	// Retention selects features.maintenance.job_archive.retention. Set accepts time.Duration.
+	//
+	// Retention keeps younger rows of stores pruned by age (outbox, job archive
+	// and notification inbox).
+	//
 	Retention config.Key[Settings, time.Duration]
 }
 
 // SettingsFeaturesMaintenanceNotificationsConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsFeaturesMaintenanceNotificationsConfigKeySet struct {
 	// Disabled selects features.maintenance.notifications.disabled. Set accepts bool.
+	//
+	// Disabled turns this task off.
+	//
 	Disabled config.Key[Settings, bool]
 	// Interval selects features.maintenance.notifications.interval. Set accepts time.Duration.
+	//
+	// Interval separates runs. Each task keeps a stable offset within its
+	// interval, so housekeeping does not pile onto the top of every hour.
+	//
 	Interval config.Key[Settings, time.Duration]
 	// Batch selects features.maintenance.notifications.batch. Set accepts int.
+	//
+	// Batch bounds the rows one statement or transaction removes; MaxBatches
+	// bounds the batches of one run, so a backlog continues at the next run.
+	//
 	Batch config.Key[Settings, int]
 	// MaxBatches selects features.maintenance.notifications.max_batches. Set accepts int.
 	MaxBatches config.Key[Settings, int]
 	// Timeout selects features.maintenance.notifications.timeout. Set accepts time.Duration.
+	//
+	// Timeout bounds one run.
+	//
 	Timeout config.Key[Settings, time.Duration]
 	// Retention selects features.maintenance.notifications.retention. Set accepts time.Duration.
+	//
+	// Retention keeps younger rows of stores pruned by age (outbox, job archive
+	// and notification inbox).
+	//
 	Retention config.Key[Settings, time.Duration]
 }
 
 // SettingsFeaturesMaintenanceSessionsConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsFeaturesMaintenanceSessionsConfigKeySet struct {
 	// Disabled selects features.maintenance.sessions.disabled. Set accepts bool.
+	//
+	// Disabled turns this task off.
+	//
 	Disabled config.Key[Settings, bool]
 	// Interval selects features.maintenance.sessions.interval. Set accepts time.Duration.
+	//
+	// Interval separates runs. Each task keeps a stable offset within its
+	// interval, so housekeeping does not pile onto the top of every hour.
+	//
 	Interval config.Key[Settings, time.Duration]
 	// Batch selects features.maintenance.sessions.batch. Set accepts int.
+	//
+	// Batch bounds the rows one statement or transaction removes; MaxBatches
+	// bounds the batches of one run, so a backlog continues at the next run.
+	//
 	Batch config.Key[Settings, int]
 	// MaxBatches selects features.maintenance.sessions.max_batches. Set accepts int.
 	MaxBatches config.Key[Settings, int]
 	// Timeout selects features.maintenance.sessions.timeout. Set accepts time.Duration.
+	//
+	// Timeout bounds one run.
+	//
 	Timeout config.Key[Settings, time.Duration]
 	// Retention selects features.maintenance.sessions.retention. Set accepts time.Duration.
+	//
+	// Retention keeps younger rows of stores pruned by age (outbox, job archive
+	// and notification inbox).
+	//
 	Retention config.Key[Settings, time.Duration]
 }
 
 // SettingsFeaturesMaintenanceTokensConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsFeaturesMaintenanceTokensConfigKeySet struct {
 	// Disabled selects features.maintenance.tokens.disabled. Set accepts bool.
+	//
+	// Disabled turns this task off.
+	//
 	Disabled config.Key[Settings, bool]
 	// Interval selects features.maintenance.tokens.interval. Set accepts time.Duration.
+	//
+	// Interval separates runs. Each task keeps a stable offset within its
+	// interval, so housekeeping does not pile onto the top of every hour.
+	//
 	Interval config.Key[Settings, time.Duration]
 	// Batch selects features.maintenance.tokens.batch. Set accepts int.
+	//
+	// Batch bounds the rows one statement or transaction removes; MaxBatches
+	// bounds the batches of one run, so a backlog continues at the next run.
+	//
 	Batch config.Key[Settings, int]
 	// MaxBatches selects features.maintenance.tokens.max_batches. Set accepts int.
 	MaxBatches config.Key[Settings, int]
 	// Timeout selects features.maintenance.tokens.timeout. Set accepts time.Duration.
+	//
+	// Timeout bounds one run.
+	//
 	Timeout config.Key[Settings, time.Duration]
 	// Retention selects features.maintenance.tokens.retention. Set accepts time.Duration.
+	//
+	// Retention keeps younger rows of stores pruned by age (outbox, job archive
+	// and notification inbox).
+	//
 	Retention config.Key[Settings, time.Duration]
 }
 
 // SettingsFeaturesMaintenanceModelsConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsFeaturesMaintenanceModelsConfigKeySet struct {
 	// Disabled selects features.maintenance.models.disabled. Set accepts bool.
+	//
+	// Disabled turns this task off.
+	//
 	Disabled config.Key[Settings, bool]
 	// Interval selects features.maintenance.models.interval. Set accepts time.Duration.
+	//
+	// Interval separates runs. Each task keeps a stable offset within its
+	// interval, so housekeeping does not pile onto the top of every hour.
+	//
 	Interval config.Key[Settings, time.Duration]
 	// Batch selects features.maintenance.models.batch. Set accepts int.
+	//
+	// Batch bounds the rows one statement or transaction removes; MaxBatches
+	// bounds the batches of one run, so a backlog continues at the next run.
+	//
 	Batch config.Key[Settings, int]
 	// MaxBatches selects features.maintenance.models.max_batches. Set accepts int.
 	MaxBatches config.Key[Settings, int]
 	// Timeout selects features.maintenance.models.timeout. Set accepts time.Duration.
+	//
+	// Timeout bounds one run.
+	//
 	Timeout config.Key[Settings, time.Duration]
 	// Retention selects features.maintenance.models.retention. Set accepts time.Duration.
+	//
+	// Retention keeps younger rows of stores pruned by age (outbox, job archive
+	// and notification inbox).
+	//
 	Retention config.Key[Settings, time.Duration]
 }
 
 // SettingsFeaturesMaintenanceCustomConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsFeaturesMaintenanceCustomConfigKeySet struct {
 	// Disabled selects features.maintenance.custom.disabled. Set accepts bool.
+	//
+	// Disabled turns this task off.
+	//
 	Disabled config.Key[Settings, bool]
 	// Interval selects features.maintenance.custom.interval. Set accepts time.Duration.
+	//
+	// Interval separates runs. Each task keeps a stable offset within its
+	// interval, so housekeeping does not pile onto the top of every hour.
+	//
 	Interval config.Key[Settings, time.Duration]
 	// Batch selects features.maintenance.custom.batch. Set accepts int.
+	//
+	// Batch bounds the rows one statement or transaction removes; MaxBatches
+	// bounds the batches of one run, so a backlog continues at the next run.
+	//
 	Batch config.Key[Settings, int]
 	// MaxBatches selects features.maintenance.custom.max_batches. Set accepts int.
 	MaxBatches config.Key[Settings, int]
 	// Timeout selects features.maintenance.custom.timeout. Set accepts time.Duration.
+	//
+	// Timeout bounds one run.
+	//
 	Timeout config.Key[Settings, time.Duration]
 	// Retention selects features.maintenance.custom.retention. Set accepts time.Duration.
+	//
+	// Retention keeps younger rows of stores pruned by age (outbox, job archive
+	// and notification inbox).
+	//
 	Retention config.Key[Settings, time.Duration]
 }
 

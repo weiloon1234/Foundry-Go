@@ -32,8 +32,21 @@ type RealtimeConnectionSettingsClusterConfigKeySet struct {
 	OperationTimeout config.Key[RealtimeConnectionSettings, time.Duration]
 	Buffer           RealtimeConnectionSettingsClusterBufferConfigKeySet
 	// RetainConnectionsOnGap selects cluster.retain_connections_on_gap. Set accepts bool.
+	//
+	// RetainConnectionsOnGap keeps local sockets open across a lost fan-out
+	// stream; events published during the gap are then missed silently. The
+	// default closes them with a retryable status so clients reconnect and
+	// request replay.
+	//
 	RetainConnectionsOnGap config.Key[RealtimeConnectionSettings, bool]
 	// ExcludeRemoteConnections selects cluster.exclude_remote_connections. Set accepts bool.
+	//
+	// ExcludeRemoteConnections lets ExceptConnection name a connection hosted
+	// by another instance by carrying the exclusion in the fan-out envelope.
+	// Instances before this field reject such envelopes, so enable it only
+	// once every instance in the namespace runs a release that has it.
+	// Excluding a connection of this instance (RelayToOthers) never needs it.
+	//
 	ExcludeRemoteConnections config.Key[RealtimeConnectionSettings, bool]
 }
 

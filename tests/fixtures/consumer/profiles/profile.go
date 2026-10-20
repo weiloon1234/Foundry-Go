@@ -83,6 +83,11 @@ func (s Services) SaveLabel(ctx context.Context, profile Profile, locale i18n.Lo
 func (s Services) DefaultPageSize(ctx context.Context) (uint32, error) {
 	return PageSize.GetOr(ctx, s.Settings, 20)
 }
+
+// EnsureDefaultPageSize initializes a missing default in the caller's transaction.
+func (s Services) EnsureDefaultPageSize(ctx context.Context, tx *database.Tx) error {
+	return PageSize.EnsureIn(ctx, tx, s.Settings, 20)
+}
 func (s Services) LoadLocalized(ctx context.Context, profiles []model.Reference[Profile, model.ID[Profile]]) (attachments.LocalizedBatch[Profile, model.ID[Profile]], error) {
 	return Localized.LoadLocalized(ctx, s.Attachments, profiles)
 }

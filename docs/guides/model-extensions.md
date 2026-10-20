@@ -180,7 +180,7 @@ or value payloads. The same parser accepts
 `metadata rescope --owner users [--page-size 100] [--format text|json] [--apply]`
 for [stale scopes](#owner-identity-and-table-renames); without `--apply` it only
 lists stale and target row keys, and rows left in place carry a `conflict`,
-`missing` or `undeclared` marker. Framework CLI composition remains in milestone 23.
+`missing` or `undeclared` marker. Register the command explicitly through the [typed CLI kernel](developer-tooling-and-testing.md#commands-and-bootstrap). Metadata alone does not register a command.
 
 The common store bounds operation count and owns actual callback lifetime. Close
 cancels operations, the caller's context bounds waiting, and Done closes after
@@ -202,9 +202,7 @@ name, err := ProductName.Resolve(ctx, manager, product.FoundryReference(), "ms")
 `i18n.LocaleID` is a canonical BCP 47 tag. Normalize external text with
 `i18n.ParseLocale`; canonical validity does not grant supported-locale membership.
 The injected `LocaleCatalog` supplies one immutable supported/default snapshot
-per operation. `LocaleSet` itself is a static catalog. The complete message and
-request localization system remains in milestone 20; model content never uses a
-process-global current locale.
+per operation. `LocaleSet` itself is a static catalog. The [message catalog and request localization](localization.md) share these locale identities. Model content still selects its locale explicitly and never uses a process-global current locale.
 
 `Get` returns the exact locale's optional text. `Resolve` checks the requested
 locale, then its supported regional parents (`en-GB` → `en`), then the catalog

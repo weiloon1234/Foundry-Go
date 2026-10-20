@@ -48,9 +48,10 @@ Use the same model-owned `With` as ordinary relations. `Find`, `First`, paginati
 | `query.Exists[Model]()` | `bool` | False for an absent group |
 | Integer/decimal `query.Sum(field)` and `query.Avg(field)` | `value.Nullable[decimal.Decimal]` | SQL NULL |
 | Float `query.Sum(field)` and `query.Avg(field)` | `value.Nullable[float64]` | SQL NULL |
+| Interval `query.Sum(field)` and `query.Avg(field)` | `value.Nullable[temporal.Interval]` | SQL NULL |
 | Ordered-field `query.Min(field)` and `query.Max(field)` | `value.Nullable[FieldType]` | SQL NULL |
 
-Numeric operations appear only on generated numeric fields. Text, temporal and enum fields cannot request sums/averages. Ordered fields retain their concrete type through extrema, including named text types and temporal values. Enum and model-ID scalar fields support counts but do not gain numeric operations.
+`query.Sum` and `query.Avg` accept numeric and [interval fields](interval-queries.md). Text, date/time, enum and model-ID fields do not satisfy their summary capability. Ordered fields retain their concrete type through extrema, including named text types and temporal values. Enum and model-ID scalar fields support counts but do not gain numeric operations.
 
 Foundry casts integer/decimal inputs to PostgreSQL `numeric` before SUM/AVG, avoiding intermediate integer overflow and fractional truncation. Finite division precision still belongs to PostgreSQL; an average is not an arbitrary-precision rational number. Float inputs are promoted to double precision and retain approximate semantics. These choices build on PostgreSQL's [aggregate return types and null behavior](https://www.postgresql.org/docs/18/functions-aggregate.html). Result codecs reject non-finite floats and decimal results outside Foundry's declared digit bound.
 
@@ -68,7 +69,7 @@ count := models.UserAggregates().OrderCount.Using(query.Related(
 users, err := models.QueryUsers().With(count).All(ctx, db)
 ```
 
-The parent remains in the result when no related row matches; its count becomes zero. `Load` does not authorize or re-fetch supplied parents. Authorization and soft-deletion scopes must be explicit until their owning milestones integrate them.
+The parent remains in the result when no related row matches; its count becomes zero. `Load` does not authorize or re-fetch supplied parents. Authorization remains the application's responsibility. Default soft-delete visibility applies independently to related targets and pivots; select different visibility with the [relation soft-delete controls](model-soft-deletes.md).
 
 Aggregate inputs use the relation's filters. Row ordering does not change these summaries and is omitted from grouped SQL. A relation passed to `Related` cannot request eager-loaded children: those clauses would serve no role in the aggregate and are rejected. Select ordinary loaded relationships separately, or select an aggregate inside a relationship when the nested model itself needs a computed field.
 

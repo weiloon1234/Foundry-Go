@@ -48,6 +48,6 @@ func emitMultipart(p *packageInput, declaration multipartDeclaration) ([]byte, e
 		}
 	}
 	e.line(")})")
-	e.emitTransportValidation(declaration.name, declaration.typ, declaration.position, declaration.validationProperties(), "multipart", "part")
+	e.emitTransportValidation(declaration.name, declaration.typ, declaration.position, declaration.validationProperties(), declaration.fieldHelp, "multipart", "part")
 	return e.finish(declaration.position.Filename)
 }

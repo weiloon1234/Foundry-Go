@@ -15,6 +15,7 @@ func (e *emitter) emitModelChanges(m model) {
 	e.line("type %sFieldChanges struct {", m.name)
 	for _, f := range m.fields {
 		e.line("// %s retains the typed change for %s.", f.name, f.column)
+		e.emitFieldHelp(f.help)
 		e.line("%s %s.FieldChange[%s]", f.name, lifecycle, e.typeName(f.typ))
 	}
 	e.line("}")

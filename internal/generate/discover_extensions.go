@@ -34,6 +34,7 @@ type extensionSlot struct {
 	contract           metadataContract
 	position           token.Position
 	pos                token.Pos
+	help               fieldHelp
 }
 
 // metadataContract is the JSON descriptor generation infers for a Value slot.
@@ -88,7 +89,13 @@ func discoverExtensionSlot(p *packageInput, v *types.Var, tag map[string]string,
 	case valueSlot:
 		slot.value = wrapper.TypeArgs().At(0)
 	}
-	return slot, true, nil
+	reader := p.sourceDocumentation()
+	source, err := reader.structure(owner)
+	if err != nil {
+		return slot, true, err
+	}
+	slot.help, err = reader.help(source, v.Name())
+	return slot, true, err
 }
 
 // finishExtensions validates model-level slot declarations once all fields are

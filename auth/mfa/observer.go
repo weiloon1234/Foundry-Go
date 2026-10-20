@@ -36,8 +36,9 @@ func (n Notice[M, K]) Action() Action                 { return n.action }
 func (Notice[M, K]) Format(s fmt.State, _ rune)       { _, _ = s.Write([]byte("MFA notice")) }
 
 // Observer maps MFA observations to application-owned event DTOs. Changed runs
-// inside the mutation transaction: use events.Enqueue/AfterCommit or audit with
-// this tx, never external I/O. Its failure rolls back factor/model/credentials.
+// inside the mutation transaction: use events.Topic.Enqueue for durable dispatch,
+// events.Topic.AfterCommit for process-local dispatch, or audit through this tx.
+// Never perform external I/O there. Failure rolls back factor/model/credentials.
 // Rejected is an immediate, process-local observation of a nonmatching factor
 // or confirmed lockout. The enclosing mutation rolls back; do not persist a
 // rejection through that transaction. No callback runs for malformed input,

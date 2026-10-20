@@ -35,7 +35,7 @@ func emitQuery(p *packageInput, declaration queryDeclaration) ([]byte, error) {
 	}
 	e.line(")})")
 	if declaration.source == "form" {
-		e.emitTransportValidation(declaration.name, declaration.typ, declaration.position, declaration.validationProperties(), "form", "field")
+		e.emitTransportValidation(declaration.name, declaration.typ, declaration.position, declaration.validationProperties(), declaration.fieldHelp, "form", "field")
 	}
 	return e.finish(declaration.position.Filename)
 }

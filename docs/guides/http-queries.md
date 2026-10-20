@@ -124,5 +124,4 @@ until encoding returns.
 
 [Typed endpoints](http-endpoints.md), [validation](validation.md),
 [HTTP pagination](http-pagination.md) and endpoint metadata build on this boundary.
-Calling `Decode` alone does not perform model lookup or authorization. Client
-exporters consume the transport declarations in milestone 21.
+Calling `Decode` alone does not perform model lookup or authorization. [Client exporters](client-contracts.md) consume the registered transport declarations.

@@ -12,6 +12,9 @@ import (
 
 // SettingsConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsConfigKeySet struct {
+	//
+	// HTTP controls the public listener and its request timeout.
+	//
 	HTTP SettingsHTTPConfigKeySet
 	// Environment selects environment. Set accepts Environment.
 	Environment config.Key[Settings, Environment]
@@ -26,6 +29,9 @@ type SettingsHTTPConfigKeySet struct {
 	// Listen selects http.listen. Set accepts string.
 	Listen config.Key[Settings, string]
 	// Port selects http.port. Set accepts Port.
+	//
+	// Port is the public listener port.
+	//
 	Port config.Key[Settings, Port]
 	// Timeout selects http.timeout. Set accepts time.Duration.
 	Timeout config.Key[Settings, time.Duration]

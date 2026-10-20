@@ -2,13 +2,13 @@
   "version": 1,
   "files": {
     "broker_settings_foundry.gen.go": "63591c8a4004e83e6aace290a693d44fb44ddf8938cd8c2da201795a5fdfeeea",
-    "cache_settings_foundry.gen.go": "cf7410c5aea9e4a6e2fbe53f3131a8e67752badf7a3b843443ddf7bfc15114bb",
-    "connection_settings_foundry.gen.go": "75b6a56b4b66b46dfa983c251f0e77b9f32fa39fba72684d0882fe6514e595a5",
-    "disk_settings_foundry.gen.go": "1f164de02afffb6ab70a49c37321f069c6e8af8023b8c71a2934ac231de1a0a7",
-    "http_client_settings_foundry.gen.go": "d3b89b4f101279fd2544ffa3003f4106c43e5e66a94311c2307592af23ee0db5",
+    "cache_settings_foundry.gen.go": "e246af38510b91b4afaff48b20bbfa981685f382836e680d8f3951543d60dc65",
+    "connection_settings_foundry.gen.go": "a7e1f40c46c9621677927d97a9dbac9ed7e61b0a7a779365b9b9e6de78496841",
+    "disk_settings_foundry.gen.go": "a726e81ba8d9a88342620c0dd979155fc8e4051dc161ceb978158fd398c5134c",
+    "http_client_settings_foundry.gen.go": "c1c652102c22382b03c5d40f0c2fff37ebcc4378ce11c4f64c9340d3a4f45c82",
     "job_connection_settings_foundry.gen.go": "aed2e27bacc787cb6f56263d1069299e23f83bd3473adcd20ebbfe1f1aaff668",
-    "mailer_settings_foundry.gen.go": "4afa3bdaed9c3fa7130924d2f3aef495603fbffbafdcd73d8b10f26510e0d935",
-    "realtime_connection_settings_foundry.gen.go": "4ac014ae329100aa96996b8cbb031b03f258a813a7dfe7ec90e3f06c1e855395",
+    "mailer_settings_foundry.gen.go": "d3d6d3b1613a62c0db697065e0feb48e000f7d5f3473ba087d3ccde6cbdae093",
+    "realtime_connection_settings_foundry.gen.go": "f0150d937d0182d5a201aeffe4bdeb30dc5d97514ce63f83e63d660d19cc79d5",
     "redis_connection_settings_foundry.gen.go": "f2e6445b5e7d3c07e6dff0979067c5980a6e3b2778f9c74d0ca119707dfe5146",
     "settings_foundry.gen.go": "ed331a7da118ea1a75e44642e824841121a9458b8a98f42a38835521909aa2ea"
   }

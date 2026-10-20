@@ -156,8 +156,7 @@ background context inside a callback.
 Redis [pub/sub is at-most-once](https://redis.io/docs/latest/develop/pubsub/#delivery-semantics):
 messages can be lost during interruption. The framework's bounded queue and explicit
 termination make local loss observable; they cannot recover messages Redis never
-delivered. Bounded WebSocket replay belongs to milestone 15, and durable recovery
-remains deferred. Pub/sub does not promise an outbox, delivery receipts, global
+delivered. [Bounded WebSocket replay](websocket-distributed.md) is available; durable recovery remains deferred. Pub/sub does not promise an outbox, delivery receipts, global
 ordering across publishers, or exactly-once processing.
 
 Redis database numbers [do not isolate pub/sub](https://redis.io/docs/latest/develop/pubsub/#database--scoping).
@@ -230,4 +229,4 @@ and namespace scope, overflow, heartbeat, dropped connections, interrupted setup
 unknown publish outcomes and draining shutdown. Typed tests cover JSON validation,
 callback ownership, provider ordering, compiler rejection and real-gopls discovery.
 Full native verification passed in 430.4s with 2012 matching source inputs, required local PostgreSQL and Redis, all 675 compiler cases, 247 consumer editor scenarios plus five field-documentation scenarios, root/consumer tests, vet/formatting, three generation-freshness targets and documentation checks. Fresh focused native races, consumer checks and 1,519,877 queue fuzz executions also passed. No dependency was added.
-Milestone 09 remains open for the additional source-parity work in its blueprint.
+The [current master status](../../blueprint/00-master-architecture-and-parity.md) records completed coordination and source-parity scope.

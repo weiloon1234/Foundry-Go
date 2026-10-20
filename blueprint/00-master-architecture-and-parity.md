@@ -6,7 +6,28 @@ Build Foundry's capabilities in idiomatic Go: **Fat Framework, Slim Project**. F
 
 Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source, public contracts and tests the authority for new work; sibling repositories are no longer required references. Historical mappings below remain delivery history. Business applications and starter products remain separate projects.
 
-This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts.
+This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
+
+## Documentation and IDE accuracy audit — 2026-10-20
+
+Status: **accepted on current native source**. The audit traced nine recent
+commits, including first-parent merge deltas, across current guide families and
+public/generated GoDoc. Current guides describe delivered capabilities; original
+field help now follows generated query, projection, validation, JSON and
+configuration APIs, including imported settings. The existing documentation
+checker rejects narrow future-work claims for completed milestones using this
+document's authoritative table.
+
+The normal `make verify` gate passed in retained and resumed segments after
+missing backend configuration caused initial setup failures. Independent
+consumers, 1,026 compiler rejections, real gopls/TypeScript, deterministic
+generation and focused tooling races passed. All 285 generated Go files retain
+their executable tokens; 22 have comment changes. No consumer migration,
+deprecated compatibility API or schema change is required. The
+[evidence](../docs/evidence/documentation-ide-drift-20261020.json) records source
+fingerprints, negative controls, review corrections and scope limits. This
+family-level audit does not certify every unchanged sentence or replace dated
+runtime, provider or performance acceptance.
 
 ## Configured queued event outboxes (starter B26) — 2026-10-19
 
@@ -501,11 +522,11 @@ Numbering is the default implementation order. A prerequisite is a gate, not per
 | 03 | [Generation and language tooling](03-generation-and-language-tooling.md) | 02 | Complete — package graph, typed generation, recovery and real-gopls acceptance verified; consumer experience reviewed |
 | 04 | [Database runtime and migrations](04-database-runtime-and-migrations.md) | 02, 03 | Complete — approved PostgreSQL adapter, runtime, migrations and tooling verified against real PostgreSQL; consumer experience reviewed |
 | 05 | [Typed models and queries](05-typed-model-and-query-core.md) | 04 | Complete — typed codecs, generated CRUD, numbered/cursor pagination and transaction outcomes verified; consumer experience reviewed |
-| 06 | [Relations and advanced queries](06-relations-and-advanced-queries.md) | 05 | Complete — typed relations, advanced queries, projections, pagination, upserts and transaction-preserving lock composition verified; consumer experience reviewed. Lifecycle/bulk-mutation integration remains in 07, with database tooling and operational parity tracked in 23/24 |
+| 06 | [Relations and advanced queries](06-relations-and-advanced-queries.md) | 05 | Complete — typed relations, advanced queries, projections, pagination, upserts and transaction-preserving lock composition verified; consumer experience reviewed. Lifecycle/bulk-mutation integration is delivered in 07, with database tooling and operational parity delivered in 23/24 |
 | 07 | [Model lifecycle, events, and audit](07-model-lifecycle-events-and-audit.md) | 05, 06 | Complete — typed hooks/observers, getters/mutators with automatic field notices, stored changes, soft deletion, events, transactional outbox and audit verified; consumer experience reviewed |
-| 08 | [HTTP, validation, and responses](08-http-validation-and-responses.md) | 02, 03, 05, 07 | Complete — typed HTTP transport, validation, pagination/model binding, files/static/SPA, middleware and gzip/Brotli compression verified; consumer experience reviewed. Cross-feature integrations remain in their owning milestones. |
+| 08 | [HTTP, validation, and responses](08-http-validation-and-responses.md) | 02, 03, 05, 07 | Complete — typed HTTP transport, validation, pagination/model binding, files/static/SPA, middleware and gzip/Brotli compression verified; consumer experience reviewed. Cross-feature integration contracts are documented in their owning milestones. |
 | 09 | [Redis, cache, and coordination](09-redis-cache-and-coordination.md) | 02 | Complete — typed cache, tags/namespace invalidation, local/distributed Remember, counters, leases, rate limiting, pub/sub, typed Redis hashes/sets and scoped commands/pipelines/scripts verified with native local services; source parity and consumer experience reviewed. |
-| 10 | [Model-first authentication](10-model-first-authentication-and-authorization.md) | 07, 08, 09 | Complete — typed guards/permissions, sessions/tokens, passwords/lockout/recovery, MFA, attribution, HTTP composition, security events and retirement passed native acceptance; source parity and consumer experience reviewed. Later integrations retain their owning milestones. |
+| 10 | [Model-first authentication](10-model-first-authentication-and-authorization.md) | 07, 08, 09 | Complete — typed guards/permissions, sessions/tokens, passwords/lockout/recovery, MFA, attribution, HTTP composition, security events and retirement passed native acceptance; source parity and consumer experience reviewed. Integration contracts are documented in their owning milestones. |
 | 11 | [Storage reliability](11-storage-reliability.md) | 02, 08 | Complete — typed storage, local/AWS S3/R2 adapters, native and live provider checks, versioned cleanup and consumer experience verified |
 | 12 | [Jobs and worker](12-jobs-and-worker-kernel.md) | 07, 09 | Complete — typed jobs, atomic Redis workflows, owned workers, shared outbox publication, native acceptance and consumer/parity review passed |
 | 13 | [Scheduler](13-scheduler-kernel.md) | 09, 12 | Complete — calendar/interval schedules, bounded execution, shared Redis coordination, typed job targets and native acceptance/consumer review passed |

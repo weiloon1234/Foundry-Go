@@ -61,7 +61,7 @@ database query until the entry is older than `Cache` (at most `MaxCacheTTL`, one
 hour), and decode a fresh value on every call. Every write through the same
 manager (`Create`, `Ensure`, `Set`, `Upsert`, `Configure`, `ResetPresentation`,
 `Remove`, `Reconcile`) invalidates the entry before and after the write; joined
-writes (`SetIn`, `UpsertIn`) invalidate again after the caller's transaction
+writes (`EnsureIn`, `SetIn`, `UpsertIn`) invalidate again after the caller's transaction
 commits, so a concurrent read cannot keep the old value. Other processes, and
 changes made outside the manager, become visible after at most `Cache`: that is
 the staleness bound for multi-process deployments. `manager.Invalidate(keys...)`

@@ -84,6 +84,7 @@ func (e *emitter) emitModelExtensions(m model, primary field) {
 	e.line("type %sExtensionSet struct{", m.name)
 	for _, slot := range m.extensions {
 		e.line("// %s configures %s.", slot.name, extensionSlotDescription(slot))
+		e.emitFieldHelp(slot.help)
 		e.line("%s %s", slot.name, policyType(slot))
 	}
 	e.line("}")
@@ -93,6 +94,7 @@ func (e *emitter) emitModelExtensions(m model, primary field) {
 	e.line("type %sExtensionSlots struct{", m.name)
 	for _, slot := range m.extensions {
 		e.line("// %s describes %s.%s: %s.", slot.name, m.name, slot.name, extensionSlotDescription(slot))
+		e.emitFieldHelp(slot.help)
 		e.line("%s %s", slot.name, descriptorType(slot))
 	}
 	e.line("}")

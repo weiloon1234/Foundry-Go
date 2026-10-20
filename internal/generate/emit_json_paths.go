@@ -12,20 +12,40 @@ import (
 type jsonPathProperty struct {
 	jsonshape.Property[types.Type]
 	child *jsonPathNode
+	help  fieldHelp
 }
 type jsonPathNode struct {
-	name       string
-	payload    types.Type
-	properties []jsonPathProperty
-	child      *jsonPathNode
-	key        types.Type // nil for an array index
-	scalar     *field
-	parent     *jsonPathNode
+	name              string
+	payload           types.Type
+	documentationType types.Type
+	properties        []jsonPathProperty
+	child             *jsonPathNode
+	key               types.Type // nil for an array index
+	scalar            *field
+	parent            *jsonPathNode
 }
 
-func (e *emitter) jsonPathNodes(name string, payload types.Type) ([]*jsonPathNode, error) {
-	nodes := []*jsonPathNode{{name: name, payload: payload}}
+func (p *packageInput) resolveJSONFieldPaths(owner string, fields []field) error {
+	for i := range fields {
+		field := &fields[i]
+		if field.kind != "JSON" {
+			continue
+		}
+		payload, _ := jsonWrapper(field.base, "JSON")
+		name := jsonPathName(owner) + "_" + jsonPathName(field.name)
+		var err error
+		field.jsonPaths, err = p.jsonPathNodes(name, payload)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *packageInput) jsonPathNodes(name string, payload types.Type) ([]*jsonPathNode, error) {
+	nodes := []*jsonPathNode{{name: name, payload: payload, documentationType: payload}}
 	child := func(parent *jsonPathNode, segment string, t types.Type) *jsonPathNode {
+		documentationType := t
 		t = types.Unalias(jsonPayload(t))
 		// Reuse recursive ancestors, not unrelated properties of the same
 		// type: adding a sibling must not rename an existing public path type.
@@ -34,16 +54,18 @@ func (e *emitter) jsonPathNodes(name string, payload types.Type) ([]*jsonPathNod
 				return node
 			}
 		}
-		n := &jsonPathNode{name: parent.name + "_" + jsonPathName(segment), payload: t, parent: parent}
+		n := &jsonPathNode{name: parent.name + "_" + jsonPathName(segment), payload: t, parent: parent, documentationType: documentationType}
 		nodes = append(nodes, n)
 		return n
 	}
+	suppressed := make(map[*jsonPathNode]bool)
 	propertyCount := 0
 	for i := 0; i < len(nodes); i++ {
 		if len(nodes) > jsonwire.MaxNodes {
 			return nil, fmt.Errorf("JSON property graph exceeds its resource bound")
 		}
 		n := nodes[i]
+		suppressed[n] = suppressed[n] || suppressed[n.parent]
 		base := jsonBase(n.payload)
 		opaque := customJSONShape(base)
 		scalarKind, err := fieldKind(base)
@@ -52,7 +74,7 @@ func (e *emitter) jsonPathNodes(name string, payload types.Type) ([]*jsonPathNod
 		if err == nil && scalarKind != "JSON" && scalarKind != "Binary" {
 			f := field{base: base, typ: base, kind: scalarKind}
 			fields := []field{f}
-			markEnumFields(fields, e.pkg.enumTypes)
+			markEnumFields(fields, p.enumTypes)
 			f = fields[0]
 			known := !opaque || f.enum
 			if named, ok := base.(*types.Named); ok {
@@ -68,14 +90,40 @@ func (e *emitter) jsonPathNodes(name string, payload types.Type) ([]*jsonPathNod
 		if opaque {
 			continue
 		}
+		switch base.Underlying().(type) {
+		case *types.Map, *types.Slice, *types.Array:
+			if !suppressed[n] {
+				source, err := p.sourceDocumentation().jsonSource(n.documentationType)
+				if err != nil {
+					return nil, err
+				}
+				suppressed[n] = source.file == nil
+			}
+		}
 		switch shape := base.Underlying().(type) {
 		case *types.Struct:
 			properties, err := jsonProperties(base)
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", name, err)
 			}
+			documentation := make([]documentedProperty, len(properties))
+			for i, property := range properties {
+				documentation[i].typ = property.Type
+			}
+			if !suppressed[n] && len(properties) != 0 {
+				reader := p.sourceDocumentation()
+				source, err := reader.jsonSource(n.documentationType)
+				if err != nil {
+					return nil, err
+				}
+				suppressed[n] = source.file == nil
+				documentation, err = reader.propertyDocumentation(base, properties, source)
+				if err != nil {
+					return nil, err
+				}
+			}
 			names := make(map[string]bool)
-			for _, p := range properties {
+			for i, p := range properties {
 				propertyCount++
 				if propertyCount > jsonwire.MaxNodes {
 					return nil, fmt.Errorf("JSON properties exceed their resource bound")
@@ -84,7 +132,11 @@ func (e *emitter) jsonPathNodes(name string, payload types.Type) ([]*jsonPathNod
 					return nil, fmt.Errorf("%s: promoted JSON properties require distinct Go field names", name)
 				}
 				names[p.GoName] = true
-				n.properties = append(n.properties, jsonPathProperty{p, child(n, p.GoName, p.Type)})
+				node := child(n, p.GoName, documentation[i].typ)
+				if documentation[i].generated && node.parent == n {
+					suppressed[node] = true
+				}
+				n.properties = append(n.properties, jsonPathProperty{Property: p, child: node, help: documentation[i].help})
 			}
 		case *types.Map:
 			n.key = shape.Key()
@@ -105,11 +157,7 @@ func (e *emitter) emitJSONField(name string, f field) {
 	payload, _ := jsonWrapper(f.base, "JSON")
 	root := name + f.name
 	pathRoot := jsonPathName(name) + "_" + jsonPathName(f.name)
-	nodes, err := e.jsonPathNodes(pathRoot, payload)
-	if err != nil {
-		e.err = err
-		return
-	}
+	nodes := f.jsonPaths
 	query := e.use(framework + "/database/query")
 	// Resolve every referenced type/codec before choosing locals. Both local
 	// payload types and imported package names can otherwise shadow them.
@@ -170,6 +218,7 @@ func (e *emitter) emitJSONPathNode(n *jsonPathNode, scope string) {
 		e.line("// %sJSONProperties describes the payload's declared properties.", n.name)
 		e.line("type %sJSONProperties[%s any] struct{", n.name, scope)
 		for _, p := range n.properties {
+			e.emitFieldHelp(p.help)
 			e.line("%s %sJSONPath[%s]", p.GoName, p.child.name, scope)
 		}
 		e.line("}")

@@ -22,6 +22,7 @@ type configField struct {
 	typ                    types.Type
 	secret                 bool
 	children               []configField
+	help                   fieldHelp
 }
 
 func discoverConfig(p *packageInput, spec *ast.TypeSpec, named *types.Named, args map[string]string) (configDeclaration, error) {
@@ -36,8 +37,11 @@ func discoverConfig(p *packageInput, spec *ast.TypeSpec, named *types.Named, arg
 }
 
 func resolveConfig(p *packageInput, declaration *configDeclaration) error {
-	var err error
-	declaration.fields, err = configFields(p, declaration.typ, "", "", false, make(map[types.Type]bool), 0)
+	source, err := p.sourceDocumentation().structure(declaration.typ)
+	if err != nil {
+		return err
+	}
+	declaration.fields, err = configFields(p, declaration.typ, source, "", "", false, make(map[types.Type]bool), 0)
 	if err != nil {
 		return err
 	}
@@ -54,7 +58,7 @@ func resolveConfig(p *packageInput, declaration *configDeclaration) error {
 	return nil
 }
 
-func configFields(p *packageInput, typ types.Type, path, prefix string, sensitive bool, ancestors map[types.Type]bool, depth int) ([]configField, error) {
+func configFields(p *packageInput, typ types.Type, source documentedType, path, prefix string, sensitive bool, ancestors map[types.Type]bool, depth int) ([]configField, error) {
 	if depth > 32 || ancestors[typ] {
 		return nil, fmt.Errorf("config groups cannot be recursive or exceed 32 levels")
 	}
@@ -91,7 +95,11 @@ func configFields(p *packageInput, typ types.Type, path, prefix string, sensitiv
 			}
 			options[option] = true
 		}
-		node := configField{name: field.Name(), path: path + field.Name(), key: prefix + name, typ: field.Type(), secret: sensitive || options["secret"]}
+		help, err := p.sourceDocumentation().help(source, field.Name())
+		if err != nil {
+			return fail(err.Error())
+		}
+		node := configField{help: help, name: field.Name(), path: path + field.Name(), key: prefix + name, typ: field.Type(), secret: sensitive || options["secret"]}
 		base := types.Unalias(field.Type())
 		if named, ok := base.(*types.Named); ok {
 			switch {
@@ -119,7 +127,15 @@ func configFields(p *packageInput, typ types.Type, path, prefix string, sensitiv
 		if node.codec == "" {
 			switch underlying := base.Underlying().(type) {
 			case *types.Struct:
-				node.children, err = configFields(p, base, node.path+".", node.key+".", node.secret, ancestors, depth+1)
+				syntax, err := source.field(field.Name())
+				if err != nil {
+					return fail(err.Error())
+				}
+				child, err := p.sourceDocumentation().child(source, syntax, field.Type())
+				if err != nil {
+					return fail(err.Error())
+				}
+				node.children, err = configFields(p, base, child, node.path+".", node.key+".", node.secret, ancestors, depth+1)
 				if err != nil {
 					return fail(err.Error())
 				}

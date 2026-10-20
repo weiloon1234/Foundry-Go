@@ -36,7 +36,7 @@ func discoverProjection(p *packageInput, spec *ast.TypeSpec, named *types.Named,
 		if tag["-"] != "" || tag["default"] != "" || tag["name"] != "" {
 			return result, p.diagnostic(v.Pos(), "projection fields cannot be ignored, declare database defaults or use an extension slot name")
 		}
-		f, err := discoverValueField(p, v, tag)
+		f, err := discoverValueField(p, named, v, tag)
 		if err != nil {
 			return result, err
 		}

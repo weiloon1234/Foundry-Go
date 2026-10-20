@@ -13,18 +13,19 @@ import (
 type dtoValidationField struct {
 	name, wire, typ, selection, labelKey string
 	guards                               []string
+	help                                 fieldHelp
 }
 
 // emitDTOValidation uses the properties already resolved for the DTO schema.
 // Business rules stay ordinary Go functions with explicit dependencies; field
 // selectors and wire names are generated automatically from the same source.
 func (e *emitter) emitDTOValidation(declaration dtoDeclaration) {
-	e.emitTransportValidation(declaration.name, declaration.typ, declaration.position, declaration.properties, "JSON", "property")
+	e.emitTransportValidation(declaration.name, declaration.typ, declaration.position, declaration.properties, declaration.fieldHelp, "JSON", "property")
 }
 
 // emitTransportValidation derives typed fields from already discovered transport
 // metadata, preserving one selector/naming implementation for DTOs and forms.
-func (e *emitter) emitTransportValidation(name string, root types.Type, position token.Position, properties []jsonshape.Property[types.Type], wireLabel, fieldLabel string) {
+func (e *emitter) emitTransportValidation(name string, root types.Type, position token.Position, properties []jsonshape.Property[types.Type], help []fieldHelp, wireLabel, fieldLabel string) {
 	validation := ""
 	if len(properties) != 0 {
 		validation = e.useNamed(framework+"/validation", "foundryvalidation")
@@ -34,7 +35,7 @@ func (e *emitter) emitTransportValidation(name string, root types.Type, position
 		counts[property.GoName]++
 	}
 	fields := make([]dtoValidationField, 0, len(properties))
-	for _, property := range properties {
+	for i, property := range properties {
 		selection, guards, names, err := dtoFieldAccess(root, property.Index, e.pkg.types)
 		if err != nil {
 			e.err = fmt.Errorf("%s: %w", position, err)
@@ -56,7 +57,7 @@ func (e *emitter) emitTransportValidation(name string, root types.Type, position
 			e.err = fmt.Errorf("%s: %w", position, err)
 			return
 		}
-		fields = append(fields, dtoValidationField{labelKey: string(presentation.LabelKey), name: name, wire: property.Name, typ: typ, selection: selection, guards: guards})
+		fields = append(fields, dtoValidationField{help: help[i], labelKey: string(presentation.LabelKey), name: name, wire: property.Name, typ: typ, selection: selection, guards: guards})
 	}
 	input := e.localName("input")
 	params, args := e.genericDeclaration(root)
@@ -65,6 +66,7 @@ func (e *emitter) emitTransportValidation(name string, root types.Type, position
 	e.line("type %sValidationFieldSet%s struct {", name, params)
 	for _, field := range fields {
 		e.line("// %s validates the declared %s %s %q.", field.name, wireLabel, fieldLabel, field.wire)
+		e.emitFieldHelp(field.help)
 		if len(field.guards) != 0 {
 			e.line("// Optional preserves absence through a nil embedded pointer.")
 		}

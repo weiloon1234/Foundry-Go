@@ -20,6 +20,9 @@ type HTTPClientSettingsConfigKeySet struct {
 
 // HTTPClientSettingsConfigConfigKeySet exposes compiler-checked configuration overrides.
 type HTTPClientSettingsConfigConfigKeySet struct {
+	//
+	// Destination optionally enforces direct, address-checked outbound networking.
+	//
 	Destination HTTPClientSettingsConfigDestinationConfigKeySet
 	// Name selects config.name. Set accepts httpclient.Name.
 	Name config.Key[HTTPClientSettings, httpclient.Name]
@@ -43,8 +46,17 @@ type HTTPClientSettingsConfigConfigKeySet struct {
 	HeaderBytes config.Key[HTTPClientSettings, int]
 	Retry       HTTPClientSettingsConfigRetryConfigKeySet
 	// PropagateTrace selects config.propagate_trace. Set accepts bool.
+	//
+	// PropagateTrace opts this named destination into bounded W3C correlation.
+	// When enabled, framework context replaces manual trace headers on the
+	// owned request copy. Disabled clients do not add propagation headers.
+	//
 	PropagateTrace config.Key[HTTPClientSettings, bool]
-	TLS            HTTPClientSettingsConfigTLSConfigKeySet
+	//
+	// TLS customizes certificate verification and client certificates for the
+	// owned transport. A supplied custom transport cannot combine with it.
+	//
+	TLS HTTPClientSettingsConfigTLSConfigKeySet
 }
 
 // HTTPClientSettingsConfigDestinationConfigKeySet exposes compiler-checked configuration overrides.

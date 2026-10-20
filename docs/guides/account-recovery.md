@@ -1,6 +1,6 @@
 # Typed account recovery
 
-Typed password-reset and email-verification flows share single-use challenge storage, current-model transactions, email revisions and uniform public request handling. Actual email adapters arrive in milestone 16.
+Typed password-reset and email-verification flows share single-use challenge storage, current-model transactions, email revisions and uniform public request handling. [Email adapters](email.md) provide transport; select durable publication explicitly when recovery delivery must survive a process crash.
 
 Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-10-acceptance) for verification evidence and later integration boundaries.
 
@@ -134,8 +134,7 @@ for the dispatches admitted so far, for tests and maintenance tools. Delivery
 runs after issuance commits and releases its locks. A failed/lost
 publication may leave an undisclosed active link; the next permitted request
 replaces it. An email/outbox adapter must supply durable delivery separately.
-Milestone 16 supplies the email drivers; this coordinator is usable with an
-explicit transport now and does not claim an atomic database/email transaction.
+[Email drivers](email.md) provide that transport. This coordinator does not claim an atomic database/email transaction.
 
 The [public request routes](../../tests/fixtures/consumer/recovering/link_routes.go)
 add typed email validation, CSRF, credential transport protection and shared IP
@@ -283,12 +282,11 @@ Missing, consumed, expired, replaced and current-state-mismatched credentials
 return `auth.Unauthenticated`; operational failures remain errors. Public request
 routes must use uniform responses, request/recipient throttling and stored-address
 only delivery. The current `Issue` result is in-process delivery data and does
-not claim crash-durable email publication. Email adapters arrive in milestone 16.
+not claim crash-durable email publication. [Email adapters](email.md) and [durable job publication](jobs.md) provide separate delivery contracts.
 
 ## Acceptance evidence
 
 Native PostgreSQL, JSON/HTTP, requester ownership/quota/diagnostics, historical
 email revisions, rollback, compiler and real-gopls tests passed. Generation is
 current for framework stores and consumer DTOs. See the [master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-10-acceptance)
-for complete evidence. Email transport and durable job delivery retain their
-separate milestone ownership.
+for complete evidence. Email transport acceptance and durable job delivery retain their separate operational requirements.

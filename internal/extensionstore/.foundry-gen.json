@@ -3,7 +3,7 @@
   "files": {
     "meta_foundry.gen.go": "d85419dbfb8af9fe2b65e0f61afa7cd7765eee9a7349df694f036a753789a693",
     "meta_index_foundry.gen.go": "3d101c3bb3af218fe9234c5965363ef792b41b1c0773b21551d8ac3d720a90ef",
-    "setting_foundry.gen.go": "2958df3dba7f1649eb9ec075bf00930f51738f754ccd18a9e1c6d58b39a0cf1e",
+    "setting_foundry.gen.go": "66d028e56e5c2d113b7d02f47a8eac4805476d033c7a9186dbaec69d7cec23a1",
     "setting_state_foundry.gen.go": "d2aaf7c85fd704ee03764e2eea87835063b6ae45748b6e9e17ddac94640948c3",
     "translation_foundry.gen.go": "add620d4bdf97279c31b1c8102cbf14b0c38cefb8a4341b704d0fe4b1fe2918e",
     "translation_index_foundry.gen.go": "f57fe21684307dd9677da9eb79fd35b963b1d23025c7ee08d0314f7e31876853"

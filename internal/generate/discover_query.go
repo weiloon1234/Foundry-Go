@@ -8,11 +8,12 @@ import (
 )
 
 type queryDeclaration struct {
-	name     string
-	source   string
-	typ      *types.Named
-	fields   []queryField
-	position token.Position
+	name      string
+	source    string
+	fieldHelp []fieldHelp
+	typ       *types.Named
+	fields    []queryField
+	position  token.Position
 }
 
 type queryField struct {

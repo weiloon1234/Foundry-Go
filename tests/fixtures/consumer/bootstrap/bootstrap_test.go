@@ -11,7 +11,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/imaging"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/model"
+	"github.com/weiloon1234/Foundry-Go/outbox"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
@@ -236,8 +238,8 @@ func TestGeneratedApplicationConfigurationIsTyped(t *testing.T) {
 		t.Fatal(err)
 	}
 	keys := SettingsConfigKeys()
-	settings, _, err := schema.Load(Defaults(), config.Inputs[Settings]{Overrides: []config.Override[Settings]{keys.App.HTTP.Server.RequestTimeout.Set(3 * time.Second), keys.Greeting.Set("Hello")}})
-	if err != nil || settings.App.HTTP.Server.RequestTimeout != 3*time.Second || settings.Greeting != "Hello" {
+	settings, _, err := schema.Load(Defaults(), config.Inputs[Settings]{Overrides: []config.Override[Settings]{keys.App.HTTP.Server.RequestTimeout.Set(3 * time.Second), keys.Greeting.Set("Hello"), keys.App.Features.Outbox.Events.Set(map[outbox.Destination]jobs.ConnectionName{"consumer.events": "default"})}})
+	if err != nil || settings.App.HTTP.Server.RequestTimeout != 3*time.Second || settings.Greeting != "Hello" || settings.App.Features.Outbox.Events["consumer.events"] != "default" {
 		t.Fatal("typed application configuration failed", err)
 	}
 }

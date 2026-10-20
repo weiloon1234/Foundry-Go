@@ -342,7 +342,10 @@ type Snapshot_SettingsJSONProperties[FoundryScope any] struct {
 	Labels  Snapshot_Settings_LabelsJSONPath[FoundryScope]
 	Profile Snapshot_Settings_ProfileJSONPath[FoundryScope]
 	Quota   Snapshot_Settings_QuotaJSONPath[FoundryScope]
-	Theme   Snapshot_Settings_ThemeJSONPath[FoundryScope]
+	//
+	// Theme chooses the reader appearance; omitted uses the application default.
+	//
+	Theme Snapshot_Settings_ThemeJSONPath[FoundryScope]
 }
 
 // Properties returns independent typed property descriptors.

@@ -119,7 +119,7 @@ and three actual gopls completion/hover/definition scenarios exercise typed usag
 Full native verification passed on 1945 matching source inputs with local PostgreSQL and Redis required, all 662 compiler cases, 242 consumer editor scenarios plus five field-documentation scenarios, root/consumer tests, vet/formatting, three generation-freshness targets and documentation checks. The initial full run took 416.7s. After a regression test exposed release hiding an earlier manager cancellation, the corrected final gate took 12.2s: affected lease/Redis/consumer packages reran and 108 unchanged packages reused Go's valid test cache. Fresh focused lease/cache/Redis races also passed on the correction; consumer races, six new compiler rejections and three actual gopls probes passed. No dependency was added. See the [master acceptance record](../../blueprint/00-master-architecture-and-parity.md#milestone-09-typed-lease-acceptance).
 
 [Distributed cache Remember](distributed-cache.md) also passed full native acceptance.
-Rate limiting and pub/sub remain milestone 09 work.
+[Rate limiting](rate-limiting.md) and [pub/sub](pubsub.md) reuse the same named Redis and coordination owners.
 
 ## Administration, hand-off and concurrency limits
 

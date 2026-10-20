@@ -304,8 +304,7 @@ Neither a restored origin nor `context.WithoutCancel` revives a closed auth scop
 Credential secrets and the concrete model are absent from the origin.
 
 Auditing and the existing transactional event outbox can capture this context;
-ordinary in-process callbacks do not gain crash durability. Dedicated auth event
-composition and final parity review remain milestone work.
+ordinary in-process callbacks do not gain crash durability. [MFA observers](mfa.md) can map typed security notices to application events and enqueue them through the mutation transaction. The [consumer example](../../tests/fixtures/consumer/multifactor/security.go) uses the shared event outbox.
 
 
 ## Authentication test helpers

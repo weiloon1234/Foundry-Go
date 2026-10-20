@@ -18,7 +18,7 @@ transaction. Foundry owns JSON capture, attribution, outbox storage and rollback
 The [consumer example](../../tests/fixtures/consumer/multifactor/security.go)
 shows the complete composition. Apply the existing `outbox.Migrations()` explicitly
 in the same schema. An observer error rolls back factor, model, credential and
-outbox changes. An enqueue ID is not proof of commit. Delivery belongs to milestone 12.
+outbox changes. An enqueue ID is not proof of commit. The [configured event outbox](events.md#durable-events-with-applicationnew) publishes committed events through the ordinary job worker.
 
 Use `Topic.AfterCommit` for process-local listeners that should run only after
 commit. Listener failure reports a committed database outcome and does not roll

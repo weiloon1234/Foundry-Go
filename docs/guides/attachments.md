@@ -296,8 +296,7 @@ for one catalog snapshot and one owner/file database snapshot. Resolve its
 loaded values using requested locale, configured default, then remaining
 supported locales in lexical order. Resolution chooses a complete nonempty
 locale collection; it never mixes different locales' files. Removed catalog
-locales remain stored but unavailable until supported again. Milestone 20 adds
-message catalogs and request locale resolution to this same locale contract.
+locales remain stored but unavailable until supported again. [Message catalogs and request locale resolution](localization.md) use the same locale identities; attachment collections keep their explicitly selected locale.
 
 `Matching` provides a typed materialized owner query predicate for a collection
 and exact locale. It is bounded to 4096 files/1000 distinct owners. The later
@@ -326,8 +325,7 @@ checks. `PruneOrphans` accepts exact inspected operation IDs, rechecks owners
 under the transaction, and refuses unsettled writers. The read-only
 `attachments/command` adapter accepts `attachments orphans --owner profiles
 --page-size 100 --format json` and `attachments undeclared --owner profiles` for
-stored collection names no registered collection declares; it has no delete flag. It can be registered in
-the command kernel supplied by milestone 23.
+stored collection names no registered collection declares; it has no delete flag. Register it explicitly in the [typed command kernel](developer-tooling-and-testing.md#commands-and-bootstrap).
 
 `InspectStorage` lists one bounded provider page under the selected registered
 owner's framework prefix and a registered collection disk. Its opaque cursor

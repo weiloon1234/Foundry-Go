@@ -32,9 +32,15 @@ func MemberFields() MemberFieldSet {
 // MemberScopedFieldSet preserves typed field operators in a declared query scope.
 type MemberScopedFieldSet[FoundryScope any] struct {
 	// ID describes mutator_members.id.
+	//
+	// ID is the database identity.
+	//
 	// Member.ID retains stored mutator_members.id. Custom getter: [Member.AccessID]; choose the stored field or getter result explicitly when mapping a DTO.
 	ID foundryquery.ScalarField[FoundryScope, model.ID[Member]]
 	// Email describes mutator_members.email_address.
+	//
+	// Delivery address.
+	//
 	// Member.Email retains stored mutator_members.email_address. Custom getter: [Member.AccessEmail]; choose the stored field or getter result explicitly when mapping a DTO.
 	// Member.Email retains stored mutator_members.email_address. Custom setter: [Member.MutateEmail] transforms assigned values during persistence through [MemberDraft.SetEmail]. Direct field assignment and draft construction do not invoke it.
 	Email foundryquery.TextField[FoundryScope, string]
@@ -65,9 +71,15 @@ func MemberFieldsAt[FoundryScope any](scope foundryquery.ModelScope[FoundryScope
 // MemberNullableFieldSet preserves typed field operators in a declared query scope.
 type MemberNullableFieldSet[FoundryScope any] struct {
 	// ID describes mutator_members.id.
+	//
+	// ID is the database identity.
+	//
 	// Member.ID retains stored mutator_members.id. Custom getter: [Member.AccessID]; choose the stored field or getter result explicitly when mapping a DTO.
 	ID foundryquery.NullableField[FoundryScope, model.ID[Member]]
 	// Email describes mutator_members.email_address.
+	//
+	// Delivery address.
+	//
 	// Member.Email retains stored mutator_members.email_address. Custom getter: [Member.AccessEmail]; choose the stored field or getter result explicitly when mapping a DTO.
 	// Member.Email retains stored mutator_members.email_address. Custom setter: [Member.MutateEmail] transforms assigned values during persistence through [MemberDraft.SetEmail]. Direct field assignment and draft construction do not invoke it.
 	Email foundryquery.NullableTextField[FoundryScope, string]
@@ -765,30 +777,46 @@ type MemberDraft struct {
 }
 
 // ID returns the typed mutation state for id.
+//
+// ID is the database identity.
+//
 // Member.ID retains stored mutator_members.id. Custom getter: [Member.AccessID]; choose the stored field or getter result explicitly when mapping a DTO.
 func (d MemberDraft) ID() foundryvalue.Optional[model.ID[Member]] { return d.fieldID }
 
 // SetID returns a new draft with id explicitly set.
+//
+// ID is the database identity.
+//
 // Member.ID retains stored mutator_members.id. Custom getter: [Member.AccessID]; choose the stored field or getter result explicitly when mapping a DTO.
 func (d MemberDraft) SetID(v model.ID[Member]) MemberDraft { d.fieldID = foundryvalue.Set(v); return d }
 
 // UnsetID omits id without requesting a zero or null write.
+//
+// ID is the database identity.
 func (d MemberDraft) UnsetID() MemberDraft {
 	d.fieldID = foundryvalue.Optional[model.ID[Member]]{}
 	return d
 }
 
 // Email returns the typed mutation state for email_address.
+//
+// Delivery address.
+//
 // Member.Email retains stored mutator_members.email_address. Custom getter: [Member.AccessEmail]; choose the stored field or getter result explicitly when mapping a DTO.
 // Member.Email retains stored mutator_members.email_address. Custom setter: [Member.MutateEmail] transforms assigned values during persistence through [MemberDraft.SetEmail]. Direct field assignment and draft construction do not invoke it.
 func (d MemberDraft) Email() foundryvalue.Optional[string] { return d.fieldEmail }
 
 // SetEmail returns a new draft with email_address explicitly set.
+//
+// Delivery address.
+//
 // Member.Email retains stored mutator_members.email_address. Custom getter: [Member.AccessEmail]; choose the stored field or getter result explicitly when mapping a DTO.
 // Member.Email retains stored mutator_members.email_address. Custom setter: [Member.MutateEmail] transforms assigned values during persistence through [MemberDraft.SetEmail]. Direct field assignment and draft construction do not invoke it.
 func (d MemberDraft) SetEmail(v string) MemberDraft { d.fieldEmail = foundryvalue.Set(v); return d }
 
 // UnsetEmail omits email_address without requesting a zero or null write.
+//
+// Delivery address.
 func (d MemberDraft) UnsetEmail() MemberDraft {
 	d.fieldEmail = foundryvalue.Optional[string]{}
 	return d
@@ -862,8 +890,14 @@ func (MemberDraft) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("
 // MemberFieldChanges contains typed changes for persisted fields only.
 type MemberFieldChanges struct {
 	// ID retains the typed change for id.
+	//
+	// ID is the database identity.
+	//
 	ID lifecycle.FieldChange[model.ID[Member]]
 	// Email retains the typed change for email_address.
+	//
+	// Delivery address.
+	//
 	Email lifecycle.FieldChange[string]
 	// Nickname retains the typed change for nickname.
 	Nickname lifecycle.FieldChange[foundryvalue.Nullable[string]]

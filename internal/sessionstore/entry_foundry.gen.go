@@ -55,12 +55,22 @@ type EntryScopedFieldSet[FoundryScope any] struct {
 	// ExpiresAt describes foundry_sessions.expires_at.
 	ExpiresAt foundryquery.OrderedField[FoundryScope, temporal.DateTime]
 	// ClientIP describes foundry_sessions.client_ip.
+	//
+	// ClientIP and UserAgent are display-only device metadata from issuance.
+	//
 	ClientIP foundryquery.NullableTextField[FoundryScope, string]
 	// UserAgent describes foundry_sessions.user_agent.
 	UserAgent foundryquery.NullableTextField[FoundryScope, string]
 	// ConfirmedAt describes foundry_sessions.confirmed_at.
+	//
+	// ConfirmedAt is the last password confirmation within this session.
+	//
 	ConfirmedAt foundryquery.NullableOrderedField[FoundryScope, temporal.DateTime]
 	// ImpersonatorIdentity describes foundry_sessions.impersonator_identity.
+	//
+	// ImpersonatorIdentity (identity JSON), ImpersonatorGuard and
+	// ImpersonatorSession mark an impersonation session with its original actor.
+	//
 	ImpersonatorIdentity foundryquery.NullableTextField[FoundryScope, string]
 	// ImpersonatorGuard describes foundry_sessions.impersonator_guard.
 	ImpersonatorGuard foundryquery.NullableTextField[FoundryScope, string]
@@ -119,12 +129,22 @@ type EntryNullableFieldSet[FoundryScope any] struct {
 	// ExpiresAt describes foundry_sessions.expires_at.
 	ExpiresAt foundryquery.NullableOrderedField[FoundryScope, temporal.DateTime]
 	// ClientIP describes foundry_sessions.client_ip.
+	//
+	// ClientIP and UserAgent are display-only device metadata from issuance.
+	//
 	ClientIP foundryquery.NullableTextField[FoundryScope, string]
 	// UserAgent describes foundry_sessions.user_agent.
 	UserAgent foundryquery.NullableTextField[FoundryScope, string]
 	// ConfirmedAt describes foundry_sessions.confirmed_at.
+	//
+	// ConfirmedAt is the last password confirmation within this session.
+	//
 	ConfirmedAt foundryquery.NullableOrderedField[FoundryScope, temporal.DateTime]
 	// ImpersonatorIdentity describes foundry_sessions.impersonator_identity.
+	//
+	// ImpersonatorIdentity (identity JSON), ImpersonatorGuard and
+	// ImpersonatorSession mark an impersonation session with its original actor.
+	//
 	ImpersonatorIdentity foundryquery.NullableTextField[FoundryScope, string]
 	// ImpersonatorGuard describes foundry_sessions.impersonator_guard.
 	ImpersonatorGuard foundryquery.NullableTextField[FoundryScope, string]
@@ -1370,23 +1390,31 @@ func (d EntryDraft) UnsetExpiresAt() EntryDraft {
 }
 
 // ClientIP returns the typed mutation state for client_ip.
+//
+// ClientIP and UserAgent are display-only device metadata from issuance.
 func (d EntryDraft) ClientIP() foundryvalue.Optional[foundryvalue.Nullable[string]] {
 	return d.fieldClientIP
 }
 
 // SetClientIP returns a new draft with client_ip explicitly set.
+//
+// ClientIP and UserAgent are display-only device metadata from issuance.
 func (d EntryDraft) SetClientIP(v string) EntryDraft {
 	d.fieldClientIP = foundryvalue.Set(foundryvalue.Of(v))
 	return d
 }
 
 // UnsetClientIP omits client_ip without requesting a zero or null write.
+//
+// ClientIP and UserAgent are display-only device metadata from issuance.
 func (d EntryDraft) UnsetClientIP() EntryDraft {
 	d.fieldClientIP = foundryvalue.Optional[foundryvalue.Nullable[string]]{}
 	return d
 }
 
 // ClearClientIP explicitly sets client_ip to null.
+//
+// ClientIP and UserAgent are display-only device metadata from issuance.
 func (d EntryDraft) ClearClientIP() EntryDraft {
 	d.fieldClientIP = foundryvalue.Set(foundryvalue.Null[string]())
 	return d
@@ -1416,46 +1444,66 @@ func (d EntryDraft) ClearUserAgent() EntryDraft {
 }
 
 // ConfirmedAt returns the typed mutation state for confirmed_at.
+//
+// ConfirmedAt is the last password confirmation within this session.
 func (d EntryDraft) ConfirmedAt() foundryvalue.Optional[foundryvalue.Nullable[temporal.DateTime]] {
 	return d.fieldConfirmedAt
 }
 
 // SetConfirmedAt returns a new draft with confirmed_at explicitly set.
+//
+// ConfirmedAt is the last password confirmation within this session.
 func (d EntryDraft) SetConfirmedAt(v temporal.DateTime) EntryDraft {
 	d.fieldConfirmedAt = foundryvalue.Set(foundryvalue.Of(v))
 	return d
 }
 
 // UnsetConfirmedAt omits confirmed_at without requesting a zero or null write.
+//
+// ConfirmedAt is the last password confirmation within this session.
 func (d EntryDraft) UnsetConfirmedAt() EntryDraft {
 	d.fieldConfirmedAt = foundryvalue.Optional[foundryvalue.Nullable[temporal.DateTime]]{}
 	return d
 }
 
 // ClearConfirmedAt explicitly sets confirmed_at to null.
+//
+// ConfirmedAt is the last password confirmation within this session.
 func (d EntryDraft) ClearConfirmedAt() EntryDraft {
 	d.fieldConfirmedAt = foundryvalue.Set(foundryvalue.Null[temporal.DateTime]())
 	return d
 }
 
 // ImpersonatorIdentity returns the typed mutation state for impersonator_identity.
+//
+// ImpersonatorIdentity (identity JSON), ImpersonatorGuard and
+// ImpersonatorSession mark an impersonation session with its original actor.
 func (d EntryDraft) ImpersonatorIdentity() foundryvalue.Optional[foundryvalue.Nullable[string]] {
 	return d.fieldImpersonatorIdentity
 }
 
 // SetImpersonatorIdentity returns a new draft with impersonator_identity explicitly set.
+//
+// ImpersonatorIdentity (identity JSON), ImpersonatorGuard and
+// ImpersonatorSession mark an impersonation session with its original actor.
 func (d EntryDraft) SetImpersonatorIdentity(v string) EntryDraft {
 	d.fieldImpersonatorIdentity = foundryvalue.Set(foundryvalue.Of(v))
 	return d
 }
 
 // UnsetImpersonatorIdentity omits impersonator_identity without requesting a zero or null write.
+//
+// ImpersonatorIdentity (identity JSON), ImpersonatorGuard and
+// ImpersonatorSession mark an impersonation session with its original actor.
 func (d EntryDraft) UnsetImpersonatorIdentity() EntryDraft {
 	d.fieldImpersonatorIdentity = foundryvalue.Optional[foundryvalue.Nullable[string]]{}
 	return d
 }
 
 // ClearImpersonatorIdentity explicitly sets impersonator_identity to null.
+//
+// ImpersonatorIdentity (identity JSON), ImpersonatorGuard and
+// ImpersonatorSession mark an impersonation session with its original actor.
 func (d EntryDraft) ClearImpersonatorIdentity() EntryDraft {
 	d.fieldImpersonatorIdentity = foundryvalue.Set(foundryvalue.Null[string]())
 	return d
@@ -1542,12 +1590,22 @@ type EntryFieldChanges struct {
 	// ExpiresAt retains the typed change for expires_at.
 	ExpiresAt lifecycle.FieldChange[temporal.DateTime]
 	// ClientIP retains the typed change for client_ip.
+	//
+	// ClientIP and UserAgent are display-only device metadata from issuance.
+	//
 	ClientIP lifecycle.FieldChange[foundryvalue.Nullable[string]]
 	// UserAgent retains the typed change for user_agent.
 	UserAgent lifecycle.FieldChange[foundryvalue.Nullable[string]]
 	// ConfirmedAt retains the typed change for confirmed_at.
+	//
+	// ConfirmedAt is the last password confirmation within this session.
+	//
 	ConfirmedAt lifecycle.FieldChange[foundryvalue.Nullable[temporal.DateTime]]
 	// ImpersonatorIdentity retains the typed change for impersonator_identity.
+	//
+	// ImpersonatorIdentity (identity JSON), ImpersonatorGuard and
+	// ImpersonatorSession mark an impersonation session with its original actor.
+	//
 	ImpersonatorIdentity lifecycle.FieldChange[foundryvalue.Nullable[string]]
 	// ImpersonatorGuard retains the typed change for impersonator_guard.
 	ImpersonatorGuard lifecycle.FieldChange[foundryvalue.Nullable[string]]

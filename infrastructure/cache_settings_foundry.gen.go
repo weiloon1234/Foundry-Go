@@ -38,16 +38,36 @@ type CacheSettingsConfigConfigKeySet struct {
 	// MaxDeclarations selects config.max_declarations. Set accepts int.
 	MaxDeclarations config.Key[CacheSettings, int]
 	// MaxBatchEntries selects config.max_batch_entries. Set accepts int.
+	//
+	// Maximum batch input keys before deduplication; bounded by MaxBatchEntries.
+	//
 	MaxBatchEntries config.Key[CacheSettings, int]
 	// MaxTags selects config.max_tags. Set accepts int.
+	//
+	// Maximum references in a tagged view/invalidation; bounded by cache.MaxTags.
+	//
 	MaxTags config.Key[CacheSettings, int]
 	// MaxFills selects config.max_fills. Set accepts int.
+	//
+	// MaxFills bounds concurrent Remember loaders across this store.
+	//
 	MaxFills config.Key[CacheSettings, int]
 	// MaxFillWaiters selects config.max_fill_waiters. Set accepts int.
+	//
+	// MaxFillWaiters bounds followers of each Remember loader (excluding its owner).
+	//
 	MaxFillWaiters config.Key[CacheSettings, int]
 	// Timeout selects config.timeout. Set accepts time.Duration.
+	//
+	// Timeout bounds each backend step (read, write, metadata) and every other
+	// operation. It does not cap Remember loaders; LoadTimeout does.
+	//
 	Timeout config.Key[CacheSettings, time.Duration]
 	// LoadTimeout selects config.load_timeout. Set accepts time.Duration.
+	//
+	// LoadTimeout bounds one Remember loader run, detached from the requesting
+	// caller's cancellation. A call can narrow it with WithLoadTimeout.
+	//
 	LoadTimeout config.Key[CacheSettings, time.Duration]
 }
 

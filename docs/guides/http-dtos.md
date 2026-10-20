@@ -25,7 +25,7 @@ fresh checkout. Changes to fields or tags make generated output stale. Generatio
 validates the whole package before replacing owned output. No separate schema
 configuration is needed.
 
-Use an exported, defined, non-generic struct. Fields keep their Go names unless a
+Use an exported, defined struct. [Annotated generic DTOs](generic-dtos.md) retain concrete type arguments in their generated contracts. Fields keep their Go names unless a
 JSON tag declares another name. `json:"-"` excludes a field. The shared field
 discovery applies Go's embedding rules and rejects ambiguous field promotion.
 Unexported embedded pointers cannot be allocated during decoding and are rejected.
@@ -121,12 +121,11 @@ fields; RawMessage retains its declared dynamic boundary.
 `Description()` returns an independent normalized graph. Exporters consume this
 same graph used by runtime field validation. Native integer widths are resolved
 before export; floating-point values retain their concrete 32/64-bit bounds.
-OpenAPI and TypeScript output adapters remain milestone 21 work.
+[OpenAPI and TypeScript exporters](client-contracts.md) consume this same normalized graph.
 
 [Custom JSON values](http-custom-json.md) declare their native wire shape once;
 [typed map keys](http-json-map-keys.md) preserve supported string, integer, enum,
-model-ID and custom key contracts. Storage-oriented `value.JSON` fields and
-arbitrary generic root declarations are not inferred as public DTOs.
+model-ID and custom key contracts. Storage-oriented `value.JSON` fields and unannotated generic types are not inferred as public DTOs. Declare [generic DTO contracts](generic-dtos.md) explicitly and register concrete instantiations.
 [Root slice/nullable descriptors and response encoding](http-responses.md) share
 this schema and passed focused and full repository acceptance.
 

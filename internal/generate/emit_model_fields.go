@@ -38,6 +38,7 @@ func (e *emitter) emitScopedFields(name string, fields []field, source, ordinary
 			f := original
 			f.nullable = f.nullable || nullable
 			e.line("// %s describes %s.%s.", f.name, source, f.column)
+			e.emitFieldHelp(original.help)
 			e.emitFieldBehavior(name, source, original)
 			_, typ := e.baseFieldType(name, f, scope)
 			if f.input != nil {

@@ -46,7 +46,7 @@ the candidate alone. Ordinary known failures still return no candidate.
 
 When the caller owns the outer transaction, inspect the outer transaction's error and retain any needed reconciliation identity in caller scope. An inner model write cannot predict a later outer commit failure. After-commit callbacks are process-local and have no crash durability. See [transaction outcomes](database-runtime.md) for details.
 
-Generated drafts supply typed assignments to `query.Query[M].Insert`, `Patch` and `Remove`, plus the insert/upsert batch execution boundaries. Those shared declaration-level APIs use the same compiler metadata and execution path for every model. Writes also reject explicit eager-loading limits. Declared model hooks and registered observers run automatically on normal writes; durable outbox integration remains milestone 07 work.
+Generated drafts supply typed assignments to `query.Query[M].Insert`, `Patch` and `Remove`, plus the insert/upsert batch execution boundaries. Those shared declaration-level APIs use the same compiler metadata and execution path for every model. Writes also reject explicit eager-loading limits. Declared model hooks and registered observers run automatically on normal writes. Use their supplied transaction for [durable event enqueue](outbox.md#register-once-publish-a-concrete-dto); in-process after-commit callbacks remain non-durable.
 
 ## Verification
 

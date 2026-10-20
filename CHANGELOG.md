@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Documentation and editor accuracy
+
+- Reconcile current guides with delivered query, events/outbox, authentication,
+  HTTP, storage, localization and client APIs. Keep dated acceptance records
+  tied to their recorded source. Check explicit stale future-work claims against
+  the master milestone table through `make docs-check`.
+- Preserve original Go field help on generated query/draft/projection/change,
+  extension, JSON property, transport validation and configuration selectors,
+  including imported nested settings. Keep managed model notices opt in through
+  `--field-docs`. No runtime, schema or public signature changes are required.
+- Cover original help and recent field-computation, geographic-distance and
+  transactional-setting APIs through real gopls completion, hover and definition.
+  Clarify generation, formatting and read-only agent inspection workflows.
+
 ### Configured queued event outboxes (B26)
 
 - `application.EventOutbox(key, destination)` and `features.outbox.events` bind

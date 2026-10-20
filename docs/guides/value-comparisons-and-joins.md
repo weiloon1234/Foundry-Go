@@ -69,6 +69,6 @@ Input filters, ordering and limits remain inside their original source boundarie
 
 Each inner SELECT retains its own aggregate/window phase. It may produce one scalar row, no row (SQL NULL), or an invalid multi-row result (a database cardinality error). Foundry adds no implicit limit. Direct aggregate/window expressions still cannot masquerade as row values, and aggregates over only an outer column are rejected because they would change SQL query ownership.
 
-The [consumer comparison fixtures](../../tests/fixtures/consumer/comparisonqueries) demonstrate row/selected comparisons, outer and Cartesian joins, scalar cardinality, CTE discovery and relation aliasing. [Milestone 06](../../blueprint/06-relations-and-advanced-queries.md) still includes typed temporal/JSON operations, conflict expressions/targets and transaction-preserving composed locks. The master records verification evidence.
+The [consumer comparison fixtures](../../tests/fixtures/consumer/comparisonqueries) demonstrate row/selected comparisons, outer and Cartesian joins, scalar cardinality, CTE discovery and relation aliasing. Delivered [temporal expressions](temporal-calculations.md), [JSON queries](json-models.md), [conflict updates](model-upserts.md#calculating-conflict-updates) and [composed locking](row-locking.md) use the same typed scope and value contracts. The master records verification evidence.
 
 [Lateral joins](lateral-joins.md) extend the same join and correlation machinery to right-hand queries that depend on preceding rows.

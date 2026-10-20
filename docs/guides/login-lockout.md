@@ -110,8 +110,7 @@ verified, err := throttle.Run(ctx, key, func(op context.Context) (bool, error) {
 Do not issue credentials inside that callback: a final lock/expiry check remains.
 A successful password producing a pending-MFA proof verifies only the password
 stage. Use separate password and MFA declarations so it cannot clear MFA failures.
-MFA enrollment, factor persistence and completion remain in milestone 10's next
-implementation work; this API does not claim those capabilities are complete.
+[MFA enrollment and factor persistence](mfa.md) and [pending-session completion](browser-sessions.md) use their own typed declarations and challenge boundaries.
 
 ## Authority, failures and resource ownership
 

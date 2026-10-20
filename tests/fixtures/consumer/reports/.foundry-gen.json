@@ -10,6 +10,6 @@
     "scalar_report_foundry.gen.go": "d6f845eed93a25cbf0659601bbc4d5788d6565c3e39c8b01fa79b22c58d7269e",
     "user_order_stats_foundry.gen.go": "64915d67f7823c1885e795f25941c8953255c79e4cd393142924c57c245ff623",
     "user_pair_foundry.gen.go": "eac250beda37cdf430decbc566e89f00016b1a38a8555abd51f5798d827e2636",
-    "user_summary_foundry.gen.go": "a75b1cf858625bbdf6f292743b943ff1c34bb5a823deaf4ec28d98f386384987"
+    "user_summary_foundry.gen.go": "b4086964652ccccff4362d08eaaa1362d07861120b150d509f3d1c0b6ddb3259"
   }
 }

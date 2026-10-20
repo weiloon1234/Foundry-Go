@@ -71,7 +71,10 @@ type Document_SettingsJSONProperties[FoundryScope any] struct {
 	Labels  Document_Settings_LabelsJSONPath[FoundryScope]
 	Profile Document_Settings_ProfileJSONPath[FoundryScope]
 	Quota   Document_Settings_QuotaJSONPath[FoundryScope]
-	Theme   Document_Settings_ThemeJSONPath[FoundryScope]
+	//
+	// Theme chooses the reader appearance; omitted uses the application default.
+	//
+	Theme Document_Settings_ThemeJSONPath[FoundryScope]
 }
 
 // Properties returns independent typed property descriptors.
@@ -406,7 +409,10 @@ type Document_BackupJSONProperties[FoundryScope any] struct {
 	Labels  Document_Backup_LabelsJSONPath[FoundryScope]
 	Profile Document_Backup_ProfileJSONPath[FoundryScope]
 	Quota   Document_Backup_QuotaJSONPath[FoundryScope]
-	Theme   Document_Backup_ThemeJSONPath[FoundryScope]
+	//
+	// Theme chooses the reader appearance; omitted uses the application default.
+	//
+	Theme Document_Backup_ThemeJSONPath[FoundryScope]
 }
 
 // Properties returns independent typed property descriptors.

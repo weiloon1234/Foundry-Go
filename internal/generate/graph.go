@@ -30,14 +30,15 @@ type listedModule struct {
 }
 
 type packageGraph struct {
-	root        string
-	scope       moduleScope
-	recursive   bool
-	packages    map[string]listedPackage
-	order       []string
-	snapshot    map[string][]string
-	moduleFiles map[string]oldFile
-	fset        *token.FileSet
+	root                  string
+	scope                 moduleScope
+	recursive             bool
+	packages              map[string]listedPackage
+	documentationPackages map[string]listedPackage
+	order                 []string
+	snapshot              map[string][]string
+	moduleFiles           map[string]oldFile
+	fset                  *token.FileSet
 	// framework is the Foundry-Go module selected by the consumer's build list.
 	framework *listedModule
 	// fieldDocumentation opts into managed notes in handwritten model files.
@@ -91,7 +92,7 @@ func loadGraph(ctx context.Context, dir string, recursive bool, tree *generation
 	if err != nil {
 		return nil, err
 	}
-	g := &packageGraph{root: tree.root, scope: tree.scope, recursive: recursive, packages: make(map[string]listedPackage), snapshot: tree.dirs, moduleFiles: moduleFiles, fset: token.NewFileSet(), checked: make(map[string]*types.Package)}
+	g := &packageGraph{root: tree.root, scope: tree.scope, recursive: recursive, packages: make(map[string]listedPackage), documentationPackages: make(map[string]listedPackage), snapshot: tree.dirs, moduleFiles: moduleFiles, fset: token.NewFileSet(), checked: make(map[string]*types.Package)}
 	pattern := "."
 	if recursive {
 		pattern = "./..."
@@ -121,6 +122,7 @@ func loadGraph(ctx context.Context, dir string, recursive bool, tree *generation
 			return nil, fmt.Errorf("package directory set changed during discovery; retry")
 		}
 		g.packages[pkg.ImportPath] = pkg
+		g.documentationPackages[pkg.ImportPath] = pkg
 	}
 	if len(g.packages) == 0 && len(listed) == 0 {
 		return nil, fmt.Errorf("%s: no Go packages found", g.scope.display(g.root))
@@ -153,10 +155,13 @@ func loadGraph(ctx context.Context, dir string, recursive bool, tree *generation
 		}
 	}
 	arguments = append([]string{"list"}, g.scope.listFlags()...)
-	arguments = append(arguments, "-e", "-deps", "-export", "-json=ImportPath,Export,Module", "--")
+	arguments = append(arguments, "-e", "-deps", "-export", "-json=Dir,ImportPath,Name,GoFiles,CgoFiles,Export,Module", "--")
 	arguments = append(arguments, targets...)
 	exports := make(map[string]string)
 	if err := g.goList(ctx, arguments, func(pkg listedPackage) {
+		if _, selected := g.packages[pkg.ImportPath]; !selected {
+			g.documentationPackages[pkg.ImportPath] = pkg
+		}
 		if pkg.Export != "" {
 			exports[pkg.ImportPath] = pkg.Export
 		}
@@ -172,8 +177,11 @@ func loadGraph(ctx context.Context, dir string, recursive bool, tree *generation
 	// package without the binding package generated declarations import.
 	slotsPath := framework + "/extensions/slots"
 	if _, listed := exports[slotsPath]; !listed && (exports[framework+"/translations"] != "" || exports[framework+"/attachments"] != "" || exports[framework+"/metadata"] != "") {
-		arguments = append(append([]string{"list"}, g.scope.listFlags()...), "-e", "-deps", "-export", "-json=ImportPath,Export,Module", "--", slotsPath)
+		arguments = append(append([]string{"list"}, g.scope.listFlags()...), "-e", "-deps", "-export", "-json=Dir,ImportPath,Name,GoFiles,CgoFiles,Export,Module", "--", slotsPath)
 		if err := g.goList(ctx, arguments, func(pkg listedPackage) {
+			if _, selected := g.packages[pkg.ImportPath]; !selected {
+				g.documentationPackages[pkg.ImportPath] = pkg
+			}
 			if pkg.Export != "" {
 				exports[pkg.ImportPath] = pkg.Export
 			}
@@ -244,7 +252,7 @@ func (g *packageGraph) exportImporter() types.Importer {
 // export data that adds proposed handwritten files, by absolute path, for a
 // validation-only generation. It has its own importer and type-check results.
 func (g *packageGraph) withOverlay(files map[string][]byte) *packageGraph {
-	clone := &packageGraph{root: g.root, scope: g.scope, recursive: g.recursive, packages: g.packages, order: g.order, snapshot: g.snapshot, moduleFiles: g.moduleFiles, fset: g.fset, framework: g.framework, fieldDocumentation: g.fieldDocumentation, overlay: files, exports: g.exports, checked: make(map[string]*types.Package)}
+	clone := &packageGraph{root: g.root, scope: g.scope, recursive: g.recursive, packages: g.packages, documentationPackages: g.documentationPackages, order: g.order, snapshot: g.snapshot, moduleFiles: g.moduleFiles, fset: g.fset, framework: g.framework, fieldDocumentation: g.fieldDocumentation, overlay: files, exports: g.exports, checked: make(map[string]*types.Package)}
 	clone.compiled = clone.exportImporter()
 	return clone
 }

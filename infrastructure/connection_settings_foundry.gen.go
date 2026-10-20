@@ -20,8 +20,16 @@ type ConnectionSettingsConfigKeySet struct {
 	// MaxConnections selects max_connections. Set accepts int.
 	MaxConnections config.Key[ConnectionSettings, int]
 	// SlowQueryThreshold selects slow_query_threshold. Set accepts time.Duration.
+	//
+	// SlowQueryThreshold logs statements at least this slow through the
+	// application logger, without SQL text or arguments; zero disables it.
+	//
 	SlowQueryThreshold config.Key[ConnectionSettings, time.Duration]
 	// StickyReadWindow selects sticky_read_window. Set accepts time.Duration.
+	//
+	// StickyReadWindow routes reads to the primary for this long after a write
+	// in a database.StickyReads request scope; zero disables it.
+	//
 	StickyReadWindow config.Key[ConnectionSettings, time.Duration]
 }
 

@@ -1,0 +1,891 @@
+{
+  "status": "accepted on current native source",
+  "date": "2026-10-20",
+  "base_revision": "d969f7c8be2fc078e20a41022723ab4839792848",
+  "scope": "Current documentation, public/generated GoDoc and actual IDE/agent tooling accuracy. Private generator and documentation-checker changes preserve framework runtime contracts.",
+  "coverage": {
+    "recent_commit_count": 9,
+    "recent_changed_paths": 632,
+    "current_guide_count": 188,
+    "recorded_passage_corrections": 70,
+    "recorded_passage_files": 46,
+    "recent_reworks": [
+      {
+        "commits": [
+          "d969f7c",
+          "43a10d9",
+          "8a396c0"
+        ],
+        "rework": "Shared private query compilation and typed stored-field capability migration",
+        "disposition": "Restore public query package GoDoc; current query guides point to delivered APIs; real completion rejects removed methods; retain typed-function migration guide and historical resource evidence. Internal compiler relocation does not remove public events."
+      },
+      {
+        "commits": [
+          "fe83568",
+          "f372727",
+          "60e3d90"
+        ],
+        "rework": "Configured queued event outboxes and generated Events configuration",
+        "disposition": "Imported OutboxSettings.Events authored help must reach consumer config keys; preserve Topic.Enqueue durable vs Topic.AfterCommit process-local contract and dated B26 evidence."
+      },
+      {
+        "commits": [
+          "38a8be6"
+        ],
+        "rework": "Transaction-aware setting initialization",
+        "disposition": "Include EnsureIn in cache invalidation guidance and independent consumer/editor usage while preserving savepoint/parent rollback meaning."
+      },
+      {
+        "commits": [
+          "25721db"
+        ],
+        "rework": "Merge of typed-field compilation work",
+        "disposition": "Inspect first-parent delta and both branch histories; keep developer resource measurements historical. Merge default combined path inventory alone is insufficient."
+      },
+      {
+        "commits": [
+          "b19e543"
+        ],
+        "rework": "Geographic expression formatting",
+        "disposition": "Use native selected SDK formatter and real SphericalDistance completion/hover/definition; do not infer runtime API removal from whitespace."
+      }
+    ],
+    "method": "Independent family-level source readers, executable consumer inspection and repository-wide text/local-reference screening. First-parent merge deltas and both branch histories were included."
+  },
+  "delivered": [
+    "Current guides and public comments describe delivered query, event/outbox, authentication, HTTP, storage, localization and exporter behavior. Dated acceptance remains historical.",
+    "Worker-owned source documentation follows original leading, trailing and block field help through imported, alias, generic and nested declarations to generated query/draft/projection/change, extension, JSON, transport validation and configuration APIs.",
+    "Existing source freshness checks cover documentation reads before publication, unchanged results and check-only results. Generated sources do not become original help.",
+    "Real gopls probes cover original help, retained stored-field capabilities, removed computation methods, SphericalDistance and transactional EnsureIn. Native gofmt remains separate from generation and semantic completion.",
+    "The existing docs checker rejects narrow explicit future-work claims against completed milestones from the canonical master table. It is not a general semantic documentation validator."
+  ],
+  "compatibility": {
+    "public_or_generated_signature_changes": false,
+    "schema_or_wire_format_changes": false,
+    "deprecated_compatibility_apis_added": false,
+    "consumer_migration_required": false,
+    "generated_go_token_comparison": {
+      "files": 285,
+      "changed": 22,
+      "non_comment_changes": []
+    }
+  },
+  "environment": {
+    "system": "Darwin",
+    "machine": "arm64",
+    "versions": {
+      "go": "go version go1.27.1 darwin/arm64",
+      "gopls": "golang.org/x/tools/gopls v0.23.0",
+      "node": "v24.21.0",
+      "typescript": "Version 5.9.3"
+    },
+    "GOFLAGS": "-mod=readonly -p=2",
+    "cache_policy": "Existing warm native caches; no cold-cache creation or shared-cache cleaning.",
+    "backend_policy": "Existing private PostgreSQL/Redis configuration; isolated non-destructive fixtures; no credential output."
+  },
+  "verification": {
+    "normal_gate": {
+      "result": "passed as a segmented make verify gate",
+      "initial_command": [
+        "make",
+        "verify"
+      ],
+      "initial_exit": 2,
+      "initial_setup_failure": "Required PostgreSQL and Redis modes were enabled before loading the private PostgreSQL URL and selecting the observed Redis endpoint. Only backend setup failed in the first batch. Existing configuration was supplied before the successful resumed segments. No credentials are retained.",
+      "preserved_passes": [
+        "toolchain-check",
+        "fmt-check",
+        "vet",
+        "github.com/weiloon1234/Foundry-Go",
+        "github.com/weiloon1234/Foundry-Go/attachments/command",
+        "github.com/weiloon1234/Foundry-Go/attribution"
+      ],
+      "resumed_root_package_count": 232,
+      "total_root_package_count": 235,
+      "batch_size": 6,
+      "timeout": "20m",
+      "completed_segments": [
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/application",
+            "github.com/weiloon1234/Foundry-Go/attachments",
+            "github.com/weiloon1234/Foundry-Go/audit",
+            "github.com/weiloon1234/Foundry-Go/audit/command",
+            "github.com/weiloon1234/Foundry-Go/audit/record",
+            "github.com/weiloon1234/Foundry-Go/auth"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 10.4539052080072
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/auth/challenge",
+            "github.com/weiloon1234/Foundry-Go/auth/challenge/postgres",
+            "github.com/weiloon1234/Foundry-Go/auth/emailverification",
+            "github.com/weiloon1234/Foundry-Go/auth/lockout",
+            "github.com/weiloon1234/Foundry-Go/auth/lockout/memory",
+            "github.com/weiloon1234/Foundry-Go/auth/mfa"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 2.003645124990726
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/auth/mfa/command",
+            "github.com/weiloon1234/Foundry-Go/auth/mfa/postgres",
+            "github.com/weiloon1234/Foundry-Go/auth/oauth",
+            "github.com/weiloon1234/Foundry-Go/auth/password",
+            "github.com/weiloon1234/Foundry-Go/auth/passwordreset",
+            "github.com/weiloon1234/Foundry-Go/auth/session"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 2.569155208999291
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/auth/session/postgres",
+            "github.com/weiloon1234/Foundry-Go/auth/token",
+            "github.com/weiloon1234/Foundry-Go/auth/token/postgres",
+            "github.com/weiloon1234/Foundry-Go/cache",
+            "github.com/weiloon1234/Foundry-Go/cache/file",
+            "github.com/weiloon1234/Foundry-Go/cache/memory"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 7.240951167012099
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/cache/null",
+            "github.com/weiloon1234/Foundry-Go/cache/postgres",
+            "github.com/weiloon1234/Foundry-Go/cli",
+            "github.com/weiloon1234/Foundry-Go/clock",
+            "github.com/weiloon1234/Foundry-Go/cloud/credentials",
+            "github.com/weiloon1234/Foundry-Go/cmd/foundry"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 3.7499538749980275
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/collection",
+            "github.com/weiloon1234/Foundry-Go/config",
+            "github.com/weiloon1234/Foundry-Go/config/toml",
+            "github.com/weiloon1234/Foundry-Go/contract",
+            "github.com/weiloon1234/Foundry-Go/contract/manifest",
+            "github.com/weiloon1234/Foundry-Go/countries"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 3.2105787910113577
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/database",
+            "github.com/weiloon1234/Foundry-Go/database/codec",
+            "github.com/weiloon1234/Foundry-Go/database/command",
+            "github.com/weiloon1234/Foundry-Go/database/encrypted",
+            "github.com/weiloon1234/Foundry-Go/database/lifecycle",
+            "github.com/weiloon1234/Foundry-Go/database/migrate"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 19.184962083993014
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/database/postgres",
+            "github.com/weiloon1234/Foundry-Go/database/prune",
+            "github.com/weiloon1234/Foundry-Go/database/query",
+            "github.com/weiloon1234/Foundry-Go/database/relation",
+            "github.com/weiloon1234/Foundry-Go/database/seed",
+            "github.com/weiloon1234/Foundry-Go/datatable"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 18.472840666014235
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/datatable/importer",
+            "github.com/weiloon1234/Foundry-Go/datatable/internal/spreadsheet",
+            "github.com/weiloon1234/Foundry-Go/decimal",
+            "github.com/weiloon1234/Foundry-Go/decimal/money",
+            "github.com/weiloon1234/Foundry-Go/diagnostics",
+            "github.com/weiloon1234/Foundry-Go/email"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 7.393950333003886
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/email/cloudflare",
+            "github.com/weiloon1234/Foundry-Go/email/failover",
+            "github.com/weiloon1234/Foundry-Go/email/internal/httptransport",
+            "github.com/weiloon1234/Foundry-Go/email/log",
+            "github.com/weiloon1234/Foundry-Go/email/mailgun",
+            "github.com/weiloon1234/Foundry-Go/email/memory"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 0.7178214169980492
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/email/postmark",
+            "github.com/weiloon1234/Foundry-Go/email/resend",
+            "github.com/weiloon1234/Foundry-Go/email/ses",
+            "github.com/weiloon1234/Foundry-Go/email/smtp",
+            "github.com/weiloon1234/Foundry-Go/encryption",
+            "github.com/weiloon1234/Foundry-Go/enum"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 0.17747433300246485
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/events",
+            "github.com/weiloon1234/Foundry-Go/extensions",
+            "github.com/weiloon1234/Foundry-Go/extensions/slots",
+            "github.com/weiloon1234/Foundry-Go/fault",
+            "github.com/weiloon1234/Foundry-Go/foundation",
+            "github.com/weiloon1234/Foundry-Go/health"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 4.30107020799187
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/health/checks",
+            "github.com/weiloon1234/Foundry-Go/http",
+            "github.com/weiloon1234/Foundry-Go/http/modelbinding",
+            "github.com/weiloon1234/Foundry-Go/http/pagination",
+            "github.com/weiloon1234/Foundry-Go/httpclient",
+            "github.com/weiloon1234/Foundry-Go/i18n"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 12.613453166995896
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/i18n/message",
+            "github.com/weiloon1234/Foundry-Go/i18n/numberformat",
+            "github.com/weiloon1234/Foundry-Go/idempotency",
+            "github.com/weiloon1234/Foundry-Go/imaging",
+            "github.com/weiloon1234/Foundry-Go/infrastructure",
+            "github.com/weiloon1234/Foundry-Go/inspection"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 8.057292042009067
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/internal/admission",
+            "github.com/weiloon1234/Foundry-Go/internal/agent",
+            "github.com/weiloon1234/Foundry-Go/internal/attachmentstore",
+            "github.com/weiloon1234/Foundry-Go/internal/auditstore",
+            "github.com/weiloon1234/Foundry-Go/internal/authtransport",
+            "github.com/weiloon1234/Foundry-Go/internal/awscredentials"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 280.9238968330028
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/internal/cacheatomic",
+            "github.com/weiloon1234/Foundry-Go/internal/cacheint",
+            "github.com/weiloon1234/Foundry-Go/internal/cachetest",
+            "github.com/weiloon1234/Foundry-Go/internal/callback",
+            "github.com/weiloon1234/Foundry-Go/internal/challengestore",
+            "github.com/weiloon1234/Foundry-Go/internal/cmd/checkdocs"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 0.6835232919838745
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/internal/cmd/testinputs",
+            "github.com/weiloon1234/Foundry-Go/internal/cmd/testpostgres",
+            "github.com/weiloon1234/Foundry-Go/internal/contextlink",
+            "github.com/weiloon1234/Foundry-Go/internal/contractmeta",
+            "github.com/weiloon1234/Foundry-Go/internal/contractname",
+            "github.com/weiloon1234/Foundry-Go/internal/credential"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 2.9883135829877574
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/internal/dependency",
+            "github.com/weiloon1234/Foundry-Go/internal/doctor",
+            "github.com/weiloon1234/Foundry-Go/internal/errordiag",
+            "github.com/weiloon1234/Foundry-Go/internal/errorgraph",
+            "github.com/weiloon1234/Foundry-Go/internal/eventseam",
+            "github.com/weiloon1234/Foundry-Go/internal/extensioncommand"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 1.7169167500105686
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/internal/extensionmaintenance",
+            "github.com/weiloon1234/Foundry-Go/internal/extensionrow",
+            "github.com/weiloon1234/Foundry-Go/internal/extensionstore",
+            "github.com/weiloon1234/Foundry-Go/internal/extensiontest",
+            "github.com/weiloon1234/Foundry-Go/internal/extensionvalue",
+            "github.com/weiloon1234/Foundry-Go/internal/faultwrap"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 0.7518053330131806
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/internal/filelock",
+            "github.com/weiloon1234/Foundry-Go/internal/filename",
+            "github.com/weiloon1234/Foundry-Go/internal/frameworkadapter",
+            "github.com/weiloon1234/Foundry-Go/internal/frameworkinfo",
+            "github.com/weiloon1234/Foundry-Go/internal/generate",
+            "github.com/weiloon1234/Foundry-Go/internal/gotype"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 202.9871798749955
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/internal/httppath",
+            "github.com/weiloon1234/Foundry-Go/internal/httpquery",
+            "github.com/weiloon1234/Foundry-Go/internal/httptoken",
+            "github.com/weiloon1234/Foundry-Go/internal/httptransport",
+            "github.com/weiloon1234/Foundry-Go/internal/idempotencystore",
+            "github.com/weiloon1234/Foundry-Go/internal/identifier"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 0.13881804200354964
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/internal/jobarchive",
+            "github.com/weiloon1234/Foundry-Go/internal/jobtest",
+            "github.com/weiloon1234/Foundry-Go/internal/jsonpointer",
+            "github.com/weiloon1234/Foundry-Go/internal/jsonshape",
+            "github.com/weiloon1234/Foundry-Go/internal/jsonwire",
+            "github.com/weiloon1234/Foundry-Go/internal/keyaddress"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 0.14683049998711795
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/internal/leasetest",
+            "github.com/weiloon1234/Foundry-Go/internal/lockouttest",
+            "github.com/weiloon1234/Foundry-Go/internal/mediatype",
+            "github.com/weiloon1234/Foundry-Go/internal/mfastore",
+            "github.com/weiloon1234/Foundry-Go/internal/namedservice",
+            "github.com/weiloon1234/Foundry-Go/internal/notificationstore"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 0.13943979199393652
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/internal/outboxstore",
+            "github.com/weiloon1234/Foundry-Go/internal/outboxtest",
+            "github.com/weiloon1234/Foundry-Go/internal/ownedstream",
+            "github.com/weiloon1234/Foundry-Go/internal/pubsubstream",
+            "github.com/weiloon1234/Foundry-Go/internal/pubsubtest",
+            "github.com/weiloon1234/Foundry-Go/internal/querycore"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 0.7052713750163093
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/internal/ratelimittest",
+            "github.com/weiloon1234/Foundry-Go/internal/ratewindow",
+            "github.com/weiloon1234/Foundry-Go/internal/scheduletest",
+            "github.com/weiloon1234/Foundry-Go/internal/sessionstore",
+            "github.com/weiloon1234/Foundry-Go/internal/sqlname",
+            "github.com/weiloon1234/Foundry-Go/internal/sqlowner"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 0.14489662501728162
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/internal/sqlscope",
+            "github.com/weiloon1234/Foundry-Go/internal/sqlvalue",
+            "github.com/weiloon1234/Foundry-Go/internal/storageio",
+            "github.com/weiloon1234/Foundry-Go/internal/testinputs",
+            "github.com/weiloon1234/Foundry-Go/internal/textvalue",
+            "github.com/weiloon1234/Foundry-Go/internal/tokenstore"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 2.51295170900994
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/internal/upload",
+            "github.com/weiloon1234/Foundry-Go/internal/webhookstore",
+            "github.com/weiloon1234/Foundry-Go/internal/websockettest",
+            "github.com/weiloon1234/Foundry-Go/internal/workscope",
+            "github.com/weiloon1234/Foundry-Go/jobs",
+            "github.com/weiloon1234/Foundry-Go/jobs/archive"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 4.235279958025785
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/jobs/archive/command",
+            "github.com/weiloon1234/Foundry-Go/jobs/command",
+            "github.com/weiloon1234/Foundry-Go/jobs/inline",
+            "github.com/weiloon1234/Foundry-Go/jobs/memory",
+            "github.com/weiloon1234/Foundry-Go/keyspace",
+            "github.com/weiloon1234/Foundry-Go/lease"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 2.7447466669837013
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/lease/memory",
+            "github.com/weiloon1234/Foundry-Go/logging",
+            "github.com/weiloon1234/Foundry-Go/maintenance",
+            "github.com/weiloon1234/Foundry-Go/maintenance/cachestore",
+            "github.com/weiloon1234/Foundry-Go/metadata",
+            "github.com/weiloon1234/Foundry-Go/metadata/command"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 3.8443142090109177
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/model",
+            "github.com/weiloon1234/Foundry-Go/notifications",
+            "github.com/weiloon1234/Foundry-Go/notifications/command",
+            "github.com/weiloon1234/Foundry-Go/observability",
+            "github.com/weiloon1234/Foundry-Go/openapi",
+            "github.com/weiloon1234/Foundry-Go/outbox"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 4.7104549589857925
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/outbox/command",
+            "github.com/weiloon1234/Foundry-Go/outbox/publisher",
+            "github.com/weiloon1234/Foundry-Go/plugin",
+            "github.com/weiloon1234/Foundry-Go/plugin/assets",
+            "github.com/weiloon1234/Foundry-Go/plugin/manifest",
+            "github.com/weiloon1234/Foundry-Go/plugin/scaffold"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 2.7412037079920992
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/pubsub",
+            "github.com/weiloon1234/Foundry-Go/pubsub/memory",
+            "github.com/weiloon1234/Foundry-Go/randomtoken",
+            "github.com/weiloon1234/Foundry-Go/ratelimit",
+            "github.com/weiloon1234/Foundry-Go/ratelimit/memory",
+            "github.com/weiloon1234/Foundry-Go/redis"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 10.015661374985939
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/redis/data",
+            "github.com/weiloon1234/Foundry-Go/redis/raw",
+            "github.com/weiloon1234/Foundry-Go/sanitize",
+            "github.com/weiloon1234/Foundry-Go/schedule",
+            "github.com/weiloon1234/Foundry-Go/schedule/command",
+            "github.com/weiloon1234/Foundry-Go/secret"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 2.453488291997928
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/settings",
+            "github.com/weiloon1234/Foundry-Go/storage",
+            "github.com/weiloon1234/Foundry-Go/storage/http",
+            "github.com/weiloon1234/Foundry-Go/storage/local",
+            "github.com/weiloon1234/Foundry-Go/storage/s3",
+            "github.com/weiloon1234/Foundry-Go/str"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 11.621121167001547
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/temporal",
+            "github.com/weiloon1234/Foundry-Go/testkit",
+            "github.com/weiloon1234/Foundry-Go/testkit/auth",
+            "github.com/weiloon1234/Foundry-Go/testkit/dbassert",
+            "github.com/weiloon1234/Foundry-Go/testkit/email",
+            "github.com/weiloon1234/Foundry-Go/testkit/events"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 2.36222137499135
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/testkit/factory",
+            "github.com/weiloon1234/Foundry-Go/testkit/http",
+            "github.com/weiloon1234/Foundry-Go/testkit/httpclient",
+            "github.com/weiloon1234/Foundry-Go/testkit/jobs",
+            "github.com/weiloon1234/Foundry-Go/testkit/notifications",
+            "github.com/weiloon1234/Foundry-Go/testkit/postgres"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 2.4843987499771174
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/testkit/postgres/application",
+            "github.com/weiloon1234/Foundry-Go/testkit/redis",
+            "github.com/weiloon1234/Foundry-Go/testkit/storage",
+            "github.com/weiloon1234/Foundry-Go/testkit/websocket",
+            "github.com/weiloon1234/Foundry-Go/tracing",
+            "github.com/weiloon1234/Foundry-Go/translations"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 6.751060459006112
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/translations/command",
+            "github.com/weiloon1234/Foundry-Go/typescript",
+            "github.com/weiloon1234/Foundry-Go/validation",
+            "github.com/weiloon1234/Foundry-Go/validation/database",
+            "github.com/weiloon1234/Foundry-Go/validation/imaging",
+            "github.com/weiloon1234/Foundry-Go/value"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 3.2612754159781616
+        },
+        {
+          "argv": [
+            "/usr/local/go/bin/go",
+            "test",
+            "-timeout=20m",
+            "github.com/weiloon1234/Foundry-Go/webhook",
+            "github.com/weiloon1234/Foundry-Go/webhook/outbound",
+            "github.com/weiloon1234/Foundry-Go/webhook/outbound/command",
+            "github.com/weiloon1234/Foundry-Go/websocket"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 5.359472208016086
+        },
+        {
+          "argv": [
+            "make",
+            "fixture-check",
+            "generate-check",
+            "docs-check",
+            "release-tools-check"
+          ],
+          "exit": 0,
+          "elapsed_seconds": 331.645858459
+        }
+      ],
+      "required_modes": [
+        "PostgreSQL",
+        "Redis",
+        "TypeScript"
+      ],
+      "conditions": "Existing native gopls/Node/TypeScript selected; existing private PostgreSQL and observed Redis required. No cache clearing or server startup. Failed/unrun segments resumed without restarting passed checks.",
+      "consumer_compiler_rejections": 1026
+    },
+    "focused_race": {
+      "command": "GOFLAGS='-mod=readonly -p=2' go test -race -timeout=20m -count=1 ./internal/cmd/checkdocs ./internal/generate -run '^(TestRepositoryChecks|TestOriginalFieldHelp|TestGenerated.*Help|TestOriginalHelpReaches|TestDocumentation|TestJSONHelpTracks)'",
+      "exit": 0,
+      "scope": "All nine new original-help/source-ownership generator regressions and repository documentation checker cases."
+    },
+    "focused_real_gopls": {
+      "command": "GOFLAGS='-mod=readonly -p=2' FOUNDRY_TEST_GOPLS=\"$PWD/bin/gopls\" go test -timeout=20m -count=1 -v ./internal/agent -run '^(TestRealGoplsFieldBehaviorDocumentation|TestRealGoplsStoredFieldCapabilities|TestRealGoplsConsumer)$/(config-group|config-trailing-field|imported-config-field|validation-field|projection-selection|extension-descriptor|extension-slot-field|changes-field|json-property|query-field|draft-setter|text|numeric|settings-transactional-default|geographic-spherical-distance)$'",
+      "exit": 0,
+      "scope": "Actual consumer completion, hover and definition; full internal/agent suite also passed in the normal gate."
+    },
+    "negative_controls": [
+      "Pinned old docs checker fails the new stale-milestone/table cases; current checker passes.",
+      "Pinned old generator fails original trailing field help; current generator passes.",
+      "Pre-fix promoted generated-source regression fails anonymous lookup and named-child suppression; corrected source passes both and retains handwritten sibling help."
+    ],
+    "source_stability": {
+      "paths_captured_before_gate": 4987,
+      "changed_paths_at_gate_completion": [],
+      "manifest_sha256": "ebf9df5074dafa5d6daaa372a9018e531db2041b9586e8766e1f5c643a6b2b27",
+      "reporting_only_changes_after_gate": [
+        "blueprint/00-master-architecture-and-parity.md",
+        "docs/guides/agent-language-tooling.md",
+        "docs/evidence/documentation-ide-drift-20261020.json"
+      ]
+    },
+    "final_documentation": {
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "started_at": "2026-10-20T06:23:20.632969+00:00",
+      "exit": 0,
+      "elapsed_seconds": 0.14527520898263901,
+      "finished_at": "2026-10-20T06:23:20.778421+00:00",
+      "scope": "After final review disposition and backend-setup clarification in the master. No verified code changed."
+    }
+  },
+  "review": {
+    "models": [
+      "gpt-6.1-sol",
+      "gpt-6-astra"
+    ],
+    "source_findings": "Alias/type-argument/pointer/wrapper provenance, check-only assertion masking and promoted generated-source origin were corrected at the shared owner. Final scoped source review has no confirmed remaining functional defect.",
+    "comments": "Seven internal narration lines removed. Public contract and original field GoDoc retained. No MUST KILL flags or suppressions.",
+    "trail_review": {
+      "model": "gpt-6-astra",
+      "verdict": "No flags",
+      "report": ".cache/documentation-ide-drift-20261020/final-trail-review.json",
+      "reviewed_at": "2026-10-20T06:22:06.597820+00:00",
+      "scope": "Current-goal trail/transcript and retained proof, including actual package coverage and hashes. Final documentation checks and reporting finalization completed by the parent afterward."
+    },
+    "reports": [
+      "guide-editor-review.json",
+      "generator-final-review.json",
+      "generator-fix-review.json",
+      "final-provenance-review.json",
+      "promoted-origin-review.json",
+      "final-trail-review.json"
+    ],
+    "model_limit": "Other model families were unavailable. These are independent GPT-family reviews, not cross-family agreement."
+  },
+  "limits": [
+    "Family-level audit and text/local-reference screening do not certify every unchanged sentence or exported comment.",
+    "Dated performance and acceptance evidence keeps its recorded revision/workload scope. No new performance claim is made by this audit.",
+    "Application upgrades, publication, live providers, Linux acceptance and a new framework-wide race matrix are outside this audit. Focused races cover the changed tooling ownership."
+  ],
+  "source_sha256": {
+    "Makefile": "19eb6518e249fe5b40e137466568a6a845f64e7e7aac353bb4dc67abd181fbab",
+    "application/.foundry-gen.json": "701bc65597698069a3e01185842c4d75ea90fb2af0585039721ca3fbbf237de1",
+    "application/settings_foundry.gen.go": "88c7516f70168cc3e104c7d3a7fe53cbb0903bd409d8ac024e38797f87f9d6f0",
+    "auth/mfa/observer.go": "ab68eb45bf286259ae3ed9199cbfde752bcd72bc02899a4d511d0e674f70d1b9",
+    "database/query/doc.go": "533772a311a29a457869d8471ed2d31b7cc950d93e170fffb49cb0178951ac25",
+    "database/query/field_interval.go": "29ad9a4a62acb9460588735a88f0095d2e42d011c2d92770c8d79fee1a1d3607",
+    "datatable/.foundry-gen.json": "8b8ec030a609145abbacd1b43cb8d0eda3cc6ae9eec1fedcb916f3fcc3c74d8d",
+    "datatable/export_options_foundry.gen.go": "cd83c77512c8d0c7b388039d033a6b37c910519566837aaeea17e34ad2559b93",
+    "events/queued_outbox.go": "f9abfb15e041f03e5b90f68df7a708a43a2dec5ae3464911b650e9816bd61455",
+    "http/signing_keys.go": "ffd01dc1c59ab36ebc05b8dc489f541e81aa539f122f756f18a0c1709614e06d",
+    "infrastructure/.foundry-gen.json": "532180a27fb689a052e4f629331758e85b5bb4113ebd8999653f31eaf1b05497",
+    "infrastructure/cache_settings_foundry.gen.go": "e246af38510b91b4afaff48b20bbfa981685f382836e680d8f3951543d60dc65",
+    "infrastructure/connection_settings_foundry.gen.go": "a7e1f40c46c9621677927d97a9dbac9ed7e61b0a7a779365b9b9e6de78496841",
+    "infrastructure/disk_settings_foundry.gen.go": "a726e81ba8d9a88342620c0dd979155fc8e4051dc161ceb978158fd398c5134c",
+    "infrastructure/http_client_settings_foundry.gen.go": "c1c652102c22382b03c5d40f0c2fff37ebcc4378ce11c4f64c9340d3a4f45c82",
+    "infrastructure/mailer_settings_foundry.gen.go": "d3d6d3b1613a62c0db697065e0feb48e000f7d5f3473ba087d3ccde6cbdae093",
+    "infrastructure/realtime_connection_settings_foundry.gen.go": "f0150d937d0182d5a201aeffe4bdeb30dc5d97514ce63f83e63d660d19cc79d5",
+    "internal/agent/field_documentation_acceptance_test.go": "547abcc27a3d08b092a63f3022282b530ed15fa47dd420af314bf41db3a9d0c7",
+    "internal/agent/gopls_acceptance_test.go": "6db840ba05f027238e6969ee05f69a1dd969da1a054017b49ca8e90d11fcd676",
+    "internal/cmd/checkdocs/guide_status.go": "7d414738d66bb7752d91230bef1450847e0f8248ad2d45af74ee609b7b9b65d1",
+    "internal/cmd/checkdocs/main.go": "7a78449a88c5e4636aabd43e59018ee74a7ed4cd3e374179e48d1f1cae81085c",
+    "internal/cmd/checkdocs/main_test.go": "d3b7e5dcdcabddd9eabb2e0f0c3d932ac886b1b73ab748881568d458a4d2bdcc",
+    "internal/extensionstore/.foundry-gen.json": "e852ef88712120b67cef3a3fcffb0401440543c58f9d6f25171e05e1ae42b3ae",
+    "internal/extensionstore/setting_foundry.gen.go": "66d028e56e5c2d113b7d02f47a8eac4805476d033c7a9186dbaec69d7cec23a1",
+    "internal/generate/declarations.go": "46d99e69d684f16bcef41afab25dcb0ad0ddc35017adc0c7e0334ce5aab6a92b",
+    "internal/generate/discover.go": "e06de12c3265822bf705a61c5aa6044ab1d4853afda8fcefc56ddbecf7d5e400",
+    "internal/generate/discover_config.go": "064e5187e460613078c3b949134f5f03bd37bbaeb51c4db99ba92a1a19b7f2c7",
+    "internal/generate/discover_dto.go": "dc75d959d83e97171096e1f79b9567ac58a8bed12c1bd1b92e35ee07e132420e",
+    "internal/generate/discover_extensions.go": "518ce5cf99ad189f5e1fda1cd844b0aa5154b1316b74fab3dc005c4a18dec72c",
+    "internal/generate/discover_multipart.go": "946d887f68a99715af07a2367c23fdbf6f0793f347fe696cf9b2979398ad7f1f",
+    "internal/generate/discover_projection.go": "7776fb3ed48412e8547557462a4f2b558d2df37d117036efdc9ba1201e187ecf",
+    "internal/generate/discover_query.go": "e1d9f04f43d0cbc1c3641584e77598a08aa7fed57cb09c1ae478ffcabed0f29b",
+    "internal/generate/emit.go": "8f9e9fe7b4bf0039dbc69a4e135994760d7c092cd3bce975aa3aaff93576f936",
+    "internal/generate/emit_config.go": "2233ae609ddfc53a5556821ddcea24878615cc1ecfc7569b6ccb3b26bc3c3521",
+    "internal/generate/emit_dto_validation.go": "e6e817383b5d9fd21536ec83ace18345dae6ceb6d672a3f197f884d94fb70eb1",
+    "internal/generate/emit_json_paths.go": "a74e6721cdea42abf0371ba324ab78bda7ac6efa24df2aa4496c7c3ee07c41fa",
+    "internal/generate/emit_model_changes.go": "bb62a372e8c892585de518939c53c10859a6b8c749adb44e363446f005d7d783",
+    "internal/generate/emit_model_extensions.go": "f01f094addf7aada94aa9d1e4dffc2381367369ff871fd79e278d08d08d95124",
+    "internal/generate/emit_model_fields.go": "cda722ba9b99268745758de91b26533bdbaf29d30a966d6879899ada7dff7fe8",
+    "internal/generate/emit_multipart.go": "94ab36b7509408eb3d0219a172d270d580baf6006541476386441eccdb31a644",
+    "internal/generate/emit_projection.go": "5b119fa7801b80ea807255aae3da510ca5610b0f5469ea55ed7544c92e246ffc",
+    "internal/generate/emit_query.go": "16d8a2eea155e4fe8c1a83ac2506016e236e7ecbd4d7ae6b1f8a81c016d69264",
+    "internal/generate/generate.go": "c2af839d82dc2759cbb16d9dd55909e17238fdd2314a1e7157689bc021fe4206",
+    "internal/generate/graph.go": "b46cfebb676ca9ec60f32e1194ddab6cd1b50e0c03e80774da5f2f64d10b73df",
+    "internal/generate/json_shape.go": "4a0126ddfafcec5467b3a41c23a3f1f19bcb8ea779dc0b6b825be9c7dc7e21ba",
+    "internal/generate/load.go": "7ad0f687a18e2ffb14cf9fe127086486def1800517d8b250b60564dafbc4721e",
+    "internal/generate/source_documentation.go": "df34430489693314c7374d2034becc8799d15714c7fc7124d89d585a478ee450",
+    "internal/generate/source_documentation_test.go": "baa38042f08f99ffe9f1eb0443b8b9d151104d5406e18c2bda6d70aaeac71e1d",
+    "internal/generate/write.go": "b61c9c407493c1d54fb5d190dd8d4fe9c7c4c471ccb542a649119b5b759b7b49",
+    "internal/sessionstore/.foundry-gen.json": "a55db826421aa55453e52bc0cbd352b48d2136699f9253232bbf4f8d4bfd230e",
+    "internal/sessionstore/entry_foundry.gen.go": "dbb9e988bb12c7d08aa2bf096ee2fb1737c56fd79cd8fba2f0eb43848603e3de",
+    "internal/tokenstore/.foundry-gen.json": "3e9c2ed2efd217c0d1035de0e5ebfa0c87a241bfa428a0b5e515b5a961de6518",
+    "internal/tokenstore/family_foundry.gen.go": "15260d8affd7f4458e0919a2a3b9fcef74d7bbe37c144860b8c54d2fd17e0321",
+    "logging/.foundry-gen.json": "eb640a70b9ad2328a61811b729fe6581f8f3ce780be4ba1860a64e23cc00e79b",
+    "logging/channel_settings_foundry.gen.go": "8d722a4ddf13c85a52475579216476ec89fb66998c327cbeef47c86c4b136276",
+    "tests/fixtures/consumer/articles/.foundry-gen.json": "164ffd3aa94329c913bee84c1d2d53ff4fe581593ee1d349068a6e7407d07269",
+    "tests/fixtures/consumer/articles/article.go": "8f8d899c779b305d5126176fe102fecb70ec80892f430c5bfbc3f369ca86f164",
+    "tests/fixtures/consumer/articles/article_foundry.gen.go": "cd3a7300f9cd7a75dc7b2d87305718e52df9dfb65aa0c7ce1baea750e9dc1845",
+    "tests/fixtures/consumer/bootstrap/.foundry-gen.json": "e29f2047d530cd5700f4af0a0b27bcd4236402a672fe92210e1916e4d91991bb",
+    "tests/fixtures/consumer/bootstrap/bootstrap_test.go": "fc558cb5b684bc6690149134995472e93fa9a7625d209c36d28b68b74c900995",
+    "tests/fixtures/consumer/bootstrap/settings_foundry.gen.go": "87299df2b4cac05dc3a39340d8a51d2fc2a48f1cb3b85264cc4f693f20a8af7e",
+    "tests/fixtures/consumer/clientcontracts/.foundry-gen.json": "82e4a9b67fc2a26c37a14ed3ff2689ef3dde5e534239c946283f39f1335e15b7",
+    "tests/fixtures/consumer/clientcontracts/payload_foundry.gen.go": "c041986835606e4c303c7ff85065f4383a26032179842ef6fa83373f491e6eb6",
+    "tests/fixtures/consumer/clientcontracts/validation_fields_test.go": "86f4065382a039e4f79240bfe11e8ec73acc755cbaf68dead84fc96fb4e2ad0a",
+    "tests/fixtures/consumer/jsonqueries/.foundry-gen.json": "fde039448c91d8642431fa45da63d40dd2427a03defa21bed08d2d6de16ba341",
+    "tests/fixtures/consumer/jsonqueries/document_foundry.gen.go": "782553e90c33873022c6134e0ca130b8bb362876f50c86ad9eaf9df29379b45e",
+    "tests/fixtures/consumer/jsonqueries/models.go": "0d16cd93268687467864c48f38e7111d2e6a9d3052e08e072258034bcd7e216a",
+    "tests/fixtures/consumer/jsonqueries/snapshot_foundry.gen.go": "9d717ec9e029833782eb52479ba0a3a00ad327debe05f2effbde09a6a5fb031e",
+    "tests/fixtures/consumer/limiting/members.go": "3eca90987fb6e1ae2ea4dd99911197746197b550d0c7bc860c1b8ea4dab861e4",
+    "tests/fixtures/consumer/mutatorqueries/.foundry-gen.json": "fe2407800d59ef9830711d1fd0e194b28684e5b35e2831b05f2f732d9a8099c5",
+    "tests/fixtures/consumer/mutatorqueries/member_foundry.gen.go": "721b6838dbdef545999c06b1b50169f18024db1ec22686b05f0bf96676a51c14",
+    "tests/fixtures/consumer/officequeries/.foundry-gen.json": "76bf8e8c65149560ac6e2b586104ec5c59ce96b53ee9e357e6d122cdd6d2837d",
+    "tests/fixtures/consumer/officequeries/region_foundry.gen.go": "2d36d6a337b7178c1a28f7f3f2b31f3faa3b47ec434a84a283acfd60fe72e905",
+    "tests/fixtures/consumer/profiles/profile.go": "23413510efe0bc3306343ab0de85229529dec3d5438cd674bea70226e8af96cb",
+    "tests/fixtures/consumer/recovering/.foundry-gen.json": "3f59304b001d707b2251ac35fc34e4f1a179d904936a6c6a2a9c88384d8871a3",
+    "tests/fixtures/consumer/recovering/member_foundry.gen.go": "23bbc5e1bd5283f8da9b2de71e01338e42bc8b8bcee5e80a82a29c4425addd74",
+    "tests/fixtures/consumer/reports/.foundry-gen.json": "ec3f2b7a3c3ac37c5146b31ff9ad1a2c0323209933fcae295596c5d7780c0011",
+    "tests/fixtures/consumer/reports/projections.go": "be8d1347a437ad82284821de79b5cc6f0406ba55a591f16aca9b4ab8280ec2bb",
+    "tests/fixtures/consumer/reports/user_summary_foundry.gen.go": "b4086964652ccccff4362d08eaaa1362d07861120b150d509f3d1c0b6ddb3259",
+    "tests/fixtures/consumer/startupconfig/.foundry-gen.json": "59bcdfc36c6f45996477ed27f60c16d644066fff8adf68d4fc9ee80c182b3db9",
+    "tests/fixtures/consumer/startupconfig/settings.go": "1c66556aa9aa78b5f892dab5893a1259e1bf456fac4d66038052e366cf032827",
+    "tests/fixtures/consumer/startupconfig/settings_foundry.gen.go": "70aad5fde966b8769a28e267d981dcb1506b8524187a90e31a07472b0d41f8ee",
+    "tests/fixtures/consumer/validationinput/input.go": "cb85c2c3b767a3a19c58e12e5749a9a624a3b2ccfaffeba4f73ecb6eef98b8b5",
+    "websocket/registry.go": "e2ba1c2eedae99f23cf35e9da2c0e961db2dd96c77ec3183c92fe626474fc046"
+  },
+  "local_artifacts": ".cache/documentation-ide-drift-20261020",
+  "logs_sha256": {
+    ".cache/documentation-ide-drift-20261020/verify-status.json": "54f281857fc69df989bdd276f46824cbb4960e38bf3b227c20b45c8b8b514e6c",
+    ".cache/documentation-ide-drift-20261020/verify.log": "8ad9aaf3045c7da78256285bf0bde057a15da5d60fa92a14a7a959addc7267d9",
+    ".cache/documentation-ide-drift-20261020/verify-resumed-status.json": "1cd780f97f869c2c2d83fec93c633e602b2e4fdbdeaacf01972205997ca346fb",
+    ".cache/documentation-ide-drift-20261020/verify-resumed.log": "e53aa8c4760cb3bc08eebdf50b97dbfa18bb0d693003d16b06d7ecafbd4dda46",
+    ".cache/documentation-ide-drift-20261020/race-final.log": "82548a7e6efd5c9bb8f5cf12d6ae332091a3409f5789b85f43b119084a8d0a35",
+    ".cache/documentation-ide-drift-20261020/editor-focused.log": "e65632be7fa4ea246ada93a91656652bc0d9b685235ff9ce1b2039d65db19dd9",
+    ".cache/documentation-ide-drift-20261020/negative-docs.log": "17e1c3527456ab1ef59cea4f246c8d202aaa6f9792b4714315938209d5225c05",
+    ".cache/documentation-ide-drift-20261020/negative-generator.log": "14990f68e2b24bfd2857e85814b446419f77f96f1a87d344b80d2f6fdb90351b",
+    ".cache/documentation-ide-drift-20261020/positive-generator.log": "09c0d661a2b7f0c55fd144227af790339770ada3b8e05663a8a1bef2a933ba0b",
+    ".cache/documentation-ide-drift-20261020/promoted-origin-before.log": "6c43f40aeae4d6efe93f48771a6dbb9bbb3a02c4c5bd8f25ffdb56ab09c74a62",
+    ".cache/documentation-ide-drift-20261020/promoted-origin-after.log": "fa7335e9673f63f31659c99f396671654dce2809ebb6da1746e10978aa10f572",
+    ".cache/documentation-ide-drift-20261020/generated-token-comparison.json": "87006bc87a0f960c1c85fa31712830b58412ad33875389f5ec3cb3f11df3be82",
+    ".cache/documentation-ide-drift-20261020/pre-final-gate-fingerprints.json": "ebf9df5074dafa5d6daaa372a9018e531db2041b9586e8766e1f5c643a6b2b27",
+    ".cache/documentation-ide-drift-20261020/prose-corrections.json": "084589e1de84e1353bce2543e997058a3cfaf57922ed686afbbc251ea46226ed",
+    ".cache/documentation-ide-drift-20261020/coverage.json": "367e4523afcd77d609615b1caf5ecc830f2c1e4ec06dcb5c62636ad252df638f",
+    ".cache/documentation-ide-drift-20261020/comment-review-messages.json": "ecda682f3896c1d924ff37ec1013408eb58b5cdff3dda48964d773643459c6dd",
+    ".cache/documentation-ide-drift-20261020/final-docs-status.json": "84befa8bd7633134605ff6dc654657f4b799333718b04930c4d490ec15db2ac0",
+    ".cache/documentation-ide-drift-20261020/final-docs.log": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06",
+    ".cache/documentation-ide-drift-20261020/final-source-stability.json": "c424988d224ea1a712951a7301957823629d0a8612bcc9ab3a255e45147018db",
+    ".cache/documentation-ide-drift-20261020/final-trail-review.json": "d12771a747a5bf3cebc593286936f0460fe747f2e9cbf13844570fccb34f19cb",
+    ".cache/documentation-ide-drift-20261020/final-docs-reviewed.log": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06",
+    ".cache/documentation-ide-drift-20261020/final-docs-reviewed-status.json": "a068747691775c504653046100fac0c9568b1b197a7f1cdb27ec32d1fd728d4c",
+    ".cache/documentation-ide-drift-20261020/decisions.tsv": "b6b53ca61b1d684b67a6a3da8f9ddb879b48f54937813446daa699ab66af7815",
+    ".cache/documentation-ide-drift-20261020/plan.json": "31a6a292c712b234f3c9e0a4700cb45429b525171032d57310d43badd2979514"
+  },
+  "decision_trail": ".cache/documentation-ide-drift-20261020/decisions.tsv"
+}

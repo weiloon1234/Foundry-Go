@@ -2,7 +2,7 @@
   "version": 1,
   "files": {
     "entry_foundry.gen.go": "def8766f850705947a07e39867a07e86de937b5ab2cbb44fdbf85cc9723952f5",
-    "family_foundry.gen.go": "29f45b322afb8cd07aeca161c4d611c88fcfbd7fd793332dfdedd4529d1be9c0",
+    "family_foundry.gen.go": "15260d8affd7f4458e0919a2a3b9fcef74d7bbe37c144860b8c54d2fd17e0321",
     "subject_foundry.gen.go": "4d9e142a8e2e98dbfe342713c530614339af69e65d01ffd3164e7b4534239185"
   }
 }

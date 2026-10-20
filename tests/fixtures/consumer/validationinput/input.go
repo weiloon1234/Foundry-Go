@@ -1,6 +1,5 @@
 // Package validationinput verifies typed validation from a separate consumer.
-// These explicit field constructors are the generator's runtime boundary;
-// automatic rule discovery remains part of the validation milestone.
+// These explicit field constructors use the same runtime as generated rules.
 package validationinput
 
 import "github.com/weiloon1234/Foundry-Go/validation"

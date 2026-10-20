@@ -9,10 +9,11 @@ import (
 )
 
 type multipartDeclaration struct {
-	name     string
-	typ      *types.Named
-	position token.Position
-	fields   []multipartField
+	name      string
+	typ       *types.Named
+	position  token.Position
+	fields    []multipartField
+	fieldHelp []fieldHelp
 }
 
 type multipartField struct {

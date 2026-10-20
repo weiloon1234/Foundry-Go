@@ -9,6 +9,7 @@ import (
 
 // Preferences is the single declaration of the persisted JSON payload.
 type Preferences struct {
+	// Theme chooses the reader appearance; omitted uses the application default.
 	Theme   value.Optional[string]            `json:"theme,omitzero"`
 	Labels  value.Optional[map[string]string] `json:"labels,omitzero"`
 	Quota   value.Optional[decimal.Decimal]   `json:"quota,omitzero"`

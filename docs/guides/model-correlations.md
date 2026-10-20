@@ -64,6 +64,6 @@ Compilation rejects zero/invalid descriptors, mismatched runtime aliases, shadow
 
 Execution retains the caller's context and executor. Canceled requests do not reach the executor; decoding or database failures discard collected output. A scalar cardinality error aborts its current PostgreSQL transaction scope; use a savepoint if the enclosing transaction must continue. Ordinary [write outcome rules](model-writes.md#transaction-ownership-and-failures) still apply.
 
-[Relationship existence filters](model-relationship-filters.md) provide the simpler `WhereHas`/`WhereDoesntHave` path for declared relationships, including nested and pivot conditions with automatic aliases. [Milestone 06](../../blueprint/06-relations-and-advanced-queries.md) records delivered advanced-query APIs and remaining contracts. The master roadmap owns verification status.
+[Relationship existence filters](model-relationship-filters.md) provide the simpler `WhereHas`/`WhereDoesntHave` path for declared relationships, including nested and pivot conditions with automatic aliases. [Milestone 06](../../blueprint/06-relations-and-advanced-queries.md) records delivered advanced-query contracts. The master roadmap owns verification status.
 
 [Correlated complete records and lateral joins](lateral-joins.md) retain these outer/inner scopes through full models and generated report selections. They cannot execute independently or enter ordinary uncorrelated sources.

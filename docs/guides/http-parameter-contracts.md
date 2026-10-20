@@ -55,5 +55,4 @@ or the next inspection result. Metadata inspection does not run Parse/Format.
 Plain route name inspection and native HTTP handler interoperability remain
 available; raw payload handlers do not acquire invented DTO schemas.
 
-These declarations feed the shared manifest work in milestone 21. They do not
-claim that OpenAPI or TypeScript generation is already complete.
+These declarations feed the shared manifest and [OpenAPI and TypeScript exporters](client-contracts.md). Runtime decoding and exports share the same registered scalar contracts.

@@ -15,9 +15,11 @@ func emitConfig(p *packageInput, declaration configDeclaration) ([]byte, error) 
 		e.line("type %s struct {", configKeySetName(declaration.name, path))
 		for _, field := range fields {
 			if len(field.children) > 0 {
+				e.emitFieldHelp(field.help)
 				e.line("%s %s", field.name, configKeySetName(declaration.name, field.path))
 			} else {
 				e.line("// %s selects %s. Set accepts %s.", field.name, field.key, e.typeName(field.typ))
+				e.emitFieldHelp(field.help)
 				e.line("%s %s.Key[%s,%s]", field.name, configuration, declaration.name, e.typeName(field.typ))
 			}
 		}

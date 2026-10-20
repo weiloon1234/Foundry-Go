@@ -56,4 +56,4 @@ At least one model snapshot is required. A physical deletion cannot carry an ass
 
 Generated persisted snapshots own their [binary buffers](binary-models.md); other built-in persisted types are immutable values. Custom values with mutable references retain ordinary Go copy semantics and must be treated as read-only. Custom codecs own canonical binding and must use supported finite driver scalars, byte buffers or timestamps. Routine `String`/`GoString` formatting omits snapshot values; deliberate `Before()`/`After()` access returns typed snapshots with fresh copies of built-in binary fields.
 
-See [model hooks](model-hooks.md) for callback order and transaction behavior, and [milestone 07](../../blueprint/07-model-lifecycle-events-and-audit.md) for remaining lifecycle, event and audit requirements.
+See [model hooks](model-hooks.md) for callback order and transaction behavior, and the delivered [events](events.md), [outbox](outbox.md) and [audit](audit.md) contracts for related effects.

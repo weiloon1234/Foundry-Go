@@ -258,6 +258,8 @@ func receiverTypeName(expr ast.Expr) string {
 	switch expr := expr.(type) {
 	case *ast.Ident:
 		return expr.Name
+	case *ast.SelectorExpr:
+		return expr.Sel.Name
 	case *ast.StarExpr:
 		return receiverTypeName(expr.X)
 	case *ast.ParenExpr:

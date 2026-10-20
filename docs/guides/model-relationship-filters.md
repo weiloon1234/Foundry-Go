@@ -74,4 +74,4 @@ Alias analysis and SQL compilation are bounded. Cyclic or excessive private quer
 
 Execution uses the caller's context and executor. Canceled operations do not reach the database. Collected results are discarded on query/decoding failure, and ordinary transaction/savepoint outcomes still apply to [model writes](model-writes.md).
 
-The master [roadmap](../../blueprint/00-master-architecture-and-parity.md) owns verification status; [milestone 06](../../blueprint/06-relations-and-advanced-queries.md) records delivered advanced-query APIs and remaining contracts. Filtered model queries also support [bounded batch iteration](model-chunks.md).
+The master [roadmap](../../blueprint/00-master-architecture-and-parity.md) owns verification status; [milestone 06](../../blueprint/06-relations-and-advanced-queries.md) records delivered advanced-query contracts. Filtered model queries also support [bounded batch iteration](model-chunks.md).

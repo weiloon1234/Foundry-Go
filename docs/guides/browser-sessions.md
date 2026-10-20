@@ -5,7 +5,7 @@ ordinary typed HTTP endpoints. It owns cookie parsing, CSRF policy, credential
 changes and cookie publication. Handlers keep returning their declared DTOs.
 This HTTP slice passed focused races and full native regression in 503.3 seconds,
 including 721 compiler cases, 271 editor probes and current generated output.
-Password verification and MFA challenge flows remain separate milestone 10 work.
+[Password verification](password-hashing.md) and [MFA challenge flows](mfa.md) compose with these session credentials through their declared login and completion adapters.
 
 ## Assemble once
 

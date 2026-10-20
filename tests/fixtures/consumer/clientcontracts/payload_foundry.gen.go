@@ -145,6 +145,9 @@ type PayloadValidationFieldSet struct {
 	// Tags validates the declared JSON property "tags".
 	Tags foundryvalidation.Field[Payload, []string]
 	// Titles validates the declared JSON property "titles".
+	//
+	// Titles is keyed by the catalog's supported locales in client requests.
+	//
 	Titles foundryvalidation.Field[Payload, foundryvalue.Optional[map[i18n.LocaleID]string]]
 	// When validates the declared JSON property "when".
 	When foundryvalidation.Field[Payload, temporal.DateTime]

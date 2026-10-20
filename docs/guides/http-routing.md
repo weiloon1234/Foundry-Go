@@ -61,8 +61,7 @@ winner for an ambiguous overlap. There is no global router or default mux mutati
 Every route explicitly declares `Public` or `Guarded`. A guarded declaration may
 construct URLs, but handler registration requires the matching typed
 [authentication adapter](authentication.md). Unbound guarded routes and unknown
-access values are rejected. Ordinary typed endpoints support required/optional
-authentication; guarded raw/signed composition remains part of milestone 10.
+access values are rejected. Ordinary typed endpoints support required or optional authentication. [Authenticated raw routes and signed endpoints](authentication.md) preserve the same concrete actor and route contracts.
 
 ## Path values and scopes
 
@@ -131,5 +130,4 @@ most one fallback.
 the selected route's metadata inside its handler. Both return independent
 snapshots, including parameter-name slices. Route metadata comes from the same
 declaration used by runtime matching and URL generation. `Router.Endpoints()` exposes the registered typed payload, validation and error
-metadata; see [endpoint inspection](http-endpoints.md). OpenAPI and TypeScript
-exporters arrive in milestone 21.
+metadata; see [endpoint inspection](http-endpoints.md). [OpenAPI and TypeScript exporters](client-contracts.md) consume the registered metadata.

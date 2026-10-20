@@ -4,7 +4,11 @@
 
 Foundry-Go is a library/framework repository. Applications consume its public packages. The nested [consumer fixture](../../tests/fixtures/consumer/README.md) checks that external module boundary; it is not the future starter project.
 
-Read the [blueprint index](../../blueprint/README.md) and [master roadmap](../../blueprint/00-master-architecture-and-parity.md) before implementation. Work on one milestone at a time. Inspect the referenced Rust source and real usage before finalizing a Go API, then prove the Go version in an independent fixture.
+For milestone work, read the [blueprint index](../../blueprint/README.md) and
+[master roadmap](../../blueprint/00-master-architecture-and-parity.md). Foundry-Go
+source, public contracts and executable consumers are the implementation authority.
+Inspect the relevant implementation and closest consumer before changing an API.
+Historical cross-repository mappings do not authorize consulting sibling projects.
 
 ## Environment and toolchain
 
@@ -42,12 +46,12 @@ provider credentials out of tracked files and command output.
 | `make fmt-check` | Fail if source formatting differs from the selected formatter |
 | `make vet` | Static analysis of framework/tool packages |
 | `make test` | Current framework/tool tests |
-| `make fixture-check` | Vet and compile/test the independent consumer module |
-| `make generate` | Regenerate the consumer fixture's model/enum code |
+| `make fixture-check` | Vet and test both plugin fixtures and the independent consumer module |
+| `make generate` | Regenerate framework-owned declarations, then the independent consumer, with managed field notices |
 | `make generate-check` | Type-check generated output and fail on stale files without rewriting them |
 | `make gopls-install` | Explicitly install the pinned development tool into `bin/` |
 | `make agent-smoke` | Verify real gopls against the consumer, requiring `FOUNDRY_TEST_GOPLS` to select an existing approved executable |
-| `make docs-check` | Check local inline Markdown link targets, contiguous blueprint numbering, and fixture Go requirements |
+| `make docs-check` | Check local Markdown link targets, explicit future-work claims against completed milestones, contiguous blueprint numbering, and fixture Go requirements |
 | `make release-tools-check` | Verify the independent module packager and native measurement harness |
 | `make verify` | Run the normal repository gate |
 | `make race` | Race-enabled framework/tool and consumer checks |
@@ -67,9 +71,18 @@ Keep acceptance tests grouped in feature packages, as with the smaller
 advanced queries. Shared fixture helpers belong under the consumer's internal
 directory. Resource settings are development controls, not framework requirements.
 
-Repeated public generic API changes can accumulate large ordinary/race compilation caches. Before a large rebuild, inspect filesystem space and the directory returned by `go env GOCACHE`; allow room for both the cache and temporary build/link files. Once builds have stopped, `go clean -cache` clears rebuildable compilation artifacts; the next build recreates them. On a small disk, clear disposable compilation cache before or between the separate gates when their artifacts would not fit. If compilation reports a full disk, record the environment failure and rerun the failed check after space is restored. The [nullable correlation fixture](../../tests/fixtures/consumer/correlations/nullable/) also separates complex joined scopes from the other correlation tests to reduce the compiler's live memory requirement.
+Ordinary and race builds retain separate compilation artifacts. Before a large
+rebuild, inspect disk headroom and `go env GOCACHE`; allow room for the cache and
+temporary build/link files. Reuse warm caches and keep expensive gates sequential.
+Never trim a cache while a build uses it. If a resource failure interrupts a gate,
+retain its completed evidence, restore capacity and resume the failed segment with
+the same command and flags. Remove only task-owned cold measurement caches after
+their processes exit and their evidence is retained. See
+[query build resources](query-build-resources.md) for measured cache behavior.
+The [nullable correlation fixture](../../tests/fixtures/consumer/correlations/nullable/)
+separates complex joined scopes to bound the compiler's live memory requirement.
 
-`make test`, `fixture-check`, `race` and `test-postgres` discover every package and run tests in bounded batches. `TEST_PACKAGE_BATCH_SIZE` in the Makefile owns the default and can be overridden for local capacity. This limits temporary test/link artifacts without reducing coverage. Failed or empty package discovery fails the gate; the PostgreSQL runner preserves required database execution, race instrumentation and fresh test runs in every batch. Compilation caches still need room and may need clearing between ordinary and race modes.
+`make test`, `fixture-check`, `race` and `test-postgres` discover every package and run tests in bounded batches. `TEST_PACKAGE_BATCH_SIZE` in the Makefile owns the default and can be overridden for local capacity. This limits temporary test/link artifacts without reducing coverage. Failed or empty package discovery fails the gate; the PostgreSQL runner preserves required database execution, race instrumentation and fresh test runs in every batch. Compilation caches still need room for both ordinary and race artifacts.
 
 `TEST_TIMEOUT` in the Makefile sets the per-package timeout for normal, race, required-PostgreSQL and agent-smoke gates. Its default is 20 minutes to allow complete suites on slower hosts. Independent real-gopls probes use Go’s parallel testing with a shared maximum of four active sessions; Go test’s `-parallel` option can impose a lower limit. Every probe keeps its own server session, source checks and semantic assertions. Individual gopls operations still have a 45-second deadline. Override the package budget with, for example, `make TEST_TIMEOUT=25m verify`; direct `go test` commands must supply their own `-timeout` when running the full language-tooling suite.
 
@@ -97,7 +110,11 @@ milestone complete. Do not repeat an unchanged full suite merely because a
 focused check has finished. Failures and unresolved interactions determine which checks need to run
 again; preserve the evidence for checks that already passed. Required race,
 PostgreSQL, generation, editor and consumer coverage still applies at completion.
-Documentation-only corrections use docs-check and factual review.
+Documentation-only corrections use docs-check and factual review. The checker
+rejects explicit forms such as `remain milestone 07 work`,
+`planned in milestone 08` and `Milestone 09 remains open` when the master table marks that
+milestone complete. Dated guide records and blueprint design/history retain
+their historical wording. Other factual claims still need source review.
 
 Milestone status lives only in the master roadmap. Each subsystem blueprint owns its API and semantics. Delivered guides explain available APIs; planned snippets stay in blueprints until implementation makes them compile-checkable.
 

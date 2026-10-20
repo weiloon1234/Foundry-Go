@@ -123,11 +123,13 @@ middleware := foundryhttp.RateLimit(limiter,
 )
 ```
 
-The resolver is a typed domain boundary; model-first authentication will provide
-its model context in milestone 10. This API requires no Actor abstraction. Apply
-the middleware through existing route/scope `WithMiddleware` or global
-`ApplyMiddleware`. Route middleware can inspect `MatchedRoute` and native path
-values. The handler receives its original request and response writer after
+The resolver is a typed domain boundary. Resolvers that need the authenticated
+model run in [middleware after authentication](authentication.md#middleware-after-authentication)
+through `WithActorMiddleware`, where `guard.Require(r.Context())` reads the request's
+concrete actor. `RateLimitByActor` provides the existing authenticated-model quota
+with an anonymous IP fallback. Other resolvers can use route/scope `WithMiddleware`
+or global `ApplyMiddleware`. Route middleware can inspect `MatchedRoute` and native
+path values. The handler receives its original request and response writer after
 admission; resolver deadlines do not cancel the downstream handler context.
 
 For IP limits, declare `keyspace.TextKeys[netip.Addr]()` and use
@@ -222,4 +224,4 @@ concurrency, policy conflicts, cancellation and independent resources. Additiona
 tests cover window boundaries, namespaces, corrupt state, callback ownership,
 uncertain acknowledgements, HTTP behavior, wrong Go types and real gopls discovery.
 Full native verification passed in 465.6s with 1984 matching source inputs, required local PostgreSQL and Redis, all 670 compiler cases, 245 consumer editor scenarios plus five field-documentation scenarios, root/consumer tests, vet/formatting, three generation-freshness targets and documentation checks. Fresh focused rate-limit/Redis/HTTP races, consumer races, five new compiler rejections, two actual gopls probes and 2,861,333 timestamp fuzz executions also passed. No dependency was added.
-See the [acceptance record](../../blueprint/00-master-architecture-and-parity.md#milestone-09-typed-rate-limit-acceptance). Milestone 09 still requires pub/sub before milestone 10 begins.
+See the [acceptance record](../../blueprint/00-master-architecture-and-parity.md#milestone-09-typed-rate-limit-acceptance). [Pub/sub](pubsub.md) and [authenticated actor quotas](authentication.md#middleware-after-authentication) are delivered integrations.

@@ -62,22 +62,24 @@ func jsonPayload(t types.Type) types.Type {
 
 func jsonBase(t types.Type) types.Type {
 	for {
-		if p, ok := types.Unalias(t).(*types.Pointer); ok {
-			t = p.Elem()
-			continue
-		}
-		found := false
-		for _, name := range []string{"Nullable", "Optional", "JSON"} {
-			if inner, ok := jsonWrapper(t, name); ok {
-				t = inner
-				found = true
-				break
-			}
-		}
-		if !found {
+		inner, ok := jsonInner(t)
+		if !ok {
 			return types.Unalias(t)
 		}
+		t = inner
 	}
+}
+
+func jsonInner(t types.Type) (types.Type, bool) {
+	if pointer, ok := types.Unalias(t).(*types.Pointer); ok {
+		return pointer.Elem(), true
+	}
+	for _, name := range []string{"Nullable", "Optional", "JSON"} {
+		if inner, ok := jsonWrapper(t, name); ok {
+			return inner, true
+		}
+	}
+	return t, false
 }
 
 func customJSONShape(t types.Type) bool {

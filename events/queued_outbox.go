@@ -22,7 +22,7 @@ type queuedEvent struct {
 	Payload     json.RawMessage     `json:"payload"`
 }
 
-// QueuedOutbox delivers milestone-07 event rows through the ordinary job worker.
+// QueuedOutbox delivers durable event rows through the ordinary job worker.
 // One declaration routes explicit destinations to their prepared buses. Earlier
 // listeners may run again after failure/crash; use Topic.OutboxID for idempotency.
 // Buses and queue infrastructure remain owned by their application providers.

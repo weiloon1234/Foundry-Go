@@ -21,6 +21,7 @@ type dtoDeclaration struct {
 	typ       *types.Named
 	position  token.Position
 	projected bool
+	fieldHelp []fieldHelp
 	message   *messageOptions
 	// role is dtoResponseRole for DTOs that are never decoded from requests.
 	role string
@@ -94,7 +95,15 @@ func dtoTypeID(typ types.Type) contract.TypeID {
 }
 
 func resolveDTOSchema(p *packageInput, declaration *dtoDeclaration, models map[*types.Named]bool) error {
-	return resolveJSONGraph(p, &declaration.dtoGraph, declaration.typ, declaration.typ.Obj().Pos(), models, false)
+	if err := resolveJSONGraph(p, &declaration.dtoGraph, declaration.typ, declaration.typ.Obj().Pos(), models, false); err != nil {
+		return err
+	}
+	if declaration.role != dtoResponseRole {
+		var err error
+		declaration.fieldHelp, err = p.validationHelp(declaration.typ, declaration.properties)
+		return err
+	}
+	return nil
 }
 
 // resolveJSONGraph owns all JSON shape discovery. Only a complete DTO root is

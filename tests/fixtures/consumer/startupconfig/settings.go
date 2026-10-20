@@ -21,13 +21,14 @@ const (
 
 type HTTPSettings struct {
 	Listen  string        `config:"listen"`
-	Port    Port          `config:"port"`
+	Port    Port          `config:"port"` // Port is the public listener port.
 	Timeout time.Duration `config:"timeout"`
 	Origins []string      `config:"origins"`
 }
 
 //foundry:config
 type Settings struct {
+	// HTTP controls the public listener and its request timeout.
 	HTTP        HTTPSettings    `config:"http"`
 	Environment Environment     `config:"environment"`
 	SigningKey  secret.String   `config:"signing_key"`

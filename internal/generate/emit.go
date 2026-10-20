@@ -18,6 +18,7 @@ type emitter struct {
 	reserved    map[string]bool
 	genericKeys map[*types.TypeParam]string
 	body        bytes.Buffer
+	fieldHelp   []emittedFieldHelp
 	err         error
 }
 
@@ -84,7 +85,7 @@ func (e *emitter) finish(source string) ([]byte, error) {
 		}
 		out.WriteString(")\n\n")
 	}
-	out.Write(e.body.Bytes())
+	out.Write(e.finishFieldHelp())
 	formatted, err := format.Source(out.Bytes())
 	if err != nil {
 		return nil, fmt.Errorf("format generated source: %w", err)
@@ -212,9 +213,11 @@ func emitModel(p *packageInput, m model) ([]byte, error) {
 	e.line("}")
 	for _, f := range m.fields {
 		e.line("// %s returns the typed mutation state for %s.", f.name, f.column)
+		e.emitFieldHelp(f.help)
 		e.emitFieldBehavior(m.name, m.table, f)
 		e.line("func(%s %sDraft)%s()%s.Optional[%s]{return %s}", draftVar, m.name, f.name, value, e.fieldInputType(f, true), e.cloneDraftInput(f, draftVar+".field"+f.name, true))
 		e.line("// Set%s returns a new draft with %s explicitly set.", f.name, f.column)
+		e.emitFieldHelp(f.help)
 		e.emitFieldBehavior(m.name, m.table, f)
 		assignment := e.cloneDraftInput(f, inputVar, false)
 		if f.nullable {
@@ -222,9 +225,11 @@ func emitModel(p *packageInput, m model) ([]byte, error) {
 		}
 		e.line("func(%s %sDraft)Set%s(%s %s)%sDraft{%s.field%s=%s.Set(%s);return %s}", draftVar, m.name, f.name, inputVar, e.fieldInputType(f, false), m.name, draftVar, f.name, value, assignment, draftVar)
 		e.line("// Unset%s omits %s without requesting a zero or null write.", f.name, f.column)
+		e.emitFieldHelp(f.help)
 		e.line("func(%s %sDraft)Unset%s()%sDraft{%s.field%s=%s.Optional[%s]{};return %s}", draftVar, m.name, f.name, m.name, draftVar, f.name, value, e.fieldInputType(f, true), draftVar)
 		if f.nullable {
 			e.line("// Clear%s explicitly sets %s to null.", f.name, f.column)
+			e.emitFieldHelp(f.help)
 			e.line("func(%s %sDraft)Clear%s()%sDraft{%s.field%s=%s.Set(%s.Null[%s]());return %s}", draftVar, m.name, f.name, m.name, draftVar, f.name, value, value, e.fieldInputType(f, false), draftVar)
 		}
 	}

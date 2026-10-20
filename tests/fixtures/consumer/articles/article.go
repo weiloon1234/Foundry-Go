@@ -52,6 +52,7 @@ type Article struct {
 	DeletedAt value.Nullable[temporal.DateTime]
 
 	// Foundry field behavior (generated): Extension slot, not a column: translated text stored in foundry_model_translations as field "title", one row per locale; policy: [Article.DefineExtensions] entry Title. Descriptor: ArticleExtensions().Title; bind it once with From(runtime), then pass it to With or Load to fill this field. The zero value is not loaded and reads never perform I/O. Write with SaveIn (merge) or SyncIn (exact, enforcing Require) in the model's transaction, and validate request input with Rule() or MergeRule(). Hard deletion removes the data; soft deletion keeps it. Renaming this field changes its stored name unless foundry:"name=title" pins it.
+	// Title is the localized article heading shown to readers.
 	Title translations.Text
 	// Foundry field behavior (generated): Extension slot, not a column: translated text stored in foundry_model_translations as field "summary", one row per locale; policy: [Article.DefineExtensions] entry Summary. Descriptor: ArticleExtensions().Summary; bind it once with From(runtime), then pass it to With or Load to fill this field. The zero value is not loaded and reads never perform I/O. Write with SaveIn (merge) or SyncIn (exact, enforcing Require) in the model's transaction, and validate request input with Rule() or MergeRule(). Hard deletion removes the data; soft deletion keeps it. Renaming this field changes its stored name unless foundry:"name=summary" pins it.
 	Summary translations.Text

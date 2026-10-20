@@ -14,6 +14,7 @@ func emitProjection(p *packageInput, projection projection, dto *dtoDeclaration)
 	e.line("// %sFieldSet exposes the declared result fields and their exact value types.", name)
 	e.line("type %sFieldSet struct{", name)
 	for i, f := range projection.fields {
+		e.emitFieldHelp(f.help)
 		e.line("%s %s.ProjectionField[%s,%s]", f.name, query, name, types[i])
 	}
 	e.line("}")
@@ -40,6 +41,7 @@ func emitProjection(p *packageInput, projection projection, dto *dtoDeclaration)
 	e.line("// %sSelection requires a type-compatible expression for every result field.", name)
 	e.line("type %sSelection[%s any]struct{", name, scope)
 	for i, f := range projection.fields {
+		e.emitFieldHelp(f.help)
 		e.line("%s %s.Expression[%s,%s]", f.name, query, scope, types[i])
 	}
 	e.line("}")
@@ -59,6 +61,7 @@ func emitProjection(p *packageInput, projection projection, dto *dtoDeclaration)
 		e.line("func %s[%s](source %s)%s[%s]{return %s[%s]{source:source}}", projectName, shape.declaration, shape.source, shape.builder, shape.arguments, shape.builder, shape.arguments)
 		for i, f := range projection.fields {
 			e.line("// Select%s supplies the typed expression for %s.", f.name, f.column)
+			e.emitFieldHelp(f.help)
 			e.line("func(p %s[%s])Select%s(v %s.Expression[%s,%s])%s[%s]{p.selection.%s=v;return p}", shape.builder, shape.arguments, f.name, query, shape.scope, types[i], shape.builder, shape.arguments, f.name)
 		}
 		e.line("// Query retains the source requirements and complete selection mapping.")

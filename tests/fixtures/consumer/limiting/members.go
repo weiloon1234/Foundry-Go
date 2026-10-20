@@ -25,8 +25,8 @@ func AdmitExport(ctx context.Context, limiter MemberLimiter, id model.ID[mutator
 	return limiter.Take(ctx, id, cost)
 }
 
-// MemberMiddleware accepts the application's concrete model-key resolver. Future
-// auth integration can resolve it from the authenticated model without an Actor.
+// MemberMiddleware accepts the application's concrete model-key resolver. Use
+// WithActorMiddleware when the resolver reads the authenticated model.
 func MemberMiddleware(limiter MemberLimiter, resolve func(*stdhttp.Request) (model.ID[mutatorqueries.Member], error)) foundryhttp.Middleware {
 	return foundryhttp.RateLimit(limiter, resolve)
 }

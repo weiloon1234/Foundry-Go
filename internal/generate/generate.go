@@ -84,6 +84,11 @@ func Generate(ctx context.Context, options Options) (Report, error) {
 	if err != nil {
 		return report, err
 	}
+	return finishGeneration(ctx, options, graph, writes)
+}
+
+func finishGeneration(ctx context.Context, options Options, graph *packageGraph, writes []packageWrite) (Report, error) {
+	var report Report
 	plan, err := combineWrites(graph.root, writes)
 	if err != nil {
 		return report, err
@@ -102,6 +107,11 @@ func Generate(ctx context.Context, options Options) (Report, error) {
 	if len(plan.changes) == 0 || options.Check {
 		// No publication rechecks the tree under its lock; verify the inputs
 		// did not change while this result was prepared.
+		for _, write := range writes {
+			if err := checkInput(write.input, write.plan); err != nil {
+				return report, err
+			}
+		}
 		if err := graph.checkSourceTree(); err != nil {
 			return report, err
 		}

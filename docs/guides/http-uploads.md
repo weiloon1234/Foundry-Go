@@ -104,7 +104,7 @@ Foundry stores incoming file bytes using a fixed scratch buffer. The consumer
 receives no temporary filesystem path. Open uses a confined root; display names
 never become local paths. UploadedFile cannot be implicitly JSON-serialized or
 retained for a job after the request ends. A domain operation must stream it to
-persistent storage before returning. Storage adapters arrive in milestone 11.
+persistent storage before returning. Use the [storage upload adapter](storage.md) to persist the request-owned file through an explicitly selected disk.
 
 WithTempDirectory accepts an absolute server-owned directory; an empty value
 uses the operating system's temporary directory. Declaration/route assembly

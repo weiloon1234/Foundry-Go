@@ -1,7 +1,7 @@
 # Go language tooling for agents
 
-Milestone 24 adds JSON `timing.initialize_ns` and `timing.request_ns` to inspection
-results. Startup/initialization and request/response time are separate; request
+Inspection results include JSON `timing.initialize_ns` and `timing.request_ns`.
+Startup/initialization and request/response time are separate; request
 time includes gopls package loading caused by that request. Overall wall time also
 includes source preparation and server shutdown. These timing additions passed
 [milestone 24 acceptance](../production-acceptance.md); see
@@ -11,7 +11,7 @@ Foundry's agent command speaks the Language Server Protocol (LSP) to an existing
 
 The client passes protocol fixture tests and real-gopls completion, hover, and definition acceptance against the independent consumer. The approved tool's version is pinned in [tools/gopls.version](../../tools/gopls.version), separately from framework runtime dependencies. Nothing installs gopls automatically.
 
-Run `make gopls-install` with the native Go toolchain to install the pinned development tool into ignored `bin/`. The real acceptance gate is `FOUNDRY_TEST_GOPLS="$PWD/bin/gopls" make agent-smoke`. It checks completion, typed hover information, definition lookup and getter/mutator field documentation in the independent consumer. It also checks that source is unchanged. Ordinary tests skip that gate when no executable is selected; the smoke target fails if the selection is missing. A skipped test does not satisfy the real-language-server requirement.
+Run `make gopls-install` with the native Go toolchain to install the pinned development tool into ignored `bin/`. The real acceptance gate is `FOUNDRY_TEST_GOPLS="$PWD/bin/gopls" make agent-smoke`. It checks completion, typed hover information, definition lookup, original field help and getter/mutator notices in the independent consumer. Stored-field probes also reject removed computation methods while keeping ordinary comparisons and mutation methods visible. It also checks that source is unchanged. Ordinary tests skip that gate when no executable is selected; the smoke target fails if the selection is missing. A skipped test does not satisfy the real-language-server requirement.
 
 ## Inspect an existing consumer file
 
@@ -28,6 +28,35 @@ These positions are illustrative; select a real position in your consumer file. 
 `--line` and `--column` are one-based source coordinates. Columns count UTF-8 bytes, as Go source diagnostics do, and cannot split a Unicode character. The client converts positions to LSP's zero-based UTF-16 coordinates. `--insert` changes only the unsaved document buffer and requests information immediately after the inserted text. It never writes a probe into source or saves returned completion edits.
 
 Use a context file inside the consumer workspace, including when symlinks are resolved. The buffer limit is 2 MiB, including inserted text. Multiline insertion is supported. Keep the buffer appropriate to a real Go expression or declaration; gopls decides which semantic results exist at that position.
+
+## Keep editor and agent answers current
+
+Use the consumer's selected framework version and generated output together.
+Regenerate with that version's CLI after changing declarations or upgrading the
+module, then use `generate --check` to verify output. Add `--field-docs` to both
+commands when the project opts into managed notices on handwritten model fields.
+Without that flag, those handwritten notices are neither updated nor checked.
+
+Generated query fields, draft methods, projection selectors, model change fields,
+extension slots, JSON property selectors, transport validation fields and
+configuration keys retain original field help from their Go declarations.
+Configuration help follows nested groups, including imported settings types.
+Original help is separate from generated getter/mutator notices and does not
+become an OpenAPI or client schema description.
+
+Inspect the public symbol in the actual consumer before using a remembered API.
+For example, stored fields use `query.Value(field)` and `query.Sum(field)`;
+computed expressions retain their own `Value` method. The
+[typed field migration table](typed-field-computations.md) records the exact
+changes. Private query-engine helpers and dated blueprint examples are not
+consumer APIs. Current guides describe supported behavior; dated acceptance
+records prove only their recorded source revision.
+
+Use `make fmt` and `make fmt-check` in this checkout for the selected Go SDK's
+`gofmt`. Formatting does not regenerate declarations, migrate API calls, or add and
+remove imports. Use the language server for semantic answers and generation for derived
+APIs. The agent command returns completion edits as data; it does not apply
+suggestions or offer a formatting action.
 
 ## Results and process ownership
 

@@ -38,6 +38,10 @@ type MemberScopedFieldSet[FoundryScope any] struct {
 	// Email describes recovery_members.email.
 	Email foundryquery.TextField[FoundryScope, string]
 	// EmailRevision describes recovery_members.email_revision.
+	//
+	// EmailRevision is managed by memberHooks. It changes with Email and is never
+	// restored with an old address; DTOs should not expose this persistence value.
+	//
 	EmailRevision foundryquery.ScalarField[FoundryScope, challenge.Revision[Member]]
 	// Password describes recovery_members.password.
 	// Sensitive stored password hash: typed persistence uses password.Codec; ordinary formatting and JSON are redacted. Automatic audit values are redacted and cursor/identity keys are rejected. Compare-and-swap with the stored Hash; verify plaintext with password.Hasher.Check rather than SQL equality.
@@ -67,6 +71,10 @@ type MemberNullableFieldSet[FoundryScope any] struct {
 	// Email describes recovery_members.email.
 	Email foundryquery.NullableTextField[FoundryScope, string]
 	// EmailRevision describes recovery_members.email_revision.
+	//
+	// EmailRevision is managed by memberHooks. It changes with Email and is never
+	// restored with an old address; DTOs should not expose this persistence value.
+	//
 	EmailRevision foundryquery.NullableField[FoundryScope, challenge.Revision[Member]]
 	// Password describes recovery_members.password.
 	// Sensitive stored password hash: typed persistence uses password.Codec; ordinary formatting and JSON are redacted. Automatic audit values are redacted and cursor/identity keys are rejected. Compare-and-swap with the stored Hash; verify plaintext with password.Hasher.Check rather than SQL equality.
@@ -853,17 +861,26 @@ func (d MemberDraft) UnsetEmail() MemberDraft {
 }
 
 // EmailRevision returns the typed mutation state for email_revision.
+//
+// EmailRevision is managed by memberHooks. It changes with Email and is never
+// restored with an old address; DTOs should not expose this persistence value.
 func (d MemberDraft) EmailRevision() foundryvalue.Optional[challenge.Revision[Member]] {
 	return d.fieldEmailRevision
 }
 
 // SetEmailRevision returns a new draft with email_revision explicitly set.
+//
+// EmailRevision is managed by memberHooks. It changes with Email and is never
+// restored with an old address; DTOs should not expose this persistence value.
 func (d MemberDraft) SetEmailRevision(v challenge.Revision[Member]) MemberDraft {
 	d.fieldEmailRevision = foundryvalue.Set(v)
 	return d
 }
 
 // UnsetEmailRevision omits email_revision without requesting a zero or null write.
+//
+// EmailRevision is managed by memberHooks. It changes with Email and is never
+// restored with an old address; DTOs should not expose this persistence value.
 func (d MemberDraft) UnsetEmailRevision() MemberDraft {
 	d.fieldEmailRevision = foundryvalue.Optional[challenge.Revision[Member]]{}
 	return d
@@ -928,6 +945,10 @@ type MemberFieldChanges struct {
 	// Email retains the typed change for email.
 	Email lifecycle.FieldChange[string]
 	// EmailRevision retains the typed change for email_revision.
+	//
+	// EmailRevision is managed by memberHooks. It changes with Email and is never
+	// restored with an old address; DTOs should not expose this persistence value.
+	//
 	EmailRevision lifecycle.FieldChange[challenge.Revision[Member]]
 	// Password retains the typed change for password.
 	Password lifecycle.FieldChange[password.Hash]

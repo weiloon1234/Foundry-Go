@@ -4,7 +4,7 @@ Generated model queries expose numbered, count-free simple and model-owned curso
 
 ## Numbered pages
 
-This is the database counterpart of Laravel's `paginate`: Foundry computes the offset, matching total, page count and typed items. Automatic HTTP request parsing and response links are planned in [milestone 08](../../blueprint/08-http-validation-and-responses.md#automatic-pagination-at-the-http-boundary). The same database API remains usable from CLI and worker code.
+This is the database counterpart of Laravel's `paginate`: Foundry computes the offset, matching total, page count and typed items. [HTTP pagination adapters](http-pagination.md) parse request parameters and build response links through these typed page contracts. The same database API remains usable from CLI and worker code.
 
 ```go
 page, err := models.QueryUsers().

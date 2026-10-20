@@ -80,7 +80,6 @@ func validSigningKeyID(id SigningKeyID) bool {
 	return true
 }
 
-// Purpose framing is shared by cookie and future signed-route adapters.
 func signingMAC(key secret.String, purpose, content string) []byte {
 	mac := hmac.New(sha256.New, []byte(key.Reveal()))
 	fmt.Fprintf(mac, "%d:", len(purpose))

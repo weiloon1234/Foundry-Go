@@ -43,8 +43,7 @@ metadata. `Router.ErrorDefinitions()` returns a deterministic catalog containing
 built-in and endpoint-declared errors. Returned metadata is owned; editing a
 snapshot cannot change runtime behavior. Duplicate codes in one endpoint and
 conflicting definitions across endpoints reject router assembly. Multiple
-endpoints can reuse the same declaration. The final OpenAPI and TypeScript
-exporters will consume these contracts in milestone 21.
+endpoints can reuse the same declaration. [OpenAPI and TypeScript exporters](client-contracts.md) publish these registered error contracts.
 
 In locale-enabled applications, a declared error's public message can be
 translated. `SeatUnavailable.MessageDefinition()` returns its parameter-free
@@ -59,7 +58,7 @@ passed directly to `WriteError`. Public text must be nonblank, valid UTF-8,
 NUL-free and at most 16KiB. Built-in codes are reserved. Declare only text that
 is appropriate to expose, including for explicitly declared 5xx failures.
 Arbitrary internal Go errors still use the generic internal-error response.
-Localized message keys integrate in milestone 20.
+[Localized error messages](localization.md) resolve declared message keys through the request locale and shared catalog.
 
 Raw handlers may call `WriteError` explicitly with a valid declaration. Global
 wrappers outside `Router` and raw handlers have no typed endpoint contract;

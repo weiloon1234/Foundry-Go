@@ -818,6 +818,9 @@ func ArticleRelations() ArticleRelationSet {
 // Article.DefineExtensions returns it; a zero entry selects that slot kind's defaults, except that attachment slots require a Disk.
 type ArticleExtensionSet struct {
 	// Title configures translated text stored in foundry_model_translations as field "title", one row per locale.
+	//
+	// Title is the localized article heading shown to readers.
+	//
 	Title translations.Options
 	// Summary configures translated text stored in foundry_model_translations as field "summary", one row per locale.
 	Summary translations.Options
@@ -833,6 +836,9 @@ type ArticleExtensionSet struct {
 // Bind managers once in a constructor with From(runtime); an unbound descriptor reports fault.Missing when used.
 type ArticleExtensionSlots struct {
 	// Title describes Article.Title: translated text stored in foundry_model_translations as field "title", one row per locale.
+	//
+	// Title is the localized article heading shown to readers.
+	//
 	Title translations.TextSlot[Article, model.ID[Article]]
 	// Summary describes Article.Summary: translated text stored in foundry_model_translations as field "summary", one row per locale.
 	Summary translations.TextSlot[Article, model.ID[Article]]

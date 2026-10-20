@@ -174,8 +174,7 @@ missing children and duplicate direct children fail Build. Overlapping branches
 write each leaf once, preserving leaf levels, groups and redaction. Build performs
 no file I/O; startup appends and shutdown closes owned leaves after borrowers drain.
 `WithLogger` replaces the default with a borrowed logger; other explicitly
-configured channels retain ownership. File sinks automatically rotate daily (UTC)
-or at 20 MiB and retain at most 14 archives for 14 days. See
+configured channels retain ownership. File sinks automatically rotate daily in the sink timezone or at 20 MiB and retain at most 14 archives for 14 days. See
 [logging](logging.md) for typed overrides, cleanup timing and ownership.
 
 Only configured services acquire resources. HTTP transports, mailers, brokers,

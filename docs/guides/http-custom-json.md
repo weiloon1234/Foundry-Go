@@ -57,5 +57,4 @@ An executable reports its package as `main`, including inside generic arguments.
 The custom-contract inclusion boundary preserves the generated source identity
 through a schema alias while keeping the factory graph intact. Only executable
 namespace tokens may differ; model names, purpose names, generic structure and
-other imported names must still match. DTO roots remain concrete non-generic
-structs. New generator/runtime coverage is written for milestone 10 and unrun.
+other imported names must still match. DTO roots may use [annotated generic declarations](generic-dtos.md); register a descriptor for each concrete instantiation. Generator and runtime tests cover custom codec identity, native shape validation and generic ownership.

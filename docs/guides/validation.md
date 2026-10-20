@@ -240,7 +240,7 @@ explicit wrappers and value-level bound rules.
 Instants compare in UTC without monotonic readings; calendar/local values compare
 in their own calendar order without choosing an application timezone. Native
 `time.Time` is also supported within the framework's year range. Nanoseconds are
-retained in comparisons and metadata; a future client must not reduce these
+retained in comparisons and metadata; clients must not reduce these
 checks to JavaScript Date's millisecond precision. Bound rules capture a declared
 value and do not read the current clock.
 

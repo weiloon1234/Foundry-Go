@@ -40,6 +40,11 @@ var foundryExportOptionsJSON = sync.OnceValue(func() foundrycontract.JSON[Export
 // ExportOptionsValidationFieldSet retains concrete DTO and value types for validation.
 type ExportOptionsValidationFieldSet struct {
 	// ByteOrderMark validates the declared JSON property "byte_order_mark".
+	//
+	// ByteOrderMark prefixes CSV with a UTF-8 byte-order mark so spreadsheet
+	// programs that guess legacy encodings open non-ASCII text correctly. It
+	// is rejected for XLSX, whose XML declares its encoding.
+	//
 	ByteOrderMark foundryvalidation.Field[ExportOptions, bool]
 	// Format validates the declared JSON property "format".
 	Format foundryvalidation.Field[ExportOptions, ExportFormat]

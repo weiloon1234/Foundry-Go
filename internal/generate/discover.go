@@ -48,6 +48,8 @@ type field struct {
 	timestamp               string
 	softDelete              bool
 	position                token.Position
+	help                    fieldHelp
+	jsonPaths               []*jsonPathNode
 }
 type enum struct {
 	name   string
@@ -77,6 +79,7 @@ type metadata struct {
 }
 
 func discover(p *packageInput) (metadata, error) {
+	defer func() { p.documentation = nil }()
 	var result metadata
 	for _, file := range p.files {
 		for _, decl := range file.syntax.Decls {
@@ -228,6 +231,9 @@ func discover(p *packageInput) (metadata, error) {
 			owners[m.extensionOwner] = true
 		}
 		markEnumFields(m.fields, enums)
+		if err := p.resolveJSONFieldPaths(m.name, m.fields); err != nil {
+			return result, err
+		}
 		symbols := []string{m.name + "FieldSet", m.name + "Fields", m.name + "ScopedFieldSet", m.name + "NullableFieldSet", m.name + "FieldsAt", m.name + "NullableFieldsAt", m.name + "Draft", m.name + "UpdateFromBuilder", "Update" + m.name + "From", m.name + "DeleteUsingBuilder", "Delete" + m.name + "Using", m.name + "InsertFromBuilder", "Insert" + m.name + "From", m.name + "Query", m.name + "LockedQuery", m.name + "FieldChanges", m.name + "Changes", m.name + "Hooks", m.name + "Observer", "New" + m.name + "Observer", "Register" + m.name + "Observer", m.name + "RetrievalHooks", m.name + "RetrievalObserver", "New" + m.name + "RetrievalObserver", "Register" + m.name + "RetrievalObserver", "Compare" + m.name, "foundry" + m.name + "Snapshot", m.query}
 		symbols = append(symbols, m.name+"AuditPolicy", m.name+"AuditFieldSet", m.name+"AuditFields", m.name+"Auditing")
 		if len(m.extensions) > 0 {
@@ -256,11 +262,14 @@ func discover(p *packageInput) (metadata, error) {
 		}
 	}
 	for i := range result.projections {
-		p := &result.projections[i]
-		markEnumFields(p.fields, enums)
-		for _, symbol := range projectionSymbols(p.name) {
+		projection := &result.projections[i]
+		markEnumFields(projection.fields, enums)
+		if err := p.resolveJSONFieldPaths(projection.name, projection.fields); err != nil {
+			return result, err
+		}
+		for _, symbol := range projectionSymbols(projection.name) {
 			if names[symbol] {
-				return result, fmt.Errorf("%s: duplicate generated symbol %s", p.position, symbol)
+				return result, fmt.Errorf("%s: duplicate generated symbol %s", projection.position, symbol)
 			}
 			names[symbol] = true
 		}
@@ -283,6 +292,11 @@ func discover(p *packageInput) (metadata, error) {
 		}
 		suffixes := []string{"Descriptor"}
 		if declaration.source == "form" {
+			var err error
+			declaration.fieldHelp, err = p.validationHelp(declaration.typ, declaration.validationProperties())
+			if err != nil {
+				return result, err
+			}
 			suffixes = append(suffixes, "ValidationFields", "ValidationFieldSet")
 		}
 		for _, suffix := range suffixes {
@@ -312,6 +326,11 @@ func discover(p *packageInput) (metadata, error) {
 	for i := range result.multipart {
 		declaration := &result.multipart[i]
 		if err := resolveMultipartFields(p, declaration, models); err != nil {
+			return result, err
+		}
+		var err error
+		declaration.fieldHelp, err = p.validationHelp(declaration.typ, declaration.validationProperties())
+		if err != nil {
 			return result, err
 		}
 		for _, suffix := range []string{"Descriptor", "ValidationFields", "ValidationFieldSet"} {
@@ -509,7 +528,7 @@ func discoverModel(p *packageInput, spec *ast.TypeSpec, named *types.Named, args
 		if tag["name"] != "" {
 			return m, p.diagnostic(v.Pos(), "foundry:\"name=...\" applies only to extension slot fields; use column=name for a persisted field")
 		}
-		f, err := discoverValueField(p, v, tag)
+		f, err := discoverValueField(p, named, v, tag)
 		if err != nil {
 			return m, err
 		}
@@ -568,7 +587,7 @@ func discoverModel(p *packageInput, spec *ast.TypeSpec, named *types.Named, args
 	return m, nil
 }
 
-func discoverValueField(p *packageInput, v *types.Var, tag map[string]string) (field, error) {
+func discoverValueField(p *packageInput, owner *types.Named, v *types.Var, tag map[string]string) (field, error) {
 	f := field{name: v.Name(), column: tag["column"], typ: v.Type(), base: v.Type(), databaseDefault: tag["default"] == "database", position: p.fset.Position(v.Pos())}
 	if f.column == "" {
 		f.column = snake(v.Name())
@@ -585,7 +604,13 @@ func discoverValueField(p *packageInput, v *types.Var, tag map[string]string) (f
 		return f, p.diagnostic(v.Pos(), err.Error())
 	}
 	f.kind = kind
-	return f, nil
+	reader := p.sourceDocumentation()
+	source, err := reader.structure(owner)
+	if err != nil {
+		return f, err
+	}
+	f.help, err = reader.help(source, v.Name())
+	return f, err
 }
 
 func passwordHash(typ types.Type) bool {

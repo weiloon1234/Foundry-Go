@@ -66,8 +66,7 @@ flushes each chunk once it has been accepted against the declared length and
 byte limit; a flushed prefix can still be aborted by a later failure, never
 completed early. Declare the route's `WithTimeout` (see
 [typed endpoints](http-endpoints.md)) for streams that outlive the kernel
-`RequestTimeout`. Storage-backed adapters belong to milestone 11; realtime
-protocols belong to 14–15.
+`RequestTimeout`. [Storage-backed adapters](storage.md) use owned readers and explicitly selected disks. [Realtime protocols](websocket.md) have separate connection and delivery contracts.
 
 ## Server-sent events
 

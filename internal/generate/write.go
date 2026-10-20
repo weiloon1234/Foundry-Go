@@ -204,6 +204,11 @@ func checkInput(p *packageInput, plan writePlan) error {
 			return fmt.Errorf("source %s changed during generation; retry", p.displayName(file.name))
 		}
 	}
+	for _, input := range p.documentationInputs {
+		if err := checkDocumentationInput(input); err != nil {
+			return err
+		}
+	}
 	for name, old := range plan.before {
 		current, err := readWithin(p.dir, name)
 		if err != nil {

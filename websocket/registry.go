@@ -203,7 +203,7 @@ func NewRegistry(registrations ...Registration) (*Registry, error) {
 	return r, nil
 }
 
-// Channels returns deterministic owned contract snapshots. Milestone21 exporters
+// Channels returns deterministic owned contract snapshots. Contract exporters
 // consume these descriptors; no second payload or room schema is maintained.
 func (r *Registry) Channels() []ChannelInfo {
 	if r == nil {

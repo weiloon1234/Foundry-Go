@@ -6,9 +6,11 @@ registrations. Start with `application.New(settings)` and the existing
 [configured consumer](consumer-startup-acceptance.md), then follow the
 [complete typed API workflow](typed-api-workflow.md) for authenticated database work.
 
-The [September 27 readiness review](final-readiness-20260927.md) accepts the current
-framework for team boilerplate development, with full verification, races and
-independent package consumption. It records supported scope and distribution steps.
+Use the [master status](../../blueprint/00-master-architecture-and-parity.md) and
+current guides to select delivered APIs. The
+[September 27 readiness review](final-readiness-20260927.md) records verification,
+races and independent package consumption for its reviewed revision. Distribution
+still follows the release checks for the source you intend to publish.
 
 Set `application.Settings.TimeZone` for the team's calendar defaults (UTC when
 omitted). Date helpers, schedules, logs and report presentation share it; see
@@ -81,7 +83,7 @@ printf '%s\n' '// Package transport owns public request and response contracts.'
 go tool foundry make model Widget --table widgets --dir ./models
 go tool foundry make dto WidgetResponse --dir ./transport
 # Add domain fields and handler behavior to the handwritten files.
-go tool foundry generate --recursive --dir .
+go tool foundry generate --recursive --field-docs --dir .
 go mod tidy
 go test ./...
 ```
@@ -95,12 +97,11 @@ are required. Select persistent session/token services for production authentica
 
 Keep generated output and `.foundry-gen.json` ownership manifests alongside their
 declarations. Regenerate after declaration or framework changes. A failed
-generation check lists each stale file and whether its content, comments,
-formatting, managed field notes or ownership manifest differ. Add these checks
+generation check lists each stale file and whether its content, comments, formatting or ownership manifest differ. This workflow opts into `--field-docs`, so it also refreshes and checks managed notices in handwritten models. Without that flag, handwritten notices are left untouched. Add these checks
 to the boilerplate's own CI, together with its configured integration/client tests:
 
 ```sh
-go tool foundry generate --recursive --check --dir .
+go tool foundry generate --recursive --field-docs --check --dir .
 go vet ./...
 go test ./...
 go test -race ./...

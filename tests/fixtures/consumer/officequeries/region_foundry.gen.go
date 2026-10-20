@@ -33,6 +33,9 @@ type RegionScopedFieldSet[FoundryScope any] struct {
 	// ID describes office_regions.id.
 	ID foundryquery.ScalarField[FoundryScope, model.ID[Region]]
 	// Code describes office_regions.code.
+	//
+	// Code is the key shared by every polymorphic target type.
+	//
 	Code foundryquery.TextField[FoundryScope, string]
 	// Name describes office_regions.name.
 	Name foundryquery.TextField[FoundryScope, string]
@@ -52,6 +55,9 @@ type RegionNullableFieldSet[FoundryScope any] struct {
 	// ID describes office_regions.id.
 	ID foundryquery.NullableField[FoundryScope, model.ID[Region]]
 	// Code describes office_regions.code.
+	//
+	// Code is the key shared by every polymorphic target type.
+	//
 	Code foundryquery.NullableTextField[FoundryScope, string]
 	// Name describes office_regions.name.
 	Name foundryquery.NullableTextField[FoundryScope, string]
@@ -761,12 +767,18 @@ func (d RegionDraft) UnsetID() RegionDraft {
 }
 
 // Code returns the typed mutation state for code.
+//
+// Code is the key shared by every polymorphic target type.
 func (d RegionDraft) Code() foundryvalue.Optional[string] { return d.fieldCode }
 
 // SetCode returns a new draft with code explicitly set.
+//
+// Code is the key shared by every polymorphic target type.
 func (d RegionDraft) SetCode(v string) RegionDraft { d.fieldCode = foundryvalue.Set(v); return d }
 
 // UnsetCode omits code without requesting a zero or null write.
+//
+// Code is the key shared by every polymorphic target type.
 func (d RegionDraft) UnsetCode() RegionDraft { d.fieldCode = foundryvalue.Optional[string]{}; return d }
 
 // Name returns the typed mutation state for name.
@@ -791,6 +803,9 @@ type RegionFieldChanges struct {
 	// ID retains the typed change for id.
 	ID lifecycle.FieldChange[model.ID[Region]]
 	// Code retains the typed change for code.
+	//
+	// Code is the key shared by every polymorphic target type.
+	//
 	Code lifecycle.FieldChange[string]
 	// Name retains the typed change for name.
 	Name lifecycle.FieldChange[string]

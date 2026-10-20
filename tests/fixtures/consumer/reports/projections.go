@@ -10,7 +10,8 @@ import (
 
 //foundry:projection
 type UserSummary struct {
-	ID       model.ID[models.User]
+	ID model.ID[models.User]
+	// Email is the buyer contact address selected for this report.
 	Email    string `foundry:"column=contact_email"`
 	Nickname value.Nullable[string]
 	Status   models.Status

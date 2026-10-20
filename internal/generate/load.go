@@ -44,15 +44,17 @@ type packageInput struct {
 	defined  map[string]bool
 	// definedAt and methods locate handwritten declarations that generated
 	// symbols must not redeclare.
-	definedAt  map[string]token.Pos
-	methods    map[string]map[string]token.Pos
-	goNames    []string
-	fset       *token.FileSet
-	importer   types.Importer
-	types      *types.Package
-	checked    *types.Package
-	enumTypes  map[*types.Named]bool
-	unionTypes map[*types.Named]*unionDeclaration
+	definedAt           map[string]token.Pos
+	methods             map[string]map[string]token.Pos
+	goNames             []string
+	fset                *token.FileSet
+	importer            types.Importer
+	types               *types.Package
+	checked             *types.Package
+	enumTypes           map[*types.Named]bool
+	unionTypes          map[*types.Named]*unionDeclaration
+	documentation       *sourceDocumentation
+	documentationInputs []documentationInput
 }
 
 // A selected package can lack compiled exports on a fresh checkout. Analyze its
@@ -63,6 +65,7 @@ func (g *packageGraph) loadPackage(path string) (*packageInput, error) {
 	target := g.packages[path]
 	absolute := target.Dir
 	input := &packageInput{dir: absolute, path: target.ImportPath, name: target.Name, display: g.scope.display(absolute), fset: g.fset, previous: make(map[string][]byte), goNames: g.snapshot[absolute], importer: g}
+	target.GoFiles = slices.Clone(target.GoFiles)
 	sort.Strings(target.GoFiles)
 	declared := false
 	for _, name := range target.GoFiles {

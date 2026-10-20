@@ -30,9 +30,19 @@ type ChannelSettingsSinkConfigKeySet struct {
 	AddSource config.Key[ChannelSettings, bool]
 	Rotation  ChannelSettingsSinkRotationConfigKeySet
 	// TimeZone selects sink.time_zone. Set accepts temporal.ZoneName.
+	//
+	// TimeZone controls timestamps and daily rotation; empty means UTC for direct
+	// sinks and inherits the application timezone during configured assembly.
+	//
 	TimeZone config.Key[ChannelSettings, temporal.ZoneName]
-	Async    ChannelSettingsSinkAsyncConfigKeySet
-	Syslog   ChannelSettingsSinkSyslogConfigKeySet
+	//
+	// Async optionally moves destination writes to one owned bounded writer.
+	//
+	Async ChannelSettingsSinkAsyncConfigKeySet
+	//
+	// Syslog selects the daemon used by the syslog driver.
+	//
+	Syslog ChannelSettingsSinkSyslogConfigKeySet
 }
 
 // ChannelSettingsSinkRotationConfigKeySet exposes compiler-checked configuration overrides.

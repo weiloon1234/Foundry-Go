@@ -110,6 +110,9 @@ type FamilyScopedFieldSet[FoundryScope any] struct {
 	// ExpiresAt describes foundry_token_families.expires_at.
 	ExpiresAt foundryquery.OrderedField[FoundryScope, temporal.DateTime]
 	// ClientIP describes foundry_token_families.client_ip.
+	//
+	// ClientIP and UserAgent are display-only device metadata from issuance.
+	//
 	ClientIP foundryquery.NullableTextField[FoundryScope, string]
 	// UserAgent describes foundry_token_families.user_agent.
 	UserAgent foundryquery.NullableTextField[FoundryScope, string]
@@ -165,6 +168,9 @@ type FamilyNullableFieldSet[FoundryScope any] struct {
 	// ExpiresAt describes foundry_token_families.expires_at.
 	ExpiresAt foundryquery.NullableOrderedField[FoundryScope, temporal.DateTime]
 	// ClientIP describes foundry_token_families.client_ip.
+	//
+	// ClientIP and UserAgent are display-only device metadata from issuance.
+	//
 	ClientIP foundryquery.NullableTextField[FoundryScope, string]
 	// UserAgent describes foundry_token_families.user_agent.
 	UserAgent foundryquery.NullableTextField[FoundryScope, string]
@@ -1342,23 +1348,31 @@ func (d FamilyDraft) UnsetExpiresAt() FamilyDraft {
 }
 
 // ClientIP returns the typed mutation state for client_ip.
+//
+// ClientIP and UserAgent are display-only device metadata from issuance.
 func (d FamilyDraft) ClientIP() foundryvalue.Optional[foundryvalue.Nullable[string]] {
 	return d.fieldClientIP
 }
 
 // SetClientIP returns a new draft with client_ip explicitly set.
+//
+// ClientIP and UserAgent are display-only device metadata from issuance.
 func (d FamilyDraft) SetClientIP(v string) FamilyDraft {
 	d.fieldClientIP = foundryvalue.Set(foundryvalue.Of(v))
 	return d
 }
 
 // UnsetClientIP omits client_ip without requesting a zero or null write.
+//
+// ClientIP and UserAgent are display-only device metadata from issuance.
 func (d FamilyDraft) UnsetClientIP() FamilyDraft {
 	d.fieldClientIP = foundryvalue.Optional[foundryvalue.Nullable[string]]{}
 	return d
 }
 
 // ClearClientIP explicitly sets client_ip to null.
+//
+// ClientIP and UserAgent are display-only device metadata from issuance.
 func (d FamilyDraft) ClearClientIP() FamilyDraft {
 	d.fieldClientIP = foundryvalue.Set(foundryvalue.Null[string]())
 	return d
@@ -1424,6 +1438,9 @@ type FamilyFieldChanges struct {
 	// ExpiresAt retains the typed change for expires_at.
 	ExpiresAt lifecycle.FieldChange[temporal.DateTime]
 	// ClientIP retains the typed change for client_ip.
+	//
+	// ClientIP and UserAgent are display-only device metadata from issuance.
+	//
 	ClientIP lifecycle.FieldChange[foundryvalue.Nullable[string]]
 	// UserAgent retains the typed change for user_agent.
 	UserAgent lifecycle.FieldChange[foundryvalue.Nullable[string]]

@@ -6,12 +6,11 @@ explicit registrations. Foundry-Go provides infrastructure, generation and a sha
 lifecycle for HTTP, CLI, workers, scheduling and WebSockets.
 
 Use it as a Go module dependency in your team's own boilerplate. The
-[team readiness review](docs/guides/final-readiness-20260927.md), the subsequent
-[stabilization review](docs/guides/stabilization-20260929.md) and the
-[second independent review](docs/guides/second-review-20260929.md) record the
-supported scope, verification and required upgrade steps. This repository contains the
-framework and executable consumer fixtures; your application skeleton belongs
-in its own repository.
+[consumer guides](docs/guides), [compatibility policy](docs/compatibility.md) and
+[master status](blueprint/00-master-architecture-and-parity.md) describe available
+APIs, upgrade steps and verification scope. Dated reviews below retain the evidence
+for their reviewed source. This repository contains the framework and executable
+consumer fixtures; your application skeleton belongs in its own repository.
 
 ## Start a project
 
@@ -111,9 +110,11 @@ The following are not implemented:
   React/Vue form rendering. Typed descriptors, semantic hints, the shared controller
   and optional subscription adapters are available; frontends supply visual controls.
 - Token-family impersonation, a cache failover store, direct local `sendfile`,
-  lossy WebP output, and test/factory/mail/observer scaffolds. Session impersonation,
-  lossless WebP and the existing testing/factory APIs are available; see the
-  [improvement program's remaining work](docs/guides/improvement-program-20260929.md#not-delivered).
+  and test/factory/mail/observer scaffolds. Session impersonation, lossless and
+  lossy WebP, and the existing testing/factory APIs are available. See
+  [imaging](docs/guides/imaging.md) for encoding controls and native-runtime limits,
+  and [artifact scaffolds](docs/guides/developer-tooling-and-testing.md#individual-artifact-scaffolds)
+  for the available commands.
 
 These extensions do not block a team boilerplate using the delivered scope.
 Production configuration, deployment and application-specific integration/load

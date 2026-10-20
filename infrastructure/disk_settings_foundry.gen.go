@@ -77,6 +77,9 @@ type DiskSettingsCloudConfigKeySet struct {
 	// VerifyPublication selects cloud.verify_publication. Set accepts bool.
 	VerifyPublication config.Key[DiskSettings, bool]
 	// AllowHTTP selects cloud.allow_http. Set accepts bool.
+	//
+	// AllowHTTP and Compatible apply only to the s3_compatible driver.
+	//
 	AllowHTTP  config.Key[DiskSettings, bool]
 	Compatible DiskSettingsCloudCompatibleConfigKeySet
 }

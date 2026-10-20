@@ -226,7 +226,7 @@ same JSON graphs used at runtime. Router snapshots are ordered by route ID. Raw
 handlers remain in `Routes()` without acquiring guessed payload schemas.
 
 Current endpoint metadata includes JSON bodies/responses and query cardinality.
-Path/query scalar schemas reuse their typed codecs; the complete normalized client manifest remains required work. Model lookup uses the explicit binding adapter. Authorization and business validation do not follow merely from declared input types.
+Path/query scalar schemas reuse their typed codecs; the [normalized client manifest](client-contracts.md) exports the registered contracts. Model lookup uses the explicit binding adapter. Authorization and business validation do not follow merely from declared input types.
 
 ## Documentation and examples
 

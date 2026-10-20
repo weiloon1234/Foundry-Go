@@ -1,5 +1,4 @@
 // Command checkdocs checks local documentation links and repository consistency.
-// It uses only the standard library so the initial framework needs no dependencies.
 package main
 
 import (
@@ -25,11 +24,15 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Println("Documentation links, blueprint numbering, and fixture Go requirements are valid.")
+	fmt.Println("Documentation links, current guide milestone claims, blueprint numbering, and fixture Go requirements are valid.")
 }
 
 func checkRepository(root string) error {
 	var failures []error
+	completed, err := completedMilestones(root)
+	if err != nil {
+		failures = append(failures, err)
+	}
 	if err := checkBlueprints(root); err != nil {
 		failures = append(failures, err)
 	}
@@ -49,7 +52,7 @@ func checkRepository(root string) error {
 			return nil
 		}
 		if strings.HasSuffix(path, ".md") {
-			if err := checkLinks(path); err != nil {
+			if err := checkDocument(path, currentGuide(root, path), completed); err != nil {
 				failures = append(failures, err)
 			}
 		}
@@ -109,7 +112,7 @@ func goRequirement(path string) (string, error) {
 	return "", fmt.Errorf("%s: missing Go requirement", path)
 }
 
-func checkLinks(path string) error {
+func checkDocument(path string, current bool, completed map[string]bool) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return err
@@ -120,11 +123,31 @@ func checkLinks(path string) error {
 	scanner.Buffer(make([]byte, 4096), 1024*1024)
 	fence := ""
 	lineNumber := 0
+	var paragraph []string
+	paragraphLine := 0
+	flushParagraph := func() {
+		if current && len(paragraph) > 0 {
+			for _, match := range pendingMilestone.FindAllStringSubmatch(strings.Join(paragraph, " "), -1) {
+				number := match[1]
+				if number == "" {
+					number = match[2]
+				}
+				if len(number) == 1 {
+					number = "0" + number
+				}
+				if completed[number] {
+					failures = append(failures, fmt.Errorf("%s:%d: future-work claim names completed milestone %s; describe its current API or move dated evidence to a dated record", path, paragraphLine, number))
+				}
+			}
+		}
+		paragraph = nil
+	}
 	for scanner.Scan() {
 		lineNumber++
 		line := scanner.Text()
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
+			flushParagraph()
 			marker := trimmed[:3]
 			if fence == "" {
 				fence = marker
@@ -136,7 +159,16 @@ func checkLinks(path string) error {
 		if fence != "" {
 			continue
 		}
-		for _, match := range inlineLink.FindAllStringSubmatch(maskInlineCode(line), -1) {
+		masked := maskInlineCode(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			flushParagraph()
+		} else if current {
+			if len(paragraph) == 0 {
+				paragraphLine = lineNumber
+			}
+			paragraph = append(paragraph, strings.Join(strings.Fields(masked), " "))
+		}
+		for _, match := range inlineLink.FindAllStringSubmatch(masked, -1) {
 			target := strings.Trim(strings.TrimSpace(match[1]), "<>")
 			link, err := url.Parse(target)
 			if err != nil {
@@ -152,6 +184,7 @@ func checkLinks(path string) error {
 			}
 		}
 	}
+	flushParagraph()
 	if err := scanner.Err(); err != nil {
 		failures = append(failures, fmt.Errorf("%s: %w", path, err))
 	}

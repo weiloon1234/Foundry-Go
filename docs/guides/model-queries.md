@@ -98,7 +98,14 @@ Partial reads use [declared projection records](model-projections.md), which hav
 
 ## Current limits and verification
 
-This guide covers the read portion of milestone 05. [Model writes](model-writes.md) provide create/update/delete and required/default mutation validation; [pagination](model-pagination.md) provides numbered, simple and cursor model pages. Relations, computed aggregates, declared projections and advanced query composition are described in [milestone 06](../../blueprint/06-relations-and-advanced-queries.md), with current verification status in the master roadmap. Lifecycle integration remains milestone 07 work. Raw parameterized SQL remains available through `database.Executor`.
+[Model writes](model-writes.md) provide create/update/delete and required/default
+mutation validation. [Pagination](model-pagination.md), [relations](model-relations.md),
+[aggregates](model-aggregates.md) and [projections](model-projections.md) share typed
+query declarations. Complete model reads run declared
+[retrieval callbacks](model-retrieval.md); scalar and DTO projections do not run
+model retrieval callbacks. The [master roadmap](../../blueprint/00-master-architecture-and-parity.md)
+owns verification status. Raw parameterized SQL remains available through
+`database.Executor`.
 
 Compiler tests cover quoting, placeholder ordering, logical grouping, literal substring escaping, cloned bindings, resource bounds and concurrent derivation. Consumer compile-failure assertions include wrong typed `Find` keys after fluent derivation. Real PostgreSQL tests verify complete user/natural-key/decimal model hydration, nullable/self-reference IDs, empty results, filtered lookup, selected-window aggregates, early streaming exit, cancellation and malformed-row rejection. Real gopls checks inspect generated and promoted query methods in the consumer workspace.
 

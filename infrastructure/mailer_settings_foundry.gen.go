@@ -29,6 +29,9 @@ type MailerSettingsConfigKeySet struct {
 // MailerSettingsConfigConfigKeySet exposes compiler-checked configuration overrides.
 type MailerSettingsConfigConfigKeySet struct {
 	// From selects config.from. Set accepts email.Address.
+	//
+	// From supplies Mailer.Message; explicit NewMessage senders are never replaced.
+	//
 	From config.Key[MailerSettings, email.Address]
 	// MaxActive selects config.max_active. Set accepts int.
 	MaxActive config.Key[MailerSettings, int]
@@ -39,6 +42,10 @@ type MailerSettingsConfigConfigKeySet struct {
 	// Timeout selects config.timeout. Set accepts time.Duration.
 	Timeout config.Key[MailerSettings, time.Duration]
 	// MessageIDDomain selects config.message_id_domain. Set accepts string.
+	//
+	// MessageIDDomain is the right-hand side of generated Message-ID headers.
+	// Empty uses each message's sender domain.
+	//
 	MessageIDDomain config.Key[MailerSettings, string]
 }
 

@@ -14,7 +14,10 @@ import (
 
 // UserSummaryFieldSet exposes the declared result fields and their exact value types.
 type UserSummaryFieldSet struct {
-	ID       foundryquery.ProjectionField[UserSummary, model.ID[models.User]]
+	ID foundryquery.ProjectionField[UserSummary, model.ID[models.User]]
+	//
+	// Email is the buyer contact address selected for this report.
+	//
 	Email    foundryquery.ProjectionField[UserSummary, string]
 	Nickname foundryquery.ProjectionField[UserSummary, foundryvalue.Nullable[string]]
 	Status   foundryquery.ProjectionField[UserSummary, models.Status]
@@ -59,7 +62,10 @@ func UserSummaryProjection() foundryquery.ProjectionDefinition[UserSummary] {
 
 // UserSummarySelection requires a type-compatible expression for every result field.
 type UserSummarySelection[FoundryScope any] struct {
-	ID       foundryquery.Expression[FoundryScope, model.ID[models.User]]
+	ID foundryquery.Expression[FoundryScope, model.ID[models.User]]
+	//
+	// Email is the buyer contact address selected for this report.
+	//
 	Email    foundryquery.Expression[FoundryScope, string]
 	Nickname foundryquery.Expression[FoundryScope, foundryvalue.Nullable[string]]
 	Status   foundryquery.Expression[FoundryScope, models.Status]
@@ -94,6 +100,8 @@ func (p UserSummaryProject[FoundryScope]) SelectID(v foundryquery.Expression[Fou
 }
 
 // SelectEmail supplies the typed expression for contact_email.
+//
+// Email is the buyer contact address selected for this report.
 func (p UserSummaryProject[FoundryScope]) SelectEmail(v foundryquery.Expression[FoundryScope, string]) UserSummaryProject[FoundryScope] {
 	p.selection.Email = v
 	return p
@@ -145,6 +153,8 @@ func (p UserSummaryCorrelatedProject[FoundryOuter, FoundryInner]) SelectID(v fou
 }
 
 // SelectEmail supplies the typed expression for contact_email.
+//
+// Email is the buyer contact address selected for this report.
 func (p UserSummaryCorrelatedProject[FoundryOuter, FoundryInner]) SelectEmail(v foundryquery.Expression[foundryquery.Correlation[FoundryOuter, FoundryInner], string]) UserSummaryCorrelatedProject[FoundryOuter, FoundryInner] {
 	p.selection.Email = v
 	return p
@@ -196,6 +206,8 @@ func (p UserSummaryTransactionProject[FoundryScope]) SelectID(v foundryquery.Exp
 }
 
 // SelectEmail supplies the typed expression for contact_email.
+//
+// Email is the buyer contact address selected for this report.
 func (p UserSummaryTransactionProject[FoundryScope]) SelectEmail(v foundryquery.Expression[FoundryScope, string]) UserSummaryTransactionProject[FoundryScope] {
 	p.selection.Email = v
 	return p
@@ -247,6 +259,8 @@ func (p UserSummaryTransactionCorrelatedProject[FoundryOuter, FoundryInner]) Sel
 }
 
 // SelectEmail supplies the typed expression for contact_email.
+//
+// Email is the buyer contact address selected for this report.
 func (p UserSummaryTransactionCorrelatedProject[FoundryOuter, FoundryInner]) SelectEmail(v foundryquery.Expression[foundryquery.TransactionCorrelation[FoundryOuter, FoundryInner], string]) UserSummaryTransactionCorrelatedProject[FoundryOuter, FoundryInner] {
 	p.selection.Email = v
 	return p
@@ -274,6 +288,9 @@ type UserSummaryScopedFieldSet[FoundryScope any] struct {
 	// ID describes UserSummary.id.
 	ID foundryquery.ScalarField[FoundryScope, model.ID[models.User]]
 	// Email describes UserSummary.contact_email.
+	//
+	// Email is the buyer contact address selected for this report.
+	//
 	Email foundryquery.TextField[FoundryScope, string]
 	// Nickname describes UserSummary.nickname.
 	Nickname foundryquery.NullableTextField[FoundryScope, string]
@@ -296,6 +313,9 @@ type UserSummaryNullableFieldSet[FoundryScope any] struct {
 	// ID describes UserSummary.id.
 	ID foundryquery.NullableField[FoundryScope, model.ID[models.User]]
 	// Email describes UserSummary.contact_email.
+	//
+	// Email is the buyer contact address selected for this report.
+	//
 	Email foundryquery.NullableTextField[FoundryScope, string]
 	// Nickname describes UserSummary.nickname.
 	Nickname foundryquery.NullableTextField[FoundryScope, string]

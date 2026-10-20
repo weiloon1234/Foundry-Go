@@ -5,8 +5,7 @@ It uses the existing model-first guards and providers. The
 [consumer example](../../tests/fixtures/consumer/authenticating/sessions.go)
 compiles independently of the framework. Focused race tests and full native
 regression with local PostgreSQL/Redis passed. [Browser integration](browser-sessions.md)
-also passed focused races and full native regression. Password and
-MFA verification remain separate work; this guide describes credential persistence.
+also passed focused races and full native regression. This guide describes credential persistence. [Password login](password-hashing.md) and [MFA verification](mfa.md) compose with it through explicit adapters.
 
 ## Construct once, register explicitly
 

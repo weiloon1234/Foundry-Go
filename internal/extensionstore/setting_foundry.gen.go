@@ -104,6 +104,10 @@ type SettingScopedFieldSet[FoundryScope any] struct {
 	// IsPublic describes foundry_settings.is_public.
 	IsPublic foundryquery.ScalarField[FoundryScope, bool]
 	// PresentationDeclared describes foundry_settings.presentation_declared.
+	//
+	// PresentationDeclared is true while the presentation follows the key's
+	// declaration; Configure sets it false to keep an explicit presentation.
+	//
 	PresentationDeclared foundryquery.ScalarField[FoundryScope, bool]
 	// CreatedAt describes foundry_settings.created_at.
 	// Managed creation timestamp: persistence supplies the owning application clock when omitted, after before-write hooks and before field mutators. An explicit input is preserved.
@@ -155,6 +159,10 @@ type SettingNullableFieldSet[FoundryScope any] struct {
 	// IsPublic describes foundry_settings.is_public.
 	IsPublic foundryquery.NullableField[FoundryScope, bool]
 	// PresentationDeclared describes foundry_settings.presentation_declared.
+	//
+	// PresentationDeclared is true while the presentation follows the key's
+	// declaration; Configure sets it false to keep an explicit presentation.
+	//
 	PresentationDeclared foundryquery.NullableField[FoundryScope, bool]
 	// CreatedAt describes foundry_settings.created_at.
 	// Managed creation timestamp: persistence supplies the owning application clock when omitted, after before-write hooks and before field mutators. An explicit input is preserved.
@@ -1237,17 +1245,26 @@ func (d SettingDraft) UnsetIsPublic() SettingDraft {
 }
 
 // PresentationDeclared returns the typed mutation state for presentation_declared.
+//
+// PresentationDeclared is true while the presentation follows the key's
+// declaration; Configure sets it false to keep an explicit presentation.
 func (d SettingDraft) PresentationDeclared() foundryvalue.Optional[bool] {
 	return d.fieldPresentationDeclared
 }
 
 // SetPresentationDeclared returns a new draft with presentation_declared explicitly set.
+//
+// PresentationDeclared is true while the presentation follows the key's
+// declaration; Configure sets it false to keep an explicit presentation.
 func (d SettingDraft) SetPresentationDeclared(v bool) SettingDraft {
 	d.fieldPresentationDeclared = foundryvalue.Set(v)
 	return d
 }
 
 // UnsetPresentationDeclared omits presentation_declared without requesting a zero or null write.
+//
+// PresentationDeclared is true while the presentation follows the key's
+// declaration; Configure sets it false to keep an explicit presentation.
 func (d SettingDraft) UnsetPresentationDeclared() SettingDraft {
 	d.fieldPresentationDeclared = foundryvalue.Optional[bool]{}
 	return d
@@ -1318,6 +1335,10 @@ type SettingFieldChanges struct {
 	// IsPublic retains the typed change for is_public.
 	IsPublic lifecycle.FieldChange[bool]
 	// PresentationDeclared retains the typed change for presentation_declared.
+	//
+	// PresentationDeclared is true while the presentation follows the key's
+	// declaration; Configure sets it false to keep an explicit presentation.
+	//
 	PresentationDeclared lifecycle.FieldChange[bool]
 	// CreatedAt retains the typed change for created_at.
 	CreatedAt lifecycle.FieldChange[temporal.DateTime]

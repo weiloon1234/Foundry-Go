@@ -302,6 +302,8 @@ func consumerEditorProbes() []consumerEditorProbe {
 		{"attachment-localized-batch", "profiles/profile.go", "Localized.", "LoadLocalized", []string{"LoadLocalized", "ForLocale", "Resolve"}, []string{"Reference", "LocalizedBatch", "error"}, "/attachments/localized.go"},
 		{"metadata-typed-value", "profiles/profile.go", "PreferencesKey.", "Set", []string{"Set", "Get", "Load", "Matching"}, []string{"Reference", "Preferences", "error"}, "/metadata/values.go"},
 		{"translation-typed-locale", "profiles/profile.go", "Label.", "Set", []string{"Set", "Get", "Resolve", "Load"}, []string{"Reference", "LocaleID", "string", "error"}, "/translations/write.go"},
+		{"settings-transactional-default", "profiles/profile.go", "PageSize.", "EnsureIn", []string{"EnsureIn", "Ensure", "GetOr"}, []string{"uint32", "database.Tx", "savepoint", "Parent rollback"}, "/settings/values.go"},
+		{"geographic-spherical-distance", "scalarqueries/geographic_test.go", "query.", "SphericalDistance", []string{"SphericalDistance", "NewGeographicPoint"}, []string{"GeographicPoint", "Expression["}, "/database/query/geographic_expression.go"},
 		{"settings-typed-default", "profiles/profile.go", "PageSize.", "GetOr", []string{"GetOr", "Set", "Ensure", "Configure"}, []string{"uint32", "error"}, "/settings/values.go"},
 		{"image-immutable-plan", "profiles/profile.go", "imaging.NewPlan().", "Fill", []string{"Fill", "Resize", "Format", "Crop"}, []string{"int", "bool", "Plan"}, "/imaging/plan.go"},
 		{"image-positioned-sizing", "profiles/images.go", "\t\t", "Contain", []string{"FillAt", "Pad", "Contain", "Canvas", "RotateDegrees"}, []string{"int", "NRGBA", "Position", "Plan"}, "/imaging/geometry.go"},

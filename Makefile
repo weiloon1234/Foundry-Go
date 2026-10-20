@@ -75,7 +75,7 @@ gopls-install:
 
 agent-smoke: generate-check
 	@test -n "$$FOUNDRY_TEST_GOPLS" || { printf 'Set FOUNDRY_TEST_GOPLS to an existing approved gopls executable.\n'; exit 1; }
-	$(GO) test -timeout=$(TEST_TIMEOUT) -count=1 -v ./internal/agent -run '^(TestRealGoplsConsumer|TestRealGoplsFieldBehaviorDocumentation)$$'
+	$(GO) test -timeout=$(TEST_TIMEOUT) -count=1 -v ./internal/agent -run '^(TestRealGoplsConsumer|TestRealGoplsFieldBehaviorDocumentation|TestRealGoplsStoredFieldCapabilities)$$'
 
 test-redis:
 	FOUNDRY_TEST_REDIS_REQUIRED=1 $(GO) test -race -timeout=$(TEST_TIMEOUT) ./redis/... ./cache/... ./lease/... ./ratelimit/... ./pubsub/...

@@ -4,8 +4,7 @@ Consumer-startup C01 passed native full verification, configuration/generator
 races and independent compiler/editor acceptance. It adds configuration
 descriptors to the existing Go generator. Verification status is owned by the
 [master](../../blueprint/00-master-architecture-and-parity.md#consumer-startup-delivery).
-This feature derives a configuration schema; configured application/provider
-assembly is a separate continuation milestone.
+This feature derives the configuration schema consumed by [configured application assembly](application-bootstrap.md). The application registers domain declarations and constructors; the builder assembles the selected services.
 
 Declare an exported Go settings struct with `//foundry:config`. Concrete nested
 structs form groups. `config:"name"` selects the external name; absent/empty names
@@ -21,6 +20,12 @@ type Settings struct {
     SigningKey secret.String `config:"signing_key"`
 }
 ```
+
+Original leading and trailing field comments also appear on generated key
+fields, including nested groups and imported settings declarations. Completion
+and hover therefore retain deployment guidance such as default connection and
+queue selection. Edit that help on the original Go field, then regenerate. This
+Go documentation does not change the configuration schema or runtime defaults.
 
 Run `foundry generate --dir ./path/to/settings`; use `--check` in verification.
 The generator uses its existing ownership manifest, atomic publication, complete

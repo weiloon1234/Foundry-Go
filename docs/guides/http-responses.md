@@ -3,8 +3,7 @@
 **Status: response encoding and descriptor composition are available.** Focused runtime, generator and independent consumer acceptance passed, including canonical consumer checks and actual-workspace completion, hover and definition. Full repository regression verification also passed, including real PostgreSQL, actual gopls, all generated-output freshness targets and documentation checks.
 
 A generated JSON descriptor can prepare a response body while preserving the DTO
-type. Encoding checks the same normalized schema used by decoding and future
-client exporters. The framework returns bytes only after encoding and schema
+type. Encoding checks the same normalized schema used by decoding and [client exporters](client-contracts.md). The framework returns bytes only after encoding and schema
 validation succeed; a transport can then write its success headers and body.
 
 ```go
@@ -79,7 +78,7 @@ descriptor so its declared field and value rules are also checked.
 [Typed endpoints](http-endpoints.md) own HTTP status/header handling and
 [validation](validation.md); [pagination adapters](http-pagination.md) retain
 page metadata while mapping models to declared response DTOs. Use those adapters
-for ordinary handlers. OpenAPI and TypeScript export remain milestone 21 work.
+for ordinary handlers. [OpenAPI and TypeScript export](client-contracts.md) use the registered response descriptors.
 
 UUID representation checks preserve the nil UUID, following `model.ID` serialization.
 This is distinct from JSON null. Request validation and model binding decide
