@@ -198,7 +198,7 @@ func (a *Assets) serveSelection(w stdhttp.ResponseWriter, r *stdhttp.Request, se
 	}
 	prepared.file.cacheControl = cache
 	prepared.file.varyAccept = selection.varyAccept
-	if err := response.write(w, r, prepared); err != nil {
+	if err := writePreparedResponse(w, r, prepared, response.kind, response.status); err != nil {
 		logRouteFailure(r, "HTTP asset response failed", err)
 		panic(stdhttp.ErrAbortHandler)
 	}

@@ -34,8 +34,12 @@ func (d Definition[M]) validateSoftDeletes() error {
 		return nil
 	}
 	field, ok := d.modelField(d.modelDefinition.SoftDelete.Name)
-	column := slices.IndexFunc(d.modelDefinition.Columns, func(c columnData) bool { return c.Name == d.modelDefinition.SoftDelete.Name })
-	if !ok || column < 0 || !d.modelDefinition.Columns[column].Nullable || d.modelDefinition.Primary == d.modelDefinition.SoftDelete.Name || field.kind != codec.TypeDateTime || field.assignment == nil ||
+	return validateSoftDeleteField(d.modelDefinition, field.recordFieldMetadata, ok)
+}
+
+func validateSoftDeleteField(model modelDefinition, field recordFieldMetadata, declared bool) error {
+	column := slices.IndexFunc(model.Columns, func(c columnData) bool { return c.Name == model.SoftDelete.Name })
+	if !declared || column < 0 || !model.Columns[column].Nullable || model.Primary == model.SoftDelete.Name || field.kind != codec.TypeDateTime || field.assignment == nil ||
 		(field.typ != reflect.TypeFor[value.Nullable[time.Time]]() && field.typ != reflect.TypeFor[value.Nullable[temporal.DateTime]]()) {
 		return fault.New(fault.Invalid, "soft deletion requires a declared nullable instant field")
 	}

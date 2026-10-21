@@ -36,39 +36,43 @@ func JSONParameter[T any](id TypeID, argument JSON[T]) Type {
 		if err != nil || jsonModelType(reflect.TypeFor[T]()) || id != GoTypeID(argument.GoTypeName(), namedGoType(reflect.TypeFor[T]())) {
 			return Schema{}, invalidSchema()
 		}
-		old := description.Root
-		for i := range description.Types {
-			node := &description.Types[i]
-			if node.ID == old {
-				node.ID = id
-			}
-			if node.Element == old {
-				node.Element = id
-			}
-			for j := range node.Properties {
-				if node.Properties[j].Type == old {
-					node.Properties[j].Type = id
-				}
-			}
-			for j := range node.Variants {
-				if node.Variants[j].Type == old {
-					node.Variants[j].Type = id
-				}
-			}
-			if node.Key != nil && node.Key.Value.ID == old {
-				key := cloneJSONKeyInfo(*node.Key)
-				key.Value.ID = id
-				node.Key = &key
-				if node.jsonKey != nil {
-					runtime := *node.jsonKey
-					runtime.info = cloneJSONKeyInfo(key)
-					node.jsonKey = &runtime
-				}
+		return renameJSONRoot(description, id), nil
+	}}
+}
+
+func renameJSONRoot(description Schema, id TypeID) Schema {
+	old := description.Root
+	for i := range description.Types {
+		node := &description.Types[i]
+		if node.ID == old {
+			node.ID = id
+		}
+		if node.Element == old {
+			node.Element = id
+		}
+		for j := range node.Properties {
+			if node.Properties[j].Type == old {
+				node.Properties[j].Type = id
 			}
 		}
-		description.Root = id
-		return description, nil
-	}}
+		for j := range node.Variants {
+			if node.Variants[j].Type == old {
+				node.Variants[j].Type = id
+			}
+		}
+		if node.Key != nil && node.Key.Value.ID == old {
+			key := cloneJSONKeyInfo(*node.Key)
+			key.Value.ID = id
+			node.Key = &key
+			if node.jsonKey != nil {
+				runtime := *node.jsonKey
+				runtime.info = cloneJSONKeyInfo(key)
+				node.jsonKey = &runtime
+			}
+		}
+	}
+	description.Root = id
+	return description
 }
 
 // DefineGenericJSON is the generated generic DTO construction boundary. source

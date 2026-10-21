@@ -206,3 +206,25 @@ func TestSoftDeleteMetadataAndUnsupportedScopeFailExplicitly(t *testing.T) {
 		t.Fatal("distinct automatic deletion input accepted", err)
 	}
 }
+
+func TestSoftDeleteMetadataRejectsDistinctMutatorInputWithoutCallbacks(t *testing.T) {
+	calls := 0
+	field := NewNullableInputModelField("deleted_on", codec.Time(), func(r softRecord) value.Nullable[time.Time] {
+		calls++
+		return r.deleted
+	}, func(string) (time.Time, error) {
+		calls++
+		return time.Time{}, nil
+	})
+	d := Define("soft_records", "id", []Column{{Name: "id"}, {Name: "deleted_on", Nullable: true}},
+		func(database.Row) (softRecord, error) { return softRecord{}, nil }, field,
+	).WithSoftDeletes("deleted_on")
+	for range 2 {
+		if err := d.Validate(); !errors.Is(err, fault.Invalid) || !strings.HasSuffix(err.Error(), ": soft deletion cannot synthesize distinct mutator inputs") {
+			t.Fatal("soft-delete metadata accepted a distinct input or changed its diagnostic", err)
+		}
+	}
+	if calls != 0 {
+		t.Fatal("soft-delete metadata validation invoked a getter or mutator", calls)
+	}
+}

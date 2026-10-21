@@ -1,0 +1,3699 @@
+{
+  "date": "2026-10-20",
+  "scope": "Unpublished unchanged-API runtime extraction on a frozen Boss Club source snapshot; both sides use one fixed private framework replacement path.",
+  "baseline_HEAD": "e9fcb1a35038a5523bfc84735f03832f8ac1af84",
+  "implementation": [
+    "Value-owned private record codec metadata and V-only codec callbacks retain concrete model getters.",
+    "Ordinary HTTP preflight, publication and response writing retain typed handler isolation and cleanup ownership.",
+    "Ordinary JSON/validation envelopes retain concrete decoding, zero failure results and existing fast paths.",
+    "One private datatable declaration metadata owner shares structural validation; typed recursive SQL construction remains."
+  ],
+  "consumer_impact": {
+    "exported_declarations": {
+      "after_declarations": 3060,
+      "before_declarations": 3060,
+      "changed": [],
+      "equal": true,
+      "scope": "Exported syntax in the five affected packages; private struct fields excluded. Compile-fail and consumer gates separately verify typed behavior."
+    },
+    "generated_go": {
+      "files_checked": 285,
+      "changed": []
+    },
+    "consumer_source_changes": false,
+    "consumer_framework_pin_changes": false,
+    "database_or_wire_migration": false,
+    "deprecated_functions_added": false,
+    "publication": "Unpublished local-source comparison. Existing Boss Club source and framework pin were not modified."
+  },
+  "conditions": {
+    "go_version": "go version go1.27.1 darwin/arm64",
+    "logical_cpu_count": 16,
+    "memory_bytes": 68719476736,
+    "GOFLAGS": "-mod=readonly -p=2 -buildvcs=false",
+    "GOMAXPROCS": "2",
+    "source_policy": "Frozen consumer with one fixed private framework replacement path; no application tests or database execution."
+  },
+  "cold_build_seconds": {
+    "before": {
+      "count": 5,
+      "median": 285.5876887079994,
+      "minimum": 284.69310337499974,
+      "maximum": 287.2198631250003,
+      "samples": [
+        287.2198631250003,
+        285.80054050000035,
+        285.36500437499944,
+        284.69310337499974,
+        285.5876887079994
+      ]
+    },
+    "after": {
+      "count": 5,
+      "median": 282.1931723329999,
+      "minimum": 281.3346377910002,
+      "maximum": 284.1325473750003,
+      "samples": [
+        283.3427271669998,
+        282.1931723329999,
+        281.55566254099995,
+        284.1325473750003,
+        281.3346377910002
+      ]
+    },
+    "median_reduction_percent": 1.188607390730434,
+    "range_separation": true,
+    "rank_sum_permutation_two_sided_p": 0.007936507936507936,
+    "verdict": "faster"
+  },
+  "warm_build_seconds": {
+    "before": {
+      "count": 5,
+      "median": 37.442207041000074,
+      "minimum": 35.973258166999585,
+      "maximum": 38.15168670799994,
+      "samples": [
+        38.15168670799994,
+        37.68627383300009,
+        37.442207041000074,
+        36.63255170800039,
+        35.973258166999585
+      ]
+    },
+    "after": {
+      "count": 5,
+      "median": 36.497115957999995,
+      "minimum": 35.74234783300017,
+      "maximum": 37.645536041000014,
+      "samples": [
+        37.645536041000014,
+        37.179294916999424,
+        36.497115957999995,
+        35.74234783300017,
+        35.74701929099865
+      ]
+    },
+    "median_reduction_percent": 2.5241329443138394,
+    "range_separation": false,
+    "rank_sum_permutation_two_sided_p": 0.2222222222222222,
+    "verdict": "inconclusive"
+  },
+  "warm_vet_seconds": {
+    "before": {
+      "count": 5,
+      "median": 0.5020100000001548,
+      "minimum": 0.49411041699931957,
+      "maximum": 0.72134004200052,
+      "samples": [
+        0.5020100000001548,
+        0.72134004200052,
+        0.5001882919987111,
+        0.5035479590005707,
+        0.49411041699931957
+      ]
+    },
+    "after": {
+      "count": 5,
+      "median": 0.5038275830011116,
+      "minimum": 0.5013347499989322,
+      "maximum": 0.7406407910002599,
+      "samples": [
+        0.5029660000000149,
+        0.7406407910002599,
+        0.5038275830011116,
+        0.5046551659997931,
+        0.5013347499989322
+      ]
+    },
+    "median_reduction_percent": -0.3620611145109143,
+    "range_separation": false,
+    "rank_sum_permutation_two_sided_p": 0.30952380952380953,
+    "verdict": "inconclusive",
+    "verdict_note": "Subsecond observations include polling and monitoring delay."
+  },
+  "warm_race_seconds": {
+    "before": {
+      "count": 5,
+      "median": 17.343361584000377,
+      "minimum": 17.296374042000025,
+      "maximum": 25.900577165999493,
+      "samples": [
+        23.5238949579998,
+        25.900577165999493,
+        17.296374042000025,
+        17.33254954200129,
+        17.343361584000377
+      ]
+    },
+    "after": {
+      "count": 5,
+      "median": 17.1405512500005,
+      "minimum": 16.895269458000257,
+      "maximum": 24.11339654099993,
+      "samples": [
+        24.11339654099993,
+        20.359796291000748,
+        17.130568167000092,
+        17.1405512500005,
+        16.895269458000257
+      ]
+    },
+    "median_reduction_percent": 1.1693830692371399,
+    "range_separation": false,
+    "rank_sum_permutation_two_sided_p": 0.30952380952380953,
+    "verdict": "inconclusive"
+  },
+  "cache_phases": [
+    {
+      "phase": "build",
+      "before": {
+        "cache_bytes": 10010396323,
+        "cache_allocated_bytes": 10027008000,
+        "added_cache_bytes": 10010396323,
+        "seconds": 287.2198631250003,
+        "compile_count": 742,
+        "link_count": 1,
+        "vet_count": 0,
+        "fake_test_executions": 0,
+        "sampled_peak_cache_plus_temp_allocated_bytes": 22182821888
+      },
+      "after": {
+        "cache_bytes": 9941966782,
+        "cache_allocated_bytes": 9958576128,
+        "added_cache_bytes": 9941966782,
+        "seconds": 283.3427271669998,
+        "compile_count": 742,
+        "link_count": 1,
+        "vet_count": 0,
+        "fake_test_executions": 0,
+        "sampled_peak_cache_plus_temp_allocated_bytes": 21255188480
+      },
+      "retained_cache_reduction_percent": 0.6835847332315459
+    },
+    {
+      "phase": "vet",
+      "before": {
+        "cache_bytes": 10082074877,
+        "cache_allocated_bytes": 10105188352,
+        "added_cache_bytes": 71678554,
+        "seconds": 10.195702459000131,
+        "compile_count": 4,
+        "link_count": 0,
+        "vet_count": 761,
+        "fake_test_executions": 0,
+        "sampled_peak_cache_plus_temp_allocated_bytes": 10038906880
+      },
+      "after": {
+        "cache_bytes": 10012914452,
+        "cache_allocated_bytes": 10036027392,
+        "added_cache_bytes": 70947670,
+        "seconds": 10.016493999999511,
+        "compile_count": 4,
+        "link_count": 0,
+        "vet_count": 761,
+        "fake_test_executions": 0,
+        "sampled_peak_cache_plus_temp_allocated_bytes": 9970454528
+      },
+      "retained_cache_reduction_percent": 0.6859741257999818
+    },
+    {
+      "phase": "race-compile",
+      "before": {
+        "cache_bytes": 22931098566,
+        "cache_allocated_bytes": 22965129216,
+        "added_cache_bytes": 12849023689,
+        "seconds": 441.8128823749994,
+        "compile_count": 780,
+        "link_count": 16,
+        "vet_count": 0,
+        "fake_test_executions": 16,
+        "sampled_peak_cache_plus_temp_allocated_bytes": 37930401792
+      },
+      "after": {
+        "cache_bytes": 22772081319,
+        "cache_allocated_bytes": 22806122496,
+        "added_cache_bytes": 12759166867,
+        "seconds": 440.8040220419998,
+        "compile_count": 780,
+        "link_count": 16,
+        "vet_count": 0,
+        "fake_test_executions": 16,
+        "sampled_peak_cache_plus_temp_allocated_bytes": 37562228736
+      },
+      "retained_cache_reduction_percent": 0.6934567331884245
+    }
+  ],
+  "ordinary_cache_samples": {
+    "before": [
+      {
+        "bytes": 10010396323,
+        "allocated_bytes": 10027008000,
+        "files": 4785
+      },
+      {
+        "bytes": 10010396323,
+        "allocated_bytes": 10027008000,
+        "files": 4785
+      },
+      {
+        "bytes": 10010396323,
+        "allocated_bytes": 10027008000,
+        "files": 4785
+      },
+      {
+        "bytes": 10010396323,
+        "allocated_bytes": 10027008000,
+        "files": 4785
+      },
+      {
+        "bytes": 10010396323,
+        "allocated_bytes": 10027008000,
+        "files": 4785
+      }
+    ],
+    "after": [
+      {
+        "bytes": 9941966782,
+        "allocated_bytes": 9958576128,
+        "files": 4785
+      },
+      {
+        "bytes": 9941966782,
+        "allocated_bytes": 9958576128,
+        "files": 4785
+      },
+      {
+        "bytes": 9941966782,
+        "allocated_bytes": 9958576128,
+        "files": 4785
+      },
+      {
+        "bytes": 9941966782,
+        "allocated_bytes": 9958576128,
+        "files": 4785
+      },
+      {
+        "bytes": 9941966782,
+        "allocated_bytes": 9958576128,
+        "files": 4785
+      }
+    ]
+  },
+  "warm_invocations_and_growth": [
+    {
+      "side": "before",
+      "phase": "warm-build",
+      "trial": 1,
+      "sample": 1,
+      "compiler_invocations": 0,
+      "linker_invocations": 1,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "before",
+      "phase": "warm-vet",
+      "trial": 1,
+      "sample": 1,
+      "compiler_invocations": 0,
+      "linker_invocations": 0,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "before",
+      "phase": "warm-race",
+      "trial": 1,
+      "sample": 1,
+      "compiler_invocations": 0,
+      "linker_invocations": 16,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "after",
+      "phase": "warm-build",
+      "trial": 1,
+      "sample": 1,
+      "compiler_invocations": 0,
+      "linker_invocations": 1,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "after",
+      "phase": "warm-vet",
+      "trial": 1,
+      "sample": 1,
+      "compiler_invocations": 0,
+      "linker_invocations": 0,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "after",
+      "phase": "warm-race",
+      "trial": 1,
+      "sample": 1,
+      "compiler_invocations": 0,
+      "linker_invocations": 16,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "before",
+      "phase": "warm-build",
+      "trial": 2,
+      "sample": 1,
+      "compiler_invocations": 0,
+      "linker_invocations": 1,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "after",
+      "phase": "warm-build",
+      "trial": 2,
+      "sample": 1,
+      "compiler_invocations": 0,
+      "linker_invocations": 1,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "before",
+      "phase": "warm-build",
+      "trial": 3,
+      "sample": 1,
+      "compiler_invocations": 0,
+      "linker_invocations": 1,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "after",
+      "phase": "warm-build",
+      "trial": 3,
+      "sample": 1,
+      "compiler_invocations": 0,
+      "linker_invocations": 1,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "before",
+      "phase": "warm-build",
+      "trial": 4,
+      "sample": 1,
+      "compiler_invocations": 0,
+      "linker_invocations": 1,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "after",
+      "phase": "warm-build",
+      "trial": 4,
+      "sample": 1,
+      "compiler_invocations": 0,
+      "linker_invocations": 1,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "before",
+      "phase": "warm-build",
+      "trial": 5,
+      "sample": 1,
+      "compiler_invocations": 0,
+      "linker_invocations": 1,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "after",
+      "phase": "warm-build",
+      "trial": 5,
+      "sample": 1,
+      "compiler_invocations": 0,
+      "linker_invocations": 1,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "before",
+      "phase": "warm-vet",
+      "trial": 1,
+      "sample": 2,
+      "compiler_invocations": 0,
+      "linker_invocations": 0,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "before",
+      "phase": "warm-race",
+      "trial": 1,
+      "sample": 2,
+      "compiler_invocations": 0,
+      "linker_invocations": 16,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "after",
+      "phase": "warm-vet",
+      "trial": 1,
+      "sample": 2,
+      "compiler_invocations": 0,
+      "linker_invocations": 0,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "after",
+      "phase": "warm-race",
+      "trial": 1,
+      "sample": 2,
+      "compiler_invocations": 0,
+      "linker_invocations": 16,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "before",
+      "phase": "warm-vet",
+      "trial": 1,
+      "sample": 3,
+      "compiler_invocations": 0,
+      "linker_invocations": 0,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "before",
+      "phase": "warm-race",
+      "trial": 1,
+      "sample": 3,
+      "compiler_invocations": 0,
+      "linker_invocations": 16,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "after",
+      "phase": "warm-vet",
+      "trial": 1,
+      "sample": 3,
+      "compiler_invocations": 0,
+      "linker_invocations": 0,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "after",
+      "phase": "warm-race",
+      "trial": 1,
+      "sample": 3,
+      "compiler_invocations": 0,
+      "linker_invocations": 16,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "before",
+      "phase": "warm-vet",
+      "trial": 1,
+      "sample": 4,
+      "compiler_invocations": 0,
+      "linker_invocations": 0,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "before",
+      "phase": "warm-race",
+      "trial": 1,
+      "sample": 4,
+      "compiler_invocations": 0,
+      "linker_invocations": 16,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "after",
+      "phase": "warm-vet",
+      "trial": 1,
+      "sample": 4,
+      "compiler_invocations": 0,
+      "linker_invocations": 0,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "after",
+      "phase": "warm-race",
+      "trial": 1,
+      "sample": 4,
+      "compiler_invocations": 0,
+      "linker_invocations": 16,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "before",
+      "phase": "warm-vet",
+      "trial": 1,
+      "sample": 5,
+      "compiler_invocations": 0,
+      "linker_invocations": 0,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "before",
+      "phase": "warm-race",
+      "trial": 1,
+      "sample": 5,
+      "compiler_invocations": 0,
+      "linker_invocations": 16,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "after",
+      "phase": "warm-vet",
+      "trial": 1,
+      "sample": 5,
+      "compiler_invocations": 0,
+      "linker_invocations": 0,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    },
+    {
+      "side": "after",
+      "phase": "warm-race",
+      "trial": 1,
+      "sample": 5,
+      "compiler_invocations": 0,
+      "linker_invocations": 16,
+      "vet_invocations": 0,
+      "cache_growth_bytes": 0
+    }
+  ],
+  "runtime": {
+    "database/query:BenchmarkModelMetadataValidation": {
+      "before": {
+        "ns_op": {
+          "count": 5,
+          "median": 209.0,
+          "minimum": 204.1,
+          "maximum": 210.4,
+          "samples": [
+            210.4,
+            208.4,
+            209.7,
+            209.0,
+            204.1
+          ]
+        },
+        "bytes_op": {
+          "count": 5,
+          "median": 256.0,
+          "minimum": 256.0,
+          "maximum": 256.0,
+          "samples": [
+            256.0,
+            256.0,
+            256.0,
+            256.0,
+            256.0
+          ]
+        },
+        "allocs_op": {
+          "count": 5,
+          "median": 2.0,
+          "minimum": 2.0,
+          "maximum": 2.0,
+          "samples": [
+            2.0,
+            2.0,
+            2.0,
+            2.0,
+            2.0
+          ]
+        }
+      },
+      "after": {
+        "ns_op": {
+          "count": 5,
+          "median": 221.8,
+          "minimum": 219.2,
+          "maximum": 224.3,
+          "samples": [
+            224.3,
+            221.8,
+            222.9,
+            219.2,
+            220.9
+          ]
+        },
+        "bytes_op": {
+          "count": 5,
+          "median": 256.0,
+          "minimum": 256.0,
+          "maximum": 256.0,
+          "samples": [
+            256.0,
+            256.0,
+            256.0,
+            256.0,
+            256.0
+          ]
+        },
+        "allocs_op": {
+          "count": 5,
+          "median": 2.0,
+          "minimum": 2.0,
+          "maximum": 2.0,
+          "samples": [
+            2.0,
+            2.0,
+            2.0,
+            2.0,
+            2.0
+          ]
+        }
+      }
+    },
+    "http:BenchmarkTypedJSONEndpoint/Router": {
+      "before": {
+        "ns_op": {
+          "count": 5,
+          "median": 170635.0,
+          "minimum": 168071.0,
+          "maximum": 171095.0,
+          "samples": [
+            170635.0,
+            171095.0,
+            170813.0,
+            168071.0,
+            169529.0
+          ]
+        },
+        "bytes_op": {
+          "count": 5,
+          "median": 112127.0,
+          "minimum": 112051.0,
+          "maximum": 112224.0,
+          "samples": [
+            112051.0,
+            112126.0,
+            112127.0,
+            112141.0,
+            112224.0
+          ]
+        },
+        "allocs_op": {
+          "count": 5,
+          "median": 2733.0,
+          "minimum": 2733.0,
+          "maximum": 2733.0,
+          "samples": [
+            2733.0,
+            2733.0,
+            2733.0,
+            2733.0,
+            2733.0
+          ]
+        }
+      },
+      "after": {
+        "ns_op": {
+          "count": 5,
+          "median": 167994.0,
+          "minimum": 167635.0,
+          "maximum": 169964.0,
+          "samples": [
+            169936.0,
+            169964.0,
+            167657.0,
+            167635.0,
+            167994.0
+          ]
+        },
+        "bytes_op": {
+          "count": 5,
+          "median": 112101.0,
+          "minimum": 112060.0,
+          "maximum": 112177.0,
+          "samples": [
+            112177.0,
+            112101.0,
+            112144.0,
+            112060.0,
+            112063.0
+          ]
+        },
+        "allocs_op": {
+          "count": 5,
+          "median": 2733.0,
+          "minimum": 2733.0,
+          "maximum": 2733.0,
+          "samples": [
+            2733.0,
+            2733.0,
+            2733.0,
+            2733.0,
+            2733.0
+          ]
+        }
+      }
+    },
+    "http:BenchmarkTypedJSONEndpoint/Kernel": {
+      "before": {
+        "ns_op": {
+          "count": 5,
+          "median": 170639.0,
+          "minimum": 169193.0,
+          "maximum": 173142.0,
+          "samples": [
+            170639.0,
+            173142.0,
+            169411.0,
+            169193.0,
+            170697.0
+          ]
+        },
+        "bytes_op": {
+          "count": 5,
+          "median": 114570.0,
+          "minimum": 114543.0,
+          "maximum": 114642.0,
+          "samples": [
+            114562.0,
+            114570.0,
+            114543.0,
+            114588.0,
+            114642.0
+          ]
+        },
+        "allocs_op": {
+          "count": 5,
+          "median": 2754.0,
+          "minimum": 2754.0,
+          "maximum": 2754.0,
+          "samples": [
+            2754.0,
+            2754.0,
+            2754.0,
+            2754.0,
+            2754.0
+          ]
+        }
+      },
+      "after": {
+        "ns_op": {
+          "count": 5,
+          "median": 169897.0,
+          "minimum": 169204.0,
+          "maximum": 172559.0,
+          "samples": [
+            172559.0,
+            171041.0,
+            169204.0,
+            169619.0,
+            169897.0
+          ]
+        },
+        "bytes_op": {
+          "count": 5,
+          "median": 114511.0,
+          "minimum": 114501.0,
+          "maximum": 114614.0,
+          "samples": [
+            114511.0,
+            114578.0,
+            114614.0,
+            114501.0,
+            114511.0
+          ]
+        },
+        "allocs_op": {
+          "count": 5,
+          "median": 2754.0,
+          "minimum": 2754.0,
+          "maximum": 2754.0,
+          "samples": [
+            2754.0,
+            2754.0,
+            2754.0,
+            2754.0,
+            2754.0
+          ]
+        }
+      }
+    },
+    "contract:BenchmarkJSONDTODecode": {
+      "before": {
+        "ns_op": {
+          "count": 5,
+          "median": 3491.0,
+          "minimum": 3488.0,
+          "maximum": 3600.0,
+          "samples": [
+            3600.0,
+            3571.0,
+            3488.0,
+            3491.0,
+            3489.0
+          ]
+        },
+        "bytes_op": {
+          "count": 5,
+          "median": 2809.0,
+          "minimum": 2809.0,
+          "maximum": 2809.0,
+          "samples": [
+            2809.0,
+            2809.0,
+            2809.0,
+            2809.0,
+            2809.0
+          ]
+        },
+        "allocs_op": {
+          "count": 5,
+          "median": 43.0,
+          "minimum": 43.0,
+          "maximum": 43.0,
+          "samples": [
+            43.0,
+            43.0,
+            43.0,
+            43.0,
+            43.0
+          ]
+        }
+      },
+      "after": {
+        "ns_op": {
+          "count": 5,
+          "median": 3516.0,
+          "minimum": 3453.0,
+          "maximum": 3578.0,
+          "samples": [
+            3516.0,
+            3578.0,
+            3504.0,
+            3529.0,
+            3453.0
+          ]
+        },
+        "bytes_op": {
+          "count": 5,
+          "median": 2809.0,
+          "minimum": 2809.0,
+          "maximum": 2809.0,
+          "samples": [
+            2809.0,
+            2809.0,
+            2809.0,
+            2809.0,
+            2809.0
+          ]
+        },
+        "allocs_op": {
+          "count": 5,
+          "median": 43.0,
+          "minimum": 43.0,
+          "maximum": 43.0,
+          "samples": [
+            43.0,
+            43.0,
+            43.0,
+            43.0,
+            43.0
+          ]
+        }
+      }
+    },
+    "validation:BenchmarkValidCheck": {
+      "before": {
+        "ns_op": {
+          "count": 5,
+          "median": 399.5,
+          "minimum": 394.0,
+          "maximum": 402.8,
+          "samples": [
+            402.8,
+            399.5,
+            401.9,
+            394.7,
+            394.0
+          ]
+        },
+        "bytes_op": {
+          "count": 5,
+          "median": 480.0,
+          "minimum": 480.0,
+          "maximum": 480.0,
+          "samples": [
+            480.0,
+            480.0,
+            480.0,
+            480.0,
+            480.0
+          ]
+        },
+        "allocs_op": {
+          "count": 5,
+          "median": 1.0,
+          "minimum": 1.0,
+          "maximum": 1.0,
+          "samples": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      "after": {
+        "ns_op": {
+          "count": 5,
+          "median": 396.6,
+          "minimum": 394.5,
+          "maximum": 401.1,
+          "samples": [
+            400.4,
+            401.1,
+            396.6,
+            394.5,
+            395.6
+          ]
+        },
+        "bytes_op": {
+          "count": 5,
+          "median": 480.0,
+          "minimum": 480.0,
+          "maximum": 480.0,
+          "samples": [
+            480.0,
+            480.0,
+            480.0,
+            480.0,
+            480.0
+          ]
+        },
+        "allocs_op": {
+          "count": 5,
+          "median": 1.0,
+          "minimum": 1.0,
+          "maximum": 1.0,
+          "samples": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      }
+    },
+    "datatable:BenchmarkTableRequestPreparation/shallow": {
+      "before": {
+        "ns_op": {
+          "count": 5,
+          "median": 228.8,
+          "minimum": 227.1,
+          "maximum": 233.6,
+          "samples": [
+            228.8,
+            233.1,
+            227.7,
+            227.1,
+            233.6
+          ]
+        },
+        "bytes_op": {
+          "count": 5,
+          "median": 384.0,
+          "minimum": 384.0,
+          "maximum": 384.0,
+          "samples": [
+            384.0,
+            384.0,
+            384.0,
+            384.0,
+            384.0
+          ]
+        },
+        "allocs_op": {
+          "count": 5,
+          "median": 12.0,
+          "minimum": 12.0,
+          "maximum": 12.0,
+          "samples": [
+            12.0,
+            12.0,
+            12.0,
+            12.0,
+            12.0
+          ]
+        }
+      },
+      "after": {
+        "ns_op": {
+          "count": 5,
+          "median": 213.0,
+          "minimum": 211.6,
+          "maximum": 215.7,
+          "samples": [
+            213.0,
+            215.7,
+            213.3,
+            212.9,
+            211.6
+          ]
+        },
+        "bytes_op": {
+          "count": 5,
+          "median": 384.0,
+          "minimum": 384.0,
+          "maximum": 384.0,
+          "samples": [
+            384.0,
+            384.0,
+            384.0,
+            384.0,
+            384.0
+          ]
+        },
+        "allocs_op": {
+          "count": 5,
+          "median": 12.0,
+          "minimum": 12.0,
+          "maximum": 12.0,
+          "samples": [
+            12.0,
+            12.0,
+            12.0,
+            12.0,
+            12.0
+          ]
+        }
+      }
+    },
+    "datatable:BenchmarkTableRequestPreparation/nested": {
+      "before": {
+        "ns_op": {
+          "count": 5,
+          "median": 1572.0,
+          "minimum": 1559.0,
+          "maximum": 1585.0,
+          "samples": [
+            1572.0,
+            1585.0,
+            1559.0,
+            1568.0,
+            1576.0
+          ]
+        },
+        "bytes_op": {
+          "count": 5,
+          "median": 3904.0,
+          "minimum": 3904.0,
+          "maximum": 3904.0,
+          "samples": [
+            3904.0,
+            3904.0,
+            3904.0,
+            3904.0,
+            3904.0
+          ]
+        },
+        "allocs_op": {
+          "count": 5,
+          "median": 88.0,
+          "minimum": 88.0,
+          "maximum": 88.0,
+          "samples": [
+            88.0,
+            88.0,
+            88.0,
+            88.0,
+            88.0
+          ]
+        }
+      },
+      "after": {
+        "ns_op": {
+          "count": 5,
+          "median": 1509.0,
+          "minimum": 1501.0,
+          "maximum": 1538.0,
+          "samples": [
+            1501.0,
+            1538.0,
+            1502.0,
+            1509.0,
+            1510.0
+          ]
+        },
+        "bytes_op": {
+          "count": 5,
+          "median": 3904.0,
+          "minimum": 3904.0,
+          "maximum": 3904.0,
+          "samples": [
+            3904.0,
+            3904.0,
+            3904.0,
+            3904.0,
+            3904.0
+          ]
+        },
+        "allocs_op": {
+          "count": 5,
+          "median": 88.0,
+          "minimum": 88.0,
+          "maximum": 88.0,
+          "samples": [
+            88.0,
+            88.0,
+            88.0,
+            88.0,
+            88.0
+          ]
+        }
+      }
+    }
+  },
+  "largest_archives": {
+    "before": [
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/routes",
+        "bytes": 1081718802
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/datatables",
+        "bytes": 858735070
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/models",
+        "bytes": 809057662
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/bootstrap",
+        "bytes": 447059968
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/handlers",
+        "bytes": 401042968
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/requests",
+        "bytes": 336754578
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/merchants",
+        "bytes": 318790760
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/developer",
+        "bytes": 304937240
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/resources",
+        "bytes": 258716494
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/merchantaccounts",
+        "bytes": 226251226
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/withdrawals",
+        "bytes": 222839000
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/examples/routes",
+        "bytes": 195964902
+      }
+    ],
+    "after": [
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/routes",
+        "bytes": 1071959066
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/datatables",
+        "bytes": 855585342
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/models",
+        "bytes": 806286990
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/bootstrap",
+        "bytes": 445180572
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/handlers",
+        "bytes": 399307052
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/requests",
+        "bytes": 334494062
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/merchants",
+        "bytes": 317568464
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/developer",
+        "bytes": 303961678
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/resources",
+        "bytes": 256061680
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/merchantaccounts",
+        "bytes": 225091480
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/withdrawals",
+        "bytes": 221802494
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/examples/routes",
+        "bytes": 194496960
+      }
+    ]
+  },
+  "object_profiles": {
+    "before": [
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/models",
+        "archive_bytes": 809057662,
+        "members": [
+          {
+            "name": "__.PKGDEF",
+            "bytes": 3104054
+          },
+          {
+            "name": "_go_.o",
+            "bytes": 805953480
+          }
+        ],
+        "go_object_bytes": 805953480,
+        "string_pool_bytes": 237909046,
+        "block_bytes": {
+          "Autolib": 448,
+          "PkgIdx": 760,
+          "File": 5728,
+          "Symdef": 15761592,
+          "Hashed64def": 12222,
+          "Hasheddef": 36230481,
+          "Nonpkgdef": 9068304,
+          "Nonpkgref": 12410139,
+          "RefFlags": 0,
+          "Hash64": 4656,
+          "Hash": 27604176,
+          "RelocIdx": 11632880,
+          "AuxIdx": 11632880,
+          "DataIdx": 11632880,
+          "Reloc": 176639149,
+          "Aux": 29016792,
+          "Data": 226377284,
+          "RefName": 13776
+        },
+        "defined_symbols": 2908219,
+        "data_bytes_by_kind": {
+          "text": 47157008,
+          "rodata": 53804481,
+          "noptrdata": 16,
+          "bss": 0,
+          "dwarf_var": 7433,
+          "dwarf_const": 1005,
+          "data": 8962673,
+          "dwarf_range": 3921328,
+          "dwarf_loc": 34708829,
+          "dwarf_lines": 8928036,
+          "dwarf_fcn": 54828377,
+          "dwarf_cu": 20,
+          "dwarf_absfcn": 14058078,
+          "noptrbss": 0
+        }
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/datatables",
+        "archive_bytes": 858735070,
+        "members": [
+          {
+            "name": "__.PKGDEF",
+            "bytes": 1270831
+          },
+          {
+            "name": "_go_.o",
+            "bytes": 857464110
+          }
+        ],
+        "go_object_bytes": 857464110,
+        "string_pool_bytes": 338781845,
+        "block_bytes": {
+          "Autolib": 288,
+          "PkgIdx": 600,
+          "File": 4584,
+          "Symdef": 13637694,
+          "Hashed64def": 8946,
+          "Hasheddef": 30644166,
+          "Nonpkgdef": 7669389,
+          "Nonpkgref": 10790787,
+          "RefFlags": 0,
+          "Hash64": 3408,
+          "Hash": 23347936,
+          "RelocIdx": 9897184,
+          "AuxIdx": 9897184,
+          "DataIdx": 9897184,
+          "Reloc": 143479773,
+          "Aux": 24867558,
+          "Data": 234524929,
+          "RefName": 10368
+        },
+        "defined_symbols": 2474295,
+        "data_bytes_by_kind": {
+          "text": 38502176,
+          "rodata": 75322930,
+          "noptrdata": 16,
+          "bss": 0,
+          "dwarf_var": 3530,
+          "data": 7145334,
+          "dwarf_range": 2529024,
+          "dwarf_loc": 30247313,
+          "dwarf_lines": 6982488,
+          "dwarf_fcn": 59505471,
+          "dwarf_cu": 24,
+          "dwarf_absfcn": 14286623,
+          "noptrbss": 0
+        }
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/routes",
+        "archive_bytes": 1081718802,
+        "members": [
+          {
+            "name": "__.PKGDEF",
+            "bytes": 2686401
+          },
+          {
+            "name": "_go_.o",
+            "bytes": 1079032271
+          }
+        ],
+        "go_object_bytes": 1079032271,
+        "string_pool_bytes": 350363694,
+        "block_bytes": {
+          "Autolib": 544,
+          "PkgIdx": 1224,
+          "File": 10376,
+          "Symdef": 17530359,
+          "Hashed64def": 65205,
+          "Hasheddef": 38589012,
+          "Nonpkgdef": 10810212,
+          "Nonpkgref": 14173173,
+          "RefFlags": 0,
+          "Hash64": 24840,
+          "Hash": 29401152,
+          "RelocIdx": 12760916,
+          "AuxIdx": 12760916,
+          "DataIdx": 12760916,
+          "Reloc": 229051296,
+          "Aux": 31248090,
+          "Data": 319443259,
+          "RefName": 36800
+        },
+        "defined_symbols": 3190228,
+        "data_bytes_by_kind": {
+          "text": 68400544,
+          "noptrdata": 8,
+          "rodata": 84357986,
+          "data": 10620053,
+          "dwarf_range": 6047168,
+          "dwarf_loc": 43342651,
+          "dwarf_lines": 11623422,
+          "dwarf_fcn": 75754832,
+          "dwarf_cu": 20,
+          "noptrbss": 0,
+          "dwarf_absfcn": 19296575
+        }
+      }
+    ],
+    "after": [
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/models",
+        "archive_bytes": 806286990,
+        "members": [
+          {
+            "name": "__.PKGDEF",
+            "bytes": 3096369
+          },
+          {
+            "name": "_go_.o",
+            "bytes": 803190491
+          }
+        ],
+        "go_object_bytes": 803190491,
+        "string_pool_bytes": 237234711,
+        "block_bytes": {
+          "Autolib": 448,
+          "PkgIdx": 760,
+          "File": 5696,
+          "Symdef": 15704619,
+          "Hashed64def": 12201,
+          "Hasheddef": 36081801,
+          "Nonpkgdef": 9044406,
+          "Nonpkgref": 12366018,
+          "RefFlags": 0,
+          "Hash64": 4648,
+          "Hash": 27490896,
+          "RelocIdx": 11589152,
+          "AuxIdx": 11589152,
+          "DataIdx": 11589152,
+          "Reloc": 175948436,
+          "Aux": 28905633,
+          "Data": 225608763,
+          "RefName": 13712
+        },
+        "defined_symbols": 2897287,
+        "data_bytes_by_kind": {
+          "text": 46990480,
+          "rodata": 53661534,
+          "noptrdata": 16,
+          "bss": 0,
+          "dwarf_var": 7433,
+          "dwarf_const": 1005,
+          "data": 8919061,
+          "dwarf_range": 3899328,
+          "dwarf_loc": 34623679,
+          "dwarf_lines": 8880461,
+          "dwarf_fcn": 54613494,
+          "dwarf_cu": 20,
+          "dwarf_absfcn": 14012252,
+          "noptrbss": 0
+        }
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/datatables",
+        "archive_bytes": 855585342,
+        "members": [
+          {
+            "name": "__.PKGDEF",
+            "bytes": 1254465
+          },
+          {
+            "name": "_go_.o",
+            "bytes": 854330747
+          }
+        ],
+        "go_object_bytes": 854330747,
+        "string_pool_bytes": 337992932,
+        "block_bytes": {
+          "Autolib": 288,
+          "PkgIdx": 600,
+          "File": 4560,
+          "Symdef": 13592334,
+          "Hashed64def": 8946,
+          "Hasheddef": 30523164,
+          "Nonpkgdef": 7642383,
+          "Nonpkgref": 10754583,
+          "RefFlags": 0,
+          "Hash64": 3408,
+          "Hash": 23255744,
+          "RelocIdx": 9860352,
+          "AuxIdx": 9860352,
+          "DataIdx": 9860352,
+          "Reloc": 142608280,
+          "Aux": 24778863,
+          "Data": 233573063,
+          "RefName": 10256
+        },
+        "defined_symbols": 2465087,
+        "data_bytes_by_kind": {
+          "text": 38295520,
+          "rodata": 75113583,
+          "noptrdata": 16,
+          "bss": 0,
+          "dwarf_var": 3530,
+          "data": 7095134,
+          "dwarf_range": 2488272,
+          "dwarf_loc": 30112203,
+          "dwarf_lines": 6930141,
+          "dwarf_fcn": 59290540,
+          "dwarf_cu": 24,
+          "dwarf_absfcn": 14244100,
+          "noptrbss": 0
+        }
+      },
+      {
+        "package": "github.com/weiloon1234/Foundry-Go-Starter/internal/routes",
+        "archive_bytes": 1071959066,
+        "members": [
+          {
+            "name": "__.PKGDEF",
+            "bytes": 2662856
+          },
+          {
+            "name": "_go_.o",
+            "bytes": 1069296082
+          }
+        ],
+        "go_object_bytes": 1069296082,
+        "string_pool_bytes": 349320478,
+        "block_bytes": {
+          "Autolib": 544,
+          "PkgIdx": 1216,
+          "File": 10352,
+          "Symdef": 17450979,
+          "Hashed64def": 62328,
+          "Hasheddef": 38391990,
+          "Nonpkgdef": 10763613,
+          "Nonpkgref": 14111811,
+          "RefFlags": 0,
+          "Hash64": 23744,
+          "Hash": 29251040,
+          "RelocIdx": 12698844,
+          "AuxIdx": 12698844,
+          "DataIdx": 12698844,
+          "Reloc": 224831877,
+          "Aux": 31096746,
+          "Data": 315846065,
+          "RefName": 36480
+        },
+        "defined_symbols": 3174710,
+        "data_bytes_by_kind": {
+          "text": 67477808,
+          "noptrdata": 8,
+          "rodata": 83854095,
+          "data": 10427729,
+          "dwarf_range": 5794320,
+          "dwarf_loc": 42543842,
+          "dwarf_lines": 11380100,
+          "dwarf_fcn": 75139105,
+          "dwarf_cu": 20,
+          "noptrbss": 0,
+          "dwarf_absfcn": 19229038
+        }
+      }
+    ]
+  },
+  "verification": [
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "run",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/check_api.go",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/baseline-framework",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 83574784,
+      "elapsed_seconds": 1.374166458000218,
+      "exit": 0,
+      "name": "exported-api",
+      "sampled_compiler_rss_bytes": 0,
+      "sampled_tree_rss_bytes": 89702400,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-timeout=20m",
+        "./database/query",
+        "./http",
+        "./contract",
+        "./validation",
+        "./datatable"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 7453818880,
+      "elapsed_seconds": 84.31467920899968,
+      "exit": 0,
+      "name": "affected-packages",
+      "sampled_compiler_rss_bytes": 7453802496,
+      "sampled_tree_rss_bytes": 8374829056,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "make",
+        "verify"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 3689250816,
+      "elapsed_seconds": 1397.7957235409995,
+      "exit": 0,
+      "name": "make-verify",
+      "sampled_compiler_rss_bytes": 3689136128,
+      "sampled_tree_rss_bytes": 5207687168,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-race",
+        "-timeout=20m",
+        "./database/query",
+        "./http",
+        "./contract",
+        "./validation",
+        "./datatable"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go",
+      "darwin_max_process_rss_bytes": 7402602496,
+      "elapsed_seconds": 110.09202066600028,
+      "exit": 0,
+      "name": "affected-races",
+      "sampled_compiler_rss_bytes": 7402602496,
+      "sampled_tree_rss_bytes": 8056733696,
+      "timed_out": false
+    }
+  ],
+  "final_verification": {
+    "current_go_module_source": {
+      "unchanged": true,
+      "files": 4473,
+      "changed": []
+    },
+    "documentation": {
+      "argv": [
+        "make",
+        "docs-check"
+      ],
+      "exit": 0,
+      "output": "go run ./internal/cmd/checkdocs\nDocumentation links, current guide milestone claims, blueprint numbering, and fixture Go requirements are valid.\n",
+      "evidence": "Successful exec_command result retained in the current implementation transcript."
+    }
+  },
+  "independent_review": {
+    "model": "gpt-6-astra",
+    "different_model_family_available": false,
+    "material_reporting_findings": [],
+    "disclosed_limits": [
+      "Combined retained-cache reduction is only 0.69%.",
+      "Repeated model metadata validation is about 13 ns slower.",
+      "Registration costs remain unmeasured."
+    ],
+    "report_file": "final-review.md",
+    "report_sha256": "952669beaf789433bb3a1e4c1193a98e787633305f6484f2463a38521db2283c"
+  },
+  "source_provenance": {
+    "unchanged_verified_go_module_files": 4473,
+    "verified_go_module_manifest_sha256": "fb076c7406cfa5f11fafe41ee0d2e3f329c7aaf36f2d8789cfb175f08b25b384",
+    "measurement_framework_sha256": {
+      "before": [
+        "c2a86f9f5899a23557c6d7b9afcb1898bd493e2d05a207e5d2de1d0a55c8af5f"
+      ],
+      "after": [
+        "670d471e75c8994e41086d9cda2c2a05f9c8d54a9a1d35f66d11056570fa825e"
+      ]
+    },
+    "measurement_consumer_sha256": [
+      "ab00b34801f5e3c81d9a31b2e44b73f07a6acd92503c861059abd73f9b3682b4"
+    ],
+    "snapshot_manifest_sha256": {
+      "baseline-framework-sha256.json": "84a38d89db8fec9855005dd0df43e32c3e07cf1ba7340bd796605fcc0ca1e2d1",
+      "candidate-framework-sha256.json": "003ebccc84aa54133a1084d20697eb7ccf669178f210836ae2f85c00e6cf1bdc",
+      "boss-source-sha256.json": "8e8078fcdf22ba417dcdee9b9210373cc70ca9d28cfae5efa9a1432c0efe7df9",
+      "runtime-probe-sha256.json": "62652f3ddb93a459edaf36c0458aa79e48cb317c7fd828e2db0b1e138846b0cf"
+    }
+  },
+  "limits": [
+    "The first retained-cache profile is build then vet then race compilation/linking. Application test executables are replaced with /usr/bin/true; no application tests or databases run.",
+    "All cold ordinary trials start with an empty task-owned cache. Ordinary timings use five alternating trials per side. OS file caches, thermal state and unrelated host load are uncontrolled.",
+    "Race cold timing is one observation per side. It does not establish a general race-compilation speedup.",
+    "Package archive locations do not identify authorship; consumer objects contain framework instantiations.",
+    "Object text, string, relocation and debug sizes are descriptive categories, not independently removable costs.",
+    "Native Runner wall time includes process monitoring, directory sampling and 0.2-second polling. Short warm-vet differences are inconclusive.",
+    "Runtime probes cover repeated model validation, table request preparation, DTO decoding, typed endpoint handling and validation. Declaration registration costs and database throughput are unmeasured.",
+    "Object sizes identify stored categories, not costs that can be deleted independently of the Go type and link graph.",
+    "Independent GPT source and evidence reviews were used. No different model family was available."
+  ],
+  "competition_observations": [],
+  "cleanup": {
+    "only_owned_measurement_caches_removed": true,
+    "shared_or_other_agent_caches_deleted": false,
+    "events": [
+      {
+        "action": "removed_owned_cache_after_child_exit",
+        "directory": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-before-trial-2",
+        "at": 1792495683.1131861
+      },
+      {
+        "action": "removed_owned_cache_after_child_exit",
+        "directory": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-after-trial-2",
+        "at": 1792496006.240011
+      },
+      {
+        "action": "removed_owned_cache_after_child_exit",
+        "directory": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-before-trial-3",
+        "at": 1792496332.7680068
+      },
+      {
+        "action": "removed_owned_cache_after_child_exit",
+        "directory": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-after-trial-3",
+        "at": 1792496654.61273
+      },
+      {
+        "action": "removed_owned_cache_after_child_exit",
+        "directory": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-before-trial-4",
+        "at": 1792496979.642884
+      },
+      {
+        "action": "removed_owned_cache_after_child_exit",
+        "directory": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-after-trial-4",
+        "at": 1792497303.192395
+      },
+      {
+        "action": "removed_owned_cache_after_child_exit",
+        "directory": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-before-trial-5",
+        "at": 1792497628.498531
+      },
+      {
+        "action": "removed_owned_cache_after_child_exit",
+        "directory": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-after-trial-5",
+        "at": 1792497949.284241
+      },
+      {
+        "action": "removed_owned_cache_after_child_exit",
+        "directory": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-before-trial-1",
+        "at": 1792498482.184942
+      },
+      {
+        "action": "removed_owned_cache_after_child_exit",
+        "directory": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-after-trial-1",
+        "at": 1792498483.59258
+      }
+    ]
+  },
+  "local_evidence_directory": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020",
+  "report_sha256": "38d7996bda4454a22807c2f9c82fb8cedd8da902805ade553f3aec09bc5bef5d",
+  "measurement_commands": [
+    {
+      "name": "before-build-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 287.2198631250003,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 11994333184,
+      "sampled_tree_rss_bytes": 12063260672,
+      "sampled_compiler_rss_bytes": 11994316800
+    },
+    {
+      "name": "before-warm-build-1-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 38.15168670799994,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 9413033984,
+      "sampled_tree_rss_bytes": 11350327296,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-vet-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "vet",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 10.195702459000131,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 867123200,
+      "sampled_tree_rss_bytes": 911884288,
+      "sampled_compiler_rss_bytes": 827670528
+    },
+    {
+      "name": "before-warm-vet-1-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "vet",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 0.5020100000001548,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 85606400,
+      "sampled_tree_rss_bytes": 84344832,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-race-compile-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-x",
+        "-race",
+        "-vet=off",
+        "-exec=/usr/bin/true",
+        "-count=1",
+        "-timeout=20m",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 441.8128823749994,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 12064079872,
+      "sampled_tree_rss_bytes": 16397746176,
+      "sampled_compiler_rss_bytes": 12063457280
+    },
+    {
+      "name": "before-warm-race-1-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-x",
+        "-race",
+        "-vet=off",
+        "-exec=/usr/bin/true",
+        "-count=1",
+        "-timeout=20m",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 23.5238949579998,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 8487862272,
+      "sampled_tree_rss_bytes": 18831097856,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-archives-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "list",
+        "-deps",
+        "-export",
+        "-f",
+        "{{.ImportPath}}\t{{.Export}}",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 0.4970398330005992,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 76627968,
+      "sampled_tree_rss_bytes": 73695232,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-build-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 283.3427271669998,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 11976048640,
+      "sampled_tree_rss_bytes": 12042911744,
+      "sampled_compiler_rss_bytes": 11976048640
+    },
+    {
+      "name": "after-warm-build-1-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 37.645536041000014,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 9399894016,
+      "sampled_tree_rss_bytes": 11425497088,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-vet-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "vet",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 10.016493999999511,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 857718784,
+      "sampled_tree_rss_bytes": 913096704,
+      "sampled_compiler_rss_bytes": 828538880
+    },
+    {
+      "name": "after-warm-vet-1-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "vet",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 0.5029660000000149,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 84606976,
+      "sampled_tree_rss_bytes": 80822272,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-race-compile-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-x",
+        "-race",
+        "-vet=off",
+        "-exec=/usr/bin/true",
+        "-count=1",
+        "-timeout=20m",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 440.8040220419998,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 11897782272,
+      "sampled_tree_rss_bytes": 16045326336,
+      "sampled_compiler_rss_bytes": 11897782272
+    },
+    {
+      "name": "after-warm-race-1-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-x",
+        "-race",
+        "-vet=off",
+        "-exec=/usr/bin/true",
+        "-count=1",
+        "-timeout=20m",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 24.11339654099993,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 8432205824,
+      "sampled_tree_rss_bytes": 19232833536,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-archives-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "list",
+        "-deps",
+        "-export",
+        "-f",
+        "{{.ImportPath}}\t{{.Export}}",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 0.4956248750004306,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 76070912,
+      "sampled_tree_rss_bytes": 73547776,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-build-2",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 285.80054050000035,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 11812438016,
+      "sampled_tree_rss_bytes": 11877859328,
+      "sampled_compiler_rss_bytes": 11812274176
+    },
+    {
+      "name": "before-warm-build-2-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 37.68627383300009,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 9412788224,
+      "sampled_tree_rss_bytes": 11615125504,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-build-2",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 282.1931723329999,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 11820187648,
+      "sampled_tree_rss_bytes": 11888443392,
+      "sampled_compiler_rss_bytes": 11819319296
+    },
+    {
+      "name": "after-warm-build-2-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 37.179294916999424,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 9417687040,
+      "sampled_tree_rss_bytes": 11424595968,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-build-3",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 285.36500437499944,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 11852349440,
+      "sampled_tree_rss_bytes": 11922014208,
+      "sampled_compiler_rss_bytes": 11852201984
+    },
+    {
+      "name": "before-warm-build-3-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 37.442207041000074,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 9397747712,
+      "sampled_tree_rss_bytes": 11469586432,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-build-3",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 281.55566254099995,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 11757568000,
+      "sampled_tree_rss_bytes": 11823382528,
+      "sampled_compiler_rss_bytes": 11757404160
+    },
+    {
+      "name": "after-warm-build-3-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 36.497115957999995,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 9410248704,
+      "sampled_tree_rss_bytes": 11772903424,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-build-4",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 284.69310337499974,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 11807211520,
+      "sampled_tree_rss_bytes": 11872337920,
+      "sampled_compiler_rss_bytes": 11807064064
+    },
+    {
+      "name": "before-warm-build-4-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 36.63255170800039,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 9389146112,
+      "sampled_tree_rss_bytes": 11484217344,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-build-4",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 284.1325473750003,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 12182110208,
+      "sampled_tree_rss_bytes": 12249825280,
+      "sampled_compiler_rss_bytes": 12182110208
+    },
+    {
+      "name": "after-warm-build-4-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 35.74234783300017,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 9366470656,
+      "sampled_tree_rss_bytes": 11765596160,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-build-5",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 285.5876887079994,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 11919671296,
+      "sampled_tree_rss_bytes": 11988402176,
+      "sampled_compiler_rss_bytes": 11919589376
+    },
+    {
+      "name": "before-warm-build-5-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 35.973258166999585,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 9463513088,
+      "sampled_tree_rss_bytes": 11612274688,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-build-5",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 281.3346377910002,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 11541364736,
+      "sampled_tree_rss_bytes": 11608883200,
+      "sampled_compiler_rss_bytes": 11541168128
+    },
+    {
+      "name": "after-warm-build-5-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "build",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 35.74701929099865,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 9422159872,
+      "sampled_tree_rss_bytes": 11507351552,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-warm-vet-1-2",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "vet",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 0.72134004200052,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 79806464,
+      "sampled_tree_rss_bytes": 79888384,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-warm-race-1-2",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-x",
+        "-race",
+        "-vet=off",
+        "-exec=/usr/bin/true",
+        "-count=1",
+        "-timeout=20m",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 25.900577165999493,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 8495529984,
+      "sampled_tree_rss_bytes": 18998050816,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-warm-vet-1-2",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "vet",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 0.7406407910002599,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 83132416,
+      "sampled_tree_rss_bytes": 84410368,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-warm-race-1-2",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-x",
+        "-race",
+        "-vet=off",
+        "-exec=/usr/bin/true",
+        "-count=1",
+        "-timeout=20m",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 20.359796291000748,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 8450228224,
+      "sampled_tree_rss_bytes": 17768759296,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-warm-vet-1-3",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "vet",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 0.5001882919987111,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 84787200,
+      "sampled_tree_rss_bytes": 80642048,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-warm-race-1-3",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-x",
+        "-race",
+        "-vet=off",
+        "-exec=/usr/bin/true",
+        "-count=1",
+        "-timeout=20m",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 17.296374042000025,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 8495759360,
+      "sampled_tree_rss_bytes": 17498718208,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-warm-vet-1-3",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "vet",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 0.5038275830011116,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 83345408,
+      "sampled_tree_rss_bytes": 80232448,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-warm-race-1-3",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-x",
+        "-race",
+        "-vet=off",
+        "-exec=/usr/bin/true",
+        "-count=1",
+        "-timeout=20m",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 17.130568167000092,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 8599470080,
+      "sampled_tree_rss_bytes": 17548115968,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-warm-vet-1-4",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "vet",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 0.5035479590005707,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 84557824,
+      "sampled_tree_rss_bytes": 81379328,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-warm-race-1-4",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-x",
+        "-race",
+        "-vet=off",
+        "-exec=/usr/bin/true",
+        "-count=1",
+        "-timeout=20m",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 17.33254954200129,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 8540880896,
+      "sampled_tree_rss_bytes": 17657151488,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-warm-vet-1-4",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "vet",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 0.5046551659997931,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 83869696,
+      "sampled_tree_rss_bytes": 81838080,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-warm-race-1-4",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-x",
+        "-race",
+        "-vet=off",
+        "-exec=/usr/bin/true",
+        "-count=1",
+        "-timeout=20m",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 17.1405512500005,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 8602550272,
+      "sampled_tree_rss_bytes": 17820532736,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-warm-vet-1-5",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "vet",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 0.49411041699931957,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 83902464,
+      "sampled_tree_rss_bytes": 83640320,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-warm-race-1-5",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-x",
+        "-race",
+        "-vet=off",
+        "-exec=/usr/bin/true",
+        "-count=1",
+        "-timeout=20m",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 17.343361584000377,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 8598667264,
+      "sampled_tree_rss_bytes": 17939480576,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-warm-vet-1-5",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "vet",
+        "-x",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 0.5013347499989322,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 84475904,
+      "sampled_tree_rss_bytes": 79904768,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-warm-race-1-5",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-x",
+        "-race",
+        "-vet=off",
+        "-exec=/usr/bin/true",
+        "-count=1",
+        "-timeout=20m",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/boss-club-snapshot",
+      "elapsed_seconds": 16.895269458000257,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 8431992832,
+      "sampled_tree_rss_bytes": 17631100928,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-compile-1-database-query-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-c",
+        "-vet=off",
+        "-o",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-database-query.test",
+        "./database/query"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 32.1966625419991,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 8099217408,
+      "sampled_tree_rss_bytes": 8145076224,
+      "sampled_compiler_rss_bytes": 8099217408
+    },
+    {
+      "name": "before-runtime-compile-1-http-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-c",
+        "-vet=off",
+        "-o",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-http.test",
+        "./http"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 48.07560399999966,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 2490761216,
+      "sampled_tree_rss_bytes": 2922905600,
+      "sampled_compiler_rss_bytes": 2490761216
+    },
+    {
+      "name": "before-runtime-compile-1-contract-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-c",
+        "-vet=off",
+        "-o",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-contract.test",
+        "./contract"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 0.9484962500009715,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 226902016,
+      "sampled_tree_rss_bytes": 262275072,
+      "sampled_compiler_rss_bytes": 185368576
+    },
+    {
+      "name": "before-runtime-compile-1-validation-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-c",
+        "-vet=off",
+        "-o",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-validation.test",
+        "./validation"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 2.117425207999986,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 488996864,
+      "sampled_tree_rss_bytes": 518995968,
+      "sampled_compiler_rss_bytes": 475791360
+    },
+    {
+      "name": "before-runtime-compile-1-datatable-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-c",
+        "-vet=off",
+        "-o",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-datatable.test",
+        "./datatable"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 5.130036250000558,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 861044736,
+      "sampled_tree_rss_bytes": 911572992,
+      "sampled_compiler_rss_bytes": 860635136
+    },
+    {
+      "name": "after-runtime-compile-1-database-query-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-c",
+        "-vet=off",
+        "-o",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-database-query.test",
+        "./database/query"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 30.963324665999608,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 7648133120,
+      "sampled_tree_rss_bytes": 7694336000,
+      "sampled_compiler_rss_bytes": 7648116736
+    },
+    {
+      "name": "after-runtime-compile-1-http-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-c",
+        "-vet=off",
+        "-o",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-http.test",
+        "./http"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 47.16056208400005,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 2581987328,
+      "sampled_tree_rss_bytes": 2967748608,
+      "sampled_compiler_rss_bytes": 2581970944
+    },
+    {
+      "name": "after-runtime-compile-1-contract-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-c",
+        "-vet=off",
+        "-o",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-contract.test",
+        "./contract"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 0.9612496249992546,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 218972160,
+      "sampled_tree_rss_bytes": 221691904,
+      "sampled_compiler_rss_bytes": 186712064
+    },
+    {
+      "name": "after-runtime-compile-1-validation-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-c",
+        "-vet=off",
+        "-o",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-validation.test",
+        "./validation"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 2.121145750001233,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 494845952,
+      "sampled_tree_rss_bytes": 536870912,
+      "sampled_compiler_rss_bytes": 493305856
+    },
+    {
+      "name": "after-runtime-compile-1-datatable-1",
+      "argv": [
+        "/usr/local/go/bin/go",
+        "test",
+        "-c",
+        "-vet=off",
+        "-o",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-datatable.test",
+        "./datatable"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 5.113609500000166,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 807387136,
+      "sampled_tree_rss_bytes": 825311232,
+      "sampled_compiler_rss_bytes": 774291456
+    },
+    {
+      "name": "before-runtime-run-1-database-query-1",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-database-query.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 2.3729169170001114,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 27312128,
+      "sampled_tree_rss_bytes": 28540928,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-http-1",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-http.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 3.302544083000612,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 33685504,
+      "sampled_tree_rss_bytes": 34914304,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-contract-1",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-contract.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.661519291001241,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 14090240,
+      "sampled_tree_rss_bytes": 15351808,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-validation-1",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-validation.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.6577259590012545,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 19693568,
+      "sampled_tree_rss_bytes": 20955136,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-datatable-1",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-datatable.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 3.0263457910004945,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 25182208,
+      "sampled_tree_rss_bytes": 26443776,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-database-query-1",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-database-query.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 2.379791249999471,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 28672000,
+      "sampled_tree_rss_bytes": 29900800,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-http-1",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-http.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 3.4890150839983107,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 33275904,
+      "sampled_tree_rss_bytes": 34504704,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-contract-1",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-contract.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.663170458001332,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 13910016,
+      "sampled_tree_rss_bytes": 15171584,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-validation-1",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-validation.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.6443529999996827,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 19382272,
+      "sampled_tree_rss_bytes": 20643840,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-datatable-1",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-datatable.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 3.0295702500006882,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 25264128,
+      "sampled_tree_rss_bytes": 26525696,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-database-query-2",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-database-query.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.4124172079991695,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 27901952,
+      "sampled_tree_rss_bytes": 29147136,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-http-2",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-http.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 2.328478000001269,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 32899072,
+      "sampled_tree_rss_bytes": 34160640,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-contract-2",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-contract.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.1836087079991557,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 13959168,
+      "sampled_tree_rss_bytes": 15171584,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-validation-2",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-validation.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.4315167910008313,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 19152896,
+      "sampled_tree_rss_bytes": 20414464,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-datatable-2",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-datatable.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 2.546024999999645,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 25427968,
+      "sampled_tree_rss_bytes": 26705920,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-database-query-2",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-database-query.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.4040275419993122,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 27836416,
+      "sampled_tree_rss_bytes": 29065216,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-http-2",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-http.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 2.322926417000417,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 33112064,
+      "sampled_tree_rss_bytes": 34373632,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-contract-2",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-contract.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.2066149579986813,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 14172160,
+      "sampled_tree_rss_bytes": 15417344,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-validation-2",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-validation.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.4154156669992517,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 19464192,
+      "sampled_tree_rss_bytes": 20725760,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-datatable-2",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-datatable.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 2.5533247500006837,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 25182208,
+      "sampled_tree_rss_bytes": 26443776,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-database-query-3",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-database-query.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.4058351250005217,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 27738112,
+      "sampled_tree_rss_bytes": 28966912,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-http-3",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-http.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 2.31288562500049,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 33341440,
+      "sampled_tree_rss_bytes": 34586624,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-contract-3",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-contract.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.1828463750007359,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 13926400,
+      "sampled_tree_rss_bytes": 15187968,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-validation-3",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-validation.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.2055145419999462,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 19513344,
+      "sampled_tree_rss_bytes": 20774912,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-datatable-3",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-datatable.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 2.5692415829998936,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 25460736,
+      "sampled_tree_rss_bytes": 26705920,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-database-query-3",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-database-query.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.4123868750011752,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 28655616,
+      "sampled_tree_rss_bytes": 29900800,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-http-3",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-http.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 2.516240375000052,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 33226752,
+      "sampled_tree_rss_bytes": 34504704,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-contract-3",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-contract.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.1859798330006015,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 14155776,
+      "sampled_tree_rss_bytes": 15417344,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-validation-3",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-validation.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.4053676250005083,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 19464192,
+      "sampled_tree_rss_bytes": 20725760,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-datatable-3",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-datatable.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 2.5464558330004365,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 24920064,
+      "sampled_tree_rss_bytes": 26181632,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-database-query-4",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-database-query.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.4132304579998163,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 27541504,
+      "sampled_tree_rss_bytes": 28786688,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-http-4",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-http.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 2.331532124999285,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 33636352,
+      "sampled_tree_rss_bytes": 34881536,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-contract-4",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-contract.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.1875378749991796,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 13926400,
+      "sampled_tree_rss_bytes": 15187968,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-validation-4",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-validation.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.4126659169996856,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 19562496,
+      "sampled_tree_rss_bytes": 20824064,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-datatable-4",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-datatable.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 2.5481607090005127,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 25083904,
+      "sampled_tree_rss_bytes": 26361856,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-database-query-4",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-database-query.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.4033259999996517,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 28950528,
+      "sampled_tree_rss_bytes": 30195712,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-http-4",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-http.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 2.309233875001155,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 33259520,
+      "sampled_tree_rss_bytes": 34537472,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-contract-4",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-contract.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.180453207998653,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 13975552,
+      "sampled_tree_rss_bytes": 15237120,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-validation-4",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-validation.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.411930291000317,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 19431424,
+      "sampled_tree_rss_bytes": 20692992,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-datatable-4",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-datatable.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 2.5481551659995603,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 25346048,
+      "sampled_tree_rss_bytes": 26607616,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-database-query-5",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-database-query.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.3939897090003797,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 27770880,
+      "sampled_tree_rss_bytes": 29016064,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-http-5",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-http.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 2.551267666998683,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 33357824,
+      "sampled_tree_rss_bytes": 34635776,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-contract-5",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-contract.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.1775910000014846,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 13926400,
+      "sampled_tree_rss_bytes": 15187968,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-validation-5",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-validation.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.4112822079987382,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 19628032,
+      "sampled_tree_rss_bytes": 20889600,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "before-runtime-run-1-datatable-5",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/before-datatable.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 2.549019457999748,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 25378816,
+      "sampled_tree_rss_bytes": 26640384,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-database-query-5",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-database-query.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.4120707919992128,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 30294016,
+      "sampled_tree_rss_bytes": 31539200,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-http-5",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-http.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 2.308131458999924,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 33472512,
+      "sampled_tree_rss_bytes": 34750464,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-contract-5",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-contract.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.1950035829995613,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 14303232,
+      "sampled_tree_rss_bytes": 15499264,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-validation-5",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-validation.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 1.4207409999999072,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 19365888,
+      "sampled_tree_rss_bytes": 20627456,
+      "sampled_compiler_rss_bytes": 0
+    },
+    {
+      "name": "after-runtime-run-1-datatable-5",
+      "argv": [
+        "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/runtime-binaries/after-datatable.test",
+        "-test.run=^$",
+        "-test.bench=^(BenchmarkModelMetadataValidation|BenchmarkTableRequestPreparation|BenchmarkJSONDTODecode|BenchmarkTypedJSONEndpoint|BenchmarkValidCheck)$",
+        "-test.benchmem",
+        "-test.benchtime=1s",
+        "-test.count=1"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go/.cache/typed-runtime-cost-20261020/working-framework",
+      "elapsed_seconds": 2.533580500001335,
+      "exit": 0,
+      "timed_out": false,
+      "darwin_max_process_rss_bytes": 25231360,
+      "sampled_tree_rss_bytes": 26509312,
+      "sampled_compiler_rss_bytes": 0
+    }
+  ]
+}

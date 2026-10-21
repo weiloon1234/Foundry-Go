@@ -376,3 +376,23 @@ func TestDTOIdentityPreservesMainSourceNamespaces(t *testing.T) {
 		}
 	}
 }
+
+func TestJSONWireAndShapeFailuresNeverInvokeNativeCodec(t *testing.T) {
+	descriptor := codecDescriptor()
+	for _, input := range []string{
+		`{"text":"panic","extra":true}`,
+		`{"text":"panic","text":"valid"}`,
+		`{"text":"panic"} {}`,
+		`{"text":"panic",`,
+	} {
+		result, err := descriptor.Decode(t.Context(), []byte(input), dtoLimits())
+		var failure *DecodeError
+		if result != (CodecDTO{}) || !errors.As(err, &failure) || errors.Is(err, fault.Internal) {
+			t.Fatal("invalid wire input reached the native codec", err)
+		}
+	}
+	result, err := descriptor.Decode(t.Context(), []byte(`{"text":"valid"}`), dtoLimits())
+	if err != nil || result.Text != "VALID" {
+		t.Fatal("wire rejection changed the next decode", result, err)
+	}
+}

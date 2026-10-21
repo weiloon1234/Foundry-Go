@@ -294,7 +294,7 @@ func readRelationKey[M any, K comparable](metadata ModelField[M], field ScalarFi
 	if err != nil {
 		return value.Optional[relationKeyValue[K]]{}, err
 	}
-	identity, err := metadata.equalityKey(raw)
+	identity, err := recordEqualityKey(metadata.kind, raw)
 	if err != nil {
 		return value.Optional[relationKeyValue[K]]{}, err
 	}

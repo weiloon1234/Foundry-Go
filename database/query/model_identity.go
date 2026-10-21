@@ -79,7 +79,7 @@ func (d ModelIdentity[M, K]) KeyToken(key K) (string, error) {
 			return fault.New(fault.Invalid, "model identity key cannot be null")
 		}
 		field, _ := d.query.definition.modelField(d.primary.ref.Column)
-		encoded, err := field.equalityKey(raw)
+		encoded, err := recordEqualityKey(field.kind, raw)
 		if err != nil {
 			return err
 		}

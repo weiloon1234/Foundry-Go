@@ -185,10 +185,10 @@ func fetchHop[M, I, N any, A, B comparable](ctx context.Context, executor databa
 	if err != nil {
 		return nil, err
 	}
-	firstMeta := ModelField[I]{kind: first.codec.ParameterType()}
+	firstKind := first.codec.ParameterType()
 	groups := make(map[cursorValue][]N, len(keys))
 	for i, row := range rows {
-		identity, err := firstMeta.equalityKey(row.key)
+		identity, err := recordEqualityKey(firstKind, row.key)
 		if err != nil {
 			return nil, err
 		}

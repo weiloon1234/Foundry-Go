@@ -64,10 +64,9 @@ func (d ProjectionDefinition[P]) Validate() error {
 		types[column.Name] = column.Typ
 	}
 	for _, field := range d.fields {
-		if types[field.column] == nil || types[field.column] != field.typ || field.get == nil || field.decode == nil {
-			return fault.New(fault.Invalid, "invalid or repeated projection field getter")
+		if err := validateProjectionFieldMetadata(field.recordFieldMetadata, field.get != nil, types); err != nil {
+			return err
 		}
-		delete(types, field.column)
 	}
 	return nil
 }

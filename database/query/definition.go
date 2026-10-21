@@ -64,10 +64,9 @@ func (d Definition[M]) Validate() error {
 	}
 	fieldSeen := make(map[string]bool, len(d.modelFields))
 	for _, field := range d.modelFields {
-		if !seen[field.column] || fieldSeen[field.column] || field.get == nil || field.decode == nil {
-			return fault.New(fault.Invalid, "invalid or repeated model field declaration")
+		if err := validateModelFieldMetadata(field.recordFieldMetadata, field.get != nil, seen, fieldSeen); err != nil {
+			return err
 		}
-		fieldSeen[field.column] = true
 	}
 	if err := d.validateTimestamps(); err != nil {
 		return err

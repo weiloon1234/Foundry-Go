@@ -109,13 +109,7 @@ func (r Rule[T]) check(ctx context.Context, input T, limits Limits, prohibitions
 	if err := r.Validate(); err != nil {
 		return err
 	}
-	if err := limits.Validate(); err != nil {
-		return err
-	}
-	if ctx == nil {
-		return invalid("validation requires a context")
-	}
-	if err := ctx.Err(); err != nil {
+	if err := validateExecution(ctx, limits); err != nil {
 		return err
 	}
 	if prohibitionsOnly && !r.prohibitions {
@@ -130,17 +124,34 @@ func (r Rule[T]) check(ctx context.Context, input T, limits Limits, prohibitions
 	} else {
 		err = callback.Invoke("validation", func() error { r.run(&state, input, 0); return nil })
 	}
-	if err != nil {
-		return fault.Wrap(fault.Internal, "validation callback failed", err)
+	return state.complete(err)
+}
+
+func validateExecution(ctx context.Context, limits Limits) error {
+	if err := limits.Validate(); err != nil {
+		return err
+	}
+	if ctx == nil {
+		return invalid("validation requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if state.err != nil {
-		return state.err
+	return nil
+}
+
+func (s *execution) complete(err error) error {
+	if err != nil {
+		return fault.Wrap(fault.Internal, "validation callback failed", err)
 	}
-	if len(state.issues) != 0 {
-		return &Errors{issues: state.issues, messages: state.messages, truncated: state.truncated}
+	if err := s.ctx.Err(); err != nil {
+		return err
+	}
+	if s.err != nil {
+		return s.err
+	}
+	if len(s.issues) != 0 {
+		return &Errors{issues: s.issues, messages: s.messages, truncated: s.truncated}
 	}
 	return nil
 }

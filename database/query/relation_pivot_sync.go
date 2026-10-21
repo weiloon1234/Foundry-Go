@@ -241,7 +241,7 @@ func relationKey[M any](q Query[M], ref fieldRef, model M) (pivotKey, error) {
 	if raw == nil {
 		return pivotKey{}, fault.New(fault.Missing, "relation writes require non-null endpoint keys")
 	}
-	identity, err := field.equalityKey(raw)
+	identity, err := recordEqualityKey(field.kind, raw)
 	if err != nil {
 		return pivotKey{}, err
 	}

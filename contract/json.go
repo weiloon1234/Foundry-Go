@@ -155,52 +155,66 @@ func (d JSON[T]) Decode(ctx context.Context, data []byte, limits JSONLimits) (T,
 	if err := d.Validate(); err != nil {
 		return *new(T), err
 	}
-	if err := limits.Validate(); err != nil {
+	if err := d.schema.checkInput(ctx, data, limits); err != nil {
 		return *new(T), err
+	}
+	var result T
+	err := callback.Isolated("decode JSON DTO", func() error {
+		return decodeNativeJSON(data, &result)
+	})
+	if err := decodeJSONOutcome(ctx, err); err != nil {
+		return *new(T), err
+	}
+	return result, nil
+}
+
+func (s *compiledSchema) checkInput(ctx context.Context, data []byte, limits JSONLimits) error {
+	if err := limits.Validate(); err != nil {
+		return err
 	}
 	if ctx == nil {
-		return *new(T), fault.New(fault.Invalid, "JSON decode requires a context")
+		return fault.New(fault.Invalid, "JSON decode requires a context")
 	}
 	if err := ctx.Err(); err != nil {
-		return *new(T), err
+		return err
 	}
 	node, err := jsonwire.Decode(data, jsonwire.Limits{Bytes: limits.Bytes, Depth: limits.Depth, Nodes: limits.Nodes})
 	if canceled := ctx.Err(); canceled != nil {
-		return *new(T), canceled
+		return canceled
 	}
 	if err != nil {
-		return *new(T), &DecodeError{cause: err}
+		return &DecodeError{cause: err}
 	}
-	issues, err := d.schema.check(ctx, node, shapeLimits{steps: limits.Steps, issues: limits.Issues})
+	issues, err := s.check(ctx, node, shapeLimits{steps: limits.Steps, issues: limits.Issues})
 	if err != nil {
 		if failure := jsonKeyInternalFailure(err); failure != nil {
-			return *new(T), failure
+			return failure
 		}
 		if canceled := ctx.Err(); canceled != nil {
-			return *new(T), canceled
+			return canceled
 		}
-		return *new(T), &DecodeError{issues: issues, cause: err}
+		return &DecodeError{issues: issues, cause: err}
 	}
 	if len(issues) != 0 {
-		return *new(T), &DecodeError{issues: issues}
+		return &DecodeError{issues: issues}
 	}
-	var result T
-	err = callback.Isolated("decode JSON DTO", func() error {
-		return decodeNativeJSON(data, &result)
-	})
+	return nil
+}
+
+func decodeJSONOutcome(ctx context.Context, err error) error {
 	// Isolated returns its own panic/Goexit fault directly. Do not invoke an
 	// arbitrary codec error's Is/As/Unwrap methods while classifying it. Preserve
 	// an actual callback failure even if cancellation arrived during the codec.
 	if failure, ok := err.(*fault.Error); ok && failure.Code() == fault.Panicked {
-		return *new(T), fault.Wrap(fault.Internal, "JSON DTO codec failed", err)
+		return fault.Wrap(fault.Internal, "JSON DTO codec failed", err)
 	}
 	if canceled := ctx.Err(); canceled != nil {
-		return *new(T), canceled
+		return canceled
 	}
 	if err != nil {
-		return *new(T), &DecodeError{cause: err}
+		return &DecodeError{cause: err}
 	}
-	return result, nil
+	return nil
 }
 
 func decodeNativeJSON[T any](data []byte, result *T) error {

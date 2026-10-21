@@ -82,6 +82,12 @@ type columnDeclaration[S, R any] struct {
 	err        error
 }
 
+type columnExecution[S, R any] struct {
+	order  func(Direction) query.ProjectionOrder[S]
+	filter func(Operator, []string) (condition[S], error)
+	cell   func(context.Context, R, Presentation) (exportCell, error)
+}
+
 // Column retains SQL scope S, response row R and exact field value V. Names and
 // getters come from generated validation fields, not a duplicate string map.
 type Column[S, R, V any] struct {

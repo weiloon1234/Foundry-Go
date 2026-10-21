@@ -11,11 +11,15 @@ import (
 // RecordField supplies typed field extraction and codec validation at the
 // generated model/projection boundary, shared by cursors, chunks and relation keys.
 type RecordField[M any] struct {
+	recordFieldMetadata
+	get func(M) (driver.Value, error)
+}
+
+type recordFieldMetadata struct {
 	column          string
 	typ             reflect.Type
 	kind            codec.ParameterType
 	sensitive       bool
-	get             func(M) (driver.Value, error)
 	decode          func(any) (driver.Value, error)
 	assignment      func(any) (assignmentValue, error)
 	mutator         fieldMutator
@@ -48,8 +52,8 @@ func encodeModelKey(raw driver.Value) (cursorValue, error) {
 	return key, nil
 }
 
-func (f RecordField[M]) equalityKey(raw driver.Value) (cursorValue, error) {
-	if f.kind == codec.TypeInterval && raw != nil {
+func recordEqualityKey(kind codec.ParameterType, raw driver.Value) (cursorValue, error) {
+	if kind == codec.TypeInterval && raw != nil {
 		interval, err := codec.Interval().Decode(raw)
 		if err != nil {
 			return cursorValue{}, err
@@ -71,9 +75,13 @@ func NewRecordField[M, V any](column string, c codec.Codec[V], get func(M) V) Re
 	if get == nil || c.Validate() != nil {
 		return ModelField[M]{}
 	}
-	return RecordField[M]{column: column, typ: reflect.TypeFor[V](), kind: c.ParameterType(), sensitive: c.SensitiveValues(), get: func(m M) (driver.Value, error) {
+	return RecordField[M]{recordFieldMetadata: newRecordFieldMetadata(column, c), get: func(m M) (driver.Value, error) {
 		return c.Bind(get(m))
-	}, decode: func(raw any) (driver.Value, error) {
+	}}
+}
+
+func newRecordFieldMetadata[V any](column string, c codec.Codec[V]) recordFieldMetadata {
+	return recordFieldMetadata{column: column, typ: reflect.TypeFor[V](), kind: c.ParameterType(), sensitive: c.SensitiveValues(), decode: func(raw any) (driver.Value, error) {
 		v, err := c.Decode(raw)
 		if err != nil {
 			return nil, err
@@ -86,4 +94,20 @@ func NewRecordField[M, V any](column string, c codec.Codec[V], get func(M) V) Re
 		}
 		return captureAssignment(c, v), nil
 	}}
+}
+
+func validateModelFieldMetadata(field recordFieldMetadata, hasGetter bool, columns, seen map[string]bool) error {
+	if !columns[field.column] || seen[field.column] || !hasGetter || field.decode == nil {
+		return fault.New(fault.Invalid, "invalid or repeated model field declaration")
+	}
+	seen[field.column] = true
+	return nil
+}
+
+func validateProjectionFieldMetadata(field recordFieldMetadata, hasGetter bool, types map[string]reflect.Type) error {
+	if types[field.column] == nil || types[field.column] != field.typ || !hasGetter || field.decode == nil {
+		return fault.New(fault.Invalid, "invalid or repeated projection field getter")
+	}
+	delete(types, field.column)
+	return nil
 }

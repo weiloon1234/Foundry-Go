@@ -34,14 +34,21 @@ func (d Definition[M]) validateTimestamps() error {
 	}
 	for _, name := range []string{fields.Created, fields.Updated} {
 		field, ok := d.modelField(name)
-		column := slices.IndexFunc(d.modelDefinition.Columns, func(column columnData) bool { return column.Name == name })
-		if !ok || name == d.modelDefinition.Primary || column < 0 || d.modelDefinition.Columns[column].Nullable || field.kind != codec.TypeDateTime || field.assignment == nil ||
-			(field.typ != reflect.TypeFor[time.Time]() && field.typ != reflect.TypeFor[temporal.DateTime]()) {
-			return fault.New(fault.Invalid, "managed timestamps require declared non-null instant fields")
+		if err := validateTimestampField(d.modelDefinition, name, field.recordFieldMetadata, ok); err != nil {
+			return err
 		}
-		if field.mutator.apply != nil && field.mutator.input != field.typ {
-			return fault.New(fault.Invalid, "managed timestamps cannot synthesize distinct mutator inputs")
-		}
+	}
+	return nil
+}
+
+func validateTimestampField(model modelDefinition, name string, field recordFieldMetadata, declared bool) error {
+	column := slices.IndexFunc(model.Columns, func(column columnData) bool { return column.Name == name })
+	if !declared || name == model.Primary || column < 0 || model.Columns[column].Nullable || field.kind != codec.TypeDateTime || field.assignment == nil ||
+		(field.typ != reflect.TypeFor[time.Time]() && field.typ != reflect.TypeFor[temporal.DateTime]()) {
+		return fault.New(fault.Invalid, "managed timestamps require declared non-null instant fields")
+	}
+	if field.mutator.apply != nil && field.mutator.input != field.typ {
+		return fault.New(fault.Invalid, "managed timestamps cannot synthesize distinct mutator inputs")
 	}
 	return nil
 }

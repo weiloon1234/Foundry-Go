@@ -317,3 +317,53 @@ func FuzzDatatableRequestBounds(f *testing.F) {
 		}
 	})
 }
+
+func TestNestedFilterCallbacksKeepDeclarationOrderAndPhaseErrors(t *testing.T) {
+	spec := reportSpec()
+	spec.Filters = []FilterRegistration[reportRecord]{DefineFilter("count", "reports.count", Having(foundryhttp.IntegerQuery[int64](), query.Count[reportRecord]()))}
+	var calls []string
+	for _, index := range []int{0, 1, 2} {
+		declaration := spec.Columns[index].declaration
+		filter := *declaration.filter
+		build := filter.build
+		name := filter.name
+		filter.build = func(op Operator, values []string) (condition[reportRecord], error) {
+			calls = append(calls, name)
+			return build(op, values)
+		}
+		declaration.filter = &filter
+		spec.Columns[index].declaration = declaration
+	}
+	build := spec.Filters[0].declaration.build
+	spec.Filters[0].declaration.build = func(op Operator, values []string) (condition[reportRecord], error) {
+		calls = append(calls, "count")
+		return build(op, values)
+	}
+	table := Define(spec)
+	if err := table.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	group := Filter{Op: All, Children: []Filter{
+		{Op: Equal, Column: "id", Values: []string{"1"}},
+		{Op: Any, Children: []Filter{
+			{Op: Equal, Column: "name", Values: []string{"Alpha"}},
+			{Op: Not, Children: []Filter{{Op: Equal, Column: "note", Values: []string{"memo"}}}},
+		}},
+	}}
+	if _, err := table.definition.prepare(Request{Filters: []Filter{group}}, DefaultConfig()); err != nil || !reflect.DeepEqual(calls, []string{"id", "name", "note"}) {
+		t.Fatal("nested filter callback order changed", calls, err)
+	}
+	calls = nil
+	invalid := Filter{Op: Not, Children: []Filter{{Op: Any, Children: []Filter{{Op: Equal, Column: "missing", Values: []string{"1"}}}}}}
+	if _, err := table.definition.prepare(Request{Filters: []Filter{group, invalid}}, DefaultConfig()); err == nil || len(calls) != 0 {
+		t.Fatal("nested structural failure invoked scalar builders", calls, err)
+	}
+	calls = nil
+	mixed := Filter{Op: Any, Children: []Filter{
+		{Op: Equal, Column: "id", Values: []string{"1"}},
+		{Op: Greater, Column: "count", Values: []string{"2"}},
+	}}
+	if _, err := table.definition.prepare(Request{Filters: []Filter{mixed}}, DefaultConfig()); err == nil || !reflect.DeepEqual(calls, []string{"id", "count"}) {
+		t.Fatal("phase rejection moved before typed filter construction", calls, err)
+	}
+}

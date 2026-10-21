@@ -326,7 +326,7 @@ func TestStreamPreservesTransportFailureCause(t *testing.T) {
 	}
 	defer prepared.cleanup()()
 	writer := streamFailingWriter{ResponseRecorder: httptest.NewRecorder(), cause: cause}
-	err = response.write(writer, httptest.NewRequest("GET", "/stream", nil), prepared)
+	err = writePreparedResponse(writer, httptest.NewRequest("GET", "/stream", nil), prepared, response.kind, response.status)
 	if !errors.Is(err, cause) {
 		t.Fatal("transport cause was replaced by the public I/O marker", err)
 	}

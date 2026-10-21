@@ -1,9 +1,13 @@
 package validation_test
 
 import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/validation"
 	"github.com/weiloon1234/Foundry-Go/value"
-	"testing"
 )
 
 func TestOriginalInputProhibitionsPreserveConditions(t *testing.T) {
@@ -33,5 +37,36 @@ func TestOriginalInputProhibitionsPreserveConditions(t *testing.T) {
 	predicate := validation.When(hidden.Rules(validation.Absent[string]()), admin.Rules(validation.OneOf(true)))
 	if err := predicate.CheckProhibitions(t.Context(), input{}, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestProhibitionSkipStillChecksLimitsAndContext(t *testing.T) {
+	calls := 0
+	rule := validation.Custom(validation.Spec{ID: "app.unused", Message: "Unused."}, func(context.Context, string) (bool, error) {
+		calls++
+		return true, nil
+	})
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	for _, tc := range []struct {
+		name   string
+		ctx    context.Context
+		limits validation.Limits
+		want   error
+	}{
+		{"valid", t.Context(), validation.DefaultLimits(), nil},
+		{"canceled", ctx, validation.DefaultLimits(), context.Canceled},
+		{"nil-context", nil, validation.DefaultLimits(), fault.Invalid},
+		{"limits-before-cancellation", ctx, validation.Limits{}, fault.Invalid},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := rule.CheckProhibitions(tc.ctx, "input", tc.limits)
+			if !errors.Is(err, tc.want) {
+				t.Fatal("prohibition skip changed validation preconditions", err)
+			}
+		})
+	}
+	if calls != 0 {
+		t.Fatal("prohibition-only validation ran an unrelated callback", calls)
 	}
 }

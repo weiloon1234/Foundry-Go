@@ -7,7 +7,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
-	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
@@ -224,7 +223,19 @@ func (e Endpoint[P, Q, B, R]) register(stage preparedStage[P, Q, B], handler fun
 	if err := e.response.outputPresentation(); err != nil {
 		return InvalidRouteRegistration(err)
 	}
-	registration := e.route.handle(func(w stdhttp.ResponseWriter, r *stdhttp.Request, path P) { e.serve(w, r, path, stage, handler) }, false)
+	transport := endpointTransport{
+		responseKind:        e.response.kind,
+		responseStatus:      e.response.status,
+		credentials:         e.response.credentials,
+		clearsRefreshCookie: e.response.refreshCookieClears,
+		readsRefreshCookie:  e.body.kind == payloadRefreshCookie,
+		cookie:              e.refreshCookie(),
+		files:               e.limits.Files,
+		browserResponse:     e.idempotency == nil && (e.response.kind == payloadJSON || e.response.kind == payloadEmpty || e.response.kind == payloadRedirect),
+	}
+	registration := e.route.handle(func(w stdhttp.ResponseWriter, r *stdhttp.Request, path P) {
+		e.serve(w, r, path, stage, handler, transport)
+	}, false)
 	registration.contract = e.contributionContract()
 	info := registration.info.clone()
 	registration.endpoint = func() EndpointInfo { return e.snapshot(info) }
@@ -235,41 +246,13 @@ func (e Endpoint[P, Q, B, R]) register(stage preparedStage[P, Q, B], handler fun
 	return registration
 }
 
-func (e Endpoint[P, Q, B, R]) serve(w stdhttp.ResponseWriter, r *stdhttp.Request, path P, stage preparedStage[P, Q, B], handler func(context.Context, Input[P, Q, B]) (preparedResponse, error)) {
-	if e.response.kind == payloadEvents {
-		r = withLastEventID(r)
+func (e Endpoint[P, Q, B, R]) serve(w stdhttp.ResponseWriter, r *stdhttp.Request, path P, stage preparedStage[P, Q, B], handler func(context.Context, Input[P, Q, B]) (preparedResponse, error), transport endpointTransport) {
+	var ready bool
+	w, r, ready = transport.preflight(w, r)
+	if !ready {
+		return
 	}
 	ctx := r.Context()
-	cookie := e.refreshCookie()
-	if (e.response.credentials || cookie != nil) && !checkCredentialRequest(w, r) {
-		return
-	}
-	if cookie != nil {
-		// Origin protection precedes reading, so a cross-site request can
-		// neither use nor clear the cookie.
-		if err := cookie.csrf.check(r); err != nil {
-			writeRoutingError(w, r, err)
-			return
-		}
-		if e.body.kind == payloadRefreshCookie || e.response.refreshCookieClears {
-			clear, err := cookie.clear()
-			if err != nil {
-				writeRoutingError(w, r, InternalError.WithCause(err))
-				return
-			}
-			w = &refreshClearingWriter{ResponseWriter: w, clear: clear}
-		}
-	}
-	if err := bindBrowserResponse(ctx, e.idempotency == nil && (e.response.kind == payloadJSON || e.response.kind == payloadEmpty || e.response.kind == payloadRedirect)); err != nil {
-		writeRoutingError(w, r, err)
-		return
-	}
-	if e.response.kind == payloadDownload {
-		if err := e.limits.Files.checkRange(r.Header.Values("Range")); err != nil {
-			writeRoutingError(w, r, err)
-			return
-		}
-	}
 	rawQuery := r.URL.RawQuery
 	if verified, ok := ctx.Value(signedEndpointQueryKey{}).(string); ok {
 		rawQuery = verified
@@ -359,48 +342,7 @@ func (e Endpoint[P, Q, B, R]) serve(w stdhttp.ResponseWriter, r *stdhttp.Request
 		return nil
 	})
 	defer cleanupEndpointResource(r, "response", data.cleanup())
-	if data.operational != nil {
-		logRouteFailure(r, "HTTP idempotent outcome committed with operational failure", data.operational)
-	}
-	if callbackErr != nil {
-		logRouteFailure(r, "HTTP endpoint handler failed", callbackErr)
-		writeRoutingError(w, r, InternalError.WithCause(callbackErr))
-		return
-	}
-	// Preparation owns classification of codec/file-source failures. In particular,
-	// cancellation must not mask a panic already contained by that boundary.
-	// A returned error is authoritative: a later deadline never replaces it.
-	if returned != nil {
-		writeRoutingError(w, r, returned)
-		return
-	}
-	// The handler succeeded and its response is prepared. A deadline that
-	// expired afterwards does not turn completed work into a timeout, but a
-	// browser-session credential is never published after the request ended.
-	// Wrappers outside the router now deliver it unless the client left.
-	completeRoute(ctx)
-	if err := publishBrowserSession(ctx, w, data.statusOr(e.response.status)); err != nil {
-		writeRoutingError(w, r, authenticationError(err))
-		return
-	}
-	if data.setCookie != "" {
-		w.Header().Add("Set-Cookie", data.setCookie)
-	}
-	if e.response.refreshCookieClears {
-		clear, err := cookie.clear()
-		if err != nil {
-			writeRoutingError(w, r, InternalError.WithCause(err))
-			return
-		}
-		w.Header().Add("Set-Cookie", clear)
-	}
-	if err := e.response.write(w, r, data); err != nil {
-		// The response is committed, so no error document can replace it. The
-		// failure still reaches the request observation as a redacted diagnostic.
-		recordRequestDiagnostic(r.Context(), errordiag.Describe(err))
-		logRouteFailure(r, "HTTP endpoint response failed", err)
-		panic(stdhttp.ErrAbortHandler)
-	}
+	transport.publish(w, r, data, returned, callbackErr)
 }
 
 func endpointInputError(ctx context.Context, source string, err error) error {

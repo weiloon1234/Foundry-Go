@@ -106,6 +106,100 @@ passed on the measured, unchanged source, including independent consumers, 1,026
 compiler rejections, real gopls/TypeScript clients and deterministic generation.
 The 2026-10-19 tables below remain historical evidence for the earlier extraction.
 
+## Shared runtime metadata
+
+Record-field codec metadata and codec-only callbacks do not depend on the model
+that owns a field. The private runtime separates that metadata from concrete
+model getters. Model/projection declarations, keys, mutation input types and
+result decoders keep their public contracts and existing validation ownership.
+
+HTTP endpoints share type-independent transport preflight and response
+publication. Typed decoding, lifecycle stages and handler execution keep their
+existing order and isolation boundaries. Body and response cleanup remain under
+the original request owner. JSON parsing/schema checks and validation execution
+envelopes share private implementation while preserving concrete DTO decoding,
+all-or-zero failure results and the validation fast path.
+
+Datatable declaration descriptions and structural request validation share one
+private metadata owner. The complete filter tree is checked before scalar
+callbacks execute. SQL predicate composition, null-aware complements, typed sort
+expressions, row exports, current authorization and source scoping retain their
+existing owners. This does not introduce a request instruction interpreter.
+
+These internal changes require no handwritten consumer migration, regeneration,
+wire change or database migration. They add no deprecated functions. The earlier
+stored-field computation migration above still applies to older framework pins.
+
+A frozen Boss Club source snapshot compares `e9fcb1a` with this continuation,
+using one fixed private framework replacement path. The actual consumer source
+and framework pin were not modified. This is an unpublished local-source
+comparison, rather than verification of a published upgrade. The historical
+workloads elsewhere in this guide are separate comparisons.
+
+| Boss Club workload | Before | Shared runtime metadata |
+| --- | ---: | ---: |
+| Cold ordinary build, median of five | 285.59 s | 282.19 s |
+| Unchanged ordinary build, median of five | 37.44 s | 36.50 s |
+| Ordinary build cache | 9.323 GiB | 9.259 GiB |
+| Build + vet cache | 9.390 GiB | 9.325 GiB |
+| Build + vet + race compilation cache | 21.356 GiB | 21.208 GiB |
+
+Ordinary cache falls by **0.68%**. The complete retained profile saves
+**151.65 MiB, or 0.69%**. Ordinary cache byte counts reproduce exactly across
+five fresh task-owned caches per side. Cold timing ranges are 284.69–287.22 s
+before and 281.33–284.13 s after. The local median improves by **1.19%**;
+this is a small improvement under the measured configuration.
+
+Unchanged-build ranges overlap at 35.97–38.15 s before and 35.74–37.65 s after,
+so they do not establish a repeatable speedup. Each unchanged ordinary build
+compiles zero packages, links the CLI once and adds zero retained cache bytes.
+The retained trace therefore attributes the warm delay to linking.
+
+Five alternating one-second samples from matched precompiled test binaries give
+the following runtime medians. These probes execute no database work.
+
+| Operation | Before → after ns/op | Before → after allocs/op |
+| --- | ---: | ---: |
+| Repeated model metadata validation | 209.0 → 221.8 | 2 → 2 |
+| Shallow table request preparation | 228.8 → 213.0 | 12 → 12 |
+| Nested table request preparation | 1,572 → 1,509 | 88 → 88 |
+| JSON DTO decoding | 3,491 → 3,516 | 43 → 43 |
+| Validation rule check | 399.5 → 396.6 | 1 → 1 |
+| 100-item JSON endpoint through router | 170,635 → 167,994 | 2,733 → 2,733 |
+| Same endpoint through kernel | 170,639 → 169,897 | 2,754 → 2,754 |
+
+Repeated metadata validation costs about 13 ns more, or 6.1%, in this probe.
+Table preparation improves by about 4–7%; DTO, rule and endpoint timing ranges
+overlap. Allocation counts are unchanged in all seven paths. Allocated bytes are
+unchanged outside the endpoint cases, whose small variation is retained in the
+evidence. These results cover the exercised operations, not registration costs
+or end-to-end database throughput.
+
+The largest three consumer archives contain about 147 MiB of stored machine
+code within about 2.6 GiB of archives. Symbol names, references, other data and
+debugging information account for most of their storage. This suggests that
+retained type and method graphs limit further savings from shared helper bodies.
+These object categories are descriptive, not independently removable costs.
+
+Commands use native Go 1.27.1 on darwin/arm64, `-mod=readonly -p=2`,
+`GOMAXPROCS=2` and `-buildvcs=false`. Before/after trials alternate. OS file
+caches, thermal state and unrelated host load remain uncontrolled. Race profiling
+compiles and links with `-exec=/usr/bin/true`; it executes no application tests
+or database code. Its one cold observation per side does not establish a race
+compilation speedup. Cache-plus-temporary-file peaks were sampled every five
+seconds at about 35 GiB during race compilation; brief higher peaks may be missed.
+
+[Recorded runtime extraction evidence](../evidence/typed-runtime-cost-20261020.json)
+retains source fingerprints, commands, timing samples, cache/object breakdowns
+and verification. Task-owned measurement caches are removed after child exit.
+Shared and other-agent caches are not deleted by this comparison.
+
+The measured Go/module source passed native `make verify` and focused races for
+query, HTTP, contract, validation and datatable packages. All 3,060 exported
+declarations in the affected packages and 285 generated Go files match the
+baseline. PostgreSQL checks used existing private configuration and retained
+isolated test namespaces. Registration allocation neutrality was not measured.
+
 ## Measurement conditions
 
 Recorded results use native Go 1.27.1 on darwin/arm64 (Apple M4 Max).

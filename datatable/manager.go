@@ -393,7 +393,7 @@ func (t Table[S, R, A]) SimpleQuery(ctx context.Context, m *Manager, subject A, 
 func (t Table[S, R, A]) checkPageBytes(ctx context.Context, m *Manager, rows []R) error {
 	remaining := m.config.MaxPageBytes
 	for _, row := range rows {
-		data, err := t.definition.spec.Row.Encode(ctx, row, rowLimits(min(remaining, m.config.MaxRowBytes)))
+		data, err := t.definition.row.Encode(ctx, row, rowLimits(min(remaining, m.config.MaxRowBytes)))
 		if err != nil {
 			return err
 		}
@@ -432,7 +432,7 @@ func (t Table[S, R, A]) Inspect(ctx context.Context, m *Manager, subject A) (Des
 	}
 	var result Description
 	err := m.calls.Run(ctx, "datatable inspection", func(ctx context.Context) error {
-		if err := t.definition.spec.Authorize(ctx, subject, InspectAction); err != nil {
+		if err := t.definition.authorize(ctx, subject, InspectAction); err != nil {
 			return err
 		}
 		var err error

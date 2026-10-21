@@ -183,7 +183,7 @@ func (t Table[S, R, A]) Export(ctx context.Context, m *Manager, subject A, reque
 	if err := t.check(m); err != nil {
 		return nil, err
 	}
-	if !t.definition.spec.Exports {
+	if !t.definition.metadata.info.Exports {
 		return nil, invalid("table does not permit exports")
 	}
 	if options.Format != CSV && options.Format != XLSX || len(options.Name) > filename.MaxBytes || options.ByteOrderMark && options.Format != CSV {
@@ -247,13 +247,13 @@ func (t Table[S, R, A]) Export(ctx context.Context, m *Manager, subject A, reque
 		if options.Format == XLSX {
 			units = maxCellUTF16Units
 		}
-		var columns []columnDeclaration[S, R]
+		var columns []columnExecution[S, R]
 		var headings []string
-		for _, column := range t.definition.columns {
+		for i, column := range t.definition.columns {
 			if column.cell == nil {
 				continue
 			}
-			text, err := m.dependencies.Labels(ctx, presentation.Locale, column.label)
+			text, err := m.dependencies.Labels(ctx, presentation.Locale, t.definition.metadata.info.Columns[i].Label)
 			if err != nil {
 				return err
 			}

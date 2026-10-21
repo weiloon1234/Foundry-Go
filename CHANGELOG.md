@@ -36,6 +36,20 @@
   defaults without replacing existing values. Parent rollback includes the
   initialization; see [settings](docs/guides/settings.md).
 
+### Typed runtime compilation footprint
+
+- Share record-field codec metadata across model owners while retaining concrete
+  getters, keys, mutation inputs and complete result decoders.
+- Share HTTP transport preflight/publication and JSON/validation execution
+  envelopes without changing typed endpoint declarations, handler signatures,
+  lifecycle ordering or resource cleanup ownership.
+- Share datatable declaration and request validation metadata while preserving
+  typed SQL scopes, rows, actors, filters and export callbacks. Existing consumer
+  calls and generated output remain unchanged; no deprecated APIs are added.
+  Matched Boss Club builds retain 0.69% less combined build/vet/race cache and
+  improve cold-build median by 1.19%; unchanged-build timing ranges overlap.
+  See [runtime build resources](docs/guides/query-build-resources.md#shared-runtime-metadata).
+
 ### Query compilation footprint
 
 - Share remaining upsert policy/index-target planning, correlation qualification,

@@ -2,7 +2,6 @@ package datatable
 
 import (
 	"context"
-	"encoding/json"
 	"reflect"
 	"slices"
 	"strings"
@@ -45,13 +44,15 @@ type Spec[S, R, A any] struct {
 type tableIdentity struct{ marker byte }
 type Table[S, R, A any] struct{ definition *tableDefinition[S, R, A] }
 type tableDefinition[S, R, A any] struct {
-	identity *tableIdentity
-	spec     Spec[S, R, A]
-	columns  []columnDeclaration[S, R]
-	byColumn map[string]columnDeclaration[S, R]
-	filters  map[string]filterDeclaration[S]
-	info     Description
-	err      error
+	identity  *tableIdentity
+	metadata  tableMetadata
+	row       contract.JSON[R]
+	authorize func(context.Context, A, Action) error
+	source    func(context.Context, A) (query.ProjectionQuery[S, R], error)
+	stable    []query.ProjectionOrder[S]
+	columns   []columnExecution[S, R]
+	filters   map[string]func(Operator, []string) (condition[S], error)
+	err       error
 }
 
 type NamedFilterInfo struct {
@@ -74,16 +75,12 @@ type Description struct {
 }
 
 func Define[S, R, A any](spec Spec[S, R, A]) Table[S, R, A] {
-	d := &tableDefinition[S, R, A]{identity: &tableIdentity{}, spec: spec, byColumn: make(map[string]columnDeclaration[S, R]), filters: make(map[string]filterDeclaration[S])}
-	d.spec.Columns = slices.Clone(spec.Columns)
-	d.spec.Filters = slices.Clone(spec.Filters)
-	d.spec.DefaultSort = slices.Clone(spec.DefaultSort)
-	d.spec.Stable = slices.Clone(spec.Stable)
-	d.err = d.initialize()
+	d := &tableDefinition[S, R, A]{identity: &tableIdentity{}, row: spec.Row, authorize: spec.Authorize, source: spec.Source, stable: slices.Clone(spec.Stable)}
+	d.metadata.info.ID = spec.ID
+	d.err = d.initialize(spec)
 	return Table[S, R, A]{definition: d}
 }
-func (d *tableDefinition[S, R, A]) initialize() error {
-	spec := d.spec
+func (d *tableDefinition[S, R, A]) initialize(spec Spec[S, R, A]) error {
 	if !identifier.Semantic(string(spec.ID)) || spec.Authorize == nil || spec.Source == nil || len(spec.Columns) == 0 || len(spec.Columns) > MaxColumns || len(spec.Filters) > MaxColumns || len(spec.Stable) == 0 || len(spec.Stable) > MaxSorts {
 		return invalid("invalid datatable declaration")
 	}
@@ -96,102 +93,28 @@ func (d *tableDefinition[S, R, A]) initialize() error {
 	if err != nil {
 		return err
 	}
-	if err := contract.RejectPasswordOutput(row, "table row"); err != nil {
-		return err
-	}
-	request, err := RequestJSON().Description()
-	if err != nil {
-		return err
-	}
-	d.info = Description{ID: spec.ID, Row: row, Request: request, DefaultSort: slices.Clone(spec.DefaultSort), Exports: spec.Exports}
-	exports := 0
-	var searchPhase FilterPhase
+	columns := make([]columnMetadataDeclaration, 0, len(spec.Columns))
+	filters := make([]filterMetadataDeclaration, 0, len(spec.Filters))
+	d.filters = make(map[string]func(Operator, []string) (condition[S], error))
 	for _, registration := range spec.Columns {
 		c := registration.declaration
-		if c.err != nil {
-			return c.err
-		}
-		if !validName(c.name) || c.label.Validate() != nil {
-			return invalid("invalid datatable column")
-		}
-		if _, exists := d.byColumn[c.name]; exists {
-			return fault.New(fault.Duplicate, "datatable column is repeated")
-		}
-		scalar, err := spec.Row.DescribeScalarProperty(c.name)
-		if err != nil {
-			return invalid("datatable column must name a declared scalar DTO property")
-		}
-		info := ColumnInfo{Name: c.name, Label: c.label, Value: scalar, Sortable: c.order != nil, Searchable: c.searchable, Exportable: c.cell != nil}
+		metadata := columnMetadataDeclaration{name: c.name, label: c.label, sortable: c.order != nil, searchable: c.searchable, exportable: c.cell != nil, cellInfo: c.cellInfo, err: c.err}
+		execution := columnExecution[S, R]{order: c.order, cell: c.cell}
 		if c.filter != nil {
-			f := *c.filter
-			if err := d.addFilter(f); err != nil {
-				return err
-			}
-			if !sameScalar(scalar.Value, f.info) {
-				return invalid("column filter scalar differs from its DTO property")
-			}
-			copy, err := cloneFilterInfo(f.info)
-			if err != nil {
-				return err
-			}
-			info.Filter = &copy
+			f := c.filter
+			execution.filter = f.build
+			metadata.filter = &filterMetadataDeclaration{name: f.name, label: f.label, info: f.info, hasBuilder: f.build != nil, err: f.err}
+			d.filters[f.name] = f.build
 		}
-		if c.searchable {
-			if c.filter == nil {
-				return invalid("searchable columns require a declared contains filter")
-			}
-			info.SearchOperator = searchOperator(c.filter.info)
-			if info.SearchOperator == "" {
-				return invalid("searchable columns require a declared contains filter")
-			}
-			// Global search ORs every searchable column; one OR cannot span
-			// the WHERE and HAVING phases, so reject the table, not a request.
-			if searchPhase != "" && searchPhase != c.filter.info.Phase {
-				return invalid("searchable columns cannot mix WHERE and HAVING phases")
-			}
-			searchPhase = c.filter.info.Phase
-		}
-		if c.cell != nil {
-			if c.cellInfo == nil || !sameScalar(scalar.Value, *c.cellInfo) {
-				return invalid("column export scalar differs from its DTO property")
-			}
-			exports++
-		}
-		d.columns = append(d.columns, c)
-		d.byColumn[c.name] = c
-		d.info.Columns = append(d.info.Columns, info)
+		columns = append(columns, metadata)
+		d.columns = append(d.columns, execution)
 	}
 	for _, registration := range spec.Filters {
 		f := registration.declaration
-		if _, exists := d.byColumn[f.name]; exists {
-			return fault.New(fault.Duplicate, "extra filter overlaps a displayed column")
-		}
-		if err := d.addFilter(f); err != nil {
-			return err
-		}
-		copy, err := cloneFilterInfo(f.info)
-		if err != nil {
-			return err
-		}
-		d.info.Filters = append(d.info.Filters, NamedFilterInfo{Name: f.name, Label: f.label, Filter: copy})
+		filters = append(filters, filterMetadataDeclaration{name: f.name, label: f.label, info: f.info, hasBuilder: f.build != nil, err: f.err})
+		d.filters[f.name] = f.build
 	}
-	if spec.Exports && exports == 0 {
-		return invalid("export-enabled table requires exportable columns")
-	}
-	return d.validateSort(spec.DefaultSort)
-}
-func (d *tableDefinition[S, R, A]) addFilter(f filterDeclaration[S]) error {
-	if f.err != nil {
-		return f.err
-	}
-	if !validName(f.name) || f.label.Validate() != nil || f.build == nil {
-		return invalid("invalid datatable filter")
-	}
-	if _, exists := d.filters[f.name]; exists {
-		return fault.New(fault.Duplicate, "datatable filter is repeated")
-	}
-	d.filters[f.name] = f
-	return nil
+	return d.metadata.initialize(spec.ID, row, spec.Row.DescribeScalarProperty, columns, filters, spec.DefaultSort, spec.Exports)
 }
 func (t Table[S, R, A]) Validate() error {
 	if t.definition == nil || t.definition.identity == nil {
@@ -203,20 +126,13 @@ func (t Table[S, R, A]) ID() TableID {
 	if t.definition == nil {
 		return ""
 	}
-	return t.definition.spec.ID
+	return t.definition.metadata.info.ID
 }
 func (t Table[S, R, A]) Description() (Description, error) {
 	if err := t.Validate(); err != nil {
 		return Description{}, err
 	}
-	// Descriptions contain only framework-owned metadata, no callbacks or values.
-	data, err := json.Marshal(t.definition.info)
-	if err != nil {
-		return Description{}, err
-	}
-	var result Description
-	err = json.Unmarshal(data, &result)
-	return result, err
+	return t.definition.metadata.description()
 }
 
 type Registration struct {

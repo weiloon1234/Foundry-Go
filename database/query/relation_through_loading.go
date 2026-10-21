@@ -76,7 +76,7 @@ func fetchThrough[M, N, P any, A, B comparable](ctx context.Context, executor da
 		if raw == nil {
 			return nil, fault.New(fault.Invalid, "pivot primary key cannot be NULL")
 		}
-		identity, err := primaryMeta.equalityKey(raw)
+		identity, err := recordEqualityKey(primaryMeta.kind, raw)
 		if err != nil {
 			return nil, fault.New(fault.Invalid, "pivot primary key has no canonical database representation")
 		}

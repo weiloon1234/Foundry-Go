@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/temporal"
+	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 type timestampRecord struct {
@@ -155,5 +156,66 @@ func TestModelTimestampsRejectInvalidTimeCancellationAndMetadata(t *testing.T) {
 	}
 	if err := q.definition.Validate(); err != nil {
 		t.Fatal("valid timestamp metadata rejected", err)
+	}
+}
+
+func TestModelTimestampsRejectNullableFieldsAndDistinctMutatorInputs(t *testing.T) {
+	calls := 0
+	updated := NewModelField("modified_on", codec.DateTime(), func(r timestampRecord) temporal.DateTime {
+		calls++
+		return r.updated
+	})
+	for _, test := range []struct {
+		name     string
+		nullable bool
+		created  ModelField[timestampRecord]
+		message  string
+	}{
+		{
+			name: "nullable field", nullable: true,
+			created: NewModelField("created_on", codec.Nullable(codec.Time()), func(r timestampRecord) value.Nullable[time.Time] {
+				calls++
+				return value.Of(r.created)
+			}),
+			message: "managed timestamps require declared non-null instant fields",
+		},
+		{
+			name: "distinct mutator input",
+			created: NewInputModelField("created_on", codec.Time(), func(r timestampRecord) time.Time {
+				calls++
+				return r.created
+			}, func(string) (time.Time, error) {
+				calls++
+				return time.Time{}, nil
+			}),
+			message: "managed timestamps cannot synthesize distinct mutator inputs",
+		},
+		{
+			name:    "missing getter",
+			created: NewModelField[timestampRecord, time.Time]("created_on", codec.Time(), nil),
+			message: "invalid or repeated model field declaration",
+		},
+		{
+			name: "invalid codec",
+			created: NewModelField("created_on", codec.Codec[time.Time]{}, func(r timestampRecord) time.Time {
+				calls++
+				return r.created
+			}),
+			message: "invalid or repeated model field declaration",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			d := Define("timed_records", "id", []Column{{Name: "id"}, {Name: "created_on", Nullable: test.nullable}, {Name: "modified_on"}},
+				func(database.Row) (timestampRecord, error) { return timestampRecord{}, nil }, test.created, updated,
+			).WithTimestamps("created_on", "modified_on")
+			for range 2 {
+				if err := d.Validate(); !errors.Is(err, fault.Invalid) || !strings.HasSuffix(err.Error(), ": "+test.message) {
+					t.Fatal("timestamp metadata validation changed diagnostic precedence", err)
+				}
+			}
+		})
+	}
+	if calls != 0 {
+		t.Fatal("timestamp metadata validation invoked a getter or mutator", calls)
 	}
 }

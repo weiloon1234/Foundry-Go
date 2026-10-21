@@ -108,13 +108,13 @@ func (q Query[M]) mutateAssignments(ctx context.Context, mutation Mutation[M], c
 	}
 	// Check all participating value types before invoking any user code.
 	for _, field := range q.definition.modelFields {
-		mutator := field.mutatorFor(conflict)
+		mutator := recordMutator(field.recordFieldMetadata, conflict)
 		if i, set := indices[field.column]; set && mutator.apply != nil && reflect.TypeOf(result.assignments[i].Value) != mutator.input {
 			return Mutation[M]{}, fault.New(fault.Invalid, "mutation value does not match its declared field type")
 		}
 	}
 	for _, field := range q.definition.modelFields {
-		mutator := field.mutatorFor(conflict)
+		mutator := recordMutator(field.recordFieldMetadata, conflict)
 		if mutator.apply == nil {
 			continue
 		}
@@ -137,7 +137,7 @@ func (q Query[M]) mutateAssignments(ctx context.Context, mutation Mutation[M], c
 	return result, nil
 }
 
-func (f RecordField[M]) mutatorFor(conflict bool) fieldMutator {
+func recordMutator(f recordFieldMetadata, conflict bool) fieldMutator {
 	if conflict {
 		return f.conflictMutator
 	}

@@ -26,7 +26,7 @@ func ExportHandler[P, S, R, A any](table Table[S, R, A], manager *Manager, resol
 	if err := table.check(manager); err != nil {
 		return nil, err
 	}
-	if !table.definition.spec.Exports || resolve == nil || deliver == nil {
+	if !table.definition.metadata.info.Exports || resolve == nil || deliver == nil {
 		return nil, invalid("export job requires an enabled table, authority resolver and delivery callback")
 	}
 	return func(ctx context.Context, payload P) error {

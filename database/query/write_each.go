@@ -205,7 +205,7 @@ func validateModelWriteIdentities[M any](ctx context.Context, primary ModelField
 		if raw == nil {
 			return fault.New(fault.Invalid, "per-model write primary key cannot be NULL")
 		}
-		identity, err := primary.equalityKey(raw)
+		identity, err := recordEqualityKey(primary.kind, raw)
 		if err != nil {
 			return err
 		}

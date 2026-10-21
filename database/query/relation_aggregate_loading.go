@@ -71,7 +71,7 @@ func aggregateKeys[M any](ctx context.Context, metadata ModelField[M], parents [
 		if raw == nil {
 			continue
 		}
-		key, err := metadata.equalityKey(raw)
+		key, err := recordEqualityKey(metadata.kind, raw)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -126,7 +126,7 @@ func fetchRelationAggregate[M, N, V any](ctx context.Context, executor database.
 			if key == nil {
 				return groupedAggregate[V]{}, fault.New(fault.Invalid, "aggregate group key is NULL")
 			}
-			identity, err := metadata.equalityKey(key)
+			identity, err := recordEqualityKey(metadata.kind, key)
 			return groupedAggregate[V]{key: identity, value: result}, err
 		}, func(row groupedAggregate[V]) error {
 			if state.remaining == 0 {

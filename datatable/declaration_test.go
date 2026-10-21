@@ -172,3 +172,44 @@ func TestSearchableColumnsCannotSpanWhereAndHavingPhases(t *testing.T) {
 		t.Fatal("single-phase search rejected", err)
 	}
 }
+
+func TestTableOwnsNestedFilterDeclarations(t *testing.T) {
+	spec := reportSpec()
+	spec.Filters = []FilterRegistration[reportRecord]{DefineFilter("count", "reports.count", Having(foundryhttp.IntegerQuery[int64](), query.Count[reportRecord]()))}
+	table := Define(spec)
+	before, err := table.Description()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, op := range spec.Columns[1].declaration.filter.info.Operators {
+		if op == Equal {
+			spec.Columns[1].declaration.filter.info.Operators[i] = "mutated"
+		}
+	}
+	for i, op := range spec.Filters[0].declaration.info.Operators {
+		if op == Equal {
+			spec.Filters[0].declaration.info.Operators[i] = "mutated"
+		}
+	}
+	copy, err := table.Description()
+	if err != nil {
+		t.Fatal(err)
+	}
+	copy.Columns[1].Filter.Operators[0] = "snapshot mutation"
+	copy.Filters[0].Filter.Operators[0] = "snapshot mutation"
+	after, err := table.Description()
+	if err != nil || !reflect.DeepEqual(before, after) {
+		t.Fatal("nested declaration or inspection mutation changed table metadata", err)
+	}
+	for _, filter := range []Filter{
+		{Op: Equal, Column: "name", Values: []string{"Alpha"}},
+		{Op: Equal, Column: "count", Values: []string{"2"}},
+	} {
+		if _, err := table.definition.prepare(Request{Filters: []Filter{filter}}, DefaultConfig()); err != nil {
+			t.Fatal("nested mutation changed the registered filter allowlist", err)
+		}
+	}
+	if _, err := table.definition.prepare(Request{Search: "Alpha"}, DefaultConfig()); err != nil {
+		t.Fatal("nested mutation changed registered search", err)
+	}
+}

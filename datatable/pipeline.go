@@ -2,21 +2,14 @@ package datatable
 
 import (
 	"context"
-	"slices"
-	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/database/query"
-	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
 type prepared[S any] struct {
 	page      query.PageRequest
 	condition condition[S]
 	orders    []query.ProjectionOrder[S]
-}
-
-func (d *tableDefinition[S, R, A]) validateSort(sorts []Sort) error {
-	return validateSortColumns(sorts, func(name string) bool { column, ok := d.byColumn[name]; return ok && column.order != nil })
 }
 
 func validateSortColumns(sorts []Sort, sortable func(string) bool) error {
@@ -33,41 +26,11 @@ func validateSortColumns(sorts []Sort, sortable func(string) bool) error {
 	return nil
 }
 
-type requestBudget struct{ nodes, bytes int }
-
-func (b *requestBudget) text(text string, maximum int) error {
-	if len(text) > maximum || !utf8.ValidString(text) || len(text) > MaxRequestBytes-b.bytes {
-		return requestInvalid("datatable request exceeds its text bounds")
-	}
-	b.bytes += len(text)
-	return nil
-}
 func (d *tableDefinition[S, R, A]) prepare(request Request, config Config) (prepared[S], error) {
 	var result prepared[S]
-	page, err := request.page()
+	page, err := d.metadata.validateRequest(request, config)
 	if err != nil {
 		return result, err
-	}
-	if page.Size > config.MaxPageSize || (page.Number-1) > config.MaxOffset/page.Size {
-		return result, requestInvalid("datatable page exceeds its configured bound")
-	}
-	if err := d.validateSort(request.Sort); err != nil {
-		return result, foundryhttp.BadRequest.WithCause(err)
-	}
-	budget := requestBudget{}
-	for _, sort := range request.Sort {
-		if err := budget.text(sort.Column, 128); err != nil {
-			return result, err
-		}
-	}
-	if err := budget.text(request.Search, MaxScalarBytes); err != nil {
-		return result, err
-	}
-	// Complete structural validation precedes all scalar/extension callbacks.
-	for _, filter := range request.Filters {
-		if err := d.validateFilter(filter, 0, &budget); err != nil {
-			return result, err
-		}
 	}
 	result.page = page
 	for _, filter := range request.Filters {
@@ -80,9 +43,9 @@ func (d *tableDefinition[S, R, A]) prepare(request Request, config Config) (prep
 	}
 	if request.Search != "" {
 		var children []condition[S]
-		for _, column := range d.columns {
-			if column.searchable {
-				c, err := column.filter.build(searchOperator(column.filter.info), []string{request.Search})
+		for i, column := range d.metadata.info.Columns {
+			if column.Searchable {
+				c, err := d.columns[i].filter(column.SearchOperator, []string{request.Search})
 				if err != nil {
 					return prepared[S]{}, err
 				}
@@ -101,52 +64,17 @@ func (d *tableDefinition[S, R, A]) prepare(request Request, config Config) (prep
 	}
 	sorts := request.Sort
 	if len(sorts) == 0 {
-		sorts = d.spec.DefaultSort
+		sorts = d.metadata.info.DefaultSort
 	}
 	for _, sort := range sorts {
-		result.orders = append(result.orders, d.byColumn[sort.Column].order(sort.Direction))
+		result.orders = append(result.orders, d.columns[d.metadata.byColumn[sort.Column]].order(sort.Direction))
 	}
-	result.orders = append(result.orders, d.spec.Stable...)
+	result.orders = append(result.orders, d.stable...)
 	return result, nil
-}
-func (d *tableDefinition[S, R, A]) validateFilter(filter Filter, depth int, budget *requestBudget) error {
-	if depth > MaxFilterDepth || budget.nodes >= MaxFilters {
-		return requestInvalid("datatable filter tree exceeds its structural bound")
-	}
-	budget.nodes++
-	if err := budget.text(filter.Column, 128); err != nil {
-		return err
-	}
-	if len(filter.Values) > MaxFilterValues {
-		return requestInvalid("too many filter values")
-	}
-	for _, text := range filter.Values {
-		if err := budget.text(text, MaxScalarBytes); err != nil {
-			return err
-		}
-	}
-	switch filter.Op {
-	case All, Any, Not:
-		if filter.Column != "" || len(filter.Values) != 0 || len(filter.Children) == 0 || filter.Op == Not && len(filter.Children) != 1 {
-			return requestInvalid("invalid datatable filter group")
-		}
-		for _, child := range filter.Children {
-			if err := d.validateFilter(child, depth+1, budget); err != nil {
-				return err
-			}
-		}
-	default:
-		declaration, ok := d.filters[filter.Column]
-		if !ok || len(filter.Children) != 0 || !slices.Contains(declaration.info.Operators, filter.Op) {
-			return requestInvalid("invalid or undeclared datatable filter")
-		}
-		return filterArity(filter.Op, len(filter.Values))
-	}
-	return nil
 }
 func (d *tableDefinition[S, R, A]) buildFilter(filter Filter) (condition[S], error) {
 	if len(filter.Children) == 0 {
-		return d.filters[filter.Column].build(filter.Op, filter.Values)
+		return d.filters[filter.Column](filter.Op, filter.Values)
 	}
 	children := make([]condition[S], 0, len(filter.Children))
 	for _, child := range filter.Children {
@@ -204,13 +132,13 @@ func (d *tableDefinition[S, R, A]) scoped(ctx context.Context, subject A, action
 	if err := ctx.Err(); err != nil {
 		return scopedSource[S, R]{}, err
 	}
-	if err := d.spec.Authorize(ctx, subject, action); err != nil {
+	if err := d.authorize(ctx, subject, action); err != nil {
 		return scopedSource[S, R]{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return scopedSource[S, R]{}, err
 	}
-	q, err := d.spec.Source(ctx, subject)
+	q, err := d.source(ctx, subject)
 	if err != nil {
 		return scopedSource[S, R]{}, err
 	}

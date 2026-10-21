@@ -74,7 +74,7 @@ func (r Response[R]) prepare(ctx context.Context, input R, limits EndpointLimits
 	return prepared, nil
 }
 
-func (r Response[R]) write(w stdhttp.ResponseWriter, request *stdhttp.Request, prepared preparedResponse) error {
+func writePreparedResponse(w stdhttp.ResponseWriter, request *stdhttp.Request, prepared preparedResponse, kind payloadKind, status int) error {
 	if prepared.file != nil {
 		return prepared.file.write(w, request)
 	}
@@ -84,19 +84,19 @@ func (r Response[R]) write(w stdhttp.ResponseWriter, request *stdhttp.Request, p
 	data := prepared.data
 	header := w.Header()
 	clearResponseRepresentation(header)
-	if r.kind == payloadJSON {
+	if kind == payloadJSON {
 		header.Set("Content-Type", "application/json")
 		header.Set("Content-Length", strconv.Itoa(len(data)))
 		header.Set("X-Content-Type-Options", "nosniff")
-	} else if r.status == stdhttp.StatusResetContent || r.kind == payloadRedirect {
+	} else if status == stdhttp.StatusResetContent || kind == payloadRedirect {
 		header.Set("Content-Length", "0")
 	}
 	applyResponseHeaders(header, prepared.headers)
-	if r.kind == payloadRedirect {
+	if kind == payloadRedirect {
 		header.Set("Location", prepared.location)
 	}
-	w.WriteHeader(prepared.statusOr(r.status))
-	if request.Method == stdhttp.MethodHead || r.kind == payloadEmpty || r.kind == payloadRedirect {
+	w.WriteHeader(prepared.statusOr(status))
+	if request.Method == stdhttp.MethodHead || kind == payloadEmpty || kind == payloadRedirect {
 		return nil
 	}
 	written, err := w.Write(data)
