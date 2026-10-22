@@ -142,6 +142,90 @@ func TestInvalidTemporalBoundaries(t *testing.T) {
 	}
 }
 
+func TestTemporalMicrosecondNormalization(t *testing.T) {
+	// NewDateTime with a nanosecond instant truncates (no rounding up: ...999999999 -> ...999999000).
+	instantWithNs := time.Date(2026, 10, 22, 10, 0, 0, 999999999, time.UTC)
+	dt, err := temporal.NewDateTime(instantWithNs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dt.UTC().Nanosecond() != 999999000 {
+		t.Fatalf("expected nanosecond 999999000, got %d", dt.UTC().Nanosecond())
+	}
+	if dt.UTC().Nanosecond()%1000 != 0 {
+		t.Fatalf("sub-microsecond precision remained: %d", dt.UTC().Nanosecond())
+	}
+
+	// ParseDateTime with nanoseconds yields .123456.
+	parsed, err := temporal.ParseDateTime("2026-10-22T10:00:00.123456789Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.UTC().Nanosecond() != 123456000 {
+		t.Fatalf("expected nanosecond 123456000, got %d", parsed.UTC().Nanosecond())
+	}
+	if parsed.String() != "2026-10-22T10:00:00.123456Z" {
+		t.Fatalf("expected 2026-10-22T10:00:00.123456Z, got %s", parsed.String())
+	}
+
+	// DateTime.Add(1ns) stays normalized.
+	added, err := dt.Add(time.Nanosecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if added.UTC().Nanosecond()%1000 != 0 {
+		t.Fatalf("sub-microsecond precision remained after Add: %d", added.UTC().Nanosecond())
+	}
+	if added != dt {
+		t.Fatalf("expected 1ns Add to truncate to unchanged microsecond instant, got %v vs %v", added, dt)
+	}
+
+	// WallTime (Time): NewTime truncates without rounding up.
+	tm, err := temporal.NewTime(10, 0, 0, 999999999)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tm.Nanosecond() != 999999000 || tm.Nanosecond()%1000 != 0 {
+		t.Fatalf("expected Time nanosecond 999999000, got %d", tm.Nanosecond())
+	}
+
+	// ParseTime with nanoseconds yields .123456.
+	parsedTime, err := temporal.ParseTime("10:00:00.123456789")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsedTime.Nanosecond() != 123456000 || parsedTime.Nanosecond()%1000 != 0 {
+		t.Fatalf("expected Time nanosecond 123456000, got %d", parsedTime.Nanosecond())
+	}
+	if parsedTime.String() != "10:00:00.123456" {
+		t.Fatalf("expected 10:00:00.123456, got %s", parsedTime.String())
+	}
+
+	// LocalDateTime: ParseLocalDateTime truncates to microsecond precision.
+	parsedLocal, err := temporal.ParseLocalDateTime("2026-10-22T10:00:00.123456789")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsedLocal.Time().Nanosecond() != 123456000 || parsedLocal.Time().Nanosecond()%1000 != 0 {
+		t.Fatalf("expected local date-time nanosecond 123456000, got %d", parsedLocal.Time().Nanosecond())
+	}
+	if parsedLocal.String() != "2026-10-22T10:00:00.123456" {
+		t.Fatalf("expected 2026-10-22T10:00:00.123456, got %s", parsedLocal.String())
+	}
+
+	// LocalDateTime.Add(1ns) stays normalized.
+	addedLocal, err := parsedLocal.Add(time.Nanosecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if addedLocal.Time().Nanosecond()%1000 != 0 {
+		t.Fatalf("sub-microsecond precision remained after local Add: %d", addedLocal.Time().Nanosecond())
+	}
+	if addedLocal != parsedLocal {
+		t.Fatalf("expected 1ns Add to truncate to unchanged local date-time, got %v vs %v", addedLocal, parsedLocal)
+	}
+}
+
 func FuzzLocalDateTimeRoundTrip(f *testing.F) {
 	f.Add("2026-09-11T12:15:00.123")
 	f.Fuzz(func(t *testing.T, input string) {

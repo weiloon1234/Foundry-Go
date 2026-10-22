@@ -10,12 +10,15 @@ import (
 
 var dateTimePattern = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]{1,9})?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$`)
 
-// DateTime is an immutable UTC instant, normalized without a monotonic reading.
-// Its zero value is Go's zero time (0001-01-01T00:00:00Z), not database null.
+// DateTime is an immutable UTC instant at microsecond precision, normalized
+// without a monotonic reading. Its zero value is Go's zero time
+// (0001-01-01T00:00:00Z), not database null.
 type DateTime struct{ instant time.Time }
 
 func NewDateTime(instant time.Time) (DateTime, error) {
-	instant = instant.UTC().Round(0)
+	// Truncate strips sub-microsecond precision and also strips the process-local
+	// monotonic reading; Round(0) is retained to keep monotonic stripping explicit.
+	instant = instant.UTC().Round(0).Truncate(time.Microsecond)
 	if instant.Year() < 1 || instant.Year() > 9999 {
 		return DateTime{}, fault.New(fault.Invalid, "instant exceeds supported years")
 	}

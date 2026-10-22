@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Temporal precision (B29)
+
+- Linux system clocks retain sub-microsecond nanoseconds, causing system-clock
+  instants to fail binding under database codecs that reject sub-microsecond
+  values ("invalid database codec value or destination", returned as HTTP 500).
+- Normalize application time sources (`clock.System.Now()`) and temporal value
+  constructors (`temporal.NewDateTime`, `temporal.NewTime`, `temporal.ParseDateTime`,
+  `temporal.ParseTime`, `temporal.ParseLocalDateTime`, `temporal.DateTime.Add`,
+  `temporal.LocalDateTime.Add`) to microsecond (PostgreSQL) precision by truncating
+  sub-microsecond fractions without rounding up.
+- Database codecs remain strict: raw `time.Time` bindings with sub-microsecond
+  nanoseconds continue to be rejected rather than silently truncated.
+- Consumer migration note: consumers may remove app-level truncating clocks if
+  they were introduced only to avoid binding rejections; raw `time.Now()` values
+  bound directly without framework temporal types must continue to truncate
+  to microsecond precision.
+
 ### Compile footprint
 
 Go compiles every method of each generic type reachable from a type's method

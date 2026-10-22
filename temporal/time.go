@@ -12,14 +12,15 @@ const timeLayout = "15:04:05.999999999"
 
 var timePattern = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]{1,9})?$`)
 
-// Time is a wall-clock time without a date or offset. Zero means midnight.
-// Leap seconds and a 24:00 representation are rejected.
+// Time is a wall-clock time at microsecond precision without a date or offset.
+// Zero means midnight. Leap seconds and a 24:00 representation are rejected.
 type Time struct{ nanos int64 }
 
 func NewTime(hour, minute, second, nanosecond int) (Time, error) {
 	if hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59 || nanosecond < 0 || nanosecond >= 1e9 {
 		return Time{}, fault.New(fault.Invalid, "invalid wall-clock time")
 	}
+	nanosecond = int(time.Duration(nanosecond).Truncate(time.Microsecond))
 	return Time{int64(hour)*int64(time.Hour) + int64(minute)*int64(time.Minute) + int64(second)*int64(time.Second) + int64(nanosecond)}, nil
 }
 func ParseTime(text string) (Time, error) {

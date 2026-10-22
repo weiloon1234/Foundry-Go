@@ -7,8 +7,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/textvalue"
 )
 
-// LocalDateTime preserves a calendar date and wall time without assuming any
-// timezone. Zero is absent. Converting to an instant requires an explicit zone.
+// LocalDateTime preserves a calendar date and wall time at microsecond precision
+// without assuming any timezone. Zero is absent. Converting to an instant requires
+// an explicit zone.
 type LocalDateTime struct {
 	date  Date
 	clock Time

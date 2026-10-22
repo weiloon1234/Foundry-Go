@@ -164,12 +164,17 @@ func TestTemporalMeaningPrecisionAndFailedScans(t *testing.T) {
 	if _, err := codec.Time().Bind(instant.Add(time.Nanosecond)); err == nil {
 		t.Fatal("sub-microsecond instant silently truncated")
 	}
-	nanosecond, err := temporal.NewDateTime(instant.Add(time.Nanosecond))
-	if err != nil || !nanosecond.UTC().Equal(instant.Add(time.Nanosecond)) {
-		t.Fatal("temporal instant lost nanosecond precision", err)
+	fromSubmicro, err := temporal.NewDateTime(instant.Add(time.Nanosecond))
+	if err != nil || !fromSubmicro.UTC().Equal(instant.UTC().Truncate(time.Microsecond)) {
+		t.Fatal("temporal instant did not truncate to microsecond precision", err)
 	}
-	if _, err := codec.DateTime().Bind(nanosecond); err == nil {
-		t.Fatal("sub-microsecond DateTime silently truncated")
+	boundDT, err := codec.DateTime().Bind(fromSubmicro)
+	if err != nil || !boundDT.(time.Time).Equal(instant.UTC().Truncate(time.Microsecond)) {
+		t.Fatal("sub-microsecond normalized DateTime failed to bind", err)
+	}
+	decodedDT, err := codec.DateTime().Decode(boundDT)
+	if err != nil || decodedDT != fromSubmicro {
+		t.Fatal("DateTime round-trip failed", err)
 	}
 	if _, err := codec.Date().Decode(instant); err == nil {
 		t.Fatal("time silently discarded from calendar date")

@@ -35,7 +35,7 @@ JSON decoding into an existing DTO follows normal Go behavior: absent object key
 | `temporal.Time` | Wall time without date/offset; zero is midnight |
 | `temporal.LocalDateTime` | Date and wall time without a zone; zero is absent |
 
-Parsing is strict; supported calendar years are 1–9999 and fractions have at most nanosecond precision. Instants require RFC3339 offsets and normalize to UTC without a monotonic clock reading. Dates reject normalization of invalid days. Wall/local values reject offsets, leap seconds, and 24:00. JSON values are strings and reject null; wrap nullable fields explicitly.
+Parsing is strict; supported calendar years are 1–9999 and fractions have at most nanosecond precision. Instants require RFC3339 offsets and normalize to UTC without a monotonic clock reading. Framework instants and temporal values normalize to microsecond precision, truncating sub-microsecond fractions to match database precision. Dates reject normalization of invalid days. Wall/local values reject offsets, leap seconds, and 24:00. JSON values are strings and reject null; wrap nullable fields explicitly.
 
 Value arithmetic returns a new value and checks the supported date range. `Date.AddDays` changes calendar days. `DateTime.Add` applies elapsed duration to an instant. `LocalDateTime.Add` applies wall-time arithmetic without implying a timezone.
 

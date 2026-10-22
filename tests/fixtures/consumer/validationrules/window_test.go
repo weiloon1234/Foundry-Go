@@ -15,7 +15,7 @@ func TestGeneratedWindowRulesCompareInstantsAcrossOffsets(t *testing.T) {
 		end   string
 		valid bool
 	}{
-		{"2026-01-02T00:00:00.000000001Z", true}, {"2026-01-02T00:00:00Z", false},
+		{"2026-01-02T00:00:00.000001Z", true}, {"2026-01-02T00:00:00Z", false},
 	} {
 		input, err := validationrules.AvailabilityWindowJSON().Decode(t.Context(), []byte(`{"start":"2026-01-02T08:00:00+08:00","end":"`+tc.end+`"}`), limits)
 		if err != nil {

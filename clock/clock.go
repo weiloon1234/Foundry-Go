@@ -8,7 +8,10 @@ import "time"
 // operations needing deterministic time rather than replacing process globals.
 type Clock interface{ Now() time.Time }
 
-// System reads the operating system clock.
+// System reads the operating system clock. Application time has database
+// (microsecond) precision.
 type System struct{}
 
-func (System) Now() time.Time { return time.Now().UTC() }
+// Now returns the current operating system time in UTC, truncated to
+// microsecond precision.
+func (System) Now() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }
