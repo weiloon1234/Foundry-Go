@@ -37,7 +37,7 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 0 | Review design and decisions | Done; approved planning record |
 | 1 | Scratch prototype and go/no-go gate | Done; historical evidence below |
 | 2 | Branch, permanent consumer, catalogue, emitter/release audit, synthetic harness | In progress. Core and permanent fixture ported at `686c6f2`; guardrails are this increment. |
-| 3.0 | Column footprint: flatten column types (R9), then measure receiver form and codec sharing; method-set trims only with approval | Planned; gate below |
+| 3.0 | Column footprint: flatten column types (R9), then measure receiver form and codec sharing; method-set trims only with approval | Done. 70-model gate: functions and bytes pass; compiler RSS 5.14 GB median against a 5 GB target, accepted as a recorded miss (2026-10-23) |
 | 3.1 | Complete declaration, reads, writes, typed raw hydration and model cursors | Planned |
 | 4 | Full relations, pivots, through relations, eager limits, filters and relation writes | Planned |
 | 5 | Lifecycle, mutators, change sets, scopes and observers | Planned |
@@ -83,8 +83,133 @@ compiler RSS ≤ 5 GB at 70 models. Handlers must be no worse, runtime within ±
 no extra allocations, and SQL, compiler cases and editor probes unchanged. It then
 adds per-kind and per-model slope budgets.
 
-The permanent [footprint test](../../tests/fixtures/goway/footprint_test.go) retains
-15% headroom, rounded up, over Stage 1d function measurements:
+## Stage 3.0 column footprint
+
+Flattened column kinds and replaced the private relation bridge’s public `Column`
+result with method-free state. Every exported method set/signature remains pinned
+by the [surface test](../../database/orm/method_surface_test.go). Rows/expr already
+declared their methods directly. No method-set trim or Stage 3.1 work is included.
+
+Go 1.27.1, darwin/arm64, seed 1, sequential new-module builds with `-p=2` and
+`GOMAXPROCS=4`. RSS is native `/usr/bin/time` maximum RSS for the models compiler.
+The task cache was reused; these are not cold-build time claims. MB/GB are decimal.
+
+| Candidate | N=10 functions / MB / RSS GB | N=20 functions / MB / RSS GB | Functions per added model |
+| --- | ---: | ---: | ---: |
+| Baseline | 20,990 / 84.6 / 1.15 | 40,407 / 162.9 / 2.20 | 1,941.7 |
+| 1: direct methods | 16,767 / 69.6 / 0.95 | 32,137 / 133.6 / 1.74 | 1,537.0 |
+| 2: method-free bridge | 14,893 / 61.6 / 0.84 | 28,426 / 117.7 / 1.66 | 1,353.3 |
+| 3: value-owned codec state (retained) | 14,192 / 58.6 / 0.82 | 26,953 / 111.5 / 1.46 | 1,276.1 |
+
+The linear 70-model estimate was 90,758 functions, 376.0 MB and 4.68 GB RSS.
+N=20 handler medians also fell: 6,249 → 4,404 functions and 25.6 → 18.2 MB.
+
+The 70-model gate used the [synthetic harness](../../tools/goway_synthetic.py) with
+the same seed, sources, flags and machine as the Stage 2b run. It was a cold
+sequential build of the old app, then the new one. The old app reproduced the same
+archives and function counts, which makes it a valid control. Its compiler RSS
+varied by 4% between runs. Compiler RSS for `models` is the median of the gate run
+and three recompiles of that package alone:
+
+| 70-model measure | Before 3.0 | Stage 3.0 | Gate | Result |
+| --- | ---: | ---: | ---: | --- |
+| `models` functions | 138,200 | 90,922 (21.4% of old) | ≤ 106,000 | Pass |
+| `models` archive bytes | 557,803,758 | 376,898,108 | ≤ 420 MB | Pass |
+| `models` compiler RSS | 7.34 GB | 5.14 GB median (5.28, 5.13, 5.12, 5.14) | ≤ 5 GB | Miss by 2.7%, accepted |
+| Handler median functions / bytes / RSS | 9,820 / 38.2 MB / 551 MB | 8,077 / 31.2 MB / 450 MB | no worse | Pass |
+| Whole-app archives / functions | 2.23 GB / 569,985 | 1.76 GB / 449,094 | report | −21% / −21% |
+| Build cache / cold build | 2.40 GB / 72.9 s | 1.93 GB / 46.6 s | report | −20% / −36% (one run) |
+
+The remaining options for reaching 5 GB change the API. The method-set trim below
+would move methods to package functions and degrade completion, so the miss was
+accepted rather than trimmed. Compiler RSS stays a tracked metric at Stages 6 and
+11, and the footprint budgets stop growth. Interleaved six-round benchmarks against
+the pre-3.0 commit on the lead's machine: ChainBuild −0.5%, ChainCompile +0.2%,
+Hydrate1000 −0.1%, with identical allocations. The method-surface test also passes
+against the pre-3.0 code.
+
+| N=20 generic origin | Before functions | Retained functions | Retained pointer wrappers |
+| --- | ---: | ---: | ---: |
+| `orm.Column` | 6,912 | 1,746 | 873 |
+| `orm.ordered` | 3,920 | 0 | 0 |
+| `orm.nullableOrdered` | 1,836 | 0 | 0 |
+| `orm.Number` | 2,560 | 2,560 | 1,280 |
+| `orm.NullableText` | 1,920 | 1,920 | 960 |
+| `orm.Query` | 2,000 | 2,000 | 1,000 |
+| `orm.LockedQuery` | 1,120 | 1,120 | 560 |
+| `codec.Codec` | 2,769 | 2,769 | 1,326 |
+| `value.Optional` | 1,613 | 1,613 | 863 |
+| `orm.bindTyped` | 624 | 184 | 0 |
+| `orm.columnWithCodec` | 954 | 276 | 0 |
+| `orm.bindNullable` | 81 | 6 | 0 |
+
+Baseline value-method promotion wrappers disappear from the column family.
+The compiler still emits pointer wrappers: an isolated real `orm.Number` probe
+has 32 whether reached by only a typed parameter, a direct call, an interface,
+a non-generic function adapter, or reflection (concrete plus shape instances).
+Changing interface boxing alone therefore does not help. Pointer receivers would
+break calls on returned values; positive probes retain `table.Key()`, derived keys
+and query chains. Declaration reflection remains for all existing startup checks.
+
+Candidate 3 confirms `Codec[V]` and `Optional[V]` already share by value
+type. Their symbol inventories are unchanged; model-owned ID/result values are
+distinct value types. Their construction helpers did carry a redundant model
+parameter: `bindTyped`, `bindNullable` and `columnWithCodec` now use only `V`.
+Model ownership stays on public handle markers and the private `ormColumn(*M)`
+argument. This removes duplicate codec-construction closures without erasing types.
+
+| Fixture probe | Before functions | Retained functions | New ceiling (15% headroom) |
+| --- | ---: | ---: | ---: |
+| model_type | 299 | 299 | 344 |
+| table_ref | 901 | 803 | 924 |
+| onequery | 901 | 803 | 924 |
+| q_with | 1,593 | 1,053 | 1,211 |
+| q_select | 934 | 836 | 962 |
+| q_join | 2,238 | 1,598 | 1,838 |
+| report_pipeline | 2,879 | 1,905 | 2,191 |
+| models | 7,808 | 6,147 | 7,070 |
+| column_number | 1,261 | 1,172 | 1,348 |
+| column_nullable_text | 1,699 | 1,456 | 1,675 |
+| column_time | — | 1,194 | 1,374 |
+| column_enum | — | 1,232 | 1,417 |
+| relation_with | — | 1,847 | 2,125 |
+| models_1 | 1,917 | 1,619 | 1,862 |
+| models_3 | 3,013 | 2,435 | 2,801 |
+| Two-model growth (`models_3 − models_1`) | 1,096 | 816 | 939 |
+
+The three review probes have no pre-flattening baseline. `relation_with` declares
+one `BelongsTo` and executes a query with `With`. The surface snapshot now pins
+exported fields (including promotion) and sealed interface methods. Stage 3.0
+deliberately removes the promoted `.Column` field while retaining exported methods;
+no branch consumer migration is needed.
+
+| Benchmark | Before median ns/op | Retained median ns/op | Allocations/op (both) |
+| --- | ---: | ---: | ---: |
+| ChainBuild | 136.30 | 135.70 | 6 |
+| ChainCompile | 1,695.50 | 1,695.00 | 56 |
+| Hydrate1000 | 182,689.00 | 180,233.00 | 5,065 |
+| InsertCompile | 1,957.00 | 1,950.50 | 59 |
+
+Six runs per side on the same machine, grouped before/after; ranges overlap.
+All medians are within ±2% and allocations are unchanged; no speedup is claimed.
+The fixture’s insert benchmark remains an explicit skip (no public insert-only
+compiler). The added internal benchmark measures planning and SQL compilation,
+checks nonempty SQL and three bindings, and includes no driver execution.
+
+If a later gate needs an API trim and it is approved, candidates are `Ne`, `NotIn`, `Between` and
+specialized text prefix/suffix/insensitive matches moved to package functions.
+That would change completion; it is not implemented or assigned an RSS saving.
+
+All requested repository checks pass on the final source, including the golden
+comparison and compiler negatives. Temporary synthetic apps and their archive
+cache entries were removed after the builds exited.
+
+Full attribution, samples, trigger counts, commands and cleanup are retained in
+[the Stage 3.0 evidence](../../docs/evidence/goway-stage3-column-footprint.json).
+
+The permanent [footprint test](../../tests/fixtures/goway/footprint_test.go) now uses
+the Stage 3.0 ceilings above. Its original Stage 1d measurements and ceilings are
+retained here as historical evidence:
 
 | Probe | Stage 1d functions | Budget |
 | --- | ---: | ---: |

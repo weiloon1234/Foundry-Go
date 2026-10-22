@@ -142,7 +142,7 @@ func TestChunkFallbackAndProgressFailures(t *testing.T) {
 	}
 	stop := errors.New("key bind failed")
 	for _, getter := range []func(unsafe.Pointer) (driver.Value, error){func(unsafe.Pointer) (driver.Value, error) { return nil, stop }, func(unsafe.Pointer) (driver.Value, error) { return nil, nil }} {
-		column := *r.ID.core
+		column := *r.ID.key.core
 		column.get = getter
 		p.keys = []*columnCore{&column}
 		if _, err := p.advance(1, nil); err == nil {

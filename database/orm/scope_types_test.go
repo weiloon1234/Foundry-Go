@@ -70,10 +70,26 @@ func TestRelationAndProjectionTypesRejectWrongOwners(t *testing.T) {
 		{"nullable null comparison", `var _=expr.At(rows.Scope(order),nfk).Eq(value.Null[model.ID[User]]())`, true},
 		{"noncomparable join", `var _=rows.On(expr.At(rows.Scope(order),bytes),expr.At(rows.Scope(order),bytes))`, true},
 		{"joined right", `var _=rows.InnerJoin(member,joined,rows.JoinOn[rows.Alias[L,User],rows.Inner[rows.Alias[L,User],rows.Alias[R,Order]]]{})`, true},
+		{"returned column values", `
+ var table orm.Table[User,int]
+ var texts orm.Table[User,string]
+ var _ = table.Key().Eq(1)
+ var _ = orm.NumberKey(table.Key()).Gt(1)
+ var _ = orm.TextKey(texts.Key()).Contains("x")
+ var _ = (func()orm.Number[User,int]{ return orm.Number[User,int]{} })().Set(1)
+ var _ = (func()orm.NullableText[User,string]{ return orm.NullableText[User,string]{} })().SetNull()
+ var _ = table.Query().Where(table.Key().Eq(1)).Limit(1).ForUpdate()
+ `, false},
+		{"column owner conversion", `var _ = orm.Number[Order,int](orm.Number[User,int]{})`, true},
+		{"enum capability conversion", `var _ = orm.Number[User,int](orm.Enum[User,int]{})`, true},
+		{"nullable capability conversion", `var _ = orm.NullableText[User,string](orm.NullableEnum[User,string]{})`, true},
 		{"valid", `var _=expr.At(rows.RightScope(joined,rows.Scope(order)),oid)`, false},
 		{"wrong model", `var _=expr.At(rows.Scope(member),oid)`, true},
 		{"wrong side", `var _=rows.LeftScope(joined,rows.Scope(order))`, true},
 		{"wrong row value", `var _=rows.Map(text,expr.At(rows.Scope(order),oid))`, true},
+		{"relation local model", `var _=orm.BelongsToOf(slot,uid,uid)`, true},
+		{"relation foreign model", `var many orm.Many[User,Order]; var _=orm.HasManyOf(many,uid,uid)`, true},
+		{"relation nullable model", `var local orm.NullableColumn[User,model.ID[User]]; var _=orm.BelongsToOf(slot,local,uid)`, true},
 		{"wrong relation key", `var _=orm.BelongsToOf(slot,oid,uid)`, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -84,6 +100,9 @@ func TestRelationAndProjectionTypesRejectWrongOwners(t *testing.T) {
 			}
 			config := types.Config{Importer: importer.ForCompiler(fset, "gc", func(path string) (io.ReadCloser, error) { return os.Open(exports[path]) })}
 			_, err = config.Check("consumer", fset, []*ast.File{file}, nil)
+			if strings.HasPrefix(tc.name, "relation ") && (err == nil || !strings.Contains(err.Error(), "does not match inferred type")) {
+				t.Fatalf("expected model-owner inference diagnostic: %v", err)
+			}
 			if (err != nil) != tc.invalid {
 				t.Fatalf("unexpected typecheck result: %v", err)
 			}

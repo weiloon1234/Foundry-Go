@@ -14,21 +14,21 @@ type ExpressionColumn[M, V, P any] interface {
 	expressionColumn(*M) (ormcore.Column[V], ormcore.Column[P])
 }
 
-func (c Column[M, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[V]) {
+func requiredExpression[V any](c columnData[V]) (ormcore.Column[V], ormcore.Column[V]) {
 	v := expressionColumn(c)
 	return v, v
 }
-func expressionColumn[M, V any](c Column[M, V]) ormcore.Column[V] {
+func expressionColumn[V any](c columnData[V]) ormcore.Column[V] {
 	if c.core == nil || c.core.owner == nil {
 		return ormcore.Column[V]{Err: invalid("uninitialized column")}
 	}
 	return ormcore.Column[V]{Reference: ormcore.Reference{Table: c.core.owner.model.Table, Owner: c.core.owner}, Field: querycore.FieldRef{Table: c.core.owner.model.Table, Column: c.core.metadata.Name}, Kind: c.core.kind, Nullable: c.core.metadata.Nullable, Bind: c.bind, Clone: c.clone, Scan: c.scanValue, Err: declarationCoreError(c.core.owner)}
 }
-func (c NullableColumn[M, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[value.Nullable[V]]) {
+func nullableExpression[V any](c nullableColumnData[V]) (ormcore.Column[V], ormcore.Column[value.Nullable[V]]) {
 	if c.nullable == nil {
 		return ormcore.Column[V]{Err: invalid("uninitialized nullable column")}, ormcore.Column[value.Nullable[V]]{Err: invalid("uninitialized nullable column")}
 	}
-	return expressionColumn(c.Column), expressionColumn(c.nullable())
+	return expressionColumn(c.base), expressionColumn(c.nullable())
 }
 
 // FoundryColumn supplies comparison and projection codecs to expr/rows.

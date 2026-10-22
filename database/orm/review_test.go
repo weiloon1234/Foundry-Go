@@ -44,7 +44,7 @@ func TestDerivedKeyCapabilities(t *testing.T) {
 	type integer struct{ ID int64 }
 	ints := Define("integers", func(b Builder[integer], m *integer) Table[integer, int64] { return TableOf(b, &m.ID) })
 	number := NumberKey(ints.Key())
-	if number.core != ints.Key().core {
+	if number.number.core != ints.Key().key.core {
 		t.Fatal("derived core changed")
 	}
 	for _, v := range []int64{0, 5} {
@@ -62,7 +62,7 @@ func TestDerivedKeyCapabilities(t *testing.T) {
 	if err := Check(enums); err != nil {
 		t.Fatal(err)
 	}
-	for _, column := range []Column[enumerated, keyStatus]{enums.Key().Column, TextKey(enums.Key()).Column} {
+	for _, column := range []Column[enumerated, keyStatus]{{column: enums.Key().ormColumn(nil)}, {column: TextKey(enums.Key()).ormColumn(nil)}} {
 		if _, err := Compile(enums.Query().Where(column.Eq("invalid"))); err == nil {
 			t.Fatal("invalid enum predicate accepted")
 		}

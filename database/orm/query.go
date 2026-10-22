@@ -27,12 +27,12 @@ func TableOf[M any, K comparable](b Builder[M], ptr *K, opts ...ColumnOption[K])
 	if b.state != nil && !b.state.sealed {
 		b.state.tableBound = true
 	}
-	return Table[M, K]{core: k.core.owner, key: func() Key[M, K] { return k }}
+	return Table[M, K]{core: k.key.core.owner, key: func() Key[M, K] { return k }}
 }
 
 func keyOf[M any, K comparable](b Builder[M], ptr *K, opts ...ColumnOption[K]) Key[M, K] {
 	codec, check := keyCodec[M](opts)
-	c := bindTyped(b, ptr, codec, false)
+	c := bindTyped(b.state, ptr, codec, false)
 	c.core.check = check
 	if b.state != nil && !b.state.sealed {
 		if c.core.uuid && reflect.TypeFor[K]() != reflect.TypeFor[model.ID[M]]() {
@@ -49,7 +49,7 @@ func keyOf[M any, K comparable](b Builder[M], ptr *K, opts ...ColumnOption[K]) K
 			b.state.core.model.Primary = c.core.metadata.Name
 		}
 	}
-	return Key[M, K]{c}
+	return Key[M, K]{key: c}
 }
 func (t *Table[M, K]) ormAttach(core *tableCore) *tableCore { old := t.core; t.core = core; return old }
 func (t Table[M, K]) ormError() error                       { return tableError(t.core) }

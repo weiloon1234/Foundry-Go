@@ -31,26 +31,30 @@ func AtLeast[V NumberValue](floor V) Bound[V] { return Bound[V]{value: floor, mi
 func AtMost[V NumberValue](ceiling V) Bound[V] { return Bound[V]{value: ceiling, ok: true} }
 
 // Increment adds a strictly positive amount in the UPDATE statement.
+// Example: Orders.TotalCents.Increment(100, orm.AtMost[int64](1000)).
 func (c Number[M, V]) Increment(amount V, bound ...Bound[V]) Assignment[M] {
-	return adjustment(c.Column, amount, false, bound)
+	return adjustment[M](c.number, amount, false, bound)
 }
 
 // Decrement subtracts a strictly positive amount in the UPDATE statement.
+// Example: Orders.TotalCents.Decrement(50, orm.AtLeast[int64](0)).
 func (c Number[M, V]) Decrement(amount V, bound ...Bound[V]) Assignment[M] {
-	return adjustment(c.Column, amount, true, bound)
+	return adjustment[M](c.number, amount, true, bound)
 }
 
 // Increment adds a strictly positive amount; SQL NULL remains NULL.
+// Example: LedgerEntries.Balance.Increment(amount, orm.AtMost(ceiling)).
 func (c NullableNumber[M, V]) Increment(amount V, bound ...Bound[V]) Assignment[M] {
-	return adjustment(c.Column, amount, false, bound)
+	return adjustment[M](c.nullableNumber.base, amount, false, bound)
 }
 
 // Decrement subtracts a strictly positive amount; SQL NULL remains NULL.
+// Example: LedgerEntries.Balance.Decrement(amount, orm.AtLeast(floor)).
 func (c NullableNumber[M, V]) Decrement(amount V, bound ...Bound[V]) Assignment[M] {
-	return adjustment(c.Column, amount, true, bound)
+	return adjustment[M](c.nullableNumber.base, amount, true, bound)
 }
 
-func adjustment[M any, V NumberValue](c Column[M, V], amount V, subtract bool, bounds []Bound[V]) Assignment[M] {
+func adjustment[M any, V NumberValue](c columnData[V], amount V, subtract bool, bounds []Bound[V]) Assignment[M] {
 	if c.core == nil || c.core.owner == nil || c.bind == nil {
 		return Assignment[M]{err: invalid("uninitialized numeric column")}
 	}

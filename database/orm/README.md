@@ -157,3 +157,18 @@ Scoped `expr.Expression[S,V,P]` keeps comparison value `V` separate from project
 value `P`. Nullable fields compare against `V` and project `value.Nullable[V]`;
 use `IsNull`/`IsNotNull` for nullness. `rows.On` unifies comparable unwrapped keys,
 and `rows.InnerJoin` accepts only an aliased table on its right side.
+
+Column kinds declare their methods directly over shared, method-free state (R9).
+`Number`, `Text`, `Time`, `Enum`, keys and nullable kinds retain their method completion
+lists and value receivers, including calls on `table.Key()` and derived key
+handles returned by value. Private relation adapters carry state without returning
+another public column type. Codec-state construction is shared by value type;
+model markers stay on the public handles and private interface arguments.
+The [surface test](method_surface_test.go) pins the
+exported fields, consumer-visible method signatures and sealed interface methods; fixture budgets cover individual kinds and growth
+from one to three identically shaped models.
+
+Stage 3.0 deliberately removes the formerly promoted exported `.Column` field
+(including `Orders.ID.Column` and `orm.TextKey(k).Column`) to remove embedding
+chains. Exported methods remain unchanged; this is not preservation of the entire
+public surface. No consumer migration is needed on this branch.

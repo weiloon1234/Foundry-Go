@@ -1,0 +1,704 @@
+orm.Assignment
+  GoString func() string
+  String func() string
+*orm.Assignment
+  GoString func() string
+  String func() string
+orm.BelongsTo
+*orm.BelongsTo
+orm.Bound
+*orm.Bound
+orm.Builder
+*orm.Builder
+orm.CheckedTable
+  ormError func() error
+orm.Column
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+*orm.Column
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+orm.ColumnOption
+*orm.ColumnOption
+orm.CreatedAt
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a V, b V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+*orm.CreatedAt
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a V, b V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+orm.Enum
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v E) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...E) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v E) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...E) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v E) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+*orm.Enum
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v E) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...E) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v E) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...E) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v E) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+orm.ExpressionColumn
+  expressionColumn func(*M) (github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[V], github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[P])
+orm.HasMany
+*orm.HasMany
+orm.InstantValue
+orm.Key
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+*orm.Key
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+orm.KeyColumn
+  ormColumn func(*M) github.com/weiloon1234/Foundry-Go/database/orm.columnData[K]
+orm.LockedQuery
+  All func(ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx) ([]M, error)
+  Each func(ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx, yield func(M) error) error
+  First func(ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx) (github.com/weiloon1234/Foundry-Go/value.Optional[M], error)
+  Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  NoWait func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  OnlyTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm.Order[M]) github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  Require func(ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx) (M, error)
+  SkipLocked func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  Wait func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]) github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  WithTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  WithoutTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+*orm.LockedQuery
+  All func(ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx) ([]M, error)
+  Each func(ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx, yield func(M) error) error
+  First func(ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx) (github.com/weiloon1234/Foundry-Go/value.Optional[M], error)
+  Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  NoWait func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  OnlyTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm.Order[M]) github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  Require func(ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx) (M, error)
+  SkipLocked func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  Wait func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]) github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  WithTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  WithoutTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+orm.Many
+*orm.Many
+orm.NullableColumn
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+*orm.NullableColumn
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+orm.NullableEnum
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v E) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...E) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v E) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...E) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v E) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+*orm.NullableEnum
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v E) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...E) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v E) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...E) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v E) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+orm.NullableNumber
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a V, b V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Decrement func(amount V, bound ...github.com/weiloon1234/Foundry-Go/database/orm.Bound[V]) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Increment func(amount V, bound ...github.com/weiloon1234/Foundry-Go/database/orm.Bound[V]) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+*orm.NullableNumber
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a V, b V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Decrement func(amount V, bound ...github.com/weiloon1234/Foundry-Go/database/orm.Bound[V]) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Increment func(amount V, bound ...github.com/weiloon1234/Foundry-Go/database/orm.Bound[V]) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+orm.NullableText
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a V, b V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Contains func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  EndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IEndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  ILike func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IStartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Like func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  StartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+*orm.NullableText
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a V, b V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Contains func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  EndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IEndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  ILike func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IStartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Like func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  StartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+orm.NullableTime
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a V, b V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+*orm.NullableTime
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a V, b V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+orm.Number
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a V, b V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Decrement func(amount V, bound ...github.com/weiloon1234/Foundry-Go/database/orm.Bound[V]) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Increment func(amount V, bound ...github.com/weiloon1234/Foundry-Go/database/orm.Bound[V]) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+*orm.Number
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a V, b V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Decrement func(amount V, bound ...github.com/weiloon1234/Foundry-Go/database/orm.Bound[V]) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Increment func(amount V, bound ...github.com/weiloon1234/Foundry-Go/database/orm.Bound[V]) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+orm.NumberValue
+orm.One
+*orm.One
+orm.Option
+*orm.Option
+orm.Order
+  NullsFirst func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  NullsLast func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+*orm.Order
+  NullsFirst func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  NullsLast func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+orm.PageRequest
+  field Number int
+  field Size int
+  Validate func() error
+*orm.PageRequest
+  Validate func() error
+orm.PageResult
+  field Items []M
+  field Number int
+  field Pages int64
+  field Size int
+  field Total int64
+  Validate func() error
+*orm.PageResult
+  Validate func() error
+orm.Predicate
+  Not func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+*orm.Predicate
+  Not func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+orm.Query
+  All func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) ([]M, error)
+  Chunk func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, size int, yield func([]M) error) error
+  Count func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) (int64, error)
+  DeleteAll func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor) (int64, error)
+  Each func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, yield func(M) error) error
+  EachChunked func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, size int, yield func(M) error) error
+  Exists func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) (bool, error)
+  First func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) (github.com/weiloon1234/Foundry-Go/value.Optional[M], error)
+  ForKeyShare func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  ForNoKeyUpdate func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  ForShare func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  ForUpdate func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  ForceDeleteAll func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor) (int64, error)
+  Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+  Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+  OnlyTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm.Order[M]) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+  Paginate func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, request github.com/weiloon1234/Foundry-Go/database/orm.PageRequest) (github.com/weiloon1234/Foundry-Go/database/orm.PageResult[M], error)
+  Require func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) (M, error)
+  SimplePaginate func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, request github.com/weiloon1234/Foundry-Go/database/orm.PageRequest) (github.com/weiloon1234/Foundry-Go/database/orm.SimplePage[M], error)
+  UpdateAll func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor, as ...github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]) (int64, error)
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+  With func(rels ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[M]) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+  WithTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+  WithoutTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+*orm.Query
+  All func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) ([]M, error)
+  Chunk func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, size int, yield func([]M) error) error
+  Count func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) (int64, error)
+  DeleteAll func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor) (int64, error)
+  Each func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, yield func(M) error) error
+  EachChunked func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, size int, yield func(M) error) error
+  Exists func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) (bool, error)
+  First func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) (github.com/weiloon1234/Foundry-Go/value.Optional[M], error)
+  ForKeyShare func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  ForNoKeyUpdate func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  ForShare func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  ForUpdate func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
+  ForceDeleteAll func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor) (int64, error)
+  Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+  Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+  OnlyTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm.Order[M]) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+  Paginate func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, request github.com/weiloon1234/Foundry-Go/database/orm.PageRequest) (github.com/weiloon1234/Foundry-Go/database/orm.PageResult[M], error)
+  Require func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) (M, error)
+  SimplePaginate func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, request github.com/weiloon1234/Foundry-Go/database/orm.PageRequest) (github.com/weiloon1234/Foundry-Go/database/orm.SimplePage[M], error)
+  UpdateAll func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor, as ...github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]) (int64, error)
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+  With func(rels ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[M]) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+  WithTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+  WithoutTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+orm.Relation
+  relationPlan func(*M) *github.com/weiloon1234/Foundry-Go/database/orm.relationPlan
+orm.SimplePage
+  field HasMore bool
+  field Items []M
+  field Number int
+  field Size int
+  Validate func() error
+*orm.SimplePage
+  Validate func() error
+orm.SoftDelete
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a V, b V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+*orm.SoftDelete
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a V, b V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+orm.Statement
+  Arguments func() []any
+  GoString func() string
+  SQL func() string
+  String func() string
+*orm.Statement
+  Arguments func() []any
+  GoString func() string
+  SQL func() string
+  String func() string
+orm.Table
+  Delete func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor, key K) (M, error)
+  Find func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, key K) (github.com/weiloon1234/Foundry-Go/value.Optional[M], error)
+  ForceDelete func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor, key K) (M, error)
+  Insert func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor, as ...github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]) (M, error)
+  InsertMany func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor, rows [][]github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]) ([]M, error)
+  Key func() github.com/weiloon1234/Foundry-Go/database/orm.Key[M, K]
+  Query func() github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+  Require func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, key K) (M, error)
+  Restore func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor, key K) (M, error)
+  Update func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor, key K, as ...github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]) (M, error)
+*orm.Table
+  Delete func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor, key K) (M, error)
+  Find func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, key K) (github.com/weiloon1234/Foundry-Go/value.Optional[M], error)
+  ForceDelete func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor, key K) (M, error)
+  Insert func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor, as ...github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]) (M, error)
+  InsertMany func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor, rows [][]github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]) ([]M, error)
+  Key func() github.com/weiloon1234/Foundry-Go/database/orm.Key[M, K]
+  Query func() github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+  Require func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, key K) (M, error)
+  Restore func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor, key K) (M, error)
+  Update func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor, key K, as ...github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]) (M, error)
+orm.Text
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a V, b V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Contains func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  EndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IEndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  ILike func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IStartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Like func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  StartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+*orm.Text
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a V, b V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Contains func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  EndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IEndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  ILike func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IStartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Like func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  StartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+orm.Time
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a V, b V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+*orm.Time
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a V, b V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+orm.TimeValue
+orm.UpdatedAt
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a V, b V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+*orm.UpdatedAt
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a V, b V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+orm.WriteError
+*orm.WriteError
+  Candidate func() R
+  Error func() string
+  GoString func() string
+  Unwrap func() error
+orm.FoundryColumn func[M, V, P any](column github.com/weiloon1234/Foundry-Go/database/orm.ExpressionColumn[M, V, P], _ github.com/weiloon1234/Foundry-Go/internal/sqlowner.Seal) (github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[V], github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[P])
+orm.NumberKey result
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a K, b K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Decrement func(amount K, bound ...github.com/weiloon1234/Foundry-Go/database/orm.Bound[K]) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Increment func(amount K, bound ...github.com/weiloon1234/Foundry-Go/database/orm.Bound[K]) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  Lt func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+*orm.NumberKey result
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a K, b K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Decrement func(amount K, bound ...github.com/weiloon1234/Foundry-Go/database/orm.Bound[K]) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Eq func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Increment func(amount K, bound ...github.com/weiloon1234/Foundry-Go/database/orm.Bound[K]) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  Lt func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+orm.TextKey result
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a K, b K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Contains func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  EndsWith func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Eq func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IEndsWith func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  ILike func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IStartsWith func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Like func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lt func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  StartsWith func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+*orm.TextKey result
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  Between func(a K, b K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Contains func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+  EndsWith func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Eq func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gt func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Gte func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IEndsWith func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  ILike func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IStartsWith func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  In func(v ...K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Like func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lt func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Lte func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Ne func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  NotIn func(v ...K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  StartsWith func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+rows.Alias
+*rows.Alias
+rows.Aliased
+*rows.Aliased
+rows.Builder
+  Row func() github.com/weiloon1234/Foundry-Go/database/orm/rows.Row[R]
+*rows.Builder
+  Row func() github.com/weiloon1234/Foundry-Go/database/orm/rows.Row[R]
+rows.CheckedSchema
+  rowError func() error
+rows.Field
+*rows.Field
+rows.Inner
+*rows.Inner
+rows.InnerJoined
+*rows.InnerJoined
+rows.JoinOn
+*rows.JoinOn
+rows.JoinTable
+  joinTable func(*S)
+  rowSource func(*S) github.com/weiloon1234/Foundry-Go/internal/ormcore.Source
+rows.Mapping
+*rows.Mapping
+rows.Query
+  All func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) ([]R, error)
+  OrderBy func(orders ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
+  Where func(predicates ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
+*rows.Query
+  All func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) ([]R, error)
+  OrderBy func(orders ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
+  Where func(predicates ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
+rows.Row
+*rows.Row
+rows.Schema
+  rowDefinition func(*R) (*github.com/weiloon1234/Foundry-Go/database/orm/rows.rowCore, func(github.com/weiloon1234/Foundry-Go/database.Row) (R, error))
+rows.Source
+  rowSource func(*S) github.com/weiloon1234/Foundry-Go/internal/ormcore.Source
+expr.Expression
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+*expr.Expression
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+expr.Order
+  NullsFirst func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
+  NullsLast func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
+*expr.Order
+  NullsFirst func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
+  NullsLast func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
+expr.Predicate
+*expr.Predicate
+expr.Scope
+*expr.Scope

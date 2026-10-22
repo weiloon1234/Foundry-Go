@@ -8,6 +8,10 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Flatten column method sets and private relation adapters; preserve public methods
+  and add per-kind/model-growth footprint budgets (Stage 3.0). Deliberately remove
+  the formerly promoted `.Column` field; no consumer migration is needed on this branch.
+
 - Add `database/orm`, `orm/expr` and `orm/rows` for handwritten typed table and row
   declarations, common reads/writes, strict positive numeric adjustments, direct
   eager relations, inner joins and projections. Shared query planning and metadata

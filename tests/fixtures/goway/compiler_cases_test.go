@@ -2,6 +2,10 @@ package goway_test
 
 func compilerCases() []compilerCase {
 	return []compilerCase{
+		{"relation_local_model", "does not match inferred type"},
+		{"relation_foreign_model", "does not match inferred type"},
+		{"relation_nullable_model", "does not match inferred type"},
+
 		{"wrong_predicate", "orm.Predicate[models.Order]"},
 		{"wrong_eq", "as int64 value"},
 		{"enum_ordered", "has no field or method Gt"},

@@ -79,9 +79,7 @@ func bindSlot(d *declaration, ptr unsafe.Pointer, typ, target reflect.Type) *slo
 
 // KeyColumn retains comparable relation key types, including nullable FKs.
 // Example: BelongsToOf(Orders.Buyer,Orders.BuyerID,Users.ID).
-type KeyColumn[M any, K comparable] interface{ ormColumn() Column[M, K] }
-
-func (c Column[M, V]) ormColumn() Column[M, V] { return c }
+type KeyColumn[M any, K comparable] interface{ ormColumn(*M) columnData[K] }
 
 type relationBudget struct{ remaining, attachments int }
 type relationPlan struct {
@@ -119,7 +117,7 @@ func BelongsToOf[M, N any, K comparable](slot One[M, N], local KeyColumn[M, K], 
 	p := newRelation(slot.core, local, foreign)
 	p.singular = true
 	if p.err == nil {
-		p.load = relationLoader[M, N](p, local.ormColumn(), foreign.ormColumn(), func(parent *M, group []N) error {
+		p.load = relationLoader[M, N](p, local.ormColumn(nil), foreign.ormColumn(nil), func(parent *M, group []N) error {
 			var item value.Optional[N]
 			if len(group) == 1 {
 				item = value.Set(group[0])
@@ -135,7 +133,7 @@ func BelongsToOf[M, N any, K comparable](slot One[M, N], local KeyColumn[M, K], 
 func HasManyOf[M, N any, K comparable](slot Many[M, N], local KeyColumn[M, K], foreign KeyColumn[N, K]) HasMany[M, N] {
 	p := newRelation(slot.core, local, foreign)
 	if p.err == nil {
-		p.load = relationLoader[M, N](p, local.ormColumn(), foreign.ormColumn(), func(parent *M, group []N) error {
+		p.load = relationLoader[M, N](p, local.ormColumn(nil), foreign.ormColumn(nil), func(parent *M, group []N) error {
 			*(*relation.Many[N])(unsafe.Add(unsafe.Pointer(parent), slot.core.offset)) = relation.FoundryCollection(sqlowner.Seal{}, group)
 			return nil
 		})
@@ -148,7 +146,7 @@ func newRelation[M, N any, K comparable](slot *slotCore, local KeyColumn[M, K], 
 		p.err = invalid("relation requires a bound slot and typed keys")
 		return p
 	}
-	a, b := local.ormColumn(), foreign.ormColumn()
+	a, b := local.ormColumn(nil), foreign.ormColumn(nil)
 	if a.core == nil || b.core == nil {
 		p.err = invalid("relation requires bound keys")
 		return p
@@ -187,7 +185,7 @@ func validateRelation(p *relationPlan, owner *tableCore) error {
 
 // The typed loader is instantiated by BelongsToOf/HasManyOf at declaration time.
 // Importers carry only relationPlan and invoke its function field.
-func relationLoader[M, N any, K comparable](p *relationPlan, local Column[M, K], foreign Column[N, K], assign func(*M, []N) error) func(context.Context, database.Executor, unsafe.Pointer, int, *relationBudget) error {
+func relationLoader[M, N any, K comparable](p *relationPlan, local columnData[K], foreign columnData[K], assign func(*M, []N) error) func(context.Context, database.Executor, unsafe.Pointer, int, *relationBudget) error {
 	return func(ctx context.Context, ex database.Executor, base unsafe.Pointer, count int, budget *relationBudget) error {
 		parents := unsafe.Slice((*M)(base), count)
 		limits := querycore.DefaultRelationLimits()
@@ -208,7 +206,7 @@ func relationLoader[M, N any, K comparable](p *relationPlan, local Column[M, K],
 		}
 		var rows []N
 		err = querycore.FetchRelationBatches(len(unique), limits.BatchSize, &budget.remaining, func(start, end, limit int) (int, error) {
-			q := where(target, []Predicate[N]{foreign.In(unique[start:end]...)})
+			q := where(target, []Predicate[N]{comparison[N](foreign, querycore.In, unique[start:end])})
 			q.ast.Limit = value.Set(limit)
 			batch, err := allRows[N](ctx, ex, q)
 			if err != nil {
@@ -246,7 +244,7 @@ func relationLoader[M, N any, K comparable](p *relationPlan, local Column[M, K],
 		return nil
 	}
 }
-func readRelationKey[M, V any](column Column[M, V], base unsafe.Pointer) (V, sqlvalue.Value, bool, error) {
+func readRelationKey[V any](column columnData[V], base unsafe.Pointer) (V, sqlvalue.Value, bool, error) {
 	raw, err := column.core.get(base)
 	if err != nil || raw == nil {
 		return *new(V), sqlvalue.Value{}, false, err
