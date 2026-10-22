@@ -2,6 +2,8 @@ package query
 
 import (
 	"context"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlvalue"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
@@ -302,28 +304,14 @@ func readRelationKey[M any, K comparable](metadata ModelField[M], field ScalarFi
 }
 
 func relationKeys[M any, K comparable](ctx context.Context, metadata ModelField[M], field ScalarField[M, K], parents []M, batchSize int) ([]value.Optional[cursorValue], []K, map[cursorValue]bool, error) {
-	positions := make([]value.Optional[cursorValue], len(parents))
-	keys := make([]K, 0, len(parents))
-	seen := make(map[cursorValue]bool)
-	for i, m := range parents {
-		if i%batchSize == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, nil, nil, err
-			}
-		}
-		key, err := readRelationKey(metadata, field, m)
+	return querycore.RelationKeys(ctx, len(parents), batchSize, func(i int) (K, sqlvalue.Value, bool, error) {
+		selected, err := readRelationKey(metadata, field, parents[i])
 		if err != nil {
-			return nil, nil, nil, err
+			return *new(K), sqlvalue.Value{}, false, err
 		}
-		if k, ok := key.Get(); ok {
-			positions[i] = value.Set(k.identity)
-			if !seen[k.identity] {
-				seen[k.identity] = true
-				keys = append(keys, k.value)
-			}
-		}
-	}
-	return positions, keys, seen, nil
+		key, ok := selected.Get()
+		return key.value, key.identity, ok, nil
+	})
 }
 
 func fetchDirect[M, N any, K comparable](ctx context.Context, executor database.Executor, source Query[M], target Query[N], local ScalarField[M, K], foreign ScalarField[N, K], parents []M, state *relationLoadState, depth int) ([][]N, error) {
@@ -344,34 +332,31 @@ func fetchDirect[M, N any, K comparable](ctx context.Context, executor database.
 	if err != nil {
 		return nil, err
 	}
-	for offset := 0; offset < len(keys); offset += state.limits.BatchSize {
-		end := min(offset+state.limits.BatchSize, len(keys))
-		q := ordered.Where(foreign.In(keys[offset:end]...)).Limit(state.remaining + 1)
-		batch, err := q.allRows(ctx, executor)
+	err = querycore.FetchRelationBatches(len(keys), state.limits.BatchSize, &state.remaining, func(start, end, limit int) (int, error) {
+		batch, err := ordered.Where(foreign.In(keys[start:end]...)).Limit(limit).allRows(ctx, executor)
 		if err != nil {
-			return nil, err
+			return 0, err
 		}
-		if len(batch) > state.remaining {
-			return nil, fault.New(fault.Invalid, "related rows exceed the shared loading budget")
-		}
-		state.remaining -= len(batch)
 		rows = append(rows, batch...)
+		return len(batch), nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	rows, err = target.loadRelations(ctx, executor, rows, state, depth, false)
 	if err != nil {
 		return nil, err
 	}
-	groups := make(map[cursorValue][]N, len(keys))
-	for _, row := range rows {
-		key, err := readRelationKey(foreignMeta, foreign, row)
+	groups, err := querycore.GroupRelationRows(rows, seen, func(row N) (sqlvalue.Value, bool, error) {
+		selected, err := readRelationKey(foreignMeta, foreign, row)
 		if err != nil {
-			return nil, err
+			return sqlvalue.Value{}, false, err
 		}
-		k, present := key.Get()
-		if !present || !seen[k.identity] {
-			return nil, fault.New(fault.Invalid, "related row key does not match requested keys; check key equality semantics")
-		}
-		groups[k.identity] = append(groups[k.identity], row)
+		key, ok := selected.Get()
+		return key.identity, ok, nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	result := make([][]N, len(parents))
 	for i, key := range positions {

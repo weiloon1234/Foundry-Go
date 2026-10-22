@@ -18,6 +18,8 @@ type builtinMessage struct {
 // Private immutable definitions are shared by execution, catalog registration
 // and exported recipe metadata. Constructors contain no duplicate message text.
 var builtinMessages = [...]builtinMessage{
+	{"foundry.decimal_positive", "{{attribute}} must be strictly positive.", "", "", ""},
+	{"foundry.positive", "{{attribute}} must be strictly positive and finite.", "", "", ""},
 	{"foundry.absent", "{{attribute}} must not be supplied.", "", "", ""},
 	{"foundry.accepted", "{{attribute}} must be accepted.", "", "", ""},
 	{"foundry.after", "{{attribute}} must be after {{other}}.", "other", "text", ""},

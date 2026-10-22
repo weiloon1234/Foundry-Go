@@ -1,0 +1,55 @@
+package orm
+
+import (
+	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
+	"github.com/weiloon1234/Foundry-Go/value"
+)
+
+// ExpressionColumn preserves a column's model and SQL value type.
+// Example: rows.SelectValue(Orders.Query(),Orders.TotalCents).
+type ExpressionColumn[M, V, P any] interface {
+	expressionColumn(*M) (ormcore.Column[V], ormcore.Column[P])
+}
+
+func (c Column[M, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[V]) {
+	v := expressionColumn(c)
+	return v, v
+}
+func expressionColumn[M, V any](c Column[M, V]) ormcore.Column[V] {
+	if c.core == nil || c.core.owner == nil {
+		return ormcore.Column[V]{Err: invalid("uninitialized column")}
+	}
+	return ormcore.Column[V]{Reference: ormcore.Reference{Table: c.core.owner.model.Table, Owner: c.core.owner}, Field: querycore.FieldRef{Table: c.core.owner.model.Table, Column: c.core.metadata.Name}, Kind: c.core.kind, Nullable: c.core.metadata.Nullable, Bind: c.bind, Clone: c.clone, Scan: c.scanValue, Err: declarationCoreError(c.core.owner)}
+}
+func (c NullableColumn[M, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[value.Nullable[V]]) {
+	if c.nullable == nil {
+		return ormcore.Column[V]{Err: invalid("uninitialized nullable column")}, ormcore.Column[value.Nullable[V]]{Err: invalid("uninitialized nullable column")}
+	}
+	return expressionColumn(c.Column), expressionColumn(c.nullable())
+}
+
+// FoundryColumn supplies comparison and projection codecs to expr/rows.
+func FoundryColumn[M, V, P any](column ExpressionColumn[M, V, P], _ sqlowner.Seal) (ormcore.Column[V], ormcore.Column[P]) {
+	if nilInterface(column) {
+		return ormcore.Column[V]{Err: invalid("missing expression column")}, ormcore.Column[P]{Err: invalid("missing expression column")}
+	}
+	return column.expressionColumn(nil)
+}
+
+// FoundrySource supplies sealed model AST metadata to rows.
+// Example: FoundrySource(Orders.Query(),sqlowner.Seal{}).
+func FoundrySource[M any](q Query[M], _ sqlowner.Seal) ormcore.Source {
+	err := errors.Join(declarationCoreError(q.state.table), q.state.err, q.state.ast.Validate())
+	if len(q.state.relations) > 0 {
+		err = errors.Join(err, invalid("projection source cannot request eager-loaded model values"))
+	}
+	if err != nil {
+		return ormcore.Source{Err: err}
+	}
+	return ormcore.Source{Node: q.state.ast.ModelSelect(q.state.table.selections), Owners: map[string]any{q.state.ast.Table: q.state.table}, Checks: []func() error{sourceCheck(q.state)}}
+}
+
+func sourceCheck(q queryState) func() error { return func() error { return validateQuery(q) } }

@@ -66,14 +66,23 @@ func ReadMutationAssignments(assignments []MutationAssignment) (map[FieldRef]Ass
 	return values, nil
 }
 
-func (q QueryCore) AdjustSet(a *Adjustment, c *Compiler, assigned map[string]MutationAssignment) (string, error) {
+// ValidateAdjustment checks the target before a write acquires resources or samples time.
+func (q QueryCore) ValidateAdjustment(a *Adjustment, c *Compiler, assigned map[string]MutationAssignment) error {
 	if err := a.Field.Validate(q.Table); err != nil {
+		return err
+	}
+	_, declared := c.Columns[a.Field.Column]
+	if _, repeated := assigned[a.Field.Column]; !declared || repeated || a.Field.Column == q.Model.Primary || a.Bind == nil {
+		return fault.New(fault.Invalid, "numeric adjustment requires a declared, unassigned non-key field")
+	}
+	return nil
+}
+
+func (q QueryCore) AdjustSet(a *Adjustment, c *Compiler, assigned map[string]MutationAssignment) (string, error) {
+	if err := q.ValidateAdjustment(a, c, assigned); err != nil {
 		return "", err
 	}
-	column, declared := c.Columns[a.Field.Column]
-	if _, repeated := assigned[a.Field.Column]; !declared || repeated || a.Field.Column == q.Model.Primary || a.Bind == nil {
-		return "", fault.New(fault.Invalid, "numeric adjustment requires a declared, unassigned non-key field")
-	}
+	column := c.Columns[a.Field.Column]
 	bound, err := a.Bind()
 	if err != nil {
 		return "", err

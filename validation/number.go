@@ -37,3 +37,10 @@ func DecimalMin(minimum decimal.Decimal) Rule[decimal.Decimal] {
 func DecimalMax(maximum decimal.Decimal) Rule[decimal.Decimal] {
 	return valueRule(Spec{ID: "foundry.decimal_max", Parameters: []Parameter{parameter("max", maximum.String())}}, false, func(_ *execution, input decimal.Decimal) (bool, error) { return input.Cmp(maximum) <= 0, nil })
 }
+
+// Positive accepts only strictly positive, finite numbers. Zero, including
+// negative floating-point zero, is rejected. This rule is server-only until the
+// TypeScript runtime supports foundry.positive.
+func Positive[N Number]() Rule[N] {
+	return valueRule(Spec{ID: "foundry.positive"}, true, func(_ *execution, input N) (bool, error) { return finite(input) && input > 0, nil })
+}

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "files": {
+    "ledger_entry_foundry.gen.go": "efa6214afdbe15f7f18c94b6f85914fc28a2b757adef0e1c4cdea540ae9d968c",
+    "level_foundry.gen.go": "9c3783f23e8baf98d8bd482d2af0981ea5eeb6e257ab62d5d298e583236734d5",
+    "order_foundry.gen.go": "5b556b4cf603c651855c41c94166676727d31bbd83118f018d2de15e6116b912",
+    "status_foundry.gen.go": "4a3098aac8f5ddba3d7e6db6a55adecc2a89a867e728f3b6adced5e2f804d4a3",
+    "user_foundry.gen.go": "b011135012a1de4724a0f754bb4e5a2f3effe935566607beb8c9b11c9db6f150",
+    "write_record_foundry.gen.go": "1db7a4a945b16c07d2af528fdf3bfb9e6ea3a10bb0d241c03cb98755f7d355cf"
+  }
+}

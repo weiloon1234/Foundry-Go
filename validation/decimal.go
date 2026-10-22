@@ -7,6 +7,14 @@ import (
 	"github.com/weiloon1234/Foundry-Go/decimal"
 )
 
+// DecimalPositive accepts strictly positive decimals at every supported scale.
+// Validation runs on the server, preserving exact decimal comparisons.
+func DecimalPositive() Rule[decimal.Decimal] {
+	return valueRule(Spec{ID: "foundry.decimal_positive"}, true, func(_ *execution, input decimal.Decimal) (bool, error) {
+		return input.Sign() > 0, nil
+	})
+}
+
 // DecimalGreaterThan and its siblings compare two exact decimal fields through
 // Compare, for example a maximum price against a minimum price. They never
 // convert through floating point; failures use the first field's path.

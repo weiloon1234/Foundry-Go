@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"reflect"
 	"slices"
 
@@ -25,16 +26,8 @@ type Relation[M any] interface {
 // branches, including expansion when explicit input parents repeat a key.
 type RelationLimits struct{ BatchSize, MaxRows, MaxDepth int }
 
-func DefaultRelationLimits() RelationLimits {
-	return RelationLimits{BatchSize: 500, MaxRows: 10000, MaxDepth: 8}
-}
-
-func (l RelationLimits) validate() error {
-	if l.BatchSize < 1 || l.BatchSize > 1000 || l.MaxRows < 1 || l.MaxRows > 1000000 || l.MaxDepth < 1 || l.MaxDepth > 32 {
-		return fault.New(fault.Invalid, "invalid relation resource limits")
-	}
-	return nil
-}
+func DefaultRelationLimits() RelationLimits { return RelationLimits(querycore.DefaultRelationLimits()) }
+func (l RelationLimits) validate() error    { return querycore.RelationLimits(l).Validate() }
 
 type relationLoadState struct {
 	limits      RelationLimits
@@ -43,11 +36,7 @@ type relationLoadState struct {
 }
 
 func (s *relationLoadState) attach(count int) error {
-	if count > s.attachments {
-		return fault.New(fault.Invalid, "attached related models exceed the shared loading budget")
-	}
-	s.attachments -= count
-	return nil
+	return querycore.ConsumeRelationBudget(&s.attachments, count, true)
 }
 
 type invalidRelation[M any] struct{}

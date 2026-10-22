@@ -44,8 +44,10 @@ func TestRequiredRunnerPropagatesSelectedTimeout(t *testing.T) {
 		t.Skip("test executable uses POSIX shell")
 	}
 	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "tests/fixtures/consumer"), 0700); err != nil {
-		t.Fatal(err)
+	for _, fixture := range []string{"consumer", "goway"} {
+		if err := os.MkdirAll(filepath.Join(dir, "tests/fixtures", fixture), 0700); err != nil {
+			t.Fatal(err)
+		}
 	}
 	t.Chdir(dir)
 	t.Setenv("FOUNDRY_TEST_POSTGRES_URL", "fixture-only-not-a-connection")
@@ -71,8 +73,8 @@ fi
 		t.Fatal(err)
 	}
 	want := "test -mod=readonly -count=1 -timeout=13m0s -race pkg/a\n"
-	if string(data) != want+want {
-		t.Fatal("root and consumer commands lost the configured timeout", string(data))
+	if string(data) != want+want+want {
+		t.Fatal("root and fixture commands lost the configured timeout", string(data))
 	}
 }
 

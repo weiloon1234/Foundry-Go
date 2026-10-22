@@ -48,7 +48,7 @@ type cursorEnvelope struct {
 	Values  []cursorValue `json:"values"`
 }
 
-type cursorValue sqlvalue.Value
+type cursorValue = sqlvalue.Value
 
 func invalidCursor() error { return fault.New(fault.Invalid, "invalid cursor token or query scope") }
 
@@ -60,7 +60,7 @@ func encodeCursorValue(v driver.Value) (cursorValue, error) {
 	return cursorValue(encoded), nil
 }
 
-func (v cursorValue) decode() (driver.Value, error) {
+func decodeCursorValue(v cursorValue) (driver.Value, error) {
 	decoded, err := sqlvalue.Value(v).Decode()
 	if err != nil {
 		return nil, invalidCursor()
@@ -90,7 +90,7 @@ func decodeCursor(token string) (cursorEnvelope, error) {
 		return cursorEnvelope{}, invalidCursor()
 	}
 	for _, v := range envelope.Values {
-		if _, err := v.decode(); err != nil {
+		if _, err := decodeCursorValue(v); err != nil {
 			return cursorEnvelope{}, err
 		}
 	}

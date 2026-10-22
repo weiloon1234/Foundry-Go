@@ -2,6 +2,7 @@ package query
 
 import (
 	"database/sql/driver"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
@@ -42,25 +43,13 @@ func (d Definition[M]) modelField(column string) (ModelField[M], bool) {
 // with Go/SQL equality for floating-point signed zero. Cursor tokens retain
 // their separate transport representation and are not used as public keys.
 func encodeModelKey(raw driver.Value) (cursorValue, error) {
-	if f, ok := raw.(float64); ok && f == 0 {
-		raw = float64(0)
-	}
-	key, err := encodeCursorValue(raw)
-	if err != nil {
-		return cursorValue{}, fault.New(fault.Invalid, "model key has no canonical database representation")
-	}
-	return key, nil
+	key, err := querycore.EncodeModelKey(raw)
+	return cursorValue(key), err
 }
 
 func recordEqualityKey(kind codec.ParameterType, raw driver.Value) (cursorValue, error) {
-	if kind == codec.TypeInterval && raw != nil {
-		interval, err := codec.Interval().Decode(raw)
-		if err != nil {
-			return cursorValue{}, err
-		}
-		return cursorValue{Kind: "interval", Text: intervalComparisonKey(interval)}, nil
-	}
-	return encodeModelKey(raw)
+	key, err := querycore.RecordEqualityKey(kind, raw)
+	return cursorValue(key), err
 }
 
 // NewModelField retains the concrete field type through extraction and codec

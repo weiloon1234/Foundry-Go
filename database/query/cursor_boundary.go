@@ -48,7 +48,7 @@ func readCursorBoundary[R any](request CursorRequest[R], scope string, fields []
 	}
 	b.keys = make([]driver.Value, len(fields))
 	for i, field := range fields {
-		raw, err := envelope.Values[i].decode()
+		raw, err := decodeCursorValue(envelope.Values[i])
 		if err != nil {
 			return cursorBoundary{}, cursorInputFailure(err)
 		}

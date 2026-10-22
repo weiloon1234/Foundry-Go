@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Go-way data layer (branch, in progress)
+
+- Add `database/orm`, `orm/expr` and `orm/rows` for handwritten typed table and row
+  declarations, common reads/writes, strict positive numeric adjustments, direct
+  eager relations, inner joins and projections. Shared query planning and metadata
+  remain in the existing internal owners; the old `database/query` API is unchanged.
+- Add server-side `validation.Positive` and `validation.DecimalPositive` rules.
+- Add the independent `goway` fixture: 56-statement old/new SQL, binding and value
+  equivalence, compiler rejection cases, compile footprint budgets, benchmarks and
+  an opt-in PostgreSQL smoke test. Invalid nullable inner codecs fail before SQL.
+
 ### Temporal precision (B29)
 
 - Linux system clocks retain sub-microsecond nanoseconds, causing system-clock

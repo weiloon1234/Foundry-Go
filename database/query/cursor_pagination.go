@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -80,81 +81,9 @@ func (q Query[M]) cursorPlan(request CursorRequest[M]) (cursorPlan[M], error) {
 	return cursorPlan[M]{query: q.Limit(request.Size + 1), fields: fields, scope: scope, backward: navigation.backward, boundary: navigation.present}, nil
 }
 
-// cursorPredicate expands lexicographic comparison with explicit SQL NULL
-// semantics. DESC defaults NULLS FIRST, ASC NULLS LAST, including reversed pages.
-// nullable reports whether an order key can be NULL; NOT NULL keys never add an
-// IS NULL alternative. When every key is NOT NULL and all keys share one
-// direction, the equivalent row comparison (a, id) > ($1, $2) is emitted so
-// PostgreSQL can use one composite index range.
+// cursorPredicate delegates the shared NULL-aware keyset predicate.
 func cursorPredicate(orders []queryOrder, keys []driver.Value, nullable func(queryOrder) bool) expression {
-	if rowKeyset(orders, keys, nullable) {
-		operands := make([]valueExpression, len(orders))
-		for i, order := range orders {
-			operands[i] = order.Field
-		}
-		op := greater
-		if orders[0].Descending {
-			op = less
-		}
-		return rowComparison{Operands: operands, Operator: op, Values: slices.Clone(keys)}
-	}
-	var alternatives []expression
-	var prefix []expression
-	for i, order := range orders {
-		key := keys[i]
-		compare := func(op operator) expression {
-			p := comparison{Operand: order.Field, Operator: op}
-			if op != isNull && op != isNotNull {
-				p.Values = []any{key}
-				p.Bind = func(raw any) (driver.Value, error) { return raw, nil }
-			}
-			return p
-		}
-		var after expression
-		if key == nil {
-			if order.Descending {
-				after = compare(isNotNull)
-			}
-		} else {
-			op := greater
-			if order.Descending {
-				op = less
-			}
-			after = compare(op)
-			if !order.Descending && nullable(order) {
-				after = junction{Any: true, Children: []expression{after, compare(isNull)}}
-			}
-		}
-		if after != nil {
-			terms := append(slices.Clone(prefix), after)
-			alternatives = append(alternatives, junction{Children: terms})
-		}
-		if key == nil {
-			prefix = append(prefix, compare(isNull))
-		} else {
-			prefix = append(prefix, compare(equal))
-		}
-	}
-	if len(alternatives) == 0 {
-		// All ascending keys can be NULL for a declared result identity. There
-		// is then no following position. Reuse empty membership's FALSE node.
-		return comparison{Operand: orders[0].Field, Operator: in, Bind: func(v any) (driver.Value, error) { return v, nil }}
-	}
-	return junction{Any: true, Children: alternatives}
-}
-
-// rowKeyset allows a row comparison only for two or more plain NOT NULL keys
-// with present values, one shared direction and default NULL placement.
-func rowKeyset(orders []queryOrder, keys []driver.Value, nullable func(queryOrder) bool) bool {
-	if len(orders) < 2 || len(orders) != len(keys) {
-		return false
-	}
-	for i, order := range orders {
-		if order.Computed != nil || order.Nulls != nullsDefault || order.Descending != orders[0].Descending || keys[i] == nil || nullable(order) {
-			return false
-		}
-	}
-	return true
+	return querycore.CursorPredicate(orders, keys, nullable)
 }
 
 // anyNullable is the conservative nullability used by result cursors.

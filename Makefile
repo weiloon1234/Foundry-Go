@@ -1,8 +1,8 @@
 GO ?= go
 TEST_PACKAGE_BATCH_SIZE ?= 6
 TEST_TIMEOUT ?= 20m
-GENERATION_DIRS := logging cloud/credentials infrastructure application internal/outboxstore internal/idempotencystore internal/auditstore internal/sessionstore internal/tokenstore internal/challengestore internal/mfastore internal/notificationstore internal/authtransport internal/extensionstore internal/attachmentstore internal/jobarchive internal/webhookstore countries datatable tests/fixtures/consumer
-FIXTURE_DIRS := tests/fixtures/plugin_base tests/fixtures/plugin_dep tests/fixtures/consumer
+GENERATION_DIRS := logging cloud/credentials infrastructure application internal/outboxstore internal/idempotencystore internal/auditstore internal/sessionstore internal/tokenstore internal/challengestore internal/mfastore internal/notificationstore internal/authtransport internal/extensionstore internal/attachmentstore internal/jobarchive internal/webhookstore countries datatable database/orm/internal/enuminit tests/fixtures/consumer tests/fixtures/goway
+FIXTURE_DIRS := tests/fixtures/plugin_base tests/fixtures/plugin_dep tests/fixtures/consumer tests/fixtures/goway
 export GOWORK := off
 
 # Compute once, lazily, for this make invocation. The tool prints one validated

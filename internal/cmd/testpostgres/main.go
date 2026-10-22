@@ -94,7 +94,7 @@ func run(ctx context.Context, goBinary, file string, race bool, batchSize int, t
 		}
 	}
 	environment = append(environment, pgtest.URLVariable+"="+value, pgtest.RequiredVariable+"=1", "GOWORK=off")
-	for _, dir := range []string{".", "tests/fixtures/consumer"} {
+	for _, dir := range []string{".", "tests/fixtures/consumer", "tests/fixtures/goway"} {
 		args := []string{"test", "-mod=readonly", "-count=1", "-timeout=" + timeout.String()}
 		if race {
 			args = append(args, "-race")

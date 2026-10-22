@@ -6,10 +6,10 @@ import (
 	"go/token"
 	"go/types"
 	"sort"
-	"strconv"
 	"strings"
 	"unicode"
 
+	"github.com/weiloon1234/Foundry-Go/internal/modelmeta"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
@@ -734,58 +734,10 @@ func fieldTag(tag string) (map[string]string, error) {
 
 // Reject malformed/duplicate tags instead of letting reflect.StructTag.Lookup
 // silently hide a misspelled persistence declaration.
-func parseTags(text string) (map[string]string, error) {
-	tags := make(map[string]string)
-	for text != "" {
-		text = strings.TrimLeft(text, " ")
-		if text == "" {
-			break
-		}
-		colon := strings.IndexByte(text, ':')
-		if colon < 1 {
-			return nil, fmt.Errorf("malformed struct tag")
-		}
-		key := text[:colon]
-		for _, r := range key {
-			if r <= ' ' || r == '"' || r == 127 {
-				return nil, fmt.Errorf("malformed struct tag key")
-			}
-		}
-		remaining := text[colon+1:]
-		if len(remaining) == 0 || remaining[0] != '"' {
-			return nil, fmt.Errorf("struct tag values must be quoted")
-		}
-		quoted, err := strconv.QuotedPrefix(remaining)
-		if err != nil {
-			return nil, fmt.Errorf("malformed quoted struct tag")
-		}
-		value, err := strconv.Unquote(quoted)
-		if err != nil {
-			return nil, fmt.Errorf("invalid struct tag value")
-		}
-		if _, exists := tags[key]; exists {
-			return nil, fmt.Errorf("duplicate struct tag namespace %s", key)
-		}
-		tags[key] = value
-		text = remaining[len(quoted):]
-		if text != "" && text[0] != ' ' {
-			return nil, fmt.Errorf("struct tags must be separated by spaces")
-		}
-	}
-	return tags, nil
-}
+func parseTags(text string) (map[string]string, error) { return modelmeta.ParseTags(text) }
 
-func snake(name string) string {
-	runes := []rune(name)
-	var out strings.Builder
-	for i, r := range runes {
-		if unicode.IsUpper(r) && i > 0 && (unicode.IsLower(runes[i-1]) || unicode.IsDigit(runes[i-1]) || (i+1 < len(runes) && unicode.IsLower(runes[i+1]) && unicode.IsUpper(runes[i-1]))) {
-			out.WriteByte('_')
-		}
-		out.WriteRune(unicode.ToLower(r))
-	}
-	return out.String()
-}
+func snake(name string) string { return modelmeta.Snake(name) }
+
 func exportedName(name string) string {
 	var out strings.Builder
 	for _, part := range strings.Split(name, "_") {

@@ -4,7 +4,7 @@ import (
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 // Alias gives each reference to a model or projection a distinct scope. Declare a different
@@ -45,23 +45,11 @@ func As[A, M any](source RecordQuerySource[M], alias string) AliasedSource[A, M]
 // Both ordinary and transaction-required aliases use the same record metadata,
 // validation and source-boundary rules. A lock must stay inside its SELECT.
 func aliasInput[S, M any](q recordQuery[M], alias string) (joinInput[S], *recordMetadata[M]) {
-	var input joinInput[S]
-	if !sqlname.Valid(alias) {
-		input.err = fault.New(fault.Invalid, "alias requires a record query and valid name")
-		return input, nil
+	core := querycore.AliasNode(q.node, q.columns, q.directSource, alias, reflect.TypeFor[S](), q.err)
+	if core.Err != nil {
+		return joinInput[S]{err: core.Err}, nil
 	}
-	if q.err != nil {
-		input.err = q.err
-		return input, nil
-	}
-	table := tableSource{Alias: alias, Columns: q.columns, Query: &q.node}
-	if q.directSource && len(q.node.Locks) == 0 {
-		table = q.node.Source
-		table.Alias = alias
-	}
-	input.node.Source = table
-	input.aliases = map[string]reflect.Type{alias: reflect.TypeFor[S]()}
-	return input, q.metadata()
+	return joinInput[S]{node: core.Node, aliases: core.Aliases}, q.metadata()
 }
 
 func (a AliasedSource[A, M]) Scope() ModelScope[Alias[A, M], M] {

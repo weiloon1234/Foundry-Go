@@ -122,7 +122,7 @@ func TestCursorTransportRoundTripsExactDriverValues(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		decoded, err := encoded.decode()
+		decoded, err := decodeCursorValue(encoded)
 		if err != nil || !reflect.DeepEqual(original, decoded) {
 			t.Fatalf("cursor value changed: %T", original)
 		}
