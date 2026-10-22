@@ -51,4 +51,7 @@ func NewKey(namespace keyspace.Namespace, queue Queue) (Key, error) {
 func (k Key) Validate() error               { return k.address.Validate() }
 func (k Key) Queue() Queue                  { return k.queue }
 func (k Key) Namespace() keyspace.Namespace { return k.address.Namespace }
-func (k Key) String() string                { return k.address.String("jobs") }
+func (k Key) String() string                { return k.address.String(KeyFeature) }
+
+// KeyFeature is the physical address family owned by this adapter.
+const KeyFeature keyspace.Feature = "jobs"

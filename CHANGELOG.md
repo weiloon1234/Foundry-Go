@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Redis key inventory (B28)
+
+- Add service-free `infrastructure.Plan.RedisKeys` and
+  `application.Builder.RedisKeys` inspection, grouped by named Redis connection
+  with sorted exact feature/namespace prefixes. Include cache metadata and fill
+  leases, jobs, coordination, realtime and separate pub/sub channel requirements.
+- Add typed `RedisRateLimitStore` and `RedisLockoutStore` declarations through
+  `WithRedisStores`, sharing resolved configuration with runtime construction.
+  Add the `application.RedisKeysCommand` CLI helper for `redis.keys --json`.
+  Existing store APIs and persisted key formats remain unchanged. See the
+  [Redis guide](docs/guides/redis.md#inspect-configured-redis-key-permissions).
+
 ### Documentation and editor accuracy
 
 - Reconcile current guides with delivered query, events/outbox, authentication,

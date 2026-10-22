@@ -55,6 +55,7 @@ type options struct {
 	logger      *slog.Logger
 	mailDrivers map[MailDriver]email.Driver
 	credentials map[credentials.Name]credentials.Provider
+	redisStores []RedisStore
 	encryption  *encryption.Keyring
 }
 type Option func(*options) error
@@ -103,9 +104,10 @@ func WithCredentials(name credentials.Name, provider credentials.Provider) Optio
 }
 
 type Plan struct {
-	settings  Settings
-	options   options
-	providers []foundation.Provider
+	settings    Settings
+	options     options
+	providers   []foundation.Provider
+	redisStores []resolvedRedisStore
 }
 
 // Configure freezes a settings snapshot and constructs provider definitions. It
@@ -130,6 +132,9 @@ func Configure(settings Settings, optionsList ...Option) (*Plan, error) {
 	}
 	p := &Plan{settings: owned, options: o}
 	if err = p.validate(); err != nil {
+		return nil, err
+	}
+	if err = p.resolveRedisStores(); err != nil {
 		return nil, err
 	}
 	p.assemble()
@@ -267,10 +272,7 @@ func (p *Plan) validate() error {
 	}
 	for _, name := range keys(s.Cache.Stores) {
 		c := s.Cache.Stores[name]
-		if c.Config.Namespace == (keyspace.Namespace{}) {
-			c.Config.Namespace = s.Namespace
-			c.Config.Namespace.Application += "." + string(name)
-		}
+		c.Config.Namespace = p.namespace(c.Config.Namespace, string(name))
 		if c.Leases.Namespace == (keyspace.Namespace{}) {
 			c.Leases.Namespace = c.Config.Namespace
 		}

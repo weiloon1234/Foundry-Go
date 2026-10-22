@@ -1,0 +1,189 @@
+{
+  "date": "2026-10-21",
+  "status": "accepted-segmented",
+  "base_commit": "a1572e7238ece078235ff041491dc2d274142556",
+  "branch": "b28-redis-key-inventory",
+  "scope": "B28 service-free Redis key inventory from resolved configured declarations; typed rate-limit and lockout stores; independent key/channel grants; existing key formats preserved.",
+  "source_evidence": {
+    "consumer_pin": "d969f7c8be2f",
+    "comparison_base": "a1572e7",
+    "result": "The cited settings, namespace resolution, keyaddress and feature-owner paths are unchanged between these two commits. Current providers additionally confirm realtime state and pub/sub channel requirements."
+  },
+  "api": {
+    "plan": "(*infrastructure.Plan).RedisKeys() []infrastructure.RedisConnectionInventory",
+    "application": "(*application.Builder).RedisKeys() ([]infrastructure.RedisConnectionInventory, error)",
+    "declarations": [
+      "infrastructure.RedisRateLimitStore",
+      "infrastructure.RedisLockoutStore",
+      "infrastructure.WithRedisStores",
+      "application.WithRedisStores"
+    ],
+    "cli": "application.RedisKeysCommand(\"redis.keys\", builder), supporting --json",
+    "reason": "The plan already owns validated resolved namespaces and connection references. Inspection reads that snapshot; runtime and inventory share feature constants and the physical prefix encoder. Typed store declarations produce both factories and inventory entries."
+  },
+  "environment": {
+    "GOFLAGS": "-p=4",
+    "GOCACHE": "/tmp/foundry-b28-go-build",
+    "backend_configuration": "Provided private environment file, automatically exported with set -a for required backend checks; no values retained.",
+    "root_test_mode": "The initial and resumed make test segments ran in service-free mode because the private file assignments were not automatically exported. Required backend coverage was performed separately via test-redis with automatic export.",
+    "cache_limit_bytes": 15000000000,
+    "minimum_free_bytes": 40000000000,
+    "cache_cleanup": "removed after all Go commands completed; absence verified",
+    "sampled_max_cache_bytes": 10048937984,
+    "sampled_min_free_bytes": 55402766336
+  },
+  "checks": [
+    {
+      "command": "make fmt; make fmt-check",
+      "result": "passed; repeated after test-fixture and CLI documentation corrections"
+    },
+    {
+      "command": "make vet",
+      "exit_code": 0
+    },
+    {
+      "command": "go vet ./redis ./application",
+      "exit_code": 0,
+      "reason": "final touched-package check after fixture corrections"
+    },
+    {
+      "command": "make test",
+      "initial_exit_code": 2,
+      "result": "completed in retained segments covering all 235 root packages",
+      "continuations": [
+        "xargs -n 6 sh -c 'go test -timeout=20m \"$@\" || exit 255' foundry-tests < remaining-packages.txt (43 then 37 uncompleted packages; same Makefile batching and flags)",
+        "go test -timeout=20m ./pubsub -run '^TestKeyCallbackRetainsOperationUntilExit$' -count=10",
+        "go test -timeout=20m ./redis -run '^(TestRedisInventory|TestRedisStoreDeclarations)' -v"
+      ],
+      "external_input_tracking": "Resumed batches exported the assignment from go run ./internal/cmd/testinputs --go go."
+    },
+    {
+      "command": "make generate-check",
+      "exit_code": 0,
+      "result": "All 20 configured generation directories current; no generated files changed. Subsequent edits only corrected a consumer command name, streams and prose; no generated declaration changed."
+    },
+    {
+      "command": "go test -timeout=20m ./bootstrap -run '^TestRedisInventoryBeforeApplicationBuild$' -v",
+      "directory": "tests/fixtures/consumer",
+      "exit_code": 0
+    },
+    {
+      "command": "make test-redis",
+      "initial_exit_code": 2,
+      "expanded_command": "FOUNDRY_TEST_REDIS_REQUIRED=1 go test -race -timeout=20m ./redis/... ./cache/... ./lease/... ./ratelimit/... ./pubsub/...",
+      "result": "passed in retained segments plus focused reruns; B28 assertions and race checks passed in the initial target"
+    },
+    {
+      "command": "go test -race -timeout=20m ./redis -run '^(TestEntryLostAcknowledgementsDoNotReturnSuccessOrRetry|TestRedisSchedulerLeadershipAndOwnedFailover)$' -v",
+      "exit_code": 0
+    },
+    {
+      "command": "go test -race -timeout=20m ./cache/postgres -run '^TestDatabaseClockContracts$/^atomic-add$' -v",
+      "exit_code": 0
+    },
+    {
+      "command": "make docs-check",
+      "result": "passed",
+      "exit_code": 0
+    }
+  ],
+  "failures_and_dispositions": [
+    {
+      "failure": "pubsub.TestKeyCallbackRetainsOperationUntilExit returned nil instead of cancellation once.",
+      "disposition": "Existing assertion passed ten focused reruns and the required Redis race target. No unrelated runtime/test changes made."
+    },
+    {
+      "failure": "Two new inventory unit fixtures lacked an explicit Redis host.",
+      "disposition": "Configured a dummy unreachable host; service-free unit assertions and required Redis race run passed."
+    },
+    {
+      "failure": "Consumer CLI fixture used redis:keys, which violates existing semantic command-name syntax.",
+      "disposition": "Changed the documented/example name to redis.keys and supplied all required CLI streams. Independent consumer passed."
+    },
+    {
+      "failure": "Existing lost-acknowledgement batch cases counted two script attempts.",
+      "disposition": "Focused race rerun passed. The hook counts both EVALSHA and EVAL; a NOSCRIPT fallback is consistent with the observed count. No script-cache reset or test weakening was performed."
+    },
+    {
+      "failure": "Existing Redis scheduler leadership and PostgreSQL cache atomic-add checks timed out under the combined race run.",
+      "disposition": "Focused checks passed with identical race flags and required backends."
+    }
+  ],
+  "acceptance": {
+    "unit": "Two job connections, coordination, two tagged/distributed caches, explicit override, base and application-specific rate-limit stores, lockout, realtime and separate pub/sub channels; memory/unused connections omitted; sorting/deduplication/snapshots/secrets/invalid declarations checked.",
+    "runtime": "Configured providers perform actual writes. Independent exact test namespaces are scanned across features so a missing inventory feature cannot hide. Every observed key matches inventory and every inventory key prefix is exercised, including fill leases while held.",
+    "acl": "Redis 7+ temporary uniquely named users per connection receive exact key-prefix patterns. Allowed key reads/writes succeed; sibling, crafted cross-environment and other connection grants are denied. Channels remain denied. Each created user is deleted.",
+    "isolation": "Only randomized test namespaces and exact test ACL identities are cleaned; no flush/reset/drop or existing-user changes."
+  },
+  "limits": [
+    "No full make verify, framework-wide race, test-postgres, browser, or general full integration suite was requested or run.",
+    "Arbitrary provider callbacks and manually constructed/raw Redis consumers are opaque. Application rate-limit and lockout stores must use the typed declaration path for inclusion.",
+    "Consumer publication, pin adoption and deployment ACL replacement remain consumer work."
+  ],
+  "consumer_adoption": [
+    "Update the framework pin after user-managed publication.",
+    "Replace manual Redis rate-limit/lockout construction with typed WithRedisStores declarations; resolve the same typed store keys during bootstrap.",
+    "Read Builder.RedisKeys or register RedisKeysCommand(\"redis.keys\", builder) before build/start.",
+    "Replace broad feature/child wildcard ACL rules with ~ + each Keys.Prefix + *. Keep resetchannels unless explicit Channels grants are needed."
+  ],
+  "files_changed": [
+    "CHANGELOG.md",
+    "application/redis_inventory.go",
+    "auth/lockout/key.go",
+    "blueprint/00-master-architecture-and-parity.md",
+    "cache/namespace.go",
+    "docs/evidence/redis-key-inventory-b28-20261021.json",
+    "docs/guides/redis.md",
+    "infrastructure/providers.go",
+    "infrastructure/redis_inventory.go",
+    "infrastructure/redis_stores.go",
+    "infrastructure/settings.go",
+    "internal/keyaddress/address.go",
+    "jobs/identity.go",
+    "keyspace/namespace.go",
+    "lease/backend.go",
+    "pubsub/backend.go",
+    "ratelimit/backend.go",
+    "redis/data/key.go",
+    "redis/inventory_integration_test.go",
+    "redis/inventory_test.go",
+    "tests/fixtures/consumer/bootstrap/redis_inventory_test.go",
+    "websocket/cluster_backend.go"
+  ],
+  "source_sha256": {
+    "application/redis_inventory.go": "c43ba237e16f1e6e3eb708fd8f60dba32155cb7352f2bb135b2cdd4e21e54a4d",
+    "auth/lockout/key.go": "7dab4df332014a4d4e4c438b1fbed07aac2dc66e492060a682dd5abe13ff5b52",
+    "cache/namespace.go": "f78b82ffdfe4ec4c8b7d5e226a6464e0b0693f2a347c9f3a8a8fea638a3534f1",
+    "infrastructure/providers.go": "f5680cb3c95e6447fbc5a503cc3e72089c82f7762ea1a42ebdd6a976af886b0f",
+    "infrastructure/redis_inventory.go": "5302533b5df5c95966458c9d7c45966678078508985363f49331c7fa5ba69aa5",
+    "infrastructure/redis_stores.go": "bce956d368c42aee1f1680a8def66a7009beca8f628c9b33b112a4de77f33705",
+    "infrastructure/settings.go": "87ddf618765c54c769b41c45a6ee5c92682a7c1277502b1ab82ec65919d62770",
+    "internal/keyaddress/address.go": "9d15e5f0a2f0f28e4bde2c0582367ba85c0aeda6472f5e43435c169d25fa9509",
+    "jobs/identity.go": "73963e27105c093d7bc3854826bdee8e8fcc6bcfa470ed169b33ac2646420130",
+    "keyspace/namespace.go": "e9996d59dcf3783c80fe15c86ac8d573e1ce3545611442c34415d1823ceb297e",
+    "lease/backend.go": "36469cd19dde3523ae8b164aba243f906efc53fe896adc546e0bdb2b2b97e67e",
+    "pubsub/backend.go": "3fa9d9af5ac33a7e07a9724a9406eeedcb3097f9d565f61f60f525e3073d0743",
+    "ratelimit/backend.go": "40840d696a221d424fb3abe5220a742d22e20268dd0f31c1b49327927389e467",
+    "redis/data/key.go": "fe6cafb55c86cd4801f23ffc428a662eadc10712c8686e5256b020664d78a1e8",
+    "redis/inventory_integration_test.go": "a75ffd72ebb980b7cda1dcc8572c064b4cbb7ad6c2cfd0641d833f52afd0a7f5",
+    "redis/inventory_test.go": "4d092266b5e175a4cbd7e9ceef6a97956295d2693579ca126ceaf587ee218b28",
+    "tests/fixtures/consumer/bootstrap/redis_inventory_test.go": "a8bd6bc73cc8f1ffd5816738025ac248d3f3c8597fb27c6188fd869fd2cddf97",
+    "websocket/cluster_backend.go": "228801f4b7f50f471f58c9651adb0d497b0a93ccc9a12783fa48264123ec001a"
+  },
+  "local_log_sha256": {
+    "/private/tmp/foundry-b28-vet.log": "685d158f951e3eb11749d2e519a64eba4f57dcc93cd562eaee2cc9457f72846e",
+    "/private/tmp/foundry-b28-vet-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/private/tmp/foundry-b28-test.log": "34347371558f7cf1f3d145213a13d82171abf91ed8bd98834a905338d5a1e96c",
+    "/private/tmp/foundry-b28-test-resumed.log": "83d7fa66799d3e96953d5857ac5dfb53cc7c45bc6c1996bb8999dd3a44c2fa9e",
+    "/private/tmp/foundry-b28-test-final.log": "b5d9494f10d8f6799edb9aecbc6f476d219cdbce2131ea4ce77ae3d7fd61e883",
+    "/private/tmp/foundry-b28-pubsub-recheck.log": "dd9b6b6650d72801dbcc659053872964652eb2be52eef8501f9e4f564caf52a2",
+    "/private/tmp/foundry-b28-inventory.log": "1df001118e6d09db6c829113d52df742f8cbbd83422075eb49156c2bfb327a4b",
+    "/private/tmp/foundry-b28-generate-check.log": "250a6710abf83ae1660d337798e3830ac9aae39f3500c5fce9dde9edef144319",
+    "/private/tmp/foundry-b28-consumer.log": "74d101da977547e56624d0b916e1e6dcbd0c242f63fc771ac51fbf24e18f7442",
+    "/private/tmp/foundry-b28-consumer-final.log": "a192f3f28f21746c0b04b682d89e40cfcd55185814eae409a36c44b41496ce3a",
+    "/private/tmp/foundry-b28-test-redis.log": "b986b0bb5c556fa5d8d07624cfe57f27e0b15456bb08fc5dfb289cfb262621af",
+    "/private/tmp/foundry-b28-redis-recheck.log": "3973b2f5e9031361b719da4c2fe84e4ca7e48e4cc09d4e6c98909661679d2c32",
+    "/private/tmp/foundry-b28-postgres-recheck.log": "68699f2f64432a9acbb5671a9d97d939a76652a3dfc9570f6eb98c8351699f32",
+    "/private/tmp/foundry-b28-docs-check.log": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+  }
+}

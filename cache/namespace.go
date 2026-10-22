@@ -32,9 +32,9 @@ func (k EntryKey) Namespace() Namespace { return k.address.Namespace }
 func (k EntryKey) Name() Name           { return Name(k.address.Name) }
 func (k EntryKey) String() string {
 	if k.namespaceTag {
-		return k.address.String("cache-namespace")
+		return k.address.String(NamespaceKeyFeature)
 	}
-	return k.address.String("cache")
+	return k.address.String(KeyFeature)
 }
 
 // NewNamespaceTagKey returns the reserved adapter metadata address for a complete
@@ -45,3 +45,9 @@ func NewNamespaceTagKey(namespace Namespace) (EntryKey, error) {
 	key.namespaceTag = true
 	return key, err
 }
+
+// Physical address families include the namespace generation metadata used by tags.
+const (
+	KeyFeature          keyspace.Feature = "cache"
+	NamespaceKeyFeature keyspace.Feature = "cache-namespace"
+)

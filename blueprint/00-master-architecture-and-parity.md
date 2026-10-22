@@ -8,6 +8,25 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Configured Redis key inventory (starter B28) — 2026-10-21
+
+Status: **accepted on current native source with the requested B28 gate**.
+The configured plan exposes sorted, secret-free Redis key and channel prefixes
+without services. Typed application rate-limit and lockout declarations share
+runtime construction with inspection. The [Redis guide](../docs/guides/redis.md#inspect-configured-redis-key-permissions)
+owns adoption. Existing persisted key formats remain unchanged. Consumer
+publication, pin adoption and deployment ACL replacement are separate work.
+
+`fmt-check`, vet, deterministic generation, the 235-package test suite and the
+independent service-free consumer passed. Required Redis acceptance, including
+its repository-owned race flags and PostgreSQL cache checks, passed in retained
+segments with focused failure reruns. The B28 integration test exercised every
+inventory key prefix and verified temporary ACL users deny sibling namespaces,
+crafted cross-environment keys, other connection grants and channels. The
+[evidence](../docs/evidence/redis-key-inventory-b28-20261021.json) records the
+initial failures, corrections, exact commands, source fingerprints and limits.
+No full `make verify`, framework-wide race or PostgreSQL suite is claimed.
+
 ## Documentation and IDE accuracy audit — 2026-10-20
 
 Status: **accepted on current native source**. The audit traced nine recent

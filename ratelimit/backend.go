@@ -22,7 +22,7 @@ func NewKey(namespace keyspace.Namespace, name Name, logical string) (Key, error
 }
 func (k Key) Validate() error               { return k.address.Validate() }
 func (k Key) Namespace() keyspace.Namespace { return k.address.Namespace }
-func (k Key) String() string                { return k.address.String("ratelimit") }
+func (k Key) String() string                { return k.address.String(KeyFeature) }
 
 // WindowOffset is this key's deterministic window phase in [0, window). Adapters
 // start fixed windows at offset + n*window, so the buckets of many keys do not
@@ -80,3 +80,6 @@ func ValidateClear(ctx context.Context, key Key) error {
 	}
 	return key.Validate()
 }
+
+// KeyFeature is the physical address family owned by this adapter.
+const KeyFeature keyspace.Feature = "ratelimit"

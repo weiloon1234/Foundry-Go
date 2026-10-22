@@ -60,6 +60,9 @@ func (p *Plan) assemble() {
 	}
 	p.storageRegistry()
 	p.supporting()
+	for _, store := range p.redisStores {
+		p.providers = append(p.providers, store.module)
+	}
 	requires := make([]foundation.ProviderID, 0, len(p.providers))
 	for _, provider := range p.providers {
 		requires = append(requires, provider.ID())

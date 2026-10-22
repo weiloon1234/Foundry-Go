@@ -95,7 +95,7 @@ func (k ClusterKey) String() string {
 	if k.Validate() != nil {
 		return ""
 	}
-	return k.address.String("websocket")
+	return k.address.String(KeyFeature)
 }
 func (k ClusterKey) Namespace() keyspace.Namespace { return k.address.Namespace }
 func (k ClusterKey) Policy() string                { return k.policy }
@@ -184,3 +184,6 @@ func ValidateClusterConnection(ctx context.Context, key ClusterKey, instance Ins
 	}
 	return nil
 }
+
+// KeyFeature is the physical address family owned by this adapter.
+const KeyFeature keyspace.Feature = "websocket"

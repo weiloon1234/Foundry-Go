@@ -51,9 +51,17 @@ func (a Address) Validate() error {
 	}
 	return nil
 }
-func (a Address) String(feature string) string {
+func (a Address) String(feature keyspace.Feature) string {
 	if !a.valid {
 		return ""
 	}
-	return "foundry:" + feature + ":v1:" + a.Namespace.Application + ":" + a.Namespace.Environment + ":" + a.Name + ":" + hex.EncodeToString(a.Hash[:])
+	return Prefix(feature, a.Namespace) + a.Name + ":" + hex.EncodeToString(a.Hash[:])
+}
+
+// Version is the shared physical address format, independent of payload versions.
+const Version = "v1"
+
+// Prefix encodes validated feature and namespace components for runtime and inspection.
+func Prefix(feature keyspace.Feature, namespace keyspace.Namespace) string {
+	return "foundry:" + string(feature) + ":" + Version + ":" + namespace.Application + ":" + namespace.Environment + ":"
 }

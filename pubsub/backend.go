@@ -39,7 +39,7 @@ func (c Channel) String() string {
 	if c.Validate() != nil {
 		return ""
 	}
-	return c.address.String("pubsub") + ":" + strconv.FormatUint(uint64(c.version), 10)
+	return c.address.String(ChannelFeature) + ":" + strconv.FormatUint(uint64(c.version), 10)
 }
 
 // Limits bound a subscription's payloads and pending messages. Queue bytes count
@@ -129,3 +129,6 @@ func ValidateSubscribe(ctx context.Context, channels []Channel, limits Limits) e
 	}
 	return nil
 }
+
+// ChannelFeature is the physical address family owned by this adapter.
+const ChannelFeature keyspace.Feature = "pubsub"

@@ -46,7 +46,7 @@ func (k Key) String() string {
 	if k.Validate() != nil {
 		return ""
 	}
-	return k.address.String("data-"+string(k.kind)) + ":" + strconv.FormatUint(uint64(k.version), 10)
+	return k.address.String(keyspace.Feature("data-"+string(k.kind))) + ":" + strconv.FormatUint(uint64(k.version), 10)
 }
 func (k Key) Namespace() keyspace.Namespace { return k.address.Namespace }
 func (k Key) Kind() Kind                    { return k.kind }

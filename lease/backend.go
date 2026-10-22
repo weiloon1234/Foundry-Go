@@ -23,7 +23,7 @@ func NewKey(namespace keyspace.Namespace, name Name, logical string) (Key, error
 }
 func (k Key) Validate() error               { return k.address.Validate() }
 func (k Key) Namespace() keyspace.Namespace { return k.address.Namespace }
-func (k Key) String() string                { return k.address.String("lease") }
+func (k Key) String() string                { return k.address.String(KeyFeature) }
 
 // Duration bounds keep expiry finite and leave room for client validity margins.
 const (
@@ -71,3 +71,6 @@ var ErrLost = fault.New(fault.Conflict, "lease ownership lost")
 
 // ErrReleased marks explicit release of a guard's work context.
 var ErrReleased = fault.New(fault.Closed, "lease released")
+
+// KeyFeature is the physical address family owned by this adapter.
+const KeyFeature keyspace.Feature = "lease"

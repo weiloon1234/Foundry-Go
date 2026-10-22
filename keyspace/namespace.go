@@ -3,6 +3,9 @@ package keyspace
 
 import "github.com/weiloon1234/Foundry-Go/fault"
 
+// Feature identifies the physical key family owned by a framework adapter.
+type Feature string
+
 // Namespace separates applications and environments sharing a backend.
 // Components contain 1–128 ASCII letters, digits, dots, underscores or hyphens.
 type Namespace struct{ Application, Environment string }

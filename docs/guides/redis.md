@@ -5,6 +5,78 @@ keep using the [typed cache API](caching.md): model-specific keys, concrete valu
 explicit TTLs and typed counters. The vendor client remains private; advanced
 capabilities use the explicit [scoped command boundary](redis-commands.md).
 
+## Inspect configured Redis key permissions
+
+`infrastructure.Plan.RedisKeys()` returns the resolved Redis address requirements
+without opening pools, retrieving credentials, or connecting to services.
+`application.Builder.RedisKeys()` provides the same inspection before `Build`.
+Both return owned `[]infrastructure.RedisConnectionInventory` snapshots, sorted
+by connection name and then by exact prefix, with duplicates removed.
+
+Each connection has separate `Keys` and `Channels` slices. Each entry contains a
+typed feature, the application/environment namespace, the physical format version
+and the exact prefix. Connection hosts, URLs, usernames and passwords are absent.
+Memory stores, other non-Redis stores and unused Redis connections add nothing.
+
+The inventory covers configured jobs, coordination leases, named caches,
+cache namespace-generation metadata, distributed fill leases, realtime state and
+pub/sub channels. Scheduler cursors share the coordination lease prefix.
+Maintenance and other cache-backed features use their selected cache's prefixes.
+Explicit namespace overrides retain their configured application and environment.
+
+Declare application rate-limit and credential-protection stores alongside the
+application settings so construction and inspection use the same declarations:
+
+```go
+var Limits = foundation.NewKey[*ratelimit.Store]("app.limits")
+var Protection = foundation.NewKey[*lockout.Store]("app.protection")
+
+builder := application.New(settings, application.WithRedisStores(
+    infrastructure.RedisRateLimitStore(
+        Limits, "default", ratelimit.DefaultConfig(keyspace.Namespace{})),
+    infrastructure.RedisLockoutStore(
+        Protection, "default", lockout.DefaultConfig(keyspace.Namespace{})),
+))
+inventory, err := builder.RedisKeys()
+if err != nil { return err }
+if err := json.NewEncoder(output).Encode(inventory); err != nil { return err }
+```
+
+The store constructors accept concrete `foundation.Key[*ratelimit.Store]` and
+`foundation.Key[*lockout.Store]` keys. Key names follow named-service syntax.
+A zero namespace selects the application's base namespace; a nonzero namespace
+is an explicit override. An empty Redis connection selects the configured default.
+Unknown connections, invalid configurations and duplicate service keys fail
+inspection and build before resources open. The stores borrow the selected pool.
+During bootstrap, resolve these keys and bind the existing typed rate-limit or
+lockout declarations. Direct plan users pass the same declarations through
+`infrastructure.WithRedisStores` to `infrastructure.Configure`.
+
+`application.RedisKeysCommand("redis.keys", builder)` returns a standard CLI
+declaration with text output and `--json`. Register it in a service-free registry,
+parse the invocation and run it before application build/start, as with
+`application.AboutCommand`. The command captures its own inventory snapshot.
+
+For each connection, deployment tooling can turn each `Keys` prefix into
+`~` + prefix + `*`. For example, `foundry:jobs:v1:shop.jobs.delivery:production:`
+becomes `~foundry:jobs:v1:shop.jobs.delivery:production:*`. Every component before
+the final colon is literal and validated to exclude glob metacharacters.
+Do not replace feature, application, child namespace or environment with `*`:
+Redis glob wildcards match colons too. Reset previous key permissions before
+installing the exact grants. Command permissions remain a separate deployment
+policy.
+
+Channels are not Redis keys. Keep `resetchannels` when pub/sub is unused; only
+applications that need pub/sub or distributed realtime should grant the separate
+`Channels` prefixes with `&` + prefix + `*`. Redis database numbers do not isolate
+channels.
+
+The inventory describes configured declarations. It cannot inspect arbitrary
+provider callbacks, manually constructed stores, or raw Redis commands. Migrate
+manual rate-limit and lockout stores to these declarations before treating the
+inventory as complete for an application. Explicit raw/data consumers still own
+their separately declared deployment policy. No existing key format changes.
+
 ## Application ownership
 
 ```go

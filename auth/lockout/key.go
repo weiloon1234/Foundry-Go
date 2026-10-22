@@ -20,7 +20,7 @@ func NewKey(namespace keyspace.Namespace, name Name, logical string) (Key, error
 }
 func (k Key) Validate() error               { return k.address.Validate() }
 func (k Key) Namespace() keyspace.Namespace { return k.address.Namespace }
-func (k Key) String() string                { return k.address.String("lockout") }
+func (k Key) String() string                { return k.address.String(KeyFeature) }
 func ValidateOperation(ctx context.Context, key Key, policy Policy) error {
 	if ctx == nil {
 		return fault.New(fault.Invalid, "lockout requires a context")
@@ -33,3 +33,6 @@ func ValidateOperation(ctx context.Context, key Key, policy Policy) error {
 	}
 	return policy.Validate()
 }
+
+// KeyFeature is the physical address family owned by this adapter.
+const KeyFeature keyspace.Feature = "lockout"
