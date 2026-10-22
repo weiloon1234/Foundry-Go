@@ -130,7 +130,7 @@ func prepare(config options) error {
 	if err != nil {
 		return err
 	}
-	report := manifest{Format: 2, Created: time.Now().UTC(), Go: files[0].Go.Version, Consumers: make(map[string][]sourceFile)}
+	report := manifest{Format: 3, Created: time.Now().UTC(), Go: files[0].Go.Version, Consumers: make(map[string][]sourceFile)}
 	for i, location := range locations {
 		stage := filepath.Join(out, "sources", fmt.Sprint(i))
 		if _, err := policy.copySource(filepath.Join(root, location), stage); err != nil {
@@ -161,7 +161,14 @@ func prepare(config options) error {
 	if err := rewriteModule(consumer, versions, report.Go); err != nil {
 		return err
 	}
-	profiles := map[string]string{"full": consumer}
+	goway := filepath.Join(out, "consumers", "goway")
+	if _, err := policy.copySource(filepath.Join(root, "tests/fixtures/goway"), goway); err != nil {
+		return err
+	}
+	if err := rewriteModule(goway, versions, report.Go); err != nil {
+		return err
+	}
+	profiles := map[string]string{"full": consumer, "goway": goway}
 	for _, name := range []string{"ordinary", "configured"} {
 		destination := filepath.Join(out, "consumers", name)
 		directories := []string{"productionprofile"}

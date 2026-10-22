@@ -83,6 +83,18 @@ func (policy sourcePolicy) sourceName(path string) bool {
 	// Reviewed imaging codec fixtures and their upstream patent notice. Keep
 	// binary allowance scoped to these test directories, never arbitrary assets.
 	relative := filepath.ToSlash(path)
+	// Reviewed catalogue and independent-consumer fixtures. The TOML is loaded
+	// by mailing/configured_test.go; the SPA assets are embedded by portals.go.
+	switch relative {
+	case "blueprint/goway-data-layer/compilefail-mapping.tsv",
+		"mailing/testdata/mailers.toml",
+		"spaportals/web/admin/assets/app-3f2a9c.js",
+		"spaportals/web/admin/logo.svg",
+		"spaportals/web/home/main.js",
+		"spaportals/web/public/admin/shadow.js",
+		"spaportals/web/public/robots.txt":
+		return true
+	}
 	if strings.HasPrefix(relative, "imaging/testdata/avif/") {
 		return filepath.Ext(name) == ".avif" || name == "PATENTS"
 	}

@@ -529,6 +529,18 @@ alone owns status; authoring these contracts does not imply runtime implementati
 | E04 | [Consumer fixture, tooling and documentation](model-extension-slots/04-consumer-tooling-and-documentation.md) | E01–E03 | Complete — native `make verify` (354 s), PostgreSQL races for the articles consumer, extension inspection snapshot and undeclared-name commands passed; scaffold slot flags were delivered as a 2026-09-30 follow-up with cross-connection cleanup and in-transaction attachment publication ([evidence](../docs/evidence/model-extension-slots-followups-20260930.json)), plus 2026-10-01 durable outbox cleanup and editor probes; the reviewed source passed `make verify`, `make typescript-check`, `make agent-smoke` and `make test-postgres` with required Redis |
 | E05 | [Integrated acceptance and final re-audit](model-extension-slots/05-acceptance-and-audit.md) | E01–E04 accepted | Complete — native `make verify` (500 s) after the re-audit corrections, 445 real-gopls checks, the compile-fail catalog, statement and list-loading measurements, and PostgreSQL races for every root and consumer package except `internal/workscope`, whose race-mode timing test failed intermittently ([evidence](../docs/evidence/model-extension-slots-e05.json)); that test was then fixed and the full `make test-postgres` passed, with extension batch reads about 41% faster at 1000 parents ([follow-up](../docs/evidence/model-extension-slots-performance-20260930.json)) |
 
+## Go-way data layer
+
+This branch-only program changes the data-layer API while preserving runtime and
+wire contracts. It does not change the delivered status of the numbered milestones.
+The [program blueprint](goway-data-layer/README.md) owns design and guardrails.
+
+| ID | Contract | Prerequisites | Status |
+| --- | --- | --- | --- |
+| G01 | [Prototype gate](goway-data-layer/README.md#stages-and-evidence) | Approved plan | Complete — historical Stage 1 gate: 56 equivalent statements, 20 compiler negatives; models 7,808 / 22,973 functions (33.99%), one-query 901 / 4,186 (21.52%) |
+| G02 | [Branch and guardrails](goway-data-layer/README.md) | G01 | In progress on `goway-data-layer` — core/fixture port at `686c6f2`; catalogue, emitter/release audit and synthetic harness added for lead acceptance. Old API retained. |
+| G03–G12 | [Parity, retirement and acceptance stages](goway-data-layer/README.md#stages-and-evidence) | G02 and each preceding stage | Planned; no model-generator retirement or consumer migration accepted yet |
+
 ## Milestones and dependencies
 
 Numbering is the default implementation order. A prerequisite is a gate, not permission to silently implement a later milestone. Later integrations are stated explicitly to avoid circular dependencies.

@@ -58,6 +58,8 @@ destinations, copies rather than edits source modules, and produces:
   consumer, including its localization test declarations/assets, using the same
   [profile source](../tests/fixtures/consumer/productionprofile), with replacements
   removed and candidate requirements selected explicitly.
+- A separate Go-way consumer on this branch, with the same candidate requirement
+  rewriting and ownership-manifest preservation.
 - SHA-256 source/archive inventories and Go `h1:` archive hashes. Generated
   ownership manifests and the root license remain in the packages.
 
@@ -76,7 +78,9 @@ dependency directory must be inside that isolated module cache, `go mod verify`
 must pass, and the generated-source hashes must remain reproducible. The ordinary
 fixture runs query compilation without starting services; the configured fixture
 boots named memory caches and a loopback HTTP kernel, checks a request and drains
-its resources. Format-2 manifests identify all three profiles.
+its resources. Format-3 manifests add the Go-way consumer to those three profiles; historical
+format-2 and format-1 manifests remain readable. Go-way whole-app measurements use
+the [synthetic harness](../blueprint/goway-data-layer/README.md#synthetic-whole-app-harness).
 
 The artifacts prove private package consumption without the workspace or Rust
 sibling. They do not prove that a public tag exists or that a public proxy has

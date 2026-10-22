@@ -51,6 +51,15 @@ class MeasurementTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 measure.verify_inputs(root, manifest)
             manifest["format"] = 2
+            goway = root / "consumers/goway"
+            goway.mkdir()
+            source = goway / "source.go"
+            source.write_text("package goway\n")
+            manifest["consumers"]["goway"] = [{"path": "source.go", "sha256": measure.digest(source)}]
+            with self.assertRaises(ValueError):
+                measure.verify_inputs(root, manifest)
+            manifest["format"] = 3
+            measure.verify_inputs(root, manifest)
             (root / "consumers/full/extra.go").write_text("package unexpected\n")
             with self.assertRaises(ValueError):
                 measure.verify_inputs(root, manifest)

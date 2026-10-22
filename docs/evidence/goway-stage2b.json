@@ -1,0 +1,1557 @@
+{
+  "base_commit": "686c6f27fb3dbe30a8a41093f492cb903cb62606",
+  "cache": "$PWD/.cache/codex-gocache",
+  "checks": [
+    {
+      "command": "GOCACHE=$PWD/.cache/codex-gocache make release-tools-check",
+      "result": "pass; Go vet/test and all 20 Python tests; native resource tests run outside sandbox"
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tools/goway_synthetic_test.py",
+      "result": "pass; seven tests, including real macOS time wrapper with a failing stub compiler; final same tests included in release-tools-check"
+    },
+    {
+      "command": "GOCACHE=$PWD/.cache/codex-gocache python3 tools/goway_synthetic.py generate /private/tmp/foundry-goway-stage2b-n5 --models 5 --seed 1",
+      "result": "pass; both modules generated; 40 handler packages and 5 reports per style"
+    },
+    {
+      "command": "cd /private/tmp/foundry-goway-stage2b-n5/old && GOCACHE=/Users/weiloon/Projects/rust-go/Foundry-Go-goway/.cache/codex-gocache GOWORK=off go vet ./...",
+      "result": "pass"
+    },
+    {
+      "command": "cd /private/tmp/foundry-goway-stage2b-n5/new && GOCACHE=/Users/weiloon/Projects/rust-go/Foundry-Go-goway/.cache/codex-gocache GOWORK=off go vet ./...",
+      "result": "pass"
+    },
+    {
+      "command": "GOCACHE=$PWD/.cache/codex-gocache make docs-check",
+      "result": "Historical local pass only; INVALID as standalone-checkout evidence: the external planning link resolved through a sibling proposals directory. Superseded by review_fixes checks after removing that link."
+    },
+    {
+      "command": "gofmt -l on three changed release Go files and both N=5 generated modules",
+      "result": "clean; 119 Go files"
+    },
+    {
+      "command": "git diff --check",
+      "result": "pass"
+    }
+  ],
+  "corrections": [
+    "Normalized temporary paths in Python assertions for macOS /var -> /private/var.",
+    "Sandbox blocks /bin/ps and /usr/bin/time kern.clockrate; isolated reruns and final tool gate passed outside sandbox.",
+    "First dry preparation failed on existing mailing TOML fixture. Reviewed this fixture and five go:embed SPA assets, added exact-path allowances and full-consumer inventory regression coverage. Fresh second candidate succeeded.",
+    "Final catalogue review assigns metadata_value_contract to Stage 7 because its reference adapter is generated.",
+    "Second review removed the outside-repository planning link; PLAN.md is now inline text. Historical docs pass did not prove standalone checkout portability."
+  ],
+  "date": "2026-10-22",
+  "mapping": {
+    "total": 1026,
+    "areas": {
+      "Authentication and security": 94,
+      "Bulk writes and conflict policies": 56,
+      "Cache, Redis and coordination": 61,
+      "Core reads, writes and codecs": 74,
+      "Events, jobs and messaging": 54,
+      "Expressions and aggregates": 70,
+      "Framework integrations": 81,
+      "HTTP, DTOs and transport contracts": 112,
+      "Joins and correlation": 101,
+      "Lifecycle, mutators and observers": 38,
+      "Other framework services and contracts": 83,
+      "Relations and pivots": 25,
+      "Rows, CTEs and sets": 77,
+      "Validation, values and localization": 40,
+      "Windows and specialized expressions": 60
+    },
+    "dispositions": {
+      "port": 561,
+      "ported": 21,
+      "unaffected": 444
+    },
+    "stages": {
+      "2a": 21,
+      "3": 60,
+      "4": 23,
+      "5": 38,
+      "6a": 70,
+      "6b": 100,
+      "6c": 73,
+      "6d": 60,
+      "6e": 56,
+      "7": 81,
+      "—": 444
+    },
+    "ported_old_rows": 21,
+    "distinct_goway_cases": 13
+  },
+  "not_run": [
+    "make verify",
+    "PostgreSQL suites",
+    "packaged consumer runtime gate"
+  ],
+  "packaging": {
+    "actual_zip_go_files": {
+      "database/orm": 30,
+      "internal/modelmeta": 3,
+      "internal/ormcore": 5,
+      "internal/querycore": 72
+    },
+    "artifacts": 3,
+    "command": "GOCACHE=$PWD/.cache/codex-gocache go -C tools/release run . -root ../.. -out ../../.cache/goway-stage2b-candidate-2 -version v0.0.0-goway.stage2b",
+    "consumers": {
+      "configured": 40,
+      "full": 1863,
+      "goway": 83,
+      "ordinary": 10
+    },
+    "goway": "Separate consumer; no replace directive; candidate requirement selected; four ownership manifests retained",
+    "manifest_format": 3,
+    "result": "pass; dry private preparation only, no publication or packaged-consumer execution",
+    "snapshot_note": "Dry ZIP presence checked before final mapping wording/count correction and evidence documentation; packaging policy/runtime Go sources unchanged afterward."
+  },
+  "python": "3.14.7",
+  "scope": "Stage 2b guardrails; branch-only, program remains in progress",
+  "toolchain": "go1.27.1 darwin/arm64",
+  "checks_scope": "Historical first Stage 2b implementation results; review_fixes records checks of the reviewed revision. Historical N=5 and packaging runs were not repeated.",
+  "review_fixes": {
+    "counts": {
+      "disposition": {
+        "merge": {
+          "before": 0,
+          "after": 0
+        },
+        "obsolete": {
+          "before": 0,
+          "after": 0
+        },
+        "port": {
+          "before": 558,
+          "after": 561
+        },
+        "ported": {
+          "before": 12,
+          "after": 21
+        },
+        "unaffected": {
+          "before": 456,
+          "after": 444
+        }
+      },
+      "area": {
+        "Authentication and security": {
+          "before": 102,
+          "after": 94
+        },
+        "Bulk writes and conflict policies": {
+          "before": 58,
+          "after": 56
+        },
+        "Cache, Redis and coordination": {
+          "before": 61,
+          "after": 61
+        },
+        "Core reads, writes and codecs": {
+          "before": 69,
+          "after": 74
+        },
+        "Events, jobs and messaging": {
+          "before": 57,
+          "after": 54
+        },
+        "Expressions and aggregates": {
+          "before": 86,
+          "after": 70
+        },
+        "Framework integrations": {
+          "before": 71,
+          "after": 81
+        },
+        "HTTP, DTOs and transport contracts": {
+          "before": 112,
+          "after": 112
+        },
+        "Joins and correlation": {
+          "before": 85,
+          "after": 101
+        },
+        "Lifecycle, mutators and observers": {
+          "before": 39,
+          "after": 38
+        },
+        "Other framework services and contracts": {
+          "before": 84,
+          "after": 83
+        },
+        "Relations and pivots": {
+          "before": 22,
+          "after": 25
+        },
+        "Rows, CTEs and sets": {
+          "before": 77,
+          "after": 77
+        },
+        "Validation, values and localization": {
+          "before": 40,
+          "after": 40
+        },
+        "Windows and specialized expressions": {
+          "before": 63,
+          "after": 60
+        }
+      },
+      "stage": {
+        "2a": {
+          "before": 12,
+          "after": 21
+        },
+        "3": {
+          "before": 62,
+          "after": 60
+        },
+        "4": {
+          "before": 20,
+          "after": 23
+        },
+        "5": {
+          "before": 39,
+          "after": 38
+        },
+        "6a": {
+          "before": 86,
+          "after": 70
+        },
+        "6b": {
+          "before": 85,
+          "after": 100
+        },
+        "6c": {
+          "before": 74,
+          "after": 73
+        },
+        "6d": {
+          "before": 63,
+          "after": 60
+        },
+        "6e": {
+          "before": 58,
+          "after": 56
+        },
+        "7": {
+          "before": 71,
+          "after": 81
+        },
+        "—": {
+          "before": 456,
+          "after": 444
+        }
+      }
+    },
+    "changed_rows": [
+      {
+        "case": "aggregate_filter_after_window",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "Preserve window phase/partition ownership or specialized text-function operand types at the failing call; these functions belong to the specialized expression stage.",
+          "stage": "6d"
+        }
+      },
+      {
+        "case": "aggregate_input",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Relations and pivots",
+          "new-API equivalent or reason": "Preserve relation aggregate source/target ownership and computed-slot result/nullability types in typed relation declarations; this case rejects a relation aggregate binding.",
+          "stage": "4"
+        }
+      },
+      {
+        "case": "aggregate_nonnullable_result",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Relations and pivots",
+          "new-API equivalent or reason": "Preserve relation aggregate source/target ownership and computed-slot result/nullability types in typed relation declarations; this case rejects a relation aggregate binding.",
+          "stage": "4"
+        }
+      },
+      {
+        "case": "aggregate_owner",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Relations and pivots",
+          "new-API equivalent or reason": "Preserve relation aggregate source/target ownership and computed-slot result/nullability types in typed relation declarations; this case rejects a relation aggregate binding.",
+          "stage": "4"
+        }
+      },
+      {
+        "case": "aggregate_result",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Relations and pivots",
+          "new-API equivalent or reason": "Preserve relation aggregate source/target ownership and computed-slot result/nullability types in typed relation declarations; this case rejects a relation aggregate binding.",
+          "stage": "4"
+        }
+      },
+      {
+        "case": "assignment_owner_conversion",
+        "before": {
+          "disposition": "port",
+          "new-API equivalent or reason": "orm tables, columns, assignments and query/locked-query results must preserve the source owner, value, nullability, key and executor restriction shown here.",
+          "stage": "3"
+        },
+        "after": {
+          "disposition": "ported",
+          "new-API equivalent or reason": "wrong_assignment: the existing Go-way case rejects the same owner or column-capability mismatch; generated draft/conversion spelling becomes a typed assignment/predicate/selection boundary.",
+          "stage": "2a"
+        }
+      },
+      {
+        "case": "audit_policy_conversion",
+        "before": {
+          "area": "Framework integrations",
+          "new-API equivalent or reason": "Adapt this integration to orm declarations while retaining the concrete owner, key, value and capability restriction shown here.",
+          "stage": "7"
+        },
+        "after": {
+          "area": "Lifecycle, mutators and observers",
+          "new-API equivalent or reason": "Preserve the concrete model/key owner in lifecycle audit policies and soft-delete restore/force-delete operations; these APIs belong to lifecycle completion.",
+          "stage": "5"
+        }
+      },
+      {
+        "case": "audit_policy_owner",
+        "before": {
+          "area": "Framework integrations",
+          "new-API equivalent or reason": "Adapt this integration to orm declarations while retaining the concrete owner, key, value and capability restriction shown here.",
+          "stage": "7"
+        },
+        "after": {
+          "area": "Lifecycle, mutators and observers",
+          "new-API equivalent or reason": "Preserve the concrete model/key owner in lifecycle audit policies and soft-delete restore/force-delete operations; these APIs belong to lifecycle completion.",
+          "stage": "5"
+        }
+      },
+      {
+        "case": "auth_assurance",
+        "before": {
+          "area": "Authentication and security",
+          "disposition": "unaffected",
+          "new-API equivalent or reason": "Retain this authentication and security contract and its existing compiler case; it does not call a SQL model/query emitter API.",
+          "stage": "—"
+        },
+        "after": {
+          "area": "Framework integrations",
+          "disposition": "port",
+          "new-API equivalent or reason": "Replace generated FoundryReference() with the owning table Reference(o) adapter; preserve the concrete model/key restriction at this integration boundary (PLAN §4.8).",
+          "stage": "7"
+        }
+      },
+      {
+        "case": "auth_provider_key",
+        "before": {
+          "area": "Authentication and security",
+          "disposition": "unaffected",
+          "new-API equivalent or reason": "Retain this authentication and security contract and its existing compiler case; it does not call a SQL model/query emitter API.",
+          "stage": "—"
+        },
+        "after": {
+          "area": "Framework integrations",
+          "disposition": "port",
+          "new-API equivalent or reason": "Replace generated FoundryReference() with the owning table Reference(o) adapter; preserve the concrete model/key restriction at this integration boundary (PLAN §4.8).",
+          "stage": "7"
+        }
+      },
+      {
+        "case": "auth_scope_proof_owner",
+        "before": {
+          "area": "Authentication and security",
+          "disposition": "unaffected",
+          "new-API equivalent or reason": "Retain this authentication and security contract and its existing compiler case; it does not call a SQL model/query emitter API.",
+          "stage": "—"
+        },
+        "after": {
+          "area": "Framework integrations",
+          "disposition": "port",
+          "new-API equivalent or reason": "Replace generated FoundryReference() with the owning table Reference(o) adapter; preserve the concrete model/key restriction at this integration boundary (PLAN §4.8).",
+          "stage": "7"
+        }
+      },
+      {
+        "case": "case_window_row_value",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "Preserve window phase/partition ownership or specialized text-function operand types at the failing call; these functions belong to the specialized expression stage.",
+          "stage": "6d"
+        }
+      },
+      {
+        "case": "computed_group_selected_list",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "Preserve window phase/partition ownership or specialized text-function operand types at the failing call; these functions belong to the specialized expression stage.",
+          "stage": "6d"
+        }
+      },
+      {
+        "case": "computed_partition_owner",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "Preserve window phase/partition ownership or specialized text-function operand types at the failing call; these functions belong to the specialized expression stage.",
+          "stage": "6d"
+        }
+      },
+      {
+        "case": "conflict_nonnullable",
+        "before": {
+          "area": "Bulk writes and conflict policies",
+          "disposition": "port",
+          "new-API equivalent or reason": "orm bulk/conflict/source-write functions must preserve target, input, result, phase and capability restrictions shown here.",
+          "stage": "6e"
+        },
+        "after": {
+          "area": "Core reads, writes and codecs",
+          "disposition": "ported",
+          "new-API equivalent or reason": "required_null_set: the existing Go-way case rejects the same owner or column-capability mismatch; generated draft/conversion spelling becomes a typed assignment/predicate/selection boundary.",
+          "stage": "2a"
+        }
+      },
+      {
+        "case": "conflict_value",
+        "before": {
+          "area": "Bulk writes and conflict policies",
+          "new-API equivalent or reason": "orm bulk/conflict/source-write functions must preserve target, input, result, phase and capability restrictions shown here.",
+          "stage": "6e"
+        },
+        "after": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "Core column/codec, assignment, predicate or lookup typing must reject the supplied value/owner/capability shown here. The rejected operation is a basic field or CRUD operation, not a specialized SQL function; retain its concrete types in orm.",
+          "stage": "3"
+        }
+      },
+      {
+        "case": "country_key_contract",
+        "before": {
+          "area": "Other framework services and contracts",
+          "disposition": "unaffected",
+          "new-API equivalent or reason": "extensions country lookup uses its existing typed country key, independently of model query generation.",
+          "stage": "—"
+        },
+        "after": {
+          "area": "Framework integrations",
+          "disposition": "port",
+          "new-API equivalent or reason": "Migrate the generated countries store adapter and preserve its concrete country key at Find; Stage 7 integration coverage complements Stage 3 core-store migration.",
+          "stage": "7"
+        }
+      },
+      {
+        "case": "create_draft_owner",
+        "before": {
+          "disposition": "port",
+          "new-API equivalent or reason": "orm tables, columns, assignments and query/locked-query results must preserve the source owner, value, nullability, key and executor restriction shown here.",
+          "stage": "3"
+        },
+        "after": {
+          "disposition": "ported",
+          "new-API equivalent or reason": "wrong_assignment: the existing Go-way case rejects the same owner or column-capability mismatch; generated draft/conversion spelling becomes a typed assignment/predicate/selection boundary.",
+          "stage": "2a"
+        }
+      },
+      {
+        "case": "decimal_float",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "Core column/codec, assignment, predicate or lookup typing must reject the supplied value/owner/capability shown here. The rejected operation is a basic field or CRUD operation, not a specialized SQL function; retain its concrete types in orm.",
+          "stage": "3"
+        }
+      },
+      {
+        "case": "decimal_text_operator",
+        "before": {
+          "area": "Expressions and aggregates",
+          "disposition": "port",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Core reads, writes and codecs",
+          "disposition": "ported",
+          "new-API equivalent or reason": "number_text: the existing Go-way case rejects the same owner or column-capability mismatch; generated draft/conversion spelling becomes a typed assignment/predicate/selection boundary.",
+          "stage": "2a"
+        }
+      },
+      {
+        "case": "encrypted_draft_plaintext",
+        "before": {
+          "area": "Lifecycle, mutators and observers",
+          "new-API equivalent or reason": "orm lifecycle declarations must preserve model-specific write input, stored-value, change, callback and observer types shown here.",
+          "stage": "5"
+        },
+        "after": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "Core column/codec, assignment, predicate or lookup typing must reject the supplied value/owner/capability shown here. The rejected operation is a basic field or CRUD operation, not a specialized SQL function; retain its concrete types in orm.",
+          "stage": "3"
+        }
+      },
+      {
+        "case": "interval_draft_text",
+        "before": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "orm/expr specialized operators and windows must preserve the value family, scope, nullability and evaluation phase shown here.",
+          "stage": "6d"
+        },
+        "after": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "Core column/codec, assignment, predicate or lookup typing must reject the supplied value/owner/capability shown here. The rejected operation is a basic field or CRUD operation, not a specialized SQL function; retain its concrete types in orm.",
+          "stage": "3"
+        }
+      },
+      {
+        "case": "interval_find_number",
+        "before": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "orm/expr specialized operators and windows must preserve the value family, scope, nullability and evaluation phase shown here.",
+          "stage": "6d"
+        },
+        "after": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "Core column/codec, assignment, predicate or lookup typing must reject the supplied value/owner/capability shown here. The rejected operation is a basic field or CRUD operation, not a specialized SQL function; retain its concrete types in orm.",
+          "stage": "3"
+        }
+      },
+      {
+        "case": "interval_like",
+        "before": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "orm/expr specialized operators and windows must preserve the value family, scope, nullability and evaluation phase shown here.",
+          "stage": "6d"
+        },
+        "after": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "Core column/codec, assignment, predicate or lookup typing must reject the supplied value/owner/capability shown here. The rejected operation is a basic field or CRUD operation, not a specialized SQL function; retain its concrete types in orm.",
+          "stage": "3"
+        }
+      },
+      {
+        "case": "interval_projection_type",
+        "before": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "orm/expr specialized operators and windows must preserve the value family, scope, nullability and evaluation phase shown here.",
+          "stage": "6d"
+        },
+        "after": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "Preserve declared row/scalar result types and the selected-result terminal/source capability, including nullable cursors and transaction-only result locking; implement in orm/rows.",
+          "stage": "6c"
+        }
+      },
+      {
+        "case": "interval_result_phase",
+        "before": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "orm/expr specialized operators and windows must preserve the value family, scope, nullability and evaluation phase shown here.",
+          "stage": "6d"
+        },
+        "after": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "Preserve aggregate operand/result types, row-versus-selected phase, grouping and ordering capabilities in orm/expr; the failing operation is aggregate/group expression typing, not a specialized path/function.",
+          "stage": "6a"
+        }
+      },
+      {
+        "case": "interval_sum_decimal",
+        "before": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "orm/expr specialized operators and windows must preserve the value family, scope, nullability and evaluation phase shown here.",
+          "stage": "6d"
+        },
+        "after": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "Preserve aggregate operand/result types, row-versus-selected phase, grouping and ordering capabilities in orm/expr; the failing operation is aggregate/group expression typing, not a specialized path/function.",
+          "stage": "6a"
+        }
+      },
+      {
+        "case": "join_side_scope",
+        "before": {
+          "disposition": "port",
+          "new-API equivalent or reason": "orm/rows joins, aliases and correlation must preserve the scope, key, nullability and executor restriction shown here.",
+          "stage": "6b"
+        },
+        "after": {
+          "disposition": "ported",
+          "new-API equivalent or reason": "join_scope: the existing Go-way case rejects the same owner or column-capability mismatch; generated draft/conversion spelling becomes a typed assignment/predicate/selection boundary.",
+          "stage": "2a"
+        }
+      },
+      {
+        "case": "json_draft_payload",
+        "before": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "orm/expr specialized operators and windows must preserve the value family, scope, nullability and evaluation phase shown here.",
+          "stage": "6d"
+        },
+        "after": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "Core column/codec, assignment, predicate or lookup typing must reject the supplied value/owner/capability shown here. The rejected operation is a basic field or CRUD operation, not a specialized SQL function; retain its concrete types in orm.",
+          "stage": "3"
+        }
+      },
+      {
+        "case": "json_like",
+        "before": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "orm/expr specialized operators and windows must preserve the value family, scope, nullability and evaluation phase shown here.",
+          "stage": "6d"
+        },
+        "after": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "Core column/codec, assignment, predicate or lookup typing must reject the supplied value/owner/capability shown here. The rejected operation is a basic field or CRUD operation, not a specialized SQL function; retain its concrete types in orm.",
+          "stage": "3"
+        }
+      },
+      {
+        "case": "json_predicate_owner",
+        "before": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "orm/expr specialized operators and windows must preserve the value family, scope, nullability and evaluation phase shown here.",
+          "stage": "6d"
+        },
+        "after": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "Core column/codec, assignment, predicate or lookup typing must reject the supplied value/owner/capability shown here. The rejected operation is a basic field or CRUD operation, not a specialized SQL function; retain its concrete types in orm.",
+          "stage": "3"
+        }
+      },
+      {
+        "case": "json_projection_payload",
+        "before": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "orm/expr specialized operators and windows must preserve the value family, scope, nullability and evaluation phase shown here.",
+          "stage": "6d"
+        },
+        "after": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "Preserve declared row/scalar result types and the selected-result terminal/source capability, including nullable cursors and transaction-only result locking; implement in orm/rows.",
+          "stage": "6c"
+        }
+      },
+      {
+        "case": "json_sum",
+        "before": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "orm/expr specialized operators and windows must preserve the value family, scope, nullability and evaluation phase shown here.",
+          "stage": "6d"
+        },
+        "after": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "Preserve aggregate operand/result types, row-versus-selected phase, grouping and ordering capabilities in orm/expr; the failing operation is aggregate/group expression typing, not a specialized path/function.",
+          "stage": "6a"
+        }
+      },
+      {
+        "case": "json_value_conversion",
+        "before": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "orm/expr specialized operators and windows must preserve the value family, scope, nullability and evaluation phase shown here.",
+          "stage": "6d"
+        },
+        "after": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "Core column/codec, assignment, predicate or lookup typing must reject the supplied value/owner/capability shown here. The rejected operation is a basic field or CRUD operation, not a specialized SQL function; retain its concrete types in orm.",
+          "stage": "3"
+        }
+      },
+      {
+        "case": "lock_clause_nullable",
+        "before": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "orm tables, columns, assignments and query/locked-query results must preserve the source owner, value, nullability, key and executor restriction shown here.",
+          "stage": "3"
+        },
+        "after": {
+          "area": "Joins and correlation",
+          "new-API equivalent or reason": "Preserve typed subquery/correlation or alias/join scope and its transaction/nullability capability at the rejected operation; implement through scoped orm/expr and orm/rows sources.",
+          "stage": "6b"
+        }
+      },
+      {
+        "case": "lock_clause_owner",
+        "before": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "orm tables, columns, assignments and query/locked-query results must preserve the source owner, value, nullability, key and executor restriction shown here.",
+          "stage": "3"
+        },
+        "after": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "Preserve declared row/scalar result types and the selected-result terminal/source capability, including nullable cursors and transaction-only result locking; implement in orm/rows.",
+          "stage": "6c"
+        }
+      },
+      {
+        "case": "lock_clause_pool",
+        "before": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "orm tables, columns, assignments and query/locked-query results must preserve the source owner, value, nullability, key and executor restriction shown here.",
+          "stage": "3"
+        },
+        "after": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "Preserve declared row/scalar result types and the selected-result terminal/source capability, including nullable cursors and transaction-only result locking; implement in orm/rows.",
+          "stage": "6c"
+        }
+      },
+      {
+        "case": "lock_clause_session",
+        "before": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "orm tables, columns, assignments and query/locked-query results must preserve the source owner, value, nullability, key and executor restriction shown here.",
+          "stage": "3"
+        },
+        "after": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "Preserve declared row/scalar result types and the selected-result terminal/source capability, including nullable cursors and transaction-only result locking; implement in orm/rows.",
+          "stage": "6c"
+        }
+      },
+      {
+        "case": "lock_clause_source",
+        "before": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "orm tables, columns, assignments and query/locked-query results must preserve the source owner, value, nullability, key and executor restriction shown here.",
+          "stage": "3"
+        },
+        "after": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "Preserve declared row/scalar result types and the selected-result terminal/source capability, including nullable cursors and transaction-only result locking; implement in orm/rows.",
+          "stage": "6c"
+        }
+      },
+      {
+        "case": "locked_nullable_target",
+        "before": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "orm/rows projections, records, CTEs and sets must preserve the result, mapping, scope and read-only restriction shown here.",
+          "stage": "6c"
+        },
+        "after": {
+          "area": "Joins and correlation",
+          "new-API equivalent or reason": "Preserve typed subquery/correlation or alias/join scope and its transaction/nullability capability at the rejected operation; implement through scoped orm/expr and orm/rows sources.",
+          "stage": "6b"
+        }
+      },
+      {
+        "case": "mfa_retirement_owner",
+        "before": {
+          "area": "Authentication and security",
+          "disposition": "unaffected",
+          "new-API equivalent or reason": "Retain this authentication and security contract and its existing compiler case; it does not call a SQL model/query emitter API.",
+          "stage": "—"
+        },
+        "after": {
+          "area": "Framework integrations",
+          "disposition": "port",
+          "new-API equivalent or reason": "Replace generated FoundryReference() with the owning table Reference(o) adapter; preserve the concrete model/key restriction at this integration boundary (PLAN §4.8).",
+          "stage": "7"
+        }
+      },
+      {
+        "case": "mutation_input_conflict",
+        "before": {
+          "area": "Bulk writes and conflict policies",
+          "new-API equivalent or reason": "orm bulk/conflict/source-write functions must preserve target, input, result, phase and capability restrictions shown here.",
+          "stage": "6e"
+        },
+        "after": {
+          "area": "Lifecycle, mutators and observers",
+          "new-API equivalent or reason": "The failing call is Set(storedValue) on a distinct-input mutator field, before any conflict query exists. Preserve the mutator input/stored-value distinction in typed assignments.",
+          "stage": "5"
+        }
+      },
+      {
+        "case": "mutation_input_scope",
+        "before": {
+          "area": "Lifecycle, mutators and observers",
+          "new-API equivalent or reason": "orm lifecycle declarations must preserve model-specific write input, stored-value, change, callback and observer types shown here.",
+          "stage": "5"
+        },
+        "after": {
+          "area": "Bulk writes and conflict policies",
+          "new-API equivalent or reason": "The failing OnConflict(...).DoUpdate assignment has the wrong conflict scope. Preserve proposed/base assignment ownership in conflict writes, beyond the Stage 5 mutator-input rule.",
+          "stage": "6e"
+        }
+      },
+      {
+        "case": "mutation_owner_conversion",
+        "before": {
+          "area": "Lifecycle, mutators and observers",
+          "disposition": "port",
+          "new-API equivalent or reason": "orm lifecycle declarations must preserve model-specific write input, stored-value, change, callback and observer types shown here.",
+          "stage": "5"
+        },
+        "after": {
+          "area": "Core reads, writes and codecs",
+          "disposition": "ported",
+          "new-API equivalent or reason": "wrong_assignment: the existing Go-way case rejects the same owner or column-capability mismatch; generated draft/conversion spelling becomes a typed assignment/predicate/selection boundary.",
+          "stage": "2a"
+        }
+      },
+      {
+        "case": "notification_payload_owner",
+        "before": {
+          "area": "Events, jobs and messaging",
+          "disposition": "unaffected",
+          "new-API equivalent or reason": "Retain this events, jobs and messaging contract and its existing compiler case; it does not call a SQL model/query emitter API.",
+          "stage": "—"
+        },
+        "after": {
+          "area": "Framework integrations",
+          "disposition": "port",
+          "new-API equivalent or reason": "Replace generated FoundryReference() with the owning table Reference(o) adapter; preserve the concrete model/key restriction at this integration boundary (PLAN §4.8).",
+          "stage": "7"
+        }
+      },
+      {
+        "case": "notification_recipient_owner",
+        "before": {
+          "area": "Events, jobs and messaging",
+          "disposition": "unaffected",
+          "new-API equivalent or reason": "Retain this events, jobs and messaging contract and its existing compiler case; it does not call a SQL model/query emitter API.",
+          "stage": "—"
+        },
+        "after": {
+          "area": "Framework integrations",
+          "disposition": "port",
+          "new-API equivalent or reason": "Replace generated FoundryReference() with the owning table Reference(o) adapter; preserve the concrete model/key restriction at this integration boundary (PLAN §4.8).",
+          "stage": "7"
+        }
+      },
+      {
+        "case": "password_model_like",
+        "before": {
+          "area": "Lifecycle, mutators and observers",
+          "new-API equivalent or reason": "orm lifecycle declarations must preserve model-specific write input, stored-value, change, callback and observer types shown here.",
+          "stage": "5"
+        },
+        "after": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "Core column/codec, assignment, predicate or lookup typing must reject the supplied value/owner/capability shown here. The rejected operation is a basic field or CRUD operation, not a specialized SQL function; retain its concrete types in orm.",
+          "stage": "3"
+        }
+      },
+      {
+        "case": "password_model_predicate",
+        "before": {
+          "area": "Lifecycle, mutators and observers",
+          "new-API equivalent or reason": "orm lifecycle declarations must preserve model-specific write input, stored-value, change, callback and observer types shown here.",
+          "stage": "5"
+        },
+        "after": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "Core column/codec, assignment, predicate or lookup typing must reject the supplied value/owner/capability shown here. The rejected operation is a basic field or CRUD operation, not a specialized SQL function; retain its concrete types in orm.",
+          "stage": "3"
+        }
+      },
+      {
+        "case": "password_model_setter",
+        "before": {
+          "area": "Lifecycle, mutators and observers",
+          "new-API equivalent or reason": "orm lifecycle declarations must preserve model-specific write input, stored-value, change, callback and observer types shown here.",
+          "stage": "5"
+        },
+        "after": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "Core column/codec, assignment, predicate or lookup typing must reject the supplied value/owner/capability shown here. The rejected operation is a basic field or CRUD operation, not a specialized SQL function; retain its concrete types in orm.",
+          "stage": "3"
+        }
+      },
+      {
+        "case": "predicate_owner_conversion",
+        "before": {
+          "disposition": "port",
+          "new-API equivalent or reason": "orm tables, columns, assignments and query/locked-query results must preserve the source owner, value, nullability, key and executor restriction shown here.",
+          "stage": "3"
+        },
+        "after": {
+          "disposition": "ported",
+          "new-API equivalent or reason": "wrong_predicate: the existing Go-way case rejects the same owner or column-capability mismatch; generated draft/conversion spelling becomes a typed assignment/predicate/selection boundary.",
+          "stage": "2a"
+        }
+      },
+      {
+        "case": "projected_record_write",
+        "before": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "orm/rows projections, records, CTEs and sets must preserve the result, mapping, scope and read-only restriction shown here.",
+          "stage": "6c"
+        },
+        "after": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "Core column/codec, assignment, predicate or lookup typing must reject the supplied value/owner/capability shown here. The rejected operation is a basic field or CRUD operation, not a specialized SQL function; retain its concrete types in orm.",
+          "stage": "3"
+        }
+      },
+      {
+        "case": "projection_aggregate_group",
+        "before": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "orm/rows projections, records, CTEs and sets must preserve the result, mapping, scope and read-only restriction shown here.",
+          "stage": "6c"
+        },
+        "after": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "Preserve aggregate operand/result types, row-versus-selected phase, grouping and ordering capabilities in orm/expr; the failing operation is aggregate/group expression typing, not a specialized path/function.",
+          "stage": "6a"
+        }
+      },
+      {
+        "case": "projection_group_owner",
+        "before": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "orm/rows projections, records, CTEs and sets must preserve the result, mapping, scope and read-only restriction shown here.",
+          "stage": "6c"
+        },
+        "after": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "Preserve aggregate operand/result types, row-versus-selected phase, grouping and ordering capabilities in orm/expr; the failing operation is aggregate/group expression typing, not a specialized path/function.",
+          "stage": "6a"
+        }
+      },
+      {
+        "case": "projection_order_scope",
+        "before": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "orm/rows projections, records, CTEs and sets must preserve the result, mapping, scope and read-only restriction shown here.",
+          "stage": "6c"
+        },
+        "after": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "Preserve aggregate operand/result types, row-versus-selected phase, grouping and ordering capabilities in orm/expr; the failing operation is aggregate/group expression typing, not a specialized path/function.",
+          "stage": "6a"
+        }
+      },
+      {
+        "case": "recovery_reference_model",
+        "before": {
+          "area": "Authentication and security",
+          "disposition": "unaffected",
+          "new-API equivalent or reason": "Retain this authentication and security contract and its existing compiler case; it does not call a SQL model/query emitter API.",
+          "stage": "—"
+        },
+        "after": {
+          "area": "Framework integrations",
+          "disposition": "port",
+          "new-API equivalent or reason": "Replace generated FoundryReference() with the owning table Reference(o) adapter; preserve the concrete model/key restriction at this integration boundary (PLAN §4.8).",
+          "stage": "7"
+        }
+      },
+      {
+        "case": "revocation_reference_model",
+        "before": {
+          "area": "Authentication and security",
+          "disposition": "unaffected",
+          "new-API equivalent or reason": "Retain this authentication and security contract and its existing compiler case; it does not call a SQL model/query emitter API.",
+          "stage": "—"
+        },
+        "after": {
+          "area": "Framework integrations",
+          "disposition": "port",
+          "new-API equivalent or reason": "Replace generated FoundryReference() with the owning table Reference(o) adapter; preserve the concrete model/key restriction at this integration boundary (PLAN §4.8).",
+          "stage": "7"
+        }
+      },
+      {
+        "case": "scalar_field_owner_conversion",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "Core column/codec, assignment, predicate or lookup typing must reject the supplied value/owner/capability shown here. The rejected operation is a basic field or CRUD operation, not a specialized SQL function; retain its concrete types in orm.",
+          "stage": "3"
+        }
+      },
+      {
+        "case": "scalar_nullability",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Joins and correlation",
+          "new-API equivalent or reason": "Preserve typed subquery/correlation or alias/join scope and its transaction/nullability capability at the rejected operation; implement through scoped orm/expr and orm/rows sources.",
+          "stage": "6b"
+        }
+      },
+      {
+        "case": "scalar_nullable_input",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Joins and correlation",
+          "new-API equivalent or reason": "Preserve typed subquery/correlation or alias/join scope and its transaction/nullability capability at the rejected operation; implement through scoped orm/expr and orm/rows sources.",
+          "stage": "6b"
+        }
+      },
+      {
+        "case": "scalar_row_identity_type",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Joins and correlation",
+          "new-API equivalent or reason": "Preserve typed subquery/correlation or alias/join scope and its transaction/nullability capability at the rejected operation; implement through scoped orm/expr and orm/rows sources.",
+          "stage": "6b"
+        }
+      },
+      {
+        "case": "scalar_row_owner",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Joins and correlation",
+          "new-API equivalent or reason": "Preserve typed subquery/correlation or alias/join scope and its transaction/nullability capability at the rejected operation; implement through scoped orm/expr and orm/rows sources.",
+          "stage": "6b"
+        }
+      },
+      {
+        "case": "scalar_scope",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Joins and correlation",
+          "new-API equivalent or reason": "Preserve typed subquery/correlation or alias/join scope and its transaction/nullability capability at the rejected operation; implement through scoped orm/expr and orm/rows sources.",
+          "stage": "6b"
+        }
+      },
+      {
+        "case": "selected_partition_owner",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "Preserve window phase/partition ownership or specialized text-function operand types at the failing call; these functions belong to the specialized expression stage.",
+          "stage": "6d"
+        }
+      },
+      {
+        "case": "session_metadata_model",
+        "before": {
+          "area": "Authentication and security",
+          "disposition": "unaffected",
+          "new-API equivalent or reason": "Retain this authentication and security contract and its existing compiler case; it does not call a SQL model/query emitter API.",
+          "stage": "—"
+        },
+        "after": {
+          "area": "Framework integrations",
+          "disposition": "port",
+          "new-API equivalent or reason": "Replace generated FoundryReference() with the owning table Reference(o) adapter; preserve the concrete model/key restriction at this integration boundary (PLAN §4.8).",
+          "stage": "7"
+        }
+      },
+      {
+        "case": "simple_page_nullable",
+        "before": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "orm tables, columns, assignments and query/locked-query results must preserve the source owner, value, nullability, key and executor restriction shown here.",
+          "stage": "3"
+        },
+        "after": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "Preserve declared row/scalar result types and the selected-result terminal/source capability, including nullable cursors and transaction-only result locking; implement in orm/rows.",
+          "stage": "6c"
+        }
+      },
+      {
+        "case": "soft_force_key",
+        "before": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "orm tables, columns, assignments and query/locked-query results must preserve the source owner, value, nullability, key and executor restriction shown here.",
+          "stage": "3"
+        },
+        "after": {
+          "area": "Lifecycle, mutators and observers",
+          "new-API equivalent or reason": "Preserve the concrete model/key owner in lifecycle audit policies and soft-delete restore/force-delete operations; these APIs belong to lifecycle completion.",
+          "stage": "5"
+        }
+      },
+      {
+        "case": "soft_restore_key",
+        "before": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "orm tables, columns, assignments and query/locked-query results must preserve the source owner, value, nullability, key and executor restriction shown here.",
+          "stage": "3"
+        },
+        "after": {
+          "area": "Lifecycle, mutators and observers",
+          "new-API equivalent or reason": "Preserve the concrete model/key owner in lifecycle audit policies and soft-delete restore/force-delete operations; these APIs belong to lifecycle completion.",
+          "stage": "5"
+        }
+      },
+      {
+        "case": "subquery_selection_scope",
+        "before": {
+          "area": "Joins and correlation",
+          "disposition": "port",
+          "new-API equivalent or reason": "orm/rows joins, aliases and correlation must preserve the scope, key, nullability and executor restriction shown here.",
+          "stage": "6b"
+        },
+        "after": {
+          "area": "Rows, CTEs and sets",
+          "disposition": "ported",
+          "new-API equivalent or reason": "select_owner: the existing Go-way case rejects the same owner or column-capability mismatch; generated draft/conversion spelling becomes a typed assignment/predicate/selection boundary.",
+          "stage": "2a"
+        }
+      },
+      {
+        "case": "substring_text_position",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "Preserve window phase/partition ownership or specialized text-function operand types at the failing call; these functions belong to the specialized expression stage.",
+          "stage": "6d"
+        }
+      },
+      {
+        "case": "text_numeric",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "Preserve window phase/partition ownership or specialized text-function operand types at the failing call; these functions belong to the specialized expression stage.",
+          "stage": "6d"
+        }
+      },
+      {
+        "case": "text_operand_owner",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "Preserve window phase/partition ownership or specialized text-function operand types at the failing call; these functions belong to the specialized expression stage.",
+          "stage": "6d"
+        }
+      },
+      {
+        "case": "text_pattern_value",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Windows and specialized expressions",
+          "new-API equivalent or reason": "Preserve window phase/partition ownership or specialized text-function operand types at the failing call; these functions belong to the specialized expression stage.",
+          "stage": "6d"
+        }
+      },
+      {
+        "case": "token_id_model",
+        "before": {
+          "area": "Authentication and security",
+          "disposition": "unaffected",
+          "new-API equivalent or reason": "Retain this authentication and security contract and its existing compiler case; it does not call a SQL model/query emitter API.",
+          "stage": "—"
+        },
+        "after": {
+          "area": "Framework integrations",
+          "disposition": "port",
+          "new-API equivalent or reason": "Replace generated FoundryReference() with the owning table Reference(o) adapter; preserve the concrete model/key restriction at this integration boundary (PLAN §4.8).",
+          "stage": "7"
+        }
+      },
+      {
+        "case": "transaction_exists_source",
+        "before": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "orm/rows projections, records, CTEs and sets must preserve the result, mapping, scope and read-only restriction shown here.",
+          "stage": "6c"
+        },
+        "after": {
+          "area": "Joins and correlation",
+          "new-API equivalent or reason": "Preserve typed subquery/correlation or alias/join scope and its transaction/nullability capability at the rejected operation; implement through scoped orm/expr and orm/rows sources.",
+          "stage": "6b"
+        }
+      },
+      {
+        "case": "transaction_nullable_lock",
+        "before": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "orm tables, columns, assignments and query/locked-query results must preserve the source owner, value, nullability, key and executor restriction shown here.",
+          "stage": "3"
+        },
+        "after": {
+          "area": "Joins and correlation",
+          "new-API equivalent or reason": "Preserve typed subquery/correlation or alias/join scope and its transaction/nullability capability at the rejected operation; implement through scoped orm/expr and orm/rows sources.",
+          "stage": "6b"
+        }
+      },
+      {
+        "case": "transaction_owner",
+        "before": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "orm tables, columns, assignments and query/locked-query results must preserve the source owner, value, nullability, key and executor restriction shown here.",
+          "stage": "3"
+        },
+        "after": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "Preserve declared row/scalar result types and the selected-result terminal/source capability, including nullable cursors and transaction-only result locking; implement in orm/rows.",
+          "stage": "6c"
+        }
+      },
+      {
+        "case": "transaction_pool",
+        "before": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "orm tables, columns, assignments and query/locked-query results must preserve the source owner, value, nullability, key and executor restriction shown here.",
+          "stage": "3"
+        },
+        "after": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "Preserve declared row/scalar result types and the selected-result terminal/source capability, including nullable cursors and transaction-only result locking; implement in orm/rows.",
+          "stage": "6c"
+        }
+      },
+      {
+        "case": "transaction_result",
+        "before": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "orm tables, columns, assignments and query/locked-query results must preserve the source owner, value, nullability, key and executor restriction shown here.",
+          "stage": "3"
+        },
+        "after": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "Preserve declared row/scalar result types and the selected-result terminal/source capability, including nullable cursors and transaction-only result locking; implement in orm/rows.",
+          "stage": "6c"
+        }
+      },
+      {
+        "case": "transaction_scope_conversion",
+        "before": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "orm tables, columns, assignments and query/locked-query results must preserve the source owner, value, nullability, key and executor restriction shown here.",
+          "stage": "3"
+        },
+        "after": {
+          "area": "Joins and correlation",
+          "new-API equivalent or reason": "Preserve typed subquery/correlation or alias/join scope and its transaction/nullability capability at the rejected operation; implement through scoped orm/expr and orm/rows sources.",
+          "stage": "6b"
+        }
+      },
+      {
+        "case": "transaction_session",
+        "before": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "orm tables, columns, assignments and query/locked-query results must preserve the source owner, value, nullability, key and executor restriction shown here.",
+          "stage": "3"
+        },
+        "after": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "Preserve declared row/scalar result types and the selected-result terminal/source capability, including nullable cursors and transaction-only result locking; implement in orm/rows.",
+          "stage": "6c"
+        }
+      },
+      {
+        "case": "transaction_value_nullability",
+        "before": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "orm/rows projections, records, CTEs and sets must preserve the result, mapping, scope and read-only restriction shown here.",
+          "stage": "6c"
+        },
+        "after": {
+          "area": "Joins and correlation",
+          "new-API equivalent or reason": "Preserve typed subquery/correlation or alias/join scope and its transaction/nullability capability at the rejected operation; implement through scoped orm/expr and orm/rows sources.",
+          "stage": "6b"
+        }
+      },
+      {
+        "case": "transaction_value_operand_type",
+        "before": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "orm/rows projections, records, CTEs and sets must preserve the result, mapping, scope and read-only restriction shown here.",
+          "stage": "6c"
+        },
+        "after": {
+          "area": "Joins and correlation",
+          "new-API equivalent or reason": "Preserve typed subquery/correlation or alias/join scope and its transaction/nullability capability at the rejected operation; implement through scoped orm/expr and orm/rows sources.",
+          "stage": "6b"
+        }
+      },
+      {
+        "case": "transaction_value_ordinary_anchor",
+        "before": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "orm/rows projections, records, CTEs and sets must preserve the result, mapping, scope and read-only restriction shown here.",
+          "stage": "6c"
+        },
+        "after": {
+          "area": "Joins and correlation",
+          "new-API equivalent or reason": "Preserve typed subquery/correlation or alias/join scope and its transaction/nullability capability at the rejected operation; implement through scoped orm/expr and orm/rows sources.",
+          "stage": "6b"
+        }
+      },
+      {
+        "case": "transaction_value_owner",
+        "before": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "orm/rows projections, records, CTEs and sets must preserve the result, mapping, scope and read-only restriction shown here.",
+          "stage": "6c"
+        },
+        "after": {
+          "area": "Joins and correlation",
+          "new-API equivalent or reason": "Preserve typed subquery/correlation or alias/join scope and its transaction/nullability capability at the rejected operation; implement through scoped orm/expr and orm/rows sources.",
+          "stage": "6b"
+        }
+      },
+      {
+        "case": "transaction_value_scalar_escape",
+        "before": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "orm/rows projections, records, CTEs and sets must preserve the result, mapping, scope and read-only restriction shown here.",
+          "stage": "6c"
+        },
+        "after": {
+          "area": "Joins and correlation",
+          "new-API equivalent or reason": "Preserve typed subquery/correlation or alias/join scope and its transaction/nullability capability at the rejected operation; implement through scoped orm/expr and orm/rows sources.",
+          "stage": "6b"
+        }
+      },
+      {
+        "case": "transaction_value_selected_operand",
+        "before": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "orm/rows projections, records, CTEs and sets must preserve the result, mapping, scope and read-only restriction shown here.",
+          "stage": "6c"
+        },
+        "after": {
+          "area": "Joins and correlation",
+          "new-API equivalent or reason": "Preserve typed subquery/correlation or alias/join scope and its transaction/nullability capability at the rejected operation; implement through scoped orm/expr and orm/rows sources.",
+          "stage": "6b"
+        }
+      },
+      {
+        "case": "transaction_value_source",
+        "before": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "orm/rows projections, records, CTEs and sets must preserve the result, mapping, scope and read-only restriction shown here.",
+          "stage": "6c"
+        },
+        "after": {
+          "area": "Joins and correlation",
+          "new-API equivalent or reason": "Preserve typed subquery/correlation or alias/join scope and its transaction/nullability capability at the rejected operation; implement through scoped orm/expr and orm/rows sources.",
+          "stage": "6b"
+        }
+      },
+      {
+        "case": "update_draft_owner",
+        "before": {
+          "disposition": "port",
+          "new-API equivalent or reason": "orm tables, columns, assignments and query/locked-query results must preserve the source owner, value, nullability, key and executor restriction shown here.",
+          "stage": "3"
+        },
+        "after": {
+          "disposition": "ported",
+          "new-API equivalent or reason": "wrong_assignment: the existing Go-way case rejects the same owner or column-capability mismatch; generated draft/conversion spelling becomes a typed assignment/predicate/selection boundary.",
+          "stage": "2a"
+        }
+      },
+      {
+        "case": "value_cursor_nullable",
+        "before": {
+          "area": "Expressions and aggregates",
+          "new-API equivalent or reason": "orm/expr must preserve the operand family, owner, nullability and row-versus-selected phase restriction shown here.",
+          "stage": "6a"
+        },
+        "after": {
+          "area": "Rows, CTEs and sets",
+          "new-API equivalent or reason": "Preserve declared row/scalar result types and the selected-result terminal/source capability, including nullable cursors and transaction-only result locking; implement in orm/rows.",
+          "stage": "6c"
+        }
+      },
+      {
+        "case": "websocket_disconnect_model",
+        "before": {
+          "area": "Events, jobs and messaging",
+          "disposition": "unaffected",
+          "new-API equivalent or reason": "Retain this events, jobs and messaging contract and its existing compiler case; it does not call a SQL model/query emitter API.",
+          "stage": "—"
+        },
+        "after": {
+          "area": "Framework integrations",
+          "disposition": "port",
+          "new-API equivalent or reason": "Replace generated FoundryReference() with the owning table Reference(o) adapter; preserve the concrete model/key restriction at this integration boundary (PLAN §4.8).",
+          "stage": "7"
+        }
+      },
+      {
+        "case": "where_has_find_owner",
+        "before": {
+          "area": "Relations and pivots",
+          "new-API equivalent or reason": "orm relation descriptors and relation writes must preserve the source/target/key/pivot and query-scope restriction shown here.",
+          "stage": "4"
+        },
+        "after": {
+          "area": "Core reads, writes and codecs",
+          "new-API equivalent or reason": "Core column/codec, assignment, predicate or lookup typing must reject the supplied value/owner/capability shown here. The rejected operation is a basic field or CRUD operation, not a specialized SQL function; retain its concrete types in orm.",
+          "stage": "3"
+        }
+      }
+    ],
+    "changed_row_count": 91,
+    "audit": "Reviewed the rejected operations and expected diagnostics against PLAN §5. Rescanned all 456 previously unaffected sources using generated declaration inventories and explicit model/store boundaries; twelve move to Stage 7. Compared all 20 Go-way cases; 13 distinct cases cover 21 old rows. Read Each/Chunk is Stage 3; per-row write and lookup-write emitters remain Stage 6e with Stage 5 lifecycle dependencies.",
+    "guards": [
+      "Reject unaffected sources referencing generated model/store APIs, including aliased imports and actual generated declarations. Exclude strings/comments and retained DTO/config field descriptors.",
+      "Validate area/stage pairs from AREA_STAGES, one shared table.",
+      "Test blueprint relative links stay inside the repository and exist."
+    ],
+    "planning_record": "proposals/foundry-go-goway-data-layer/PLAN.md (outside the repository; not a Markdown link)",
+    "lead_streaming_changes_preserved_sha256": {
+      "tools/goway_synthetic.py": "6b308860dbeeff87ea0c0220a6501770b1caa3ec796d32a0d10164c86552eaee",
+      "tools/goway_synthetic_test.py": "fd8608420c4dc91fc0a54459d78f5f386a2bd93e7f5dca9cf5447411679a8a86"
+    },
+    "checks": [
+      {
+        "command": "GOCACHE=$PWD/.cache/codex-gocache make docs-check",
+        "result": "pass; links, milestone claims, blueprint numbering and fixture Go requirements"
+      },
+      {
+        "command": "PYTHONDONTWRITEBYTECODE=1 GOCACHE=$PWD/.cache/codex-gocache make release-tools-check",
+        "result": "pass; release Go vet/test (cached) and 26 Python tests; native macOS resource-accounting access"
+      },
+      {
+        "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p '*_test.py' ",
+        "result": "pass; 26 tests; native macOS resource-accounting access"
+      },
+      {
+        "command": "gofmt -l on every repository Go file excluding .cache and .git",
+        "result": "clean; 4599 files"
+      },
+      {
+        "command": "git diff --check",
+        "result": "pass"
+      }
+    ]
+  },
+  "historical_source_sha256": {
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "ce15f7365da3d95942dd472e1a5d91ee54f441d2cc213a31d8de0edd20ad4656",
+    "tools/goway_catalogue.py": "8e5149051608b730f81fd57a2ca07f0923e6f8b49afae221056badb5464521ad",
+    "tools/goway_catalogue_test.py": "4e6e5482bd3e34a9d3c6cd3478163e40c8fe9bcaf7667c6728d18e4e0a288d94",
+    "tools/goway_synthetic.py": "b36c7d000966a0cdb4d61a1c87685dcb4729e58c94638c4157bf72b146432d63",
+    "tools/goway_synthetic_test.py": "18f6a8a130a070bf8244fd6adadc485a66ba88cb3a448746aa145618f55846fe",
+    "tools/measure-release.py": "9fc0e465a163ca4338b89445cfedcc0bc3aeffd6253d5a916b24a7331d1e913e",
+    "tools/measure_release_test.py": "18aaaced49b51bf06b357da50bc4be04b3f241a5d212133b3b4edd337dc4c24e",
+    "tools/release/main.go": "4a1cb56a12a6defd45afcaae3733ad06d4468afa095c892f518930c6054b4d48",
+    "tools/release/release_test.go": "cc94f9dd5fc569a17553bd8e2f3c762348e3839b8ed21f6313e23cb308f78425",
+    "tools/release/source.go": "5100bfb4030df41a10fa3297b171099abbff70e686e22ef153970ab3a8e728ee"
+  },
+  "source_sha256": {
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "ea88bad26c81f37f38be5bcd1800ed7547d0c4584c65bc87e3f4a36533f74215",
+    "tools/goway_catalogue.py": "2ce1443b813a20bf1514d14bcef7f1a28d68870191f92fbd8d1c454422f6c7df",
+    "tools/goway_catalogue_test.py": "62e0a53f44021c1aec190bc35b29fc4767d3cac7d6474a28dd4fa49fe1e92e4d",
+    "tools/goway_synthetic.py": "6b308860dbeeff87ea0c0220a6501770b1caa3ec796d32a0d10164c86552eaee",
+    "tools/goway_synthetic_test.py": "fd8608420c4dc91fc0a54459d78f5f386a2bd93e7f5dca9cf5447411679a8a86",
+    "tools/measure-release.py": "9fc0e465a163ca4338b89445cfedcc0bc3aeffd6253d5a916b24a7331d1e913e",
+    "tools/measure_release_test.py": "18aaaced49b51bf06b357da50bc4be04b3f241a5d212133b3b4edd337dc4c24e",
+    "tools/release/main.go": "4a1cb56a12a6defd45afcaae3733ad06d4468afa095c892f518930c6054b4d48",
+    "tools/release/release_test.go": "cc94f9dd5fc569a17553bd8e2f3c762348e3839b8ed21f6313e23cb308f78425",
+    "tools/release/source.go": "5100bfb4030df41a10fa3297b171099abbff70e686e22ef153970ab3a8e728ee"
+  },
+  "whole_app_measurement": {
+    "by": "lead",
+    "date": "2026-10-22",
+    "commands": [
+      "python3 tools/goway_synthetic.py generate <task dir>/app --models 70 --seed 1",
+      "python3 tools/goway_synthetic.py measure <task dir>/app --cache <fresh task cache>"
+    ],
+    "harness_change": "nm symbols are counted while streaming (stream_functions); the old 70-model models listing exceeded OUTPUT_LIMIT on the first attempt, whose cache and output were deleted",
+    "framework_go_sources": "all 4,694 fingerprinted Go sources match this revision",
+    "toolchain": "go1.27.1 darwin/arm64",
+    "conditions": "fresh task caches, old then new, -p=2, GOMAXPROCS=4; load average 9-11 from a concurrent build, so build seconds are one noisy observation",
+    "old": {
+      "whole_app_archive_bytes": 8798205638,
+      "whole_app_functions": 2178194,
+      "cache_bytes": 8954620015,
+      "cold_build_seconds": 203.985,
+      "models_archive_bytes": 1677648016,
+      "models_functions": 424238,
+      "models_compile_rss_bytes": 22261776384,
+      "handler_median_functions": 41431.5
+    },
+    "new": {
+      "whole_app_archive_bytes": 2234304108,
+      "whole_app_functions": 569985,
+      "cache_bytes": 2400803097,
+      "cold_build_seconds": 72.912,
+      "models_archive_bytes": 557803758,
+      "models_functions": 138200,
+      "models_compile_rss_bytes": 7342424064,
+      "handler_median_functions": 9820
+    },
+    "retained": "outside the repository with the planning record: evidence/wholeapp-70-seed1 (measurement.json, summary.md, synthetic.json, new-models-attribution.md)"
+  }
+}

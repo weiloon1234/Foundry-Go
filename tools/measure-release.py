@@ -116,7 +116,8 @@ class Runner:
 
 
 def verify_inputs(candidate, manifest):
-    expected = {1: {"full", "ordinary"}, 2: {"full", "ordinary", "configured"}}.get(manifest.get("format"))
+    expected = {1: {"full", "ordinary"}, 2: {"full", "ordinary", "configured"},
+                3: {"full", "ordinary", "configured", "goway"}}.get(manifest.get("format"))
     if expected is None or len(manifest["artifacts"]) != 3 or set(manifest["consumers"]) != expected:
         raise ValueError("unsupported or incomplete release manifest")
     for artifact in manifest["artifacts"]:

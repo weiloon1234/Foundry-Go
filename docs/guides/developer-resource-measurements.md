@@ -37,7 +37,9 @@ environment values, disables user Go environment configuration and automatic
 toolchain selection, and uses ordinary native compiler defaults. `-mod=readonly`
 controls dependency changes; it does not change compiler optimization.
 
-Current format-2 candidates have three profiles reusing checked-in source.
+Format-3 candidates add a separate Go-way consumer for package/source acceptance.
+Its performance is measured by the [synthetic harness](../../blueprint/goway-data-layer/README.md#synthetic-whole-app-harness).
+The release measurement profiles remain the following three, as in format 2.
 Historical format-1 candidates have ordinary/full only and remain supported:
 
 - **Ordinary:** one persisted model with named ID, scalar, nullable and binary

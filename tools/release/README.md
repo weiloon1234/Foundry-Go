@@ -16,7 +16,7 @@ tests; the target is part of `make verify`. Preparation requires a new private
 output directory and explicit canonical candidate version. Existing output is
 never overwritten. A failed directory is retained as incomplete evidence.
 
-Format-2 candidates include ordinary, configured and full consumers. The configured
+Format 3 candidates include `ordinary`, `configured`, `full` and `goway` consumers. The configured
 profile is copied from `tests/fixtures/consumer/configuredprofile` alongside the
 existing typed `productionprofile` model. The measurement harness accepts earlier
 format-1 candidates separately; profile source inventories must still match exactly.

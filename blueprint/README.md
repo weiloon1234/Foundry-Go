@@ -19,6 +19,10 @@ The [model extension slot continuation](model-extension-slots/README.md) lets
 models declare translated text, attachments and typed schemaless values as typed
 fields over the delivered extension stores. Its status is also owned by the master.
 
+The [Go-way data-layer program](goway-data-layer/README.md) develops handwritten
+model declarations on `goway-data-layer`, alongside the existing generated API.
+Its blueprint includes the compiler-case mapping, emitter audit and measurement harness.
+
 ## How to implement a milestone
 
 1. Read the master document and the milestone's prerequisites.

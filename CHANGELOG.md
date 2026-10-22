@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Go-way branch guardrails: compiler-case mapping, emitter/contract audit, separate
+  release consumer and deterministic old/new synthetic application measurement tool.
+
+
 ### Go-way data layer (branch, in progress)
 
 - Add `database/orm`, `orm/expr` and `orm/rows` for handwritten typed table and row

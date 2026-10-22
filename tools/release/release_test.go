@@ -43,7 +43,7 @@ func sourceFixture(t *testing.T) (string, sourcePolicy) {
 	put(t, root, ".cache/private.json", "PRIVATE-SENTINEL")
 	put(t, root, "node_modules/private.json", "PRIVATE-SENTINEL")
 	for _, item := range []struct{ dir, name string }{
-		{"tests/fixtures/plugin_base", "pluginbase"}, {"tests/fixtures/plugin_dep", "plugindep"}, {"tests/fixtures/consumer", "consumer"},
+		{"tests/fixtures/plugin_base", "pluginbase"}, {"tests/fixtures/plugin_dep", "plugindep"}, {"tests/fixtures/consumer", "consumer"}, {"tests/fixtures/goway", "goway"},
 	} {
 		put(t, root, item.dir+"/go.mod", "module foundry.test/"+item.name+"\n\ngo "+module.Go.Version+"\n\nrequire example.test/Framework v0.0.0\nreplace example.test/Framework => ../../..\n")
 		put(t, root, item.dir+"/go.sum", "")
@@ -72,7 +72,7 @@ func TestPrivateCandidateHasCanonicalIndependentModulesAndPreservesOwnership(t *
 		if err := json.Unmarshal(data, &report); err != nil {
 			t.Fatal(err)
 		}
-		if len(report.Artifacts) != 3 || len(report.Consumers) != 3 || report.Format != 2 {
+		if len(report.Artifacts) != 3 || len(report.Consumers) != 4 || report.Format != 3 {
 			t.Fatal("incomplete release manifest")
 		}
 		for i, item := range report.Artifacts {
@@ -98,7 +98,7 @@ func TestPrivateCandidateHasCanonicalIndependentModulesAndPreservesOwnership(t *
 				t.Fatal("identical source did not produce identical module bytes")
 			}
 		}
-		for _, name := range []string{"full", "ordinary", "configured"} {
+		for _, name := range []string{"full", "ordinary", "configured", "goway"} {
 			file, err := readModule(filepath.Join(out, "consumers", name))
 			if err != nil {
 				t.Fatal(err)
@@ -171,6 +171,92 @@ func TestSourcePolicyIncludesOnlyReviewedImagingAssets(t *testing.T) {
 	for _, name := range []string{"private.jpg", "imaging/testdata/native/private.pem", "other/testdata/profile.icc", "imaging/testdata/native/.private.png", "imaging/testdata/avif/plugin.so"} {
 		if policy.sourceName(filepath.FromSlash(name)) {
 			t.Fatal("unreviewed asset allowed", name)
+		}
+	}
+}
+
+func TestGoWaySourceInventory(t *testing.T) {
+	root := filepath.Join("..", "..")
+	policy, err := policyFor(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := policy.inventory(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	included := make(map[string]bool, len(files))
+	for _, file := range files {
+		included[file.Path] = true
+		if strings.HasPrefix(file.Path, "tests/fixtures/goway/") {
+			t.Fatal("nested fixture must remain a separate candidate consumer")
+		}
+	}
+	for _, directory := range []string{"database/orm", "internal/ormcore", "internal/modelmeta", "internal/querycore"} {
+		count := 0
+		err := filepath.WalkDir(filepath.Join(root, directory), func(path string, entry os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if !entry.IsDir() && filepath.Ext(path) == ".go" {
+				count++
+				relative, err := filepath.Rel(root, path)
+				if err != nil {
+					return err
+				}
+				if !included[filepath.ToSlash(relative)] {
+					t.Errorf("runtime source omitted: %s", relative)
+				}
+			}
+			return nil
+		})
+		if err != nil || count == 0 {
+			t.Fatalf("inventory %s: count=%d, error=%v", directory, count, err)
+		}
+	}
+	if !included["blueprint/goway-data-layer/compilefail-mapping.tsv"] || policy.sourceName("unreviewed.tsv") {
+		t.Fatal("catalogue allowance must be limited to its reviewed path")
+	}
+	fixture, err := policy.inventory(filepath.Join(root, "tests/fixtures/goway"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	present := make(map[string]bool, len(fixture))
+	for _, file := range fixture {
+		present[file.Path] = true
+	}
+	for _, name := range []string{"go.mod", "golden_test.go", "compiler_batch_test.go", "footprint_test.go", "models/user.go", "oldmodels/models.go", "models/.foundry-gen.json", "oldmodels/.foundry-gen.json"} {
+		if !present[name] {
+			t.Errorf("Go-way consumer lost %s", name)
+		}
+	}
+}
+
+func TestReviewedConsumerAssets(t *testing.T) {
+	policy, err := policyFor("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := policy.inventory("../../tests/fixtures/consumer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	present := make(map[string]bool, len(files))
+	for _, file := range files {
+		present[file.Path] = true
+	}
+	for _, name := range []string{
+		"mailing/testdata/mailers.toml", "spaportals/web/admin/assets/app-3f2a9c.js",
+		"spaportals/web/admin/logo.svg", "spaportals/web/home/main.js",
+		"spaportals/web/public/admin/shadow.js", "spaportals/web/public/robots.txt",
+	} {
+		if !present[name] {
+			t.Errorf("reviewed fixture omitted: %s", name)
+		}
+	}
+	for _, name := range []string{"credentials.toml", "other.svg", "unreviewed.js", "notes.txt"} {
+		if policy.sourceName(name) {
+			t.Errorf("asset allowance leaked to %s", name)
 		}
 	}
 }
