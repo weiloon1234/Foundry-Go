@@ -104,8 +104,11 @@ func QueryOfficeRegions() RegionQuery {
 	return RegionQuery{foundryRegionModelQuery.Get(foundryRegionBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Region) FoundryQuery() foundryquery.Query[Region] { return QueryOfficeRegions().Query }
+// FoundryModel identifies Region's generated query for framework integrations
+// without placing the query engine in Region's method set.
+func (Region) FoundryModel() foundryquery.ModelRef[Region] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Region] { return QueryOfficeRegions().Query })
+}
 
 // FoundryReference retains Region and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -460,7 +463,7 @@ func (p RegionInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune
 // InsertRegionFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertRegionFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) RegionInsertFromBuilder[FoundryScope] {
-	return RegionInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Region{}).FoundryQuery())}
+	return RegionInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryOfficeRegions().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -676,7 +679,7 @@ func (d RegionDraft) FoundryUpdateMutation() (foundryquery.Mutation[Region], err
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d RegionDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Region]) (foundryquery.Mutation[Region], error) {
-	values, err := foundryquery.ReadCreateDefaults((Region{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryOfficeRegions().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Region]{}, err
 	}
@@ -734,15 +737,15 @@ type RegionRelationSet struct {
 var foundryRegionRelations foundryquery.Memo[RegionRelationSet]
 
 func foundryRegionBuildRelations() RegionRelationSet {
-	relations := (Region{}).DefineRelations()
-	relations.Employees = relations.Employees.Bind("Employees", QueryOfficeRegions().Query, (Employee{}).FoundryQuery(), func(m Region) relation.Many[Employee] { return m.Employees }, func(m Region, loaded relation.Many[Employee]) Region { m.Employees = loaded; return m })
-	relations.Notes = relations.Notes.Bind("Notes", QueryOfficeRegions().Query, (Note{}).FoundryQuery(), func(m Region) relation.Many[Note] { return m.Notes }, func(m Region, loaded relation.Many[Note]) Region { m.Notes = loaded; return m })
-	relations.LatestHire = relations.LatestHire.Bind("LatestHire", QueryOfficeRegions().Query, (Employee{}).FoundryQuery(), func(m Region) relation.One[Employee] { return m.LatestHire }, func(m Region, loaded relation.One[Employee]) Region { m.LatestHire = loaded; return m })
+	relations := defineRegionRelations()
+	relations.Employees = relations.Employees.Bind("Employees", QueryOfficeRegions().Query, foundryquery.ModelQueryOf[Employee](), func(m Region) relation.Many[Employee] { return m.Employees }, func(m Region, loaded relation.Many[Employee]) Region { m.Employees = loaded; return m })
+	relations.Notes = relations.Notes.Bind("Notes", QueryOfficeRegions().Query, foundryquery.ModelQueryOf[Note](), func(m Region) relation.Many[Note] { return m.Notes }, func(m Region, loaded relation.Many[Note]) Region { m.Notes = loaded; return m })
+	relations.LatestHire = relations.LatestHire.Bind("LatestHire", QueryOfficeRegions().Query, foundryquery.ModelQueryOf[Employee](), func(m Region) relation.One[Employee] { return m.LatestHire }, func(m Region, loaded relation.One[Employee]) Region { m.LatestHire = loaded; return m })
 	return relations
 }
 
 // RegionRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// defineRegionRelations runs once per process; its immutable descriptors are shared.
 func RegionRelations() RegionRelationSet {
 	return foundryRegionRelations.Get(foundryRegionBuildRelations)
 }

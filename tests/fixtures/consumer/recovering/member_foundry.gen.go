@@ -138,8 +138,11 @@ func QueryRecoveryMembers() MemberQuery {
 	return MemberQuery{foundryMemberModelQuery.Get(foundryMemberBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Member) FoundryQuery() foundryquery.Query[Member] { return QueryRecoveryMembers().Query }
+// FoundryModel identifies Member's generated query for framework integrations
+// without placing the query engine in Member's method set.
+func (Member) FoundryModel() foundryquery.ModelRef[Member] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Member] { return QueryRecoveryMembers().Query })
+}
 
 // FoundryReference retains Member and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -494,7 +497,7 @@ func (p MemberInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune
 // InsertMemberFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertMemberFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) MemberInsertFromBuilder[FoundryScope] {
-	return MemberInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Member{}).FoundryQuery())}
+	return MemberInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryRecoveryMembers().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -748,7 +751,7 @@ func (d MemberDraft) FoundryUpdateMutation() (foundryquery.Mutation[Member], err
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d MemberDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Member]) (foundryquery.Mutation[Member], error) {
-	values, err := foundryquery.ReadCreateDefaults((Member{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryRecoveryMembers().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Member]{}, err
 	}

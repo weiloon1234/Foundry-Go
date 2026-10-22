@@ -27,7 +27,7 @@ type Project struct {
 	Enabled bool
 }
 
-func (Team) DefineRelations() TeamRelationSet {
+func defineTeamRelations() TeamRelationSet {
 	return TeamRelationSet{Projects: query.HasMany(TeamFields().ID, ProjectFields().TeamID)}
 }
 

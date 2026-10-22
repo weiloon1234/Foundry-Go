@@ -18,7 +18,7 @@ func TestRouteFactoriesCannotSubstituteDeclaredTransport(t *testing.T) {
 	raw := func(stdhttp.ResponseWriter, *stdhttp.Request, NoPath) {}
 	wrongBody := DefineEndpoint(route, EmptyQuery(), JSONBody(endpointPatchJSON()), EmptyResponse(204))
 	wrongResponse := DefineEndpoint(route, EmptyQuery(), EmptyBody(), JSONResponse(200, endpointReplyJSON()))
-	signed := endpoint.Signed(urlTestSigner(t, testkit.NewClock(urlTestTime)))
+	signed := Signed(endpoint, urlTestSigner(t, testkit.NewClock(urlTestTime)))
 	cases := []struct {
 		name        string
 		declaration routeDeclaration

@@ -1,12 +1,12 @@
 {
   "version": 1,
   "files": {
-    "desk_foundry.gen.go": "a7d49c8f5e7513687ab46e645d76ccc1291991b2472ab3ed72a4e6aecfb25bc0",
-    "employee_foundry.gen.go": "aa2ffb2e602c278c7e345d72c32e6d647e61194853d77ebf8542b6eb73df78cd",
-    "label_foundry.gen.go": "2a940068ec2c35cf82f86cc8e7cebd03b3c4b517ea67ab4d225d0cc117c5178b",
-    "labeling_foundry.gen.go": "12da8c9bec6fd02f238a510719fd8de7cb94bd0b0d72dc479b131ab3dd0122ea",
-    "note_foundry.gen.go": "b6def5222acd741aa8cbead2a6c22b3d9480bcd9ada04a4d57d0ffc986b6fbee",
-    "office_foundry.gen.go": "a6ecba9d47222d3c4911fe99bddbaac5ebaa579ee284064834b0ececb916f2c1",
-    "region_foundry.gen.go": "2d36d6a337b7178c1a28f7f3f2b31f3faa3b47ec434a84a283acfd60fe72e905"
+    "desk_foundry.gen.go": "0387f648fa1f695fca8ddd29477b4257bd59b4afbc237c6c14cda2bacf0028a9",
+    "employee_foundry.gen.go": "a1477e8de87d35344608d3182e3fe194e4a16df86b5323f5dcb00e1b6eee53d7",
+    "label_foundry.gen.go": "4e9f023e0e36daf3528c03c994b620e0a9eb10f479fe283472fc87d29780fb2b",
+    "labeling_foundry.gen.go": "b7d807c1e11fa4bb158f839c23af661a064edcc36e38e7e3c2c4615a46db87bf",
+    "note_foundry.gen.go": "81c65722db86b307b4fb2628064fb907a9203dce06434aec3ac38573e9f8c924",
+    "office_foundry.gen.go": "07d7d9aaa49a8cf38490116b02bbf2c72b8b486aa1e86390e998c360a50cdd54",
+    "region_foundry.gen.go": "1f11a262c55233cf75040b4670a10e9c46bf43c6136ed15b356122abad121972"
   }
 }

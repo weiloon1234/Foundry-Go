@@ -180,9 +180,10 @@ func QueryFoundryNotificationDeliveries() DeliveryQuery {
 	return DeliveryQuery{foundryDeliveryModelQuery.Get(foundryDeliveryBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Delivery) FoundryQuery() foundryquery.Query[Delivery] {
-	return QueryFoundryNotificationDeliveries().Query
+// FoundryModel identifies Delivery's generated query for framework integrations
+// without placing the query engine in Delivery's method set.
+func (Delivery) FoundryModel() foundryquery.ModelRef[Delivery] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Delivery] { return QueryFoundryNotificationDeliveries().Query })
 }
 
 // FoundryReference retains Delivery and its concrete stored primary key for framework integrations.
@@ -545,7 +546,7 @@ func (p DeliveryInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb ru
 // InsertDeliveryFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertDeliveryFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) DeliveryInsertFromBuilder[FoundryScope] {
-	return DeliveryInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Delivery{}).FoundryQuery())}
+	return DeliveryInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryFoundryNotificationDeliveries().Query)}
 }
 
 // SelectKey supplies the stored SQL value for key. It cannot also be supplied by Values.
@@ -836,7 +837,7 @@ func (d DeliveryDraft) FoundryUpdateMutation() (foundryquery.Mutation[Delivery],
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d DeliveryDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Delivery]) (foundryquery.Mutation[Delivery], error) {
-	values, err := foundryquery.ReadCreateDefaults((Delivery{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryFoundryNotificationDeliveries().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Delivery]{}, err
 	}

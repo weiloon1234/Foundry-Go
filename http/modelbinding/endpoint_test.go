@@ -283,7 +283,7 @@ func TestSignedModelEndpointVerifiesBeforeLookup(t *testing.T) {
 		t.Fatal(err)
 	}
 	const origin foundryhttp.Origin = "https://example.test"
-	signed := endpoint().Signed(signer)
+	signed := foundryhttp.Signed(endpoint(), signer)
 	location, err := signed.URL(t.Context(), origin, path{42}, foundryhttp.NoQuery{}, now.Now().Add(time.Minute))
 	if err != nil {
 		t.Fatal(err)

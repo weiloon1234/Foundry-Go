@@ -117,8 +117,11 @@ func QueryReportOperators() OperatorQuery {
 	return OperatorQuery{foundryOperatorModelQuery.Get(foundryOperatorBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Operator) FoundryQuery() foundryquery.Query[Operator] { return QueryReportOperators().Query }
+// FoundryModel identifies Operator's generated query for framework integrations
+// without placing the query engine in Operator's method set.
+func (Operator) FoundryModel() foundryquery.ModelRef[Operator] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Operator] { return QueryReportOperators().Query })
+}
 
 // FoundryReference retains Operator and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -480,7 +483,7 @@ func (p OperatorInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb ru
 // InsertOperatorFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertOperatorFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) OperatorInsertFromBuilder[FoundryScope] {
-	return OperatorInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Operator{}).FoundryQuery())}
+	return OperatorInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryReportOperators().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -723,7 +726,7 @@ func (d OperatorDraft) FoundryUpdateMutation() (foundryquery.Mutation[Operator],
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d OperatorDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Operator]) (foundryquery.Mutation[Operator], error) {
-	values, err := foundryquery.ReadCreateDefaults((Operator{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryReportOperators().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Operator]{}, err
 	}

@@ -2,8 +2,8 @@ package models
 
 import "github.com/weiloon1234/Foundry-Go/database/query"
 
-// DefineAggregates owns domain computations; generation binds concrete slots.
-func (User) DefineAggregates() UserAggregateSet {
+// defineUserAggregates owns domain computations; generation binds concrete slots.
+func defineUserAggregates() UserAggregateSet {
 	r := UserRelations()
 	return UserAggregateSet{
 		OrderCount:         query.Related(r.Orders, query.Count[Order]()),

@@ -143,8 +143,11 @@ func foundryUserBuildQuery() foundryquery.Query[User] {
 // QueryUsers starts a complete-model query for users with generated hydration.
 func QueryUsers() UserQuery { return UserQuery{foundryUserModelQuery.Get(foundryUserBuildQuery)} }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (User) FoundryQuery() foundryquery.Query[User] { return QueryUsers().Query }
+// FoundryModel identifies User's generated query for framework integrations
+// without placing the query engine in User's method set.
+func (User) FoundryModel() foundryquery.ModelRef[User] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[User] { return QueryUsers().Query })
+}
 
 // FoundryReference retains User and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -489,7 +492,7 @@ func (p UserInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune) 
 // InsertUserFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertUserFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) UserInsertFromBuilder[FoundryScope] {
-	return UserInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (User{}).FoundryQuery())}
+	return UserInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryUsers().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -765,7 +768,7 @@ func (d UserDraft) FoundryUpdateMutation() (foundryquery.Mutation[User], error) 
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d UserDraft) FoundryCreateMutation(defaults foundryquery.Mutation[User]) (foundryquery.Mutation[User], error) {
-	values, err := foundryquery.ReadCreateDefaults((User{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryUsers().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[User]{}, err
 	}
@@ -877,19 +880,19 @@ type UserRelationSet struct {
 var foundryUserRelations foundryquery.Memo[UserRelationSet]
 
 func foundryUserBuildRelations() UserRelationSet {
-	relations := (User{}).DefineRelations()
-	relations.Introducer = relations.Introducer.Bind("Introducer", QueryUsers().Query, (User{}).FoundryQuery(), func(m User) relation.One[User] { return m.Introducer }, func(m User, loaded relation.One[User]) User { m.Introducer = loaded; return m })
-	relations.Referrals = relations.Referrals.Bind("Referrals", QueryUsers().Query, (User{}).FoundryQuery(), func(m User) relation.Many[User] { return m.Referrals }, func(m User, loaded relation.Many[User]) User { m.Referrals = loaded; return m })
-	relations.Orders = relations.Orders.Bind("Orders", QueryUsers().Query, (Order{}).FoundryQuery(), func(m User) relation.Many[Order] { return m.Orders }, func(m User, loaded relation.Many[Order]) User { m.Orders = loaded; return m })
-	relations.SingleOrder = relations.SingleOrder.Bind("SingleOrder", QueryUsers().Query, (Order{}).FoundryQuery(), func(m User) relation.One[Order] { return m.SingleOrder }, func(m User, loaded relation.One[Order]) User { m.SingleOrder = loaded; return m })
-	relations.Groups = relations.Groups.Bind("Groups", QueryUsers().Query, (Group{}).FoundryQuery(), (Membership{}).FoundryQuery(), func(m User) relation.Through[Group, Membership] { return m.Groups }, func(m User, loaded relation.Through[Group, Membership]) User { m.Groups = loaded; return m })
-	relations.Friends = relations.Friends.Bind("Friends", QueryUsers().Query, (User{}).FoundryQuery(), (Friendship{}).FoundryQuery(), func(m User) relation.Through[User, Friendship] { return m.Friends }, func(m User, loaded relation.Through[User, Friendship]) User { m.Friends = loaded; return m })
-	relations.Measurements = relations.Measurements.Bind("Measurements", QueryUsers().Query, (Measurement{}).FoundryQuery(), func(m User) relation.Many[Measurement] { return m.Measurements }, func(m User, loaded relation.Many[Measurement]) User { m.Measurements = loaded; return m })
+	relations := defineUserRelations()
+	relations.Introducer = relations.Introducer.Bind("Introducer", QueryUsers().Query, foundryquery.ModelQueryOf[User](), func(m User) relation.One[User] { return m.Introducer }, func(m User, loaded relation.One[User]) User { m.Introducer = loaded; return m })
+	relations.Referrals = relations.Referrals.Bind("Referrals", QueryUsers().Query, foundryquery.ModelQueryOf[User](), func(m User) relation.Many[User] { return m.Referrals }, func(m User, loaded relation.Many[User]) User { m.Referrals = loaded; return m })
+	relations.Orders = relations.Orders.Bind("Orders", QueryUsers().Query, foundryquery.ModelQueryOf[Order](), func(m User) relation.Many[Order] { return m.Orders }, func(m User, loaded relation.Many[Order]) User { m.Orders = loaded; return m })
+	relations.SingleOrder = relations.SingleOrder.Bind("SingleOrder", QueryUsers().Query, foundryquery.ModelQueryOf[Order](), func(m User) relation.One[Order] { return m.SingleOrder }, func(m User, loaded relation.One[Order]) User { m.SingleOrder = loaded; return m })
+	relations.Groups = relations.Groups.Bind("Groups", QueryUsers().Query, foundryquery.ModelQueryOf[Group](), foundryquery.ModelQueryOf[Membership](), func(m User) relation.Through[Group, Membership] { return m.Groups }, func(m User, loaded relation.Through[Group, Membership]) User { m.Groups = loaded; return m })
+	relations.Friends = relations.Friends.Bind("Friends", QueryUsers().Query, foundryquery.ModelQueryOf[User](), foundryquery.ModelQueryOf[Friendship](), func(m User) relation.Through[User, Friendship] { return m.Friends }, func(m User, loaded relation.Through[User, Friendship]) User { m.Friends = loaded; return m })
+	relations.Measurements = relations.Measurements.Bind("Measurements", QueryUsers().Query, foundryquery.ModelQueryOf[Measurement](), func(m User) relation.Many[Measurement] { return m.Measurements }, func(m User, loaded relation.Many[Measurement]) User { m.Measurements = loaded; return m })
 	return relations
 }
 
 // UserRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// defineUserRelations runs once per process; its immutable descriptors are shared.
 func UserRelations() UserRelationSet { return foundryUserRelations.Get(foundryUserBuildRelations) }
 
 // UserAggregateSet checks the source model and result type of every computed slot.
@@ -913,7 +916,7 @@ type UserAggregateSet struct {
 var foundryUserAggregates foundryquery.Memo[UserAggregateSet]
 
 func foundryUserBuildAggregates() UserAggregateSet {
-	aggregates := (User{}).DefineAggregates()
+	aggregates := defineUserAggregates()
 	aggregates.OrderCount = aggregates.OrderCount.Bind("OrderCount", QueryUsers().Query, func(m User) relation.Value[int64] { return m.OrderCount }, func(m User, computed relation.Value[int64]) User { m.OrderCount = computed; return m })
 	aggregates.OrderTotal = aggregates.OrderTotal.Bind("OrderTotal", QueryUsers().Query, func(m User) relation.Value[foundryvalue.Nullable[decimal.Decimal]] { return m.OrderTotal }, func(m User, computed relation.Value[foundryvalue.Nullable[decimal.Decimal]]) User {
 		m.OrderTotal = computed
@@ -959,7 +962,7 @@ func foundryUserBuildAggregates() UserAggregateSet {
 }
 
 // UserAggregates binds handwritten computations to generated typed result slots.
-// DefineAggregates runs once per process; its immutable descriptors are shared.
+// defineUserAggregates runs once per process; its immutable descriptors are shared.
 func UserAggregates() UserAggregateSet { return foundryUserAggregates.Get(foundryUserBuildAggregates) }
 
 // UserDraft tracks explicitly selected mutation fields, preserving omitted, zero and null states.

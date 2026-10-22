@@ -108,8 +108,11 @@ func QueryFriendships() FriendshipQuery {
 	return FriendshipQuery{foundryFriendshipModelQuery.Get(foundryFriendshipBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Friendship) FoundryQuery() foundryquery.Query[Friendship] { return QueryFriendships().Query }
+// FoundryModel identifies Friendship's generated query for framework integrations
+// without placing the query engine in Friendship's method set.
+func (Friendship) FoundryModel() foundryquery.ModelRef[Friendship] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Friendship] { return QueryFriendships().Query })
+}
 
 // FoundryReference retains Friendship and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -476,7 +479,7 @@ func (p FriendshipInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb 
 // InsertFriendshipFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertFriendshipFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) FriendshipInsertFromBuilder[FoundryScope] {
-	return FriendshipInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Friendship{}).FoundryQuery())}
+	return FriendshipInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryFriendships().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -707,7 +710,7 @@ func (d FriendshipDraft) FoundryUpdateMutation() (foundryquery.Mutation[Friendsh
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d FriendshipDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Friendship]) (foundryquery.Mutation[Friendship], error) {
-	values, err := foundryquery.ReadCreateDefaults((Friendship{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryFriendships().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Friendship]{}, err
 	}

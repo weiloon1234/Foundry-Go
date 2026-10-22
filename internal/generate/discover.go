@@ -566,6 +566,25 @@ func discoverModel(p *packageInput, spec *ast.TypeSpec, named *types.Named, args
 	if !foundPrimary {
 		return m, p.diagnostic(spec.Pos(), "model is missing primary field "+primary)
 	}
+	if err := checkDeprecatedModelMethods(p, m); err != nil {
+		return m, err
+	}
+	if len(m.relations) > 0 {
+		fnName := modelDeclarationFunction(m.name, kindRelations)
+		if pos, found := p.definedAt[fnName]; found {
+			if !validDeclarationFunction(p, fnName, m.name+"RelationSet") {
+				return m, p.diagnostic(pos, "function "+fnName+" requires signature func "+fnName+"() "+m.name+"RelationSet")
+			}
+		}
+	}
+	if len(m.aggregates) > 0 {
+		fnName := modelDeclarationFunction(m.name, kindAggregates)
+		if pos, found := p.definedAt[fnName]; found {
+			if !validDeclarationFunction(p, fnName, m.name+"AggregateSet") {
+				return m, p.diagnostic(pos, "function "+fnName+" requires signature func "+fnName+"() "+m.name+"AggregateSet")
+			}
+		}
+	}
 	if err := discoverFieldMethods(p, &m); err != nil {
 		return m, err
 	}

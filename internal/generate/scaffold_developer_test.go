@@ -82,7 +82,7 @@ func TestModelScaffoldDeclaresExtensionSlots(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"Title   translations.Text", "Logo      attachments.One[Article]", "Galleries attachments.Many[Article]", "SEO       metadata.Value[ArticleSEO]", "type ArticleSEO struct{}", `var ArticleDisk = storage.DefineDisk("public")`, "func (Article) DefineExtensions() ArticleExtensionSet"} {
+	for _, expected := range []string{"Title   translations.Text", "Logo      attachments.One[Article]", "Galleries attachments.Many[Article]", "SEO       metadata.Value[ArticleSEO]", "type ArticleSEO struct{}", `var ArticleDisk = storage.DefineDisk("public")`, "func defineArticleExtensions() ArticleExtensionSet"} {
 		if !strings.Contains(strings.Join(strings.Fields(string(data)), " "), strings.Join(strings.Fields(expected), " ")) {
 			t.Fatalf("scaffold lacks %q:\n%s", expected, data)
 		}

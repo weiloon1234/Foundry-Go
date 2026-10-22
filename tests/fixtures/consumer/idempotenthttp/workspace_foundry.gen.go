@@ -99,8 +99,11 @@ func QueryIdemWorkspaces() WorkspaceQuery {
 	return WorkspaceQuery{foundryWorkspaceModelQuery.Get(foundryWorkspaceBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Workspace) FoundryQuery() foundryquery.Query[Workspace] { return QueryIdemWorkspaces().Query }
+// FoundryModel identifies Workspace's generated query for framework integrations
+// without placing the query engine in Workspace's method set.
+func (Workspace) FoundryModel() foundryquery.ModelRef[Workspace] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Workspace] { return QueryIdemWorkspaces().Query })
+}
 
 // FoundryReference retains Workspace and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -464,7 +467,7 @@ func (p WorkspaceInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb r
 // InsertWorkspaceFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertWorkspaceFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) WorkspaceInsertFromBuilder[FoundryScope] {
-	return WorkspaceInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Workspace{}).FoundryQuery())}
+	return WorkspaceInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryIdemWorkspaces().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -683,7 +686,7 @@ func (d WorkspaceDraft) FoundryUpdateMutation() (foundryquery.Mutation[Workspace
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d WorkspaceDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Workspace]) (foundryquery.Mutation[Workspace], error) {
-	values, err := foundryquery.ReadCreateDefaults((Workspace{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryIdemWorkspaces().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Workspace]{}, err
 	}

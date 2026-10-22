@@ -100,8 +100,11 @@ func QueryLinkGroups() GroupQuery {
 	return GroupQuery{foundryGroupModelQuery.Get(foundryGroupBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Group) FoundryQuery() foundryquery.Query[Group] { return QueryLinkGroups().Query }
+// FoundryModel identifies Group's generated query for framework integrations
+// without placing the query engine in Group's method set.
+func (Group) FoundryModel() foundryquery.ModelRef[Group] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Group] { return QueryLinkGroups().Query })
+}
 
 // FoundryReference retains Group and its concrete stored primary key for framework integrations.
 // It reads Code directly, never calls an accessor, and performs no database lookup.
@@ -473,7 +476,7 @@ func (p GroupInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune)
 // InsertGroupFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertGroupFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) GroupInsertFromBuilder[FoundryScope] {
-	return GroupInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Group{}).FoundryQuery())}
+	return GroupInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryLinkGroups().Query)}
 }
 
 // SelectCode supplies the stored SQL value for code. It cannot also be supplied by Values.
@@ -702,7 +705,7 @@ func (d GroupDraft) FoundryUpdateMutation() (foundryquery.Mutation[Group], error
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d GroupDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Group]) (foundryquery.Mutation[Group], error) {
-	values, err := foundryquery.ReadCreateDefaults((Group{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryLinkGroups().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Group]{}, err
 	}

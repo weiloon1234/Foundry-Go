@@ -150,18 +150,20 @@ func (e *emitter) emitModelQuery(m model) {
 	if m.softDelete != "" {
 		behavior += fmt.Sprintf(".WithSoftDeletes(%q)", m.softDelete)
 	}
-	// A handwritten value-receiver DefineGlobalScopes method declares the
-	// model's default scopes (discovery validates its receiver and signature).
-	// The method value is evaluated lazily at first use, after this query
+	// A handwritten define<Model>GlobalScopes function declares the
+	// model's default scopes (discovery validates its signature).
+	// The function is evaluated lazily at first use, after this query
 	// declaration is memoized, so scopes may reference the model's relations.
-	if _, declared := e.pkg.methods[m.name]["DefineGlobalScopes"]; declared {
-		behavior += fmt.Sprintf(".WithGlobalScopeSource((%s{}).DefineGlobalScopes)", m.name)
+	fnName := modelDeclarationFunction(m.name, kindGlobalScopes)
+	if _, declared := e.pkg.definedAt[fnName]; declared {
+		behavior += fmt.Sprintf(".WithGlobalScopeSource(%s)", fnName)
 	}
 	e.line(")%s.WithObserverHooks((%sHooks{}).foundryWriteHooks,%t).WithRetrievalHooks((%sRetrievalHooks{}).foundryRetrievalHooks,%t))}", behavior, m.name, m.hooks != "", m.name, m.retrieval != "")
 	e.line("// %s starts a complete-model query for %s with generated hydration.", m.query, m.table)
 	e.line("func %s()%sQuery{return %sQuery{foundry%sModelQuery.Get(foundry%sBuildQuery)}}", m.query, m.name, m.name, m.name, m.name)
-	e.line("// FoundryQuery returns this model's generated metadata query for framework integrations.")
-	e.line("func(%s)FoundryQuery()%s.Query[%s]{return %s().Query}", m.name, query, m.name, m.query)
+	e.line("// FoundryModel identifies %s's generated query for framework integrations", m.name)
+	e.line("// without placing the query engine in %s's method set.", m.name)
+	e.line("func(%s)FoundryModel()%s.ModelRef[%s]{return %s.NewModelRef(func()%s.Query[%s]{return %s().Query})}", m.name, query, m.name, query, query, m.name, m.query)
 	e.emitModelReference(m, primary)
 	for _, method := range modelQueryMethods(query, context, m.name) {
 		e.line("// %s derives a new %s query without changing its source.", method.name, m.name)

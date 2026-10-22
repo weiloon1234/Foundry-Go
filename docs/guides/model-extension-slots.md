@@ -29,7 +29,7 @@ type Article struct {
     SEO       metadata.Value[SEO]        // foundry_model_metadata, no column
 }
 
-func (Article) DefineExtensions() ArticleExtensionSet {
+func defineArticleExtensions() ArticleExtensionSet {
     return ArticleExtensionSet{
         Title: translations.Options{MaxBytes: 512, Require: i18n.DefaultLocale},
         Logo: attachments.Policy{Disk: Files, Accepted: []storage.MediaType{"image/png"},
@@ -58,7 +58,7 @@ type selects cardinality, so a policy's `Cardinality` must be zero or match.
 Localized attachment collections keep the explicit `ForLocale` API; a slot
 policy with `Localized: true` is rejected.
 
-`DefineExtensions` uses a value receiver and returns the generated
+`define<Model>Extensions` is an unexported package function returning the generated
 `<Model>ExtensionSet`. It is required when the model has an attachment slot and
 optional otherwise; omitted entries use the zero policy. It runs once per
 process and must not call `<Model>Extensions()`.
@@ -73,7 +73,7 @@ string, boolean, integer or floating value, a type with a `JSONContract` method,
 or `json.RawMessage` through `contract.DynamicJSON()`. Enums are not inferred,
 because a scalar contract would accept values outside their members; wrap an enum
 in a DTO. Declare `metadata.Spec[V]{JSON: ...}` for any other value type; generation fails when
-such a slot has no `DefineExtensions`, and assembly fails when the entry stays
+such a slot has no `define<Model>Extensions`, and assembly fails when the entry stays
 empty. Adding optional fields to a DTO value needs no migration. Removing or
 renaming a field requires a `Version` increment, because strict decoding rejects
 stored unknown fields.
@@ -109,7 +109,7 @@ commands, stays on the explicit owner path.
 
 For `Article`, generation emits:
 
-- `ArticleExtensionSet`, the policy type returned by `DefineExtensions`;
+- `ArticleExtensionSet`, the policy type returned by `defineArticleExtensions`;
 - `ArticleExtensionSlots`, with one typed descriptor per slot:
   `translations.TextSlot[Article, K]`, `attachments.OneSlot[Article, K]`,
   `attachments.ManySlot[Article, K]` and `metadata.ValueSlot[Article, K, V]`;

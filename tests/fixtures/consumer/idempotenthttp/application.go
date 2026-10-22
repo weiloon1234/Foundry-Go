@@ -104,7 +104,7 @@ func Build(ctx context.Context, settings application.Settings, hooks Hooks, opti
 			}
 			return nil
 		})
-		operation := bound.Idempotent(store, idempotency.Definition{ID: "orders.create", Version: 1}).WithHeaders(func(_ context.Context, result Receipt) ([]http.ResponseHeader, error) {
+		operation := modelbinding.IdempotentAuthenticated(bound, store, idempotency.Definition{ID: "orders.create", Version: 1}).WithHeaders(func(_ context.Context, result Receipt) ([]http.ResponseHeader, error) {
 			return []http.ResponseHeader{{Name: "Location", Value: http.HeaderValue("/orders/" + result.ID.String())}}, nil
 		})
 		return []http.RouteRegistration{operation.Handle(func(_ context.Context, actor Actor, _ BoundRequest) (idempotency.Scope, error) {

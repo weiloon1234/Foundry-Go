@@ -105,8 +105,11 @@ func foundryNoteBuildQuery() foundryquery.Query[Note] {
 // QueryOfficeNotes starts a complete-model query for office_notes with generated hydration.
 func QueryOfficeNotes() NoteQuery { return NoteQuery{foundryNoteModelQuery.Get(foundryNoteBuildQuery)} }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Note) FoundryQuery() foundryquery.Query[Note] { return QueryOfficeNotes().Query }
+// FoundryModel identifies Note's generated query for framework integrations
+// without placing the query engine in Note's method set.
+func (Note) FoundryModel() foundryquery.ModelRef[Note] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Note] { return QueryOfficeNotes().Query })
+}
 
 // FoundryReference retains Note and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -451,7 +454,7 @@ func (p NoteInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune) 
 // InsertNoteFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertNoteFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) NoteInsertFromBuilder[FoundryScope] {
-	return NoteInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Note{}).FoundryQuery())}
+	return NoteInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryOfficeNotes().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -679,7 +682,7 @@ func (d NoteDraft) FoundryUpdateMutation() (foundryquery.Mutation[Note], error) 
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d NoteDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Note]) (foundryquery.Mutation[Note], error) {
-	values, err := foundryquery.ReadCreateDefaults((Note{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryOfficeNotes().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Note]{}, err
 	}
@@ -746,14 +749,14 @@ type NoteRelationSet struct {
 var foundryNoteRelations foundryquery.Memo[NoteRelationSet]
 
 func foundryNoteBuildRelations() NoteRelationSet {
-	relations := (Note{}).DefineRelations()
-	relations.Region = relations.Region.Bind("Region", QueryOfficeNotes().Query, (Region{}).FoundryQuery(), func(m Note) relation.One[Region] { return m.Region }, func(m Note, loaded relation.One[Region]) Note { m.Region = loaded; return m })
-	relations.Office = relations.Office.Bind("Office", QueryOfficeNotes().Query, (Office{}).FoundryQuery(), func(m Note) relation.One[Office] { return m.Office }, func(m Note, loaded relation.One[Office]) Note { m.Office = loaded; return m })
+	relations := defineNoteRelations()
+	relations.Region = relations.Region.Bind("Region", QueryOfficeNotes().Query, foundryquery.ModelQueryOf[Region](), func(m Note) relation.One[Region] { return m.Region }, func(m Note, loaded relation.One[Region]) Note { m.Region = loaded; return m })
+	relations.Office = relations.Office.Bind("Office", QueryOfficeNotes().Query, foundryquery.ModelQueryOf[Office](), func(m Note) relation.One[Office] { return m.Office }, func(m Note, loaded relation.One[Office]) Note { m.Office = loaded; return m })
 	return relations
 }
 
 // NoteRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// defineNoteRelations runs once per process; its immutable descriptors are shared.
 func NoteRelations() NoteRelationSet { return foundryNoteRelations.Get(foundryNoteBuildRelations) }
 
 // NoteDraft tracks explicitly selected mutation fields, preserving omitted, zero and null states.

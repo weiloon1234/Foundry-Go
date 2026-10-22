@@ -129,8 +129,11 @@ func QueryReportOrders() OrderQuery {
 	return OrderQuery{foundryOrderModelQuery.Get(foundryOrderBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Order) FoundryQuery() foundryquery.Query[Order] { return QueryReportOrders().Query }
+// FoundryModel identifies Order's generated query for framework integrations
+// without placing the query engine in Order's method set.
+func (Order) FoundryModel() foundryquery.ModelRef[Order] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Order] { return QueryReportOrders().Query })
+}
 
 // FoundryReference retains Order and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -502,7 +505,7 @@ func (p OrderInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune)
 // InsertOrderFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertOrderFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) OrderInsertFromBuilder[FoundryScope] {
-	return OrderInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Order{}).FoundryQuery())}
+	return OrderInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryReportOrders().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -767,7 +770,7 @@ func (d OrderDraft) FoundryUpdateMutation() (foundryquery.Mutation[Order], error
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d OrderDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Order]) (foundryquery.Mutation[Order], error) {
-	values, err := foundryquery.ReadCreateDefaults((Order{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryReportOrders().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Order]{}, err
 	}
@@ -853,13 +856,13 @@ type OrderRelationSet struct {
 var foundryOrderRelations foundryquery.Memo[OrderRelationSet]
 
 func foundryOrderBuildRelations() OrderRelationSet {
-	relations := (Order{}).DefineRelations()
-	relations.Member = relations.Member.Bind("Member", QueryReportOrders().Query, (Member{}).FoundryQuery(), func(m Order) relation.One[Member] { return m.Member }, func(m Order, loaded relation.One[Member]) Order { m.Member = loaded; return m })
+	relations := defineOrderRelations()
+	relations.Member = relations.Member.Bind("Member", QueryReportOrders().Query, foundryquery.ModelQueryOf[Member](), func(m Order) relation.One[Member] { return m.Member }, func(m Order, loaded relation.One[Member]) Order { m.Member = loaded; return m })
 	return relations
 }
 
 // OrderRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// defineOrderRelations runs once per process; its immutable descriptors are shared.
 func OrderRelations() OrderRelationSet { return foundryOrderRelations.Get(foundryOrderBuildRelations) }
 
 // OrderDraft tracks explicitly selected mutation fields, preserving omitted, zero and null states.

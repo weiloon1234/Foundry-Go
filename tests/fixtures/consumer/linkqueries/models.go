@@ -77,7 +77,7 @@ type Friendship struct {
 	ToID   model.ID[Member]
 }
 
-func (Member) DefineRelations() MemberRelationSet {
+func defineMemberRelations() MemberRelationSet {
 	m, g, p, n, z, f := MemberFields(), GroupFields(), MembershipFields(), NaturalLinkFields(), NullableLinkFields(), FriendshipFields()
 	return MemberRelationSet{
 		Groups:      query.ManyToMany(m.ID, p.MemberID, p.GroupCode, g.Code),

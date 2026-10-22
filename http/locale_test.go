@@ -87,7 +87,7 @@ func TestLocaleNegotiationPrecedenceAndValidation(t *testing.T) {
 // ignore it, while an endpoint that declares the same name keeps its value.
 func TestLocaleSelectorIsStrippedBeforeTypedAndSignedDecoding(t *testing.T) {
 	now := testkit.NewClock(urlTestTime)
-	signed := DefineEndpoint(DefineRoute(RouteSpec{ID: "reports.signed", Method: GET, Access: Public}, StaticPath("/signed")), EmptyQuery(), EmptyBody(), EmptyResponse(204)).Signed(urlTestSigner(t, now))
+	signed := Signed(DefineEndpoint(DefineRoute(RouteSpec{ID: "reports.signed", Method: GET, Access: Public}, StaticPath("/signed")), EmptyQuery(), EmptyBody(), EmptyResponse(204)), urlTestSigner(t, now))
 	type langQuery struct{ Lang value.Optional[string] }
 	declared := DefineEndpoint(DefineRoute(RouteSpec{ID: "reports.declared", Method: GET, Access: Public}, StaticPath("/declared")),
 		DefineQuery(OptionalQueryParam("lang", StringQuery[string](), func(q *langQuery) *value.Optional[string] { return &q.Lang })), EmptyBody(), EmptyResponse(204))

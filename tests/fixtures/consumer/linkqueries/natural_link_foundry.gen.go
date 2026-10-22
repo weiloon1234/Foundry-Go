@@ -101,8 +101,11 @@ func QueryLinkNatural() NaturalLinkQuery {
 	return NaturalLinkQuery{foundryNaturalLinkModelQuery.Get(foundryNaturalLinkBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (NaturalLink) FoundryQuery() foundryquery.Query[NaturalLink] { return QueryLinkNatural().Query }
+// FoundryModel identifies NaturalLink's generated query for framework integrations
+// without placing the query engine in NaturalLink's method set.
+func (NaturalLink) FoundryModel() foundryquery.ModelRef[NaturalLink] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[NaturalLink] { return QueryLinkNatural().Query })
+}
 
 // FoundryReference retains NaturalLink and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -474,7 +477,7 @@ func (p NaturalLinkInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb
 // InsertNaturalLinkFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertNaturalLinkFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) NaturalLinkInsertFromBuilder[FoundryScope] {
-	return NaturalLinkInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (NaturalLink{}).FoundryQuery())}
+	return NaturalLinkInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryLinkNatural().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -693,7 +696,7 @@ func (d NaturalLinkDraft) FoundryUpdateMutation() (foundryquery.Mutation[Natural
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d NaturalLinkDraft) FoundryCreateMutation(defaults foundryquery.Mutation[NaturalLink]) (foundryquery.Mutation[NaturalLink], error) {
-	values, err := foundryquery.ReadCreateDefaults((NaturalLink{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryLinkNatural().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[NaturalLink]{}, err
 	}

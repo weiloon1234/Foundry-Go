@@ -103,7 +103,7 @@ func (*multipartCountedBody) Close() error                    { return nil }
 
 func TestSignedMultipartVerifiesBeforeReadingOrCapturing(t *testing.T) {
 	directory := t.TempDir()
-	signed := multipartEndpoint(directory).Signed(urlTestSigner(t, testkit.NewClock(urlTestTime)))
+	signed := Signed(multipartEndpoint(directory), urlTestSigner(t, testkit.NewClock(urlTestTime)))
 	location, err := signed.URL(t.Context(), urlTestOrigin, NoPath{}, NoQuery{}, urlTestTime.Add(time.Minute))
 	if err != nil {
 		t.Fatal(err)

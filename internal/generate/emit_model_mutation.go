@@ -41,7 +41,7 @@ func (e *emitter) emitModelMutation(m model, primary field) {
 	draftName, defaultsName := e.localName("d"), e.localName("defaults")
 	valuesName, errName, inputName := e.localName("values"), e.localName("err"), e.localName("v")
 	e.line("// FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.")
-	e.line("func(%s %sDraft)FoundryCreateMutation(%s %s.Mutation[%s])(%s.Mutation[%s],error){%s,%s:=%s.ReadCreateDefaults((%s{}).FoundryQuery(),%s);if %s!=nil{return %s.Mutation[%s]{},%s}", draftName, m.name, defaultsName, query, m.name, query, m.name, valuesName, errName, query, m.name, defaultsName, errName, query, m.name, errName)
+	e.line("func(%s %sDraft)FoundryCreateMutation(%s %s.Mutation[%s])(%s.Mutation[%s],error){%s,%s:=%s.ReadCreateDefaults(%s().Query,%s);if %s!=nil{return %s.Mutation[%s]{},%s}", draftName, m.name, defaultsName, query, m.name, query, m.name, valuesName, errName, query, m.query, defaultsName, errName, query, m.name, errName)
 	for _, f := range m.fields {
 		e.line("if !%s.field%s.IsSet(){%s,%s:=%s.MutationValue[%s,%s](%s,%q,%q);if %s!=nil{return %s.Mutation[%s]{},%s};%s.field%s=%s}", draftName, f.name, inputName, errName, query, m.name, e.fieldInputType(f, true), valuesName, m.table, f.column, errName, query, m.name, errName, draftName, f.name, inputName)
 	}

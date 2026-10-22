@@ -159,7 +159,7 @@ func New%s(resolver foundation.Resolver) (cli.Handler[%sArguments], error) {
 
 // renderSlotModel renders a model with extension slot fields. Metadata slots
 // get an empty DTO each; attachment slots share one disk declaration and need
-// DefineExtensions, whose policies accept nothing until the application lists
+// the model's extension definition, whose policies accept nothing until the application lists
 // their media types, so assembly refuses them rather than guessing a policy.
 func renderSlotModel(pkg string, options ScaffoldOptions) (string, error) {
 	imports, err := modelSlotImports(options)
@@ -192,7 +192,8 @@ func renderSlotModel(pkg string, options ScaffoldOptions) (string, error) {
 		return source.String(), nil
 	}
 	fmt.Fprintf(&source, "\n// %sDisk names the storage disk holding %s attachments. Configure disk %q\n// in the application's storage settings; models sharing a disk can share one declaration.\nvar %sDisk = storage.DefineDisk(%q)\n", options.Name, options.Name, options.Disk, options.Name, options.Disk)
-	fmt.Fprintf(&source, "\n// DefineExtensions declares %s's slot policies; omitted slots use their defaults.\nfunc (%s) DefineExtensions() %sExtensionSet {\n\treturn %sExtensionSet{\n", options.Name, options.Name, options.Name, options.Name)
+	fnName := modelDeclarationFunction(options.Name, kindExtensions)
+	fmt.Fprintf(&source, "\n// %s declares %s's slot policies; omitted slots use their defaults.\nfunc %s() %sExtensionSet {\n\treturn %sExtensionSet{\n", fnName, options.Name, fnName, options.Name, options.Name)
 	for _, name := range append(append([]string{}, options.Attachment...), options.Attachments...) {
 		fmt.Fprintf(&source, "\t\t// List the accepted media types (or set an Image plan); assembly rejects\n\t\t// a policy that accepts nothing.\n\t\t%s: attachments.Policy{Disk: %sDisk, Accepted: []storage.MediaType{}},\n", name, options.Name)
 	}

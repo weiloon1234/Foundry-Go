@@ -88,8 +88,11 @@ func QueryObservedPlain() PlainQuery {
 	return PlainQuery{foundryPlainModelQuery.Get(foundryPlainBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Plain) FoundryQuery() foundryquery.Query[Plain] { return QueryObservedPlain().Query }
+// FoundryModel identifies Plain's generated query for framework integrations
+// without placing the query engine in Plain's method set.
+func (Plain) FoundryModel() foundryquery.ModelRef[Plain] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Plain] { return QueryObservedPlain().Query })
+}
 
 // FoundryReference retains Plain and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -441,7 +444,7 @@ func (p PlainInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune)
 // InsertPlainFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertPlainFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) PlainInsertFromBuilder[FoundryScope] {
-	return PlainInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Plain{}).FoundryQuery())}
+	return PlainInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryObservedPlain().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -645,7 +648,7 @@ func (d PlainDraft) FoundryUpdateMutation() (foundryquery.Mutation[Plain], error
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d PlainDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Plain]) (foundryquery.Mutation[Plain], error) {
-	values, err := foundryquery.ReadCreateDefaults((Plain{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryObservedPlain().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Plain]{}, err
 	}

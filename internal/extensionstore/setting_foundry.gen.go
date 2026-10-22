@@ -253,8 +253,11 @@ func QueryFoundrySettings() SettingQuery {
 	return SettingQuery{foundrySettingModelQuery.Get(foundrySettingBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Setting) FoundryQuery() foundryquery.Query[Setting] { return QueryFoundrySettings().Query }
+// FoundryModel identifies Setting's generated query for framework integrations
+// without placing the query engine in Setting's method set.
+func (Setting) FoundryModel() foundryquery.ModelRef[Setting] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Setting] { return QueryFoundrySettings().Query })
+}
 
 // FoundryReference retains Setting and its concrete stored primary key for framework integrations.
 // It reads Name directly, never calls an accessor, and performs no database lookup.
@@ -612,7 +615,7 @@ func (p SettingInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb run
 // InsertSettingFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertSettingFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) SettingInsertFromBuilder[FoundryScope] {
-	return SettingInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Setting{}).FoundryQuery())}
+	return SettingInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryFoundrySettings().Query)}
 }
 
 // SelectName supplies the stored SQL value for name. It cannot also be supplied by Values.
@@ -941,7 +944,7 @@ func (d SettingDraft) FoundryUpdateMutation() (foundryquery.Mutation[Setting], e
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d SettingDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Setting]) (foundryquery.Mutation[Setting], error) {
-	values, err := foundryquery.ReadCreateDefaults((Setting{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryFoundrySettings().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Setting]{}, err
 	}

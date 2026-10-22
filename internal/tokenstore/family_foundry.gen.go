@@ -265,8 +265,11 @@ func QueryFoundryTokenFamilies() FamilyQuery {
 	return FamilyQuery{foundryFamilyModelQuery.Get(foundryFamilyBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Family) FoundryQuery() foundryquery.Query[Family] { return QueryFoundryTokenFamilies().Query }
+// FoundryModel identifies Family's generated query for framework integrations
+// without placing the query engine in Family's method set.
+func (Family) FoundryModel() foundryquery.ModelRef[Family] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Family] { return QueryFoundryTokenFamilies().Query })
+}
 
 // FoundryReference retains Family and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -621,7 +624,7 @@ func (p FamilyInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune
 // InsertFamilyFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertFamilyFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) FamilyInsertFromBuilder[FoundryScope] {
-	return FamilyInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Family{}).FoundryQuery())}
+	return FamilyInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryFoundryTokenFamilies().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -981,7 +984,7 @@ func (d FamilyDraft) FoundryUpdateMutation() (foundryquery.Mutation[Family], err
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d FamilyDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Family]) (foundryquery.Mutation[Family], error) {
-	values, err := foundryquery.ReadCreateDefaults((Family{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryFoundryTokenFamilies().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Family]{}, err
 	}

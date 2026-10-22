@@ -39,6 +39,90 @@ must pass the invalid-type consumer gate.
 Queries still own captured declaration/order/mapping slices. Scope callbacks stay
 lazy and isolated, and execution resolves scopes from its own request context.
 
+## Model and endpoint edges
+
+Go 1.27's compiler reads every method signature and struct field type of a type an
+importing package uses, and compiles every method of any generic instantiation it
+reaches from them transitively in every importing package. If a model type's method
+set exposes a generic query engine, or if an HTTP endpoint's method set exposes
+signed or idempotent endpoint transitions, any package that merely inspects a model
+field (such as `Order.TotalCents`) or registers a simple endpoint compiles the entire
+transitive generic closure into its own package archive (`.a`).
+
+### Framework design rules
+
+Foundry-Go eliminates these closure edges across generated models and HTTP endpoints:
+
+- **Methodless witness**: `(M).FoundryModel()` returns `query.ModelRef[M]`. `ModelRef` is
+  a zero-method generic witness that statically identifies generated models without
+  pulling `database/query` engine methods into the model's own method set.
+- **Small model metadata**: the only other generated model methods are
+  `(M).FoundryReference()`, returning `model.Reference[M, K]`, and
+  `(M).FoundryIdentity()`, returning `model.Identity`. Neither reaches a query engine.
+- **Package-level model declarations**: Model relation, aggregate, extension, and
+  global scope descriptors live in package-level functions (`define<Model>Relations`,
+  `define<Model>Aggregates`, `define<Model>Extensions`, `define<Model>GlobalScopes`)
+  rather than receiver methods on the model type. Importing a model type never forces
+  the compiler to instantiate relation or query generic methods.
+- **Top-level endpoint transitions**: `http.Signed`, `http.Idempotent`,
+  `http.IdempotentSigned`, `http.SignedAuthenticated`,
+  `http.SignedOptionalAuthentication`, `http.IdempotentAuthenticated`,
+  `modelbinding.Idempotent` and `modelbinding.IdempotentAuthenticated` are top-level
+  functions rather than methods on the endpoint types. Declaring a plain endpoint does
+  not compile the signed or idempotent generic families into the route package.
+
+### Consumer guidance
+
+When authoring application models, query helpers, and HTTP routes:
+
+1. Never declare methods on model types whose signatures mention query, relation,
+   scope, aggregate, or endpoint generics.
+2. Keep custom query helpers, scopes, and model extensions in package functions or
+   dedicated query packages rather than receiver methods on the model struct.
+3. Keep HTTP endpoint transitions as top-level function calls at route registration
+   time rather than chaining through receiver methods.
+
+### Inspecting package compile footprint
+
+To measure the compile footprint and symbol count of an individual package archive:
+
+```bash
+# Export the package archive without link-time dead-code elimination
+go list -export -f '{{.Export}}' ./your/package
+
+# Count text (function) symbols in the archive
+go tool nm <export-archive> | grep ' [Tt] ' | wc -l
+
+# Count total defined symbols in the archive
+go tool nm <export-archive> | grep -v ' U ' | wc -l
+```
+
+### Regression guards and footprint impact
+
+The framework enforces closure-free model and endpoint contracts with two automated
+regression guards:
+
+1. **Generator closure guard** (`internal/generate/closure_guard_test.go`): Walks
+   every generated model type's struct fields, value method sets, and pointer method
+   sets using export data, verifying that no generic types from `database/query`
+   (except zero-method `ModelRef`) are reachable, and verifying negative detection
+   on intentional closure leaks.
+2. **Footprint budget probes** (`tests/fixtures/consumer/footprint_test.go`): Compiles
+   isolated consumer probe packages with `go list -export` and asserts that function
+   symbol counts, defined symbol counts, and archive sizes stay within committed
+   upper-bound budgets (~1.25x headroom).
+
+Measured on the consumer fixture models (Go 1.27.1, darwin/arm64). The baseline is
+Foundry-Go dd188a7 with the same probe bodies; the compile of the `model_type` probe
+fell from 850 MB to 113 MB peak RSS and from 2.6 s to 0.12 s:
+
+| Probe case | Pre-change baseline | Post-change footprint | Reduction |
+| --- | --- | --- | --- |
+| Model with relations (`model_type`) | 14,910 fn, 70.9 MB | 1,159 fn, 7,267 symbols, 4.55 MB | ~93% size |
+| Standalone model (`model_isolated`) | 2,546 fn, 12.2 MB | 139 fn, 1,051 symbols, 0.60 MB | ~95% size |
+| Model draft (`model_draft`) | 2,612 fn, 12.4 MB | 225 fn, 1,566 symbols, 0.95 MB | ~92% size |
+| Plain HTTP endpoint (`endpoint_plain`) | 3,734 fn, 16.4 MB | 1,065 fn, 7,314 symbols, 4.62 MB | ~72% size |
+
 ## Further shared write planning
 
 Upsert policy data, index-target inference, assignment compilation, dependency

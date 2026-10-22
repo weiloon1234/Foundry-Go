@@ -101,8 +101,11 @@ func QueryLinkNullable() NullableLinkQuery {
 	return NullableLinkQuery{foundryNullableLinkModelQuery.Get(foundryNullableLinkBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (NullableLink) FoundryQuery() foundryquery.Query[NullableLink] { return QueryLinkNullable().Query }
+// FoundryModel identifies NullableLink's generated query for framework integrations
+// without placing the query engine in NullableLink's method set.
+func (NullableLink) FoundryModel() foundryquery.ModelRef[NullableLink] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[NullableLink] { return QueryLinkNullable().Query })
+}
 
 // FoundryReference retains NullableLink and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -477,7 +480,7 @@ func (p NullableLinkInsertFromBuilder[FoundryScope]) Format(state fmt.State, ver
 // InsertNullableLinkFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertNullableLinkFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) NullableLinkInsertFromBuilder[FoundryScope] {
-	return NullableLinkInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (NullableLink{}).FoundryQuery())}
+	return NullableLinkInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryLinkNullable().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -696,7 +699,7 @@ func (d NullableLinkDraft) FoundryUpdateMutation() (foundryquery.Mutation[Nullab
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d NullableLinkDraft) FoundryCreateMutation(defaults foundryquery.Mutation[NullableLink]) (foundryquery.Mutation[NullableLink], error) {
-	values, err := foundryquery.ReadCreateDefaults((NullableLink{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryLinkNullable().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[NullableLink]{}, err
 	}

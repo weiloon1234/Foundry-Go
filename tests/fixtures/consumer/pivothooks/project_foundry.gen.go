@@ -91,8 +91,11 @@ func QueryHookProjects() ProjectQuery {
 	return ProjectQuery{foundryProjectModelQuery.Get(foundryProjectBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Project) FoundryQuery() foundryquery.Query[Project] { return QueryHookProjects().Query }
+// FoundryModel identifies Project's generated query for framework integrations
+// without placing the query engine in Project's method set.
+func (Project) FoundryModel() foundryquery.ModelRef[Project] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Project] { return QueryHookProjects().Query })
+}
 
 // FoundryReference retains Project and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -449,7 +452,7 @@ func (p ProjectInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb run
 // InsertProjectFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertProjectFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) ProjectInsertFromBuilder[FoundryScope] {
-	return ProjectInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Project{}).FoundryQuery())}
+	return ProjectInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryHookProjects().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -656,7 +659,7 @@ func (d ProjectDraft) FoundryUpdateMutation() (foundryquery.Mutation[Project], e
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d ProjectDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Project]) (foundryquery.Mutation[Project], error) {
-	values, err := foundryquery.ReadCreateDefaults((Project{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryHookProjects().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Project]{}, err
 	}
@@ -702,13 +705,13 @@ type ProjectRelationSet struct {
 var foundryProjectRelations foundryquery.Memo[ProjectRelationSet]
 
 func foundryProjectBuildRelations() ProjectRelationSet {
-	relations := (Project{}).DefineRelations()
-	relations.Members = relations.Members.Bind("Members", QueryHookProjects().Query, (Person{}).FoundryQuery(), (Assignment{}).FoundryQuery(), func(m Project) relation.Through[Person, Assignment] { return m.Members }, func(m Project, loaded relation.Through[Person, Assignment]) Project { m.Members = loaded; return m })
+	relations := defineProjectRelations()
+	relations.Members = relations.Members.Bind("Members", QueryHookProjects().Query, foundryquery.ModelQueryOf[Person](), foundryquery.ModelQueryOf[Assignment](), func(m Project) relation.Through[Person, Assignment] { return m.Members }, func(m Project, loaded relation.Through[Person, Assignment]) Project { m.Members = loaded; return m })
 	return relations
 }
 
 // ProjectRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// defineProjectRelations runs once per process; its immutable descriptors are shared.
 func ProjectRelations() ProjectRelationSet {
 	return foundryProjectRelations.Get(foundryProjectBuildRelations)
 }

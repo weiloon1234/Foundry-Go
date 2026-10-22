@@ -16,12 +16,14 @@ import (
 
 type record struct{ ID int64 }
 
-func (record) FoundryQuery() query.Query[record] {
-	return query.ForModel(query.Define("factory_records", "id", []query.Column{{Name: "id"}}, func(row database.Row) (record, error) {
-		var result record
-		err := row.Scan(&result.ID)
-		return result, err
-	}, query.NewModelField("id", codec.Signed[int64](), func(r record) int64 { return r.ID })))
+func (record) FoundryModel() query.ModelRef[record] {
+	return query.NewModelRef(func() query.Query[record] {
+		return query.ForModel(query.Define("factory_records", "id", []query.Column{{Name: "id"}}, func(row database.Row) (record, error) {
+			var result record
+			err := row.Scan(&result.ID)
+			return result, err
+		}, query.NewModelField("id", codec.Signed[int64](), func(r record) int64 { return r.ID })))
+	})
 }
 
 type draft struct {

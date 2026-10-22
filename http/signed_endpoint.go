@@ -16,8 +16,11 @@ type SignedEndpoint[P, Q, B, R any] struct {
 	err      error
 }
 
-func (e Endpoint[P, Q, B, R]) Signed(signer URLSigner) SignedEndpoint[P, Q, B, R] {
-	return SignedEndpoint[P, Q, B, R]{endpoint: e, signer: signer}
+// Signed returns a signed endpoint preserving the original path, query, body and response types.
+// Configure scopes, limits, validation and middleware before calling Signed.
+// Expiry/signature are framework transport fields, never fields of a domain DTO.
+func Signed[P, Q, B, R any](endpoint Endpoint[P, Q, B, R], signer URLSigner) SignedEndpoint[P, Q, B, R] {
+	return SignedEndpoint[P, Q, B, R]{endpoint: endpoint, signer: signer}
 }
 func (e SignedEndpoint[P, Q, B, R]) ID() RouteID     { return e.endpoint.ID() }
 func (e SignedEndpoint[P, Q, B, R]) Method() Method  { return e.endpoint.Method() }

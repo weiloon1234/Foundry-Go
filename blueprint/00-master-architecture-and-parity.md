@@ -516,7 +516,7 @@ Existing foundation and consumer-startup milestones retain their accepted status
 User direction on 2026-09-29 adds model-level declaration of translated text,
 attachments and typed schemaless values over milestone 18's extension stores,
 similar to Laravel model traits. Slots are typed model fields with one
-`DefineExtensions` policy method; generation binds owners, registrations,
+`define<Model>Extensions` policy function; generation binds owners, registrations,
 descriptors and deletion cleanup. The user chose explicit bind-once runtime
 injection. The [series](model-extension-slots/README.md) owns design. This table
 alone owns status; authoring these contracts does not imply runtime implementation.
@@ -745,7 +745,7 @@ Consumer review confirms that applications declare typed domain keys/scopes whil
 
 ### Milestone 06 relation aggregate evidence
 
-The [aggregate guide](../docs/guides/model-aggregates.md) documents generated `relation.Value[V]` slots and model-specific aggregate sets from handwritten `DefineAggregates` methods. `query.Related` checks source/target/result ownership; many-to-many `Pivot()` preserves the pivot input type. `With` and `Using` reuse existing model-owned loading and scope composition. The generator owns attachment and excludes computed fields from persistence and write drafts.
+The [aggregate guide](../docs/guides/model-aggregates.md) documents generated `relation.Value[V]` slots and model-specific aggregate sets from handwritten `define<Model>Aggregates` functions. `query.Related` checks source/target/result ownership; many-to-many `Pivot()` preserves the pivot input type. `With` and `Using` reuse existing model-owned loading and scope composition. The generator owns attachment and excludes computed fields from persistence and write drafts.
 
 Verified on 2026-09-11 with Go 1.27.1 in the existing project VM:
 

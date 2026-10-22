@@ -46,7 +46,7 @@ type Article struct {
     Author relation.One[User]
 }
 
-func (Article) DefineExtensions() ArticleExtensionSet {
+func defineArticleExtensions() ArticleExtensionSet {
     return ArticleExtensionSet{
         Title: translations.Options{MaxBytes: 512, Require: i18n.DefaultLocale},
         Logo: attachments.Policy{Disk: PublicFiles,
@@ -100,7 +100,7 @@ if file, ok := in.Logo.Get(); ok {
 ## Decisions recorded on 2026-09-29
 
 - **Slots, policy method and generation.** Reuse the relation pattern: typed
-  struct fields declare what a model has, `DefineExtensions()` declares policy and
+  struct fields declare what a model has, `define<Model>Extensions()` declares policy and
   `foundry generate` binds owner, registrations, descriptors and cleanup. Struct
   tags do not carry policy; policies contain typed disks, imaging plans and codecs.
 - **Bind once.** Descriptors borrow managers through

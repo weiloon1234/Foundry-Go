@@ -63,9 +63,10 @@ func fieldBehaviorNotes(owner, table string, f field) []string {
 // extensionSlotNotes documents an extension slot beside its handwritten field,
 // sharing the generated descriptor summary.
 func extensionSlotNotes(m model, slot extensionSlot) []string {
-	policy := "slot defaults apply; declare " + extensionSetMethod + " to configure it"
+	fnName := modelDeclarationFunction(m.name, kindExtensions)
+	policy := "slot defaults apply; declare " + fnName + " to configure it"
 	if m.extensionPolicy {
-		policy = "policy: [" + m.name + "." + extensionSetMethod + "] entry " + slot.name
+		policy = "policy: " + fnName + " entry " + slot.name
 	}
 	writes := map[string]string{
 		textSlot:  "Write with SaveIn (merge) or SyncIn (exact, enforcing Require) in the model's transaction, and validate request input with Rule() or MergeRule().",

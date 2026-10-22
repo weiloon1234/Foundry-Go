@@ -96,8 +96,11 @@ func foundryGroupBuildQuery() foundryquery.Query[Group] {
 // QueryGroups starts a complete-model query for groups with generated hydration.
 func QueryGroups() GroupQuery { return GroupQuery{foundryGroupModelQuery.Get(foundryGroupBuildQuery)} }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Group) FoundryQuery() foundryquery.Query[Group] { return QueryGroups().Query }
+// FoundryModel identifies Group's generated query for framework integrations
+// without placing the query engine in Group's method set.
+func (Group) FoundryModel() foundryquery.ModelRef[Group] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Group] { return QueryGroups().Query })
+}
 
 // FoundryReference retains Group and its concrete stored primary key for framework integrations.
 // It reads Code directly, never calls an accessor, and performs no database lookup.
@@ -449,7 +452,7 @@ func (p GroupInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune)
 // InsertGroupFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertGroupFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) GroupInsertFromBuilder[FoundryScope] {
-	return GroupInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Group{}).FoundryQuery())}
+	return GroupInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryGroups().Query)}
 }
 
 // SelectCode supplies the stored SQL value for code. It cannot also be supplied by Values.
@@ -665,7 +668,7 @@ func (d GroupDraft) FoundryUpdateMutation() (foundryquery.Mutation[Group], error
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d GroupDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Group]) (foundryquery.Mutation[Group], error) {
-	values, err := foundryquery.ReadCreateDefaults((Group{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryGroups().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Group]{}, err
 	}
@@ -714,13 +717,13 @@ type GroupRelationSet struct {
 var foundryGroupRelations foundryquery.Memo[GroupRelationSet]
 
 func foundryGroupBuildRelations() GroupRelationSet {
-	relations := (Group{}).DefineRelations()
-	relations.Owner = relations.Owner.Bind("Owner", QueryGroups().Query, (User{}).FoundryQuery(), func(m Group) relation.One[User] { return m.Owner }, func(m Group, loaded relation.One[User]) Group { m.Owner = loaded; return m })
+	relations := defineGroupRelations()
+	relations.Owner = relations.Owner.Bind("Owner", QueryGroups().Query, foundryquery.ModelQueryOf[User](), func(m Group) relation.One[User] { return m.Owner }, func(m Group, loaded relation.One[User]) Group { m.Owner = loaded; return m })
 	return relations
 }
 
 // GroupRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// defineGroupRelations runs once per process; its immutable descriptors are shared.
 func GroupRelations() GroupRelationSet { return foundryGroupRelations.Get(foundryGroupBuildRelations) }
 
 // GroupDraft tracks explicitly selected mutation fields, preserving omitted, zero and null states.

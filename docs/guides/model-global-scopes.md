@@ -17,14 +17,14 @@ var (
     PublishedScope = query.NewGlobalScope[Document]("published", DocumentFields().Published.Eq(true))
 )
 
-func (Document) DefineGlobalScopes() []query.GlobalScope[Document] {
+func defineDocumentGlobalScopes() []query.GlobalScope[Document] {
     return []query.GlobalScope[Document]{TenantScope, PublishedScope}
 }
 ```
 
-`NewGlobalScope` takes a fixed typed predicate. `NewContextScope` derives its predicate from the executing request: the function reads typed context metadata explicitly (here `TenantFrom(ctx)`), and must return an error when that metadata is absent rather than a permissive fallback. Declare `DefineGlobalScopes` next to the model with a value receiver and exactly the signature `func (Document) DefineGlobalScopes() []query.GlobalScope[Document]`, then run `foundry generate`; the generator reports a pointer receiver or any other signature against the method. Scope names use the SQL identifier grammar and must be unique per model. Keep scopes in package variables (or functions, below) so queries can remove them by value; there is no mutable registry.
+`NewGlobalScope` takes a fixed typed predicate. `NewContextScope` derives its predicate from the executing request: the function reads typed context metadata explicitly (here `TenantFrom(ctx)`), and must return an error when that metadata is absent rather than a permissive fallback. Declare `defineDocumentGlobalScopes` next to the model with exactly the signature `func defineDocumentGlobalScopes() []query.GlobalScope[Document]`, then run `foundry generate`; the generator reports any other signature against the function. Scope names use the SQL identifier grammar and must be unique per model. Keep scopes in package variables (or functions, below) so queries can remove them by value; there is no mutable registry.
 
-The generated query passes `DefineGlobalScopes` uncalled. It runs once per process, on the first compilation that needs the model's scopes, after the model's generated query, fields and relations exist. A scope may therefore use the model's own relations:
+The generated query passes `defineDocumentGlobalScopes` uncalled. It runs once per process, on the first compilation that needs the model's scopes, after the model's generated query, fields and relations exist. A scope may therefore use the model's own relations:
 
 ```go
 // A function, not a package variable: DeskRelations reads generated
@@ -33,12 +33,12 @@ func OpenOffice() query.GlobalScope[Desk] {
     return query.NewGlobalScope("open_office", DeskRelations().Office.Exists())
 }
 
-func (Desk) DefineGlobalScopes() []query.GlobalScope[Desk] {
+func defineDeskGlobalScopes() []query.GlobalScope[Desk] {
     return []query.GlobalScope[Desk]{OpenOffice()}
 }
 ```
 
-`DefineGlobalScopes` must only build predicates: it must not compile or execute queries. A panic or invalid scope fails every query of the model with a validation error. A scope that (directly or through relations) requires itself is rejected by the compiler's nesting bound.
+`defineDeskGlobalScopes` must only build predicates: it must not compile or execute queries. A panic or invalid scope fails every query of the model with a validation error. A scope that (directly or through relations) requires itself is rejected by the compiler's nesting bound.
 
 ## Where scopes apply
 

@@ -337,12 +337,12 @@ uses the helpers alongside its existing guard and permission declarations. The t
 
 ## Signed endpoints and bound resources
 
-Configure scopes, permissions and ordinary endpoint options, then call `Signed`:
+Configure scopes, permissions and ordinary endpoint options, then call `SignedAuthenticated`:
 
 ```go
 secured := http.RequireAuthentication(endpoint, authentication, api).
     WithPermissions(ViewAccount)
-signed := secured.Signed(signer)
+signed := http.SignedAuthenticated(secured, signer)
 bound := modelbinding.BindAuthenticated(signed, orders)
 registration := bound.Handle(func(ctx context.Context, user User,
     in modelbinding.Input[OrderPath, http.NoQuery, http.NoBody, Order],

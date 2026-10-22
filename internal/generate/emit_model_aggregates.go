@@ -13,12 +13,12 @@ func (e *emitter) emitModelAggregates(m model) {
 	e.line("}")
 	e.line("var foundry%sAggregates %s.Memo[%sAggregateSet]", m.name, query, m.name)
 	e.line("func foundry%sBuildAggregates()%sAggregateSet{", m.name, m.name)
-	e.line("aggregates:=(%s{}).DefineAggregates()", m.name)
+	e.line("aggregates:=%s()", modelDeclarationFunction(m.name, kindAggregates))
 	for _, a := range m.aggregates {
 		e.line("aggregates.%s=aggregates.%s.Bind(%q,%s().Query,func(m %s)%s.Value[%s]{return m.%s},func(m %s,computed %s.Value[%s])%s{m.%s=computed;return m})", a.name, a.name, a.name, m.query, m.name, relation, e.typeName(a.typ), a.name, m.name, relation, e.typeName(a.typ), m.name, a.name)
 	}
 	e.line("return aggregates}")
 	e.line("// %sAggregates binds handwritten computations to generated typed result slots.", m.name)
-	e.line("// DefineAggregates runs once per process; its immutable descriptors are shared.")
+	e.line("// %s runs once per process; its immutable descriptors are shared.", modelDeclarationFunction(m.name, kindAggregates))
 	e.line("func %sAggregates()%sAggregateSet{return foundry%sAggregates.Get(foundry%sBuildAggregates)}", m.name, m.name, m.name, m.name)
 }

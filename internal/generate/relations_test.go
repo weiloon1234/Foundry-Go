@@ -16,7 +16,7 @@ import (
 type User struct{ ID int; ParentID value.Nullable[int]; Parent relation.One[User]; Children relation.Many[User]; Friends relation.Through[User, Friendship] }
 //foundry:model table=friendships primary=ID
 type Friendship struct { ID int; FromID int; ToID int }
-func(User)DefineRelations()UserRelationSet{
+func defineUserRelations() UserRelationSet {
  return UserRelationSet{
   Parent:query.BelongsTo(UserFields().ParentID,UserFields().ID),
   Children:query.HasMany(UserFields().ID,UserFields().ParentID),
@@ -36,7 +36,7 @@ func TestFreshTypedRelationGeneration(t *testing.T) {
 	}
 	first := generatedSnapshot(t, dir)
 	output := first["user_foundry.gen.go"]
-	if !strings.Contains(output, "func UserRelations()") || !strings.Contains(output, "func (User) FoundryQuery()") || !strings.Contains(output, "ThroughRelation[User, User, Friendship]") || strings.Contains(output, "SetParent(") || strings.Contains(output, "SetFriends(") {
+	if !strings.Contains(output, "func UserRelations()") || !strings.Contains(output, "func (User) FoundryModel()") || !strings.Contains(output, "ThroughRelation[User, User, Friendship]") || strings.Contains(output, "SetParent(") || strings.Contains(output, "SetFriends(") {
 		t.Fatal("relation was not separated from persisted model fields")
 	}
 	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
@@ -57,7 +57,7 @@ func TestInvalidRelationDeclarationsDoNotPublish(t *testing.T) {
 		strings.Replace(relationSource, "Through[User, Friendship]", "Through[Friendship, User]", 1),
 		strings.Replace(relationSource, "Parent relation.One[User]", "Parent relation.One[User] `foundry:\"column=parent\"`", 1),
 		strings.Replace(relationSource, "Parent:query.BelongsTo(UserFields().ParentID,UserFields().ID)", "Parent:query.HasMany(UserFields().ID,UserFields().ParentID)", 1),
-		strings.Replace(relationSource, "func(User)DefineRelations()UserRelationSet", "func(User)MisspelledDefinition()UserRelationSet", 1),
+		strings.Replace(relationSource, "func defineUserRelations() UserRelationSet", "func misspelledUserRelations() UserRelationSet", 1),
 	} {
 		dir := fixture(t, source)
 		if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil {
@@ -66,5 +66,20 @@ func TestInvalidRelationDeclarationsDoNotPublish(t *testing.T) {
 		if len(generatedSnapshot(t, dir)) != 0 {
 			t.Fatal("invalid relation published files")
 		}
+	}
+}
+
+func TestRelationRejectsOldMethodForm(t *testing.T) {
+	source := `package sample
+import (
+ "github.com/weiloon1234/Foundry-Go/database/relation"
+)
+//foundry:model table=users primary=ID
+type User struct { ID int; Other relation.One[User] }
+func (User) DefineRelations() UserRelationSet { return UserRelationSet{} }
+`
+	dir := fixture(t, source)
+	if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), "model User declares DefineRelations as a method; declare func defineUserRelations() UserRelationSet instead (methods on model types make every importing package compile the model's query engine)") {
+		t.Fatalf("old DefineRelations method was not rejected with migration diagnostic: %v", err)
 	}
 }

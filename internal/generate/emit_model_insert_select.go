@@ -18,7 +18,7 @@ func (e *emitter) emitModelInsertSelect(m model) {
 	e.line("func(%s %s[%s])Format(%s %s.State,%s rune){%s.plan.Format(%s,%s)}", receiver, builder, scope, state, format, verb, receiver, state, verb)
 	e.line("// Insert%sFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.", m.name)
 	e.line("// UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.")
-	e.line("func Insert%sFrom[%s any](%s %s.ProjectionSource[%s])%s[%s]{return %s[%s]{plan:%s.InsertFrom(%s,(%s{}).FoundryQuery())}}", m.name, scope, source, query, scope, builder, scope, builder, scope, query, source, m.name)
+	e.line("func Insert%sFrom[%s any](%s %s.ProjectionSource[%s])%s[%s]{return %s[%s]{plan:%s.InsertFrom(%s,%s().Query)}}", m.name, scope, source, query, scope, builder, scope, builder, scope, query, source, m.query)
 	for _, f := range m.fields {
 		// An encrypted envelope is bound to its source row and cannot be copied.
 		if f.mutator != "" || f.kind == "Encrypted" || (m.timestamps[1] != "" && f.column == m.timestamps[1]) {

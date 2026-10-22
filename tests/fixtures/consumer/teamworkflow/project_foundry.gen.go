@@ -126,8 +126,11 @@ func QueryWorkflowProjects() ProjectQuery {
 	return ProjectQuery{foundryProjectModelQuery.Get(foundryProjectBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Project) FoundryQuery() foundryquery.Query[Project] { return QueryWorkflowProjects().Query }
+// FoundryModel identifies Project's generated query for framework integrations
+// without placing the query engine in Project's method set.
+func (Project) FoundryModel() foundryquery.ModelRef[Project] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Project] { return QueryWorkflowProjects().Query })
+}
 
 // FoundryReference retains Project and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -484,7 +487,7 @@ func (p ProjectInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb run
 // InsertProjectFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertProjectFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) ProjectInsertFromBuilder[FoundryScope] {
-	return ProjectInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Project{}).FoundryQuery())}
+	return ProjectInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryWorkflowProjects().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -739,7 +742,7 @@ func (d ProjectDraft) FoundryUpdateMutation() (foundryquery.Mutation[Project], e
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d ProjectDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Project]) (foundryquery.Mutation[Project], error) {
-	values, err := foundryquery.ReadCreateDefaults((Project{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryWorkflowProjects().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Project]{}, err
 	}

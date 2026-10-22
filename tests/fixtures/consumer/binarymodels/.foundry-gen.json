@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    "record_foundry.gen.go": "3885cdd372c2e1cf72b8482a70867075d4b27f0d34cddb29a87ebe69d0e060d8",
+    "record_foundry.gen.go": "7ef831e2928b96853b46a1b82b59eb71842237ab23e7bc4ea071ad1d14e23549",
     "view_foundry.gen.go": "4e23f1fcc11ffb76e9e3179135d080928593dd4178f6abd40c941fd95bc990ae"
   }
 }

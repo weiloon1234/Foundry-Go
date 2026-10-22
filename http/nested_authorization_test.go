@@ -19,12 +19,12 @@ func TestSignedTypedResourceAuthorization(t *testing.T) {
 	}
 	signer, now := compositionSigner(t)
 	base := foundryhttp.DefineEndpoint(compositionRoute(foundryhttp.Guarded, &parses), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
-	signed := foundryhttp.RequireAuthentication(base, transport, guard).WithAuthorization(func(_ context.Context, _ authAccount, in foundryhttp.Input[compositionPath, foundryhttp.NoQuery, foundryhttp.NoBody]) error {
+	signed := foundryhttp.SignedAuthenticated(foundryhttp.RequireAuthentication(base, transport, guard).WithAuthorization(func(_ context.Context, _ authAccount, in foundryhttp.Input[compositionPath, foundryhttp.NoQuery, foundryhttp.NoBody]) error {
 		if in.Path.Order == 13 {
 			return foundryhttp.Forbidden
 		}
 		return nil
-	}).Signed(signer)
+	}), signer)
 	resolver := modelbinding.Define(func(_ context.Context, p compositionPath) (value.Optional[compositionOrder], error) {
 		lookups.Add(1)
 		return value.Set(compositionOrder{ID: p.Order, Owner: 1}), nil

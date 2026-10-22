@@ -52,11 +52,11 @@ type Order struct {
 	Member    relation.One[Member]
 }
 
-func (Member) DefineRelations() MemberRelationSet {
+func defineMemberRelations() MemberRelationSet {
 	return MemberRelationSet{Orders: query.HasMany(MemberFields().ID, OrderFields().MemberID)}
 }
 
-func (Order) DefineRelations() OrderRelationSet {
+func defineOrderRelations() OrderRelationSet {
 	return OrderRelationSet{Member: query.BelongsTo(OrderFields().MemberID, MemberFields().ID)}
 }
 

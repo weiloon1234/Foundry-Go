@@ -119,8 +119,11 @@ func QueryOfficeOffices() OfficeQuery {
 	return OfficeQuery{foundryOfficeModelQuery.Get(foundryOfficeBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Office) FoundryQuery() foundryquery.Query[Office] { return QueryOfficeOffices().Query }
+// FoundryModel identifies Office's generated query for framework integrations
+// without placing the query engine in Office's method set.
+func (Office) FoundryModel() foundryquery.ModelRef[Office] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Office] { return QueryOfficeOffices().Query })
+}
 
 // FoundryReference retains Office and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -495,7 +498,7 @@ func (p OfficeInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune
 // InsertOfficeFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertOfficeFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) OfficeInsertFromBuilder[FoundryScope] {
-	return OfficeInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Office{}).FoundryQuery())}
+	return OfficeInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryOfficeOffices().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -748,7 +751,7 @@ func (d OfficeDraft) FoundryUpdateMutation() (foundryquery.Mutation[Office], err
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d OfficeDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Office]) (foundryquery.Mutation[Office], error) {
-	values, err := foundryquery.ReadCreateDefaults((Office{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryOfficeOffices().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Office]{}, err
 	}
@@ -831,20 +834,20 @@ type OfficeRelationSet struct {
 var foundryOfficeRelations foundryquery.Memo[OfficeRelationSet]
 
 func foundryOfficeBuildRelations() OfficeRelationSet {
-	relations := (Office{}).DefineRelations()
-	relations.Newest = relations.Newest.Bind("Newest", QueryOfficeOffices().Query, (Employee{}).FoundryQuery(), func(m Office) relation.One[Employee] { return m.Newest }, func(m Office, loaded relation.One[Employee]) Office { m.Newest = loaded; return m })
-	relations.Earliest = relations.Earliest.Bind("Earliest", QueryOfficeOffices().Query, (Employee{}).FoundryQuery(), func(m Office) relation.One[Employee] { return m.Earliest }, func(m Office, loaded relation.One[Employee]) Office { m.Earliest = loaded; return m })
-	relations.TopEarner = relations.TopEarner.Bind("TopEarner", QueryOfficeOffices().Query, (Employee{}).FoundryQuery(), func(m Office) relation.One[Employee] { return m.TopEarner }, func(m Office, loaded relation.One[Employee]) Office { m.TopEarner = loaded; return m })
-	relations.Region = relations.Region.Bind("Region", QueryOfficeOffices().Query, (Region{}).FoundryQuery(), func(m Office) relation.One[Region] { return m.Region }, func(m Office, loaded relation.One[Region]) Office { m.Region = loaded; return m })
-	relations.Colleagues = relations.Colleagues.Bind("Colleagues", QueryOfficeOffices().Query, (Employee{}).FoundryQuery(), func(m Office) relation.Many[Employee] { return m.Colleagues }, func(m Office, loaded relation.Many[Employee]) Office { m.Colleagues = loaded; return m })
-	relations.Notes = relations.Notes.Bind("Notes", QueryOfficeOffices().Query, (Note{}).FoundryQuery(), func(m Office) relation.Many[Note] { return m.Notes }, func(m Office, loaded relation.Many[Note]) Office { m.Notes = loaded; return m })
-	relations.Labels = relations.Labels.Bind("Labels", QueryOfficeOffices().Query, (Label{}).FoundryQuery(), (Labeling{}).FoundryQuery(), func(m Office) relation.Through[Label, Labeling] { return m.Labels }, func(m Office, loaded relation.Through[Label, Labeling]) Office { m.Labels = loaded; return m })
-	relations.Desks = relations.Desks.Bind("Desks", QueryOfficeOffices().Query, (Desk{}).FoundryQuery(), func(m Office) relation.Many[Desk] { return m.Desks }, func(m Office, loaded relation.Many[Desk]) Office { m.Desks = loaded; return m })
+	relations := defineOfficeRelations()
+	relations.Newest = relations.Newest.Bind("Newest", QueryOfficeOffices().Query, foundryquery.ModelQueryOf[Employee](), func(m Office) relation.One[Employee] { return m.Newest }, func(m Office, loaded relation.One[Employee]) Office { m.Newest = loaded; return m })
+	relations.Earliest = relations.Earliest.Bind("Earliest", QueryOfficeOffices().Query, foundryquery.ModelQueryOf[Employee](), func(m Office) relation.One[Employee] { return m.Earliest }, func(m Office, loaded relation.One[Employee]) Office { m.Earliest = loaded; return m })
+	relations.TopEarner = relations.TopEarner.Bind("TopEarner", QueryOfficeOffices().Query, foundryquery.ModelQueryOf[Employee](), func(m Office) relation.One[Employee] { return m.TopEarner }, func(m Office, loaded relation.One[Employee]) Office { m.TopEarner = loaded; return m })
+	relations.Region = relations.Region.Bind("Region", QueryOfficeOffices().Query, foundryquery.ModelQueryOf[Region](), func(m Office) relation.One[Region] { return m.Region }, func(m Office, loaded relation.One[Region]) Office { m.Region = loaded; return m })
+	relations.Colleagues = relations.Colleagues.Bind("Colleagues", QueryOfficeOffices().Query, foundryquery.ModelQueryOf[Employee](), func(m Office) relation.Many[Employee] { return m.Colleagues }, func(m Office, loaded relation.Many[Employee]) Office { m.Colleagues = loaded; return m })
+	relations.Notes = relations.Notes.Bind("Notes", QueryOfficeOffices().Query, foundryquery.ModelQueryOf[Note](), func(m Office) relation.Many[Note] { return m.Notes }, func(m Office, loaded relation.Many[Note]) Office { m.Notes = loaded; return m })
+	relations.Labels = relations.Labels.Bind("Labels", QueryOfficeOffices().Query, foundryquery.ModelQueryOf[Label](), foundryquery.ModelQueryOf[Labeling](), func(m Office) relation.Through[Label, Labeling] { return m.Labels }, func(m Office, loaded relation.Through[Label, Labeling]) Office { m.Labels = loaded; return m })
+	relations.Desks = relations.Desks.Bind("Desks", QueryOfficeOffices().Query, foundryquery.ModelQueryOf[Desk](), func(m Office) relation.Many[Desk] { return m.Desks }, func(m Office, loaded relation.Many[Desk]) Office { m.Desks = loaded; return m })
 	return relations
 }
 
 // OfficeRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// defineOfficeRelations runs once per process; its immutable descriptors are shared.
 func OfficeRelations() OfficeRelationSet {
 	return foundryOfficeRelations.Get(foundryOfficeBuildRelations)
 }
@@ -857,13 +860,13 @@ type OfficeAggregateSet struct {
 var foundryOfficeAggregates foundryquery.Memo[OfficeAggregateSet]
 
 func foundryOfficeBuildAggregates() OfficeAggregateSet {
-	aggregates := (Office{}).DefineAggregates()
+	aggregates := defineOfficeAggregates()
 	aggregates.Headcount = aggregates.Headcount.Bind("Headcount", QueryOfficeOffices().Query, func(m Office) relation.Value[int64] { return m.Headcount }, func(m Office, computed relation.Value[int64]) Office { m.Headcount = computed; return m })
 	return aggregates
 }
 
 // OfficeAggregates binds handwritten computations to generated typed result slots.
-// DefineAggregates runs once per process; its immutable descriptors are shared.
+// defineOfficeAggregates runs once per process; its immutable descriptors are shared.
 func OfficeAggregates() OfficeAggregateSet {
 	return foundryOfficeAggregates.Get(foundryOfficeBuildAggregates)
 }

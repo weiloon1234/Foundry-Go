@@ -29,7 +29,7 @@ Adapt an existing typed endpoint after declaring its decoding, normalization,
 validation and authorization:
 
 ```go
-operation := endpoint.Idempotent(store, idempotency.Definition{
+operation := http.Idempotent(endpoint, store, idempotency.Definition{
     ID: "orders.create", Version: 1,
 })
 route := operation.Handle(

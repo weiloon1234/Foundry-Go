@@ -32,15 +32,16 @@ type IdempotentEndpoint[P, Q, B, R any] struct {
 
 // Idempotent supports transaction-bound JSON/empty operations on unsafe methods.
 // Configure the ordinary endpoint's rules, hooks and response before adapting it.
-func (e Endpoint[P, Q, B, R]) Idempotent(store *idempotency.Store, definition idempotency.Definition) IdempotentEndpoint[P, Q, B, R] {
-	return IdempotentEndpoint[P, Q, B, R]{endpoint: e, store: store, definition: definition}
+func Idempotent[P, Q, B, R any](endpoint Endpoint[P, Q, B, R], store *idempotency.Store, definition idempotency.Definition) IdempotentEndpoint[P, Q, B, R] {
+	return IdempotentEndpoint[P, Q, B, R]{endpoint: endpoint, store: store, definition: definition}
 }
-func (e SignedEndpoint[P, Q, B, R]) Idempotent(store *idempotency.Store, definition idempotency.Definition) IdempotentEndpoint[P, Q, B, R] {
-	bound := e.endpoint.Idempotent(store, definition)
-	bound.err = e.Validate()
-	bound.signedURL = signedURLInfo(e.signer.policy)
+
+func IdempotentSigned[P, Q, B, R any](endpoint SignedEndpoint[P, Q, B, R], store *idempotency.Store, definition idempotency.Definition) IdempotentEndpoint[P, Q, B, R] {
+	bound := Idempotent(endpoint.endpoint, store, definition)
+	bound.err = endpoint.Validate()
+	bound.signedURL = signedURLInfo(endpoint.signer.policy)
 	bound.wrap = func(r RouteRegistration) RouteRegistration {
-		return signedRegistration(r, e.signer, e.endpoint.route.spec, e.endpoint.Pattern(), true)
+		return signedRegistration(r, endpoint.signer, endpoint.endpoint.route.spec, endpoint.endpoint.Pattern(), true)
 	}
 	return bound
 }

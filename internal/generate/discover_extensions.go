@@ -9,11 +9,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
-// extensionSetMethod is the optional handwritten model method returning the
-// generated policy set. Its result type is generated, so discovery validates
-// its declaration syntactically and the complete overlay checks its body.
-const extensionSetMethod = "DefineExtensions"
-
 // Extension slot kinds, named after their runtime slot types.
 const (
 	textSlot  = "Text"
@@ -38,7 +33,7 @@ type extensionSlot struct {
 }
 
 // metadataContract is the JSON descriptor generation infers for a Value slot.
-// An empty kind infers none; DefineExtensions must then declare one.
+// An empty kind infers none; the model's extension definition must then declare one.
 type metadataContract struct {
 	kind, function string
 	pkg            *types.Package // Imported DTO descriptors.
@@ -99,14 +94,15 @@ func discoverExtensionSlot(p *packageInput, v *types.Var, tag map[string]string,
 }
 
 // finishExtensions validates model-level slot declarations once all fields are
-// known: unique stored names, owner identity and the policy method.
+// known: unique stored names, owner identity and the policy function.
 func finishExtensions(p *packageInput, spec *ast.TypeSpec, m *model, owner string) error {
+	fnName := modelDeclarationFunction(m.name, kindExtensions)
 	if len(m.extensions) == 0 {
 		if owner != "" {
 			return p.diagnostic(spec.Pos(), "extension_owner requires extension slot fields")
 		}
-		if declared, found := p.methods[m.name][extensionSetMethod]; found {
-			return p.diagnostic(declared, "model "+extensionSetMethod+" requires extension slot fields")
+		if declared, found := p.definedAt[fnName]; found {
+			return p.diagnostic(declared, "model "+fnName+" requires extension slot fields")
 		}
 		return nil
 	}
@@ -124,44 +120,25 @@ func finishExtensions(p *packageInput, spec *ast.TypeSpec, m *model, owner strin
 	if !identifier.Semantic(m.extensionOwner) || !sqlname.Table(m.extensionOwner) {
 		return p.diagnostic(spec.Pos(), "extension owner "+m.extensionOwner+" must be a lowercase table-style name; declare extension_owner=name")
 	}
-	declared, found := p.methods[m.name][extensionSetMethod]
+	declared, found := p.definedAt[fnName]
 	m.extensionPolicy = found
 	if found {
-		if !validExtensionSetMethod(p, m.name) {
-			return p.diagnostic(declared, "model "+extensionSetMethod+" requires a value receiver and signature func ("+m.name+") "+extensionSetMethod+"() "+m.name+"ExtensionSet")
+		if !validDeclarationFunction(p, fnName, m.name+"ExtensionSet") {
+			return p.diagnostic(declared, "function "+fnName+" requires signature func "+fnName+"() "+m.name+"ExtensionSet")
 		}
 		return nil
 	}
 	for _, slot := range m.extensions {
 		if slot.kind == oneSlot || slot.kind == manySlot {
-			return p.diagnostic(slot.pos, "attachment slot "+slot.name+" requires a policy; declare func ("+m.name+") "+extensionSetMethod+"() "+m.name+"ExtensionSet")
+			return p.diagnostic(slot.pos, "attachment slot "+slot.name+" requires a policy; declare func "+fnName+"() "+m.name+"ExtensionSet")
 		}
 	}
 	return nil
 }
 
-// validExtensionSetMethod checks the handwritten declaration syntactically;
-// its generated result type does not exist during declaration analysis.
-func validExtensionSetMethod(p *packageInput, owner string) bool {
-	for _, file := range p.files {
-		for _, decl := range file.syntax.Decls {
-			method, ok := decl.(*ast.FuncDecl)
-			if !ok || method.Recv == nil || method.Name.Name != extensionSetMethod || len(method.Recv.List) != 1 || receiverTypeName(method.Recv.List[0].Type) != owner {
-				continue
-			}
-			if _, pointer := method.Recv.List[0].Type.(*ast.StarExpr); pointer || method.Type.TypeParams != nil || method.Type.Params.NumFields() != 0 || method.Type.Results.NumFields() != 1 {
-				return false
-			}
-			result, ok := method.Type.Results.List[0].Type.(*ast.Ident)
-			return ok && result.Name == owner+"ExtensionSet"
-		}
-	}
-	return false
-}
-
 // inferMetadataContracts runs after discovery, when same-package DTO
 // descriptors are known. A slot without an inferable contract needs one in
-// DefineExtensions; a model without that method fails generation.
+// the model's extension definition; a model without that function fails generation.
 func inferMetadataContracts(p *packageInput, models []model, dtos []dtoDeclaration) error {
 	local := make(map[*types.Named]bool, len(dtos))
 	for _, declaration := range dtos {
@@ -182,7 +159,8 @@ func inferMetadataContracts(p *packageInput, models []model, dtos []dtoDeclarati
 				return p.diagnostic(slot.pos, "metadata slot "+slot.name+": "+problem)
 			}
 			if slot.contract.kind == "" && !m.extensionPolicy {
-				return p.diagnostic(slot.pos, "metadata slot "+slot.name+" needs an explicit JSON contract; declare func ("+m.name+") "+extensionSetMethod+"() "+m.name+"ExtensionSet with metadata.Spec{JSON: ...}")
+				fnName := modelDeclarationFunction(m.name, kindExtensions)
+				return p.diagnostic(slot.pos, "metadata slot "+slot.name+" needs an explicit JSON contract; declare func "+fnName+"() "+m.name+"ExtensionSet with metadata.Spec{JSON: ...}")
 			}
 		}
 	}

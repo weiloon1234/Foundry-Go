@@ -91,8 +91,11 @@ func QueryLocations() LocationQuery {
 	return LocationQuery{foundryLocationModelQuery.Get(foundryLocationBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Location) FoundryQuery() foundryquery.Query[Location] { return QueryLocations().Query }
+// FoundryModel identifies Location's generated query for framework integrations
+// without placing the query engine in Location's method set.
+func (Location) FoundryModel() foundryquery.ModelRef[Location] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Location] { return QueryLocations().Query })
+}
 
 // FoundryReference retains Location and its concrete stored primary key for framework integrations.
 // It reads Code directly, never calls an accessor, and performs no database lookup.
@@ -454,7 +457,7 @@ func (p LocationInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb ru
 // InsertLocationFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertLocationFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) LocationInsertFromBuilder[FoundryScope] {
-	return LocationInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Location{}).FoundryQuery())}
+	return LocationInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryLocations().Query)}
 }
 
 // SelectCode supplies the stored SQL value for code. It cannot also be supplied by Values.
@@ -661,7 +664,7 @@ func (d LocationDraft) FoundryUpdateMutation() (foundryquery.Mutation[Location],
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d LocationDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Location]) (foundryquery.Mutation[Location], error) {
-	values, err := foundryquery.ReadCreateDefaults((Location{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryLocations().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Location]{}, err
 	}
@@ -700,13 +703,13 @@ type LocationRelationSet struct {
 var foundryLocationRelations foundryquery.Memo[LocationRelationSet]
 
 func foundryLocationBuildRelations() LocationRelationSet {
-	relations := (Location{}).DefineRelations()
-	relations.Country = relations.Country.Bind("Country", QueryLocations().Query, (Country{}).FoundryQuery(), func(m Location) relation.One[Country] { return m.Country }, func(m Location, loaded relation.One[Country]) Location { m.Country = loaded; return m })
+	relations := defineLocationRelations()
+	relations.Country = relations.Country.Bind("Country", QueryLocations().Query, foundryquery.ModelQueryOf[Country](), func(m Location) relation.One[Country] { return m.Country }, func(m Location, loaded relation.One[Country]) Location { m.Country = loaded; return m })
 	return relations
 }
 
 // LocationRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// defineLocationRelations runs once per process; its immutable descriptors are shared.
 func LocationRelations() LocationRelationSet {
 	return foundryLocationRelations.Get(foundryLocationBuildRelations)
 }

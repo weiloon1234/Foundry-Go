@@ -163,8 +163,11 @@ func QueryFoundryTokenGenerations() EntryQuery {
 	return EntryQuery{foundryEntryModelQuery.Get(foundryEntryBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Entry) FoundryQuery() foundryquery.Query[Entry] { return QueryFoundryTokenGenerations().Query }
+// FoundryModel identifies Entry's generated query for framework integrations
+// without placing the query engine in Entry's method set.
+func (Entry) FoundryModel() foundryquery.ModelRef[Entry] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Entry] { return QueryFoundryTokenGenerations().Query })
+}
 
 // FoundryReference retains Entry and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -516,7 +519,7 @@ func (p EntryInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune)
 // InsertEntryFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertEntryFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) EntryInsertFromBuilder[FoundryScope] {
-	return EntryInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Entry{}).FoundryQuery())}
+	return EntryInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryFoundryTokenGenerations().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -816,7 +819,7 @@ func (d EntryDraft) FoundryUpdateMutation() (foundryquery.Mutation[Entry], error
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d EntryDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Entry]) (foundryquery.Mutation[Entry], error) {
-	values, err := foundryquery.ReadCreateDefaults((Entry{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryFoundryTokenGenerations().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Entry]{}, err
 	}

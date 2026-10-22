@@ -113,8 +113,11 @@ func QueryRetrievalMembers() MemberQuery {
 	return MemberQuery{foundryMemberModelQuery.Get(foundryMemberBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Member) FoundryQuery() foundryquery.Query[Member] { return QueryRetrievalMembers().Query }
+// FoundryModel identifies Member's generated query for framework integrations
+// without placing the query engine in Member's method set.
+func (Member) FoundryModel() foundryquery.ModelRef[Member] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Member] { return QueryRetrievalMembers().Query })
+}
 
 // FoundryReference retains Member and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -469,7 +472,7 @@ func (p MemberInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune
 // InsertMemberFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertMemberFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) MemberInsertFromBuilder[FoundryScope] {
-	return MemberInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Member{}).FoundryQuery())}
+	return MemberInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryRetrievalMembers().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -685,7 +688,7 @@ func (d MemberDraft) FoundryUpdateMutation() (foundryquery.Mutation[Member], err
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d MemberDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Member]) (foundryquery.Mutation[Member], error) {
-	values, err := foundryquery.ReadCreateDefaults((Member{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryRetrievalMembers().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Member]{}, err
 	}
@@ -753,15 +756,15 @@ type MemberRelationSet struct {
 var foundryMemberRelations foundryquery.Memo[MemberRelationSet]
 
 func foundryMemberBuildRelations() MemberRelationSet {
-	relations := (Member{}).DefineRelations()
-	relations.Parent = relations.Parent.Bind("Parent", QueryRetrievalMembers().Query, (Member{}).FoundryQuery(), func(m Member) relation.One[Member] { return m.Parent }, func(m Member, loaded relation.One[Member]) Member { m.Parent = loaded; return m })
-	relations.Children = relations.Children.Bind("Children", QueryRetrievalMembers().Query, (Member{}).FoundryQuery(), func(m Member) relation.Many[Member] { return m.Children }, func(m Member, loaded relation.Many[Member]) Member { m.Children = loaded; return m })
-	relations.Groups = relations.Groups.Bind("Groups", QueryRetrievalMembers().Query, (Group{}).FoundryQuery(), (Membership{}).FoundryQuery(), func(m Member) relation.Through[Group, Membership] { return m.Groups }, func(m Member, loaded relation.Through[Group, Membership]) Member { m.Groups = loaded; return m })
+	relations := defineMemberRelations()
+	relations.Parent = relations.Parent.Bind("Parent", QueryRetrievalMembers().Query, foundryquery.ModelQueryOf[Member](), func(m Member) relation.One[Member] { return m.Parent }, func(m Member, loaded relation.One[Member]) Member { m.Parent = loaded; return m })
+	relations.Children = relations.Children.Bind("Children", QueryRetrievalMembers().Query, foundryquery.ModelQueryOf[Member](), func(m Member) relation.Many[Member] { return m.Children }, func(m Member, loaded relation.Many[Member]) Member { m.Children = loaded; return m })
+	relations.Groups = relations.Groups.Bind("Groups", QueryRetrievalMembers().Query, foundryquery.ModelQueryOf[Group](), foundryquery.ModelQueryOf[Membership](), func(m Member) relation.Through[Group, Membership] { return m.Groups }, func(m Member, loaded relation.Through[Group, Membership]) Member { m.Groups = loaded; return m })
 	return relations
 }
 
 // MemberRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// defineMemberRelations runs once per process; its immutable descriptors are shared.
 func MemberRelations() MemberRelationSet {
 	return foundryMemberRelations.Get(foundryMemberBuildRelations)
 }

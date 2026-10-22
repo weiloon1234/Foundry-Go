@@ -171,8 +171,11 @@ func QueryFoundryNotificationInbox() InboxQuery {
 	return InboxQuery{foundryInboxModelQuery.Get(foundryInboxBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Inbox) FoundryQuery() foundryquery.Query[Inbox] { return QueryFoundryNotificationInbox().Query }
+// FoundryModel identifies Inbox's generated query for framework integrations
+// without placing the query engine in Inbox's method set.
+func (Inbox) FoundryModel() foundryquery.ModelRef[Inbox] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Inbox] { return QueryFoundryNotificationInbox().Query })
+}
 
 // FoundryReference retains Inbox and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -524,7 +527,7 @@ func (p InboxInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune)
 // InsertInboxFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertInboxFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) InboxInsertFromBuilder[FoundryScope] {
-	return InboxInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Inbox{}).FoundryQuery())}
+	return InboxInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryFoundryNotificationInbox().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -800,7 +803,7 @@ func (d InboxDraft) FoundryUpdateMutation() (foundryquery.Mutation[Inbox], error
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d InboxDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Inbox]) (foundryquery.Mutation[Inbox], error) {
-	values, err := foundryquery.ReadCreateDefaults((Inbox{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryFoundryNotificationInbox().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Inbox]{}, err
 	}

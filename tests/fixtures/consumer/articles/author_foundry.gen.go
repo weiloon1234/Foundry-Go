@@ -91,8 +91,11 @@ func QueryArticleAuthors() AuthorQuery {
 	return AuthorQuery{foundryAuthorModelQuery.Get(foundryAuthorBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Author) FoundryQuery() foundryquery.Query[Author] { return QueryArticleAuthors().Query }
+// FoundryModel identifies Author's generated query for framework integrations
+// without placing the query engine in Author's method set.
+func (Author) FoundryModel() foundryquery.ModelRef[Author] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Author] { return QueryArticleAuthors().Query })
+}
 
 // FoundryReference retains Author and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -447,7 +450,7 @@ func (p AuthorInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune
 // InsertAuthorFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertAuthorFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) AuthorInsertFromBuilder[FoundryScope] {
-	return AuthorInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Author{}).FoundryQuery())}
+	return AuthorInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryArticleAuthors().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -651,7 +654,7 @@ func (d AuthorDraft) FoundryUpdateMutation() (foundryquery.Mutation[Author], err
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d AuthorDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Author]) (foundryquery.Mutation[Author], error) {
-	values, err := foundryquery.ReadCreateDefaults((Author{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryArticleAuthors().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Author]{}, err
 	}
@@ -697,13 +700,13 @@ type AuthorRelationSet struct {
 var foundryAuthorRelations foundryquery.Memo[AuthorRelationSet]
 
 func foundryAuthorBuildRelations() AuthorRelationSet {
-	relations := (Author{}).DefineRelations()
-	relations.Articles = relations.Articles.Bind("Articles", QueryArticleAuthors().Query, (Article{}).FoundryQuery(), func(m Author) relation.Many[Article] { return m.Articles }, func(m Author, loaded relation.Many[Article]) Author { m.Articles = loaded; return m })
+	relations := defineAuthorRelations()
+	relations.Articles = relations.Articles.Bind("Articles", QueryArticleAuthors().Query, foundryquery.ModelQueryOf[Article](), func(m Author) relation.Many[Article] { return m.Articles }, func(m Author, loaded relation.Many[Article]) Author { m.Articles = loaded; return m })
 	return relations
 }
 
 // AuthorRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// defineAuthorRelations runs once per process; its immutable descriptors are shared.
 func AuthorRelations() AuthorRelationSet {
 	return foundryAuthorRelations.Get(foundryAuthorBuildRelations)
 }

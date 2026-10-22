@@ -42,30 +42,30 @@ func TestIdempotencyRejectsUnsupportedAssembly(t *testing.T) {
 	definition := idempotency.Definition{ID: "empty", Version: 1}
 	route := DefineRoute(RouteSpec{ID: "empty", Method: POST, Access: Public}, StaticPath("/empty"))
 	empty := DefineEndpoint(route, EmptyQuery(), EmptyBody(), EmptyResponse(204))
-	if err := empty.Idempotent(store, definition).Validate(); err != nil {
+	if err := Idempotent(empty, store, definition).Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if err := DefineEndpoint(route, EmptyQuery(), EmptyBody(), DownloadResponse("text/plain")).Idempotent(store, definition).Validate(); err == nil {
+	if err := Idempotent(DefineEndpoint(route, EmptyQuery(), EmptyBody(), DownloadResponse("text/plain")), store, definition).Validate(); err == nil {
 		t.Fatal("download replay accepted")
 	}
-	if err := DefineEndpoint(route, EmptyQuery(), EmptyBody(), StreamResponse("text/plain")).Idempotent(store, definition).Validate(); err == nil {
+	if err := Idempotent(DefineEndpoint(route, EmptyQuery(), EmptyBody(), StreamResponse("text/plain")), store, definition).Validate(); err == nil {
 		t.Fatal("stream replay accepted")
 	}
 	credential := empty
 	credential.response.credentials = true
-	if credential.Idempotent(store, definition).Validate() == nil {
+	if Idempotent(credential, store, definition).Validate() == nil {
 		t.Fatal("credential issuance replay accepted")
 	}
 	safe := empty
 	safe.route.spec.Method = GET
-	if safe.Idempotent(store, definition).Validate() == nil {
+	if Idempotent(safe, store, definition).Validate() == nil {
 		t.Fatal("safe-method idempotency accepted")
 	}
 	unknown := DefineMiddleware("custom", func(next stdhttp.Handler) (stdhttp.Handler, error) { return next, nil })
-	if empty.WithMiddleware(unknown).Idempotent(store, definition).Validate() == nil {
+	if Idempotent(empty.WithMiddleware(unknown), store, definition).Validate() == nil {
 		t.Fatal("unclassified response mutation accepted")
 	}
-	adapted := empty.WithMiddleware(unknown.PreservesIdempotentResponses()).Idempotent(store, definition)
+	adapted := Idempotent(empty.WithMiddleware(unknown.PreservesIdempotentResponses()), store, definition)
 	identity, _ := idempotency.NewScope("trusted", "caller")
 	router, err := NewRouter(adapted.Handle(func(context.Context, Input[NoPath, NoQuery, NoBody]) (idempotency.Scope, error) { return identity, nil }, func(context.Context, *database.Tx, Input[NoPath, NoQuery, NoBody]) (NoContent, error) {
 		t.Error("declaration-only handler ran")

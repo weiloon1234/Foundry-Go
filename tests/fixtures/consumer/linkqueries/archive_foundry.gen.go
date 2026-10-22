@@ -249,8 +249,11 @@ func QueryLinkArchives() ArchiveQuery {
 	return ArchiveQuery{foundryArchiveModelQuery.Get(foundryArchiveBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Archive) FoundryQuery() foundryquery.Query[Archive] { return QueryLinkArchives().Query }
+// FoundryModel identifies Archive's generated query for framework integrations
+// without placing the query engine in Archive's method set.
+func (Archive) FoundryModel() foundryquery.ModelRef[Archive] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Archive] { return QueryLinkArchives().Query })
+}
 
 // FoundryReference retains Archive and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -608,7 +611,7 @@ func (p ArchiveInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb run
 // InsertArchiveFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertArchiveFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) ArchiveInsertFromBuilder[FoundryScope] {
-	return ArchiveInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Archive{}).FoundryQuery())}
+	return ArchiveInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryLinkArchives().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -889,7 +892,7 @@ func (d ArchiveDraft) FoundryUpdateMutation() (foundryquery.Mutation[Archive], e
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d ArchiveDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Archive]) (foundryquery.Mutation[Archive], error) {
-	values, err := foundryquery.ReadCreateDefaults((Archive{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryLinkArchives().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Archive]{}, err
 	}

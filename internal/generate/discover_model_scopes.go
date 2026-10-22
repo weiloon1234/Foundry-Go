@@ -2,33 +2,29 @@ package generate
 
 import "go/types"
 
-// globalScopeSourceMethod is the handwritten model method declaring the model's
-// global scopes. The generated query passes it, uncalled, as a lazy scope source.
-const globalScopeSourceMethod = "DefineGlobalScopes"
-
-// discoverGlobalScopeSource validates a handwritten DefineGlobalScopes before
-// anything is emitted, so a pointer receiver or another signature is reported
-// against the method instead of producing uncompilable generated code.
+// discoverGlobalScopeSource validates a handwritten define<Model>GlobalScopes
+// before anything is emitted, so an invalid signature is reported against the
+// function instead of producing uncompilable generated code.
 func discoverGlobalScopeSource(p *packageInput, m model) error {
-	declared, found := p.methods[m.name][globalScopeSourceMethod]
+	fnName := modelDeclarationFunction(m.name, kindGlobalScopes)
+	declared, found := p.definedAt[fnName]
 	if !found {
 		return nil
 	}
-	diagnostic := "model " + globalScopeSourceMethod + " requires a value receiver and signature func (" + m.name + ") " + globalScopeSourceMethod + "() []query.GlobalScope[" + m.name + "]"
-	for i := range m.typ.NumMethods() {
-		method := m.typ.Method(i)
-		if method.Name() != globalScopeSourceMethod {
-			continue
-		}
-		sig := method.Type().(*types.Signature)
-		_, pointer := sig.Recv().Type().(*types.Pointer)
-		if pointer || sig.Variadic() || sig.Params().Len() != 0 || sig.Results().Len() != 1 || !globalScopeSlice(sig.Results().At(0).Type(), m.typ) {
-			return p.diagnostic(method.Pos(), diagnostic)
-		}
-		return nil
+	diagnostic := "function " + fnName + " requires signature func " + fnName + "() []query.GlobalScope[" + m.name + "]"
+	obj := p.types.Scope().Lookup(fnName)
+	if obj == nil {
+		return p.diagnostic(declared, diagnostic)
 	}
-	// Recorded syntactically but absent from the model's type information.
-	return p.diagnostic(declared, diagnostic)
+	fn, ok := obj.(*types.Func)
+	if !ok {
+		return p.diagnostic(declared, diagnostic)
+	}
+	sig, ok := fn.Type().(*types.Signature)
+	if !ok || sig.Recv() != nil || sig.Variadic() || sig.TypeParams().Len() != 0 || sig.Params().Len() != 0 || sig.Results().Len() != 1 || !globalScopeSlice(sig.Results().At(0).Type(), m.typ) {
+		return p.diagnostic(fn.Pos(), diagnostic)
+	}
+	return nil
 }
 
 // globalScopeSlice accepts exactly []query.GlobalScope[M] (or an alias of it):

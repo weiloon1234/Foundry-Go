@@ -35,7 +35,7 @@ type Article struct {
  Rank metadata.Value[Rank]
  Extra metadata.Value[json.RawMessage]
 }
-func (Article) DefineExtensions() ArticleExtensionSet {
+func defineArticleExtensions() ArticleExtensionSet {
  return ArticleExtensionSet{
   Title: translations.Options{MaxBytes: 512, Require: i18n.DefaultLocale},
   Logo: attachments.Policy{Disk: Files, AnyMedia: true},
@@ -82,7 +82,7 @@ func TestFreshExtensionSlotGeneration(t *testing.T) {
 		`metadata.DefineValue(owner, "seo", policy.SEO, SEOJSON()`,
 		`foundrycontract.IntegerJSON[Rank]()`,
 		`foundrycontract.DynamicJSON()`,
-		"policy := (Article{}).DefineExtensions()",
+		"policy := defineArticleExtensions()",
 		"NewCleanup(runtime, ArticleExtensionOwner(), parts, Article.FoundryReference)",
 	} {
 		if !strings.Contains(article, want) {
@@ -140,9 +140,9 @@ func TestExtensionSlotFieldNotices(t *testing.T) {
 		`Its stored name is pinned by foundry:"name=content", so renaming this field keeps its data.`,
 		`Renaming this field changes its stored name unless foundry:"name=title" pins it.`,
 		`Extension slot, not a column: translated text stored in foundry_model_translations as field "content"`,
-		"policy: [Article.DefineExtensions] entry Galleries",
+		"policy: defineArticleExtensions entry Galleries",
 		"Descriptor: NoteExtensions().Label; bind it once with From(runtime), then pass it to With or Load",
-		"slot defaults apply; declare DefineExtensions to configure it",
+		"slot defaults apply; declare defineNoteExtensions to configure it",
 	} {
 		if !strings.Contains(string(source), want) {
 			t.Fatalf("model source lacks slot notice %q:\n%s", want, source)
@@ -162,11 +162,11 @@ func TestInvalidExtensionSlotDeclarationsDoNotPublish(t *testing.T) {
 		"invalid stored name":      {"Title translations.Text\n", "Title translations.Text `foundry:\"name=Title\"`\n", "stored name must be lowercase"},
 		"reserved slot name":       {"Extra metadata.Value[json.RawMessage]", "From metadata.Value[json.RawMessage]", "conflicts with a generated descriptor method"},
 		"missing attachment policy": {
-			"func (Article) DefineExtensions() ArticleExtensionSet {", "func (Article) Unrelated() ArticleExtensionSet {", "attachment slot Logo requires a policy",
+			"func defineArticleExtensions() ArticleExtensionSet {", "func unrelatedArticleExtensions() ArticleExtensionSet {", "attachment slot Logo requires a policy",
 		},
-		"pointer policy receiver": {"func (Article) DefineExtensions()", "func (*Article) DefineExtensions()", "requires a value receiver and signature"},
-		"wrong policy result":     {"func (Article) DefineExtensions() ArticleExtensionSet {\n return ArticleExtensionSet{", "func (Article) DefineExtensions() NoteExtensionSet {\n return NoteExtensionSet{", "requires a value receiver and signature"},
-		"policy without slots":    {"type Plain struct { ID model.ID[Plain] }", "type Plain struct { ID model.ID[Plain] }\nfunc (Plain) DefineExtensions() int { return 0 }", "requires extension slot fields"},
+		"wrong policy signature":  {"func defineArticleExtensions() ArticleExtensionSet {", "func defineArticleExtensions(x int) ArticleExtensionSet {", "requires signature func defineArticleExtensions() ArticleExtensionSet"},
+		"wrong policy result":     {"func defineArticleExtensions() ArticleExtensionSet {\n return ArticleExtensionSet{", "func defineArticleExtensions() NoteExtensionSet {\n return NoteExtensionSet{", "requires signature func defineArticleExtensions() ArticleExtensionSet"},
+		"policy without slots":    {"type Plain struct { ID model.ID[Plain] }", "type Plain struct { ID model.ID[Plain] }\nfunc definePlainExtensions() int { return 0 }", "requires extension slot fields"},
 		"owner without slots":     {"//foundry:model table=plain", "//foundry:model table=plain extension_owner=plain", "extension_owner requires extension slot fields"},
 		"invalid owner":           {"//foundry:model table=notes", "//foundry:model table=notes extension_owner=Notes", "must be a lowercase table-style name"},
 		"uninferable contract":    {"Label translations.Text\n}", "Label translations.Text\n Tags metadata.Value[[]string]\n}", "metadata slot Tags needs an explicit JSON contract"},
@@ -219,7 +219,7 @@ type Country struct {
  Info metadata.Value[shared.Info]
  Tier metadata.Value[Tier]
 }
-func (Country) DefineExtensions() CountryExtensionSet { return CountryExtensionSet{} }
+func defineCountryExtensions() CountryExtensionSet { return CountryExtensionSet{} }
 func typedCountryUse() {
  var _ translations.TextSlot[Country, Code] = CountryExtensions().Label
  _ = CountryExtensionOwner().Scope()
@@ -253,7 +253,7 @@ func TestExtensionSlotInferenceAndIdentity(t *testing.T) {
 		}
 	}
 	// Without DefineExtensions an enum value has no contract to fall back on.
-	source := strings.Replace(inferenceSource, "func (Country) DefineExtensions() CountryExtensionSet { return CountryExtensionSet{} }\n", "", 1)
+	source := strings.Replace(inferenceSource, "func defineCountryExtensions() CountryExtensionSet { return CountryExtensionSet{} }\n", "", 1)
 	if source == inferenceSource {
 		t.Fatal("test replacement did not apply")
 	}
@@ -306,5 +306,24 @@ type Note struct {
 	}
 	if note := generatedSnapshot(t, dir)["note_foundry.gen.go"]; !strings.Contains(note, "func NoteExtensionDeclaration() slots.Declaration") {
 		t.Fatalf("aliased slot did not generate its declaration:\n%s", note)
+	}
+}
+
+func TestExtensionRejectsOldMethodForm(t *testing.T) {
+	source := `package sample
+import (
+ "github.com/weiloon1234/Foundry-Go/model"
+ "github.com/weiloon1234/Foundry-Go/translations"
+)
+//foundry:model table=articles
+type Article struct {
+ ID model.ID[Article]
+ Title translations.Text
+}
+func (Article) DefineExtensions() ArticleExtensionSet { return ArticleExtensionSet{} }
+`
+	dir := fixture(t, source)
+	if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), "model Article declares DefineExtensions as a method; declare func defineArticleExtensions() ArticleExtensionSet instead (methods on model types make every importing package compile the model's query engine)") {
+		t.Fatalf("old DefineExtensions method was not rejected with migration diagnostic: %v", err)
 	}
 }

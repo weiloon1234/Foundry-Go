@@ -95,8 +95,11 @@ func foundryTaskBuildQuery() foundryquery.Query[Task] {
 // QueryTasks starts a complete-model query for tasks with generated hydration.
 func QueryTasks() TaskQuery { return TaskQuery{foundryTaskModelQuery.Get(foundryTaskBuildQuery)} }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Task) FoundryQuery() foundryquery.Query[Task] { return QueryTasks().Query }
+// FoundryModel identifies Task's generated query for framework integrations
+// without placing the query engine in Task's method set.
+func (Task) FoundryModel() foundryquery.ModelRef[Task] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Task] { return QueryTasks().Query })
+}
 
 // FoundryReference retains Task and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -441,7 +444,7 @@ func (p TaskInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune) 
 // InsertTaskFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertTaskFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) TaskInsertFromBuilder[FoundryScope] {
-	return TaskInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Task{}).FoundryQuery())}
+	return TaskInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryTasks().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -657,7 +660,7 @@ func (d TaskDraft) FoundryUpdateMutation() (foundryquery.Mutation[Task], error) 
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d TaskDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Task]) (foundryquery.Mutation[Task], error) {
-	values, err := foundryquery.ReadCreateDefaults((Task{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryTasks().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Task]{}, err
 	}

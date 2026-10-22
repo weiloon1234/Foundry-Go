@@ -8,10 +8,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/idempotency"
 )
 
-type idempotentTransport[P, Q, B, R any] interface {
-	Idempotent(*idempotency.Store, idempotency.Definition) foundryhttp.IdempotentEndpoint[P, Q, B, R]
-}
-
 // IdempotentEndpoint resolves and authorizes the resource on every request, then
 // supplies the same concrete model and request to a transaction-bound callback.
 type IdempotentEndpoint[P, Q, B, M, R any] struct {
@@ -20,14 +16,17 @@ type IdempotentEndpoint[P, Q, B, M, R any] struct {
 	err       error
 }
 
-func (e Endpoint[P, Q, B, M, R]) Idempotent(store *idempotency.Store, definition idempotency.Definition) IdempotentEndpoint[P, Q, B, M, R] {
-	adapted := IdempotentEndpoint[P, Q, B, M, R]{source: e}
-	transport, ok := e.transport.(idempotentTransport[P, Q, B, R])
-	if !ok {
+func Idempotent[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, M, R], store *idempotency.Store, definition idempotency.Definition) IdempotentEndpoint[P, Q, B, M, R] {
+	adapted := IdempotentEndpoint[P, Q, B, M, R]{source: endpoint}
+	switch transport := endpoint.transport.(type) {
+	case foundryhttp.Endpoint[P, Q, B, R]:
+		adapted.transport = foundryhttp.Idempotent(transport, store, definition)
+	case foundryhttp.SignedEndpoint[P, Q, B, R]:
+		adapted.transport = foundryhttp.IdempotentSigned(transport, store, definition)
+	default:
 		adapted.err = fault.New(fault.Invalid, "model-bound transport does not support idempotent operations")
 		return adapted
 	}
-	adapted.transport = transport.Idempotent(store, definition)
 	return adapted
 }
 func (e IdempotentEndpoint[P, Q, B, M, R]) Validate() error {
@@ -72,23 +71,21 @@ func (e IdempotentEndpoint[P, Q, B, M, R]) Handle(scope func(context.Context, In
 	})
 }
 
-type authenticatedIdempotentTransport[P, Q, B, S, R any] interface {
-	Idempotent(*idempotency.Store, idempotency.Definition) foundryhttp.AuthenticatedIdempotentEndpoint[P, Q, B, S, R]
-}
 type AuthenticatedIdempotentEndpoint[P, Q, B, S, M, R any] struct {
 	source    AuthenticatedEndpoint[P, Q, B, S, M, R]
 	transport foundryhttp.AuthenticatedIdempotentEndpoint[P, Q, B, S, R]
 	err       error
 }
 
-func (e AuthenticatedEndpoint[P, Q, B, S, M, R]) Idempotent(store *idempotency.Store, definition idempotency.Definition) AuthenticatedIdempotentEndpoint[P, Q, B, S, M, R] {
-	adapted := AuthenticatedIdempotentEndpoint[P, Q, B, S, M, R]{source: e}
-	transport, ok := e.transport.(authenticatedIdempotentTransport[P, Q, B, S, R])
-	if !ok {
+func IdempotentAuthenticated[P, Q, B, S, M, R any](endpoint AuthenticatedEndpoint[P, Q, B, S, M, R], store *idempotency.Store, definition idempotency.Definition) AuthenticatedIdempotentEndpoint[P, Q, B, S, M, R] {
+	adapted := AuthenticatedIdempotentEndpoint[P, Q, B, S, M, R]{source: endpoint}
+	switch transport := endpoint.transport.(type) {
+	case foundryhttp.AuthenticatedEndpoint[P, Q, B, S, R]:
+		adapted.transport = foundryhttp.IdempotentAuthenticated(transport, store, definition)
+	default:
 		adapted.err = fault.New(fault.Invalid, "authenticated transport does not support required idempotent identity")
 		return adapted
 	}
-	adapted.transport = transport.Idempotent(store, definition)
 	return adapted
 }
 func (e AuthenticatedIdempotentEndpoint[P, Q, B, S, M, R]) Validate() error {

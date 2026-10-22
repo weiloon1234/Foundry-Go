@@ -194,9 +194,10 @@ func QueryFoundryModelTranslations() TranslationQuery {
 	return TranslationQuery{foundryTranslationModelQuery.Get(foundryTranslationBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Translation) FoundryQuery() foundryquery.Query[Translation] {
-	return QueryFoundryModelTranslations().Query
+// FoundryModel identifies Translation's generated query for framework integrations
+// without placing the query engine in Translation's method set.
+func (Translation) FoundryModel() foundryquery.ModelRef[Translation] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Translation] { return QueryFoundryModelTranslations().Query })
 }
 
 // FoundryReference retains Translation and its concrete stored primary key for framework integrations.
@@ -570,7 +571,7 @@ func (p TranslationInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb
 // InsertTranslationFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertTranslationFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) TranslationInsertFromBuilder[FoundryScope] {
-	return TranslationInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Translation{}).FoundryQuery())}
+	return TranslationInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryFoundryModelTranslations().Query)}
 }
 
 // SelectKey supplies the stored SQL value for key. It cannot also be supplied by Values.
@@ -863,7 +864,7 @@ func (d TranslationDraft) FoundryUpdateMutation() (foundryquery.Mutation[Transla
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d TranslationDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Translation]) (foundryquery.Mutation[Translation], error) {
-	values, err := foundryquery.ReadCreateDefaults((Translation{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryFoundryModelTranslations().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Translation]{}, err
 	}

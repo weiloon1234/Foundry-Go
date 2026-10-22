@@ -89,8 +89,11 @@ func QueryOfficeLabels() LabelQuery {
 	return LabelQuery{foundryLabelModelQuery.Get(foundryLabelBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Label) FoundryQuery() foundryquery.Query[Label] { return QueryOfficeLabels().Query }
+// FoundryModel identifies Label's generated query for framework integrations
+// without placing the query engine in Label's method set.
+func (Label) FoundryModel() foundryquery.ModelRef[Label] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Label] { return QueryOfficeLabels().Query })
+}
 
 // FoundryReference retains Label and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -442,7 +445,7 @@ func (p LabelInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune)
 // InsertLabelFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertLabelFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) LabelInsertFromBuilder[FoundryScope] {
-	return LabelInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Label{}).FoundryQuery())}
+	return LabelInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryOfficeLabels().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -646,7 +649,7 @@ func (d LabelDraft) FoundryUpdateMutation() (foundryquery.Mutation[Label], error
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d LabelDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Label]) (foundryquery.Mutation[Label], error) {
-	values, err := foundryquery.ReadCreateDefaults((Label{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryOfficeLabels().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Label]{}, err
 	}
@@ -692,13 +695,13 @@ type LabelRelationSet struct {
 var foundryLabelRelations foundryquery.Memo[LabelRelationSet]
 
 func foundryLabelBuildRelations() LabelRelationSet {
-	relations := (Label{}).DefineRelations()
-	relations.Offices = relations.Offices.Bind("Offices", QueryOfficeLabels().Query, (Office{}).FoundryQuery(), (Labeling{}).FoundryQuery(), func(m Label) relation.Through[Office, Labeling] { return m.Offices }, func(m Label, loaded relation.Through[Office, Labeling]) Label { m.Offices = loaded; return m })
+	relations := defineLabelRelations()
+	relations.Offices = relations.Offices.Bind("Offices", QueryOfficeLabels().Query, foundryquery.ModelQueryOf[Office](), foundryquery.ModelQueryOf[Labeling](), func(m Label) relation.Through[Office, Labeling] { return m.Offices }, func(m Label, loaded relation.Through[Office, Labeling]) Label { m.Offices = loaded; return m })
 	return relations
 }
 
 // LabelRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// defineLabelRelations runs once per process; its immutable descriptors are shared.
 func LabelRelations() LabelRelationSet { return foundryLabelRelations.Get(foundryLabelBuildRelations) }
 
 // LabelDraft tracks explicitly selected mutation fields, preserving omitted, zero and null states.

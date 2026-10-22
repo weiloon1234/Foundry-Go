@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    "member_foundry.gen.go": "721b6838dbdef545999c06b1b50169f18024db1ec22686b05f0bf96676a51c14",
+    "member_foundry.gen.go": "66d495932d6526a6403c051049ed40ec13f1607fa56957d0febce9cbfd5d5a8c",
     "state_foundry.gen.go": "ad31ed38a37a41500c44a2e9bff50e842fbef5110498ac7671581e8d95f20304"
   }
 }

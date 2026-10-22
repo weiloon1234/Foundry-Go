@@ -30,7 +30,7 @@ type scopeNode = querycore.ScopeNode
 type scopeDefinition = querycore.ScopeDefinition
 
 // GlobalScope is a named default predicate a model declares once, next to the
-// model, through a DefineGlobalScopes method returning its scopes. Every query
+// model, through a define<Model>GlobalScopes function returning its scopes. Every query
 // of the model applies it through the same effective-predicate owner as soft
 // deletion: reads, pagination, chunking, counts, relations and WhereHas,
 // relation aggregates, joins and subqueries built from the model query, and
@@ -72,7 +72,7 @@ func (d Definition[M]) WithGlobalScopes(scopes ...GlobalScope[M]) Definition[M] 
 	return d
 }
 
-// WithGlobalScopeSource attaches the model's DefineGlobalScopes method, which
+// WithGlobalScopeSource attaches the model's define<Model>GlobalScopes function, which
 // generated code passes without calling. The source runs once, on the first
 // compilation that needs it, after the model's generated query exists; scopes
 // may therefore use the model's own relations, such as Owner.Exists(). It must

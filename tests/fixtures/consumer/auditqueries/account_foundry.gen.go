@@ -234,8 +234,11 @@ func QueryAuditedAccounts() AccountQuery {
 	return AccountQuery{foundryAccountModelQuery.Get(foundryAccountBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Account) FoundryQuery() foundryquery.Query[Account] { return QueryAuditedAccounts().Query }
+// FoundryModel identifies Account's generated query for framework integrations
+// without placing the query engine in Account's method set.
+func (Account) FoundryModel() foundryquery.ModelRef[Account] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Account] { return QueryAuditedAccounts().Query })
+}
 
 // FoundryReference retains Account and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -613,7 +616,7 @@ func (p AccountInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb run
 // InsertAccountFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertAccountFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) AccountInsertFromBuilder[FoundryScope] {
-	return AccountInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Account{}).FoundryQuery())}
+	return AccountInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryAuditedAccounts().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -895,7 +898,7 @@ func (d AccountDraft) FoundryUpdateMutation() (foundryquery.Mutation[Account], e
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d AccountDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Account]) (foundryquery.Mutation[Account], error) {
-	values, err := foundryquery.ReadCreateDefaults((Account{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryAuditedAccounts().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Account]{}, err
 	}

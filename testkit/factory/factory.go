@@ -20,7 +20,7 @@ const MaxCount = query.MaxPerModelWriteRows
 
 // Model and query.CreateDraft are the existing generated integration contracts.
 // The draft must describe this exact model; another model's draft cannot bind.
-type Model[M any] interface{ FoundryQuery() query.Query[M] }
+type Model[M any] = query.ModelQuery[M]
 type Build[D any] func(context.Context, Sequence) (D, error)
 type State[D any] func(context.Context, D) (D, error)
 
@@ -55,10 +55,9 @@ func New[M Model[M], D query.CreateDraft[M]](build Build[D]) (*Factory[M, D], er
 	if build == nil {
 		return nil, fault.New(fault.Invalid, "factory requires a typed draft builder")
 	}
-	var model M
 	var definition query.Query[M]
 	err := callback.Isolated("prepare factory model", func() error {
-		definition = model.FoundryQuery()
+		definition = query.ModelQueryOf[M]()
 		_, err := definition.Compile()
 		return err
 	})

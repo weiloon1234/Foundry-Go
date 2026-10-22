@@ -54,7 +54,7 @@ count := models.UserAggregates().OrderCount.Using(query.Related(
 users, err := models.QueryUsers().With(count).All(ctx, db)
 ```
 
-Handwritten `DefineAggregates` declarations may use this same composition. Target aggregates require target predicates; pivot aggregates require pivot predicates. A filter affects the measure, while relation cardinality checks still inspect the complete scoped relationship input. Existing loaded-state, batch and row-budget contracts apply.
+Handwritten `define<Model>Aggregates` declarations may use this same composition. Target aggregates require target predicates; pivot aggregates require pivot predicates. A filter affects the measure, while relation cardinality checks still inspect the complete scoped relationship input. Existing loaded-state, batch and row-budget contracts apply.
 
 ## NULLs, subqueries and validation
 

@@ -2,7 +2,7 @@
   "version": 1,
   "files": {
     "receipt_foundry.gen.go": "7e5b3476b470e9e0ab61cf5a1e6076ade847502b30f63f25e14a903eb1a9b7a0",
-    "record_foundry.gen.go": "65ac224769756d081d504fda4d5428600cb140b9a8f74432bfdb3838217acce3",
+    "record_foundry.gen.go": "f30f319680d29620805eb3716931b8dae6016595b55f468d3790e9b096f1eb8a",
     "record_path_foundry.gen.go": "b212a75b568df701ef234e29a40a120e50237323564665dff992f75b99c8b6c2",
     "submission_foundry.gen.go": "46eb20402444a4c3d50626dabb4fc7d0501a345d5ef7ad35ce3405ae3b8a9554"
   }

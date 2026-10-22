@@ -15,11 +15,12 @@ type SignedAuthenticatedEndpoint[P, Q, B, S, R any] struct {
 	signed    SignedEndpoint[P, Q, B, R]
 }
 
-func (e AuthenticatedEndpoint[P, Q, B, M, R]) Signed(signer URLSigner) SignedAuthenticatedEndpoint[P, Q, B, M, R] {
-	return SignedAuthenticatedEndpoint[P, Q, B, M, R]{transport: e, signed: e.endpoint.Signed(signer)}
+func SignedAuthenticated[P, Q, B, M, R any](endpoint AuthenticatedEndpoint[P, Q, B, M, R], signer URLSigner) SignedAuthenticatedEndpoint[P, Q, B, M, R] {
+	return SignedAuthenticatedEndpoint[P, Q, B, M, R]{transport: endpoint, signed: Signed(endpoint.endpoint, signer)}
 }
-func (e OptionalAuthenticationEndpoint[P, Q, B, M, R]) Signed(signer URLSigner) SignedAuthenticatedEndpoint[P, Q, B, value.Optional[M], R] {
-	return SignedAuthenticatedEndpoint[P, Q, B, value.Optional[M], R]{transport: e, signed: e.required.endpoint.Signed(signer)}
+
+func SignedOptionalAuthentication[P, Q, B, M, R any](endpoint OptionalAuthenticationEndpoint[P, Q, B, M, R], signer URLSigner) SignedAuthenticatedEndpoint[P, Q, B, value.Optional[M], R] {
+	return SignedAuthenticatedEndpoint[P, Q, B, value.Optional[M], R]{transport: endpoint, signed: Signed(endpoint.required.endpoint, signer)}
 }
 func (e SignedAuthenticatedEndpoint[P, Q, B, S, R]) ID() RouteID     { return e.signed.ID() }
 func (e SignedAuthenticatedEndpoint[P, Q, B, S, R]) Method() Method  { return e.signed.Method() }

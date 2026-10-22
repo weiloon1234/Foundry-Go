@@ -157,8 +157,11 @@ func QueryJsonPolicies() PolicyQuery {
 	return PolicyQuery{foundryPolicyModelQuery.Get(foundryPolicyBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Policy) FoundryQuery() foundryquery.Query[Policy] { return QueryJsonPolicies().Query }
+// FoundryModel identifies Policy's generated query for framework integrations
+// without placing the query engine in Policy's method set.
+func (Policy) FoundryModel() foundryquery.ModelRef[Policy] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Policy] { return QueryJsonPolicies().Query })
+}
 
 // FoundryReference retains Policy and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -513,7 +516,7 @@ func (p PolicyInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune
 // InsertPolicyFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertPolicyFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) PolicyInsertFromBuilder[FoundryScope] {
-	return PolicyInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Policy{}).FoundryQuery())}
+	return PolicyInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryJsonPolicies().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -717,7 +720,7 @@ func (d PolicyDraft) FoundryUpdateMutation() (foundryquery.Mutation[Policy], err
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d PolicyDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Policy]) (foundryquery.Mutation[Policy], error) {
-	values, err := foundryquery.ReadCreateDefaults((Policy{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryJsonPolicies().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Policy]{}, err
 	}

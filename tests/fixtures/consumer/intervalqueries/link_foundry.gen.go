@@ -98,8 +98,11 @@ func QueryIntervalLinks() LinkQuery {
 	return LinkQuery{foundryLinkModelQuery.Get(foundryLinkBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Link) FoundryQuery() foundryquery.Query[Link] { return QueryIntervalLinks().Query }
+// FoundryModel identifies Link's generated query for framework integrations
+// without placing the query engine in Link's method set.
+func (Link) FoundryModel() foundryquery.ModelRef[Link] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Link] { return QueryIntervalLinks().Query })
+}
 
 // FoundryReference retains Link and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -444,7 +447,7 @@ func (p LinkInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune) 
 // InsertLinkFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertLinkFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) LinkInsertFromBuilder[FoundryScope] {
-	return LinkInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Link{}).FoundryQuery())}
+	return LinkInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryIntervalLinks().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -660,7 +663,7 @@ func (d LinkDraft) FoundryUpdateMutation() (foundryquery.Mutation[Link], error) 
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d LinkDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Link]) (foundryquery.Mutation[Link], error) {
-	values, err := foundryquery.ReadCreateDefaults((Link{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryIntervalLinks().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Link]{}, err
 	}

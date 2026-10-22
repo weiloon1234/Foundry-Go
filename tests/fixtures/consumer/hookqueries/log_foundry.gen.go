@@ -86,8 +86,11 @@ func foundryLogBuildQuery() foundryquery.Query[Log] {
 // QueryHookLogs starts a complete-model query for hook_logs with generated hydration.
 func QueryHookLogs() LogQuery { return LogQuery{foundryLogModelQuery.Get(foundryLogBuildQuery)} }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Log) FoundryQuery() foundryquery.Query[Log] { return QueryHookLogs().Query }
+// FoundryModel identifies Log's generated query for framework integrations
+// without placing the query engine in Log's method set.
+func (Log) FoundryModel() foundryquery.ModelRef[Log] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Log] { return QueryHookLogs().Query })
+}
 
 // FoundryReference retains Log and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -432,7 +435,7 @@ func (p LogInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune) {
 // InsertLogFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertLogFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) LogInsertFromBuilder[FoundryScope] {
-	return LogInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Log{}).FoundryQuery())}
+	return LogInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryHookLogs().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -636,7 +639,7 @@ func (d LogDraft) FoundryUpdateMutation() (foundryquery.Mutation[Log], error) {
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d LogDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Log]) (foundryquery.Mutation[Log], error) {
-	values, err := foundryquery.ReadCreateDefaults((Log{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryHookLogs().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Log]{}, err
 	}

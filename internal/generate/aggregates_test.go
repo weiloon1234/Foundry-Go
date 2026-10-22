@@ -15,8 +15,8 @@ import (
 )
 //foundry:model table=users primary=ID
 type User struct { ID int; ParentID value.Nullable[int]; Children relation.Many[User]; ChildCount relation.Value[int64]; ChildSum relation.Value[value.Nullable[decimal.Decimal]] }
-func(User)DefineRelations()UserRelationSet { return UserRelationSet{Children:query.HasMany(UserFields().ID,UserFields().ParentID)} }
-func(User)DefineAggregates()UserAggregateSet {
+func defineUserRelations() UserRelationSet { return UserRelationSet{Children:query.HasMany(UserFields().ID,UserFields().ParentID)} }
+func defineUserAggregates() UserAggregateSet {
  return UserAggregateSet{
   ChildCount:query.Related(UserRelations().Children,query.Count[User]()),
   ChildSum:query.Related(UserRelations().Children,query.Sum(UserFields().ID)),
@@ -48,7 +48,7 @@ func TestInvalidAggregateGenerationDoesNotPublish(t *testing.T) {
 	for _, source := range []string{
 		strings.Replace(aggregateSource, "ChildCount relation.Value[int64]", "ChildCount relation.Value[int64] `foundry:\"column=count\"`", 1),
 		strings.Replace(aggregateSource, "ChildCount relation.Value[int64]", "ChildCount relation.Value[string]", 1),
-		strings.Replace(aggregateSource, "DefineAggregates()", "WrongMethod()", 1),
+		strings.Replace(aggregateSource, "func defineUserAggregates() UserAggregateSet", "func wrongUserAggregates() UserAggregateSet", 1),
 		strings.Replace(aggregateSource, "query.Sum(UserFields().ID)", "UserFields().ParentID.Eq(1)", 1),
 	} {
 		dir := fixture(t, source)
@@ -58,5 +58,20 @@ func TestInvalidAggregateGenerationDoesNotPublish(t *testing.T) {
 		if len(generatedSnapshot(t, dir)) != 0 {
 			t.Fatal("invalid aggregate published output")
 		}
+	}
+}
+
+func TestAggregateRejectsOldMethodForm(t *testing.T) {
+	source := `package sample
+import (
+ "github.com/weiloon1234/Foundry-Go/database/relation"
+)
+//foundry:model table=users primary=ID
+type User struct { ID int; ChildCount relation.Value[int64] }
+func (User) DefineAggregates() UserAggregateSet { return UserAggregateSet{} }
+`
+	dir := fixture(t, source)
+	if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), "model User declares DefineAggregates as a method; declare func defineUserAggregates() UserAggregateSet instead (methods on model types make every importing package compile the model's query engine)") {
+		t.Fatalf("old DefineAggregates method was not rejected with migration diagnostic: %v", err)
 	}
 }

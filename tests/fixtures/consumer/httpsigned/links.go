@@ -32,7 +32,7 @@ type Links struct {
 }
 
 func NewLinks(signer foundryhttp.URLSigner) (Links, error) {
-	links := Links{Preview: Preview.Signed(signer), Asset: Asset.Signed(signer)}
+	links := Links{Preview: foundryhttp.Signed(Preview, signer), Asset: Asset.Signed(signer)}
 	if err := links.Preview.Validate(); err != nil {
 		return Links{}, err
 	}

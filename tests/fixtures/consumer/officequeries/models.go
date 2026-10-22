@@ -52,7 +52,7 @@ type Employee struct {
 	Region   relation.One[Region]
 }
 
-func (Region) DefineRelations() RegionRelationSet {
+func defineRegionRelations() RegionRelationSet {
 	r, o, e, n := RegionFields(), OfficeFields(), EmployeeFields(), NoteFields()
 	return RegionRelationSet{
 		Employees:  query.HasManyThrough(r.ID, o.RegionID, o.ID, e.OfficeID),
@@ -79,7 +79,7 @@ type Note struct {
 	Office      relation.One[Office]
 }
 
-func (Note) DefineRelations() NoteRelationSet {
+func defineNoteRelations() NoteRelationSet {
 	n, r, o := NoteFields(), RegionFields(), OfficeFields()
 	return NoteRelationSet{
 		Region: query.MorphTo(n.SubjectID, n.SubjectType, r.Code),
@@ -102,12 +102,12 @@ type Labeling struct {
 	LabelableID   string
 }
 
-func (Label) DefineRelations() LabelRelationSet {
+func defineLabelRelations() LabelRelationSet {
 	l, p, o := LabelFields(), LabelingFields(), OfficeFields()
 	return LabelRelationSet{Offices: query.MorphedByMany(l.ID, p.LabelID, p.LabelableType, p.LabelableID, o.Code)}
 }
 
-func (Office) DefineRelations() OfficeRelationSet {
+func defineOfficeRelations() OfficeRelationSet {
 	o, e, r := OfficeFields(), EmployeeFields(), RegionFields()
 	n, p, l := NoteFields(), LabelingFields(), LabelFields()
 	return OfficeRelationSet{
@@ -122,11 +122,11 @@ func (Office) DefineRelations() OfficeRelationSet {
 	}
 }
 
-func (Office) DefineAggregates() OfficeAggregateSet {
+func defineOfficeAggregates() OfficeAggregateSet {
 	return OfficeAggregateSet{Headcount: query.Related(OfficeRelations().Colleagues, query.Count[Employee]())}
 }
 
-func (Employee) DefineRelations() EmployeeRelationSet {
+func defineEmployeeRelations() EmployeeRelationSet {
 	e, o, r := EmployeeFields(), OfficeFields(), RegionFields()
 	return EmployeeRelationSet{Region: query.HasOneThrough(e.OfficeID, o.ID, o.RegionID, r.ID)}
 }
@@ -142,7 +142,7 @@ type Desk struct {
 	Office   relation.One[Office]
 }
 
-func (Desk) DefineRelations() DeskRelationSet {
+func defineDeskRelations() DeskRelationSet {
 	return DeskRelationSet{Office: query.BelongsTo(DeskFields().OfficeID, OfficeFields().ID)}
 }
 
@@ -153,8 +153,8 @@ func OpenOffice() query.GlobalScope[Desk] {
 	return query.NewGlobalScope("open_office", DeskRelations().Office.Exists())
 }
 
-// DefineGlobalScopes runs lazily on the first query that needs the scopes, so
+// defineDeskGlobalScopes runs lazily on the first query that needs the scopes, so
 // it may use DeskRelations without re-entering the generated query declaration.
-func (Desk) DefineGlobalScopes() []query.GlobalScope[Desk] {
+func defineDeskGlobalScopes() []query.GlobalScope[Desk] {
 	return []query.GlobalScope[Desk]{OpenOffice()}
 }

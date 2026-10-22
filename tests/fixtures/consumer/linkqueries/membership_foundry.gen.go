@@ -145,8 +145,11 @@ func QueryLinkMemberships() MembershipQuery {
 	return MembershipQuery{foundryMembershipModelQuery.Get(foundryMembershipBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Membership) FoundryQuery() foundryquery.Query[Membership] { return QueryLinkMemberships().Query }
+// FoundryModel identifies Membership's generated query for framework integrations
+// without placing the query engine in Membership's method set.
+func (Membership) FoundryModel() foundryquery.ModelRef[Membership] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Membership] { return QueryLinkMemberships().Query })
+}
 
 // FoundryReference retains Membership and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -534,7 +537,7 @@ func (p MembershipInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb 
 // InsertMembershipFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertMembershipFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) MembershipInsertFromBuilder[FoundryScope] {
-	return MembershipInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Membership{}).FoundryQuery())}
+	return MembershipInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryLinkMemberships().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -792,7 +795,7 @@ func (d MembershipDraft) FoundryUpdateMutation() (foundryquery.Mutation[Membersh
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d MembershipDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Membership]) (foundryquery.Mutation[Membership], error) {
-	values, err := foundryquery.ReadCreateDefaults((Membership{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryLinkMemberships().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Membership]{}, err
 	}

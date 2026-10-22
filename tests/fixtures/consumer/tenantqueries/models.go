@@ -59,11 +59,11 @@ var (
 	PublishedScope = query.NewGlobalScope[Document]("published", DocumentFields().Published.Eq(true))
 )
 
-func (Document) DefineGlobalScopes() []query.GlobalScope[Document] {
+func defineDocumentGlobalScopes() []query.GlobalScope[Document] {
 	return []query.GlobalScope[Document]{TenantScope, PublishedScope}
 }
 
-func (Document) DefineRelations() DocumentRelationSet {
+func defineDocumentRelations() DocumentRelationSet {
 	d, t, p := DocumentFields(), TagFields(), DocumentTagFields()
 	return DocumentRelationSet{Tags: query.ManyToMany(d.ID, p.DocumentID, p.TagCode, t.Code)}
 }
@@ -77,7 +77,7 @@ type Tag struct {
 	Documents relation.Through[Document, DocumentTag]
 }
 
-func (Tag) DefineRelations() TagRelationSet {
+func defineTagRelations() TagRelationSet {
 	d, t, p := DocumentFields(), TagFields(), DocumentTagFields()
 	return TagRelationSet{Documents: query.ManyToMany(t.Code, p.TagCode, p.DocumentID, d.ID)}
 }

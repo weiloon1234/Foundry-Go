@@ -12,11 +12,11 @@ type AuthenticatedIdempotentEndpoint[P, Q, B, M, R any] struct {
 	endpoint IdempotentEndpoint[P, Q, B, R]
 }
 
-func (e AuthenticatedEndpoint[P, Q, B, M, R]) Idempotent(store *idempotency.Store, definition idempotency.Definition) AuthenticatedIdempotentEndpoint[P, Q, B, M, R] {
-	if err := e.Validate(); err != nil {
-		return AuthenticatedIdempotentEndpoint[P, Q, B, M, R]{source: e, endpoint: IdempotentEndpoint[P, Q, B, R]{err: err}}
+func IdempotentAuthenticated[P, Q, B, M, R any](endpoint AuthenticatedEndpoint[P, Q, B, M, R], store *idempotency.Store, definition idempotency.Definition) AuthenticatedIdempotentEndpoint[P, Q, B, M, R] {
+	if err := endpoint.Validate(); err != nil {
+		return AuthenticatedIdempotentEndpoint[P, Q, B, M, R]{source: endpoint, endpoint: IdempotentEndpoint[P, Q, B, R]{err: err}}
 	}
-	return AuthenticatedIdempotentEndpoint[P, Q, B, M, R]{source: e, endpoint: e.authorized().Idempotent(store, definition)}
+	return AuthenticatedIdempotentEndpoint[P, Q, B, M, R]{source: endpoint, endpoint: Idempotent(endpoint.authorized(), store, definition)}
 }
 func (e AuthenticatedIdempotentEndpoint[P, Q, B, M, R]) Validate() error {
 	if err := e.source.Validate(); err != nil {

@@ -240,7 +240,7 @@ func TestFreshProjectionGeneration(t *testing.T) {
 			t.Fatal("projection did not generate safe concrete declarations", want)
 		}
 	}
-	if strings.Contains(output, "SummaryDraft") || strings.Contains(output, "FoundryQuery()") {
+	if strings.Contains(output, "SummaryDraft") || strings.Contains(output, "FoundryModel()") {
 		t.Fatal("projection gained persisted model methods")
 	}
 	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {

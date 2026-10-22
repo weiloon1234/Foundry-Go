@@ -108,8 +108,11 @@ func QueryOfficeLabelings() LabelingQuery {
 	return LabelingQuery{foundryLabelingModelQuery.Get(foundryLabelingBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Labeling) FoundryQuery() foundryquery.Query[Labeling] { return QueryOfficeLabelings().Query }
+// FoundryModel identifies Labeling's generated query for framework integrations
+// without placing the query engine in Labeling's method set.
+func (Labeling) FoundryModel() foundryquery.ModelRef[Labeling] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Labeling] { return QueryOfficeLabelings().Query })
+}
 
 // FoundryReference retains Labeling and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -471,7 +474,7 @@ func (p LabelingInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb ru
 // InsertLabelingFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertLabelingFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) LabelingInsertFromBuilder[FoundryScope] {
-	return LabelingInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Labeling{}).FoundryQuery())}
+	return LabelingInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryOfficeLabelings().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -702,7 +705,7 @@ func (d LabelingDraft) FoundryUpdateMutation() (foundryquery.Mutation[Labeling],
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d LabelingDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Labeling]) (foundryquery.Mutation[Labeling], error) {
-	values, err := foundryquery.ReadCreateDefaults((Labeling{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryOfficeLabelings().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Labeling]{}, err
 	}

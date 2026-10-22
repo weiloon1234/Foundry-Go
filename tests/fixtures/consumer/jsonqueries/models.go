@@ -50,7 +50,7 @@ type Policy struct {
 	Name string
 }
 
-func (Document) DefineRelations() DocumentRelationSet {
+func defineDocumentRelations() DocumentRelationSet {
 	f, p := DocumentFields(), PolicyFields()
 	return DocumentRelationSet{Policy: query.BelongsTo(f.PolicyID, p.ID)}
 }

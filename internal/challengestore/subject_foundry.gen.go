@@ -124,9 +124,10 @@ func QueryFoundryChallengeSubjects() SubjectQuery {
 	return SubjectQuery{foundrySubjectModelQuery.Get(foundrySubjectBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Subject) FoundryQuery() foundryquery.Query[Subject] {
-	return QueryFoundryChallengeSubjects().Query
+// FoundryModel identifies Subject's generated query for framework integrations
+// without placing the query engine in Subject's method set.
+func (Subject) FoundryModel() foundryquery.ModelRef[Subject] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Subject] { return QueryFoundryChallengeSubjects().Query })
 }
 
 // FoundryReference retains Subject and its concrete stored primary key for framework integrations.
@@ -484,7 +485,7 @@ func (p SubjectInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb run
 // InsertSubjectFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertSubjectFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) SubjectInsertFromBuilder[FoundryScope] {
-	return SubjectInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Subject{}).FoundryQuery())}
+	return SubjectInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryFoundryChallengeSubjects().Query)}
 }
 
 // SelectKey supplies the stored SQL value for key. It cannot also be supplied by Values.
@@ -703,7 +704,7 @@ func (d SubjectDraft) FoundryUpdateMutation() (foundryquery.Mutation[Subject], e
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d SubjectDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Subject]) (foundryquery.Mutation[Subject], error) {
-	values, err := foundryquery.ReadCreateDefaults((Subject{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryFoundryChallengeSubjects().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Subject]{}, err
 	}

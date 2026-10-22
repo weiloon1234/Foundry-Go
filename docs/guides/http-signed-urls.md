@@ -14,7 +14,7 @@ signer, err := foundryhttp.NewURLSigner(keys, applicationClock)
 if err != nil {
     return err
 }
-preview := Preview.Signed(signer)
+preview := foundryhttp.Signed(Preview, signer)
 link, err := preview.URL(ctx, publicOrigin,
     httpkernel.UserPath{User: userID},
     httpquery.SearchInput{

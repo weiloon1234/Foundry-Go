@@ -218,8 +218,11 @@ func QueryFoundryModelMetadata() MetaQuery {
 	return MetaQuery{foundryMetaModelQuery.Get(foundryMetaBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Meta) FoundryQuery() foundryquery.Query[Meta] { return QueryFoundryModelMetadata().Query }
+// FoundryModel identifies Meta's generated query for framework integrations
+// without placing the query engine in Meta's method set.
+func (Meta) FoundryModel() foundryquery.ModelRef[Meta] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Meta] { return QueryFoundryModelMetadata().Query })
+}
 
 // FoundryReference retains Meta and its concrete stored primary key for framework integrations.
 // It reads Key directly, never calls an accessor, and performs no database lookup.
@@ -565,7 +568,7 @@ func (p MetaInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune) 
 // InsertMetaFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertMetaFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) MetaInsertFromBuilder[FoundryScope] {
-	return MetaInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Meta{}).FoundryQuery())}
+	return MetaInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryFoundryModelMetadata().Query)}
 }
 
 // SelectKey supplies the stored SQL value for key. It cannot also be supplied by Values.
@@ -855,7 +858,7 @@ func (d MetaDraft) FoundryUpdateMutation() (foundryquery.Mutation[Meta], error) 
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d MetaDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Meta]) (foundryquery.Mutation[Meta], error) {
-	values, err := foundryquery.ReadCreateDefaults((Meta{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryFoundryModelMetadata().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Meta]{}, err
 	}

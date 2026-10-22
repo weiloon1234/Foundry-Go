@@ -99,8 +99,11 @@ func QueryTimeManual() ManualQuery {
 	return ManualQuery{foundryManualModelQuery.Get(foundryManualBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Manual) FoundryQuery() foundryquery.Query[Manual] { return QueryTimeManual().Query }
+// FoundryModel identifies Manual's generated query for framework integrations
+// without placing the query engine in Manual's method set.
+func (Manual) FoundryModel() foundryquery.ModelRef[Manual] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Manual] { return QueryTimeManual().Query })
+}
 
 // FoundryReference retains Manual and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -455,7 +458,7 @@ func (p ManualInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune
 // InsertManualFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertManualFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) ManualInsertFromBuilder[FoundryScope] {
-	return ManualInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Manual{}).FoundryQuery())}
+	return ManualInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryTimeManual().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -671,7 +674,7 @@ func (d ManualDraft) FoundryUpdateMutation() (foundryquery.Mutation[Manual], err
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d ManualDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Manual]) (foundryquery.Mutation[Manual], error) {
-	values, err := foundryquery.ReadCreateDefaults((Manual{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryTimeManual().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Manual]{}, err
 	}

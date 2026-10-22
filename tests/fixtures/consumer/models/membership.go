@@ -17,7 +17,7 @@ type Group struct {
 	Owner   relation.One[User]
 }
 
-func (Group) DefineRelations() GroupRelationSet {
+func defineGroupRelations() GroupRelationSet {
 	return GroupRelationSet{Owner: query.BelongsTo(GroupFields().OwnerID, UserFields().ID)}
 }
 
@@ -33,7 +33,7 @@ type Membership struct {
 	Inviter   relation.One[User]
 }
 
-func (Membership) DefineRelations() MembershipRelationSet {
+func defineMembershipRelations() MembershipRelationSet {
 	return MembershipRelationSet{Inviter: query.BelongsTo(MembershipFields().InviterID, UserFields().ID)}
 }
 

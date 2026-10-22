@@ -50,7 +50,7 @@ type MemberLabel struct {
 	Name string
 }
 
-func (Member) DefineRelations() MemberRelationSet {
+func defineMemberRelations() MemberRelationSet {
 	m, g, p := MemberFields(), GroupFields(), MembershipFields()
 	return MemberRelationSet{
 		Parent:   query.BelongsTo(m.ParentID, m.ID),

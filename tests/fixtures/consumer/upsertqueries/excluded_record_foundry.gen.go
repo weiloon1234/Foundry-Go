@@ -92,8 +92,11 @@ func QueryExcluded() ExcludedRecordQuery {
 	return ExcludedRecordQuery{foundryExcludedRecordModelQuery.Get(foundryExcludedRecordBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (ExcludedRecord) FoundryQuery() foundryquery.Query[ExcludedRecord] { return QueryExcluded().Query }
+// FoundryModel identifies ExcludedRecord's generated query for framework integrations
+// without placing the query engine in ExcludedRecord's method set.
+func (ExcludedRecord) FoundryModel() foundryquery.ModelRef[ExcludedRecord] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[ExcludedRecord] { return QueryExcluded().Query })
+}
 
 // FoundryReference retains ExcludedRecord and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -474,7 +477,7 @@ func (p ExcludedRecordInsertFromBuilder[FoundryScope]) Format(state fmt.State, v
 // InsertExcludedRecordFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertExcludedRecordFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) ExcludedRecordInsertFromBuilder[FoundryScope] {
-	return ExcludedRecordInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (ExcludedRecord{}).FoundryQuery())}
+	return ExcludedRecordInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryExcluded().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -681,7 +684,7 @@ func (d ExcludedRecordDraft) FoundryUpdateMutation() (foundryquery.Mutation[Excl
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d ExcludedRecordDraft) FoundryCreateMutation(defaults foundryquery.Mutation[ExcludedRecord]) (foundryquery.Mutation[ExcludedRecord], error) {
-	values, err := foundryquery.ReadCreateDefaults((ExcludedRecord{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryExcluded().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[ExcludedRecord]{}, err
 	}

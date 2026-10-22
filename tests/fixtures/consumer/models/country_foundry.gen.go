@@ -89,8 +89,11 @@ func QueryCountries() CountryQuery {
 	return CountryQuery{foundryCountryModelQuery.Get(foundryCountryBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Country) FoundryQuery() foundryquery.Query[Country] { return QueryCountries().Query }
+// FoundryModel identifies Country's generated query for framework integrations
+// without placing the query engine in Country's method set.
+func (Country) FoundryModel() foundryquery.ModelRef[Country] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Country] { return QueryCountries().Query })
+}
 
 // FoundryReference retains Country and its concrete stored primary key for framework integrations.
 // It reads Code directly, never calls an accessor, and performs no database lookup.
@@ -447,7 +450,7 @@ func (p CountryInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb run
 // InsertCountryFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertCountryFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) CountryInsertFromBuilder[FoundryScope] {
-	return CountryInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Country{}).FoundryQuery())}
+	return CountryInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryCountries().Query)}
 }
 
 // SelectCode supplies the stored SQL value for code. It cannot also be supplied by Values.
@@ -654,7 +657,7 @@ func (d CountryDraft) FoundryUpdateMutation() (foundryquery.Mutation[Country], e
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d CountryDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Country]) (foundryquery.Mutation[Country], error) {
-	values, err := foundryquery.ReadCreateDefaults((Country{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryCountries().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Country]{}, err
 	}
@@ -693,13 +696,13 @@ type CountryRelationSet struct {
 var foundryCountryRelations foundryquery.Memo[CountryRelationSet]
 
 func foundryCountryBuildRelations() CountryRelationSet {
-	relations := (Country{}).DefineRelations()
-	relations.Locations = relations.Locations.Bind("Locations", QueryCountries().Query, (Location{}).FoundryQuery(), func(m Country) relation.Many[Location] { return m.Locations }, func(m Country, loaded relation.Many[Location]) Country { m.Locations = loaded; return m })
+	relations := defineCountryRelations()
+	relations.Locations = relations.Locations.Bind("Locations", QueryCountries().Query, foundryquery.ModelQueryOf[Location](), func(m Country) relation.Many[Location] { return m.Locations }, func(m Country, loaded relation.Many[Location]) Country { m.Locations = loaded; return m })
 	return relations
 }
 
 // CountryRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// defineCountryRelations runs once per process; its immutable descriptors are shared.
 func CountryRelations() CountryRelationSet {
 	return foundryCountryRelations.Get(foundryCountryBuildRelations)
 }

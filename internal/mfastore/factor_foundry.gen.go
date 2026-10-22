@@ -238,8 +238,11 @@ func QueryFoundryMfaFactors() FactorQuery {
 	return FactorQuery{foundryFactorModelQuery.Get(foundryFactorBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Factor) FoundryQuery() foundryquery.Query[Factor] { return QueryFoundryMfaFactors().Query }
+// FoundryModel identifies Factor's generated query for framework integrations
+// without placing the query engine in Factor's method set.
+func (Factor) FoundryModel() foundryquery.ModelRef[Factor] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Factor] { return QueryFoundryMfaFactors().Query })
+}
 
 // FoundryReference retains Factor and its concrete stored primary key for framework integrations.
 // It reads Key directly, never calls an accessor, and performs no database lookup.
@@ -594,7 +597,7 @@ func (p FactorInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune
 // InsertFactorFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertFactorFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) FactorInsertFromBuilder[FoundryScope] {
-	return FactorInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Factor{}).FoundryQuery())}
+	return FactorInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryFoundryMfaFactors().Query)}
 }
 
 // SelectKey supplies the stored SQL value for key. It cannot also be supplied by Values.
@@ -894,7 +897,7 @@ func (d FactorDraft) FoundryUpdateMutation() (foundryquery.Mutation[Factor], err
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d FactorDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Factor]) (foundryquery.Mutation[Factor], error) {
-	values, err := foundryquery.ReadCreateDefaults((Factor{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryFoundryMfaFactors().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Factor]{}, err
 	}

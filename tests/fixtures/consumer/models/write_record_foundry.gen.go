@@ -120,8 +120,11 @@ func QueryWriteRecords() WriteRecordQuery {
 	return WriteRecordQuery{foundryWriteRecordModelQuery.Get(foundryWriteRecordBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (WriteRecord) FoundryQuery() foundryquery.Query[WriteRecord] { return QueryWriteRecords().Query }
+// FoundryModel identifies WriteRecord's generated query for framework integrations
+// without placing the query engine in WriteRecord's method set.
+func (WriteRecord) FoundryModel() foundryquery.ModelRef[WriteRecord] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[WriteRecord] { return QueryWriteRecords().Query })
+}
 
 // FoundryReference retains WriteRecord and its concrete stored primary key for framework integrations.
 // It reads Code directly, never calls an accessor, and performs no database lookup.
@@ -493,7 +496,7 @@ func (p WriteRecordInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb
 // InsertWriteRecordFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertWriteRecordFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) WriteRecordInsertFromBuilder[FoundryScope] {
-	return WriteRecordInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (WriteRecord{}).FoundryQuery())}
+	return WriteRecordInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryWriteRecords().Query)}
 }
 
 // SelectCode supplies the stored SQL value for code. It cannot also be supplied by Values.
@@ -736,7 +739,7 @@ func (d WriteRecordDraft) FoundryUpdateMutation() (foundryquery.Mutation[WriteRe
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d WriteRecordDraft) FoundryCreateMutation(defaults foundryquery.Mutation[WriteRecord]) (foundryquery.Mutation[WriteRecord], error) {
-	values, err := foundryquery.ReadCreateDefaults((WriteRecord{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryWriteRecords().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[WriteRecord]{}, err
 	}

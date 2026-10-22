@@ -144,7 +144,7 @@ func foundryDocumentBuildQuery() foundryquery.Query[Document] {
 		foundryquery.NewModelField("created_at", foundryCodec5, func(item Document) time.Time { return item.CreatedAt }),
 		foundryquery.NewModelField("updated_at", foundryCodec6, func(item Document) time.Time { return item.UpdatedAt }),
 		foundryquery.NewModelField("deleted_at", foundryCodec7, func(item Document) foundryvalue.Nullable[time.Time] { return item.DeletedAt }),
-	).WithTimestamps("created_at", "updated_at").WithSoftDeletes("deleted_at").WithGlobalScopeSource((Document{}).DefineGlobalScopes).WithObserverHooks((DocumentHooks{}).foundryWriteHooks, false).WithRetrievalHooks((DocumentRetrievalHooks{}).foundryRetrievalHooks, false))
+	).WithTimestamps("created_at", "updated_at").WithSoftDeletes("deleted_at").WithGlobalScopeSource(defineDocumentGlobalScopes).WithObserverHooks((DocumentHooks{}).foundryWriteHooks, false).WithRetrievalHooks((DocumentRetrievalHooks{}).foundryRetrievalHooks, false))
 }
 
 // QueryTenantDocuments starts a complete-model query for tenant_documents with generated hydration.
@@ -152,8 +152,11 @@ func QueryTenantDocuments() DocumentQuery {
 	return DocumentQuery{foundryDocumentModelQuery.Get(foundryDocumentBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Document) FoundryQuery() foundryquery.Query[Document] { return QueryTenantDocuments().Query }
+// FoundryModel identifies Document's generated query for framework integrations
+// without placing the query engine in Document's method set.
+func (Document) FoundryModel() foundryquery.ModelRef[Document] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Document] { return QueryTenantDocuments().Query })
+}
 
 // FoundryReference retains Document and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -536,7 +539,7 @@ func (p DocumentInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb ru
 // InsertDocumentFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertDocumentFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) DocumentInsertFromBuilder[FoundryScope] {
-	return DocumentInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Document{}).FoundryQuery())}
+	return DocumentInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryTenantDocuments().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -818,7 +821,7 @@ func (d DocumentDraft) FoundryUpdateMutation() (foundryquery.Mutation[Document],
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d DocumentDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Document]) (foundryquery.Mutation[Document], error) {
-	values, err := foundryquery.ReadCreateDefaults((Document{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryTenantDocuments().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Document]{}, err
 	}
@@ -924,13 +927,13 @@ type DocumentRelationSet struct {
 var foundryDocumentRelations foundryquery.Memo[DocumentRelationSet]
 
 func foundryDocumentBuildRelations() DocumentRelationSet {
-	relations := (Document{}).DefineRelations()
-	relations.Tags = relations.Tags.Bind("Tags", QueryTenantDocuments().Query, (Tag{}).FoundryQuery(), (DocumentTag{}).FoundryQuery(), func(m Document) relation.Through[Tag, DocumentTag] { return m.Tags }, func(m Document, loaded relation.Through[Tag, DocumentTag]) Document { m.Tags = loaded; return m })
+	relations := defineDocumentRelations()
+	relations.Tags = relations.Tags.Bind("Tags", QueryTenantDocuments().Query, foundryquery.ModelQueryOf[Tag](), foundryquery.ModelQueryOf[DocumentTag](), func(m Document) relation.Through[Tag, DocumentTag] { return m.Tags }, func(m Document, loaded relation.Through[Tag, DocumentTag]) Document { m.Tags = loaded; return m })
 	return relations
 }
 
 // DocumentRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// defineDocumentRelations runs once per process; its immutable descriptors are shared.
 func DocumentRelations() DocumentRelationSet {
 	return foundryDocumentRelations.Get(foundryDocumentBuildRelations)
 }

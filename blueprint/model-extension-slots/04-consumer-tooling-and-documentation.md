@@ -38,7 +38,7 @@ such a model to generated declarations using E01's scope-equality guarantee.
   and has no delete flag, like the orphan commands.
 - **Scaffolds.** `foundry make model` slot flags were not delivered in this
   series. Scaffolds keep their check-first publication; declaring slot fields
-  and `DefineExtensions` by hand stays short, and an attachment policy always
+  and `define<Model>Extensions` by hand stays short, and an attachment policy always
   needs an explicit disk, which a scaffold could not choose. Follow-up delivered
   on 2026-09-30: `--translated`, `--attachment`, `--attachments`, `--metadata`
   and a required `--disk` for attachments. The model is checked together with

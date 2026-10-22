@@ -34,14 +34,14 @@ type Plan struct {
 	TotalPeriod relation.Value[value.Nullable[temporal.Interval]]
 }
 
-func (Plan) DefineRelations() PlanRelationSet {
+func definePlanRelations() PlanRelationSet {
 	p, s, l, label := PlanFields(), SampleFields(), LinkFields(), LabelFields()
 	return PlanRelationSet{
 		Samples: query.HasMany(p.Period, s.Period),
 		Labels:  query.ManyToMany(p.Period, l.PlanPeriod, l.LabelID, label.ID),
 	}
 }
-func (Plan) DefineAggregates() PlanAggregateSet {
+func definePlanAggregates() PlanAggregateSet {
 	r := PlanRelations()
 	return PlanAggregateSet{SampleCount: query.Related(r.Samples, query.Count[Sample]()), TotalPeriod: query.Related(r.Samples, query.Sum(SampleFields().Period))}
 }

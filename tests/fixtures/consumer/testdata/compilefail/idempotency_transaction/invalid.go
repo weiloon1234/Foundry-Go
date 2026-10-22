@@ -9,7 +9,7 @@ import (
 )
 
 func bad(store *idempotency.Store) {
-	fixture.Endpoint().Idempotent(store, idempotency.Definition{ID: "test", Version: 1}).Handle(func(context.Context, fixture.Request) (idempotency.Scope, error) { return idempotency.Scope{}, nil }, func(context.Context, *database.DB, fixture.Request) (fixture.Receipt, error) {
+	http.Idempotent(fixture.Endpoint(), store, idempotency.Definition{ID: "test", Version: 1}).Handle(func(context.Context, fixture.Request) (idempotency.Scope, error) { return idempotency.Scope{}, nil }, func(context.Context, *database.DB, fixture.Request) (fixture.Receipt, error) {
 		return fixture.Receipt{}, nil
 	})
 }

@@ -70,7 +70,7 @@ func DefineValue[M any, K comparable, V any](owner extensions.Owner[M, K], name 
 	var err error
 	if spec.JSON.IsZero() {
 		if inferred.IsZero() {
-			err = fault.New(fault.Invalid, "metadata slot "+binding.Field+" requires an explicit JSON contract in DefineExtensions")
+			err = fault.New(fault.Invalid, "metadata slot "+binding.Field+" requires an explicit JSON contract in define<Model>Extensions")
 		}
 		spec.JSON = inferred
 	}

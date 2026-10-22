@@ -142,7 +142,7 @@ re-audits all new ownership, transaction and replay paths together.
 ## Concrete delivered implementation
 
 The typed core is `idempotency.Define(store, definition, input, output)` and
-`Operation[I,R].Run`; HTTP uses `endpoint.Idempotent(store, definition).Handle`
+`Operation[I,R].Run`; HTTP uses `http.Idempotent(endpoint, store, definition).Handle`
 with the existing required-authentication and model-binding adapters. The configured
 application exposes `Features.Idempotency` and `Services.Idempotency()`. Its
 store/migrations join the shared persistence target list. Manifest format 4 owns

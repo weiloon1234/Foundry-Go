@@ -90,14 +90,17 @@ func foundryDeskBuildQuery() foundryquery.Query[Desk] {
 		foundryquery.NewModelField("id", foundryCodec0, func(item Desk) model.ID[Desk] { return item.ID }),
 		foundryquery.NewModelField("office_id", foundryCodec1, func(item Desk) model.ID[Office] { return item.OfficeID }),
 		foundryquery.NewModelField("label", foundryCodec2, func(item Desk) string { return item.Label }),
-	).WithGlobalScopeSource((Desk{}).DefineGlobalScopes).WithObserverHooks((DeskHooks{}).foundryWriteHooks, false).WithRetrievalHooks((DeskRetrievalHooks{}).foundryRetrievalHooks, false))
+	).WithGlobalScopeSource(defineDeskGlobalScopes).WithObserverHooks((DeskHooks{}).foundryWriteHooks, false).WithRetrievalHooks((DeskRetrievalHooks{}).foundryRetrievalHooks, false))
 }
 
 // QueryOfficeDesks starts a complete-model query for office_desks with generated hydration.
 func QueryOfficeDesks() DeskQuery { return DeskQuery{foundryDeskModelQuery.Get(foundryDeskBuildQuery)} }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Desk) FoundryQuery() foundryquery.Query[Desk] { return QueryOfficeDesks().Query }
+// FoundryModel identifies Desk's generated query for framework integrations
+// without placing the query engine in Desk's method set.
+func (Desk) FoundryModel() foundryquery.ModelRef[Desk] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Desk] { return QueryOfficeDesks().Query })
+}
 
 // FoundryReference retains Desk and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -442,7 +445,7 @@ func (p DeskInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune) 
 // InsertDeskFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertDeskFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) DeskInsertFromBuilder[FoundryScope] {
-	return DeskInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Desk{}).FoundryQuery())}
+	return DeskInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryOfficeDesks().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -658,7 +661,7 @@ func (d DeskDraft) FoundryUpdateMutation() (foundryquery.Mutation[Desk], error) 
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d DeskDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Desk]) (foundryquery.Mutation[Desk], error) {
-	values, err := foundryquery.ReadCreateDefaults((Desk{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryOfficeDesks().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Desk]{}, err
 	}
@@ -714,13 +717,13 @@ type DeskRelationSet struct {
 var foundryDeskRelations foundryquery.Memo[DeskRelationSet]
 
 func foundryDeskBuildRelations() DeskRelationSet {
-	relations := (Desk{}).DefineRelations()
-	relations.Office = relations.Office.Bind("Office", QueryOfficeDesks().Query, (Office{}).FoundryQuery(), func(m Desk) relation.One[Office] { return m.Office }, func(m Desk, loaded relation.One[Office]) Desk { m.Office = loaded; return m })
+	relations := defineDeskRelations()
+	relations.Office = relations.Office.Bind("Office", QueryOfficeDesks().Query, foundryquery.ModelQueryOf[Office](), func(m Desk) relation.One[Office] { return m.Office }, func(m Desk, loaded relation.One[Office]) Desk { m.Office = loaded; return m })
 	return relations
 }
 
 // DeskRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// defineDeskRelations runs once per process; its immutable descriptors are shared.
 func DeskRelations() DeskRelationSet { return foundryDeskRelations.Get(foundryDeskBuildRelations) }
 
 // DeskDraft tracks explicitly selected mutation fields, preserving omitted, zero and null states.

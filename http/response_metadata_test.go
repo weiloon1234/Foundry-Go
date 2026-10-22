@@ -88,7 +88,7 @@ func TestEndpointResponseHeadersValidation(t *testing.T) {
 		t.Fatal("file response headers accepted", err)
 	}
 	endpoint := patchEndpoint().WithHeaders(func(context.Context, EndpointReply) ([]ResponseHeader, error) { return nil, nil })
-	if err := endpoint.Idempotent(nil, idempotency.Definition{}).Validate(); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "IdempotentEndpoint.WithHeaders") {
+	if err := Idempotent(endpoint, nil, idempotency.Definition{}).Validate(); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "IdempotentEndpoint.WithHeaders") {
 		t.Fatal("idempotent endpoint accepted non-replayable headers", err)
 	}
 	if _, err := EndpointLocation(t.Context(), patchEndpoint(), userPath{}, endpointParameters{}); err == nil {

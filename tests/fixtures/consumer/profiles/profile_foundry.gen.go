@@ -100,8 +100,11 @@ func QueryProfiles() ProfileQuery {
 	return ProfileQuery{foundryProfileModelQuery.Get(foundryProfileBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Profile) FoundryQuery() foundryquery.Query[Profile] { return QueryProfiles().Query }
+// FoundryModel identifies Profile's generated query for framework integrations
+// without placing the query engine in Profile's method set.
+func (Profile) FoundryModel() foundryquery.ModelRef[Profile] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Profile] { return QueryProfiles().Query })
+}
 
 // FoundryReference retains Profile and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -478,7 +481,7 @@ func (p ProfileInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb run
 // InsertProfileFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertProfileFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) ProfileInsertFromBuilder[FoundryScope] {
-	return ProfileInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Profile{}).FoundryQuery())}
+	return ProfileInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryProfiles().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -710,7 +713,7 @@ func (d ProfileDraft) FoundryUpdateMutation() (foundryquery.Mutation[Profile], e
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d ProfileDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Profile]) (foundryquery.Mutation[Profile], error) {
-	values, err := foundryquery.ReadCreateDefaults((Profile{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryProfiles().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Profile]{}, err
 	}

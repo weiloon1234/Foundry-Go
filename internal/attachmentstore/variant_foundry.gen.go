@@ -239,9 +239,10 @@ func QueryFoundryAttachmentVariants() VariantQuery {
 	return VariantQuery{foundryVariantModelQuery.Get(foundryVariantBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Variant) FoundryQuery() foundryquery.Query[Variant] {
-	return QueryFoundryAttachmentVariants().Query
+// FoundryModel identifies Variant's generated query for framework integrations
+// without placing the query engine in Variant's method set.
+func (Variant) FoundryModel() foundryquery.ModelRef[Variant] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Variant] { return QueryFoundryAttachmentVariants().Query })
 }
 
 // FoundryReference retains Variant and its concrete stored primary key for framework integrations.
@@ -600,7 +601,7 @@ func (p VariantInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb run
 // InsertVariantFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertVariantFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) VariantInsertFromBuilder[FoundryScope] {
-	return VariantInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Variant{}).FoundryQuery())}
+	return VariantInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryFoundryAttachmentVariants().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -989,7 +990,7 @@ func (d VariantDraft) FoundryUpdateMutation() (foundryquery.Mutation[Variant], e
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d VariantDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Variant]) (foundryquery.Mutation[Variant], error) {
-	values, err := foundryquery.ReadCreateDefaults((Variant{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryFoundryAttachmentVariants().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Variant]{}, err
 	}

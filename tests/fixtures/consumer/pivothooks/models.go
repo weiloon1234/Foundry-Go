@@ -31,7 +31,7 @@ type Assignment struct {
 	Role      string
 }
 
-func (Project) DefineRelations() ProjectRelationSet {
+func defineProjectRelations() ProjectRelationSet {
 	p, a, m := ProjectFields(), AssignmentFields(), PersonFields()
 	return ProjectRelationSet{Members: query.ManyToMany(p.ID, a.ProjectID, a.PersonID, m.ID)}
 }

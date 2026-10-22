@@ -108,8 +108,11 @@ func QueryHookAssignments() AssignmentQuery {
 	return AssignmentQuery{foundryAssignmentModelQuery.Get(foundryAssignmentBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Assignment) FoundryQuery() foundryquery.Query[Assignment] { return QueryHookAssignments().Query }
+// FoundryModel identifies Assignment's generated query for framework integrations
+// without placing the query engine in Assignment's method set.
+func (Assignment) FoundryModel() foundryquery.ModelRef[Assignment] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Assignment] { return QueryHookAssignments().Query })
+}
 
 // FoundryReference retains Assignment and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -476,7 +479,7 @@ func (p AssignmentInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb 
 // InsertAssignmentFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertAssignmentFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) AssignmentInsertFromBuilder[FoundryScope] {
-	return AssignmentInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Assignment{}).FoundryQuery())}
+	return AssignmentInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryHookAssignments().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -707,7 +710,7 @@ func (d AssignmentDraft) FoundryUpdateMutation() (foundryquery.Mutation[Assignme
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d AssignmentDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Assignment]) (foundryquery.Mutation[Assignment], error) {
-	values, err := foundryquery.ReadCreateDefaults((Assignment{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryHookAssignments().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Assignment]{}, err
 	}

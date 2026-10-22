@@ -133,9 +133,10 @@ func QueryTenantDocumentTags() DocumentTagQuery {
 	return DocumentTagQuery{foundryDocumentTagModelQuery.Get(foundryDocumentTagBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (DocumentTag) FoundryQuery() foundryquery.Query[DocumentTag] {
-	return QueryTenantDocumentTags().Query
+// FoundryModel identifies DocumentTag's generated query for framework integrations
+// without placing the query engine in DocumentTag's method set.
+func (DocumentTag) FoundryModel() foundryquery.ModelRef[DocumentTag] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[DocumentTag] { return QueryTenantDocumentTags().Query })
 }
 
 // FoundryReference retains DocumentTag and its concrete stored primary key for framework integrations.
@@ -509,7 +510,7 @@ func (p DocumentTagInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb
 // InsertDocumentTagFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertDocumentTagFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) DocumentTagInsertFromBuilder[FoundryScope] {
-	return DocumentTagInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (DocumentTag{}).FoundryQuery())}
+	return DocumentTagInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryTenantDocumentTags().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -754,7 +755,7 @@ func (d DocumentTagDraft) FoundryUpdateMutation() (foundryquery.Mutation[Documen
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d DocumentTagDraft) FoundryCreateMutation(defaults foundryquery.Mutation[DocumentTag]) (foundryquery.Mutation[DocumentTag], error) {
-	values, err := foundryquery.ReadCreateDefaults((DocumentTag{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryTenantDocumentTags().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[DocumentTag]{}, err
 	}

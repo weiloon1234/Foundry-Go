@@ -249,8 +249,11 @@ func QueryFoundryNotifications() EnvelopeQuery {
 	return EnvelopeQuery{foundryEnvelopeModelQuery.Get(foundryEnvelopeBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Envelope) FoundryQuery() foundryquery.Query[Envelope] { return QueryFoundryNotifications().Query }
+// FoundryModel identifies Envelope's generated query for framework integrations
+// without placing the query engine in Envelope's method set.
+func (Envelope) FoundryModel() foundryquery.ModelRef[Envelope] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Envelope] { return QueryFoundryNotifications().Query })
+}
 
 // FoundryReference retains Envelope and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -612,7 +615,7 @@ func (p EnvelopeInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb ru
 // InsertEnvelopeFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertEnvelopeFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) EnvelopeInsertFromBuilder[FoundryScope] {
-	return EnvelopeInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Envelope{}).FoundryQuery())}
+	return EnvelopeInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryFoundryNotifications().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -927,7 +930,7 @@ func (d EnvelopeDraft) FoundryUpdateMutation() (foundryquery.Mutation[Envelope],
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d EnvelopeDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Envelope]) (foundryquery.Mutation[Envelope], error) {
-	values, err := foundryquery.ReadCreateDefaults((Envelope{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryFoundryNotifications().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Envelope]{}, err
 	}

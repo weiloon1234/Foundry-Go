@@ -40,10 +40,10 @@ type Task struct {
 	Slug      Slug
 }
 
-func (Team) DefineRelations() TeamRelationSet {
+func defineTeamRelations() TeamRelationSet {
 	return TeamRelationSet{Projects: query.HasMany(TeamFields().ID, ProjectFields().TeamID)}
 }
-func (Project) DefineRelations() ProjectRelationSet {
+func defineProjectRelations() ProjectRelationSet {
 	return ProjectRelationSet{Team: query.BelongsTo(ProjectFields().TeamID, TeamFields().ID), Tasks: query.HasMany(ProjectFields().ID, TaskFields().ProjectID)}
 }
 

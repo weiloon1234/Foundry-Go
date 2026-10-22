@@ -102,8 +102,11 @@ func QueryLedgerEntries() LedgerEntryQuery {
 	return LedgerEntryQuery{foundryLedgerEntryModelQuery.Get(foundryLedgerEntryBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (LedgerEntry) FoundryQuery() foundryquery.Query[LedgerEntry] { return QueryLedgerEntries().Query }
+// FoundryModel identifies LedgerEntry's generated query for framework integrations
+// without placing the query engine in LedgerEntry's method set.
+func (LedgerEntry) FoundryModel() foundryquery.ModelRef[LedgerEntry] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[LedgerEntry] { return QueryLedgerEntries().Query })
+}
 
 // FoundryReference retains LedgerEntry and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -475,7 +478,7 @@ func (p LedgerEntryInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb
 // InsertLedgerEntryFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertLedgerEntryFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) LedgerEntryInsertFromBuilder[FoundryScope] {
-	return LedgerEntryInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (LedgerEntry{}).FoundryQuery())}
+	return LedgerEntryInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryLedgerEntries().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -694,7 +697,7 @@ func (d LedgerEntryDraft) FoundryUpdateMutation() (foundryquery.Mutation[LedgerE
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d LedgerEntryDraft) FoundryCreateMutation(defaults foundryquery.Mutation[LedgerEntry]) (foundryquery.Mutation[LedgerEntry], error) {
-	values, err := foundryquery.ReadCreateDefaults((LedgerEntry{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryLedgerEntries().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[LedgerEntry]{}, err
 	}

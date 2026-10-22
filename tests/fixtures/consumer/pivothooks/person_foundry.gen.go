@@ -88,8 +88,11 @@ func QueryHookPeople() PersonQuery {
 	return PersonQuery{foundryPersonModelQuery.Get(foundryPersonBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Person) FoundryQuery() foundryquery.Query[Person] { return QueryHookPeople().Query }
+// FoundryModel identifies Person's generated query for framework integrations
+// without placing the query engine in Person's method set.
+func (Person) FoundryModel() foundryquery.ModelRef[Person] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Person] { return QueryHookPeople().Query })
+}
 
 // FoundryReference retains Person and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -444,7 +447,7 @@ func (p PersonInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune
 // InsertPersonFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertPersonFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) PersonInsertFromBuilder[FoundryScope] {
-	return PersonInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Person{}).FoundryQuery())}
+	return PersonInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryHookPeople().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -648,7 +651,7 @@ func (d PersonDraft) FoundryUpdateMutation() (foundryquery.Mutation[Person], err
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d PersonDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Person]) (foundryquery.Mutation[Person], error) {
-	values, err := foundryquery.ReadCreateDefaults((Person{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryHookPeople().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Person]{}, err
 	}

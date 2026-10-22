@@ -88,8 +88,11 @@ func QueryRecords() RecordQuery {
 	return RecordQuery{foundryRecordModelQuery.Get(foundryRecordBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Record) FoundryQuery() foundryquery.Query[Record] { return QueryRecords().Query }
+// FoundryModel identifies Record's generated query for framework integrations
+// without placing the query engine in Record's method set.
+func (Record) FoundryModel() foundryquery.ModelRef[Record] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Record] { return QueryRecords().Query })
+}
 
 // FoundryReference retains Record and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -444,7 +447,7 @@ func (p RecordInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune
 // InsertRecordFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertRecordFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) RecordInsertFromBuilder[FoundryScope] {
-	return RecordInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Record{}).FoundryQuery())}
+	return RecordInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryRecords().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -648,7 +651,7 @@ func (d RecordDraft) FoundryUpdateMutation() (foundryquery.Mutation[Record], err
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d RecordDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Record]) (foundryquery.Mutation[Record], error) {
-	values, err := foundryquery.ReadCreateDefaults((Record{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryRecords().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Record]{}, err
 	}

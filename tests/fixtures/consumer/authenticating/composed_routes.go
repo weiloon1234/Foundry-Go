@@ -29,7 +29,7 @@ func Orders(transport *foundryhttp.Authentication, guard auth.Guard[models.User]
 	return foundryhttp.RequireAuthentication(showOrder, transport, guard).WithPermissions(ViewAccount)
 }
 func SignedOrders(endpoint OrderEndpoint, signer foundryhttp.URLSigner) SignedOrderEndpoint {
-	return endpoint.Signed(signer)
+	return foundryhttp.SignedAuthenticated(endpoint, signer)
 }
 func OrderResource(db database.Executor) modelbinding.Resolver[OrderPath, models.Order] {
 	return modelbinding.ByKey(db, models.QueryOrders(), func(path OrderPath) model.ID[models.Order] { return path.Order })

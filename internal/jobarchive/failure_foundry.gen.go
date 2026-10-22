@@ -182,8 +182,11 @@ func QueryFoundryFailedJobs() FailureQuery {
 	return FailureQuery{foundryFailureModelQuery.Get(foundryFailureBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Failure) FoundryQuery() foundryquery.Query[Failure] { return QueryFoundryFailedJobs().Query }
+// FoundryModel identifies Failure's generated query for framework integrations
+// without placing the query engine in Failure's method set.
+func (Failure) FoundryModel() foundryquery.ModelRef[Failure] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Failure] { return QueryFoundryFailedJobs().Query })
+}
 
 // FoundryReference retains Failure and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -540,7 +543,7 @@ func (p FailureInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb run
 // InsertFailureFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertFailureFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) FailureInsertFromBuilder[FoundryScope] {
-	return FailureInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Failure{}).FoundryQuery())}
+	return FailureInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryFoundryFailedJobs().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -867,7 +870,7 @@ func (d FailureDraft) FoundryUpdateMutation() (foundryquery.Mutation[Failure], e
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d FailureDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Failure]) (foundryquery.Mutation[Failure], error) {
-	values, err := foundryquery.ReadCreateDefaults((Failure{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryFoundryFailedJobs().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Failure]{}, err
 	}

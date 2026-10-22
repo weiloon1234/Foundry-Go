@@ -39,7 +39,7 @@ type Author struct {
 	Articles relation.Many[Article]
 }
 
-func (Author) DefineRelations() AuthorRelationSet {
+func defineAuthorRelations() AuthorRelationSet {
 	return AuthorRelationSet{Articles: query.HasMany(AuthorFields().ID, ArticleFields().AuthorID)}
 }
 
@@ -51,22 +51,22 @@ type Article struct {
 	// Foundry field behavior (generated): Managed soft-delete timestamp: Delete sets this stored field and Restore clears it. Ordinary queries exclude deleted models; WithTrashed and OnlyTrashed select visibility explicitly. Assigning this field directly through a draft uses ordinary create/update hooks rather than deletion/restoration events.
 	DeletedAt value.Nullable[temporal.DateTime]
 
-	// Foundry field behavior (generated): Extension slot, not a column: translated text stored in foundry_model_translations as field "title", one row per locale; policy: [Article.DefineExtensions] entry Title. Descriptor: ArticleExtensions().Title; bind it once with From(runtime), then pass it to With or Load to fill this field. The zero value is not loaded and reads never perform I/O. Write with SaveIn (merge) or SyncIn (exact, enforcing Require) in the model's transaction, and validate request input with Rule() or MergeRule(). Hard deletion removes the data; soft deletion keeps it. Renaming this field changes its stored name unless foundry:"name=title" pins it.
+	// Foundry field behavior (generated): Extension slot, not a column: translated text stored in foundry_model_translations as field "title", one row per locale; policy: defineArticleExtensions entry Title. Descriptor: ArticleExtensions().Title; bind it once with From(runtime), then pass it to With or Load to fill this field. The zero value is not loaded and reads never perform I/O. Write with SaveIn (merge) or SyncIn (exact, enforcing Require) in the model's transaction, and validate request input with Rule() or MergeRule(). Hard deletion removes the data; soft deletion keeps it. Renaming this field changes its stored name unless foundry:"name=title" pins it.
 	// Title is the localized article heading shown to readers.
 	Title translations.Text
-	// Foundry field behavior (generated): Extension slot, not a column: translated text stored in foundry_model_translations as field "summary", one row per locale; policy: [Article.DefineExtensions] entry Summary. Descriptor: ArticleExtensions().Summary; bind it once with From(runtime), then pass it to With or Load to fill this field. The zero value is not loaded and reads never perform I/O. Write with SaveIn (merge) or SyncIn (exact, enforcing Require) in the model's transaction, and validate request input with Rule() or MergeRule(). Hard deletion removes the data; soft deletion keeps it. Renaming this field changes its stored name unless foundry:"name=summary" pins it.
+	// Foundry field behavior (generated): Extension slot, not a column: translated text stored in foundry_model_translations as field "summary", one row per locale; policy: defineArticleExtensions entry Summary. Descriptor: ArticleExtensions().Summary; bind it once with From(runtime), then pass it to With or Load to fill this field. The zero value is not loaded and reads never perform I/O. Write with SaveIn (merge) or SyncIn (exact, enforcing Require) in the model's transaction, and validate request input with Rule() or MergeRule(). Hard deletion removes the data; soft deletion keeps it. Renaming this field changes its stored name unless foundry:"name=summary" pins it.
 	Summary translations.Text
-	// Foundry field behavior (generated): Extension slot, not a column: the single file of attachment collection "logo", recorded in foundry_attachments with its bytes on the policy's disk; policy: [Article.DefineExtensions] entry Logo. Descriptor: ArticleExtensions().Logo; bind it once with From(runtime), then pass it to With or Load to fill this field. The zero value is not loaded and reads never perform I/O. Publish with ReplaceFile after the model commits, and check uploads with Accepts. Hard deletion removes the data; soft deletion keeps it. Renaming this field changes its stored name unless foundry:"name=logo" pins it.
+	// Foundry field behavior (generated): Extension slot, not a column: the single file of attachment collection "logo", recorded in foundry_attachments with its bytes on the policy's disk; policy: defineArticleExtensions entry Logo. Descriptor: ArticleExtensions().Logo; bind it once with From(runtime), then pass it to With or Load to fill this field. The zero value is not loaded and reads never perform I/O. Publish with ReplaceFile after the model commits, and check uploads with Accepts. Hard deletion removes the data; soft deletion keeps it. Renaming this field changes its stored name unless foundry:"name=logo" pins it.
 	Logo attachments.One[Article]
-	// Foundry field behavior (generated): Extension slot, not a column: the ordered files of attachment collection "galleries", recorded in foundry_attachments with their bytes on the policy's disk; policy: [Article.DefineExtensions] entry Galleries. Descriptor: ArticleExtensions().Galleries; bind it once with From(runtime), then pass it to With or Load to fill this field. The zero value is not loaded and reads never perform I/O. Publish with AddFile or attachments.AddFiles after the model commits, and check uploads with Accepts. Hard deletion removes the data; soft deletion keeps it. Renaming this field changes its stored name unless foundry:"name=galleries" pins it.
+	// Foundry field behavior (generated): Extension slot, not a column: the ordered files of attachment collection "galleries", recorded in foundry_attachments with their bytes on the policy's disk; policy: defineArticleExtensions entry Galleries. Descriptor: ArticleExtensions().Galleries; bind it once with From(runtime), then pass it to With or Load to fill this field. The zero value is not loaded and reads never perform I/O. Publish with AddFile or attachments.AddFiles after the model commits, and check uploads with Accepts. Hard deletion removes the data; soft deletion keeps it. Renaming this field changes its stored name unless foundry:"name=galleries" pins it.
 	Galleries attachments.Many[Article]
-	// Foundry field behavior (generated): Extension slot, not a column: the typed metadata value "seo" stored in foundry_model_metadata, with no model column; policy: [Article.DefineExtensions] entry SEO. Descriptor: ArticleExtensions().SEO; bind it once with From(runtime), then pass it to With or Load to fill this field. The zero value is not loaded and reads never perform I/O. Write with SaveIn in the model's transaction. Hard deletion removes the data; soft deletion keeps it. Renaming this field changes its stored name unless foundry:"name=seo" pins it.
+	// Foundry field behavior (generated): Extension slot, not a column: the typed metadata value "seo" stored in foundry_model_metadata, with no model column; policy: defineArticleExtensions entry SEO. Descriptor: ArticleExtensions().SEO; bind it once with From(runtime), then pass it to With or Load to fill this field. The zero value is not loaded and reads never perform I/O. Write with SaveIn in the model's transaction. Hard deletion removes the data; soft deletion keeps it. Renaming this field changes its stored name unless foundry:"name=seo" pins it.
 	SEO metadata.Value[SEO]
 
 	Author relation.One[Author]
 }
 
-func (Article) DefineExtensions() ArticleExtensionSet {
+func defineArticleExtensions() ArticleExtensionSet {
 	return ArticleExtensionSet{
 		Title: translations.Options{MaxBytes: 512, Require: i18n.DefaultLocale},
 		Logo: attachments.Policy{
@@ -83,6 +83,6 @@ func (Article) DefineExtensions() ArticleExtensionSet {
 	}
 }
 
-func (Article) DefineRelations() ArticleRelationSet {
+func defineArticleRelations() ArticleRelationSet {
 	return ArticleRelationSet{Author: query.BelongsTo(ArticleFields().AuthorID, AuthorFields().ID)}
 }

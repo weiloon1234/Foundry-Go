@@ -60,7 +60,7 @@ func TestJSONResponsesPublishTheSelectedDeclaredStatus(t *testing.T) {
 			t.Fatal("invalid status set accepted", statuses)
 		}
 	}
-	if err := upsertEndpoint().Idempotent(nil, idempotency.Definition{}).Validate(); err == nil {
+	if err := Idempotent(upsertEndpoint(), nil, idempotency.Definition{}).Validate(); err == nil {
 		t.Fatal("idempotent endpoint accepted several statuses")
 	}
 }

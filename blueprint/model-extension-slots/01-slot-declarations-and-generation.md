@@ -10,9 +10,9 @@ Relation and aggregate slots already use this shape. Discovery recognizes
 [model discovery](../../internal/generate/discover.go). The
 [relation](../../internal/generate/emit_model_relations.go) and
 [aggregate](../../internal/generate/emit_model_aggregates.go) emitters then bind
-the handwritten `DefineRelations`/`DefineAggregates` result through a `query.Memo`.
+the handwritten `define<Model>Relations`/`define<Model>Aggregates` result through a `query.Memo`.
 [Global scopes](../../internal/generate/discover_model_scopes.go) show how a
-handwritten `Define...` method is validated with a source diagnostic.
+handwritten `define...` function is validated with a source diagnostic.
 [Generated auditing](../../internal/generate/emit_model_audit.go) shows a
 generated declaration that the application registers through typed observers.
 
@@ -60,8 +60,8 @@ the default is the snake_case Go field name (`Galleries` → `galleries`). Store
 names use the existing semantic identifier rule and must be unique across all
 slots of one model. `foundry:"-"` excludes the field, which is then not a slot.
 
-`DefineExtensions() <Model>ExtensionSet` uses a value receiver and the exact
-signature, validated like `DefineGlobalScopes` with a diagnostic at the method.
+`define<Model>Extensions() <Model>ExtensionSet` uses the exact
+signature, validated like `define<Model>GlobalScopes` with a diagnostic at the function.
 It is required when the model has any attachment slot and optional otherwise.
 The generated set type has one field per slot:
 
@@ -76,8 +76,8 @@ match; generation supplies it. Metadata contract inference covers generated DTO
 descriptors (`ArticleSEOJSON()`), the scalar descriptors in `contract` and
 `json.RawMessage` through `contract.DynamicJSON()`, plus types with a
 `JSONContract` method. Any other `V` requires an explicit `JSON` descriptor:
-generation fails when the model has no `DefineExtensions`, and assembly fails when
-the method leaves that entry empty, because generation cannot evaluate the method
+generation fails when the model has no `define<Model>Extensions`, and assembly fails when
+the function leaves that entry empty, because generation cannot evaluate the function
 body. `translations.Options` gains `Require`, an `i18n.LocaleRequirement`
 (`OptionalLocales` by default, `DefaultLocale` or `AllLocales`), shared with the
 locale-map validation rule. It is enforced by E03's input rule and exact
@@ -104,14 +104,14 @@ on the explicit owner path and the existing `rescope` commands.
 
 For model `Article` with key `K`, generation emits:
 
-- `ArticleExtensionSet`, the policy type returned by `DefineExtensions`.
+- `ArticleExtensionSet`, the policy type returned by `defineArticleExtensions`.
 - `ArticleExtensionSlots`, with one descriptor per slot:
   `translations.TextSlot[Article, K]`, `attachments.OneSlot[Article, K]`,
   `attachments.ManySlot[Article, K]` and `metadata.ValueSlot[Article, K, V]`.
   Each wraps the existing `Field`, `Collection` or `Key` declaration and exposes it
   for advanced calls. Generated getters/setters bind the concrete struct field.
 - `ArticleExtensions() ArticleExtensionSlots`, built once through `query.Memo`;
-  `DefineExtensions` runs once per process and must not call this accessor.
+  `defineArticleExtensions` runs once per process and must not call this accessor.
 - `(ArticleExtensionSlots).From(slots.Runtime) ArticleExtensionSlots`, returning
   a copy whose descriptors borrow the runtime's managers.
 - `ArticleExtensionDeclaration() slots.Declaration` and one package-level
@@ -188,7 +188,7 @@ and recovery path.
 - Generation: fresh, repeated and check-only runs are deterministic. Diagnostics
   with source positions cover: another model as `One`/`Many` argument; column or
   unknown slot tags; duplicate or invalid stored names; reserved names; a missing
-  or wrongly typed `DefineExtensions`; attachment slots without policy; and a
+  or wrongly typed `define<Model>Extensions`; attachment slots without policy; and a
   metadata `V` without an inferable contract.
 - Compile-fail cases in the [existing catalog](../../tests/fixtures/consumer/compiler_batch_test.go):
   a policy of the wrong kind in the set, and one model's descriptor in another

@@ -181,9 +181,10 @@ func QueryFoundryWebhookEndpoints() EndpointQuery {
 	return EndpointQuery{foundryEndpointModelQuery.Get(foundryEndpointBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Endpoint) FoundryQuery() foundryquery.Query[Endpoint] {
-	return QueryFoundryWebhookEndpoints().Query
+// FoundryModel identifies Endpoint's generated query for framework integrations
+// without placing the query engine in Endpoint's method set.
+func (Endpoint) FoundryModel() foundryquery.ModelRef[Endpoint] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Endpoint] { return QueryFoundryWebhookEndpoints().Query })
 }
 
 // FoundryReference retains Endpoint and its concrete stored primary key for framework integrations.
@@ -547,7 +548,7 @@ func (p EndpointInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb ru
 // InsertEndpointFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertEndpointFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) EndpointInsertFromBuilder[FoundryScope] {
-	return EndpointInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Endpoint{}).FoundryQuery())}
+	return EndpointInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryFoundryWebhookEndpoints().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -792,7 +793,7 @@ func (d EndpointDraft) FoundryUpdateMutation() (foundryquery.Mutation[Endpoint],
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d EndpointDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Endpoint]) (foundryquery.Mutation[Endpoint], error) {
-	values, err := foundryquery.ReadCreateDefaults((Endpoint{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryFoundryWebhookEndpoints().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Endpoint]{}, err
 	}

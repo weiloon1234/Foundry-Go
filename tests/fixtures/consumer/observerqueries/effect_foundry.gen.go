@@ -90,8 +90,11 @@ func QueryObservedEffects() EffectQuery {
 	return EffectQuery{foundryEffectModelQuery.Get(foundryEffectBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Effect) FoundryQuery() foundryquery.Query[Effect] { return QueryObservedEffects().Query }
+// FoundryModel identifies Effect's generated query for framework integrations
+// without placing the query engine in Effect's method set.
+func (Effect) FoundryModel() foundryquery.ModelRef[Effect] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Effect] { return QueryObservedEffects().Query })
+}
 
 // FoundryReference retains Effect and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -446,7 +449,7 @@ func (p EffectInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune
 // InsertEffectFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertEffectFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) EffectInsertFromBuilder[FoundryScope] {
-	return EffectInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Effect{}).FoundryQuery())}
+	return EffectInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryObservedEffects().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -650,7 +653,7 @@ func (d EffectDraft) FoundryUpdateMutation() (foundryquery.Mutation[Effect], err
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d EffectDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Effect]) (foundryquery.Mutation[Effect], error) {
-	values, err := foundryquery.ReadCreateDefaults((Effect{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryObservedEffects().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Effect]{}, err
 	}

@@ -111,7 +111,7 @@ func TestSignedEndpointUsesOnlyVerifiedDomainQuery(t *testing.T) {
 	type query struct{ Terms []string }
 	parameters := DefineQuery(RepeatedQueryParam("q", StringQuery[string](), func(q *query) *[]string { return &q.Terms }))
 	base := DefineEndpoint(textRoute("/search/{text}"), parameters, EmptyBody(), EmptyResponse(204))
-	signed := base.Signed(signer)
+	signed := Signed(base, signer)
 	location, err := signed.URL(t.Context(), urlTestOrigin, textPath{Text: "a/b"}, query{Terms: []string{"one + two", "中文"}}, now.Now().Add(time.Minute))
 	if err != nil {
 		t.Fatal(err)
@@ -158,7 +158,7 @@ func TestSignedEndpointUsesOnlyVerifiedDomainQuery(t *testing.T) {
 	for _, name := range []string{"expires", "signature"} {
 		type reserved struct{ Value string }
 		q := DefineQuery(QueryParam(name, StringQuery[string](), func(q *reserved) *string { return &q.Value }))
-		invalid := DefineEndpoint(textRoute("/search/{text}"), q, EmptyBody(), EmptyResponse(204)).Signed(signer)
+		invalid := Signed(DefineEndpoint(textRoute("/search/{text}"), q, EmptyBody(), EmptyResponse(204)), signer)
 		if invalid.Validate() == nil {
 			t.Fatal("reserved query declaration accepted")
 		}

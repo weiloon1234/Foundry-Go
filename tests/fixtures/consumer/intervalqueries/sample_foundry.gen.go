@@ -164,8 +164,11 @@ func QueryIntervalSamples() SampleQuery {
 	return SampleQuery{foundrySampleModelQuery.Get(foundrySampleBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Sample) FoundryQuery() foundryquery.Query[Sample] { return QueryIntervalSamples().Query }
+// FoundryModel identifies Sample's generated query for framework integrations
+// without placing the query engine in Sample's method set.
+func (Sample) FoundryModel() foundryquery.ModelRef[Sample] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Sample] { return QueryIntervalSamples().Query })
+}
 
 // FoundryReference retains Sample and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -520,7 +523,7 @@ func (p SampleInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune
 // InsertSampleFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertSampleFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) SampleInsertFromBuilder[FoundryScope] {
-	return SampleInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Sample{}).FoundryQuery())}
+	return SampleInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryIntervalSamples().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -820,7 +823,7 @@ func (d SampleDraft) FoundryUpdateMutation() (foundryquery.Mutation[Sample], err
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d SampleDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Sample]) (foundryquery.Mutation[Sample], error) {
-	values, err := foundryquery.ReadCreateDefaults((Sample{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryIntervalSamples().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Sample]{}, err
 	}

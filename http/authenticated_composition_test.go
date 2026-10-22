@@ -85,7 +85,7 @@ func TestSignedAuthenticatedModelBindingPreservesAllBoundaries(t *testing.T) {
 	}
 	signer, now := compositionSigner(t)
 	endpoint := foundryhttp.DefineEndpoint(compositionRoute(foundryhttp.Guarded, &parses), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
-	signed := foundryhttp.RequireAuthentication(endpoint, transport, guard).WithPermissions(permission).Signed(signer)
+	signed := foundryhttp.SignedAuthenticated(foundryhttp.RequireAuthentication(endpoint, transport, guard).WithPermissions(permission), signer)
 	resolver := modelbinding.Define(func(ctx context.Context, path compositionPath) (value.Optional[compositionOrder], error) {
 		lookups.Add(1)
 		if origin := attribution.FromContext(ctx); origin.Guard() != "api" {
@@ -198,7 +198,7 @@ func TestOptionalSignedModelBindingRetainsOptionalSubject(t *testing.T) {
 	}
 	signer, now := compositionSigner(t)
 	endpoint := foundryhttp.DefineEndpoint(compositionRoute(foundryhttp.Public, &parses), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
-	signed := foundryhttp.OptionalAuthentication(endpoint, transport, guard).Signed(signer)
+	signed := foundryhttp.SignedOptionalAuthentication(foundryhttp.OptionalAuthentication(endpoint, transport, guard), signer)
 	resolver := modelbinding.Define(func(_ context.Context, p compositionPath) (value.Optional[compositionOrder], error) {
 		return value.Set(compositionOrder{ID: p.Order}), nil
 	})

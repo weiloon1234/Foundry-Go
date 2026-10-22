@@ -565,8 +565,11 @@ func QueryFoundryCountries() CountryQuery {
 	return CountryQuery{foundryCountryModelQuery.Get(foundryCountryBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Country) FoundryQuery() foundryquery.Query[Country] { return QueryFoundryCountries().Query }
+// FoundryModel identifies Country's generated query for framework integrations
+// without placing the query engine in Country's method set.
+func (Country) FoundryModel() foundryquery.ModelRef[Country] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Country] { return QueryFoundryCountries().Query })
+}
 
 // FoundryReference retains Country and its concrete stored primary key for framework integrations.
 // It reads ISO2 directly, never calls an accessor, and performs no database lookup.
@@ -924,7 +927,7 @@ func (p CountryInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb run
 // InsertCountryFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertCountryFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) CountryInsertFromBuilder[FoundryScope] {
-	return CountryInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Country{}).FoundryQuery())}
+	return CountryInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryFoundryCountries().Query)}
 }
 
 // SelectISO2 supplies the stored SQL value for iso2. It cannot also be supplied by Values.
@@ -1409,7 +1412,7 @@ func (d CountryDraft) FoundryUpdateMutation() (foundryquery.Mutation[Country], e
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d CountryDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Country]) (foundryquery.Mutation[Country], error) {
-	values, err := foundryquery.ReadCreateDefaults((Country{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryFoundryCountries().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Country]{}, err
 	}

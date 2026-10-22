@@ -91,8 +91,11 @@ func QueryEventLinks() EventLinkQuery {
 	return EventLinkQuery{foundryEventLinkModelQuery.Get(foundryEventLinkBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (EventLink) FoundryQuery() foundryquery.Query[EventLink] { return QueryEventLinks().Query }
+// FoundryModel identifies EventLink's generated query for framework integrations
+// without placing the query engine in EventLink's method set.
+func (EventLink) FoundryModel() foundryquery.ModelRef[EventLink] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[EventLink] { return QueryEventLinks().Query })
+}
 
 // FoundryReference retains EventLink and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -456,7 +459,7 @@ func (p EventLinkInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb r
 // InsertEventLinkFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertEventLinkFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) EventLinkInsertFromBuilder[FoundryScope] {
-	return EventLinkInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (EventLink{}).FoundryQuery())}
+	return EventLinkInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryEventLinks().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -663,7 +666,7 @@ func (d EventLinkDraft) FoundryUpdateMutation() (foundryquery.Mutation[EventLink
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d EventLinkDraft) FoundryCreateMutation(defaults foundryquery.Mutation[EventLink]) (foundryquery.Mutation[EventLink], error) {
-	values, err := foundryquery.ReadCreateDefaults((EventLink{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryEventLinks().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[EventLink]{}, err
 	}

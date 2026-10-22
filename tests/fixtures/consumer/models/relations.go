@@ -2,9 +2,9 @@ package models
 
 import "github.com/weiloon1234/Foundry-Go/database/query"
 
-// DefineRelations links Go field descriptors. Key/target compatibility is checked
+// defineUserRelations links Go field descriptors. Key/target compatibility is checked
 // by the Go compiler; SQL column names and slot setters stay generator-owned.
-func (User) DefineRelations() UserRelationSet {
+func defineUserRelations() UserRelationSet {
 	return UserRelationSet{
 		Introducer:   query.BelongsTo(UserFields().IntroducerID, UserFields().ID),
 		Referrals:    query.HasMany(UserFields().ID, UserFields().IntroducerID),
@@ -16,12 +16,12 @@ func (User) DefineRelations() UserRelationSet {
 	}
 }
 
-func (Country) DefineRelations() CountryRelationSet {
+func defineCountryRelations() CountryRelationSet {
 	return CountryRelationSet{Locations: query.HasMany(CountryFields().Code, LocationFields().CountryCode)}
 }
-func (Location) DefineRelations() LocationRelationSet {
+func defineLocationRelations() LocationRelationSet {
 	return LocationRelationSet{Country: query.BelongsTo(LocationFields().CountryCode, CountryFields().Code)}
 }
-func (Order) DefineRelations() OrderRelationSet {
+func defineOrderRelations() OrderRelationSet {
 	return OrderRelationSet{Buyer: query.BelongsTo(OrderFields().BuyerID, UserFields().ID)}
 }

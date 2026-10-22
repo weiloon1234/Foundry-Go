@@ -43,10 +43,13 @@ var MemberEvents = foundryhttp.DefineEndpoint(
 // signedMember accepts expiring, permanent and origin-relative signed links; a
 // mail client's utm_source decoration is ignored.
 func signedMember(signer foundryhttp.URLSigner) foundryhttp.SignedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, Member] {
-	return foundryhttp.DefineEndpoint(
-		foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.signed", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members/signed")),
-		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, MemberJSON()),
-	).Signed(signer).WithPermanentLinks().WithIgnoredParameters("utm_source")
+	return foundryhttp.Signed(
+		foundryhttp.DefineEndpoint(
+			foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.signed", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members/signed")),
+			foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, MemberJSON()),
+		),
+		signer,
+	).WithPermanentLinks().WithIgnoredParameters("utm_source")
 }
 
 // SignedLinks are the link forms a client receives from the server.

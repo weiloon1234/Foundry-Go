@@ -87,8 +87,11 @@ func foundryTagBuildQuery() foundryquery.Query[Tag] {
 // QueryTenantTags starts a complete-model query for tenant_tags with generated hydration.
 func QueryTenantTags() TagQuery { return TagQuery{foundryTagModelQuery.Get(foundryTagBuildQuery)} }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Tag) FoundryQuery() foundryquery.Query[Tag] { return QueryTenantTags().Query }
+// FoundryModel identifies Tag's generated query for framework integrations
+// without placing the query engine in Tag's method set.
+func (Tag) FoundryModel() foundryquery.ModelRef[Tag] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Tag] { return QueryTenantTags().Query })
+}
 
 // FoundryReference retains Tag and its concrete stored primary key for framework integrations.
 // It reads Code directly, never calls an accessor, and performs no database lookup.
@@ -433,7 +436,7 @@ func (p TagInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune) {
 // InsertTagFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertTagFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) TagInsertFromBuilder[FoundryScope] {
-	return TagInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Tag{}).FoundryQuery())}
+	return TagInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryTenantTags().Query)}
 }
 
 // SelectCode supplies the stored SQL value for code. It cannot also be supplied by Values.
@@ -637,7 +640,7 @@ func (d TagDraft) FoundryUpdateMutation() (foundryquery.Mutation[Tag], error) {
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d TagDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Tag]) (foundryquery.Mutation[Tag], error) {
-	values, err := foundryquery.ReadCreateDefaults((Tag{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryTenantTags().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Tag]{}, err
 	}
@@ -676,13 +679,13 @@ type TagRelationSet struct {
 var foundryTagRelations foundryquery.Memo[TagRelationSet]
 
 func foundryTagBuildRelations() TagRelationSet {
-	relations := (Tag{}).DefineRelations()
-	relations.Documents = relations.Documents.Bind("Documents", QueryTenantTags().Query, (Document{}).FoundryQuery(), (DocumentTag{}).FoundryQuery(), func(m Tag) relation.Through[Document, DocumentTag] { return m.Documents }, func(m Tag, loaded relation.Through[Document, DocumentTag]) Tag { m.Documents = loaded; return m })
+	relations := defineTagRelations()
+	relations.Documents = relations.Documents.Bind("Documents", QueryTenantTags().Query, foundryquery.ModelQueryOf[Document](), foundryquery.ModelQueryOf[DocumentTag](), func(m Tag) relation.Through[Document, DocumentTag] { return m.Documents }, func(m Tag, loaded relation.Through[Document, DocumentTag]) Tag { m.Documents = loaded; return m })
 	return relations
 }
 
 // TagRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// defineTagRelations runs once per process; its immutable descriptors are shared.
 func TagRelations() TagRelationSet { return foundryTagRelations.Get(foundryTagBuildRelations) }
 
 // TagDraft tracks explicitly selected mutation fields, preserving omitted, zero and null states.

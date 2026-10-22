@@ -20,6 +20,6 @@ type Product struct {
 // CreatorDraft deliberately uses a generated type from another package.
 func (p Product) CreatorDraft() models.UserDraft { return models.UserDraft{}.SetID(p.CreatorID) }
 
-func (Product) DefineRelations() ProductRelationSet {
+func defineProductRelations() ProductRelationSet {
 	return ProductRelationSet{Creator: query.BelongsTo(ProductFields().CreatorID, models.UserFields().ID)}
 }

@@ -88,8 +88,11 @@ func QueryAuditedLabels() LabelQuery {
 	return LabelQuery{foundryLabelModelQuery.Get(foundryLabelBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Label) FoundryQuery() foundryquery.Query[Label] { return QueryAuditedLabels().Query }
+// FoundryModel identifies Label's generated query for framework integrations
+// without placing the query engine in Label's method set.
+func (Label) FoundryModel() foundryquery.ModelRef[Label] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Label] { return QueryAuditedLabels().Query })
+}
 
 // FoundryReference retains Label and its concrete stored primary key for framework integrations.
 // It reads Code directly, never calls an accessor, and performs no database lookup.
@@ -441,7 +444,7 @@ func (p LabelInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune)
 // InsertLabelFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertLabelFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) LabelInsertFromBuilder[FoundryScope] {
-	return LabelInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Label{}).FoundryQuery())}
+	return LabelInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryAuditedLabels().Query)}
 }
 
 // SelectCode supplies the stored SQL value for code. It cannot also be supplied by Values.
@@ -645,7 +648,7 @@ func (d LabelDraft) FoundryUpdateMutation() (foundryquery.Mutation[Label], error
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d LabelDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Label]) (foundryquery.Mutation[Label], error) {
-	values, err := foundryquery.ReadCreateDefaults((Label{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryAuditedLabels().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Label]{}, err
 	}

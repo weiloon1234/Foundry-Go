@@ -243,8 +243,11 @@ func QueryFoundryOutbox() MessageQuery {
 	return MessageQuery{foundryMessageModelQuery.Get(foundryMessageBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Message) FoundryQuery() foundryquery.Query[Message] { return QueryFoundryOutbox().Query }
+// FoundryModel identifies Message's generated query for framework integrations
+// without placing the query engine in Message's method set.
+func (Message) FoundryModel() foundryquery.ModelRef[Message] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Message] { return QueryFoundryOutbox().Query })
+}
 
 // FoundryReference retains Message and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -601,7 +604,7 @@ func (p MessageInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb run
 // InsertMessageFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertMessageFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) MessageInsertFromBuilder[FoundryScope] {
-	return MessageInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Message{}).FoundryQuery())}
+	return MessageInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryFoundryOutbox().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -940,7 +943,7 @@ func (d MessageDraft) FoundryUpdateMutation() (foundryquery.Mutation[Message], e
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d MessageDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Message]) (foundryquery.Mutation[Message], error) {
-	values, err := foundryquery.ReadCreateDefaults((Message{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryFoundryOutbox().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Message]{}, err
 	}

@@ -120,8 +120,11 @@ func QueryMeasurements() MeasurementQuery {
 	return MeasurementQuery{foundryMeasurementModelQuery.Get(foundryMeasurementBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Measurement) FoundryQuery() foundryquery.Query[Measurement] { return QueryMeasurements().Query }
+// FoundryModel identifies Measurement's generated query for framework integrations
+// without placing the query engine in Measurement's method set.
+func (Measurement) FoundryModel() foundryquery.ModelRef[Measurement] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Measurement] { return QueryMeasurements().Query })
+}
 
 // FoundryReference retains Measurement and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -493,7 +496,7 @@ func (p MeasurementInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb
 // InsertMeasurementFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertMeasurementFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) MeasurementInsertFromBuilder[FoundryScope] {
-	return MeasurementInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Measurement{}).FoundryQuery())}
+	return MeasurementInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryMeasurements().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -736,7 +739,7 @@ func (d MeasurementDraft) FoundryUpdateMutation() (foundryquery.Mutation[Measure
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d MeasurementDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Measurement]) (foundryquery.Mutation[Measurement], error) {
-	values, err := foundryquery.ReadCreateDefaults((Measurement{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryMeasurements().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Measurement]{}, err
 	}

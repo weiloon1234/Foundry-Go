@@ -99,9 +99,10 @@ func QueryWorkflowSubmissions() SubmissionQuery {
 	return SubmissionQuery{foundrySubmissionModelQuery.Get(foundrySubmissionBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Submission) FoundryQuery() foundryquery.Query[Submission] {
-	return QueryWorkflowSubmissions().Query
+// FoundryModel identifies Submission's generated query for framework integrations
+// without placing the query engine in Submission's method set.
+func (Submission) FoundryModel() foundryquery.ModelRef[Submission] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Submission] { return QueryWorkflowSubmissions().Query })
 }
 
 // FoundryReference retains Submission and its concrete stored primary key for framework integrations.
@@ -469,7 +470,7 @@ func (p SubmissionInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb 
 // InsertSubmissionFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertSubmissionFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) SubmissionInsertFromBuilder[FoundryScope] {
-	return SubmissionInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Submission{}).FoundryQuery())}
+	return SubmissionInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryWorkflowSubmissions().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -688,7 +689,7 @@ func (d SubmissionDraft) FoundryUpdateMutation() (foundryquery.Mutation[Submissi
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d SubmissionDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Submission]) (foundryquery.Mutation[Submission], error) {
-	values, err := foundryquery.ReadCreateDefaults((Submission{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryWorkflowSubmissions().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Submission]{}, err
 	}

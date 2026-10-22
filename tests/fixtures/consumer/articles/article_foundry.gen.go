@@ -115,8 +115,11 @@ func QueryArticles() ArticleQuery {
 	return ArticleQuery{foundryArticleModelQuery.Get(foundryArticleBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Article) FoundryQuery() foundryquery.Query[Article] { return QueryArticles().Query }
+// FoundryModel identifies Article's generated query for framework integrations
+// without placing the query engine in Article's method set.
+func (Article) FoundryModel() foundryquery.ModelRef[Article] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Article] { return QueryArticles().Query })
+}
 
 // FoundryReference retains Article and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -493,7 +496,7 @@ func (p ArticleInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb run
 // InsertArticleFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertArticleFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) ArticleInsertFromBuilder[FoundryScope] {
-	return ArticleInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Article{}).FoundryQuery())}
+	return ArticleInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryArticles().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -737,7 +740,7 @@ func (d ArticleDraft) FoundryUpdateMutation() (foundryquery.Mutation[Article], e
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d ArticleDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Article]) (foundryquery.Mutation[Article], error) {
-	values, err := foundryquery.ReadCreateDefaults((Article{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryArticles().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Article]{}, err
 	}
@@ -803,19 +806,19 @@ type ArticleRelationSet struct {
 var foundryArticleRelations foundryquery.Memo[ArticleRelationSet]
 
 func foundryArticleBuildRelations() ArticleRelationSet {
-	relations := (Article{}).DefineRelations()
-	relations.Author = relations.Author.Bind("Author", QueryArticles().Query, (Author{}).FoundryQuery(), func(m Article) relation.One[Author] { return m.Author }, func(m Article, loaded relation.One[Author]) Article { m.Author = loaded; return m })
+	relations := defineArticleRelations()
+	relations.Author = relations.Author.Bind("Author", QueryArticles().Query, foundryquery.ModelQueryOf[Author](), func(m Article) relation.One[Author] { return m.Author }, func(m Article, loaded relation.One[Author]) Article { m.Author = loaded; return m })
 	return relations
 }
 
 // ArticleRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// defineArticleRelations runs once per process; its immutable descriptors are shared.
 func ArticleRelations() ArticleRelationSet {
 	return foundryArticleRelations.Get(foundryArticleBuildRelations)
 }
 
 // ArticleExtensionSet declares the policy of every extension slot of Article.
-// Article.DefineExtensions returns it; a zero entry selects that slot kind's defaults, except that attachment slots require a Disk.
+// defineArticleExtensions returns it; a zero entry selects that slot kind's defaults, except that attachment slots require a Disk.
 type ArticleExtensionSet struct {
 	// Title configures translated text stored in foundry_model_translations as field "title", one row per locale.
 	//
@@ -863,7 +866,7 @@ func ArticleExtensionOwner() extensions.Owner[Article, model.ID[Article]] {
 var foundryArticleExtensions foundryquery.Memo[ArticleExtensionSlots]
 
 func foundryArticleBuildExtensions() ArticleExtensionSlots {
-	policy := (Article{}).DefineExtensions()
+	policy := defineArticleExtensions()
 	owner := ArticleExtensionOwner()
 	return ArticleExtensionSlots{
 		Title:     translations.DefineText(owner, "title", policy.Title, extensions.SlotBinding[Article, model.ID[Article], translations.Text]{Field: "Title", Reference: Article.FoundryReference, Get: func(m Article) translations.Text { return m.Title }, Set: func(m Article, slot translations.Text) Article { m.Title = slot; return m }}),
@@ -875,7 +878,7 @@ func foundryArticleBuildExtensions() ArticleExtensionSlots {
 }
 
 // ArticleExtensions returns unbound descriptors for the extension slots of Article, built once per process.
-// DefineExtensions runs once and must not call this accessor. Bind the descriptors with From before loading or writing.
+// defineArticleExtensions runs once and must not call this accessor. Bind the descriptors with From before loading or writing.
 func ArticleExtensions() ArticleExtensionSlots {
 	return foundryArticleExtensions.Get(foundryArticleBuildExtensions)
 }

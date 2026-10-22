@@ -360,8 +360,11 @@ func QueryFoundryAttachments() FileQuery {
 	return FileQuery{foundryFileModelQuery.Get(foundryFileBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (File) FoundryQuery() foundryquery.Query[File] { return QueryFoundryAttachments().Query }
+// FoundryModel identifies File's generated query for framework integrations
+// without placing the query engine in File's method set.
+func (File) FoundryModel() foundryquery.ModelRef[File] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[File] { return QueryFoundryAttachments().Query })
+}
 
 // FoundryReference retains File and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -707,7 +710,7 @@ func (p FileInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune) 
 // InsertFileFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertFileFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) FileInsertFromBuilder[FoundryScope] {
-	return FileInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (File{}).FoundryQuery())}
+	return FileInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryFoundryAttachments().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -1189,7 +1192,7 @@ func (d FileDraft) FoundryUpdateMutation() (foundryquery.Mutation[File], error) 
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d FileDraft) FoundryCreateMutation(defaults foundryquery.Mutation[File]) (foundryquery.Mutation[File], error) {
-	values, err := foundryquery.ReadCreateDefaults((File{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryFoundryAttachments().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[File]{}, err
 	}

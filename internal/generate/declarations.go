@@ -45,10 +45,9 @@ func (p *packageInput) declarationFiles() ([]*ast.File, error) {
 					copy := *decl
 					copy.Body = nil
 					add(declarationUnit{file: fileIndex, decl: &copy, names: []string{decl.Name.Name}, refs: references(decl.Type)})
-				} else if (declarationMethod(decl.Name.Name) || fieldMethodPrefix(decl.Name.Name) != "" || decl.Name.Name == globalScopeSourceMethod) && len(decl.Recv.List) == 1 {
-					// Codec, contract, field-method and global-scope-source discovery
-					// need signatures on a fresh checkout. Bodies may reference
-					// generated declarations.
+				} else if (declarationMethod(decl.Name.Name) || fieldMethodPrefix(decl.Name.Name) != "") && len(decl.Recv.List) == 1 {
+					// Codec, contract and field-method discovery need signatures on a fresh
+					// checkout. Bodies may reference generated declarations.
 					owner := receiverTypeName(decl.Recv.List[0].Type)
 					copy := *decl
 					copy.Body = nil
@@ -176,6 +175,11 @@ func (p *packageInput) declarationFiles() ([]*ast.File, error) {
 						selected[i] = true
 						queue = append(queue, i)
 					}
+				}
+				fnName := modelDeclarationFunction(name, kindGlobalScopes)
+				if i, ok := index[fnName]; ok && !selected[i] {
+					selected[i] = true
+					queue = append(queue, i)
 				}
 			}
 		}

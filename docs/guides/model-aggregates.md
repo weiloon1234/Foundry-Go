@@ -12,10 +12,10 @@ OrderTotal   relation.Value[value.Nullable[decimal.Decimal]]
 OrderAverage relation.Value[value.Nullable[decimal.Decimal]]
 ```
 
-These slots are excluded from SQL columns, write drafts and model row decoders. They cannot carry persistence column/default tags. Models with slots implement `DefineAggregates() UserAggregateSet`; generation creates that concrete set and `UserAggregates()`.
+These slots are excluded from SQL columns, write drafts and model row decoders. They cannot carry persistence column/default tags. Models with slots declare an unexported package function `defineUserAggregates() UserAggregateSet`; generation creates that concrete set and `UserAggregates()`.
 
 ```go
-func (User) DefineAggregates() UserAggregateSet {
+func defineUserAggregates() UserAggregateSet {
     return UserAggregateSet{
         OrderCount: query.Related(UserRelations().Orders, query.Count[Order]()),
         OrderTotal: query.Related(UserRelations().Orders, query.Sum(OrderFields().TotalCents)),
@@ -25,7 +25,7 @@ func (User) DefineAggregates() UserAggregateSet {
 }
 ```
 
-`Related` checks that its aggregate input belongs to the relationship's target model. Its result must match the generated slot exactly. Wrong owners, integer/decimal result mismatches and lost nullability fail compilation. Missing computations remain invalid zero descriptors and fail when selected. Keep `DefineAggregates` and `DefineRelations` pure declarations; do not perform I/O or call the aggregate constructor recursively from its own definition.
+`Related` checks that its aggregate input belongs to the relationship's target model. Its result must match the generated slot exactly. Wrong owners, integer/decimal result mismatches and lost nullability fail compilation. Missing computations remain invalid zero descriptors and fail when selected. Keep `defineUserAggregates` and `defineUserRelations` pure declarations; do not perform I/O or call the aggregate constructor recursively from its own definition.
 
 ## Loading and result types
 

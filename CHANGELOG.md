@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+### Compile footprint
+
+Go compiles every method of each generic type reachable from a type's method
+signatures and fields, in every importing package. Generated models and endpoint
+types no longer expose such edges, so packages that only read a model or declare a
+plain endpoint stop compiling query engines and signed/idempotent families.
+Measured on the consumer fixture: a package reading `Order.TotalCents` 70.9 MB →
+4.7 MB (compile 850 → 113 MB RSS), one typed query 76.4 → 20.8 MB, a model
+without relations 12.2 → 0.62 MB, a plain endpoint 16.4 → 4.9 MB. Typed
+contracts and runtime behavior are unchanged. See the
+[build resources guide](docs/guides/query-build-resources.md#model-and-endpoint-edges).
+
+- Generated models replace `FoundryQuery()` with the methodless witness
+  `FoundryModel() query.ModelRef[M]`; add `query.NewModelRef` and
+  `query.ModelQueryOf`. `factory.Model` is an alias of `query.ModelQuery`.
+  Migration: regenerate; a hand-written `FoundryQuery()` becomes `FoundryModel()`
+  built with `query.NewModelRef`.
+- Model declarations move from receiver methods to unexported package functions:
+  `define<Model>Relations`, `define<Model>Aggregates`, `define<Model>Extensions`
+  and `define<Model>GlobalScopes`. Migration: rename the method, keeping its body
+  (`func (Order) DefineRelations() OrderRelationSet` →
+  `func defineOrderRelations() OrderRelationSet`). The old method form fails
+  generation with a diagnostic naming the exact function signature.
+- Endpoint transition methods become top-level functions: `e.Signed(s)` →
+  `http.Signed(e, s)`, `e.Idempotent(st, d)` → `http.Idempotent(e, st, d)`, plus
+  `http.IdempotentSigned`, `http.SignedAuthenticated`,
+  `http.SignedOptionalAuthentication`, `http.IdempotentAuthenticated`,
+  `modelbinding.Idempotent` and `modelbinding.IdempotentAuthenticated`.
+- Add regression guards: a generator closure guard
+  (`internal/generate/closure_guard_test.go`) and export-archive budget probes
+  (`tests/fixtures/consumer/footprint_test.go`).
+
 ### Redis key inventory (B28)
 
 - Add service-free `infrastructure.Plan.RedisKeys` and

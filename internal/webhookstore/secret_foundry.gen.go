@@ -118,8 +118,11 @@ func QueryFoundryWebhookSecrets() SecretQuery {
 	return SecretQuery{foundrySecretModelQuery.Get(foundrySecretBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Secret) FoundryQuery() foundryquery.Query[Secret] { return QueryFoundryWebhookSecrets().Query }
+// FoundryModel identifies Secret's generated query for framework integrations
+// without placing the query engine in Secret's method set.
+func (Secret) FoundryModel() foundryquery.ModelRef[Secret] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Secret] { return QueryFoundryWebhookSecrets().Query })
+}
 
 // FoundryReference retains Secret and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -474,7 +477,7 @@ func (p SecretInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune
 // InsertSecretFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertSecretFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) SecretInsertFromBuilder[FoundryScope] {
-	return SecretInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Secret{}).FoundryQuery())}
+	return SecretInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryFoundryWebhookSecrets().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -714,7 +717,7 @@ func (d SecretDraft) FoundryUpdateMutation() (foundryquery.Mutation[Secret], err
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d SecretDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Secret]) (foundryquery.Mutation[Secret], error) {
-	values, err := foundryquery.ReadCreateDefaults((Secret{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryFoundryWebhookSecrets().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Secret]{}, err
 	}

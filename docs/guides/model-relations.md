@@ -4,10 +4,10 @@ Relations retain source model, target model and key types. The [handwritten mode
 
 ## Declaring keys in Go
 
-Models with relation fields implement `DefineRelations`, returning their generated relation-set type. The [consumer declarations](../../tests/fixtures/consumer/models/relations.go) compile this pattern:
+Models with relation fields declare an unexported package function `define<Model>Relations`, returning their generated relation-set type. Declarations are package functions rather than model methods, so packages that merely use a model type don't compile its query engine. The [consumer declarations](../../tests/fixtures/consumer/models/relations.go) compile this pattern:
 
 ```go
-func (User) DefineRelations() UserRelationSet {
+func defineUserRelations() UserRelationSet {
     return UserRelationSet{
         Introducer: query.BelongsTo(UserFields().IntroducerID, UserFields().ID),
         Referrals: query.HasMany(UserFields().ID, UserFields().IntroducerID),
@@ -23,7 +23,7 @@ func (User) DefineRelations() UserRelationSet {
 
 Use generated Go field descriptors; no SQL names or database types are repeated. Key types must match, including named natural keys and model-owned IDs. A nullable field retains its underlying key type for compatibility, with missing values handled at runtime. A relation set also checks the declared source/target and singular/collection cardinality. Missing descriptors remain invalid zero values and fail when selected for loading.
 
-Generation emits `UserRelations()`, which binds the declarations to complete model metadata and typed field getters/setters. Each model also receives `FoundryQuery()` for generated integrations across packages. Keep `DefineRelations` a pure declaration of base relationships; request-specific scopes and finite nested loading belong at the call site. Self-relations work because `relation.One[T]` stores its model behind a private pointer. Imported targets work when their package has generated model metadata; ordinary Go import-cycle rules still apply.
+Generation emits `UserRelations()`, which binds the declarations to complete model metadata and typed field getters/setters. Each model also implements `query.ModelQuery` (`FoundryModel()`) for generated integrations across packages. Keep `defineUserRelations` a pure declaration of base relationships; request-specific scopes and finite nested loading belong at the call site. Self-relations work because `relation.One[T]` stores its model behind a private pointer. Imported targets work when their package has generated model metadata; ordinary Go import-cycle rules still apply.
 
 The generated `Bind` calls are an explicit metadata boundary, not normal consumer configuration. They require bare source/target/pivot metadata queries and reject query options rather than silently dropping predicates. Declare filters/order/nesting on the relation descriptor itself.
 

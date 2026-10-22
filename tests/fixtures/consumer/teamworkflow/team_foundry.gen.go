@@ -89,8 +89,11 @@ func QueryWorkflowTeams() TeamQuery {
 	return TeamQuery{foundryTeamModelQuery.Get(foundryTeamBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Team) FoundryQuery() foundryquery.Query[Team] { return QueryWorkflowTeams().Query }
+// FoundryModel identifies Team's generated query for framework integrations
+// without placing the query engine in Team's method set.
+func (Team) FoundryModel() foundryquery.ModelRef[Team] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Team] { return QueryWorkflowTeams().Query })
+}
 
 // FoundryReference retains Team and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -435,7 +438,7 @@ func (p TeamInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune) 
 // InsertTeamFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertTeamFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) TeamInsertFromBuilder[FoundryScope] {
-	return TeamInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Team{}).FoundryQuery())}
+	return TeamInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryWorkflowTeams().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -639,7 +642,7 @@ func (d TeamDraft) FoundryUpdateMutation() (foundryquery.Mutation[Team], error) 
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d TeamDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Team]) (foundryquery.Mutation[Team], error) {
-	values, err := foundryquery.ReadCreateDefaults((Team{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryWorkflowTeams().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Team]{}, err
 	}
@@ -678,13 +681,13 @@ type TeamRelationSet struct {
 var foundryTeamRelations foundryquery.Memo[TeamRelationSet]
 
 func foundryTeamBuildRelations() TeamRelationSet {
-	relations := (Team{}).DefineRelations()
-	relations.Projects = relations.Projects.Bind("Projects", QueryWorkflowTeams().Query, (Project{}).FoundryQuery(), func(m Team) relation.Many[Project] { return m.Projects }, func(m Team, loaded relation.Many[Project]) Team { m.Projects = loaded; return m })
+	relations := defineTeamRelations()
+	relations.Projects = relations.Projects.Bind("Projects", QueryWorkflowTeams().Query, foundryquery.ModelQueryOf[Project](), func(m Team) relation.Many[Project] { return m.Projects }, func(m Team, loaded relation.Many[Project]) Team { m.Projects = loaded; return m })
 	return relations
 }
 
 // TeamRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// defineTeamRelations runs once per process; its immutable descriptors are shared.
 func TeamRelations() TeamRelationSet { return foundryTeamRelations.Get(foundryTeamBuildRelations) }
 
 // TeamDraft tracks explicitly selected mutation fields, preserving omitted, zero and null states.

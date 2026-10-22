@@ -56,7 +56,7 @@ type Membership struct {
 	DeletedAt value.Nullable[time.Time]
 }
 
-func (Member) DefineRelations() MemberRelationSet {
+func defineMemberRelations() MemberRelationSet {
 	m, g, p := MemberFields(), GroupFields(), MembershipFields()
 	return MemberRelationSet{
 		Parent:   query.BelongsTo(m.ParentID, m.ID),
@@ -65,7 +65,7 @@ func (Member) DefineRelations() MemberRelationSet {
 	}
 }
 
-func (Member) DefineAggregates() MemberAggregateSet {
+func defineMemberAggregates() MemberAggregateSet {
 	r := MemberRelations()
 	return MemberAggregateSet{
 		ChildCount: query.Related(r.Children, query.Count[Member]()),

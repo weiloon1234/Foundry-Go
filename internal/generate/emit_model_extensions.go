@@ -80,7 +80,7 @@ func (e *emitter) emitModelExtensions(m model, primary field) {
 	}
 
 	e.line("// %sExtensionSet declares the policy of every extension slot of %s.", m.name, m.name)
-	e.line("// %s.%s returns it; a zero entry selects that slot kind's defaults, except that attachment slots require a Disk.", m.name, extensionSetMethod)
+	e.line("// %s returns it; a zero entry selects that slot kind's defaults, except that attachment slots require a Disk.", modelDeclarationFunction(m.name, kindExtensions))
 	e.line("type %sExtensionSet struct{", m.name)
 	for _, slot := range m.extensions {
 		e.line("// %s configures %s.", slot.name, extensionSlotDescription(slot))
@@ -108,7 +108,7 @@ func (e *emitter) emitModelExtensions(m model, primary field) {
 	e.line("var foundry%sExtensions %s.Memo[%sExtensionSlots]", m.name, query, m.name)
 	e.line("func foundry%sBuildExtensions()%sExtensionSlots{", m.name, m.name)
 	if m.extensionPolicy {
-		e.line("%s:=(%s{}).%s()", policy, m.name, extensionSetMethod)
+		e.line("%s:=%s()", policy, modelDeclarationFunction(m.name, kindExtensions))
 	} else {
 		e.line("var %s %sExtensionSet", policy, m.name)
 	}
@@ -127,7 +127,7 @@ func (e *emitter) emitModelExtensions(m model, primary field) {
 	}
 	e.line("}}")
 	e.line("// %sExtensions returns unbound descriptors for the extension slots of %s, built once per process.", m.name, m.name)
-	e.line("// %s runs once and must not call this accessor. Bind the descriptors with From before loading or writing.", extensionSetMethod)
+	e.line("// %s runs once and must not call this accessor. Bind the descriptors with From before loading or writing.", modelDeclarationFunction(m.name, kindExtensions))
 	e.line("func %sExtensions()%sExtensionSlots{return foundry%sExtensions.Get(foundry%sBuildExtensions)}", m.name, m.name, m.name, m.name)
 
 	runtime, descriptors := e.localName("runtime"), e.localName("s")
@@ -185,7 +185,7 @@ func (e *emitter) emitModelExtensions(m model, primary field) {
 }
 
 // metadataContract emits the inferred JSON descriptor, or a zero descriptor
-// that DefineExtensions must replace.
+// that the model's extension definition must replace.
 func (e *emitter) metadataContract(slot extensionSlot) string {
 	// Import contract only for expressions that name it; a same-package DTO
 	// descriptor call must not leave an unused import.

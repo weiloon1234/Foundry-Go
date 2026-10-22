@@ -71,9 +71,12 @@ func (s *Service) Routes() ([]http.RouteRegistration, error) {
 		}
 		return nil
 	})
-	submit := modelbinding.BindAuthenticated(required, submissions).
-		WithAuthorization(func(_ context.Context, actor Actor, in SubmissionRequest) error { return authorized(actor, in.Model) }).
-		Idempotent(s.store, idempotency.Definition{ID: "workflow.submit", Version: 1})
+	submit := modelbinding.IdempotentAuthenticated(
+		modelbinding.BindAuthenticated(required, submissions).
+			WithAuthorization(func(_ context.Context, actor Actor, in SubmissionRequest) error { return authorized(actor, in.Model) }),
+		s.store,
+		idempotency.Definition{ID: "workflow.submit", Version: 1},
+	)
 	catalogue := pagination.DefineNumbered(http.DefineRoute(http.RouteSpec{ID: "workflow.catalogue", Method: http.GET, Access: http.Public}, http.StaticPath("/catalogue")), CatalogueFiltersDescriptor(), CatalogueItemJSON(), pagination.DefaultConfig())
 	routes := []http.RouteRegistration{
 		patch.Handle(s.Patch), submit.Handle(submissionScope, s.Submit),

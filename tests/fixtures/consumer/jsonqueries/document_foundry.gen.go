@@ -953,8 +953,11 @@ func QueryJsonDocuments() DocumentQuery {
 	return DocumentQuery{foundryDocumentModelQuery.Get(foundryDocumentBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Document) FoundryQuery() foundryquery.Query[Document] { return QueryJsonDocuments().Query }
+// FoundryModel identifies Document's generated query for framework integrations
+// without placing the query engine in Document's method set.
+func (Document) FoundryModel() foundryquery.ModelRef[Document] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Document] { return QueryJsonDocuments().Query })
+}
 
 // FoundryReference retains Document and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -1316,7 +1319,7 @@ func (p DocumentInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb ru
 // InsertDocumentFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertDocumentFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) DocumentInsertFromBuilder[FoundryScope] {
-	return DocumentInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Document{}).FoundryQuery())}
+	return DocumentInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryJsonDocuments().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -1571,7 +1574,7 @@ func (d DocumentDraft) FoundryUpdateMutation() (foundryquery.Mutation[Document],
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d DocumentDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Document]) (foundryquery.Mutation[Document], error) {
-	values, err := foundryquery.ReadCreateDefaults((Document{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryJsonDocuments().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Document]{}, err
 	}
@@ -1650,13 +1653,13 @@ type DocumentRelationSet struct {
 var foundryDocumentRelations foundryquery.Memo[DocumentRelationSet]
 
 func foundryDocumentBuildRelations() DocumentRelationSet {
-	relations := (Document{}).DefineRelations()
-	relations.Policy = relations.Policy.Bind("Policy", QueryJsonDocuments().Query, (Policy{}).FoundryQuery(), func(m Document) relation.One[Policy] { return m.Policy }, func(m Document, loaded relation.One[Policy]) Document { m.Policy = loaded; return m })
+	relations := defineDocumentRelations()
+	relations.Policy = relations.Policy.Bind("Policy", QueryJsonDocuments().Query, foundryquery.ModelQueryOf[Policy](), func(m Document) relation.One[Policy] { return m.Policy }, func(m Document, loaded relation.One[Policy]) Document { m.Policy = loaded; return m })
 	return relations
 }
 
 // DocumentRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// defineDocumentRelations runs once per process; its immutable descriptors are shared.
 func DocumentRelations() DocumentRelationSet {
 	return foundryDocumentRelations.Get(foundryDocumentBuildRelations)
 }

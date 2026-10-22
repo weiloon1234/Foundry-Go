@@ -119,8 +119,11 @@ func QueryOfficeEmployees() EmployeeQuery {
 	return EmployeeQuery{foundryEmployeeModelQuery.Get(foundryEmployeeBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Employee) FoundryQuery() foundryquery.Query[Employee] { return QueryOfficeEmployees().Query }
+// FoundryModel identifies Employee's generated query for framework integrations
+// without placing the query engine in Employee's method set.
+func (Employee) FoundryModel() foundryquery.ModelRef[Employee] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Employee] { return QueryOfficeEmployees().Query })
+}
 
 // FoundryReference retains Employee and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -482,7 +485,7 @@ func (p EmployeeInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb ru
 // InsertEmployeeFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertEmployeeFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) EmployeeInsertFromBuilder[FoundryScope] {
-	return EmployeeInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Employee{}).FoundryQuery())}
+	return EmployeeInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryOfficeEmployees().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -725,7 +728,7 @@ func (d EmployeeDraft) FoundryUpdateMutation() (foundryquery.Mutation[Employee],
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d EmployeeDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Employee]) (foundryquery.Mutation[Employee], error) {
-	values, err := foundryquery.ReadCreateDefaults((Employee{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryOfficeEmployees().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Employee]{}, err
 	}
@@ -801,13 +804,13 @@ type EmployeeRelationSet struct {
 var foundryEmployeeRelations foundryquery.Memo[EmployeeRelationSet]
 
 func foundryEmployeeBuildRelations() EmployeeRelationSet {
-	relations := (Employee{}).DefineRelations()
-	relations.Region = relations.Region.Bind("Region", QueryOfficeEmployees().Query, (Region{}).FoundryQuery(), func(m Employee) relation.One[Region] { return m.Region }, func(m Employee, loaded relation.One[Region]) Employee { m.Region = loaded; return m })
+	relations := defineEmployeeRelations()
+	relations.Region = relations.Region.Bind("Region", QueryOfficeEmployees().Query, foundryquery.ModelQueryOf[Region](), func(m Employee) relation.One[Region] { return m.Region }, func(m Employee, loaded relation.One[Region]) Employee { m.Region = loaded; return m })
 	return relations
 }
 
 // EmployeeRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// defineEmployeeRelations runs once per process; its immutable descriptors are shared.
 func EmployeeRelations() EmployeeRelationSet {
 	return foundryEmployeeRelations.Get(foundryEmployeeBuildRelations)
 }

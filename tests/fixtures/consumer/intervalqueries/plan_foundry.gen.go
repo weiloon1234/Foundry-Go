@@ -90,8 +90,11 @@ func QueryIntervalPlans() PlanQuery {
 	return PlanQuery{foundryPlanModelQuery.Get(foundryPlanBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Plan) FoundryQuery() foundryquery.Query[Plan] { return QueryIntervalPlans().Query }
+// FoundryModel identifies Plan's generated query for framework integrations
+// without placing the query engine in Plan's method set.
+func (Plan) FoundryModel() foundryquery.ModelRef[Plan] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Plan] { return QueryIntervalPlans().Query })
+}
 
 // FoundryReference retains Plan and its concrete stored primary key for framework integrations.
 // It reads ID directly, never calls an accessor, and performs no database lookup.
@@ -436,7 +439,7 @@ func (p PlanInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb rune) 
 // InsertPlanFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertPlanFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) PlanInsertFromBuilder[FoundryScope] {
-	return PlanInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Plan{}).FoundryQuery())}
+	return PlanInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryIntervalPlans().Query)}
 }
 
 // SelectID supplies the stored SQL value for id. It cannot also be supplied by Values.
@@ -640,7 +643,7 @@ func (d PlanDraft) FoundryUpdateMutation() (foundryquery.Mutation[Plan], error) 
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d PlanDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Plan]) (foundryquery.Mutation[Plan], error) {
-	values, err := foundryquery.ReadCreateDefaults((Plan{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryIntervalPlans().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Plan]{}, err
 	}
@@ -680,14 +683,14 @@ type PlanRelationSet struct {
 var foundryPlanRelations foundryquery.Memo[PlanRelationSet]
 
 func foundryPlanBuildRelations() PlanRelationSet {
-	relations := (Plan{}).DefineRelations()
-	relations.Samples = relations.Samples.Bind("Samples", QueryIntervalPlans().Query, (Sample{}).FoundryQuery(), func(m Plan) relation.Many[Sample] { return m.Samples }, func(m Plan, loaded relation.Many[Sample]) Plan { m.Samples = loaded; return m })
-	relations.Labels = relations.Labels.Bind("Labels", QueryIntervalPlans().Query, (Label{}).FoundryQuery(), (Link{}).FoundryQuery(), func(m Plan) relation.Through[Label, Link] { return m.Labels }, func(m Plan, loaded relation.Through[Label, Link]) Plan { m.Labels = loaded; return m })
+	relations := definePlanRelations()
+	relations.Samples = relations.Samples.Bind("Samples", QueryIntervalPlans().Query, foundryquery.ModelQueryOf[Sample](), func(m Plan) relation.Many[Sample] { return m.Samples }, func(m Plan, loaded relation.Many[Sample]) Plan { m.Samples = loaded; return m })
+	relations.Labels = relations.Labels.Bind("Labels", QueryIntervalPlans().Query, foundryquery.ModelQueryOf[Label](), foundryquery.ModelQueryOf[Link](), func(m Plan) relation.Through[Label, Link] { return m.Labels }, func(m Plan, loaded relation.Through[Label, Link]) Plan { m.Labels = loaded; return m })
 	return relations
 }
 
 // PlanRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// definePlanRelations runs once per process; its immutable descriptors are shared.
 func PlanRelations() PlanRelationSet { return foundryPlanRelations.Get(foundryPlanBuildRelations) }
 
 // PlanAggregateSet checks the source model and result type of every computed slot.
@@ -699,7 +702,7 @@ type PlanAggregateSet struct {
 var foundryPlanAggregates foundryquery.Memo[PlanAggregateSet]
 
 func foundryPlanBuildAggregates() PlanAggregateSet {
-	aggregates := (Plan{}).DefineAggregates()
+	aggregates := definePlanAggregates()
 	aggregates.SampleCount = aggregates.SampleCount.Bind("SampleCount", QueryIntervalPlans().Query, func(m Plan) relation.Value[int64] { return m.SampleCount }, func(m Plan, computed relation.Value[int64]) Plan { m.SampleCount = computed; return m })
 	aggregates.TotalPeriod = aggregates.TotalPeriod.Bind("TotalPeriod", QueryIntervalPlans().Query, func(m Plan) relation.Value[foundryvalue.Nullable[temporal.Interval]] { return m.TotalPeriod }, func(m Plan, computed relation.Value[foundryvalue.Nullable[temporal.Interval]]) Plan {
 		m.TotalPeriod = computed
@@ -709,7 +712,7 @@ func foundryPlanBuildAggregates() PlanAggregateSet {
 }
 
 // PlanAggregates binds handwritten computations to generated typed result slots.
-// DefineAggregates runs once per process; its immutable descriptors are shared.
+// definePlanAggregates runs once per process; its immutable descriptors are shared.
 func PlanAggregates() PlanAggregateSet { return foundryPlanAggregates.Get(foundryPlanBuildAggregates) }
 
 // PlanDraft tracks explicitly selected mutation fields, preserving omitted, zero and null states.

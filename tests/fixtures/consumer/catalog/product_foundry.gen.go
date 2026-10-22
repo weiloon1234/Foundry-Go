@@ -100,8 +100,11 @@ func QueryProducts() ProductQuery {
 	return ProductQuery{foundryProductModelQuery.Get(foundryProductBuildQuery)}
 }
 
-// FoundryQuery returns this model's generated metadata query for framework integrations.
-func (Product) FoundryQuery() foundryquery.Query[Product] { return QueryProducts().Query }
+// FoundryModel identifies Product's generated query for framework integrations
+// without placing the query engine in Product's method set.
+func (Product) FoundryModel() foundryquery.ModelRef[Product] {
+	return foundryquery.NewModelRef(func() foundryquery.Query[Product] { return QueryProducts().Query })
+}
 
 // FoundryReference retains Product and its concrete stored primary key for framework integrations.
 // It reads Code directly, never calls an accessor, and performs no database lookup.
@@ -458,7 +461,7 @@ func (p ProductInsertFromBuilder[FoundryScope]) Format(state fmt.State, verb run
 // InsertProductFrom starts a typed INSERT SELECT. Omitted columns retain database defaults or NULL.
 // UUID primary keys require a typed source value or a declared database default; no per-row Go IDs are generated.
 func InsertProductFrom[FoundryScope any](source foundryquery.ProjectionSource[FoundryScope]) ProductInsertFromBuilder[FoundryScope] {
-	return ProductInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, (Product{}).FoundryQuery())}
+	return ProductInsertFromBuilder[FoundryScope]{plan: foundryquery.InsertFrom(source, QueryProducts().Query)}
 }
 
 // SelectCode supplies the stored SQL value for code. It cannot also be supplied by Values.
@@ -677,7 +680,7 @@ func (d ProductDraft) FoundryUpdateMutation() (foundryquery.Mutation[Product], e
 
 // FoundryCreateMutation supplies the typed draft adapter for framework integrations. Defaults fill omitted fields before UUID preparation; no mutators or database calls run here.
 func (d ProductDraft) FoundryCreateMutation(defaults foundryquery.Mutation[Product]) (foundryquery.Mutation[Product], error) {
-	values, err := foundryquery.ReadCreateDefaults((Product{}).FoundryQuery(), defaults)
+	values, err := foundryquery.ReadCreateDefaults(QueryProducts().Query, defaults)
 	if err != nil {
 		return foundryquery.Mutation[Product]{}, err
 	}
@@ -726,13 +729,13 @@ type ProductRelationSet struct {
 var foundryProductRelations foundryquery.Memo[ProductRelationSet]
 
 func foundryProductBuildRelations() ProductRelationSet {
-	relations := (Product{}).DefineRelations()
-	relations.Creator = relations.Creator.Bind("Creator", QueryProducts().Query, (models.User{}).FoundryQuery(), func(m Product) relation.One[models.User] { return m.Creator }, func(m Product, loaded relation.One[models.User]) Product { m.Creator = loaded; return m })
+	relations := defineProductRelations()
+	relations.Creator = relations.Creator.Bind("Creator", QueryProducts().Query, foundryquery.ModelQueryOf[models.User](), func(m Product) relation.One[models.User] { return m.Creator }, func(m Product, loaded relation.One[models.User]) Product { m.Creator = loaded; return m })
 	return relations
 }
 
 // ProductRelations binds handwritten key declarations to generated model metadata and typed slots.
-// DefineRelations runs once per process; its immutable descriptors are shared.
+// defineProductRelations runs once per process; its immutable descriptors are shared.
 func ProductRelations() ProductRelationSet {
 	return foundryProductRelations.Get(foundryProductBuildRelations)
 }

@@ -23,10 +23,6 @@ type relationHop struct {
 	validate      func() error
 }
 
-// ModelQuery is implemented by every generated model: it returns the model's
-// metadata query. HasManyThrough uses it for the intermediate model.
-type ModelQuery[M any] interface{ FoundryQuery() Query[M] }
-
 // HasManyThrough reaches targets through an intermediate model, like Laravel's
 // hasManyThrough: source.local = intermediate.first and intermediate.second =
 // target.foreign. For Country -> User -> Post:
@@ -52,8 +48,7 @@ func hopSpec[M any, I ModelQuery[I], N any, A, B comparable](local KeyField[M, A
 		return relationSpec[M, N]{}
 	}
 	a, f, s, b := local.relationKey(), first.relationKey(), second.relationKey(), foreign.relationKey()
-	var zero I
-	intermediate := zero.FoundryQuery()
+	intermediate := ModelQueryOf[I]()
 	hop := &relationHop{first: f.ref, second: s.ref, predicates: intermediate.queryCore.EffectivePredicates,
 		validate: func() error {
 			if intermediate.definition == nil || f.ref.Table != intermediate.queryCore.Table || s.ref.Table != intermediate.queryCore.Table {
