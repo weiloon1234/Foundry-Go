@@ -2,13 +2,13 @@ package query
 
 import (
 	"context"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-const throughTargetAlias = "foundry_target"
-
-const throughPivotAlias = "foundry_pivot"
+const throughTargetAlias = querycore.RelationTargetAlias
+const throughPivotAlias = querycore.RelationPivotAlias
 
 func (r ThroughRelation[M, N, P]) compileThrough(ctx context.Context, keys expression, limit int) (Statement, error) {
 	node := r.throughSelect()
@@ -32,35 +32,9 @@ func (r ThroughRelation[M, N, P]) throughSelect() selectNode {
 }
 
 func (r ThroughRelation[M, N, P]) throughSelectAt(targetAlias, pivotAlias string) selectNode {
-	target, pivot := r.spec.target, r.pivot
-	node := selectNode{
-		Source:     tableSource{Table: target.queryCore.Table, Alias: targetAlias, Columns: target.definition.modelDefinition.Columns},
-		Selections: append(columnSelections(targetAlias, target.definition.modelDefinition.Columns), columnSelections(pivotAlias, pivot.definition.modelDefinition.Columns)...),
-		Joins: []joinNode{{Source: tableSource{Table: pivot.queryCore.Table, Alias: pivotAlias, Columns: pivot.definition.modelDefinition.Columns},
-			On: binaryComparison{Left: fieldRef{Table: targetAlias, Column: r.spec.foreign.Column}, Right: fieldRef{Table: pivotAlias, Column: r.pivotForeign.Column}, Operator: equal}}},
+	orders := make([]querycore.RelationOrder, len(r.orders))
+	for i, o := range r.orders {
+		orders[i] = querycore.RelationOrder{Value: o.value, Descending: o.descending, Pivot: o.pivot, Nulls: o.nulls}
 	}
-	for _, p := range target.queryCore.EffectivePredicates() {
-		node.Predicates = append(node.Predicates, requalify(p, targetAlias))
-	}
-	for _, p := range pivot.queryCore.EffectivePredicates() {
-		node.Predicates = append(node.Predicates, requalify(p, pivotAlias))
-	}
-	seen := make(map[fieldRef]bool, len(r.orders))
-	for _, o := range r.orders {
-		alias := targetAlias
-		if o.pivot {
-			alias = pivotAlias
-		}
-		expr := requalifyValue(o.value, alias)
-		node.Orders = append(node.Orders, orderNode{Expression: expr, Descending: o.descending, Nulls: o.nulls})
-		if field, plain := expr.(fieldRef); plain {
-			seen[field] = true
-		}
-	}
-	for _, f := range []fieldRef{{Table: targetAlias, Column: target.definition.modelDefinition.Primary}, {Table: pivotAlias, Column: pivot.definition.modelDefinition.Primary}} {
-		if !seen[f] {
-			node.Orders = append(node.Orders, orderNode{Expression: f})
-		}
-	}
-	return node
+	return querycore.RelationThroughSelect(r.spec.target.queryCore, r.pivot.queryCore, r.spec.foreign, r.pivotForeign, orders, targetAlias, pivotAlias)
 }

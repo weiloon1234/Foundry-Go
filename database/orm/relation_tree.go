@@ -66,14 +66,11 @@ func validateRelation(p *relationPlan, owner *tableCore) error {
 	nodes := 0
 	return validateRelationAt(p, owner, 1, DefaultRelationLimits(), &nodes)
 }
-func validateRelationAt(p *relationPlan, owner *tableCore, depth int, limits RelationLimits, nodes *int) error {
-	(*nodes)++
-	if depth > limits.MaxDepth {
-		return invalid("relation nesting exceeds its depth bound")
-	}
-	if *nodes > querycore.MaxExpressionNodes {
-		return invalid("relation graph exceeds its resource bound")
-	}
+
+// validateRelationMetadata checks deferred declarations without walking or
+// compiling predicate subqueries. The outer compiler owns that recursive work
+// and its shared resource budget.
+func validateRelationMetadata(p *relationPlan, owner *tableCore) error {
 	if p == nil {
 		return invalid("nil relation descriptor")
 	}
@@ -92,10 +89,29 @@ func validateRelationAt(p *relationPlan, owner *tableCore, depth int, limits Rel
 	if p.query.ast.Limit.IsSet() || p.query.ast.Offset != 0 {
 		return invalid("relation scopes cannot use global limits or offsets")
 	}
-	if err := errors.Join(p.query.ast.Validate(), p.target.model.ValidateGlobalScopes()); err != nil {
+	if err := errors.Join(p.query.ast.ValidateSoftDeleteScope(), p.query.ast.ValidateScopeOptions(), p.target.model.ValidateGlobalScopes()); err != nil {
+		return err
+	}
+	return validateJoinedMetadata(p)
+}
+func validateRelationAt(p *relationPlan, owner *tableCore, depth int, limits RelationLimits, nodes *int) error {
+	(*nodes)++
+	if depth > limits.MaxDepth {
+		return invalid("relation nesting exceeds its depth bound")
+	}
+	if *nodes > querycore.MaxExpressionNodes {
+		return invalid("relation graph exceeds its resource bound")
+	}
+	if err := validateRelationMetadata(p, owner); err != nil {
+		return err
+	}
+	if err := p.query.ast.Validate(); err != nil {
 		return err
 	}
 	if _, err := p.query.ast.StableOrder(); err != nil {
+		return err
+	}
+	if err := validateJoined(p, depth, limits, nodes); err != nil {
 		return err
 	}
 	return validateRelationPlans(p.query.relations, p.target, depth, limits, nodes)

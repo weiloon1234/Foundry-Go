@@ -5,13 +5,25 @@ orm.Assignment
   GoString func() string
   String func() string
 orm.BelongsTo
+  LatestOfMany func() github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
+  OfMany func(orders ...github.com/weiloon1234/Foundry-Go/database/orm.Order[N]) github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
+  OldestOfMany func() github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
+  OnlyTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
   OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm.Order[N]) github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
   Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
   With func(children ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[N]) github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
+  WithTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
+  WithoutTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
 *orm.BelongsTo
+  LatestOfMany func() github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
+  OfMany func(orders ...github.com/weiloon1234/Foundry-Go/database/orm.Order[N]) github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
+  OldestOfMany func() github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
+  OnlyTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
   OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm.Order[N]) github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
   Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
   With func(children ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[N]) github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
+  WithTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
+  WithoutTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
 orm.Bound
 *orm.Bound
 orm.Builder
@@ -88,21 +100,39 @@ orm.ExistenceRelation
 orm.ExpressionColumn
   expressionColumn func(*M) (github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[V], github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[P])
 orm.HasMany
+  OnlyTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
   OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm.Order[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
   Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
   With func(children ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
+  WithTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
+  WithoutTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
 *orm.HasMany
+  OnlyTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
   OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm.Order[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
   Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
   With func(children ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
+  WithTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
+  WithoutTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
 orm.HasOne
+  LatestOfMany func() github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
+  OfMany func(orders ...github.com/weiloon1234/Foundry-Go/database/orm.Order[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
+  OldestOfMany func() github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
+  OnlyTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
   OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm.Order[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
   Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
   With func(children ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
+  WithTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
+  WithoutTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
 *orm.HasOne
+  LatestOfMany func() github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
+  OfMany func(orders ...github.com/weiloon1234/Foundry-Go/database/orm.Order[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
+  OldestOfMany func() github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
+  OnlyTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
   OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm.Order[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
   Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
   With func(children ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
+  WithTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
+  WithoutTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
 orm.InstantValue
 orm.Interval
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
@@ -202,6 +232,8 @@ orm.LockedQuery
   WithoutTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]
 orm.Many
 *orm.Many
+orm.Morphable
+  MorphName func() github.com/weiloon1234/Foundry-Go/database/query.MorphName
 orm.NullableColumn
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
   Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
@@ -667,6 +699,34 @@ orm.Text
   NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
   Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
   StartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+orm.Through
+*orm.Through
+orm.ThroughRelation
+  OnlyTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  OnlyTrashedPivot func() github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  OrderBy func(orders ...github.com/weiloon1234/Foundry-Go/database/orm.Order[N]) github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  OrderByPivot func(orders ...github.com/weiloon1234/Foundry-Go/database/orm.Order[P]) github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  WherePivot func(ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[P]) github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  With func(children ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[N]) github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  WithPivot func(children ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[P]) github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  WithTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  WithTrashedPivot func() github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  WithoutTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  WithoutTrashedPivot func() github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+*orm.ThroughRelation
+  OnlyTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  OnlyTrashedPivot func() github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  OrderBy func(orders ...github.com/weiloon1234/Foundry-Go/database/orm.Order[N]) github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  OrderByPivot func(orders ...github.com/weiloon1234/Foundry-Go/database/orm.Order[P]) github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  WherePivot func(ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[P]) github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  With func(children ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[N]) github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  WithPivot func(children ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[P]) github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  WithTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  WithTrashedPivot func() github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  WithoutTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+  WithoutTrashedPivot func() github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
 orm.Time
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
   Between func(a V, b V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
@@ -735,6 +795,15 @@ orm.DoesntHave func[M, N any](r github.com/weiloon1234/Foundry-Go/database/orm.E
 orm.LoadMissing func[M any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, parents []M, rels ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[M]) ([]M, error)
 orm.DefaultRelationLimits func() github.com/weiloon1234/Foundry-Go/database/orm.RelationLimits
 orm.WithRelationLimits func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], limits github.com/weiloon1234/Foundry-Go/database/orm.RelationLimits) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+orm.ThroughOf func[M, N, P any](b github.com/weiloon1234/Foundry-Go/database/orm.Builder[M], ptr *github.com/weiloon1234/Foundry-Go/database/relation.Through[N, P]) github.com/weiloon1234/Foundry-Go/database/orm.Through[M, N, P]
+orm.ManyToManyOf func[M, N, P any, A, B comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.Through[M, N, P], local github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, A], pivotLocal github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, A], pivotForeign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, B], foreign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, B]) github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+orm.HasManyThroughOf func[M, I, N any, A, B comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.Many[M, N], local github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, A], first github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[I, A], second github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[I, B], foreign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, B]) github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
+orm.HasOneThroughOf func[M, I, N any, A, B comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.One[M, N], local github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, A], first github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[I, A], second github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[I, B], foreign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, B]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
+orm.MorphManyOf func[M github.com/weiloon1234/Foundry-Go/database/orm.Morphable, N any, K comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.Many[M, N], local github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, K], id github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, K], kind github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, github.com/weiloon1234/Foundry-Go/database/orm.MorphName]) github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
+orm.MorphOneOf func[M github.com/weiloon1234/Foundry-Go/database/orm.Morphable, N any, K comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.One[M, N], local github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, K], id github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, K], kind github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, github.com/weiloon1234/Foundry-Go/database/orm.MorphName]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
+orm.MorphToOf func[M any, N github.com/weiloon1234/Foundry-Go/database/orm.Morphable, K comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.One[M, N], id github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, K], kind github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, github.com/weiloon1234/Foundry-Go/database/orm.MorphName], key github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, K]) github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
+orm.MorphToManyOf func[M github.com/weiloon1234/Foundry-Go/database/orm.Morphable, N, P any, A, B comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.Through[M, N, P], local github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, A], pivotLocal github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, A], kind github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, github.com/weiloon1234/Foundry-Go/database/orm.MorphName], pivotForeign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, B], foreign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, B]) github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+orm.MorphedByManyOf func[M any, N github.com/weiloon1234/Foundry-Go/database/orm.Morphable, P any, A, B comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.Through[M, N, P], local github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, A], pivotLocal github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, A], kind github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, github.com/weiloon1234/Foundry-Go/database/orm.MorphName], pivotForeign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, B], foreign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, B]) github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
 orm.FoundryColumn func[M, V, P any](column github.com/weiloon1234/Foundry-Go/database/orm.ExpressionColumn[M, V, P], _ github.com/weiloon1234/Foundry-Go/internal/sqlowner.Seal) (github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[V], github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[P])
 orm.NumberKey result
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]

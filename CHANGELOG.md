@@ -8,6 +8,10 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Add typed pivot relations, has-one/has-many-through, one-of-many choices and
+  polymorphic relations with immutable constraints and batch-bounded eager loading
+  under shared scopes and budgets (Stage 4c). The old API remains unchanged.
+
 - Add has-one, immutable constrained direct eager trees, `LoadMissing`, shared
   relation limits and nested `Has`/`DoesntHave` predicates with batch-bounded
   statement counts (Stage 4b). The old API remains unchanged.

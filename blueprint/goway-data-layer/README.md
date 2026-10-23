@@ -44,8 +44,9 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 3.1d | Typed raw model/row hydration | Implemented; acceptance evidence below; live PostgreSQL belongs to the lead |
 | 3.1 | Complete declaration, reads, writes, typed raw hydration and model cursors | Done. Stage 3 gate passed on 2026-10-23: `make verify`, `make test-postgres` (race) and `make typescript-check` |
 | 4a | N+1 detector foundations | Done; committed at `e731753` |
-| 4b | Direct eager trees, has-one, LoadMissing, relation limits and existence filters | Done pending the lead's commit; local acceptance passed and second review reported no findings. Live PostgreSQL coverage remains for the lead. |
-| 4 | Full read relations, pivots, through, one-of-many, filters and aggregate slots | In progress; 4a and 4b delivered, 4c and 4d planned. Relation writes belong to Stage 5b; per-parent limits are out of scope. |
+| 4b | Direct eager trees, has-one, LoadMissing, relation limits and existence filters | Done; committed at `470d585`. |
+| 4c | Typed pivots, through, one-of-many and polymorphic relations | Accepted; Done pending the lead's commit. Local acceptance passed after second-review fixes; live PostgreSQL execution remains for the lead. |
+| 4 | Full read relations, pivots, through, one-of-many, filters and aggregate slots | In progress; 4a–4c delivered, 4d aggregate-slot design and implementation remain planned. Relation writes belong to Stage 5b; per-parent limits are out of scope. |
 | 5 | Lifecycle, mutators, change sets, scopes and observers | Planned |
 | 6a | Expressions, aggregates, grouping, having and raw fragments | Planned |
 | 6b | Joins, aliases, correlation and lateral queries | Planned |
@@ -318,13 +319,18 @@ Names in planned rows remain subject to their owning stage's consumer acceptance
 | `q.ForUpdate().RequireFind(ctx, tx, id)` | `q.Where(Orders.ID.Eq(id)).ForUpdate().Require(ctx, tx)` | Stage 3.1c; transaction-only |
 | `QueryOrders().Create(ctx, tx, OrderDraft{}.SetTotalCents(v))` | `Orders.Insert(ctx, tx, Orders.TotalCents.Set(v))` | Core ported |
 | `QueryOrders().With(OrderRelations().Buyer)` | `Orders.Query().With(OrderRelations.Buyer)` | Direct eager trees ported, Stage 4b |
-| `defineOrderRelations() OrderRelationSet` | Separate typed relation namespace using `BelongsToOf`/`HasOneOf`/`HasManyOf` | Direct kinds ported; joined families and aggregate slots remain 4c/4d |
-| `q.WhereHas(UserRelations().Orders)` | `q.Where(orm.Has(UserRelations.Orders))` | Stage 4b; target predicates and nested `Has` compose inside the predicate |
-| `q.WhereDoesntHave(UserRelations().Orders)` | `q.Where(orm.DoesntHave(UserRelations.Orders))` | Stage 4b; correlated `NOT EXISTS` |
+| `defineOrderRelations() OrderRelationSet` | Separate typed relation namespace using direct, through and morph `orm.*Of` constructors | Direct kinds ported in 4b, joined families in 4c; aggregate slots remain 4d |
+| `q.WhereHas(UserRelations().Orders)` | `q.Where(orm.Has(UserRelations.Orders))` | Direct kinds in 4b, joined families in 4c; target predicates and nested `Has` compose |
+| `q.WhereDoesntHave(UserRelations().Orders)` | `q.Where(orm.DoesntHave(UserRelations.Orders))` | Direct kinds in 4b, joined families in 4c; correlated `NOT EXISTS` |
 | `r.Orders.Where(p).OrderBy(o).With(child)` | `r.Orders.Where(p).OrderBy(o).With(child)` | Stage 4b; immutable target-owned constraints and nested branches |
 | `q.WithRelationLimits(limits)` | `orm.WithRelationLimits(q, limits)` | Stage 4b; package function, shared limits type and defaults |
-| `q.With(r).Load(ctx, ex, parents)` | `orm.Load(ctx, ex, parents, r)` | Direct relations ported; no parent statement |
+| `q.With(r).Load(ctx, ex, parents)` | `orm.Load(ctx, ex, parents, r)` | Direct and joined families ported; no parent statement |
 | `q.With(r).LoadMissing(ctx, ex, parents)` | `orm.LoadMissing(ctx, ex, parents, r)` | Stage 4b; loaded-empty slots stay loaded |
+| `ManyToMany(...)` with a `relation.Through[N,P]` slot | `orm.ManyToManyOf(slot, local, pivotLocal, pivotForeign, foreign)` with `orm.ThroughOf` binding | Stage 4c; thin `ThroughRelation[M,N,P]` descriptor and `relation.Link[N,P]` results |
+| `r.WherePivot(p).OrderByPivot(o).WithPivot(child)` | `r.WherePivot(p).OrderByPivot(o).WithPivot(child)` | Stage 4c; typed pivot constraints and nested pivot branches |
+| `HasOneThrough(...)` / `HasManyThrough(...)` | `orm.HasOneThroughOf(...)` / `orm.HasManyThroughOf(...)` | Stage 4c; both key pairs checked, singular and many slots retained |
+| `r.OfMany(o)` / `r.LatestOfMany()` / `r.OldestOfMany()` | Same methods on singular descriptors | Stage 4c; immutable `DISTINCT ON` option with primary-key tie-breaker |
+| `MorphOne` / `MorphMany` / `MorphTo` / `MorphToMany` / `MorphedByMany` | Corresponding `orm.*Of` constructor and one concrete slot per target | Stage 4c; validated discriminator and eligible-key batches |
 | Generated `Distinct`/set query surface | `rows.Distinct(...)`, `rows.Union(a, b)` | Planned, Stages 6a/6c |
 | `query.SelectValue(QueryOrders(), ...)` | `rows.SelectValue(Orders.Query(), ...)` | Basic scalar selection ported |
 | Model annotation plus `foundry generate` | Plain struct plus `orm.Define` | Core ported; DTO/enum generation retained |
@@ -332,7 +338,7 @@ Names in planned rows remain subject to their owning stage's consumer acceptance
 ## Feature parity contract
 
 “Preserve” states the program's target, not completion of the feature. The current
-consumer retains Stage 1 golden coverage and adds core and direct-relation cases.
+consumer retains Stage 1 golden coverage and adds core, direct and joined-relation cases.
 
 | Capability | Old owner/shape | New shape and owning stage |
 | --- | --- | --- |
@@ -352,7 +358,10 @@ consumer retains Stage 1 golden coverage and adds core and direct-relation cases
 | Nested and constrained eager loads; LoadMissing | Descriptor `Where`/`OrderBy`/`With`, query `Load`/`LoadMissing` | Stage 4b: immutable descriptors, complete target batches at each level, package `Load`/`LoadMissing`, loaded-empty preservation and primary-key order tie-breakers |
 | Relation limits and depth | Query `WithRelationLimits` and shared loading budgets | Stage 4b: `orm.WithRelationLimits(q, limits)`; shared row/attachment budgets and depth bound, defaults from the existing owner. No relation `Limit`/`Offset` or per-parent limits |
 | Relation existence filters | `WhereHas`/`WhereDoesntHave`, descriptor `Exists` | Stage 4b: `Where(orm.Has/DoesntHave(...))`, nested correlated subqueries with related scopes and zero extra statements |
-| Pivots/WithPivot, through and one-of-many | Generated relation sets and joined loaders | Planned Stage 4c; same typed slots and batch-bounded loading contract |
+| Pivots and WithPivot | Generated relation sets, `Through` slots and joined loaders | Stage 4c delivered: `ThroughOf` and `ManyToManyOf`, typed links, target/pivot constraints and nested branches, independent pivot ownership and soft-delete scopes |
+| Has-one/has-many-through | Joined hop loaders | Stage 4c delivered: `HasOneThroughOf`/`HasManyThroughOf`, both key pairs checked and shared batched plans |
+| One-of-many | Latest, oldest and custom singular choices | Stage 4c delivered: immutable `OfMany`/`LatestOfMany`/`OldestOfMany`, `DISTINCT ON` per parent and primary-key tie-breaker |
+| Polymorphic relations | MorphOne/Many/To/ToMany/MorphedByMany | Stage 4c delivered: corresponding `orm.*Of` constructors, validated `MorphName`, concrete target slots and discriminator-group batching |
 | Relation aggregate slots | Generated computed slots | Design and implementation in Stage 4d |
 | Relation writes and pivot lifecycle | Attach/detach/sync/toggle/update-pivot | Planned Stage 5b, alongside lifecycle integration |
 | Stored change sets | Generated `CompareX` and field structs | Column-keyed typed comparisons and changes, Stage 5 |
@@ -418,8 +427,8 @@ intentionally accepts byte slices, while identity does not.
 <!-- catalogue-summary -->
 | Disposition | Cases |
 | --- | ---: |
-| ported | 87 |
-| port | 495 |
+| ported | 93 |
+| port | 489 |
 | merge | 0 |
 | obsolete | 0 |
 | unaffected | 444 |
@@ -457,7 +466,7 @@ intentionally accepts byte slices, while identity does not.
 | 7 | 81 |
 | — | 444 |
 
-87 old catalogue rows are covered by 79 distinct Go-way cases.
+93 old catalogue rows are covered by 85 distinct Go-way cases.
 
 ## Emitter audit
 
@@ -774,7 +783,7 @@ evidence; no existing footprint ceiling changed.
 
 ## Stage 4b direct eager trees and existence
 
-Stage 4b is **Done pending the lead's commit**. Local acceptance passed, and the
+Stage 4b is committed at `470d585`. Local acceptance passed, and the
 second review reported no findings. Live PostgreSQL execution remains for the lead;
 its isolated-schema test sources compile and vet. The old API remains unchanged.
 See the [4b evidence](../../docs/evidence/goway-stage4b-relations.json) and
@@ -816,3 +825,60 @@ Existing footprint ceilings remain unchanged. Shared query-state helpers avoid
 constructing target `Query[N]` values in descriptor helpers; the existing `q_with`
 probe measures 1,114 functions against its unchanged 1,211 ceiling. Six old
 compiler-catalogue rows are ported in 4b, with five additional rejection cases.
+
+## Stage 4c joined relation families
+
+Stage 4c is accepted and **Done pending the lead's commit**. Build, vet, race,
+generation, fixture, catalogue and documentation checks pass after the second-review
+fixes. Live PostgreSQL execution remains for the lead. See the
+[4c evidence](../../docs/evidence/goway-stage4c-joined-relations.json) and
+[joined relation recipe](../../database/orm/README.md#joined-relation-families).
+The old API remains unchanged.
+
+`ThroughOf` binds a typed pivot slot; `ManyToManyOf` returns a thin
+`ThroughRelation[M,N,P]` descriptor over a non-generic plan. Target and pivot
+`Where`, `OrderBy` and `With` variants return immutable descriptors. Links retain
+separate pivot values for each parent, including distinct duplicate pivot rows.
+NULL pivot keys and missing or filtered targets create no links. A pivot row
+matching multiple targets returns `database.TooManyRows`.
+
+`HasOneThroughOf` and `HasManyThroughOf` validate both key pairs and share the
+joined plan. Singular descriptors support latest, oldest and custom one-of-many
+choices through `DISTINCT ON` with a primary-key tie-breaker. Morph constructors
+validate the discriminator and bind one concrete slot per target. Related and
+pivot soft-delete scopes apply under the shared depth and row budgets.
+
+Each joined branch issues one statement per distinct eligible non-null key batch,
+plus nested target and pivot branch batches. Nested branches batch their complete
+collections after the joined batches. Morph targets batch separately for each
+concrete discriminator group. One-of-many adds no statements. Empty eligible key
+sets issue zero statements; `Has` and `DoesntHave` add zero extra statements.
+A query adds one parent statement; `Load` and `LoadMissing` add none. Joined links
+consume two attached values in the shared budget, one target and one pivot.
+
+| Count assertion | Statements |
+| --- | ---: |
+| Query, two parents, batch size one, nested target and pivot branches | 5 |
+| Explicit Load with shared targets and nested target and pivot branches | 3 |
+| LoadMissing with loaded slots, including empty slots | 0 |
+| Locked source query plus joined branch in a transaction | 2 |
+| Two eligible concrete morph target groups | 2 |
+| Empty parent set or ineligible/NULL morph keys | 0 |
+| Joined existence query | 1, with no extra relation statements |
+
+Six catalogue rows are ported: `pivot_key`, `pivot_model`, `pivot_order`,
+`pivot_payload`, `pivot_scope` and `soft_pivot_scope`. Six additional negatives
+cover wrong pivot models, target/pivot predicate ownership, morph targets and both
+hop key ownership. Six nested joined `Has` levels now compile each subtree once within
+the outer compiler's budget, with byte-identical SQL and bindings.
+
+| New probe | Measured functions | Ceiling, ceil(measured × 1.15) |
+| --- | ---: | ---: |
+| `pivot` | 1,005 | 1,156 |
+| `through` | 928 | 1,068 |
+| `morph` | 1,088 | 1,252 |
+
+Existing footprint ceilings remain unchanged. The PostgreSQL test sources cover
+pivot payloads and duplicate rows, cardinality failures, through relations,
+one-of-many ties, morph groups, pivot soft deletion and statement counts.
+Stage 4d aggregate-slot design and Stage 5b relation writes remain separate.

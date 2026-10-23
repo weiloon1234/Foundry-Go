@@ -6,7 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 // MorphName is the stored discriminator naming one model in polymorphic
@@ -24,8 +24,8 @@ type Morphable interface{ MorphName() MorphName }
 func morphName[M Morphable]() (MorphName, error) {
 	var zero M
 	name := zero.MorphName()
-	if !sqlname.Valid(string(name)) {
-		return "", fault.New(fault.Invalid, "morph names use the identifier grammar")
+	if err := querycore.ValidateMorphName(string(name)); err != nil {
+		return "", err
 	}
 	return name, nil
 }

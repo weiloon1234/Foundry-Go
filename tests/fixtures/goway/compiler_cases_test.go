@@ -2,6 +2,19 @@ package goway_test
 
 func compilerCases() []compilerCase {
 	return []compilerCase{
+		{"pivot_key", "does not match inferred type"},
+		{"pivot_model", "does not match inferred type"},
+		{"pivot_order", "orm.Order[joined.Pivot]"},
+		{"pivot_payload", "as joined.Pivot value"},
+		{"pivot_scope", "orm.Predicate[joined.Pivot]"},
+		{"soft_pivot_scope", "orm.Predicate[joined.Pivot]"},
+		{"pivot_wrong_model", "cannot use"},
+		{"joined_target_side", "orm.Predicate[joined.Target]"},
+		{"joined_pivot_side", "orm.Relation[joined.Pivot]"},
+		{"morph_target_mismatch", "does not match inferred type"},
+		{"hop_second_key", "does not match inferred type"},
+		{"hop_intermediate_owner", "does not match inferred type"},
+
 		{"nested_relation_owner", "does not implement"},
 		{"relation_scope", "orm.Predicate[models.Order]"},
 		{"relation_target", "does not match inferred type"},

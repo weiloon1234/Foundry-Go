@@ -317,3 +317,51 @@ dbassert.AssertStatementShapes(t, scope)
 Close rows before checking. Only compiler-produced shapes appear as SQL text;
 raw statements use keyed fingerprints and violations include bounded call sites.
 See [statement instrumentation](../../docs/guides/database-runtime.md#detecting-repeated-statement-shapes).
+
+## Joined relation families
+
+`ThroughOf(b, &m.Groups)` binds a `relation.Through[Group, Membership]` slot.
+`ManyToManyOf` unifies the source/pivot and pivot/target key pairs without retaining
+public generic queries in the descriptor:
+
+```go
+links := orm.ManyToManyOf(Users.Groups, Users.ID,
+    Memberships.UserID, Memberships.GroupID, Groups.ID)
+users, err := Users.Query().With(
+    links.Where(Groups.Active.Eq(true)).WherePivot(Memberships.Role.Eq("admin")).
+        With(GroupRelations.Owner).WithPivot(MembershipRelations.Inviter),
+).All(ctx, db)
+for _, user := range users {
+    for _, link := range user.Groups.All() {
+        use(link.Model, link.Pivot)
+    }
+}
+```
+
+Targets and pivots remain separate typed values in each `relation.Link`.
+Distinct pivot rows remain distinct links. A pivot matching multiple targets fails
+with `database.TooManyRows`; NULL keys, missing targets and filtered targets create
+no link. Target and pivot soft-delete scopes apply independently. Use
+`WithTrashedPivot`, `OnlyTrashedPivot` or `WithoutTrashedPivot` to change the latter.
+`OrderBy` and `OrderByPivot` retain their combined call order, with target and pivot
+primary keys appended as tie-breakers.
+
+`HasManyThroughOf` and `HasOneThroughOf` accept a slot followed by four columns:
+source local key, intermediate first key, intermediate second key, target foreign
+key. Both key pairs and the intermediate owner must match. Intermediates retain
+their scopes. A singular descriptor's `OfMany(orders...)`, `LatestOfMany()` and
+`OldestOfMany()` select one target per parent through `DISTINCT ON`, with a primary
+key tie-breaker. `OfMany` requires an order; latest and oldest use the primary key.
+
+`MorphName` and `Morphable` reuse the old API's persisted discriminator contract.
+`MorphOneOf` and `MorphManyOf` filter targets by the source's declared name.
+`MorphToOf` declares one concrete slot per possible target and loads only matching
+source rows. `MorphToManyOf` and `MorphedByManyOf` constrain the pivot discriminator.
+Names must follow the identifier grammar. Discriminator values are bound parameters.
+
+Each joined family uses one SELECT per key batch. Nested target and pivot branches
+batch their complete collections under the same depth and fetched/attached-value
+budgets. Each attached link consumes two values. Polymorphic inverses batch each
+concrete discriminator group; an empty eligible key set sends no statement.
+`Has` and `DoesntHave` also accept these descriptors without extra round trips.
+Relation writes and pivot lifecycle remain Stage 5b.

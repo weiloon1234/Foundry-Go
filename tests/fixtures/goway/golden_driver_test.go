@@ -44,6 +44,9 @@ func (transaction) Commit() error   { return nil }
 func (transaction) Rollback() error { return nil }
 
 type goldenCapture struct {
+	reply   func(string, []driver.NamedValue) ([]string, [][]driver.Value)
+	onClose func()
+
 	quiet           bool // Benchmarks count real driver calls without formatting golden output.
 	detector        *database.StatementDetector
 	scopeContext    context.Context
@@ -87,6 +90,10 @@ func (g *connection) ExecContext(_ context.Context, s string, args []driver.Name
 }
 func (g *connection) QueryContext(_ context.Context, s string, args []driver.NamedValue) (driver.Rows, error) {
 	g.printSQL(s, args)
+	if g.reply != nil {
+		columns, batch := g.reply(s, args)
+		return &rows{columns: columns, batch: batch, onClose: g.onClose}, nil
+	}
 	if g.scriptedColumns != nil {
 		if len(g.scriptedBatches) == 0 {
 			return nil, errors.New("unexpected scripted read")
@@ -141,6 +148,8 @@ func (g *connection) QueryContext(_ context.Context, s string, args []driver.Nam
 }
 
 type rows struct {
+	onClose func()
+
 	batch     [][]driver.Value
 	index     int
 	columns   []string
@@ -150,7 +159,13 @@ type rows struct {
 }
 
 func (r *rows) Columns() []string { return r.columns }
-func (r *rows) Close() error      { return nil }
+func (r *rows) Close() error {
+	if r.onClose != nil {
+		r.onClose()
+		r.onClose = nil
+	}
+	return nil
+}
 func (r *rows) Next(dest []driver.Value) error {
 	if r.batch != nil {
 		if r.index >= len(r.batch) {

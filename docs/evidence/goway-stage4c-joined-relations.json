@@ -1,0 +1,576 @@
+{
+  "stage": "4c",
+  "base_commit": "470d585105e7532d8f9d30f90bbf356800c878c7",
+  "status": "Stage 4c accepted by the lead; Done pending the lead's commit. Local acceptance passed after second-review fixes; live PostgreSQL execution remains for the lead; no commit.",
+  "scope": "Joined relation families only; no Stage 4d, lifecycle implementation, seal or capability changes. Mapping TSV updated as requested. Lead-owned CHANGELOG and blueprint notes integrated after acceptance with explicit authorization.",
+  "api": {
+    "slots": [
+      "Through[M,N,P]",
+      "ThroughOf(b,&m.Slot)"
+    ],
+    "descriptors": [
+      "ThroughRelation[M,N,P] with only a non-generic plan pointer and ownership markers",
+      "HasMany/HasOne reused for through hops and morph sources; BelongsTo reused for concrete morph inverses"
+    ],
+    "constructors": [
+      "ManyToManyOf(slot,local,pivotLocal,pivotForeign,foreign)",
+      "HasManyThroughOf(slot,local,first,second,foreign)",
+      "HasOneThroughOf(slot,local,first,second,foreign)",
+      "MorphManyOf(slot,local,id,kind)",
+      "MorphOneOf(slot,local,id,kind)",
+      "MorphToOf(slot,id,kind,key)",
+      "MorphToManyOf(slot,local,pivotLocal,kind,pivotForeign,foreign)",
+      "MorphedByManyOf(slot,local,pivotLocal,kind,pivotForeign,foreign)"
+    ],
+    "aliases": [
+      "MorphName = query.MorphName",
+      "Morphable = query.Morphable"
+    ]
+  },
+  "surface_additions": {
+    "snapshot_lines_added": 69,
+    "removed_or_resignatured": false,
+    "new_query_or_table_methods": false,
+    "functions": [
+      "ThroughOf",
+      "ManyToManyOf",
+      "HasManyThroughOf",
+      "HasOneThroughOf",
+      "MorphManyOf",
+      "MorphOneOf",
+      "MorphToOf",
+      "MorphToManyOf",
+      "MorphedByManyOf"
+    ],
+    "types": [
+      "Through[M,N,P]",
+      "ThroughRelation[M,N,P]",
+      "Morphable interface alias; MorphName scalar alias"
+    ],
+    "ThroughRelation_methods": [
+      "Where",
+      "OrderBy",
+      "With",
+      "WherePivot",
+      "OrderByPivot",
+      "WithPivot",
+      "WithTrashed",
+      "OnlyTrashed",
+      "WithoutTrashed",
+      "WithTrashedPivot",
+      "OnlyTrashedPivot",
+      "WithoutTrashedPivot"
+    ],
+    "BelongsTo_and_HasOne_methods": [
+      "OfMany",
+      "LatestOfMany",
+      "OldestOfMany",
+      "WithTrashed",
+      "OnlyTrashed",
+      "WithoutTrashed"
+    ],
+    "HasMany_methods": [
+      "WithTrashed",
+      "OnlyTrashed",
+      "WithoutTrashed"
+    ]
+  },
+  "owners": {
+    "joined_sql": "internal/querycore/relation_join.go: shared target/pivot SELECT, aliases, combined ordering, hop JOIN/scopes and morph-name validation. database/query wrappers delegate.",
+    "partitioned_hydration": "internal/ormcore/relation_row.go: moved existing partitioned Scan implementation, including RawBytes rejection and encryption-context forwarding; database/query/joined_hydration.go delegates.",
+    "new_plans": "database/orm/relation_join_plan.go: non-generic pivot/hop state, ordering, one-of-many choice, scopes and metadata validation. Typed loaders only bridge hydration and slots; no generic queries retained.",
+    "old_api": "Existing database/query tests pass unchanged; 16 old/new SQL and binding scenarios cover all joined families and existence forms."
+  },
+  "statement_contract": {
+    "rule": "One joined statement per distinct eligible key batch; nested target and pivot branches each batch their complete collections under the shared depth/fetched/attachment budget. One attached link consumes two values. Each morph inverse filters its discriminator group before batching. Empty eligible key sets send zero statements; EXISTS adds zero extra statements.",
+    "assertions": [
+      {
+        "operation": "Query, two parents, batch size one, target branch and pivot branch",
+        "statements": 5
+      },
+      {
+        "operation": "Explicit Load of three parents with shared targets, target and pivot branches",
+        "statements": 3
+      },
+      {
+        "operation": "LoadMissing of already-loaded slots, including empty",
+        "statements": 0
+      },
+      {
+        "operation": "Locked source query plus pivot branch inside transaction",
+        "statements": 2
+      },
+      {
+        "operation": "Two eligible concrete morph target groups",
+        "statements": 2
+      },
+      {
+        "operation": "Empty parent sets or ineligible/NULL morph keys",
+        "statements": 0
+      },
+      {
+        "operation": "Each joined existence query",
+        "statements": 1,
+        "extra_relation_statements": 0
+      }
+    ]
+  },
+  "coverage": [
+    "16 old/new golden SQL/binding scenarios: pivot constraints and combined order, both nested sides, many/one through, latest/oldest/custom one-of-many and through choice, all morph variants, joined EXISTS/NOT EXISTS.",
+    "Public in-memory driver: exact statement counts, close-before-next-statement, shared targets, distinct pivots, loaded-empty preservation, transaction/locked execution and empty eligibility.",
+    "Faults: repeated pivot primary returns database.TooManyRows; mismatched target key, decode failure, shared attachment budget, duplicate ordering, depth and empty OfMany fail without partial parents; invalid morph name sends zero SQL.",
+    "PostgreSQL source: pivot payloads, duplicate pivot rows, null and missing targets, soft-deleted pivots and pivot visibility, nested batch counts, many/one through, one-of-many ties and soft-deleted targets, all morph kinds and empty groups, nested existence and non-unique target-key TooManyRows."
+  ],
+  "compilefail": {
+    "ported": {
+      "pivot_key": "Both key value pairs must unify.",
+      "pivot_model": "Both pivot keys belong to the declared pivot owner.",
+      "pivot_order": "Pivot ordering retains its model.",
+      "pivot_payload": "Link retains the concrete pivot payload.",
+      "pivot_scope": "Pivot predicates retain their owner.",
+      "soft_pivot_scope": "Pivot trash visibility preserves predicate ownership."
+    },
+    "additional": [
+      "pivot_wrong_model",
+      "joined_target_side",
+      "joined_pivot_side",
+      "morph_target_mismatch",
+      "hop_second_key",
+      "hop_intermediate_owner"
+    ],
+    "catalogue_ported_rows": 93,
+    "catalogue_distinct_goway_cases": 85
+  },
+  "footprint": {
+    "toolchain": "go1.27.1 darwin/arm64; go list -export and streamed go tool nm T/t symbols",
+    "new_probes": {
+      "pivot": {
+        "functions": 1005,
+        "baseline": 1005,
+        "ceiling": 1156,
+        "archive_bytes": 4535862
+      },
+      "through": {
+        "functions": 928,
+        "baseline": 928,
+        "ceiling": 1068,
+        "archive_bytes": 4085922
+      },
+      "morph": {
+        "functions": 1088,
+        "baseline": 1088,
+        "ceiling": 1252,
+        "archive_bytes": 4843080
+      }
+    },
+    "all_probes": {
+      "pivot": {
+        "functions": 1005,
+        "baseline": 1005,
+        "ceiling": 1156,
+        "archive_bytes": 4535862
+      },
+      "through": {
+        "functions": 928,
+        "baseline": 928,
+        "ceiling": 1068,
+        "archive_bytes": 4085922
+      },
+      "morph": {
+        "functions": 1088,
+        "baseline": 1088,
+        "ceiling": 1252,
+        "archive_bytes": 4843080
+      },
+      "nested_with": {
+        "functions": 1307,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 5680886
+      },
+      "has": {
+        "functions": 1316,
+        "baseline": 1302,
+        "ceiling": 1498,
+        "archive_bytes": 5667956
+      },
+      "has_one": {
+        "functions": 1307,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 5643738
+      },
+      "raw": {
+        "functions": 1047,
+        "baseline": 1045,
+        "ceiling": 1202,
+        "archive_bytes": 4860968
+      },
+      "cursor": {
+        "functions": 1133,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5015106
+      },
+      "key_chunk": {
+        "functions": 818,
+        "baseline": 812,
+        "ceiling": 934,
+        "archive_bytes": 3843160
+      },
+      "column_encrypted_text": {
+        "functions": 1139,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 4791412
+      },
+      "column_nullable_encrypted_text": {
+        "functions": 1371,
+        "baseline": 1359,
+        "ceiling": 1563,
+        "archive_bytes": 5952706
+      },
+      "column_encrypted_json": {
+        "functions": 1229,
+        "baseline": 1217,
+        "ceiling": 1400,
+        "archive_bytes": 5099912
+      },
+      "column_nullable_encrypted_json": {
+        "functions": 1461,
+        "baseline": 1449,
+        "ceiling": 1667,
+        "archive_bytes": 6283858
+      },
+      "column_password": {
+        "functions": 1202,
+        "baseline": 1190,
+        "ceiling": 1369,
+        "archive_bytes": 5022000
+      },
+      "column_nullable_password": {
+        "functions": 1429,
+        "baseline": 1417,
+        "ceiling": 1630,
+        "archive_bytes": 6119724
+      },
+      "sensitive_models": {
+        "functions": 2630,
+        "baseline": 2606,
+        "ceiling": 2997,
+        "archive_bytes": 11615760
+      },
+      "model_type": {
+        "functions": 299,
+        "baseline": 299,
+        "ceiling": 344,
+        "archive_bytes": 1263160
+      },
+      "table_ref": {
+        "functions": 810,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 3934814
+      },
+      "onequery": {
+        "functions": 810,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 3800242
+      },
+      "q_with": {
+        "functions": 1141,
+        "baseline": 1053,
+        "ceiling": 1211,
+        "archive_bytes": 5126960
+      },
+      "q_select": {
+        "functions": 843,
+        "baseline": 836,
+        "ceiling": 962,
+        "archive_bytes": 3997692
+      },
+      "q_join": {
+        "functions": 1618,
+        "baseline": 1598,
+        "ceiling": 1838,
+        "archive_bytes": 7542050
+      },
+      "report_pipeline": {
+        "functions": 1928,
+        "baseline": 1905,
+        "ceiling": 2191,
+        "archive_bytes": 10144452
+      },
+      "models": {
+        "functions": 6336,
+        "baseline": 6147,
+        "ceiling": 7070,
+        "archive_bytes": 27018794
+      },
+      "column_number": {
+        "functions": 1184,
+        "baseline": 1172,
+        "ceiling": 1348,
+        "archive_bytes": 4837332
+      },
+      "column_nullable_text": {
+        "functions": 1472,
+        "baseline": 1456,
+        "ceiling": 1675,
+        "archive_bytes": 5943440
+      },
+      "models_1": {
+        "functions": 1635,
+        "baseline": 1619,
+        "ceiling": 1862,
+        "archive_bytes": 6617576
+      },
+      "models_3": {
+        "functions": 2467,
+        "baseline": 2435,
+        "ceiling": 2801,
+        "archive_bytes": 10128916
+      },
+      "column_time": {
+        "functions": 1206,
+        "baseline": 1194,
+        "ceiling": 1374,
+        "archive_bytes": 4878504
+      },
+      "column_enum": {
+        "functions": 1244,
+        "baseline": 1232,
+        "ceiling": 1417,
+        "archive_bytes": 5080690
+      },
+      "relation_with": {
+        "functions": 1918,
+        "baseline": 1847,
+        "ceiling": 2125,
+        "archive_bytes": 8008910
+      },
+      "column_json": {
+        "functions": 1292,
+        "baseline": 1280,
+        "ceiling": 1472,
+        "archive_bytes": 5298504
+      },
+      "column_nullable_json": {
+        "functions": 1534,
+        "baseline": 1522,
+        "ceiling": 1751,
+        "archive_bytes": 6447282
+      },
+      "column_interval": {
+        "functions": 1190,
+        "baseline": 1178,
+        "ceiling": 1355,
+        "archive_bytes": 4972160
+      },
+      "column_nullable_interval": {
+        "functions": 1418,
+        "baseline": 1406,
+        "ceiling": 1617,
+        "archive_bytes": 6109444
+      }
+    },
+    "existing_ceilings": "All 32 pre-existing baseline/package entries unchanged; all probes and model slope pass.",
+    "head_4b_q_with_functions": 1114,
+    "current_q_with_functions": 1141,
+    "q_with_ceiling": 1211
+  },
+  "acceptance": {
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache",
+      "GOWORK": "off"
+    },
+    "commands": [
+      {
+        "command": "go build ./...",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/goway-stage4c/review-build.log"
+      },
+      {
+        "command": "go vet ./database/... ./internal/...",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/goway-stage4c/review-vet.log"
+      },
+      {
+        "command": "go test -race ./database/orm/... ./database/query/... ./internal/querycore/... ./internal/ormcore/...",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/goway-stage4c/review-race.log"
+      },
+      {
+        "command": "make generate-check",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/goway-stage4c/review-generate-check.log"
+      },
+      {
+        "command": "cd tests/fixtures/goway && go vet ./...",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/goway-stage4c/review-fixture-vet.log"
+      },
+      {
+        "command": "cd tests/fixtures/goway && go test ./...",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/goway-stage4c/review-fixture-test.log"
+      },
+      {
+        "command": "python3 tools/goway_catalogue.py",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/goway-stage4c/review-catalogue.log"
+      },
+      {
+        "command": "sh tools/format-go.sh check /usr/local/go/bin/gofmt (gofmt -l over repository sources, including fixtures)",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/goway-stage4c/review-gofmt.log"
+      },
+      {
+        "command": "make docs-check",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/goway-stage4c/docs-integration-check.log"
+      }
+    ],
+    "postgres": "FOUNDRY_TEST_POSTGRES_URL unset; live pgsmoke tests skipped. Sources compile and vet. No live PostgreSQL claim.",
+    "corrections": [
+      "Removed handwritten generated relation-set declarations and regenerated the fixture through the Makefile path.",
+      "Corrected old-API fixture query names to the generator-owned QueryJoinedParents/Targets/Pivots names.",
+      "Updated the public snapshot for approved additions; all old signatures retained.",
+      "Added the old singular one-of-many methods to BelongsTo as well as HasOne before final verification."
+    ],
+    "diff_check": "git diff --check passed"
+  },
+  "docs_notes": {
+    "changelog": "Add thin typed pivot relations, has-one/has-many-through, one-of-many choices and all polymorphic relation families with batch-bounded eager loading and shared scopes/budgets (Stage 4c). Old API unchanged.",
+    "blueprint_status": "4c accepted and Done pending the lead's commit; local acceptance passed after second-review fixes. 4d aggregate-slot design and Stage 5b relation writes remain separate. Parity and API mappings now include pivots/WithPivot, through, one-of-many and all morph variants.",
+    "api_mapping": "ManyToMany -> orm.ManyToManyOf with an explicit ThroughOf-bound slot; HasOneThrough/HasManyThrough and Morph* -> the corresponding orm.*Of constructor with a slot. Where/OrderBy/With and pivot variants remain immutable fluent descriptors. OfMany/LatestOfMany/OldestOfMany remain singular descriptor methods.",
+    "statement_rule": "One joined statement per eligible key batch, plus complete nested target/pivot branch batches; concrete morph discriminator groups batch independently; empty eligible sets issue no statements.",
+    "catalogue": "Six additional old rows are ported; summary becomes 93 ported / 489 port / 444 unaffected, with 85 distinct Go-way cases covering ported rows.",
+    "probes": {
+      "pivot": {
+        "functions": 1005,
+        "baseline": 1005,
+        "ceiling": 1156,
+        "archive_bytes": 4535862
+      },
+      "through": {
+        "functions": 928,
+        "baseline": 928,
+        "ceiling": 1068,
+        "archive_bytes": 4085922
+      },
+      "morph": {
+        "functions": 1088,
+        "baseline": 1088,
+        "ceiling": 1252,
+        "archive_bytes": 4843080
+      }
+    }
+  },
+  "open_questions": [],
+  "source_sha256": {
+    "CHANGELOG.md": "bb890ce249870e8ccdb6bd9bd9b99249262e79cc438cd1c425f92ba9e5135257",
+    "blueprint/00-master-architecture-and-parity.md": "4fb46ac345f65e028fb8362897c20b78f7c40fb0fbbf3a4b5b99aa6617078f88",
+    "blueprint/goway-data-layer/README.md": "ad7ddda8fa4bae86428184f0114f324f1ec0a85ec2ea336b7f3919381f178dcf",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "06e77b4b211ff01a33f4d56c542852ca9b14f205ae33824476fbf116b2420bc2",
+    "database/orm/README.md": "2f02c70100f911538d83da90f6053689229466fb46486c759867b875d07549dc",
+    "database/orm/method_surface_test.go": "4e2f96a4b1f2bd22abe1d264060906528251824bf49c46ab0ea74d99c2209491",
+    "database/orm/relation.go": "af55906fd8db0cde794a66bc4b206abf399a9d9bc4f62b2d76c2e797ab4352ff",
+    "database/orm/relation_join_plan.go": "c2471539b481dfefd3af263b18b2cb3dc90ed6a3c08c47b3a8634f39cb89c7e8",
+    "database/orm/relation_join_plan_test.go": "eab86363b1c6f9e85bc3be85b9cbb5324f602252330a54e3471b45e74cb0cc63",
+    "database/orm/relation_loading.go": "2807a5ee6b9eeec1c9f53905bb296fc4085c2fcc5fc41d559da71d055656fb33",
+    "database/orm/relation_morph.go": "c6ccd40636f75ab335bc71f338c4ef9a9c964c168b46a5c1e45ff6ad97873d0c",
+    "database/orm/relation_predicate.go": "8652671476239ddeec5c7b30495106b8a9699dce4290afbe68a5a4bd65bd3541",
+    "database/orm/relation_scope.go": "c74a2cb4f7792d8357aec3aaa37a4c6ac2bc9f7b58beb3ddc6f4b42e89534c03",
+    "database/orm/relation_through.go": "9d0f0a5db58cd0ef250595b9be7e885d84e40d4ed83beeef43b53ba5e742e15a",
+    "database/orm/relation_through_hop.go": "b8ff35bbe6274c8db661f8db5e03f55c8888101475819e94c8dbf4eb51db34ed",
+    "database/orm/relation_through_loading.go": "428c9fb6b158d7f458bda8a9b0dcaf808ee86d3c69d5c0cf368492f94f4bfcb3",
+    "database/orm/relation_tree.go": "ae9fc589856824b251b2fa7eeb1f8268302eb68a75576fa27a1ac78749080b4d",
+    "database/orm/testdata/joined-has.sql": "2c47d40736473cca5b2009c00ec3644952830a88d7336bab4b80dce4a73c1787",
+    "database/orm/testdata/public-methods.txt": "64af85d61456729bd148fb3113487cc37db4aac72cab346ff7e0dbd71c25bb83",
+    "database/query/joined_hydration.go": "a5e9de1adf9a232dcca13b429b0d02b170bc6aedb557b82ece3b51cef9d7b6a7",
+    "database/query/relation_morph.go": "d184ee0a1d1529a7b3153ceb04727bfa429b58a97260cdbfd77b1df118a89746",
+    "database/query/relation_through_hop.go": "e4f5e090c7a7e903f5d0c2f8d0c7553b2d425b1648cb44bcfd3973f1c01b568c",
+    "database/query/relation_through_select.go": "848b7b63695ae471b2ee5ea9cae12cb27e8c5b1f9795259c404379820100dd26",
+    "internal/ormcore/relation_row.go": "d33f510da919a391faae0e95a0b1162b8522db6971985dd500a400813e488ec9",
+    "internal/querycore/relation_join.go": "4f5acb97290cea8a9dec62e23529480cd8d3f69d9c2a273ca8c47ac17a42bfeb",
+    "tests/fixtures/goway/compiler_cases_test.go": "22aa6ba3cb7c3cb001b73ca013dde3cb97e8e0d59e33a7d6f647c242e6a3c092",
+    "tests/fixtures/goway/footprint_test.go": "ccb88af1f8c448f77ede5b778c90e90a85c1c12bee25108267a523ded4e4655a",
+    "tests/fixtures/goway/golden_driver_test.go": "83bd4462ed736e3d319d0525aa147b2f938c3d8cf58d685ea301c40ab35b7e59",
+    "tests/fixtures/goway/models/joined/models.go": "dff2c349d7e01e60e91516819e9576a62140ed69d3a6d60cf099ed5c9fac86cf",
+    "tests/fixtures/goway/oldmodels/joined/.foundry-gen.json": "a25a60fe0e5ff273fe6646bdb99f5e154ccdf26b4bbbf34264b5c4988b867a67",
+    "tests/fixtures/goway/oldmodels/joined/models.go": "889c0cc33f91aba0d0f299847acfeab4d325b9adff30d87b7f3c0bfe085458ca",
+    "tests/fixtures/goway/oldmodels/joined/parent_foundry.gen.go": "036ffb9a7ff6a86fd5e39be12e9d248b5d441f0e73bb55a6494008920e2bf78c",
+    "tests/fixtures/goway/oldmodels/joined/pivot_foundry.gen.go": "8c3658943542405ea30e7a7949960d80ea6e101bb770988abd67e921176e1730",
+    "tests/fixtures/goway/oldmodels/joined/target_foundry.gen.go": "76288352e993dac88bfd3257edd21f207ade074f76d4d4f2d6070b6c09430370",
+    "tests/fixtures/goway/pgsmoke/relations_joined_test.go": "841cc33c7691b068b1c8e301df499a186cef59528c68ae68bc73513dbd0ec201",
+    "tests/fixtures/goway/relations_joined_golden_test.go": "b4465860e8d3d6bee563c7fc7600a237c4f2dd576a9ed1bfda1ba16fc3783920",
+    "tests/fixtures/goway/relations_joined_test.go": "c4ed99b9487e85ec8b03c345927ca98afd4edcfaad3f58fec5114f858feb6100",
+    "tests/fixtures/goway/testdata/compilefail/hop_intermediate_owner/invalid.go": "354b6006a01f00c22697d0dfbd91d95482a769ea23ee77116b8a06b5bd5e089d",
+    "tests/fixtures/goway/testdata/compilefail/hop_second_key/invalid.go": "c5183e15ac48f34aeace752a0ad880f7a1fd86b31bba6ded9d2dafcbe80bee51",
+    "tests/fixtures/goway/testdata/compilefail/joined_pivot_side/invalid.go": "71942e46dbd81a09ee1631ed476c70d1a38ce3bb5b0b05004747db80d220b3c9",
+    "tests/fixtures/goway/testdata/compilefail/joined_target_side/invalid.go": "c11f570d8d5f491f0578e0739813d52589884333fdd8f0a3577ad09608b8ca2c",
+    "tests/fixtures/goway/testdata/compilefail/morph_target_mismatch/invalid.go": "1f793a67f988d5085162bad9ea90154683cad4ab958ad867d1b201d8ca885bf7",
+    "tests/fixtures/goway/testdata/compilefail/pivot_key/invalid.go": "85c301c02fe19ff79a30adec89dc8411d3b74c2be87c75fc2965298f911ec8a9",
+    "tests/fixtures/goway/testdata/compilefail/pivot_model/invalid.go": "2df2fd06223ac96551c49ad717b3651cc0092320bee253aa6f97ac6298b49723",
+    "tests/fixtures/goway/testdata/compilefail/pivot_order/invalid.go": "1fc0f924325bcaa4d2d5b219e9c1c9aca92c70a26fab388ff0f221b94bd8938e",
+    "tests/fixtures/goway/testdata/compilefail/pivot_payload/invalid.go": "0fb58d2528509536390dd04d81342ca641afb8126a9dbfe3c67f8dcd8173d3eb",
+    "tests/fixtures/goway/testdata/compilefail/pivot_scope/invalid.go": "f90f0c6696c17fff978e831764ce6d1959ca83a204ff7a323384d9c880fda69b",
+    "tests/fixtures/goway/testdata/compilefail/pivot_wrong_model/invalid.go": "0eb45f11c3462518a2a3219120f0ebf940403d1828325f2595af6c3168599977",
+    "tests/fixtures/goway/testdata/compilefail/soft_pivot_scope/invalid.go": "edfe2118b456464c76e7488e85a8363cea150765cd4e00fcc743aa5430afeeb6",
+    "tests/fixtures/goway/testdata/footprint/morph/probe.go": "bede9ec75d53e32f1eddfecf0bbf8aa57f8cddaf762964dbe6cb799a3eae781f",
+    "tests/fixtures/goway/testdata/footprint/pivot/probe.go": "97bd3116a5977fbcc36b8fcea10582bec5879da077cb0ff589a48b27d775d86b",
+    "tests/fixtures/goway/testdata/footprint/through/probe.go": "9d12c6184c57eab435ef94aa8c1b93a711c005c5ec4fc940068399eee5c080df"
+  },
+  "second_review_fixes": {
+    "deferred_validation": "RelationCheck now calls metadata-only validateRelationMetadata/validateJoinedMetadata. SQL and predicate subqueries are compiled only by the active outer compiler. Eager-load validation retains its pre-parent SELECT validation.",
+    "regression": {
+      "test": "TestJoinedHasCompilesEachLevelOnce",
+      "levels": 6,
+      "bind_calls_before": [
+        2,
+        4,
+        8,
+        16,
+        32,
+        64
+      ],
+      "bind_calls_after": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "sql": "Exact pre-fix SQL pinned in database/orm/testdata/joined-has.sql; bindings remain [1,2,3,4,5,6].",
+      "shared_budget": "Seeding the outer SELECT budget rejects the sixth subtree before its bind; calls [1,1,1,1,1,0].",
+      "before_log": ".cache/goway-stage4c/review-regression-before.log",
+      "after_log": ".cache/goway-stage4c/review-regression-after.log",
+      "result": "pass, including race execution"
+    },
+    "documentation": "Concrete target and pivot examples on Where, OrderBy, With, WherePivot, OrderByPivot, WithPivot.",
+    "public_surface": "No additions, removals or signature changes in this review fix.",
+    "footprint": "All ceilings unchanged and rechecked by the full fixture test run. The original per-probe measurements above are retained from footprint-final.log."
+  },
+  "docs_integration": {
+    "status": "Accepted 4c notes integrated; no runtime or test changes in this step.",
+    "files": [
+      "CHANGELOG.md",
+      "blueprint/goway-data-layer/README.md",
+      "blueprint/00-master-architecture-and-parity.md"
+    ],
+    "catalogue_summary": "93 ported / 489 port / 444 unaffected; 85 distinct Go-way cases cover the ported rows.",
+    "docs_check_log": ".cache/goway-stage4c/docs-integration-check.log"
+  }
+}

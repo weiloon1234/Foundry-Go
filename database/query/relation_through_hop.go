@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"database/sql/driver"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
@@ -11,7 +12,7 @@ import (
 )
 
 // hopAlias names the intermediate model inside HasManyThrough statements.
-const hopAlias = "foundry_through"
+const hopAlias = querycore.RelationHopAlias
 
 // relationHop is the intermediate model of HasManyThrough/HasOneThrough. Its
 // query supplies the intermediate's own filters: soft deletion and scopes.
@@ -101,14 +102,7 @@ func (h *relationHop) node() selectNode {
 
 // join adds the intermediate to a target select aliased as targetAlias.
 func (h *relationHop) join(node selectNode, targetAlias string, foreign fieldRef) selectNode {
-	node.Joins = append(node.Joins, joinNode{
-		Source: tableSource{Table: h.table, Alias: hopAlias, Columns: h.columns},
-		On:     binaryComparison{Left: fieldRef{Table: targetAlias, Column: foreign.Column}, Right: fieldRef{Table: hopAlias, Column: h.second.Column}, Operator: equal},
-	})
-	for _, predicate := range h.predicates() {
-		node.Predicates = append(node.Predicates, requalify(predicate, hopAlias))
-	}
-	return node
+	return querycore.RelationHopJoin(node, targetAlias, foreign, h.table, h.columns, h.predicates(), h.second)
 }
 
 type hopRow[N any] struct {

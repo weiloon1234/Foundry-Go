@@ -17,6 +17,7 @@ import (
 type slotCore struct {
 	owner  *tableCore
 	target reflect.Type
+	pivot  reflect.Type
 	name   string
 	offset uintptr
 	err    error
@@ -85,6 +86,9 @@ type relationBudget struct {
 }
 type relationPlan struct {
 	singular       bool
+	join           *relationJoin
+	morph          *relationMorph
+	choice         uint8
 	slot           *slotCore
 	target         *tableCore
 	local, foreign querycore.FieldRef
@@ -175,28 +179,32 @@ func HasManyOf[M, N any, K comparable](slot Many[M, N], local KeyColumn[M, K], f
 	return HasMany[M, N]{plan: p}
 }
 func newRelation[M, N any, K comparable](slot *slotCore, local KeyColumn[M, K], foreign KeyColumn[N, K]) *relationPlan {
+
+	if nilInterface(local) || nilInterface(foreign) {
+		return &relationPlan{slot: slot, err: invalid("relation requires a bound slot and typed keys")}
+	}
+	a, b := local.ormColumn(nil), foreign.ormColumn(nil)
+	return newRelationCore(slot, a.core, b.core, reflect.TypeFor[M](), reflect.TypeFor[N]())
+}
+func newRelationCore(slot *slotCore, a, b *columnCore, source, target reflect.Type) *relationPlan {
 	p := &relationPlan{slot: slot}
-	if slot == nil || nilInterface(local) || nilInterface(foreign) {
+	if slot == nil || a == nil || b == nil || a.owner == nil || b.owner == nil {
 		p.err = invalid("relation requires a bound slot and typed keys")
 		return p
 	}
-	a, b := local.ormColumn(nil), foreign.ormColumn(nil)
-	if a.core == nil || b.core == nil || a.core.owner == nil || b.core.owner == nil {
-		p.err = invalid("relation requires bound keys")
-		return p
-	}
-	p.target = b.core.owner
-	p.local, p.foreign = querycore.FieldRef{Table: a.core.owner.model.Table, Column: a.core.metadata.Name}, querycore.FieldRef{Table: b.core.owner.model.Table, Column: b.core.metadata.Name}
+	p.target = b.owner
+	p.local, p.foreign = querycore.FieldRef{Table: a.owner.model.Table, Column: a.metadata.Name}, querycore.FieldRef{Table: b.owner.model.Table, Column: b.metadata.Name}
 	p.query = newQuery(p.target)
-	if slot.owner == nil || slot.owner != a.core.owner {
+	if slot.owner == nil || slot.owner != a.owner {
 		p.err = invalid("relation local key belongs to a different table declaration")
 	}
-	if p.target == nil || p.target.typ != slot.target || slot.target != reflect.TypeFor[N]() || (slot.owner == nil || slot.owner.typ != reflect.TypeFor[M]()) {
+	if p.target.typ != slot.target || slot.target != target || slot.owner == nil || slot.owner.typ != source {
 		p.err = errors.Join(p.err, invalid("relation slot/model mismatch"))
 	}
 	p.err = errors.Join(p.err, slot.err, declarationCoreError(slot.owner), declarationCoreError(p.target))
 	return p
 }
+
 func nilInterface(v any) bool {
 	return v == nil || reflect.ValueOf(v).Kind() == reflect.Pointer && reflect.ValueOf(v).IsNil()
 }

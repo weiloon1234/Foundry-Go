@@ -2,12 +2,11 @@ package query
 
 import (
 	"context"
-	"database/sql"
+	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/encryption"
-	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
 // partitionedRow reuses complete generated model decoders for joined rows.
@@ -18,30 +17,11 @@ type partitionedRow struct {
 	start, count, total int
 }
 
-// FieldEncryption forwards the underlying stream's decryption scope.
 func (r partitionedRow) FieldEncryption() (context.Context, *encryption.Keyring) {
 	return forwardEncryption(r.row)
 }
-
-type discardColumn struct{}
-
-func (discardColumn) Scan(any) error { return nil }
-
 func (r partitionedRow) Scan(destinations ...any) error {
-	if len(destinations) != r.count || r.start < 0 || r.count < 0 || r.start+r.count > r.total {
-		return fault.New(fault.Invalid, "joined decoder does not match its declared columns")
-	}
-	all := make([]any, r.total)
-	for i := range all {
-		all[i] = discardColumn{}
-	}
-	for i, destination := range destinations {
-		if _, raw := destination.(*sql.RawBytes); raw {
-			return fault.New(fault.Invalid, "joined hydration requires owned values, not RawBytes")
-		}
-		all[r.start+i] = destination
-	}
-	return r.row.Scan(all...)
+	return (ormcore.RelationRow{Row: r.row, Start: r.start, Count: r.count, Total: r.total}).Scan(destinations...)
 }
 
 func scanJoined[N, P any](row database.Row, target *Definition[N], pivot *Definition[P]) (relation.Link[N, P], error) {
