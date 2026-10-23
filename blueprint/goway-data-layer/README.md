@@ -47,10 +47,11 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 4b | Direct eager trees, has-one, LoadMissing, relation limits and existence filters | Done; committed at `470d585`. |
 | 4c | Typed pivots, through, one-of-many and polymorphic relations | Done; committed at `a89f509`. Live PostgreSQL execution remains for the lead. |
 | 4 | Full read relations, pivots, through, one-of-many, filters and aggregate slots | In progress; 4a–4c delivered, 4d aggregate-slot design and implementation remain planned. Relation writes belong to Stage 5b; per-parent limits are out of scope. |
-| B5a | Typed mutators, accessor validation, input-column kinds and InputKey | Done; committed at `884beb7`. B5b–B5d remain deferred. |
-| 5 | Lifecycle, mutators, change sets, scopes and observers | In progress; B5a integrated. Hooks, draft/write getters, retrieval dispatch, scopes, change tracking and audit remain deferred. Relation writes belong to 5b. |
-| 6a1 | Expression phases, values, arithmetic, casts, comparisons, Count/Exists and MapSelected | Accepted lane C patch integrated; combined acceptance passed. Done pending the lead's commit. |
-| 6a2 | Row and selected CASE, COALESCE and NULLIF | Accepted lane C patch integrated; combined acceptance passed. Done pending the lead's commit. |
+| B5a | Typed mutators, accessor validation, input-column kinds and InputKey | Done; committed at `884beb7`. B5b is delivered; B5c/B5d remain deferred. |
+| B5b | Write hooks, observers, stored changes, conventions and set-write/force-delete parity | Accepted and integrated on `a5f30a6`; implementation acceptance passed in lane B. Documentation, release and catalogue checks recorded below. Done pending the lead's commit. |
+| 5 | Lifecycle, mutators, change sets, scopes and observers | In progress; B5a/B5b delivered. Retrieval/scopes remain B5c; audit policy/capture remains B5d. Relation writes and extension slots remain outside B5b. |
+| 6a1 | Expression phases, values, arithmetic, casts, comparisons, Count/Exists and MapSelected | Done; committed at `a5f30a6`. |
+| 6a2 | Row and selected CASE, COALESCE and NULLIF | Done; committed at `a5f30a6`. |
 | 6a | Expressions, aggregates, grouping, having and raw fragments | In progress; 6a1/6a2 integrated. Summary aggregates, grouping/HAVING/DISTINCT and raw fragments remain 6a3/6a4. |
 | 6b | Joins, aliases, correlation and lateral queries | Planned |
 | 6c | Rows/projections, CTEs, recursive queries, sets and result cursors | Planned |
@@ -352,9 +353,10 @@ consumer retains Stage 1 golden coverage and adds core, direct and joined-relati
 | Table name/options | Model annotation | `orm.Define` and typed options, Stage 3 |
 | Accessors | Handwritten `Access<Field>` methods | B5a: exact startup signature and persisted-field validation; explicit calls remain ordinary Go methods and never replace stored hydration |
 | Mutators, including distinct input/stored types | `Mutate<Field>` plus generated input fields | B5a: typed named methods bound once at declaration or explicit `orm.Mutate`; required/nullable input-column kinds, once-only transactional transforms and redacted errors preserving cause identity |
-| Lifecycle and per-write factory state | Generated hooks and drafts | Typed framework hooks/write state and column handles, Stage 5 |
-| Retrieval hooks and observers | Generated adapters and registration | Explicit retrieval options/application observers, Stage 5 |
-| Timestamps and soft deletes | Field-name conventions and opt-out | Same behavior, `NoTimestamps`, optional explicit temporal bindings; core ported, completion Stage 3 |
+| Lifecycle and per-write factory state | Generated hooks and drafts | B5b delivered: `WithHooks(func() Hooks[M])`, typed Write input getters, all 13 stages, local-before-observer order per stage, locked originals and closed RETURNING rows |
+| Write observers | Generated adapters and registration | B5b delivered: `NewObserver`/`NewDeletionObserver` and `RegisterObserver`, instance-owned sets including observer-only models; trusted concrete-owner discovery and actual-transaction dispatch for wrappers |
+| Retrieval hooks | Generated adapters | Retrieval dispatch remains B5c, including Raw |
+| Timestamps and soft deletes | Field-name conventions and opt-out | Core ported; B5b applies conventions after before hooks, validates the effective draft before mutators/encryption and captures actual stored changes |
 | Integer, UUID and natural keys | `primary=` annotation | `TableOf` binds concrete `K`; B5a `InputKeyOf` accepts distinct assignment inputs while retaining stored lookup/predicate K. Distinct inputs disable automatic UUID synthesis |
 | Global scopes | `defineXGlobalScopes` | Typed scope options, Stage 5 |
 | Direct belongs-to, has-one, has-many, self and nullable-FK relations | Slots and generated relation sets | `BelongsToOf`/`HasOneOf`/`HasManyOf`; delivered in 4b, including singular cardinality checks |
@@ -367,7 +369,9 @@ consumer retains Stage 1 golden coverage and adds core, direct and joined-relati
 | Polymorphic relations | MorphOne/Many/To/ToMany/MorphedByMany | Stage 4c delivered: corresponding `orm.*Of` constructors, validated `MorphName`, concrete target slots and discriminator-group batching |
 | Relation aggregate slots | Generated computed slots | Design and implementation in Stage 4d |
 | Relation writes and pivot lifecycle | Attach/detach/sync/toggle/update-pivot | Planned Stage 5b, alongside lifecycle integration |
-| Stored change sets | Generated `CompareX` and field structs | Column-keyed typed comparisons and changes, Stage 5 |
+| Stored change sets | Generated `CompareX` and field structs | B5b delivered: `Changes`, `Compare`, typed `ChangeOf`/nullable/encrypted variants, persisted-only owned snapshots, Assigned versus Changed and existing FieldChange codec policy |
+| Set writes | Explicit bulk lifecycle limits | B5b: `WithoutModelHooks(q)` acknowledges skipped hooks/observers/change capture; required with declared hooks, active observers or unknown executor wrappers; rejected for per-model writes |
+| Force-delete visibility | Active default and scoped physical deletion | B5b: table ForceDelete keeps active visibility; package `orm.ForceDelete` retains supplied query visibility and predicates, including WithTrashed/OnlyTrashed |
 | Draft, batch, lookup, conflict and source writes | Generated drafts/wrappers | Assignments and package functions, Stages 3/6e; preserve hook versus set-write semantics |
 | Reference and identity | `FoundryReference`/`FoundryIdentity` | Table/column-based adapters retaining model/key and persisted identity, Stage 7 |
 | Attachments, translations and metadata | Slot fields plus generated policies | Preserve fields, stored owner names, policies and cleanup; declarations in Stage 7 |
@@ -440,8 +444,8 @@ intentionally accepts byte slices, while identity does not.
 <!-- catalogue-summary -->
 | Disposition | Cases |
 | --- | ---: |
-| ported | 137 |
-| port | 445 |
+| ported | 158 |
+| port | 424 |
 | merge | 0 |
 | obsolete | 0 |
 | unaffected | 444 |
@@ -479,7 +483,7 @@ intentionally accepts byte slices, while identity does not.
 | 7 | 81 |
 | — | 444 |
 
-137 old catalogue rows are covered by 129 distinct Go-way cases.
+158 old catalogue rows are covered by 150 distinct Go-way cases.
 
 ## Emitter audit
 
@@ -924,10 +928,10 @@ automatic UUID creation; same-type UUID mutators retain it.
 Eight catalogue rows are ported: `binary_mutation_input`, `model_accessor_nullable`,
 `model_accessor_result`, `mutation_input_draft`, `mutation_input_predicate`,
 `mutator_nullable`, `mutator_owner` and `mutator_value`.
-`mutation_input_nullable` remains Stage 5/B5b pending draft/write getters that retain
-`Optional[Nullable[Input]]`. Its current input-column negative does not prove getter
-parity. `mutation_input_conflict` belongs to Stage 6e. The combined fixture has
-129 compiler cases and 39 footprint probes; both lanes' rows and probes are retained.
+`mutation_input_nullable` was deferred at B5a and is now ported in B5b: draft
+getters retain `Optional[Nullable[Input]]`. `mutation_input_conflict` belongs to Stage 6e. The combined fixture has
+129 compiler cases and 39 footprint probes at B5a acceptance; later slices retain
+those rows and probes.
 
 | New B5a probe | Baseline functions | Unchanged ceiling |
 | --- | ---: | ---: |
@@ -938,8 +942,8 @@ parity. `mutation_input_conflict` belongs to Stage 6e. The combined fixture has
 
 All 39 probes pass; the 35 pre-integration footprint ceilings remain unchanged.
 Combined build, vet, race, generation, fixture, catalogue, documentation and formatting
-checks pass. B5b–B5d, including
-hooks, retrieval dispatch on Raw, scopes, change tracking and audit, remain deferred.
+checks passed at B5a acceptance. B5b now delivers hooks and change tracking;
+retrieval dispatch on Raw and scopes remain B5c, while audit remains B5d.
 The PostgreSQL test sources cover distinct inputs, explicit accessors, omission,
 NULL, rollback and typed key inputs; live execution remains for the lead.
 
@@ -986,3 +990,55 @@ ceilings unchanged. Build, vet, race, generation, fixture, catalogue, documentat
 and formatting checks pass. PostgreSQL sources cover expression and conditional behavior;
 live execution remains for the lead. Summary aggregates, FILTER, GROUP BY,
 query HAVING and DISTINCT remain 6a3; raw fragments and the no-raw guard remain 6a4.
+
+## B5b write lifecycle and changes
+
+The accepted B5b implementation is integrated on `a5f30a6`. Its
+[evidence](../../docs/evidence/goway-b5b-lifecycle.json) records lane acceptance,
+trusted observer lookup and current source hashes. The
+[write lifecycle recipe](../../database/orm/README.md#write-lifecycle) uses
+`orm.WithHooks(func() orm.Hooks[Order] { ... })`; before hooks receive
+`*orm.Write[Order]`.
+
+Per-write factories run inside the owning transaction after an existing original
+is uniquely locked, hydrated and closed. `Saving` precedes `Creating` or `Updating`.
+Conventions follow before hooks; the effective draft validates before mutators and
+encryption. After RETURNING hydration and row closure, `Created` or `Updated`
+precedes `Saved`. Deletion runs `Deleting` then `Deleted`; force deletion adds
+`ForceDeleting` first and `ForceDeleted` last. Restore runs `Restoring` then
+`Restored`. At each stage local callbacks run first, then observers in declaration
+order. The same stages run for observer-only models without a local hook factory.
+
+`NewObserver`, `NewDeletionObserver` and `RegisterObserver` use the existing
+configured application/database registration path and instance-owned observer
+sets. Discovery delegates to the generated API's trusted concrete-owner lookup
+through a validated observer-family bridge. Unknown wrappers receive no capability;
+per-model writes resolve observers from the actual supplied transaction.
+
+`Changes[M]` compares only persisted fields, using locked originals and actual
+RETURNING values, including database defaults, triggers and managed timestamps.
+Typed `ChangeOf` variants reuse `lifecycle.FieldChange`; `Assigned` and `Changed`
+remain distinct. Snapshots own binary storage and omit ignored fields and relation
+slots. `WriteGet` retains the mutation input type; `WriteNullableGet` retains
+`Optional[Nullable[Input]]`, including explicit NULL. Hook and codec comparison
+errors share safe diagnostics while preserving `errors.Is` and `errors.As`.
+
+Set writes skip per-model hooks, observers and change capture. They require
+`WithoutModelHooks(q)` when hooks or observers apply, and for unknown executor
+wrappers. Per-model writes reject that acknowledgement. InsertMany retains its
+existing bulk semantics. Table ForceDelete retains default active visibility;
+`orm.ForceDelete(ctx, writer, q, table.Key(), id)` retains q's visibility and other
+predicates, including `WithTrashed` and `OnlyTrashed`.
+
+After-commit callbacks merge through successful savepoints, disappear on rollback,
+and run after the outer commit releases its connection. Callback failure preserves
+the committed outcome and reconciliation candidate. These callbacks are
+process-local; durable outbox/audit effects use the transaction supplied to after
+hooks. Retrieval/scopes remain B5c, audit policy/capture remains B5d, and relation
+writes and extension slots remain outside this slice.
+
+B5b ports 21 catalogue rows, including `mutation_input_nullable`, and adds two
+extra compiler negatives. The combined fixture has 203 compiler cases and 45
+footprint probes. Documentation, release inventory and catalogue checks pass;
+implementation acceptance is recorded in lane B's evidence. Live PostgreSQL
+execution remains for the lead.

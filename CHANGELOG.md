@@ -8,6 +8,12 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Add per-write hooks, typed observers and persisted change tracking (B5b), with
+  stage-major callback order, observer-only models and nullable input draft getters.
+  Require explicit set-write acknowledgement, preserve force-delete visibility,
+  and share redacted callback/codec errors and trusted observer lookup. After-commit
+  work remains process-local; durable outbox/audit effects use the supplied transaction.
+
 - Add typed row and selected expressions, arithmetic, casts, comparisons,
   Count/Exists and `rows.MapSelected` (6a1), plus CASE/COALESCE/NULLIF (6a2).
   Keep row, selected and HAVING phases distinct; preserve parameter ownership and

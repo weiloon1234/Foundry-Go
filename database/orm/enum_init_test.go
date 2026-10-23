@@ -2,6 +2,7 @@ package orm_test
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
 	"testing"
 
@@ -13,6 +14,18 @@ import (
 )
 
 func TestEnumsInitializeAfterModelDeclaration(t *testing.T) {
+	// A frozen concrete owner proves observer absence. Unknown transactor wrappers
+	// must now enter their transaction to discover observers that can repair input.
+	db, err := database.Open(t.Context(), database.Adapter{Connector: enumRefusingConnector{}}, database.DefaultPoolConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(context.Background()); err != nil {
+			t.Error(err)
+		}
+	})
+
 	for index := range 3 {
 		as := []orm.Assignment[enuminit.Model]{enuminit.Models.Key().Set(enuminit.Active), enuminit.Models.State.Set(enuminit.Active), enuminit.Models.Nullable.Set(enuminit.Active)}
 		bad := enuminit.Status("unknown")
@@ -24,7 +37,7 @@ func TestEnumsInitializeAfterModelDeclaration(t *testing.T) {
 		case 2:
 			as[2] = enuminit.Models.Nullable.Set(bad)
 		}
-		if _, err := enuminit.Models.Insert(t.Context(), refusingWriter{}, as...); !errors.Is(err, fault.Invalid) {
+		if _, err := enuminit.Models.Insert(t.Context(), db, as...); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
 	}
@@ -37,8 +50,22 @@ func TestEnumsInitializeAfterModelDeclaration(t *testing.T) {
 
 }
 
-type refusingWriter struct{}
+type enumRefusingConnector struct{}
 
-func (refusingWriter) Transaction(context.Context, func(*database.Tx) error, ...database.TxOptions) error {
-	panic("invalid enum opened a transaction")
+func (enumRefusingConnector) Connect(context.Context) (driver.Conn, error) {
+	return enumRefusingConnection{}, nil
+}
+func (enumRefusingConnector) Driver() driver.Driver            { return enumRefusingConnector{} }
+func (enumRefusingConnector) Open(string) (driver.Conn, error) { return enumRefusingConnection{}, nil }
+
+type enumRefusingConnection struct{}
+
+func (enumRefusingConnection) Prepare(string) (driver.Stmt, error) {
+	panic("invalid enum prepared SQL")
+}
+func (enumRefusingConnection) Close() error               { return nil }
+func (enumRefusingConnection) Begin() (driver.Tx, error)  { panic("invalid enum opened a transaction") }
+func (enumRefusingConnection) Ping(context.Context) error { return nil }
+func (enumRefusingConnection) QueryContext(context.Context, string, []driver.NamedValue) (driver.Rows, error) {
+	panic("invalid enum queried SQL")
 }

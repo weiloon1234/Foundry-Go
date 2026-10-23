@@ -5,12 +5,12 @@ package lifecycle
 import (
 	"bytes"
 	"database/sql/driver"
-	"fmt"
 	"math"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/lifecore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -24,23 +24,23 @@ type FieldChange[V any] struct {
 	before, after value.Optional[V]
 	assigned      bool
 	changed       bool
-	// Share the immutable codec across copies of one captured change. Keeping
+	// Share immutable codec policy across copies of one captured change. Keeping
 	// function-valued codec internals directly in this value would make even
 	// scalar changes non-comparable and break copied observer snapshots.
-	codec *codec.Codec[V]
+	policy *FieldPolicy[V]
 }
 
 func (c FieldChange[V]) Before() value.Optional[V] {
-	if c.codec == nil {
+	if c.policy == nil {
 		return c.before
 	}
-	return c.codec.CloneOptional(c.before)
+	return cloneOptional(c.policy, c.before)
 }
 func (c FieldChange[V]) After() value.Optional[V] {
-	if c.codec == nil {
+	if c.policy == nil {
 		return c.after
 	}
-	return c.codec.CloneOptional(c.after)
+	return cloneOptional(c.policy, c.after)
 }
 func (c FieldChange[V]) Assigned() bool { return c.assigned }
 func (c FieldChange[V]) Changed() bool  { return c.changed }
@@ -61,51 +61,60 @@ func (c FieldChange[V]) GoString() string { return c.String() }
 // codecs preserve calendar components; SQL relation-key equality is deliberately
 // a separate contract. A failure returns no partial change data.
 func CompareField[V any](c codec.Codec[V], before, after value.Optional[V], assigned bool) (FieldChange[V], error) {
+	return CompareFieldPolicy(FieldPolicyOf(c), before, after, assigned)
+}
+
+// CompareFieldPolicy reuses declared codec metadata without reconstructing a codec.
+// Its snapshots and errors follow CompareField. Example: CompareFieldPolicy(policy, value.Set(before), value.Set(after), true).
+func CompareFieldPolicy[V any](policy FieldPolicy[V], before, after value.Optional[V], assigned bool) (FieldChange[V], error) {
+	if policy.bind == nil || policy.clone == nil {
+		return FieldChange[V]{}, fault.New(fault.Invalid, "field change requires a declared codec policy")
+	}
+
 	if !before.IsSet() && !after.IsSet() {
 		return FieldChange[V]{}, fault.New(fault.Invalid, "field change requires a model snapshot")
 	}
 	if assigned && !after.IsSet() {
 		return FieldChange[V]{}, fault.New(fault.Invalid, "deleted field cannot be assigned")
 	}
-	same, err := sameField(c, before, after)
+	same, err := sameField(policy, before, after)
 	if err != nil {
 		return FieldChange[V]{}, err
 	}
-	return FieldChange[V]{before: c.CloneOptional(before), after: c.CloneOptional(after), assigned: assigned, codec: &c,
+	return FieldChange[V]{before: cloneOptional(&policy, before), after: cloneOptional(&policy, after), assigned: assigned, policy: &policy,
 		changed: before.IsSet() != after.IsSet() || !same}, nil
 }
 
 // sameField compares decoded values when the codec defines equality, because
 // such a codec binds non-deterministically (for example a fresh encryption
 // nonce), and otherwise compares canonical bound values.
-func sameField[V any](c codec.Codec[V], before, after value.Optional[V]) (bool, error) {
-	if c.ComparesValues() {
+func sameField[V any](c FieldPolicy[V], before, after value.Optional[V]) (bool, error) {
+	if c.equal != nil {
 		left, leftSet := before.Get()
 		right, rightSet := after.Get()
 		if !leftSet || !rightSet {
 			// Creation or deletion already changes the field.
 			return true, nil
 		}
-		same, _ := c.Equal(left, right)
-		return same, nil
+		return c.equal(left, right), nil
 	}
 	left, err := bindSnapshot(c, before)
 	if err != nil {
-		return false, fmt.Errorf("compare original model field: %w", err)
+		return false, lifecore.Failure("compare original model field failed", err)
 	}
 	right, err := bindSnapshot(c, after)
 	if err != nil {
-		return false, fmt.Errorf("compare resulting model field: %w", err)
+		return false, lifecore.Failure("compare resulting model field failed", err)
 	}
 	return sameStoredValue(left, right)
 }
 
-func bindSnapshot[V any](c codec.Codec[V], snapshot value.Optional[V]) (driver.Value, error) {
+func bindSnapshot[V any](c FieldPolicy[V], snapshot value.Optional[V]) (driver.Value, error) {
 	v, present := snapshot.Get()
 	if !present {
 		return nil, nil
 	}
-	return c.Bind(v)
+	return c.bind(v)
 }
 
 func sameStoredValue(left, right driver.Value) (bool, error) {

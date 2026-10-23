@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/lifecore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -25,16 +26,6 @@ func NewFieldMutator[I, V any](column string, c codec.Codec[V], mutate func(I) (
 	return NewCapturedFieldMutator(column, func(v V) AssignmentValue { return CaptureAssignment(c, v) }, mutate)
 }
 
-// fieldMutatorError retains classification without formatting application data.
-type fieldMutatorError struct {
-	column string
-	cause  error
-}
-
-func (e *fieldMutatorError) Error() string    { return "mutate model field " + e.column + " failed" }
-func (e *fieldMutatorError) GoString() string { return e.Error() }
-func (e *fieldMutatorError) Unwrap() error    { return e.cause }
-
 // NewCapturedFieldMutator reuses a declared column's typed stored-value capture.
 // Example: NewCapturedFieldMutator("id", captureID, convertFreshID).
 func NewCapturedFieldMutator[I, V any](column string, capture func(V) AssignmentValue, mutate func(I) (V, error)) FieldMutator {
@@ -45,7 +36,7 @@ func NewCapturedFieldMutator[I, V any](column string, capture func(V) Assignment
 		}
 		output, err := mutate(input)
 		if err != nil {
-			return AssignmentValue{}, &fieldMutatorError{column: column, cause: err}
+			return AssignmentValue{}, lifecore.Failure("mutate model field "+column+" failed", err)
 		}
 		return capture(output), nil
 	}}

@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/lifecore"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -58,19 +59,24 @@ func writerObservers(writer any) (lifecycle.Observers, bool) {
 	}
 }
 
+// FoundryObservers shares the concrete framework-owner lookup with ORM. The
+// observer capability is validated here and is never sent to application code.
+// Unknown wrappers cannot prove observer absence.
+// Example (framework only): FoundryObservers(db, sqlowner.Observers()).
+func FoundryObservers(writer any, seal sqlowner.ObserverSeal) (lifecycle.Observers, bool) {
+	if !seal.Valid() {
+		return lifecycle.Observers{}, false
+	}
+	return writerObservers(writer)
+}
+
 // MaxLifecycleDepth bounds nested write and retrieval callbacks using the
 // supplied context. Hooks must propagate it to nested operations. Failures roll
 // back owning writes/savepoints; pool reads have no implicit write transaction.
-const MaxLifecycleDepth = 32
-
-type lifecycleDepthKey struct{}
+const MaxLifecycleDepth = lifecore.MaxDepth
 
 func writeHookContext(ctx context.Context) (context.Context, error) {
-	depth, _ := ctx.Value(lifecycleDepthKey{}).(int)
-	if depth >= MaxLifecycleDepth {
-		return nil, fault.New(fault.Invalid, "model lifecycle nesting exceeds its depth bound; check recursive hooks")
-	}
-	return context.WithValue(ctx, lifecycleDepthKey{}, depth+1), nil
+	return lifecore.Context(ctx)
 }
 
 func executeHookedMutation[M any](ctx context.Context, writer database.Transactor, plan mutationPlan[M]) (M, error) {
@@ -126,7 +132,7 @@ func executeHookedMutation[M any](ctx context.Context, writer database.Transacto
 		if hooks.Before != nil {
 			mutation, err := hooks.Before(ctx, tx, operation, before, plan.mutation)
 			if err != nil {
-				return *new(M), err
+				return *new(M), lifecore.Failure("model before hook failed", err)
 			}
 			plan.mutation = mutation
 		}
@@ -147,7 +153,7 @@ func executeHookedMutation[M any](ctx context.Context, writer database.Transacto
 		}
 		if hooks.After != nil {
 			if err := hooks.After(ctx, tx, operation, before, after, plan.mutation); err != nil {
-				return *new(M), err
+				return *new(M), lifecore.Failure("model after hook failed", err)
 			}
 		}
 		if err := ctx.Err(); err != nil {

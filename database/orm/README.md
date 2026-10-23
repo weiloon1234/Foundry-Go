@@ -106,11 +106,12 @@ passing the guard.
 
 `InsertMany(ctx, tx, [][]orm.Assignment[M]{...})` inserts an atomic bounded batch.
 `NoSoftDeletes()` disables the deletion convention and conflicts with explicit
-`SoftDeleteOf`. `Table.ForceDelete(key)` physically deletes active or trashed
-records; `Query.ForceDeleteAll` respects the query's visibility. Explicit timestamp roles
+`SoftDeleteOf`. `Table.ForceDelete(key)` physically deletes active records by
+default; use package `ForceDelete` with a `WithTrashed` or `OnlyTrashed` query for
+deleted records. `Query.ForceDeleteAll` respects query visibility. Explicit timestamp roles
 win over names; explicit timestamp constructors conflict with `NoTimestamps()`.
 `CreatedAt`, `UpdatedAt`, and `SoftDelete` retain the instant type as their second
-type parameter. Upsert and cursor pagination remain deferred.
+type parameter. Upsert remains deferred.
 
 `Query.Chunk(ctx, ex, size, func([]M) error)` reads bounded batches with stable
 ordering and preserves Limit/Offset. Later batches advance from the last ordered
@@ -428,3 +429,66 @@ Mutator callback errors expose only a fixed field diagnostic through ordinary
 formatting. Their original cause remains available through `errors.Is` and
 `errors.As`. Required and nullable password constructors bind named mutators;
 encrypted fields continue to reject them.
+
+### Write lifecycle
+
+Declare a per-write factory with `WithHooks(func() Hooks[Order] { ... })` as a
+`Define` option. The factory runs inside the owning transaction, after a locked
+original has been hydrated and its rows closed. It runs once per normal write.
+`Saving` precedes `Creating` or `Updating`. Mutators and conventions follow these
+callbacks. The effective draft is validated before mutators and encryption;
+omitted required fields can be supplied with
+`WriteSet(write, Orders.TotalCents.Set(0))`.
+
+Draft getters accept typed setter functions. `WriteGet(write, Orders.TotalCents.Set)`
+returns `Optional[int64]`; `WriteNullableGet(write, Members.Note.Set)` returns
+`Optional[Nullable[LabelInput]]` when `Note` has a distinct `LabelInput` mutation
+input. `WriteIsSet(write, Members.Note.Set)` also reports an explicit NULL as
+assigned. These functions preserve input values without running mutators. Use the
+nullable getter for nullable fields. Getter/assignment errors abort the draft even
+if a callback ignores them. Draft pointers are valid only during before hooks.
+
+After RETURNING has hydrated and closed its rows, `Created` or `Updated` precedes
+`Saved`. Deletion runs `Deleting` then `Deleted`; force deletion adds
+`ForceDeleting` before `Deleting` and `ForceDeleted` after `Deleted`. Restore runs
+`Restoring` then `Restored`. A callback error, panic, Goexit or cancellation aborts
+the owning transaction/savepoint. Hook and comparison errors expose fixed framework
+text while retaining the original cause for `errors.Is`/`errors.As`. The supplied
+context shares the generated API's
+32-level lifecycle nesting bound; propagate it to nested operations.
+
+`Changes[Order]` contains only persisted fields, with locked originals and actual
+RETURNING results (including defaults, triggers and managed timestamps).
+`ChangeOf(changes, Orders.TotalCents)` returns the existing
+`lifecycle.FieldChange[int64]`; `NullableChangeOf(changes, Members.Note)` retains
+`Nullable[StoredLabel]`. `Assigned` reflects effective assignments, even if the
+canonical stored value did not change. `Before` is absent on create; `After` is
+absent after physical deletion. Snapshot getters return owned binary buffers and
+exclude ignored fields and relation slots. `Compare(Orders.Table, before, after,
+assignments...)` provides the same comparison without a write or operation tag.
+
+Observers use `NewObserver[Order]("orders.audit")` and `RegisterObserver` through
+the existing database Module/provider registration at `application.New`.
+Dependency constructors return `func() Hooks[Order]`. Each application's pool owns
+an immutable observer set. At every stage local hooks run first, followed by
+observers in declaration order, including models without a local factory.
+`NewDeletionObserver` limits dispatch to deletion operations.
+
+`AfterCommit` callbacks merge through successful savepoints, are discarded on
+rollback, and run after the outer commit releases its connection. All callbacks
+run even if one fails; failures preserve the committed outcome and reconciliation
+candidate. Use the transaction supplied to after hooks for durable outbox/audit
+writes: in-memory after-commit work is not crash durable.
+
+Set writes skip per-model hooks, observers and change capture. A declaration with
+hooks or observers requires `WithoutModelHooks(Orders.Query()).UpdateAll(...)`
+(and likewise delete/force-delete); unknown executor wrappers require this explicit
+acknowledgement too. Per-model writes reject the acknowledgement. `InsertMany`
+retains its existing bulk semantics: no per-model hooks/observers.
+Observer discovery shares the generated API's concrete framework-owner lookup;
+it never invokes a wrapper's observer method or gives it an internal capability.
+Per-model writes through wrappers dispatch observers from the supplied transaction.
+
+`Orders.ForceDelete(ctx, db, id)` preserves default active visibility. For deleted
+rows use `ForceDelete(ctx, db, Orders.Query().WithTrashed(), Orders.Key(), id)`;
+`OnlyTrashed` and other predicates are retained through locking and deletion.

@@ -77,6 +77,9 @@ func planWrite[M any](q queryState, kind querycore.MutationKind, as []Assignment
 	if err := validateQuery(q); err != nil {
 		return writePlan{}, err
 	}
+	if !many && q.ast.SkipModelHooks {
+		return writePlan{}, invalid("WithoutModelHooks is only an acknowledgement for set writes")
+	}
 	p := writePlan{query: q, kind: kind, many: many, assignments: make([]querycore.MutationAssignment, 0, len(as))}
 	for _, a := range as {
 		if a.err != nil {
@@ -235,6 +238,39 @@ func (p *writePlan) setAutomatic(name string, raw any) error {
 	}
 	return invalid("automatic assignment has no declared codec")
 }
+
+// validateAssignments is shared by effective-draft preflight and final compilation.
+// It checks shape/required fields without binding, mutating or sealing values.
+func (p writePlan) validateAssignments(c *querycore.Compiler) (map[string]querycore.MutationAssignment, error) {
+	if p.adjust == nil {
+		return p.query.ast.ValidateMutation(p.kind, p.assignments, c)
+	}
+	assigned, err := p.query.ast.ValidateMutationShape(p.kind, p.assignments, c)
+	if err != nil {
+		return nil, err
+	}
+	if err = p.query.ast.ValidateAdjustment(p.adjust, c, assigned); err != nil {
+		return nil, err
+	}
+	return assigned, nil
+}
+func (p writePlan) validateEffective() error {
+	c, err := p.query.ast.WriteCompiler(p.kind.SqlKind(), !p.many, len(p.query.relations) > 0)
+	if err != nil {
+		return err
+	}
+	if p.batch != nil {
+		for _, row := range p.batch {
+			if _, err = p.query.ast.ValidateMutation(querycore.InsertModel, row, &c); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	_, err = p.validateAssignments(&c)
+	return err
+}
+
 func (p writePlan) compile() (querycore.Statement, error) {
 	c, err := p.query.ast.WriteCompiler(p.kind.SqlKind(), !p.many, len(p.query.relations) > 0)
 	if err != nil {
@@ -244,15 +280,11 @@ func (p writePlan) compile() (querycore.Statement, error) {
 		return p.compileBatch(c)
 	}
 
-	var assigned map[string]querycore.MutationAssignment
-	if p.adjust != nil {
-		assigned, err = p.query.ast.ValidateMutationShape(p.kind, p.assignments, &c)
-	} else {
-		assigned, err = p.query.ast.ValidateMutation(p.kind, p.assignments, &c)
-	}
+	assigned, err := p.validateAssignments(&c)
 	if err != nil {
 		return querycore.Statement{}, err
 	}
+
 	node := p.query.ast.ModelSelect(p.query.table.selections)
 	if p.kind == querycore.InsertModel {
 		union := make(map[string]bool, len(assigned))
@@ -281,7 +313,7 @@ func writeOne[M any](ctx context.Context, writer database.Transactor, q querySta
 		candidate = item
 		present = true
 		return nil
-	}, nil)
+	}, nil, modelCallbacks(q.table, unsafe.Pointer(&candidate)))
 	if err != nil {
 		if present && reconcile {
 			return *new(M), &WriteError[M]{cause: err, candidate: candidate}
@@ -298,8 +330,12 @@ func writeAll[M any](ctx context.Context, writer database.Transactor, q querySta
 	if err != nil {
 		return 0, err
 	}
+	set, known := ownerObservers(writer)
+	if !q.ast.SkipModelHooks && (q.table.hooks != nil || !known || observed[M](set, p.kind)) {
+		return 0, invalid("set-based writes skip per-model hooks and observers; acknowledge with WithoutModelHooks")
+	}
 	var count int64
-	err, reconcile := executeWrite(ctx, writer, p, nil, &count)
+	err, reconcile := executeWrite(ctx, writer, p, nil, &count, nil)
 	if err != nil {
 		if reconcile {
 			return 0, &WriteError[int64]{cause: err, candidate: count}
@@ -308,7 +344,7 @@ func writeAll[M any](ctx context.Context, writer database.Transactor, q querySta
 	}
 	return count, nil
 }
-func executeWrite(ctx context.Context, writer database.Transactor, p writePlan, scan func(database.Row) error, count *int64) (error, bool) {
+func executeWrite(ctx context.Context, writer database.Transactor, p writePlan, scan func(database.Row) error, count *int64, callbacks *writeCallbacks) (error, bool) {
 	if ctx == nil || writer == nil {
 		return invalid("write requires a context and transactor"), false
 	}
@@ -316,8 +352,10 @@ func executeWrite(ctx context.Context, writer database.Transactor, p writePlan, 
 		return err, false
 	}
 	p.query.ast.ScopeContext = ctx
+	set, known := ownerObservers(writer)
+	hooked := callbacks != nil && (!known || callbacks.needed(set, p.kind))
 	// Exact pool owners can confirm a single INSERT without an explicit transaction.
-	if p.kind == querycore.InsertModel && !p.many && !p.encrypted() && !p.mutated() {
+	if p.kind == querycore.InsertModel && !p.many && !p.encrypted() && !p.mutated() && !hooked {
 		switch owner := writer.(type) {
 		case *database.DB:
 			if owner == nil {
@@ -330,7 +368,7 @@ func executeWrite(ctx context.Context, writer database.Transactor, p writePlan, 
 	}
 	var prepared querycore.Statement
 	var err error
-	if !p.needsClock() && !p.encrypted() && !p.mutated() {
+	if !p.needsClock() && !p.encrypted() && !p.mutated() && !hooked {
 		p, err = p.conventions(ctx, nil)
 		if err == nil {
 			prepared, err = p.compile()
@@ -344,10 +382,19 @@ func executeWrite(ctx context.Context, writer database.Transactor, p writePlan, 
 		if tx == nil {
 			return invalid("transactor supplied no transaction")
 		}
+		if hooked {
+			if err := callbacks.before(ctx, tx, &p); err != nil {
+				return err
+			}
+			ctx = p.query.ast.ScopeContext
+		}
 		s := prepared
-		if p.needsClock() || p.encrypted() || p.mutated() {
+		if p.needsClock() || p.encrypted() || p.mutated() || hooked {
 			current, e := p.conventions(ctx, tx.Clock())
 			if e != nil {
+				return e
+			}
+			if e = current.validateEffective(); e != nil {
 				return e
 			}
 			current, e = current.mutate(ctx)
@@ -358,6 +405,7 @@ func executeWrite(ctx context.Context, writer database.Transactor, p writePlan, 
 			if e != nil {
 				return e
 			}
+			p = current
 			s, e = current.compile()
 			if e != nil {
 				return e
@@ -378,6 +426,14 @@ func executeWrite(ctx context.Context, writer database.Transactor, p writePlan, 
 
 				return e
 			}
+		}
+		if hooked {
+			if err := callbacks.after(ctx, tx, p); err != nil {
+				return err
+			}
+		}
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 		completed = true
 		return nil
@@ -482,7 +538,7 @@ func insertMany[M any](ctx context.Context, writer database.Transactor, q queryS
 		}
 		items = append(items, item)
 		return nil
-	}, nil)
+	}, nil, nil)
 	if err != nil {
 		if reconcile && len(items) > 0 {
 			return nil, &WriteError[[]M]{cause: err, candidate: items}
@@ -554,9 +610,9 @@ func (t Table[M, K]) Restore(ctx context.Context, tx database.Transactor, key K)
 	return writeOne[M](ctx, tx, t.Query().Where(t.Key().Eq(key)).state, querycore.RestoreModel, nil)
 }
 
-// ForceDelete physically deletes one key regardless of soft-delete state of a soft-delete model.
+// ForceDelete physically deletes one active key. Use the package ForceDelete function for other visibility.
 func (t Table[M, K]) ForceDelete(ctx context.Context, tx database.Transactor, key K) (M, error) {
-	return writeOne[M](ctx, tx, t.Query().WithTrashed().Where(t.Key().Eq(key)).state, querycore.ForceDeleteModel, nil)
+	return writeOne[M](ctx, tx, t.Query().Where(t.Key().Eq(key)).state, querycore.ForceDeleteModel, nil)
 }
 
 // ForceDeleteAll physically deletes matching rows within the selected scope.

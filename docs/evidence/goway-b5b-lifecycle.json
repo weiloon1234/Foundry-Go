@@ -1,0 +1,1040 @@
+{
+  "slice": "B5b",
+  "stage": "5",
+  "base_commit": "a5f30a6264aaaa24e671ddbc5f37df06e5f9e996",
+  "status": "Accepted B5b implementation rebased onto a5f30a6 with trusted observer lookup; lead-owned docs integrated and docs/release-tools/catalogue checks passed. No commit.",
+  "recorded_at": "2026-10-23T08:47:35.818092+00:00",
+  "depends_on": {
+    "slice": "B5a",
+    "evidence": "docs/evidence/goway-b5a-mutators.json",
+    "sha256": "357e233d5d24c6510609dd17ffac40f1c59e88a0e4af125bf31888b545e575dd",
+    "note": "Accepted B5a is committed in the rebased HEAD together with Stages 4b/4c and 6a1/6a2; B5b and review 2 fixes were preserved."
+  },
+  "environment": {
+    "go": "go1.27.1 darwin/arm64",
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache",
+    "GOWORK": "off",
+    "cache_policy": "shared warm lane cache retained"
+  },
+  "features": [
+    "all 13 old normal-write callback stages and stage-major local/observer ordering",
+    "per-write factories after unique locked original, with original and RETURNING rows closed",
+    "existing transaction callback isolation, bounded error classification, savepoints, outcome candidates and outer after-commit owner",
+    "instance-owned typed observer/deletion-observer constructors and configured application.New registration, including observer-only CRUD",
+    "persisted-only snapshots, codec cloning/equality, Assigned vs Changed, lifecycle.FieldChange reuse",
+    "managed timestamps/UUID/defaults/soft-delete conventions after before hooks and before mutators/encryption",
+    "explicit set-write hook/observer/change-capture acknowledgement",
+    "force-delete active default and query-preserving package operation",
+    "required and nullable draft getters retain distinct mutation input types",
+    "shared safe error wrapper for mutators, write hooks and change-comparison codec errors, preserving errors.Is/As",
+    "effective draft shape/required-field validation after hooks and conventions, before mutators and encryption",
+    "trusted concrete-owner observer lookup shared with the old API through a validated ObserverSeal bridge; unknown wrappers require set-write acknowledgement and receive no capability"
+  ],
+  "api": {
+    "declaration": "WithHooks(func() Hooks[Member] { ... })",
+    "draft": "WriteSet(w, Members.Name.Set(\"\")); WriteGet(w, Members.Name.Set); WriteNullableGet(w, Members.Note.Set); WriteIsSet(w, Members.Note.Set)",
+    "changes": "Changes[M]; ChangeOf, NullableChangeOf, EncryptedChangeOf, NullableEncryptedChangeOf; Compare(table.Table, before, after, assignments...)",
+    "observers": "Observer[M]; NewObserver[M], NewDeletionObserver[M], RegisterObserver[M]",
+    "set_acknowledgement": "WithoutModelHooks(query)",
+    "force_delete": "ForceDelete(ctx, writer, query, table.Key(), id)",
+    "shared_policy": "lifecycle.FieldPolicy[V], FieldPolicyOf and CompareFieldPolicy retain original codec policy without rebuilding a codec"
+  },
+  "ported_rows": [
+    "generated_observer_factory",
+    "generated_observer_owner",
+    "hook_callback_typo",
+    "hook_changes_owner",
+    "hook_draft_owner",
+    "hook_snapshot_owner",
+    "lifecycle_change_nullable",
+    "lifecycle_change_owner",
+    "lifecycle_change_value",
+    "model_change_draft",
+    "model_change_field_result",
+    "model_change_ignored_field",
+    "model_change_snapshots",
+    "model_change_unknown_field",
+    "mutation_input_nullable",
+    "observer_constructor_owner",
+    "observer_factory_owner",
+    "soft_change_operation",
+    "soft_force_key",
+    "soft_restore_hook",
+    "soft_restore_key"
+  ],
+  "extra_compilefail_cases": [
+    "change_owner_conversion",
+    "input_nullable_type (preserved B5a negative)"
+  ],
+  "surface_additions": {
+    "orm_types": {
+      "Hooks[M]": "13 typed callback fields; no methods",
+      "Write[M]": "pointer String and GoString",
+      "Changes[M]": "Before, After, Operation, Assigned, Changed, String, GoString",
+      "Observer[M]": "Name, Validate, Declare"
+    },
+    "orm_functions": [
+      "WithHooks",
+      "WriteSet",
+      "WriteGet",
+      "WriteNullableGet",
+      "WriteIsSet",
+      "Compare",
+      "ChangeOf",
+      "NullableChangeOf",
+      "EncryptedChangeOf",
+      "NullableEncryptedChangeOf",
+      "NewObserver",
+      "NewDeletionObserver",
+      "RegisterObserver",
+      "WithoutModelHooks",
+      "ForceDelete"
+    ],
+    "lifecycle_types": [
+      "FieldPolicy[V]"
+    ],
+    "lifecycle_functions": [
+      "FieldPolicyOf",
+      "CompareFieldPolicy"
+    ],
+    "pinned_surface": "database/orm/testdata/public-methods.txt; additions only; all generic method/surface/codec guards pass; no Query methods added",
+    "framework_bridges": [
+      "query.FoundryObservers(any, sqlowner.ObserverSeal) (lifecycle.Observers, bool): validates the observer family and delegates to the existing concrete-owner lookup; no new ORM methods"
+    ]
+  },
+  "footprints": {
+    "measurement": "Defined T/t symbols in Go package archives; not runtime timing or linked binary size.",
+    "new_probes": {
+      "lifecycle_write": {
+        "functions": 932,
+        "baseline_functions": 930,
+        "ceiling": 1070,
+        "archive_bytes": 4587620
+      },
+      "lifecycle_changes": {
+        "functions": 1052,
+        "baseline_functions": 1050,
+        "ceiling": 1208,
+        "archive_bytes": 4827592
+      }
+    },
+    "existing_ceilings": "All 43 rebased HEAD probe declarations and ceilings retained byte-for-byte in value; both previously accepted B5b probe ceilings retained. No ceiling raised.",
+    "all_probes": {
+      "column_encrypted_json": {
+        "functions": 1306,
+        "baseline_functions": 1217,
+        "ceiling": 1400,
+        "archive_bytes": 5493786
+      },
+      "column_encrypted_text": {
+        "functions": 1216,
+        "baseline_functions": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5184142
+      },
+      "column_enum": {
+        "functions": 1329,
+        "baseline_functions": 1232,
+        "ceiling": 1417,
+        "archive_bytes": 5487400
+      },
+      "column_interval": {
+        "functions": 1274,
+        "baseline_functions": 1178,
+        "ceiling": 1355,
+        "archive_bytes": 5409192
+      },
+      "column_json": {
+        "functions": 1376,
+        "baseline_functions": 1280,
+        "ceiling": 1472,
+        "archive_bytes": 5725520
+      },
+      "column_nullable_encrypted_json": {
+        "functions": 1547,
+        "baseline_functions": 1449,
+        "ceiling": 1667,
+        "archive_bytes": 6755230
+      },
+      "column_nullable_encrypted_text": {
+        "functions": 1457,
+        "baseline_functions": 1359,
+        "ceiling": 1563,
+        "archive_bytes": 6422660
+      },
+      "column_nullable_interval": {
+        "functions": 1511,
+        "baseline_functions": 1406,
+        "ceiling": 1617,
+        "archive_bytes": 6621236
+      },
+      "column_nullable_json": {
+        "functions": 1627,
+        "baseline_functions": 1522,
+        "ceiling": 1751,
+        "archive_bytes": 6945820
+      },
+      "column_nullable_password": {
+        "functions": 1520,
+        "baseline_functions": 1417,
+        "ceiling": 1630,
+        "archive_bytes": 6604066
+      },
+      "column_nullable_text": {
+        "functions": 1565,
+        "baseline_functions": 1456,
+        "ceiling": 1675,
+        "archive_bytes": 6397260
+      },
+      "column_number": {
+        "functions": 1248,
+        "baseline_functions": 1172,
+        "ceiling": 1348,
+        "archive_bytes": 5152692
+      },
+      "column_password": {
+        "functions": 1284,
+        "baseline_functions": 1190,
+        "ceiling": 1369,
+        "archive_bytes": 5436056
+      },
+      "column_time": {
+        "functions": 1290,
+        "baseline_functions": 1194,
+        "ceiling": 1374,
+        "archive_bytes": 5290278
+      },
+      "conditional_row": {
+        "functions": 1719,
+        "baseline_functions": 1681,
+        "ceiling": 1934,
+        "archive_bytes": 7820692
+      },
+      "conditional_selected": {
+        "functions": 1549,
+        "baseline_functions": 1511,
+        "ceiling": 1738,
+        "archive_bytes": 7065750
+      },
+      "cursor": {
+        "functions": 1169,
+        "baseline_functions": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5227880
+      },
+      "expr_arithmetic": {
+        "functions": 1200,
+        "baseline_functions": 1162,
+        "ceiling": 1337,
+        "archive_bytes": 5596206
+      },
+      "expr_selected": {
+        "functions": 1593,
+        "baseline_functions": 1551,
+        "ceiling": 1784,
+        "archive_bytes": 7028296
+      },
+      "has": {
+        "functions": 1380,
+        "baseline_functions": 1302,
+        "ceiling": 1498,
+        "archive_bytes": 5993178
+      },
+      "has_one": {
+        "functions": 1371,
+        "baseline_functions": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 5966894
+      },
+      "input_column_kinds": {
+        "functions": 5274,
+        "baseline_functions": 5088,
+        "ceiling": 5852,
+        "archive_bytes": 21741846
+      },
+      "input_key": {
+        "functions": 1034,
+        "baseline_functions": 982,
+        "ceiling": 1130,
+        "archive_bytes": 4703732
+      },
+      "key_chunk": {
+        "functions": 854,
+        "baseline_functions": 812,
+        "ceiling": 934,
+        "archive_bytes": 4040102
+      },
+      "lifecycle_changes": {
+        "functions": 1052,
+        "baseline_functions": 1050,
+        "ceiling": 1208,
+        "archive_bytes": 4827592
+      },
+      "lifecycle_write": {
+        "functions": 932,
+        "baseline_functions": 930,
+        "ceiling": 1070,
+        "archive_bytes": 4587620
+      },
+      "model_type": {
+        "functions": 299,
+        "baseline_functions": 299,
+        "ceiling": 344,
+        "archive_bytes": 1263552
+      },
+      "models": {
+        "functions": 6715,
+        "baseline_functions": 6147,
+        "ceiling": 7070,
+        "archive_bytes": 29091120
+      },
+      "models_1": {
+        "functions": 1728,
+        "baseline_functions": 1619,
+        "ceiling": 1862,
+        "archive_bytes": 7071500
+      },
+      "models_3": {
+        "functions": 2564,
+        "baseline_functions": 2435,
+        "ceiling": 2801,
+        "archive_bytes": 10592688
+      },
+      "morph": {
+        "functions": 1126,
+        "baseline_functions": 1088,
+        "ceiling": 1252,
+        "archive_bytes": 5043234
+      },
+      "mutator_explicit": {
+        "functions": 1675,
+        "baseline_functions": 1605,
+        "ceiling": 1846,
+        "archive_bytes": 6849238
+      },
+      "mutators": {
+        "functions": 841,
+        "baseline_functions": 801,
+        "ceiling": 922,
+        "archive_bytes": 4362786
+      },
+      "nested_with": {
+        "functions": 1371,
+        "baseline_functions": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6004476
+      },
+      "onequery": {
+        "functions": 846,
+        "baseline_functions": 803,
+        "ceiling": 924,
+        "archive_bytes": 3997146
+      },
+      "pivot": {
+        "functions": 1043,
+        "baseline_functions": 1005,
+        "ceiling": 1156,
+        "archive_bytes": 4732478
+      },
+      "q_join": {
+        "functions": 1676,
+        "baseline_functions": 1598,
+        "ceiling": 1838,
+        "archive_bytes": 7893044
+      },
+      "q_select": {
+        "functions": 879,
+        "baseline_functions": 836,
+        "ceiling": 962,
+        "archive_bytes": 4200642
+      },
+      "q_with": {
+        "functions": 1177,
+        "baseline_functions": 1053,
+        "ceiling": 1211,
+        "archive_bytes": 5339708
+      },
+      "raw": {
+        "functions": 1083,
+        "baseline_functions": 1045,
+        "ceiling": 1202,
+        "archive_bytes": 5074374
+      },
+      "relation_with": {
+        "functions": 2002,
+        "baseline_functions": 1847,
+        "ceiling": 2125,
+        "archive_bytes": 8425994
+      },
+      "report_pipeline": {
+        "functions": 2010,
+        "baseline_functions": 1905,
+        "ceiling": 2191,
+        "archive_bytes": 10640780
+      },
+      "sensitive_models": {
+        "functions": 2793,
+        "baseline_functions": 2606,
+        "ceiling": 2997,
+        "archive_bytes": 12558540
+      },
+      "table_ref": {
+        "functions": 846,
+        "baseline_functions": 803,
+        "ceiling": 924,
+        "archive_bytes": 4149466
+      },
+      "through": {
+        "functions": 966,
+        "baseline_functions": 928,
+        "ceiling": 1068,
+        "archive_bytes": 4282556
+      }
+    },
+    "model_slope": {
+      "functions_for_two_added_models": 836,
+      "ceiling": 939
+    },
+    "total_probes": 45,
+    "harness": "Probe order derives from sorted budget keys so every new budget is measured."
+  },
+  "checks": [
+    {
+      "command": "go test -race ./database/orm ./database/query ./database/lifecycle ./database ./internal/querycore ./internal/lifecore ./internal/sqlowner",
+      "result": "PASS",
+      "log": "/private/tmp/goway-b5b-rebase-race.log",
+      "note": "All requested packages and changed internal owners pass; ORM 19.428s, query 2.241s, database 18.935s."
+    },
+    {
+      "command": "go -C tests/fixtures/goway test -v .",
+      "result": "PASS",
+      "log": "/private/tmp/goway-b5b-rebase-fixture.log",
+      "note": "203 compiler cases; all old/new goldens; 45 footprint probes; 11.031s."
+    },
+    {
+      "command": "go -C tests/fixtures/goway test ./pgsmoke -run '^$'",
+      "result": "PASS",
+      "log": "/private/tmp/goway-b5b-rebase-pgcompile.log",
+      "note": "Compile only; no PostgreSQL tests executed."
+    },
+    {
+      "command": "go -C tests/fixtures/goway vet ./pgsmoke",
+      "result": "PASS",
+      "log": "/private/tmp/goway-b5b-rebase-pgvet.log"
+    },
+    {
+      "command": "make generate-check",
+      "result": "PASS",
+      "log": "/private/tmp/goway-b5b-rebase-generate.log",
+      "note": "All Makefile GENERATION_DIRS checked, not only the Go-way fixture."
+    },
+    {
+      "command": "python3 tools/goway_catalogue.py",
+      "result": "PASS",
+      "log": "/private/tmp/goway-b5b-rebase-catalogue.log"
+    },
+    {
+      "command": "make docs-check",
+      "result": "PASS",
+      "log": "/private/tmp/goway-b5b-rebase-docs.log"
+    },
+    {
+      "command": "gofmt -w <54 changed Go files>; gofmt -l <same files>",
+      "result": "PASS",
+      "log": "/private/tmp/goway-b5b-rebase-gofmt.log"
+    },
+    {
+      "command": "git diff --check HEAD",
+      "result": "PASS"
+    }
+  ],
+  "resolved_failures": [
+    "Removed a misplaced validation block in bulk insert; old natural key explicitly declares primary=ID.",
+    "Refreshed the public surface snapshot only after proving old entries were retained.",
+    "Enum preflight regression now tests a frozen concrete owner: unknown wrappers must enter their Tx to discover observers that may repair input.",
+    "Moved heavy typed stage dispatch to declaration adapters and a non-generic engine; no existing ceiling raised.",
+    "Removed generic codec reconstruction rather than weakening the codec guard; lifecycle.FieldChange now owns a reusable thin FieldPolicy.",
+    "Nullable policy metadata lives only on nullable column cores, keeping required-column signatures thin.",
+    "The new application.New test uses the root module rather than expanding fixture dependencies.",
+    "Catalogue reasons use their compiler-case prefix as required by the existing validator."
+  ],
+  "postgresql_coverage": {
+    "source": "tests/fixtures/goway/pgsmoke/lifecycle_test.go",
+    "compile_and_vet": "PASS",
+    "executed": false,
+    "lead_run_covers": [
+      "before-hook supplied fields and managed timestamps",
+      "locked original and RETURNING stored changes",
+      "after-hook veto rolls back model and transactional event/outbox-style effect",
+      "after-commit waits for the outer commit",
+      "set-write acknowledgement",
+      "soft delete, restore, default-active force delete and WithTrashed physical deletion"
+    ]
+  },
+  "docs_notes": [
+    "Replace the superseded OnSaving example with orm.WithHooks(func() orm.Hooks[Order] { ... }); before hooks receive *orm.Write[Order].",
+    "Stage 5 B5b is complete: write hooks/observers, persisted change tracking, conventions, set-write acknowledgement, force-delete visibility and typed input draft getters.",
+    "After-commit callbacks are process-local; durable outbox/audit effects use the supplied transaction.",
+    "Retrieval/scopes (B5c), audit policy/capture (B5d), relation writes and extension slots remain outside this slice.",
+    "Write-hook/codec errors use safe diagnostics while retaining causes; effective drafts validate before mutators and encryption.",
+    "Observer discovery now reuses the generated API concrete-owner lookup through a validated observer-family bridge. Unknown wrappers require explicit set-write acknowledgement, receive no capability, and per-model CRUD resolves actual transaction observers."
+  ],
+  "scope_notes": [
+    "No dependency or Go pin changes.",
+    "No DTO, wire-manifest, OpenAPI, TypeScript or datatable contract declarations changed.",
+    "Lead-owned CHANGELOG/blueprint/master notes integrated with explicit authorization; implementation and wire contracts unchanged in this step.",
+    "No live PostgreSQL and no Git write commands.",
+    "Existing validated capability families reused without changes; added only a sealed bridge to the existing observer lookup."
+  ],
+  "b5b_delta_files": [
+    "blueprint/goway-data-layer/compilefail-mapping.tsv",
+    "database/lifecycle/change.go",
+    "database/lifecycle/change_redaction_test.go",
+    "database/lifecycle/field_policy.go",
+    "database/orm/README.md",
+    "database/orm/changes.go",
+    "database/orm/column.go",
+    "database/orm/declaration.go",
+    "database/orm/enum_init_test.go",
+    "database/orm/fix_a_test.go",
+    "database/orm/hooks.go",
+    "database/orm/hooks_test.go",
+    "database/orm/lifecycle_failure_test.go",
+    "database/orm/method_surface_test.go",
+    "database/orm/observer_capability_test.go",
+    "database/orm/observers_application_test.go",
+    "database/orm/testdata/public-methods.txt",
+    "database/orm/write.go",
+    "database/orm/write_draft.go",
+    "database/query/model_hooks.go",
+    "internal/lifecore/context.go",
+    "internal/lifecore/failure.go",
+    "internal/querycore/field_mutator.go",
+    "tests/fixtures/goway/compiler_cases_test.go",
+    "tests/fixtures/goway/coremodels/lifecycle.go",
+    "tests/fixtures/goway/footprint_test.go",
+    "tests/fixtures/goway/lifecycle_golden_test.go",
+    "tests/fixtures/goway/models/hooks/key.go",
+    "tests/fixtures/goway/models/hooks/models.go",
+    "tests/fixtures/goway/oldmodels/hooks/.foundry-gen.json",
+    "tests/fixtures/goway/oldmodels/hooks/member_foundry.gen.go",
+    "tests/fixtures/goway/oldmodels/hooks/models.go",
+    "tests/fixtures/goway/pgsmoke/lifecycle_test.go",
+    "tests/fixtures/goway/testdata/compilefail/change_owner_conversion/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/generated_observer_factory/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/generated_observer_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/hook_callback_typo/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/hook_changes_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/hook_draft_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/hook_snapshot_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/input_nullable_type/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/lifecycle_change_nullable/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/lifecycle_change_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/lifecycle_change_value/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/model_change_draft/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/model_change_field_result/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/model_change_ignored_field/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/model_change_snapshots/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/model_change_unknown_field/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/mutation_input_nullable/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/observer_constructor_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/observer_factory_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/soft_change_operation/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/soft_force_key/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/soft_restore_hook/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/soft_restore_key/invalid.go",
+    "tests/fixtures/goway/testdata/footprint/lifecycle_changes/probe.go",
+    "tests/fixtures/goway/testdata/footprint/lifecycle_write/probe.go"
+  ],
+  "shared_existing_files_touched": [
+    "blueprint/goway-data-layer/compilefail-mapping.tsv",
+    "database/lifecycle/change.go",
+    "database/orm/README.md",
+    "database/orm/column.go",
+    "database/orm/declaration.go",
+    "database/orm/enum_init_test.go",
+    "database/orm/fix_a_test.go",
+    "database/orm/method_surface_test.go",
+    "database/orm/testdata/public-methods.txt",
+    "database/orm/write.go",
+    "database/query/model_hooks.go",
+    "internal/querycore/field_mutator.go",
+    "tests/fixtures/goway/compiler_cases_test.go",
+    "tests/fixtures/goway/footprint_test.go",
+    "tests/fixtures/goway/testdata/compilefail/mutation_input_nullable/invalid.go"
+  ],
+  "source_sha256": {
+    "CHANGELOG.md": "b499e96367930eeea93b137f8f0b07cd9e239272cff620af3be0bc2901d6e782",
+    "blueprint/00-master-architecture-and-parity.md": "9fe8b944a9fc945f4daa4d01b5bcac1961f689ca86b0f4d93edcf496023e4f56",
+    "blueprint/goway-data-layer/README.md": "0d63bc4fb573127076705dc7d596a804fe85773d9d7e78c32fae67713b8f89a8",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "bb127ce55a66663a18020d292e93e732657cbcb4552078630874528caae43e1c",
+    "database/capability_test.go": "271d0e4dc5f4461a1c9b999f85d40ba31922a8a9c70739d17af81cc3e1e8bf11",
+    "database/lifecycle/change.go": "71e5a1054a259441a1e0e82ae38fee229f55b15aad060255ea564671c36c4cb3",
+    "database/lifecycle/change_redaction_test.go": "132e01704f325560b38643ea0f1b9a8084a724e5beaa76b97b6876a0324cdfe7",
+    "database/lifecycle/field_policy.go": "a63f13b955c156cf0dc5f93c5a1f599f062a568c2429d4ecbd61b831bef52aad",
+    "database/observers.go": "89279b9a81586eb9f3ceffc5234f6f6f06519bc1b9edf13790fd96d3931a0b04",
+    "database/orm/README.md": "831e40958f669ce2da002887bdb01e8fe63619974d128572b8ba9d8db57c2c41",
+    "database/orm/changes.go": "0fe4750d1aa8f9fbc3c397fc731c35884850a80f507c2ff375d1d44a13a07ddf",
+    "database/orm/codecs.go": "6d12cba6565441fa4d898d3de3e9bbcb623d5f76f60f191c727a6bde87f2cafa",
+    "database/orm/column.go": "4996e3b0bf391df1fad58865bf362a3cfca367beb6f773d19f435138b28dc0fc",
+    "database/orm/column_input.go": "ccb41423f1e4cb48a0bc7420f14f5b5ab76bf9b427622d735891acb9d943f2a4",
+    "database/orm/column_interval.go": "01ac20d0d923ea9191ac2dc3c65f50c8ef2bff1b7fa5cd36a9c51784c49294fe",
+    "database/orm/column_json.go": "c91cdda8a9c0dc37886ce42bbc6e984a17b0b536fe44e0abf23d9c4dca6582b8",
+    "database/orm/column_sensitive.go": "0a39f3e2e15312a5dfb1d637923a8426bae852912fa4a3e5801256c356464ff6",
+    "database/orm/declaration.go": "f3e81f27b949be832fc7d2b1df583d4bde2084d9e36f24255bb2b33213fdaba9",
+    "database/orm/enum_init_test.go": "96e48c95b0eb43d51b4a886632aef5157f1165a0a406ebdbbf1cd9d4174a36f1",
+    "database/orm/fix_a_test.go": "520215cadce3fce0ed7daeeddd1fdd496ebdeca6035effe80adbbcc6f7f876bb",
+    "database/orm/hooks.go": "7d2630575921df9e1aac1b4c45285321e11abcbc2df358126830644f5baef586",
+    "database/orm/hooks_test.go": "c554e011a8552709d4f9fcacdabd58dc88f7c68c8d521b5d487b1e22f8f33641",
+    "database/orm/input_binding.go": "abfb9fb821aa2b660657c971eed11961587354ef8f51693a560ccfef22a5a226",
+    "database/orm/input_binding_test.go": "fdd8cd4ceb8ef5c11f72c70984a55d07f92fa0766e88c9435725df2f7240d60e",
+    "database/orm/input_key.go": "4bc239558e227d59ddd18e18c1fb0949819abb715b1ea84ce0a97237d847c260",
+    "database/orm/lifecycle_failure_test.go": "f80ceeb0a6a7398a08d91ac974d309f1c06cf672fe6bbe83b53fd58f1e263a2d",
+    "database/orm/method_surface_test.go": "ccdb5d93c7a3ca47b3986ec3badf2a2b330e81ce187d8fb1e35516df003e8dba",
+    "database/orm/mutator.go": "fea109599cca38cebe6b85a636a56059142e117740686837021a2bcbe02aacad",
+    "database/orm/mutator_test.go": "43b1c514418569b2278cee1703986cdfae0026907c04a995bd5651c1655635cf",
+    "database/orm/observer_capability_test.go": "b296e613d6a10c6d8927f42943ac7d6d626d36fdaa23ecd571ba8b3dc5ea17db",
+    "database/orm/observers_application_test.go": "7da7b37b8861324374f130853b846080b4255fff365c424d9008fb6eedf0550e",
+    "database/orm/password_mutator_test.go": "e3d98cfaec49d7c87620cf37854942d54d3fb8a03045cf1bbb45859c66d49a21",
+    "database/orm/query.go": "27bf245c501a01d8f6b5d5de49f892b79cdd4de9c7866aabc7c86f58fb7704f0",
+    "database/orm/testdata/public-methods.txt": "6d8eac2f3bcebffb060feef140da253a246d7e78bd76f93ff35ca1772eaf396e",
+    "database/orm/write.go": "ddb7efae074ec4bebb985b7e75a8badb0721534b135406c404edb3065f3b269f",
+    "database/orm/write_draft.go": "00df3119dfba7fad6f78da82d73a9508b700d47b97feb8912bdcd99890f8ec64",
+    "database/query/binary_ownership_test.go": "c6efea6ea38a1d4800b9009a16cfc1175be8efeaa35725138ef6b3a47b740a74",
+    "database/query/conflict_mutator.go": "e5cd078284efd2036453ab708a1f1bf54ec57d8e66727213299f0afedaa378f3",
+    "database/query/field_mutator.go": "748535019c202db8652a993c1f6fc891c5d1d39d9b8e49c843018c65cf950e70",
+    "database/query/model_hooks.go": "413b5341a7681f422a073d6c5223e688159f9a7a6b53fc71985d4782340372f4",
+    "database/query/model_hooks_test.go": "e2c530c9c0e5fb377b7cba1bbd7616554e57ac260697a6875e552df23609dc0b",
+    "database/query/model_timestamps.go": "f51933b0861ec8ff6e9b4f1b23f7fda7345580c0bcfb17337aea5dfa52cca9f6",
+    "database/query/model_value_mapping.go": "ac4076b31cbe438827c08d707af409332055b0171f1ea8e45e3ba9b7c28ef3a7",
+    "database/query/mutation.go": "b4f84b2b86f9158c5e3db9afcfd92084664224e68ebb161810f6ed4e8023c9ee",
+    "database/query/mutation_input.go": "e37e6e04f3c91c2bfc6ca0ac9f77431d16662451419ccf12bef07e414ff79ab9",
+    "database/query/soft_delete_scope.go": "7311574aa0fe48a6ee44a234396e747d595245f954593a5e64aa98e59d933a32",
+    "database/query/write_lookup.go": "f59c1e77276365c666aa39cfe44bc07087a0f562e7e902a3a6ef200e2e79d1b3",
+    "internal/generate/discover_field_methods.go": "7351a36fc49462c8f90f2b28916425eb624009e9b1a1b7b0548eff6ebfd4826e",
+    "internal/lifecore/context.go": "b286190d24dd0879e54562df5b78d4bd8da9a55bfaad589b14d74b26390e0599",
+    "internal/lifecore/failure.go": "33607e88eff76335cfe7ed3f4dfd97b965c5a7e7bbab7da19e411a761cf6454d",
+    "internal/modelmeta/field_methods.go": "7b8a28542b34eda9c543154638bdbf2e0f100ed1389b462efc78b9c104a89620",
+    "internal/modelmeta/field_methods_test.go": "69adc36e8a4b73d7e8220d71a156fb014f406e621060364bdafd14b25dc70a95",
+    "internal/ormcore/input_clone.go": "086a07a945214e133960b1ba0d0ca83a12870e5c9f2d5bcd4ee8d92c715ed498",
+    "internal/ormcore/input_clone_test.go": "f2c03ce5bf13a7654bcd134821681e1372ab5b6b37c6e123e11264e056f983a6",
+    "internal/querycore/field_mutator.go": "0f7df8165447054cf3186586dd35dc3c65c6e3b626cee96d9ee3b6c4b4df1c24",
+    "internal/querycore/field_mutator_test.go": "ae1d610a50d652b8e4b5e5ac27a59807dea6a8d95eae1129b1138fc6cd4469a7",
+    "internal/sqlowner/seal.go": "b9f546f7111812d4a7245673425607c3bf7e4da73c048843f94c0f28df088cb8",
+    "internal/sqlowner/seal_test.go": "46e53cd1c2e05fbacd0388e0013164aa6c1df5dfad0eb694633b14fb118aea38",
+    "tests/fixtures/goway/bridge_capability_test.go": "36f9ad491a8f3bab1e40c5c51d642d205939c270300d22dd0bde7d7f339a281b",
+    "tests/fixtures/goway/compiler_cases_test.go": "1666106093044b0784f24f31c885df3ec3d2572e65b745381590d112a1146ab7",
+    "tests/fixtures/goway/coremodels/lifecycle.go": "48cce7a9b0bfdd98f7c8a961ce015c395eaafd37bc3bcc4b82f77b5e042a4aa3",
+    "tests/fixtures/goway/coremodels/mutator.go": "2ea3ea1f4b49840d78c1c480e19da7a52b711aefea35157c4a8da26040bb70e1",
+    "tests/fixtures/goway/footprint_test.go": "808b9f16dd24971911fff6985cb0f81e9ec70d7c4518d85b1aa1e626fc20996a",
+    "tests/fixtures/goway/lifecycle_golden_test.go": "e64e2498347bd05cf8cc765a4dde4a8892d86ef826d3732ed7a895400833f393",
+    "tests/fixtures/goway/models/hooks/key.go": "41f474beb13cd43c669732e6c03eeaa6001e4e4e78094727a514232dba3c2a1e",
+    "tests/fixtures/goway/models/hooks/models.go": "2a37cc67af74a433359540ff344b003fa565d94333be76471acd46e4246b86ab",
+    "tests/fixtures/goway/models/mutators/key.go": "2f70990a6e8f1bbd71e6afec361d73032515642c3c817906f3915d10fe6ba6c3",
+    "tests/fixtures/goway/models/mutators/models.go": "3baac1d6cf1ae664f4d2f45e56f1540aa613cd1fb97a184a4513d2b403fdf164",
+    "tests/fixtures/goway/mutators_golden_test.go": "6bbb7830e27cae0f3ddcbc2da32e90ad25bfe1b185bbaeb69bda0d706579181e",
+    "tests/fixtures/goway/oldmodels/hooks/.foundry-gen.json": "0f4e9ad539e382e2286d98d791050f6d9c7b3e950192475739f6f32694efd35a",
+    "tests/fixtures/goway/oldmodels/hooks/member_foundry.gen.go": "9a3ae41aee9e6bebb9ace65a9ead0f303e72ef6fc0ee26497d98fc0ac93f7261",
+    "tests/fixtures/goway/oldmodels/hooks/models.go": "c559e0844c27ead6171a919d196c6c96c6983de89fda878cde86b421b3a309c3",
+    "tests/fixtures/goway/oldmodels/mutators/.foundry-gen.json": "a6b8c023abf1066046e9b91b0f81c90a752010fa08b500b4a3b0a4513c38ac2f",
+    "tests/fixtures/goway/oldmodels/mutators/key.go": "3be298d92ea078d40c2271ecbec71e17e5d7a27d2814c609ac219891957f5e65",
+    "tests/fixtures/goway/oldmodels/mutators/key_record_foundry.gen.go": "ef0cd943d2a4362d8e6c56223e3da54ee65582e083ccbe173b2e537e7bd845c0",
+    "tests/fixtures/goway/oldmodels/mutators/member_foundry.gen.go": "ace6e94b28824dd48e40dc13570972e102e1972d656e5c89bf635d397ea1ee35",
+    "tests/fixtures/goway/oldmodels/mutators/models.go": "8747751562b24f17fc678175b83b61235b031acfe49f768c4dca0765116cb471",
+    "tests/fixtures/goway/pgsmoke/lifecycle_test.go": "6e82b9a65e5c78cb04f9f98116d79b4b871413ad58bbf40b7d57e14aba24ecad",
+    "tests/fixtures/goway/pgsmoke/mutators_test.go": "2c51caaefa3c0f0eff1a01006d718ba681638b5be8f35e9d27e63519f46cc046",
+    "tests/fixtures/goway/testdata/compilefail/binary_mutation_input/invalid.go": "0caec6fa659e66d92e655712dc5f0303141a1dd995810ee5e428a2bc794f205c",
+    "tests/fixtures/goway/testdata/compilefail/change_owner_conversion/invalid.go": "7de665155a01df020fc3e297264cf49701aaf73b7c234dc91ee6251a65929671",
+    "tests/fixtures/goway/testdata/compilefail/generated_observer_factory/invalid.go": "21c4e4e880efe17104aa62387235412e2061f0fc2f050d6956e207eba2c94be7",
+    "tests/fixtures/goway/testdata/compilefail/generated_observer_owner/invalid.go": "2b70e008ff88d00a5fbd0708ecbd43c40c47bbd4cbb30f9139ceffc182ff91ae",
+    "tests/fixtures/goway/testdata/compilefail/hook_callback_typo/invalid.go": "7740db3d20248ddab96ef20cf52c30946e68debf849d67e53cd45da410394907",
+    "tests/fixtures/goway/testdata/compilefail/hook_changes_owner/invalid.go": "feac5b5ec4f976d89424f965cba7cdc2105dfeb87c59c8c44d4a4846b063a7b7",
+    "tests/fixtures/goway/testdata/compilefail/hook_draft_owner/invalid.go": "dce27e004494bbf83720c4273ae8ba82b984bf845e6e2284f6073d3e394f2873",
+    "tests/fixtures/goway/testdata/compilefail/hook_snapshot_owner/invalid.go": "009c23555861f295cda40d347385d026ae7c6f9a4218623d354d4a68e51052ea",
+    "tests/fixtures/goway/testdata/compilefail/input_column_conversion/invalid.go": "5c505c25f1077c8e7cf420b7e2ca3f17e8455ec97fa26591e21016e2b802fcbf",
+    "tests/fixtures/goway/testdata/compilefail/input_key_lookup_input/invalid.go": "8c6ca97b7984b157014c4ae3653730aec1040ddfd2000b11ade499e9b305a041",
+    "tests/fixtures/goway/testdata/compilefail/input_key_predicate_input/invalid.go": "c1aa9af00c77441c8ef9ffaf00b4d61f0028b6a187d51314dd9b13290fa3b90f",
+    "tests/fixtures/goway/testdata/compilefail/input_key_set_stored/invalid.go": "fa5d9fefec08c6d6e58ceb560c6960c64c4de8ed1156aaa918d5e65c5b34f3b1",
+    "tests/fixtures/goway/testdata/compilefail/input_nullable_stored/invalid.go": "dd84b780c5d7b931727a2ee0f63f2e196c1ac9b64a1b0e2dc3f3d5b0853f843a",
+    "tests/fixtures/goway/testdata/compilefail/input_nullable_type/invalid.go": "a69d8fcd27ad5baeb722628c93a9b35fb2ed2c8173ce3e79cfaeab52e0e765e8",
+    "tests/fixtures/goway/testdata/compilefail/input_required_null/invalid.go": "0936079482b4b48ebf9ef61d70f535c3f84c405e2b7511cda94af9808ed969ad",
+    "tests/fixtures/goway/testdata/compilefail/input_text_number/invalid.go": "a268149e704e499b7180633309c1601b8f78af1e0b31038591bbf4a90070bafa",
+    "tests/fixtures/goway/testdata/compilefail/lifecycle_change_nullable/invalid.go": "0eb6460922575cc1050dd63cab124096c93eff04f3f8714130433f9d3d8e230e",
+    "tests/fixtures/goway/testdata/compilefail/lifecycle_change_owner/invalid.go": "bdc1033a54955a6c4b287edd2c890171b1bbac962f341e89ab7f44851b621a80",
+    "tests/fixtures/goway/testdata/compilefail/lifecycle_change_value/invalid.go": "63988ac5aaf810c64ca94dad88927c2907945177b78159a1d8a2ff061e7cb8bf",
+    "tests/fixtures/goway/testdata/compilefail/model_accessor_nullable/invalid.go": "837236c30a1f0fb2f56b4ba6e4abf9d48a4457443aa1bf7be0ffcc5dc4966170",
+    "tests/fixtures/goway/testdata/compilefail/model_accessor_result/invalid.go": "3bdb439684714f75c39816096ea3bc812e2c40a50475e395bc49f46178077146",
+    "tests/fixtures/goway/testdata/compilefail/model_change_draft/invalid.go": "65d2c10a0b1fad7a1f47a139fc91e8c1a1a1cf699850e8053589f56a3ed6a39b",
+    "tests/fixtures/goway/testdata/compilefail/model_change_field_result/invalid.go": "54bbee54660c6118d7cb7b67d0d18b389c8cae31b86d0dfb8bf3a55e19e50f4c",
+    "tests/fixtures/goway/testdata/compilefail/model_change_ignored_field/invalid.go": "3e1a28b09f62cecb6b6c1414ea09f644d0e2e650f9965ed3418f1f85695fd5d1",
+    "tests/fixtures/goway/testdata/compilefail/model_change_snapshots/invalid.go": "bbf11a8949b88eafa77ace123faaa4108e2c40466aeb857302ad4f44e63feaed",
+    "tests/fixtures/goway/testdata/compilefail/model_change_unknown_field/invalid.go": "20d08c1de2a3ba2a4a936f734623cc6af8545a046ab24227ce04adf849c0089d",
+    "tests/fixtures/goway/testdata/compilefail/mutation_input_draft/invalid.go": "ab59c10594ba825b989cf58d4e3a2429210f786b9bbe6944aadd898f3d602e7c",
+    "tests/fixtures/goway/testdata/compilefail/mutation_input_nullable/invalid.go": "20514f41055b9a43a2ea2376de7d5398c766bca659eed6b04a96e104da0f5e97",
+    "tests/fixtures/goway/testdata/compilefail/mutation_input_predicate/invalid.go": "259befbdece099a194bbadc98fadde1d70b4805dcb913b85d7e52d1b003e15da",
+    "tests/fixtures/goway/testdata/compilefail/mutator_nullable/invalid.go": "cb99c4aff3a64151f92240b4a4b29abdec4d1dd0af7a3937f373249592432eb2",
+    "tests/fixtures/goway/testdata/compilefail/mutator_owner/invalid.go": "a4ddb260f2ad0e28e39274ccfe0448bcd5705773f1944511c03eebe737556ed3",
+    "tests/fixtures/goway/testdata/compilefail/mutator_value/invalid.go": "40b940fb05616f25247da449d01b22177c4e6c93b133549a2fc8d2dd90b9cbda",
+    "tests/fixtures/goway/testdata/compilefail/observer_constructor_owner/invalid.go": "8dfc04b702a2322e1424f3e12f0fc77bb95c7670f17cb22d8bc85179bc891b13",
+    "tests/fixtures/goway/testdata/compilefail/observer_factory_owner/invalid.go": "23ce8b147ec35e321b8f0a55d2355f8772daf1748224007595a4d24ab623b7c7",
+    "tests/fixtures/goway/testdata/compilefail/soft_change_operation/invalid.go": "4027d72e60b3fff29d2e2fa8e59f09a14e7b3f291412368bc32470eaabe3ced4",
+    "tests/fixtures/goway/testdata/compilefail/soft_force_key/invalid.go": "89bedc8faf36f1dcdca5847e02e888c9718d8bf67e150d6ed09bc88470fbe32a",
+    "tests/fixtures/goway/testdata/compilefail/soft_restore_hook/invalid.go": "851ac58653b29eeb226e317682acdfbbd697b216855d7ec88e3f54d0b93ac1ed",
+    "tests/fixtures/goway/testdata/compilefail/soft_restore_key/invalid.go": "f14b0fd7dd77c11300ee80bfb476a33ea35c8ae0fe757630ca5703907565147a",
+    "tests/fixtures/goway/testdata/footprint/input_column_kinds/probe.go": "ecad439a98331b897c7d9ead0371da777f59b762255ee6129d4e6af74f242927",
+    "tests/fixtures/goway/testdata/footprint/input_key/probe.go": "bf528e6cae21d02af5f4f8d42eaf5e23ff9bfaa5bf50bdca1e3da8598fb00b9a",
+    "tests/fixtures/goway/testdata/footprint/lifecycle_changes/probe.go": "7c3a3d0244b9aca633c635e20a28a518ce63d4ea37117cffc82959bf217e3d56",
+    "tests/fixtures/goway/testdata/footprint/lifecycle_write/probe.go": "8b713e3a950ee2a27df3fc06a069bea243fca63485768cfd05ede0a44123e255",
+    "tests/fixtures/goway/testdata/footprint/mutator_explicit/probe.go": "eb1dc9c69acaa0dd39e3530c771ec71b9f2069b02acafaddd57e8db153551411",
+    "tests/fixtures/goway/testdata/footprint/mutators/probe.go": "6ac30ce4b470834b67005589e2896f3ea0fac67e1680e9f079f13b77341ed22c",
+    "tools/release/release_test.go": "b5a7d31f5f022a604d7ca7072fda8ffe3d609b669fe9776f8a822805c49ae941"
+  },
+  "logs": {
+    "/private/tmp/goway-b5b-catalogue-final.log": {
+      "sha256": "b7c680077f429c01bdebc4e4f95b06117bc06fb9e342f6d2d02bc40c07302ae2"
+    },
+    "/private/tmp/goway-b5b-docs.log": {
+      "sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+    },
+    "/private/tmp/goway-b5b-fixture-complete.log": {
+      "sha256": "3dd1bfaf933bc9d0fc43f24bebc392cf58a99967bb5e1eabc70eaa7f7cc5eade"
+    },
+    "/private/tmp/goway-b5b-footprint-core.log": {
+      "sha256": "48cd144d64bdc5088bda8b47c6edc7bcde30e73a177d00595f06039753cfb74c"
+    },
+    "/private/tmp/goway-b5b-footprint-policy.log": {
+      "sha256": "33f2716e94be670817dc03d344f029a2592ebbcc71943bcdd307cc6347e1f39c"
+    },
+    "/private/tmp/goway-b5b-footprint-thin.log": {
+      "sha256": "83c1ddd7d1b888eda9a04a7683f633f3bdb97cf6b7130758bad2028d05635382"
+    },
+    "/private/tmp/goway-b5b-generate-check.log": {
+      "sha256": "0b590a17ee76b6b46179237fec2b833f4788fbc10bc41d51dd27d1f0400d4858"
+    },
+    "/private/tmp/goway-b5b-generate.log": {
+      "sha256": "67bcc184c7e1e40aa51c7f3b65d102ccf75b89c0176a30e6ade2082003e08d82"
+    },
+    "/private/tmp/goway-b5b-orm-final.log": {
+      "sha256": "5c22e5a39f554ff73bdb1edd7f5ca4435041f53546fbc08a153e5bccb1f33def"
+    },
+    "/private/tmp/goway-b5b-orm.log": {
+      "sha256": "1346be580dbb90c4b67d4d527e89958c6939e360c546c19768647a59be3ca1d6"
+    },
+    "/private/tmp/goway-b5b-pgcompile.log": {
+      "sha256": "0c1f53c370e9b2e13d90f614d61d070fdcba4d0c40a9d5e08468019fdfd3ca38"
+    },
+    "/private/tmp/goway-b5b-pgvet.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "/private/tmp/goway-b5b-race-final.log": {
+      "sha256": "6201110be453a53f53e417d6e367d6f8962b5edacc48b105ec54c2eb5d807b3e"
+    },
+    "/private/tmp/goway-b5b-race-policy.log": {
+      "sha256": "7c36c9c41180cb9d933ff136cd2426a9ac84ed998fcf122729b8988c3b888127"
+    },
+    "/private/tmp/goway-b5b-race.log": {
+      "sha256": "3896351428799c75baa8738d14fc7f65e10e6f0caa75b461be27564d18184a02"
+    },
+    "/private/tmp/goway-b5b-review2-race.log": {
+      "sha256": "5b6bb821ebdab0b9b497bcb398f227e4a576d337227b3000d88a5cf5436cfaab"
+    },
+    "/private/tmp/goway-b5b-review2-fixture.log": {
+      "sha256": "ca3c564b6ae26dda2e92474099fdb07af8ac0296fb002fc810f0f98d2c9b25b2"
+    },
+    "/private/tmp/goway-b5b-review2-pgcompile.log": {
+      "sha256": "70a1b6c2acc84c64778a568eb13043a0938d9b0bbfdfb1a2878e7aa432f1bac4"
+    },
+    "/private/tmp/goway-b5b-review2-pgvet.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "/private/tmp/goway-b5b-review2-generate.log": {
+      "sha256": "0b590a17ee76b6b46179237fec2b833f4788fbc10bc41d51dd27d1f0400d4858"
+    },
+    "/private/tmp/goway-b5b-review2-catalogue.log": {
+      "sha256": "b7c680077f429c01bdebc4e4f95b06117bc06fb9e342f6d2d02bc40c07302ae2"
+    },
+    "/private/tmp/goway-b5b-review2-docs.log": {
+      "sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+    },
+    "/private/tmp/goway-b5b-rebase-race.log": {
+      "sha256": "e6b3172f4861d66f03f6cdc62fb54a76eb56216088b178acc1521817b5bf0898"
+    },
+    "/private/tmp/goway-b5b-rebase-fixture.log": {
+      "sha256": "1924fa7590978f54bcff585e955ad6db5fff044b2e735a218bfc77fd8e9556c0"
+    },
+    "/private/tmp/goway-b5b-rebase-pgcompile.log": {
+      "sha256": "bea2393a5978bd899298dd59a7a082fc0189469424c3c5044db020eab217e7f1"
+    },
+    "/private/tmp/goway-b5b-rebase-pgvet.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "/private/tmp/goway-b5b-rebase-generate.log": {
+      "sha256": "2d9a3b6531cf4b5135a1526d050d10b91ab02bd96a97d3e382a4352b8b56aaef"
+    },
+    "/private/tmp/goway-b5b-rebase-catalogue.log": {
+      "sha256": "378c330c37991f64f97bb8efe81954135f1b1d2629c349061b6b7505dd51f3d0"
+    },
+    "/private/tmp/goway-b5b-rebase-docs.log": {
+      "sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+    },
+    "/private/tmp/goway-b5b-rebase-gofmt.log": {
+      "sha256": "8528b8e200cd16ace9767d8d9fd1c3cafb90fdcec3fc00641721dbaf18c53581"
+    },
+    "/private/tmp/goway-b5b-rebase-snapshot.log": {
+      "sha256": "273e39516a0b65fa12c9fc4287059480b2fce7fd7ffe995f25c36a880d05f74e",
+      "note": "Expected mismatch from temporary textual union; snapshot regenerated preserving both sides, then passed in the race gate."
+    }
+  },
+  "review2": {
+    "fixed_findings": [
+      2,
+      3
+    ],
+    "deferred_finding": {
+      "number": 1,
+      "status": "fixed after rebase; see rebase_observer_fix",
+      "reason": "Lead will integrate Lane C concrete framework-owner observer lookup and distinct capability families before rebasing this worktree. No second lookup implemented.",
+      "next_step": "Completed: ORM delegates through a validated observer-family bridge to the shared concrete-owner lookup; unknown wrappers receive no capability and require explicit set-write acknowledgement.",
+      "previous_status": "waiting for rebase"
+    },
+    "wrapper_owner": "internal/lifecore/failure.go; the prior internal/querycore.fieldMutatorError was removed and its callers migrated to this one owner.",
+    "redacted_boundaries": [
+      "old/new write Before and After callbacks",
+      "orm AfterCommit callback cause",
+      "orm stored-snapshot codec comparisons",
+      "lifecycle.CompareField and CompareFieldPolicy snapshot binding"
+    ],
+    "diagnostic_contract": "Fixed framework-owned Error/GoString text; original error retained through Unwrap; errors.Is/As preserved.",
+    "validation_contract": "Shared effective-draft validation after hooks and conventions and before all mutators/sealing, also reused at final compilation.",
+    "regressions": [
+      "before/after/after-commit local and observer errors redact synthetic model values in Error(), %v, %+v, %#v while preserving errors.Is/As",
+      "shared CompareField and CompareFieldPolicy redact both original and resulting codec failures",
+      "orm Compare, ChangeOf and automatic RETURNING change capture redact codec failures",
+      "Updating hook assigning the primary key fails before any mutator or mutation SQL; only the required original locking SELECT is sent"
+    ],
+    "files_changed": [
+      "database/lifecycle/change.go",
+      "database/lifecycle/change_redaction_test.go",
+      "database/orm/README.md",
+      "database/orm/changes.go",
+      "database/orm/hooks.go",
+      "database/orm/lifecycle_failure_test.go",
+      "database/orm/write.go",
+      "database/query/model_hooks.go",
+      "internal/lifecore/failure.go",
+      "internal/querycore/field_mutator.go"
+    ],
+    "public_surface_additions": [],
+    "public_surface_unchanged": true,
+    "observer_lookup_unchanged": "Reversing only the three hook redaction returns (and their gofmt line wrapping) reproduces the prior hooks.go SHA-256 exactly.",
+    "previous_hooks_sha256": "3c935e075c9a17fc5ce7aef2e3eb3d0ecd010c995efe797f0e4327867c95ade1",
+    "previous_checks": [
+      {
+        "command": "go test -race ./database/orm ./database/query ./database/lifecycle ./database",
+        "result": "PASS",
+        "log": "/private/tmp/goway-b5b-race-policy.log",
+        "note": "All four packages passed; subsequent ORM-only metadata/test changes rechecked below. Query, lifecycle and database sources unchanged afterward."
+      },
+      {
+        "command": "go test -race ./database/orm",
+        "result": "PASS",
+        "log": "/private/tmp/goway-b5b-orm-final.log",
+        "note": "Final ORM source and configured application.New observer assembly; 20.981s test execution."
+      },
+      {
+        "command": "go -C tests/fixtures/goway test -v .",
+        "result": "PASS",
+        "log": "/private/tmp/goway-b5b-fixture-complete.log",
+        "note": "128 compiler cases; all goldens, compiler harness checks, and 35 footprint probes; 9.202s."
+      },
+      {
+        "command": "go -C tests/fixtures/goway test ./pgsmoke -run '^$'",
+        "result": "PASS",
+        "log": "/private/tmp/goway-b5b-pgcompile.log",
+        "note": "Compile only; no PostgreSQL tests executed."
+      },
+      {
+        "command": "go -C tests/fixtures/goway vet ./pgsmoke",
+        "result": "PASS",
+        "log": "/private/tmp/goway-b5b-pgvet.log"
+      },
+      {
+        "command": "go run ./cmd/foundry generate --recursive --field-docs --dir tests/fixtures/goway",
+        "result": "PASS",
+        "log": "/private/tmp/goway-b5b-generate.log",
+        "note": "Generated old lifecycle parity fixture and ownership manifest."
+      },
+      {
+        "command": "go run ./cmd/foundry generate --recursive --field-docs --check --dir tests/fixtures/goway",
+        "result": "PASS",
+        "log": "/private/tmp/goway-b5b-generate-check.log"
+      },
+      {
+        "command": "make docs-check",
+        "result": "PASS",
+        "log": "/private/tmp/goway-b5b-docs.log"
+      },
+      {
+        "command": "python3 tools/goway_catalogue.py",
+        "result": "PASS",
+        "log": "/private/tmp/goway-b5b-catalogue-final.log",
+        "note": "110 ported; 472 port; 444 unaffected; 1026 total catalogue rows."
+      },
+      {
+        "command": "gofmt -w <105 changed Go files>; gofmt -l <same files>",
+        "result": "PASS",
+        "note": "No unformatted Go sources remain."
+      },
+      {
+        "command": "git diff --check",
+        "result": "PASS"
+      }
+    ],
+    "checks": [
+      {
+        "command": "go test -race ./database/orm ./database/query ./database/lifecycle ./database ./internal/querycore ./internal/lifecore",
+        "result": "PASS",
+        "log": "/private/tmp/goway-b5b-review2-race.log"
+      },
+      {
+        "command": "go -C tests/fixtures/goway test -v .",
+        "result": "PASS",
+        "log": "/private/tmp/goway-b5b-review2-fixture.log"
+      },
+      {
+        "command": "go -C tests/fixtures/goway test ./pgsmoke -run '^$'",
+        "result": "PASS",
+        "log": "/private/tmp/goway-b5b-review2-pgcompile.log"
+      },
+      {
+        "command": "go -C tests/fixtures/goway vet ./pgsmoke",
+        "result": "PASS",
+        "log": "/private/tmp/goway-b5b-review2-pgvet.log"
+      },
+      {
+        "command": "go run ./cmd/foundry generate --recursive --field-docs --check --dir tests/fixtures/goway",
+        "result": "PASS",
+        "log": "/private/tmp/goway-b5b-review2-generate.log"
+      },
+      {
+        "command": "python3 tools/goway_catalogue.py",
+        "result": "PASS",
+        "log": "/private/tmp/goway-b5b-review2-catalogue.log"
+      },
+      {
+        "command": "make docs-check",
+        "result": "PASS",
+        "log": "/private/tmp/goway-b5b-review2-docs.log"
+      },
+      {
+        "command": "gofmt -w <changed Go files>; gofmt -l <108 worktree Go files>",
+        "result": "PASS",
+        "note": "No unformatted sources."
+      },
+      {
+        "command": "git diff --check",
+        "result": "PASS"
+      }
+    ],
+    "compiler_cases": 128,
+    "footprint_probes": 35,
+    "all_ceilings_unchanged": true,
+    "no_commit": true,
+    "live_postgresql_executed": false,
+    "historical": true,
+    "historical_note": "Results and deferred status below describe the pre-rebase review 2 source. Observer finding #1 is now resolved by rebase_observer_fix."
+  },
+  "rebase_observer_fix": {
+    "fixed_finding": 1,
+    "lookup_owner": "database/query/model_hooks.go: writerObservers; no second concrete switch introduced",
+    "bridge": "query.FoundryObservers validates sqlowner.ObserverSeal before delegation; orm.ownerObservers uses sqlowner.Observers()",
+    "trust_contract": "Only concrete framework owners prove observer absence. Unknown wrappers require WithoutModelHooks for set writes; per-model writes resolve observers from the supplied transaction. The framework never invokes a structural observer method or passes its capability to application code.",
+    "regression": "database/orm/observer_capability_test.go: TestObserverCatcherCannotProveAbsenceOrCaptureCapability",
+    "regression_cases": [
+      "inferred catcher[K] with empty and registered observer sets",
+      "zero inferred observer bridge capability rejected",
+      "unknown wrapper unacknowledged set write fails before transaction, SQL or structural observer callback",
+      "acknowledged set write skips observers",
+      "observer-only per-model CRUD dispatches actual transaction observers",
+      "catcher receives no issued capability"
+    ],
+    "conflict_files": [
+      "blueprint/goway-data-layer/compilefail-mapping.tsv",
+      "database/orm/method_surface_test.go",
+      "database/orm/testdata/public-methods.txt",
+      "tests/fixtures/goway/compiler_cases_test.go",
+      "tests/fixtures/goway/footprint_test.go"
+    ],
+    "union_proofs": {
+      "base_compiler_cases_preserved": 181,
+      "total_compiler_cases": 203,
+      "base_footprint_probes_preserved": 43,
+      "total_footprint_probes": 45,
+      "catalogue_rows_updated_by_B5b": 21,
+      "base_ported_rows_preserved": true,
+      "snapshot": "Regenerated from type-checker output, every base header/signature and every union line retained; TestPublicMethodSurface passes in the race suite."
+    },
+    "shared_files_touched_this_turn": [
+      "blueprint/goway-data-layer/compilefail-mapping.tsv",
+      "database/orm/method_surface_test.go",
+      "database/orm/testdata/public-methods.txt",
+      "tests/fixtures/goway/compiler_cases_test.go",
+      "tests/fixtures/goway/footprint_test.go",
+      "database/orm/hooks.go",
+      "database/query/model_hooks.go",
+      "database/orm/README.md",
+      "docs/evidence/goway-b5b-lifecycle.json"
+    ],
+    "new_test_file": "database/orm/observer_capability_test.go",
+    "index_note": "Five paths still have unmerged index entries because Git write commands, including staging, were forbidden. Working-tree files contain no conflict markers.",
+    "no_git_write_commands": true,
+    "live_postgresql_executed": false
+  },
+  "source_fingerprint_note": "Current accepted B5b source and integrated documentation/release inventory fingerprints. Original implementation acceptance retained; only docs/release-tools/catalogue checks rerun for this documentation step.",
+  "docs_integration": {
+    "base_commit": "a5f30a6",
+    "recorded_at": "2026-10-23T08:56:05.069850+00:00",
+    "status": "pass; no commit or Git writes",
+    "files": [
+      "CHANGELOG.md",
+      "blueprint/goway-data-layer/README.md",
+      "blueprint/00-master-architecture-and-parity.md",
+      "database/orm/README.md",
+      "tools/release/release_test.go"
+    ],
+    "release_inventory": "No new asset exception needed. Existing manifest policy covers oldmodels/hooks/.foundry-gen.json; TestGoWaySourceInventory now explicitly asserts its presence.",
+    "scope": "Fold accepted B5b notes into lead docs, correct stale force-delete/cursor wording in the ORM README, retain implementation acceptance; no runtime changes.",
+    "catalogue": {
+      "total": 1026,
+      "ported": 158,
+      "port": 424,
+      "unaffected": 444,
+      "distinct_goway_cases_covering_ported_rows": 150
+    },
+    "compiler_cases": 203,
+    "footprint_probes": 45,
+    "checks": [
+      {
+        "command": "make docs-check",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/b5b-docs/docs-check.log",
+        "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+      },
+      {
+        "command": "make release-tools-check",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/b5b-docs/release-tools-check.log",
+        "log_sha256": "b23efd2b40a96a3b7f8ba8ecc994f9553bd344ec1b663ea34ef6b21ae04466b6"
+      },
+      {
+        "command": "python3 tools/goway_catalogue.py",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/b5b-docs/catalogue.log",
+        "log_sha256": "378c330c37991f64f97bb8efe81954135f1b1d2629c349061b6b7505dd51f3d0"
+      }
+    ]
+  }
+}

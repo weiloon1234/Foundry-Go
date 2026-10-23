@@ -28,6 +28,22 @@ orm.Bound
 *orm.Bound
 orm.Builder
 *orm.Builder
+orm.Changes
+  After func() github.com/weiloon1234/Foundry-Go/value.Optional[M]
+  Assigned func() bool
+  Before func() github.com/weiloon1234/Foundry-Go/value.Optional[M]
+  Changed func() bool
+  GoString func() string
+  Operation func() github.com/weiloon1234/Foundry-Go/value.Optional[github.com/weiloon1234/Foundry-Go/database/lifecycle.Operation]
+  String func() string
+*orm.Changes
+  After func() github.com/weiloon1234/Foundry-Go/value.Optional[M]
+  Assigned func() bool
+  Before func() github.com/weiloon1234/Foundry-Go/value.Optional[M]
+  Changed func() bool
+  GoString func() string
+  Operation func() github.com/weiloon1234/Foundry-Go/value.Optional[github.com/weiloon1234/Foundry-Go/database/lifecycle.Operation]
+  String func() string
 orm.CheckedTable
   ormError func() error
 orm.Column
@@ -133,6 +149,21 @@ orm.HasOne
   With func(children ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
   WithTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
   WithoutTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
+orm.Hooks
+  field AfterCommit func(context.Context, github.com/weiloon1234/Foundry-Go/database/lifecycle.Operation, github.com/weiloon1234/Foundry-Go/database/orm.Changes[M]) error
+  field Created func(context.Context, *github.com/weiloon1234/Foundry-Go/database.Tx, github.com/weiloon1234/Foundry-Go/database/orm.Changes[M]) error
+  field Creating func(context.Context, *github.com/weiloon1234/Foundry-Go/database.Tx, *github.com/weiloon1234/Foundry-Go/database/orm.Write[M]) error
+  field Deleted func(context.Context, *github.com/weiloon1234/Foundry-Go/database.Tx, github.com/weiloon1234/Foundry-Go/database/orm.Changes[M]) error
+  field Deleting func(context.Context, *github.com/weiloon1234/Foundry-Go/database.Tx, M) error
+  field ForceDeleted func(context.Context, *github.com/weiloon1234/Foundry-Go/database.Tx, github.com/weiloon1234/Foundry-Go/database/orm.Changes[M]) error
+  field ForceDeleting func(context.Context, *github.com/weiloon1234/Foundry-Go/database.Tx, M) error
+  field Restored func(context.Context, *github.com/weiloon1234/Foundry-Go/database.Tx, github.com/weiloon1234/Foundry-Go/database/orm.Changes[M]) error
+  field Restoring func(context.Context, *github.com/weiloon1234/Foundry-Go/database.Tx, M) error
+  field Saved func(context.Context, *github.com/weiloon1234/Foundry-Go/database.Tx, github.com/weiloon1234/Foundry-Go/database/orm.Changes[M]) error
+  field Saving func(context.Context, *github.com/weiloon1234/Foundry-Go/database.Tx, github.com/weiloon1234/Foundry-Go/value.Optional[M], *github.com/weiloon1234/Foundry-Go/database/orm.Write[M]) error
+  field Updated func(context.Context, *github.com/weiloon1234/Foundry-Go/database.Tx, github.com/weiloon1234/Foundry-Go/database/orm.Changes[M]) error
+  field Updating func(context.Context, *github.com/weiloon1234/Foundry-Go/database.Tx, M, *github.com/weiloon1234/Foundry-Go/database/orm.Write[M]) error
+*orm.Hooks
 orm.InputColumn
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
   Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
@@ -901,6 +932,14 @@ orm.Number
   NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
   Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
 orm.NumberValue
+orm.Observer
+  Declare func(factory func() github.com/weiloon1234/Foundry-Go/database/orm.Hooks[M]) (github.com/weiloon1234/Foundry-Go/database/lifecycle.Declaration, error)
+  Name func() string
+  Validate func() error
+*orm.Observer
+  Declare func(factory func() github.com/weiloon1234/Foundry-Go/database/orm.Hooks[M]) (github.com/weiloon1234/Foundry-Go/database/lifecycle.Declaration, error)
+  Name func() string
+  Validate func() error
 orm.One
 *orm.One
 orm.Option
@@ -1186,6 +1225,10 @@ orm.UpdatedAt
   Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
   NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
   Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+orm.Write
+*orm.Write
+  GoString func() string
+  String func() string
 orm.WriteError
 *orm.WriteError
   Candidate func() R
@@ -1230,6 +1273,21 @@ orm.InputIntervalOf func[M, I any](b github.com/weiloon1234/Foundry-Go/database/
 orm.NullableInputIntervalOf func[M, I any](b github.com/weiloon1234/Foundry-Go/database/orm.Builder[M], ptr *github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval], transform func(I) (github.com/weiloon1234/Foundry-Go/temporal.Interval, error), opts ...github.com/weiloon1234/Foundry-Go/database/orm.ColumnOption[github.com/weiloon1234/Foundry-Go/temporal.Interval]) github.com/weiloon1234/Foundry-Go/database/orm.NullableInputInterval[M, I]
 orm.InputBytesOf func[M, I any, V ~[]byte](b github.com/weiloon1234/Foundry-Go/database/orm.Builder[M], ptr *V, transform func(I) (V, error)) github.com/weiloon1234/Foundry-Go/database/orm.InputColumn[M, I, V]
 orm.NullableInputBytesOf func[M, I any, V ~[]byte](b github.com/weiloon1234/Foundry-Go/database/orm.Builder[M], ptr *github.com/weiloon1234/Foundry-Go/value.Nullable[V], transform func(I) (V, error)) github.com/weiloon1234/Foundry-Go/database/orm.NullableInputColumn[M, I, V]
+orm.EncryptedChangeOf func[M any, V github.com/weiloon1234/Foundry-Go/database/encrypted.Value[V]](changes github.com/weiloon1234/Foundry-Go/database/orm.Changes[M], field github.com/weiloon1234/Foundry-Go/database/orm.Encrypted[M, V]) (github.com/weiloon1234/Foundry-Go/database/lifecycle.FieldChange[V], error)
+orm.NullableEncryptedChangeOf func[M any, V github.com/weiloon1234/Foundry-Go/database/encrypted.Value[V]](changes github.com/weiloon1234/Foundry-Go/database/orm.Changes[M], field github.com/weiloon1234/Foundry-Go/database/orm.NullableEncrypted[M, V]) (github.com/weiloon1234/Foundry-Go/database/lifecycle.FieldChange[github.com/weiloon1234/Foundry-Go/value.Nullable[V]], error)
+orm.WithHooks func[M any](factory func() github.com/weiloon1234/Foundry-Go/database/orm.Hooks[M]) github.com/weiloon1234/Foundry-Go/database/orm.Option
+orm.WriteGet func[M, I any](write *github.com/weiloon1234/Foundry-Go/database/orm.Write[M], setter func(I) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]) github.com/weiloon1234/Foundry-Go/value.Optional[I]
+orm.WriteNullableGet func[M, I any](write *github.com/weiloon1234/Foundry-Go/database/orm.Write[M], setter func(I) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]) github.com/weiloon1234/Foundry-Go/value.Optional[github.com/weiloon1234/Foundry-Go/value.Nullable[I]]
+orm.WriteSet func[M any](write *github.com/weiloon1234/Foundry-Go/database/orm.Write[M], assignments ...github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]) error
+orm.WriteIsSet func[M, I any](write *github.com/weiloon1234/Foundry-Go/database/orm.Write[M], setter func(I) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]) bool
+orm.ChangeOf func[M, V any](changes github.com/weiloon1234/Foundry-Go/database/orm.Changes[M], field interface{ormColumn(*M) github.com/weiloon1234/Foundry-Go/database/orm.columnData[V]}) (github.com/weiloon1234/Foundry-Go/database/lifecycle.FieldChange[V], error)
+orm.NullableChangeOf func[M, V any](changes github.com/weiloon1234/Foundry-Go/database/orm.Changes[M], field interface{ormColumn(*M) github.com/weiloon1234/Foundry-Go/database/orm.columnData[V]}) (github.com/weiloon1234/Foundry-Go/database/lifecycle.FieldChange[github.com/weiloon1234/Foundry-Go/value.Nullable[V]], error)
+orm.Compare func[M any, K comparable](table github.com/weiloon1234/Foundry-Go/database/orm.Table[M, K], before github.com/weiloon1234/Foundry-Go/value.Optional[M], after github.com/weiloon1234/Foundry-Go/value.Optional[M], assigned ...github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]) (github.com/weiloon1234/Foundry-Go/database/orm.Changes[M], error)
+orm.NewObserver func[M any](name string) github.com/weiloon1234/Foundry-Go/database/orm.Observer[M]
+orm.NewDeletionObserver func[M any](name string) github.com/weiloon1234/Foundry-Go/database/orm.Observer[M]
+orm.RegisterObserver func[M any](r *github.com/weiloon1234/Foundry-Go/foundation.Registrar, pool github.com/weiloon1234/Foundry-Go/foundation.Key[*github.com/weiloon1234/Foundry-Go/database.DB], observer github.com/weiloon1234/Foundry-Go/database/orm.Observer[M], construct func(github.com/weiloon1234/Foundry-Go/foundation.Resolver) (func() github.com/weiloon1234/Foundry-Go/database/orm.Hooks[M], error)) error
+orm.WithoutModelHooks func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M]) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+orm.ForceDelete func[M any, K comparable](ctx context.Context, writer github.com/weiloon1234/Foundry-Go/database.Transactor, q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], key github.com/weiloon1234/Foundry-Go/database/orm.Key[M, K], id K) (M, error)
 orm.FoundryColumn func[M, V, P any](column github.com/weiloon1234/Foundry-Go/database/orm.ExpressionColumn[M, V, P], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.MetadataSeal) (github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[V], github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[P])
 orm.NumberKey result
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]

@@ -7,6 +7,7 @@ import (
 	"unsafe"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
+	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/enum"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
@@ -22,6 +23,7 @@ type Column[M, V any] struct {
 // columnData has no methods: each public capability owns only its own shells.
 type columnData[V any] struct {
 	core      *columnCore
+	policy    lifecycle.FieldPolicy[V]
 	bind      func(V) (driver.Value, error)
 	decode    func(any) (V, error)
 	scanValue func(*V) any
@@ -83,6 +85,16 @@ func bindTyped[V any](d *declaration, ptr *V, c codec.Codec[V], nullable bool, o
 		d.fail(core.field.Name, "unsupported type or invalid codec; use orm.Codec(c)")
 	}
 	core.stored = reflect.TypeFor[V]()
+	core.snapshot = func(dst, src unsafe.Pointer) {
+		*(*V)(unsafe.Add(dst, core.offset)) = c.Clone(*(*V)(unsafe.Add(src, core.offset)))
+	}
+	if c.ComparesValues() {
+		core.equal = func(before, after unsafe.Pointer) bool {
+			equal, _ := c.Equal(*(*V)(unsafe.Add(before, core.offset)), *(*V)(unsafe.Add(after, core.offset)))
+			return equal
+		}
+	}
+
 	core.sensitive = c.SensitiveValues()
 	core.bindMutator = func(fn any) error {
 		mutate, ok := fn.(func(V) (V, error))
@@ -105,7 +117,7 @@ func bindTyped[V any](d *declaration, ptr *V, c codec.Codec[V], nullable bool, o
 	return columnWithCodec(core, c)
 }
 func columnWithCodec[V any](core *columnCore, c codec.Codec[V]) columnData[V] {
-	return columnData[V]{core: core, bind: c.Bind, decode: c.Decode, scanValue: func(v *V) any { return c.Scan(v) }, clone: c.Clone, assign: func(v V) querycore.AssignmentValue { return capture(c, v) }}
+	return columnData[V]{core: core, policy: lifecycle.FieldPolicyOf(c), bind: c.Bind, decode: c.Decode, scanValue: func(v *V) any { return c.Scan(v) }, clone: c.Clone, assign: func(v V) querycore.AssignmentValue { return capture(c, v) }}
 }
 func capture[V any](c codec.Codec[V], v V) querycore.AssignmentValue {
 	return querycore.CaptureAssignment(c, v)
@@ -270,6 +282,7 @@ func bindNullable[V any](d *declaration, ptr *value.Nullable[V], c codec.Codec[V
 	}
 	configureMutatorOptions(d, field.core, opts)
 	base := columnWithCodec(field.core, c)
+	field.core.nullablePolicy = field.policy
 	base.assign = func(v V) querycore.AssignmentValue { return capture(nullable, value.Of(v)) }
 	return nullableColumnData[V]{base: base, nullable: func() columnData[value.Nullable[V]] { return field }}
 }

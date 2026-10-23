@@ -14,10 +14,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-func TestForceDeleteKeyIncludesTrashedAndSetRespectsVisibility(t *testing.T) {
+func TestForceDeleteKeyPreservesDefaultAndExplicitVisibility(t *testing.T) {
 	r := timedRecords()
 	now := time.Date(2026, 10, 22, 0, 0, 0, 0, time.UTC)
-	wantReturning := `DELETE FROM "timed" WHERE ("timed"."id" = $1) RETURNING "timed"."id", "timed"."created_at", "timed"."updated_at", "timed"."deleted_at"`
+	wantReturning := `DELETE FROM "timed" WHERE ("timed"."id" = $1) AND ("timed"."deleted_at" IS NULL) RETURNING "timed"."id", "timed"."created_at", "timed"."updated_at", "timed"."deleted_at"`
 	for _, deleted := range []driver.Value{nil, now} {
 		var statements []string
 		var bindings [][]any

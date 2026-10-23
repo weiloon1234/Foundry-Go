@@ -14,6 +14,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
+	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/modelmeta"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
@@ -46,6 +47,9 @@ type tableCore struct {
 	err        error
 	check      func() error
 	mutators   []querycore.FieldMutator
+	hooks      func() hookSet
+	observers  func(lifecycle.Observers) ([]func() hookSet, error)
+	observed   func(lifecycle.Observers, querycore.MutationKind) bool
 }
 
 type columnCore struct {
@@ -68,10 +72,17 @@ type columnCore struct {
 	mutator          querycore.FieldMutator
 	explicitMutator  bool
 	requiresMutator  bool
+	snapshot         func(unsafe.Pointer, unsafe.Pointer)
+	equal            func(unsafe.Pointer, unsafe.Pointer) bool
+	nullablePolicy   any
 }
 
 // Option configures a declaration. Example: Define("logs", declare, NoTimestamps()).
-type Option struct{ noTimestamps, noSoftDeletes bool }
+type Option struct {
+	noTimestamps, noSoftDeletes bool
+	hooks                       func() hookSet
+	hookModel                   reflect.Type
+}
 
 // NoTimestamps disables CreatedAt/UpdatedAt conventions. Example: NoTimestamps().
 func NoTimestamps() Option { return Option{noTimestamps: true} }
@@ -80,9 +91,26 @@ func NoTimestamps() Option { return Option{noTimestamps: true} }
 func Define[M any, T CheckedTable](name string, declare func(Builder[M], *M) T, opts ...Option) (result T) {
 	template := new(M)
 	d := &declaration{core: &tableCore{typ: reflect.TypeFor[M](), slots: make(map[int]*slotCore), model: querycore.ModelDefinition{Table: name}}, template: unsafe.Pointer(template), typ: reflect.TypeFor[M](), fields: make(map[int]*columnCore)}
+	d.core.observers = func(set lifecycle.Observers) ([]func() hookSet, error) {
+		return lifecycle.ObserverFactories[M, hookSet](set)
+	}
+	d.core.observed = observed[M]
 	for _, opt := range opts {
 		d.noTimestamps = d.noTimestamps || opt.noTimestamps
 		d.noSoftDeletes = d.noSoftDeletes || opt.noSoftDeletes
+		if opt.hookModel != nil {
+			if opt.hookModel != d.typ {
+				d.fail("hooks", "hook factory belongs to a different model")
+			}
+			if d.core.hooks != nil {
+				d.fail("hooks", "declare one per-write hook factory")
+			}
+			d.core.hooks = opt.hooks
+			if opt.hooks == nil {
+				d.fail("hooks", "hook factory is missing")
+			}
+		}
+
 	}
 	if d.typ.Kind() != reflect.Struct {
 		d.errors = append(d.errors, fmt.Errorf("orm %s: model must be a struct", name))

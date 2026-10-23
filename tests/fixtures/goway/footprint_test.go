@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -44,9 +45,10 @@ var footprintBudgets = map[string]footprintBudget{
 	"input_column_kinds":   {"./testdata/footprint/input_column_kinds", 5088},
 	"conditional_row":      {"./testdata/footprint/conditional_row", 1681},
 	"conditional_selected": {"./testdata/footprint/conditional_selected", 1511},
-
-	"expr_arithmetic": {"./testdata/footprint/expr_arithmetic", 1162},
-	"expr_selected":   {"./testdata/footprint/expr_selected", 1551},
+	"expr_arithmetic":      {"./testdata/footprint/expr_arithmetic", 1162},
+	"expr_selected":        {"./testdata/footprint/expr_selected", 1551},
+	"lifecycle_write":      {"./testdata/footprint/lifecycle_write", 930},
+	"lifecycle_changes":    {"./testdata/footprint/lifecycle_changes", 1050},
 
 	"column_encrypted_text":          {"./testdata/footprint/column_encrypted_text", 1127},
 	"column_nullable_encrypted_text": {"./testdata/footprint/column_nullable_encrypted_text", 1359},
@@ -81,7 +83,12 @@ var footprintBudgets = map[string]footprintBudget{
 func TestFootprintBudgets(t *testing.T) {
 	testkit.TrackExternalInputs(t)
 
-	probeOrder := []string{"pivot", "through", "morph", "nested_with", "has", "has_one", "raw", "cursor", "key_chunk", "column_encrypted_text", "column_nullable_encrypted_text", "column_encrypted_json", "column_nullable_encrypted_json", "column_password", "column_nullable_password", "sensitive_models", "model_type", "table_ref", "onequery", "q_with", "q_select", "q_join", "report_pipeline", "models", "column_number", "column_nullable_text", "models_1", "models_3", "column_time", "column_enum", "relation_with", "column_json", "column_nullable_json", "column_interval", "column_nullable_interval", "input_key", "mutators", "mutator_explicit", "input_column_kinds", "conditional_row", "conditional_selected", "expr_arithmetic", "expr_selected"}
+	probeOrder := make([]string, 0, len(footprintBudgets))
+	for name := range footprintBudgets {
+		probeOrder = append(probeOrder, name)
+	}
+	slices.Sort(probeOrder)
+
 	pkgArgs := make([]string, 0, len(probeOrder))
 	for _, name := range probeOrder {
 		pkgArgs = append(pkgArgs, footprintBudgets[name].pkg)
