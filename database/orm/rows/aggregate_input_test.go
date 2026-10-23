@@ -299,7 +299,7 @@ func TestOrderedInputAggregatesUseStoredValues(t *testing.T) {
 	}
 }
 
-func checkInputAggregate[S, V any](t *testing.T, inputSource, storedSource Source[S], input, stored expr.Selected[S, value.Nullable[V]], c codec.Codec[V], raw driver.Value, want V) {
+func checkInputAggregate[S, V any](t *testing.T, inputSource, storedSource SelectionSource[S], input, stored expr.Selected[S, value.Nullable[V]], c codec.Codec[V], raw driver.Value, want V) {
 	t.Helper()
 	iq := expressionQuery(inputSource, input, codec.Nullable(c))
 	sq := expressionQuery(storedSource, stored, codec.Nullable(c))

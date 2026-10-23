@@ -48,11 +48,21 @@ func writerObservers(writer any) (lifecycle.Observers, bool) {
 		return owner.FoundryObservers(sqlowner.Observers())
 	case database.PrimaryExecutor:
 		return owner.FoundryObservers(sqlowner.Observers())
+	case *database.PrimaryExecutor:
+		if owner == nil {
+			return lifecycle.Observers{}, false
+		}
+		return owner.FoundryObservers(sqlowner.Observers())
 	case *database.Session:
 		return owner.FoundryObservers(sqlowner.Observers())
 	case *database.Tx:
 		return owner.FoundryObservers(sqlowner.Observers())
 	case enclosingTransaction:
+		return owner.tx.FoundryObservers(sqlowner.Observers())
+	case *enclosingTransaction:
+		if owner == nil {
+			return lifecycle.Observers{}, false
+		}
 		return owner.tx.FoundryObservers(sqlowner.Observers())
 	default:
 		return lifecycle.Observers{}, false

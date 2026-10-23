@@ -55,9 +55,10 @@ type Row[R any] struct {
 
 // Field preserves the row and value types of one result field. Example: rows.Map(OrderRows.Amount,amount).
 type Field[R, V any] struct {
-	_    [0]*R
-	_    [0]*V
-	core *fieldCore
+	column func() ormcore.Column[V]
+	_      [0]*R
+	_      [0]*V
+	core   *fieldCore
 }
 
 // Schema retains a complete row declaration. Example: rows.Select(joined,OrderRows,mappings...).
@@ -199,7 +200,9 @@ func bindField[R, V any](b Builder[R], ptr *V, c codec.Codec[V]) Field[R, V] {
 	f.column = querycore.ProjectionColumn{Name: name, Typ: reflect.TypeFor[V](), Nullable: value.IsNullableType[V]()}
 	f.scan = func(base unsafe.Pointer) any { return c.Scan((*V)(unsafe.Add(base, f.offset))) }
 	d.fields[index] = f
-	return Field[R, V]{core: f}
+	return Field[R, V]{core: f, column: func() ormcore.Column[V] {
+		return ormcore.Column[V]{Kind: c.ParameterType(), Nullable: f.column.Nullable, Bind: c.Bind, Clone: c.Clone, Scan: func(v *V) any { return c.Scan(v) }, Err: f.owner.err}
+	}}
 }
 func seal(d *declaration) {
 	d.sealed = true

@@ -55,7 +55,8 @@ func relationLoader[M, N any, K comparable](local columnData[K], foreign columnD
 			node.Limit = value.Set(limit)
 			n := len(p.target.columns)
 			fetched := 0
-			err = ormcore.Read(ctx, ex, node, nil, nil, func(row database.Row) error {
+			batch := retrievalBatch{table: p.target, start: len(rows)}
+			err = ormcore.ReadComplete(ctx, ex, node, nil, nil, func(row database.Row) error {
 				var item N
 				var key K
 				if err := hydrate(p.target, ormcore.RelationRow{Row: row, Count: n, Total: n + 1}, unsafe.Pointer(&item)); err != nil {
@@ -73,10 +74,11 @@ func relationLoader[M, N any, K comparable](local columnData[K], foreign columnD
 					return err
 				}
 				rows = append(rows, item)
+				batch.capture(unsafe.Pointer(unsafe.SliceData(rows)), len(rows))
 				owners = append(owners, identity)
 				fetched++
 				return nil
-			})
+			}, readBatches(ex, &batch))
 			return fetched, err
 		})
 		if err != nil {

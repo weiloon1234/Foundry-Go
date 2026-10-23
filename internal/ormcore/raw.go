@@ -12,6 +12,11 @@ import (
 // Raw validates the complete result shape before iteration, then reuses the
 // caller's decoder. It deliberately neither routes reads nor applies scopes.
 func Raw(ctx context.Context, ex database.Executor, columns []string, statement string, args []any, scan func(database.Row) error) error {
+	return RawComplete(ctx, ex, columns, statement, args, scan, nil)
+}
+
+// RawComplete adds retrieval dispatch for complete model decoders only.
+func RawComplete(ctx context.Context, ex database.Executor, columns []string, statement string, args []any, scan func(database.Row) error, callbacks *ReadCallbacks) error {
 	if ctx == nil || NilDescriptor(ex) {
 		return Invalid("raw execution requires a context and executor")
 	}
@@ -31,7 +36,7 @@ func Raw(ctx context.Context, ex database.Executor, columns []string, statement 
 		return errors.Join(err, rows.Close())
 	}
 	mapped := &rawRow{Rows: rows, order: order, destinations: make([]any, len(order))}
-	return Consume(ctx, mapped, scan)
+	return Collect(ctx, rows, func(database.Row) error { return scan(mapped) }, callbacks)
 }
 
 // rawRow preserves the stream's FieldEncryption scope while ordering scanner

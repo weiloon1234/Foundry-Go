@@ -74,12 +74,13 @@ func compare[S, V, P any](e Expression[S, V, P], op querycore.Operator, v V) Pre
 }
 
 // Asc orders a scoped value ascending. Example: orderID.Asc().
-func (e Expression[S, V, P]) Asc() Order[S] { return order(e, false) }
+func (e Expression[S, V, P]) Asc() Order[S] {
+	return Order[S]{core: ormcore.OrderExpression(e.core, false)}
+}
 
 // Desc orders a scoped value descending. Example: orderID.Desc().
-func (e Expression[S, V, P]) Desc() Order[S] { return order(e, true) }
-func order[S, V, P any](e Expression[S, V, P], descending bool) Order[S] {
-	return Order[S]{core: ormcore.Order{Node: querycore.OrderNode{Expression: e.core.Node, Descending: descending}, Refs: e.core.Refs, ReferenceFree: e.core.ReferenceFree, Err: e.core.Err}}
+func (e Expression[S, V, P]) Desc() Order[S] {
+	return Order[S]{core: ormcore.OrderExpression(e.core, true)}
 }
 
 // NullsFirst explicitly sorts SQL NULL before values. Example: name.Asc().NullsFirst().

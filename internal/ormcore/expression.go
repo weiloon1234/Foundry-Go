@@ -7,6 +7,12 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
+// OrderExpression retains an expression's provenance without specializing by
+// model, result type or row/selected phase. Typed shells supply the phase.
+func OrderExpression(e Expression, descending bool) Order {
+	return Order{Node: querycore.OrderNode{Expression: e.Node, Descending: descending}, Refs: e.Refs, ReferenceFree: e.ReferenceFree, Err: e.Err}
+}
+
 // OperationArgument retains a scalar operand's representation and provenance.
 type OperationArgument struct {
 	Value Expression
@@ -68,4 +74,13 @@ func Conjunction(predicates []Predicate) Predicate {
 	out.Refs = refs.values
 	out.Err = errors.Join(out.Err, refs.err)
 	return out
+}
+
+// NegatePredicate retains ownership and errors under SQL NOT.
+func NegatePredicate(p Predicate) Predicate {
+	if p.Node == nil {
+		p.Err = errors.Join(p.Err, Invalid("uninitialized predicate"))
+	}
+	p.Node = querycore.Negation{Child: p.Node}
+	return p
 }

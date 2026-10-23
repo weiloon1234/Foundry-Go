@@ -8,6 +8,19 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Complete read relations with typed aggregate slots (`ValueOf`, `expr.Related`,
+  `Pivot`) loaded through `With`/`Load`/`LoadMissing` (4d). Each slot keeps its
+  own grouped statement per eligible-key batch, shared limits and typed results.
+- Add row-phase ON comparisons, independent scalar/IN/EXISTS subqueries (6b2),
+  explicit correlation and model/projected cross/inner/left LATERAL (6b3).
+  Sealed source validation rejects unwrapped selections and foreign join scopes.
+- Add separate complete-model retrieval hooks/observers and typed global scopes
+  (B5c). Callbacks run on closed, fully hydrated batches; tenant scope errors,
+  including source panic/Goexit, fail closed across both APIs. Raw model reads
+  dispatch retrieval callbacks while retaining their scope/routing bypass.
+- Preserve observer ownership for pointer primary executors and internal enclosing
+  transactions through the shared concrete-owner lookup; wrappers remain untrusted.
+
 - Add outer/cross joins, nullable scopes and typed column lifting (6b1).
   `LeftScope`/`RightScope` now accept sealed preserved-side interfaces. Inferred
   calls remain valid; explicit type arguments change from `[L,R,M]` to `[S,L,M]`

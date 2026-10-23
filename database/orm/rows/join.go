@@ -3,7 +3,6 @@
 package rows
 
 import (
-	"errors"
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/database/orm"
@@ -41,14 +40,21 @@ type InnerJoined[L, R any] struct {
 	left, right map[string]any
 }
 
-// Source accepts only a source in S. Example: rows.Select(joined,OrderRows,mappings...).
-type Source[S any] interface{ rowSource(*S) ormcore.Source }
+// Source accepts an alias or join chain in S with a preserved join boundary.
+// Example: rows.LeftJoin(users, orders, on).
+type Source[S any] interface {
+	SelectionSource[S]
+	joinSource()
+}
 
 // JoinTable accepts only a single aliased table on the right side of a join.
 type JoinTable[S any] interface {
 	Source[S]
 	joinTable(*S)
 }
+
+func (a Aliased[A, M]) joinSource()     {}
+func (j InnerJoined[L, R]) joinSource() {}
 
 func (a Aliased[A, M]) joinTable(*Alias[A, M]) {}
 
@@ -57,11 +63,9 @@ func (j InnerJoined[L, R]) rowSource(*Inner[L, R]) ormcore.Source { return j.sou
 
 // JoinOn retains the two operand scopes. Example: rows.On(memberID,orderMemberID).
 type JoinOn[L, R any] struct {
-	_           [0]*L
-	_           [0]*R
-	node        querycore.Expression
-	left, right []ormcore.Reference
-	err         error
+	_    [0]*L
+	_    [0]*R
+	core ormcore.JoinCondition
 }
 
 // As aliases a model query, preserving its filters and soft-delete scope.
@@ -82,7 +86,7 @@ func Scope[A, M any](a Aliased[A, M]) expr.Scope[Alias[A, M], M] {
 // On joins expressions with the same value type. Example: rows.On(memberID,orderMemberID).
 func On[L, R any, K comparable, LP, RP any](left expr.Expression[L, K, LP], right expr.Expression[R, K, RP]) JoinOn[L, R] {
 	l, r := expr.FoundryExpression(left, sqlowner.Expressions()), expr.FoundryExpression(right, sqlowner.Expressions())
-	return JoinOn[L, R]{node: querycore.BinaryComparison{Left: l.Node, Right: r.Node, Operator: querycore.Equal}, left: l.Refs, right: r.Refs, err: errors.Join(l.Err, r.Err)}
+	return JoinOn[L, R]{core: ormcore.JoinComparison(l, r, querycore.Equal)}
 }
 
 // InnerJoin joins two distinct typed aliases. Example: rows.InnerJoin(members,orders,rows.On(mID,oMemberID)).

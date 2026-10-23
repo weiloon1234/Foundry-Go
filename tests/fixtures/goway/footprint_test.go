@@ -30,6 +30,11 @@ const footprintFailureAdvice = "a generic method, field or codec helper has expa
 // Go 1.27.1 darwin/arm64: T/t symbols in each package archive.
 // Budget is ceil(measured * 1.15), calculated exactly with integer arithmetic.
 var footprintBudgets = map[string]footprintBudget{
+	"aggregate_slot_declaration": {"./testdata/footprint/aggregate_slot_declaration", 1112},
+	"aggregate_slot_direct":      {"./testdata/footprint/aggregate_slot_direct", 1490},
+	"aggregate_slot_pivot":       {"./testdata/footprint/aggregate_slot_pivot", 2095},
+	"aggregate_slot_nested":      {"./testdata/footprint/aggregate_slot_nested", 2048},
+
 	"pivot":              {"./testdata/footprint/pivot", 1005},
 	"through":            {"./testdata/footprint/through", 928},
 	"morph":              {"./testdata/footprint/morph", 1088},
@@ -47,8 +52,14 @@ var footprintBudgets = map[string]footprintBudget{
 	"aggregate_families": {"./testdata/footprint/aggregate_families", 3799},
 	"distinct":           {"./testdata/footprint/distinct", 1135},
 
+	"correlation":          {"./testdata/footprint/correlation", 2752},
+	"lateral":              {"./testdata/footprint/lateral", 2852},
+	"on_comparisons":       {"./testdata/footprint/on_comparisons", 1454},
+	"subqueries":           {"./testdata/footprint/subqueries", 2837},
 	"outer_join":           {"./testdata/footprint/outer_join", 1668},
 	"nullable_join_chain":  {"./testdata/footprint/nullable_join_chain", 1695},
+	"retrieval_read":       {"./testdata/footprint/retrieval_read", 826},
+	"global_scopes":        {"./testdata/footprint/global_scopes", 1374},
 	"conditional_row":      {"./testdata/footprint/conditional_row", 1681},
 	"conditional_selected": {"./testdata/footprint/conditional_selected", 1511},
 	"expr_arithmetic":      {"./testdata/footprint/expr_arithmetic", 1162},

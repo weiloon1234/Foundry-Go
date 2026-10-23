@@ -135,3 +135,9 @@ DISTINCT clauses, preserve result types and remain read-only. PostgreSQL groupin
 and DISTINCT/order validation still apply. Existing `rows.Query.OrderBy` accepts
 row orders; the package function additionally accepts selected ordering, including
 aggregate results. General subquery and window entry points belong to later slices.
+
+Relation slots reuse these descriptors through `Related(source, computation)`.
+Bind the result with `Users.OrdersCount.Using(...)`, then load it through the existing
+ORM relation APIs. `orm.Pivot(relation)` selects a joined relation's concrete pivot
+input. See the [typed aggregate slot recipe](../README.md#typed-relation-aggregate-slots)
+for ownership, nullability and statement-count contracts.

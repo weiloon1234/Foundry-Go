@@ -139,7 +139,7 @@ func TestNullableAggregateParamRequiredFallback(t *testing.T) {
 	checkAggregateFallback(t, alias, total.Value(), fallback, codec.Decimal(), "0", decimal.FromInt64(0))
 }
 
-func checkAggregateFallback[S, V any](t *testing.T, source Source[S], aggregate expr.Selected[S, value.Nullable[V]], fallback expr.RowExpression[S, V], c codec.Codec[V], bound driver.Value, want V) {
+func checkAggregateFallback[S, V any](t *testing.T, source SelectionSource[S], aggregate expr.Selected[S, value.Nullable[V]], fallback expr.RowExpression[S, V], c codec.Codec[V], bound driver.Value, want V) {
 	t.Helper()
 	q := expressionQuery(source, expr.CoalesceValue(aggregate, fallback.Value()), c)
 	statement := expressionSQL(t, q)

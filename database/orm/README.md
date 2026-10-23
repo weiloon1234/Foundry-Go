@@ -492,3 +492,137 @@ Per-model writes through wrappers dispatch observers from the supplied transacti
 `Orders.ForceDelete(ctx, db, id)` preserves default active visibility. For deleted
 rows use `ForceDelete(ctx, db, Orders.Query().WithTrashed(), Orders.Key(), id)`;
 `OnlyTrashed` and other predicates are retained through locking and deletion.
+
+## Typed relation aggregate slots
+
+Declare a non-persisted `relation.Value[V]` field on the model and an
+`orm.Value[Model,V]` handle on its table. Bind the handle inside `Define` with
+`orm.ValueOf(b, &model.Count)`. Like relation slots, aggregate slots cannot carry
+persistence tags and do not enter write drafts or ordinary row hydration.
+
+Bind computations after tables and relations have initialized:
+
+```go
+var UserAggregates = struct {
+    OrdersCount orm.AggregateRelation[User, int64]
+    OrdersTotal orm.AggregateRelation[User, value.Nullable[decimal.Decimal]]
+}{
+    OrdersCount: Users.OrdersCount.Using(
+        expr.Related(UserRelations.Orders, expr.Count[Order]())),
+    OrdersTotal: Users.OrdersTotal.Using(
+        expr.Related(UserRelations.Orders, expr.Sum(Orders.TotalCents))),
+}
+
+users, err := Users.Query().With(UserAggregates.OrdersCount).All(ctx, db)
+count := UserAggregates.OrdersCount.Using(expr.Related(
+    UserRelations.Orders.Where(Orders.TotalCents.Gt(minimum)),
+    expr.Count[Order](),
+))
+users, err = orm.LoadMissing(ctx, db, users, count)
+```
+
+Keep dependencies flowing from tables to relation namespaces to aggregate
+namespaces. Table initializers must not reference relation or aggregate namespaces;
+relation initializers must not reference aggregates. Compose nested eager loads at
+use sites, for example `OrderRelations.Buyer.With(UserAggregates.OrdersCount)`.
+Wrapping a reference in a closure does not remove a Go initialization cycle.
+
+`expr.Related` preserves the source model, measured model and exact aggregate result.
+`Using` retains the destination slot when replacing its computation. Computations
+without slot binding fail validation before execution. Different declarations of
+the same model remain distinct owners and cannot be mixed.
+
+The [expression aggregate rules](expr/README.md) apply unchanged: counts return
+`int64`, existence returns `bool`, exact sums/averages return nullable decimal,
+float summaries return nullable float64, interval summaries return nullable interval,
+and extrema retain the present field type with one nullable layer. Use the existing
+`SumFloat`/`AvgFloat` and `SumInterval`/`AvgInterval` constructors for those families.
+`Filter` takes expression row predicates, for example
+`expr.Sum(Orders.TotalCents).Filter(expr.OrderRow(expr.Value(Orders.TotalCents)).Gt(0))`.
+It filters the measure without hiding cardinality errors in the input relation.
+Relation `Where` restricts that input before aggregation.
+
+A joined relation measures targets. `orm.Pivot(UserRelations.Groups)` measures
+its concrete pivot, retaining target and pivot filters and soft-delete visibility.
+Counts include duplicate edges; use `expr.CountDistinctField(Groups.ID)` for distinct
+targets. Missing targets and NULL join keys contribute no edges. Singular relations
+still reject multiple matching rows; many-to-many relations reject a pivot matching
+multiple targets. Direct, through and concrete morph families are supported.
+Aggregate sources must be framework descriptors: zero, nil and application wrappers
+(including embedded `AggregateSource` interfaces) fail validation before SQL.
+One-of-many and MorphTo inputs are rejected at plan validation. Inputs requesting
+eager target or pivot children are also rejected; load those as separate branches.
+
+Loading uses existing `With`, `Load` and `LoadMissing`, including nested target and
+pivot branches, transactions, locked reads and chunk windows. Each selected slot
+executes one grouped statement per batch of distinct eligible non-null source keys.
+Slots are not fused. A query adds its parent statement; explicit loads add none.
+Empty key sets execute no aggregate SQL. Relation ordering is omitted from grouped
+SQL. Shared row and attachment limits apply: each returned group consumes one row,
+and each computed parent slot consumes one attachment, including empty results.
+These limits bound returned data, not the rows examined by the database.
+
+`Get()` returns the typed value and a loaded flag. A loaded zero/false/SQL NULL is
+preserved by `LoadMissing`; `Load` refreshes it. No related models are hydrated to
+compute a summary. Errors or cancellation discard the collected result and leave
+caller-owned parents untouched. All statements use the supplied executor; choose
+transaction isolation when separate slots require one consistent snapshot.
+
+## Complete-model retrieval and global scopes
+
+`WithRetrievalHooks(func() RetrievalHooks[Order] { ... })` declares a separate
+read factory. `Retrieved(ctx, executor, order)` runs after complete stored
+hydration and successful row closure. Each nonempty fetch/batch constructs the
+local factory first, then retrieval observer factories in registration order;
+each model invokes local callbacks before observers. Register instance-owned
+read observers with `NewRetrievalObserver[Order]("orders.read")` and
+`RegisterRetrievalObserver`, using the existing database Module at
+`application.New`. Write and retrieval observer kinds remain distinct.
+
+Reads use the actual rows' frozen observer owner. Unknown executor wrappers
+cannot prove absence and receive no internal capability. `Each` keeps streaming
+when callbacks cannot run; otherwise it reads bounded, stable, closed batches
+before callbacks and delivery. `All`, pagination, chunks and loaded relation
+roles dispatch retrieval. A failed batch publishes no pending models. Earlier
+delivered batches remain delivered. Write hydration, DTO projections and scalars
+skip retrieval, even when their source has read callbacks. `Table.Raw` dispatches
+retrieval for its complete models while bypassing all scopes and read routing.
+A callback failure does not roll back SQL supplied to Raw.
+
+Attach tenant defaults through a lazy source receiving the completed typed
+declaration. This avoids Go initialization cycles and snapshots declaration
+handles before consumers can replace their public fields:
+
+```go
+var Orders = orm.Define("orders", declareOrders,
+    orm.WithGlobalScopes(func(t OrderTable) []orm.GlobalScope[Order] {
+        return []orm.GlobalScope[Order]{
+            orm.Scope(t.Table, "tenant", func(ctx context.Context) (orm.Predicate[Order], error) {
+                id, err := tenantID(ctx)
+                return t.TenantID.Eq(id), err
+            }),
+        }
+    }),
+)
+```
+
+The source runs once when first needed. It may construct relation predicates but
+must not compile or execute queries. Each scope returns an additive predicate
+and an error; a zero predicate, foreign declaration, missing context/tenant,
+invalid name, duplicate name or callback failure fails closed before SQL.
+Source failures, including panic and Goexit, are retained by the declaration;
+every later scoped operation returns the failure without executing SQL.
+Context values are explicit typed request metadata. There is no service registry
+in the context. Every terminal uses its executing context; `WithScopeContext(q,
+ctx)` only supplies context for `Compile` and inspection.
+
+Scopes apply through the shared effective-predicate owner to reads, keyed and
+set writes, relation targets/pivots, aggregates, joins and subqueries. Inserts
+are unfiltered. Remove defaults for one query with `WithoutGlobalScope(q,
+scope)` or `WithoutGlobalScopes(q)`; explicit predicates and soft-delete
+visibility remain. Apply these before taking a row lock. Relation package
+functions preserve the concrete descriptor and its other side's defaults:
+`WithoutRelationGlobalScope`, `WithoutRelationGlobalScopes`,
+`WithoutPivotGlobalScope` and `WithoutPivotGlobalScopes`. Bypasses do not mutate
+the source query, descriptor or declaration. Treat them as explicit authorization
+choices, especially for tenant scopes.

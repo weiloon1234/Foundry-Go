@@ -7,44 +7,14 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 func compileRelationAggregate[M, N any](ctx context.Context, input aggregateInput[M, N], measure aggregateNode, keys []driver.Value, limit int) (Statement, error) {
-	field := func(f fieldRef) error { return f.Validate(input.inputTable) }
-	if err := measure.Validate(field); err != nil {
+	node, err := querycore.RelationAggregateSelect(input.selectNode(), input.inputTable, input.inputAlias, input.group, measure, input.singular, input.unique, keys, limit)
+	if err != nil {
 		return Statement{}, err
-	}
-	nodes := 0
-	if err := measure.ValidateFilter(field, &nodes); err != nil {
-		return Statement{}, err
-	}
-	node := input.selectNode()
-	node.Selections = []selectItem{{Expression: input.group}}
-	node.GroupBy = []valueExpression{input.group}
-	node.Orders = nil
-	node.Limit = value.Set(limit)
-	measure = requalifyAggregate(measure, input.inputAlias)
-	node.Selections = append(node.Selections, selectItem{Expression: measure})
-	if input.singular || input.unique != (fieldRef{}) {
-		node.Selections = append(node.Selections, selectItem{Expression: aggregateNode{Kind: countAll}})
-	}
-	if input.unique != (fieldRef{}) {
-		node.Selections = append(node.Selections, selectItem{Expression: aggregateNode{Kind: countDistinct, Field: input.unique}})
-	}
-	if keys != nil {
-		bindings := make([]any, len(keys))
-		for i, key := range keys {
-			bindings[i] = key
-		}
-		// ModelField has already bound/validated the concrete key codec. This
-		// private AST boundary carries driver values, never caller SQL text.
-		node.Predicates = append(node.Predicates, comparison{Operand: input.group, Operator: in, Values: bindings, Bind: func(v any) (driver.Value, error) {
-			if !driver.IsValue(v) {
-				return nil, fault.New(fault.Invalid, "aggregate key is not a database value")
-			}
-			return v, nil
-		}})
 	}
 	c := compiler{ScopeContext: ctx, ScopeShapeOnly: ctx == nil}
 	c.BeginStatement(ctx)

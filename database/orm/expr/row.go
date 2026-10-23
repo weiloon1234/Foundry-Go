@@ -1,6 +1,7 @@
 package expr
 
 import (
+	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -62,10 +63,14 @@ func (e RowExpression[S, V]) IsNotNull() Predicate[S] {
 }
 
 // Asc orders a computed row value. Example: expression.Asc().
-func (e RowExpression[S, V]) Asc() Order[S] { return rowOrder[S](e.data, false) }
+func (e RowExpression[S, V]) Asc() Order[S] {
+	return Order[S]{core: ormcore.OrderExpression(e.data.core, false)}
+}
 
 // Desc orders a computed row value. Example: expression.Desc().
-func (e RowExpression[S, V]) Desc() Order[S]                { return rowOrder[S](e.data, true) }
+func (e RowExpression[S, V]) Desc() Order[S] {
+	return Order[S]{core: ormcore.OrderExpression(e.data.core, true)}
+}
 func (e OrderedRowExpression[S, V]) rowValue(*S) rowData[V] { return e.data }
 
 // Value selects the computed value. Example: expression.Value().
@@ -122,10 +127,14 @@ func (e OrderedRowExpression[S, V]) IsNotNull() Predicate[S] {
 }
 
 // Asc orders a computed row value. Example: expression.Asc().
-func (e OrderedRowExpression[S, V]) Asc() Order[S] { return rowOrder[S](e.data, false) }
+func (e OrderedRowExpression[S, V]) Asc() Order[S] {
+	return Order[S]{core: ormcore.OrderExpression(e.data.core, false)}
+}
 
 // Desc orders a computed row value. Example: expression.Desc().
-func (e OrderedRowExpression[S, V]) Desc() Order[S]                                 { return rowOrder[S](e.data, true) }
+func (e OrderedRowExpression[S, V]) Desc() Order[S] {
+	return Order[S]{core: ormcore.OrderExpression(e.data.core, true)}
+}
 func (e NullableOrderedRowExpression[S, V]) rowValue(*S) rowData[value.Nullable[V]] { return e.data }
 
 // Value selects the computed value. Example: expression.Value().
@@ -184,7 +193,11 @@ func (e NullableOrderedRowExpression[S, V]) IsNotNull() Predicate[S] {
 }
 
 // Asc orders a computed row value. Example: expression.Asc().
-func (e NullableOrderedRowExpression[S, V]) Asc() Order[S] { return rowOrder[S](e.data, false) }
+func (e NullableOrderedRowExpression[S, V]) Asc() Order[S] {
+	return Order[S]{core: ormcore.OrderExpression(e.data.core, false)}
+}
 
 // Desc orders a computed row value. Example: expression.Desc().
-func (e NullableOrderedRowExpression[S, V]) Desc() Order[S] { return rowOrder[S](e.data, true) }
+func (e NullableOrderedRowExpression[S, V]) Desc() Order[S] {
+	return Order[S]{core: ormcore.OrderExpression(e.data.core, true)}
+}

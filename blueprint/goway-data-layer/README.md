@@ -46,16 +46,20 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 4a | N+1 detector foundations | Done; committed at `e731753` |
 | 4b | Direct eager trees, has-one, LoadMissing, relation limits and existence filters | Done; committed at `470d585`. |
 | 4c | Typed pivots, through, one-of-many and polymorphic relations | Done; committed at `a89f509`. Live PostgreSQL execution remains for the lead. |
-| 4 | Full read relations, pivots, through, one-of-many, filters and aggregate slots | In progress; 4a–4c delivered, 4d aggregate-slot design and implementation remain planned. Relation writes belong to Stage 5b; per-parent limits are out of scope. |
-| B5a | Typed mutators, accessor validation, input-column kinds and InputKey | Done; committed at `884beb7`. B5b is delivered; B5c/B5d remain deferred. |
+| 4d | Typed relation aggregate slots | Done pending the lead’s commit; accepted patch integrated. Current batch verification is recorded below. |
+| 4 | Full read relations, pivots, through, one-of-many, filters and aggregate slots | Complete; 4a–4d delivered. 4d accepted and integrated pending the lead’s commit. Relation writes remain a separate Stage 5b task; per-parent limits are out of scope. |
+| B5a | Typed mutators, accessor validation, input-column kinds and InputKey | Done; committed at `884beb7`. |
 | B5b | Write hooks, observers, stored changes, conventions and set-write/force-delete parity | Done; committed at `af1976a`. |
-| 5 | Lifecycle, mutators, change sets, scopes and observers | In progress; B5a/B5b delivered. Retrieval/scopes remain B5c; audit policy/capture remains B5d. Relation writes and extension slots remain outside B5b. |
+| B5c | Retrieval hooks/observers, global scopes and tenancy | Done pending the lead’s commit; accepted patch integrated, including sticky scope-source panic/Goexit failures. |
+| 5 | Lifecycle, mutators, change sets, scopes and observers | In progress; B5a–B5c delivered. Audit policy/capture remains B5d; relation writes and extension slots remain separate tasks. |
 | 6a1 | Expression phases, values, arithmetic, casts, comparisons, Count/Exists and MapSelected | Done; committed at `a5f30a6`. |
 | 6a2 | Row and selected CASE, COALESCE and NULLIF | Done; committed at `a5f30a6`. |
 | 6a3 | Summary aggregates, FILTER, GROUP BY/HAVING, selected ordering and keys, DISTINCT | Done; committed at `2cc60e8`. Ordered input-kind compatibility completed with the 6b1 integration below. |
 | 6a | Expressions, aggregates, grouping, having and raw fragments | In progress; 6a1–6a3 delivered. Raw fragments and the no-raw guard remain 6a4. |
-| 6b1 | Join kinds, nullable scopes and typed column lifting | Accepted patch integrated; combined build/vet/race, fixture, catalogue, release-tools, docs and formatting checks pass. Done pending the lead's commit. |
-| 6b | Joins, aliases, correlation and lateral queries | In progress; 6b1 delivered. General ON expressions/subqueries, correlation, LATERAL and transaction-only families remain planned. |
+| 6b1 | Join kinds, nullable scopes and typed column lifting | Done; committed with the integration gate at `690a147`. |
+| 6b2 | ON comparisons and independent scalar/IN/EXISTS subqueries | Done pending the lead’s commit; hardened join-source validation included. |
+| 6b3 | Explicit correlation and cross/inner/left LATERAL | Done pending the lead’s commit; model and projected results retain scope/nullability. |
+| 6b | Joins, aliases, correlation and lateral queries | In progress; 6b1–6b3 delivered. Transaction adapters and CTE-boundary rejection remain dependent on 6c. |
 | 6c | Rows/projections, CTEs, recursive queries, sets and result cursors | Planned |
 | 6d | Windows, JSON, temporal, interval, geographic and text expressions | Planned |
 | 6e | Conflict/upsert, source writes, insert-select, adjustments, prune and explain | Planned |
@@ -325,7 +329,7 @@ Names in planned rows remain subject to their owning stage's consumer acceptance
 | `q.ForUpdate().RequireFind(ctx, tx, id)` | `q.Where(Orders.ID.Eq(id)).ForUpdate().Require(ctx, tx)` | Stage 3.1c; transaction-only |
 | `QueryOrders().Create(ctx, tx, OrderDraft{}.SetTotalCents(v))` | `Orders.Insert(ctx, tx, Orders.TotalCents.Set(v))` | Core ported |
 | `QueryOrders().With(OrderRelations().Buyer)` | `Orders.Query().With(OrderRelations.Buyer)` | Direct eager trees ported, Stage 4b |
-| `defineOrderRelations() OrderRelationSet` | Separate typed relation namespace using direct, through and morph `orm.*Of` constructors | Direct kinds ported in 4b, joined families in 4c; aggregate slots remain 4d |
+| `defineOrderRelations() OrderRelationSet` | Separate typed relation namespace using direct, through and morph `orm.*Of` constructors | Direct kinds ported in 4b, joined families in 4c; typed aggregate slots delivered in 4d |
 | `q.WhereHas(UserRelations().Orders)` | `q.Where(orm.Has(UserRelations.Orders))` | Direct kinds in 4b, joined families in 4c; target predicates and nested `Has` compose |
 | `q.WhereDoesntHave(UserRelations().Orders)` | `q.Where(orm.DoesntHave(UserRelations.Orders))` | Direct kinds in 4b, joined families in 4c; correlated `NOT EXISTS` |
 | `r.Orders.Where(p).OrderBy(o).With(child)` | `r.Orders.Where(p).OrderBy(o).With(child)` | Stage 4b; immutable target-owned constraints and nested branches |
@@ -337,6 +341,11 @@ Names in planned rows remain subject to their owning stage's consumer acceptance
 | `HasOneThrough(...)` / `HasManyThrough(...)` | `orm.HasOneThroughOf(...)` / `orm.HasManyThroughOf(...)` | Stage 4c; both key pairs checked, singular and many slots retained |
 | `r.OfMany(o)` / `r.LatestOfMany()` / `r.OldestOfMany()` | Same methods on singular descriptors | Stage 4c; immutable `DISTINCT ON` option with primary-key tie-breaker |
 | `MorphOne` / `MorphMany` / `MorphTo` / `MorphToMany` / `MorphedByMany` | Corresponding `orm.*Of` constructor and one concrete slot per target | Stage 4c; validated discriminator and eligible-key batches |
+| Generated aggregate slots loaded with `With` | `orm.ValueOf`, slot `.Using(expr.Related(...))`, optional `orm.Pivot(...)` | 4d; `With`/`Load`/`LoadMissing` unchanged |
+| Generated retrieval hooks/observers | `orm.WithRetrievalHooks`, `NewRetrievalObserver`, `RegisterRetrievalObserver` | B5c; closed complete-model batches |
+| `defineXGlobalScopes` and scope bypasses | `orm.WithGlobalScopes`, `Scope`, `WithoutGlobalScope(s)` and relation/pivot package bypasses | B5c; executing context retained |
+| Generated scalar/IN/EXISTS selectors | `rows.SelectScalar`, `ScalarQuery`, `InQuery`, `ExistsQuery` and nullable variants | 6b2; selection sources cannot enter joins without aliasing |
+| Correlated and lateral selectors | `rows.Correlate`, correlated scalar/IN/EXISTS and cross/inner/left LATERAL functions | 6b3; explicit enclosing scope |
 | Generated `Distinct`/set query surface | `rows.Distinct(...)`, `rows.Union(a, b)` | Planned, Stages 6a/6c |
 | `query.SelectValue(QueryOrders(), ...)` | `rows.SelectValue(Orders.Query(), ...)` | Basic scalar selection ported |
 | Model annotation plus `foundry generate` | Plain struct plus `orm.Define` | Core ported; DTO/enum generation retained |
@@ -357,10 +366,10 @@ consumer retains Stage 1 golden coverage and adds core, direct and joined-relati
 | Mutators, including distinct input/stored types | `Mutate<Field>` plus generated input fields | B5a: typed named methods bound once at declaration or explicit `orm.Mutate`; required/nullable input-column kinds, once-only transactional transforms and redacted errors preserving cause identity |
 | Lifecycle and per-write factory state | Generated hooks and drafts | B5b delivered: `WithHooks(func() Hooks[M])`, typed Write input getters, all 13 stages, local-before-observer order per stage, locked originals and closed RETURNING rows |
 | Write observers | Generated adapters and registration | B5b delivered: `NewObserver`/`NewDeletionObserver` and `RegisterObserver`, instance-owned sets including observer-only models; trusted concrete-owner discovery and actual-transaction dispatch for wrappers |
-| Retrieval hooks | Generated adapters | Retrieval dispatch remains B5c, including Raw |
+| Retrieval hooks | Generated adapters | B5c: separate RetrievalHooks/RetrievalObserver factories, complete closed batches and actual row-owner dispatch; Table.Raw included, write/DTO/scalar hydration excluded |
 | Timestamps and soft deletes | Field-name conventions and opt-out | Core ported; B5b applies conventions after before hooks, validates the effective draft before mutators/encryption and captures actual stored changes |
 | Integer, UUID and natural keys | `primary=` annotation | `TableOf` binds concrete `K`; B5a `InputKeyOf` accepts distinct assignment inputs while retaining stored lookup/predicate K. Distinct inputs disable automatic UUID synthesis |
-| Global scopes | `defineXGlobalScopes` | Typed scope options, Stage 5 |
+| Global scopes | `defineXGlobalScopes` | B5c: lazy WithGlobalScopes with completed typed descriptors, additive context predicates and explicit query/target/pivot bypasses; sticky source failures prevent SQL |
 | Direct belongs-to, has-one, has-many, self and nullable-FK relations | Slots and generated relation sets | `BelongsToOf`/`HasOneOf`/`HasManyOf`; delivered in 4b, including singular cardinality checks |
 | Nested and constrained eager loads; LoadMissing | Descriptor `Where`/`OrderBy`/`With`, query `Load`/`LoadMissing` | Stage 4b: immutable descriptors, complete target batches at each level, package `Load`/`LoadMissing`, loaded-empty preservation and primary-key order tie-breakers |
 | Relation limits and depth | Query `WithRelationLimits` and shared loading budgets | Stage 4b: `orm.WithRelationLimits(q, limits)`; shared row/attachment budgets and depth bound, defaults from the existing owner. No relation `Limit`/`Offset` or per-parent limits |
@@ -369,7 +378,7 @@ consumer retains Stage 1 golden coverage and adds core, direct and joined-relati
 | Has-one/has-many-through | Joined hop loaders | Stage 4c delivered: `HasOneThroughOf`/`HasManyThroughOf`, both key pairs checked and shared batched plans |
 | One-of-many | Latest, oldest and custom singular choices | Stage 4c delivered: immutable `OfMany`/`LatestOfMany`/`OldestOfMany`, `DISTINCT ON` per parent and primary-key tie-breaker |
 | Polymorphic relations | MorphOne/Many/To/ToMany/MorphedByMany | Stage 4c delivered: corresponding `orm.*Of` constructors, validated `MorphName`, concrete target slots and discriminator-group batching |
-| Relation aggregate slots | Generated computed slots | Design and implementation in Stage 4d |
+| Relation aggregate slots | Generated computed slots | 4d: ValueOf binds relation.Value slots; expr.Related and Pivot reuse exact 6a3 result families/FILTER, existing loaders and per-slot grouped batches |
 | Relation writes and pivot lifecycle | Attach/detach/sync/toggle/update-pivot | Planned Stage 5b, alongside lifecycle integration |
 | Stored change sets | Generated `CompareX` and field structs | B5b delivered: `Changes`, `Compare`, typed `ChangeOf`/nullable/encrypted variants, persisted-only owned snapshots, Assigned versus Changed and existing FieldChange codec policy |
 | Set writes | Explicit bulk lifecycle limits | B5b: `WithoutModelHooks(q)` acknowledges skipped hooks/observers/change capture; required with declared hooks, active observers or unknown executor wrappers; rejected for per-model writes |
@@ -387,7 +396,9 @@ consumer retains Stage 1 golden coverage and adds core, direct and joined-relati
 | DISTINCT and DISTINCT ON | Complete model/projection selection | 6a3: read-only rows boundary, including FromModel; row and selected keys retain ownership; no write methods |
 | CASE, COALESCE and NULLIF | Conditional query expressions | 6a2 delivered: distinct row/selected phases, mandatory CASE fallback and one nullable layer; shared querycore validation |
 | Join kinds and nullable scopes | Aliased inner/left/right/full/cross joins | 6b1: same shared compiler, distinct kind/side scopes, required/nullable column lifting and chained nullable scopes; broadened LeftScope/RightScope signatures approved |
-| Projections, CTEs, sets, windows and subqueries | Generated selectors and `query` families | `orm/expr` and `orm/rows` functions, Stages 6a–6d |
+| ON comparisons and subqueries | Join predicates and scalar/IN/EXISTS query families | 6b2: typed row-phase comparisons/composition, independent SelectionSource subqueries and sealed join sources; shared compiler validation |
+| Correlation and LATERAL | Enclosing scopes and joined model/projected sources | 6b3: explicit correlation, nullable scalar/IN/EXISTS, cross/inner/left LATERAL with owned scopes; transaction adapters and CTE rejection remain 6c dependencies |
+| Projections, CTEs, sets and windows | Generated selectors and query families | Remaining rows/CTE/set/window families in Stages 6c–6d |
 | Model binding, factories, datatables and database validation | Generated metadata and typed query interfaces | Table/column adapters, Stage 7; TS/OpenAPI/manifest contracts must remain identical |
 
 Generated field hover notices move to handwritten comments and declaration docs.
@@ -450,8 +461,8 @@ intentionally accepts byte slices, while identity does not.
 <!-- catalogue-summary -->
 | Disposition | Cases |
 | --- | ---: |
-| ported | 207 |
-| port | 375 |
+| ported | 268 |
+| port | 314 |
 | merge | 0 |
 | obsolete | 0 |
 | unaffected | 444 |
@@ -489,7 +500,7 @@ intentionally accepts byte slices, while identity does not.
 | 7 | 81 |
 | — | 444 |
 
-207 old catalogue rows are covered by 199 distinct Go-way cases.
+268 old catalogue rows are covered by 260 distinct Go-way cases.
 
 ## Emitter audit
 
@@ -1143,6 +1154,80 @@ negatives; external forged markers remain rejected.
 
 The `outer_join` and `nullable_join_chain` probes measure 1,738 and 1,765 functions
 against their original ceilings of 1,919 and 1,950. Aggregate families measure
-4,351 against the retained 4,369 ceiling. All prior probe ceilings remain unchanged. General
-ON expressions and subqueries, correlation, LATERAL and transaction-only families
-remain later slices; Stage 6b is not complete.
+4,351 against the retained 4,369 ceiling. All prior probe ceilings remain unchanged. ON expressions, subqueries, correlation
+and LATERAL are now delivered in 6b2/6b3 below. Transaction-only adapters remain
+dependent on 6c; Stage 6b is not complete.
+
+
+## Stage 4d typed relation aggregate slots
+
+The accepted [4d evidence](../../docs/evidence/goway-stage4d.json) completes Stage 4.
+`ValueOf` binds a non-persisted `relation.Value[V]`; `expr.Related` ties a typed
+relation input to a 6a3 aggregate, and `Using` binds or replaces its computation.
+`Pivot` measures concrete pivot rows. Counts, existence, exact/float/interval
+summaries, extrema and FILTER retain their existing result and nullability rules.
+See the [aggregate recipe](../../database/orm/README.md#typed-relation-aggregate-slots).
+
+Each selected slot adds one grouped statement per batch of distinct eligible
+non-null keys. Slots are not fused; query loads add one parent statement and
+explicit loads add none. Nested target/pivot branches share row and attachment
+budgets. Loaded zero/false/NULL slots survive LoadMissing; errors publish no partial
+parents. No target models are hydrated to compute an aggregate. Singular and
+pivot cardinality checks remain unfiltered. One-of-many, MorphTo and eager-child
+aggregate inputs fail validation. Lane evidence records five statements per
+operation for the 1,000-parent, two-slot benchmark; this integration does not rerun
+that benchmark or live PostgreSQL.
+
+## B5c retrieval hooks and global scopes
+
+The accepted [B5c evidence](../../docs/evidence/goway-b5c-retrieval-scopes.json)
+records separate read factories, instance-owned retrieval observers and global
+scopes. Factories run once per nonempty complete batch: local factory first,
+then observers in registration order; each model invokes local callbacks before
+observers. Dispatch follows successful hydration and row closure through the
+shared `ormcore.Collect` owner and actual returned rows' observer snapshot.
+Each switches to bounded closed batches when callbacks may run. DTOs, scalars,
+write hydration and unselected intermediate roles do not dispatch retrieval.
+Table.Raw does dispatch retrieval, with no automatic scopes or read routing.
+
+Lazy scope sources receive the completed typed declaration. Scope predicates are
+additive, use the executing context, and fail before SQL on invalid definitions,
+missing tenancy or callback errors. Source panic/Goexit failures are retained by
+the shared owner; subsequent operations fail closed without retrying the source.
+Scopes cover reads/writes, relation targets and pivots, aggregates, joins and
+subqueries; inserts remain unfiltered. Explicit package-level bypasses retain
+other predicates and soft-delete visibility. No manifests, OpenAPI, TypeScript,
+datatables, relation writes or extension slots changed. Audit remains B5d.
+The shared concrete-owner lookup also retains pointer primary/enclosing owners.
+
+## Stage 6b2 and 6b3 subqueries and lateral joins
+
+The accepted [6b2 report](../../docs/evidence/goway-6b2-report.md) and
+[6b3 report](../../docs/evidence/goway-6b3-report.md) add row-phase ON comparisons,
+composition and side-owned filters, independent scalar/IN/EXISTS subqueries,
+explicit enclosing correlation, and model/projected cross/inner/left LATERAL.
+All lower to the existing shared compiler; phase, identity and nullable boundaries
+remain typed. Input/Scalar descriptors are selection sources; only framework
+aliases and join chains satisfy the sealed join-source contract. Runtime source
+validation rejects zero, forged or foreign metadata before SQL.
+
+The approved 6b1 LeftScope/RightScope signature broadening remains: inferred calls
+are valid; explicit arguments change from `[L,R,M]` to `[S,L,M]`/`[S,R,M]`.
+Thirty more catalogue rows are ported by 6b3. `lateral_record_cte` and transaction
+record/projection adapters remain 6c integration checkpoints. The
+[rows recipes](../../database/orm/rows/README.md) show the shipped API.
+
+## Integration batch 2 acceptance
+
+The integrated build, database/internal vet, requested races, fixture vet/tests,
+catalogue, generation, release-tools, docs, formatting and diff checks pass.
+Current-source command results and hashes are recorded in the four slice evidence
+files. The combined fixture has 352 compiler cases and 60 footprint probes. The
+catalogue retains all 1,026 rows: 268 ported, 314 to port and 444 unaffected. The
+five remaining Stage 4-labelled rows concern relation writes, outside the completed
+read-relation scope. Existing footprint ceilings are retained. Integration moved row/selected ordering
+construction into one non-generic core helper and replaced per-model retrieval-window
+closures with an explicit batch record; public signatures and provenance remain
+unchanged. The two combined probes that initially exceeded their limits now measure
+4,362/4,369 functions (`aggregate_families`) and 1,209/1,211 (`q_with`). PostgreSQL sources
+compile in the fixture gate, while live execution remains with the lead.

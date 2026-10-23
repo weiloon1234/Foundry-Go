@@ -40,12 +40,13 @@ func Group[S, V any](v RowValue[S, V]) GroupKey[S] { return GroupKey[S]{core: ro
 func (e Selected[S, V]) Key() ProjectionKey[S] { return ProjectionKey[S]{core: e.data.core} }
 
 // Asc orders a selected value in a rows query. Example: expr.AddValue(a,b).Asc().
-func (e Selected[S, V]) Asc() SelectedOrder[S] { return selectedOrder[S](e.data, false) }
+func (e Selected[S, V]) Asc() SelectedOrder[S] {
+	return SelectedOrder[S]{core: ormcore.OrderExpression(e.data.core, false)}
+}
 
 // Desc orders a selected value in a rows query. Example: count.Value().Desc().
-func (e Selected[S, V]) Desc() SelectedOrder[S] { return selectedOrder[S](e.data, true) }
-func selectedOrder[S, V any](data rowData[V], descending bool) SelectedOrder[S] {
-	return SelectedOrder[S]{core: rowOrder[S](data, descending).core}
+func (e Selected[S, V]) Desc() SelectedOrder[S] {
+	return SelectedOrder[S]{core: ormcore.OrderExpression(e.data.core, true)}
 }
 
 // NullsFirst places SQL NULL first. Example: count.Desc().NullsFirst().

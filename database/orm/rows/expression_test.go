@@ -30,7 +30,7 @@ func expressionSchema[V any](c codec.Codec[V]) expressionFields[V] {
 		return expressionFields[V]{b.Row(), FieldOf(b, &r.Value, orm.Codec(c))}
 	})
 }
-func expressionQuery[S, V any](source Source[S], v expr.Selected[S, V], c codec.Codec[V]) Query[S, expressionRow[V]] {
+func expressionQuery[S, V any](source SelectionSource[S], v expr.Selected[S, V], c codec.Codec[V]) Query[S, expressionRow[V]] {
 	schema := expressionSchema(c)
 	return Select(source, schema, MapSelected(schema.Value, v))
 }

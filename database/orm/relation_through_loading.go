@@ -34,7 +34,9 @@ func throughLoader[M, N, P any, A, B comparable](local columnData[A], pivotLocal
 			node.Limit = value.Set(limit)
 			n, pc := len(p.target.columns), len(p.join.pivot.table.columns)
 			fetched := 0
-			err = ormcore.Read(ctx, ex, node, nil, nil, func(row database.Row) error {
+			targetBatch := retrievalBatch{table: p.target, start: len(targets)}
+			pivotBatch := retrievalBatch{table: p.join.pivot.table, start: len(pivots)}
+			err = ormcore.ReadComplete(ctx, ex, node, nil, nil, func(row database.Row) error {
 				var target N
 				var pivot P
 				if err := hydrate(p.target, ormcore.RelationRow{Row: row, Count: n, Total: n + pc}, unsafe.Pointer(&target)); err != nil {
@@ -49,8 +51,10 @@ func throughLoader[M, N, P any, A, B comparable](local columnData[A], pivotLocal
 				}
 				targets = append(targets, target)
 				pivots = append(pivots, pivot)
+				targetBatch.capture(unsafe.Pointer(unsafe.SliceData(targets)), len(targets))
+				pivotBatch.capture(unsafe.Pointer(unsafe.SliceData(pivots)), len(pivots))
 				return nil
-			})
+			}, readBatches(ex, &targetBatch, &pivotBatch))
 			return fetched, err
 		})
 		if err != nil {

@@ -139,6 +139,11 @@ func Consume(ctx context.Context, rows RowSource, scan func(database.Row) error)
 
 // Read centralizes projection/scalar execution and discards unfinished rows.
 func Read(ctx context.Context, ex database.Executor, node querycore.SelectNode, planError error, checks []func() error, scan func(database.Row) error) (err error) {
+	return ReadComplete(ctx, ex, node, planError, checks, scan, nil)
+}
+
+// ReadComplete retains complete-model callback ownership through row closure.
+func ReadComplete(ctx context.Context, ex database.Executor, node querycore.SelectNode, planError error, checks []func() error, scan func(database.Row) error, callbacks *ReadCallbacks) (err error) {
 	if ctx == nil || ex == nil {
 		return Invalid("query execution requires a context and executor")
 	}
@@ -158,7 +163,7 @@ func Read(ctx context.Context, ex database.Executor, node querycore.SelectNode, 
 	if err != nil {
 		return err
 	}
-	return Consume(ctx, rows, scan)
+	return Collect(ctx, rows, scan, callbacks)
 }
 
 // AppendChecks snapshots deferred declaration checks without specializing slice

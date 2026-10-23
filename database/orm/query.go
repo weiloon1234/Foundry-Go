@@ -274,14 +274,16 @@ func all[M any](ctx context.Context, ex database.Executor, q queryState) ([]M, e
 }
 func allRows[M any](ctx context.Context, ex database.Executor, q queryState) ([]M, error) {
 	items := make([]M, 0)
+	batch := retrievalBatch{table: q.table}
 	err := readModels(ctx, ex, q, func(row database.Row) error {
 		var item M
 		if err := hydrate(q.table, row, unsafe.Pointer(&item)); err != nil {
 			return err
 		}
 		items = append(items, item)
+		batch.capture(unsafe.Pointer(unsafe.SliceData(items)), len(items))
 		return nil
-	})
+	}, readBatches(ex, &batch))
 	if err != nil {
 		return nil, err
 	}
@@ -334,7 +336,7 @@ type rowSource = ormcore.RowSource
 func consume(ctx context.Context, rows rowSource, scan func(database.Row) error) error {
 	return ormcore.Consume(ctx, rows, scan)
 }
-func readModels(ctx context.Context, ex database.Executor, q queryState, scan func(database.Row) error) error {
+func readModels(ctx context.Context, ex database.Executor, q queryState, scan func(database.Row) error, callbacks *ormcore.ReadCallbacks) error {
 	if err := executionContext(ctx, ex); err != nil {
 		return err
 	}
@@ -352,7 +354,7 @@ func readModels(ctx context.Context, ex database.Executor, q queryState, scan fu
 	if err != nil {
 		return err
 	}
-	return consume(ctx, rows, scan)
+	return ormcore.Collect(ctx, rows, scan, callbacks)
 }
 func executionContext(ctx context.Context, ex database.Executor) error {
 	if ctx == nil || ex == nil {
@@ -499,8 +501,9 @@ func (q LockedQuery[M]) SkipLocked() LockedQuery[M] { q.state.behavior = queryco
 // Wait restores the default waiting behavior.
 func (q LockedQuery[M]) Wait() LockedQuery[M] { q.state.behavior = querycore.LockWait; return q }
 
-// Each streams models while rows remain open. Rows yielded before a later
-// hydration failure remain yielded; the failed row and its successors are not.
+// Each streams models while rows remain open when retrieval cannot run. Otherwise
+// it uses closed complete batches, dispatching Retrieved before yielding models.
+// Rows yielded before a later failed batch remain yielded.
 func (q Query[M]) Each(ctx context.Context, ex database.Executor, yield func(M) error) error {
 	if len(q.state.relations) > 0 {
 		return q.EachChunked(ctx, ex, query.DefaultChunkSize, yield)
@@ -525,11 +528,14 @@ func each[M any](ctx context.Context, ex database.Executor, q queryState, yield 
 	if yield == nil {
 		return invalid("model iteration requires a callback")
 	}
+	if mayRetrieve(q.table, ex) {
+		return chunks(ctx, ex, q, query.DefaultChunkSize, eachBatch(ctx, yield))
+	}
 	return readModels(ctx, ex, q, func(row database.Row) error {
 		var item M
 		if err := hydrate(q.table, row, unsafe.Pointer(&item)); err != nil {
 			return err
 		}
 		return yield(item)
-	})
+	}, nil)
 }

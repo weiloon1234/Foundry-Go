@@ -101,3 +101,82 @@ func TestObserverCatcherCannotProveAbsenceOrCaptureCapability(t *testing.T) {
 		})
 	}
 }
+
+func TestFrameworkOwnerFormsPreserveObservers(t *testing.T) {
+	for _, registered := range []bool{false, true} {
+		name := "empty"
+		if registered {
+			name = "observed"
+		}
+		t.Run(name, func(t *testing.T) {
+			q := hookedFields(nil)
+			observed := 0
+			var declarations []lifecycle.Declaration
+			if registered {
+				declaration, err := NewObserver[hookedRow]("owner.audit").Declare(func() Hooks[hookedRow] {
+					return Hooks[hookedRow]{Creating: func(context.Context, *database.Tx, *Write[hookedRow]) error {
+						observed++
+						return nil
+					}}
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				declarations = append(declarations, declaration)
+			}
+			var statements []string
+			db := hookDB(t, testConnector{statements: &statements, columns: hookColumns, values: hookValues("name", nil, nil)}, declarations...)
+			check := func(name string, writer database.Transactor) {
+				t.Helper()
+				t.Run(name, func(t *testing.T) {
+					set, known := ownerObservers(writer)
+					if !known || lifecycle.HasObservers[hookedRow](set) != registered {
+						t.Fatal("owner lost its observer snapshot", known)
+					}
+					before := len(statements)
+					_, err := q.Query().UpdateAll(t.Context(), writer, q.Name.Set("name"))
+					if registered {
+						if !errors.Is(err, fault.Invalid) || len(statements) != before {
+							t.Fatal("unacknowledged set write reached SQL", err)
+						}
+					} else if err != nil {
+						t.Fatal("observer-free owner required acknowledgement", err)
+					}
+					beforeObserved := observed
+					if _, err := q.Insert(t.Context(), writer, q.Key().Set(1), q.Name.Set("name"), q.Body.Set([]byte{1})); err != nil {
+						t.Fatal(err)
+					}
+					want := beforeObserved
+					if registered {
+						want++
+					}
+					if observed != want {
+						t.Fatalf("observer calls = %d, want %d", observed, want)
+					}
+				})
+			}
+			primary := db.Primary()
+			check("pool", db)
+			check("primary value", primary)
+			check("primary pointer", &primary)
+			if err := db.Session(t.Context(), func(session *database.Session) error {
+				check("session", session)
+				return session.Transaction(t.Context(), func(tx *database.Tx) error {
+					check("session transaction", tx)
+					return nil
+				})
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Transaction(t.Context(), func(tx *database.Tx) error {
+				check("transaction", tx)
+				return tx.Transaction(t.Context(), func(nested *database.Tx) error {
+					check("savepoint", nested)
+					return nil
+				})
+			}); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

@@ -85,6 +85,7 @@ type relationBudget struct {
 	remaining, attachments int
 }
 type relationPlan struct {
+	aggregate      *aggregatePlan
 	singular       bool
 	join           *relationJoin
 	morph          *relationMorph

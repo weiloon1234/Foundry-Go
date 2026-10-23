@@ -38,18 +38,21 @@ type declaration struct {
 }
 
 type tableCore struct {
-	typ        reflect.Type
-	slots      map[int]*slotCore
-	model      querycore.ModelDefinition
-	columns    []*columnCore
-	primary    *columnCore
-	selections []querycore.SelectItem
-	err        error
-	check      func() error
-	mutators   []querycore.FieldMutator
-	hooks      func() hookSet
-	observers  func(lifecycle.Observers) ([]func() hookSet, error)
-	observed   func(lifecycle.Observers, querycore.MutationKind) bool
+	typ           reflect.Type
+	slots         map[int]*slotCore
+	model         querycore.ModelDefinition
+	columns       []*columnCore
+	primary       *columnCore
+	selections    []querycore.SelectItem
+	err           error
+	check         func() error
+	mutators      []querycore.FieldMutator
+	hooks         func() hookSet
+	observers     func(lifecycle.Observers) ([]func() hookSet, error)
+	observed      func(lifecycle.Observers, querycore.MutationKind) bool
+	retrieval     func() retrievalSet
+	readFactories func(lifecycle.Observers) ([]func() retrievalSet, error)
+	readObserved  func(lifecycle.Observers) bool
 }
 
 type columnCore struct {
@@ -82,6 +85,11 @@ type Option struct {
 	noTimestamps, noSoftDeletes bool
 	hooks                       func() hookSet
 	hookModel                   reflect.Type
+	retrieval                   func() retrievalSet
+	retrievalModel              reflect.Type
+	scopeModel                  reflect.Type
+	scopeTable                  reflect.Type
+	scopes                      func(any, *tableCore) []querycore.ScopeDefinition
 }
 
 // NoTimestamps disables CreatedAt/UpdatedAt conventions. Example: NoTimestamps().
@@ -91,11 +99,25 @@ func NoTimestamps() Option { return Option{noTimestamps: true} }
 func Define[M any, T CheckedTable](name string, declare func(Builder[M], *M) T, opts ...Option) (result T) {
 	template := new(M)
 	d := &declaration{core: &tableCore{typ: reflect.TypeFor[M](), slots: make(map[int]*slotCore), model: querycore.ModelDefinition{Table: name}}, template: unsafe.Pointer(template), typ: reflect.TypeFor[M](), fields: make(map[int]*columnCore)}
-	d.core.observers = func(set lifecycle.Observers) ([]func() hookSet, error) {
-		return lifecycle.ObserverFactories[M, hookSet](set)
-	}
+	d.core.observers = lifecycle.ObserverFactories[M, hookSet]
 	d.core.observed = observed[M]
+	d.core.readFactories = lifecycle.RetrievalObserverFactories[M, retrievalSet]
+	d.core.readObserved = lifecycle.HasRetrievalObservers[M]
+	var scopeSource func(any, *tableCore) []querycore.ScopeDefinition
 	for _, opt := range opts {
+		if opt.retrievalModel != nil {
+			if opt.retrievalModel != d.typ || opt.retrieval == nil || d.core.retrieval != nil {
+				d.fail("retrieval", "declare one retrieval factory for this model")
+			}
+			d.core.retrieval = opt.retrieval
+		}
+		if opt.scopeModel != nil {
+			if opt.scopeModel != d.typ || opt.scopeTable != reflect.TypeFor[T]() || opt.scopes == nil || d.core.model.ScopeSource != nil {
+				d.fail("scopes", "declare one lazy scope source for this model")
+			}
+			d.core.model.ScopeSource = &querycore.LazyScopes{}
+			scopeSource = opt.scopes
+		}
 		d.noTimestamps = d.noTimestamps || opt.noTimestamps
 		d.noSoftDeletes = d.noSoftDeletes || opt.noSoftDeletes
 		if opt.hookModel != nil {
@@ -122,6 +144,10 @@ func Define[M any, T CheckedTable](name string, declare func(Builder[M], *M) T, 
 	}
 	attachDeclaration(d, reflect.ValueOf(&result).Elem())
 	seal(d)
+	if scopeSource != nil {
+		snapshot := result
+		d.core.model.ScopeSource.Source = func() []querycore.ScopeDefinition { return scopeSource(snapshot, d.core) }
+	}
 	return result
 }
 

@@ -3,7 +3,6 @@ package rows
 import (
 	"context"
 	"errors"
-	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
@@ -40,7 +39,7 @@ func MapSelected[S, R, V any](field Field[R, V], expression expr.Selected[S, V])
 }
 
 // Select maps every declared row field exactly once. Example: rows.Select(joined,OrderRows,rows.Map(OrderRows.ID,id),...).
-func Select[S, R any](source Source[S], schema Schema[R], mappings ...Mapping[S, R]) Query[S, R] {
+func Select[S, R any](source SelectionSource[S], schema Schema[R], mappings ...Mapping[S, R]) Query[S, R] {
 	q := Query[S, R]{}
 	if ormcore.NilDescriptor(source) || ormcore.NilDescriptor(schema) {
 		q.source.Err = ormcore.Invalid("projection requires a source and row declaration")
@@ -90,23 +89,13 @@ func SelectValue[M, V, P any](source orm.Query[M], column orm.ExpressionColumn[M
 
 // Where appends scoped predicates. Example: report.Where(memberTenant.Eq(tenant)).
 func (q Query[S, R]) Where(predicates ...expr.Predicate[S]) Query[S, R] {
-	q.source.Node.Predicates = slices.Clone(q.source.Node.Predicates)
-	for _, p := range predicates {
-		c := expr.FoundryPredicate(p, sqlowner.Expressions())
-		q.source.Err = errors.Join(q.source.Err, c.Err, ormcore.CheckReferenceSet(q.source, c.Refs, c.ReferenceFree))
-		q.source.Node.Predicates = append(q.source.Node.Predicates, c.Node)
-	}
+	q.source = whereSource(q.source, predicates)
 	return q
 }
 
 // OrderBy appends scoped sort directions. Example: report.OrderBy(orderID.Asc()).
 func (q Query[S, R]) OrderBy(orders ...expr.Order[S]) Query[S, R] {
-	q.source.Node.Orders = slices.Clone(q.source.Node.Orders)
-	for _, o := range orders {
-		c := expr.FoundryOrder(o, sqlowner.Expressions())
-		q.source.Err = errors.Join(q.source.Err, c.Err, ormcore.CheckReferenceSet(q.source, c.Refs, c.ReferenceFree))
-		q.source.Node.Orders = append(q.source.Node.Orders, c.Node)
-	}
+	q.source = orderSource(q.source, orders)
 	return q
 }
 

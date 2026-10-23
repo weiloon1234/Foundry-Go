@@ -77,6 +77,9 @@ func validateRelationMetadata(p *relationPlan, owner *tableCore) error {
 	if p.err != nil {
 		return p.err
 	}
+	if p.aggregate != nil {
+		return validateAggregateMetadata(p, owner)
+	}
 	if p.slot == nil || p.load == nil || p.loaded == nil {
 		return invalid("relation requires a bound slot and loader")
 	}
@@ -103,6 +106,19 @@ func validateRelationAt(p *relationPlan, owner *tableCore, depth int, limits Rel
 		return invalid("relation graph exceeds its resource bound")
 	}
 	if err := validateRelationMetadata(p, owner); err != nil {
+		return err
+	}
+	if p.aggregate != nil {
+		if err := validateRelationAt(p.aggregate.input.plan, p.slot.owner, depth, limits, nodes); err != nil {
+			return err
+		}
+		node, err := aggregateSelect(p.aggregate, nil, nil, 1)
+		if err != nil {
+			return err
+		}
+		compiler := querycore.Compiler{ScopeShapeOnly: true}
+		compiler.BeginStatement(nil)
+		_, err = compiler.CompileSelect(node)
 		return err
 	}
 	if err := p.query.ast.Validate(); err != nil {

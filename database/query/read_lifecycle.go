@@ -3,12 +3,12 @@ package query
 import (
 	"context"
 	"database/sql/driver"
-	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 )
 
 // RetrievalHooks bridges concrete generated read callbacks into the shared read
@@ -130,54 +130,37 @@ func collectRead[R any](ctx context.Context, executor database.Executor, stateme
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		err = errors.Join(err, rows.Close())
-		if err != nil {
-			result = nil
-		}
-	}()
 	result = make([]R, 0)
-	collect := func(ctx context.Context) error {
-		for rows.Next() {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			item, err := scan(rows)
+	var dispatch *ormcore.ReadCallbacks
+	if callbacks != nil {
+		dispatch = &ormcore.ReadCallbacks{Needed: callbacks.needed, Complete: func(work context.Context, set lifecycle.Observers) error {
+			invoke, err := callbacks.prepare(work, set)
 			if err != nil {
 				return err
 			}
-			result = append(result, item)
-		}
-		return errors.Join(rows.Close(), ctx.Err())
-	}
-	set := rows.Observers()
-	if callbacks == nil || !callbacks.needed(set) {
-		err = collect(ctx)
-		return result, err
-	}
-	err = rows.WithObserverScope(ctx, func(work context.Context) error {
-		if err := collect(work); err != nil || len(result) == 0 {
-			return err
-		}
-		work, err := writeHookContext(work)
-		if err != nil {
-			return err
-		}
-		invoke, err := callbacks.prepare(work, set)
-		if err != nil {
-			return err
-		}
-		for _, item := range result {
-			if err := work.Err(); err != nil {
-				return err
-			}
-			if invoke != nil {
-				if err := invoke(work, executor, item); err != nil {
+			for _, item := range result {
+				if err := work.Err(); err != nil {
 					return err
 				}
+				if invoke != nil {
+					if err := invoke(work, executor, item); err != nil {
+						return err
+					}
+				}
 			}
+			return work.Err()
+		}}
+	}
+	err = ormcore.Collect(ctx, rows, func(row database.Row) error {
+		item, err := scan(row)
+		if err != nil {
+			return err
 		}
-		return work.Err()
-	})
-	return result, err
+		result = append(result, item)
+		return nil
+	}, dispatch)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }

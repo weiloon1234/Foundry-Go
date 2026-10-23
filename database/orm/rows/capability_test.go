@@ -54,3 +54,24 @@ func TestNullableScopeBridgesRejectZeroCapability(t *testing.T) {
 		t.Fatal("zero capability exposed metadata", actual)
 	}
 }
+
+func TestSubqueryBridgesRejectZeroCapabilities(t *testing.T) {
+	m := declareMembers()
+	v := expr.Select(expr.Value(m.ID))
+	row := expr.Value(m.ID)
+	core := expr.FoundrySelected(v, sqlowner.Expressions())
+	column := expr.FoundrySelectedColumn(v, sqlowner.Expressions())
+	var zero sqlowner.ExpressionSeal
+	if expr.FoundryRowValue(row, zero).Node != nil || expr.FoundrySelectedColumn(v, zero).Bind != nil {
+		t.Fatal("zero capability exposed expression data")
+	}
+	selected := expr.FoundrySelectedValue[member](core, column, zero)
+	restored := expr.FoundryRowExpression[member](core, column, zero)
+	if !errors.Is(expr.FoundrySelected(selected, sqlowner.Expressions()).Err, fault.Invalid) || !errors.Is(expr.FoundryRowValue(restored, sqlowner.Expressions()).Err, fault.Invalid) {
+		t.Fatal("zero capability adopted a value")
+	}
+	predicate := expr.FoundryPredicateValue[member](expr.FoundryPredicate(row.Eq(1), sqlowner.Expressions()), zero)
+	if !errors.Is(expr.FoundryPredicate(predicate, sqlowner.Expressions()).Err, fault.Invalid) {
+		t.Fatal("zero capability adopted predicate")
+	}
+}

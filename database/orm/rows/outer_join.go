@@ -18,7 +18,7 @@ func buildJoin[L, R any](left Source[L], right JoinTable[R], on JoinOn[L, R], ki
 		return joinState{source: ormcore.Source{Err: ormcore.Invalid("join requires both sources")}}
 	}
 	l, r := left.rowSource(nil), right.rowSource(nil)
-	return joinState{source: ormcore.JoinSources(l, r, on.node, on.left, on.right, on.err, kind, scope), left: l.Owners, right: r.Owners}
+	return joinState{source: ormcore.JoinSources(l, r, on.core, kind, scope), left: l.Owners, right: r.Owners}
 }
 
 type scopeBoundary struct {
@@ -84,6 +84,8 @@ type LeftJoined[L, R any] struct {
 	left, right map[string]any
 }
 
+func (j LeftJoined[L, R]) joinSource() {}
+
 func (j LeftJoined[L, R]) rowSource(*Left[L, R]) ormcore.Source { return j.source }
 func (j LeftJoined[L, R]) leftBoundary(*Left[L, R], *L) scopeBoundary {
 	return scopeBoundary{j.left, j.source.Err}
@@ -116,6 +118,8 @@ type RightJoined[L, R any] struct {
 	source      ormcore.Source
 	left, right map[string]any
 }
+
+func (j RightJoined[L, R]) joinSource() {}
 
 func (j RightJoined[L, R]) rowSource(*Right[L, R]) ormcore.Source { return j.source }
 func (j RightJoined[L, R]) leftBoundary(*Right[L, R], *L) scopeBoundary {
@@ -150,6 +154,8 @@ type FullJoined[L, R any] struct {
 	left, right map[string]any
 }
 
+func (j FullJoined[L, R]) joinSource() {}
+
 func (j FullJoined[L, R]) rowSource(*Full[L, R]) ormcore.Source { return j.source }
 func (j FullJoined[L, R]) leftBoundary(*Full[L, R], *L) scopeBoundary {
 	return scopeBoundary{j.left, j.source.Err}
@@ -182,6 +188,8 @@ type CrossJoined[L, R any] struct {
 	source      ormcore.Source
 	left, right map[string]any
 }
+
+func (j CrossJoined[L, R]) joinSource() {}
 
 func (j CrossJoined[L, R]) rowSource(*Cross[L, R]) ormcore.Source { return j.source }
 func (j CrossJoined[L, R]) leftBoundary(*Cross[L, R], *L) scopeBoundary {

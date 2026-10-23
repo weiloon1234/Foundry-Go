@@ -51,6 +51,7 @@ func paginate[M any](ctx context.Context, ex database.Executor, q queryState, r 
 	if err := executionContext(ctx, ex); err != nil {
 		return PageResult[M]{}, err
 	}
+	q.ast.ScopeContext = ctx
 	base, window, err := pageStates(q, r)
 	if err != nil {
 		return PageResult[M]{}, err
@@ -84,6 +85,7 @@ func simplePaginate[M any](ctx context.Context, ex database.Executor, q querySta
 	if err := executionContext(ctx, ex); err != nil {
 		return SimplePage[M]{}, err
 	}
+	q.ast.ScopeContext = ctx
 	_, window, err := pageStates(q, r)
 	if err != nil {
 		return SimplePage[M]{}, err

@@ -210,10 +210,14 @@ func (a Aggregate[S, V]) Filter(predicates ...Predicate[S]) Aggregate[S, V] {
 }
 
 // Asc orders selected aggregate results. Example: aggregate.Asc().
-func (a Aggregate[S, V]) Asc() SelectedOrder[S] { return selectedOrder[S](a.data, false) }
+func (a Aggregate[S, V]) Asc() SelectedOrder[S] {
+	return SelectedOrder[S]{core: ormcore.OrderExpression(a.data.core, false)}
+}
 
 // Desc orders selected aggregate results. Example: aggregate.Desc().
-func (a Aggregate[S, V]) Desc() SelectedOrder[S] { return selectedOrder[S](a.data, true) }
+func (a Aggregate[S, V]) Desc() SelectedOrder[S] {
+	return SelectedOrder[S]{core: ormcore.OrderExpression(a.data.core, true)}
+}
 
 // Filter appends same-scope row predicates joined by AND, for this aggregate only.
 // Example: aggregate.Filter(expr.Value(Orders.Total).Eq(1)).
@@ -223,10 +227,14 @@ func (a OrderedAggregate[S, V]) Filter(predicates ...Predicate[S]) OrderedAggreg
 }
 
 // Asc orders selected aggregate results. Example: aggregate.Asc().
-func (a OrderedAggregate[S, V]) Asc() SelectedOrder[S] { return selectedOrder[S](a.data, false) }
+func (a OrderedAggregate[S, V]) Asc() SelectedOrder[S] {
+	return SelectedOrder[S]{core: ormcore.OrderExpression(a.data.core, false)}
+}
 
 // Desc orders selected aggregate results. Example: aggregate.Desc().
-func (a OrderedAggregate[S, V]) Desc() SelectedOrder[S] { return selectedOrder[S](a.data, true) }
+func (a OrderedAggregate[S, V]) Desc() SelectedOrder[S] {
+	return SelectedOrder[S]{core: ormcore.OrderExpression(a.data.core, true)}
+}
 
 // Filter appends same-scope row predicates joined by AND, for this aggregate only.
 // Example: aggregate.Filter(expr.Value(Orders.Total).Eq(1)).
@@ -237,12 +245,12 @@ func (a NullableOrderedAggregate[S, V]) Filter(predicates ...Predicate[S]) Nulla
 
 // Asc orders selected aggregate results. Example: aggregate.Asc().
 func (a NullableOrderedAggregate[S, V]) Asc() SelectedOrder[S] {
-	return selectedOrder[S](a.data, false)
+	return SelectedOrder[S]{core: ormcore.OrderExpression(a.data.core, false)}
 }
 
 // Desc orders selected aggregate results. Example: aggregate.Desc().
 func (a NullableOrderedAggregate[S, V]) Desc() SelectedOrder[S] {
-	return selectedOrder[S](a.data, true)
+	return SelectedOrder[S]{core: ormcore.OrderExpression(a.data.core, true)}
 }
 
 func filterAggregate[S any](input ormcore.Expression, predicates []Predicate[S]) ormcore.Expression {

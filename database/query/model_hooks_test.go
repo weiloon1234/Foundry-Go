@@ -95,3 +95,41 @@ func TestObserverAdapterMustBeValidAndUnstartedPoolIsNotFrozen(t *testing.T) {
 		t.Fatal("a wrapper cannot prove absence of observers")
 	}
 }
+
+func TestWriterObserversFrameworkOwnerForms(t *testing.T) {
+	db := new(database.DB)
+	if err := db.BindObservers(lifecycle.Observers{}); err != nil {
+		t.Fatal(err)
+	}
+	primary := db.Primary()
+	tx := new(database.Tx)
+	enclosing := enclosingTransaction{tx: tx}
+	for _, tc := range []struct {
+		name  string
+		owner any
+		known bool
+	}{
+		{"pool", db, true},
+		{"primary value", primary, true},
+		{"primary pointer", &primary, true},
+		{"session", new(database.Session), true},
+		{"transaction", tx, true},
+		{"enclosing value", enclosing, true},
+		{"enclosing pointer", &enclosing, true},
+		{"nil pool", (*database.DB)(nil), false},
+		{"nil primary", (*database.PrimaryExecutor)(nil), false},
+		{"zero primary", database.PrimaryExecutor{}, false},
+		{"zero primary pointer", new(database.PrimaryExecutor), false},
+		{"nil session", (*database.Session)(nil), false},
+		{"nil transaction", (*database.Tx)(nil), false},
+		{"nil enclosing", (*enclosingTransaction)(nil), false},
+		{"empty enclosing", enclosingTransaction{}, false},
+		{"empty enclosing pointer", new(enclosingTransaction), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, known := writerObservers(tc.owner); known != tc.known {
+				t.Fatalf("known = %v, want %v", known, tc.known)
+			}
+		})
+	}
+}
