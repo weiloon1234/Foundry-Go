@@ -272,7 +272,7 @@ func (r ManyRelation[M, N]) loadRelation(ctx context.Context, executor database.
 			return nil, err
 		}
 		index := indices[i]
-		result[index] = r.set(result[index], relation.FoundryCollection(sqlowner.Seal{}, group))
+		result[index] = r.set(result[index], relation.FoundryCollection(sqlowner.Collections(), group))
 	}
 	return result, nil
 }

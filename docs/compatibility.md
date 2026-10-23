@@ -77,6 +77,31 @@ application payload version. Change it deliberately when that compatibility
 surface changes and verify base/dependent/consumer resolution together. It is
 not inferred from a synthetic packaging candidate version.
 
+## Validated framework capabilities (B31)
+
+The framework-only `FoundryObservers`, `FoundryAutocommitQuery`,
+`FoundryStatementUnknown`, `FoundryCollection` and `FoundryLinked` bridges now
+use distinct validated internal seal types. Inferred zero seals fail closed;
+`FoundryDiagnostic` also rejects a zero seal. These exported bridge signatures
+are a documented security correction to the public Go surface, even though
+ordinary application calls never need their internal arguments. Do not infer or
+retain bridge tokens; use the ordinary database, relation and diagnostic APIs.
+
+Observer lookup trusts concrete framework owners only, including pointer and
+value forms of `PrimaryExecutor` and the internal enclosing transaction. Custom
+wrappers, including wrappers embedding a pool, cannot prove observer absence: per-model
+writes use their supplied transaction, and set-based writes require the existing
+`WithoutModelHooks()` acknowledgement when absence is unknown. Adapter no-op
+markers carry no capability and are never invoked; concrete package ownership
+remains required. Application diagnostic methods are likewise never issued a
+capability. Framework relation loaders now copy input slices before publication;
+model fields retain ordinary Go value-copy semantics.
+
+Normal caller signatures, generated declarations, persisted data and transport
+formats are unchanged. Keep generator/runtime pins aligned; no generated-output
+or database migration is introduced. The asset navigation hook (B30) is opt-in
+and additive; see [assets and SPA routing](guides/http-assets.md).
+
 ## Persisted and transport formats
 
 | Contract | Rollout rule |

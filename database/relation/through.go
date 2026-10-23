@@ -33,8 +33,8 @@ func (r Through[M, P]) Len() int { return r.items.Len() }
 // All yields each loaded link by value without copying the collection.
 func (r Through[M, P]) All() iter.Seq2[int, Link[M, P]] { return r.items.All() }
 
-// FoundryLinked adopts a freshly built, unshared link slice without copying.
-// Only framework loaders can name the seal; applications use Linked.
-func FoundryLinked[M, P any](seal sqlowner.Seal, items []Link[M, P]) Through[M, P] {
+// FoundryLinked publishes caller-independent links for framework loaders.
+// An invalid capability leaves the relation unloaded.
+func FoundryLinked[M, P any](seal sqlowner.CollectionSeal, items []Link[M, P]) Through[M, P] {
 	return Through[M, P]{items: FoundryCollection(seal, items)}
 }

@@ -41,7 +41,13 @@ func Build(ctx context.Context, source foundryhttp.AssetSource) (*foundation.App
 			if err != nil {
 				return nil, err
 			}
-			mount := assets.Mount("web.assets", "/assets")
+			mount := assets.Mount("web.assets", "/assets").WithNavigationFallback(stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.WriteHeader(stdhttp.StatusNotFound)
+				if r.Method != stdhttp.MethodHead {
+					_, _ = io.WriteString(w, "<main>Page not found</main>")
+				}
+			}))
 			health := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "api.health", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/api/health")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
 			router, err := foundryhttp.NewRouter(mount.Register(), health.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
 				return foundryhttp.NoContent{}, nil

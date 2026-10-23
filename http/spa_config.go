@@ -2,6 +2,7 @@ package http
 
 import (
 	"mime"
+	stdhttp "net/http"
 	"path"
 	"slices"
 	"strings"
@@ -52,7 +53,15 @@ func (c SPAConfig) snapshot() SPAConfig { c.Exclude = slices.Clone(c.Exclude); r
 func matchesAssetPrefix(location, prefix string) bool {
 	return prefix == "" || prefix == "/" || location == prefix || strings.HasPrefix(location, prefix+"/")
 }
-func htmlNavigation(values []string, name string) bool {
+
+// IsHTMLNavigation reports whether r is a GET/HEAD navigation to an
+// extensionless asset name whose bounded Accept header permits text/html (q > 0).
+// name is relative to the asset source, and may end with a directory slash.
+func IsHTMLNavigation(r *stdhttp.Request, name string) bool {
+	if r == nil || (r.Method != stdhttp.MethodGet && r.Method != stdhttp.MethodHead) {
+		return false
+	}
+	values := r.Header.Values("Accept")
 	if path.Ext(strings.TrimSuffix(name, "/")) != "" || len(values) > 32 {
 		return false
 	}

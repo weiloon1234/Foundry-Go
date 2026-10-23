@@ -94,7 +94,7 @@ func (s *spaFallback) serve(w stdhttp.ResponseWriter, r *stdhttp.Request) bool {
 		}
 	} else {
 		selection, err = s.assets.selectAsset(r.Context(), name, strings.HasSuffix(r.URL.Path, "/"))
-		if isMissingAsset(err) && s.assets.config.allowed(strings.TrimSuffix(name, "/")) && htmlNavigation(r.Header.Values("Accept"), name) {
+		if isMissingAsset(err) && s.assets.config.allowed(strings.TrimSuffix(name, "/")) && IsHTMLNavigation(r, name) {
 			selection, err = s.entry(r.Context())
 			selection.varyAccept = true
 		}

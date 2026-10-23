@@ -59,9 +59,11 @@ func (r Many[M]) Len() int { return len(r.items) }
 // Nothing is yielded when the relation is not loaded.
 func (r Many[M]) All() iter.Seq2[int, M] { return slices.All(r.items) }
 
-// FoundryCollection adopts a freshly built, unshared slice as a loaded
-// collection without copying it. Only framework loaders can name the seal;
-// application code uses Collection, which copies its input.
-func FoundryCollection[M any](_ sqlowner.Seal, items []M) Many[M] {
-	return Many[M]{items: slices.Clip(items), loaded: true}
+// FoundryCollection publishes a caller-independent collection for framework loaders.
+// An invalid capability leaves the relation unloaded.
+func FoundryCollection[M any](seal sqlowner.CollectionSeal, items []M) Many[M] {
+	if !seal.Valid() {
+		return Many[M]{}
+	}
+	return Collection(items)
 }

@@ -197,7 +197,7 @@ func TestAutocommitStatementFailuresCarryOutcome(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer db.Close(context.Background())
-			_, err = db.Primary().FoundryAutocommitQuery(sqlowner.Seal{}, t.Context(), "INSERT RETURNING")
+			_, err = db.Primary().FoundryAutocommitQuery(sqlowner.Autocommit(), t.Context(), "INSERT RETURNING")
 			var detail *database.Error
 			if !errors.As(err, &detail) || db.Stats().Owners != 0 {
 				t.Fatal("autocommit failure was not classified", err)
@@ -227,7 +227,7 @@ func TestAutocommitStatementFailuresCarryOutcome(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close(context.Background())
-	rows, err := db.FoundryAutocommitQuery(sqlowner.Seal{}, t.Context(), "INSERT RETURNING")
+	rows, err := db.FoundryAutocommitQuery(sqlowner.Autocommit(), t.Context(), "INSERT RETURNING")
 	if err != nil {
 		t.Fatal(err)
 	}

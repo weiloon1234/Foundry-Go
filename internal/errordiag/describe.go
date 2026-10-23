@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/frameworkadapter"
 )
 
 const (
@@ -17,12 +18,20 @@ const (
 	maxAttributes = 16
 )
 
-// Seal can only be named inside this module, so Provider is implementable only
-// by framework-owned error types. Describing an error therefore never runs an
-// application's diagnostic method.
-type Seal struct{ _ struct{} }
+// Seal authorizes framework diagnostic attributes. Its zero value is invalid.
+type Seal struct{ diagnostic *sentinel }
 
-// Provider contributes framework-owned, redaction-safe attributes.
+type sentinel struct{ live byte }
+
+var diagnosticCapability = sentinel{live: 1}
+
+func grant() Seal { return Seal{diagnostic: &diagnosticCapability} }
+
+// Valid reports whether the capability was issued by this package.
+func (s Seal) Valid() bool { return s.diagnostic == &diagnosticCapability }
+
+// Provider contributes redaction-safe attributes only after concrete framework
+// ownership is established. The method signature alone does not prove ownership.
 type Provider interface {
 	FoundryDiagnostic(Seal) []fault.Attribute
 }
@@ -76,7 +85,10 @@ func record(d *fault.Diagnostic, err error) {
 			d.Truncated = true
 		}
 	case Provider:
-		for _, attribute := range current.FoundryDiagnostic(Seal{}) {
+		if !frameworkadapter.IsFrameworkType(current) {
+			return
+		}
+		for _, attribute := range current.FoundryDiagnostic(grant()) {
 			if len(d.Attributes) == maxAttributes {
 				d.Truncated = true
 				break

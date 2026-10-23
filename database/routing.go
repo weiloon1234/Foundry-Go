@@ -175,7 +175,10 @@ func (p PrimaryExecutor) Clock() clock.Clock {
 }
 
 // FoundryAutocommitQuery keeps framework single-statement writes on primary.
-func (p PrimaryExecutor) FoundryAutocommitQuery(seal sqlowner.Seal, ctx context.Context, statement string, arguments ...any) (*Rows, error) {
+func (p PrimaryExecutor) FoundryAutocommitQuery(seal sqlowner.AutocommitSeal, ctx context.Context, statement string, arguments ...any) (*Rows, error) {
+	if !seal.Valid() {
+		return nil, fault.New(fault.Invalid, "invalid SQL owner capability")
+	}
 	if p.db == nil {
 		return nil, &Error{operation: "query", detail: Detail{Code: NotReady}, outcome: NoCommit}
 	}

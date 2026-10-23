@@ -8,6 +8,31 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Asset navigation fallback and validated seals (B30/B31) — 2026-10-23
+
+Status: **accepted on current native source under the requested focused gate**.
+Asset mounts offer an optional application handler for missing HTML navigations,
+using the SPA's exported navigation predicate and retaining route/SPA precedence.
+The [assets guide](../docs/guides/http-assets.md) owns composition. Database and
+diagnostic bridges validate distinct capabilities, concrete ownership checks
+prevent application capture, and relation loaders copy published slices. The
+[compatibility note](../docs/compatibility.md#validated-framework-capabilities-b31)
+records the bridge-signature correction and conservative custom-wrapper behavior.
+
+Build, vet, generation freshness, documentation and formatting checks passed.
+Races across HTTP, database, events and internal packages passed in retained
+segments: the sandbox initially denied HTTP/websocket test listeners, and those
+two complete packages passed with listener access. The independent HTTP-assets
+consumer also passed under race. The [evidence](../docs/evidence/b30-b31-20261023.json)
+records every audited seal declaration/call site, source fingerprints and commands.
+The lead retains `make verify`, required PostgreSQL acceptance and TypeScript
+checks; this record does not claim those broader gates.
+
+The accepted review follow-up restores `*PrimaryExecutor` and
+`*enclosingTransaction` observer lookup. Regressions cover all seven previously
+supported concrete owner forms and their update/delete lifecycle admission.
+The requested acceptance gate passed again, including the full race command.
+
 ## Configured Redis key inventory (starter B28) — 2026-10-21
 
 Status: **accepted on current native source with the requested B28 gate**.

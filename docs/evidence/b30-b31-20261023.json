@@ -1,0 +1,457 @@
+{
+  "date": "2026-10-23",
+  "status": "accepted-after-review",
+  "base_commit": "10030ad4eaf6ecf6caf269dfb5e970b0816f366e",
+  "scope": "B30 HTML navigation fallback for asset mounts; B31 validated framework capabilities and relation slice ownership.",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache",
+    "GOWORK": "off"
+  },
+  "api": [
+    "AssetMount.WithNavigationFallback(net/http.Handler) AssetMount",
+    "http.IsHTMLNavigation(*net/http.Request, string) bool"
+  ],
+  "capability_design": "Four SQL bridge families use the matching goway-data-layer names and private sentinel pointers: ObserverSeal/Observers, AutocommitSeal/Autocommit, OutcomeSeal/Outcomes, CollectionSeal/Collections. Diagnostics have a separate private-sentinel Seal. Only internal constructors issue valid capabilities.",
+  "seal_symbol_audit": [
+    {
+      "file": "cache/file/backend.go",
+      "base_line": 109,
+      "declaration": "func (*Backend) FoundryAdapter(frameworkadapter.Seal) {}",
+      "status": "Unchanged pure no-op marker; never invoked. Is checks the concrete defining package; no capability is issued."
+    },
+    {
+      "file": "cache/memory/memory.go",
+      "base_line": 108,
+      "declaration": "func (*Backend) FoundryAdapter(frameworkadapter.Seal) {}",
+      "status": "Unchanged pure no-op marker; never invoked. Is checks the concrete defining package; no capability is issued."
+    },
+    {
+      "file": "cache/null/null.go",
+      "base_line": 39,
+      "declaration": "func (Backend) FoundryAdapter(frameworkadapter.Seal) {}",
+      "status": "Unchanged pure no-op marker; never invoked. Is checks the concrete defining package; no capability is issued."
+    },
+    {
+      "file": "cache/postgres/backend.go",
+      "base_line": 93,
+      "declaration": "func (*Backend) FoundryAdapter(frameworkadapter.Seal) {}",
+      "status": "Unchanged pure no-op marker; never invoked. Is checks the concrete defining package; no capability is issued."
+    },
+    {
+      "file": "database/errors.go",
+      "base_line": 117,
+      "declaration": "func (e *Error) FoundryDiagnostic(errordiag.Seal) []fault.Attribute {",
+      "status": "Diagnostic seal validated directly, or by concrete ErrorCode delegation for responseError. Invalid returns no attributes; Describe issues only after concrete framework package check."
+    },
+    {
+      "file": "database/errors.go",
+      "base_line": 288,
+      "declaration": "func FoundryStatementUnknown(_ sqlowner.Seal, operation string, cause error) error {",
+      "status": "OutcomeSeal validated; invalid returns fault.Invalid without publishing an unknown-commit label."
+    },
+    {
+      "file": "database/execution.go",
+      "base_line": 119,
+      "declaration": "func (db *DB) FoundryAutocommitQuery(_ sqlowner.Seal, ctx context.Context, statement string, arguments ...any) (*Rows, error) {",
+      "status": "AutocommitSeal validated before runtime access. Invalid returns fault.Invalid. Issuers select only concrete DB/PrimaryExecutor method values."
+    },
+    {
+      "file": "database/observers.go",
+      "base_line": 119,
+      "declaration": "func (db *DB) FoundryObservers(sqlowner.Seal) (set lifecycle.Observers, known bool) {",
+      "status": "ObserverSeal validated directly, or by concrete DB delegation for PrimaryExecutor. Invalid returns empty observers and known=false."
+    },
+    {
+      "file": "database/observers.go",
+      "base_line": 132,
+      "declaration": "func (p PrimaryExecutor) FoundryObservers(seal sqlowner.Seal) (lifecycle.Observers, bool) {",
+      "status": "ObserverSeal validated directly, or by concrete DB delegation for PrimaryExecutor. Invalid returns empty observers and known=false."
+    },
+    {
+      "file": "database/observers.go",
+      "base_line": 137,
+      "declaration": "func (s *Session) FoundryObservers(sqlowner.Seal) (lifecycle.Observers, bool) {",
+      "status": "ObserverSeal validated directly, or by concrete DB delegation for PrimaryExecutor. Invalid returns empty observers and known=false."
+    },
+    {
+      "file": "database/observers.go",
+      "base_line": 145,
+      "declaration": "func (tx *Tx) FoundryObservers(sqlowner.Seal) (lifecycle.Observers, bool) {",
+      "status": "ObserverSeal validated directly, or by concrete DB delegation for PrimaryExecutor. Invalid returns empty observers and known=false."
+    },
+    {
+      "file": "database/query/write_each.go",
+      "base_line": 29,
+      "declaration": "func (e enclosingTransaction) FoundryObservers(seal sqlowner.Seal) (lifecycle.Observers, bool) {",
+      "status": "Removed redundant enclosingTransaction.FoundryObservers method. Concrete lookup uses owner.tx directly."
+    },
+    {
+      "file": "database/relation/loaded.go",
+      "base_line": 65,
+      "declaration": "func FoundryCollection[M any](_ sqlowner.Seal, items []M) Many[M] {",
+      "status": "CollectionSeal validated; invalid returns unloaded relation. Valid uses Collection to clone caller slice."
+    },
+    {
+      "file": "database/relation/through.go",
+      "base_line": 38,
+      "declaration": "func FoundryLinked[M, P any](seal sqlowner.Seal, items []Link[M, P]) Through[M, P] {",
+      "status": "Delegates CollectionSeal validation and slice cloning to FoundryCollection; invalid returns unloaded links."
+    },
+    {
+      "file": "database/routing.go",
+      "base_line": 178,
+      "declaration": "func (p PrimaryExecutor) FoundryAutocommitQuery(seal sqlowner.Seal, ctx context.Context, statement string, arguments ...any) (*Rows, error) {",
+      "status": "AutocommitSeal validated before runtime access. Invalid returns fault.Invalid. Issuers select only concrete DB/PrimaryExecutor method values."
+    },
+    {
+      "file": "events/listener_queue.go",
+      "base_line": 121,
+      "declaration": "func (b *Bus) Intercept(token eventseam.Token, interceptor Interceptor) (func(), error) {",
+      "status": "Unchanged: validates its existing eventseam token before installing an interceptor; no token is passed to the callback."
+    },
+    {
+      "file": "http/cookie_codec.go",
+      "base_line": 63,
+      "declaration": "func (stringPathCodec[V]) FoundryAdapter(frameworkadapter.Seal)    {}",
+      "status": "Unchanged pure no-op marker; never invoked. Is checks the concrete defining package; no capability is issued."
+    },
+    {
+      "file": "http/cookie_codec.go",
+      "base_line": 64,
+      "declaration": "func (integerPathCodec[V]) FoundryAdapter(frameworkadapter.Seal)   {}",
+      "status": "Unchanged pure no-op marker; never invoked. Is checks the concrete defining package; no capability is issued."
+    },
+    {
+      "file": "http/cookie_codec.go",
+      "base_line": 65,
+      "declaration": "func (floatPathCodec[V]) FoundryAdapter(frameworkadapter.Seal)     {}",
+      "status": "Unchanged pure no-op marker; never invoked. Is checks the concrete defining package; no capability is issued."
+    },
+    {
+      "file": "http/cookie_codec.go",
+      "base_line": 66,
+      "declaration": "func (boolPathCodec[V]) FoundryAdapter(frameworkadapter.Seal)      {}",
+      "status": "Unchanged pure no-op marker; never invoked. Is checks the concrete defining package; no capability is issued."
+    },
+    {
+      "file": "http/cookie_codec.go",
+      "base_line": 67,
+      "declaration": "func (modelIDPathCodec[M]) FoundryAdapter(frameworkadapter.Seal)   {}",
+      "status": "Unchanged pure no-op marker; never invoked. Is checks the concrete defining package; no capability is issued."
+    },
+    {
+      "file": "http/cookie_codec.go",
+      "base_line": 68,
+      "declaration": "func (credentialCookieCodec) FoundryAdapter(frameworkadapter.Seal) {}",
+      "status": "Unchanged pure no-op marker; never invoked. Is checks the concrete defining package; no capability is issued."
+    },
+    {
+      "file": "http/errors.go",
+      "base_line": 118,
+      "declaration": "func (c ErrorCode) FoundryDiagnostic(errordiag.Seal) []fault.Attribute {",
+      "status": "Diagnostic seal validated directly, or by concrete ErrorCode delegation for responseError. Invalid returns no attributes; Describe issues only after concrete framework package check."
+    },
+    {
+      "file": "http/errors.go",
+      "base_line": 121,
+      "declaration": "func (e responseError) FoundryDiagnostic(errordiag.Seal) []fault.Attribute {",
+      "status": "Diagnostic seal validated directly, or by concrete ErrorCode delegation for responseError. Invalid returns no attributes; Describe issues only after concrete framework package check."
+    },
+    {
+      "file": "lease/memory/memory.go",
+      "base_line": 70,
+      "declaration": "func (*Backend) FoundryAdapter(frameworkadapter.Seal) {}",
+      "status": "Unchanged pure no-op marker; never invoked. Is checks the concrete defining package; no capability is issued."
+    },
+    {
+      "file": "pubsub/memory/memory.go",
+      "base_line": 33,
+      "declaration": "func (*Backend) FoundryAdapter(frameworkadapter.Seal) {}",
+      "status": "Unchanged pure no-op marker; never invoked. Is checks the concrete defining package; no capability is issued."
+    },
+    {
+      "file": "pubsub/memory/memory.go",
+      "base_line": 113,
+      "declaration": "func (*stream) FoundryAdapter(frameworkadapter.Seal) {}",
+      "status": "Unchanged pure no-op marker; never invoked. Is checks the concrete defining package; no capability is issued."
+    },
+    {
+      "file": "ratelimit/memory/memory.go",
+      "base_line": 68,
+      "declaration": "func (*Backend) FoundryAdapter(frameworkadapter.Seal) {}",
+      "status": "Unchanged pure no-op marker; never invoked. Is checks the concrete defining package; no capability is issued."
+    },
+    {
+      "file": "redis/client.go",
+      "base_line": 52,
+      "declaration": "func (*Client) FoundryAdapter(frameworkadapter.Seal) {}",
+      "status": "Unchanged pure no-op marker; never invoked. Is checks the concrete defining package; no capability is issued."
+    },
+    {
+      "file": "redis/pubsub.go",
+      "base_line": 207,
+      "declaration": "func (*subscription) FoundryAdapter(frameworkadapter.Seal) {}",
+      "status": "Unchanged pure no-op marker; never invoked. Is checks the concrete defining package; no capability is issued."
+    }
+  ],
+  "capability_call_sites": [
+    {
+      "file": "database/query/model_hooks.go",
+      "status": "writerObservers issues Observers() only for *DB, PrimaryExecutor, *PrimaryExecutor, *Session, *Tx, enclosingTransaction.tx and *enclosingTransaction.tx. All seven previously supported concrete owner forms are retained; typed nil pointers and unknown wrappers return known=false. No structural interface receives a capability."
+    },
+    {
+      "file": "database/query/execute_mutation.go",
+      "status": "Unchanged concrete DB/PrimaryExecutor switch selects autocommit method values; no application interface receives a seal."
+    },
+    {
+      "file": "database/query/execute_autocommit.go",
+      "status": "send receives Autocommit(); outcome classification calls concrete database.FoundryStatementUnknown with Outcomes()."
+    },
+    {
+      "file": "database/query/relation_direct.go",
+      "status": "Direct relation loader calls FoundryCollection with Collections()."
+    },
+    {
+      "file": "database/query/relation_through.go",
+      "status": "Through relation loader calls FoundryLinked with Collections()."
+    },
+    {
+      "file": "internal/errordiag/describe.go",
+      "status": "Provider remains structural, but Describe checks frameworkadapter.IsFrameworkType before issuing its private diagnostic capability. Foreign and promoted application methods are not called."
+    },
+    {
+      "file": "internal/frameworkadapter/owned.go",
+      "status": "Owned is a method-set marker, not authority. Is requires concrete package ownership; the shared predicate also protects diagnostics. FoundryAdapter is never called."
+    },
+    {
+      "file": "database/runtime_resilience_test.go",
+      "status": "Existing autocommit tests now use Autocommit()."
+    },
+    {
+      "file": "database/postgres/session_limits_postgres_test.go",
+      "status": "Existing PostgreSQL autocommit test now uses Autocommit(); PostgreSQL acceptance belongs to the lead."
+    }
+  ],
+  "compatibility": [
+    "B30 is additive and opt-in. Existing routes and equal/more-specific SPAs retain precedence, including exclusions. No new reserved-prefix policy is introduced.",
+    "B31 changes exported framework bridge signatures involving internal seals as a documented security correction. Normal application APIs, generated declarations, persisted data and wire formats are unchanged.",
+    "Unknown database wrappers, including embedding wrappers, cannot prove observer absence. Per-model writes use supplied transactions; set-based writes need existing WithoutModelHooks acknowledgement.",
+    "Relation container slices are copied; contained models retain ordinary Go value-copy semantics."
+  ],
+  "checks": [
+    {
+      "command": "go build ./...",
+      "exit_code": 0
+    },
+    {
+      "command": "go vet ./...",
+      "exit_code": 0
+    },
+    {
+      "command": "go test -race ./http/... ./database/... ./events/... ./internal/...",
+      "exit_code": 0,
+      "log": "/private/tmp/foundry-b30-b31-review-race.log",
+      "result": "Full requested command passed with required local listener access; unchanged packages used normal Go test caching."
+    },
+    {
+      "command": "make generate-check",
+      "exit_code": 0,
+      "log": "/private/tmp/foundry-b30-b31-review-generate.log",
+      "result": "Generated output current."
+    },
+    {
+      "command": "go test -race ./httpassets",
+      "directory": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "log": "/private/tmp/foundry-b30-b31-review-consumer.log"
+    },
+    {
+      "command": "make docs-check",
+      "exit_code": 0
+    },
+    {
+      "command": "make fmt-check",
+      "exit_code": 0,
+      "result": "Repository gofmt -l scan clean."
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "deferred_to_lead": [
+    "make verify",
+    "PostgreSQL acceptance",
+    "TypeScript checks"
+  ],
+  "changed_files": [
+    "CHANGELOG.md",
+    "blueprint/00-master-architecture-and-parity.md",
+    "database/errors.go",
+    "database/execution.go",
+    "database/observers.go",
+    "database/postgres/session_limits_postgres_test.go",
+    "database/query/execute_autocommit.go",
+    "database/query/model_hooks.go",
+    "database/query/observer_capability_test.go",
+    "database/query/relation_direct.go",
+    "database/query/relation_through.go",
+    "database/query/write_each.go",
+    "database/relation/loaded.go",
+    "database/relation/seals_test.go",
+    "database/relation/through.go",
+    "database/routing.go",
+    "database/runtime_resilience_test.go",
+    "database/seals_test.go",
+    "docs/compatibility.md",
+    "docs/evidence/b30-b31-20261023.json",
+    "docs/guides/http-assets.md",
+    "http/assets_fuzz_test.go",
+    "http/assets_navigation_test.go",
+    "http/assets_route.go",
+    "http/errors.go",
+    "http/spa.go",
+    "http/spa_config.go",
+    "http/spa_test.go",
+    "internal/errordiag/describe.go",
+    "internal/errordiag/describe_test.go",
+    "internal/frameworkadapter/owned.go",
+    "internal/frameworkadapter/owned_test.go",
+    "internal/sqlowner/seal.go",
+    "tests/fixtures/consumer/httpassets/assets.go",
+    "tests/fixtures/consumer/httpassets/assets_test.go"
+  ],
+  "source_sha256": {
+    "database/errors.go": "86c439a2536bb7d1eafa5f1315d3db7cdc62421778e334e51b0643aa706172b9",
+    "database/execution.go": "8496ac8f865d7b683b2d249bc9d6f209122fd2e8cf0abf926cd98007ede2ddf9",
+    "database/observers.go": "89279b9a81586eb9f3ceffc5234f6f6f06519bc1b9edf13790fd96d3931a0b04",
+    "database/postgres/session_limits_postgres_test.go": "87b50742974d14e34cfbe41a0bccc649311ec67854450f4f8603b1a1bbc410da",
+    "database/query/execute_autocommit.go": "bbde359f560079563580fd6cdfebdfae0ce4b9ccbb8c5c90d6ae18e848790c5c",
+    "database/query/model_hooks.go": "8997d9773df4afaba0c4c2e973c4b22760274983bc0345ee16e99e073ce7533d",
+    "database/query/observer_capability_test.go": "10e0163043f60062d9907b8927923adb7be055c1ba5571000092e99432f2294e",
+    "database/query/relation_direct.go": "8b184a0684fbc423161ac573de5823c1f55bf3f42125ee540bb6bb6c78f4b120",
+    "database/query/relation_through.go": "272f1ea3ce11c2dd290c162c5912166d4ad93f43bf7cb1f23edd42330dded4da",
+    "database/query/write_each.go": "7ea640c9cc507a22cf696420e90cb7cb45a8cb4618caf045e010d59dc4cf5abb",
+    "database/relation/loaded.go": "2b7f196ebbb62ab95a85debdf3ceaddd9ef9b1fcd79826beb23651cd76f3373f",
+    "database/relation/seals_test.go": "ddabcff19db7b25a3709fa7155007f8a9108fb845736d174c02c3fd96463d2ab",
+    "database/relation/through.go": "179ceed1a2940a0186540c85eb37e621b747bab176b282942533374f0cce216d",
+    "database/routing.go": "08ade2882c8c5506c3f2e54a3a3bf1bc467775c4e915b233bccd929c69077423",
+    "database/runtime_resilience_test.go": "b9d30a931a349d14ee81ec7ba1964659d1dbc25fc153408c384b6ee69f6aadcd",
+    "database/seals_test.go": "5703ad581472166ba6e6a7d36da781e56fe398a8cdc11d55456faaf6cd2a338d",
+    "http/assets_fuzz_test.go": "6d45ae3c1c3dc0f3e2dd94bc2096fbff89d8aacc716bce2e975d8941bc74024d",
+    "http/assets_navigation_test.go": "f9f0c9cd05a58e0a8a9c1415d3970b5cceef0256c8812d1212378dd51d98894f",
+    "http/assets_route.go": "2afc7427f1759c19dd8624c290add254b09f67f5b0d34a6391440e6450e272f3",
+    "http/errors.go": "79bfa941f67012315cf47379803a30c0880c346c4794ceb2aeed15f9e96c9e2e",
+    "http/spa.go": "f4265b72b07d9bc58500903c66b774c811934cb179800f47d2a43a9f68ebb80d",
+    "http/spa_config.go": "6159df6694889cebbfdb0d61853d118c68a25885720eb66015e2cb5dc2acd0ac",
+    "http/spa_test.go": "1f569294d2bc998f056957a9e589bbf20314493dd2ce6955b851cc9b1a6db39d",
+    "internal/errordiag/describe.go": "18e85e4558813967a96b69414e462dc8aee1ce2fa131b870ff337f0676af5304",
+    "internal/errordiag/describe_test.go": "516ff30c1d07077a4668fbcb525ea0dc8192a0d813a779e98d379596d41b75a6",
+    "internal/frameworkadapter/owned.go": "5a4788e7bdc9098dc2020ceadf6a61098493c0cacaddcbf769d30db7ecd20ac4",
+    "internal/frameworkadapter/owned_test.go": "0e65e7fac18cc5384822b4dc22f59b87dd5c503202f1ab606081511a7f8acd75",
+    "internal/sqlowner/seal.go": "65a52cea2915953987efac2686fe6b8722c429703dd06da0890c5b7efdb62827",
+    "tests/fixtures/consumer/httpassets/assets.go": "98e240c2c6666c6e091402bb3acc3974978fcb313227442d0079bdc3f0ea34ff",
+    "tests/fixtures/consumer/httpassets/assets_test.go": "d555638cca59cceb5d425ae2d350e44104fa74d0b6382cbbf4f03735d3acb424"
+  },
+  "changelog": "- Add `AssetMount.WithNavigationFallback(net/http.Handler)` for missing HTML\n  navigations inside mount middleware, and export the shared\n  `http.IsHTMLNavigation` predicate. Existing assets, typed JSON errors, route\n  and SPA precedence, and SPA exclusions retain their behavior. The handler\n  owns its response and receives no mount cache headers.\n- Validate distinct framework capabilities for observer metadata, autocommit\n  queries, statement outcomes, relation collections and error diagnostics.\n  Inferred zero seals fail closed; concrete ownership checks prevent application\n  wrappers from capturing capabilities. Unknown database wrappers count as\n  observed; previously supported concrete pointer/value owner forms remain\n  recognized. Pure adapter markers remain no-ops with no capability.\n- Copy relation loader input slices before publishing collections and links.\n  Normal caller APIs and generated/persisted formats are unchanged; internal-seal\n  bridge signatures are a documented security correction. See\n  [compatibility](docs/compatibility.md#validated-framework-capabilities-b31).",
+  "final_review": "Reviewed the former observerOwner declarations and receiver method sets: DB/Session/Tx supported pointers only, PrimaryExecutor/enclosingTransaction supported values and pointers. Both missing pointer forms now have concrete cases and nil guards; regressions cover observer absence and update/delete lifecycle admission for all seven forms. Application capture protections remain intact. All requested acceptance commands passed on this revision.",
+  "review_followup": {
+    "finding": "Accepted Medium: concrete observer lookup omitted *database.PrimaryExecutor and *enclosingTransaction, both supported by the former observerOwner interface.",
+    "fix": "Added both concrete pointer forms with nil guards, preserving capability isolation.",
+    "regression": "TestObserverLookupPreservesFrameworkOwnerForms covers *DB, PrimaryExecutor, *PrimaryExecutor, *Session, *Tx, enclosingTransaction, *enclosingTransaction; each must prove absence and permit update/delete lifecycle checks without WithoutModelHooks. Typed nil owners remain unknown."
+  },
+  "prior_acceptance": {
+    "status": "accepted-segmented",
+    "checks": [
+      {
+        "command": "go build ./...",
+        "exit_code": 0,
+        "note": "Go emitted a nonfatal sandbox module-stat-cache warning; build completed successfully."
+      },
+      {
+        "command": "go vet ./...",
+        "exit_code": 0,
+        "note": "Initial run found a new test helper embedding-name collision; corrected with a local type alias, then the full vet command passed."
+      },
+      {
+        "command": "go test -race ./http/... ./database/... ./events/... ./internal/...",
+        "initial_exit_code": 1,
+        "result": "Passed in retained segments. Initial run passed 46 packages, with 43 having no tests; HTTP and internal/websockettest stopped only because sandbox denied httptest loopback listeners. Both complete packages then passed with local listener access.",
+        "continuations": [
+          {
+            "command": "go test -race ./http",
+            "exit_code": 0
+          },
+          {
+            "command": "go test -race ./internal/websockettest",
+            "exit_code": 0
+          }
+        ],
+        "logs": [
+          "/private/tmp/foundry-b30-b31-race.log",
+          "/private/tmp/foundry-b30-b31-http-race.log",
+          "/private/tmp/foundry-b30-b31-websocket-race.log"
+        ],
+        "limits": "No separate required-backend PostgreSQL, TypeScript or gopls acceptance is claimed."
+      },
+      {
+        "command": "make generate-check",
+        "exit_code": 0,
+        "result": "All generation directories current. No generated output changed.",
+        "log": "/private/tmp/foundry-b30-b31-generate.log"
+      },
+      {
+        "command": "go test -race ./httpassets",
+        "directory": "tests/fixtures/consumer",
+        "exit_code": 0,
+        "log": "/private/tmp/foundry-b30-b31-consumer.log",
+        "result": "Changed independent consumer starts the managed server and serves its application HTML not-found handler."
+      },
+      {
+        "command": "make docs-check",
+        "exit_code": 0
+      },
+      {
+        "command": "make fmt-check",
+        "exit_code": 0,
+        "result": "Repository-owned gofmt -l scan clean, including fixtures and new files."
+      },
+      {
+        "command": "git diff --check",
+        "exit_code": 0
+      }
+    ],
+    "source_sha256": {
+      "database/errors.go": "86c439a2536bb7d1eafa5f1315d3db7cdc62421778e334e51b0643aa706172b9",
+      "database/execution.go": "8496ac8f865d7b683b2d249bc9d6f209122fd2e8cf0abf926cd98007ede2ddf9",
+      "database/observers.go": "89279b9a81586eb9f3ceffc5234f6f6f06519bc1b9edf13790fd96d3931a0b04",
+      "database/postgres/session_limits_postgres_test.go": "87b50742974d14e34cfbe41a0bccc649311ec67854450f4f8603b1a1bbc410da",
+      "database/query/execute_autocommit.go": "bbde359f560079563580fd6cdfebdfae0ce4b9ccbb8c5c90d6ae18e848790c5c",
+      "database/query/model_hooks.go": "fbc6762d69c2d6cfce3a80cc5f470380265335b9def27f270832b94dec6b5fd3",
+      "database/query/observer_capability_test.go": "fff241e5c5e6fc39d7f022e533d1d65083550bf800cf688afa59a5c5118d08b9",
+      "database/query/relation_direct.go": "8b184a0684fbc423161ac573de5823c1f55bf3f42125ee540bb6bb6c78f4b120",
+      "database/query/relation_through.go": "272f1ea3ce11c2dd290c162c5912166d4ad93f43bf7cb1f23edd42330dded4da",
+      "database/query/write_each.go": "7ea640c9cc507a22cf696420e90cb7cb45a8cb4618caf045e010d59dc4cf5abb",
+      "database/relation/loaded.go": "2b7f196ebbb62ab95a85debdf3ceaddd9ef9b1fcd79826beb23651cd76f3373f",
+      "database/relation/seals_test.go": "ddabcff19db7b25a3709fa7155007f8a9108fb845736d174c02c3fd96463d2ab",
+      "database/relation/through.go": "179ceed1a2940a0186540c85eb37e621b747bab176b282942533374f0cce216d",
+      "database/routing.go": "08ade2882c8c5506c3f2e54a3a3bf1bc467775c4e915b233bccd929c69077423",
+      "database/runtime_resilience_test.go": "b9d30a931a349d14ee81ec7ba1964659d1dbc25fc153408c384b6ee69f6aadcd",
+      "database/seals_test.go": "5703ad581472166ba6e6a7d36da781e56fe398a8cdc11d55456faaf6cd2a338d",
+      "http/assets_fuzz_test.go": "6d45ae3c1c3dc0f3e2dd94bc2096fbff89d8aacc716bce2e975d8941bc74024d",
+      "http/assets_navigation_test.go": "f9f0c9cd05a58e0a8a9c1415d3970b5cceef0256c8812d1212378dd51d98894f",
+      "http/assets_route.go": "2afc7427f1759c19dd8624c290add254b09f67f5b0d34a6391440e6450e272f3",
+      "http/errors.go": "79bfa941f67012315cf47379803a30c0880c346c4794ceb2aeed15f9e96c9e2e",
+      "http/spa.go": "f4265b72b07d9bc58500903c66b774c811934cb179800f47d2a43a9f68ebb80d",
+      "http/spa_config.go": "6159df6694889cebbfdb0d61853d118c68a25885720eb66015e2cb5dc2acd0ac",
+      "http/spa_test.go": "1f569294d2bc998f056957a9e589bbf20314493dd2ce6955b851cc9b1a6db39d",
+      "internal/errordiag/describe.go": "18e85e4558813967a96b69414e462dc8aee1ce2fa131b870ff337f0676af5304",
+      "internal/errordiag/describe_test.go": "516ff30c1d07077a4668fbcb525ea0dc8192a0d813a779e98d379596d41b75a6",
+      "internal/frameworkadapter/owned.go": "5a4788e7bdc9098dc2020ceadf6a61098493c0cacaddcbf769d30db7ecd20ac4",
+      "internal/frameworkadapter/owned_test.go": "0e65e7fac18cc5384822b4dc22f59b87dd5c503202f1ab606081511a7f8acd75",
+      "internal/sqlowner/seal.go": "65a52cea2915953987efac2686fe6b8722c429703dd06da0890c5b7efdb62827",
+      "tests/fixtures/consumer/httpassets/assets.go": "98e240c2c6666c6e091402bb3acc3974978fcb313227442d0079bdc3f0ea34ff",
+      "tests/fixtures/consumer/httpassets/assets_test.go": "d555638cca59cceb5d425ae2d350e44104fa74d0b6382cbbf4f03735d3acb424"
+    }
+  }
+}

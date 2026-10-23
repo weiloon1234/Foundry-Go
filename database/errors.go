@@ -114,8 +114,8 @@ func (e *Error) Outcome() Outcome     { return e.outcome }
 
 // FoundryDiagnostic contributes the safe classification to redacted failure
 // diagnostics: operation, code, SQLSTATE, constraint and outcome only.
-func (e *Error) FoundryDiagnostic(errordiag.Seal) []fault.Attribute {
-	if e == nil {
+func (e *Error) FoundryDiagnostic(seal errordiag.Seal) []fault.Attribute {
+	if !seal.Valid() || e == nil {
 		return nil
 	}
 	attributes := []fault.Attribute{{Key: "database_operation", Value: e.operation}, {Key: "database_code", Value: string(e.detail.Code)}}
@@ -285,7 +285,10 @@ func poolExhausted(err error) error {
 // FoundryStatementUnknown labels a failure observed after a framework
 // autocommit statement was sent, such as a result that could not be decoded:
 // the statement's implicit transaction may already have committed.
-func FoundryStatementUnknown(_ sqlowner.Seal, operation string, cause error) error {
+func FoundryStatementUnknown(seal sqlowner.OutcomeSeal, operation string, cause error) error {
+	if !seal.Valid() {
+		return fault.New(fault.Invalid, "invalid SQL owner capability")
+	}
 	return &Error{operation: operation, detail: Detail{Code: CommitUnknown}, outcome: Unknown, cause: cause}
 }
 

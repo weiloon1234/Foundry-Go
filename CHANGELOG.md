@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Asset navigation fallback and validated framework seals (B30/B31)
+
+- Add `AssetMount.WithNavigationFallback(net/http.Handler)` for missing HTML
+  navigations inside mount middleware, and export the shared
+  `http.IsHTMLNavigation` predicate. Existing assets, typed JSON errors, route
+  and SPA precedence, and SPA exclusions retain their behavior. The handler
+  owns its response and receives no mount cache headers.
+- Validate distinct framework capabilities for observer metadata, autocommit
+  queries, statement outcomes, relation collections and error diagnostics.
+  Inferred zero seals fail closed; concrete ownership checks prevent application
+  wrappers from capturing capabilities. Unknown database wrappers count as
+  observed; previously supported concrete pointer/value owner forms remain
+  recognized. Pure adapter markers remain no-ops with no capability.
+- Copy relation loader input slices before publishing collections and links.
+  Normal caller APIs and generated/persisted formats are unchanged; internal-seal
+  bridge signatures are a documented security correction. See
+  [compatibility](docs/compatibility.md#validated-framework-capabilities-b31).
+
 ### Temporal precision (B29)
 
 - Linux system clocks retain sub-microsecond nanoseconds, causing system-clock

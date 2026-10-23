@@ -20,9 +20,10 @@ type assetRoutePath struct{ Value AssetPath }
 // AssetMount declares one named GET/HEAD subtree. Register contributes it to
 // NewRouter; URL encodes an AssetPath through the same prefix declaration.
 type AssetMount struct {
-	assets *Assets
-	route  Route[assetRoutePath]
-	prefix string
+	assets             *Assets
+	route              Route[assetRoutePath]
+	prefix             string
+	navigationFallback stdhttp.Handler
 }
 
 func (a *Assets) Mount(id RouteID, prefix string) AssetMount {
@@ -53,6 +54,14 @@ func (m AssetMount) Validate() error {
 }
 func (m AssetMount) WithMiddleware(middleware ...Middleware) AssetMount {
 	m.route = m.route.WithMiddleware(middleware...)
+	return m
+}
+
+// WithNavigationFallback returns a mount that delegates missing HTML navigations
+// to handler inside its middleware. A nil handler disables the fallback. Routes
+// and covering SPAs retain precedence; the handler owns its response headers.
+func (m AssetMount) WithNavigationFallback(handler stdhttp.Handler) AssetMount {
+	m.navigationFallback = handler
 	return m
 }
 func (m AssetMount) URL(name AssetPath) (string, error) {
@@ -103,8 +112,15 @@ func (m AssetMount) Register() RouteRegistration {
 		if err != nil {
 			// An equal SPA extends this mount: it answers the mount's misses
 			// inside the mount's middleware. Hits never look it up.
-			if spa := mountSPA(r, m.prefix); spa != nil && len(spa.prefix) == len(m.prefix) && isMissingAsset(err) && spa.serve(w, r) {
-				return
+			if isMissingAsset(err) {
+				if spa := mountSPA(r, m.prefix); spa != nil {
+					if spa.serve(w, r) {
+						return
+					}
+				} else if name := r.PathValue(assetParameter); m.navigationFallback != nil && m.assets.config.allowed(strings.TrimSuffix(name, "/")) && IsHTMLNavigation(r, name) {
+					m.navigationFallback.ServeHTTP(w, r)
+					return
+				}
 			}
 			writeRoutingError(w, r, err)
 			return

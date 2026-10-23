@@ -152,22 +152,27 @@ func TestSPAPrefixAndEntryCannotLoopOnADirectory(t *testing.T) {
 }
 
 func TestHTMLNavigationBudgetsAndQuality(t *testing.T) {
+	navigation := func(values []string, name string) bool {
+		r := httptest.NewRequest("GET", "/", nil)
+		r.Header["Accept"] = values
+		return IsHTMLNavigation(r, name)
+	}
 	for _, accept := range []string{"text/html;q=-1", "text/html;q=1.1", "text/html;q=NaN", "text/html;q=1e0", "text/html;q=0", "text/html;q=0.000", "text/html; note=\"unterminated"} {
-		if htmlNavigation([]string{accept}, "view") {
+		if navigation([]string{accept}, "view") {
 			t.Fatal("invalid acceptance", accept)
 		}
 	}
-	if htmlNavigation([]string{"text/html", strings.Repeat("x", 4097)}, "view") {
+	if navigation([]string{"text/html", strings.Repeat("x", 4097)}, "view") {
 		t.Fatal("oversized header accepted")
 	}
-	if htmlNavigation([]string{strings.Repeat("text/html,", 32) + "text/html"}, "view") {
+	if navigation([]string{strings.Repeat("text/html,", 32) + "text/html"}, "view") {
 		t.Fatal("too many media entries")
 	}
-	if htmlNavigation([]string{"text/html"}, "missing.css") {
+	if navigation([]string{"text/html"}, "missing.css") {
 		t.Fatal("missing asset became HTML")
 	}
 	for _, accept := range []string{"text/html;q=1", "text/html;q=1.000", "text/html;q=0.001", "text/html; note=\"a,b\""} {
-		if !htmlNavigation([]string{accept}, "view") {
+		if !navigation([]string{accept}, "view") {
 			t.Fatal("valid HTML navigation rejected", accept)
 		}
 	}

@@ -116,7 +116,10 @@ func (db *DB) Query(ctx context.Context, statement string, arguments ...any) (*R
 // NoCommit before the statement was performed, RolledBack when the adapter
 // confirms server rejection, and otherwise Unknown with CommitUnknown. Only a
 // complete iteration whose Err and Close both succeed confirms the commit.
-func (db *DB) FoundryAutocommitQuery(_ sqlowner.Seal, ctx context.Context, statement string, arguments ...any) (*Rows, error) {
+func (db *DB) FoundryAutocommitQuery(seal sqlowner.AutocommitSeal, ctx context.Context, statement string, arguments ...any) (*Rows, error) {
+	if !seal.Valid() {
+		return nil, fault.New(fault.Invalid, "invalid SQL owner capability")
+	}
 	db.markWrite(ctx)
 	instrument := db.instrumented(PrimaryPool)
 	acquired := instrument.start()

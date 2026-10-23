@@ -5,9 +5,7 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
 
 // enclosingTransaction runs a nested model write directly on the transaction of
@@ -23,11 +21,6 @@ func (e enclosingTransaction) Transaction(_ context.Context, fn func(*database.T
 		return fault.New(fault.Invalid, "nested model writes cannot set transaction options")
 	}
 	return fn(e.tx)
-}
-
-// FoundryObservers reports the enclosing transaction's frozen observer set.
-func (e enclosingTransaction) FoundryObservers(seal sqlowner.Seal) (lifecycle.Observers, bool) {
-	return e.tx.FoundryObservers(seal)
 }
 
 // MaxPerModelWriteRows bounds one atomic operation that runs ordinary model

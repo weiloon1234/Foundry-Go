@@ -115,11 +115,14 @@ func (e responseError) Unwrap() error                     { return e.cause }
 func (e responseError) Is(target error) bool              { return target == e.code }
 
 // FoundryDiagnostic contributes the public transport code to redacted diagnostics.
-func (c ErrorCode) FoundryDiagnostic(errordiag.Seal) []fault.Attribute {
+func (c ErrorCode) FoundryDiagnostic(seal errordiag.Seal) []fault.Attribute {
+	if !seal.Valid() {
+		return nil
+	}
 	return []fault.Attribute{{Key: "http_code", Value: string(c)}}
 }
-func (e responseError) FoundryDiagnostic(errordiag.Seal) []fault.Attribute {
-	return e.code.FoundryDiagnostic(errordiag.Seal{})
+func (e responseError) FoundryDiagnostic(seal errordiag.Seal) []fault.Attribute {
+	return e.code.FoundryDiagnostic(seal)
 }
 
 // ErrorResponse is Foundry's public HTTP failure DTO. Models and internal causes

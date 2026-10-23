@@ -38,20 +38,34 @@ func (d Definition[M]) WithObserverHooks(factory func(context.Context, lifecycle
 	return d
 }
 
-// observerOwner is the module-sealed capability implemented by DB,
-// PrimaryExecutor, Session and Tx. Only these owners can prove observer absence
-// without entering a transaction; an arbitrary wrapper must use the Tx it
-// supplies. The capability reads a frozen snapshot without pool locks or I/O.
-type observerOwner interface {
-	FoundryObservers(sqlowner.Seal) (lifecycle.Observers, bool)
-}
-
+// writerObservers trusts only concrete framework owners. A structural assertion
+// would let an application infer and capture the observer capability. Unknown
+// wrappers use the transaction they supply and its frozen observer snapshot.
 func writerObservers(writer any) (lifecycle.Observers, bool) {
-	owner, ok := writer.(observerOwner)
-	if !ok {
+	switch owner := writer.(type) {
+	case *database.DB:
+		return owner.FoundryObservers(sqlowner.Observers())
+	case database.PrimaryExecutor:
+		return owner.FoundryObservers(sqlowner.Observers())
+	case *database.PrimaryExecutor:
+		if owner == nil {
+			return lifecycle.Observers{}, false
+		}
+		return owner.FoundryObservers(sqlowner.Observers())
+	case *database.Session:
+		return owner.FoundryObservers(sqlowner.Observers())
+	case *database.Tx:
+		return owner.FoundryObservers(sqlowner.Observers())
+	case enclosingTransaction:
+		return owner.tx.FoundryObservers(sqlowner.Observers())
+	case *enclosingTransaction:
+		if owner == nil {
+			return lifecycle.Observers{}, false
+		}
+		return owner.tx.FoundryObservers(sqlowner.Observers())
+	default:
 		return lifecycle.Observers{}, false
 	}
-	return owner.FoundryObservers(sqlowner.Seal{})
 }
 
 // MaxLifecycleDepth bounds nested write and retrieval callbacks using the

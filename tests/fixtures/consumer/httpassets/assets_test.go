@@ -80,7 +80,7 @@ func TestConsumerLocalAndEmbeddedAssets(t *testing.T) {
 				path, accept string
 				status       int
 				contains     string
-			}{{"/assets/site.css", "*/*", 200, "navy"}, {"/dashboard", "text/html", 200, "SPA fixture"}, {"/missing.js", "text/html", 404, ""}, {"/api/unknown", "text/html", 404, ""}, {"/api/health", "", 204, ""}} {
+			}{{"/assets/site.css", "*/*", 200, "navy"}, {"/assets/missing", "text/html", 404, "Page not found"}, {"/dashboard", "text/html", 200, "SPA fixture"}, {"/missing.js", "text/html", 404, ""}, {"/api/unknown", "text/html", 404, ""}, {"/api/health", "", 204, ""}} {
 				request, err := http.NewRequestWithContext(t.Context(), "GET", "http://"+address+tc.path, nil)
 				if err != nil {
 					t.Fatal(err)
