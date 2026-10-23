@@ -1,0 +1,446 @@
+{
+  "base_commit": "f3dabba",
+  "scope": "Stage 3.1a only; no password/encrypted implementation or framework store migration",
+  "constructors": [
+    "JSONOf",
+    "NullableJSONOf",
+    "IntervalOf",
+    "NullableIntervalOf"
+  ],
+  "new_kinds": [
+    "JSON[M,T]",
+    "NullableJSON[M,T]",
+    "Interval[M]",
+    "NullableInterval[M]"
+  ],
+  "kind_rationale": "JSON provides sorting, whole-document predicates and assignments without range comparisons or text patterns. Interval retains ordered comparisons without widening the existing public TimeValue constraint or numeric-adjustment capability. All methods are direct shells over shared state/helpers.",
+  "json_scope": "Lead correction: parity retains Asc/Desc and IsJSONNull. Kind/Length expression APIs remain Stage 6d; mapping rows json_kind_boolean/json_selected_row record that deferral. No range comparisons or text patterns.",
+  "surface_additions": {
+    "orm.Interval": [
+      "Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]",
+      "Between func(a github.com/weiloon1234/Foundry-Go/temporal.Interval, b github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]",
+      "Eq func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Gt func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Gte func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "In func(v ...github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Lt func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Lte func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Ne func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "NotIn func(v ...github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Set func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]"
+    ],
+    "*orm.Interval": [
+      "Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]",
+      "Between func(a github.com/weiloon1234/Foundry-Go/temporal.Interval, b github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]",
+      "Eq func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Gt func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Gte func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "In func(v ...github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Lt func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Lte func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Ne func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "NotIn func(v ...github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Set func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]"
+    ],
+    "orm.JSON": [
+      "Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]",
+      "ContainedBy func(v github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Contains func(v github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]",
+      "Eq func(v github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "In func(v ...github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "IsJSONNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Ne func(v github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "NotIn func(v ...github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Set func(v github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]"
+    ],
+    "*orm.JSON": [
+      "Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]",
+      "ContainedBy func(v github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Contains func(v github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]",
+      "Eq func(v github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "In func(v ...github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "IsJSONNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Ne func(v github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "NotIn func(v ...github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Set func(v github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]"
+    ],
+    "orm.NullableInterval": [
+      "Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]",
+      "Between func(a github.com/weiloon1234/Foundry-Go/temporal.Interval, b github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]",
+      "Eq func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Gt func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Gte func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "In func(v ...github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Lt func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Lte func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Ne func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "NotIn func(v ...github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Set func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]",
+      "SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]"
+    ],
+    "*orm.NullableInterval": [
+      "Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]",
+      "Between func(a github.com/weiloon1234/Foundry-Go/temporal.Interval, b github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]",
+      "Eq func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Gt func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Gte func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "In func(v ...github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Lt func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Lte func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Ne func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "NotIn func(v ...github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Set func(v github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]",
+      "SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]"
+    ],
+    "orm.NullableJSON": [
+      "Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]",
+      "ContainedBy func(v github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Contains func(v github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]",
+      "Eq func(v github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "In func(v ...github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "IsJSONNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Ne func(v github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "NotIn func(v ...github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Set func(v github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]",
+      "SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]"
+    ],
+    "*orm.NullableJSON": [
+      "Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]",
+      "ContainedBy func(v github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Contains func(v github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]",
+      "Eq func(v github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "In func(v ...github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "IsJSONNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Ne func(v github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "NotIn func(v ...github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Set func(v github.com/weiloon1234/Foundry-Go/value.JSON[T]) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]",
+      "SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]"
+    ],
+    "orm.NullableText": [
+      "IContains func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]"
+    ],
+    "*orm.NullableText": [
+      "IContains func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]"
+    ],
+    "orm.Text": [
+      "IContains func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]"
+    ],
+    "*orm.Text": [
+      "IContains func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]"
+    ],
+    "orm.TextKey result": [
+      "IContains func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]"
+    ],
+    "*orm.TextKey result": [
+      "IContains func(v K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]"
+    ]
+  },
+  "surface_removals_or_signature_changes": [],
+  "probes": {
+    "column_time": {
+      "before": 1194,
+      "after": 1194,
+      "budget": 1374,
+      "bytes": 4798368
+    },
+    "column_enum": {
+      "before": 1232,
+      "after": 1232,
+      "budget": 1417,
+      "bytes": 4999652
+    },
+    "relation_with": {
+      "before": 1847,
+      "after": 1847,
+      "budget": 2125,
+      "bytes": 7634638
+    },
+    "model_type": {
+      "before": 299,
+      "after": 299,
+      "budget": 344,
+      "bytes": 1261566
+    },
+    "table_ref": {
+      "before": 803,
+      "after": 803,
+      "budget": 924,
+      "bytes": 3866916
+    },
+    "onequery": {
+      "before": 803,
+      "after": 803,
+      "budget": 924,
+      "bytes": 3740676
+    },
+    "q_with": {
+      "before": 1053,
+      "after": 1059,
+      "budget": 1211,
+      "bytes": 4699792
+    },
+    "q_select": {
+      "before": 836,
+      "after": 836,
+      "budget": 962,
+      "bytes": 3938226
+    },
+    "q_join": {
+      "before": 1598,
+      "after": 1604,
+      "budget": 1838,
+      "bytes": 7438798
+    },
+    "report_pipeline": {
+      "before": 1905,
+      "after": 1914,
+      "budget": 2191,
+      "bytes": 10033928
+    },
+    "models": {
+      "before": 6147,
+      "after": 6163,
+      "budget": 7070,
+      "bytes": 26145256
+    },
+    "column_number": {
+      "before": 1172,
+      "after": 1172,
+      "budget": 1348,
+      "bytes": 4757064
+    },
+    "column_nullable_text": {
+      "before": 1456,
+      "after": 1460,
+      "budget": 1675,
+      "bytes": 5861468
+    },
+    "models_1": {
+      "before": 1619,
+      "after": 1623,
+      "budget": 1862,
+      "bytes": 6535266
+    },
+    "models_3": {
+      "before": 2435,
+      "after": 2443,
+      "budget": 2801,
+      "bytes": 9979918
+    },
+    "column_json": {
+      "before": null,
+      "after": 1280,
+      "budget": 1472,
+      "bytes": 5217402
+    },
+    "column_nullable_json": {
+      "before": null,
+      "after": 1522,
+      "budget": 1751,
+      "bytes": 6364158
+    },
+    "column_interval": {
+      "before": null,
+      "after": 1178,
+      "budget": 1355,
+      "bytes": 4890740
+    },
+    "column_nullable_interval": {
+      "before": null,
+      "after": 1406,
+      "budget": 1617,
+      "bytes": 6025960
+    }
+  },
+  "two_model_growth": {
+    "before": 816,
+    "after": 820,
+    "budget": 939
+  },
+  "catalogue": {
+    "ported_slice_rows": 30,
+    "merged_slice_rows": 0,
+    "total_ported_rows": 51,
+    "total_remaining_port_rows": 531,
+    "unchanged_api_witnesses": [
+      "codec_owner",
+      "codec_value",
+      "json_value_conversion",
+      "model_conversion",
+      "model_id_owner_conversion",
+      "model_owner"
+    ],
+    "binary_scalar_key": "Comparable identity restriction uses Key[M, []byte]; general Column deliberately supports byte slices.",
+    "additional_capability_cases": 4,
+    "total_goway_compilefail_cases": 57,
+    "removed_incorrect_uncommitted_cases": [
+      "json_order",
+      "nullable_json_order"
+    ]
+  },
+  "postgres": {
+    "status": "sources compiled and vetted; execution deferred to lead",
+    "path": "tests/fixtures/goway/pgsmoke/codecs_test.go",
+    "isolation": "postgres.Isolate; retained schema, no drop/reset/truncate",
+    "coverage": [
+      "all primitive numeric widths",
+      "bool/text",
+      "all temporal instants/civil values",
+      "model IDs",
+      "enums",
+      "nullable SQL NULL and values",
+      "JSON null vs SQL NULL",
+      "JSON/interval constructor hydration and predicates",
+      "binary assignment ownership and NULL vs empty",
+      "string and interval natural keys with explicit codecs",
+      "enum validation before persisted change",
+      "malformed stored JSON and enum rejection",
+      "JSON Asc/Desc including nullable SQL ordering",
+      "IsJSONNull distinguishes JSON null from SQL NULL",
+      "30 days stored interval matches Eq(Months(1)), required and nullable, preserving hydrated components"
+    ]
+  },
+  "checks": {
+    "go build ./...": "pass",
+    "go vet ./database/orm/... ./internal/ormcore/...": "pass",
+    "go test -race ./database/orm/... ./internal/ormcore/... ./internal/querycore/... ./internal/modelmeta/...": "pass",
+    "go test ./database/codec ./value ./database/query/": "pass",
+    "fixture: go vet ./...": "pass; full fixture rerun after JSON parity correction",
+    "fixture: go test ./...": "pass; full fixture rerun after JSON parity correction, including 57 compiler cases and all footprint budgets",
+    "python3 tools/goway_catalogue.py": "pass",
+    "python3 -m unittest discover -s tools -p \"*_test.py\"": "24 passed initially; two native-resource tests blocked by sandbox /usr/bin/time and /bin/ps. Both passed on targeted rerun with native access.",
+    "make generate-check": "pass",
+    "make docs-check": "pass",
+    "gofmt -l": "clean",
+    "git diff --check": "pass",
+    "json correction: race orm/core incl surface and core parity": "pass",
+    "json correction: go build ./... and vet orm/core": "pass",
+    "json correction: shared codec/value/query tests": "pass",
+    "json correction: all footprint probes": "pass; committed ceilings unchanged; new JSON ceilings recomputed from corrected measured surface",
+    "json correction: catalogue command and its unit tests": "pass",
+    "json correction: make generate-check": "pass"
+  },
+  "corrections": [
+    "IContains test expected the existing ! pattern escape rather than backslash escaping.",
+    "Fixture rows import renamed ormrows to avoid golden driver type collision.",
+    "Three compiler diagnostics retain public outbox.ID/challenge.Revision aliases.",
+    "Lead restored JSON Asc/Desc parity and retained IsJSONNull; removed two incorrect no-ordering negatives and added positive ordering and null tests."
+  ],
+  "source_sha256": {
+    "database/orm/column_methods.go": "ea0b6aab2a22c68e2513c159ead702c709a3b84843103e20899ae7fe702e0472",
+    "tests/fixtures/goway/compiler_cases_test.go": "6f48c44c38cac1229a38a4826bca88a48b2fbb3b43652be66988e38809e47277",
+    "tests/fixtures/goway/footprint_test.go": "c23a517543f842b4c8210b098369cf65855638798e0a00a1652e5ae8e77e9ece",
+    "database/orm/column_interval.go": "832b84898acdc48e4c3cca8ee2d8aaf049a4d46ba0740466636306b6fff1df81",
+    "database/orm/column_json.go": "e3ae2166e16dd0f809c24a109a52f9da96a3ef2b5ea81a12ad94e8079fa03be1",
+    "database/orm/column_kinds_test.go": "98d5645a7b3d5b7a332b10acae4f5b72306939443be440b4d2553b0d9b25e018",
+    "internal/ormcore/json_predicate.go": "df5f401c946bcfa7b521a0ddb22db6bb1ac680f2a037d544a1a20289942cfb0f",
+    "tests/fixtures/goway/column_kinds_test.go": "fb0d9da937faf55e503026fd5f795b9552221caeeff84605a02120cd8777fe18",
+    "tests/fixtures/goway/coremodels/record.go": "8b42803689cc8e94fde3d626208b5e439b9c8d90480c8a45ce8da078a3eefe57",
+    "tests/fixtures/goway/pgsmoke/codecs_test.go": "eb2ec20ec33c1de6fb68f7d1befda2ce466a3971d97353c03c8ed24ba7720bf3",
+    "tests/fixtures/goway/testdata/compilefail/binary_comparison_type/invalid.go": "ab6163b649befbf052ff034e68aaca753c899785e994f153d1956b8d4e69001d",
+    "tests/fixtures/goway/testdata/compilefail/binary_identity_key/invalid.go": "84a782b9ff78186d508d5b04c5b4847833e1a3d01d0cbc852dd3fa84051102b5",
+    "tests/fixtures/goway/testdata/compilefail/binary_scalar_key/invalid.go": "f848b63ba3815beb2c63150b8d955e03b99a7b7e774440f4b77a5f3369fe7e31",
+    "tests/fixtures/goway/testdata/compilefail/binary_scope_owner/invalid.go": "4b7b6a17804f02404715be3d0f879a73a6fc0b7406458f7ecffef185464b12f8",
+    "tests/fixtures/goway/testdata/compilefail/codec_owner/invalid.go": "ec6b6f3402d8cc0b70d5235fb26b5dcc5c6f5703a37ac7f1aae63636038ec2a1",
+    "tests/fixtures/goway/testdata/compilefail/codec_value/invalid.go": "6e911bf4370b38430938eb290f4e33e8ae14793217b14b5c6256f52a6f281d72",
+    "tests/fixtures/goway/testdata/compilefail/conflict_value/invalid.go": "ecd9ede8bc110a586b35a2d692948844777965e2cacba350c7dfb7fda67c6502",
+    "tests/fixtures/goway/testdata/compilefail/country_status_contract/invalid.go": "b9d9845ecd2c0f9d98b8f9fe85e9911c3463619790712d9ae5900e3d11befd3e",
+    "tests/fixtures/goway/testdata/compilefail/decimal_float/invalid.go": "0668deb1917846e4cb965e7690632ef6b85dbbf5830b5a8dd5d68808abb6f9a7",
+    "tests/fixtures/goway/testdata/compilefail/draft_value/invalid.go": "d519203eaf24c81b3f7d8309c7dc0b012647ba8334b013125b4d3708fa1df729",
+    "tests/fixtures/goway/testdata/compilefail/find_natural_key/invalid.go": "50e3b27bfaca824fb7045f004edad1ff5290cc4d383111eb191509b964395fae",
+    "tests/fixtures/goway/testdata/compilefail/imported_enum_text_operator/invalid.go": "5c119d7948a38daa85b180a3dcbfdae8e11b4a43e955dc7039df63644f5a84ad",
+    "tests/fixtures/goway/testdata/compilefail/interval_adjustment/invalid.go": "15db9da4cbd64c0f1dbc9ad5160b6aa806e9a4b61954de2d56fbbde4a96f782d",
+    "tests/fixtures/goway/testdata/compilefail/interval_draft_text/invalid.go": "5bb5134929a9178567420bc53b4ef575304deda2cf09242dd614d03d39af5892",
+    "tests/fixtures/goway/testdata/compilefail/interval_find_number/invalid.go": "997db35c343f2fdbab891e3ee25fe80a6a43557326f78fe04ed16009b3268e92",
+    "tests/fixtures/goway/testdata/compilefail/interval_like/invalid.go": "32c1bcc3d87a901e9946709a2b64a7dea3cfddbc044c5bffc428cffb5bd66147",
+    "tests/fixtures/goway/testdata/compilefail/json_draft_payload/invalid.go": "ba5b27e7d1c6acd86e582c5b3ece24869623dc20d5124695ce21939b152f9e7c",
+    "tests/fixtures/goway/testdata/compilefail/json_like/invalid.go": "0de51fdab6786e7b72c379605b21fa467032d1dbcb93f587b9883928fcba722d",
+    "tests/fixtures/goway/testdata/compilefail/json_ordered_comparison/invalid.go": "7dfe1b70175bb59bf955579e541575353b10e95874d610c99998447dc05ace82",
+    "tests/fixtures/goway/testdata/compilefail/json_predicate_owner/invalid.go": "9e7b73a3cac2e135d23998d4817c9e4f9194f597c05272a8f6607b8c7b0db638",
+    "tests/fixtures/goway/testdata/compilefail/json_value_conversion/invalid.go": "88fb5490e4d3d52bec1bc83f79d9581d0926d76257f252c219b02be4d6c33311",
+    "tests/fixtures/goway/testdata/compilefail/model_conversion/invalid.go": "dd3b6bcb8f14d34ce49297da98fb2daee6e5581b930f21eec39105350c673dea",
+    "tests/fixtures/goway/testdata/compilefail/model_id_owner_conversion/invalid.go": "caa84670e63f1db755fff48bd068a4b6f8b321748643bcd0b491a936595d923b",
+    "tests/fixtures/goway/testdata/compilefail/model_owner/invalid.go": "398b92e7dcc1c32176841f333ae332b14eb7ed48913fe3dbd4ea459a4d009c11",
+    "tests/fixtures/goway/testdata/compilefail/nested_field_owner/invalid.go": "c3c810a4a30817a08012d97968df8f1a8c7d12da5d907553b51b00eb4e3d3e94",
+    "tests/fixtures/goway/testdata/compilefail/nullable_interval_like/invalid.go": "5ae70c1d0800cf51e0dbc7f7bd3d7a5f19810d46618726a91c2673a46b3516fb",
+    "tests/fixtures/goway/testdata/compilefail/nullable_json_like/invalid.go": "9fdb95b3845d052206cd1a401e3d144fe09377127c1e93d8bb003e8548d890a9",
+    "tests/fixtures/goway/testdata/compilefail/outbox_field_id/invalid.go": "ab7bf9857f6a6ed18dbc4394f90cf534f80aba7fb5b957c43cee66a57df8348d",
+    "tests/fixtures/goway/testdata/compilefail/query_icontains_nullable/invalid.go": "aeb0be8dad8b8aa8e0fdaf6112afcfd36f2b702018b55c9e767403703e4aeed5",
+    "tests/fixtures/goway/testdata/compilefail/query_icontains_value/invalid.go": "ae3c51c5aa82cbb618a51cb8bb9b9e6a2d3de3d58513bb70899cda5d5be3970d",
+    "tests/fixtures/goway/testdata/compilefail/query_id/invalid.go": "3d1338fc04dc0c364ee4148cc7fb9ced803899ccf4f9d93317e0dae414cf61db",
+    "tests/fixtures/goway/testdata/compilefail/recovery_revision_identity/invalid.go": "7fb3ba195dd953f86b9be2e055175c6e38268b18c5026def4bc8c01d2d81236e",
+    "tests/fixtures/goway/testdata/compilefail/recovery_revision_owner/invalid.go": "fdc7aa37a1975ccac7e275d7d8ef79d4ce9d5dea05c35b4e28fa214d1ea947c1",
+    "tests/fixtures/goway/testdata/compilefail/scalar_field_owner_conversion/invalid.go": "a0f33b0370cf6cb507e5cd59554a14432dbb679093cc866ffc4c36d9c5ae1d86",
+    "tests/fixtures/goway/testdata/footprint/column_interval/probe.go": "98d66d0878890323a7ef60691af872e54d4a37cc8da10dac9180defc1f47e6d3",
+    "tests/fixtures/goway/testdata/footprint/column_json/probe.go": "80cf3808bbc67c63a0a5d6d892a5510a92574513070017ccc440a0f9c02342d6",
+    "tests/fixtures/goway/testdata/footprint/column_nullable_interval/probe.go": "dac006b1198b385a991ff8a677df3c5b069b4ddb136454cfa126d9c1d8a5c500",
+    "tests/fixtures/goway/testdata/footprint/column_nullable_json/probe.go": "211e0bf460be030e4600832fb7a956ee60f9467a7ddec8959ce24e98c68132b8",
+    "database/orm/testdata/public-methods.txt": "2b24430abd929264064f2676ba664e20ca848f23952f81e5f95ee456da0a389c"
+  },
+  "interval_parity": {
+    "test": "database/orm/column_kinds_test.go:TestColumnKindCoreParity",
+    "source": [
+      "database/query/field_interval.go",
+      "database/query/field.go",
+      "database/query/predicate_extensions.go",
+      "database/query/conflict.go"
+    ],
+    "core_methods": [
+      "Asc",
+      "Between",
+      "Desc",
+      "Eq",
+      "Gt",
+      "Gte",
+      "In",
+      "Lt",
+      "Lte",
+      "Ne",
+      "NotIn",
+      "Set"
+    ],
+    "nullable_additions": [
+      "IsNull",
+      "IsNotNull",
+      "SetNull"
+    ],
+    "later_stage_capabilities": "Grouping/aggregates (6a), column comparison and subqueries (6b), incoming conflict values (5). No Increment/Decrement or text patterns."
+  },
+  "json_correction_probe_delta": {
+    "column_json": {
+      "before_correction": 1266,
+      "after": 1280
+    },
+    "column_nullable_json": {
+      "before_correction": 1508,
+      "after": 1522
+    }
+  },
+  "review_fixes": {
+    "interval_semantics": "Documented PostgreSQL 30-day month/24-hour day comparisons and natural-key collisions; added TestIntervalComparisonSemantics for required and nullable intervals. Live PostgreSQL remains for lead.",
+    "parity": "Core methods compare counts, parameter types/kinds, variadic shape and explicitly mapped Predicate/Order/Assignment result families. Deferred names on new types fail. Interval summaryData Sum/Avg deferred to 6a.",
+    "json_docs": "Valid document assignments; zero JSON rejected without SQL. Public methods grouped consistently before private bridges.",
+    "mapping": "Neutral case-specific replay notes; binary_scalar_key retains its precise comparable-identity explanation.",
+    "checks": {
+      "orm_race": "pass",
+      "fixture_vet_and_tests": "pass",
+      "catalogue_and_7_tests": "pass"
+    }
+  }
+}

@@ -8,6 +8,10 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Add typed JSON and interval column constructors, literal `IContains`, and production
+  codec/ownership coverage with 30 compiler-rule ports (Stage 3.1a). JSON retains
+  `Asc`/`Desc` and `IsJSONNull`; `Kind`/`Length` expressions remain Stage 6d.
+
 - Flatten column method sets and private relation adapters; preserve public methods
   and add per-kind/model-growth footprint budgets (Stage 3.0). Deliberately remove
   the formerly promoted `.Column` field; no consumer migration is needed on this branch.

@@ -24,9 +24,15 @@ type footprintBudget struct {
 
 const footprintFailureAdvice = "a generic method, field or codec helper has expanded the reachable surface; inspect database/orm surface guards and blueprint/goway-data-layer/README.md, Goals and rules (R1–R9)"
 
-// Stage 3.0, Go 1.27.1 darwin/arm64: T/t symbols in each package archive.
+// Stage 3.0 ceilings are retained; JSON/interval probes were measured in 3.1a.
+// Go 1.27.1 darwin/arm64: T/t symbols in each package archive.
 // Budget is ceil(measured * 1.15), calculated exactly with integer arithmetic.
 var footprintBudgets = map[string]footprintBudget{
+	"column_json":              {"./testdata/footprint/column_json", 1280},
+	"column_nullable_json":     {"./testdata/footprint/column_nullable_json", 1522},
+	"column_interval":          {"./testdata/footprint/column_interval", 1178},
+	"column_nullable_interval": {"./testdata/footprint/column_nullable_interval", 1406},
+
 	"column_time":   {"./testdata/footprint/column_time", 1194},
 	"column_enum":   {"./testdata/footprint/column_enum", 1232},
 	"relation_with": {"./testdata/footprint/relation_with", 1847},
@@ -48,7 +54,7 @@ var footprintBudgets = map[string]footprintBudget{
 func TestFootprintBudgets(t *testing.T) {
 	testkit.TrackExternalInputs(t)
 
-	probeOrder := []string{"model_type", "table_ref", "onequery", "q_with", "q_select", "q_join", "report_pipeline", "models", "column_number", "column_nullable_text", "models_1", "models_3", "column_time", "column_enum", "relation_with"}
+	probeOrder := []string{"model_type", "table_ref", "onequery", "q_with", "q_select", "q_join", "report_pipeline", "models", "column_number", "column_nullable_text", "models_1", "models_3", "column_time", "column_enum", "relation_with", "column_json", "column_nullable_json", "column_interval", "column_nullable_interval"}
 	pkgArgs := make([]string, 0, len(probeOrder))
 	for _, name := range probeOrder {
 		pkgArgs = append(pkgArgs, footprintBudgets[name].pkg)
@@ -132,7 +138,7 @@ func TestFootprintBudgets(t *testing.T) {
 		measuredFunctions, _ := parseFootprintSymbols(t, nmStdout.Bytes())
 		functions[name] = measuredFunctions
 		maxFunctions := (budget.measured*115 + 99) / 100
-		t.Logf("probe %s: %d functions (Stage 3.0 %d, max %d), %d archive bytes", name, measuredFunctions, budget.measured, maxFunctions, measuredBytes)
+		t.Logf("probe %s: %d functions (baseline %d, max %d), %d archive bytes", name, measuredFunctions, budget.measured, maxFunctions, measuredBytes)
 		t.Run(name, func(t *testing.T) {
 			if measuredFunctions > maxFunctions {
 				t.Errorf("%s exceeded function budget: measured %d > budget %d; %s", name, measuredFunctions, maxFunctions, footprintFailureAdvice)

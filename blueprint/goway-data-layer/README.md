@@ -38,6 +38,7 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 1 | Scratch prototype and go/no-go gate | Done; historical evidence below |
 | 2 | Branch, permanent consumer, catalogue, emitter/release audit, synthetic harness | In progress. Core and permanent fixture ported at `686c6f2`; guardrails are this increment. |
 | 3.0 | Column footprint: flatten column types (R9), then measure receiver form and codec sharing; method-set trims only with approval | Done. 70-model gate: functions and bytes pass; compiler RSS 5.14 GB median against a 5 GB target, accepted as a recorded miss (2026-10-23) |
+| 3.1a | Declarations/codecs: JSON, interval, natural keys, binary ownership and IContains | Implemented; local acceptance passes (segmented fixes); PostgreSQL sources compile/vet, execution belongs to the lead |
 | 3.1 | Complete declaration, reads, writes, typed raw hydration and model cursors | Planned |
 | 4 | Full relations, pivots, through relations, eager limits, filters and relation writes | Planned |
 | 5 | Lifecycle, mutators, change sets, scopes and observers | Planned |
@@ -226,6 +227,55 @@ The [56-statement comparison](../../tests/fixtures/goway/golden_test.go) and
 [compiler cases](../../tests/fixtures/goway/compiler_cases_test.go) are permanent
 branch guards. Historical scratch acceptance does not verify a later revision.
 
+## Stage 3.1a declarations and codecs
+
+[Source and acceptance evidence](../../docs/evidence/goway-stage31a-declarations-codecs.json)
+records the 30 compiler-case ports, surface additions and unchanged budgets.
+
+`JSONOf` and `NullableJSONOf` retain typed documents, equality/membership,
+JSONB containment, assignment, `Asc`/`Desc` and `IsJSONNull`; they expose no range
+comparisons or text patterns. `IntervalOf` and `NullableIntervalOf` retain ordered interval comparisons,
+sorting and assignments. All four handles declare direct methods over shared
+state (R9), because existing kinds do not express these capability boundaries.
+JSON Kind/Length expressions, paths and interval functions remain Stage 6d.
+Interval `Sum`/`Avg` (the old private `summaryData` capability) remain Stage 6a.
+A parity test compares the core method names against the old JSON/interval fields.
+Existing staged column-comparison, grouping, subquery and conflict APIs remain
+with their owning slices; interval adds no numeric adjustments or text patterns.
+`IContains` delegates to the existing case-insensitive literal-pattern compiler.
+Natural keys use explicit codecs where needed; binary snapshots and typed ID aliases
+retain their ownership. No Query/Table/LockedQuery method was added.
+
+The committed Stage 3.0 measurements are the “before” values below. Existing
+ceilings stay unchanged. The two-model delta is 816 → 820 (ceiling 939).
+
+| Probe | Before functions | 3.1a functions | Ceiling |
+| --- | ---: | ---: | ---: |
+| column_time | 1194 | 1194 | 1374 |
+| column_enum | 1232 | 1232 | 1417 |
+| relation_with | 1847 | 1847 | 2125 |
+| model_type | 299 | 299 | 344 |
+| table_ref | 803 | 803 | 924 |
+| onequery | 803 | 803 | 924 |
+| q_with | 1053 | 1059 | 1211 |
+| q_select | 836 | 836 | 962 |
+| q_join | 1598 | 1604 | 1838 |
+| report_pipeline | 1905 | 1914 | 2191 |
+| models | 6147 | 6163 | 7070 |
+| column_number | 1172 | 1172 | 1348 |
+| column_nullable_text | 1456 | 1460 | 1675 |
+| models_1 | 1619 | 1623 | 1862 |
+| models_3 | 2435 | 2443 | 2801 |
+| column_json | — | 1280 | 1472 |
+| column_nullable_json | — | 1522 | 1751 |
+| column_interval | — | 1178 | 1355 |
+| column_nullable_interval | — | 1406 | 1617 |
+
+PostgreSQL sources cover every primitive numeric width, bool/text, temporal values,
+IDs, enums, nullable NULL/value, typed JSON/JSON null, interval components, owned
+binary buffers and empty bytes, natural keys, and malformed stored JSON/enum values.
+They use retained `postgres.Isolate` schemas. PostgreSQL execution is lead-owned.
+
 ## Decisions
 
 | Decision | Adopted direction |
@@ -267,11 +317,13 @@ Names in planned rows remain subject to their owning stage's consumer acceptance
 ## Feature parity contract
 
 “Preserve” states the program's target, not completion of the feature. The current
-consumer covers only the Stage 1 slice.
+consumer retains Stage 1 golden coverage and adds Stage 3.1a declaration/codec cases.
 
 | Capability | Old owner/shape | New shape and owning stage |
 | --- | --- | --- |
-| Model fields: IDs, nullables, temporal values, enums, JSON, bytes, encrypted values | Plain structs | Preserve field types; constructors/codecs, Stage 3; specialized operators Stage 6d |
+| IDs, nullables, numeric/temporal values, enums and bytes | Plain structs and generated codecs | Constructors/codecs retained; natural keys and binary ownership covered in 3.1a |
+| JSON documents and intervals | Generated JSON/interval fields | `JSONOf`/`NullableJSONOf`: equality, membership, containment, assignment, `Asc`/`Desc` and `IsJSONNull`; no range comparisons/text patterns. `IntervalOf`/`NullableIntervalOf`: ordered comparisons, sorting and assignment. Kind/Length expressions, paths and interval functions stay 6d |
+| Password and encrypted fields | Typed values and lifecycle codecs | Stage 3.1b; unchanged here |
 | Column/default tags | Generator reads tags | Startup metadata reads the same tags, Stage 3 |
 | Table name/options | Model annotation | `orm.Define` and typed options, Stage 3 |
 | Accessors | Handwritten `Access<Field>` methods | Same Go methods; no per-field generated hover notices |
@@ -332,16 +384,19 @@ the case prefix or incidental query setup. Basic column kinds, `Set`, `Find` and
 bindings belong to Stage 4. Per-row write and lookup-write families remain 6e,
 with lifecycle integration in Stage 5; read `Each`/`Chunk` belongs to Stage 3.
 All previously unaffected sources were rescanned against generated declarations;
-twelve reference/store cases move to Stage 7. All 20 Go-way cases were compared:
+twelve reference/store cases move to Stage 7. The original 20 Go-way cases were compared:
 seven have no direct old catalogue equivalent (`enum_ordered`, `int_text_key`,
 `number_key`, `joined_right`, `nullable_eq_null`, `required_null_test`,
-`text_adjustment`); the others cover the old rows counted below.
+`text_adjustment`); the others cover old rows. Stage 3.1a adds all 30 declaration/codec catalogue cases
+as separate negative sources; identity and codec APIs are retained unchanged.
+The binary comparable-scalar rejection uses `Key[M, []byte]`: general `Column`
+intentionally accepts byte slices, while identity does not.
 
 <!-- catalogue-summary -->
 | Disposition | Cases |
 | --- | ---: |
-| ported | 21 |
-| port | 561 |
+| ported | 51 |
+| port | 531 |
 | merge | 0 |
 | obsolete | 0 |
 | unaffected | 444 |
@@ -379,7 +434,7 @@ seven have no direct old catalogue equivalent (`enum_ordered`, `int_text_key`,
 | 7 | 81 |
 | — | 444 |
 
-21 old catalogue rows are covered by 13 distinct Go-way cases.
+51 old catalogue rows are covered by 43 distinct Go-way cases.
 
 ## Emitter audit
 

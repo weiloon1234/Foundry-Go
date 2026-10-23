@@ -184,6 +184,11 @@ func (c Text[M, V]) Contains(v V) Predicate[M] {
 	return comparison[M](c.text, querycore.Contains, []V{v})
 }
 
+// IContains matches a literal substring case-insensitively; wildcards are escaped. Example: Users.Email.IContains("Ada").
+func (c Text[M, V]) IContains(v V) Predicate[M] {
+	return comparison[M](c.text, querycore.InsensitiveContains, []V{v})
+}
+
 // StartsWith matches a literal prefix; wildcards are escaped. Example: Users.Email.StartsWith("admin").
 func (c Text[M, V]) StartsWith(v V) Predicate[M] {
 	return comparison[M](c.text, querycore.StartsWith, []V{v})
@@ -492,6 +497,11 @@ func (c NullableText[M, V]) Between(a, b V) Predicate[M] {
 // Contains matches a literal substring; wildcards are escaped. Example: Users.Nickname.Contains("da").
 func (c NullableText[M, V]) Contains(v V) Predicate[M] {
 	return comparison[M](c.nullableText.base, querycore.Contains, []V{v})
+}
+
+// IContains matches a literal substring case-insensitively; wildcards are escaped. Example: Users.Nickname.IContains("Ada").
+func (c NullableText[M, V]) IContains(v V) Predicate[M] {
+	return comparison[M](c.nullableText.base, querycore.InsensitiveContains, []V{v})
 }
 
 // StartsWith matches a literal prefix; wildcards are escaped. Example: Users.Nickname.StartsWith("Ada").

@@ -72,7 +72,7 @@ Their terminal methods require `*database.Tx`. Ordinary reads accept
 transaction behavior. A `*orm.WriteError[M]` preserves a hydrated candidate when
 transaction confirmation is uncertain. The candidate does not prove persistence.
 
-Hooks, mutators, JSON and encryption remain outside this increment. Direct
+Hooks, mutators and encryption remain outside this increment. Direct
 relations, inner joins and projections are described below.
 
 The key field is bound only by `TableOf`. Derive ordered numeric capabilities
@@ -172,3 +172,22 @@ Stage 3.0 deliberately removes the formerly promoted exported `.Column` field
 (including `Orders.ID.Column` and `orm.TextKey(k).Column`) to remove embedding
 chains. Exported methods remain unchanged; this is not preservation of the entire
 public surface. No consumer migration is needed on this branch.
+
+Stage 3.1a adds `JSONOf`/`NullableJSONOf` for `value.JSON[T]` and
+`IntervalOf`/`NullableIntervalOf` for `temporal.Interval`. JSON handles keep the
+payload type through equality, membership, containment and assignment. They expose
+`Asc`/`Desc` and `IsJSONNull`, but no range comparisons or text patterns. `Kind`
+and `Length` expressions remain Stage 6d. Interval handles add ordered comparisons
+and sorting, without numeric adjustments or text patterns. Nullable handles distinguish SQL NULL from
+values; JSON null is represented by `value.JSON[value.Nullable[T]]`.
+
+Use `TableOf(b, &m.Period, orm.Codec(codec.Interval()))` for an interval natural
+key. PostgreSQL compares intervals using 30-day months and 24-hour days: an
+`Eq(temporal.Months(1))` predicate also matches stored `30 days`. Interval natural
+keys therefore collide for `1 mon` and `30 days`; hydration preserves their distinct
+calendar and elapsed components. Interval `Sum`/`Avg` capabilities remain Stage 6a.
+`BytesOf`/`NullableBytesOf` retain buffer ownership and distinguish empty bytes
+from NULL. `Text.IContains` and `NullableText.IContains` treat `%`, `_` and `\`
+as literal substring characters and match case-insensitively. For example,
+`Users.Email.IContains("@EXAMPLE.com")` binds a value; it never interpolates SQL.
+Password and encrypted columns remain Stage 3.1b.
