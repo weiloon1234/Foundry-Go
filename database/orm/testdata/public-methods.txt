@@ -953,8 +953,8 @@ orm.Order
   NullsFirst func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
   NullsLast func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
 orm.OrderedExpressionColumn
-  constraint interface{github.com/weiloon1234/Foundry-Go/database/orm.ExpressionColumn[M, V, P]; ~struct{_ [0]*M; number github.com/weiloon1234/Foundry-Go/database/orm.columnData[V]} | ~struct{_ [0]*M; nullableNumber github.com/weiloon1234/Foundry-Go/database/orm.nullableColumnData[V]} | ~struct{_ [0]*M; text github.com/weiloon1234/Foundry-Go/database/orm.columnData[V]} | ~struct{_ [0]*M; nullableText github.com/weiloon1234/Foundry-Go/database/orm.nullableColumnData[V]} | ~struct{_ [0]*M; time github.com/weiloon1234/Foundry-Go/database/orm.columnData[V]} | ~struct{_ [0]*M; nullableTime github.com/weiloon1234/Foundry-Go/database/orm.nullableColumnData[V]} | ~struct{_ [0]*M; interval github.com/weiloon1234/Foundry-Go/database/orm.columnData[V]} | ~struct{_ [0]*M; nullableInterval github.com/weiloon1234/Foundry-Go/database/orm.nullableColumnData[V]}}
   expressionColumn func(*M) (github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[V], github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[P])
+  orderedColumn func()
 orm.PageRequest
   field Number int
   field Size int
@@ -1378,8 +1378,16 @@ rows.Builder
   Row func() github.com/weiloon1234/Foundry-Go/database/orm/rows.Row[R]
 rows.CheckedSchema
   rowError func() error
+rows.Cross
+*rows.Cross
+rows.CrossJoined
+*rows.CrossJoined
 rows.Field
 *rows.Field
+rows.Full
+*rows.Full
+rows.FullJoined
+*rows.FullJoined
 rows.Inner
 *rows.Inner
 rows.InnerJoined
@@ -1389,6 +1397,10 @@ rows.JoinOn
 rows.JoinTable
   joinTable func(*S)
   rowSource func(*S) github.com/weiloon1234/Foundry-Go/internal/ormcore.Source
+rows.Left
+*rows.Left
+rows.LeftJoined
+*rows.LeftJoined
 rows.Mapping
 *rows.Mapping
 rows.Query
@@ -1399,6 +1411,10 @@ rows.Query
   All func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) ([]R, error)
   OrderBy func(orders ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
   Where func(predicates ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
+rows.Right
+*rows.Right
+rows.RightJoined
+*rows.RightJoined
 rows.Row
 *rows.Row
 rows.Schema
@@ -1413,6 +1429,19 @@ rows.Distinct func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/ro
 rows.DistinctOn func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], keys ...github.com/weiloon1234/Foundry-Go/database/orm/expr.GroupKey[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
 rows.DistinctOnValues func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], keys ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionKey[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
 rows.MapSelected func[S, R, V any](field github.com/weiloon1234/Foundry-Go/database/orm/rows.Field[R, V], expression github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Mapping[S, R]
+rows.As func[A, M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], alias string) github.com/weiloon1234/Foundry-Go/database/orm/rows.Aliased[A, M]
+rows.Scope func[A, M any](a github.com/weiloon1234/Foundry-Go/database/orm/rows.Aliased[A, M]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[github.com/weiloon1234/Foundry-Go/database/orm/rows.Alias[A, M], M]
+rows.On func[L, R any, K comparable, LP, RP any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Expression[L, K, LP], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Expression[R, K, RP]) github.com/weiloon1234/Foundry-Go/database/orm/rows.JoinOn[L, R]
+rows.InnerJoin func[L, R any](left github.com/weiloon1234/Foundry-Go/database/orm/rows.Source[L], right github.com/weiloon1234/Foundry-Go/database/orm/rows.JoinTable[R], on github.com/weiloon1234/Foundry-Go/database/orm/rows.JoinOn[L, R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.InnerJoined[L, R]
+rows.LeftJoin func[L, R any](left github.com/weiloon1234/Foundry-Go/database/orm/rows.Source[L], right github.com/weiloon1234/Foundry-Go/database/orm/rows.JoinTable[R], on github.com/weiloon1234/Foundry-Go/database/orm/rows.JoinOn[L, R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.LeftJoined[L, R]
+rows.RightJoin func[L, R any](left github.com/weiloon1234/Foundry-Go/database/orm/rows.Source[L], right github.com/weiloon1234/Foundry-Go/database/orm/rows.JoinTable[R], on github.com/weiloon1234/Foundry-Go/database/orm/rows.JoinOn[L, R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.RightJoined[L, R]
+rows.FullJoin func[L, R any](left github.com/weiloon1234/Foundry-Go/database/orm/rows.Source[L], right github.com/weiloon1234/Foundry-Go/database/orm/rows.JoinTable[R], on github.com/weiloon1234/Foundry-Go/database/orm/rows.JoinOn[L, R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.FullJoined[L, R]
+rows.CrossJoin func[L, R any](left github.com/weiloon1234/Foundry-Go/database/orm/rows.Source[L], right github.com/weiloon1234/Foundry-Go/database/orm/rows.JoinTable[R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.CrossJoined[L, R]
+rows.LeftScope func[S, L, M any](j github.com/weiloon1234/Foundry-Go/database/orm/rows.preservedLeftSource[S, L], scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[L, M]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, M]
+rows.RightScope func[S, R, M any](j github.com/weiloon1234/Foundry-Go/database/orm/rows.preservedRightSource[S, R], scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[R, M]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, M]
+rows.NullableLeftScope func[S, L, M any](j github.com/weiloon1234/Foundry-Go/database/orm/rows.nullableLeftSource[S, L], scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[L, M]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableScope[S, M]
+rows.NullableRightScope func[S, R, M any](j github.com/weiloon1234/Foundry-Go/database/orm/rows.nullableRightSource[S, R], scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[R, M]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableScope[S, M]
+rows.LeftNullableScope func[S, L, M any](j github.com/weiloon1234/Foundry-Go/database/orm/rows.leftScopeSource[S, L], scope github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableScope[L, M]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableScope[S, M]
 rows.Raw func[R any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, schema github.com/weiloon1234/Foundry-Go/database/orm/rows.Schema[R], sql string, args ...any) ([]R, error)
 expr.Aggregate
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
@@ -1540,6 +1569,8 @@ expr.NullableOrderedValueComparison
   Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
   Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
   Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+expr.NullableScope
+*expr.NullableScope
 expr.Order
   NullsFirst func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
   NullsLast func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
@@ -1714,6 +1745,10 @@ expr.FoundryHaving func[S any](p github.com/weiloon1234/Foundry-Go/database/orm/
 expr.FoundryGroup func[S any](key github.com/weiloon1234/Foundry-Go/database/orm/expr.GroupKey[S], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) github.com/weiloon1234/Foundry-Go/internal/ormcore.Expression
 expr.FoundryKey func[S any](key github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionKey[S], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) github.com/weiloon1234/Foundry-Go/internal/ormcore.Expression
 expr.FoundryProjectionOrder func[S any](order github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) github.com/weiloon1234/Foundry-Go/internal/ormcore.Order
+expr.AtNullable func[S, M, V any](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableScope[S, M], column github.com/weiloon1234/Foundry-Go/database/orm.ExpressionColumn[M, V, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Expression[S, V, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+expr.AtNullableValue func[S, M, V any](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableScope[S, M], column github.com/weiloon1234/Foundry-Go/database/orm.ExpressionColumn[M, V, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Expression[S, V, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+expr.FoundryNullableScope func[S, M any](core github.com/weiloon1234/Foundry-Go/internal/ormcore.Scope, seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableScope[S, M]
+expr.FoundryNullableScopeData func[S, M any](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableScope[S, M], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) github.com/weiloon1234/Foundry-Go/internal/ormcore.Scope
 expr.Coalesce func[S, V any](first github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], fallback github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]
 expr.CoalesceValue func[S, V any](first github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], fallback github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
 expr.CoalesceNullable func[S, V any](first github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], rest ...github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]

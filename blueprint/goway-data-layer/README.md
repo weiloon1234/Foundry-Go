@@ -20,7 +20,7 @@ and business code. Removing model generation does not remove DTO or enum generat
 
 | Rule | Constraint |
 | --- | --- |
-| R1 | Keep public generic method sets small, approximately 25 methods per type. |
+| R1 | Keep public generic method sets at most 25 exported methods per type. Private signatures remain subject to reachability checks; the sealed ordered marker is private. |
 | R2 | Keep generic method bodies thin; delegate substantial work to the non-generic core. |
 | R3 | Do not embed heavy generic state in public generic structs; use non-generic state or typed function fields. |
 | R4 | Keep every method signature, including private signatures, restricted to thin types. Enter long-tail SQL families through package functions. |
@@ -52,9 +52,10 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 5 | Lifecycle, mutators, change sets, scopes and observers | In progress; B5a/B5b delivered. Retrieval/scopes remain B5c; audit policy/capture remains B5d. Relation writes and extension slots remain outside B5b. |
 | 6a1 | Expression phases, values, arithmetic, casts, comparisons, Count/Exists and MapSelected | Done; committed at `a5f30a6`. |
 | 6a2 | Row and selected CASE, COALESCE and NULLIF | Done; committed at `a5f30a6`. |
-| 6a3 | Summary aggregates, FILTER, GROUP BY/HAVING, selected ordering and keys, DISTINCT | Accepted lane patch integrated with relations and B5b; verification recorded below. Done pending the lead's commit. |
+| 6a3 | Summary aggregates, FILTER, GROUP BY/HAVING, selected ordering and keys, DISTINCT | Done; committed at `2cc60e8`. Ordered input-kind compatibility completed with the 6b1 integration below. |
 | 6a | Expressions, aggregates, grouping, having and raw fragments | In progress; 6a1–6a3 delivered. Raw fragments and the no-raw guard remain 6a4. |
-| 6b | Joins, aliases, correlation and lateral queries | Planned |
+| 6b1 | Join kinds, nullable scopes and typed column lifting | Accepted patch integrated; combined build/vet/race, fixture, catalogue, release-tools, docs and formatting checks pass. Done pending the lead's commit. |
+| 6b | Joins, aliases, correlation and lateral queries | In progress; 6b1 delivered. General ON expressions/subqueries, correlation, LATERAL and transaction-only families remain planned. |
 | 6c | Rows/projections, CTEs, recursive queries, sets and result cursors | Planned |
 | 6d | Windows, JSON, temporal, interval, geographic and text expressions | Planned |
 | 6e | Conflict/upsert, source writes, insert-select, adjustments, prune and explain | Planned |
@@ -381,11 +382,12 @@ consumer retains Stage 1 golden coverage and adds core, direct and joined-relati
 | Audit/history and pruning | Generated wrappers and query runtime | Stages 5/6e/7; preserve redaction, transaction and outcome contracts |
 | Arithmetic, casts and comparisons | Generated fields and query expressions | 6a1 delivered: typed row/selected package functions, explicit nullable variants and capability-specific comparisons |
 | Count and existence aggregates | Selected query aggregates | 6a3 delivered: Count/Exists, CountField/CountDistinctField and immutable same-scope FILTER; counts skip NULL fields and return zero on empty input |
-| Summary aggregates | Generated field Sum/Avg/Min/Max | 6a3: exact Sum/Avg return nullable decimal; float and interval variants preserve their families; sealed ordered Min/Max preserve the present type and return one nullable layer |
+| Summary aggregates | Generated field Sum/Avg/Min/Max | 6a3: exact Sum/Avg return nullable decimal; float and interval variants preserve their families; sealed ordered Min/Max preserve the present type and return one nullable layer; ordered input handles have identical stored-value aggregate capabilities |
 | GROUP BY, HAVING and selected ordering | Group/selected query clauses | 6a3: rows package functions, row grouping keys and separate selected keys/orders; shared compiler rejects invalid grouping and aggregate phases |
 | DISTINCT and DISTINCT ON | Complete model/projection selection | 6a3: read-only rows boundary, including FromModel; row and selected keys retain ownership; no write methods |
 | CASE, COALESCE and NULLIF | Conditional query expressions | 6a2 delivered: distinct row/selected phases, mandatory CASE fallback and one nullable layer; shared querycore validation |
-| Projections, joins, CTEs, sets, windows and subqueries | Generated selectors and `query` families | `orm/expr` and `orm/rows` functions, Stages 6a–6d |
+| Join kinds and nullable scopes | Aliased inner/left/right/full/cross joins | 6b1: same shared compiler, distinct kind/side scopes, required/nullable column lifting and chained nullable scopes; broadened LeftScope/RightScope signatures approved |
+| Projections, CTEs, sets, windows and subqueries | Generated selectors and `query` families | `orm/expr` and `orm/rows` functions, Stages 6a–6d |
 | Model binding, factories, datatables and database validation | Generated metadata and typed query interfaces | Table/column adapters, Stage 7; TS/OpenAPI/manifest contracts must remain identical |
 
 Generated field hover notices move to handwritten comments and declaration docs.
@@ -448,8 +450,8 @@ intentionally accepts byte slices, while identity does not.
 <!-- catalogue-summary -->
 | Disposition | Cases |
 | --- | ---: |
-| ported | 192 |
-| port | 390 |
+| ported | 207 |
+| port | 375 |
 | merge | 0 |
 | obsolete | 0 |
 | unaffected | 444 |
@@ -487,7 +489,7 @@ intentionally accepts byte slices, while identity does not.
 | 7 | 81 |
 | — | 444 |
 
-192 old catalogue rows are covered by 184 distinct Go-way cases.
+207 old catalogue rows are covered by 199 distinct Go-way cases.
 
 ## Emitter audit
 
@@ -1061,8 +1063,11 @@ Float and interval variants return nullable `float64` and `temporal.Interval`.
 `Min`/`Max` preserve the present ordered field type and add one nullable layer.
 All summaries return NULL on empty or all-NULL input. Count includes rows;
 CountField/CountDistinctField skip NULLs and return required int64, including zero.
-The sealed ordered constraint rejects enum wrappers that merely add `Gt`, without
-adding another method to column types. Each field family has an alias-aware `At`
+The sealed ordered constraint rejects enum wrappers that merely add `Gt`. Its
+private marker is shared by ordinary and input number/text/time/interval kinds,
+including nullable forms. Aggregates use stored values and never invoke mutators.
+InputEnum/InputJSON/InputColumn/InputBytes remain excluded. R1 counts exported
+methods (limit 25); private signatures still undergo reachability checks. Each field family has an alias-aware `At`
 constructor that preserves ownership and inner-source scopes.
 
 Aggregate `Filter` immutably appends row predicates for that aggregate. GroupBy,
@@ -1100,3 +1105,44 @@ PostgreSQL sources cover grouped exact/float/interval summaries, FILTER, nullabl
 fallbacks, selected ordering, DISTINCT and empty inputs. Live execution remains
 for the lead. Current integration command results and probe measurements are in
 the evidence.
+
+
+## Stage 6b1 join kinds and nullable scopes
+
+The accepted lane A patch is integrated with B5b and 6a3. Its
+[evidence](../../docs/evidence/goway-6b1.json) records source hashes and combined
+acceptance; the [rows recipe](../../database/orm/rows/README.md) shows the API.
+`ormcore.JoinSources` owns reference validation, owner snapshots and deferred checks
+around the existing querycore join compiler. Required and nullable model fields
+retain codecs, model ownership and exactly one nullable layer.
+
+LeftJoin, RightJoin, FullJoin and CrossJoin join the existing InnerJoin. Distinct
+join-kind and side types prevent conversions that erase nullability.
+NullableLeftScope/NullableRightScope widen missing outer rows; LeftNullableScope
+preserves a nullable side through another join. AtNullable lifts a required column;
+AtNullableValue retains the nullability of an already nullable column.
+
+The lead approved broader LeftScope/RightScope signatures using sealed
+preserved-side interfaces. Inferred calls remain valid across inner/cross joins
+and preserved outer sides. Explicit generic arguments change from `[L,R,M]` to
+`[S,L,M]` and `[S,R,M]`, respectively; callers can use inference or update them.
+No Query or Table methods change.
+
+6b1 ports 15 of the 100 Stage 6b catalogue rows and adds four additional negatives.
+Six old/new SQL and binding goldens cover all join kinds and a nullable chain,
+filtered/windowed inputs and nullable results. Unit tests cover NULL hydration,
+wrong declarations/aliases, nil inputs and rejected zero capabilities. PostgreSQL
+sources cover unmatched outer rows, multiplicity, soft-delete scopes and nullable
+chains; live execution remains for the lead.
+
+Combined acceptance passes: build, vet, races, fixture vet/tests, catalogue,
+release-tools, docs and formatting. The fixture contains 271 compiler cases and
+50 probes, retaining all prior cases and ceilings. Stored/input aggregate tests
+cover 64 unaliased/aliased SQL and hydration comparisons, plus eight input-kind
+negatives; external forged markers remain rejected.
+
+The `outer_join` and `nullable_join_chain` probes measure 1,738 and 1,765 functions
+against their original ceilings of 1,919 and 1,950. Aggregate families measure
+4,351 against the retained 4,369 ceiling. All prior probe ceilings remain unchanged. General
+ON expressions and subqueries, correlation, LATERAL and transaction-only families
+remain later slices; Stage 6b is not complete.

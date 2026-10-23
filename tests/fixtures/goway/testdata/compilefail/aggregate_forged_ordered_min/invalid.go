@@ -14,4 +14,7 @@ func (forgedOrdered) Gt(models.Level) orm.Predicate[models.User] {
 	return orm.Predicate[models.User]{}
 }
 
+// A same-spelled private method belongs to this package, not orm.
+func (forgedOrdered) orderedColumn() {}
+
 var _ = expr.Min[models.User, models.Level, models.Level](forgedOrdered{models.Users.Level})

@@ -88,6 +88,12 @@ return `value.Nullable[float64]`; `SumInterval`/`AvgInterval` preserve
 present type and return one nullable layer. Empty or all-NULL input returns NULL
 for all these summaries. Ordered field capabilities are sealed: adding a `Gt`
 method to an enum wrapper does not make it eligible for summaries or extrema.
+Ordered input handles have the same aggregate capabilities as their stored kinds:
+number, time and interval handles, including nullable forms, retain their stored
+types; text input handles support Min/Max. Aggregates never invoke write transforms.
+InputEnum, InputJSON, InputColumn and InputBytes remain outside the ordered
+capability. The private framework marker cannot be supplied by an external method
+with the same name.
 `NullableOrderedAggregate.Param(v)` accepts a present value and returns a required
 row expression, for example `expr.CoalesceValue(total.Value(), total.Param(decimal.FromInt64(0)).Value())`.
 It preserves the result codec, scope and existing errors. `CountField` and `CountDistinctField` skip NULLs and return

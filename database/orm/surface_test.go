@@ -61,8 +61,14 @@ func (w *surfaceWalker) walk(typ types.Type, path string) {
 		}
 		for _, receiver := range []types.Type{t, types.NewPointer(t)} {
 			methods := types.NewMethodSet(receiver)
-			if generic && methods.Len() > 25 && !w.layerOnly {
-				w.violations = append(w.violations, fmt.Sprintf("%s has %d methods", path, methods.Len()))
+			exported := 0
+			for i := 0; i < methods.Len(); i++ {
+				if methods.At(i).Obj().Exported() {
+					exported++
+				}
+			}
+			if generic && exported > 25 && !w.layerOnly {
+				w.violations = append(w.violations, fmt.Sprintf("%s has %d exported methods", path, exported))
 			}
 			for i := 0; i < methods.Len(); i++ {
 				m := methods.At(i).Obj()
@@ -257,13 +263,18 @@ func TestSurfaceWalkerBudgetsAndFunctionFieldExemption(t *testing.T) {
  import "github.com/weiloon1234/Foundry-Go/database/query"
  type functionField[V any] struct { allowed func() query.Query[V] }
  type tooMany[V any] struct{}
+ type atLimit[V any] struct{}
+ func (atLimit[V]) orderedColumn() {}
  `
 	for i := 0; i < 26; i++ {
-		source += fmt.Sprintf("func (tooMany[V]) m%d() {}\n", i)
+		source += fmt.Sprintf("func (tooMany[V]) M%d() {}\n", i)
+		if i < 25 {
+			source += fmt.Sprintf("func (atLimit[V]) M%d() {}\n", i)
+		}
 	}
 	pkg := surfacePackage(t, source)
 	violations := strings.Join(checkSurface(pkg), "\n")
-	if !strings.Contains(violations, "tooMany has 26 methods") || strings.Contains(violations, "functionField") {
+	if !strings.Contains(violations, "tooMany has 26 exported methods") || strings.Contains(violations, "functionField") || strings.Contains(violations, "atLimit") {
 		t.Fatalf("budget/exemption: %s", violations)
 	}
 }

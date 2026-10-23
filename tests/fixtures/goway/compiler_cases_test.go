@@ -2,6 +2,26 @@ package goway_test
 
 func compilerCases() []compilerCase {
 	return []compilerCase{
+		{"alias_predicate_owner", "expr.Predicate["},
+		{"cross_join_nullable_scope", "does not match"},
+		{"cross_join_scope_conversion", "cannot convert"},
+		{"join_full_scope", "does not match rows.preservedLeftSource"},
+		{"join_key_type", "does not match"},
+		{"join_kind_scope", "does not match"},
+		{"join_nullable_chain", "does not match"},
+		{"join_nullable_fields", "does not match"},
+		{"join_nullable_result", "does not match"},
+		{"join_outer_preserved", "does not match rows.preservedRightSource"},
+		{"join_right_scope", "does not match rows.preservedLeftSource"},
+		{"join_scope_outside", "does not match"},
+		{"join_scope_unlifted", "does not match"},
+		{"join_where_model", "expr.Predicate["},
+		{"scoped_model_owner", "does not match"},
+		{"join_nullable_scope_conversion", "cannot convert"},
+		{"join_nullable_column_required_path", "does not match"},
+		{"join_required_column_nullable_path", "does not match"},
+		{"join_wrong_nullable_side", "does not match"},
+
 		{"pivot_key", "does not match inferred type"},
 		{"pivot_model", "does not match inferred type"},
 		{"pivot_order", "orm.Order[joined.Pivot]"},
@@ -72,8 +92,8 @@ func compilerCases() []compilerCase {
 		{"order_phase_selected_to_row", "cannot convert"},
 		{"order_phase_row_to_selected", "cannot convert"},
 
-		{"aggregate_forged_ordered_sum", "forgedOrdered missing in"},
-		{"aggregate_forged_ordered_min", "forgedOrdered missing in"},
+		{"aggregate_forged_ordered_sum", "orderedColumn"},
+		{"aggregate_forged_ordered_min", "orderedColumn"},
 
 		{"aggregate_input_text_sum", "does not satisfy"},
 		{"aggregate_input_time_avg", "does not satisfy"},

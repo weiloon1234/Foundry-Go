@@ -47,6 +47,8 @@ var footprintBudgets = map[string]footprintBudget{
 	"aggregate_families": {"./testdata/footprint/aggregate_families", 3799},
 	"distinct":           {"./testdata/footprint/distinct", 1135},
 
+	"outer_join":           {"./testdata/footprint/outer_join", 1668},
+	"nullable_join_chain":  {"./testdata/footprint/nullable_join_chain", 1695},
 	"conditional_row":      {"./testdata/footprint/conditional_row", 1681},
 	"conditional_selected": {"./testdata/footprint/conditional_selected", 1511},
 	"expr_arithmetic":      {"./testdata/footprint/expr_arithmetic", 1162},

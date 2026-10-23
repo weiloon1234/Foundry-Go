@@ -36,3 +36,21 @@ func TestModelBridgesRejectZeroCapabilityWithValidMetadata(t *testing.T) {
 		}
 	}
 }
+
+func TestNullableScopeBridgesRejectZeroCapability(t *testing.T) {
+	m := declareMembers()
+	a, b := As[left](m.Query(), "a"), As[right](m.Query(), "b")
+	j := LeftJoin(a, b, On(expr.At(Scope(a), m.ID), expr.At(Scope(b), m.ID)))
+	scope := NullableRightScope(j, Scope(b))
+	metadata := expr.FoundryNullableScopeData(scope, sqlowner.Expressions())
+	var zero sqlowner.ExpressionSeal
+	rejected := expr.FoundryNullableScope[Left[Alias[left, member], Alias[right, member]], member](metadata, zero)
+	actual := expr.FoundryNullableScopeData(rejected, sqlowner.Expressions())
+	if !errors.Is(actual.Err, fault.Invalid) || actual.Owner != nil {
+		t.Fatal("zero capability adopted metadata", actual)
+	}
+	actual = expr.FoundryNullableScopeData(scope, zero)
+	if !errors.Is(actual.Err, fault.Invalid) || actual.Owner != nil {
+		t.Fatal("zero capability exposed metadata", actual)
+	}
+}

@@ -1,6 +1,6 @@
 {
   "slice": "6a3",
-  "status": "Accepted 6a3 patch integrated on af1976a; all requested combined-worktree acceptance commands pass. PostgreSQL sources compile/vet and skip without configuration; live execution remains for the lead. No commit.",
+  "status": "6a3 committed at 2cc60e8. Lead-approved ordered input-kind follow-up integrated with 6b1; all requested combined acceptance commands pass, no footprint ceilings raised. No commit in this turn.",
   "base_commit": "e73175333d6134d0f0f5da17ab6f8bb4ae4e70a5",
   "parents": [
     "6a1 and 6a2 accepted uncommitted changes retained"
@@ -892,19 +892,19 @@
     "tests/fixtures/goway/testdata/footprint/distinct/probe.go"
   ],
   "source_sha256": {
-    "blueprint/goway-data-layer/compilefail-mapping.tsv": "218aaa8b8d94cfef836bad351887b22dbaf57ba698786b0992d24a71eb192bd6",
-    "database/orm/expr/README.md": "7846d930e2ca3b166b77e891f83d64511378a70348fa2995f8aaa9da6c423458",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "791411a0a55a383a568152de3e2f8be260e63bb80b492a60cd7481b3013be0fe",
+    "database/orm/expr/README.md": "5dd3f5f625d93148ce6ea56107340fc57a5331c36b79b18e9453992d44554127",
     "database/orm/expr/aggregate_fields.go": "a0fec1f4876ed26c9865ebe8603b074dc13c1840d6e7f50720eeed78707a88f7",
     "database/orm/expr/having.go": "8719317fd8955ea05451f3dbfaba1ccee3ce863727ae2ea16ccd95039ff6738c",
     "database/orm/expr/keys.go": "3c4425c9dc7a351466d8e83033e11372e265b1afb11354e910fa6131038e79ee",
     "database/orm/expr/model.go": "6d387525190a03efc5bf056f9d926eca679f24eb1e4d1c1dbd4f5084cb98701c",
     "database/orm/expr/value.go": "e6d6599baa84786a91d75ec611aa860910f25ff4533115c7c3d9cf768b11adba",
-    "database/orm/method_surface_test.go": "7a1b36665da33695d509adbee7a9cfacf5bb717b1dad28f7f4b5c4cfa102f47c",
-    "database/orm/ordered.go": "0eca1f17d97f6512c30688eb5a8d906027707005fb925b826bc68790b636b4a0",
+    "database/orm/method_surface_test.go": "42ad4812a0eb554a7e8d197d32c5cacf361196589c8ca6af519174248e201bb2",
+    "database/orm/ordered.go": "729356c14a20cc4036920f44b47dd479ff3d8b1ffbd5da00269d916922fec99b",
     "database/orm/rows/aggregate_test.go": "1ef3a47be426ceb808621c9171f540955c6fb1b8d3e603f0587e22638c3f2733",
     "database/orm/rows/clauses.go": "ac6c0a17ff12fb4a184d61ccf6157495eb4f83a3f3b51d4a811a0a7284ee669e",
     "database/orm/source.go": "a08da82a472e758546acfca6336eb3b619aea98038e358be1e520924a09fde41",
-    "database/orm/testdata/public-methods.txt": "389fbce610d2e2e53851a1a5b255b6a91726827b9644aac402d60124ed4abf09",
+    "database/orm/testdata/public-methods.txt": "75cab1ea5f878478eb6e567073d7088b69caac10df755ebf42b062c94206ad59",
     "internal/ormcore/aggregate.go": "13158e8be7720b0b2973dd25db56a3aa8695354daa1c2ab0948edcf1717c775a",
     "internal/ormcore/aggregate_test.go": "5d9ca95320148de66ac4bf2dd8b2304bd3f1b20810683e58122103664a34024a",
     "internal/ormcore/clauses.go": "d2c8c535ecfdf593364fd875961a8cb5cfceb1bd28b139c974df3db0d414c6ba",
@@ -912,8 +912,8 @@
     "internal/querycore/aggregate_filter.go": "595b7db3b2d649fbe5207f0423eb9e2ff8920ed37dd21c5674f860eeab0147fa",
     "tests/fixtures/goway/aggregate_golden_test.go": "7f8a3c22c509671d7e0eeac16a74e4bc8e7067cb7341470086a2b19c76bd87e9",
     "tests/fixtures/goway/bridge_capability_test.go": "8255b310104f75dd5097116462dad2e4ea73eacb16b9e4ee425636ae4e50c41f",
-    "tests/fixtures/goway/compiler_cases_test.go": "4157200dfbc773450735bfb844cdee397e4a682ee8c9d9e83fe90e1bdb584a6a",
-    "tests/fixtures/goway/footprint_test.go": "a4813bbfe3bfdb3bdfe20c85f13204734d783ba4c741194e1e22e73a499ac8a2",
+    "tests/fixtures/goway/compiler_cases_test.go": "a0b74e2f15861ed894cfd982b5ffed998d9f7728cfb550dfb7c0347544551831",
+    "tests/fixtures/goway/footprint_test.go": "402fcc4352aa8c8c2b1981ad7d1014329fa6d26f838c39ece86f0e9f5bf4daac",
     "tests/fixtures/goway/pgsmoke/aggregates_test.go": "60c7ccb350d369b8998da2a30ae99d93467bcd90c35a70a317e63c3dd1ca6c5e",
     "tests/fixtures/goway/testdata/compilefail/aggregate_enum_sum/invalid.go": "9bf33e6778a0aca198fac080a72433fb3713e2898d193a877519cbb8ca410b12",
     "tests/fixtures/goway/testdata/compilefail/aggregate_filter_boolean_order/invalid.go": "76e1d411b7d02b1bf99841e23b93205d1f49ae5ce8eb2b3dc985a0c6d2671da9",
@@ -921,8 +921,8 @@
     "tests/fixtures/goway/testdata/compilefail/aggregate_filter_nullable/invalid.go": "a48c043313349531818945716401ffe903b32522209fbceaf99200dc388f466e",
     "tests/fixtures/goway/testdata/compilefail/aggregate_filter_owner/invalid.go": "d7ffa2a81d175ec4a18d7f662e7ba89ae47c2188fc04328bc4368584cbda26e5",
     "tests/fixtures/goway/testdata/compilefail/aggregate_filter_value/invalid.go": "430836d410c3925f6cf50cc8e1bf6196a1fc5fd468f1733b81d37b94faa58310",
-    "tests/fixtures/goway/testdata/compilefail/aggregate_forged_ordered_min/invalid.go": "8c769e9c30df617e43ba7b5c7a2bf619ff93b3e35091c255bdf1fc28867f7dee",
-    "tests/fixtures/goway/testdata/compilefail/aggregate_forged_ordered_sum/invalid.go": "dd5bfa1a07be5d1d3dc6f745a6e517d17b51f8361e81d76cbbf5b0e773e56fb6",
+    "tests/fixtures/goway/testdata/compilefail/aggregate_forged_ordered_min/invalid.go": "6b939044f9b1bd3c8aa9fc7108706afb64788f100d35b15083788b368f856bf3",
+    "tests/fixtures/goway/testdata/compilefail/aggregate_forged_ordered_sum/invalid.go": "eba0c51c6376c473424ea53e046b4dccea273aebb280cc572970b015cf29003f",
     "tests/fixtures/goway/testdata/compilefail/aggregate_order_model/invalid.go": "96996caa4426a2ad71071f1cc386a02774ab0395921ba3a7f9cad22384144c90",
     "tests/fixtures/goway/testdata/compilefail/aggregate_phase_to_row/invalid.go": "8736d78da2845231a660e49b3beec72aea8977e1f745244dae5186b85283f10b",
     "tests/fixtures/goway/testdata/compilefail/aggregate_temporal_avg/invalid.go": "df46a2b4b2480b24d21a6a60b17d687e1bee509831a0a4064c95fb1e7faef74f",
@@ -959,14 +959,24 @@
     "tests/fixtures/goway/testdata/footprint/aggregate_families/probe.go": "32d4a775dd2100744bd7b942bf3edeefb18e0c7c89e3cd35e3675ff34cbd6ad3",
     "tests/fixtures/goway/testdata/footprint/aggregate_group/probe.go": "4f28e9d263db600d8d757c49efa512dc63959850c3eb2f3a3b4b099f126aa87d",
     "tests/fixtures/goway/testdata/footprint/distinct/probe.go": "ace267a0da6d85a92e5a8ef6fb00b5e43a76ebe2939acc27d1ddc3a5a606fa19",
-    "CHANGELOG.md": "ada6ae7dd3e75457ae235642e037bdb253a11f0563dc413e2d19674b4fff1d63",
-    "blueprint/goway-data-layer/README.md": "8220a09b854ffcb073ed46af58a0d7f6f3ec0f2c69d38dda49e9c0cb0f5ebdb8",
-    "blueprint/00-master-architecture-and-parity.md": "b8d2f9a7d790fbab03216e1f4db450c9eba13d63c37340366059fe69dafa28cb",
+    "CHANGELOG.md": "d420c39d8f9439baa1d11e8b116dc88d5c7f9301454298b151cf7f5e046dcd78",
+    "blueprint/goway-data-layer/README.md": "4f1e0f7bacef0d3c780eee4091039af41a73d645bb9f2c7a044780ecd8ac0e90",
+    "blueprint/00-master-architecture-and-parity.md": "e2240d1fd5aacc32480fc27335c20a2802237806e15b814f3507222eeb33b456",
     "tools/release/source.go": "0a95269a9308b11ff714037a7a85f92ac4833dda4d2f7248089fd84c81621d40",
     "tools/release/release_test.go": "b5a7d31f5f022a604d7ca7072fda8ffe3d609b669fe9776f8a822805c49ae941",
     "database/orm/hooks.go": "7d2630575921df9e1aac1b4c45285321e11abcbc2df358126830644f5baef586",
     "database/orm/write.go": "ddb7efae074ec4bebb985b7e75a8badb0721534b135406c404edb3065f3b269f",
-    "database/query/model_hooks.go": "413b5341a7681f422a073d6c5223e688159f9a7a6b53fc71985d4782340372f4"
+    "database/query/model_hooks.go": "413b5341a7681f422a073d6c5223e688159f9a7a6b53fc71985d4782340372f4",
+    "database/orm/surface_test.go": "e5fd068150ec7f78d20c0b7b20cf5f6d8676623a05434e824246f65f00a0147c",
+    "database/orm/rows/aggregate_input_test.go": "af388b256a14bf3a03af58d401e723a569b901ed096fa17bc3371a7f28b6f6a9",
+    "tests/fixtures/goway/testdata/compilefail/aggregate_input_text_sum/invalid.go": "d440e4c40f09df6fcaa285cb316e326b45773d83fd186c96d7bc5f1eb4454042",
+    "tests/fixtures/goway/testdata/compilefail/aggregate_input_time_avg/invalid.go": "bfa4630ba75f78801f1a19e6e02369e884194407a5fa2da51ab1fe43e90771d4",
+    "tests/fixtures/goway/testdata/compilefail/aggregate_input_enum/invalid.go": "a3d02876ca7465d304d9d3dd6ed152e27b2c7ac92091c5465eee86cd34815d1c",
+    "tests/fixtures/goway/testdata/compilefail/aggregate_nullable_input_enum/invalid.go": "7a1ef9b4d602d990f5c9cf3ed71df08ee04dc73bebe2074b271b6a33f9f8ae06",
+    "tests/fixtures/goway/testdata/compilefail/aggregate_input_json/invalid.go": "07642af36866db7d618b9e48ffe8dab3242284c3f5bc68ed3a2fe45beca8f6bc",
+    "tests/fixtures/goway/testdata/compilefail/aggregate_nullable_input_json/invalid.go": "7b3bc119c16f891ed75646cb721c9299430f0e95362bf605827d223d67d2b17b",
+    "tests/fixtures/goway/testdata/compilefail/aggregate_input_column/invalid.go": "ffc3e4da1319f08a54e244f9c0195ec507103c1a6059da31ba6009593bf18d62",
+    "tests/fixtures/goway/testdata/compilefail/aggregate_input_bytes/invalid.go": "be28d4d3135827e5f5dc570fc431daa148fbc7ae35d9dae52040f2145413f58c"
   },
   "shared_compiler_owner_sha256": {
     "internal/querycore/aggregate.go": "8ffdd465f082703774348733f011714e1698d7176d5d1adb30d50aef3a19cf2c",
@@ -1734,8 +1744,54 @@
         "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       }
     },
-    "open_questions": [
-      "The accepted sealed OrderedExpressionColumn includes ordinary Number/Text/Time/Interval handles and nullable forms, but excludes B5a InputNumber/InputText/InputTime/InputInterval. GreaterColumn previously accepted these structurally. A lead clarification was requested; no type-design change was made during integration."
-    ]
+    "open_questions": []
+  },
+  "ordered_input_followup": {
+    "decision": "Ordered input kinds expose their stored aggregate capabilities through a private framework-only orderedColumn marker. R1 counts exported methods only, with a limit of 25. Every footprint ceiling is retained.",
+    "kinds": [
+      "InputNumber",
+      "NullableInputNumber",
+      "InputText",
+      "NullableInputText",
+      "InputTime",
+      "NullableInputTime",
+      "InputInterval",
+      "NullableInputInterval"
+    ],
+    "excluded": [
+      "InputEnum",
+      "InputJSON",
+      "InputColumn",
+      "InputBytes",
+      "nullable forms of non-ordered kinds"
+    ],
+    "coverage": "64 SQL/hydration comparisons for Min/Max and exact/float/interval Sum/Avg, unaliased and At forms, NULL and value results; transforms panic if invoked during aggregate reads; GreaterColumn input compatibility; eight input negatives and strengthened forgedOrdered cases.",
+    "review_history": "The private-kind-field union in the original accepted 6a3 review is superseded by the lead-approved private marker, allowing input handles with distinct write types without altering their typed storage.",
+    "surface": "OrderedExpressionColumn now pins the private orderedColumn method instead of the private-field type union; no exported column methods or signatures changed.",
+    "verification": "Combined with 6b1 integration; results are recorded in docs/evidence/goway-6b1.json.",
+    "result": "pass; combined race suite, fixture cases, footprint and surface checks pass",
+    "footprint": {
+      "aggregate_families": {
+        "probe": "aggregate_families",
+        "functions": 4351,
+        "baseline": 3799,
+        "ceiling": 4369,
+        "archive_bytes": 19761280
+      },
+      "aggregate_group": {
+        "probe": "aggregate_group",
+        "functions": 2524,
+        "baseline": 2426,
+        "ceiling": 2790,
+        "archive_bytes": 11276462
+      },
+      "input_column_kinds": {
+        "probe": "input_column_kinds",
+        "functions": 5306,
+        "baseline": 5088,
+        "ceiling": 5852,
+        "archive_bytes": 21823044
+      }
+    }
   }
 }

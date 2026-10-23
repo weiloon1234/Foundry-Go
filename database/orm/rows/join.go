@@ -4,7 +4,6 @@ package rows
 
 import (
 	"errors"
-	"maps"
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/database/orm"
@@ -88,37 +87,29 @@ func On[L, R any, K comparable, LP, RP any](left expr.Expression[L, K, LP], righ
 
 // InnerJoin joins two distinct typed aliases. Example: rows.InnerJoin(members,orders,rows.On(mID,oMemberID)).
 func InnerJoin[L, R any](left Source[L], right JoinTable[R], on JoinOn[L, R]) InnerJoined[L, R] {
-	if ormcore.NilDescriptor(left) || ormcore.NilDescriptor(right) {
-		return InnerJoined[L, R]{source: ormcore.Source{Err: ormcore.Invalid("join requires both sources")}}
-	}
-	l, r := left.rowSource(nil), right.rowSource(nil)
-	err := errors.Join(on.err, ormcore.CheckReferences(l, on.left), ormcore.CheckReferences(r, on.right))
-	if len(r.Node.Joins) > 0 {
-		err = errors.Join(err, ormcore.Invalid("right join input must be an aliased source"))
-	}
-	node := querycore.JoinNodes(l.Node, r.Node, l.Aliases, r.Aliases, errors.Join(l.Err, err), r.Err, on.node, querycore.InnerJoin)
-	owners := maps.Clone(l.Owners)
-	if owners == nil {
-		owners = map[string]any{}
-	}
-	maps.Copy(owners, r.Owners)
-	return InnerJoined[L, R]{source: ormcore.Source{Scope: reflect.TypeFor[Inner[L, R]](), Node: node.Node, Aliases: node.Aliases, Owners: owners, Err: node.Err, Checks: ormcore.AppendChecks(l.Checks, r.Checks...)}, left: l.Owners, right: r.Owners}
+	state := buildJoin(left, right, on, querycore.InnerJoin, reflect.TypeFor[Inner[L, R]]())
+	return InnerJoined[L, R]{source: state.source, left: state.left, right: state.right}
 }
 
-// LeftScope re-scopes only a model from the left input. Example: rows.LeftScope(joined,rows.Scope(members)).
-func LeftScope[L, R, M any](j InnerJoined[L, R], scope expr.Scope[L, M]) expr.Scope[Inner[L, R], M] {
-	return rescope[Inner[L, R]](scope, j.left, j.source.Err)
+// LeftScope preserves a model from the non-nullable left side. Example: rows.LeftScope(joined,rows.Scope(members)).
+func LeftScope[S, L, M any](j preservedLeftSource[S, L], scope expr.Scope[L, M]) expr.Scope[S, M] {
+	b := scopeBoundary{err: ormcore.Invalid("scope requires a join")}
+	if !ormcore.NilDescriptor(j) {
+		b = j.preservedLeft(nil, nil)
+	}
+	return rescope[S](scope, b.owners, b.err)
 }
 
-// RightScope re-scopes only a model from the right input. Example: rows.RightScope(joined,rows.Scope(orders)).
-func RightScope[L, R, M any](j InnerJoined[L, R], scope expr.Scope[R, M]) expr.Scope[Inner[L, R], M] {
-	return rescope[Inner[L, R]](scope, j.right, j.source.Err)
+// RightScope preserves a model from the non-nullable right side. Example: rows.RightScope(joined,rows.Scope(orders)).
+func RightScope[S, R, M any](j preservedRightSource[S, R], scope expr.Scope[R, M]) expr.Scope[S, M] {
+	b := scopeBoundary{err: ormcore.Invalid("scope requires a join")}
+	if !ormcore.NilDescriptor(j) {
+		b = j.preservedRight(nil, nil)
+	}
+	return rescope[S](scope, b.owners, b.err)
 }
+
 func rescope[S, Old, M any](scope expr.Scope[Old, M], owners map[string]any, err error) expr.Scope[S, M] {
 	c := expr.FoundryScopeData(scope, sqlowner.Expressions())
-	c.Err = errors.Join(c.Err, err)
-	if c.Owner == nil || owners[c.Table] != c.Owner {
-		c.Err = errors.Join(c.Err, ormcore.Invalid("scope is not on this join side"))
-	}
-	return expr.FoundryScope[S, M](c, sqlowner.Expressions())
+	return expr.FoundryScope[S, M](ormcore.Rescope(c, owners, err), sqlowner.Expressions())
 }

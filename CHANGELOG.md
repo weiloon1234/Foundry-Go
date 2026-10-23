@@ -8,6 +8,14 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Add outer/cross joins, nullable scopes and typed column lifting (6b1).
+  `LeftScope`/`RightScope` now accept sealed preserved-side interfaces. Inferred
+  calls remain valid; explicit type arguments change from `[L,R,M]` to `[S,L,M]`
+  and `[S,R,M]`, respectively.
+- Give ordered input columns the same stored-value aggregate capabilities as their
+  ordinary kinds, with a framework-only marker. R1 retains the limit of 25
+  exported methods and the existing footprint ceilings.
+
 - Add typed exact, float and interval aggregates, sealed ordered Min/Max,
   Count variants and immutable FILTER (6a3), with GROUP BY/HAVING, selected
   ordering and keys, and read-only DISTINCT/DISTINCT ON. Nullable aggregate
