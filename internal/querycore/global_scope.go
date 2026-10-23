@@ -35,7 +35,9 @@ func (l *LazyScopes) Get(table string) ([]ScopeDefinition, error) {
 			return
 		}
 		var scopes []ScopeDefinition
-		if failed := callback.Invoke("define global scopes", func() error { scopes = slices.Clone(l.Source()); return nil }); failed != nil {
+		// Goexit must return a failure to this owner before Once publishes its
+		// result; otherwise it would permanently cache an empty successful source.
+		if failed := callback.Isolated("define global scopes", func() error { scopes = slices.Clone(l.Source()); return nil }); failed != nil {
 			l.Err = failed
 			return
 		}

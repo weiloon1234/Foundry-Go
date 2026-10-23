@@ -38,7 +38,7 @@ func defineDeskGlobalScopes() []query.GlobalScope[Desk] {
 }
 ```
 
-`defineDeskGlobalScopes` must only build predicates: it must not compile or execute queries. A panic or invalid scope fails every query of the model with a validation error. A scope that (directly or through relations) requires itself is rejected by the compiler's nesting bound.
+`defineDeskGlobalScopes` must only build predicates: it must not compile or execute queries. The source runs in an isolated callback, and compilation waits for its actual exit. A panic or `runtime.Goexit` becomes a safe `fault.Panicked` error without exposing the panic payload; an invalid scope returns a validation error. The failure is cached with the model definition, so later operations that apply its scopes fail before issuing SQL instead of running unscoped. A scope that (directly or through relations) requires itself is rejected by the compiler's nesting bound.
 
 ## Where scopes apply
 

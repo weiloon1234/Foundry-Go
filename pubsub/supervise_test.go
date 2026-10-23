@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -12,68 +13,82 @@ import (
 )
 
 func TestBrokerAdmissionQueuesAndCloseStopsWaiters(t *testing.T) {
-	broker, _, _ := fixture(t, func(c *pubsub.Config) { c.MaxConcurrent = 1 })
-	entered, release := make(chan struct{}), make(chan struct{})
-	held := true
-	topic, err := pubsub.Define[memberID, payload]("queued-keys", 1, keyspace.NewCodec(func(memberID) (string, error) {
-		if held {
-			held = false
-			close(entered)
-			<-release
-		}
-		return "key", nil
-	})).Bind(broker)
-	if err != nil {
-		t.Fatal(err)
-	}
-	first := make(chan error, 1)
-	go func() {
-		_, err := topic.Publish(t.Context(), 1, payload{Text: "first", Labels: []string{}})
-		first <- err
-	}()
-	<-entered
-	// A queued caller proceeds once capacity frees instead of failing.
-	second := make(chan error, 1)
-	go func() {
-		_, err := topic.Publish(t.Context(), 2, payload{Text: "second", Labels: []string{}})
-		second <- err
-	}()
-	time.Sleep(10 * time.Millisecond)
-	close(release)
-	for _, result := range []chan error{first, second} {
-		if err := <-result; err != nil {
+	synctest.Test(t, func(t *testing.T) {
+		broker, _, _ := fixture(t, func(c *pubsub.Config) { c.MaxConcurrent = 1 })
+		entered, release := make(chan struct{}), make(chan struct{})
+		held := true
+		topic, err := pubsub.Define[memberID, payload]("queued-keys", 1, keyspace.NewCodec(func(memberID) (string, error) {
+			if held {
+				held = false
+				close(entered)
+				<-release
+			}
+			return "key", nil
+		})).Bind(broker)
+		if err != nil {
 			t.Fatal(err)
 		}
-	}
-	if stats := broker.Stats(); stats.Operations != 0 {
-		t.Fatal(stats)
-	}
-	// Shutdown ends a queued wait with ErrClosed.
-	blocked, unblock := make(chan struct{}), make(chan struct{})
-	stuck, err := pubsub.Define[memberID, payload]("stuck-keys", 1, keyspace.NewCodec(func(memberID) (string, error) {
-		close(blocked)
-		<-unblock
-		return "key", nil
-	})).Bind(broker)
-	if err != nil {
-		t.Fatal(err)
-	}
-	holder := make(chan error, 1)
-	go func() { _, err := stuck.Publish(t.Context(), 1, payload{Labels: []string{}}); holder <- err }()
-	<-blocked
-	waiter := make(chan error, 1)
-	go func() { _, err := topic.Publish(t.Context(), 3, payload{Labels: []string{}}); waiter <- err }()
-	time.Sleep(10 * time.Millisecond)
-	closing, cancel := context.WithCancel(t.Context())
-	cancel()
-	_ = broker.Close(closing)
-	if err := <-waiter; !errors.Is(err, pubsub.ErrClosed) {
-		t.Fatal("queued publication survived shutdown", err)
-	}
-	close(unblock)
-	if err := <-holder; err == nil {
-		t.Fatal("canceled holder published")
-	}
+		first := make(chan error, 1)
+		go func() {
+			_, err := topic.Publish(t.Context(), 1, payload{Text: "first", Labels: []string{}})
+			first <- err
+		}()
+		<-entered
+		// A queued caller proceeds once capacity frees instead of failing.
+		second := make(chan error, 1)
+		go func() {
+			_, err := topic.Publish(t.Context(), 2, payload{Text: "second", Labels: []string{}})
+			second <- err
+		}()
+		synctest.Wait()
+		select {
+		case err := <-second:
+			t.Fatal("publication did not wait for capacity", err)
+		default:
+		}
+		close(release)
+		for _, result := range []chan error{first, second} {
+			if err := <-result; err != nil {
+				t.Fatal(err)
+			}
+		}
+		if stats := broker.Stats(); stats.Operations != 0 {
+			t.Fatal(stats)
+		}
+		// Shutdown ends a queued wait with ErrClosed.
+		blocked, unblock := make(chan struct{}), make(chan struct{})
+		stuck, err := pubsub.Define[memberID, payload]("stuck-keys", 1, keyspace.NewCodec(func(memberID) (string, error) {
+			close(blocked)
+			<-unblock
+			return "key", nil
+		})).Bind(broker)
+		if err != nil {
+			t.Fatal(err)
+		}
+		holder := make(chan error, 1)
+		go func() { _, err := stuck.Publish(t.Context(), 1, payload{Labels: []string{}}); holder <- err }()
+		<-blocked
+		waiter := make(chan error, 1)
+		go func() { _, err := topic.Publish(t.Context(), 3, payload{Labels: []string{}}); waiter <- err }()
+		synctest.Wait()
+		select {
+		case err := <-waiter:
+			t.Fatal("publication did not wait for capacity", err)
+		default:
+		}
+		closing, cancel := context.WithCancel(t.Context())
+		cancel()
+		_ = broker.Close(closing)
+		if err := <-waiter; !errors.Is(err, pubsub.ErrClosed) {
+			t.Fatal("queued publication survived shutdown", err)
+		}
+		// Shutdown cancellation must reach the held operation before it exits.
+		synctest.Wait()
+		close(unblock)
+		if err := <-holder; err == nil {
+			t.Fatal("canceled holder published")
+		}
+	})
 }
 
 func TestSubscribeKeysReportsTypedKeys(t *testing.T) {

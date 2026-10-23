@@ -8,6 +8,29 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Pubsub synchronization and scope-source isolation (B32/B33) — 2026-10-23
+
+Status: **accepted on current native source under the requested focused gate**.
+Pubsub ownership and admission tests use callback channels and blocked-goroutine
+barriers to retain their guarantees under host load. Both tests passed 200
+repetitions under race with 32 CPU-bound worker processes (400 test executions,
+zero failures).
+
+Lazy global-scope sources use the branch-matching isolated callback owner, which
+waits for exit and caches a safe error after panic or `runtime.Goexit`. Regression
+statement inspection rejects unscoped reads, writes, relations, aggregates, joins,
+subqueries, cursors and chunks. The [scope guide](../docs/guides/model-global-scopes.md)
+owns the contract; explicit scope removal and unfiltered inserts are unchanged.
+
+Build, vet, generation freshness, docs, formatting and whitespace checks passed.
+The requested pubsub/database/internal race gate passed in retained segments:
+the generator package reached the default 10-minute timeout, so its unfinished
+69 test entries resumed with the repository's 20-minute timeout; the websocket
+package passed with local-listener access after sandbox denial. The
+[evidence](../docs/evidence/b32-b33-20261023.json) records commands, source
+fingerprints, the original-source regression failures and the stress conditions.
+This does not claim `make verify` or required backend/editor acceptance.
+
 ## Asset navigation fallback and validated seals (B30/B31) — 2026-10-23
 
 Status: **accepted on current native source under the requested focused gate**.

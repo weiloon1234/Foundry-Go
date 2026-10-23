@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Pubsub test synchronization and scope-source isolation (B32/B33)
+
+- Synchronize pubsub ownership and admission tests with blocked-goroutine barriers
+  and callback channels, including shutdown cancellation, so host load cannot
+  change their ordering or expire their test deadlines.
+- Isolate lazy global-scope sources and wait for actual callback exit. A panic or
+  `runtime.Goexit` leaves a cached, safe `fault.Panicked` error; later reads,
+  writes, relations, aggregates, joins, subqueries, cursors and chunks that apply
+  those scopes fail before issuing SQL instead of running unscoped.
+
 ### Asset navigation fallback and validated framework seals (B30/B31)
 
 - Add `AssetMount.WithNavigationFallback(net/http.Handler)` for missing HTML
