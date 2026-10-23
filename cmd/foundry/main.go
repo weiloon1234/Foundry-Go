@@ -40,6 +40,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		{"agent", "Inspect completion, hover and definition with gopls", runAgent},
 		{"make", "Scaffold a model, DTO, job, command, migration or seeder", runMake},
 		{"contracts", "Generate client contracts from an exported manifest", runContracts},
+		{"lint", "Check project raw SQL policy", runLint},
 		{"doctor", "Inspect local framework/tool prerequisites without starting services", runDoctor},
 	} {
 		command := cli.Define(entry.name, entry.summary, func(args []string, _ io.Writer) (arguments, error) { return arguments{values: args}, nil })

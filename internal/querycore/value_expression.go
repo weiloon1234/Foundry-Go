@@ -39,6 +39,8 @@ func (c *Compiler) SelectedExpression(e ValueExpression, grouped map[FieldRef]bo
 
 func (c *Compiler) RenderSelectedExpression(e ValueExpression, grouped map[FieldRef]bool, grouping bool) (string, error) {
 	switch e := e.(type) {
+	case RawFragment:
+		return c.RawSQL(e)
 	case FieldRef:
 		if c.IndexTarget {
 			return Quoted(e.Column), nil

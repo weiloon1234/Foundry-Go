@@ -31,7 +31,7 @@ type closedHelpWriter struct{}
 
 func (closedHelpWriter) Write([]byte) (int, error) { return 0, io.ErrClosedPipe }
 func TestDevelopmentCommandHelpPreservesSuccessAndOutputFailure(t *testing.T) {
-	groups := [][]string{nil, {"generate"}, {"agent"}, {"agent", "complete"}, {"agent", "hover"}, {"agent", "definition"}, {"doctor"}, {"contracts"}, {"make"}, {"make", "model"}, {"make", "dto"}, {"make", "job"}, {"make", "command"}, {"make", "migration"}, {"make", "seeder"}}
+	groups := [][]string{nil, {"generate"}, {"agent"}, {"agent", "complete"}, {"agent", "hover"}, {"agent", "definition"}, {"lint"}, {"doctor"}, {"contracts"}, {"make"}, {"make", "model"}, {"make", "dto"}, {"make", "job"}, {"make", "command"}, {"make", "migration"}, {"make", "seeder"}}
 	for _, group := range groups {
 		for _, flag := range []string{"--help", "-h"} {
 			args := append(append([]string(nil), group...), flag)

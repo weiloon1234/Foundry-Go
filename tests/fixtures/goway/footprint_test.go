@@ -30,6 +30,9 @@ const footprintFailureAdvice = "a generic method, field or codec helper has expa
 // Go 1.27.1 darwin/arm64: T/t symbols in each package archive.
 // Budget is ceil(measured * 1.15), calculated exactly with integer arithmetic.
 var footprintBudgets = map[string]footprintBudget{
+	"records":                    {"./testdata/footprint/records", 1313},
+	"transaction_records":        {"./testdata/footprint/transaction_records", 1296},
+	"audit":                      {"./testdata/footprint/audit", 1313},
 	"aggregate_slot_declaration": {"./testdata/footprint/aggregate_slot_declaration", 1112},
 	"aggregate_slot_direct":      {"./testdata/footprint/aggregate_slot_direct", 1490},
 	"aggregate_slot_pivot":       {"./testdata/footprint/aggregate_slot_pivot", 2095},
@@ -66,6 +69,8 @@ var footprintBudgets = map[string]footprintBudget{
 	"expr_selected":        {"./testdata/footprint/expr_selected", 1551},
 	"lifecycle_write":      {"./testdata/footprint/lifecycle_write", 930},
 	"lifecycle_changes":    {"./testdata/footprint/lifecycle_changes", 1050},
+
+	"raw_fragments": {"./testdata/footprint/raw_fragments", 1331},
 
 	"column_encrypted_text":          {"./testdata/footprint/column_encrypted_text", 1127},
 	"column_nullable_encrypted_text": {"./testdata/footprint/column_nullable_encrypted_text", 1359},
@@ -186,7 +191,10 @@ func TestFootprintBudgets(t *testing.T) {
 			t.Fatalf("go tool nm %s failed: %v\nstderr: %s", archive, err, nmStderr.String())
 		}
 
-		measuredFunctions, _ := parseFootprintSymbols(t, nmStdout.Bytes())
+		measuredFunctions, _, auditFunctions := parseFootprintSymbols(t, nmStdout.Bytes())
+		if (name == "onequery" || name == "q_with" || name == "aggregate_families") && auditFunctions != 0 {
+			t.Fatalf("%s reaches %d audit functions; keep audit adapters behind package functions", name, auditFunctions)
+		}
 		functions[name] = measuredFunctions
 		maxFunctions := (budget.measured*115 + 99) / 100
 		t.Logf("probe %s: %d functions (baseline %d, max %d), %d archive bytes", name, measuredFunctions, budget.measured, maxFunctions, measuredBytes)
@@ -209,7 +217,7 @@ func TestFootprintBudgets(t *testing.T) {
 	})
 }
 
-func parseFootprintSymbols(t *testing.T, data []byte) (functions int, definedSymbols int) {
+func parseFootprintSymbols(t *testing.T, data []byte) (functions int, definedSymbols int, auditFunctions int) {
 	t.Helper()
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
@@ -230,11 +238,14 @@ func parseFootprintSymbols(t *testing.T, data []byte) (functions int, definedSym
 			definedSymbols++
 			if symType == "T" || symType == "t" {
 				functions++
+				if strings.Contains(scanner.Text(), "/audit/record.") || strings.Contains(scanner.Text(), "/database/orm.Audit") {
+					auditFunctions++
+				}
 			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		t.Fatalf("scanning nm output: %v", err)
 	}
-	return functions, definedSymbols
+	return functions, definedSymbols, auditFunctions
 }

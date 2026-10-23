@@ -144,6 +144,10 @@ func Read(ctx context.Context, ex database.Executor, node querycore.SelectNode, 
 
 // ReadComplete retains complete-model callback ownership through row closure.
 func ReadComplete(ctx context.Context, ex database.Executor, node querycore.SelectNode, planError error, checks []func() error, scan func(database.Row) error, callbacks *ReadCallbacks) (err error) {
+	return readComplete(ctx, ex, node, planError, checks, scan, callbacks, false)
+}
+
+func readComplete(ctx context.Context, ex database.Executor, node querycore.SelectNode, planError error, checks []func() error, scan func(database.Row) error, callbacks *ReadCallbacks, transaction bool) (err error) {
 	if ctx == nil || ex == nil {
 		return Invalid("query execution requires a context and executor")
 	}
@@ -155,7 +159,12 @@ func ReadComplete(ctx context.Context, ex database.Executor, node querycore.Sele
 			planError = errors.Join(planError, check())
 		}
 	}
-	statement, err := querycore.CompileRead(node, ctx, false, planError, scan != nil)
+	if transaction {
+		if tx, ok := ex.(*database.Tx); !ok || tx == nil {
+			return Invalid("record read requires a transaction")
+		}
+	}
+	statement, err := querycore.CompileRead(node, ctx, transaction, planError, scan != nil)
 	if err != nil {
 		return err
 	}

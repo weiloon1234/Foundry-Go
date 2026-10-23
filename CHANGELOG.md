@@ -8,6 +8,18 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Complete 6a with typed raw fragments (`expr.Raw`, `RawWithCodec`, `orm.WhereRaw`)
+  and opt-in `foundry lint --no-raw`. Fragments retain query scopes and transaction
+  ownership; raw-bearing statements use private detector fingerprints. The lexer
+  rejects ambiguous syntax; lint is a best-effort source policy, not a runtime proof.
+- Add complete model/projection record adapters and transaction-only record and
+  projection composition (6c1), preserving derived windows, decoder identity,
+  retrieval callbacks and inner locks. CTEs, sets and result cursors remain pending.
+- Add opt-in model audit policies and typed historical readers (B5d), reusing
+  Automatic/Exclude/Redact, stored codecs and transactional observer capture.
+  Updates capture touched fields; creates/deletes capture complete snapshots.
+  Historical reads distinguish omission, absence, SQL NULL and redaction.
+
 - Complete read relations with typed aggregate slots (`ValueOf`, `expr.Related`,
   `Pivot`) loaded through `With`/`Load`/`LoadMissing` (4d). Each slot keeps its
   own grouped statement per eligible-key batch, shared limits and typed results.
@@ -32,7 +44,7 @@
 - Add typed exact, float and interval aggregates, sealed ordered Min/Max,
   Count variants and immutable FILTER (6a3), with GROUP BY/HAVING, selected
   ordering and keys, and read-only DISTINCT/DISTINCT ON. Nullable aggregate
-  `Param(V)` supplies a required fallback; raw fragments remain deferred to 6a4.
+  `Param(V)` supplies a required fallback; raw fragments are delivered in 6a4.
 
 - Add per-write hooks, typed observers and persisted change tracking (B5b), with
   stage-major callback order, observer-only models and nullable input draft getters.

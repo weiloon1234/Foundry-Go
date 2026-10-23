@@ -22,9 +22,10 @@ type Mapping[S, R any] struct {
 
 // Query retains input scope S and result R without heavy engine types. Example: projection.All(ctx,db).
 type Query[S, R any] struct {
-	_      [0]*S
-	source ormcore.Source
-	decode func(database.Row) (R, error)
+	_           [0]*S
+	source      ormcore.Source
+	decode      func(database.Row) (R, error)
+	recordOwner any
 }
 
 // Map requires an exact result-field value type. Example: rows.Map(OrderRows.Amount,amount).
@@ -48,6 +49,7 @@ func Select[S, R any](source SelectionSource[S], schema Schema[R], mappings ...M
 	q.source = source.rowSource(nil)
 	core, decode := schema.rowDefinition(nil)
 	q.decode = decode
+	q.recordOwner = core
 	if core == nil {
 		q.source.Err = errors.Join(q.source.Err, ormcore.Invalid("uninitialized row declaration"))
 		return q

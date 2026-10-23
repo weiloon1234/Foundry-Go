@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -14,7 +15,7 @@ import (
 // audit representation rather than a partial application model.
 type FieldValue[V any] struct {
 	snapshot Snapshot
-	codec    codec.Codec[V]
+	decode   func(any) (V, error)
 }
 
 func (v FieldValue[V]) State() State                 { return v.snapshot.state }
@@ -43,7 +44,10 @@ func (v FieldValue[V]) Get() (value.Optional[V], error) {
 		if err != nil {
 			return err
 		}
-		result, err = v.codec.Decode(bound)
+		if v.decode == nil {
+			return fault.New(fault.Invalid, "audit field codec is not initialized")
+		}
+		result, err = v.decode(bound)
 		return err
 	})
 	if err != nil {
@@ -95,15 +99,29 @@ func Inspect[M, K any](record Model[M, K]) (View[M, K], error) {
 // ReadField is a generated declaration boundary. Model adapters supply the
 // column and existing codec; ordinary application code uses their named fields.
 func ReadField[M, K, V any](view View[M, K], name string, c codec.Codec[V]) (value.Optional[FieldChange[V]], error) {
+	return readField(view, name, c.ParameterType(), c.Decode)
+}
+
+// FoundryReadField retains a declaration's existing decoder without rebuilding a codec.
+// The metadata capability is checked before the decoder is retained.
+// Example: FoundryReadField(view, "name", codec.TypeText, decode, sqlowner.Metadata()).
+func FoundryReadField[M, K, V any](view View[M, K], name string, kind codec.ParameterType, decode func(any) (V, error), seal sqlowner.MetadataSeal) (value.Optional[FieldChange[V]], error) {
+	if !seal.Valid() {
+		return value.Optional[FieldChange[V]]{}, fault.New(fault.Invalid, "invalid audit metadata capability")
+	}
+	return readField(view, name, kind, decode)
+}
+
+func readField[M, K, V any](view View[M, K], name string, kind codec.ParameterType, decode func(any) (V, error)) (value.Optional[FieldChange[V]], error) {
 	if view.fields == nil {
 		return value.Optional[FieldChange[V]]{}, fault.New(fault.Invalid, "audit view is not initialized")
 	}
 	if field, present := view.fields[name]; present {
-		if field.typ != c.ParameterType() {
+		if field.typ != kind {
 			return value.Optional[FieldChange[V]]{}, fault.New(fault.Invalid, "audit field codec does not match its stored representation")
 		}
-		return value.Set(FieldChange[V]{before: FieldValue[V]{snapshot: field.before, codec: c},
-			after: FieldValue[V]{snapshot: field.after, codec: c}, assigned: field.assigned, changed: field.changed}), nil
+		return value.Set(FieldChange[V]{before: FieldValue[V]{snapshot: field.before, decode: decode},
+			after: FieldValue[V]{snapshot: field.after, decode: decode}, assigned: field.assigned, changed: field.changed}), nil
 	}
 	return value.Optional[FieldChange[V]]{}, nil
 }

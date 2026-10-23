@@ -46,21 +46,24 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 4a | N+1 detector foundations | Done; committed at `e731753` |
 | 4b | Direct eager trees, has-one, LoadMissing, relation limits and existence filters | Done; committed at `470d585`. |
 | 4c | Typed pivots, through, one-of-many and polymorphic relations | Done; committed at `a89f509`. Live PostgreSQL execution remains for the lead. |
-| 4d | Typed relation aggregate slots | Done pending the lead’s commit; accepted patch integrated. Current batch verification is recorded below. |
-| 4 | Full read relations, pivots, through, one-of-many, filters and aggregate slots | Complete; 4a–4d delivered. 4d accepted and integrated pending the lead’s commit. Relation writes remain a separate Stage 5b task; per-parent limits are out of scope. |
+| 4d | Typed relation aggregate slots | Done; committed in integration batch 2 at `80546f4`. |
+| 4 | Full read relations, pivots, through, one-of-many, filters and aggregate slots | Complete; 4a–4d delivered. 4d committed in integration batch 2 at `80546f4`. Relation writes remain a separate Stage 5b task; per-parent limits are out of scope. |
 | B5a | Typed mutators, accessor validation, input-column kinds and InputKey | Done; committed at `884beb7`. |
 | B5b | Write hooks, observers, stored changes, conventions and set-write/force-delete parity | Done; committed at `af1976a`. |
-| B5c | Retrieval hooks/observers, global scopes and tenancy | Done pending the lead’s commit; accepted patch integrated, including sticky scope-source panic/Goexit failures. |
-| 5 | Lifecycle, mutators, change sets, scopes and observers | In progress; B5a–B5c delivered. Audit policy/capture remains B5d; relation writes and extension slots remain separate tasks. |
+| B5c | Retrieval hooks/observers, global scopes and tenancy | Done; committed at `80546f4`, including sticky scope-source panic/Goexit failures. |
+| B5d | Typed audit policies, transactional capture and historical readers | Done pending the lead’s commit; accepted patch integrated. Current batch evidence below. |
+| 5 | Lifecycle, mutators, change sets, scopes and observers | In progress; B5a–B5d delivered. Relation writes and extension slots remain separate tasks. |
 | 6a1 | Expression phases, values, arithmetic, casts, comparisons, Count/Exists and MapSelected | Done; committed at `a5f30a6`. |
 | 6a2 | Row and selected CASE, COALESCE and NULLIF | Done; committed at `a5f30a6`. |
 | 6a3 | Summary aggregates, FILTER, GROUP BY/HAVING, selected ordering and keys, DISTINCT | Done; committed at `2cc60e8`. Ordered input-kind compatibility completed with the 6b1 integration below. |
-| 6a | Expressions, aggregates, grouping, having and raw fragments | In progress; 6a1–6a3 delivered. Raw fragments and the no-raw guard remain 6a4. |
+| 6a4 | Typed raw fragments and opt-in no-raw lint | Done pending the lead’s commit; accepted patch integrated. |
+| 6a | Expressions, aggregates, grouping, having and raw fragments | Complete; 6a1–6a4 delivered. Current batch evidence below. |
 | 6b1 | Join kinds, nullable scopes and typed column lifting | Done; committed with the integration gate at `690a147`. |
-| 6b2 | ON comparisons and independent scalar/IN/EXISTS subqueries | Done pending the lead’s commit; hardened join-source validation included. |
-| 6b3 | Explicit correlation and cross/inner/left LATERAL | Done pending the lead’s commit; model and projected results retain scope/nullability. |
-| 6b | Joins, aliases, correlation and lateral queries | In progress; 6b1–6b3 delivered. Transaction adapters and CTE-boundary rejection remain dependent on 6c. |
-| 6c | Rows/projections, CTEs, recursive queries, sets and result cursors | Planned |
+| 6b2 | ON comparisons and independent scalar/IN/EXISTS subqueries | Done; committed at `80546f4`; hardened join-source validation included. |
+| 6b3 | Explicit correlation and cross/inner/left LATERAL | Done; committed at `80546f4`; model and projected results retain scope/nullability. |
+| 6b | Joins, aliases, correlation and lateral queries | In progress; 6b1–6b3 delivered. 6c1 transaction record foundations delivered; transaction joins and CTE-boundary rejection remain later slices. |
+| 6c1 | Complete record/projection adapters and transaction-only composition | Done pending the lead’s commit; accepted patch integrated. |
+| 6c | Rows/projections, CTEs, recursive queries, sets and result cursors | In progress; 6c1 delivered. CTEs/recursion, sets, result cursors and remaining terminals are pending. |
 | 6d | Windows, JSON, temporal, interval, geographic and text expressions | Planned |
 | 6e | Conflict/upsert, source writes, insert-select, adjustments, prune and explain | Planned |
 | 7 | Framework integrations and wire-contract parity | Planned |
@@ -346,7 +349,11 @@ Names in planned rows remain subject to their owning stage's consumer acceptance
 | `defineXGlobalScopes` and scope bypasses | `orm.WithGlobalScopes`, `Scope`, `WithoutGlobalScope(s)` and relation/pivot package bypasses | B5c; executing context retained |
 | Generated scalar/IN/EXISTS selectors | `rows.SelectScalar`, `ScalarQuery`, `InQuery`, `ExistsQuery` and nullable variants | 6b2; selection sources cannot enter joins without aliasing |
 | Correlated and lateral selectors | `rows.Correlate`, correlated scalar/IN/EXISTS and cross/inner/left LATERAL functions | 6b3; explicit enclosing scope |
-| Generated `Distinct`/set query surface | `rows.Distinct(...)`, `rows.Union(a, b)` | Planned, Stages 6a/6c |
+| Generated audit policy/capture/readers | `orm.AuditPolicyOf`, `Audit`, `Auditing`, `AuditRead` and nullable/encrypted variants | B5d; shared record policy and instance-owned recorder |
+| Complete model/projected record sources | `rows.ModelRecord`, `RecordOf`, `AsRecord`, `SelectRecord` | 6c1; preserved scopes, read-only results |
+| Transaction record/projection sources | `rows.TransactionOf`, `LockedRecord`, `AsTransaction`, `SelectTransaction`, `SelectTransactionRecord` | 6c1; `All` requires `*database.Tx` |
+| Raw selected expressions and predicates | `expr.Raw`, `RawWithCodec`, `orm.WhereRaw` | 6a4; explicit argument/result boundary and optional no-raw lint |
+| Generated `Distinct`/set query surface | `rows.Distinct(...)`; set functions remain planned | DISTINCT delivered 6a3; sets remain 6c |
 | `query.SelectValue(QueryOrders(), ...)` | `rows.SelectValue(Orders.Query(), ...)` | Basic scalar selection ported |
 | Model annotation plus `foundry generate` | Plain struct plus `orm.Define` | Core ported; DTO/enum generation retained |
 
@@ -397,8 +404,12 @@ consumer retains Stage 1 golden coverage and adds core, direct and joined-relati
 | CASE, COALESCE and NULLIF | Conditional query expressions | 6a2 delivered: distinct row/selected phases, mandatory CASE fallback and one nullable layer; shared querycore validation |
 | Join kinds and nullable scopes | Aliased inner/left/right/full/cross joins | 6b1: same shared compiler, distinct kind/side scopes, required/nullable column lifting and chained nullable scopes; broadened LeftScope/RightScope signatures approved |
 | ON comparisons and subqueries | Join predicates and scalar/IN/EXISTS query families | 6b2: typed row-phase comparisons/composition, independent SelectionSource subqueries and sealed join sources; shared compiler validation |
-| Correlation and LATERAL | Enclosing scopes and joined model/projected sources | 6b3: explicit correlation, nullable scalar/IN/EXISTS, cross/inner/left LATERAL with owned scopes; transaction adapters and CTE rejection remain 6c dependencies |
-| Projections, CTEs, sets and windows | Generated selectors and query families | Remaining rows/CTE/set/window families in Stages 6c–6d |
+| Correlation and LATERAL | Enclosing scopes and joined model/projected sources | 6b3: explicit correlation, nullable scalar/IN/EXISTS, cross/inner/left LATERAL with owned scopes; transaction record adapters delivered in 6c1; transaction joins and CTE rejection remain later slices |
+| Complete records and projection adapters | Generated complete selectors and derived records | 6c1: RecordOf/ModelRecord/AsRecord/SelectRecord, owned decoders, retained windows and retrieval callbacks; nullable record selection rejected |
+| Transaction record/projection composition | Transaction-only generated selectors | 6c1: separate record/selection sources and All(*database.Tx), retained inner locks; remaining terminals/joins are later slices |
+| CTEs, sets, result cursors and windows | Generated query families | Remaining families in Stages 6c–6d |
+| Audit capture and history | Generated policies and record adapters | B5d: immutable model-owned Automatic/Exclude/Redact, transactional observer capture, typed stored-value readers and shared sensitive redaction |
+| Typed raw fragments | Explicit raw expression/predicate boundary | 6a4: Raw/RawWithCodec selected values and WhereRaw predicates, shared lexer and binding, scopes retained; no-raw CLI policy |
 | Model binding, factories, datatables and database validation | Generated metadata and typed query interfaces | Table/column adapters, Stage 7; TS/OpenAPI/manifest contracts must remain identical |
 
 Generated field hover notices move to handwritten comments and declaration docs.
@@ -412,11 +423,11 @@ remain compile-time constraints.
 | --- | --- | --- |
 | 1 | Existing executor `Exec`, `Query`, `database.ScanOne` and read-routed `DB.QueryRead`; transactions unchanged | Retained |
 | 2 | Typed model/declared-row hydration from raw SQL; validate selected columns rather than return partial models | Implemented Stage 3.1d: `Table.Raw` / `rows.Raw`, exact names in any order; no automatic scopes or read routing |
-| 3 | Opt-in typed fragments (`expr.Raw[S,V]`, `orm.WhereRaw[M]` sketches), composed with existing scopes and transaction | Planned Stage 6a4; not part of the shipped 6a1–6a3 expression API |
+| 3 | Opt-in typed fragments (`expr.Raw[S,V]`, `RawWithCodec`, `orm.WhereRaw[M]`), composed with existing scopes and transaction | Delivered 6a4; selected expression phase, shared bindings and fail-closed fragment lexer |
 
 All levels bind arguments instead of interpolating values. Raw fragments require
 the caller to declare result types. A project may forbid raw call sites through
-the planned opt-in lint guard. Typed advanced SQL remains a first-class parity
+`foundry lint --no-raw ./...`, a best-effort source-policy guard. Typed advanced SQL remains a first-class parity
 requirement; raw SQL does not substitute for porting its compiler rules.
 
 The 6a1–6a3 typed expression API distinguishes row values, selected values and
@@ -459,10 +470,11 @@ The binary comparable-scalar rejection uses `Key[M, []byte]`: general `Column`
 intentionally accepts byte slices, while identity does not.
 
 <!-- catalogue-summary -->
+
 | Disposition | Cases |
 | --- | ---: |
-| ported | 268 |
-| port | 314 |
+| ported | 292 |
+| port | 290 |
 | merge | 0 |
 | obsolete | 0 |
 | unaffected | 444 |
@@ -500,7 +512,7 @@ intentionally accepts byte slices, while identity does not.
 | 7 | 81 |
 | — | 444 |
 
-268 old catalogue rows are covered by 260 distinct Go-way cases.
+292 old catalogue rows are covered by 284 distinct Go-way cases.
 
 ## Emitter audit
 
@@ -1231,3 +1243,60 @@ closures with an explicit batch record; public signatures and provenance remain
 unchanged. The two combined probes that initially exceeded their limits now measure
 4,362/4,369 functions (`aggregate_families`) and 1,209/1,211 (`q_with`). PostgreSQL sources
 compile in the fixture gate, while live execution remains with the lead.
+
+## Integration batch 3: raw fragments, records and audit
+
+Accepted 6a4, 6c1 and B5d patches are integrated pending the lead’s commit.
+Current integration checks and source hashes are recorded with the lane history in
+[6a4 evidence](../../docs/evidence/goway-6a4.json),
+[6c1 evidence](../../docs/evidence/goway-6c1.json) and
+[B5d evidence](../../docs/evidence/goway-b5d-audit.json).
+
+6a is complete. Raw fragments use the shared compiler, preserve scopes and
+transaction ownership, and never become readable detector shapes. The lexer rejects
+ambiguous ordinary-string backslashes (use E strings or parameters), malformed
+regions and mismatched placeholders. The opt-in no-raw lint resolves direct calls,
+interface/constraint contracts and called function signatures; diagnostics contain
+only file:line. Reflection, unselected dependencies/build configurations and
+unresolved generic results remain limitations; matching application function
+signatures may also be rejected. See the [expression guide](../../database/orm/expr/README.md#raw-fragments-and-project-policy).
+
+6c1 provides complete record extraction, aliases and preserved-scope selection,
+plus explicit transaction-only composition. Derived windows, result identity,
+codecs, closed-batch retrieval callbacks and inner model locks remain intact.
+Scalar-only legacy row queries are rejected by record validation. CTEs/recursion,
+sets, result cursors and remaining read/page/scalar/lock terminals are pending;
+transaction joins remain coordinated with 6b4. See the
+[records guide](../../database/orm/rows/records.md).
+
+B5d registers `orm.Auditing(table, policy)` with the existing instance-owned audit
+recorder. Automatic/Exclude/Redact policies are immutable and model-owned;
+invalid, foreign, duplicate or key-hiding rules fail before capture. Updates,
+soft deletes and restores capture touched stored fields; creates/deletes capture
+complete snapshots. Audit and business writes share rollback. Historical readers
+retain omitted fields, absent models, SQL NULL and redaction through shared stored
+codecs. Set writes still require lifecycle acknowledgement and emit no per-model
+audit entries. Wire contracts, relation writes and extension slots are unchanged.
+See the [audit recipe](../../database/orm/README.md#audit-capture-and-history).
+
+The integrated catalogue retains all 1,026 rows: 292 ported, 290 awaiting ports
+and 444 unaffected. The fixture passes 388 compiler cases and all 64 footprint
+probes with existing ceilings unchanged. Selected current T/t symbol counts:
+
+| Probe | Functions | Existing/new ceiling |
+| --- | ---: | ---: |
+| Raw fragments | 1,379 | 1,531 |
+| Complete records | 1,313 | 1,510 |
+| Transaction records | 1,296 | 1,491 |
+| Audit | 1,313 | 1,510 |
+| Existing q_with | 1,211 | 1,211 |
+| Existing aggregate_families | 4,362 | 4,369 |
+
+The requested build, vet, race, fixture, generation, release-tool, catalogue,
+documentation and formatting checks pass. Race acceptance is segmented: only
+`internal/websockettest` required a rerun with localhost-listener permission after
+the sandbox blocked its test server. The no-raw CLI reports zero diagnostics for
+the typed-only fixture package and model/report packages. Live PostgreSQL remains
+for the lead. Two accepted lint fixture sources under `raw.test` were omitted by
+the patch's ignore rule; their accepted hashes were verified before restoring them.
+A narrow ignore exception and explicit release inventory assertions retain them.

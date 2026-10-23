@@ -626,3 +626,42 @@ functions preserve the concrete descriptor and its other side's defaults:
 `WithoutPivotGlobalScope` and `WithoutPivotGlobalScopes`. Bypasses do not mutate
 the source query, descriptor or declaration. Treat them as explicit authorization
 choices, especially for tenant scopes.
+
+## Audit capture and history
+
+Declare model-owned policy with `orm.AuditPolicyOf(Orders.Table,
+ orm.AuditField(Orders.Note, record.Exclude))`. Unspecified fields use
+`record.Automatic`; `record.Redact` retains change flags and hides values.
+A zero `orm.AuditPolicy[Order]` applies Automatic everywhere. Policies cannot
+exclude or redact the primary key while retaining it as the subject identity.
+Foreign columns, duplicate rules and invalid disclosures fail registration or
+capture. Encrypted fields use `AuditEncryptedField` or
+`AuditNullableEncryptedField` for explicit exclusion; Automatic redacts them.
+
+Register `orm.Auditing(Orders.Table, policy)` through
+`audit.Register(r, pool, recorderKey, config, declaration)` in an application
+module. The recorder and write observer belong to that application instance.
+Created, Updated, Deleted and Restored capture inside the business transaction,
+after local callbacks. Force deletion uses Deleted once. An audit failure or a
+later write failure rolls back both business and audit rows. Set writes still
+require explicit `WithoutModelHooks` acknowledgement and produce no automatic
+audit entries. Install audit storage through the existing audit migrations.
+
+`orm.Audit(Orders.Table, changes, policy)` also captures a lifecycle callback's
+stored changes without SQL. Standalone `Compare` results cannot be audited.
+Updates, soft deletes and restores retain assigned or changed fields plus the
+key; creates and physical deletes retain complete snapshots subject to policy.
+Values come from locked originals and RETURNING, after mutators and database
+changes; accessors never replace them. Sensitive codecs, encrypted fields and
+sensitive names are redacted before their capture binder runs. Nested JSON keys
+are redacted by the shared record owner before binding the audit row. Unchanged
+and excluded fields do not invoke their capture codec.
+
+History remains `record.Model[M,K]`; use `orm.AuditRead(history, Orders.Total)`
+or `orm.AuditReadNullable(history, Orders.Note)` with stored column types.
+`AuditReadEncrypted` and `AuditReadNullableEncrypted` expose redaction state.
+An omitted field, an absent model snapshot and SQL NULL remain distinct.
+Redacted fields and partially redacted JSON cannot hydrate fabricated values;
+inspect `Snapshot()` for deliberate export. The same declared codecs restore
+persisted keys and historical field values. Audit adapters are package functions
+and add no methods or per-column closures to ordinary reads.

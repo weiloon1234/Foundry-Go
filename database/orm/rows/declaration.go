@@ -20,6 +20,7 @@ import (
 )
 
 type rowCore struct {
+	typ     reflect.Type
 	fields  []*fieldCore
 	columns []querycore.ProjectionColumn
 	err     error
@@ -107,15 +108,11 @@ func Check(schemas ...CheckedSchema) error {
 // Define binds and seals a complete row shape. Example: rows.Define(func(b rows.Builder[OrderRow],r *OrderRow) Fields {...}).
 func Define[R any, T Schema[R]](declare func(Builder[R], *R) T) (result T) {
 	template := new(R)
-	d := &declaration{core: &rowCore{}, typ: reflect.TypeFor[R](), template: unsafe.Pointer(template), fields: map[int]*fieldCore{}}
+	d := &declaration{core: &rowCore{typ: reflect.TypeFor[R]()}, typ: reflect.TypeFor[R](), template: unsafe.Pointer(template), fields: map[int]*fieldCore{}}
 	core := d.core
 	decode := func(row database.Row) (R, error) {
 		var item R
-		dest := make([]any, len(core.fields))
-		for i, f := range core.fields {
-			dest[i] = f.scan(unsafe.Pointer(&item))
-		}
-		if err := row.Scan(dest...); err != nil {
+		if err := scanDeclaredRow(core, row, unsafe.Pointer(&item)); err != nil {
 			return *new(R), err
 		}
 		return item, nil
@@ -159,6 +156,14 @@ func Define[R any, T Schema[R]](declare func(Builder[R], *R) T) (result T) {
 	}
 	seal(d)
 	return result
+}
+
+func scanDeclaredRow(core *rowCore, row database.Row, base unsafe.Pointer) error {
+	dest := make([]any, len(core.fields))
+	for i, f := range core.fields {
+		dest[i] = f.scan(base)
+	}
+	return row.Scan(dest...)
 }
 
 func bindField[R, V any](b Builder[R], ptr *V, c codec.Codec[V]) Field[R, V] {

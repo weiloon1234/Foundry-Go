@@ -1,0 +1,1218 @@
+{
+  "slice": "B5d",
+  "stage": "5",
+  "base_commit": "80546f4c266744030102f1c69a536566d9cfcadc",
+  "recorded_at": "2026-10-23T13:08:34.798563+00:00",
+  "status": "Implemented; requested acceptance passed; uncommitted.",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r2",
+    "GOWORK": "off",
+    "go": "go1.27.1 darwin/arm64",
+    "services": "No live PostgreSQL or other external service run."
+  },
+  "api": {
+    "types": [
+      "orm.AuditPolicy[M]",
+      "orm.AuditRule[M]"
+    ],
+    "functions": [
+      "orm.AuditField",
+      "orm.AuditEncryptedField",
+      "orm.AuditNullableEncryptedField",
+      "orm.AuditPolicyOf",
+      "orm.Audit",
+      "orm.Auditing",
+      "orm.AuditRead",
+      "orm.AuditReadNullable",
+      "orm.AuditReadEncrypted",
+      "orm.AuditReadNullableEncrypted"
+    ],
+    "disclosure": "Reuses record.Automatic, record.Exclude, record.Redact; zero model-owned policy means Automatic. Invalid/duplicate/foreign rules and key exclusion/redaction fail before capture or registration.",
+    "registration": "audit.Register(..., orm.Auditing(table.Table, policy)); existing per-model write observer factories and instance-owned recorder; no local hook factory needed.",
+    "history": "record.Model[M,K] and existing record.FieldChange[V]; nullable and encrypted reader variants use the stored column decoder."
+  },
+  "contracts": [
+    "Capture consumes persisted locked originals/RETURNING snapshots and saved Assigned/Changed flags. It does not run mutators, accessors, equality comparisons or SQL.",
+    "Updates, soft deletes and restores retain touched fields plus the key; create and physical delete retain all fields subject to policy. ForceDelete captures once through Deleted. Compare without operation is rejected.",
+    "Shared audit/record capture applies exclusions, sensitive-codec/name and encryption redaction before invoking those field binders; JSON redaction occurs before audit-row SQL binding. Untouched fields never invoke capture binders.",
+    "Primary identity uses the already declared stored key binder/decoder. Historical reads use the already declared decoder, preserving omitted/absent/NULL/redaction states and custom stored representations.",
+    "Automatic auditing stays inside the business transaction. An error from audit or a later observer aborts business and audit rows together. Existing acknowledged set writes skip model observers/audit.",
+    "Existing callback.Isolated and safe fault wrapping remain the shared capture/decode boundaries. Metadata bridges validate issued sqlowner.Metadata capabilities before retaining or invoking callbacks; no capability is passed to application code.",
+    "No new generic field capture closures or Query/Table methods. Nullable metadata retains its existing decoder function beside its lifecycle policy; audit key adapters only delegate the declared codec functions."
+  ],
+  "ported_rows": [
+    "audit_policy_conversion",
+    "audit_policy_owner"
+  ],
+  "extra_compilefail_cases": [
+    "audit_history_owner"
+  ],
+  "surface_additions": {
+    "snapshot_lines_added": 14,
+    "snapshot": "database/orm/testdata/public-methods.txt",
+    "new_orm_types": 2,
+    "new_orm_functions": 10,
+    "query_table_methods_added": 0,
+    "framework_bridges": [
+      "record.FoundryStoredField",
+      "record.FoundryCapture",
+      "record.FoundryReadField"
+    ],
+    "retained": "All prior snapshot lines preserved in order; no method or exported field removals."
+  },
+  "footprints": {
+    "measurement": "Defined T/t symbols in native package archives, not runtime speed or linked size. New probe retains declaration/observer capture plus typed historical reads.",
+    "new_probe": {
+      "audit": {
+        "functions": 1313,
+        "baseline_functions": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6417688
+      }
+    },
+    "tight_probes": {
+      "q_with": {
+        "functions": 1209,
+        "baseline_functions": 1053,
+        "ceiling": 1211,
+        "archive_bytes": 5496644
+      },
+      "aggregate_families": {
+        "functions": 4362,
+        "baseline_functions": 3799,
+        "ceiling": 4369,
+        "archive_bytes": 19796064
+      },
+      "onequery": {
+        "functions": 854,
+        "baseline_functions": 803,
+        "ceiling": 924,
+        "archive_bytes": 4073926
+      }
+    },
+    "growth_justification": "q_with remains 1209/1211 and aggregate_families remains 4362/4369: zero growth. New audit-only probe is 1313 with ceil(1313*1.15)=1510. All 60 existing baseline declarations and ceilings remain unchanged.",
+    "audit_reachability": "Added a function-symbol guard for onequery, q_with and aggregate_families; all pass with zero audit adapter functions.",
+    "all_probes": {
+      "aggregate_families": {
+        "functions": 4362,
+        "baseline_functions": 3799,
+        "ceiling": 4369,
+        "archive_bytes": 19796064
+      },
+      "aggregate_group": {
+        "functions": 2529,
+        "baseline_functions": 2426,
+        "ceiling": 2790,
+        "archive_bytes": 11294164
+      },
+      "aggregate_slot_declaration": {
+        "functions": 1127,
+        "baseline_functions": 1112,
+        "ceiling": 1279,
+        "archive_bytes": 4823434
+      },
+      "aggregate_slot_direct": {
+        "functions": 1490,
+        "baseline_functions": 1490,
+        "ceiling": 1714,
+        "archive_bytes": 6067856
+      },
+      "aggregate_slot_nested": {
+        "functions": 2050,
+        "baseline_functions": 2048,
+        "ceiling": 2356,
+        "archive_bytes": 8380386
+      },
+      "aggregate_slot_pivot": {
+        "functions": 2092,
+        "baseline_functions": 2095,
+        "ceiling": 2410,
+        "archive_bytes": 8684858
+      },
+      "audit": {
+        "functions": 1313,
+        "baseline_functions": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6417688
+      },
+      "column_encrypted_json": {
+        "functions": 1321,
+        "baseline_functions": 1217,
+        "ceiling": 1400,
+        "archive_bytes": 5618768
+      },
+      "column_encrypted_text": {
+        "functions": 1231,
+        "baseline_functions": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5308590
+      },
+      "column_enum": {
+        "functions": 1344,
+        "baseline_functions": 1232,
+        "ceiling": 1417,
+        "archive_bytes": 5609834
+      },
+      "column_interval": {
+        "functions": 1293,
+        "baseline_functions": 1178,
+        "ceiling": 1355,
+        "archive_bytes": 5540300
+      },
+      "column_json": {
+        "functions": 1391,
+        "baseline_functions": 1280,
+        "ceiling": 1472,
+        "archive_bytes": 5847874
+      },
+      "column_nullable_encrypted_json": {
+        "functions": 1562,
+        "baseline_functions": 1449,
+        "ceiling": 1667,
+        "archive_bytes": 6884210
+      },
+      "column_nullable_encrypted_text": {
+        "functions": 1472,
+        "baseline_functions": 1359,
+        "ceiling": 1563,
+        "archive_bytes": 6551074
+      },
+      "column_nullable_interval": {
+        "functions": 1530,
+        "baseline_functions": 1406,
+        "ceiling": 1617,
+        "archive_bytes": 6757342
+      },
+      "column_nullable_json": {
+        "functions": 1642,
+        "baseline_functions": 1522,
+        "ceiling": 1751,
+        "archive_bytes": 7072156
+      },
+      "column_nullable_password": {
+        "functions": 1535,
+        "baseline_functions": 1417,
+        "ceiling": 1630,
+        "archive_bytes": 6731510
+      },
+      "column_nullable_text": {
+        "functions": 1584,
+        "baseline_functions": 1456,
+        "ceiling": 1675,
+        "archive_bytes": 6530744
+      },
+      "column_number": {
+        "functions": 1267,
+        "baseline_functions": 1172,
+        "ceiling": 1348,
+        "archive_bytes": 5282278
+      },
+      "column_password": {
+        "functions": 1299,
+        "baseline_functions": 1190,
+        "ceiling": 1369,
+        "archive_bytes": 5559528
+      },
+      "column_time": {
+        "functions": 1309,
+        "baseline_functions": 1194,
+        "ceiling": 1374,
+        "archive_bytes": 5420384
+      },
+      "conditional_row": {
+        "functions": 1803,
+        "baseline_functions": 1681,
+        "ceiling": 1934,
+        "archive_bytes": 8173122
+      },
+      "conditional_selected": {
+        "functions": 1647,
+        "baseline_functions": 1511,
+        "ceiling": 1738,
+        "archive_bytes": 7517420
+      },
+      "correlation": {
+        "functions": 2990,
+        "baseline_functions": 2752,
+        "ceiling": 3165,
+        "archive_bytes": 13667910
+      },
+      "cursor": {
+        "functions": 1186,
+        "baseline_functions": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5320934
+      },
+      "distinct": {
+        "functions": 1174,
+        "baseline_functions": 1135,
+        "ceiling": 1306,
+        "archive_bytes": 5641454
+      },
+      "expr_arithmetic": {
+        "functions": 1256,
+        "baseline_functions": 1162,
+        "ceiling": 1337,
+        "archive_bytes": 5852414
+      },
+      "expr_selected": {
+        "functions": 1696,
+        "baseline_functions": 1551,
+        "ceiling": 1784,
+        "archive_bytes": 7497134
+      },
+      "global_scopes": {
+        "functions": 1387,
+        "baseline_functions": 1374,
+        "ceiling": 1581,
+        "archive_bytes": 6338840
+      },
+      "has": {
+        "functions": 1412,
+        "baseline_functions": 1302,
+        "ceiling": 1498,
+        "archive_bytes": 6207704
+      },
+      "has_one": {
+        "functions": 1403,
+        "baseline_functions": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6181404
+      },
+      "input_column_kinds": {
+        "functions": 5321,
+        "baseline_functions": 5088,
+        "ceiling": 5852,
+        "archive_bytes": 21949210
+      },
+      "input_key": {
+        "functions": 1049,
+        "baseline_functions": 982,
+        "ceiling": 1130,
+        "archive_bytes": 4834278
+      },
+      "key_chunk": {
+        "functions": 862,
+        "baseline_functions": 812,
+        "ceiling": 934,
+        "archive_bytes": 4116942
+      },
+      "lateral": {
+        "functions": 3046,
+        "baseline_functions": 2852,
+        "ceiling": 3280,
+        "archive_bytes": 14999046
+      },
+      "lifecycle_changes": {
+        "functions": 1069,
+        "baseline_functions": 1050,
+        "ceiling": 1208,
+        "archive_bytes": 4927550
+      },
+      "lifecycle_write": {
+        "functions": 949,
+        "baseline_functions": 930,
+        "ceiling": 1070,
+        "archive_bytes": 4687042
+      },
+      "model_type": {
+        "functions": 299,
+        "baseline_functions": 299,
+        "ceiling": 344,
+        "archive_bytes": 1272416
+      },
+      "models": {
+        "functions": 6849,
+        "baseline_functions": 6147,
+        "ceiling": 7070,
+        "archive_bytes": 29794274
+      },
+      "models_1": {
+        "functions": 1751,
+        "baseline_functions": 1619,
+        "ceiling": 1862,
+        "archive_bytes": 7217634
+      },
+      "models_3": {
+        "functions": 2605,
+        "baseline_functions": 2435,
+        "ceiling": 2801,
+        "archive_bytes": 10814468
+      },
+      "morph": {
+        "functions": 1155,
+        "baseline_functions": 1088,
+        "ceiling": 1252,
+        "archive_bytes": 5187708
+      },
+      "mutator_explicit": {
+        "functions": 1698,
+        "baseline_functions": 1605,
+        "ceiling": 1846,
+        "archive_bytes": 6996034
+      },
+      "mutators": {
+        "functions": 855,
+        "baseline_functions": 801,
+        "ceiling": 922,
+        "archive_bytes": 4459906
+      },
+      "nested_with": {
+        "functions": 1403,
+        "baseline_functions": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6220296
+      },
+      "nullable_join_chain": {
+        "functions": 1853,
+        "baseline_functions": 1695,
+        "ceiling": 1950,
+        "archive_bytes": 8794994
+      },
+      "on_comparisons": {
+        "functions": 1589,
+        "baseline_functions": 1454,
+        "ceiling": 1673,
+        "archive_bytes": 7185584
+      },
+      "onequery": {
+        "functions": 854,
+        "baseline_functions": 803,
+        "ceiling": 924,
+        "archive_bytes": 4073926
+      },
+      "outer_join": {
+        "functions": 1788,
+        "baseline_functions": 1668,
+        "ceiling": 1919,
+        "archive_bytes": 8456500
+      },
+      "pivot": {
+        "functions": 1072,
+        "baseline_functions": 1005,
+        "ceiling": 1156,
+        "archive_bytes": 4888272
+      },
+      "q_join": {
+        "functions": 1766,
+        "baseline_functions": 1598,
+        "ceiling": 1838,
+        "archive_bytes": 8342064
+      },
+      "q_select": {
+        "functions": 895,
+        "baseline_functions": 836,
+        "ceiling": 962,
+        "archive_bytes": 4301634
+      },
+      "q_with": {
+        "functions": 1209,
+        "baseline_functions": 1053,
+        "ceiling": 1211,
+        "archive_bytes": 5496644
+      },
+      "raw": {
+        "functions": 1095,
+        "baseline_functions": 1045,
+        "ceiling": 1202,
+        "archive_bytes": 5173090
+      },
+      "relation_with": {
+        "functions": 2047,
+        "baseline_functions": 1847,
+        "ceiling": 2125,
+        "archive_bytes": 8721826
+      },
+      "report_pipeline": {
+        "functions": 2120,
+        "baseline_functions": 1905,
+        "ceiling": 2191,
+        "archive_bytes": 11206854
+      },
+      "retrieval_read": {
+        "functions": 831,
+        "baseline_functions": 826,
+        "ceiling": 950,
+        "archive_bytes": 4086338
+      },
+      "sensitive_models": {
+        "functions": 2821,
+        "baseline_functions": 2606,
+        "ceiling": 2997,
+        "archive_bytes": 12772250
+      },
+      "subqueries": {
+        "functions": 3059,
+        "baseline_functions": 2837,
+        "ceiling": 3263,
+        "archive_bytes": 13155448
+      },
+      "table_ref": {
+        "functions": 854,
+        "baseline_functions": 803,
+        "ceiling": 924,
+        "archive_bytes": 4233050
+      },
+      "through": {
+        "functions": 986,
+        "baseline_functions": 928,
+        "ceiling": 1068,
+        "archive_bytes": 4395910
+      }
+    }
+  },
+  "checks": [
+    {
+      "command": "go build ./...",
+      "result": "PASS",
+      "log": "/private/tmp/goway-b5d-build-final.log"
+    },
+    {
+      "command": "go vet ./database/... ./internal/... ./audit/record",
+      "result": "PASS",
+      "log": "/private/tmp/goway-b5d-vet-final.log"
+    },
+    {
+      "command": "go test -race ./audit/record ./database/orm/... ./database/query/... ./internal/querycore/... ./internal/ormcore/...",
+      "result": "PASS",
+      "log": "/private/tmp/goway-b5d-race-final.log"
+    },
+    {
+      "command": "go -C tests/fixtures/goway vet ./...",
+      "result": "PASS",
+      "log": "/private/tmp/goway-b5d-fixture-vet.log"
+    },
+    {
+      "command": "go -C tests/fixtures/goway test -v .",
+      "result": "PASS",
+      "log": "/private/tmp/goway-b5d-fixture.log"
+    },
+    {
+      "command": "go -C tests/fixtures/goway test ./pgsmoke -run '^$'",
+      "result": "PASS",
+      "log": "/private/tmp/goway-b5d-pgcompile.log"
+    },
+    {
+      "command": "python3 tools/goway_catalogue.py",
+      "result": "PASS",
+      "log": "/private/tmp/goway-b5d-catalogue-final.log"
+    },
+    {
+      "command": "make docs-check",
+      "result": "PASS",
+      "log": "/private/tmp/goway-b5d-docs-final.log"
+    },
+    {
+      "command": "gofmt -w <19 changed Go files>; gofmt -l <same files>",
+      "result": "PASS",
+      "log": "/private/tmp/goway-b5d-gofmt.log"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS"
+    }
+  ],
+  "acceptance_counts": {
+    "fixture_compiler_cases": 355,
+    "fixture_footprint_probes": 61,
+    "fixture_goldens": "All pass, including audit payload/SQL parity across create, update, soft delete, restore and force delete."
+  },
+  "regressions": [
+    "TestAuditStoredSnapshotsPoliciesAndHistoricalFields",
+    "TestAuditRejectsInvalidPolicyAndStandaloneChanges",
+    "TestAuditCodecErrorsAreSafeAndDoNotRebindUntouchedFields",
+    "TestAuditKeepsPersistedPrimaryCodec",
+    "TestAuditNullableEncryptionDoesNotBindUnsealedValues",
+    "TestAuditRegistrationOwnsRecorderAndRollsBackWithBusinessWrite",
+    "TestStoredCaptureRejectsZeroSealAndRedactsBeforeBinding",
+    "TestHistoricalDecoderBridgeRejectsZeroSeal",
+    "TestAuditOldAndNewAgree"
+  ],
+  "postgresql_coverage": {
+    "file": "tests/fixtures/goway/pgsmoke/audit_test.go",
+    "status": "Compiled and vetted only; lead runs it.",
+    "covers": "Actual audit migrations/Recorder storage, business and audit row rollback after insertion, stored typed history reads, untouched-field omission."
+  },
+  "resolved_failures": [
+    "Initial ORM test build found package name record colliding with an existing test type; aliased new ORM imports to auditrecord.",
+    "Initial record vet found a test using nonexistent codec.Text; corrected to existing codec.String.",
+    "Initial catalogue run required case-name prefixes in the two ported mapping reasons; corrected only the B5d rows.",
+    "Initial race caught generic codec reconstruction in Audit and auditCodec. Removed reconstruction; existing declared bind/decode functions now pass through minimal identity adapters and the shared validated history bridge. All guards and full requested races passed afterward.",
+    "Expected snapshot mismatch was regenerated from go/types and checked for additions only."
+  ],
+  "notes": [
+    "The final build exited 0 while Go emitted a nonfatal sandbox warning about writing a module-version stat cache; no module or dependency changes were made.",
+    "After acceptance, only R7 example comments were clarified; gofmt and docs-check passed. Runtime implementations match the passed gate.",
+    "No generated declarations changed, so model generation was unnecessary."
+  ],
+  "shared_existing_files_touched": [
+    "audit/record/field.go",
+    "audit/record/view.go",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv",
+    "database/orm/README.md",
+    "database/orm/changes.go",
+    "database/orm/column.go",
+    "database/orm/method_surface_test.go",
+    "database/orm/testdata/public-methods.txt",
+    "tests/fixtures/goway/compiler_cases_test.go",
+    "tests/fixtures/goway/footprint_test.go"
+  ],
+  "files": [
+    "audit/record/field.go",
+    "audit/record/stored.go",
+    "audit/record/stored_test.go",
+    "audit/record/view.go",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv",
+    "database/orm/README.md",
+    "database/orm/audit.go",
+    "database/orm/audit_application_test.go",
+    "database/orm/audit_read.go",
+    "database/orm/audit_test.go",
+    "database/orm/changes.go",
+    "database/orm/column.go",
+    "database/orm/method_surface_test.go",
+    "database/orm/testdata/public-methods.txt",
+    "tests/fixtures/goway/audit_golden_test.go",
+    "tests/fixtures/goway/compiler_cases_test.go",
+    "tests/fixtures/goway/footprint_test.go",
+    "tests/fixtures/goway/pgsmoke/audit_test.go",
+    "tests/fixtures/goway/testdata/compilefail/audit_history_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/audit_policy_conversion/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/audit_policy_owner/invalid.go",
+    "tests/fixtures/goway/testdata/footprint/audit/probe.go"
+  ],
+  "source_sha256": {
+    ".gitignore": "9420ba43de51b768a977a2f8e14dccc28238186167a0bd48ba556bf99bb9bc5a",
+    "CHANGELOG.md": "cd54f1ce372ee16d5f367f4644f750918c7b4b6a3ca948aced337034cd2cf0da",
+    "audit/model.go": "d64e5b61bc807349bfaca45640094f95b74810d2f6bdeeaf0156d90080940962",
+    "audit/record/disclosure.go": "84c9135cd525d4c9c1624fb0d0bb669ae857ecae791d519cafdafad7a40af1ce",
+    "audit/record/field.go": "2e283e9f4a7ec85f1367ff52439db94e9f42dd630479cbed9c0f77c4519dbc2d",
+    "audit/record/model.go": "ae3da09ea2a3df5477dac86e29ccf6ebb3ceb32d1de0b9d8ff824b3dd1b1fdff",
+    "audit/record/registration.go": "9ae3122b331a8f48ba48688e18826b3af658ad0f5875d81208a77d33a7768966",
+    "audit/record/snapshot.go": "0648566a55cf8b226a5b39f91ede9fe07b61b999f6a82c98c4eb4b9df8ffb5ba",
+    "audit/record/stored.go": "31d884e57e786e8eca5b061141a176d6d00cf697beeb5abad6603346b125054f",
+    "audit/record/stored_test.go": "34b5cd8e61fc4a6d7e63a0e4b7b51acc7bb296fd527e3427f5f0664c4f20234a",
+    "audit/record/view.go": "903bdff7fbdaf1d482fc413567df66c791acc8ab7089d0bbef3f7a7481593b00",
+    "audit/registration.go": "01489983e959dfed655fe19b390b244722c0c324a06b1b6a2c7517c4c9fc9df5",
+    "blueprint/00-master-architecture-and-parity.md": "2cbebef12146a671b1c6dca0c584679e4686e0c6901d7df3698b8a27c864d921",
+    "blueprint/goway-data-layer/README.md": "ed73b10d40494b042172f6c2e7c12c1ab6744e720a083a284f1d1df66f453fb1",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "780dfd138427f4121e9e1cbb0c8e3cbc991b35a05b2cd4e785491fae9f4c6446",
+    "database/lifecycle/change.go": "71e5a1054a259441a1e0e82ae38fee229f55b15aad060255ea564671c36c4cb3",
+    "database/orm/README.md": "2b43727dd0bd447122010406b6972b80b7ecff8f3441a456340f029cb919b1cc",
+    "database/orm/audit.go": "d6ee60f41381fae60437d067b6d47710e504ccc37eecb8d778437b658328f133",
+    "database/orm/audit_application_test.go": "930347e771fe143053d81e52370b751f820219b85314f583b16e40823944e980",
+    "database/orm/audit_read.go": "c8a6cf1efeed86275f4f6edfb3d504927df443ef8b44a979f88dbac40a10a3d8",
+    "database/orm/audit_test.go": "a179a294c216a90c327b19133ef9609464d1968f99a1967a5b051cd4e051b4f3",
+    "database/orm/changes.go": "c4e5a7ad087f346fae8f4e8ceb24b165aee7adbec46d3073c633c96389e90b99",
+    "database/orm/column.go": "31edfc06bb898135a29dd00546a35e29d55a34fef4dfe43e671ae455f3b78a1f",
+    "database/orm/hooks.go": "7d2630575921df9e1aac1b4c45285321e11abcbc2df358126830644f5baef586",
+    "database/orm/method_surface_test.go": "09da6c2e6bf20754552422ccc23e7c110bc4d757ff386454b4bfe4cd1bde4608",
+    "database/orm/testdata/public-methods.txt": "13beb76cb48f9a739e4661697543ee192c329493585009cf57662fc51334118a",
+    "database/orm/write.go": "ddb7efae074ec4bebb985b7e75a8badb0721534b135406c404edb3065f3b269f",
+    "internal/callback/invoke.go": "b32a3f593aff1eb6b4d6007a02e04bd693a7ca5a31864bef607fd627a7fd435e",
+    "internal/generate/emit_model_audit.go": "38dbca148acb617da08ad8a5e1e55150aec604f55311609058e2eb4eaa091062",
+    "internal/sqlowner/seal.go": "b9f546f7111812d4a7245673425607c3bf7e4da73c048843f94c0f28df088cb8",
+    "model/reference.go": "796b7984f075fe634986c791b1e28fb51d913e1f85c16de6c9589d94b0cef478",
+    "tests/fixtures/goway/audit_golden_test.go": "0da2f26f10c2a555fdcb4b07dabc8272462c23f96cfe938c9bc9152c0713b463",
+    "tests/fixtures/goway/compiler_cases_test.go": "7aaa1b03b978254b51f5da183636e34188e3d2e6a122c04d59116c4a1d450874",
+    "tests/fixtures/goway/footprint_test.go": "933c1f8692890cf8c2bfee3d5bced78c7658a035cbcf0f03832292ef12df2771",
+    "tests/fixtures/goway/pgsmoke/audit_test.go": "b4f14177f734370ced6573dbfb7f558e564f7bbfe35e0af95b2934f3d8b4a9a6",
+    "tests/fixtures/goway/testdata/compilefail/audit_history_owner/invalid.go": "c29848c662bf0d0376cfa07d46e66b683d9fe789c744c1f7322f2450ef29741f",
+    "tests/fixtures/goway/testdata/compilefail/audit_policy_conversion/invalid.go": "0d3db1a79e6b778f7b53992bdec4b6afaefd9866acd19430737f1e8982bd0530",
+    "tests/fixtures/goway/testdata/compilefail/audit_policy_owner/invalid.go": "0c69b22ddfa95ed885d506267c8e4931479ecc27ce3850af6fdf02bc43d9a609",
+    "tests/fixtures/goway/testdata/footprint/audit/probe.go": "2022f7bb4e806425544841bd296be65d40730e455de4c8db14c401263b54c380",
+    "tools/release/release_test.go": "a33e0ba1908fd5debffb4c7258f115d5715cafd3bd0fafacc09afebb341559e9",
+    "tools/release/source.go": "0a95269a9308b11ff714037a7a85f92ac4833dda4d2f7248089fd84c81621d40"
+  },
+  "logs": {
+    "/private/tmp/goway-b5d-build-final.log": {
+      "sha256": "ebe18a43a9f0a17191e7334e9acbfb98059a4d43f4416a9863d8d7c9c11789dc"
+    },
+    "/private/tmp/goway-b5d-vet-final.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "/private/tmp/goway-b5d-race-final.log": {
+      "sha256": "9c7cba46710ef0917d36115aedba320a9132b6ea61f24e27914533cde9e4f53b"
+    },
+    "/private/tmp/goway-b5d-fixture-vet.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "/private/tmp/goway-b5d-fixture.log": {
+      "sha256": "d9b8bd3ef503957eb6b51f382a3747febb49b4a53326deec69daa179fb50e2e0"
+    },
+    "/private/tmp/goway-b5d-pgcompile.log": {
+      "sha256": "d0c6a7d17fcc6c1fbf13ce1906bf20956a05806c60ce3958d1908a7d97088981"
+    },
+    "/private/tmp/goway-b5d-catalogue-final.log": {
+      "sha256": "55c9cefc356a05b1490402548afdb3230999dfa9b5080ff6d6a1cf18decd21bb"
+    },
+    "/private/tmp/goway-b5d-docs-final.log": {
+      "sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+    },
+    "/private/tmp/goway-b5d-gofmt.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "docs_notes": [
+    "B5d ports the last two Stage 5 audit catalogue rows. Audit is opt-in through instance-owned application registration and package functions; no Query/Table methods added.",
+    "Document Automatic/Exclude/Redact, immutable model-owned policies, touched-only update/soft-delete/restore capture, complete create/delete snapshots, stored codecs and transactional rollback.",
+    "Historical readers preserve field omission, model absence, SQL NULL and redaction. Capture/redaction and decoder ownership are shared with the old API; ordinary read footprints remain unchanged.",
+    "No manifests, OpenAPI, TypeScript, datatables, relation writes or extension slots changed."
+  ],
+  "limits": [
+    "No Git write commands or commits.",
+    "No live PostgreSQL run.",
+    "Lead-owned shared documentation was not edited."
+  ],
+  "integration_batch3": {
+    "base_commit": "80546f4",
+    "status": "pass",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r2",
+      "GOWORK": "off"
+    },
+    "lane_source_sha256": {
+      "audit/model.go": "d64e5b61bc807349bfaca45640094f95b74810d2f6bdeeaf0156d90080940962",
+      "audit/record/disclosure.go": "84c9135cd525d4c9c1624fb0d0bb669ae857ecae791d519cafdafad7a40af1ce",
+      "audit/record/field.go": "2e283e9f4a7ec85f1367ff52439db94e9f42dd630479cbed9c0f77c4519dbc2d",
+      "audit/record/model.go": "ae3da09ea2a3df5477dac86e29ccf6ebb3ceb32d1de0b9d8ff824b3dd1b1fdff",
+      "audit/record/registration.go": "9ae3122b331a8f48ba48688e18826b3af658ad0f5875d81208a77d33a7768966",
+      "audit/record/snapshot.go": "0648566a55cf8b226a5b39f91ede9fe07b61b999f6a82c98c4eb4b9df8ffb5ba",
+      "audit/record/stored.go": "31d884e57e786e8eca5b061141a176d6d00cf697beeb5abad6603346b125054f",
+      "audit/record/stored_test.go": "34b5cd8e61fc4a6d7e63a0e4b7b51acc7bb296fd527e3427f5f0664c4f20234a",
+      "audit/record/view.go": "903bdff7fbdaf1d482fc413567df66c791acc8ab7089d0bbef3f7a7481593b00",
+      "audit/registration.go": "01489983e959dfed655fe19b390b244722c0c324a06b1b6a2c7517c4c9fc9df5",
+      "blueprint/goway-data-layer/compilefail-mapping.tsv": "777e4b0dde40bb81c28ed356938482eeaa4e5f0000b86941c7c1238005f795c7",
+      "database/lifecycle/change.go": "71e5a1054a259441a1e0e82ae38fee229f55b15aad060255ea564671c36c4cb3",
+      "database/orm/README.md": "2b43727dd0bd447122010406b6972b80b7ecff8f3441a456340f029cb919b1cc",
+      "database/orm/audit.go": "d6ee60f41381fae60437d067b6d47710e504ccc37eecb8d778437b658328f133",
+      "database/orm/audit_application_test.go": "930347e771fe143053d81e52370b751f820219b85314f583b16e40823944e980",
+      "database/orm/audit_read.go": "c8a6cf1efeed86275f4f6edfb3d504927df443ef8b44a979f88dbac40a10a3d8",
+      "database/orm/audit_test.go": "a179a294c216a90c327b19133ef9609464d1968f99a1967a5b051cd4e051b4f3",
+      "database/orm/changes.go": "c4e5a7ad087f346fae8f4e8ceb24b165aee7adbec46d3073c633c96389e90b99",
+      "database/orm/column.go": "5b815faeaee91b7c399753c5af4e7da61bfd64a89bfbc9011e0c97f6b4344611",
+      "database/orm/hooks.go": "7d2630575921df9e1aac1b4c45285321e11abcbc2df358126830644f5baef586",
+      "database/orm/method_surface_test.go": "6a7e2a614b5dee2584cff17c6b888052d9d6743e8e529a76d31a5e2d1eef7c8b",
+      "database/orm/testdata/public-methods.txt": "253cc8004733d2138f47e399ac3f2c1d1a3f7d3db2f5fff0e6cf7d38209bef4a",
+      "database/orm/write.go": "ddb7efae074ec4bebb985b7e75a8badb0721534b135406c404edb3065f3b269f",
+      "internal/callback/invoke.go": "b32a3f593aff1eb6b4d6007a02e04bd693a7ca5a31864bef607fd627a7fd435e",
+      "internal/generate/emit_model_audit.go": "38dbca148acb617da08ad8a5e1e55150aec604f55311609058e2eb4eaa091062",
+      "internal/sqlowner/seal.go": "b9f546f7111812d4a7245673425607c3bf7e4da73c048843f94c0f28df088cb8",
+      "model/reference.go": "796b7984f075fe634986c791b1e28fb51d913e1f85c16de6c9589d94b0cef478",
+      "tests/fixtures/goway/audit_golden_test.go": "0da2f26f10c2a555fdcb4b07dabc8272462c23f96cfe938c9bc9152c0713b463",
+      "tests/fixtures/goway/compiler_cases_test.go": "af31494bcbfd8d64a6983c8660046c1ff53aa0c98d73ecbdbf2e3c668e644520",
+      "tests/fixtures/goway/footprint_test.go": "4479b66eaa11fafe5048439a38818bab56bde0dc73e062c5267d2185b07cf14b",
+      "tests/fixtures/goway/pgsmoke/audit_test.go": "b4f14177f734370ced6573dbfb7f558e564f7bbfe35e0af95b2934f3d8b4a9a6",
+      "tests/fixtures/goway/testdata/compilefail/audit_history_owner/invalid.go": "c29848c662bf0d0376cfa07d46e66b683d9fe789c744c1f7322f2450ef29741f",
+      "tests/fixtures/goway/testdata/compilefail/audit_policy_conversion/invalid.go": "0d3db1a79e6b778f7b53992bdec4b6afaefd9866acd19430737f1e8982bd0530",
+      "tests/fixtures/goway/testdata/compilefail/audit_policy_owner/invalid.go": "0c69b22ddfa95ed885d506267c8e4931479ecc27ce3850af6fdf02bc43d9a609",
+      "tests/fixtures/goway/testdata/footprint/audit/probe.go": "2022f7bb4e806425544841bd296be65d40730e455de4c8db14c401263b54c380"
+    },
+    "conflicts": {
+      "6a4": [
+        "database/orm/expr/README.md",
+        "database/orm/method_surface_test.go",
+        "database/orm/testdata/public-methods.txt",
+        "tests/fixtures/goway/compiler_cases_test.go",
+        "tests/fixtures/goway/footprint_test.go"
+      ],
+      "6c1": [
+        "database/orm/method_surface_test.go"
+      ],
+      "B5d": [
+        "database/orm/testdata/public-methods.txt",
+        "tests/fixtures/goway/compiler_cases_test.go",
+        "tests/fixtures/goway/footprint_test.go"
+      ]
+    },
+    "resolution": "Union APIs/docs/cases/probes, preserve every existing ceiling and sorted map enumeration, regenerate go/types snapshot. No runtime conflict required choosing between lane behavior.",
+    "corrections": [
+      "Recovered two raw.test lint fixture sources omitted by the patch due to *.test ignore; both match accepted lane evidence hashes. Added exact directory exception and release inventory assertions.",
+      "Initial B5d apply failed index checks without applying; restaged already resolved registries and reapplied."
+    ],
+    "counts": {
+      "catalogue_rows": 1026,
+      "dispositions": {
+        "ported": 292,
+        "port": 290,
+        "unaffected": 444
+      },
+      "compiler_cases": 388,
+      "footprint_probes": 64
+    },
+    "footprints": {
+      "aggregate_families": {
+        "functions": 4362,
+        "baseline": 3799,
+        "ceiling": 4369,
+        "archive_bytes": 19814020
+      },
+      "aggregate_group": {
+        "functions": 2529,
+        "baseline": 2426,
+        "ceiling": 2790,
+        "archive_bytes": 11308584
+      },
+      "aggregate_slot_declaration": {
+        "functions": 1127,
+        "baseline": 1112,
+        "ceiling": 1279,
+        "archive_bytes": 4828314
+      },
+      "aggregate_slot_direct": {
+        "functions": 1490,
+        "baseline": 1490,
+        "ceiling": 1714,
+        "archive_bytes": 6087338
+      },
+      "aggregate_slot_nested": {
+        "functions": 2050,
+        "baseline": 2048,
+        "ceiling": 2356,
+        "archive_bytes": 8413324
+      },
+      "aggregate_slot_pivot": {
+        "functions": 2092,
+        "baseline": 2095,
+        "ceiling": 2410,
+        "archive_bytes": 8721626
+      },
+      "audit": {
+        "functions": 1313,
+        "baseline": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6437574
+      },
+      "column_encrypted_json": {
+        "functions": 1321,
+        "baseline": 1217,
+        "ceiling": 1400,
+        "archive_bytes": 5623514
+      },
+      "column_encrypted_text": {
+        "functions": 1231,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5313344
+      },
+      "column_enum": {
+        "functions": 1344,
+        "baseline": 1232,
+        "ceiling": 1417,
+        "archive_bytes": 5614940
+      },
+      "column_interval": {
+        "functions": 1293,
+        "baseline": 1178,
+        "ceiling": 1355,
+        "archive_bytes": 5556528
+      },
+      "column_json": {
+        "functions": 1391,
+        "baseline": 1280,
+        "ceiling": 1472,
+        "archive_bytes": 5853454
+      },
+      "column_nullable_encrypted_json": {
+        "functions": 1562,
+        "baseline": 1449,
+        "ceiling": 1667,
+        "archive_bytes": 6889190
+      },
+      "column_nullable_encrypted_text": {
+        "functions": 1472,
+        "baseline": 1359,
+        "ceiling": 1563,
+        "archive_bytes": 6556064
+      },
+      "column_nullable_interval": {
+        "functions": 1530,
+        "baseline": 1406,
+        "ceiling": 1617,
+        "archive_bytes": 6773722
+      },
+      "column_nullable_json": {
+        "functions": 1642,
+        "baseline": 1522,
+        "ceiling": 1751,
+        "archive_bytes": 7077976
+      },
+      "column_nullable_password": {
+        "functions": 1535,
+        "baseline": 1417,
+        "ceiling": 1630,
+        "archive_bytes": 6736982
+      },
+      "column_nullable_text": {
+        "functions": 1584,
+        "baseline": 1456,
+        "ceiling": 1675,
+        "archive_bytes": 6547806
+      },
+      "column_number": {
+        "functions": 1267,
+        "baseline": 1172,
+        "ceiling": 1348,
+        "archive_bytes": 5298356
+      },
+      "column_password": {
+        "functions": 1299,
+        "baseline": 1190,
+        "ceiling": 1369,
+        "archive_bytes": 5564706
+      },
+      "column_time": {
+        "functions": 1309,
+        "baseline": 1194,
+        "ceiling": 1374,
+        "archive_bytes": 5436430
+      },
+      "conditional_row": {
+        "functions": 1803,
+        "baseline": 1681,
+        "ceiling": 1934,
+        "archive_bytes": 8191646
+      },
+      "conditional_selected": {
+        "functions": 1647,
+        "baseline": 1511,
+        "ceiling": 1738,
+        "archive_bytes": 7530928
+      },
+      "correlation": {
+        "functions": 2990,
+        "baseline": 2752,
+        "ceiling": 3165,
+        "archive_bytes": 13700932
+      },
+      "cursor": {
+        "functions": 1186,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5340414
+      },
+      "distinct": {
+        "functions": 1174,
+        "baseline": 1135,
+        "ceiling": 1306,
+        "archive_bytes": 5657462
+      },
+      "expr_arithmetic": {
+        "functions": 1256,
+        "baseline": 1162,
+        "ceiling": 1337,
+        "archive_bytes": 5867588
+      },
+      "expr_selected": {
+        "functions": 1696,
+        "baseline": 1551,
+        "ceiling": 1784,
+        "archive_bytes": 7510554
+      },
+      "global_scopes": {
+        "functions": 1389,
+        "baseline": 1374,
+        "ceiling": 1581,
+        "archive_bytes": 6379120
+      },
+      "has": {
+        "functions": 1412,
+        "baseline": 1302,
+        "ceiling": 1498,
+        "archive_bytes": 6228334
+      },
+      "has_one": {
+        "functions": 1403,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6201770
+      },
+      "input_column_kinds": {
+        "functions": 5321,
+        "baseline": 5088,
+        "ceiling": 5852,
+        "archive_bytes": 21979630
+      },
+      "input_key": {
+        "functions": 1049,
+        "baseline": 982,
+        "ceiling": 1130,
+        "archive_bytes": 4839804
+      },
+      "key_chunk": {
+        "functions": 862,
+        "baseline": 812,
+        "ceiling": 934,
+        "archive_bytes": 4131370
+      },
+      "lateral": {
+        "functions": 3046,
+        "baseline": 2852,
+        "ceiling": 3280,
+        "archive_bytes": 15031756
+      },
+      "lifecycle_changes": {
+        "functions": 1069,
+        "baseline": 1050,
+        "ceiling": 1208,
+        "archive_bytes": 4946540
+      },
+      "lifecycle_write": {
+        "functions": 949,
+        "baseline": 930,
+        "ceiling": 1070,
+        "archive_bytes": 4705730
+      },
+      "model_type": {
+        "functions": 299,
+        "baseline": 299,
+        "ceiling": 344,
+        "archive_bytes": 1272140
+      },
+      "models": {
+        "functions": 6849,
+        "baseline": 6147,
+        "ceiling": 7070,
+        "archive_bytes": 29877108
+      },
+      "models_1": {
+        "functions": 1751,
+        "baseline": 1619,
+        "ceiling": 1862,
+        "archive_bytes": 7235732
+      },
+      "models_3": {
+        "functions": 2605,
+        "baseline": 2435,
+        "ceiling": 2801,
+        "archive_bytes": 10836654
+      },
+      "morph": {
+        "functions": 1155,
+        "baseline": 1088,
+        "ceiling": 1252,
+        "archive_bytes": 5211920
+      },
+      "mutator_explicit": {
+        "functions": 1698,
+        "baseline": 1605,
+        "ceiling": 1846,
+        "archive_bytes": 7014838
+      },
+      "mutators": {
+        "functions": 855,
+        "baseline": 801,
+        "ceiling": 922,
+        "archive_bytes": 4479738
+      },
+      "nested_with": {
+        "functions": 1403,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6240676
+      },
+      "nullable_join_chain": {
+        "functions": 1853,
+        "baseline": 1695,
+        "ceiling": 1950,
+        "archive_bytes": 8813626
+      },
+      "on_comparisons": {
+        "functions": 1589,
+        "baseline": 1454,
+        "ceiling": 1673,
+        "archive_bytes": 7204914
+      },
+      "onequery": {
+        "functions": 854,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 4088372
+      },
+      "outer_join": {
+        "functions": 1788,
+        "baseline": 1668,
+        "ceiling": 1919,
+        "archive_bytes": 8475116
+      },
+      "pivot": {
+        "functions": 1072,
+        "baseline": 1005,
+        "ceiling": 1156,
+        "archive_bytes": 4911212
+      },
+      "q_join": {
+        "functions": 1766,
+        "baseline": 1598,
+        "ceiling": 1838,
+        "archive_bytes": 8376032
+      },
+      "q_select": {
+        "functions": 895,
+        "baseline": 836,
+        "ceiling": 962,
+        "archive_bytes": 4316508
+      },
+      "q_with": {
+        "functions": 1211,
+        "baseline": 1053,
+        "ceiling": 1211,
+        "archive_bytes": 5525608
+      },
+      "raw": {
+        "functions": 1095,
+        "baseline": 1045,
+        "ceiling": 1202,
+        "archive_bytes": 5187168
+      },
+      "raw_fragments": {
+        "functions": 1379,
+        "baseline": 1331,
+        "ceiling": 1531,
+        "archive_bytes": 6182516
+      },
+      "records": {
+        "functions": 1313,
+        "baseline": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6459486
+      },
+      "relation_with": {
+        "functions": 2047,
+        "baseline": 1847,
+        "ceiling": 2125,
+        "archive_bytes": 8746170
+      },
+      "report_pipeline": {
+        "functions": 2120,
+        "baseline": 1905,
+        "ceiling": 2191,
+        "archive_bytes": 11245428
+      },
+      "retrieval_read": {
+        "functions": 831,
+        "baseline": 826,
+        "ceiling": 950,
+        "archive_bytes": 4103056
+      },
+      "sensitive_models": {
+        "functions": 2821,
+        "baseline": 2606,
+        "ceiling": 2997,
+        "archive_bytes": 12782510
+      },
+      "subqueries": {
+        "functions": 3059,
+        "baseline": 2837,
+        "ceiling": 3263,
+        "archive_bytes": 13188482
+      },
+      "table_ref": {
+        "functions": 854,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 4248684
+      },
+      "through": {
+        "functions": 986,
+        "baseline": 928,
+        "ceiling": 1068,
+        "archive_bytes": 4415506
+      },
+      "transaction_records": {
+        "functions": 1296,
+        "baseline": 1296,
+        "ceiling": 1491,
+        "archive_bytes": 6102452
+      }
+    },
+    "commands": [
+      {
+        "command": "go build ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch3/build.log",
+        "log_sha256": "56d385592f7bb1b483a385730227928c91d208da1f51605c535c9172e354df06"
+      },
+      {
+        "command": "go vet ./database/... ./internal/... ./cmd/...",
+        "status": "pass",
+        "log": ".cache/goway-batch3/vet.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "go test -race ./database/... ./internal/... ./audit/... ./cmd/foundry/...",
+        "status": "pass",
+        "log": ".cache/goway-batch3/race.log",
+        "log_sha256": "bda47c05dfc4f1491b8dc94bf310861c110eba9c47052c1168e74d85157c8f00",
+        "initial_status": "sandbox-blocked only in internal/websockettest; every other package passed",
+        "completion": {
+          "command": "go test -race ./internal/websockettest/...",
+          "status": "pass",
+          "permission": "localhost test server allowed",
+          "log": ".cache/goway-batch3/race-websockettest.log",
+          "log_sha256": "1569358365960482b68ac5157d8888c6c53f12b6c4e2b6e8d119e882821815cd"
+        }
+      },
+      {
+        "command": "cd tests/fixtures/goway && go vet ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch3/fixture-vet.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "cd tests/fixtures/goway && go test -v ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch3/fixture-test.log",
+        "log_sha256": "d461221e42c2f2a1048cd3518cf58fb22b95326611d543cbb32aeb2b4acaecff"
+      },
+      {
+        "command": "python3 tools/goway_catalogue.py",
+        "status": "pass",
+        "log": ".cache/goway-batch3/catalogue.log",
+        "log_sha256": "14f1e1ef5604930a3e558c2ea6889a2282e50e54dd3e210caa9ce403f6388020"
+      },
+      {
+        "command": "make generate-check",
+        "status": "pass",
+        "log": ".cache/goway-batch3/generate.log",
+        "log_sha256": "2d9a3b6531cf4b5135a1526d050d10b91ab02bd96a97d3e382a4352b8b56aaef"
+      },
+      {
+        "command": "make release-tools-check",
+        "status": "pass",
+        "log": ".cache/goway-batch3/release-tools.log",
+        "log_sha256": "228af5c26b75cb70a5d2c5442c566325f7541618d14bfb3e20a9187b678d49aa"
+      },
+      {
+        "command": "make docs-check",
+        "status": "pass",
+        "log": ".cache/goway-batch3/docs.log",
+        "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+      },
+      {
+        "command": "gofmt -l (all repository Go files)",
+        "status": "pass",
+        "log": ".cache/goway-batch3/gofmt.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "git diff --check",
+        "status": "pass",
+        "log": ".cache/goway-batch3/diff-check.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "foundry lint --no-raw ./... (cwd tests/fixtures/goway/testdata/noraw/positive); foundry lint --no-raw ./models/... ./reporting/... (fixture cwd)",
+        "status": "pass",
+        "log": ".cache/goway-batch3/no-raw.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "release_inventory": "All ten noraw fixtures are Go sources; existing source policy covers them. Explicit fixture inventory assertions plus internal/noraw runtime source sweep added; no broader extension allowance.",
+    "not_run": [
+      "Live PostgreSQL (lead checkpoint; opt-in tests skip without configuration)",
+      "Benchmarks (not requested)"
+    ],
+    "git": "Only authorized apply -3 --binary and add for integration; no commit."
+  }
+}

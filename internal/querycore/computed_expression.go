@@ -22,6 +22,8 @@ func VisitComputedValue(v ValueExpression, item func(ValueExpression) error, con
 		return true, nil
 	case ParameterNode:
 		return true, v.Validate()
+	case RawFragment:
+		return true, v.Validate()
 	case ConditionalNode:
 		if v.Err != nil {
 			return true, v.Err
@@ -66,6 +68,9 @@ func ValidateRowValue(v ValueExpression, field func(FieldRef) error, depth int, 
 	}
 	if f, ok := v.(FieldRef); ok {
 		return field(f)
+	}
+	if _, raw := v.(RawFragment); raw {
+		return rawInvalid("selected fragment cannot be used as a row value")
 	}
 	if s, ok := v.(ScalarSubquery); ok {
 		// The subquery owns an independent SELECT phase. Its scopes, cardinality

@@ -12,7 +12,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlvalue"
-	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 // MaxCapturedValueBytes bounds one captured value before the record-level
@@ -72,41 +71,72 @@ func fieldFromWire(wire fieldWire) (capturedField, error) {
 // Values above MaxCapturedValueBytes become Oversized digests rather than
 // failing the business write.
 func CaptureField[M, V any](name string, c codec.Codec[V], change lifecycle.FieldChange[V], disclosure Disclosure) (Field[M], error) {
-	if !sqlname.Valid(name) {
-		return Field[M]{}, fault.New(fault.Invalid, "audit field requires a declared column")
-	}
-	if err := disclosure.Validate(); err != nil {
+	field := FoundryStoredField{Name: name, Type: c.ParameterType(), Sensitive: c.SensitiveValues(),
+		Before: change.Before().IsSet(), After: change.After().IsSet(), Assigned: change.Assigned(), Changed: change.Changed(),
+		Bind: func(after bool) (driver.Value, error) {
+			input := change.Before()
+			if after {
+				input = change.After()
+			}
+			v, _ := input.Get()
+			return c.Bind(v)
+		}}
+	captured, err := captureStoredField(field, disclosure)
+	if err != nil {
 		return Field[M]{}, err
 	}
-	before, after := change.Before().IsSet(), change.After().IsSet()
-	if !before && !after || change.Assigned() && !after {
-		return Field[M]{}, fault.New(fault.Invalid, "audit field requires a stored change")
+	return Field[M]{field: captured, before: field.Before, after: field.After, excluded: disclosure == Exclude}, err
+}
+
+func captureStoredField(field FoundryStoredField, disclosure Disclosure) (capturedField, error) {
+	if !sqlname.Valid(field.Name) {
+		return capturedField{}, fault.New(fault.Invalid, "audit field requires a declared column")
 	}
-	result := Field[M]{field: capturedField{name: name, typ: c.ParameterType(), assigned: change.Assigned(), changed: change.Changed()},
-		before: before, after: after, excluded: disclosure == Exclude}
-	if result.excluded {
+	if err := disclosure.Validate(); err != nil {
+		return capturedField{}, err
+	}
+	if !field.Before && !field.After || field.Assigned && !field.After {
+		return capturedField{}, fault.New(fault.Invalid, "audit field requires a stored change")
+	}
+	result := capturedField{name: field.Name, typ: field.Type, assigned: field.Assigned, changed: field.Changed}
+	if disclosure == Exclude {
 		return result, nil
 	}
-	if disclosure == Redact || c.SensitiveValues() || SensitiveName(name) {
-		if before {
-			result.field.before.state = Redacted
+	if disclosure == Redact || field.Sensitive || SensitiveName(field.Name) {
+		if field.Before {
+			result.before.state = Redacted
 		}
-		if after {
-			result.field.after.state = Redacted
+		if field.After {
+			result.after.state = Redacted
 		}
 		return result, nil
 	}
 	err := callback.Isolated("capture audit field", func() error {
-		var err error
-		result.field.before, err = captureSnapshot(c, change.Before())
-		if err != nil {
-			return err
+		if field.Bind == nil {
+			return fault.New(fault.Invalid, "audit field has no stored codec")
 		}
-		result.field.after, err = captureSnapshot(c, change.After())
-		return err
+		for _, after := range []bool{false, true} {
+			if !after && !field.Before || after && !field.After {
+				continue
+			}
+			bound, err := field.Bind(after)
+			if err != nil {
+				return err
+			}
+			snapshot, err := captureBound(bound, field.Type)
+			if err != nil {
+				return err
+			}
+			if after {
+				result.after = snapshot
+			} else {
+				result.before = snapshot
+			}
+		}
+		return nil
 	})
 	if err != nil {
-		return Field[M]{}, fault.Wrap(fault.Invalid, "audit field capture failed", err)
+		return capturedField{}, fault.Wrap(fault.Invalid, "audit field capture failed", err)
 	}
 	return result, nil
 }
@@ -132,19 +162,11 @@ func Capture[M, K, V any](builder *Builder[M, K], name string, c codec.Codec[V],
 	return builder.Add(field)
 }
 
-func captureSnapshot[V any](c codec.Codec[V], input value.Optional[V]) (Snapshot, error) {
-	item, present := input.Get()
-	if !present {
-		return Snapshot{}, nil
-	}
-	bound, err := c.Bind(item)
-	if err != nil {
-		return Snapshot{}, err
-	}
+func captureBound(bound driver.Value, kind codec.ParameterType) (Snapshot, error) {
 	switch v := bound.(type) {
 	case string:
 		if len(v) > MaxCapturedValueBytes {
-			if c.ParameterType() == codec.TypeJSON {
+			if kind == codec.TypeJSON {
 				return capturedJSONOverflow(v)
 			}
 			return oversized([]byte(v), true), nil
@@ -155,7 +177,7 @@ func captureSnapshot[V any](c codec.Codec[V], input value.Optional[V]) (Snapshot
 		}
 	}
 	state := Disclosed
-	if bound != nil && c.ParameterType() == codec.TypeJSON {
+	if bound != nil && kind == codec.TypeJSON {
 		text, ok := bound.(string)
 		if !ok {
 			return Snapshot{}, invalidSnapshot()

@@ -18,7 +18,7 @@ type CorrelatedScalar[O, I, V any] struct {
 
 // SelectCorrelatedScalar selects one lifted value without an execution escape. Example: rows.SelectCorrelatedScalar(c,expr.Count[rows.Correlation[User,Order]]().Value()).
 func SelectCorrelatedScalar[O, I, V any](c CorrelatedSource[O, I], v expr.Selected[Correlation[O, I], V]) CorrelatedScalar[O, I, V] {
-	s := SelectScalar(correlatedSelection[Correlation[O, I]]{c.core.Source}, v)
+	s := SelectScalar(selectionAdapter[Correlation[O, I]]{c.core.Source}, v)
 	c.core.Source = s.source
 	return CorrelatedScalar[O, I, V]{core: c.core, column: s.column}
 }
@@ -84,6 +84,6 @@ func InNullableCorrelatedQuery[O, I, V any](v expr.RowValue[O, V], s CorrelatedS
 	return expr.FoundryPredicateValue[O](ormcore.CorrelatedMembership(expr.FoundryRowValue(v, sqlowner.Expressions()), s.core), sqlowner.Expressions())
 }
 
-type correlatedSelection[S any] struct{ source ormcore.Source }
+type selectionAdapter[S any] struct{ source ormcore.Source }
 
-func (s correlatedSelection[S]) rowSource(*S) ormcore.Source { return s.source }
+func (s selectionAdapter[S]) rowSource(*S) ormcore.Source { return s.source }

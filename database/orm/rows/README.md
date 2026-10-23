@@ -158,3 +158,10 @@ and nested-query limits use the existing shared compiler. Ordinary join boundary
 checks also apply to the lateral parent. Transaction variants still wait for 6c.
 CTE composition will be covered when the Stage 6c CTE API exists; correlated
 records currently have no ordinary selection-source capability.
+
+## Complete record adapters
+
+See [complete records and transaction projections](records.md) for `ModelRecord`,
+`RecordOf`, `AsRecord`, `SelectRecord` and the transaction-required record family.
+These adapters retain complete decoders and provide the shared foundation for
+Stage 6c CTE/set/cursor composition and Stage 6b4 transaction joins.

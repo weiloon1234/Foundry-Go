@@ -13,7 +13,7 @@ import (
 // Example: rows.Distinct(rows.FromModel(Users.Query())).All(ctx,db).
 func FromModel[M any](q orm.Query[M]) Query[M, M] {
 	source, decode := orm.FoundryModel(q, sqlowner.Metadata())
-	return Query[M, M]{source: source, decode: decode}
+	return Query[M, M]{source: source, decode: decode, recordOwner: source.Owners[source.Node.Source.Name()]}
 }
 func (q Query[S, R]) rowSource(*S) ormcore.Source { return q.source }
 

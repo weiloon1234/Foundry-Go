@@ -25,7 +25,7 @@ func SelectCorrelatedRecord[O, I, R any](c CorrelatedSource[O, I], scope expr.Sc
 
 // ProjectCorrelated maps a complete declared record without granting execution. Example: rows.ProjectCorrelated(c,Totals,rows.MapSelected(Totals.Count,count)).
 func ProjectCorrelated[O, I, R any](c CorrelatedSource[O, I], schema Schema[R], mappings ...Mapping[Correlation[O, I], R]) CorrelatedRecord[O, I, R] {
-	q := Select(correlatedSelection[Correlation[O, I]]{c.core.Source}, schema, mappings...)
+	q := Select(selectionAdapter[Correlation[O, I]]{c.core.Source}, schema, mappings...)
 	c.core.Source = q.source
 	r := ormcore.CorrelatedRecord{Correlation: c.core}
 	if !ormcore.NilDescriptor(schema) {

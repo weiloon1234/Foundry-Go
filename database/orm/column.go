@@ -42,6 +42,7 @@ type Predicate[M any] struct {
 	_          [0]*M
 	expression querycore.Expression
 	owner      *tableCore
+	rawScope   reflect.Type
 	err        error
 }
 
@@ -265,6 +266,12 @@ func enumCodec[E interface {
 func BytesOf[M any, V ~[]byte](b Builder[M], ptr *V, opts ...ColumnOption[V]) Column[M, V] {
 	return Column[M, V]{column: bindModel[M](b.state, ptr, optionCodec(codec.Bytes[V](), opts), false, opts...)}
 }
+
+type nullableFieldPolicy[V any] struct {
+	policy lifecycle.FieldPolicy[value.Nullable[V]]
+	decode func(any) (value.Nullable[V], error)
+}
+
 func bindNullable[V any](d *declaration, ptr *value.Nullable[V], c codec.Codec[V], opts ...ColumnOption[V]) nullableColumnData[V] {
 	var nullable codec.Codec[value.Nullable[V]]
 	if c.Validate() == nil {
@@ -282,7 +289,7 @@ func bindNullable[V any](d *declaration, ptr *value.Nullable[V], c codec.Codec[V
 	}
 	configureMutatorOptions(d, field.core, opts)
 	base := columnWithCodec(field.core, c)
-	field.core.nullablePolicy = field.policy
+	field.core.nullablePolicy = nullableFieldPolicy[V]{policy: field.policy, decode: field.decode}
 	base.assign = func(v V) querycore.AssignmentValue { return capture(nullable, value.Of(v)) }
 	return nullableColumnData[V]{base: base, nullable: func() columnData[value.Nullable[V]] { return field }}
 }
@@ -353,7 +360,7 @@ func Or[M any](ps ...Predicate[M]) Predicate[M] { return junction(true, ps) }
 
 // Not negates a condition. Example: Not(users.Email.Like("%@example.com")).
 func Not[M any](p Predicate[M]) Predicate[M] {
-	if p.owner == nil {
+	if p.owner == nil && p.rawScope != reflect.TypeFor[M]() {
 		p.err = errors.Join(p.err, invalid("predicate has no table declaration"))
 	}
 	p.expression = querycore.Negation{Child: p.expression}
@@ -363,12 +370,20 @@ func junction[M any](or bool, ps []Predicate[M]) Predicate[M] {
 	p := Predicate[M]{}
 	children := make([]querycore.Expression, len(ps))
 	for i, x := range ps {
-		if i == 0 {
-			p.owner = x.owner
-		}
 		p.err = errors.Join(p.err, x.err)
-		if x.owner == nil || x.owner != p.owner {
-			p.err = errors.Join(p.err, invalid("predicates must belong to the same table declaration"))
+		if x.owner != nil {
+			if p.owner != nil && p.owner != x.owner {
+				p.err = errors.Join(p.err, invalid("predicates must belong to the same table declaration"))
+			}
+			p.owner = x.owner
+		} else if x.rawScope != reflect.TypeFor[M]() {
+			p.err = errors.Join(p.err, invalid("predicate has no table declaration"))
+		}
+		if x.rawScope != nil {
+			if x.rawScope != reflect.TypeFor[M]() {
+				p.err = errors.Join(p.err, invalid("raw predicate belongs to a different model"))
+			}
+			p.rawScope = x.rawScope
 		}
 		children[i] = x.expression
 	}

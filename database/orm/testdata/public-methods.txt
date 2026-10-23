@@ -10,6 +10,10 @@ orm.Assignment
 *orm.Assignment
   GoString func() string
   String func() string
+orm.AuditPolicy
+*orm.AuditPolicy
+orm.AuditRule
+*orm.AuditRule
 orm.BelongsTo
   LatestOfMany func() github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
   OfMany func(orders ...github.com/weiloon1234/Foundry-Go/database/orm.Order[N]) github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
@@ -1272,6 +1276,19 @@ orm.FoundryWhere func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Qu
 orm.FoundryRelated func[M, N, V any](source github.com/weiloon1234/Foundry-Go/database/orm.AggregateSource[M, N], expression github.com/weiloon1234/Foundry-Go/internal/ormcore.Expression, column github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[V], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) github.com/weiloon1234/Foundry-Go/database/orm.AggregateRelation[M, V]
 orm.ValueOf func[M, V any](b github.com/weiloon1234/Foundry-Go/database/orm.Builder[M], ptr *github.com/weiloon1234/Foundry-Go/database/relation.Value[V]) github.com/weiloon1234/Foundry-Go/database/orm.Value[M, V]
 orm.Pivot func[M, N, P any](r github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]) github.com/weiloon1234/Foundry-Go/database/orm.AggregateSource[M, P]
+orm.WhereRaw func[M any](sql string, args ...any) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+orm.FoundryRecord func[M any](scope github.com/weiloon1234/Foundry-Go/internal/ormcore.Scope, seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.MetadataSeal) github.com/weiloon1234/Foundry-Go/internal/ormcore.Record
+orm.FoundryLockedRecord func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.MetadataSeal) github.com/weiloon1234/Foundry-Go/internal/ormcore.RecordSource
+orm.AuditField func[M, V any](field interface{ormColumn(*M) github.com/weiloon1234/Foundry-Go/database/orm.columnData[V]}, disclosure github.com/weiloon1234/Foundry-Go/audit/record.Disclosure) github.com/weiloon1234/Foundry-Go/database/orm.AuditRule[M]
+orm.AuditEncryptedField func[M any, V github.com/weiloon1234/Foundry-Go/database/encrypted.Value[V]](field github.com/weiloon1234/Foundry-Go/database/orm.Encrypted[M, V], disclosure github.com/weiloon1234/Foundry-Go/audit/record.Disclosure) github.com/weiloon1234/Foundry-Go/database/orm.AuditRule[M]
+orm.AuditNullableEncryptedField func[M any, V github.com/weiloon1234/Foundry-Go/database/encrypted.Value[V]](field github.com/weiloon1234/Foundry-Go/database/orm.NullableEncrypted[M, V], disclosure github.com/weiloon1234/Foundry-Go/audit/record.Disclosure) github.com/weiloon1234/Foundry-Go/database/orm.AuditRule[M]
+orm.AuditPolicyOf func[M any, K comparable](table github.com/weiloon1234/Foundry-Go/database/orm.Table[M, K], rules ...github.com/weiloon1234/Foundry-Go/database/orm.AuditRule[M]) github.com/weiloon1234/Foundry-Go/database/orm.AuditPolicy[M]
+orm.Audit func[M any, K comparable](table github.com/weiloon1234/Foundry-Go/database/orm.Table[M, K], changes github.com/weiloon1234/Foundry-Go/database/orm.Changes[M], policy github.com/weiloon1234/Foundry-Go/database/orm.AuditPolicy[M]) (github.com/weiloon1234/Foundry-Go/audit/record.Model[M, K], error)
+orm.Auditing func[M any, K comparable](table github.com/weiloon1234/Foundry-Go/database/orm.Table[M, K], policy github.com/weiloon1234/Foundry-Go/database/orm.AuditPolicy[M]) github.com/weiloon1234/Foundry-Go/audit/record.Declaration
+orm.AuditRead func[M, K, V any](history github.com/weiloon1234/Foundry-Go/audit/record.Model[M, K], field interface{ormColumn(*M) github.com/weiloon1234/Foundry-Go/database/orm.columnData[V]}) (github.com/weiloon1234/Foundry-Go/value.Optional[github.com/weiloon1234/Foundry-Go/audit/record.FieldChange[V]], error)
+orm.AuditReadNullable func[M, K, V any](history github.com/weiloon1234/Foundry-Go/audit/record.Model[M, K], field interface{ormColumn(*M) github.com/weiloon1234/Foundry-Go/database/orm.columnData[V]}) (github.com/weiloon1234/Foundry-Go/value.Optional[github.com/weiloon1234/Foundry-Go/audit/record.FieldChange[github.com/weiloon1234/Foundry-Go/value.Nullable[V]]], error)
+orm.AuditReadEncrypted func[M, K any, V github.com/weiloon1234/Foundry-Go/database/encrypted.Value[V]](history github.com/weiloon1234/Foundry-Go/audit/record.Model[M, K], field github.com/weiloon1234/Foundry-Go/database/orm.Encrypted[M, V]) (github.com/weiloon1234/Foundry-Go/value.Optional[github.com/weiloon1234/Foundry-Go/audit/record.FieldChange[V]], error)
+orm.AuditReadNullableEncrypted func[M, K any, V github.com/weiloon1234/Foundry-Go/database/encrypted.Value[V]](history github.com/weiloon1234/Foundry-Go/audit/record.Model[M, K], field github.com/weiloon1234/Foundry-Go/database/orm.NullableEncrypted[M, V]) (github.com/weiloon1234/Foundry-Go/value.Optional[github.com/weiloon1234/Foundry-Go/audit/record.FieldChange[github.com/weiloon1234/Foundry-Go/value.Nullable[V]]], error)
 orm.WithRetrievalHooks func[M any](factory func() github.com/weiloon1234/Foundry-Go/database/orm.RetrievalHooks[M]) github.com/weiloon1234/Foundry-Go/database/orm.Option
 orm.NewRetrievalObserver func[M any](name string) github.com/weiloon1234/Foundry-Go/database/orm.RetrievalObserver[M]
 orm.RegisterRetrievalObserver func[M any](r *github.com/weiloon1234/Foundry-Go/foundation.Registrar, pool github.com/weiloon1234/Foundry-Go/foundation.Key[*github.com/weiloon1234/Foundry-Go/database.DB], observer github.com/weiloon1234/Foundry-Go/database/orm.RetrievalObserver[M], construct func(github.com/weiloon1234/Foundry-Go/foundation.Resolver) (func() github.com/weiloon1234/Foundry-Go/database/orm.RetrievalHooks[M], error)) error
@@ -1500,6 +1517,22 @@ rows.Query
   All func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) ([]R, error)
   OrderBy func(orders ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
   Where func(predicates ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
+rows.Record
+*rows.Record
+rows.RecordRead
+  All func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) ([]R, error)
+  Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordRead[S, R]
+  Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordRead[S, R]
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordRead[S, R]
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordRead[S, R]
+*rows.RecordRead
+  All func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) ([]R, error)
+  Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordRead[S, R]
+  Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordRead[S, R]
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordRead[S, R]
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordRead[S, R]
+rows.RecordSource
+  recordData func(*R) github.com/weiloon1234/Foundry-Go/internal/ormcore.RecordSource
 rows.Right
 *rows.Right
 rows.RightJoined
@@ -1517,6 +1550,28 @@ rows.SelectionSource
 rows.Source
   joinSource func()
   rowSource func(*S) github.com/weiloon1234/Foundry-Go/internal/ormcore.Source
+rows.TransactionAlias
+*rows.TransactionAlias
+rows.TransactionAliased
+*rows.TransactionAliased
+rows.TransactionRead
+  All func(ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx) ([]R, error)
+  Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRead[S, R]
+  Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRead[S, R]
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRead[S, R]
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRead[S, R]
+*rows.TransactionRead
+  All func(ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx) ([]R, error)
+  Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRead[S, R]
+  Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRead[S, R]
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRead[S, R]
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRead[S, R]
+rows.TransactionRecord
+*rows.TransactionRecord
+rows.TransactionRecordSource
+  transactionRecord func(*R) github.com/weiloon1234/Foundry-Go/internal/ormcore.RecordSource
+rows.TransactionSelectionSource
+  transactionSelection func(*S) github.com/weiloon1234/Foundry-Go/internal/ormcore.RecordSource
 rows.FromModel func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[M, M]
 rows.GroupBy func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], keys ...github.com/weiloon1234/Foundry-Go/database/orm/expr.GroupKey[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
 rows.Having func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], predicates ...github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
@@ -1588,6 +1643,18 @@ rows.LeftJoinLateral func[L, A, R any](left github.com/weiloon1234/Foundry-Go/da
 rows.At func[S, R, V any](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, R], field github.com/weiloon1234/Foundry-Go/database/orm/rows.Field[R, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]
 rows.AtNullable func[S, R, V any](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableScope[S, R], field github.com/weiloon1234/Foundry-Go/database/orm/rows.Field[R, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
 rows.AtNullableValue func[S, R, V any](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableScope[S, R], field github.com/weiloon1234/Foundry-Go/database/orm/rows.Field[R, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+rows.RecordOf func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Record[R]
+rows.ModelRecord func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Record[M]
+rows.AsRecord func[A, R any](source github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordSource[R], alias string) github.com/weiloon1234/Foundry-Go/database/orm/rows.Aliased[A, R]
+rows.SelectRecord func[S, R any](source github.com/weiloon1234/Foundry-Go/database/orm/rows.SelectionSource[S], scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordRead[S, R]
+rows.Limit func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
+rows.Offset func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
+rows.TransactionOf func[R any](source github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordSource[R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRecord[R]
+rows.LockedRecord func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.LockedQuery[M]) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRecord[M]
+rows.AsTransaction func[A, R any](source github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRecordSource[R], alias string) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionAliased[A, R]
+rows.TransactionScope func[A, R any](source github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionAliased[A, R]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionAlias[A, R], R]
+rows.SelectTransaction func[S, R any](source github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionSelectionSource[S], schema github.com/weiloon1234/Foundry-Go/database/orm/rows.Schema[R], mappings ...github.com/weiloon1234/Foundry-Go/database/orm/rows.Mapping[S, R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRead[S, R]
+rows.SelectTransactionRecord func[S, R any](source github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionSelectionSource[S], scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRead[S, R]
 rows.Raw func[R any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, schema github.com/weiloon1234/Foundry-Go/database/orm/rows.Schema[R], sql string, args ...any) ([]R, error)
 expr.Aggregate
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
@@ -1995,3 +2062,5 @@ expr.FoundrySelectedColumn func[S, V any](e github.com/weiloon1234/Foundry-Go/da
 expr.FoundryRowExpression func[S, V any](core github.com/weiloon1234/Foundry-Go/internal/ormcore.Expression, column github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[V], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]
 expr.FoundrySelectedValue func[S, V any](core github.com/weiloon1234/Foundry-Go/internal/ormcore.Expression, column github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[V], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
 expr.FoundryPredicateValue func[S any](core github.com/weiloon1234/Foundry-Go/internal/ormcore.Predicate, seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+expr.Raw func[S, V any](sql string, args ...any) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
+expr.RawWithCodec func[S, V any](c github.com/weiloon1234/Foundry-Go/database/codec.Codec[V], sql string, args ...any) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]

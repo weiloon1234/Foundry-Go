@@ -131,6 +131,8 @@ func ValidateExpressionValues(e Expression, operand func(ValueExpression) error,
 		return fault.New(fault.Invalid, "query expression exceeds its resource bound")
 	}
 	switch e := e.(type) {
+	case RawFragment:
+		return e.Validate()
 	case Comparison:
 		if err := operand(e.Operand); err != nil {
 			return err

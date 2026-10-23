@@ -1,0 +1,1586 @@
+{
+  "slice": "6a4",
+  "status": "implemented; final callable type-parameter lint fix complete; set D and gofmt pass with r2 cache; prior A-C retained, not rerun for this lint-only fix; documented best-effort limits",
+  "base_commit": "e73175333d6134d0f0f5da17ab6f8bb4ae4e70a5",
+  "parents": [
+    "accepted uncommitted 6a1-6a3 retained"
+  ],
+  "parent_evidence_sha256": {
+    "docs/evidence/goway-6a1.json": "f417755b568b66b880408eab34ca1b975ce696e419c72d6bf1003739154a450b",
+    "docs/evidence/goway-6a2.json": "57efa6d1581024ad8d645eb72a7fc2189a514b86eec6e8a32616b120c368c090",
+    "docs/evidence/goway-6a3.json": "543b02ecd8b2dc6c7a081f51e60a03b6670009ebcfa4bfaf2516b7cabb235912"
+  },
+  "scope": [
+    "selected-phase raw expressions and explicit result codecs",
+    "model-owned predicate fragments, preserving surrounding scopes and transactions",
+    "shared bounded lexical parser and statement-wide compiler binding",
+    "raw statements never receive trusted detector shapes",
+    "dependency-free call-only foundry lint --no-raw and project CI documentation"
+  ],
+  "api": {
+    "additions": [
+      "expr.Raw[S,V](sql string, args ...any) Selected[S,V]",
+      "expr.RawWithCodec[S,V](codec.Codec[V], sql string, args ...any) Selected[S,V]",
+      "orm.WhereRaw[M](sql string, args ...any) Predicate[M]"
+    ],
+    "cli": "foundry lint --no-raw ./...",
+    "new_capability_families": 0,
+    "bridges": "existing validated family-specific bridges retained; no capability is passed to new application interfaces"
+  },
+  "surface": {
+    "additions": [
+      "expr.Raw func[S, V any](sql string, args ...any) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]",
+      "expr.RawWithCodec func[S, V any](c github.com/weiloon1234/Foundry-Go/database/codec.Codec[V], sql string, args ...any) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]",
+      "orm.WhereRaw func[M any](sql string, args ...any) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]"
+    ],
+    "removed": [],
+    "methods_added_to_existing_types": []
+  },
+  "compilefail_rows": [],
+  "additional_compilefail_cases": [
+    "raw_fragment_row_phase",
+    "raw_fragment_group_phase",
+    "raw_fragment_owner",
+    "raw_fragment_conversion"
+  ],
+  "compilefail_acceptance": {
+    "passed": 98,
+    "cases": [
+      "raw_fragment_row_phase",
+      "parameter_id",
+      "value_compare_type",
+      "phase_having_to_predicate",
+      "phase_predicate_to_having",
+      "phase_nullable_comparison_to_row",
+      "phase_selected_to_nullable_row",
+      "phase_row_to_selected",
+      "phase_ordered_row_to_selected",
+      "phase_selected_to_ordered_row",
+      "projection_type",
+      "coalesce_value",
+      "coalesce_owner",
+      "parameter_value",
+      "parameter_owner",
+      "parameter_nullable_field",
+      "phase_ordered_comparison_to_row",
+      "case_unfinished",
+      "phase_comparison_to_row",
+      "phase_ordered_aggregate_to_row",
+      "value_compare_owner",
+      "coalesce_fallback_nullable",
+      "phase_aggregate_to_row",
+      "case_selected_row_condition",
+      "phase_nullable_row_to_selected",
+      "case_phase_selected_to_row",
+      "case_phase_row_to_selected",
+      "case_selected_predicate",
+      "phase_selected_to_row",
+      "value_compare_nullable",
+      "selected_key_row_list",
+      "case_result_owner",
+      "value_compare_like_number",
+      "case_aggregate_condition",
+      "column_scope",
+      "computed_model_order_owner",
+      "case_aggregate_row_value",
+      "arithmetic_text",
+      "column_value",
+      "arithmetic_value",
+      "case_result_nullable",
+      "selected_comparison_row",
+      "case_owner_conversion",
+      "selected_boolean_order",
+      "projection_order_scope",
+      "aggregate_filter_having",
+      "projection_aggregate_group",
+      "order_phase_selected_to_row",
+      "distinct_write",
+      "distinct_scalar_type",
+      "distinct_predicate_owner",
+      "distinct_key_owner",
+      "column_enum_range",
+      "aggregate_text_sum",
+      "projection_group_owner",
+      "aggregate_filter_boolean_order",
+      "aggregate_temporal_avg",
+      "aggregate_forged_ordered_min",
+      "aggregate_order_model",
+      "value_compare_order_bool",
+      "aggregate_enum_sum",
+      "value_compare_selected_owner",
+      "having_nullable",
+      "order_phase_row_to_selected",
+      "aggregate_forged_ordered_sum",
+      "aggregate_filter_owner",
+      "arithmetic_nullable_operand",
+      "arithmetic_nullable_result",
+      "arithmetic_float_remainder",
+      "having_in_where",
+      "aggregate_filter_nullable",
+      "having_combination_scope",
+      "arithmetic_compare_value",
+      "selected_key_conversion",
+      "raw_fragment_group_phase",
+      "raw_fragment_owner",
+      "arithmetic_row_phase",
+      "interval_sum_decimal",
+      "having_value",
+      "having_boolean_range",
+      "decimal_conversion_float",
+      "selected_group_phase",
+      "key_phase_row_to_selected",
+      "key_phase_selected_to_row",
+      "selected_distinct_owner",
+      "json_sum",
+      "selected_calculation_order",
+      "computed_group_owner",
+      "value_compare_selected_row",
+      "value_compare_selected_where",
+      "field_in_having",
+      "aggregate_filter_value",
+      "arithmetic_owner",
+      "raw_fragment_conversion",
+      "interval_result_phase",
+      "having_scope",
+      "case_result_type",
+      "aggregate_phase_to_row"
+    ]
+  },
+  "catalogue": {
+    "stage_6a_old_rows": 70,
+    "already_ported": 70,
+    "new_old_rows": 0,
+    "mapping_changed": false,
+    "total_ported_rows": 151
+  },
+  "coverage": {
+    "lexer": [
+      "single/double quotes and doubled quotes",
+      "E-string escapes",
+      "dollar quotes",
+      "line/nested-block comments",
+      "?? literal question mark",
+      "statement-wide numbering",
+      "numbered/named/malformed placeholders and count errors",
+      "unbalanced/unterminated regions, statement separators, NUL/UTF8/resource bounds",
+      "argument conversion and owned byte snapshots",
+      "PostgreSQL continued E/plain strings; escape mode retained only across newline whitespace/line comments; internal ? never bound",
+      "fail closed for backslashes in non-E strings with standard_conforming_strings diagnostic; E strings, identifiers, dollar quotes and bound values remain accepted"
+    ],
+    "runtime": [
+      "selected hydration with built-in nullable and explicit custom codecs",
+      "invalid fragments/codecs rejected before SQL",
+      "AND/OR/NOT predicate composition and model/declaration ownership",
+      "global scopes and transaction executor retention",
+      "selected and predicate fragments yield only detector fingerprints"
+    ],
+    "lint": [
+      "call sites only; captures, assignments and conversions are not diagnostic sites",
+      "resolved framework function/method identities with generic instantiation and promoted methods",
+      "order-insensitive complete function-value signatures from framework declarations; no binding/dataflow tracking",
+      "generic signature substitution preserves repeated type argument identity and constraints",
+      "arbitrary function-valued callees including *(&f), fields, parameters, indexing, returned functions and conversions",
+      "interface and type-parameter instantiated method sets checked by executor/Raw name and parameter shape, independent of result type",
+      "standalone generic interfaces without a framework import",
+      "ordinary typed ORM query/write/relation/cursor/chunk/transaction suite: zero diagnostics",
+      "framework caller packages excluded; missing packages, no matches and type errors fail",
+      "file:line only diagnostics, no SQL or arguments",
+      "legitimate .test package and external tests retained; generated test mains excluded",
+      "built CLI: positive 0 diagnostics/exit 0, negative 60/exit 1, raw.test 2/exit 1, standalone contracts 3/exit 1, framework 0/exit 0; missing and unmatched patterns exit 1",
+      "documented best-effort source-policy check, not runtime proof; exact raw signatures are flagged even for application implementations called through values",
+      "callable type-parameter constraints: ~func, exact func, embedded interfaces and same-signature unions; generic raw signatures reuse the shared matcher"
+    ],
+    "postgres_sources": [
+      "soft-delete scope remains outside raw OR predicate",
+      "selected arithmetic and JSON ?? operator with bound arguments",
+      "query participates in transaction, observes update then rollback"
+    ],
+    "postgres_execution": "not run; lead-owned",
+    "wire": "no model/DTO declarations, generated manifests, OpenAPI or TypeScript changes"
+  },
+  "footprint": {
+    "toolchain": "go version go1.27.1 darwin/arm64",
+    "method": "warm shared r2 GOCACHE; go list -export and go tool nm count defined archive T/t symbols; not runtime benchmarks",
+    "new_probe": "raw_fragments",
+    "new_probe_rule": "ceil(measured * 1.15): 1331 -> 1531",
+    "probes": [
+      {
+        "probe": "raw_fragments",
+        "functions": 1331,
+        "baseline": 1331,
+        "ceiling": 1531,
+        "archive_bytes": 5886448
+      },
+      {
+        "probe": "aggregate_group",
+        "functions": 2483,
+        "baseline": 2426,
+        "ceiling": 2790,
+        "archive_bytes": 11065976
+      },
+      {
+        "probe": "aggregate_families",
+        "functions": 4163,
+        "baseline": 3799,
+        "ceiling": 4369,
+        "archive_bytes": 18836634
+      },
+      {
+        "probe": "distinct",
+        "functions": 1135,
+        "baseline": 1135,
+        "ceiling": 1306,
+        "archive_bytes": 5409862
+      },
+      {
+        "probe": "conditional_row",
+        "functions": 1740,
+        "baseline": 1681,
+        "ceiling": 1934,
+        "archive_bytes": 7855766
+      },
+      {
+        "probe": "conditional_selected",
+        "functions": 1591,
+        "baseline": 1511,
+        "ceiling": 1738,
+        "archive_bytes": 7222722
+      },
+      {
+        "probe": "expr_arithmetic",
+        "functions": 1217,
+        "baseline": 1162,
+        "ceiling": 1337,
+        "archive_bytes": 5602338
+      },
+      {
+        "probe": "expr_selected",
+        "functions": 1637,
+        "baseline": 1551,
+        "ceiling": 1784,
+        "archive_bytes": 7188248
+      },
+      {
+        "probe": "raw",
+        "functions": 1045,
+        "baseline": 1045,
+        "ceiling": 1202,
+        "archive_bytes": 4849784
+      },
+      {
+        "probe": "cursor",
+        "functions": 1131,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5001954
+      },
+      {
+        "probe": "key_chunk",
+        "functions": 816,
+        "baseline": 812,
+        "ceiling": 934,
+        "archive_bytes": 3832798
+      },
+      {
+        "probe": "column_encrypted_text",
+        "functions": 1137,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 4774914
+      },
+      {
+        "probe": "column_nullable_encrypted_text",
+        "functions": 1369,
+        "baseline": 1359,
+        "ceiling": 1563,
+        "archive_bytes": 5935372
+      },
+      {
+        "probe": "column_encrypted_json",
+        "functions": 1227,
+        "baseline": 1217,
+        "ceiling": 1400,
+        "archive_bytes": 5083250
+      },
+      {
+        "probe": "column_nullable_encrypted_json",
+        "functions": 1459,
+        "baseline": 1449,
+        "ceiling": 1667,
+        "archive_bytes": 6266464
+      },
+      {
+        "probe": "column_password",
+        "functions": 1200,
+        "baseline": 1190,
+        "ceiling": 1369,
+        "archive_bytes": 5003042
+      },
+      {
+        "probe": "column_nullable_password",
+        "functions": 1427,
+        "baseline": 1417,
+        "ceiling": 1630,
+        "archive_bytes": 6100666
+      },
+      {
+        "probe": "sensitive_models",
+        "functions": 2626,
+        "baseline": 2606,
+        "ceiling": 2997,
+        "archive_bytes": 11576872
+      },
+      {
+        "probe": "model_type",
+        "functions": 299,
+        "baseline": 299,
+        "ceiling": 344,
+        "archive_bytes": 1263428
+      },
+      {
+        "probe": "table_ref",
+        "functions": 808,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 3923366
+      },
+      {
+        "probe": "onequery",
+        "functions": 808,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 3789850
+      },
+      {
+        "probe": "q_with",
+        "functions": 1064,
+        "baseline": 1053,
+        "ceiling": 1211,
+        "archive_bytes": 4741836
+      },
+      {
+        "probe": "q_select",
+        "functions": 849,
+        "baseline": 836,
+        "ceiling": 962,
+        "archive_bytes": 4020120
+      },
+      {
+        "probe": "q_join",
+        "functions": 1634,
+        "baseline": 1598,
+        "ceiling": 1838,
+        "archive_bytes": 7617422
+      },
+      {
+        "probe": "report_pipeline",
+        "functions": 1974,
+        "baseline": 1905,
+        "ceiling": 2191,
+        "archive_bytes": 10409960
+      },
+      {
+        "probe": "models",
+        "functions": 6203,
+        "baseline": 6147,
+        "ceiling": 7070,
+        "archive_bytes": 26372308
+      },
+      {
+        "probe": "column_number",
+        "functions": 1182,
+        "baseline": 1172,
+        "ceiling": 1348,
+        "archive_bytes": 4830442
+      },
+      {
+        "probe": "column_nullable_text",
+        "functions": 1470,
+        "baseline": 1456,
+        "ceiling": 1675,
+        "archive_bytes": 5936772
+      },
+      {
+        "probe": "models_1",
+        "functions": 1633,
+        "baseline": 1619,
+        "ceiling": 1862,
+        "archive_bytes": 6609810
+      },
+      {
+        "probe": "models_3",
+        "functions": 2465,
+        "baseline": 2435,
+        "ceiling": 2801,
+        "archive_bytes": 10111164
+      },
+      {
+        "probe": "column_time",
+        "functions": 1204,
+        "baseline": 1194,
+        "ceiling": 1374,
+        "archive_bytes": 4871452
+      },
+      {
+        "probe": "column_enum",
+        "functions": 1242,
+        "baseline": 1232,
+        "ceiling": 1417,
+        "archive_bytes": 5062392
+      },
+      {
+        "probe": "relation_with",
+        "functions": 1867,
+        "baseline": 1847,
+        "ceiling": 2125,
+        "archive_bytes": 7758262
+      },
+      {
+        "probe": "column_json",
+        "functions": 1290,
+        "baseline": 1280,
+        "ceiling": 1472,
+        "archive_bytes": 5280310
+      },
+      {
+        "probe": "column_nullable_json",
+        "functions": 1532,
+        "baseline": 1522,
+        "ceiling": 1751,
+        "archive_bytes": 6428972
+      },
+      {
+        "probe": "column_interval",
+        "functions": 1188,
+        "baseline": 1178,
+        "ceiling": 1355,
+        "archive_bytes": 4964050
+      },
+      {
+        "probe": "column_nullable_interval",
+        "functions": 1416,
+        "baseline": 1406,
+        "ceiling": 1617,
+        "archive_bytes": 6101192
+      }
+    ],
+    "existing_ceilings_changed": false,
+    "model_slope": {
+      "two_models_functions": 832,
+      "ceiling": 939
+    }
+  },
+  "environment": {
+    "GOWORK": "off",
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r2",
+    "postgres": "no execution",
+    "new_dependencies": false
+  },
+  "commands": [
+    {
+      "set": "D",
+      "cwd": ".",
+      "command": "go test -p=2 ./internal/noraw ./cmd/foundry",
+      "log": "D-tests.log",
+      "result": "pass; 65 expected call sites; zero-diagnostic controls pass"
+    },
+    {
+      "set": "D",
+      "cwd": ".",
+      "command": "go build -p=2 -o /private/tmp/goway-6a4-r5-acceptance/foundry ./cmd/foundry",
+      "log": "D-build.log",
+      "result": "pass"
+    },
+    {
+      "set": "D",
+      "cwd": "tests/fixtures/goway",
+      "command": "/private/tmp/goway-6a4-r5-acceptance/foundry lint --no-raw ./testdata/noraw/positive",
+      "log": "D-positive.log",
+      "result": "pass; expected exit 0, 0 file:line diagnostics; no SQL or arguments"
+    },
+    {
+      "set": "D",
+      "cwd": "tests/fixtures/goway",
+      "command": "/private/tmp/goway-6a4-r5-acceptance/foundry lint --no-raw ./testdata/noraw/negative",
+      "log": "D-negative.log",
+      "result": "pass; expected exit 1, 60 file:line diagnostics; no SQL or arguments"
+    },
+    {
+      "set": "D",
+      "cwd": "tests/fixtures/goway",
+      "command": "/private/tmp/goway-6a4-r5-acceptance/foundry lint --no-raw ./testdata/noraw/raw.test",
+      "log": "D-raw-test.log",
+      "result": "pass; expected exit 1, 2 file:line diagnostics; no SQL or arguments"
+    },
+    {
+      "set": "D",
+      "cwd": "tests/fixtures/goway",
+      "command": "/private/tmp/goway-6a4-r5-acceptance/foundry lint --no-raw ./testdata/noraw/contracts",
+      "log": "D-contracts.log",
+      "result": "pass; expected exit 1, 3 file:line diagnostics; no SQL or arguments"
+    },
+    {
+      "set": "D",
+      "cwd": "tests/fixtures/goway",
+      "command": "/private/tmp/goway-6a4-r5-acceptance/foundry lint --no-raw ./missing",
+      "log": "D-load-error.log",
+      "result": "pass; expected exit 1, 0 file:line diagnostics; no SQL or arguments"
+    },
+    {
+      "set": "D",
+      "cwd": "tests/fixtures/goway",
+      "command": "/private/tmp/goway-6a4-r5-acceptance/foundry lint --no-raw ./missing/...",
+      "log": "D-no-match.log",
+      "result": "pass; expected exit 1, 0 file:line diagnostics; no SQL or arguments"
+    },
+    {
+      "set": "D",
+      "cwd": ".",
+      "command": "/private/tmp/goway-6a4-r5-acceptance/foundry lint --no-raw ./database/orm",
+      "log": "D-framework.log",
+      "result": "pass; expected exit 0, 0 file:line diagnostics; no SQL or arguments"
+    },
+    {
+      "set": "format",
+      "cwd": ".",
+      "command": "gofmt -w internal/noraw/calls.go tests/fixtures/goway/testdata/noraw/negative/signatures.go tests/fixtures/goway/testdata/noraw/positive/signatures.go; gofmt -l <same three files>",
+      "log": "format.log",
+      "result": "pass"
+    },
+    {
+      "set": "diff",
+      "cwd": ".",
+      "command": "git diff --check",
+      "log": "diff-check.log",
+      "result": "pass"
+    }
+  ],
+  "corrections_during_acceptance": [
+    "Initial A rejected the new result-codec boundary and missing surface entries; added only the three approved functions and an exact expr.Raw -> ResultCodec -> ScalarCodec audit allowance, with a rejection test for other callers.",
+    "Initial B compilation found the fixture import name rows conflicted with an existing driver helper; aliased the import and reran the selected gate.",
+    "B detector fixture initially returned the default multi-column driver result for the selected COUNT fragment; supplied two explicit count batches using the existing driver scripting contract, then reran only the affected test.",
+    "Final audit added exact-signature resolution for application interfaces restating Table.Raw; reran D tests and rebuilt/re-executed the CLI consumers."
+  ],
+  "shared_files_touched": [
+    "cmd/foundry/main.go",
+    "cmd/foundry/main_test.go",
+    "database/orm/codec_surface_test.go",
+    "database/orm/column.go",
+    "database/orm/expr/README.md",
+    "database/orm/method_surface_test.go",
+    "database/orm/query.go",
+    "database/orm/testdata/public-methods.txt",
+    "internal/querycore/ast.go",
+    "internal/querycore/compiler.go",
+    "internal/querycore/computed_expression.go",
+    "internal/querycore/select_walk.go",
+    "internal/querycore/statement_shape.go",
+    "internal/querycore/value_expression.go",
+    "tests/fixtures/goway/compiler_cases_test.go",
+    "tests/fixtures/goway/footprint_test.go"
+  ],
+  "changed_files": [
+    "cmd/foundry/lint.go",
+    "cmd/foundry/lint_test.go",
+    "cmd/foundry/main.go",
+    "cmd/foundry/main_test.go",
+    "database/orm/codec_surface_test.go",
+    "database/orm/column.go",
+    "database/orm/expr/README.md",
+    "database/orm/expr/raw.go",
+    "database/orm/method_surface_test.go",
+    "database/orm/query.go",
+    "database/orm/raw_fragment.go",
+    "database/orm/raw_fragment_test.go",
+    "database/orm/rows/raw_fragment_test.go",
+    "database/orm/testdata/public-methods.txt",
+    "internal/noraw/calls.go",
+    "internal/noraw/lint.go",
+    "internal/noraw/lint_test.go",
+    "internal/noraw/load.go",
+    "internal/noraw/signatures.go",
+    "internal/ormcore/result_codec.go",
+    "internal/querycore/ast.go",
+    "internal/querycore/compiler.go",
+    "internal/querycore/computed_expression.go",
+    "internal/querycore/raw_fragment.go",
+    "internal/querycore/raw_fragment_test.go",
+    "internal/querycore/select_walk.go",
+    "internal/querycore/statement_shape.go",
+    "internal/querycore/value_expression.go",
+    "tests/fixtures/goway/compiler_cases_test.go",
+    "tests/fixtures/goway/footprint_test.go",
+    "tests/fixtures/goway/pgsmoke/raw_fragments_test.go",
+    "tests/fixtures/goway/raw_fragment_test.go",
+    "tests/fixtures/goway/testdata/compilefail/raw_fragment_conversion/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/raw_fragment_group_phase/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/raw_fragment_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/raw_fragment_row_phase/invalid.go",
+    "tests/fixtures/goway/testdata/footprint/raw_fragments/probe.go",
+    "tests/fixtures/goway/testdata/noraw/contracts/probe.go",
+    "tests/fixtures/goway/testdata/noraw/negative/interfaces.go",
+    "tests/fixtures/goway/testdata/noraw/negative/probe.go",
+    "tests/fixtures/goway/testdata/noraw/negative/refs_test.go",
+    "tests/fixtures/goway/testdata/noraw/negative/signatures.go",
+    "tests/fixtures/goway/testdata/noraw/positive/probe.go",
+    "tests/fixtures/goway/testdata/noraw/positive/signatures.go",
+    "tests/fixtures/goway/testdata/noraw/positive/typed.go",
+    "tests/fixtures/goway/testdata/noraw/raw.test/probe.go",
+    "tests/fixtures/goway/testdata/noraw/raw.test/probe_test.go",
+    "docs/evidence/goway-6a4.json"
+  ],
+  "source_sha256": {
+    ".gitignore": "9420ba43de51b768a977a2f8e14dccc28238186167a0bd48ba556bf99bb9bc5a",
+    "CHANGELOG.md": "cd54f1ce372ee16d5f367f4644f750918c7b4b6a3ca948aced337034cd2cf0da",
+    "blueprint/00-master-architecture-and-parity.md": "2cbebef12146a671b1c6dca0c584679e4686e0c6901d7df3698b8a27c864d921",
+    "blueprint/goway-data-layer/README.md": "ed73b10d40494b042172f6c2e7c12c1ab6744e720a083a284f1d1df66f453fb1",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "780dfd138427f4121e9e1cbb0c8e3cbc991b35a05b2cd4e785491fae9f4c6446",
+    "cmd/foundry/lint.go": "5361e8867a0429fe9b014dffddf6e69feede6498213a8b23057fc94efac4cb96",
+    "cmd/foundry/lint_test.go": "d92aa67b5218ce6c925a660ca780ebabb7baf78399f64fa8aa6afefaa6650fae",
+    "cmd/foundry/main.go": "c0318ae02850ee77a0a64a2cabdf71cdb5ae708ac2745d9938a9a2d2f7dcee9d",
+    "cmd/foundry/main_test.go": "f7048af2cefd9fde17b3e1527b414617fda711e75b10c36f34fa4edb07ebaf7c",
+    "database/orm/codec_surface_test.go": "dd35ed40d44b21beac6f5df0ec792d57daeeb6736ab288b48d4669a635e189a0",
+    "database/orm/column.go": "31edfc06bb898135a29dd00546a35e29d55a34fef4dfe43e671ae455f3b78a1f",
+    "database/orm/expr/README.md": "7b0433e06e575db3486b0aed20afa5f7fbc8a9f115c362a8e9df93c0ca81af34",
+    "database/orm/expr/raw.go": "47ac44ea8014300f1405e838b7c2d3247b0d42ff0f45d29cd890778d3a8f1fb9",
+    "database/orm/method_surface_test.go": "09da6c2e6bf20754552422ccc23e7c110bc4d757ff386454b4bfe4cd1bde4608",
+    "database/orm/query.go": "2d367c59968ffd63e89098d6409c6394e60ed4f218e84bc72f3c21365d722e20",
+    "database/orm/raw_fragment.go": "6d8dc345deeec14b6ab93a1397965353ef6d9a5fc4d935f09d18c7cfab0dbb1b",
+    "database/orm/raw_fragment_test.go": "749d41f55e34da8046a566f8271f21ba68924671f5e36e1b510914eef9583042",
+    "database/orm/rows/raw_fragment_test.go": "e2b62c4c495b8ad4887897238fc7fdd3e6f485a5738534abcf9645c2441f4e01",
+    "database/orm/testdata/public-methods.txt": "13beb76cb48f9a739e4661697543ee192c329493585009cf57662fc51334118a",
+    "internal/noraw/calls.go": "efb2485577477704242ddfca3aaf966477223f35e717ca3baeea48fd6cb39b26",
+    "internal/noraw/lint.go": "807449d576f3b37a7a26066aea90bd2c4b77705e7bf7ad2db545ead42fc87f34",
+    "internal/noraw/lint_test.go": "ed53131038874cfdcb05c5c6888397f39399f1c4123a592e0676e16f9695e363",
+    "internal/noraw/load.go": "c2fffb94836683d6cbc9d6546aec62b24c5453c22543bb309ddf88afd4a7f463",
+    "internal/noraw/signatures.go": "5379ec1911f7d842e38b95db577b241dacd81cdbd5f4ad35e16d65b13d381a90",
+    "internal/ormcore/result_codec.go": "31ea75b4ea3fcd64b3a020e288df3f1f0513044facc648bb081c89d1935cee84",
+    "internal/querycore/ast.go": "8eb79abd05fe68d59dfd8b910d46f73ef7932beeeac47cd082cd5e1c04cd833f",
+    "internal/querycore/compiler.go": "5f52050d973df7b434f3f30f89334b6c9ab46d73a3f0c1eed04277496322c57d",
+    "internal/querycore/computed_expression.go": "79a5b6e2afec65883c916e2694bec7e5d4f3900370fd6df960976b8d75b69798",
+    "internal/querycore/raw_fragment.go": "abd46dedabdf5d788afc41315851a5e3ae5806d695f8a2cc512c965469b0efce",
+    "internal/querycore/raw_fragment_test.go": "33ced790293c658c3148b08888c4a19502f46794caed82208c95962103638c5f",
+    "internal/querycore/select_walk.go": "cd95988f4bc85a2191a0e9176d88e35fb94e34df522a97eb6ee7f92450f4fead",
+    "internal/querycore/statement_shape.go": "d2b358e850f8bea9e188a38638dea4b4f309e616e022106bd1a0f58991613fe9",
+    "internal/querycore/value_expression.go": "5ae8be986170ecff39a348ddf34949380eb2b9cccd798423c398204b903aab38",
+    "tests/fixtures/goway/compiler_cases_test.go": "7aaa1b03b978254b51f5da183636e34188e3d2e6a122c04d59116c4a1d450874",
+    "tests/fixtures/goway/footprint_test.go": "933c1f8692890cf8c2bfee3d5bced78c7658a035cbcf0f03832292ef12df2771",
+    "tests/fixtures/goway/pgsmoke/raw_fragments_test.go": "467e6762863ffac907ddc82657f12bb93d3f9554746a297764dec0cc15939163",
+    "tests/fixtures/goway/raw_fragment_test.go": "dfa502e6021a6808f5f24f6bf0f481b309567934c4decd7a54dfc62e2b78b3c5",
+    "tests/fixtures/goway/testdata/compilefail/raw_fragment_conversion/invalid.go": "59d54a2836746578e0a6167f456b7ea481557c5594221b17c52d64e208dba88f",
+    "tests/fixtures/goway/testdata/compilefail/raw_fragment_group_phase/invalid.go": "16523fa7b9e4cf8c19f9cbed8d7f3abd49fbf7154f99c01a80f48cbaa9d5e32c",
+    "tests/fixtures/goway/testdata/compilefail/raw_fragment_owner/invalid.go": "ea49d83b734fb09afc9ccf9691bab6a9d82d233602769c0cc63208c6cda7cb3c",
+    "tests/fixtures/goway/testdata/compilefail/raw_fragment_row_phase/invalid.go": "12d75d81645ddf5628e811423084c183326a3324a06f9f73d29d0c52f80c94a9",
+    "tests/fixtures/goway/testdata/footprint/raw_fragments/probe.go": "adea0b30d2e9c05684e06d137b30f272a3d3b9600713c0f73e6c20cd494deacd",
+    "tests/fixtures/goway/testdata/noraw/contracts/probe.go": "7e747c92cf6bbda7c101574097f4ad00d2cec6bd1c6c212b39e2d8f8eceaf9be",
+    "tests/fixtures/goway/testdata/noraw/negative/interfaces.go": "e38d319bab905af59480c4541d94b4f8c7ad285a3456b35404babf99bd0cdc77",
+    "tests/fixtures/goway/testdata/noraw/negative/probe.go": "adcd00a94f8d38c314278f6e64ae4cc8270f0810a1314be71158892be92f3910",
+    "tests/fixtures/goway/testdata/noraw/negative/refs_test.go": "ada0605b965d0522e53d85b18f841d2f8e4358968f9418ef12485182f834c6ea",
+    "tests/fixtures/goway/testdata/noraw/negative/signatures.go": "9b705a06c2171e620201e8380c70e8e31bc2ab8636c380f0accc4d2f96d7c60f",
+    "tests/fixtures/goway/testdata/noraw/positive/probe.go": "b9aa420b8ab0e77e00dddbfc42ded55aa5e3e556c3eb4c213274dd41bce51988",
+    "tests/fixtures/goway/testdata/noraw/positive/signatures.go": "bb2cd0daf60fb194482b8070348dfc4c57f5707abb7109803f76b4f33bfcadf8",
+    "tests/fixtures/goway/testdata/noraw/positive/typed.go": "253bd675f602d80cf92a43521abe7c930340c86d0d659f5b1a79d1ceb993627e",
+    "tests/fixtures/goway/testdata/noraw/raw.test/probe.go": "8e82207548efb98942421410ed7250bd66b7350ae5fe7c7ed8beff4cf32ceb7d",
+    "tests/fixtures/goway/testdata/noraw/raw.test/probe_test.go": "7c5a0ec545e110d5b4719bcdedbdb13a52becd571c335a8834901eb81e17db30",
+    "tools/release/release_test.go": "a33e0ba1908fd5debffb4c7258f115d5715cafd3bd0fafacc09afebb341559e9",
+    "tools/release/source.go": "0a95269a9308b11ff714037a7a85f92ac4833dda4d2f7248089fd84c81621d40"
+  },
+  "shared_compiler_owner_sha256": {
+    "internal/querycore/raw_fragment.go": "abd46dedabdf5d788afc41315851a5e3ae5806d695f8a2cc512c965469b0efce",
+    "internal/querycore/compiler.go": "5f52050d973df7b434f3f30f89334b6c9ab46d73a3f0c1eed04277496322c57d",
+    "internal/querycore/statement_shape.go": "d2b358e850f8bea9e188a38638dea4b4f309e616e022106bd1a0f58991613fe9",
+    "internal/querycore/ast.go": "8eb79abd05fe68d59dfd8b910d46f73ef7932beeeac47cd082cd5e1c04cd833f",
+    "internal/querycore/select_walk.go": "cd95988f4bc85a2191a0e9176d88e35fb94e34df522a97eb6ee7f92450f4fead",
+    "internal/querycore/value_expression.go": "5ae8be986170ecff39a348ddf34949380eb2b9cccd798423c398204b903aab38",
+    "internal/querycore/computed_expression.go": "79a5b6e2afec65883c916e2694bec7e5d4f3900370fd6df960976b8d75b69798",
+    "internal/sqlowner/seal.go": "b9f546f7111812d4a7245673425607c3bf7e4da73c048843f94c0f28df088cb8",
+    "internal/ormcore/source.go": "17c315a8be86c675cc29fa284ffe4357f4a3d2630c8a7216d4f7441e793a52fb"
+  },
+  "logs": {
+    "D-build.log": {
+      "path": "/private/tmp/goway-6a4-r5-acceptance/D-build.log",
+      "sha256": "e098d3c27a39dcdfecfc36085b4260bd12d4324a976fd2f274528c552b033365"
+    },
+    "D-contracts.log": {
+      "path": "/private/tmp/goway-6a4-r5-acceptance/D-contracts.log",
+      "sha256": "3da6e18db53ae452d4a2c95b69daa621c91e9d8f8a7afc0b070c33eec3168a51"
+    },
+    "D-framework.log": {
+      "path": "/private/tmp/goway-6a4-r5-acceptance/D-framework.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "D-load-error.log": {
+      "path": "/private/tmp/goway-6a4-r5-acceptance/D-load-error.log",
+      "sha256": "24204628e217ea8994457455ad338ccea61bcac54e19910b13fe7a0de1921335"
+    },
+    "D-negative.log": {
+      "path": "/private/tmp/goway-6a4-r5-acceptance/D-negative.log",
+      "sha256": "0c019ab53f9bb648fd187538592c7c015915344c8a5f23ab7df4927273d8ebeb"
+    },
+    "D-no-match.log": {
+      "path": "/private/tmp/goway-6a4-r5-acceptance/D-no-match.log",
+      "sha256": "24204628e217ea8994457455ad338ccea61bcac54e19910b13fe7a0de1921335"
+    },
+    "D-positive.log": {
+      "path": "/private/tmp/goway-6a4-r5-acceptance/D-positive.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "D-raw-test.log": {
+      "path": "/private/tmp/goway-6a4-r5-acceptance/D-raw-test.log",
+      "sha256": "3ac0396cf96f75740bb0681a55e08824cc50ec1ed58c8c74d396df1618676f06"
+    },
+    "D-tests.log": {
+      "path": "/private/tmp/goway-6a4-r5-acceptance/D-tests.log",
+      "sha256": "9670529e558d5699041d0c0fb113a98a6886d48cc575c3fc8232187ef024a4e6"
+    },
+    "diff-check.log": {
+      "path": "/private/tmp/goway-6a4-r5-acceptance/diff-check.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "format.log": {
+      "path": "/private/tmp/goway-6a4-r5-acceptance/format.log",
+      "sha256": "a3b6f2b734a3a09861d23ce28b3be97f9b926f6f31d62ac1e21e20d9d449ef01"
+    }
+  },
+  "docs_notes": [
+    "Stage 6a4 delivered: three additive fragment constructors; typed selected phase, preserved scopes/transactions, opaque detector fingerprints. No API/surface additions in this review fix.",
+    "CI opt-in: foundry lint --no-raw ./... is a best-effort source-policy check, not a runtime proof. Direct framework symbols, interface/constraint raw parameter contracts including Table.Raw, and complete raw signatures of called function values are checked. Function-value detection is order-insensitive and independent of assignments; same-signature application implementations are included. No capture/transfer diagnostics. Framework callers are excluded; diagnostics are file:line only. Findings and load failures fail CI.",
+    "Ordinary non-E raw string literals containing backslashes fail closed due to standard_conforming_strings ambiguity; use E'...' or a bound parameter. E-mode continuation remains supported.",
+    "All 70 old Stage 6a catalogue rows remain ported; 98 selected external compile-fail cases and 37 footprint probes pass without increased ceilings. Ordinary typed ORM lint suite and framework package lint report zero diagnostics.",
+    "Prior A-C retained without rerun for the lint-only final fix; D rerun with GOWORK=off and GOCACHE=/private/tmp/foundry-goway-codex-gocache-r2; PostgreSQL compiled/vetted only. Lead-owned docs remain unchanged.",
+    "Callable type parameters use their constraint-fixed underlying function signature. The expr README documents unresolved generic result signatures, reflection, unselected dependencies/build configurations, wrapper tracing and same-signature false positives as known source-policy limits."
+  ],
+  "vcs": {
+    "committed": false,
+    "git_writes": false,
+    "lead_owned_docs_unchanged": true,
+    "prior_evidence_unchanged": true
+  },
+  "previous_acceptance_commands": [
+    {
+      "set": "A",
+      "cwd": ".",
+      "command": "go test -p=2 ./database/orm/... ./internal/ormcore ./internal/querycore ./internal/sqlowner",
+      "log": "A.log",
+      "result": "pass"
+    },
+    {
+      "set": "B",
+      "cwd": "tests/fixtures/goway",
+      "command": "go test -p=2 -v -run '^TestInvalidPublicContractsFailCompilation$/(^raw_fragment_|^aggregate_|^computed_group_owner$|^distinct_|^field_in_having$|^having_|^interval_result_phase$|^interval_sum_decimal$|^json_sum$|^projection_|^selected_|^key_phase_|^order_phase_|^case_|^coalesce_|^arithmetic_|^computed_model_order_owner$|^decimal_conversion_float$|^column_|^value_compare_|^parameter_|^phase_)' .",
+      "log": "B-compiler.log",
+      "result": "pass; 98 selected external compile-fail cases"
+    },
+    {
+      "set": "B",
+      "cwd": "tests/fixtures/goway",
+      "command": "go test -p=2 -v -run '^(TestStage6a4RawFragmentsOpaque|TestStage6a3AggregateGolden|TestStage6a3InferredZeroCapabilitiesFailClosed|TestStage6a2ConditionalGolden|TestStage6a1ExpressionGolden|TestOldAndNewDataLayersAgree|TestInferredCapabilityCatchersNeverReceiveAuthority|TestInferredZeroBridgeCapabilitiesFailClosed|TestFootprintBudgets)$' .",
+      "log": "B-runtime.log",
+      "result": "pass; all selected goldens, bridge/detector tests, 37 footprint probes and model slope"
+    },
+    {
+      "set": "C",
+      "cwd": ".",
+      "command": "python3 tools/goway_catalogue.py",
+      "log": "C-catalogue.log",
+      "result": "pass; all 70 old Stage 6a rows already ported; mapping unchanged"
+    },
+    {
+      "set": "C",
+      "cwd": "tests/fixtures/goway",
+      "command": "go test -p=2 -run '^$' ./pgsmoke",
+      "log": "C-pgsmoke-compile.log",
+      "result": "pass; compile only, no PostgreSQL execution"
+    },
+    {
+      "set": "C",
+      "cwd": "tests/fixtures/goway",
+      "command": "go vet -p=2 ./pgsmoke",
+      "log": "C-pgsmoke-vet.log",
+      "result": "pass"
+    },
+    {
+      "set": "old API regressions",
+      "cwd": ".",
+      "command": "go test -p=2 ./database/query -run '^(TestAggregate|TestTypedAggregate|TestDistinct)'",
+      "log": "old-api.log",
+      "result": "pass; old API tests unchanged"
+    },
+    {
+      "set": "format",
+      "cwd": ".",
+      "command": "gofmt -w <45 slice Go files>; gofmt -l <same files; paths in format-files.json>",
+      "log": "format.log",
+      "result": "pass; no remaining unformatted files"
+    },
+    {
+      "set": "diff",
+      "cwd": ".",
+      "command": "git diff --check",
+      "log": "diff-check.log",
+      "result": "pass"
+    },
+    {
+      "set": "D",
+      "cwd": ".",
+      "command": "go test -p=2 ./internal/noraw ./cmd/foundry",
+      "log": "D-tests.log",
+      "result": "pass; 59 expected raw call sites and all zero-diagnostic controls"
+    },
+    {
+      "set": "D",
+      "cwd": ".",
+      "command": "go build -p=2 -o /private/tmp/goway-6a4-r4-acceptance/foundry ./cmd/foundry",
+      "log": "D-build.log",
+      "result": "pass"
+    },
+    {
+      "set": "D",
+      "cwd": "tests/fixtures/goway",
+      "command": "/private/tmp/goway-6a4-r4-acceptance/foundry lint --no-raw ./testdata/noraw/positive",
+      "log": "D-positive.log",
+      "result": "pass; expected exit 0, 0 file:line diagnostics; no SQL or argument canaries"
+    },
+    {
+      "set": "D",
+      "cwd": "tests/fixtures/goway",
+      "command": "/private/tmp/goway-6a4-r4-acceptance/foundry lint --no-raw ./testdata/noraw/negative",
+      "log": "D-negative.log",
+      "result": "pass; expected exit 1, 54 file:line diagnostics; no SQL or argument canaries"
+    },
+    {
+      "set": "D",
+      "cwd": "tests/fixtures/goway",
+      "command": "/private/tmp/goway-6a4-r4-acceptance/foundry lint --no-raw ./testdata/noraw/raw.test",
+      "log": "D-raw-test.log",
+      "result": "pass; expected exit 1, 2 file:line diagnostics; no SQL or argument canaries"
+    },
+    {
+      "set": "D",
+      "cwd": "tests/fixtures/goway",
+      "command": "/private/tmp/goway-6a4-r4-acceptance/foundry lint --no-raw ./testdata/noraw/contracts",
+      "log": "D-contracts.log",
+      "result": "pass; expected exit 1, 3 file:line diagnostics; no SQL or argument canaries"
+    },
+    {
+      "set": "D",
+      "cwd": "tests/fixtures/goway",
+      "command": "/private/tmp/goway-6a4-r4-acceptance/foundry lint --no-raw ./missing",
+      "log": "D-load-error.log",
+      "result": "pass; expected exit 1, 0 file:line diagnostics; no SQL or argument canaries"
+    },
+    {
+      "set": "D",
+      "cwd": "tests/fixtures/goway",
+      "command": "/private/tmp/goway-6a4-r4-acceptance/foundry lint --no-raw ./missing/...",
+      "log": "D-no-match.log",
+      "result": "pass; expected exit 1, 0 file:line diagnostics; no SQL or argument canaries"
+    },
+    {
+      "set": "D",
+      "cwd": ".",
+      "command": "/private/tmp/goway-6a4-r4-acceptance/foundry lint --no-raw ./database/orm",
+      "log": "D-framework.log",
+      "result": "pass; expected exit 0, 0 file:line diagnostics; no SQL or argument canaries"
+    }
+  ],
+  "previous_acceptance_logs": {
+    "A.log": {
+      "path": "/private/tmp/goway-6a4-r4-acceptance/A.log",
+      "sha256": "85f4a535f99e6e70fa1031932d46c461f62a53593ad1d794155fb16d7d5562d6"
+    },
+    "B-compiler.log": {
+      "path": "/private/tmp/goway-6a4-r4-acceptance/B-compiler.log",
+      "sha256": "4bb4b5bb51042446f7321c8afa648e046363516800b7b4ec302c604127ef9e42"
+    },
+    "B-runtime.log": {
+      "path": "/private/tmp/goway-6a4-r4-acceptance/B-runtime.log",
+      "sha256": "2d4b938b52179a055bc8e7aea7ca44f547d1c34c952e4db9fee7451f880e5ff7"
+    },
+    "C-catalogue.log": {
+      "path": "/private/tmp/goway-6a4-r4-acceptance/C-catalogue.log",
+      "sha256": "5309282efacdf7d18dd590ce8cfefe25cd3b48069163f9bbfeb89ff7824e70a7"
+    },
+    "C-pgsmoke-compile.log": {
+      "path": "/private/tmp/goway-6a4-r4-acceptance/C-pgsmoke-compile.log",
+      "sha256": "74101af38ffe9be0609a1779f9148fb9c345e915993691ff1d6ddbcfd12b9d0d"
+    },
+    "C-pgsmoke-vet.log": {
+      "path": "/private/tmp/goway-6a4-r4-acceptance/C-pgsmoke-vet.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "D-build.log": {
+      "path": "/private/tmp/goway-6a4-r4-acceptance/D-build.log",
+      "sha256": "0d3d04e16d47507647a492b0b0b2a14b3e1aebe3b5f2899d0e58ca8bc3ac1385"
+    },
+    "D-contracts.log": {
+      "path": "/private/tmp/goway-6a4-r4-acceptance/D-contracts.log",
+      "sha256": "3da6e18db53ae452d4a2c95b69daa621c91e9d8f8a7afc0b070c33eec3168a51"
+    },
+    "D-framework.log": {
+      "path": "/private/tmp/goway-6a4-r4-acceptance/D-framework.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "D-load-error.log": {
+      "path": "/private/tmp/goway-6a4-r4-acceptance/D-load-error.log",
+      "sha256": "24204628e217ea8994457455ad338ccea61bcac54e19910b13fe7a0de1921335"
+    },
+    "D-negative.log": {
+      "path": "/private/tmp/goway-6a4-r4-acceptance/D-negative.log",
+      "sha256": "18500b2878c611bb7ef8d340598ef774ae8b5573e5afb0a110b464aeb3118c77"
+    },
+    "D-no-match.log": {
+      "path": "/private/tmp/goway-6a4-r4-acceptance/D-no-match.log",
+      "sha256": "24204628e217ea8994457455ad338ccea61bcac54e19910b13fe7a0de1921335"
+    },
+    "D-positive.log": {
+      "path": "/private/tmp/goway-6a4-r4-acceptance/D-positive.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "D-raw-test.log": {
+      "path": "/private/tmp/goway-6a4-r4-acceptance/D-raw-test.log",
+      "sha256": "3ac0396cf96f75740bb0681a55e08824cc50ec1ed58c8c74d396df1618676f06"
+    },
+    "D-tests.log": {
+      "path": "/private/tmp/goway-6a4-r4-acceptance/D-tests.log",
+      "sha256": "a4e85762a28b5dc0a4f0cd5c03a458236fae4d4132f19c2eef097739dafed835"
+    },
+    "diff-check.log": {
+      "path": "/private/tmp/goway-6a4-r4-acceptance/diff-check.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "format.log": {
+      "path": "/private/tmp/goway-6a4-r4-acceptance/format.log",
+      "sha256": "2bf461f24898588ffead515fae3945e7c1ab00433c84e01c92d39509fc840d7d"
+    },
+    "old-api.log": {
+      "path": "/private/tmp/goway-6a4-r4-acceptance/old-api.log",
+      "sha256": "25c387a7fb1875fcecf40c802f8b29432f0f6c19ffd9de8c39da103719274ab2"
+    }
+  },
+  "previous_acceptance_environment": {
+    "GOWORK": "off",
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache",
+    "postgres": "no execution",
+    "new_dependencies": false
+  },
+  "review_fixes": [
+    {
+      "finding": "callable type parameter bypasses function-value signature detection",
+      "fix": "Extract the shared underlying function signature from type-checked callable constraints, following embedded interfaces and union terms, then reuse the existing raw signature matcher. No binding/dataflow tracking added.",
+      "regressions": [
+        "inline ~func raw constraint and *(&f) calls",
+        "named and embedded constraints",
+        "union of named function types with the same raw signature",
+        "exact func constraint",
+        "generic selected Raw result constraint",
+        "unrelated result signatures and unresolved generic results remain clean"
+      ],
+      "known_limits": "Best-effort source-policy check only: no reflection or wrapper/dataflow tracing, no specialization of generic application bodies at every call, no inspection of unselected dependencies/build configurations; same-signature application values may be flagged without performing SQL."
+    }
+  ],
+  "review_files_touched": [
+    "database/orm/expr/README.md",
+    "internal/noraw/calls.go",
+    "tests/fixtures/goway/testdata/noraw/negative/signatures.go",
+    "tests/fixtures/goway/testdata/noraw/positive/signatures.go",
+    "docs/evidence/goway-6a4.json"
+  ],
+  "previous_review_fixes": [
+    {
+      "finding": "final lint design",
+      "fix": "Removed binding/dataflow tracking. Function-valued call expressions are classified by complete signatures derived from framework declarations, with consistent generic type arguments and constraints. Direct named calls still use framework symbol identity; interface/type-parameter methods use instantiated parameter contracts, now including Raw(context.Context, database.Executor, string, ...any). Metadata packages supply signatures even when consumer source has no raw symbol reference. No captures or transfer sites are flagged. Framework callers excluded; file:line diagnostics; loading and unmatched patterns fail.",
+      "regressions": [
+        "pointer/address alias calls *(&f), fields, parameters, slice indexing, returned function values, conversions",
+        "all raw constructor generic signature families without origin bindings; mismatched codec/result and nonvariadic signatures remain clean",
+        "reassignment order: exact raw signatures always flagged, unrelated signatures and direct application functions remain clean",
+        "restated Table.Raw generic/non-generic interfaces and constrained methods",
+        "existing Runner[R], constrained executors, method expressions and method values",
+        "ordinary typed ORM queries, writes, relations, cursors, chunks and transactions yield zero diagnostics",
+        "CLI help and expr README explicitly describe best-effort source-policy check, not runtime proof"
+      ]
+    }
+  ],
+  "deleted_files": [
+    "internal/noraw/interface.go"
+  ],
+  "integration_batch3": {
+    "base_commit": "80546f4",
+    "status": "pass",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r2",
+      "GOWORK": "off"
+    },
+    "lane_source_sha256": {
+      "cmd/foundry/lint.go": "5361e8867a0429fe9b014dffddf6e69feede6498213a8b23057fc94efac4cb96",
+      "cmd/foundry/lint_test.go": "d92aa67b5218ce6c925a660ca780ebabb7baf78399f64fa8aa6afefaa6650fae",
+      "cmd/foundry/main.go": "c0318ae02850ee77a0a64a2cabdf71cdb5ae708ac2745d9938a9a2d2f7dcee9d",
+      "cmd/foundry/main_test.go": "f7048af2cefd9fde17b3e1527b414617fda711e75b10c36f34fa4edb07ebaf7c",
+      "database/orm/codec_surface_test.go": "dd35ed40d44b21beac6f5df0ec792d57daeeb6736ab288b48d4669a635e189a0",
+      "database/orm/column.go": "658e9ee80710c84b1c49c3945b489152633ee0809f0a3c5d201a9c0ff546b0c7",
+      "database/orm/expr/README.md": "f23d16d3cc834dec75cabfaed3428f96ce2ae884bf53be1a079d66f0e9d32c13",
+      "database/orm/expr/raw.go": "47ac44ea8014300f1405e838b7c2d3247b0d42ff0f45d29cd890778d3a8f1fb9",
+      "database/orm/method_surface_test.go": "44bfd447e1c0617f09ccaae0a7cf0e160986633707b49cb02142541583fa2141",
+      "database/orm/query.go": "b63d222482d30d5f409bfa860ac5822930db65e5dc027227ff804d414afcdf89",
+      "database/orm/raw_fragment.go": "6d8dc345deeec14b6ab93a1397965353ef6d9a5fc4d935f09d18c7cfab0dbb1b",
+      "database/orm/raw_fragment_test.go": "749d41f55e34da8046a566f8271f21ba68924671f5e36e1b510914eef9583042",
+      "database/orm/rows/raw_fragment_test.go": "e2b62c4c495b8ad4887897238fc7fdd3e6f485a5738534abcf9645c2441f4e01",
+      "database/orm/testdata/public-methods.txt": "80bd355644a968b1b83523273ff654f1860d77f0f87c898b6c753d060b5766e1",
+      "internal/noraw/calls.go": "efb2485577477704242ddfca3aaf966477223f35e717ca3baeea48fd6cb39b26",
+      "internal/noraw/lint.go": "807449d576f3b37a7a26066aea90bd2c4b77705e7bf7ad2db545ead42fc87f34",
+      "internal/noraw/lint_test.go": "ed53131038874cfdcb05c5c6888397f39399f1c4123a592e0676e16f9695e363",
+      "internal/noraw/load.go": "c2fffb94836683d6cbc9d6546aec62b24c5453c22543bb309ddf88afd4a7f463",
+      "internal/noraw/signatures.go": "5379ec1911f7d842e38b95db577b241dacd81cdbd5f4ad35e16d65b13d381a90",
+      "internal/ormcore/result_codec.go": "31ea75b4ea3fcd64b3a020e288df3f1f0513044facc648bb081c89d1935cee84",
+      "internal/querycore/ast.go": "8eb79abd05fe68d59dfd8b910d46f73ef7932beeeac47cd082cd5e1c04cd833f",
+      "internal/querycore/compiler.go": "5f52050d973df7b434f3f30f89334b6c9ab46d73a3f0c1eed04277496322c57d",
+      "internal/querycore/computed_expression.go": "79a5b6e2afec65883c916e2694bec7e5d4f3900370fd6df960976b8d75b69798",
+      "internal/querycore/raw_fragment.go": "abd46dedabdf5d788afc41315851a5e3ae5806d695f8a2cc512c965469b0efce",
+      "internal/querycore/raw_fragment_test.go": "33ced790293c658c3148b08888c4a19502f46794caed82208c95962103638c5f",
+      "internal/querycore/select_walk.go": "cd95988f4bc85a2191a0e9176d88e35fb94e34df522a97eb6ee7f92450f4fead",
+      "internal/querycore/statement_shape.go": "d2b358e850f8bea9e188a38638dea4b4f309e616e022106bd1a0f58991613fe9",
+      "internal/querycore/value_expression.go": "5ae8be986170ecff39a348ddf34949380eb2b9cccd798423c398204b903aab38",
+      "tests/fixtures/goway/compiler_cases_test.go": "dd3efa5471c7238d584144b0f237628b9a7bbe9e5a8c28fffac14f30b77e078c",
+      "tests/fixtures/goway/footprint_test.go": "64aa15914b0b69f60347d4487ab196924638322c674c1065de7c1a26875c8b99",
+      "tests/fixtures/goway/pgsmoke/raw_fragments_test.go": "467e6762863ffac907ddc82657f12bb93d3f9554746a297764dec0cc15939163",
+      "tests/fixtures/goway/raw_fragment_test.go": "dfa502e6021a6808f5f24f6bf0f481b309567934c4decd7a54dfc62e2b78b3c5",
+      "tests/fixtures/goway/testdata/compilefail/raw_fragment_conversion/invalid.go": "59d54a2836746578e0a6167f456b7ea481557c5594221b17c52d64e208dba88f",
+      "tests/fixtures/goway/testdata/compilefail/raw_fragment_group_phase/invalid.go": "16523fa7b9e4cf8c19f9cbed8d7f3abd49fbf7154f99c01a80f48cbaa9d5e32c",
+      "tests/fixtures/goway/testdata/compilefail/raw_fragment_owner/invalid.go": "ea49d83b734fb09afc9ccf9691bab6a9d82d233602769c0cc63208c6cda7cb3c",
+      "tests/fixtures/goway/testdata/compilefail/raw_fragment_row_phase/invalid.go": "12d75d81645ddf5628e811423084c183326a3324a06f9f73d29d0c52f80c94a9",
+      "tests/fixtures/goway/testdata/footprint/raw_fragments/probe.go": "adea0b30d2e9c05684e06d137b30f272a3d3b9600713c0f73e6c20cd494deacd",
+      "tests/fixtures/goway/testdata/noraw/contracts/probe.go": "7e747c92cf6bbda7c101574097f4ad00d2cec6bd1c6c212b39e2d8f8eceaf9be",
+      "tests/fixtures/goway/testdata/noraw/negative/interfaces.go": "e38d319bab905af59480c4541d94b4f8c7ad285a3456b35404babf99bd0cdc77",
+      "tests/fixtures/goway/testdata/noraw/negative/probe.go": "adcd00a94f8d38c314278f6e64ae4cc8270f0810a1314be71158892be92f3910",
+      "tests/fixtures/goway/testdata/noraw/negative/refs_test.go": "ada0605b965d0522e53d85b18f841d2f8e4358968f9418ef12485182f834c6ea",
+      "tests/fixtures/goway/testdata/noraw/negative/signatures.go": "9b705a06c2171e620201e8380c70e8e31bc2ab8636c380f0accc4d2f96d7c60f",
+      "tests/fixtures/goway/testdata/noraw/positive/probe.go": "b9aa420b8ab0e77e00dddbfc42ded55aa5e3e556c3eb4c213274dd41bce51988",
+      "tests/fixtures/goway/testdata/noraw/positive/signatures.go": "bb2cd0daf60fb194482b8070348dfc4c57f5707abb7109803f76b4f33bfcadf8",
+      "tests/fixtures/goway/testdata/noraw/positive/typed.go": "253bd675f602d80cf92a43521abe7c930340c86d0d659f5b1a79d1ceb993627e",
+      "tests/fixtures/goway/testdata/noraw/raw.test/probe.go": "8e82207548efb98942421410ed7250bd66b7350ae5fe7c7ed8beff4cf32ceb7d",
+      "tests/fixtures/goway/testdata/noraw/raw.test/probe_test.go": "7c5a0ec545e110d5b4719bcdedbdb13a52becd571c335a8834901eb81e17db30"
+    },
+    "conflicts": {
+      "6a4": [
+        "database/orm/expr/README.md",
+        "database/orm/method_surface_test.go",
+        "database/orm/testdata/public-methods.txt",
+        "tests/fixtures/goway/compiler_cases_test.go",
+        "tests/fixtures/goway/footprint_test.go"
+      ],
+      "6c1": [
+        "database/orm/method_surface_test.go"
+      ],
+      "B5d": [
+        "database/orm/testdata/public-methods.txt",
+        "tests/fixtures/goway/compiler_cases_test.go",
+        "tests/fixtures/goway/footprint_test.go"
+      ]
+    },
+    "resolution": "Union APIs/docs/cases/probes, preserve every existing ceiling and sorted map enumeration, regenerate go/types snapshot. No runtime conflict required choosing between lane behavior.",
+    "corrections": [
+      "Recovered two raw.test lint fixture sources omitted by the patch due to *.test ignore; both match accepted lane evidence hashes. Added exact directory exception and release inventory assertions.",
+      "Initial B5d apply failed index checks without applying; restaged already resolved registries and reapplied."
+    ],
+    "counts": {
+      "catalogue_rows": 1026,
+      "dispositions": {
+        "ported": 292,
+        "port": 290,
+        "unaffected": 444
+      },
+      "compiler_cases": 388,
+      "footprint_probes": 64
+    },
+    "footprints": {
+      "aggregate_families": {
+        "functions": 4362,
+        "baseline": 3799,
+        "ceiling": 4369,
+        "archive_bytes": 19814020
+      },
+      "aggregate_group": {
+        "functions": 2529,
+        "baseline": 2426,
+        "ceiling": 2790,
+        "archive_bytes": 11308584
+      },
+      "aggregate_slot_declaration": {
+        "functions": 1127,
+        "baseline": 1112,
+        "ceiling": 1279,
+        "archive_bytes": 4828314
+      },
+      "aggregate_slot_direct": {
+        "functions": 1490,
+        "baseline": 1490,
+        "ceiling": 1714,
+        "archive_bytes": 6087338
+      },
+      "aggregate_slot_nested": {
+        "functions": 2050,
+        "baseline": 2048,
+        "ceiling": 2356,
+        "archive_bytes": 8413324
+      },
+      "aggregate_slot_pivot": {
+        "functions": 2092,
+        "baseline": 2095,
+        "ceiling": 2410,
+        "archive_bytes": 8721626
+      },
+      "audit": {
+        "functions": 1313,
+        "baseline": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6437574
+      },
+      "column_encrypted_json": {
+        "functions": 1321,
+        "baseline": 1217,
+        "ceiling": 1400,
+        "archive_bytes": 5623514
+      },
+      "column_encrypted_text": {
+        "functions": 1231,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5313344
+      },
+      "column_enum": {
+        "functions": 1344,
+        "baseline": 1232,
+        "ceiling": 1417,
+        "archive_bytes": 5614940
+      },
+      "column_interval": {
+        "functions": 1293,
+        "baseline": 1178,
+        "ceiling": 1355,
+        "archive_bytes": 5556528
+      },
+      "column_json": {
+        "functions": 1391,
+        "baseline": 1280,
+        "ceiling": 1472,
+        "archive_bytes": 5853454
+      },
+      "column_nullable_encrypted_json": {
+        "functions": 1562,
+        "baseline": 1449,
+        "ceiling": 1667,
+        "archive_bytes": 6889190
+      },
+      "column_nullable_encrypted_text": {
+        "functions": 1472,
+        "baseline": 1359,
+        "ceiling": 1563,
+        "archive_bytes": 6556064
+      },
+      "column_nullable_interval": {
+        "functions": 1530,
+        "baseline": 1406,
+        "ceiling": 1617,
+        "archive_bytes": 6773722
+      },
+      "column_nullable_json": {
+        "functions": 1642,
+        "baseline": 1522,
+        "ceiling": 1751,
+        "archive_bytes": 7077976
+      },
+      "column_nullable_password": {
+        "functions": 1535,
+        "baseline": 1417,
+        "ceiling": 1630,
+        "archive_bytes": 6736982
+      },
+      "column_nullable_text": {
+        "functions": 1584,
+        "baseline": 1456,
+        "ceiling": 1675,
+        "archive_bytes": 6547806
+      },
+      "column_number": {
+        "functions": 1267,
+        "baseline": 1172,
+        "ceiling": 1348,
+        "archive_bytes": 5298356
+      },
+      "column_password": {
+        "functions": 1299,
+        "baseline": 1190,
+        "ceiling": 1369,
+        "archive_bytes": 5564706
+      },
+      "column_time": {
+        "functions": 1309,
+        "baseline": 1194,
+        "ceiling": 1374,
+        "archive_bytes": 5436430
+      },
+      "conditional_row": {
+        "functions": 1803,
+        "baseline": 1681,
+        "ceiling": 1934,
+        "archive_bytes": 8191646
+      },
+      "conditional_selected": {
+        "functions": 1647,
+        "baseline": 1511,
+        "ceiling": 1738,
+        "archive_bytes": 7530928
+      },
+      "correlation": {
+        "functions": 2990,
+        "baseline": 2752,
+        "ceiling": 3165,
+        "archive_bytes": 13700932
+      },
+      "cursor": {
+        "functions": 1186,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5340414
+      },
+      "distinct": {
+        "functions": 1174,
+        "baseline": 1135,
+        "ceiling": 1306,
+        "archive_bytes": 5657462
+      },
+      "expr_arithmetic": {
+        "functions": 1256,
+        "baseline": 1162,
+        "ceiling": 1337,
+        "archive_bytes": 5867588
+      },
+      "expr_selected": {
+        "functions": 1696,
+        "baseline": 1551,
+        "ceiling": 1784,
+        "archive_bytes": 7510554
+      },
+      "global_scopes": {
+        "functions": 1389,
+        "baseline": 1374,
+        "ceiling": 1581,
+        "archive_bytes": 6379120
+      },
+      "has": {
+        "functions": 1412,
+        "baseline": 1302,
+        "ceiling": 1498,
+        "archive_bytes": 6228334
+      },
+      "has_one": {
+        "functions": 1403,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6201770
+      },
+      "input_column_kinds": {
+        "functions": 5321,
+        "baseline": 5088,
+        "ceiling": 5852,
+        "archive_bytes": 21979630
+      },
+      "input_key": {
+        "functions": 1049,
+        "baseline": 982,
+        "ceiling": 1130,
+        "archive_bytes": 4839804
+      },
+      "key_chunk": {
+        "functions": 862,
+        "baseline": 812,
+        "ceiling": 934,
+        "archive_bytes": 4131370
+      },
+      "lateral": {
+        "functions": 3046,
+        "baseline": 2852,
+        "ceiling": 3280,
+        "archive_bytes": 15031756
+      },
+      "lifecycle_changes": {
+        "functions": 1069,
+        "baseline": 1050,
+        "ceiling": 1208,
+        "archive_bytes": 4946540
+      },
+      "lifecycle_write": {
+        "functions": 949,
+        "baseline": 930,
+        "ceiling": 1070,
+        "archive_bytes": 4705730
+      },
+      "model_type": {
+        "functions": 299,
+        "baseline": 299,
+        "ceiling": 344,
+        "archive_bytes": 1272140
+      },
+      "models": {
+        "functions": 6849,
+        "baseline": 6147,
+        "ceiling": 7070,
+        "archive_bytes": 29877108
+      },
+      "models_1": {
+        "functions": 1751,
+        "baseline": 1619,
+        "ceiling": 1862,
+        "archive_bytes": 7235732
+      },
+      "models_3": {
+        "functions": 2605,
+        "baseline": 2435,
+        "ceiling": 2801,
+        "archive_bytes": 10836654
+      },
+      "morph": {
+        "functions": 1155,
+        "baseline": 1088,
+        "ceiling": 1252,
+        "archive_bytes": 5211920
+      },
+      "mutator_explicit": {
+        "functions": 1698,
+        "baseline": 1605,
+        "ceiling": 1846,
+        "archive_bytes": 7014838
+      },
+      "mutators": {
+        "functions": 855,
+        "baseline": 801,
+        "ceiling": 922,
+        "archive_bytes": 4479738
+      },
+      "nested_with": {
+        "functions": 1403,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6240676
+      },
+      "nullable_join_chain": {
+        "functions": 1853,
+        "baseline": 1695,
+        "ceiling": 1950,
+        "archive_bytes": 8813626
+      },
+      "on_comparisons": {
+        "functions": 1589,
+        "baseline": 1454,
+        "ceiling": 1673,
+        "archive_bytes": 7204914
+      },
+      "onequery": {
+        "functions": 854,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 4088372
+      },
+      "outer_join": {
+        "functions": 1788,
+        "baseline": 1668,
+        "ceiling": 1919,
+        "archive_bytes": 8475116
+      },
+      "pivot": {
+        "functions": 1072,
+        "baseline": 1005,
+        "ceiling": 1156,
+        "archive_bytes": 4911212
+      },
+      "q_join": {
+        "functions": 1766,
+        "baseline": 1598,
+        "ceiling": 1838,
+        "archive_bytes": 8376032
+      },
+      "q_select": {
+        "functions": 895,
+        "baseline": 836,
+        "ceiling": 962,
+        "archive_bytes": 4316508
+      },
+      "q_with": {
+        "functions": 1211,
+        "baseline": 1053,
+        "ceiling": 1211,
+        "archive_bytes": 5525608
+      },
+      "raw": {
+        "functions": 1095,
+        "baseline": 1045,
+        "ceiling": 1202,
+        "archive_bytes": 5187168
+      },
+      "raw_fragments": {
+        "functions": 1379,
+        "baseline": 1331,
+        "ceiling": 1531,
+        "archive_bytes": 6182516
+      },
+      "records": {
+        "functions": 1313,
+        "baseline": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6459486
+      },
+      "relation_with": {
+        "functions": 2047,
+        "baseline": 1847,
+        "ceiling": 2125,
+        "archive_bytes": 8746170
+      },
+      "report_pipeline": {
+        "functions": 2120,
+        "baseline": 1905,
+        "ceiling": 2191,
+        "archive_bytes": 11245428
+      },
+      "retrieval_read": {
+        "functions": 831,
+        "baseline": 826,
+        "ceiling": 950,
+        "archive_bytes": 4103056
+      },
+      "sensitive_models": {
+        "functions": 2821,
+        "baseline": 2606,
+        "ceiling": 2997,
+        "archive_bytes": 12782510
+      },
+      "subqueries": {
+        "functions": 3059,
+        "baseline": 2837,
+        "ceiling": 3263,
+        "archive_bytes": 13188482
+      },
+      "table_ref": {
+        "functions": 854,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 4248684
+      },
+      "through": {
+        "functions": 986,
+        "baseline": 928,
+        "ceiling": 1068,
+        "archive_bytes": 4415506
+      },
+      "transaction_records": {
+        "functions": 1296,
+        "baseline": 1296,
+        "ceiling": 1491,
+        "archive_bytes": 6102452
+      }
+    },
+    "commands": [
+      {
+        "command": "go build ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch3/build.log",
+        "log_sha256": "56d385592f7bb1b483a385730227928c91d208da1f51605c535c9172e354df06"
+      },
+      {
+        "command": "go vet ./database/... ./internal/... ./cmd/...",
+        "status": "pass",
+        "log": ".cache/goway-batch3/vet.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "go test -race ./database/... ./internal/... ./audit/... ./cmd/foundry/...",
+        "status": "pass",
+        "log": ".cache/goway-batch3/race.log",
+        "log_sha256": "bda47c05dfc4f1491b8dc94bf310861c110eba9c47052c1168e74d85157c8f00",
+        "initial_status": "sandbox-blocked only in internal/websockettest; every other package passed",
+        "completion": {
+          "command": "go test -race ./internal/websockettest/...",
+          "status": "pass",
+          "permission": "localhost test server allowed",
+          "log": ".cache/goway-batch3/race-websockettest.log",
+          "log_sha256": "1569358365960482b68ac5157d8888c6c53f12b6c4e2b6e8d119e882821815cd"
+        }
+      },
+      {
+        "command": "cd tests/fixtures/goway && go vet ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch3/fixture-vet.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "cd tests/fixtures/goway && go test -v ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch3/fixture-test.log",
+        "log_sha256": "d461221e42c2f2a1048cd3518cf58fb22b95326611d543cbb32aeb2b4acaecff"
+      },
+      {
+        "command": "python3 tools/goway_catalogue.py",
+        "status": "pass",
+        "log": ".cache/goway-batch3/catalogue.log",
+        "log_sha256": "14f1e1ef5604930a3e558c2ea6889a2282e50e54dd3e210caa9ce403f6388020"
+      },
+      {
+        "command": "make generate-check",
+        "status": "pass",
+        "log": ".cache/goway-batch3/generate.log",
+        "log_sha256": "2d9a3b6531cf4b5135a1526d050d10b91ab02bd96a97d3e382a4352b8b56aaef"
+      },
+      {
+        "command": "make release-tools-check",
+        "status": "pass",
+        "log": ".cache/goway-batch3/release-tools.log",
+        "log_sha256": "228af5c26b75cb70a5d2c5442c566325f7541618d14bfb3e20a9187b678d49aa"
+      },
+      {
+        "command": "make docs-check",
+        "status": "pass",
+        "log": ".cache/goway-batch3/docs.log",
+        "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+      },
+      {
+        "command": "gofmt -l (all repository Go files)",
+        "status": "pass",
+        "log": ".cache/goway-batch3/gofmt.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "git diff --check",
+        "status": "pass",
+        "log": ".cache/goway-batch3/diff-check.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "foundry lint --no-raw ./... (cwd tests/fixtures/goway/testdata/noraw/positive); foundry lint --no-raw ./models/... ./reporting/... (fixture cwd)",
+        "status": "pass",
+        "log": ".cache/goway-batch3/no-raw.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "release_inventory": "All ten noraw fixtures are Go sources; existing source policy covers them. Explicit fixture inventory assertions plus internal/noraw runtime source sweep added; no broader extension allowance.",
+    "not_run": [
+      "Live PostgreSQL (lead checkpoint; opt-in tests skip without configuration)",
+      "Benchmarks (not requested)"
+    ],
+    "git": "Only authorized apply -3 --binary and add for integration; no commit.",
+    "lane_shared_compiler_owner_sha256": {
+      "internal/querycore/raw_fragment.go": "abd46dedabdf5d788afc41315851a5e3ae5806d695f8a2cc512c965469b0efce",
+      "internal/querycore/compiler.go": "5f52050d973df7b434f3f30f89334b6c9ab46d73a3f0c1eed04277496322c57d",
+      "internal/querycore/statement_shape.go": "d2b358e850f8bea9e188a38638dea4b4f309e616e022106bd1a0f58991613fe9",
+      "internal/querycore/ast.go": "8eb79abd05fe68d59dfd8b910d46f73ef7932beeeac47cd082cd5e1c04cd833f",
+      "internal/querycore/select_walk.go": "cd95988f4bc85a2191a0e9176d88e35fb94e34df522a97eb6ee7f92450f4fead",
+      "internal/querycore/value_expression.go": "5ae8be986170ecff39a348ddf34949380eb2b9cccd798423c398204b903aab38",
+      "internal/querycore/computed_expression.go": "79a5b6e2afec65883c916e2694bec7e5d4f3900370fd6df960976b8d75b69798",
+      "internal/sqlowner/seal.go": "b9f546f7111812d4a7245673425607c3bf7e4da73c048843f94c0f28df088cb8",
+      "internal/ormcore/source.go": "642d51ddce575abc913a7e2c7b4634683fd76c7f76a1c5f5b5cd96570cadf1a7"
+    },
+    "lane_parent_evidence_sha256": {
+      "docs/evidence/goway-6a1.json": "a68c00bec37f171b76a88710d34eadfe1fb971410ba06ac91bb70a16fc81ef3a",
+      "docs/evidence/goway-6a2.json": "b223b4c2e20908ddfd83051bc752742acaec4ab0a982bdabbedc82eab2bc543b",
+      "docs/evidence/goway-6a3.json": "57316cbb890014bb53dbda0c89ac0a3d66bcb112cc95855761db304d6445c284"
+    }
+  }
+}

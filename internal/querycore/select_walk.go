@@ -238,6 +238,8 @@ func (w *SelectWalk) Expression(e Expression, depth int) {
 		return
 	}
 	switch e := e.(type) {
+	case RawFragment:
+		w.Err = e.Validate()
 	case Comparison:
 		w.Value(e.Operand, depth+1)
 	case BinaryComparison:

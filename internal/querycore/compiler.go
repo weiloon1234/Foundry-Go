@@ -29,6 +29,7 @@ const (
 
 type Compiler struct {
 	fragments     *statementFragments
+	opaque        bool
 	AllowLocks    bool
 	LockWork      int
 	Ctes          map[string]*CteNode
@@ -102,6 +103,8 @@ func (c *Compiler) Expression(e Expression) (string, error) { return c.Expressio
 
 func (c *Compiler) ExpressionAt(e Expression, grouped map[FieldRef]bool, grouping bool) (string, error) {
 	switch e := e.(type) {
+	case RawFragment:
+		return c.RawSQL(e)
 	case Comparison:
 		return c.Comparison(e, grouped, grouping)
 	case SubqueryPredicate:

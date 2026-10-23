@@ -20,6 +20,7 @@ type statementFragments struct{ values []statementFragment }
 func (c *Compiler) BeginStatement(ctx context.Context) {
 	c.ScopeContext = ctx
 	c.fragments = nil
+	c.opaque = false
 	if ctx != nil && statementmeta.Active(ctx) {
 		c.TrackShape()
 	}
@@ -74,7 +75,7 @@ func (c *Compiler) render(template string, shape bool) string {
 }
 func (c *Compiler) Statement(template string) Statement {
 	s := Statement{SQLText: c.render(template, false), Bindings: c.Arguments}
-	if c.fragments != nil {
+	if c.fragments != nil && !c.opaque {
 		s.Shape = c.render(template, true)
 	}
 	return s

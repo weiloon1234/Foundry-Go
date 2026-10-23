@@ -9,6 +9,7 @@
 /coverage/
 /coverage.out
 *.test
+!tests/fixtures/goway/testdata/noraw/raw.test/
 go.work
 go.work.sum
 .foundry-generate.lock/

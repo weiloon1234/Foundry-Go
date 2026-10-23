@@ -126,7 +126,7 @@ func where[M any](q queryState, ps []Predicate[M]) queryState {
 		if p.err != nil {
 			q.err = errors.Join(q.err, p.err)
 		}
-		if p.owner == nil || p.owner != q.table {
+		if !predicateOwnerMatches(p.owner, p.rawScope, q.table) {
 			q.err = errors.Join(q.err, invalid("predicate belongs to a different table declaration"))
 		}
 		q.ast.Predicates = append(q.ast.Predicates, p.expression)

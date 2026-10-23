@@ -192,7 +192,7 @@ func TestGoWaySourceInventory(t *testing.T) {
 			t.Fatal("nested fixture must remain a separate candidate consumer")
 		}
 	}
-	for _, directory := range []string{"database/orm", "internal/ormcore", "internal/modelmeta", "internal/querycore"} {
+	for _, directory := range []string{"database/orm", "internal/ormcore", "internal/modelmeta", "internal/querycore", "internal/noraw"} {
 		count := 0
 		err := filepath.WalkDir(filepath.Join(root, directory), func(path string, entry os.DirEntry, err error) error {
 			if err != nil {
@@ -244,7 +244,7 @@ func TestGoWaySourceInventory(t *testing.T) {
 	for _, file := range fixture {
 		present[file.Path] = true
 	}
-	for _, name := range []string{"go.mod", "golden_test.go", "compiler_batch_test.go", "footprint_test.go", "models/user.go", "oldmodels/models.go", "models/.foundry-gen.json", "oldmodels/.foundry-gen.json", "oldmodels/joined/.foundry-gen.json", "oldmodels/mutators/.foundry-gen.json", "oldmodels/hooks/.foundry-gen.json", "oldmodels/reads/.foundry-gen.json"} {
+	for _, name := range []string{"go.mod", "golden_test.go", "compiler_batch_test.go", "footprint_test.go", "models/user.go", "oldmodels/models.go", "models/.foundry-gen.json", "oldmodels/.foundry-gen.json", "oldmodels/joined/.foundry-gen.json", "oldmodels/mutators/.foundry-gen.json", "oldmodels/hooks/.foundry-gen.json", "oldmodels/reads/.foundry-gen.json", "testdata/noraw/contracts/probe.go", "testdata/noraw/negative/interfaces.go", "testdata/noraw/negative/probe.go", "testdata/noraw/negative/refs_test.go", "testdata/noraw/negative/signatures.go", "testdata/noraw/positive/probe.go", "testdata/noraw/positive/signatures.go", "testdata/noraw/positive/typed.go", "testdata/noraw/raw.test/probe.go", "testdata/noraw/raw.test/probe_test.go"} {
 		if !present[name] {
 			t.Errorf("Go-way consumer lost %s", name)
 		}

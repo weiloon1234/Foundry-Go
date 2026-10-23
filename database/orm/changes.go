@@ -23,10 +23,12 @@ type Changes[M any] struct {
 type changeState struct {
 	table             *tableCore
 	before, after     unsafe.Pointer
-	fields            map[*columnCore]bool
+	fields            map[*columnCore]changeFlags
 	assigned, changed bool
 	operation         value.Optional[lifecycle.Operation]
 }
+
+type changeFlags struct{ assigned, changed bool }
 
 // Before returns an owned persisted original, absent for creation. Example: changes.Before().Get().
 func (c Changes[M]) Before() value.Optional[M] {
@@ -79,11 +81,11 @@ func NullableChangeOf[M, V any](changes Changes[M], field interface{ ormColumn(*
 	if err := changeField(changes.state, c.core, true); err != nil {
 		return lifecycle.FieldChange[value.Nullable[V]]{}, err
 	}
-	policy, ok := c.core.nullablePolicy.(lifecycle.FieldPolicy[value.Nullable[V]])
+	policy, ok := c.core.nullablePolicy.(nullableFieldPolicy[V])
 	if !ok {
 		return lifecycle.FieldChange[value.Nullable[V]]{}, invalid("change field has a different stored type")
 	}
-	return compareTypedField(c.core, policy, changes.state)
+	return compareTypedField(c.core, policy.policy, changes.state)
 }
 func changeField(state *changeState, field *columnCore, nullable bool) error {
 	if state == nil || field == nil || field.owner != state.table || field.metadata.Nullable != nullable {
@@ -99,7 +101,7 @@ func compareTypedField[V any](field *columnCore, c lifecycle.FieldPolicy[V], sta
 	if state.after != nil {
 		after = value.Set(*(*V)(unsafe.Add(state.after, field.offset)))
 	}
-	return lifecycle.CompareFieldPolicy(c, before, after, state.fields[field])
+	return lifecycle.CompareFieldPolicy(c, before, after, state.fields[field].assigned)
 }
 
 // One canonical codec lets capture validate/compare stored driver values without
@@ -185,7 +187,7 @@ func optionalSnapshot[M any](table *tableCore, src unsafe.Pointer) value.Optiona
 }
 func captureChanges(table *tableCore, before, after unsafe.Pointer, assigned []querycore.MutationAssignment, operation value.Optional[lifecycle.Operation]) (*changeState, error) {
 	before, after = snapshotPointer(table, before), snapshotPointer(table, after)
-	state := &changeState{table: table, before: before, after: after, fields: make(map[*columnCore]bool, len(table.columns)), operation: operation}
+	state := &changeState{table: table, before: before, after: after, fields: make(map[*columnCore]changeFlags, len(table.columns)), operation: operation}
 	for _, c := range table.columns {
 		present := false
 		for _, a := range assigned {
@@ -201,7 +203,7 @@ func captureChanges(table *tableCore, before, after unsafe.Pointer, assigned []q
 		if c == table.primary && before != nil && after != nil && (changed || present) {
 			return nil, invalid("model change cannot replace or assign its existing primary key")
 		}
-		state.fields[c] = present
+		state.fields[c] = changeFlags{assigned: present, changed: changed}
 		state.assigned = state.assigned || present
 		state.changed = state.changed || changed
 	}
@@ -225,9 +227,9 @@ func NullableEncryptedChangeOf[M any, V encrypted.Value[V]](changes Changes[M], 
 	if err := changeField(changes.state, c.core, true); err != nil {
 		return lifecycle.FieldChange[value.Nullable[V]]{}, err
 	}
-	policy, ok := c.core.nullablePolicy.(lifecycle.FieldPolicy[value.Nullable[V]])
+	policy, ok := c.core.nullablePolicy.(nullableFieldPolicy[V])
 	if !ok {
 		return lifecycle.FieldChange[value.Nullable[V]]{}, invalid("change field has a different stored type")
 	}
-	return compareTypedField(c.core, policy, changes.state)
+	return compareTypedField(c.core, policy.policy, changes.state)
 }

@@ -127,8 +127,11 @@ func codecBodyViolations(files []*ast.File, info *types.Info, bodies map[string]
 				if adapter && !(name == "New" && shell) || strings.Contains(strings.ToLower(name), "reinterpretcodec") {
 					bad = append(bad, body.name+": generic representation adapter")
 				}
-				unrestricted := path == ormcorePath && name == "ScalarCodec" || path == ormPath && name == "scalarCodec"
+				unrestricted := path == ormcorePath && (name == "ScalarCodec" || name == "ResultCodec") || path == ormPath && name == "scalarCodec"
 				fallback := object.Pkg().Path() == ormPath && (object.Name() == "scalarCodec" || object.Name() == "selectedCodec" || object.Name() == "ColumnOf" || object.Name() == "NullableColumnOf")
+				// Raw's approved result fallback uses fixed non-generic dispatch,
+				// then the existing scalar shell. No other caller gains this path.
+				fallback = fallback || (path == ormcorePath && name == "ScalarCodec" && object.Pkg().Path() == ormcorePath && object.Name() == "ResultCodec") || (path == ormcorePath && name == "ResultCodec" && object.Pkg().Path() == ormPath+"/expr" && object.Name() == "Raw")
 				if unrestricted && !fallback {
 					bad = append(bad, body.name+": unrestricted codec selector")
 				}
@@ -235,6 +238,7 @@ func TestCodecInstantiationGuardRejectsBypasses(t *testing.T) {
  func guardAdapter[V any]() { f:=c.Adapt[V,int64]; _=f }
  func guardInline[V any]() { _=c.New(func(V)(driver.Value,error){return nil,nil},func(any)(V,error){return *new(V),nil}) }
  func guardRenamed[V any]() { _=core.ScalarCodec[V]() }
+ func guardRawResult[V any]() { _=core.ResultCodec[V]() }
  func guardSelectorValue[V any]() { f:=core.ScalarCodec[V]; _=f }
  type guardReceiver[V any] struct{}
  func (guardReceiver[V]) hidden() { _=c.Adapt[V,int64] }
@@ -243,7 +247,7 @@ func TestCodecInstantiationGuardRejectsBypasses(t *testing.T) {
 	bodies := map[string]*codecBody{}
 	violations := codecBodyViolations(files, info, bodies)
 	violations = append(violations, codecGraphViolations(bodies)...)
-	for _, name := range []string{"guardHop", "guardValues", "guardConstructorValues", "guardAdapter", "guardInline", "guardRenamed", "guardSelectorValue", "guardReceiver"} {
+	for _, name := range []string{"guardHop", "guardValues", "guardConstructorValues", "guardAdapter", "guardInline", "guardRenamed", "guardRawResult", "guardSelectorValue", "guardReceiver"} {
 		found := false
 		for _, violation := range violations {
 			if strings.Contains(violation, name) {
