@@ -355,6 +355,7 @@ orm.InputTime
   NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
   Set func(v I) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
 orm.InstantValue
+  constraint interface{time.Time | github.com/weiloon1234/Foundry-Go/temporal.DateTime}
 orm.Interval
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
   Between func(a github.com/weiloon1234/Foundry-Go/temporal.Interval, b github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
@@ -932,6 +933,7 @@ orm.Number
   NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
   Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
 orm.NumberValue
+  constraint interface{~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~float32 | ~float64 | github.com/weiloon1234/Foundry-Go/decimal.Decimal}
 orm.Observer
   Declare func(factory func() github.com/weiloon1234/Foundry-Go/database/orm.Hooks[M]) (github.com/weiloon1234/Foundry-Go/database/lifecycle.Declaration, error)
   Name func() string
@@ -950,6 +952,9 @@ orm.Order
 *orm.Order
   NullsFirst func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
   NullsLast func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
+orm.OrderedExpressionColumn
+  constraint interface{github.com/weiloon1234/Foundry-Go/database/orm.ExpressionColumn[M, V, P]; ~struct{_ [0]*M; number github.com/weiloon1234/Foundry-Go/database/orm.columnData[V]} | ~struct{_ [0]*M; nullableNumber github.com/weiloon1234/Foundry-Go/database/orm.nullableColumnData[V]} | ~struct{_ [0]*M; text github.com/weiloon1234/Foundry-Go/database/orm.columnData[V]} | ~struct{_ [0]*M; nullableText github.com/weiloon1234/Foundry-Go/database/orm.nullableColumnData[V]} | ~struct{_ [0]*M; time github.com/weiloon1234/Foundry-Go/database/orm.columnData[V]} | ~struct{_ [0]*M; nullableTime github.com/weiloon1234/Foundry-Go/database/orm.nullableColumnData[V]} | ~struct{_ [0]*M; interval github.com/weiloon1234/Foundry-Go/database/orm.columnData[V]} | ~struct{_ [0]*M; nullableInterval github.com/weiloon1234/Foundry-Go/database/orm.nullableColumnData[V]}}
+  expressionColumn func(*M) (github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[V], github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[P])
 orm.PageRequest
   field Number int
   field Size int
@@ -1199,6 +1204,7 @@ orm.Time
   NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
   Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
 orm.TimeValue
+  constraint interface{time.Time | github.com/weiloon1234/Foundry-Go/temporal.DateTime | github.com/weiloon1234/Foundry-Go/temporal.Date | github.com/weiloon1234/Foundry-Go/temporal.Time | github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime}
 orm.UpdatedAt
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
   Between func(a V, b V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
@@ -1235,6 +1241,7 @@ orm.WriteError
   Error func() string
   GoString func() string
   Unwrap func() error
+orm.FoundryModel func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.MetadataSeal) (github.com/weiloon1234/Foundry-Go/internal/ormcore.Source, func(github.com/weiloon1234/Foundry-Go/database.Row) (M, error))
 orm.FoundryOrderBy func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], o github.com/weiloon1234/Foundry-Go/internal/ormcore.Order, seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.QuerySeal) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
 orm.FoundryWhere func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], p github.com/weiloon1234/Foundry-Go/internal/ormcore.Predicate, seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.QuerySeal) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
 orm.CursorPaginate func[M any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], request github.com/weiloon1234/Foundry-Go/database/query.CursorRequest[M]) (github.com/weiloon1234/Foundry-Go/database/query.CursorPage[M], error)
@@ -1398,20 +1405,35 @@ rows.Schema
   rowDefinition func(*R) (*github.com/weiloon1234/Foundry-Go/database/orm/rows.rowCore, func(github.com/weiloon1234/Foundry-Go/database.Row) (R, error))
 rows.Source
   rowSource func(*S) github.com/weiloon1234/Foundry-Go/internal/ormcore.Source
+rows.FromModel func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[M, M]
+rows.GroupBy func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], keys ...github.com/weiloon1234/Foundry-Go/database/orm/expr.GroupKey[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
+rows.Having func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], predicates ...github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
+rows.OrderBy func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], orders ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
+rows.Distinct func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
+rows.DistinctOn func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], keys ...github.com/weiloon1234/Foundry-Go/database/orm/expr.GroupKey[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
+rows.DistinctOnValues func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], keys ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionKey[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
 rows.MapSelected func[S, R, V any](field github.com/weiloon1234/Foundry-Go/database/orm/rows.Field[R, V], expression github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Mapping[S, R]
 rows.Raw func[R any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, schema github.com/weiloon1234/Foundry-Go/database/orm/rows.Schema[R], sql string, args ...any) ([]R, error)
 expr.Aggregate
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
   Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Filter func(predicates ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Aggregate[S, V]
   In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
   Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
   Param func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]
   Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
 *expr.Aggregate
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
   Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Filter func(predicates ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Aggregate[S, V]
   In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
   Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
   Param func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]
   Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
+expr.AggregateExpression
+  aggregateValue func(*S) github.com/weiloon1234/Foundry-Go/database/orm/expr.rowData[V]
 expr.Case
   Else func(result github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]
   ElseNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
@@ -1434,8 +1456,42 @@ expr.Expression
   IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
   IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
   Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+expr.GroupKey
+*expr.GroupKey
 expr.HavingPredicate
+  Not func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
 *expr.HavingPredicate
+  Not func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+expr.NullableOrderedAggregate
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Filter func(predicates ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, V]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Param func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]
+  Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+*expr.NullableOrderedAggregate
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Filter func(predicates ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, V]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Param func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]
+  Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
 expr.NullableOrderedRowExpression
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
   Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
@@ -1491,7 +1547,10 @@ expr.Order
   NullsFirst func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
   NullsLast func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
 expr.OrderedAggregate
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
   Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Filter func(predicates ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedAggregate[S, V]
   Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
   Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
   In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
@@ -1501,7 +1560,10 @@ expr.OrderedAggregate
   Param func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]
   Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
 *expr.OrderedAggregate
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
   Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Filter func(predicates ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedAggregate[S, V]
   Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
   Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
   In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
@@ -1560,6 +1622,10 @@ expr.OrderedValueComparison
   Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
 expr.Predicate
 *expr.Predicate
+expr.ProjectionKey
+*expr.ProjectionKey
+expr.ProjectionOrder
+  projectionOrder func(*S) github.com/weiloon1234/Foundry-Go/internal/ormcore.Order
 expr.RowExpression
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
   Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
@@ -1585,9 +1651,21 @@ expr.RowValue
 expr.Scope
 *expr.Scope
 expr.Selected
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
+  Key func() github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionKey[S]
   Param func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]
 *expr.Selected
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
+  Key func() github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionKey[S]
   Param func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]
+expr.SelectedOrder
+  NullsFirst func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
+  NullsLast func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
+*expr.SelectedOrder
+  NullsFirst func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
+  NullsLast func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
 expr.ValueCase
   Else func(result github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
   ElseNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
@@ -1608,6 +1686,34 @@ expr.ValueComparison
   IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
   IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
   Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+expr.Sum func[S any, V interface{github.com/weiloon1234/Foundry-Go/database/orm/expr.exactNumber}, P any, C github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[S, V, P]](column C) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]
+expr.SumAt func[S, M any, V interface{github.com/weiloon1234/Foundry-Go/database/orm/expr.exactNumber}, P any, C github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[M, V, P]](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, M], column C) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]
+expr.Avg func[S any, V interface{github.com/weiloon1234/Foundry-Go/database/orm/expr.exactNumber}, P any, C github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[S, V, P]](column C) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]
+expr.AvgAt func[S, M any, V interface{github.com/weiloon1234/Foundry-Go/database/orm/expr.exactNumber}, P any, C github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[M, V, P]](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, M], column C) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]
+expr.SumFloat func[S any, V interface{~float32 | ~float64}, P any, C github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[S, V, P]](column C) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, float64]
+expr.SumFloatAt func[S, M any, V interface{~float32 | ~float64}, P any, C github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[M, V, P]](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, M], column C) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, float64]
+expr.AvgFloat func[S any, V interface{~float32 | ~float64}, P any, C github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[S, V, P]](column C) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, float64]
+expr.AvgFloatAt func[S, M any, V interface{~float32 | ~float64}, P any, C github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[M, V, P]](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, M], column C) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, float64]
+expr.SumInterval func[S, P any, C github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[S, github.com/weiloon1234/Foundry-Go/temporal.Interval, P]](column C) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.SumIntervalAt func[S, M, P any, C github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[M, github.com/weiloon1234/Foundry-Go/temporal.Interval, P]](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, M], column C) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.AvgInterval func[S, P any, C github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[S, github.com/weiloon1234/Foundry-Go/temporal.Interval, P]](column C) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.AvgIntervalAt func[S, M, P any, C github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[M, github.com/weiloon1234/Foundry-Go/temporal.Interval, P]](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, M], column C) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.Min func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar, P any, C github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[S, V, P]](column C) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, V]
+expr.MinAt func[S, M any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar, P any, C github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[M, V, P]](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, M], column C) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, V]
+expr.Max func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar, P any, C github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[S, V, P]](column C) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, V]
+expr.MaxAt func[S, M any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar, P any, C github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[M, V, P]](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, M], column C) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, V]
+expr.CountField func[S, V, P any](column github.com/weiloon1234/Foundry-Go/database/orm.ExpressionColumn[S, V, P]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedAggregate[S, int64]
+expr.CountFieldAt func[S, M, V, P any](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, M], column github.com/weiloon1234/Foundry-Go/database/orm.ExpressionColumn[M, V, P]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedAggregate[S, int64]
+expr.CountDistinctField func[S, V, P any](column github.com/weiloon1234/Foundry-Go/database/orm.ExpressionColumn[S, V, P]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedAggregate[S, int64]
+expr.CountDistinctFieldAt func[S, M, V, P any](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, M], column github.com/weiloon1234/Foundry-Go/database/orm.ExpressionColumn[M, V, P]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedAggregate[S, int64]
+expr.FoundryAggregate func[S, V any](a github.com/weiloon1234/Foundry-Go/database/orm/expr.AggregateExpression[S, V], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) (github.com/weiloon1234/Foundry-Go/internal/ormcore.Expression, github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[V])
+expr.Group func[S, V any](v github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.GroupKey[S]
+expr.HavingAnd func[S any](predicates ...github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+expr.HavingOr func[S any](predicates ...github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+expr.FoundryHaving func[S any](p github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) github.com/weiloon1234/Foundry-Go/internal/ormcore.Predicate
+expr.FoundryGroup func[S any](key github.com/weiloon1234/Foundry-Go/database/orm/expr.GroupKey[S], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) github.com/weiloon1234/Foundry-Go/internal/ormcore.Expression
+expr.FoundryKey func[S any](key github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionKey[S], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) github.com/weiloon1234/Foundry-Go/internal/ormcore.Expression
+expr.FoundryProjectionOrder func[S any](order github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) github.com/weiloon1234/Foundry-Go/internal/ormcore.Order
 expr.Coalesce func[S, V any](first github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], fallback github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]
 expr.CoalesceValue func[S, V any](first github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], fallback github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
 expr.CoalesceNullable func[S, V any](first github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], rest ...github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
@@ -1648,7 +1754,7 @@ expr.FloatOf func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.n
 expr.FloatValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, float64]
 expr.FoundrySelected func[S, V any](e github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) github.com/weiloon1234/Foundry-Go/internal/ormcore.Expression
 expr.Greater func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
-expr.GreaterColumn func[M, V, P any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[M, V, P], right github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[M, V, P]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[M]
+expr.GreaterColumn func[M, V, P any, L, R github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[M, V, P]](left L, right R) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[M]
 expr.GreaterNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
 expr.GreaterNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
 expr.GreaterOrEqual func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]

@@ -8,6 +8,11 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Add typed exact, float and interval aggregates, sealed ordered Min/Max,
+  Count variants and immutable FILTER (6a3), with GROUP BY/HAVING, selected
+  ordering and keys, and read-only DISTINCT/DISTINCT ON. Nullable aggregate
+  `Param(V)` supplies a required fallback; raw fragments remain deferred to 6a4.
+
 - Add per-write hooks, typed observers and persisted change tracking (B5b), with
   stage-major callback order, observer-only models and nullable input draft getters.
   Require explicit set-write acknowledgement, preserve force-delete visibility,

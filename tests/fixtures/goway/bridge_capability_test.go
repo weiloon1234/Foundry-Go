@@ -13,8 +13,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	rowset "github.com/weiloon1234/Foundry-Go/database/orm/rows"
+	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/model"
+	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 // K is inferred from a bridge signature even though the consumer cannot import
@@ -183,5 +185,30 @@ func TestInferredCapabilityCatchersNeverReceiveAuthority(t *testing.T) {
 	}
 	if capture.statements != 5 {
 		t.Fatal("unexpected statement count", capture.statements)
+	}
+}
+
+func TestStage6a3InferredZeroCapabilitiesFailClosed(t *testing.T) {
+	source, decode := openColumnBridge(orm.FoundryModel[models.User], models.Users.Query())
+	if !errors.Is(source.Err, fault.Invalid) || decode != nil || len(source.Owners) != 0 {
+		t.Fatal("model bridge exposed decoder/source", source.Err)
+	}
+	var aggregate expr.AggregateExpression[models.Order, value.Nullable[decimal.Decimal]] = expr.Sum(models.Orders.TotalCents)
+	metadata, column := openColumnBridge(expr.FoundryAggregate[models.Order, value.Nullable[decimal.Decimal]], aggregate)
+	if !errors.Is(metadata.Err, fault.Invalid) || !errors.Is(column.Err, fault.Invalid) || metadata.Node != nil || column.Scan != nil {
+		t.Fatal("aggregate bridge exposed metadata/codec", metadata.Err, column.Err)
+	}
+	group := openBridge(expr.FoundryGroup[models.User], expr.Group(expr.Value(models.Users.Age)))
+	key := openBridge(expr.FoundryKey[models.User], expr.Select(expr.Value(models.Users.Age)).Key())
+	having := openBridge(expr.FoundryHaving[models.User], expr.Count[models.User]().Gt(0))
+	var order expr.ProjectionOrder[models.User] = expr.Count[models.User]().Desc()
+	ordering := openBridge(expr.FoundryProjectionOrder[models.User], order)
+	for _, err := range []error{group.Err, key.Err, having.Err, ordering.Err} {
+		if !errors.Is(err, fault.Invalid) {
+			t.Fatal(err)
+		}
+	}
+	if group.Node != nil || key.Node != nil || having.Node != nil || ordering.Node.Expression != nil {
+		t.Fatal("new bridge exposed metadata")
 	}
 }

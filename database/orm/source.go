@@ -2,11 +2,13 @@ package orm
 
 import (
 	"errors"
+	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
 	"reflect"
+	"unsafe"
 )
 
 // ExpressionColumn preserves a column's model and SQL value type.
@@ -88,4 +90,24 @@ func FoundryOrderBy[M any](q Query[M], o ormcore.Order, seal sqlowner.QuerySeal)
 	err := errors.Join(o.Err, ormcore.CheckReferenceSet(source, o.Refs, o.ReferenceFree))
 	order := querycore.QueryOrder{Computed: &querycore.ComputedOrder{Expression: o.Node.Expression}, Descending: o.Node.Descending, Nulls: o.Node.Nulls}
 	return q.OrderBy(Order[M]{owner: q.state.table, core: order, err: err})
+}
+
+// FoundryModel supplies a validated model source and its existing hydration codec.
+// Example: FoundryModel(q,sqlowner.Metadata()).
+func FoundryModel[M any](q Query[M], seal sqlowner.MetadataSeal) (ormcore.Source, func(database.Row) (M, error)) {
+	if !seal.Valid() {
+		return ormcore.Source{Err: invalid("invalid SQL owner capability")}, nil
+	}
+	source := FoundrySource(q, seal)
+	if source.Err != nil {
+		return source, nil
+	}
+	table := q.state.table
+	return source, func(row database.Row) (M, error) {
+		var model M
+		if err := hydrate(table, row, unsafe.Pointer(&model)); err != nil {
+			return *new(M), err
+		}
+		return model, nil
+	}
 }

@@ -28,9 +28,9 @@ func TestPublicMethodSurface(t *testing.T) {
 			recordMethodSurface(&out, pkg.Name()+"."+name, typ)
 		}
 		for _, name := range map[string][]string{
-			".":      {"FoundryOrderBy", "FoundryWhere"},
-			"./rows": {"MapSelected"},
-			"./expr": {"Coalesce", "CoalesceValue", "CoalesceNullable", "CoalesceNullableValue", "NullIf", "NullIfValue", "NullIfNullable", "NullIfNullableValue", "When", "WhenValue", "Grouped", "Abs", "AbsNullable", "AbsNullableValue", "AbsValue", "Add", "AddNullable", "AddNullableValue", "AddValue", "CompareValue", "Count", "DecimalNullable", "DecimalNullableValue", "DecimalOf", "DecimalValue", "DistinctFrom", "DistinctFromValue", "Divide", "DivideNullable", "DivideNullableValue", "DivideValue", "Equal", "EqualValue", "Exists", "FloatNullable", "FloatNullableValue", "FloatOf", "FloatValue", "FoundrySelected", "Greater", "GreaterColumn", "GreaterNullable", "GreaterNullableValue", "GreaterOrEqual", "GreaterOrEqualNullable", "GreaterOrEqualNullableValue", "GreaterOrEqualValue", "GreaterValue", "Less", "LessNullable", "LessNullableValue", "LessOrEqual", "LessOrEqualNullable", "LessOrEqualNullableValue", "LessOrEqualValue", "LessValue", "Like", "LikeNullable", "LikeNullableValue", "LikeValue", "Multiply", "MultiplyNullable", "MultiplyNullableValue", "MultiplyValue", "Negate", "NegateNullable", "NegateNullableValue", "NegateValue", "NotDistinctFrom", "NotDistinctFromValue", "NotEqual", "NotEqualValue", "NullFor", "Nullable", "NullableRow", "OrderBy", "OrderNullableRow", "OrderNullableValue", "OrderRow", "OrderValue", "Param", "Remainder", "RemainderNullable", "RemainderNullableValue", "RemainderValue", "Select", "Subtract", "SubtractNullable", "SubtractNullableValue", "SubtractValue", "Where"},
+			".":      {"FoundryModel", "FoundryOrderBy", "FoundryWhere"},
+			"./rows": {"FromModel", "GroupBy", "Having", "OrderBy", "Distinct", "DistinctOn", "DistinctOnValues", "MapSelected"},
+			"./expr": {"Sum", "SumAt", "Avg", "AvgAt", "SumFloat", "SumFloatAt", "AvgFloat", "AvgFloatAt", "SumInterval", "SumIntervalAt", "AvgInterval", "AvgIntervalAt", "Min", "MinAt", "Max", "MaxAt", "CountField", "CountFieldAt", "CountDistinctField", "CountDistinctFieldAt", "FoundryAggregate", "Group", "HavingAnd", "HavingOr", "FoundryHaving", "FoundryGroup", "FoundryKey", "FoundryProjectionOrder", "Coalesce", "CoalesceValue", "CoalesceNullable", "CoalesceNullableValue", "NullIf", "NullIfValue", "NullIfNullable", "NullIfNullableValue", "When", "WhenValue", "Grouped", "Abs", "AbsNullable", "AbsNullableValue", "AbsValue", "Add", "AddNullable", "AddNullableValue", "AddValue", "CompareValue", "Count", "DecimalNullable", "DecimalNullableValue", "DecimalOf", "DecimalValue", "DistinctFrom", "DistinctFromValue", "Divide", "DivideNullable", "DivideNullableValue", "DivideValue", "Equal", "EqualValue", "Exists", "FloatNullable", "FloatNullableValue", "FloatOf", "FloatValue", "FoundrySelected", "Greater", "GreaterColumn", "GreaterNullable", "GreaterNullableValue", "GreaterOrEqual", "GreaterOrEqualNullable", "GreaterOrEqualNullableValue", "GreaterOrEqualValue", "GreaterValue", "Less", "LessNullable", "LessNullableValue", "LessOrEqual", "LessOrEqualNullable", "LessOrEqualNullableValue", "LessOrEqualValue", "LessValue", "Like", "LikeNullable", "LikeNullableValue", "LikeValue", "Multiply", "MultiplyNullable", "MultiplyNullableValue", "MultiplyValue", "Negate", "NegateNullable", "NegateNullableValue", "NegateValue", "NotDistinctFrom", "NotDistinctFromValue", "NotEqual", "NotEqualValue", "NullFor", "Nullable", "NullableRow", "OrderBy", "OrderNullableRow", "OrderNullableValue", "OrderRow", "OrderValue", "Param", "Remainder", "RemainderNullable", "RemainderNullableValue", "RemainderValue", "Select", "Subtract", "SubtractNullable", "SubtractNullableValue", "SubtractValue", "Where"},
 		}[dir] {
 			out.WriteString(pkg.Name() + "." + name + " " + types.TypeString(pkg.Scope().Lookup(name).Type(), nil) + "\n")
 		}
@@ -59,7 +59,7 @@ func TestPublicMethodSurface(t *testing.T) {
 }
 
 func recordMethodSurface(out *strings.Builder, name string, typ types.Type) {
-	_, isInterface := typ.Underlying().(*types.Interface)
+	iface, isInterface := typ.Underlying().(*types.Interface)
 	for _, pointer := range []bool{false, true} {
 		if pointer && isInterface {
 			continue
@@ -71,6 +71,9 @@ func recordMethodSurface(out *strings.Builder, name string, typ types.Type) {
 			label = "*" + label
 		}
 		out.WriteString(label + "\n")
+		if isInterface && !iface.IsMethodSet() {
+			out.WriteString("  constraint " + types.TypeString(iface, nil) + "\n")
+		}
 		if !pointer {
 			for _, field := range exportedSurfaceFields(typ) {
 				out.WriteString("  field " + field.Name() + " " + types.TypeString(field.Type(), nil) + "\n")

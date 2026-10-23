@@ -10,12 +10,20 @@ import (
 // checks while storing ordinary predicates in the shared expression AST.
 type AggregateFilter struct{ Predicates []Expression }
 
+// ValidateAggregateFilterCount checks the shared constructor/compiler bound.
+func ValidateAggregateFilterCount(count int) error {
+	if count == 0 || count > MaxExpressionNodes {
+		return fault.New(fault.Invalid, "aggregate filter requires bounded row predicates")
+	}
+	return nil
+}
+
 func (a AggregateNode) ValidateFilter(field func(FieldRef) error, nodes *int) error {
 	if a.Filter == nil {
 		return nil
 	}
-	if len(a.Filter.Predicates) == 0 || len(a.Filter.Predicates) > MaxExpressionNodes {
-		return fault.New(fault.Invalid, "aggregate filter requires bounded row predicates")
+	if err := ValidateAggregateFilterCount(len(a.Filter.Predicates)); err != nil {
+		return err
 	}
 	for _, predicate := range a.Filter.Predicates {
 		if err := ValidateExpressionFields(predicate, field, 0, nodes); err != nil {

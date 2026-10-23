@@ -40,8 +40,7 @@ zero for empty input. `Exists[S]()` returns required `bool`, false for empty inp
 and exposes no range comparisons. Both use the existing aggregate compiler and
 preserve the source query's scopes, executor and transaction.
 
-Aggregate summaries, GROUP BY/HAVING, DISTINCT and raw fragments belong to later
-Stage 6a slices. Specialized text and temporal functions belong to Stage 6d.
+Raw fragments and the no-raw guard belong to the final Stage 6a slice. Specialized text and temporal functions belong to Stage 6d.
 
 Row and selected phases have different private marker fields, so explicit Go
 conversions cannot move selected aggregates or HAVING conditions into row WHERE.
@@ -79,5 +78,54 @@ selected branch values, and finishes as `Selected`. For example:
 `expr.WhenValue(count.Gt(0), count.Value()).Else(count.Param(0).Value())`.
 `Grouped` explicitly lifts a row predicate for selected CASE; the shared compiler
 still requires its columns to be grouped when aggregates are present. Group keys
-and query HAVING entry points arrive in the next slice. All branches and fallbacks
+and query HAVING entry points are supplied by `rows.GroupBy` and `rows.Having`. All branches and fallbacks
 retain source ownership, codecs and errors through subsequent composition/`Param`.
+
+Use `Sum`/`Avg` for exact stored numbers: their result is
+`value.Nullable[decimal.Decimal]`, including integer inputs. `SumFloat`/`AvgFloat`
+return `value.Nullable[float64]`; `SumInterval`/`AvgInterval` preserve
+`temporal.Interval`. `Min`/`Max` accept ordered stored fields, preserve the field's
+present type and return one nullable layer. Empty or all-NULL input returns NULL
+for all these summaries. Ordered field capabilities are sealed: adding a `Gt`
+method to an enum wrapper does not make it eligible for summaries or extrema.
+`NullableOrderedAggregate.Param(v)` accepts a present value and returns a required
+row expression, for example `expr.CoalesceValue(total.Value(), total.Param(decimal.FromInt64(0)).Value())`.
+It preserves the result codec, scope and existing errors. `CountField` and `CountDistinctField` skip NULLs and return
+required `int64`, zero on empty input. `Count` includes NULL rows; `Exists` returns
+false on empty input. There is no general aggregate DISTINCT operation.
+
+Each field aggregate also has an `At` constructor, such as
+`expr.SumAt(rows.Scope(alias), Orders.TotalCents)`, retaining stored-field
+capabilities and the alias's input scope. `.Filter(exprPredicate...)` appends
+same-scope row conditions with AND for that aggregate only; it retains empty-input
+semantics. Query WHERE filters every aggregate; HAVING filters completed groups.
+`AggregateExpression[S,V]` is the sealed reusable descriptor for relation aggregate
+slots: it retains native aggregate metadata, complete ownership and the typed
+result codec/scanner. Selected calculations do not implement this interface.
+
+```go
+buyer := expr.Value(Orders.BuyerID)
+total := expr.Sum(Orders.TotalCents)
+q := rows.Select(rows.FromModel(Orders.Query()), Totals,
+    rows.Map(Totals.Buyer, buyer), rows.MapSelected(Totals.Amount, total.Value()))
+q = rows.GroupBy(q, expr.Group(buyer))
+q = rows.Having(q, total.Gt(decimal.FromInt64(100)))
+q = rows.OrderBy(q, total.Desc(), buyer.Asc())
+```
+
+`rows.FromModel` exposes complete models through the read-only rows boundary and
+can also supply a projection source. Existing model/row codecs and scopes remain
+applied. Eager relation requests must be collected explicitly. Row keys use
+`expr.Group(rowValue)`. Selected keys use `selected.Key()`; these types and selected
+ordering cannot convert to row keys or model ordering. `HavingAnd`, `HavingOr` and
+`HavingPredicate.Not` retain group scope. The compiler rejects ungrouped selected
+columns, nested aggregates, aggregates in row conditions and invalid group keys.
+
+`rows.Distinct(q)` removes duplicate complete results. `rows.DistinctOn(q, rowKeys...)`
+and `rows.DistinctOnValues(q, selectedKeys...)` select one result per key combination.
+Order by the DISTINCT ON keys first, then precedence and a unique tie breaker;
+without ordering the chosen row is unspecified. These operations replace earlier
+DISTINCT clauses, preserve result types and remain read-only. PostgreSQL grouping
+and DISTINCT/order validation still apply. Existing `rows.Query.OrderBy` accepts
+row orders; the package function additionally accepts selected ordering, including
+aggregate results. General subquery and window entry points belong to later slices.
