@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/statementmeta"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -88,6 +89,7 @@ func explain(ctx context.Context, executor database.Executor, source planSource,
 		return Plan{}, err
 	}
 	var result Plan
+	ctx = statementmeta.CaptureSite(ctx)
 	err := callback.Isolated("inspect query plan", func() error {
 		statement, err := compileSource(ctx, source)
 		if err != nil {
@@ -101,7 +103,8 @@ func explain(ctx context.Context, executor database.Executor, source planSource,
 			prefix = "EXPLAIN (FORMAT JSON, ANALYZE TRUE, VERBOSE FALSE, COSTS TRUE, BUFFERS TRUE, TIMING TRUE) "
 		}
 		var response planBytes
-		if err := database.ScanOne(ctx, readExecutor{executor}, prefix+statement.sql, statement.arguments, &response); err != nil {
+		statement = statement.envelope(prefix, "")
+		if err := database.ScanOne(statement.executionContext(ctx), readExecutor{executor}, statement.sql, statement.arguments, &response); err != nil {
 			return err
 		}
 		result, err = decodePlan(ctx, response.data, analyze)

@@ -155,3 +155,50 @@ func TestRawCancellationClosesAcquiredRows(t *testing.T) {
 		t.Fatal(got, err, closed)
 	}
 }
+
+func TestRawQuotedAliasesAreCaseSensitive(t *testing.T) {
+	for _, alias := range []string{"Id", "id"} {
+		t.Run(alias, func(t *testing.T) {
+			closed := false
+			statement := `SELECT id AS "` + alias + `", name FROM raw_records`
+			db := testDB(t, testConnector{onClose: func() { closed = true }, respond: func(sql string) ([]string, [][]driver.Value) {
+				if sql != statement {
+					t.Fatal("raw SQL changed", sql)
+				}
+				return []string{alias, "name"}, [][]driver.Value{{int64(9), "Ada"}}
+			}})
+			got, err := rawRecords().Raw(t.Context(), db, statement)
+			if !closed {
+				t.Fatal("rows not closed")
+			}
+			if alias == "Id" {
+				if got != nil || !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), `unexpected column "Id"`) || !strings.Contains(err.Error(), `missing column "id"`) {
+					t.Fatal(got, err)
+				}
+			} else if err != nil || len(got) != 1 || got[0] != (rawRecord{9, "Ada"}) {
+				t.Fatal(got, err)
+			}
+		})
+	}
+}
+
+// driver.Rows.Columns cannot return an error. Close the driver-backed stream
+// before handing it to Raw to exercise the fallible database.Rows.Columns path.
+type closedRawExecutor struct{ database.Executor }
+
+func (e closedRawExecutor) Query(ctx context.Context, sql string, args ...any) (*database.Rows, error) {
+	rows, err := e.Executor.Query(ctx, sql, args...)
+	if err == nil {
+		_ = rows.Close()
+	}
+	return rows, err
+}
+func TestRawColumnsFailureClosesAndPublishesNothing(t *testing.T) {
+	sentinel := errors.New("injected driver close failure")
+	closes := 0
+	db := testDB(t, testConnector{columns: []string{"id", "name"}, values: [][]driver.Value{{int64(9), "Ada"}}, closeErr: sentinel, onClose: func() { closes++ }})
+	got, err := rawRecords().Raw(t.Context(), closedRawExecutor{db}, "SELECT id,name FROM raw_records")
+	if got != nil || !errors.Is(err, database.Closed) || !errors.Is(err, sentinel) || closes != 1 {
+		t.Fatal(got, err, closes)
+	}
+}

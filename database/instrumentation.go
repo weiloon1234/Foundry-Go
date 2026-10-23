@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
+	"github.com/weiloon1234/Foundry-Go/internal/statementmeta"
 )
 
 // QueryEvent describes one completed Exec or Query statement. Statement is the
@@ -85,15 +86,16 @@ func WithSlowQueryThreshold(threshold time.Duration) Option {
 // instrumentation is fixed before Start; nil disables all timing work.
 type instrumentation struct {
 	observer  QueryObserver
+	detector  *StatementDetector
 	logger    *slog.Logger
 	threshold time.Duration
 }
 
 func newInstrumentation(settings poolSettings) *instrumentation {
-	if settings.queryObserver == nil && settings.slowThreshold <= 0 {
+	if settings.queryObserver == nil && settings.slowThreshold <= 0 && settings.statementDetector == nil {
 		return nil
 	}
-	return &instrumentation{observer: settings.queryObserver, logger: settings.slowLogger, threshold: settings.slowThreshold}
+	return &instrumentation{observer: settings.queryObserver, detector: settings.statementDetector, logger: settings.slowLogger, threshold: settings.slowThreshold}
 }
 
 // bindRuntimeLogger supplies a Module's application logger for startup and a
@@ -123,9 +125,11 @@ func (i *instrumentation) validate() error {
 // statementProbe carries one statement's instrumentation context through the funnel.
 // Its zero value records nothing and never reads the clock.
 type statementProbe struct {
-	hooks *instrumentation
-	role  PoolRole
-	wait  time.Duration
+	hooks              *instrumentation
+	role               PoolRole
+	wait               time.Duration
+	transactionControl bool
+	site               string
 }
 
 func (db *DB) instrumented(role PoolRole) statementProbe {
@@ -133,6 +137,22 @@ func (db *DB) instrumented(role PoolRole) statementProbe {
 		return statementProbe{}
 	}
 	return statementProbe{hooks: db.instrument, role: role}
+}
+
+// control marks framework-issued transaction commands without changing observer events.
+func (p statementProbe) control() statementProbe {
+	p.transactionControl = true
+	return p
+}
+
+func (p statementProbe) locate(ctx context.Context) statementProbe {
+	if p.hooks != nil && p.hooks.detector != nil && !p.transactionControl && p.hooks.detector.active(ctx) {
+		site := statementmeta.CallSite(ctx)
+		if site != "unavailable:0" || p.site == "" {
+			p.site = site
+		}
+	}
+	return p
 }
 
 // start samples the clock only when instrumentation is enabled.
@@ -154,6 +174,9 @@ func (p statementProbe) finish(ctx context.Context, operation, statement string,
 	} else if err != nil {
 		event.Code = QueryFailed
 	}
+	if p.hooks.detector != nil && !p.transactionControl {
+		p.hooks.detector.observe(ctx, event, p.site)
+	}
 	if p.hooks.observer != nil {
 		if failed := callback.Invoke("database query observer", func() error { p.hooks.observer(ctx, event); return nil }); failed != nil && p.hooks.logger != nil {
 			p.hooks.logger.LogAttrs(context.WithoutCancel(ctx), slog.LevelError, "database query observer failed", slog.Any("diagnostic", errordiag.Describe(failed)))
@@ -168,4 +191,12 @@ func (p statementProbe) finish(ctx context.Context, operation, statement string,
 			slog.Int64("rows", rows), slog.String("code", string(event.Code)), slog.String("sqlstate", event.SQLState),
 			slog.String("statement_fingerprint", strconv.FormatUint(fingerprint.Sum64(), 16)))
 	}
+}
+
+// Internal write transactions execute in an owned callback goroutine. Preserve
+// the entry caller when that goroutine contains no application frame.
+func (tx *Tx) instrumented() statementProbe {
+	p := tx.owner.instrumented(PrimaryPool)
+	p.site = tx.statementSite
+	return p
 }

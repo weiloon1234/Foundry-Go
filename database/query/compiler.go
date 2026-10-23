@@ -12,6 +12,7 @@ import (
 type Statement struct {
 	sql       string
 	arguments []any
+	shape     string
 }
 
 type readKind = querycore.ReadKind

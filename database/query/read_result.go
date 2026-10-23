@@ -39,7 +39,7 @@ func (q readResult[P]) Each(ctx context.Context, executor database.Executor, yie
 	if err != nil {
 		return err
 	}
-	return database.ForEach(ctx, readExecutor{executor}, s.sql, s.arguments, q.scan, yield)
+	return database.ForEach(s.executionContext(ctx), readExecutor{executor}, s.sql, s.arguments, q.scan, yield)
 }
 
 func (q readResult[P]) All(ctx context.Context, executor database.Executor) ([]P, error) {
@@ -91,8 +91,9 @@ func (q readResult[P]) Count(ctx context.Context, executor database.Executor) (i
 	if err != nil {
 		return 0, err
 	}
+	s = s.envelope(`SELECT COUNT(*) FROM (`, `) AS "foundry_count"`)
 	var n int64
-	err = database.ScanOne(ctx, readExecutor{executor}, `SELECT COUNT(*) FROM (`+s.sql+`) AS "foundry_count"`, s.arguments, codec.Signed[int64]().Scan(&n))
+	err = database.ScanOne(s.executionContext(ctx), readExecutor{executor}, s.sql, s.arguments, codec.Signed[int64]().Scan(&n))
 	return n, err
 }
 
@@ -108,7 +109,8 @@ func (q readResult[P]) Exists(ctx context.Context, executor database.Executor) (
 	if err != nil {
 		return false, err
 	}
+	s = s.envelope("SELECT EXISTS(", ")")
 	var exists bool
-	err = database.ScanOne(ctx, readExecutor{executor}, "SELECT EXISTS("+s.sql+")", s.arguments, codec.Bool[bool]().Scan(&exists))
+	err = database.ScanOne(s.executionContext(ctx), readExecutor{executor}, s.sql, s.arguments, codec.Bool[bool]().Scan(&exists))
 	return exists, err
 }

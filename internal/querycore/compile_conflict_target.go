@@ -75,7 +75,7 @@ func (p Conflict) targetSQL(parent *Compiler, table string) (string, error) {
 			return "", fault.New(fault.Invalid, "conflict target repeats an index key")
 		}
 		index.Add(planned)
-		keys[i] = planned.Sql
+		keys[i] = c.fragment(planned.Sql, planned.Shape)
 		if _, field := key.(FieldRef); !field {
 			keys[i] = "(" + keys[i] + ")"
 		}
@@ -85,7 +85,7 @@ func (p Conflict) targetSQL(parent *Compiler, table string) (string, error) {
 	if err := c.Where(&result, p.TargetCondition); err != nil {
 		return "", err
 	}
-	if result.Len() > MaxScalarSQLBytes {
+	if len(c.render(result.String(), false)) > MaxScalarSQLBytes {
 		return "", fault.New(fault.Invalid, "conflict target SQL exceeds its resource bound")
 	}
 	return result.String(), nil

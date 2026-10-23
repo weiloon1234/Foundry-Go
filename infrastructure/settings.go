@@ -18,6 +18,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/cloud/credentials"
 	"github.com/weiloon1234/Foundry-Go/config"
+	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
@@ -51,12 +52,13 @@ func DefaultSettings() Settings {
 }
 
 type options struct {
-	clock       clock.Clock
-	logger      *slog.Logger
-	mailDrivers map[MailDriver]email.Driver
-	credentials map[credentials.Name]credentials.Provider
-	redisStores []RedisStore
-	encryption  *encryption.Keyring
+	clock             clock.Clock
+	logger            *slog.Logger
+	mailDrivers       map[MailDriver]email.Driver
+	credentials       map[credentials.Name]credentials.Provider
+	redisStores       []RedisStore
+	encryption        *encryption.Keyring
+	statementDetector *database.StatementDetector
 }
 type Option func(*options) error
 
@@ -384,6 +386,21 @@ func WithMailDriver(name MailDriver, driver email.Driver) Option {
 			return fault.New(fault.Invalid, "too many custom mail drivers")
 		}
 		o.mailDrivers[name] = driver
+		return nil
+	}
+}
+
+// WithStatementDetector installs one borrowed detector on every named database.
+// Defaults still alias their named pool; no additional pool is constructed.
+func WithStatementDetector(detector *database.StatementDetector) Option {
+	return func(o *options) error {
+		if detector == nil {
+			return fault.New(fault.Invalid, "statement detector is nil")
+		}
+		if o.statementDetector != nil {
+			return fault.New(fault.Invalid, "statement detector already configured")
+		}
+		o.statementDetector = detector
 		return nil
 	}
 }

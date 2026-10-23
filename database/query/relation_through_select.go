@@ -19,11 +19,12 @@ func (r ThroughRelation[M, N, P]) compileThrough(ctx context.Context, keys expre
 	// Declaration validation compiles without a context: context scopes then
 	// stand in as TRUE for shape checks only; execution always resolves them.
 	c := compiler{ScopeContext: ctx, ScopeShapeOnly: ctx == nil}
+	c.BeginStatement(ctx)
 	sql, err := c.CompileSelect(node)
 	if err != nil {
 		return Statement{}, err
 	}
-	return Statement{sql: sql, arguments: c.Arguments}, nil
+	return statementFromCore(c.Statement(sql)), nil
 }
 
 func (r ThroughRelation[M, N, P]) throughSelect() selectNode {

@@ -124,7 +124,7 @@ func Read(ctx context.Context, ex database.Executor, node querycore.SelectNode, 
 	if err != nil {
 		return err
 	}
-	rows, err := database.ReadQuery(ctx, ex, statement.SQLText, statement.Bindings...)
+	rows, err := database.ReadQuery(statement.Context(ctx), ex, statement.SQLText, statement.Bindings...)
 	if err != nil {
 		return err
 	}

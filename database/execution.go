@@ -31,6 +31,7 @@ type sqlExecutor interface {
 }
 
 func execute(ctx context.Context, executor sqlExecutor, classify classifier, instrument statementProbe, statement string, arguments []any) (result Result, err error) {
+	instrument = instrument.locate(ctx)
 	started := instrument.start()
 	rows := int64(-1)
 	defer func() { instrument.finish(ctx, "exec", statement, started, rows, err) }()
@@ -55,6 +56,7 @@ func query(ctx context.Context, executor sqlExecutor, classify classifier, instr
 // connection and resource owner. A forgotten stream is therefore closed when
 // ctx ends instead of retaining the connection and blocking pool shutdown.
 func queryStatement(ctx context.Context, executor sqlExecutor, classify classifier, instrument statementProbe, observers lifecycle.Observers, owner observerOwner, release func() error, statement string, arguments []any, autocommit bool) (*Rows, error) {
+	instrument = instrument.locate(ctx)
 	started := instrument.start()
 	rows, err := executor.QueryContext(ctx, statement, arguments...)
 	if err != nil {

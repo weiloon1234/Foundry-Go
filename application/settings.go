@@ -4,6 +4,7 @@
 package application
 
 import (
+	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/imaging"
@@ -41,10 +42,11 @@ type Settings struct {
 	StartupTimeout time.Duration
 }
 type HTTPSettings struct {
-	Enabled         bool
-	Server          http.ServerConfig
-	SecurityHeaders bool
-	Probes          ProbeSettings
+	StatementDetector StatementDetectorSettings
+	Enabled           bool
+	Server            http.ServerConfig
+	SecurityHeaders   bool
+	Probes            ProbeSettings
 }
 type ImageSettings struct {
 	Enabled bool
@@ -54,5 +56,5 @@ type ImageSettings struct {
 func DefaultSettings() Settings {
 	server := http.DefaultServerConfig()
 	server.AccessLog = true
-	return Settings{TimeZone: temporal.UTC, Services: infrastructure.DefaultSettings(), Worker: DefaultWorkerSettings(), Scheduler: DefaultSchedulerSettings(), Realtime: DefaultRealtimeServerSettings(), Features: DefaultFeatureSettings(), HTTP: HTTPSettings{Enabled: true, Server: server, SecurityHeaders: true, Probes: DefaultProbeSettings()}, Image: ImageSettings{Config: imaging.DefaultConfig()}, Log: DefaultLogSettings(), Maintenance: DefaultMaintenanceSettings(), ShutdownTimeout: foundation.DefaultShutdownTimeout}
+	return Settings{TimeZone: temporal.UTC, Services: infrastructure.DefaultSettings(), Worker: DefaultWorkerSettings(), Scheduler: DefaultSchedulerSettings(), Realtime: DefaultRealtimeServerSettings(), Features: DefaultFeatureSettings(), HTTP: HTTPSettings{StatementDetector: StatementDetectorSettings{Limits: database.DefaultStatementDetectorConfig()}, Enabled: true, Server: server, SecurityHeaders: true, Probes: DefaultProbeSettings()}, Image: ImageSettings{Config: imaging.DefaultConfig()}, Log: DefaultLogSettings(), Maintenance: DefaultMaintenanceSettings(), ShutdownTimeout: foundation.DefaultShutdownTimeout}
 }

@@ -212,6 +212,12 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if keys != nil {
 		infrastructureOptions = append(infrastructureOptions, infrastructure.WithDatabaseEncryption(keys))
 	}
+	detectorOptions, detectorMiddleware, err := prepareStatementDetector(s, logger)
+	if err != nil {
+		return nil, err
+	}
+	infrastructureOptions = append(infrastructureOptions, detectorOptions...)
+	middleware = append(detectorMiddleware, middleware...)
 	plan, err := infrastructure.Configure(s.Services, infrastructureOptions...)
 	if err != nil {
 		return nil, err

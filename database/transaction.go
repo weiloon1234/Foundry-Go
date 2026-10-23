@@ -67,16 +67,17 @@ const (
 // fail with Busy. An escaped Tx is closed after its callback; it cannot commit
 // independently or be reused in a later request.
 type Tx struct {
-	owner      *DB
-	raw        *sql.Tx
-	scope      *operationScope
-	classify   classifier
-	control    *transactionControl
-	mu         sync.Mutex
-	state      TxState
-	after      []func(context.Context) error
-	observers  lifecycle.Observers
-	timeSource clock.Clock
+	statementSite string
+	owner         *DB
+	raw           *sql.Tx
+	scope         *operationScope
+	classify      classifier
+	control       *transactionControl
+	mu            sync.Mutex
+	state         TxState
+	after         []func(context.Context) error
+	observers     lifecycle.Observers
+	timeSource    clock.Clock
 }
 
 type transactionControl struct {
@@ -153,7 +154,8 @@ func runTransaction(ctx context.Context, conn *sql.Conn, owner *DB, classify cla
 		unlink()
 		return classify.wrap("begin", err)
 	}
-	tx := &Tx{owner: owner, raw: raw, scope: &operationScope{ctx: lifetime, cancel: cancel}, classify: classify, state: TxActive, control: &transactionControl{cancel: cancel}, observers: observers, timeSource: source}
+	site := owner.instrumented(PrimaryPool).locate(ctx).site
+	tx := &Tx{statementSite: site, owner: owner, raw: raw, scope: &operationScope{ctx: lifetime, cancel: cancel}, classify: classify, state: TxActive, control: &transactionControl{cancel: cancel}, observers: observers, timeSource: source}
 	// Defensive cleanup also covers a framework panic after BEGIN. SQL rollback
 	// is harmless after an already terminal commit/rollback.
 	defer raw.Rollback()
@@ -288,11 +290,11 @@ func (tx *Tx) AfterCommit(fn func(context.Context) error) error {
 }
 
 func (tx *Tx) Exec(ctx context.Context, statement string, arguments ...any) (result Result, err error) {
-	return tx.scope.exec(ctx, tx.raw, tx.classify, tx.owner.instrumented(PrimaryPool), statement, arguments)
+	return tx.scope.exec(ctx, tx.raw, tx.classify, tx.instrumented(), statement, arguments)
 }
 
 func (tx *Tx) Query(ctx context.Context, statement string, arguments ...any) (*Rows, error) {
-	return tx.owner.attachEncryption(tx.scope.query(ctx, tx.raw, tx.classify, tx.owner.instrumented(PrimaryPool), tx.observers, statement, arguments))
+	return tx.owner.attachEncryption(tx.scope.query(ctx, tx.raw, tx.classify, tx.instrumented(), tx.observers, statement, arguments))
 }
 
 // An operation may have a tighter context, but it cannot outlive the transaction

@@ -4,7 +4,7 @@
     "member_foundry.gen.go": "4df414382298df541c854dfd082912cdffcdc80303ad461ad62caaf4859ca85f",
     "operator_foundry.gen.go": "3477a878a03dedb5db98a9b8a68b15363bca74c82ff971e4a9c9baee40d61517",
     "profile_foundry.gen.go": "92034e38145c70a12d5068707bf6b28de0d461caeba71a492d00607b4f9e46aa",
-    "settings_foundry.gen.go": "87299df2b4cac05dc3a39340d8a51d2fc2a48f1cb3b85264cc4f693f20a8af7e",
+    "settings_foundry.gen.go": "d77cf966214b096504907ef7002effb0c83f878d2e2c0a6ed1403852beb6ad68",
     "upload_input_foundry.gen.go": "0c00c8cc6563d0b2790dd84953c795758aab36f53ca3d7b9607d2de4596a7de5",
     "upload_result_foundry.gen.go": "26dbf5591013c854aaa7c85a05c1233cc3eb9416f5d5c7db1da694d22ed3cd3c"
   }

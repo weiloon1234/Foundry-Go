@@ -210,7 +210,7 @@ func returningOne[M any](ctx context.Context, tx *database.Tx, statement Stateme
 }
 
 func returningModels[M any](ctx context.Context, tx *database.Tx, statement Statement, scan func(database.Row) (M, error), minimum, maximum int) (result []M, err error) {
-	rows, err := tx.Query(ctx, statement.sql, statement.arguments...)
+	rows, err := tx.Query(statement.executionContext(ctx), statement.sql, statement.arguments...)
 	if err != nil {
 		return nil, err
 	}

@@ -2,6 +2,7 @@ package goway_test
 
 func compilerCases() []compilerCase {
 	return []compilerCase{
+		{"trusted_shape_internal", "use of internal package"},
 		{"raw_model_result_owner", "as []models.User value"},
 		{"raw_schema_result_owner", "rows.Schema[B]"},
 		{"chunk_callback_owner", "func([]models.User) error"},

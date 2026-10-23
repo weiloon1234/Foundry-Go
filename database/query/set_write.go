@@ -102,7 +102,7 @@ func (q Query[M]) setWrite(ctx context.Context, writer database.Transactor, kind
 		if err != nil {
 			return 0, err
 		}
-		result, err := tx.Exec(ctx, statement.sql, statement.arguments...)
+		result, err := tx.Exec(statement.executionContext(ctx), statement.sql, statement.arguments...)
 		return result.RowsAffected, err
 	})
 }

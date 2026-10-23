@@ -355,13 +355,13 @@ func executeWrite(ctx context.Context, writer database.Transactor, p writePlan, 
 			}
 		}
 		if p.many {
-			result, e := tx.Exec(ctx, s.SQLText, s.Bindings...)
+			result, e := tx.Exec(s.Context(ctx), s.SQLText, s.Bindings...)
 			if e != nil {
 				return e
 			}
 			*count = result.RowsAffected
 		} else {
-			rows, e := tx.Query(ctx, s.SQLText, s.Bindings...)
+			rows, e := tx.Query(s.Context(ctx), s.SQLText, s.Bindings...)
 			if e != nil {
 				return e
 			}
@@ -494,7 +494,7 @@ func autocommit(ctx context.Context, p writePlan, source clock.Clock, send autoc
 	if err != nil {
 		return err, false
 	}
-	rows, err := send(sqlowner.Seal{}, ctx, s.SQLText, s.Bindings...)
+	rows, err := send(sqlowner.Seal{}, s.Context(ctx), s.SQLText, s.Bindings...)
 	if err != nil {
 		return err, false
 	}

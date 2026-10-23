@@ -1,7 +1,6 @@
 package goway_test
 
 import (
-	"context"
 	"database/sql/driver"
 	"fmt"
 
@@ -13,7 +12,7 @@ import (
 )
 
 func (g oldGolden) run() {
-	ctx := context.Background()
+	ctx := g.context()
 	db := g.open(ctx)
 	defer db.Close(ctx)
 	id := must(model.ParseID[models.Order](orderID))

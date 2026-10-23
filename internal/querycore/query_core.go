@@ -140,6 +140,7 @@ func (q QueryCore) StableOrder() (QueryCore, error) {
 func (q QueryCore) CompileModel(kind ReadKind, selections []SelectItem) (Statement, error) {
 	// SELECT owns its source-column maps; the mutation column map is unused.
 	c := Compiler{ScopeContext: q.ScopeContext}
+	c.BeginStatement(q.ScopeContext)
 	if kind == ReadExists {
 		if n, set := q.Limit.Get(); !set || n > 1 {
 			q.Limit = value.Set(1)
@@ -162,7 +163,7 @@ func (q QueryCore) CompileModel(kind ReadKind, selections []SelectItem) (Stateme
 	case ReadExists:
 		statement = "SELECT EXISTS(" + statement + ")"
 	}
-	return Statement{SQLText: statement, Bindings: c.Arguments}, nil
+	return c.Statement(statement), nil
 }
 
 func (q QueryCore) ModelSelect(selections []SelectItem) SelectNode {
@@ -217,9 +218,10 @@ func CompileRead(node SelectNode, scopeContext context.Context, transaction bool
 		return Statement{}, fault.New(fault.Invalid, "query requires a complete result decoder")
 	}
 	c := Compiler{AllowLocks: transaction, ScopeContext: scopeContext}
+	c.BeginStatement(scopeContext)
 	sql, err := c.CompileSelect(node)
 	if err != nil {
 		return Statement{}, err
 	}
-	return Statement{SQLText: sql, Bindings: c.Arguments}, nil
+	return c.Statement(sql), nil
 }

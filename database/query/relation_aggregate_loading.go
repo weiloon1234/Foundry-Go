@@ -47,11 +47,12 @@ func compileRelationAggregate[M, N any](ctx context.Context, input aggregateInpu
 		}})
 	}
 	c := compiler{ScopeContext: ctx, ScopeShapeOnly: ctx == nil}
+	c.BeginStatement(ctx)
 	sql, err := c.CompileSelect(node)
 	if err != nil {
 		return Statement{}, err
 	}
-	return Statement{sql: sql, arguments: c.Arguments}, nil
+	return statementFromCore(c.Statement(sql)), nil
 }
 
 func aggregateKeys[M any](ctx context.Context, metadata ModelField[M], parents []M, batchSize int) ([]value.Optional[cursorValue], []driver.Value, map[cursorValue]bool, error) {
@@ -102,7 +103,7 @@ func fetchRelationAggregate[M, N, V any](ctx context.Context, executor database.
 		if err != nil {
 			return nil, err
 		}
-		err = database.ForEach(ctx, readExecutor{executor}, statement.sql, statement.arguments, func(row database.Row) (groupedAggregate[V], error) {
+		err = database.ForEach(statement.executionContext(ctx), readExecutor{executor}, statement.sql, statement.arguments, func(row database.Row) (groupedAggregate[V], error) {
 			var raw any
 			var result V
 			var count, distinct int64

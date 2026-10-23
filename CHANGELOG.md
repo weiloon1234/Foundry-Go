@@ -8,6 +8,12 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Add opt-in scoped N+1 statement-shape detection, test assertions and configured
+  HTTP warnings with bounded diagnostics (Stage 4a). Only shared-compiler shapes
+  display SQL structure; raw SQL uses instance-keyed fingerprints. Violations carry
+  bounded call sites, and transaction-control events remain excluded by provenance.
+  Compile shapes only inside active scopes; inactive compiles allocate no tracking state.
+
 - Add `Table.Raw` and `rows.Raw` with exact named-column hydration, no automatic
   scopes or read routing, and existing model encryption opening (Stage 3.1d).
 

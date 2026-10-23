@@ -182,3 +182,14 @@ func TestCompilerSelectionHelper(t *testing.T) {
 		return results
 	})
 }
+
+func TestCompilerIndentedInternalImportDiagnostic(t *testing.T) {
+	item := compilerCase{"trusted_shape_internal", "use of internal package"}
+	own := "\ttestdata/compilefail/trusted_shape_internal/invalid.go:3:8: use of internal package framework/internal/private not allowed\n"
+	if !matchesCompilerDiagnostic(own, item) {
+		t.Fatal("own indented import diagnostic rejected")
+	}
+	if matchesCompilerDiagnostic(strings.ReplaceAll(own, "trusted_shape_internal", "other_case"), item) {
+		t.Fatal("accepted neighboring diagnostic")
+	}
+}

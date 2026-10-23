@@ -102,6 +102,7 @@ func (q QueryCore) AdjustSet(a *Adjustment, c *Compiler, assigned map[string]Mut
 }
 
 func (q QueryCore) CompileMutation(c Compiler, node SelectNode, kind MutationKind, assignments []MutationAssignment, assigned map[string]MutationAssignment, adjust *Adjustment, countOnly bool) (Statement, error) {
+	c.BeginStatement(q.ScopeContext)
 	prefix, err := c.CompileCTEs(node)
 	if err != nil {
 		return Statement{}, err
@@ -138,10 +139,11 @@ func (q QueryCore) CompileMutation(c Compiler, node SelectNode, kind MutationKin
 	if !countOnly {
 		sql.WriteString(" RETURNING " + SelectedColumns(q.Table, q.Model.Columns))
 	}
-	return Statement{SQLText: sql.String(), Bindings: c.Arguments}, nil
+	return c.Statement(sql.String()), nil
 }
 
 func (q QueryCore) CompileInsert(c Compiler, rows []map[string]MutationAssignment, union map[string]bool, node SelectNode, conflict *Conflict) (Statement, error) {
+	c.BeginStatement(q.ScopeContext)
 	alias := q.Table
 	if conflict != nil {
 		names, err := NamesInSelects(node)
@@ -196,8 +198,8 @@ func (q QueryCore) CompileInsert(c Compiler, rows []map[string]MutationAssignmen
 	if len(columns) == 0 {
 		sql.WriteString(" DEFAULT VALUES")
 	} else {
-		sql.WriteString(" (" + strings.Join(quotedNames, ", ") + ") VALUES " + strings.Join(values, ", "))
+		sql.WriteString(" (" + strings.Join(quotedNames, ", ") + ") VALUES " + c.rowsFragment(values))
 	}
 	sql.WriteString(conflictSQL + " RETURNING " + SelectedColumns(alias, q.Model.Columns))
-	return Statement{SQLText: sql.String(), Bindings: c.Arguments}, nil
+	return c.Statement(sql.String()), nil
 }

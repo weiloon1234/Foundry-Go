@@ -213,12 +213,30 @@ type SettingsServicesCoordinationConfigNamespaceConfigKeySet struct {
 
 // SettingsHTTPConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsHTTPConfigKeySet struct {
+	StatementDetector SettingsHTTPStatementDetectorConfigKeySet
 	// Enabled selects http.enabled. Set accepts bool.
 	Enabled config.Key[Settings, bool]
 	Server  SettingsHTTPServerConfigKeySet
 	// SecurityHeaders selects http.security_headers. Set accepts bool.
 	SecurityHeaders config.Key[Settings, bool]
 	Probes          SettingsHTTPProbesConfigKeySet
+}
+
+// SettingsHTTPStatementDetectorConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsHTTPStatementDetectorConfigKeySet struct {
+	// Enabled selects http.statement_detector.enabled. Set accepts bool.
+	Enabled config.Key[Settings, bool]
+	// AllowNonDevelopment selects http.statement_detector.allow_non_development. Set accepts bool.
+	AllowNonDevelopment config.Key[Settings, bool]
+	Limits              SettingsHTTPStatementDetectorLimitsConfigKeySet
+}
+
+// SettingsHTTPStatementDetectorLimitsConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsHTTPStatementDetectorLimitsConfigKeySet struct {
+	// Threshold selects http.statement_detector.limits.threshold. Set accepts int.
+	Threshold config.Key[Settings, int]
+	// MaxShapes selects http.statement_detector.limits.max_shapes. Set accepts int.
+	MaxShapes config.Key[Settings, int]
 }
 
 // SettingsHTTPServerConfigKeySet exposes compiler-checked configuration overrides.
@@ -1697,6 +1715,14 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 			Credentials: config.Text[Settings, infrastructure.CredentialSources, *infrastructure.CredentialSources]("services.credentials", func(settings *Settings) *infrastructure.CredentialSources { return &settings.Services.Credentials }).Sensitive(),
 		},
 		HTTP: SettingsHTTPConfigKeySet{
+			StatementDetector: SettingsHTTPStatementDetectorConfigKeySet{
+				Enabled:             config.Scalar[Settings, bool]("http.statement_detector.enabled", func(settings *Settings) *bool { return &settings.HTTP.StatementDetector.Enabled }),
+				AllowNonDevelopment: config.Scalar[Settings, bool]("http.statement_detector.allow_non_development", func(settings *Settings) *bool { return &settings.HTTP.StatementDetector.AllowNonDevelopment }),
+				Limits: SettingsHTTPStatementDetectorLimitsConfigKeySet{
+					Threshold: config.Scalar[Settings, int]("http.statement_detector.limits.threshold", func(settings *Settings) *int { return &settings.HTTP.StatementDetector.Limits.Threshold }),
+					MaxShapes: config.Scalar[Settings, int]("http.statement_detector.limits.max_shapes", func(settings *Settings) *int { return &settings.HTTP.StatementDetector.Limits.MaxShapes }),
+				},
+			},
 			Enabled: config.Scalar[Settings, bool]("http.enabled", func(settings *Settings) *bool { return &settings.HTTP.Enabled }),
 			Server: SettingsHTTPServerConfigKeySet{
 				Address:               config.Scalar[Settings, string]("http.server.address", func(settings *Settings) *string { return &settings.HTTP.Server.Address }),
@@ -2249,6 +2275,10 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.Services.Coordination.Config.PollInterval,
 		keys.Services.Coordination.MaxEntries,
 		keys.Services.Credentials,
+		keys.HTTP.StatementDetector.Enabled,
+		keys.HTTP.StatementDetector.AllowNonDevelopment,
+		keys.HTTP.StatementDetector.Limits.Threshold,
+		keys.HTTP.StatementDetector.Limits.MaxShapes,
 		keys.HTTP.Enabled,
 		keys.HTTP.Server.Address,
 		keys.HTTP.Server.ReadHeaderTimeout,

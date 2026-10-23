@@ -64,7 +64,7 @@ func (c *Compiler) SchemaLiteral(value any) (string, error) {
 		return "", fault.New(fault.Invalid, "schema constant exceeds its resource bound")
 	}
 	c.ScalarSQLBytes += len(text)
-	return text, nil
+	return c.fragment(text, "?"), nil
 }
 
 func QuoteSchemaText(value string, remaining int) (string, error) {

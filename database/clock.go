@@ -14,16 +14,17 @@ import (
 type Option func(*poolSettings) error
 
 type poolSettings struct {
-	clock           clock.Clock
-	clockSet        bool
-	read            *readPoolSettings
-	connectionLimit int
-	queryObserver   QueryObserver
-	slowLogger      *slog.Logger
-	startupLogger   *slog.Logger
-	slowThreshold   time.Duration
-	stickyWindow    time.Duration
-	encryption      *encryption.Keyring
+	clock             clock.Clock
+	clockSet          bool
+	read              *readPoolSettings
+	connectionLimit   int
+	queryObserver     QueryObserver
+	statementDetector *StatementDetector
+	slowLogger        *slog.Logger
+	startupLogger     *slog.Logger
+	slowThreshold     time.Duration
+	stickyWindow      time.Duration
+	encryption        *encryption.Keyring
 }
 
 // WithClock injects model lifecycle time. Direct Open/Prepare calls default to

@@ -57,12 +57,22 @@ func TestIntervalScalarExpansionHasBoundedWork(t *testing.T) {
 func TestScalarSQLPlanningSharesCompilationBudget(t *testing.T) {
 	f := NewIntervalField[cursorRecord, temporal.Interval]("records", "rank", codec.Interval())
 	expr := IntervalMonths(Param(f, temporal.Months(1))).Value().node
-	var c compiler
-	if _, err := c.PlanValue(expr); err != nil || c.ScalarSQLBytes == 0 {
-		t.Fatal("planning discarded scalar compilation work", err)
-	}
-	c.ScalarSQLBytes = MaxScalarSQLBytes - c.ScalarSQLBytes + 1
-	if _, err := c.PlanValue(expr); !errors.Is(err, fault.Invalid) || c.ScalarSQLBytes <= MaxScalarSQLBytes {
-		t.Fatal("repeated planning bypassed scalar work budget", err)
+	var bytes int
+	for _, tracked := range []bool{false, true} {
+		var c compiler
+		if tracked {
+			c.TrackShape()
+		}
+		if _, err := c.PlanValue(expr); err != nil || c.ScalarSQLBytes == 0 {
+			t.Fatal("planning discarded scalar compilation work", err)
+		}
+		if tracked && bytes != c.ScalarSQLBytes {
+			t.Fatal("shape fragments changed SQL work accounting", bytes, c.ScalarSQLBytes)
+		}
+		bytes = c.ScalarSQLBytes
+		c.ScalarSQLBytes = MaxScalarSQLBytes - c.ScalarSQLBytes + 1
+		if _, err := c.PlanValue(expr); !errors.Is(err, fault.Invalid) || c.ScalarSQLBytes <= MaxScalarSQLBytes {
+			t.Fatal("repeated planning bypassed scalar work budget", err)
+		}
 	}
 }

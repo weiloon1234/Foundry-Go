@@ -44,6 +44,9 @@ func (transaction) Commit() error   { return nil }
 func (transaction) Rollback() error { return nil }
 
 type goldenCapture struct {
+	quiet           bool // Benchmarks count real driver calls without formatting golden output.
+	detector        *database.StatementDetector
+	scopeContext    context.Context
 	output          bytes.Buffer
 	statements      int
 	generatedKey    bool
@@ -60,6 +63,9 @@ type EmailRow struct{ Email string }
 
 func (g *goldenCapture) printSQL(s string, args []driver.NamedValue) {
 	g.statements++
+	if g.quiet {
+		return
+	}
 	values := make([]any, len(args))
 	for i, a := range args {
 		values[i] = a.Value
@@ -172,7 +178,11 @@ func must[T any](v T, err error) T {
 	return v
 }
 func (g *goldenCapture) open(ctx context.Context) *database.DB {
-	return must(database.Open(ctx, database.Adapter{Connector: connector{capture: g}}, database.DefaultPoolConfig(), database.WithClock(fixedClock{})))
+	options := []database.Option{database.WithClock(fixedClock{})}
+	if g.detector != nil {
+		options = append(options, database.WithStatementDetector(g.detector))
+	}
+	return must(database.Open(ctx, database.Adapter{Connector: connector{capture: g}}, database.DefaultPoolConfig(), options...))
 }
 func check(err error) {
 	if err != nil {
@@ -234,3 +244,10 @@ func persisted(v reflect.Value) any {
 type fixedClock struct{}
 
 func (fixedClock) Now() time.Time { return time.Date(2026, 10, 22, 0, 0, 0, 0, time.UTC) }
+
+func (g *goldenCapture) context() context.Context {
+	if g.scopeContext != nil {
+		return g.scopeContext
+	}
+	return context.Background()
+}

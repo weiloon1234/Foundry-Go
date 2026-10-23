@@ -9,6 +9,7 @@ import (
 // validation and bindings. Destination declaration order owns insertion columns.
 // This private compiler accepts only already-prepared literal values.
 func (q QueryCore) CompileInsertSelect(c Compiler, node SelectNode, mapped map[string]ValueExpression, values map[string]MutationAssignment, kind func(string) codec.ParameterType, returning bool) (Statement, error) {
+	c.BeginStatement(q.ScopeContext)
 	node.Selections = make([]SelectItem, 0, len(mapped)+len(values))
 	columns := make([]string, 0, cap(node.Selections))
 	for _, column := range q.Model.Columns {
@@ -39,5 +40,5 @@ func (q QueryCore) CompileInsertSelect(c Compiler, node SelectNode, mapped map[s
 	if returning {
 		sql += " RETURNING " + SelectedColumns(q.Table, q.Model.Columns)
 	}
-	return Statement{SQLText: sql, Bindings: c.Arguments}, nil
+	return c.Statement(sql), nil
 }

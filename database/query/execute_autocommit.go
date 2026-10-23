@@ -32,7 +32,7 @@ func executeAutocommitInsert[M any](ctx context.Context, send autocommitQuery, s
 	if err != nil {
 		return *new(M), err
 	}
-	rows, err := send(sqlowner.Seal{}, ctx, statement.sql, statement.arguments...)
+	rows, err := send(sqlowner.Seal{}, statement.executionContext(ctx), statement.sql, statement.arguments...)
 	if err != nil {
 		return *new(M), err
 	}

@@ -66,6 +66,7 @@ func (q QueryCore) sourceWriteSelection(destination, source SelectNode, key Sour
 // Source SELECTs, dependencies, predicates and all bindings use the shared AST
 // compiler. Only the native mutation envelope is assembled here.
 func (q QueryCore) CompileSourceWrite(c Compiler, destination, source SelectNode, key SourceWriteKey, kind MutationKind, mapped map[string]ValueExpression, values map[string]MutationAssignment, returning bool) (Statement, error) {
+	c.BeginStatement(q.ScopeContext)
 	node, names, countName, err := q.sourceWriteSelection(destination, source, key, mapped)
 	if err != nil {
 		return Statement{}, err
@@ -115,15 +116,15 @@ func (q QueryCore) CompileSourceWrite(c Compiler, destination, source SelectNode
 		if countName != "" {
 			body.WriteString(", " + Qualified(FieldRef{Table: sourceName, Column: countName}))
 		}
-		return Statement{SQLText: prefix + body.String(), Bindings: c.Arguments}, nil
+		return c.Statement(prefix + body.String()), nil
 	}
 	if countName == "" {
-		return Statement{SQLText: prefix + body.String(), Bindings: c.Arguments}, nil
+		return c.Statement(prefix + body.String()), nil
 	}
 	// Checking two scalars inside the owning transaction avoids materializing
 	// affected models for Exec. Every ambiguous group carries the same count,
 	// regardless of which match PostgreSQL chooses before we reject and roll back.
 	changes := names.Allocate("foundry_source_changes")
 	sql := strings.TrimSuffix(prefix, " ") + ", " + Quoted(changes) + " AS (" + body.String() + " RETURNING " + Qualified(FieldRef{Table: sourceName, Column: countName}) + " AS " + Quoted(countName) + ") SELECT COUNT(*), COALESCE(MAX(" + Quoted(countName) + "), 0) FROM " + Quoted(changes)
-	return Statement{SQLText: sql, Bindings: c.Arguments}, nil
+	return c.Statement(sql), nil
 }

@@ -16,6 +16,7 @@ import (
 type Statement struct {
 	SQLText  string
 	Bindings []any
+	Shape    string
 }
 
 type ReadKind uint8
@@ -27,6 +28,7 @@ const (
 )
 
 type Compiler struct {
+	fragments     *statementFragments
 	AllowLocks    bool
 	LockWork      int
 	Ctes          map[string]*CteNode
@@ -93,7 +95,7 @@ func (c *Compiler) Parameter(value any) (string, error) {
 		value = slices.Clone(data)
 	}
 	c.Arguments = append(c.Arguments, value)
-	return "$" + strconv.Itoa(len(c.Arguments)), nil
+	return c.fragment("$"+strconv.Itoa(len(c.Arguments)), "?"), nil
 }
 
 func (c *Compiler) Expression(e Expression) (string, error) { return c.ExpressionAt(e, nil, false) }
@@ -252,9 +254,9 @@ func (c *Compiler) Comparison(e Comparison, grouped map[FieldRef]bool, grouping 
 	}
 	switch e.Operator {
 	case In:
-		return "(" + field + " IN (" + strings.Join(parameters, ", ") + "))", nil
+		return "(" + field + " IN (" + c.fragment(strings.Join(parameters, ", "), parameters[0]) + "))", nil
 	case NotIn:
-		return "(" + field + " NOT IN (" + strings.Join(parameters, ", ") + "))", nil
+		return "(" + field + " NOT IN (" + c.fragment(strings.Join(parameters, ", "), parameters[0]) + "))", nil
 	}
 	op, ok := ComparisonOperator(e.Operator)
 	if !ok || len(parameters) != 1 {

@@ -340,9 +340,9 @@ func readModels(ctx context.Context, ex database.Executor, q queryState, scan fu
 	}
 	var rows *database.Rows
 	if q.lock != 0 {
-		rows, err = ex.Query(ctx, s.SQLText, s.Bindings...)
+		rows, err = ex.Query(s.Context(ctx), s.SQLText, s.Bindings...)
 	} else {
-		rows, err = database.ReadQuery(ctx, ex, s.SQLText, s.Bindings...)
+		rows, err = database.ReadQuery(s.Context(ctx), ex, s.SQLText, s.Bindings...)
 	}
 	if err != nil {
 		return err
@@ -370,7 +370,7 @@ func scalarRead(ctx context.Context, ex database.Executor, q queryState, kind qu
 	if err != nil {
 		return err
 	}
-	return database.ScanOne(ctx, readExecutor{ex}, s.SQLText, s.Bindings, destination)
+	return database.ScanOne(s.Context(ctx), readExecutor{ex}, s.SQLText, s.Bindings, destination)
 }
 func count(ctx context.Context, ex database.Executor, q queryState) (int64, error) {
 	var n int64

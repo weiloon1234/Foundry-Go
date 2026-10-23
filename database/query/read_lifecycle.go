@@ -126,7 +126,7 @@ func joinedReadLifecycle[N, P any](target *Definition[N], pivot *Definition[P]) 
 // before EOF closes the stream, then constructs/dispatches hooks with no rows
 // open. The entire partial result is discarded on scan, close or hook failure.
 func collectRead[R any](ctx context.Context, executor database.Executor, statement Statement, scan func(database.Row) (R, error), callbacks *readLifecycle[R]) (result []R, err error) {
-	rows, err := database.ReadQuery(ctx, executor, statement.sql, statement.arguments...)
+	rows, err := database.ReadQuery(statement.executionContext(ctx), executor, statement.sql, statement.arguments...)
 	if err != nil {
 		return nil, err
 	}

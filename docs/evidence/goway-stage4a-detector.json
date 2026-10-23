@@ -1,0 +1,1478 @@
+{
+  "stage": "4a",
+  "base_commit": "35f8d45377ba84aaebe0f7d9615d7eae17dc5e51",
+  "scope": "N+1 detector foundations only; existing uncommitted raw_test.go carry-over preserved; no relation runtime/API changes.",
+  "configuration": {
+    "default": "Disabled; no middleware or observer installed. Enabled defaults: threshold 10, max 128 shapes.",
+    "bounds": "Threshold 1..1000000; MaxShapes 1..1024.",
+    "production_guard": "HTTP enabled required; outside Services.Namespace.Environment=development, AllowNonDevelopment must be explicit.",
+    "generated": "Regenerated application and consumer bootstrap configuration/ownership manifests with the repository generator. No wire DTO changes."
+  },
+  "status": "Disabled-path allocation regression fixed; requested tests pass; timing gate inconclusive under host contention; no commit",
+  "api": [
+    "database.NewStatementDetector(StatementDetectorConfig) (*StatementDetector,error)",
+    "(*StatementDetector).Begin(context.Context) (context.Context,*StatementScope)",
+    "(*StatementDetector).Observe(context.Context,QueryEvent)",
+    "(*StatementScope).Report() StatementReport",
+    "database.WithStatementDetector(*StatementDetector) Option",
+    "testkit/dbassert.AssertStatementShapes(testing.TB,*database.StatementScope)",
+    "http.StatementDetector(*database.StatementDetector,*slog.Logger) Middleware",
+    "infrastructure.WithStatementDetector(*database.StatementDetector) Option",
+    "application.HTTPSettings.StatementDetector StatementDetectorSettings"
+  ],
+  "ownership": {
+    "compiler": "internal/querycore/statement_shape.go:17,64: compiler-authored dual-render fragments produce Statement.Shape without parsing emitted SQL or repeating codec/scope callbacks.",
+    "carrier": "internal/statementmeta/context.go:15: private keys, active-scope-only transport and exact SQL equality; application modules cannot import this package (negative consumer compilation proves it).",
+    "execution": "database/instrumentation.go:148,166 captures execution call sites and composes detection with unchanged observer/FNV behavior. ORM/read/write boundaries use Statement.Context; database/query/core_metadata.go:30 delegates. Transaction/savepoint entry sites survive isolated callbacks (database/transaction.go:157); explain preserves its origin through internal metadata.",
+    "state": "Random 256-bit key per immutable detector; context-owned synchronized bounded counters; four distinct source sites per shape with explicit overflow.",
+    "control": "Completed pool/transaction/session Exec/Query events are counted. Framework savepoint commands are marked at database/savepoint.go:32,51,66,69 and excluded only from the detector. Driver Begin/Commit/Rollback calls never generated QueryObserver events. Application-issued raw transaction commands remain counted."
+  },
+  "privacy": {
+    "display": "Only compiler-authored shapes appear as SQL text. Every untrusted statement appears as untrusted statement <128-bit HMAC fingerprint>. No parser result or fallback raw text reaches diagnostics.",
+    "hash": "HMAC-SHA-256 truncated to 128 bits; domain-separated normalized and raw fallbacks; crypto/rand key per detector instance. Normalize is internal, bounded to 16 KiB and depth 64; malformed/oversized input hashes the original text with a bounded 4096-byte temporary buffer.",
+    "call_sites": "Captured only for an active scope at execution entry; first frame outside framework/runtime/testing, at most 64 frames inspected, 1024-byte path bound, unavailable:0 fallback; four distinct file:line locations per shape. Reports return owned sorted copies.",
+    "overflow": "Shape or call-site overflow fails testkit and logs one incomplete warning per HTTP request; parse failure is not incompleteness because keyed raw fallback remains countable.",
+    "deleted": "Public StatementShape and SQL-derived text display, utility labels, WITH/data-statement classification, setting-function display redaction, and Unshapable reporting. Internal grouping normalization is not a privacy boundary."
+  },
+  "coverage": [
+    "366 inputs (original 330 WITH/utility/canary combinations plus 36 CR/LF/CRLF and nested-utility cases), each with failed Exec/Query through reports/assertions and again through HTTP warnings: 1464 actual failed driver calls.",
+    "Actual old/new 56-statement golden workloads carry trusted shapes; cursor consumers separately cover both APIs; loop/eager tests plus varying relation IN lengths use real database instrumentation.",
+    "External fixture loops prove readable compiled shapes or opaque raw fingerprints plus external file:line locations.",
+    "Keyed fingerprints stable within an instance and different across instances, malformed/oversized fallback, call-site cap/owned reports, spoof-rejection compile-fail case, exact-SQL context binding.",
+    "Compiler values/schema literals separated from shape, IN/ANY/VALUES arity collapse, array/scalar structure, no repeated binding calls.",
+    "Existing concurrency, cancellation, composition, middleware/config/default-off and 200-savepoint observer-preservation tests retained."
+  ],
+  "footprint": "All existing Go-way probes pass unchanged. No Query/Table methods or generic types added.",
+  "not_run": [
+    "PostgreSQL (not requested)"
+  ],
+  "historical_before_privacy_redesign": {
+    "stage": "4a",
+    "base_commit": "35f8d45377ba84aaebe0f7d9615d7eae17dc5e51",
+    "status": "Implemented; selective acceptance passed, pending lead review; no commit",
+    "scope": "N+1 detector foundations only; existing uncommitted raw_test.go carry-over preserved; no relation runtime/API changes.",
+    "api": [
+      "database.StatementShape(string) (string,error)",
+      "database.NewStatementDetector(StatementDetectorConfig) (*StatementDetector,error)",
+      "(*StatementDetector).Begin(context.Context) (context.Context,*StatementScope)",
+      "(*StatementDetector).Observe(context.Context,QueryEvent)",
+      "(*StatementScope).Report() StatementReport",
+      "database.WithStatementDetector(*StatementDetector) Option",
+      "testkit/dbassert.AssertStatementShapes(testing.TB,*database.StatementScope)",
+      "http.StatementDetector(*database.StatementDetector,*slog.Logger) Middleware",
+      "infrastructure.WithStatementDetector(*database.StatementDetector) Option",
+      "application.HTTPSettings.StatementDetector StatementDetectorSettings"
+    ],
+    "ownership": {
+      "composition": "database/instrumentation.go:165 skips detector observation only when the probe is marked transactionControl; the callback-isolated QueryObserver still receives the unchanged event. FNV fingerprints remain exact-text.",
+      "application": "application/builder.go:215 creates one detector and supplies it to both HTTP middleware and infrastructure; infrastructure/providers.go:46 attaches it to every named database pool.",
+      "state": "Detector owns immutable limits; each Begin owns a concurrent context-scoped bounded map, no registry. Nested scopes of the same detector replace parent counters.",
+      "events": "Completed pool/transaction/session Exec/Query events are counted. Framework savepoint commands are marked at database/savepoint.go:32,51,66,69 and excluded only from the detector. Driver Begin/Commit/Rollback calls never generated QueryObserver events. Application-issued raw transaction commands remain counted."
+    },
+    "normalization": {
+      "input_and_output_bytes": 16384,
+      "delimiter_depth": 64,
+      "rules": "Data statement whitelist: SELECT/INSERT/UPDATE/DELETE/MERGE/VALUES/TABLE. WITH prefixes are parsed recursively before classification; CTE bodies and main statement must resolve to the whitelist. Unsupported/malformed WITH grammar is Unshapable. Utility labels and setting-function argument redaction remain. VALUES and IN preserve ARRAY boundaries; only ANY operands unwrap. Literal list multiplicity collapses with ordered VALUES arity and cast signatures preserved.",
+      "failure": "Unsupported/unterminated/oversized input marks Unshapable, retaining no original SQL. This includes unparsed WITH constructs, utility commands behind WITH, SEARCH/CYCLE, ambiguous backslash strings, Unicode-escaped identifiers, and all multi-statement strings regardless of their leading keyword.",
+      "overflow": "New shapes beyond MaxShapes mark Overflow; existing shapes continue counting. Test assertion fails and HTTP logs one incomplete-observation warning per request."
+    },
+    "configuration": {
+      "default": "Disabled; no middleware or observer installed. Enabled defaults: threshold 10, max 128 shapes.",
+      "bounds": "Threshold 1..1000000; MaxShapes 1..1024.",
+      "production_guard": "HTTP enabled required; outside Services.Namespace.Environment=development, AllowNonDevelopment must be explicit.",
+      "generated": "Regenerated application and consumer bootstrap configuration/ownership manifests with the repository generator. No wire DTO changes."
+    },
+    "coverage": [
+      "Literal/comment/list/quoted-identifier/dollar-quote/cast/numeric normalization, input bounds and ambiguous backslash redaction",
+      "Real ORM query-in-loop violation versus hydrated batched With success",
+      "Pool plus transaction completions; existing observer panic isolation and both option orders",
+      "Concurrent independent scopes, shared scope concurrency, owned reports, cancellation, cap overflow and unsafe SQL",
+      "Enabled/omitted HTTP middleware, per-request isolation, one overflow warning, redacted logs",
+      "Testkit violations and incomplete observation fail through test reporter",
+      "Configured app defaults, explicit production opt-in, invalid limits, HTTP requirement, generated TOML loading and actual application.New production guard",
+      "Setting-value canaries in bare, quoted-identifier and string form never appear in scope reports, middleware warnings or testkit assertion failures.",
+      "VALUES different row arity, cast order and mixed-cast ARRAY-column boundaries stay distinct; varying CAST-list lengths collapse.",
+      "200 savepoints: 200 SAVEPOINT + 200 RELEASE + 100 ROLLBACK TO events reach the existing observer; no retained detector shapes/overflow. Subsequent application-issued ROLLBACK statements are counted, proving exclusion does not guess from SQL.",
+      "330 combinations: five WITH prefixes, eleven utility commands, three canary forms, and main/body positions. Each executes failed Exec and Query through a real in-memory driver for scope/assertion checks, then again through HTTP middleware: 1320 failed driver executions. Report, HTTP warning and assertion text contain no canary.",
+      "Positive recursive/materialized/multiple/nested CTE classification for every supported main-statement keyword; malformed and unsupported WITH clauses fail closed.",
+      "Uniform, mixed-cast and nested ARRAY boundaries differ from scalars in VALUES/IN; ANY retains intended unwrapping.",
+      "Multi-statement SELECT/SET/SHOW/WITH input is incomplete; trailing terminator plus comments alone remains valid."
+    ],
+    "footprint": "All existing goway fixture probe ceilings pass unchanged; no Query/Table methods or generic types added.",
+    "benchmark": {
+      "toolchain": "go1.27.1 darwin/arm64",
+      "hardware": "Apple M4 Max; 16 logical CPUs",
+      "cache": "warm .cache/codex-gocache",
+      "load_average_before": [
+        6.9,
+        8.2,
+        8.66
+      ],
+      "method": "Six sequential rounds, each running disabled nil instrumentation, disabled not installed, then enabled active scope. Short parameterized UPDATE via pool Exec and in-memory driver. Timed driver call count equals b.N; active scope count also equals b.N; errors are fatal. Scope creation and report rendering are outside the timer.",
+      "results": {
+        "disabled_nil_instrumentation": {
+          "ns_per_op": [
+            556.5,
+            557.1,
+            563.0,
+            569.1,
+            566.1,
+            565.1
+          ],
+          "median_ns_per_op": 564.05,
+          "range_ns_per_op": [
+            556.5,
+            569.1
+          ],
+          "bytes_per_op": 688,
+          "allocations_per_op": 14,
+          "statements_per_op": 1
+        },
+        "disabled_not_installed": {
+          "ns_per_op": [
+            548.1,
+            553.7,
+            549.7,
+            547.4,
+            553.4,
+            557.6
+          ],
+          "median_ns_per_op": 551.55,
+          "range_ns_per_op": [
+            547.4,
+            557.6
+          ],
+          "bytes_per_op": 688,
+          "allocations_per_op": 14,
+          "statements_per_op": 1
+        },
+        "enabled_active_scope": {
+          "ns_per_op": [
+            1055.0,
+            1070.0,
+            1059.0,
+            1058.0,
+            1056.0,
+            1055.0
+          ],
+          "median_ns_per_op": 1057.0,
+          "range_ns_per_op": [
+            1055.0,
+            1070.0
+          ],
+          "bytes_per_op": 1176,
+          "allocations_per_op": 25,
+          "statements_per_op": 1
+        }
+      },
+      "interpretation": "Both disabled labels describe the same nil instrumentation path, not different implementations. Enabled active scope adds about 493 ns, 488 B and 11 allocations per statement versus the nil baseline for this workload. No HTTP/network/database-service latency or warning-log cost is measured.",
+      "profile": "A separate unreported CPU-profile run succeeded; go tool pprof is unavailable in this toolchain, so no profile attribution claim is made. Sandbox denied ps for background process inspection; loaded-host conditions are recorded and cases interleaved.",
+      "log": "bench-final.log",
+      "status": "Historical: measured before WITH-classification and ARRAY-signature re-review fixes. Not rerun in this re-review; latest request did not include benchmarks."
+    },
+    "acceptance": {
+      "cache": "GOCACHE=<worktree>/.cache/codex-gocache",
+      "log_directory": ".cache/goway-stage4a-rereview",
+      "commands": [
+        {
+          "command": "go test -race ./database/... ./testkit/... ./http/... ./application/...",
+          "result": "pass; native execution for loopback tests",
+          "log": "race.log"
+        },
+        {
+          "command": "cd tests/fixtures/goway && go test ./...",
+          "result": "pass; footprint ceilings unchanged; opt-in PostgreSQL skipped",
+          "log": "fixture.log"
+        },
+        {
+          "command": "make docs-check",
+          "result": "pass",
+          "log": "docs.log"
+        },
+        {
+          "command": "git ls-files -z --cached --others --exclude-standard '*.go' | xargs -0 gofmt -l",
+          "result": "clean; no output",
+          "log": "gofmt.log"
+        },
+        {
+          "command": "git diff --check",
+          "result": "clean"
+        }
+      ]
+    },
+    "not_run": [
+      "Live PostgreSQL/Redis suites (not requested for this slice)",
+      "make verify",
+      "HTTP request throughput or warning-log benchmark"
+    ],
+    "open_questions": [],
+    "source_sha256": {
+      "CHANGELOG.md": "a356e836da02cbd6ed73753ccadb0d5b2e23ec167d3fe458366682449d46b6f5",
+      "application/.foundry-gen.json": "e31312485e45ca18749cc1d4db254c04966c06effb0e5f02920092ab16fa25dc",
+      "application/builder.go": "dc568d2104803638cc78d48ccc371619828ad4a292a6ea4e88e26ce02d5c61e1",
+      "application/settings.go": "b2c47e890d4eeec092fa22519cd1c2c5e076d6586f9dcdadc9cfe82d052c2892",
+      "application/settings_foundry.gen.go": "e77b7d10770e1c3592a589105456314cc5094ee4010ec78e4a7844cca14eb5c9",
+      "application/statement_detector.go": "315be0aa32a84998de5acc60fae6148cd85c7b278c52c0cfa2bb8dadd34d8216",
+      "application/statement_detector_config_test.go": "f9c38846faae57dd72a1e4c4c9025a0f58dcf2f30b8ba4f943c9e8e9947c4709",
+      "application/statement_detector_test.go": "54efed829b9bb33f13ac227bf261ec9d6080aa7c6a5fe3ab7d9accde76ce77b8",
+      "blueprint/goway-data-layer/README.md": "8f2deefb0e3dc5136a0623dbc0e7a939a4d4eafd91162159ddd87a264d78bcaa",
+      "database/clock.go": "be9c947480c7a766f31d26b0d4e35616df43bc7e1fe3db9511fb8c69e62bee54",
+      "database/instrumentation.go": "6d5c27a3eaa1b85414b6ddf31cbca35b513e6853f7b07a87fc9515459fe09a1d",
+      "database/orm/raw_test.go": "52c5e27ba86b3f0d78e828b39ae4bb455a21411c7bc07a399cf43d689974b3c0",
+      "database/orm/statement_detector_test.go": "0955191a55de966e673c46fa571c17a4a9672f62eced811df6d6ad614cf187f9",
+      "database/savepoint.go": "03cd0361b978d810a91580b893edc07522da81a8d36561454283781d3a6c8af2",
+      "database/statement_detector.go": "55b42960dc4e118352caf95b9035fba6fcf1c8dd26106065ba15ae0ce7f8ef9e",
+      "database/statement_detector_internal_test.go": "4c270b080e3de69c959839b7b1e174ab9816a7cdb432b73009b6386b4141b4f9",
+      "database/statement_detector_test.go": "c269b2ab834118beee3ebc1d082b8b01ca2c497587bb6dbbf73e98728742a91e",
+      "database/statement_shape.go": "05c60bb57b8065781dda0a10de69cda1b6f68d53f7a7dbd6652703c43174dc06",
+      "database/statement_shape_test.go": "06aa6d081ff25af94a94d8e9282f0a3e5fa36a22ce2f4e97d83dbc76c49cc15b",
+      "docs/guides/database-runtime.md": "a148ea8441da9c80f90f4c9f1995c94bc288957160c7a911a08334df77d286ba",
+      "http/statement_detector.go": "98a5b7509980bc90e7b13fe6efb2736d0181a7c7c58ca2e6198f7b720416ca58",
+      "http/statement_detector_test.go": "4854f7e5e131aa334c3ac2a51b59862f677fd0c2155a416875a5d82f2117db72",
+      "infrastructure/providers.go": "8596a492d4bd031197d7c616312f28174c078cd372851e47fd1e1349b46adaf9",
+      "infrastructure/settings.go": "6b925f74b72ea8fc37ab5212b0628600c90274d55327d6ecb34cfb2c07095947",
+      "testkit/dbassert/statement_shapes.go": "e18c2c0dbd1cf8eb63683cebcbaabf3d0f9f65fb803ce160bee74071ea3a8e8d",
+      "testkit/dbassert/statement_shapes_test.go": "8244b0f1730682b2fd0e1704d5c4d4f6978a3e1f883ddb7a4bca5c27711d741e",
+      "testkit/dbassert/statement_with_test.go": "06d44ce7c7de2a74f6f591ffc8b93174b6126d90a108a09599f4a2cdb32acbf7",
+      "tests/fixtures/consumer/bootstrap/.foundry-gen.json": "3d358595a3a40d3a29c22a01f26ebc05cd151836270f03ba9903489b52a78503",
+      "tests/fixtures/consumer/bootstrap/settings_foundry.gen.go": "d77cf966214b096504907ef7002effb0c83f878d2e2c0a6ed1403852beb6ad68"
+    },
+    "initial_benchmark": {
+      "toolchain": "go1.27.1 darwin/arm64",
+      "hardware": "Apple M4 Max; 16 logical CPUs",
+      "cache": "warm task-owned .cache/codex-gocache",
+      "load_average_before": [
+        3.98,
+        4.47,
+        5.0
+      ],
+      "method": "Six alternating baseline/candidate pairs, one benchmark invocation per pair. Pool Exec through an in-memory driver, exact timed driver call count asserted, failures fatal. Timings include normal executor/driver work and atomic counting; no network/database service.",
+      "verdict": "No measurable disabled-path overhead; allocation counts identical, timing ranges overlap. Both configurations use the same nil-instrumentation path; no speedup claimed. Does not measure enabled-detector cost or whole HTTP throughput.",
+      "results": {
+        "nil_instrumentation": {
+          "ns_per_op": [
+            547.5,
+            543.2,
+            552.2,
+            539.5,
+            549.8,
+            563.7
+          ],
+          "median_ns_per_op": 548.65,
+          "range_ns_per_op": [
+            539.5,
+            563.7
+          ],
+          "bytes_per_op": 688,
+          "allocations_per_op": 14,
+          "statements_per_op": 1
+        },
+        "detector_not_installed": {
+          "ns_per_op": [
+            541.0,
+            537.3,
+            538.5,
+            544.0,
+            537.3,
+            545.7
+          ],
+          "median_ns_per_op": 539.75,
+          "range_ns_per_op": [
+            537.3,
+            545.7
+          ],
+          "bytes_per_op": 688,
+          "allocations_per_op": 14,
+          "statements_per_op": 1
+        }
+      },
+      "exploratory": "Initial grouped -count=6 run retained as bench.log; final reported result uses alternating pairs in bench-interleaved.log."
+    },
+    "initial_acceptance": {
+      "cache": "GOCACHE=<worktree>/.cache/codex-gocache",
+      "log_directory": ".cache/goway-stage4a",
+      "commands": [
+        {
+          "command": "go build ./...",
+          "result": "pass",
+          "log": "build-final.log",
+          "note": "Nonfatal sandbox warning writing the module download stat cache; exit 0."
+        },
+        {
+          "command": "go vet ./database/... ./testkit/... ./http/... ./application/... ./infrastructure/...",
+          "result": "pass",
+          "log": "vet-final.log"
+        },
+        {
+          "command": "go test -race ./database/... ./testkit/... ./http/... ./application/... ./infrastructure/...",
+          "result": "segmented pass",
+          "log": "race.log",
+          "note": "Sandbox blocked loopback listener tests in five packages; all other packages passed. Only those five were rerun natively."
+        },
+        {
+          "command": "go test -race ./testkit/http ./testkit/websocket ./http ./application ./infrastructure",
+          "result": "pass; native rerun",
+          "log": "race-native.log"
+        },
+        {
+          "command": "go test -race ./database -run 'TestStatementShape|TestStatementDetector'",
+          "result": "pass after conservative backslash redaction fix",
+          "log": "race-final-normalizer.log"
+        },
+        {
+          "command": "go test -race ./database ./database/orm ./testkit/dbassert ./http ./application -run 'TestStatementShape|TestStatementDetector|TestDisabledStatementDetector'",
+          "result": "pass on final runtime/test source",
+          "log": "race-final-targeted.log"
+        },
+        {
+          "command": "make generate-check",
+          "result": "segmented pass",
+          "log": "generate-check.log",
+          "note": "Root generation scopes passed. Consumer bootstrap settings became stale because HTTP settings gained detector config; regenerated through make generate GENERATION_DIRS=tests/fixtures/consumer, then resumed failed/remaining scopes."
+        },
+        {
+          "command": "make generate-check GENERATION_DIRS='tests/fixtures/consumer tests/fixtures/goway'",
+          "result": "pass",
+          "log": "generate-check-resumed.log"
+        },
+        {
+          "command": "cd tests/fixtures/goway && go vet ./...",
+          "result": "pass",
+          "log": "fixture-vet.log"
+        },
+        {
+          "command": "cd tests/fixtures/goway && go test ./...",
+          "result": "pass; PostgreSQL opt-in skipped",
+          "log": "fixture-test.log"
+        },
+        {
+          "command": "make docs-check",
+          "result": "pass",
+          "log": "docs-final.log"
+        },
+        {
+          "command": "git ls-files -z --cached --others --exclude-standard '*.go' | xargs -0 gofmt -l",
+          "result": "clean; no output",
+          "log": "gofmt.log"
+        },
+        {
+          "command": "git diff --check",
+          "result": "clean"
+        },
+        {
+          "command": "go test ./database -run '^$' -bench '^BenchmarkStatementDetectorDisabled$' -benchmem -count=1 (six sequential invocations)",
+          "result": "pass",
+          "log": "bench-interleaved.log"
+        }
+      ]
+    },
+    "review_fixes": [
+      "Only SELECT/WITH/INSERT/UPDATE/DELETE/MERGE/VALUES/TABLE retain structure; other recognized keywords become keyword-only labels, unknown starts become utility labels. Direct SELECT setting calls become select labels; nested set_config/current_setting arguments are erased, including identifier forms. Multi-statement shaped SQL and Unicode-escaped identifiers fail closed.",
+      "VALUES rows preserve arity and ordered cast signatures; only repeated equivalent rows collapse. Mixed-cast array elements retain their single-column boundary.",
+      "CAST(x AS type) and x::type literal/placeholder list elements normalize with cast signatures retained for IN/ANY/VALUES.",
+      "Framework savepoint paths set statementProbe.transactionControl, suppressing only detector observation. QueryObserver and slow-query events are unchanged. Native Begin/Commit/Rollback driver calls still produce no statement events.",
+      "Renamed both disabled benchmark cases explicitly and added an installed, active-scope enabled benchmark with exact counted-work assertion."
+    ],
+    "second_review_acceptance": {
+      "cache": "GOCACHE=<worktree>/.cache/codex-gocache",
+      "log_directory": ".cache/goway-stage4a-review",
+      "commands": [
+        {
+          "command": "go vet ./database/... ./testkit/... ./http/... ./application/...",
+          "result": "pass",
+          "log": "vet.log"
+        },
+        {
+          "command": "go test -race ./database/... ./testkit/... ./http/... ./application/... ./infrastructure/...",
+          "result": "pass; native execution for existing loopback tests",
+          "log": "race.log"
+        },
+        {
+          "command": "cd tests/fixtures/goway && go test ./...",
+          "result": "pass; footprint ceilings unchanged; opt-in PostgreSQL skipped",
+          "log": "fixture.log"
+        },
+        {
+          "command": "make generate-check",
+          "result": "pass; all 22 generation scopes current",
+          "log": "generate-check.log"
+        },
+        {
+          "command": "go test -race ./database -run '^TestStatementDetectorExcludesFrameworkSavepoints$'",
+          "result": "pass after strengthening the raw-control assertion",
+          "log": "savepoints-final.log"
+        },
+        {
+          "command": "go test -race ./database ./testkit/dbassert ./http -run 'TestStatementShape|TestStatementSetting|TestStatementDetector'",
+          "result": "pass after final ARRAY-column arity fix",
+          "log": "final-targeted.log"
+        },
+        {
+          "command": "go vet ./database/...",
+          "result": "pass after final ARRAY-column arity fix",
+          "log": "final-vet.log"
+        },
+        {
+          "command": "go test ./database -run '^$' -bench '^BenchmarkStatementDetectorPaths$' -benchmem -count=1 (six sequential invocations)",
+          "result": "pass on final source",
+          "log": "bench-final.log"
+        },
+        {
+          "command": "make docs-check",
+          "result": "pass",
+          "log": "docs.log"
+        },
+        {
+          "command": "git ls-files -z --cached --others --exclude-standard '*.go' | xargs -0 gofmt -l",
+          "result": "clean; no output",
+          "log": "gofmt.log"
+        },
+        {
+          "command": "git diff --check",
+          "result": "clean"
+        }
+      ]
+    },
+    "rereview_fixes": [
+      "Parse complete WITH declaration chains, RECURSIVE, column lists, MATERIALIZED/NOT MATERIALIZED, nested CTE bodies and nested WITH subqueries before shape retention. Every CTE body and main statement must resolve to the data-statement whitelist. Malformed, ambiguous and unsupported WITH constructs fail closed as Unshapable, including SEARCH/CYCLE and utility commands in either position.",
+      "Preserve ARRAY/container boundaries in VALUES and IN signatures, including uniform-element arrays, casts and nested arrays. Unwrap only an ANY operand, not its nested containers.",
+      "Reject multi-statement input before utility classification for every leading keyword. A single trailing terminator remains supported."
+    ]
+  },
+  "benchmark": {
+    "toolchain": "go1.27.1 darwin/arm64",
+    "hardware": "Apple M4 Max, 16 logical CPUs (Go benchmark metadata)",
+    "cache": "warm .cache/codex-gocache",
+    "method": "Six sequential rounds of four alternating cases per harness. One successful driver statement per timed operation, b.N driver count and scope count checked. Scope creation/report rendering excluded. Root harness isolates pool Exec and precompiled transport; root tests have no external frame (bounded unavailable-site fallback). Consumer Count includes compilation, transport, hydration, and an actual external file:line. Driver is in memory; no database/network/log rendering latency measured.",
+    "host": "Load at start 34.98/26.15/19.27, at finish 17.78/22.28/19.34. Read-only process inspection found another Go process at 1384.7% CPU. Contended latency is indicative, not evidence of a speedup/regression. Both disabled execution labels are the identical nil-instrumentation path, 688 B/op and 14 allocs/op.",
+    "results": {
+      "execution": {
+        "disabled_nil_instrumentation": {
+          "rounds": 6,
+          "ns_per_op": [
+            887.7,
+            664.9,
+            625.6,
+            634.5,
+            594.3,
+            586.6
+          ],
+          "median_ns_per_op": 630.05,
+          "range_ns_per_op": [
+            586.6,
+            887.7
+          ],
+          "bytes_per_op_range": [
+            688,
+            688
+          ],
+          "allocations_per_op": 14
+        },
+        "disabled_not_installed": {
+          "rounds": 6,
+          "ns_per_op": [
+            781.3,
+            610.2,
+            639.4,
+            643.0,
+            590.6,
+            684.6
+          ],
+          "median_ns_per_op": 641.2,
+          "range_ns_per_op": [
+            590.6,
+            781.3
+          ],
+          "bytes_per_op_range": [
+            688,
+            688
+          ],
+          "allocations_per_op": 14
+        },
+        "enabled_untrusted": {
+          "rounds": 6,
+          "ns_per_op": [
+            4988.0,
+            3668.0,
+            3727.0,
+            3929.0,
+            3844.0,
+            3464.0
+          ],
+          "median_ns_per_op": 3785.5,
+          "range_ns_per_op": [
+            3464.0,
+            4988.0
+          ],
+          "bytes_per_op_range": [
+            6552,
+            6552
+          ],
+          "allocations_per_op": 36
+        },
+        "enabled_trusted": {
+          "rounds": 6,
+          "ns_per_op": [
+            3106.0,
+            2850.0,
+            2681.0,
+            2471.0,
+            2466.0,
+            2496.0
+          ],
+          "median_ns_per_op": 2588.5,
+          "range_ns_per_op": [
+            2466.0,
+            3106.0
+          ],
+          "bytes_per_op_range": [
+            1448,
+            1448
+          ],
+          "allocations_per_op": 17
+        }
+      },
+      "consumer": {
+        "compiled_disabled": {
+          "rounds": 6,
+          "ns_per_op": [
+            3739.0,
+            5375.0,
+            4563.0,
+            10682.0,
+            10665.0,
+            9660.0
+          ],
+          "median_ns_per_op": 7517.5,
+          "range_ns_per_op": [
+            3739.0,
+            10682.0
+          ],
+          "bytes_per_op_range": [
+            4648,
+            4658
+          ],
+          "allocations_per_op": 73
+        },
+        "compiled_enabled": {
+          "rounds": 6,
+          "ns_per_op": [
+            7830.0,
+            14606.0,
+            10242.0,
+            10703.0,
+            8853.0,
+            11317.0
+          ],
+          "median_ns_per_op": 10472.5,
+          "range_ns_per_op": [
+            7830.0,
+            14606.0
+          ],
+          "bytes_per_op_range": [
+            5664,
+            5666
+          ],
+          "allocations_per_op": 81
+        },
+        "raw_disabled": {
+          "rounds": 6,
+          "ns_per_op": [
+            1533.0,
+            1717.0,
+            1899.0,
+            1745.0,
+            1782.0,
+            1695.0
+          ],
+          "median_ns_per_op": 1731.0,
+          "range_ns_per_op": [
+            1533.0,
+            1899.0
+          ],
+          "bytes_per_op_range": [
+            1592,
+            1595
+          ],
+          "allocations_per_op": 29
+        },
+        "raw_enabled": {
+          "rounds": 6,
+          "ns_per_op": [
+            5634.0,
+            8548.0,
+            6913.0,
+            6376.0,
+            8040.0,
+            6314.0
+          ],
+          "median_ns_per_op": 6644.5,
+          "range_ns_per_op": [
+            5634.0,
+            8548.0
+          ],
+          "bytes_per_op_range": [
+            7976,
+            7977
+          ],
+          "allocations_per_op": 59
+        }
+      }
+    },
+    "logs": ".cache/goway-stage4a-privacy/benchmark-{execution,consumer}.log; separate profile-run.log/profile-top.log, excluded from measurements",
+    "profile": "Separate consumer CPU profile captured; go tool pprof was unavailable, so analyzed via GOCACHE=$PWD/.cache/codex-gocache go run cmd/pprof using the installed SDK source. Dominated by runtime sleep/condition waits under host contention; CallSite accounted for 3.57% cumulative samples. No idle-host bottleneck or speedup inference is justified. Profile measurements excluded from six-round results.",
+    "status": "Historical measurements before the disabled-compilation fix; current paired benchmarks are under disabled_path_fix."
+  },
+  "review_corrections": [
+    "Preserve the existing E-prefixed schema string representation in the new compiler assertion.",
+    "Retain transaction/savepoint entry sites across isolated framework callbacks; immediate external statement callers take priority.",
+    "Attribute indented Go internal-package errors to their owning invalid.go in the compiler harness; neighboring-package regression retained.",
+    "Count rendered SQL bytes, not fragment-marker bytes, in the existing scalar expansion/conflict target resource bounds."
+  ],
+  "open_questions": [
+    "A quiet-host default-CPU timing gate remains needed; allocation parity is proved."
+  ],
+  "source_sha256": {
+    "CHANGELOG.md": "8d08d97f4d42995c1d03ca172925c371b95d5aed1d725dfba1d8cfd0fb299146",
+    "application/.foundry-gen.json": "e31312485e45ca18749cc1d4db254c04966c06effb0e5f02920092ab16fa25dc",
+    "application/builder.go": "dc568d2104803638cc78d48ccc371619828ad4a292a6ea4e88e26ce02d5c61e1",
+    "application/settings.go": "b2c47e890d4eeec092fa22519cd1c2c5e076d6586f9dcdadc9cfe82d052c2892",
+    "application/settings_foundry.gen.go": "e77b7d10770e1c3592a589105456314cc5094ee4010ec78e4a7844cca14eb5c9",
+    "application/statement_detector.go": "315be0aa32a84998de5acc60fae6148cd85c7b278c52c0cfa2bb8dadd34d8216",
+    "application/statement_detector_config_test.go": "f9c38846faae57dd72a1e4c4c9025a0f58dcf2f30b8ba4f943c9e8e9947c4709",
+    "application/statement_detector_test.go": "54efed829b9bb33f13ac227bf261ec9d6080aa7c6a5fe3ab7d9accde76ce77b8",
+    "blueprint/goway-data-layer/README.md": "25250db5a1f2a36a129baaaa34367df38259fbcc9ae7d820a7d014a05b713ff6",
+    "database/clock.go": "be9c947480c7a766f31d26b0d4e35616df43bc7e1fe3db9511fb8c69e62bee54",
+    "database/execution.go": "ed6b0cfa6843043765e59bce85bec035860e0cb0d0c8949a449f847e4a0b7451",
+    "database/instrumentation.go": "60cc80ca22426333b074ce1900f2a6d4f8f52c98e43a217289ed05e05c25a6b2",
+    "database/orm/query.go": "7fb8b5c5d10f62d7640fd3ce032d243fa92915df8976a203aaeed9307e770e99",
+    "database/orm/raw_test.go": "52c5e27ba86b3f0d78e828b39ae4bb455a21411c7bc07a399cf43d689974b3c0",
+    "database/orm/statement_detector_test.go": "b3b07073b287a15583ebd649ca25066c2b8d47ea421ef5ad3e1d77e4935e404f",
+    "database/orm/write.go": "5db22eb2ca81f4b1d791f36022c810ac6d9b47acbfc98c5e35f10cfa75cd771f",
+    "database/query/compiler.go": "66bdd635dc7da92a344420d5b0f4bd3877152aa97b932181141bd3e9e8c8f2ec",
+    "database/query/core_metadata.go": "088aefe5b5f8fe76f0f1d15a2a582a19d8f83ab13c9077109919ecfa7c98e0b5",
+    "database/query/execute_autocommit.go": "6ec15adb6b15fb109662ad5190bf403524e4d23adcd2ce8a2c0c780226c1cd06",
+    "database/query/execute_mutation.go": "adffbc0757a7065e8f8fd9efba91c7b15311113995c02b357fd9d48916166cfb",
+    "database/query/execution.go": "71b3d3b9c4b1b79b750779f28e797b4cff923125fbfe66013c076512864f5f00",
+    "database/query/explain.go": "9e14b8d340bddaaff138c785612c8af1cc6986f362a52ea694fbb73ba5ae8ea5",
+    "database/query/insert_select.go": "5e50250b21bba2d5c50eeff71ebc622ffab79ffa9572d1d2deee6d432f69f858",
+    "database/query/interval_operation_test.go": "bcbad602c582de5eaf66b0858efa7be349f07608ab5b707b34c5dcc98d6467f8",
+    "database/query/prune_batch.go": "ef2ae1060062e7132eef6a501e25b3b0aa2353b4a40e26b96d2f211adc0ddfee",
+    "database/query/read_lifecycle.go": "cf1c1908a391d670c77d0317fd9787c0dcf3051e7c5b09bb63997882e88a21f1",
+    "database/query/read_result.go": "8884d8a49bb4c73949e58c7a6e2039209fbacc4a63af9cd724417c5b95ddbae0",
+    "database/query/relation_aggregate_loading.go": "6cf6b73472a06e69ee8215837e2288a28b5f83551a12bdb752295455c5e07910",
+    "database/query/relation_pivot_sync.go": "e2d02093f85c76aaab496557a292ff15f6e76f4dc86071b638f64bfaaaa3b2df",
+    "database/query/relation_through_select.go": "0303da47edd12f329b1b47d4fc68c3dddaa82ba28828b2d407dfa1247ed44f36",
+    "database/query/set_write.go": "e915fb67893f19dff2515fb61aff77db72c6be626a8cfa7f54c9aa701ec2bfde",
+    "database/query/source_write_execution.go": "5068a2eac31f3f0b4b34a77c6163450dd0aeefa4fc84fee2d301109cc3827840",
+    "database/query/statement_shape_alloc_test.go": "bc5886b2d4a99e9167974466e8ccb48c78e73ae3506ad0ef630125959ecc57eb",
+    "database/savepoint.go": "0776bfeb537ac1a44db75a97e3306134e258aecf9586993d7f9fb85f84f8b7d1",
+    "database/statement_detector.go": "b80194fbf699c4ee2d7635868efc911977606ff0b9a1aa54fce4276111afb2aa",
+    "database/statement_detector_internal_test.go": "d6cddcd79fb282fe771dcbe71c021f670555357c8d2164d39f29fa88161a1a27",
+    "database/statement_detector_test.go": "7af98b0425ffc82a39fb03437cd6d6db96169a77a9b6a3c162a821e9935db1c8",
+    "database/transaction.go": "302f456f587d8d14b6453269937904585fa86800d8cc7949608df8ae3b28739c",
+    "docs/guides/database-runtime.md": "14df3fbafc53f2df19de1360a58905e192aced5624f45a72c0947b8f7427ec20",
+    "http/statement_detector.go": "69d72ab495ede006ec840d717a31871561b8b3a40d5bb6a3f4057b6ee2880f00",
+    "http/statement_detector_test.go": "4854f7e5e131aa334c3ac2a51b59862f677fd0c2155a416875a5d82f2117db72",
+    "infrastructure/providers.go": "8596a492d4bd031197d7c616312f28174c078cd372851e47fd1e1349b46adaf9",
+    "infrastructure/settings.go": "6b925f74b72ea8fc37ab5212b0628600c90274d55327d6ecb34cfb2c07095947",
+    "internal/ormcore/source.go": "036b28e0755ac6a7f0d14fd18c95a039694ba85a91a4d61e05f906d908741337",
+    "internal/querycore/compile_conflict_target.go": "3cd05efcf85f988b1fb340789f6fe6fa8d68a6660b7cc8480045fa477f033df3",
+    "internal/querycore/compile_insert_select.go": "77682d4c8eecc6c40b822f8242634a5cdf4ac41b536bde24684e89aae7e95981",
+    "internal/querycore/compile_source_write.go": "e798fb17915dbf0721ff3dad2b31226fb163192125341106066bfea68b0b1708",
+    "internal/querycore/compiler.go": "560d10b4ef99747c44c6b155c27201abd39f8d5418a1deeeb33de0f35aa352d2",
+    "internal/querycore/mutation_core.go": "892059ec4fa74362c1b12a1ae276debd74f24d60d4c9d4fa3cdc6b9709f30cb5",
+    "internal/querycore/query_core.go": "f8d771159aac8986f96f78cd07b5d4ee22400b3ce2928b28d201e5183c02b2e3",
+    "internal/querycore/scalar_operation.go": "ab08e1f2af633c980ea6332065098f39cf195ecb3f994efc03be0b42beab2553",
+    "internal/querycore/schema_literal.go": "df54c1c64d5691e035bf8f1822b87af75d9e071ce73393216c3986fbf463d997",
+    "internal/querycore/statement_shape.go": "4db299f3359ab8f30450dbb9965f284b2b19fb1d0765dfcdd678fb8a21946a88",
+    "internal/querycore/statement_shape_alloc_test.go": "40d2ab9c0464a90237488b6aa249f3de399252215c66e6064b32156fe735c2b0",
+    "internal/querycore/statement_shape_test.go": "5bda51e40e1a0627d72c2f30dba7440561eef6c33ab353836f90efef48e2f734",
+    "internal/querycore/value_index.go": "fda6c6bcf61bc09f1ac391faea835a9fa0115faf6dffd02b5fe75dd7d46c7a9f",
+    "internal/statementmeta/callsite.go": "70691214145f59a2460b1f14aa878812588b53feedc4db1f83582f9a2ade6cfd",
+    "internal/statementmeta/context.go": "0d74de2a2b1af606bb86e4acd5640eaa419721669ade9a5e3c525c03ca1ad970",
+    "internal/statementmeta/context_test.go": "bb75f6b51c475454df49e5a5abb74de29e1dd6b5afb5ea4c70814461350984d4",
+    "internal/statementshape/normalize.go": "916aebc976905407318ca9c3f175baa2098f35ed083abd1e3631df68f47cc8d4",
+    "internal/statementshape/normalize_test.go": "be6d8d10052bbc9c5a49782e4c5355743a44aa9625214b2a121bf773037e93d6",
+    "testkit/dbassert/statement_shapes.go": "a002e65592a5c878cff7d4471c24902201c5a37ffc5d2b2adfef78fcf5fd397c",
+    "testkit/dbassert/statement_shapes_test.go": "1d1e3a1bd01114b0b311e118203b178277a9c83a93a2a44fb21859473c6896b8",
+    "testkit/dbassert/statement_with_test.go": "9a496bcef93ef2f627b9e45e8c8e83e325edc5d47fd36c5f37a57fb548592a50",
+    "tests/fixtures/consumer/bootstrap/.foundry-gen.json": "3d358595a3a40d3a29c22a01f26ebc05cd151836270f03ba9903489b52a78503",
+    "tests/fixtures/consumer/bootstrap/settings_foundry.gen.go": "d77cf966214b096504907ef7002effb0c83f878d2e2c0a6ed1403852beb6ad68",
+    "tests/fixtures/goway/compiler_batch_parser_test.go": "1af60ce577d25431b8dbd2baa5780f65ab5743a72b13bd230adf963570864f0c",
+    "tests/fixtures/goway/compiler_batch_test.go": "8af03f60e4a065ca96de7e91dd7254bcf2eb5123ccc86b82548cc0d720549422",
+    "tests/fixtures/goway/compiler_cases_test.go": "59e9fdd5a0ebdc4db0ab91a45fa9d2fc53ba9309fecda7490af402d1737db421",
+    "tests/fixtures/goway/golden_driver_test.go": "25f4134b6f21b0084d18f6f1951f0e3b7bc0156e633415beac5702f6f40dd78c",
+    "tests/fixtures/goway/golden_new_queries_test.go": "0a16a310ffb576d6b6dcde0a488be31e9ee483cfde16feb045d76cacef017658",
+    "tests/fixtures/goway/golden_old_queries_test.go": "03a69642ed430ebca2dac1493bc967829d7adac8f23322118f2cfc73d94d4031",
+    "tests/fixtures/goway/statement_detector_test.go": "c71bc1be5fb987a5515617e54585d87e5c06e39f50e92b749f75c84d2c861501",
+    "tests/fixtures/goway/testdata/compilefail/trusted_shape_internal/invalid.go": "2083469408e694b3e33723b432f686fba5477a6dd85322c2e5fb6ab0547f0a1c"
+  },
+  "acceptance_before_disabled_fix": {
+    "build": {
+      "command": "GOCACHE=$PWD/.cache/codex-gocache go build ./...",
+      "result": "passed; build-final.log"
+    },
+    "vet": {
+      "command": "GOCACHE=$PWD/.cache/codex-gocache go vet ./database/... ./internal/... ./testkit/... ./http/... ./application/...",
+      "result": "passed; vet-final.log"
+    },
+    "race": {
+      "command": "go test -race ./database/... ./internal/querycore/... ./internal/ormcore/... ./internal/statementmeta/... ./internal/statementshape/... ./testkit/... ./http/... ./application/... ./infrastructure/...",
+      "result": "passed in segments; initial race.log, corrected schema-literal expectation in race-correction.log, sandbox-blocked loopback packages in race-native.log, changed transaction/callsite/SQL-size paths in race-final.log. Final Report fingerprint regression passed (race-report-fingerprints.log)."
+    },
+    "generate": {
+      "command": "GOCACHE=$PWD/.cache/codex-gocache make generate-check",
+      "result": "passed all 22 scopes; generate.log"
+    },
+    "fixture": {
+      "command": "cd tests/fixtures/goway && go vet ./... && go test ./... (root task cache)",
+      "result": "passed; fixture-vet-final.log, fixture-test-final.log. Initial internal-import diagnostic attribution and transaction caller fallback failures corrected; all existing footprint ceilings unchanged."
+    },
+    "docs": {
+      "command": "make docs-check",
+      "result": "passed; docs.log"
+    },
+    "format": {
+      "command": "gofmt -l",
+      "result": "clean across 4749 Go files tracked or unignored in this worktree; gofmt.log empty; git diff --check clean"
+    },
+    "logs": ".cache/goway-stage4a-privacy"
+  },
+  "acceptance": {
+    "race": {
+      "command": "GOCACHE=$PWD/.cache/codex-gocache go test -race ./internal/querycore/... ./database/... ./internal/ormcore/... ./testkit/... ./http/...",
+      "result": "passed natively, including loopback HTTP tests; .cache/goway-stage4a-disabled-fix/race.log"
+    },
+    "fixture": {
+      "command": "cd tests/fixtures/goway && GOCACHE=<root>/.cache/codex-gocache go test ./...",
+      "result": "passed, including trusted shapes, golden SQL, compile-fail and unchanged footprint ceilings; fixture.log"
+    },
+    "format": {
+      "command": "gofmt -l (tracked/unignored Go files)",
+      "result": "clean across tracked/unignored Go files; gofmt.log empty; git diff --check clean"
+    },
+    "docs": {
+      "command": "GOCACHE=$PWD/.cache/codex-gocache make docs-check",
+      "result": "passed; .cache/goway-stage4a-disabled-fix/docs.log"
+    },
+    "benchmark": {
+      "command": "Six paired rounds of HEAD/worktree bench binaries: -test.run=^$ -test.bench=^Benchmark(ChainBuild|ChainCompile|Hydrate1000)$ -test.benchmem -test.count=1; alternating pair order",
+      "result": "allocation gates pass: ChainCompile 56 and Hydrate1000 5065; default-CPU latency gate remains inconclusive. All raw logs retained."
+    }
+  },
+  "disabled_path_fix": {
+    "owner": "internal/querycore/statement_shape.go:20 Compiler.BeginStatement(ctx) clears previous fragments, binds ScopeContext, and calls TrackShape only when statementmeta.Active(ctx) is true. Re-evaluated at every complete statement compile.",
+    "entrypoints": [
+      "QueryCore.CompileModel",
+      "CompileRead",
+      "QueryCore.CompileMutation",
+      "QueryCore.CompileInsert",
+      "QueryCore.CompileInsertSelect",
+      "QueryCore.CompileSourceWrite",
+      "database/query compileRelationAggregate",
+      "database/query ThroughRelation.compileThrough"
+    ],
+    "context_audit": {
+      "orm_reads": "database/orm/query.go:336,368; locked reads share compileRead. internal/ormcore/source.go:123 passes actual ctx to CompileRead.",
+      "orm_writes": "database/orm/write.go:313 rebinds ast.ScopeContext before compilation, including autocommit, prepared/transaction writes and batches.",
+      "orm_relations_cursor_chunk": "database/orm/relation.go:199; cursor.go:22; chunk.go:151,207.",
+      "old_reads": "database/query/execution.go:38,66,122,137; read_result.go binds scopeContext; scope_compile.go compileIn overrides stored contexts.",
+      "old_writes": "database/query/execute_mutation.go:80; execute_insert.go:20,57; source_write_execution.go:66,91; insert_select.go:57,72; all before per-execution compile.",
+      "old_relation_cursor_chunk": "Relation compilers receive ctx directly; cursor_pagination.go:111 and chunk.go:187 rebind inContext; result cursors use compileIn(ctx)/All(ctx)."
+    },
+    "guards": [
+      "internal/querycore/statement_shape_alloc_test.go: inactive model read/mutation AllocsPerRun equals low-level compiler control, with equal SQL/bindings and empty shape, for nil/background contexts.",
+      "Compiler.BeginStatement active/inactive/active/nil reuse proves fragment state nil when inactive.",
+      "database/query/statement_shape_alloc_test.go: relation batch AllocsPerRun equals low-level SELECT control; through/aggregate compiles re-evaluate active/inactive scope; compileIn overrides a stored active scope."
+    ],
+    "benchmark": {
+      "baseline_commit": "35f8d45377ba84aaebe0f7d9615d7eae17dc5e51",
+      "baseline_method": "Pristine git archive HEAD extracted to task-owned /private/tmp directory; read-only git commands only. Bench executables compiled separately using the same warm task cache. Benchmark source files are byte-identical across baseline/worktree.",
+      "platform": "go1.27.1 darwin/arm64, Apple M4 Max; default GOMAXPROCS 16; explicit -test.cpu=1 only in labelled diagnostic control.",
+      "conditions": "Initial load 12.25/17.47/16.46; later 33.79/20.50/17.58 and 18.49/20.88/18.50. Other compiler/UI/system activity observed. No workloads stopped or shared caches cleared.",
+      "method": "Six paired full-suite rounds, order alternates HEAD/worktree then worktree/HEAD. Additional six focused ChainCompile pairs at 3s and six explicitly single-CPU full-suite diagnostic pairs retained separately. No samples discarded. Hydrate validates all 1000 rows and exactly one query/op; ChainCompile errors fail. Profiles excluded from timing results.",
+      "results": {
+        "round": {
+          "ChainCompile": {
+            "head": {
+              "samples": [
+                {
+                  "ns_per_op": 1976.0,
+                  "bytes_per_op": 3506,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 3242.0,
+                  "bytes_per_op": 3507,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 2079.0,
+                  "bytes_per_op": 3507,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 2102.0,
+                  "bytes_per_op": 3507,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 2095.0,
+                  "bytes_per_op": 3507,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 1994.0,
+                  "bytes_per_op": 3507,
+                  "allocs_per_op": 56
+                }
+              ],
+              "median_ns_per_op": 2087.0,
+              "range_ns_per_op": [
+                1976.0,
+                3242.0
+              ],
+              "allocs_per_op": [
+                56
+              ],
+              "bytes_per_op_range": [
+                3506,
+                3507
+              ]
+            },
+            "worktree": {
+              "samples": [
+                {
+                  "ns_per_op": 2830.0,
+                  "bytes_per_op": 3523,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 2102.0,
+                  "bytes_per_op": 3523,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 2979.0,
+                  "bytes_per_op": 3523,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 2095.0,
+                  "bytes_per_op": 3523,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 1991.0,
+                  "bytes_per_op": 3522,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 3950.0,
+                  "bytes_per_op": 3523,
+                  "allocs_per_op": 56
+                }
+              ],
+              "median_ns_per_op": 2466.0,
+              "range_ns_per_op": [
+                1991.0,
+                3950.0
+              ],
+              "allocs_per_op": [
+                56
+              ],
+              "bytes_per_op_range": [
+                3522,
+                3523
+              ]
+            },
+            "median_change_percent": 18.160038332534747
+          },
+          "ChainBuild": {
+            "head": {
+              "samples": [
+                {
+                  "ns_per_op": 162.9,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                },
+                {
+                  "ns_per_op": 161.3,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                },
+                {
+                  "ns_per_op": 163.4,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                },
+                {
+                  "ns_per_op": 161.0,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                },
+                {
+                  "ns_per_op": 165.7,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                },
+                {
+                  "ns_per_op": 161.1,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                }
+              ],
+              "median_ns_per_op": 162.10000000000002,
+              "range_ns_per_op": [
+                161.0,
+                165.7
+              ],
+              "allocs_per_op": [
+                6
+              ],
+              "bytes_per_op_range": [
+                240,
+                240
+              ]
+            },
+            "worktree": {
+              "samples": [
+                {
+                  "ns_per_op": 160.1,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                },
+                {
+                  "ns_per_op": 162.7,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                },
+                {
+                  "ns_per_op": 155.5,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                },
+                {
+                  "ns_per_op": 208.9,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                },
+                {
+                  "ns_per_op": 167.7,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                },
+                {
+                  "ns_per_op": 280.4,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                }
+              ],
+              "median_ns_per_op": 165.2,
+              "range_ns_per_op": [
+                155.5,
+                280.4
+              ],
+              "allocs_per_op": [
+                6
+              ],
+              "bytes_per_op_range": [
+                240,
+                240
+              ]
+            },
+            "median_change_percent": 1.9123997532387138
+          },
+          "Hydrate1000": {
+            "head": {
+              "samples": [
+                {
+                  "ns_per_op": 219401.0,
+                  "bytes_per_op": 286474,
+                  "allocs_per_op": 5065
+                },
+                {
+                  "ns_per_op": 212914.0,
+                  "bytes_per_op": 286475,
+                  "allocs_per_op": 5065
+                },
+                {
+                  "ns_per_op": 214113.0,
+                  "bytes_per_op": 286475,
+                  "allocs_per_op": 5065
+                },
+                {
+                  "ns_per_op": 220115.0,
+                  "bytes_per_op": 286474,
+                  "allocs_per_op": 5065
+                },
+                {
+                  "ns_per_op": 228424.0,
+                  "bytes_per_op": 286474,
+                  "allocs_per_op": 5065
+                },
+                {
+                  "ns_per_op": 213553.0,
+                  "bytes_per_op": 286475,
+                  "allocs_per_op": 5065
+                }
+              ],
+              "median_ns_per_op": 216757.0,
+              "range_ns_per_op": [
+                212914.0,
+                228424.0
+              ],
+              "allocs_per_op": [
+                5065
+              ],
+              "bytes_per_op_range": [
+                286474,
+                286475
+              ]
+            },
+            "worktree": {
+              "samples": [
+                {
+                  "ns_per_op": 221462.0,
+                  "bytes_per_op": 286492,
+                  "allocs_per_op": 5065
+                },
+                {
+                  "ns_per_op": 266830.0,
+                  "bytes_per_op": 286493,
+                  "allocs_per_op": 5065
+                },
+                {
+                  "ns_per_op": 215067.0,
+                  "bytes_per_op": 286491,
+                  "allocs_per_op": 5065
+                },
+                {
+                  "ns_per_op": 227041.0,
+                  "bytes_per_op": 286490,
+                  "allocs_per_op": 5065
+                },
+                {
+                  "ns_per_op": 207212.0,
+                  "bytes_per_op": 286490,
+                  "allocs_per_op": 5065
+                },
+                {
+                  "ns_per_op": 344641.0,
+                  "bytes_per_op": 286494,
+                  "allocs_per_op": 5065
+                }
+              ],
+              "median_ns_per_op": 224251.5,
+              "range_ns_per_op": [
+                207212.0,
+                344641.0
+              ],
+              "allocs_per_op": [
+                5065
+              ],
+              "bytes_per_op_range": [
+                286490,
+                286494
+              ]
+            },
+            "median_change_percent": 3.4575584640865076
+          }
+        },
+        "focused": {
+          "ChainCompile": {
+            "head": {
+              "samples": [
+                {
+                  "ns_per_op": 2060.0,
+                  "bytes_per_op": 3506,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 8051.0,
+                  "bytes_per_op": 3507,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 12788.0,
+                  "bytes_per_op": 3507,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 2192.0,
+                  "bytes_per_op": 3507,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 2448.0,
+                  "bytes_per_op": 3507,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 2293.0,
+                  "bytes_per_op": 3507,
+                  "allocs_per_op": 56
+                }
+              ],
+              "median_ns_per_op": 2370.5,
+              "range_ns_per_op": [
+                2060.0,
+                12788.0
+              ],
+              "allocs_per_op": [
+                56
+              ],
+              "bytes_per_op_range": [
+                3506,
+                3507
+              ]
+            },
+            "worktree": {
+              "samples": [
+                {
+                  "ns_per_op": 2284.0,
+                  "bytes_per_op": 3523,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 9143.0,
+                  "bytes_per_op": 3523,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 14261.0,
+                  "bytes_per_op": 3523,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 3888.0,
+                  "bytes_per_op": 3523,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 2510.0,
+                  "bytes_per_op": 3523,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 2755.0,
+                  "bytes_per_op": 3523,
+                  "allocs_per_op": 56
+                }
+              ],
+              "median_ns_per_op": 3321.5,
+              "range_ns_per_op": [
+                2284.0,
+                14261.0
+              ],
+              "allocs_per_op": [
+                56
+              ],
+              "bytes_per_op_range": [
+                3523,
+                3523
+              ]
+            },
+            "median_change_percent": 40.11811854039231
+          }
+        },
+        "cpu1": {
+          "ChainCompile": {
+            "head": {
+              "samples": [
+                {
+                  "ns_per_op": 20518.0,
+                  "bytes_per_op": 3504,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 3072.0,
+                  "bytes_per_op": 3504,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 3050.0,
+                  "bytes_per_op": 3504,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 2755.0,
+                  "bytes_per_op": 3504,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 6431.0,
+                  "bytes_per_op": 3504,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 2657.0,
+                  "bytes_per_op": 3504,
+                  "allocs_per_op": 56
+                }
+              ],
+              "median_ns_per_op": 3061.0,
+              "range_ns_per_op": [
+                2657.0,
+                20518.0
+              ],
+              "allocs_per_op": [
+                56
+              ],
+              "bytes_per_op_range": [
+                3504,
+                3504
+              ]
+            },
+            "worktree": {
+              "samples": [
+                {
+                  "ns_per_op": 12498.0,
+                  "bytes_per_op": 3520,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 4460.0,
+                  "bytes_per_op": 3520,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 3165.0,
+                  "bytes_per_op": 3520,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 3704.0,
+                  "bytes_per_op": 3520,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 2711.0,
+                  "bytes_per_op": 3520,
+                  "allocs_per_op": 56
+                },
+                {
+                  "ns_per_op": 5080.0,
+                  "bytes_per_op": 3520,
+                  "allocs_per_op": 56
+                }
+              ],
+              "median_ns_per_op": 4082.0,
+              "range_ns_per_op": [
+                2711.0,
+                12498.0
+              ],
+              "allocs_per_op": [
+                56
+              ],
+              "bytes_per_op_range": [
+                3520,
+                3520
+              ]
+            },
+            "median_change_percent": 33.35511270826528
+          },
+          "ChainBuild": {
+            "head": {
+              "samples": [
+                {
+                  "ns_per_op": 1047.0,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                },
+                {
+                  "ns_per_op": 266.0,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                },
+                {
+                  "ns_per_op": 252.4,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                },
+                {
+                  "ns_per_op": 449.9,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                },
+                {
+                  "ns_per_op": 252.3,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                },
+                {
+                  "ns_per_op": 245.6,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                }
+              ],
+              "median_ns_per_op": 259.2,
+              "range_ns_per_op": [
+                245.6,
+                1047.0
+              ],
+              "allocs_per_op": [
+                6
+              ],
+              "bytes_per_op_range": [
+                240,
+                240
+              ]
+            },
+            "worktree": {
+              "samples": [
+                {
+                  "ns_per_op": 1619.0,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                },
+                {
+                  "ns_per_op": 289.9,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                },
+                {
+                  "ns_per_op": 235.6,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                },
+                {
+                  "ns_per_op": 255.4,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                },
+                {
+                  "ns_per_op": 227.4,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                },
+                {
+                  "ns_per_op": 234.7,
+                  "bytes_per_op": 240,
+                  "allocs_per_op": 6
+                }
+              ],
+              "median_ns_per_op": 245.5,
+              "range_ns_per_op": [
+                227.4,
+                1619.0
+              ],
+              "allocs_per_op": [
+                6
+              ],
+              "bytes_per_op_range": [
+                240,
+                240
+              ]
+            },
+            "median_change_percent": -5.285493827160492
+          },
+          "Hydrate1000": {
+            "head": {
+              "samples": [
+                {
+                  "ns_per_op": 1369971.0,
+                  "bytes_per_op": 286472,
+                  "allocs_per_op": 5065
+                },
+                {
+                  "ns_per_op": 338853.0,
+                  "bytes_per_op": 286472,
+                  "allocs_per_op": 5065
+                },
+                {
+                  "ns_per_op": 295225.0,
+                  "bytes_per_op": 286472,
+                  "allocs_per_op": 5065
+                },
+                {
+                  "ns_per_op": 1080965.0,
+                  "bytes_per_op": 286472,
+                  "allocs_per_op": 5065
+                },
+                {
+                  "ns_per_op": 282279.0,
+                  "bytes_per_op": 286472,
+                  "allocs_per_op": 5065
+                },
+                {
+                  "ns_per_op": 278912.0,
+                  "bytes_per_op": 286472,
+                  "allocs_per_op": 5065
+                }
+              ],
+              "median_ns_per_op": 317039.0,
+              "range_ns_per_op": [
+                278912.0,
+                1369971.0
+              ],
+              "allocs_per_op": [
+                5065
+              ],
+              "bytes_per_op_range": [
+                286472,
+                286472
+              ]
+            },
+            "worktree": {
+              "samples": [
+                {
+                  "ns_per_op": 365540.0,
+                  "bytes_per_op": 286488,
+                  "allocs_per_op": 5065
+                },
+                {
+                  "ns_per_op": 334664.0,
+                  "bytes_per_op": 286488,
+                  "allocs_per_op": 5065
+                },
+                {
+                  "ns_per_op": 279102.0,
+                  "bytes_per_op": 286488,
+                  "allocs_per_op": 5065
+                },
+                {
+                  "ns_per_op": 299053.0,
+                  "bytes_per_op": 286488,
+                  "allocs_per_op": 5065
+                },
+                {
+                  "ns_per_op": 300840.0,
+                  "bytes_per_op": 286488,
+                  "allocs_per_op": 5065
+                },
+                {
+                  "ns_per_op": 284750.0,
+                  "bytes_per_op": 286488,
+                  "allocs_per_op": 5065
+                }
+              ],
+              "median_ns_per_op": 299946.5,
+              "range_ns_per_op": [
+                279102.0,
+                365540.0
+              ],
+              "allocs_per_op": [
+                5065
+              ],
+              "bytes_per_op_range": [
+                286488,
+                286488
+              ]
+            },
+            "median_change_percent": -5.39129255391293
+          }
+        }
+      },
+      "verdict": "Allocation gates restored exactly. Default full-suite medians ChainCompile 2087->2466 ns (+18.16%); ranges 1976..3242 versus 1991..3950. Focused and CPU1 controls also unstable, including multi-fold spikes on both binaries. Timing parity cannot be claimed; needs a quiet-host gate. There is a constant ~16 B/op storage-size increase on the pre-existing compiled-statement allocation, not a new allocation or allocated shape string.",
+      "profile": "Separate HEAD/worktree CPU profiles analyzed via installed SDK source (go run cmd/pprof). Similar compiler CPU work; runtime waits dominate unfiltered samples. Profiles do not establish idle-host latency parity.",
+      "logs": ".cache/goway-stage4a-disabled-fix",
+      "source_sha256": {
+        "tests/fixtures/goway/bench/chain_test.go": "9db283b8926487f0a88e737060f31e8fd2c35c380db1d1e5f9caa91dd785a505",
+        "tests/fixtures/goway/bench/hydrate_test.go": "40f9409ee7dde623d57815e24fa1c8d1be9aeb7c66863119efefed1bcf70a254",
+        "tests/fixtures/goway/bench/insert_test.go": "a3033a10ed83cecdde62fad173bec909cbdce35328ebaf6171e52303a05449fb"
+      }
+    }
+  }
+}

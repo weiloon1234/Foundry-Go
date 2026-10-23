@@ -61,7 +61,7 @@ func (q Query[M]) PruneBatch(ctx context.Context, writer database.Transactor, si
 		if err != nil {
 			return 0, err
 		}
-		result, err := tx.Exec(ctx, prepared.sql, prepared.arguments...)
+		result, err := tx.Exec(prepared.executionContext(ctx), prepared.sql, prepared.arguments...)
 		return result.RowsAffected, err
 	})
 }

@@ -257,7 +257,7 @@ func matchesCompilerDiagnostic(output string, item compilerCase) bool {
 				return true
 			}
 			block.Reset()
-			file := strings.ReplaceAll(match[1], `\`, "/")
+			file := strings.ReplaceAll(strings.TrimSpace(match[1]), `\`, "/")
 			owned = file == "invalid.go" || strings.HasSuffix("/"+file, "/testdata/compilefail/"+item.name+"/invalid.go")
 			if owned {
 				block.WriteString(match[2])

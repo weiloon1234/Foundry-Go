@@ -114,3 +114,65 @@ operations to compiled SELECT queries. Locked/transaction sources retain their
 ## Optional read endpoint
 
 [Primary/read routing](database-routing.md) preserves raw primary SQL and transaction ownership while routing generated SELECTs through an optional read capability. It includes separate endpoint health, an explicit combined connection budget and shared shutdown ownership.
+
+## Detecting repeated statement shapes
+
+N+1 detection is opt-in and reports repeated SQL shapes, not proof of an inefficient
+query. For configured HTTP applications, set
+`settings.HTTP.StatementDetector.Enabled = true`. Defaults allow 10 executions per
+shape and retain at most 128 shapes per request; configure
+`HTTP.StatementDetector.Limits.Threshold` (1–1,000,000) and `MaxShapes`
+(1–1,024). Outside
+`Services.Namespace.Environment == "development"`, also set
+`AllowNonDevelopment` explicitly. Disabled installs no middleware or observer.
+
+The application shares one detector across its named database pools; each request
+has isolated counters. Existing query observers and the slow-query fingerprint
+retain their behavior. Warnings use the application logger after the request.
+Concurrent queries count safely; close rows before inspecting a scope because
+query completion is reported when the stream closes. Framework savepoint commands still reach configured query observers but are
+excluded from detector counts using their execution-path provenance. BEGIN,
+COMMIT and ROLLBACK use driver methods and emit no statement events. Application
+SQL is counted even when its text names transaction control. Counts include failed statements that reached execution.
+Nested scopes of the same detector replace their parent's counters.
+
+For tests or direct database assembly:
+
+```go
+detector, err := database.NewStatementDetector(database.DefaultStatementDetectorConfig())
+// Handle err, then include database.WithStatementDetector(detector) when opening pools.
+ctx, scope := detector.Begin(t.Context())
+// Execute the operation using ctx, and close all rows.
+dbassert.AssertStatementShapes(t, scope)
+```
+
+Import `testkit/dbassert` for the assertion. Only framework-compiled shapes are
+shown as SQL text. The shared compiler renders a shape alongside SQL from its
+validated declarations and AST: values become placeholders, repeated IN/ANY and
+VALUES elements collapse, and column/cast and array boundaries remain structural.
+Shape compilation starts only inside an active detector scope; inactive compiles
+retain no fragment state or shape string. Reused plans re-evaluate the execution
+context for each statement. SQL and its shape travel through private metadata, bound to
+the exact statement. No parser decides whether arbitrary SQL is safe to display.
+
+Raw/executor SQL, utility statements and anything without this metadata appear
+only as `untrusted statement <fingerprint>`. An internal bounded normalizer helps
+group equivalent raw statements; its output is never displayed. If normalization
+fails (including oversized or malformed input), the original text is hashed
+instead, never retained or printed. Fingerprints use HMAC-SHA-256 truncated to
+128 bits, with a random 256-bit key per detector instance. They are stable within
+that instance and differ across instances. Bound arguments never reach detection.
+Retained compiler shapes are capped at 16 KiB; larger ones also use a fingerprint.
+The normalizer is limited to 16 KiB and delimiter depth 64; hashing larger input
+uses bounded temporary memory but time proportional to input length.
+
+Every violation includes up to four distinct `file:line` call sites, captured at
+execution entry only when a detector scope is active. The first stack frame outside
+the framework module and runtime/testing frames identifies the caller, even when
+rows close later. Framework-owned transaction and inspection goroutines retain
+their entry call site when no immediate application frame is available. Stack inspection is bounded to 64 frames; an unavailable site
+is explicit. File paths are source locations, not SQL or argument data. Exceeding
+the shape or call-site cap marks the report incomplete: tests fail and development
+middleware logs one incomplete-observation warning per request, alongside threshold
+violations. Malformed SQL remains countable through its fingerprint and cannot
+expose literal or identifier-form values through reports, warnings or assertions.

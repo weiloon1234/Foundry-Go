@@ -43,6 +43,7 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 3.1c | Cursor/key-chunk reads and locked keyed lookup composition | Implemented; Go/fixture gates pass; unchanged contracts; existing TypeScript timestamp assertion fails on HEAD too; PostgreSQL execution belongs to lead |
 | 3.1d | Typed raw model/row hydration | Implemented; acceptance evidence below; live PostgreSQL belongs to the lead |
 | 3.1 | Complete declaration, reads, writes, typed raw hydration and model cursors | Done. Stage 3 gate passed on 2026-10-23: `make verify`, `make test-postgres` (race) and `make typescript-check` |
+| 4a | N+1 detector foundations | Privacy redesign implemented; requested acceptance passed in segments, pending lead review |
 | 4 | Full relations, pivots, through relations, eager limits, filters and relation writes | Planned |
 | 5 | Lifecycle, mutators, change sets, scopes and observers | Planned |
 | 6a | Expressions, aggregates, grouping, having and raw fragments | Planned |
@@ -687,3 +688,73 @@ sources compile/vet and skip without configuration; the lead executes them.
 Stage 3.1 is complete. The lead's Stage 3 gate on 2026-10-23 passed `make verify` (655 s),
 the full PostgreSQL race suite (`make test-postgres`, about 21 minutes) and
 `make typescript-check`, on the source committed with 3.1d.
+
+## Stage 4a statement-shape detector
+
+The injected detector composes with the existing completed-statement observer.
+Each test/request owns a bounded concurrent map. Exact-text slow-query fingerprints
+and observer events remain unchanged. Framework transaction/savepoint control is
+excluded by execution metadata, including failed commands; raw commands still count.
+No relation runtime or Query/Table methods change.
+
+Privacy is owned by the shared compiler: inside an active detector scope it
+produces readable shapes alongside SQL, with values replaced by placeholders and equivalent IN/ANY/VALUES batches
+collapsed. Private context metadata binds the shape to the executed SQL. Both old
+and new typed APIs carry it through reads, writes, relation batches, cursor/chunk,
+locked lookups and count/pagination paths. Raw SQL is displayed only as a keyed
+fingerprint, never normalized SQL text. Every violation carries bounded source
+call sites. Untrusted grouping normalization is internal and has no privacy role.
+
+Configured applications opt in through `HTTP.StatementDetector`; outside the
+`development` namespace they must also set `AllowNonDevelopment`. Disabled installs
+nothing. Shape/call-site overflow fails test assertions and logs once per request.
+See the [database guide](../../docs/guides/database-runtime.md#detecting-repeated-statement-shapes)
+and [evidence](../../docs/evidence/goway-stage4a-detector.json).
+
+Regression sources retain the 330-case failed-execution privacy matrix and add
+36 CR/LF/CRLF and nested-utility cases across Report, HTTP warnings and assertions.
+External consumers exercise old/new compiled paths, opaque raw loops, external
+call sites and varying relation-batch lengths. Internal tests cover keyed instance
+isolation, bounded call-site retention and compiler shape/value separation. The
+200-savepoint test retains unchanged observer events with no detector shapes.
+
+The privacy redesign supersedes the earlier SQL text-display parser and its
+historical measurements. Current-source acceptance passed in segments (including native reruns for
+sandbox-blocked loopback tests); exact commands and logs are in the evidence. Footprint ceilings
+remain unchanged. The earlier raw-hydration coverage additions are preserved.
+
+Privacy-redesign benchmarks: Go 1.27.1, Apple M4 Max, warm task cache; six rounds
+per case. A competing Go process used roughly 14 cores (initial load 34.98).
+Timings are indicative under contention, not a regression/speedup claim. Both
+disabled execution labels run the same nil-instrumentation code and retain
+688 B/op and 14 allocs/op.
+
+| Harness / path | Median ns/op | Range ns/op | B/op range | Allocs/op |
+| --- | ---: | ---: | ---: | ---: |
+| execution: disabled nil instrumentation | 630.05 | 586.6–887.7 | 688–688 | 14 |
+| execution: disabled not installed | 641.2 | 590.6–781.3 | 688–688 | 14 |
+| execution: enabled untrusted | 3785.5 | 3464–4988 | 6552–6552 | 36 |
+| execution: enabled trusted | 2588.5 | 2466–3106 | 1448–1448 | 17 |
+| consumer: compiled disabled | 7517.5 | 3739–10682 | 4648–4658 | 73 |
+| consumer: compiled enabled | 10472.5 | 7830–14606 | 5664–5666 | 81 |
+| consumer: raw disabled | 1731 | 1533–1899 | 1592–1595 | 29 |
+| consumer: raw enabled | 6644.5 | 5634–8548 | 7976–7977 | 59 |
+
+The consumer harness measures complete Count calls, including compilation,
+transport and hydration, with a real application call site. The execution harness
+isolates pool Exec, including enabled stack walking (no external test frame, so
+its site is unavailable). Both assert one successful driver statement per timed
+operation and exact scope counts. Neither measures HTTP/network or log output.
+
+Disabled-path follow-up: statement initialization now gates fragment tracking on
+the current execution context and clears previous tracking on compiler reuse.
+Inactive model, mutation and relation-batch allocation guards compare against
+compilation without tracking. The earlier consumer benchmark table above predates
+this correction; paired HEAD/worktree fixture measurements are in the evidence.
+
+The disabled-path allocation correction passed the requested race and fixture
+checks. Paired benchmarks restore ChainCompile to 56 allocations/op and
+Hydrate1000 to 5,065. Default-CPU medians were 2,087 → 2,466 ns for ChainCompile;
+large host-contention spikes persisted in focused and single-CPU controls, so
+latency parity remains unproven. All samples and conditions are retained in the
+evidence; no existing footprint ceiling changed.

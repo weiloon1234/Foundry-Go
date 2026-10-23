@@ -509,7 +509,8 @@ func (r ThroughRelation[M, N, P]) requireLinks(ctx context.Context, tx *database
 		return err
 	}
 	var matched int64
-	if err := database.ScanOne(ctx, tx, `SELECT COUNT(*) FROM (`+statement.sql+`) AS "foundry_links"`, statement.arguments, codec.Signed[int64]().Scan(&matched)); err != nil {
+	statement = statement.envelope(`SELECT COUNT(*) FROM (`, `) AS "foundry_links"`)
+	if err := database.ScanOne(statement.executionContext(ctx), tx, statement.sql, statement.arguments, codec.Signed[int64]().Scan(&matched)); err != nil {
 		return err
 	}
 	if matched != int64(len(created)) {

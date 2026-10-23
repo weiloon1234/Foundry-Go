@@ -12,6 +12,7 @@ import (
 type PlannedValue struct {
 	Sql       string
 	Arguments []any
+	Shape     string
 }
 
 func (c *Compiler) PlanValue(v ValueExpression) (PlannedValue, error) {
@@ -21,7 +22,8 @@ func (c *Compiler) PlanValue(v ValueExpression) (PlannedValue, error) {
 	text, err := probe.SelectedExpression(v, nil, false)
 	c.SelectNodes, c.ExpressionNodes = probe.SelectNodes, probe.ExpressionNodes
 	c.ScalarSQLBytes = probe.ScalarSQLBytes
-	return PlannedValue{Sql: text, Arguments: probe.Arguments}, err
+	compiled := probe.Statement(text)
+	return PlannedValue{Sql: compiled.SQLText, Arguments: probe.Arguments, Shape: compiled.Shape}, err
 }
 
 type ValueIndex struct {

@@ -283,7 +283,7 @@ func (c *Compiler) JsonTextScalarSQL(n OperationNode, grouped map[FieldRef]bool,
 func (c *Compiler) OperationSQL(n OperationNode, grouped map[FieldRef]bool, grouping bool) (sql string, err error) {
 	defer func() {
 		if err == nil {
-			c.ScalarSQLBytes += len(sql)
+			c.ScalarSQLBytes += len(c.render(sql, false))
 			if c.ScalarSQLBytes > MaxScalarSQLBytes {
 				sql, err = "", fault.New(fault.Invalid, "scalar SQL expansion exceeds its resource bound")
 			}
