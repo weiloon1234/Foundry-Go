@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"reflect"
-	"slices"
 	"unsafe"
 
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -12,7 +11,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/modelmeta"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
-	"github.com/weiloon1234/Foundry-Go/internal/sqlvalue"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -81,13 +79,21 @@ func bindSlot(d *declaration, ptr unsafe.Pointer, typ, target reflect.Type) *slo
 // Example: BelongsToOf(Orders.Buyer,Orders.BuyerID,Users.ID).
 type KeyColumn[M any, K comparable] interface{ ormColumn(*M) columnData[K] }
 
-type relationBudget struct{ remaining, attachments int }
+type relationBudget struct {
+	limits                 RelationLimits
+	remaining, attachments int
+}
 type relationPlan struct {
-	singular bool
-	slot     *slotCore
-	target   *tableCore
-	err      error
-	load     func(context.Context, database.Executor, unsafe.Pointer, int, *relationBudget) error
+	singular       bool
+	slot           *slotCore
+	target         *tableCore
+	local, foreign querycore.FieldRef
+	query          queryState
+	// Query-level overrides share one immutable settings value across root branches.
+	limits *RelationLimits
+	err    error
+	loaded func(unsafe.Pointer) bool
+	load   func(context.Context, database.Executor, *relationPlan, unsafe.Pointer, int, *relationBudget, int, bool) error
 }
 
 // Relation is a model-owned, immutable eager-loading descriptor. Example: q.With(OrderRelations.Buyer).
@@ -95,6 +101,13 @@ type Relation[M any] interface{ relationPlan(*M) *relationPlan }
 
 // BelongsTo loads a singular target using a local FK. Example: OrderRelations.Buyer.
 type BelongsTo[M, N any] struct {
+	_    [0]*M
+	_    [0]*N
+	plan *relationPlan
+}
+
+// HasOne loads at most one target by its FK. Example: UserRelations.Profile.
+type HasOne[M, N any] struct {
 	_    [0]*M
 	_    [0]*N
 	plan *relationPlan
@@ -108,16 +121,34 @@ type HasMany[M, N any] struct {
 }
 
 func (r BelongsTo[M, N]) relationPlan(*M) *relationPlan { return r.plan }
+func (r HasOne[M, N]) relationPlan(*M) *relationPlan    { return r.plan }
 func (r HasMany[M, N]) relationPlan(*M) *relationPlan   { return r.plan }
+func (r BelongsTo[M, N]) relationTarget(*N)             {}
+func (r HasOne[M, N]) relationTarget(*N)                {}
+func (r HasMany[M, N]) relationTarget(*N)               {}
 func (r BelongsTo[M, N]) ormError() error               { return validateRelation(r.plan, nil) }
+func (r HasOne[M, N]) ormError() error                  { return validateRelation(r.plan, nil) }
 func (r HasMany[M, N]) ormError() error                 { return validateRelation(r.plan, nil) }
 
 // BelongsToOf unifies local and target key types. Example: BelongsToOf(Orders.Buyer,Orders.BuyerID,Users.ID).
 func BelongsToOf[M, N any, K comparable](slot One[M, N], local KeyColumn[M, K], foreign KeyColumn[N, K]) BelongsTo[M, N] {
+	return BelongsTo[M, N]{plan: singularRelation(slot, local, foreign)}
+}
+
+// HasOneOf unifies the parent key and target FK and rejects multiple matches.
+// Example: HasOneOf(Users.Profile,Users.ID,Profiles.UserID).
+func HasOneOf[M, N any, K comparable](slot One[M, N], local KeyColumn[M, K], foreign KeyColumn[N, K]) HasOne[M, N] {
+	return HasOne[M, N]{plan: singularRelation(slot, local, foreign)}
+}
+
+func singularRelation[M, N any, K comparable](slot One[M, N], local KeyColumn[M, K], foreign KeyColumn[N, K]) *relationPlan {
 	p := newRelation(slot.core, local, foreign)
 	p.singular = true
 	if p.err == nil {
-		p.load = relationLoader[M, N](p, local.ormColumn(nil), foreign.ormColumn(nil), func(parent *M, group []N) error {
+		p.loaded = func(parent unsafe.Pointer) bool {
+			return (*relation.One[N])(unsafe.Add(parent, slot.core.offset)).IsLoaded()
+		}
+		p.load = relationLoader[M, N](local.ormColumn(nil), foreign.ormColumn(nil), func(parent *M, group []N) error {
 			var item value.Optional[N]
 			if len(group) == 1 {
 				item = value.Set(group[0])
@@ -126,14 +157,17 @@ func BelongsToOf[M, N any, K comparable](slot One[M, N], local KeyColumn[M, K], 
 			return nil
 		})
 	}
-	return BelongsTo[M, N]{plan: p}
+	return p
 }
 
 // HasManyOf unifies parent keys with target FKs. Example: HasManyOf(Users.Orders,Users.ID,Orders.BuyerID).
 func HasManyOf[M, N any, K comparable](slot Many[M, N], local KeyColumn[M, K], foreign KeyColumn[N, K]) HasMany[M, N] {
 	p := newRelation(slot.core, local, foreign)
 	if p.err == nil {
-		p.load = relationLoader[M, N](p, local.ormColumn(nil), foreign.ormColumn(nil), func(parent *M, group []N) error {
+		p.loaded = func(parent unsafe.Pointer) bool {
+			return (*relation.Many[N])(unsafe.Add(parent, slot.core.offset)).IsLoaded()
+		}
+		p.load = relationLoader[M, N](local.ormColumn(nil), foreign.ormColumn(nil), func(parent *M, group []N) error {
 			*(*relation.Many[N])(unsafe.Add(unsafe.Pointer(parent), slot.core.offset)) = relation.FoundryCollection(sqlowner.Seal{}, group)
 			return nil
 		})
@@ -147,11 +181,13 @@ func newRelation[M, N any, K comparable](slot *slotCore, local KeyColumn[M, K], 
 		return p
 	}
 	a, b := local.ormColumn(nil), foreign.ormColumn(nil)
-	if a.core == nil || b.core == nil {
+	if a.core == nil || b.core == nil || a.core.owner == nil || b.core.owner == nil {
 		p.err = invalid("relation requires bound keys")
 		return p
 	}
 	p.target = b.core.owner
+	p.local, p.foreign = querycore.FieldRef{Table: a.core.owner.model.Table, Column: a.core.metadata.Name}, querycore.FieldRef{Table: b.core.owner.model.Table, Column: b.core.metadata.Name}
+	p.query = newQuery(p.target)
 	if slot.owner == nil || slot.owner != a.core.owner {
 		p.err = invalid("relation local key belongs to a different table declaration")
 	}
@@ -163,164 +199,6 @@ func newRelation[M, N any, K comparable](slot *slotCore, local KeyColumn[M, K], 
 }
 func nilInterface(v any) bool {
 	return v == nil || reflect.ValueOf(v).Kind() == reflect.Pointer && reflect.ValueOf(v).IsNil()
-}
-func validateRelation(p *relationPlan, owner *tableCore) error {
-	if p == nil {
-		return invalid("nil relation descriptor")
-	}
-	if p.err != nil {
-		return p.err
-	}
-	if p.slot == nil || p.load == nil {
-		return invalid("relation requires a bound slot and loader")
-	}
-	if owner != nil && owner != p.slot.owner {
-		return invalid("relation belongs to a different table declaration")
-	}
-	if err := errors.Join(tableError(p.slot.owner), tableError(p.target)); err != nil {
-		return err
-	}
-	return errors.Join(newQuery(p.target).ast.Validate(), p.target.model.ValidateGlobalScopes())
-}
-
-// The typed loader is instantiated by BelongsToOf/HasManyOf at declaration time.
-// Importers carry only relationPlan and invoke its function field.
-func relationLoader[M, N any, K comparable](p *relationPlan, local columnData[K], foreign columnData[K], assign func(*M, []N) error) func(context.Context, database.Executor, unsafe.Pointer, int, *relationBudget) error {
-	return func(ctx context.Context, ex database.Executor, base unsafe.Pointer, count int, budget *relationBudget) error {
-		parents := unsafe.Slice((*M)(base), count)
-		limits := querycore.DefaultRelationLimits()
-		positions, unique, seen, err := querycore.RelationKeys(ctx, count, limits.BatchSize, func(i int) (K, sqlvalue.Value, bool, error) {
-			return readRelationKey(local, unsafe.Pointer(&parents[i]))
-		})
-		if err != nil {
-			return err
-		}
-		target := newQuery(p.target)
-		target.ast.ScopeContext = ctx
-		if err := validateQuery(target); err != nil {
-			return err
-		}
-		target.ast, err = target.ast.StableOrder()
-		if err != nil {
-			return err
-		}
-		var rows []N
-		err = querycore.FetchRelationBatches(len(unique), limits.BatchSize, &budget.remaining, func(start, end, limit int) (int, error) {
-			q := where(target, []Predicate[N]{comparison[N](foreign, querycore.In, unique[start:end])})
-			q.ast.Limit = value.Set(limit)
-			batch, err := allRows[N](ctx, ex, q)
-			if err != nil {
-				return 0, err
-			}
-			rows = append(rows, batch...)
-			return len(batch), nil
-		})
-		if err != nil {
-			return err
-		}
-		groups, err := querycore.GroupRelationRows(rows, seen, func(row N) (sqlvalue.Value, bool, error) {
-			_, identity, present, err := readRelationKey(foreign, unsafe.Pointer(&row))
-			return identity, present, err
-		})
-		if err != nil {
-			return err
-		}
-		for i, position := range positions {
-			key, _ := position.Get()
-			group := groups[key]
-			if p.singular && len(group) > 1 {
-				return database.NewError("singular relation cardinality", database.TooManyRows)
-			}
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			if err := querycore.ConsumeRelationBudget(&budget.attachments, len(group), true); err != nil {
-				return err
-			}
-			if err := assign(&parents[i], group); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-}
-func readRelationKey[V any](column columnData[V], base unsafe.Pointer) (V, sqlvalue.Value, bool, error) {
-	raw, err := column.core.get(base)
-	if err != nil || raw == nil {
-		return *new(V), sqlvalue.Value{}, false, err
-	}
-	v, err := column.decode(raw)
-	if err != nil {
-		return v, sqlvalue.Value{}, false, err
-	}
-	identity, err := querycore.RecordEqualityKey(column.core.kind, raw)
-	return v, identity, true, err
-}
-
-// With adds batched eager loading. Example: Orders.Query().With(OrderRelations.Buyer).
-func (q Query[M]) With(rels ...Relation[M]) Query[M] {
-	q.state.relations = slices.Clone(q.state.relations)
-	for _, r := range rels {
-		if nilInterface(r) {
-			q.state.relations = append(q.state.relations, nil)
-		} else {
-			q.state.relations = append(q.state.relations, r.relationPlan(nil))
-		}
-	}
-	return q
-}
-func validateRelations(q queryState) error {
-	if len(q.relations) == 0 {
-		return nil
-	}
-	owner := q.table
-	if len(q.relations) > querycore.MaxExpressionNodes {
-		return invalid("too many relation descriptors")
-	}
-	seen := map[string]bool{}
-	for _, p := range q.relations {
-		if err := validateRelation(p, owner); err != nil {
-			return err
-		}
-		if owner == nil {
-			owner = p.slot.owner
-		}
-		if seen[p.slot.name] {
-			return invalid("relation slot was registered more than once")
-		}
-		seen[p.slot.name] = true
-	}
-	return nil
-}
-func loadPlans(ctx context.Context, ex database.Executor, base unsafe.Pointer, count int, plans []*relationPlan) error {
-	limits := querycore.DefaultRelationLimits()
-	budget := relationBudget{limits.MaxRows, limits.MaxRows}
-	for _, p := range plans {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := p.load(ctx, ex, base, count, &budget); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// Load returns copies with loaded slots and discards partial results on error.
-// Example: loaded,err := Load(ctx,db,orders,OrderRelations.Buyer).
-func Load[M any](ctx context.Context, ex database.Executor, parents []M, rels ...Relation[M]) ([]M, error) {
-	if err := executionContext(ctx, ex); err != nil {
-		return nil, err
-	}
-	q := Query[M]{}.With(rels...)
-	if err := validateRelations(q.state); err != nil {
-		return nil, err
-	}
-	result := slices.Clone(parents)
-	if err := loadPlans(ctx, ex, unsafe.Pointer(unsafe.SliceData(result)), len(result), q.state.relations); err != nil {
-		return nil, err
-	}
-	return result, nil
 }
 
 // Declaration-time checks must not resolve enum descriptors during package init.

@@ -31,7 +31,7 @@ func TestPublicMethodSurface(t *testing.T) {
 			out.WriteString("rows.Raw " + types.TypeString(pkg.Scope().Lookup("Raw").Type(), nil) + "\n")
 		}
 		if dir == "." {
-			for _, name := range []string{"CursorPaginate", "ChunkByKey", "EachByKey"} {
+			for _, name := range []string{"CursorPaginate", "ChunkByKey", "EachByKey", "HasOneOf", "Has", "DoesntHave", "LoadMissing", "DefaultRelationLimits", "WithRelationLimits"} {
 				out.WriteString("orm." + name + " " + types.TypeString(pkg.Scope().Lookup(name).Type(), nil) + "\n")
 			}
 			out.WriteString("orm.FoundryColumn " + types.TypeString(pkg.Scope().Lookup("FoundryColumn").Type(), nil) + "\n")

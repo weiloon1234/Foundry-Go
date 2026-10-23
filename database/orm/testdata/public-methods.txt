@@ -5,7 +5,13 @@ orm.Assignment
   GoString func() string
   String func() string
 orm.BelongsTo
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm.Order[N]) github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
+  With func(children ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[N]) github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
 *orm.BelongsTo
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm.Order[N]) github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
+  With func(children ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[N]) github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
 orm.Bound
 *orm.Bound
 orm.Builder
@@ -76,10 +82,27 @@ orm.Enum
   Ne func(v E) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
   NotIn func(v ...E) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
   Set func(v E) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+orm.ExistenceRelation
+  relationPlan func(*M) *github.com/weiloon1234/Foundry-Go/database/orm.relationPlan
+  relationTarget func(*N)
 orm.ExpressionColumn
   expressionColumn func(*M) (github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[V], github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[P])
 orm.HasMany
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm.Order[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
+  With func(children ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
 *orm.HasMany
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm.Order[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
+  With func(children ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
+orm.HasOne
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm.Order[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
+  With func(children ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
+*orm.HasOne
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm.Order[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
+  With func(children ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[N]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
 orm.InstantValue
 orm.Interval
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
@@ -523,6 +546,11 @@ orm.Query
   WithoutTrashed func() github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
 orm.Relation
   relationPlan func(*M) *github.com/weiloon1234/Foundry-Go/database/orm.relationPlan
+orm.RelationLimits
+  field BatchSize int
+  field MaxDepth int
+  field MaxRows int
+*orm.RelationLimits
 orm.SimplePage
   field HasMore bool
   field Items []M
@@ -701,6 +729,12 @@ orm.WriteError
 orm.CursorPaginate func[M any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], request github.com/weiloon1234/Foundry-Go/database/query.CursorRequest[M]) (github.com/weiloon1234/Foundry-Go/database/query.CursorPage[M], error)
 orm.ChunkByKey func[M any, K comparable](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], key github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, K], size int, yield func([]M) error) error
 orm.EachByKey func[M any, K comparable](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], key github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, K], size int, yield func(M) error) error
+orm.HasOneOf func[M, N any, K comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.One[M, N], local github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, K], foreign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, K]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
+orm.Has func[M, N any](r github.com/weiloon1234/Foundry-Go/database/orm.ExistenceRelation[M, N], ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+orm.DoesntHave func[M, N any](r github.com/weiloon1234/Foundry-Go/database/orm.ExistenceRelation[M, N], ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+orm.LoadMissing func[M any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, parents []M, rels ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[M]) ([]M, error)
+orm.DefaultRelationLimits func() github.com/weiloon1234/Foundry-Go/database/orm.RelationLimits
+orm.WithRelationLimits func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], limits github.com/weiloon1234/Foundry-Go/database/orm.RelationLimits) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
 orm.FoundryColumn func[M, V, P any](column github.com/weiloon1234/Foundry-Go/database/orm.ExpressionColumn[M, V, P], _ github.com/weiloon1234/Foundry-Go/internal/sqlowner.Seal) (github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[V], github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[P])
 orm.NumberKey result
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]

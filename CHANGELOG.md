@@ -8,6 +8,10 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Add has-one, immutable constrained direct eager trees, `LoadMissing`, shared
+  relation limits and nested `Has`/`DoesntHave` predicates with batch-bounded
+  statement counts (Stage 4b). The old API remains unchanged.
+
 - Add opt-in scoped N+1 statement-shape detection, test assertions and configured
   HTTP warnings with bounded diagnostics (Stage 4a). Only shared-compiler shapes
   display SQL structure; raw SQL uses instance-keyed fingerprints. Violations carry

@@ -266,3 +266,54 @@ model encryption opening are reused; row schemas still reject encrypted types.
 Any decoding/opening failure discards the whole result and closes the stream.
 For `UPDATE … RETURNING`, a hydration error does not prove rollback: use an owning
 transaction and preserve the executor's outcome classification.
+
+## Direct eager trees and existence
+
+Declare `BelongsToOf`, `HasOneOf` or `HasManyOf` once, then derive immutable target
+constraints and finite trees:
+
+```go
+orders, err := Orders.Query().With(
+    OrderRelations.Buyer.Where(Users.Age.Gt(18)).With(UserRelations.Orders),
+).All(ctx, db)
+
+q := Users.Query().Where(orm.Has(UserRelations.Orders, Orders.TotalCents.Gt(100)))
+q = orm.WithRelationLimits(q, orm.RelationLimits{
+    BatchSize: 100, MaxRows: 5000, MaxDepth: 4,
+})
+missing, err := orm.LoadMissing(ctx, db, users, UserRelations.Orders)
+```
+
+Each query load executes one parent statement plus, for each tree branch,
+`ceil(distinct eligible non-null keys / batch size)` statements. Nested branches
+batch the complete fetched target collection. `Load` and `LoadMissing` issue no
+parent statement; the latter preserves already-loaded slots, including empty
+ones. Supplied parent provenance/authorization belongs to the caller. Related
+soft-delete and declared scopes still apply. `Has`/`DoesntHave` are correlated
+EXISTS predicates, compose recursively, and add zero statements or eager loads.
+
+Defaults come from the shared relation-limits owner: batches of 500, depth 8,
+and a shared maximum of 10,000 fetched rows and 10,000 attached values across the
+whole tree. Query overrides apply to every branch, pagination and each chunk
+window. Invalid graphs fail before parent SQL; budget/cardinality/decoding errors
+publish no partial collected parents. Singular relations reject multiple matches.
+Relation `Limit`/`Offset` is unavailable: a global batch limit would truncate
+collections across parents. Target ordering appends the primary key as a tie-breaker.
+
+For a statement-count regression, install one detector on the pool and begin a
+scope around the read. Set a threshold appropriate to the expected batch count:
+
+```go
+detector, err := database.NewStatementDetector(database.StatementDetectorConfig{
+    Threshold: 4, MaxShapes: 32,
+})
+// Handle err; supply database.WithStatementDetector(detector) when opening db.
+ctx, scope := detector.Begin(t.Context())
+_, err = Users.Query().With(UserRelations.Orders).All(ctx, db)
+// Handle err, then check both the operation's exact statement count and shapes.
+dbassert.AssertStatementShapes(t, scope)
+```
+
+Close rows before checking. Only compiler-produced shapes appear as SQL text;
+raw statements use keyed fingerprints and violations include bounded call sites.
+See [statement instrumentation](../../docs/guides/database-runtime.md#detecting-repeated-statement-shapes).

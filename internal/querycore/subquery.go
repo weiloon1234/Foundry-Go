@@ -5,9 +5,12 @@ import (
 )
 
 type Subquery struct {
-	Node        SelectNode
-	Err         error
-	Correlation *ScopeRequirement
+	// RelationCheck defers declaration checks until compilation, preserving lazy
+	// enum initialization while retaining a static AST for nested alias planning.
+	RelationCheck func() error
+	Node          SelectNode
+	Err           error
+	Correlation   *ScopeRequirement
 }
 
 type SubqueryPredicate struct {
@@ -24,6 +27,11 @@ func (ScalarSubquery) ValueNode() {}
 func (c *Compiler) SubquerySQL(q Subquery, single bool, grouped map[FieldRef]bool, grouping bool) (string, error) {
 	if q.Err != nil {
 		return "", q.Err
+	}
+	if q.RelationCheck != nil {
+		if err := q.RelationCheck(); err != nil {
+			return "", err
+		}
 	}
 	if single && len(q.Node.Selections) != 1 {
 		return "", fault.New(fault.Invalid, "value subquery must select exactly one column")

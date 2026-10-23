@@ -1,0 +1,507 @@
+{
+  "stage": "4b",
+  "base_commit": "e73175333d6134d0f0f5da17ab6f8bb4ae4e70a5",
+  "status": "Stage 4b done pending the lead commit; local acceptance passed and second review reported no findings. Lead-owned docs integrated; live PostgreSQL coverage remains for the lead.",
+  "scope": "Direct eager trees and existence filters only. No lifecycle or advanced SQL implementation. Mapping TSV updated, and lead-owned CHANGELOG/blueprint docs integrated with explicit user authorization.",
+  "api": [
+    "HasOneOf(slot,local,foreign) HasOne[M,N]",
+    "BelongsTo/HasOne/HasMany.Where(...Predicate[N]), OrderBy(...Order[N]), With(...Relation[N])",
+    "LoadMissing(ctx,ex,parents,...Relation[M]) ([]M,error)",
+    "RelationLimits alias of database/query.RelationLimits, DefaultRelationLimits()",
+    "WithRelationLimits(q,limits) Query[M]",
+    "Has/DoesntHave(ExistenceRelation[M,N],...Predicate[N]) Predicate[M]"
+  ],
+  "ownership": {
+    "exists": "internal/querycore/relation_exists.go: shared alias planning, direct correlation and Subquery metadata; database/query/relation_predicate.go delegates. Existing compiler owns EXISTS/NOT SQL and trusted shapes.",
+    "loading": "database/orm/relation_loading.go: collect complete target collection across batches, recurse once per branch, group and attach only to owned parents. Root plan settings share one immutable config pointer across every read/page/chunk path.",
+    "validation": "whole graph before parent SQL; depth and node bounds; duplicate slots/order columns; related table checks, scopes, limits and cardinality; compiler RelationCheck defers target enum checks without hiding nested AST aliases."
+  },
+  "compilefail": {
+    "ported": [
+      "nested_relation_owner",
+      "relation_scope",
+      "relation_target",
+      "relation_exists_owner",
+      "where_has_owner",
+      "where_doesnt_have_owner"
+    ],
+    "additional": [
+      "nested_with_target",
+      "has_target_predicate",
+      "relation_where_parent_predicate",
+      "relation_limit",
+      "relation_offset"
+    ]
+  },
+  "statement_contract": "1 parent + sum ceil(distinct eligible non-null keys / batch size) per branch. Load/LoadMissing: no parent. EXISTS: no additional statements. Budgets reset per chunk window.",
+  "coverage": [
+    "in-memory exact counts at depths 1..3, pool/tx/locked, complete nested target batching, empty/shared/nullable/self keys, loaded-empty and partial LoadMissing, input immutability",
+    "duplicate slot/order, depth/invalid limits, singular cardinality, shared fetched/attachment budgets and closed rows/no partial publication",
+    "Each/Chunk eager windows; nested EXISTS scopes/owners and one statement",
+    "old/new deterministic nested constrained eager trees, has-one and nested WhereHas/WhereDoesntHave SQL/bindings",
+    "PostgreSQL isolated-schema source: nested constraints and soft deletes, has-one/cardinality, partial LoadMissing, nested Has/DoesntHave, budget/depth failures and detector/exact query counts",
+    "1000-parent depth-2 full public read/compile/hydrate/attach benchmark: expected five statements/op"
+  ],
+  "footprint": {
+    "existing_ceilings": "unchanged",
+    "new_probes": [
+      "nested_with",
+      "has",
+      "has_one"
+    ],
+    "measurements": {
+      "nested_with": {
+        "functions": 1281,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 5549682
+      },
+      "has": {
+        "functions": 1302,
+        "baseline": 1302,
+        "ceiling": 1498,
+        "archive_bytes": 5604304
+      },
+      "has_one": {
+        "functions": 1281,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 5514422
+      }
+    },
+    "status": "All existing baselines/ceilings retained byte-for-byte in value. New baselines pinned to final measured T/t functions with integer ceil(measured * 1.15); sentinel removed. Full fixture test passes, including per-model slope.",
+    "all_probes": {
+      "nested_with": {
+        "functions": 1281,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 5549682
+      },
+      "has": {
+        "functions": 1302,
+        "baseline": 1302,
+        "ceiling": 1498,
+        "archive_bytes": 5604304
+      },
+      "has_one": {
+        "functions": 1281,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 5514422
+      },
+      "raw": {
+        "functions": 1047,
+        "baseline": 1045,
+        "ceiling": 1202,
+        "archive_bytes": 4859578
+      },
+      "cursor": {
+        "functions": 1133,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5014948
+      },
+      "key_chunk": {
+        "functions": 818,
+        "baseline": 812,
+        "ceiling": 934,
+        "archive_bytes": 3843000
+      },
+      "column_encrypted_text": {
+        "functions": 1139,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 4789962
+      },
+      "column_nullable_encrypted_text": {
+        "functions": 1371,
+        "baseline": 1359,
+        "ceiling": 1563,
+        "archive_bytes": 5951304
+      },
+      "column_encrypted_json": {
+        "functions": 1229,
+        "baseline": 1217,
+        "ceiling": 1400,
+        "archive_bytes": 5098462
+      },
+      "column_nullable_encrypted_json": {
+        "functions": 1461,
+        "baseline": 1449,
+        "ceiling": 1667,
+        "archive_bytes": 6282458
+      },
+      "column_password": {
+        "functions": 1202,
+        "baseline": 1190,
+        "ceiling": 1369,
+        "archive_bytes": 5020596
+      },
+      "column_nullable_password": {
+        "functions": 1429,
+        "baseline": 1417,
+        "ceiling": 1630,
+        "archive_bytes": 6118324
+      },
+      "sensitive_models": {
+        "functions": 2630,
+        "baseline": 2606,
+        "ceiling": 2997,
+        "archive_bytes": 11614374
+      },
+      "model_type": {
+        "functions": 299,
+        "baseline": 299,
+        "ceiling": 344,
+        "archive_bytes": 1263174
+      },
+      "table_ref": {
+        "functions": 810,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 3933430
+      },
+      "onequery": {
+        "functions": 810,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 3800072
+      },
+      "q_with": {
+        "functions": 1114,
+        "baseline": 1053,
+        "ceiling": 1211,
+        "archive_bytes": 5017386
+      },
+      "q_select": {
+        "functions": 843,
+        "baseline": 836,
+        "ceiling": 962,
+        "archive_bytes": 3997532
+      },
+      "q_join": {
+        "functions": 1618,
+        "baseline": 1598,
+        "ceiling": 1838,
+        "archive_bytes": 7541926
+      },
+      "report_pipeline": {
+        "functions": 1928,
+        "baseline": 1905,
+        "ceiling": 2191,
+        "archive_bytes": 10144292
+      },
+      "models": {
+        "functions": 6270,
+        "baseline": 6147,
+        "ceiling": 7070,
+        "archive_bytes": 26714048
+      },
+      "column_number": {
+        "functions": 1184,
+        "baseline": 1172,
+        "ceiling": 1348,
+        "archive_bytes": 4835942
+      },
+      "column_nullable_text": {
+        "functions": 1472,
+        "baseline": 1456,
+        "ceiling": 1675,
+        "archive_bytes": 5942042
+      },
+      "models_1": {
+        "functions": 1635,
+        "baseline": 1619,
+        "ceiling": 1862,
+        "archive_bytes": 6616186
+      },
+      "models_3": {
+        "functions": 2467,
+        "baseline": 2435,
+        "ceiling": 2801,
+        "archive_bytes": 10127524
+      },
+      "column_time": {
+        "functions": 1206,
+        "baseline": 1194,
+        "ceiling": 1374,
+        "archive_bytes": 4877108
+      },
+      "column_enum": {
+        "functions": 1244,
+        "baseline": 1232,
+        "ceiling": 1417,
+        "archive_bytes": 5079294
+      },
+      "relation_with": {
+        "functions": 1892,
+        "baseline": 1847,
+        "ceiling": 2125,
+        "archive_bytes": 7885682
+      },
+      "column_json": {
+        "functions": 1292,
+        "baseline": 1280,
+        "ceiling": 1472,
+        "archive_bytes": 5297106
+      },
+      "column_nullable_json": {
+        "functions": 1534,
+        "baseline": 1522,
+        "ceiling": 1751,
+        "archive_bytes": 6445884
+      },
+      "column_interval": {
+        "functions": 1190,
+        "baseline": 1178,
+        "ceiling": 1355,
+        "archive_bytes": 4970762
+      },
+      "column_nullable_interval": {
+        "functions": 1418,
+        "baseline": 1406,
+        "ceiling": 1617,
+        "archive_bytes": 6108048
+      }
+    },
+    "toolchain": "go1.27.1 darwin/arm64; go list -export and streamed go tool nm T/t count"
+  },
+  "surface_additions": [
+    "BelongsTo and HasMany: Where, OrderBy, With (value and pointer method sets)",
+    "HasOne type with direct Where, OrderBy, With",
+    "ExistenceRelation[M,N] sealed parent/target interface",
+    "RelationLimits public alias and its three fields",
+    "package functions HasOneOf, Has, DoesntHave, LoadMissing, DefaultRelationLimits, WithRelationLimits"
+  ],
+  "acceptance": {
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache",
+      "GOWORK": "off"
+    },
+    "authorization": "User explicitly requested completion of the full Stage 4b acceptance list, overriding the prior lead-only verification interpretation.",
+    "commands": [
+      {
+        "command": "go build ./...",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/goway-stage4b/build-final.log"
+      },
+      {
+        "command": "go vet ./database/... ./internal/...",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/goway-stage4b/vet-final.log"
+      },
+      {
+        "command": "go test -race ./database/orm/... ./database/query/... ./internal/querycore/... ./internal/ormcore/...",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/goway-stage4b/race-final.log"
+      },
+      {
+        "command": "make generate-check",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/goway-stage4b/generate-final.log"
+      },
+      {
+        "command": "cd tests/fixtures/goway && go vet ./...",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/goway-stage4b/fixture-vet-final.log"
+      },
+      {
+        "command": "cd tests/fixtures/goway && go test ./...",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/goway-stage4b/fixture-test-final.log"
+      },
+      {
+        "command": "python3 tools/goway_catalogue.py",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/goway-stage4b/catalogue-final.log"
+      },
+      {
+        "command": "sh tools/format-go.sh check /usr/local/go/bin/gofmt (runs gofmt -l on all repository Go sources, including fixtures)",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/goway-stage4b/gofmt.log"
+      },
+      {
+        "command": "make docs-check",
+        "result": "pass",
+        "exit_code": 0,
+        "log": ".cache/goway-stage4b/docs-final.log"
+      }
+    ],
+    "postgres": "FOUNDRY_TEST_POSTGRES_URL unset; pgsmoke compiles and passes with live tests skipped. No PostgreSQL run claimed.",
+    "surface": "TestPublicMethodSurface passed as part of the final ORM race suite; snapshot additions only.",
+    "corrections": [
+      {
+        "initial_failure": "Fixture TestFootprintBudgets/q_with: 1330 functions > unchanged ceiling 1211.",
+        "cause": "Descriptor OrderBy/With helpers constructed Query[N] values, reaching full target-model Query method tables.",
+        "fix": "Extract shared query-state orderBy and withRelations helpers; public Query methods and descriptors delegate without descriptor helpers constructing Query[N]. Standalone Load uses the same state helper. No method signatures or ceilings changed.",
+        "final_q_with_functions": 1114,
+        "ceiling": 1211,
+        "logs": [
+          ".cache/goway-stage4b/fixture-test.log",
+          ".cache/goway-stage4b/footprint-fixed.log",
+          ".cache/goway-stage4b/fixture-test-final.log"
+        ]
+      },
+      {
+        "initial_failure": "First docs-check invocation omitted the requested GOCACHE and hit a sandbox cache-directory restriction.",
+        "fix": "Reran with the requested cache and GOWORK=off; passed. No sandbox escalation or cache policy changes."
+      }
+    ]
+  },
+  "docs_notes": {
+    "blueprint": "4b implements has-one, immutable constrained direct eager trees, LoadMissing, shared configurable relation limits/depth and Has/DoesntHave correlated predicates; mark local verification separately from lead PostgreSQL gate. Map old WhereHas/WhereDoesntHave to Where(orm.Has/DoesntHave(...)); old relation.Where/OrderBy/With keep descriptor syntax; old WithRelationLimits becomes orm.WithRelationLimits package function.",
+    "changelog": "Add constrained direct eager trees, has-one, LoadMissing, shared relation limits and nested Has/DoesntHave predicates with batch-bounded statement counts."
+  },
+  "open_questions": [],
+  "benchmark": {
+    "name": "BenchmarkRelationTree1000Depth2",
+    "expected_statements_per_op": 5,
+    "parents_per_op": 1000,
+    "conditions": "Public All path, self tree, one child and grandchild per parent, batch size 500; compile/hydrate/attach and fake-driver work timed, detector disabled; verifies full results and closed-row statement counts.",
+    "measured_results": [
+      {
+        "iterations": 141,
+        "ns_per_op": 9046327,
+        "parents_per_op": 1000,
+        "statements_per_op": 5.0,
+        "bytes_per_op": 3972538,
+        "allocs_per_op": 35391
+      },
+      {
+        "iterations": 226,
+        "ns_per_op": 5378907,
+        "parents_per_op": 1000,
+        "statements_per_op": 5.0,
+        "bytes_per_op": 3972307,
+        "allocs_per_op": 35390
+      },
+      {
+        "iterations": 289,
+        "ns_per_op": 4076711,
+        "parents_per_op": 1000,
+        "statements_per_op": 5.0,
+        "bytes_per_op": 3972293,
+        "allocs_per_op": 35390
+      },
+      {
+        "iterations": 295,
+        "ns_per_op": 4071851,
+        "parents_per_op": 1000,
+        "statements_per_op": 5.0,
+        "bytes_per_op": 3972297,
+        "allocs_per_op": 35390
+      },
+      {
+        "iterations": 295,
+        "ns_per_op": 4128199,
+        "parents_per_op": 1000,
+        "statements_per_op": 5.0,
+        "bytes_per_op": 3972302,
+        "allocs_per_op": 35390
+      },
+      {
+        "iterations": 288,
+        "ns_per_op": 4212527,
+        "parents_per_op": 1000,
+        "statements_per_op": 5.0,
+        "bytes_per_op": 3972294,
+        "allocs_per_op": 35390
+      }
+    ],
+    "status": "pass; all six runs verify complete results and exactly five executed/closed statements per operation",
+    "command": "go test ./database/orm -run '^$' -bench '^BenchmarkRelationTree1000Depth2$' -benchmem -count 6",
+    "log": ".cache/goway-stage4b/benchmark.log",
+    "median_ns_per_op": 4170363.0,
+    "range_ns_per_op": [
+      4071851,
+      9046327
+    ],
+    "median_allocs_per_op": 35390.0,
+    "machine": "Apple M4 Max, darwin/arm64, 16 logical CPUs, go1.27.1",
+    "noise": "Shared machine; observed one-minute load 12.41 immediately before timed runs. Wide measured range retained; no before/after speedup claim.",
+    "profile": {
+      "command": "go test ./database/orm -run '^$' -bench '^BenchmarkRelationTree1000Depth2$' -benchtime=1s -cpuprofile .cache/goway-stage4b/relations.cpu -o .cache/goway-stage4b/relations-bench.test",
+      "included_in_reported_samples": false,
+      "top": ".cache/goway-stage4b/benchmark-profile-top.txt",
+      "finding": "Sampled CPU dominated runtime memory/scheduling operations (madvise, kevent, pthread waits); fake-driver string matching is visible. This is a full in-memory public-path measurement, not database/network latency or an isolated engine CPU claim."
+    }
+  },
+  "pending": [
+    "Lead commit and isolated live PostgreSQL coverage."
+  ],
+  "source_sha256": {
+    "CHANGELOG.md": "a4d32e2a109be187f39b808d361b311cb07e7c5cacd43f647297c9a1a29f63fb",
+    "blueprint/00-master-architecture-and-parity.md": "8c8533bf0b1792839fa8a1416e831abd63c93742d49feafd1af9f13919afd637",
+    "blueprint/goway-data-layer/README.md": "005e476630fb1f42152d7bdeb874a829b9d2ab0e4f2bb524c8fecd8427d2ca26",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "128961e7c549a197e835796ff6cc2fb7c648132135454e5d53b5f638a3531327",
+    "database/orm/README.md": "18acf8e9c6b15055af4647b542da4a6d39786aac49f0840895e4b18e012ee278",
+    "database/orm/method_surface_test.go": "aac8d01bf45c290314a975d85358ea96895eacfcefa2c16ed320c14f39aafe6e",
+    "database/orm/query.go": "9a5409ace4bf9cf3165c6a04bdf6e6ed3ac4b688fe94f166d0712f0f8df89ddb",
+    "database/orm/relation.go": "8d0a1091d360a438a8e1ecadf86caaee92d583662457b56e74cadd20047dd0cd",
+    "database/orm/relation_benchmark_test.go": "947703e2ebf22897c7db9327c8dc82ea99383aecbf4b11e8f2b72b63cde33987",
+    "database/orm/relation_lazy_test.go": "40769495570b6b44f07525f702e244f4e70476cc986fc6159e7e951d6df3a0d7",
+    "database/orm/relation_loading.go": "f9cdbf00140170d5f23175dc3d01598cf417c006967e09925ab7d92cf681797e",
+    "database/orm/relation_predicate.go": "e790675bcc3c9733ad125f7572f746a327c59e9e55e72893d34d3351bf82536a",
+    "database/orm/relation_scope.go": "27af4c62004b2e293d9037601868c539ab7deec8e183a6044b213250bebda172",
+    "database/orm/relation_tree.go": "d78145ba9305d483429c0083252b7473805cb68862473651bc93aabc8eb83b91",
+    "database/orm/relation_tree_test.go": "2aab56cfec1875a4f296a1058107587c2e5dfd75c321ff3ea77f62eebc0b1ec7",
+    "database/orm/testdata/public-methods.txt": "64e2e5b729162e72c7d12c3acf97392f9667f9424bd885068694e31e86f02999",
+    "database/query/relation_predicate.go": "cfd8c7fe5d2892069ad2d052a3061c17a153c235e0e65c25f860d18f0c886866",
+    "internal/querycore/relation_exists.go": "9131cb9dc6abdb23990c5ad705eddb6d590e26680bfe195b00095c113e5e91c1",
+    "internal/querycore/subquery.go": "979af4778c7e96d913bfba17689253155641eb0e7f8561472ae60c812b9afdf0",
+    "tests/fixtures/goway/compiler_cases_test.go": "e2f114a65f2984f05110c721f2e9f9d71f71263b772448e6e0b65b959ca42400",
+    "tests/fixtures/goway/footprint_test.go": "ae6445445ca3023fd8e02cfd7785573ebd6b41b6e593d36686b4e093b9149401",
+    "tests/fixtures/goway/pgsmoke/relations_test.go": "3e091a3ec20f6b24e0a56cfe80d32d94609852db68da305d7ed5a1444f709c83",
+    "tests/fixtures/goway/relations_golden_test.go": "5f85fab7266d32084e5eda4c41ca840d594810b814f8c4940cf5ab44db23a25c",
+    "tests/fixtures/goway/testdata/compilefail/has_target_predicate/invalid.go": "7dc318be6bec8e0e7f91cecf10499ef7c310211d51cb494db61ad4174644d438",
+    "tests/fixtures/goway/testdata/compilefail/nested_relation_owner/invalid.go": "8ca2a3d09b2da0b07cb62b40459fb67a9ae9e2b3af2617729f4e1d6b2493b535",
+    "tests/fixtures/goway/testdata/compilefail/nested_with_target/invalid.go": "edc502770a4132decbd0bca78bfc201f8c7bf13f15f14c0658d770232d5387a6",
+    "tests/fixtures/goway/testdata/compilefail/relation_exists_owner/invalid.go": "8dfd9c125bd142a9282bb48a842dd4970ea36db510fd2d71f777863952fe035e",
+    "tests/fixtures/goway/testdata/compilefail/relation_limit/invalid.go": "d34f16fc722af6e4ba542e927474025af2c165447fd9e457eb95a4303a9e601b",
+    "tests/fixtures/goway/testdata/compilefail/relation_offset/invalid.go": "672b4f6d546bd947e18b2e8739063e1ff6167ec85707856d442c18e9a6706dc2",
+    "tests/fixtures/goway/testdata/compilefail/relation_scope/invalid.go": "b2f827b0216058033c75fd06a764acdefe755faf9295f8015bd0c3301247461e",
+    "tests/fixtures/goway/testdata/compilefail/relation_target/invalid.go": "9df21f64f798a8797669d0510920b5e0535c70a6dfe7c2891a1af664c887ee8c",
+    "tests/fixtures/goway/testdata/compilefail/relation_where_parent_predicate/invalid.go": "4b810268ca4aef318da470ad9792ecab8c8d0bf82c265cad19278bf493eb7740",
+    "tests/fixtures/goway/testdata/compilefail/where_doesnt_have_owner/invalid.go": "78f7f897696475d776121d302539d0df6d19c45ea2f4e32cda016802f67c2954",
+    "tests/fixtures/goway/testdata/compilefail/where_has_owner/invalid.go": "bd2efd816463e602ab9544e797637dcfebd0cc79088611fe824f6190e98f7153",
+    "tests/fixtures/goway/testdata/footprint/has/probe.go": "e22fc0fb9af85db3e10197e88590a9dc6e5d58b706b976594abe7de33677af9d",
+    "tests/fixtures/goway/testdata/footprint/has_one/probe.go": "b24c63aba156fef15ea237ea73591e2d832b3656ee369b3a9eabffcda6a63371",
+    "tests/fixtures/goway/testdata/footprint/nested_with/probe.go": "17557dd3ec53cf3e032fdf5a7ad72ef3c202762e4e6a523d6d2c34d9ca697803"
+  },
+  "docs_integration": {
+    "status": "Integrated; make docs-check passed, including blueprint numbering and local links.",
+    "files": [
+      "CHANGELOG.md",
+      "blueprint/goway-data-layer/README.md",
+      "blueprint/00-master-architecture-and-parity.md"
+    ],
+    "content": [
+      "Unreleased Go-way changelog entry for Stage 4b, old API unchanged.",
+      "4b Done pending the lead commit; G04 in progress with 4c/4d remaining and relation writes in 5b.",
+      "Direct/eager/limits/existence parity rows and WhereHas/WhereDoesntHave/WithRelationLimits/Load/LoadMissing API mappings.",
+      "Batch-bounded statement-count contract, benchmark/probe evidence and catalogue counts synchronized from the TSV owner."
+    ],
+    "catalogue": {
+      "ported_rows": 87,
+      "distinct_goway_cases": 79
+    },
+    "verification": {
+      "command": "make docs-check",
+      "environment": {
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache",
+        "GOWORK": "off"
+      },
+      "exit_code": 0,
+      "log": ".cache/goway-stage4b/docs-integration.log",
+      "diff_check": "git diff --check passed"
+    }
+  }
+}

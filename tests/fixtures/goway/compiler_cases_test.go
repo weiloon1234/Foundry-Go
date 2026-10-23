@@ -2,6 +2,18 @@ package goway_test
 
 func compilerCases() []compilerCase {
 	return []compilerCase{
+		{"nested_relation_owner", "does not implement"},
+		{"relation_scope", "orm.Predicate[models.Order]"},
+		{"relation_target", "does not match inferred type"},
+		{"relation_exists_owner", "orm.Predicate[models.Order]"},
+		{"where_has_owner", "orm.Predicate[models.User]"},
+		{"where_doesnt_have_owner", "orm.Predicate[models.User]"},
+		{"nested_with_target", "orm.Relation[models.Order]"},
+		{"has_target_predicate", "does not match inferred type"},
+		{"relation_where_parent_predicate", "orm.Predicate[models.User]"},
+		{"relation_limit", "has no field or method Limit"},
+		{"relation_offset", "has no field or method Offset"},
+
 		{"trusted_shape_internal", "use of internal package"},
 		{"raw_model_result_owner", "as []models.User value"},
 		{"raw_schema_result_owner", "rows.Schema[B]"},

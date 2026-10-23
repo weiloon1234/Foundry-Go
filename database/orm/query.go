@@ -89,12 +89,13 @@ type LockedQuery[M any] struct {
 }
 
 type queryState struct {
-	relations []*relationPlan
-	ast       querycore.QueryCore
-	table     *tableCore
-	lock      querycore.LockStrength
-	behavior  querycore.LockBehavior
-	err       error
+	relations      []*relationPlan
+	relationLimits *RelationLimits
+	ast            querycore.QueryCore
+	table          *tableCore
+	lock           querycore.LockStrength
+	behavior       querycore.LockBehavior
+	err            error
 }
 
 func newQuery(t *tableCore) queryState {
@@ -135,13 +136,17 @@ func where[M any](q queryState, ps []Predicate[M]) queryState {
 
 // OrderBy appends sort directions. Example: Orders.Query().OrderBy(Orders.ID.Asc()).
 func (q Query[M]) OrderBy(os ...Order[M]) Query[M] {
-	q.state.ast.Orders = slices.Clone(q.state.ast.Orders)
+	q.state = orderBy(q.state, os)
+	return q
+}
+func orderBy[M any](q queryState, os []Order[M]) queryState {
+	q.ast.Orders = slices.Clone(q.ast.Orders)
 	for _, o := range os {
-		q.state.err = errors.Join(q.state.err, o.err)
-		if o.owner == nil || o.owner != q.state.table {
-			q.state.err = errors.Join(q.state.err, invalid("order belongs to a different table declaration"))
+		q.err = errors.Join(q.err, o.err)
+		if o.owner == nil || o.owner != q.table {
+			q.err = errors.Join(q.err, invalid("order belongs to a different table declaration"))
 		}
-		q.state.ast.Orders = append(q.state.ast.Orders, o.core)
+		q.ast.Orders = append(q.ast.Orders, o.core)
 	}
 	return q
 }

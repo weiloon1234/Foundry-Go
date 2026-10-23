@@ -2,6 +2,7 @@ package query
 
 import (
 	"database/sql/driver"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 // ExistenceRelation is a declared relationship that can filter its parent by
@@ -73,18 +74,12 @@ func (s relationSpec[M, N]) exists() Predicate[M] {
 	if err := s.validate(s.source.queryCore.Table, 0, DefaultRelationLimits()); err != nil {
 		return existsPredicate[M](subquery{Err: err})
 	}
-	node := s.target.modelSelect()
-	node.Selections = nil
-	names, err := namesInSelects(node)
+	if s.hop == nil && s.morph == nil {
+		return existsPredicate[M](querycore.DirectRelationExists(s.target.modelSelect(), s.local, s.foreign, s.source.definition.modelDefinition.Columns))
+	}
+	node, alias, err := querycore.RelationExistsSelect(s.target.modelSelect(), s.source.queryCore.Table)
 	if err != nil {
 		return existsPredicate[M](subquery{Err: err})
-	}
-	names.Used[s.source.queryCore.Table] = true
-	alias := names.Allocate("foundry_related")
-	node.Source.Alias = alias
-	node.Predicates = nil
-	for _, predicate := range s.target.queryCore.EffectivePredicates() {
-		node.Predicates = append(node.Predicates, requalify(predicate, alias))
 	}
 	if s.hop != nil {
 		// Through an intermediate: target -> intermediate.second, and the
@@ -107,9 +102,7 @@ func (s relationSpec[M, N]) exists() Predicate[M] {
 }
 
 func (s relationSpec[M, N]) existencePredicate(node selectNode) Predicate[M] {
-	return existsPredicate[M](subquery{Node: node, Correlation: &scopeRequirement{
-		Sources: map[string][]columnData{s.source.queryCore.Table: s.source.definition.modelDefinition.Columns},
-	}})
+	return existsPredicate[M](querycore.RelationExistence(node, s.source.queryCore.Table, s.source.definition.modelDefinition.Columns))
 }
 
 func existsPredicate[M any](q subquery) Predicate[M] {

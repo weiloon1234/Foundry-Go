@@ -43,8 +43,9 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 3.1c | Cursor/key-chunk reads and locked keyed lookup composition | Implemented; Go/fixture gates pass; unchanged contracts; existing TypeScript timestamp assertion fails on HEAD too; PostgreSQL execution belongs to lead |
 | 3.1d | Typed raw model/row hydration | Implemented; acceptance evidence below; live PostgreSQL belongs to the lead |
 | 3.1 | Complete declaration, reads, writes, typed raw hydration and model cursors | Done. Stage 3 gate passed on 2026-10-23: `make verify`, `make test-postgres` (race) and `make typescript-check` |
-| 4a | N+1 detector foundations | Privacy redesign implemented; requested acceptance passed in segments, pending lead review |
-| 4 | Full relations, pivots, through relations, eager limits, filters and relation writes | Planned |
+| 4a | N+1 detector foundations | Done; committed at `e731753` |
+| 4b | Direct eager trees, has-one, LoadMissing, relation limits and existence filters | Done pending the lead's commit; local acceptance passed and second review reported no findings. Live PostgreSQL coverage remains for the lead. |
+| 4 | Full read relations, pivots, through, one-of-many, filters and aggregate slots | In progress; 4a and 4b delivered, 4c and 4d planned. Relation writes belong to Stage 5b; per-parent limits are out of scope. |
 | 5 | Lifecycle, mutators, change sets, scopes and observers | Planned |
 | 6a | Expressions, aggregates, grouping, having and raw fragments | Planned |
 | 6b | Joins, aliases, correlation and lateral queries | Planned |
@@ -316,8 +317,14 @@ Names in planned rows remain subject to their owning stage's consumer acceptance
 | `q.EachByID(ctx, ex, size, visit)` | `orm.EachByKey(ctx, ex, q, Orders.ID, size, visit)` | Stage 3.1c |
 | `q.ForUpdate().RequireFind(ctx, tx, id)` | `q.Where(Orders.ID.Eq(id)).ForUpdate().Require(ctx, tx)` | Stage 3.1c; transaction-only |
 | `QueryOrders().Create(ctx, tx, OrderDraft{}.SetTotalCents(v))` | `Orders.Insert(ctx, tx, Orders.TotalCents.Set(v))` | Core ported |
-| `QueryOrders().With(OrderRelations().Buyer)` | `Orders.Query().With(OrderRelations.Buyer)` | Basic eager loading ported |
-| `defineOrderRelations() OrderRelationSet` | Separate typed relation namespace using `BelongsToOf`/`HasManyOf` | Basic relations ported; full family Stage 4 |
+| `QueryOrders().With(OrderRelations().Buyer)` | `Orders.Query().With(OrderRelations.Buyer)` | Direct eager trees ported, Stage 4b |
+| `defineOrderRelations() OrderRelationSet` | Separate typed relation namespace using `BelongsToOf`/`HasOneOf`/`HasManyOf` | Direct kinds ported; joined families and aggregate slots remain 4c/4d |
+| `q.WhereHas(UserRelations().Orders)` | `q.Where(orm.Has(UserRelations.Orders))` | Stage 4b; target predicates and nested `Has` compose inside the predicate |
+| `q.WhereDoesntHave(UserRelations().Orders)` | `q.Where(orm.DoesntHave(UserRelations.Orders))` | Stage 4b; correlated `NOT EXISTS` |
+| `r.Orders.Where(p).OrderBy(o).With(child)` | `r.Orders.Where(p).OrderBy(o).With(child)` | Stage 4b; immutable target-owned constraints and nested branches |
+| `q.WithRelationLimits(limits)` | `orm.WithRelationLimits(q, limits)` | Stage 4b; package function, shared limits type and defaults |
+| `q.With(r).Load(ctx, ex, parents)` | `orm.Load(ctx, ex, parents, r)` | Direct relations ported; no parent statement |
+| `q.With(r).LoadMissing(ctx, ex, parents)` | `orm.LoadMissing(ctx, ex, parents, r)` | Stage 4b; loaded-empty slots stay loaded |
 | Generated `Distinct`/set query surface | `rows.Distinct(...)`, `rows.Union(a, b)` | Planned, Stages 6a/6c |
 | `query.SelectValue(QueryOrders(), ...)` | `rows.SelectValue(Orders.Query(), ...)` | Basic scalar selection ported |
 | Model annotation plus `foundry generate` | Plain struct plus `orm.Define` | Core ported; DTO/enum generation retained |
@@ -325,7 +332,7 @@ Names in planned rows remain subject to their owning stage's consumer acceptance
 ## Feature parity contract
 
 “Preserve” states the program's target, not completion of the feature. The current
-consumer retains Stage 1 golden coverage and adds Stage 3.1a declaration/codec cases.
+consumer retains Stage 1 golden coverage and adds core and direct-relation cases.
 
 | Capability | Old owner/shape | New shape and owning stage |
 | --- | --- | --- |
@@ -341,7 +348,13 @@ consumer retains Stage 1 golden coverage and adds Stage 3.1a declaration/codec c
 | Timestamps and soft deletes | Field-name conventions and opt-out | Same behavior, `NoTimestamps`, optional explicit temporal bindings; core ported, completion Stage 3 |
 | Integer, UUID and natural keys | `primary=` annotation | `TableOf` binds concrete `K`; preserve UUID source/default rules, Stage 3 |
 | Global scopes | `defineXGlobalScopes` | Typed scope options, Stage 5 |
-| Relations, pivots, through, one-of-many, eager limits, filters, aggregates and writes | Slots and generated relation sets | Same slots plus typed declarations; complete family Stage 4 |
+| Direct belongs-to, has-one, has-many, self and nullable-FK relations | Slots and generated relation sets | `BelongsToOf`/`HasOneOf`/`HasManyOf`; delivered in 4b, including singular cardinality checks |
+| Nested and constrained eager loads; LoadMissing | Descriptor `Where`/`OrderBy`/`With`, query `Load`/`LoadMissing` | Stage 4b: immutable descriptors, complete target batches at each level, package `Load`/`LoadMissing`, loaded-empty preservation and primary-key order tie-breakers |
+| Relation limits and depth | Query `WithRelationLimits` and shared loading budgets | Stage 4b: `orm.WithRelationLimits(q, limits)`; shared row/attachment budgets and depth bound, defaults from the existing owner. No relation `Limit`/`Offset` or per-parent limits |
+| Relation existence filters | `WhereHas`/`WhereDoesntHave`, descriptor `Exists` | Stage 4b: `Where(orm.Has/DoesntHave(...))`, nested correlated subqueries with related scopes and zero extra statements |
+| Pivots/WithPivot, through and one-of-many | Generated relation sets and joined loaders | Planned Stage 4c; same typed slots and batch-bounded loading contract |
+| Relation aggregate slots | Generated computed slots | Design and implementation in Stage 4d |
+| Relation writes and pivot lifecycle | Attach/detach/sync/toggle/update-pivot | Planned Stage 5b, alongside lifecycle integration |
 | Stored change sets | Generated `CompareX` and field structs | Column-keyed typed comparisons and changes, Stage 5 |
 | Draft, batch, lookup, conflict and source writes | Generated drafts/wrappers | Assignments and package functions, Stages 3/6e; preserve hook versus set-write semantics |
 | Reference and identity | `FoundryReference`/`FoundryIdentity` | Table/column-based adapters retaining model/key and persisted identity, Stage 7 |
@@ -405,8 +418,8 @@ intentionally accepts byte slices, while identity does not.
 <!-- catalogue-summary -->
 | Disposition | Cases |
 | --- | ---: |
-| ported | 81 |
-| port | 501 |
+| ported | 87 |
+| port | 495 |
 | merge | 0 |
 | obsolete | 0 |
 | unaffected | 444 |
@@ -444,7 +457,7 @@ intentionally accepts byte slices, while identity does not.
 | 7 | 81 |
 | — | 444 |
 
-81 old catalogue rows are covered by 73 distinct Go-way cases.
+87 old catalogue rows are covered by 79 distinct Go-way cases.
 
 ## Emitter audit
 
@@ -758,3 +771,48 @@ Hydrate1000 to 5,065. Default-CPU medians were 2,087 → 2,466 ns for ChainCompi
 large host-contention spikes persisted in focused and single-CPU controls, so
 latency parity remains unproven. All samples and conditions are retained in the
 evidence; no existing footprint ceiling changed.
+
+## Stage 4b direct eager trees and existence
+
+Stage 4b is **Done pending the lead's commit**. Local acceptance passed, and the
+second review reported no findings. Live PostgreSQL execution remains for the lead;
+its isolated-schema test sources compile and vet. The old API remains unchanged.
+See the [4b evidence](../../docs/evidence/goway-stage4b-relations.json) and
+[eager-loading recipe](../../database/orm/README.md#direct-eager-trees-and-existence).
+
+`HasOneOf` shares the singular loader and rejects multiple matching rows.
+`BelongsTo`, `HasOne` and `HasMany` declare direct `Where`, `OrderBy` and `With`
+methods that return immutable descriptors. Target scopes apply, duplicate slots
+and ordering columns fail validation, and ordering appends a primary-key tie-breaker.
+`LoadMissing` preserves loaded slots, including empty ones.
+
+A query load executes one parent statement plus the sum, over all tree branches,
+of `ceil(distinct eligible non-null keys / batch size)` statements. Each nested
+branch batches the complete fetched target collection, never one query per parent.
+`Load` and `LoadMissing` issue no parent statement. `Has` and `DoesntHave` compile
+to correlated `EXISTS` and `NOT EXISTS` subqueries and add zero statements.
+The same rules apply inside transactions and locked reads. `Each` and `Chunk`
+apply the count contract and reset the shared budget for each window.
+
+`orm.WithRelationLimits(q, limits)` uses the existing public limits type and shared
+defaults: batches of 500, depth 8, at most 10,000 fetched rows and 10,000 attached
+values across the tree. Relation `Limit` and `Offset` remain unavailable;
+per-parent limits are out of scope. Budget or hydration failures publish no
+partial collected parents.
+
+Exact-count tests cover depths 1–3, shared and nullable keys, loaded-empty slots,
+partial `LoadMissing`, transactions, locked reads and chunk windows. Six runs of
+the 1,000-parent depth-two benchmark each executed five statements per operation.
+Median time was 4,170,363 ns/op, with a 4,071,851–9,046,327 ns/op range on the shared
+machine. These in-memory timings do not measure database or network latency.
+
+| New probe | Measured functions | Ceiling, ceil(measured × 1.15) |
+| --- | ---: | ---: |
+| `nested_with` | 1,281 | 1,474 |
+| `has` | 1,302 | 1,498 |
+| `has_one` | 1,281 | 1,474 |
+
+Existing footprint ceilings remain unchanged. Shared query-state helpers avoid
+constructing target `Query[N]` values in descriptor helpers; the existing `q_with`
+probe measures 1,114 functions against its unchanged 1,211 ceiling. Six old
+compiler-catalogue rows are ported in 4b, with five additional rejection cases.
