@@ -2,6 +2,8 @@ package goway_test
 
 func compilerCases() []compilerCase {
 	return []compilerCase{
+		{"raw_model_result_owner", "as []models.User value"},
+		{"raw_schema_result_owner", "rows.Schema[B]"},
 		{"chunk_callback_owner", "func([]models.User) error"},
 		{"chunk_each_callback_owner", "func(models.User) error"},
 		{"chunk_each_key_owner", "does not match inferred type"},

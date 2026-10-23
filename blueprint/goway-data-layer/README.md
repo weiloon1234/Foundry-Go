@@ -41,7 +41,8 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 3.1a | Declarations/codecs: JSON, interval, natural keys, binary ownership and IContains | Implemented; local acceptance passes (segmented fixes); PostgreSQL sources compile/vet, execution belongs to the lead |
 | 3.1b | Writes, encrypted fields and password hashes | Implemented; local acceptance passes in segments; live PostgreSQL belongs to the lead |
 | 3.1c | Cursor/key-chunk reads and locked keyed lookup composition | Implemented; Go/fixture gates pass; unchanged contracts; existing TypeScript timestamp assertion fails on HEAD too; PostgreSQL execution belongs to lead |
-| 3.1 | Complete declaration, reads, writes, typed raw hydration and model cursors | Planned |
+| 3.1d | Typed raw model/row hydration | Implemented; acceptance evidence below; live PostgreSQL belongs to the lead |
+| 3.1 | Complete declaration, reads, writes, typed raw hydration and model cursors | Done. Stage 3 gate passed on 2026-10-23: `make verify`, `make test-postgres` (race) and `make typescript-check` |
 | 4 | Full relations, pivots, through relations, eager limits, filters and relation writes | Planned |
 | 5 | Lifecycle, mutators, change sets, scopes and observers | Planned |
 | 6a | Expressions, aggregates, grouping, having and raw fragments | Planned |
@@ -344,6 +345,7 @@ consumer retains Stage 1 golden coverage and adds Stage 3.1a declaration/codec c
 | Draft, batch, lookup, conflict and source writes | Generated drafts/wrappers | Assignments and package functions, Stages 3/6e; preserve hook versus set-write semantics |
 | Reference and identity | `FoundryReference`/`FoundryIdentity` | Table/column-based adapters retaining model/key and persisted identity, Stage 7 |
 | Attachments, translations and metadata | Slot fields plus generated policies | Preserve fields, stored owner names, policies and cleanup; declarations in Stage 7 |
+| Typed raw hydration | Executor-level raw only | Stage 3.1d: model/row decoders, exact named column set, no scopes or automatic routing |
 | Chunks, pagination and locking | Generated wrappers and query runtime | Stage 3.1c: cursor/key-chunk package functions; keyed/locked lookup composition; shared tokens and unchanged HTTP shape |
 | Audit/history and pruning | Generated wrappers and query runtime | Stages 5/6e/7; preserve redaction, transaction and outcome contracts |
 | Projections, joins, CTEs, sets, windows and subqueries | Generated selectors and `query` families | `orm/expr` and `orm/rows` functions, Stages 6a–6d |
@@ -359,7 +361,7 @@ remain compile-time constraints.
 | Level | Boundary | Status |
 | --- | --- | --- |
 | 1 | Existing executor `Exec`, `Query`, `database.ScanOne` and read-routed `DB.QueryRead`; transactions unchanged | Retained |
-| 2 | Typed model/declared-row hydration from raw SQL; validate selected columns rather than return partial models | Planned Stage 3 (`Table.Raw` / `rows.Raw` sketches) |
+| 2 | Typed model/declared-row hydration from raw SQL; validate selected columns rather than return partial models | Implemented Stage 3.1d: `Table.Raw` / `rows.Raw`, exact names in any order; no automatic scopes or read routing |
 | 3 | Opt-in typed fragments (`expr.Raw[S,V]`, `orm.WhereRaw[M]` sketches), composed with existing scopes and transaction | Planned Stage 6a |
 
 All levels bind arguments instead of interpolating values. Raw fragments require
@@ -652,3 +654,36 @@ round-trip assertion (`.123456789Z` expected, `.123456Z` actual); the same failu
 was reproduced with all changed Go sources overlaid from HEAD. This slice does
 not alter temporal precision or that fixture. See the
 [read-slice evidence](../../docs/evidence/goway-stage31c-reads.json).
+
+## Stage 3.1d typed raw hydration
+
+`Table[M,K].Raw` returns `[]M`; `rows.Raw[R]` takes an explicit `rows.Schema[R]`
+and returns `[]R`. The shared non-generic owner in `internal/ormcore/raw.go`
+validates `Rows.Columns()` before iteration and reorders scanner destinations.
+The result must match the full declared set, including for zero rows. It retains
+the original stream's encryption context and the existing model/row decoders.
+
+Raw applies no tenant, soft-delete or global scopes and uses the supplied executor
+directly. Arguments go unchanged to the executor. SQL may write; a hydration
+failure does not imply rollback. Level-1 APIs remain unchanged. Live PostgreSQL
+sources cover aliased/reordered selections, transaction `UPDATE … RETURNING`,
+missing columns, encrypted values and intentionally returned soft-deleted rows.
+
+Two additional compiler cases pin model-result and row-schema ownership. No old
+catalogue row changes disposition in this slice. The surface adds exactly one
+Table method (value and pointer method sets) and one `rows.Raw` package function.
+Existing footprint ceilings remain unchanged; the dedicated raw probe exercises
+both APIs. Evidence: [Stage 3.1d](../../docs/evidence/goway-stage31d-raw.json).
+
+| Raw probe | Functions | Ceiling (`ceil(measured × 1.15)`) | Archive bytes |
+| --- | ---: | ---: | ---: |
+| Model and row-schema raw hydration | 1,045 | 1,202 | 4,833,602 |
+
+Go 1.27.1 darwin/arm64, warm task cache, archive T/t symbols (not runtime timing).
+All 28 pre-existing probes and the model slope remain below unchanged ceilings;
+model growth is 832 functions for two added models against 939. Requested build,
+vet, race, generation, fixture, catalogue and documentation checks pass. PostgreSQL
+sources compile/vet and skip without configuration; the lead executes them.
+Stage 3.1 is complete. The lead's Stage 3 gate on 2026-10-23 passed `make verify` (655 s),
+the full PostgreSQL race suite (`make test-postgres`, about 21 minutes) and
+`make typescript-check`, on the source committed with 3.1d.

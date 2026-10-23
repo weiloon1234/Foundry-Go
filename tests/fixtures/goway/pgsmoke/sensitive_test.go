@@ -34,6 +34,11 @@ func TestSensitivePersistenceAcrossAPIs(t *testing.T) {
 	must(t, err)
 	inserted, err := v.Insert(ctx, db, v.Token.Set(encrypted.NewText("private")), v.Backup.Set(encrypted.NewText("backup")), v.Settings.Set(doc), v.Optional.Set(doc))
 	must(t, err)
+	rawModels, err := v.Raw(ctx, db, `SELECT optional,settings,backup,token,id FROM sensitive_vaults WHERE id=$1`, inserted.ID.String())
+	must(t, err)
+	if len(rawModels) != 1 || rawModels[0].Token.Reveal() != "private" {
+		t.Fatal("encrypted raw hydration")
+	}
 	storedRows, err := db.Query(ctx, `SELECT token,backup,settings,optional FROM sensitive_vaults WHERE id=$1`, inserted.ID.String())
 	must(t, err)
 	if !storedRows.Next() {

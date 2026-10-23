@@ -34,4 +34,11 @@ func TestCursorChunksAndLockedLookupRouting(t *testing.T) {
 	if len(primary) != 1 || len(replica) != 2 {
 		t.Fatal("locked lookup left transaction", primary, replica)
 	}
+	if _, err := r.Raw(t.Context(), db, "SELECT id,display_name,note,amount FROM records"); err != nil {
+		t.Fatal(err)
+	}
+	if len(primary) != 2 || len(replica) != 2 {
+		t.Fatal("raw unexpectedly used read routing", primary, replica)
+	}
+
 }

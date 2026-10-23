@@ -27,6 +27,9 @@ func TestPublicMethodSurface(t *testing.T) {
 			}
 			recordMethodSurface(&out, pkg.Name()+"."+name, typ)
 		}
+		if dir == "./rows" {
+			out.WriteString("rows.Raw " + types.TypeString(pkg.Scope().Lookup("Raw").Type(), nil) + "\n")
+		}
 		if dir == "." {
 			for _, name := range []string{"CursorPaginate", "ChunkByKey", "EachByKey"} {
 				out.WriteString("orm." + name + " " + types.TypeString(pkg.Scope().Lookup(name).Type(), nil) + "\n")

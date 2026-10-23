@@ -28,6 +28,7 @@ const footprintFailureAdvice = "a generic method, field or codec helper has expa
 // Go 1.27.1 darwin/arm64: T/t symbols in each package archive.
 // Budget is ceil(measured * 1.15), calculated exactly with integer arithmetic.
 var footprintBudgets = map[string]footprintBudget{
+	"raw":       {"./testdata/footprint/raw", 1045},
 	"cursor":    {"./testdata/footprint/cursor", 1127},
 	"key_chunk": {"./testdata/footprint/key_chunk", 812},
 
@@ -64,7 +65,7 @@ var footprintBudgets = map[string]footprintBudget{
 func TestFootprintBudgets(t *testing.T) {
 	testkit.TrackExternalInputs(t)
 
-	probeOrder := []string{"cursor", "key_chunk", "column_encrypted_text", "column_nullable_encrypted_text", "column_encrypted_json", "column_nullable_encrypted_json", "column_password", "column_nullable_password", "sensitive_models", "model_type", "table_ref", "onequery", "q_with", "q_select", "q_join", "report_pipeline", "models", "column_number", "column_nullable_text", "models_1", "models_3", "column_time", "column_enum", "relation_with", "column_json", "column_nullable_json", "column_interval", "column_nullable_interval"}
+	probeOrder := []string{"raw", "cursor", "key_chunk", "column_encrypted_text", "column_nullable_encrypted_text", "column_encrypted_json", "column_nullable_encrypted_json", "column_password", "column_nullable_password", "sensitive_models", "model_type", "table_ref", "onequery", "q_with", "q_select", "q_join", "report_pipeline", "models", "column_number", "column_nullable_text", "models_1", "models_3", "column_time", "column_enum", "relation_with", "column_json", "column_nullable_json", "column_interval", "column_nullable_interval"}
 	pkgArgs := make([]string, 0, len(probeOrder))
 	for _, name := range probeOrder {
 		pkgArgs = append(pkgArgs, footprintBudgets[name].pkg)

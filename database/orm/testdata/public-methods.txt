@@ -581,6 +581,7 @@ orm.Table
   InsertMany func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor, rows [][]github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]) ([]M, error)
   Key func() github.com/weiloon1234/Foundry-Go/database/orm.Key[M, K]
   Query func() github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+  Raw func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, sql string, args ...any) ([]M, error)
   Require func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, key K) (M, error)
   Restore func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor, key K) (M, error)
   Update func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor, key K, as ...github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]) (M, error)
@@ -592,6 +593,7 @@ orm.Table
   InsertMany func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor, rows [][]github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]) ([]M, error)
   Key func() github.com/weiloon1234/Foundry-Go/database/orm.Key[M, K]
   Query func() github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
+  Raw func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, sql string, args ...any) ([]M, error)
   Require func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, key K) (M, error)
   Restore func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor, key K) (M, error)
   Update func(ctx context.Context, tx github.com/weiloon1234/Foundry-Go/database.Transactor, key K, as ...github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]) (M, error)
@@ -809,6 +811,7 @@ rows.Schema
   rowDefinition func(*R) (*github.com/weiloon1234/Foundry-Go/database/orm/rows.rowCore, func(github.com/weiloon1234/Foundry-Go/database.Row) (R, error))
 rows.Source
   rowSource func(*S) github.com/weiloon1234/Foundry-Go/internal/ormcore.Source
+rows.Raw func[R any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, schema github.com/weiloon1234/Foundry-Go/database/orm/rows.Schema[R], sql string, args ...any) ([]R, error)
 expr.Expression
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
   Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]

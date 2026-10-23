@@ -1,0 +1,331 @@
+{
+  "stage": "3.1d",
+  "base_commit": "a230148aec555f88b85cd653ffcbcba69543dd7f",
+  "status": "Stage 3.1 complete pending lead Stage 3 gate; no commit",
+  "api": [
+    "Table[M,K].Raw(context.Context, database.Executor, string, ...any) ([]M,error)",
+    "rows.Raw[R](context.Context, database.Executor, rows.Schema[R], string, ...any) ([]R,error)"
+  ],
+  "validation": "internal/ormcore/raw.go matches Rows.Columns before iteration against exact declared names, reorders scanner destinations, and preserves the original stream FieldEncryption method; errors list column names, never SQL or arguments.",
+  "semantics": "No automatic scopes or read routing. Arguments pass unchanged through ex.Query. Existing codecs/hydrate open per-row encryption. Errors discard all results and close rows; hydration failure does not assert write rollback.",
+  "surface_additions": [
+    "orm.Table.Raw",
+    "*orm.Table.Raw",
+    "rows.Raw package function"
+  ],
+  "compilefail_cases": {
+    "raw_model_result_owner": "as []models.User value",
+    "raw_schema_result_owner": "rows.Schema[B]"
+  },
+  "catalogue": "1026 existing rows unchanged: 81 ported, 501 port, 444 unaffected. Two new independent raw typing cases.",
+  "unit_coverage": [
+    "Exact name set including reordered, missing, duplicate, extra and zero-row mismatches",
+    "No partial result on decoding, encrypted opening or close failure",
+    "Rows close on success, validation/decode errors and cancellation after acquisition",
+    "Invalid declarations, including encrypted types incorrectly bound as ordinary fields/rows, send zero SQL",
+    "Pool and transaction executors; SQL/arguments unchanged; raw stays primary with a configured replica",
+    "Encrypted raw reordered read opens with its row key"
+  ],
+  "postgres_coverage": [
+    "Reordered/aliased model and declared row results",
+    "Transaction UPDATE RETURNING and persisted verification",
+    "Missing columns on zero rows",
+    "Encrypted model raw read with reordered columns",
+    "Raw returns soft-deleted rows while ordinary query excludes them"
+  ],
+  "footprint": {
+    "toolchain": "go version go1.27.1 darwin/arm64",
+    "method": "go list -export + go tool nm archive T/t symbol counts; warm task-owned GOCACHE; no timing/RSS claims",
+    "probes": [
+      {
+        "probe": "raw",
+        "functions": 1045,
+        "baseline": 1045,
+        "ceiling": 1202,
+        "archive_bytes": 4833602
+      },
+      {
+        "probe": "cursor",
+        "functions": 1131,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 4992786
+      },
+      {
+        "probe": "key_chunk",
+        "functions": 816,
+        "baseline": 812,
+        "ceiling": 934,
+        "archive_bytes": 3820228
+      },
+      {
+        "probe": "column_encrypted_text",
+        "functions": 1137,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 4764984
+      },
+      {
+        "probe": "column_nullable_encrypted_text",
+        "functions": 1369,
+        "baseline": 1359,
+        "ceiling": 1563,
+        "archive_bytes": 5925656
+      },
+      {
+        "probe": "column_encrypted_json",
+        "functions": 1227,
+        "baseline": 1217,
+        "ceiling": 1400,
+        "archive_bytes": 5073324
+      },
+      {
+        "probe": "column_nullable_encrypted_json",
+        "functions": 1459,
+        "baseline": 1449,
+        "ceiling": 1667,
+        "archive_bytes": 6256752
+      },
+      {
+        "probe": "column_password",
+        "functions": 1200,
+        "baseline": 1190,
+        "ceiling": 1369,
+        "archive_bytes": 4995426
+      },
+      {
+        "probe": "column_nullable_password",
+        "functions": 1427,
+        "baseline": 1417,
+        "ceiling": 1630,
+        "archive_bytes": 6092996
+      },
+      {
+        "probe": "sensitive_models",
+        "functions": 2626,
+        "baseline": 2606,
+        "ceiling": 2997,
+        "archive_bytes": 11571012
+      },
+      {
+        "probe": "model_type",
+        "functions": 299,
+        "baseline": 299,
+        "ceiling": 344,
+        "archive_bytes": 1262918
+      },
+      {
+        "probe": "table_ref",
+        "functions": 808,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 3907478
+      },
+      {
+        "probe": "onequery",
+        "functions": 808,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 3777352
+      },
+      {
+        "probe": "q_with",
+        "functions": 1064,
+        "baseline": 1053,
+        "ceiling": 1211,
+        "archive_bytes": 4732786
+      },
+      {
+        "probe": "q_select",
+        "functions": 841,
+        "baseline": 836,
+        "ceiling": 962,
+        "archive_bytes": 3974902
+      },
+      {
+        "probe": "q_join",
+        "functions": 1614,
+        "baseline": 1598,
+        "ceiling": 1838,
+        "archive_bytes": 7504536
+      },
+      {
+        "probe": "report_pipeline",
+        "functions": 1924,
+        "baseline": 1905,
+        "ceiling": 2191,
+        "archive_bytes": 10103248
+      },
+      {
+        "probe": "models",
+        "functions": 6203,
+        "baseline": 6147,
+        "ceiling": 7070,
+        "archive_bytes": 26346402
+      },
+      {
+        "probe": "column_number",
+        "functions": 1182,
+        "baseline": 1172,
+        "ceiling": 1348,
+        "archive_bytes": 4811120
+      },
+      {
+        "probe": "column_nullable_text",
+        "functions": 1470,
+        "baseline": 1456,
+        "ceiling": 1675,
+        "archive_bytes": 5917066
+      },
+      {
+        "probe": "models_1",
+        "functions": 1633,
+        "baseline": 1619,
+        "ceiling": 1862,
+        "archive_bytes": 6591240
+      },
+      {
+        "probe": "models_3",
+        "functions": 2465,
+        "baseline": 2435,
+        "ceiling": 2801,
+        "archive_bytes": 10093696
+      },
+      {
+        "probe": "column_time",
+        "functions": 1204,
+        "baseline": 1194,
+        "ceiling": 1374,
+        "archive_bytes": 4852402
+      },
+      {
+        "probe": "column_enum",
+        "functions": 1242,
+        "baseline": 1232,
+        "ceiling": 1417,
+        "archive_bytes": 5054278
+      },
+      {
+        "probe": "relation_with",
+        "functions": 1867,
+        "baseline": 1847,
+        "ceiling": 2125,
+        "archive_bytes": 7737030
+      },
+      {
+        "probe": "column_json",
+        "functions": 1290,
+        "baseline": 1280,
+        "ceiling": 1472,
+        "archive_bytes": 5271974
+      },
+      {
+        "probe": "column_nullable_json",
+        "functions": 1532,
+        "baseline": 1522,
+        "ceiling": 1751,
+        "archive_bytes": 6420580
+      },
+      {
+        "probe": "column_interval",
+        "functions": 1188,
+        "baseline": 1178,
+        "ceiling": 1355,
+        "archive_bytes": 4945614
+      },
+      {
+        "probe": "column_nullable_interval",
+        "functions": 1416,
+        "baseline": 1406,
+        "ceiling": 1617,
+        "archive_bytes": 6082572
+      }
+    ],
+    "model_slope": {
+      "two_models": 832,
+      "ceiling": 939
+    },
+    "existing_ceilings": "unchanged"
+  },
+  "checks": [
+    {
+      "command": "go build ./...",
+      "result": "pass",
+      "log": "build.log"
+    },
+    {
+      "command": "go vet ./database/... ./internal/...",
+      "result": "pass",
+      "log": "vet.log"
+    },
+    {
+      "command": "go test -race ./database ./database/orm/... ./database/query/... ./internal/querycore/... ./internal/ormcore/...",
+      "result": "pass",
+      "log": "race.log"
+    },
+    {
+      "command": "make generate-check",
+      "result": "pass",
+      "log": "generate.log"
+    },
+    {
+      "command": "cd tests/fixtures/goway && go vet ./...",
+      "result": "pass",
+      "log": "fixture-vet.log"
+    },
+    {
+      "command": "cd tests/fixtures/goway && go test -v ./...",
+      "result": "pass",
+      "log": "fixture-test.log"
+    },
+    {
+      "command": "python3 tools/goway_catalogue.py",
+      "result": "pass",
+      "log": "catalogue.log"
+    },
+    {
+      "command": "make docs-check",
+      "result": "pass",
+      "log": "docs.log"
+    },
+    {
+      "command": "gofmt -l (tracked and new Go sources)",
+      "result": "pass",
+      "log": "format-all.log"
+    },
+    {
+      "command": "go test -race ./database/orm -run TestEncryptedOrdinaryColumnRejectedBeforeSQL",
+      "result": "pass; final added invalid-declaration raw assertion",
+      "log": "final-targeted.log"
+    }
+  ],
+  "executor_level_compatibility": "No level-1 source changes. Existing database race suite passed, including TestPoolExecParametersAndRowOwnership, TestScanOneAndIterationAlwaysRelease, TestReadRoutingPreservesRawPrimaryAndActualTransaction.",
+  "not_run": [
+    "Live PostgreSQL: skipped without configuration; lead runs isolated-schema integration tests."
+  ],
+  "open_questions": [],
+  "source_sha256": {
+    "CHANGELOG.md": "253abe057a61e3b34daaf985b1aabb342695251a7d43a29f646315876be5b113",
+    "blueprint/goway-data-layer/README.md": "6c4b4300409306aa98fb6f508bfc15fd914981d02c1f09b3abe1aeb568050bcc",
+    "database/orm/README.md": "395cf6696851c86ac547e1afd37e734ce9c68a79a226fe78bf103b17da1ae0cc",
+    "database/orm/method_surface_test.go": "f6b65f0cef0d81168e174327d6526434184c8f0d31c8bd6d48a5850637b17a11",
+    "database/orm/raw.go": "4d38082652b3836fa8db4e723d2183b67b208823488d4cfff52bb8d5f2b27e6d",
+    "database/orm/raw_test.go": "991de2851e95700dde5463aeeed362c143be1cbce3d5bbeb1cfee1be2f4630ae",
+    "database/orm/read_routing_test.go": "ebd75da9585def840fad344c2c719caaa2a341eb4597d92329ae97beb24dcf42",
+    "database/orm/rows/raw.go": "5097a233e01d24df095948ea14f0f0f81c157a800ff8338846528266a536b0b8",
+    "database/orm/rows/raw_test.go": "c9cce22b9d192725d170c8ba5d6d67ff03406fbc5397d49054f4d44e6b5e0cde",
+    "database/orm/rows/sensitive_test.go": "69ef601330eaa9136b47b0ec6e2073908c86f805f7aaebff3b99aa71fb947ca2",
+    "database/orm/sensitive_declaration_test.go": "1d1c50862fdab9d883cbd1900840834049090bbcf5f85fbc97d87651e0697423",
+    "database/orm/sensitive_publication_test.go": "799f9a59c25b152f15556a5291f5620650939eabdfae2f9aba42284c7884cdb5",
+    "database/orm/testdata/public-methods.txt": "2d957e1b010f50277eb888913c4caf85b3b855ab6438a5233e21333987a55014",
+    "internal/ormcore/raw.go": "c5a8d309102b4ac772e95b5e549725b0d9671b916678d42e51f4c05ca1a1ac88",
+    "tests/fixtures/goway/compiler_cases_test.go": "b7cc6151837070118a4fc6ade916366e2298961fec52ed15c468a5ee184254dc",
+    "tests/fixtures/goway/footprint_test.go": "8c7086e7ac2fe276a34212aecef2ae2d1541baff1675f1adf42d1ac32b59f3fd",
+    "tests/fixtures/goway/pgsmoke/raw_test.go": "e47c44c313525413b53c60331ad5f59dbd5357cb85a67216d69ab12ed8e149b2",
+    "tests/fixtures/goway/pgsmoke/sensitive_test.go": "045a4911a88bd2999982293079895222b2605adc9fe588c9dfeeeba9235959fb",
+    "tests/fixtures/goway/testdata/compilefail/raw_model_result_owner/invalid.go": "0553e92cf7a8b43ba7444fd24b4cd3921c620e724ec40ac65316dd5564a1c4b4",
+    "tests/fixtures/goway/testdata/compilefail/raw_schema_result_owner/invalid.go": "60c0d657565a8bb15ec1cbc0635a70024b3d5fad1f1237d635d0c71f1240ec42",
+    "tests/fixtures/goway/testdata/footprint/raw/raw.go": "e45dd086bdad343d07a76b9f89dba8ff9a4ce70e040ac896f5b1c0af9334417e"
+  },
+  "log_directory": ".cache/goway-stage31d"
+}

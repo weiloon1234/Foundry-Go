@@ -29,6 +29,9 @@ func testEncryptedRow[V any](t *testing.T, c codec.Codec[V]) {
 	if _, err := Select(source, schema).All(t.Context(), db); err == nil {
 		t.Fatal("encrypted projection executed")
 	}
+	if _, err := Raw(t.Context(), db, schema, "must not execute"); err == nil {
+		t.Fatal("encrypted raw row executed")
+	}
 	if state.sql != "" {
 		t.Fatal("encrypted projection sent SQL")
 	}

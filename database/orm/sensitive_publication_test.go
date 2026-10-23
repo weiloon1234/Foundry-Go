@@ -54,6 +54,10 @@ func TestEncryptedOpenFailurePublication(t *testing.T) {
 		want   int
 		run    func(*database.DB) (int, error)
 	}{
+		{"Raw", false, 0, func(db *database.DB) (int, error) {
+			v, e := r.Raw(ctx, db, "SELECT id,secret,backup FROM secure_records")
+			return len(v), e
+		}},
 		{"All", false, 0, func(db *database.DB) (int, error) { v, e := r.Query().All(ctx, db); return len(v), e }},
 		{"First", true, 0, func(db *database.DB) (int, error) {
 			v, e := r.Query().First(ctx, db)

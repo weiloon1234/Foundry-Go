@@ -8,6 +8,9 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Add `Table.Raw` and `rows.Raw` with exact named-column hydration, no automatic
+  scopes or read routing, and existing model encryption opening (Stage 3.1d).
+
 - Add cursor pagination and key-chunk package functions with shared old/new token
   handling and unchanged HTTP pagination contracts (Stage 3.1c).
 

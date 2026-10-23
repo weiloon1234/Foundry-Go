@@ -540,7 +540,8 @@ The [program blueprint](goway-data-layer/README.md) owns design and guardrails.
 | G01 | [Prototype gate](goway-data-layer/README.md#stages-and-evidence) | Approved plan | Complete — historical Stage 1 gate: 56 equivalent statements, 20 compiler negatives; models 7,808 / 22,973 functions (33.99%), one-query 901 / 4,186 (21.52%) |
 | G02 | [Branch and guardrails](goway-data-layer/README.md) | G01 | In progress on `goway-data-layer` — core/fixture port at `686c6f2`; catalogue, emitter/release audit and synthetic harness added for lead acceptance. Old API retained. |
 | G03.0 | [Column footprint](goway-data-layer/README.md#stage-30-column-footprint) | G02 | Direct methods, method-free private bridges and value-owned codec state implemented; N=10/N=20 measured. Repository checks pass. 70-model gate: `models` 90,922 functions / 377 MB pass; compiler RSS 5.14 GB median misses the 5 GB target by 2.7%, accepted and tracked. No API trim or Stage 3.1 work. |
-| G03.1–G12 | [Parity, retirement and acceptance stages](goway-data-layer/README.md#stages-and-evidence) | G02 and each preceding stage | Planned; no model-generator retirement or consumer migration accepted yet |
+| G03.1 | [Core declarations, reads, writes and raw hydration](goway-data-layer/README.md#stages-and-evidence) | G03.0 | Done on the branch. JSON/interval/encrypted/password kinds, write outcomes, cursor pagination, key chunking, locked keyed reads and typed raw hydration; 81 of 1,026 compile-fail catalogue rows ported. Stage 3 gate passed 2026-10-23: `make verify`, `make test-postgres` (race), `make typescript-check`. No consumer migration accepted yet. |
+| G04–G12 | [Parity, retirement and acceptance stages](goway-data-layer/README.md#stages-and-evidence) | G03.1 and each preceding stage | Planned; no model-generator retirement or consumer migration accepted yet |
 
 ## Milestones and dependencies
 

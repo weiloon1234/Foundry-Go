@@ -40,6 +40,9 @@ func TestEncryptedOrdinaryColumnRejectedBeforeSQL(t *testing.T) {
 			if _, err := r.Query().Exists(t.Context(), db); err == nil {
 				t.Fatal("invalid declaration checked existence")
 			}
+			if _, err := r.Raw(t.Context(), db, "must not execute"); err == nil {
+				t.Fatal("invalid encrypted declaration executed raw SQL")
+			}
 			if len(statements) != 0 {
 				t.Fatal("invalid declaration sent SQL")
 			}

@@ -242,3 +242,27 @@ stable; iteration does not provide a snapshot across callbacks.
 
 Locked keyed reads compose `Orders.Query().Where(Orders.ID.Eq(id)).ForUpdate().Require(ctx, tx)`.
 The executor remains `*database.Tx`; unlocked reads retain read-pool routing.
+
+## Typed raw hydration
+
+`Table.Raw` and `rows.Raw` apply **no automatic scopes**: callers must write tenant,
+soft-delete and other scope predicates themselves. Both use the supplied executor
+exactly; raw SQL may write, so they do **not** choose a read replica. For explicit
+read routing, the existing level-1 `db.QueryRead` or `database.ReadQuery` API is
+available; an executor wrapper can deliberately forward `Query` to `QueryRead`
+when its SQL is known to be read-only. There is no implicit SQL classification.
+
+```go
+orders, err := Orders.Raw(ctx, tx,
+    "SELECT * FROM orders WHERE id=$1", id)
+report, err := rows.Raw(ctx, db, OrderRows,
+    "SELECT id, label FROM orders WHERE id=$1", id)
+```
+
+Results must contain exactly the declaration's column names, in any order. Use
+SQL aliases for declared names. Missing, duplicate or extra names fail even when
+there are zero rows. Arguments go unchanged to the executor. Existing codecs and
+model encryption opening are reused; row schemas still reject encrypted types.
+Any decoding/opening failure discards the whole result and closes the stream.
+For `UPDATE … RETURNING`, a hydration error does not prove rollback: use an owning
+transaction and preserve the executor's outcome classification.
