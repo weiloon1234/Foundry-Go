@@ -2,6 +2,7 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -9,17 +10,9 @@ import (
 // not belong to the current query. Adapters can classify this input failure
 // separately from invalid query declarations or failed output token creation.
 // It never formats a supplied token, decoded sort key or database value.
-type CursorInputError struct{ cause error }
+type CursorInputError = querycore.CursorInputError
 
-func (*CursorInputError) Error() string { return "invalid cursor input or query scope" }
-
-func (e *CursorInputError) GoString() string { return e.Error() }
-
-func (e *CursorInputError) Unwrap() error { return e.cause }
-
-func (*CursorInputError) Is(target error) bool { return target == fault.Invalid }
-
-func cursorInputFailure(cause error) error { return &CursorInputError{cause: cause} }
+func cursorInputFailure(cause error) error { return querycore.CursorInputFailure(cause) }
 
 // Validate checks the token's bounded structure without database I/O. Query
 // execution still verifies the query fingerprint and every ordered key codec.

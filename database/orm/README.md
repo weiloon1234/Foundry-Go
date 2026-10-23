@@ -214,3 +214,31 @@ Hydration publishes only complete, successfully opened models. Buffered reads,
 page reads, eager loads, and each chunk discard the failing batch. Streaming
 `Each` retains rows already delivered before an error; it never delivers the
 failing row or any later row. This matches the old API's streaming behavior.
+
+Stage 3.1c adds cursor pagination and primary-key chunking as package functions:
+
+```go
+page, err := orm.CursorPaginate(ctx, db,
+    models.Users.Query().OrderBy(models.Users.Nickname.Asc()), request.Page)
+// request is pagination.CursorRequest[Path, Filters, models.User].
+// Map the returned query.CursorPage with pagination.MapCursorPage.
+err = orm.ChunkByKey(ctx, db, models.Orders.Query(), models.Orders.ID, 500,
+    func(batch []models.Order) error { return process(batch) })
+err = orm.EachByKey(ctx, db, models.Orders.Query(), models.Orders.ID, 500, processOrder)
+```
+
+Cursor requests/results reuse the existing HTTP pagination adapters and
+`data`/`meta`/`links` JSON shape. Tokens retain the old unsigned v1 format and
+concrete model, filter and ordering scope. They are positions, not credentials: a
+client may move its own position, but query predicates (tenant, soft-delete and
+scopes) always still apply. Nullable
+and mixed orders use the same keyset predicate, with the primary key appended as
+a unique tiebreaker. Existing Limit/Offset windows are rejected.
+
+Key chunks accept only primary-key ordering and zero Offset; Limit bounds total
+delivery. Rows close before callbacks and the next key is captured before callback
+edits. Deleting rows behind the boundary does not shift later batches. Keep keys
+stable; iteration does not provide a snapshot across callbacks.
+
+Locked keyed reads compose `Orders.Query().Where(Orders.ID.Eq(id)).ForUpdate().Require(ctx, tx)`.
+The executor remains `*database.Tx`; unlocked reads retain read-pool routing.

@@ -182,7 +182,10 @@ const response = await echoDescriptor.call(wrappedAPI, request);
 assert.deepEqual(echoDescriptor.validate(request), sdk.validateRequest("itemsEcho", request));
 assert.equal(response.large, source.large); assert.equal(response.counter, source.counter); assert.equal(response.exact, source.exact);
 assert.equal(response.quoted, source.quoted); assert.equal(response.amount, source.amount); assert.equal(response.natural, "MY");
-assert.equal(response.keys[source.large], "max"); assert.equal(response.when, source.when);
+assert.equal(response.keys[source.large], "max");
+// Framework instants are normalized to PostgreSQL's microsecond precision, so the
+// nanosecond input echoes truncated (B29).
+assert.equal(response.when, "2026-09-17T12:34:56.123456Z");
 assert.equal(closes, beforeEchoClose + 1);
 // Locale-keyed input round-trips; the descriptor addresses entries by locale.
 const titled = await api.itemsEcho({ ...request, body: { ...payload, titles: { en: "Hello", ms: "Helo" } } });

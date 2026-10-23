@@ -2,6 +2,25 @@ package goway_test
 
 func compilerCases() []compilerCase {
 	return []compilerCase{
+		{"chunk_callback_owner", "func([]models.User) error"},
+		{"chunk_each_callback_owner", "func(models.User) error"},
+		{"chunk_each_key_owner", "does not match inferred type"},
+		{"chunk_key_callback_owner", "does not match inferred type"},
+		{"cursor_owner", "value.Optional[query.Cursor[models.User]]"},
+		{"cursor_request_owner", "does not match inferred type"},
+		{"lock_clause_owner_conversion", "cannot convert"},
+		{"locked_count", "has no field or method Count"},
+		{"locked_key_owner", "as CountryCode value"},
+		{"locked_model_id", "model.ID[models.User]"},
+		{"locked_mutation", "has no field or method UpdateAll"},
+		{"locked_predicate_owner", "orm.Predicate[models.User]"},
+		{"locked_result_owner", "as []models.Order value"},
+		{"nested_locked_source", "does not match"},
+		{"routing_primary_lock", "*database.Tx"},
+		{"simple_page_owner", "orm.SimplePage[models.Order]"},
+		{"simple_page_total", "has no field or method Total"},
+		{"where_has_find_owner", "model.ID[models.User]"},
+
 		{"encrypted_draft_plaintext", "as encrypted.Text value"},
 		{"encrypted_field_order", "has no field or method Asc"},
 		{"encrypted_field_predicate", "has no field or method Eq"},

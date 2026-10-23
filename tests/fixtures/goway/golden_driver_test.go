@@ -44,11 +44,13 @@ func (transaction) Commit() error   { return nil }
 func (transaction) Rollback() error { return nil }
 
 type goldenCapture struct {
-	output        bytes.Buffer
-	statements    int
-	generatedKey  bool
-	introducerKey bool
-	chunkBatches  [][][]driver.Value
+	output          bytes.Buffer
+	statements      int
+	generatedKey    bool
+	introducerKey   bool
+	chunkBatches    [][][]driver.Value
+	scriptedColumns []string
+	scriptedBatches [][][]driver.Value
 }
 type oldGolden struct{ *goldenCapture }
 type newGolden struct{ *goldenCapture }
@@ -79,6 +81,14 @@ func (g *connection) ExecContext(_ context.Context, s string, args []driver.Name
 }
 func (g *connection) QueryContext(_ context.Context, s string, args []driver.NamedValue) (driver.Rows, error) {
 	g.printSQL(s, args)
+	if g.scriptedColumns != nil {
+		if len(g.scriptedBatches) == 0 {
+			return nil, errors.New("unexpected scripted read")
+		}
+		batch := g.scriptedBatches[0]
+		g.scriptedBatches = g.scriptedBatches[1:]
+		return &rows{columns: g.scriptedColumns, batch: batch}, nil
+	}
 	if g.chunkBatches != nil && strings.Contains(s, `FROM "orders"`) {
 		if len(g.chunkBatches) == 0 {
 			panic("unexpected extra chunk read")

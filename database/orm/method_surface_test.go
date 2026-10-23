@@ -28,6 +28,9 @@ func TestPublicMethodSurface(t *testing.T) {
 			recordMethodSurface(&out, pkg.Name()+"."+name, typ)
 		}
 		if dir == "." {
+			for _, name := range []string{"CursorPaginate", "ChunkByKey", "EachByKey"} {
+				out.WriteString("orm." + name + " " + types.TypeString(pkg.Scope().Lookup(name).Type(), nil) + "\n")
+			}
 			out.WriteString("orm.FoundryColumn " + types.TypeString(pkg.Scope().Lookup("FoundryColumn").Type(), nil) + "\n")
 			for _, name := range []string{"NumberKey", "TextKey"} {
 				sig := pkg.Scope().Lookup(name).Type().(*types.Signature)

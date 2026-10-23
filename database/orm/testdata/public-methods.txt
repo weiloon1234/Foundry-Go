@@ -696,6 +696,9 @@ orm.WriteError
   Error func() string
   GoString func() string
   Unwrap func() error
+orm.CursorPaginate func[M any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], request github.com/weiloon1234/Foundry-Go/database/query.CursorRequest[M]) (github.com/weiloon1234/Foundry-Go/database/query.CursorPage[M], error)
+orm.ChunkByKey func[M any, K comparable](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], key github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, K], size int, yield func([]M) error) error
+orm.EachByKey func[M any, K comparable](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], key github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, K], size int, yield func(M) error) error
 orm.FoundryColumn func[M, V, P any](column github.com/weiloon1234/Foundry-Go/database/orm.ExpressionColumn[M, V, P], _ github.com/weiloon1234/Foundry-Go/internal/sqlowner.Seal) (github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[V], github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[P])
 orm.NumberKey result
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]

@@ -2,11 +2,8 @@ package query
 
 import (
 	"database/sql/driver"
-	"slices"
 
-	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/internal/callback"
-	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 type cursorBoundary struct {
@@ -14,75 +11,25 @@ type cursorBoundary struct {
 	backward, present bool
 }
 
-func validCursorRequest[R any](request CursorRequest[R]) bool {
-	return validPageSize(request.Size) && !(request.After.IsSet() && request.Before.IsSet())
+func validCursorRequest[R any](r CursorRequest[R]) bool {
+	return validPageSize(r.Size) && !(r.After.IsSet() && r.Before.IsSet())
 }
-
 func readCursorBoundary[R any](request CursorRequest[R], scope string, fields []RecordField[R], required []bool) (cursorBoundary, error) {
-	if len(fields) != len(required) {
-		return cursorBoundary{}, invalidCursor()
-	}
 	if !validCursorRequest(request) {
 		return cursorBoundary{}, cursorInputFailure(invalidCursor())
-	}
-	for _, field := range fields {
-		if field.sensitive {
-			return cursorBoundary{}, fault.New(fault.Invalid, "sensitive fields cannot be cursor keys")
-		}
 	}
 	token, present := request.After.Get()
 	backward := request.Before.IsSet()
 	if backward {
 		token, present = request.Before.Get()
 	}
-	b := cursorBoundary{backward: backward, present: present}
-	if !present {
-		return b, nil
+	adapters := make([]querycore.CursorField, len(fields))
+	for i, f := range fields {
+		adapters[i] = querycore.CursorField{Sensitive: f.sensitive, Decode: f.decode}
 	}
-	envelope, err := decodeCursor(token.token)
-	if err != nil {
-		return cursorBoundary{}, cursorInputFailure(err)
-	}
-	if envelope.Scope != scope || len(envelope.Values) != len(fields) {
-		return cursorBoundary{}, cursorInputFailure(invalidCursor())
-	}
-	b.keys = make([]driver.Value, len(fields))
-	for i, field := range fields {
-		raw, err := decodeCursorValue(envelope.Values[i])
-		if err != nil {
-			return cursorBoundary{}, cursorInputFailure(err)
-		}
-		if field.decode == nil {
-			return cursorBoundary{}, invalidCursor()
-		}
-		// Decode/bind and custom error classification share one owned callback.
-		// Only declared invalid-value errors are client input. Panic, Goexit and
-		// arbitrary infrastructure errors retain their server classification.
-		err = callback.Isolated("decode cursor boundary key", func() error {
-			var err error
-			b.keys[i], err = field.decode(raw)
-			if err != nil && errorgraph.Is(err, fault.Invalid) {
-				return cursorInputFailure(err)
-			}
-			return err
-		})
-		if err != nil {
-			return cursorBoundary{}, err
-		}
-		if required[i] && b.keys[i] == nil {
-			return cursorBoundary{}, cursorInputFailure(invalidCursor())
-		}
-	}
-	return b, nil
+	b, err := querycore.ReadCursorBoundary(token.token, present, backward, scope, adapters, required)
+	return cursorBoundary{keys: b.Keys, backward: b.Backward, present: b.Present}, err
 }
-
 func cursorOrders(orders []queryOrder, backward bool) []queryOrder {
-	if !backward {
-		return orders
-	}
-	orders = slices.Clone(orders)
-	for i := range orders {
-		orders[i].Descending = !orders[i].Descending
-	}
-	return orders
+	return querycore.CursorOrders(orders, backward)
 }

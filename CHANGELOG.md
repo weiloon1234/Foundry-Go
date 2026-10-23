@@ -8,6 +8,9 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Add cursor pagination and key-chunk package functions with shared old/new token
+  handling and unchanged HTTP pagination contracts (Stage 3.1c).
+
 - Share encrypted-field orchestration across old/new data layers; add restricted
   encrypted handles, typed password codecs and write-outcome coverage (Stage 3.1b).
   Reject encrypted types bound as ordinary columns or projections at startup.

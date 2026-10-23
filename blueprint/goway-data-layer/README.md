@@ -40,6 +40,7 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 3.0 | Column footprint: flatten column types (R9), then measure receiver form and codec sharing; method-set trims only with approval | Done. 70-model gate: functions and bytes pass; compiler RSS 5.14 GB median against a 5 GB target, accepted as a recorded miss (2026-10-23) |
 | 3.1a | Declarations/codecs: JSON, interval, natural keys, binary ownership and IContains | Implemented; local acceptance passes (segmented fixes); PostgreSQL sources compile/vet, execution belongs to the lead |
 | 3.1b | Writes, encrypted fields and password hashes | Implemented; local acceptance passes in segments; live PostgreSQL belongs to the lead |
+| 3.1c | Cursor/key-chunk reads and locked keyed lookup composition | Implemented; Go/fixture gates pass; unchanged contracts; existing TypeScript timestamp assertion fails on HEAD too; PostgreSQL execution belongs to lead |
 | 3.1 | Complete declaration, reads, writes, typed raw hydration and model cursors | Planned |
 | 4 | Full relations, pivots, through relations, eager limits, filters and relation writes | Planned |
 | 5 | Lifecycle, mutators, change sets, scopes and observers | Planned |
@@ -308,6 +309,10 @@ Names in planned rows remain subject to their owning stage's consumer acceptance
 | --- | --- | --- |
 | `QueryOrders().Where(OrderFields().TotalCents.Gt(100)).All(ctx, db)` | `Orders.Query().Where(Orders.TotalCents.Gt(100)).All(ctx, db)` | Core ported |
 | `QueryOrders().Find(ctx, db, id)` | `Orders.Find(ctx, db, id)` | Ported |
+| `q.CursorPaginate(ctx, ex, request)` | `orm.CursorPaginate(ctx, ex, q, request)` | Stage 3.1c; unchanged HTTP request/result adapters |
+| `q.ChunkByID(ctx, ex, size, visit)` | `orm.ChunkByKey(ctx, ex, q, Orders.ID, size, visit)` | Stage 3.1c |
+| `q.EachByID(ctx, ex, size, visit)` | `orm.EachByKey(ctx, ex, q, Orders.ID, size, visit)` | Stage 3.1c |
+| `q.ForUpdate().RequireFind(ctx, tx, id)` | `q.Where(Orders.ID.Eq(id)).ForUpdate().Require(ctx, tx)` | Stage 3.1c; transaction-only |
 | `QueryOrders().Create(ctx, tx, OrderDraft{}.SetTotalCents(v))` | `Orders.Insert(ctx, tx, Orders.TotalCents.Set(v))` | Core ported |
 | `QueryOrders().With(OrderRelations().Buyer)` | `Orders.Query().With(OrderRelations.Buyer)` | Basic eager loading ported |
 | `defineOrderRelations() OrderRelationSet` | Separate typed relation namespace using `BelongsToOf`/`HasManyOf` | Basic relations ported; full family Stage 4 |
@@ -339,7 +344,8 @@ consumer retains Stage 1 golden coverage and adds Stage 3.1a declaration/codec c
 | Draft, batch, lookup, conflict and source writes | Generated drafts/wrappers | Assignments and package functions, Stages 3/6e; preserve hook versus set-write semantics |
 | Reference and identity | `FoundryReference`/`FoundryIdentity` | Table/column-based adapters retaining model/key and persisted identity, Stage 7 |
 | Attachments, translations and metadata | Slot fields plus generated policies | Preserve fields, stored owner names, policies and cleanup; declarations in Stage 7 |
-| Audit/history, pruning, chunks, pagination and locking | Generated wrappers and query runtime | Stages 3/5/6e/7; preserve redaction, transaction and outcome contracts |
+| Chunks, pagination and locking | Generated wrappers and query runtime | Stage 3.1c: cursor/key-chunk package functions; keyed/locked lookup composition; shared tokens and unchanged HTTP shape |
+| Audit/history and pruning | Generated wrappers and query runtime | Stages 5/6e/7; preserve redaction, transaction and outcome contracts |
 | Projections, joins, CTEs, sets, windows and subqueries | Generated selectors and `query` families | `orm/expr` and `orm/rows` functions, Stages 6a–6d |
 | Model binding, factories, datatables and database validation | Generated metadata and typed query interfaces | Table/column adapters, Stage 7; TS/OpenAPI/manifest contracts must remain identical |
 
@@ -396,8 +402,8 @@ intentionally accepts byte slices, while identity does not.
 <!-- catalogue-summary -->
 | Disposition | Cases |
 | --- | ---: |
-| ported | 63 |
-| port | 519 |
+| ported | 81 |
+| port | 501 |
 | merge | 0 |
 | obsolete | 0 |
 | unaffected | 444 |
@@ -435,7 +441,7 @@ intentionally accepts byte slices, while identity does not.
 | 7 | 81 |
 | — | 444 |
 
-63 old catalogue rows are covered by 55 distinct Go-way cases.
+81 old catalogue rows are covered by 73 distinct Go-way cases.
 
 ## Emitter audit
 
@@ -596,3 +602,53 @@ read/write publication failures, and old/new streaming parity. `Each` keeps rows
 already yielded before a later open failure; buffered reads and failing chunks
 publish nothing. PostgreSQL coverage now inspects stored envelopes, persists
 new-API `SetNull`, and checks `fault.Invalid` for wrong row, column and table.
+
+## Stage 3.1c reads
+
+`orm.CursorPaginate(ctx, ex, q, query.CursorRequest[M])` returns the existing
+`query.CursorPage[M]`, directly usable with `pagination.MapCursorPage` and the
+existing HTTP `CursorRequest.Page`. Wire types, manifests, OpenAPI and TypeScript
+remain owned by their existing descriptors. No Query/LockedQuery/Table methods
+are added. `ChunkByKey` and `EachByKey` take a same-model key column and preserve
+the old primary-key ordering, bounded-window and closed-row callback contracts.
+
+Token parsing, encoding, scope hashing and boundary decoding now share
+`internal/querycore`; old query entry points delegate. The old v1 tokens are
+unsigned positions (not credentials). A client may move its own position; query
+predicates (tenant, soft-delete and scopes) always still apply. Scope includes
+concrete Go model identity, SQL and bindings. Interoperability uses both APIs over the same Go model, with exact token
+byte comparisons. Distinct Go models remain distinct token scopes.
+
+Eighteen read compiler cases are ported. Golden tests cover nullable/mixed cursor
+orders, forward/backward navigation, key-chunk SQL and locked keyed reads.
+PostgreSQL sources traverse ties and NULLs both ways, cover malformed-token and
+foreign-scope rejection, preserve tenant and soft-delete predicates after client
+position edits, delete rows during key chunks, and perform a transaction-only
+keyed lock.
+Footprint ceilings are retained; dedicated cursor and key-chunk probes are added.
+
+| Old API | New API | Parity |
+| --- | --- | --- |
+| `q.CursorPaginate(ctx, ex, request)` | `orm.CursorPaginate(ctx, ex, q, request)` | Shared token format/scope and HTTP adapters |
+| `q.ChunkByID(ctx, ex, size, visit)` | `orm.ChunkByKey(ctx, ex, q, table.Key(), size, visit)` | Primary-key seeks, stable progress before callbacks |
+| `q.EachByID(ctx, ex, size, visit)` | `orm.EachByKey(ctx, ex, q, table.Key(), size, visit)` | Individual rows from closed batches |
+| `q.ForUpdate().Find(ctx, tx, id)` | `q.Where(table.Key().Eq(id)).ForUpdate().First(ctx, tx)` | Typed key and transaction retained |
+| Required locked keyed lookup | `q.Where(table.Key().Eq(id)).ForUpdate().Require(ctx, tx)` | Same transaction SQL |
+
+Acceptance: Go build/vet, scoped races (segmented fixes), generation, fixture tests,
+catalogue and pagination contract checks pass. All 28 probes remain within their
+ceilings; two-model growth is 820 functions against 939. The surface snapshot adds
+only `CursorPaginate`, `ChunkByKey` and `EachByKey` function signatures.
+
+| New probe | Functions | Ceiling | Archive bytes |
+| --- | ---: | ---: | ---: |
+| cursor | 1127 | 1297 | 4968190 |
+| key_chunk | 812 | 934 | 3792620 |
+
+Ten manifest/OpenAPI/TypeScript export files are byte-identical against the HEAD
+cursor implementation. Strict TypeScript/negative compilation and React/Vue tests
+pass. The native HTTP/WebSocket runtime test fails at the existing nanosecond
+round-trip assertion (`.123456789Z` expected, `.123456Z` actual); the same failure
+was reproduced with all changed Go sources overlaid from HEAD. This slice does
+not alter temporal precision or that fixture. See the
+[read-slice evidence](../../docs/evidence/goway-stage31c-reads.json).

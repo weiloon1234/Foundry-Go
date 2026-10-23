@@ -1,18 +1,11 @@
 package query
 
 import (
-	"bytes"
-	"crypto/sha256"
 	"database/sql/driver"
-	"encoding/base64"
-	"encoding/hex"
-	"encoding/json"
-	"io"
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
-	"github.com/weiloon1234/Foundry-Go/internal/sqlvalue"
 )
 
 const MaxCursorBytes = querycore.MaxCursorBytes
@@ -42,60 +35,13 @@ func ParseCursor[M any](token string) (Cursor[M], error) {
 	return Cursor[M]{token: token}, nil
 }
 
-type cursorEnvelope struct {
-	Version int           `json:"v"`
-	Scope   string        `json:"scope"`
-	Values  []cursorValue `json:"values"`
-}
+type cursorEnvelope = querycore.CursorEnvelope
+type cursorValue = querycore.CursorValue
 
-type cursorValue = sqlvalue.Value
-
-func invalidCursor() error { return fault.New(fault.Invalid, "invalid cursor token or query scope") }
-
-func encodeCursorValue(v driver.Value) (cursorValue, error) {
-	encoded, err := sqlvalue.Encode(v)
-	if err != nil {
-		return cursorValue{}, invalidCursor()
-	}
-	return cursorValue(encoded), nil
-}
-
-func decodeCursorValue(v cursorValue) (driver.Value, error) {
-	decoded, err := sqlvalue.Value(v).Decode()
-	if err != nil {
-		return nil, invalidCursor()
-	}
-	return decoded, nil
-}
-
-func decodeCursor(token string) (cursorEnvelope, error) {
-	if len(token) == 0 || len(token) > MaxCursorBytes {
-		return cursorEnvelope{}, invalidCursor()
-	}
-	data, err := base64.RawURLEncoding.Strict().DecodeString(token)
-	if err != nil {
-		return cursorEnvelope{}, invalidCursor()
-	}
-	var envelope cursorEnvelope
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&envelope); err != nil {
-		return cursorEnvelope{}, invalidCursor()
-	}
-	var extra any
-	if decoder.Decode(&extra) != io.EOF || envelope.Version != 1 || len(envelope.Scope) != sha256.Size*2 || len(envelope.Values) == 0 || len(envelope.Values) > MaxCursorFields {
-		return cursorEnvelope{}, invalidCursor()
-	}
-	if _, err := hex.DecodeString(envelope.Scope); err != nil {
-		return cursorEnvelope{}, invalidCursor()
-	}
-	for _, v := range envelope.Values {
-		if _, err := decodeCursorValue(v); err != nil {
-			return cursorEnvelope{}, err
-		}
-	}
-	return envelope, nil
-}
+func invalidCursor() error                                  { return querycore.InvalidCursor() }
+func encodeCursorValue(v driver.Value) (cursorValue, error) { return querycore.EncodeCursorValue(v) }
+func decodeCursorValue(v cursorValue) (driver.Value, error) { return querycore.DecodeCursorValue(v) }
+func decodeCursor(token string) (cursorEnvelope, error)     { return querycore.DecodeCursor(token) }
 
 func cursorScope[M any](q Query[M]) (string, error) {
 	statement, err := q.Compile()
@@ -111,58 +57,18 @@ func cursorStatementScope[M any](statement Statement, identity ...string) (strin
 }
 
 func cursorStatementScopeFor(modelIdentity string, statement Statement, identity []string) (string, error) {
-	values := make([]cursorValue, len(statement.arguments))
-	for i, v := range statement.arguments {
-		encoded, err := encodeCursorValue(v)
-		if err != nil {
-			return "", err
-		}
-		values[i] = encoded
-	}
-	data, err := json.Marshal(struct {
-		Model, SQL string
-		Arguments  []cursorValue
-		Identity   []string `json:",omitempty"`
-	}{modelIdentity, statement.sql, values, identity})
-	if err != nil {
-		return "", invalidCursor()
-	}
-	hash := sha256.Sum256(data)
-	return hex.EncodeToString(hash[:]), nil
+	return querycore.CursorStatementScopeFor(modelIdentity, querycore.Statement{SQLText: statement.sql, Bindings: statement.arguments}, identity)
 }
-
 func makeCursor[M any](scope string, fields []ModelField[M], model M) (Cursor[M], error) {
-	envelope := cursorEnvelope{Version: 1, Scope: scope, Values: make([]cursorValue, len(fields))}
-	for i, field := range fields {
+	token, err := querycore.BuildCursor(scope, len(fields), func(i int) (driver.Value, error) {
+		field := fields[i]
 		if field.sensitive {
-			return Cursor[M]{}, fault.New(fault.Invalid, "sensitive fields cannot be cursor keys")
+			return nil, fault.New(fault.Invalid, "sensitive fields cannot be cursor keys")
 		}
-		bound, err := field.get(model)
-		if err != nil {
-			return Cursor[M]{}, err
-		}
-		// Bound allocation before base64/JSON expansion of a large ordered value.
-		switch v := bound.(type) {
-		case string:
-			if len(v) > MaxCursorBytes {
-				return Cursor[M]{}, invalidCursor()
-			}
-		case []byte:
-			if len(v) > MaxCursorBytes {
-				return Cursor[M]{}, invalidCursor()
-			}
-		}
-		envelope.Values[i], err = encodeCursorValue(bound)
-		if err != nil {
-			return Cursor[M]{}, err
-		}
-	}
-	data, err := json.Marshal(envelope)
+		return field.get(model)
+	})
 	if err != nil {
-		return Cursor[M]{}, invalidCursor()
+		return Cursor[M]{}, err
 	}
-	if base64.RawURLEncoding.EncodedLen(len(data)) > MaxCursorBytes {
-		return Cursor[M]{}, invalidCursor()
-	}
-	return Cursor[M]{token: base64.RawURLEncoding.EncodeToString(data)}, nil
+	return Cursor[M]{token: token}, nil
 }
