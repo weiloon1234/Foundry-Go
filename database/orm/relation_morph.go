@@ -68,6 +68,8 @@ func morphPivot[P any](p *relationPlan, kind KeyColumn[P, MorphName], name Morph
 		return p
 	}
 	p.join.pivot = where(p.join.pivot, []Predicate[P]{comparison[P](c, querycore.Equal, []MorphName{name})})
+	p.join.defaults, err = relationPivotDefaults(p.join.defaults, c.core, string(name))
+	p.err = errors.Join(p.err, err)
 	return p
 }
 

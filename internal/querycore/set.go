@@ -6,6 +6,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
+// SetAlias is the output scope shared by record and scalar set adapters.
+const SetAlias = "foundry_set"
+
 type SetOperator uint8
 
 const (

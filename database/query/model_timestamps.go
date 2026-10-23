@@ -131,15 +131,7 @@ func (p insertPlan[M]) withTimestamps(ctx context.Context, source clock.Clock) (
 	}
 	if p.conflict != nil && p.conflict.state.Action == querycore.ConflictDoUpdate {
 		policy := *p.conflict
-		policy.state.Updates = slices.Clone(policy.state.Updates)
-		name := p.query.definition.modelDefinition.Timestamps.Updated
-		index := slices.IndexFunc(policy.state.Updates, func(update conflictUpdate) bool { return update.Field.Column == name })
-		update := conflictUpdate{Field: fieldRef{Table: p.query.queryCore.Table, Column: name}, Incoming: true}
-		if index >= 0 {
-			policy.state.Updates[index] = update
-		} else {
-			policy.state.Updates = append(policy.state.Updates, update)
-		}
+		policy.state = policy.state.WithUpdatedTimestamp(p.query.queryCore.Table, p.query.definition.modelDefinition.Timestamps.Updated)
 		p.conflict = &policy
 	}
 	return p, nil

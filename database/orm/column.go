@@ -114,6 +114,7 @@ func bindTyped[V any](d *declaration, ptr *V, c codec.Codec[V], nullable bool, o
 		}
 		return capture(c, v), nil
 	}
+	core.storedAssignment = core.automatic
 	configureMutatorOptions(d, core, opts)
 	return columnWithCodec(core, c)
 }

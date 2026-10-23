@@ -165,3 +165,6 @@ See [complete records and transaction projections](records.md) for `ModelRecord`
 `RecordOf`, `AsRecord`, `SelectRecord` and the transaction-required record family.
 These adapters retain complete decoders and provide the shared foundation for
 Stage 6c CTE/set/cursor composition and Stage 6b4 transaction joins.
+
+See [CTEs, recursion and set operations](composition.md) for complete-record CTEs,
+transaction CTEs, recursive self scopes, and record/scalar set composition.

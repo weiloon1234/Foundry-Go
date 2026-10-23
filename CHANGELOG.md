@@ -8,13 +8,25 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Complete Stage 5 with typed pivot relation writes: Attach/Detach/Sync/Toggle/
+  UpdatePivot package functions reuse the lifecycle, scoped endpoint locks and
+  atomic bounds. Hook-free batches use set writes; failures retain typed
+  reconciliation candidates without publishing partial success.
+- Add ordinary/transaction CTEs, recursive UNION/UNION ALL and all six record
+  and scalar set operators (6c2), retaining decoder identity, input windows,
+  output scopes, nullability and transaction locks.
+- Add immutable column/constraint conflict policies and Upsert/UpsertMany (6e1).
+  Mutators, proposed-value encryption, timestamps and RETURNING remain active;
+  upserts skip per-model callbacks and automatic audit. DO UPDATE retains global
+  scopes; unconditional updates suppressed by those scopes roll back the batch.
+
 - Complete 6a with typed raw fragments (`expr.Raw`, `RawWithCodec`, `orm.WhereRaw`)
   and opt-in `foundry lint --no-raw`. Fragments retain query scopes and transaction
   ownership; raw-bearing statements use private detector fingerprints. The lexer
   rejects ambiguous syntax; lint is a best-effort source policy, not a runtime proof.
 - Add complete model/projection record adapters and transaction-only record and
   projection composition (6c1), preserving derived windows, decoder identity,
-  retrieval callbacks and inner locks. CTEs, sets and result cursors remain pending.
+  retrieval callbacks and inner locks. Result cursors remain pending.
 - Add opt-in model audit policies and typed historical readers (B5d), reusing
   Automatic/Exclude/Redact, stored codecs and transactional observer capture.
   Updates capture touched fields; creates/deletes capture complete snapshots.

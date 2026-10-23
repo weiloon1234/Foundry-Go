@@ -71,9 +71,11 @@ type writePlan struct {
 	adjust      *querycore.Adjustment
 	bounded     bool
 	batch       [][]querycore.MutationAssignment
+	returnLimit int
+	conflict    *querycore.Conflict
 }
 
-func planWrite[M any](q queryState, kind querycore.MutationKind, as []Assignment[M], many bool) (writePlan, error) {
+func planWrite[M any](q queryState, kind querycore.MutationKind, as []Assignment[M], many bool, deferIdentity ...bool) (writePlan, error) {
 	if err := validateQuery(q); err != nil {
 		return writePlan{}, err
 	}
@@ -123,7 +125,10 @@ func planWrite[M any](q queryState, kind querycore.MutationKind, as []Assignment
 	if (kind == querycore.RestoreModel || kind == querycore.ForceDeleteModel) && !q.ast.HasSoftDeletes() {
 		return writePlan{}, invalid("operation requires soft deletes")
 	}
-	c, err := p.query.ast.WriteCompiler(p.kind.SqlKind(), !many, len(p.query.relations) > 0)
+	// Relation templates validate shape before selecting concrete pivot identities.
+	// Final compilation still requires a primary equality for every per-model write.
+	requireIdentity := !many && !(len(deferIdentity) == 1 && deferIdentity[0])
+	c, err := p.query.ast.WriteCompiler(p.kind.SqlKind(), requireIdentity, len(p.query.relations) > 0)
 	if err != nil {
 		return writePlan{}, err
 	}
@@ -153,6 +158,7 @@ func (p writePlan) conventions(ctx context.Context, source clock.Clock) (writePl
 		for i, row := range p.batch {
 			item := p
 			item.batch = nil
+			item.conflict = nil
 			item.assignments = row
 			current, err := item.conventions(ctx, source)
 			if err != nil {
@@ -161,7 +167,7 @@ func (p writePlan) conventions(ctx context.Context, source clock.Clock) (writePl
 			batch[i] = current.assignments
 		}
 		p.batch = batch
-		return p, nil
+		return p.withConflictTimestamp(), nil
 	}
 	p.assignments = slices.Clone(p.assignments)
 	if p.kind == querycore.InsertModel {
@@ -213,7 +219,7 @@ func (p writePlan) conventions(ctx context.Context, source clock.Clock) (writePl
 			return p, err
 		}
 	}
-	return p, nil
+	return p.withConflictTimestamp(), nil
 }
 func (p writePlan) present(name string) bool {
 	return slices.ContainsFunc(p.assignments, func(a querycore.MutationAssignment) bool { return a.Field.Column == name })
@@ -259,6 +265,9 @@ func (p writePlan) validateEffective() error {
 	if err != nil {
 		return err
 	}
+	if err := p.validateConflict(&c); err != nil {
+		return err
+	}
 	if p.batch != nil {
 		for _, row := range p.batch {
 			if _, err = p.query.ast.ValidateMutation(querycore.InsertModel, row, &c); err != nil {
@@ -274,6 +283,9 @@ func (p writePlan) validateEffective() error {
 func (p writePlan) compile() (querycore.Statement, error) {
 	c, err := p.query.ast.WriteCompiler(p.kind.SqlKind(), !p.many, len(p.query.relations) > 0)
 	if err != nil {
+		return querycore.Statement{}, err
+	}
+	if err := p.validateConflict(&c); err != nil {
 		return querycore.Statement{}, err
 	}
 	if p.batch != nil {
@@ -293,7 +305,7 @@ func (p writePlan) compile() (querycore.Statement, error) {
 		}
 		return p.query.ast.CompileInsert(c, []map[string]querycore.MutationAssignment{assigned}, union, node, nil)
 	}
-	return p.query.ast.CompileMutation(c, node, p.kind, p.assignments, assigned, p.adjust, p.many)
+	return p.query.ast.CompileMutation(c, node, p.kind, p.assignments, assigned, p.adjust, p.many && p.returnLimit == 0)
 }
 func writeOne[M any](ctx context.Context, writer database.Transactor, q queryState, kind querycore.MutationKind, as []Assignment[M]) (M, error) {
 	if err := writeContext(ctx, writer); err != nil {
@@ -355,7 +367,7 @@ func executeWrite(ctx context.Context, writer database.Transactor, p writePlan, 
 	set, known := ownerObservers(writer)
 	hooked := callbacks != nil && (!known || callbacks.needed(set, p.kind))
 	// Exact pool owners can confirm a single INSERT without an explicit transaction.
-	if p.kind == querycore.InsertModel && !p.many && !p.encrypted() && !p.mutated() && !hooked {
+	if p.kind == querycore.InsertModel && p.conflict == nil && !p.many && !p.encrypted() && !p.mutated() && !hooked {
 		switch owner := writer.(type) {
 		case *database.DB:
 			if owner == nil {
@@ -366,73 +378,13 @@ func executeWrite(ctx context.Context, writer database.Transactor, p writePlan, 
 			return autocommit(ctx, p, owner.Clock(), owner.FoundryAutocommitQuery, scan)
 		}
 	}
-	var prepared querycore.Statement
-	var err error
-	if !p.needsClock() && !p.encrypted() && !p.mutated() && !hooked {
-		p, err = p.conventions(ctx, nil)
-		if err == nil {
-			prepared, err = p.compile()
-		}
-		if err != nil {
-			return err, false
-		}
+	prepared, err := precompileWrite(ctx, p, hooked)
+	if err != nil {
+		return err, false
 	}
 	completed := false
 	err = writer.Transaction(ctx, func(tx *database.Tx) error {
-		if tx == nil {
-			return invalid("transactor supplied no transaction")
-		}
-		if hooked {
-			if err := callbacks.before(ctx, tx, &p); err != nil {
-				return err
-			}
-			ctx = p.query.ast.ScopeContext
-		}
-		s := prepared
-		if p.needsClock() || p.encrypted() || p.mutated() || hooked {
-			current, e := p.conventions(ctx, tx.Clock())
-			if e != nil {
-				return e
-			}
-			if e = current.validateEffective(); e != nil {
-				return e
-			}
-			current, e = current.mutate(ctx)
-			if e != nil {
-				return e
-			}
-			current, e = current.seal(ctx, tx)
-			if e != nil {
-				return e
-			}
-			p = current
-			s, e = current.compile()
-			if e != nil {
-				return e
-			}
-		}
-		if p.many {
-			result, e := tx.Exec(s.Context(ctx), s.SQLText, s.Bindings...)
-			if e != nil {
-				return e
-			}
-			*count = result.RowsAffected
-		} else {
-			rows, e := tx.Query(s.Context(ctx), s.SQLText, s.Bindings...)
-			if e != nil {
-				return e
-			}
-			if e = returningN(ctx, rows, scan, p.returnCount(), p.bounded); e != nil {
-
-				return e
-			}
-		}
-		if hooked {
-			if err := callbacks.after(ctx, tx, p); err != nil {
-				return err
-			}
-		}
-		if err := ctx.Err(); err != nil {
+		if err := writeInTransaction(ctx, tx, p, prepared, hooked, scan, count, callbacks); err != nil {
 			return err
 		}
 		completed = true
@@ -446,18 +398,97 @@ func executeWrite(ctx context.Context, writer database.Transactor, p writePlan, 
 	}
 	return err, false
 }
+func precompileWrite(ctx context.Context, p writePlan, hooked bool) (querycore.Statement, error) {
+	var prepared querycore.Statement
+	var err error
+	if !p.needsClock() && !p.encrypted() && !p.mutated() && !hooked {
+		p, err = p.conventions(ctx, nil)
+		if err == nil {
+			prepared, err = p.compile()
+		}
+		if err != nil {
+			return querycore.Statement{}, err
+		}
+	}
+	return prepared, nil
+}
+
+func writeInTransaction(ctx context.Context, tx *database.Tx, p writePlan, prepared querycore.Statement, hooked bool, scan func(database.Row) error, count *int64, callbacks *writeCallbacks) error {
+	if tx == nil {
+		return invalid("transactor supplied no transaction")
+	}
+	if hooked {
+		if err := callbacks.before(ctx, tx, &p); err != nil {
+			return err
+		}
+		ctx = p.query.ast.ScopeContext
+	}
+	s := prepared
+	if p.needsClock() || p.encrypted() || p.mutated() || hooked {
+		current, e := p.conventions(ctx, tx.Clock())
+		if e != nil {
+			return e
+		}
+		if e = current.validateEffective(); e != nil {
+			return e
+		}
+		current, e = current.mutate(ctx)
+		if e != nil {
+			return e
+		}
+		current, e = current.seal(ctx, tx)
+		if e != nil {
+			return e
+		}
+		p = current
+		s, e = current.compile()
+		if e != nil {
+			return e
+		}
+	}
+	if p.many && p.returnLimit == 0 {
+		result, e := tx.Exec(s.Context(ctx), s.SQLText, s.Bindings...)
+		if e != nil {
+			return e
+		}
+		*count = result.RowsAffected
+	} else {
+		rows, e := tx.Query(s.Context(ctx), s.SQLText, s.Bindings...)
+		if e != nil {
+			return e
+		}
+		if p.returnLimit > 0 {
+			n := 0
+			e = consume(ctx, rows, func(row database.Row) error {
+				n++
+				if n > p.returnLimit {
+					return invalid("relation write exceeds its row limit")
+				}
+				return scan(row)
+			})
+		} else {
+			e = p.returning(ctx, rows, scan)
+		}
+		if e != nil {
+			return e
+		}
+	}
+	if hooked {
+		if err := callbacks.after(ctx, tx, p); err != nil {
+			return err
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func returning(ctx context.Context, rows rowSource, scan func(database.Row) error) error {
 	return returningN(ctx, rows, scan, 1, false)
 }
 func returningN(ctx context.Context, rows rowSource, scan func(database.Row) error, expected int, bounded bool) error {
-	n := 0
-	err := consume(ctx, rows, func(row database.Row) error {
-		if n >= expected {
-			return database.NewError("model write returned too many rows", database.TooManyRows)
-		}
-		n++
-		return scan(row)
-	})
+	n, err := returningCount(ctx, rows, scan, expected)
 	if err == nil && n < expected {
 		if n == 0 && bounded {
 			return boundExceeded()
@@ -466,6 +497,18 @@ func returningN(ctx context.Context, rows rowSource, scan func(database.Row) err
 	}
 	return err
 }
+func returningCount(ctx context.Context, rows rowSource, scan func(database.Row) error, expected int) (int, error) {
+	n := 0
+	err := consume(ctx, rows, func(row database.Row) error {
+		if n >= expected {
+			return database.NewError("model write returned too many rows", database.TooManyRows)
+		}
+		n++
+		return scan(row)
+	})
+	return n, err
+}
+
 func (p writePlan) returnCount() int {
 	if p.batch != nil {
 		return len(p.batch)
@@ -496,17 +539,27 @@ func (p writePlan) compileBatch(c querycore.Compiler) (querycore.Statement, erro
 	if len(rows) > 0 && len(union) > querycore.MaxParameters/len(rows) {
 		return querycore.Statement{}, invalid("model insert exceeds its cell bound")
 	}
-	return p.query.ast.CompileInsert(c, rows, union, p.query.ast.ModelSelect(p.query.table.selections), nil)
+	node := p.query.ast.ModelSelect(p.query.table.selections)
+	if p.conflict != nil {
+		node = p.conflict.Dependencies(node)
+	}
+	return p.query.ast.CompileInsert(c, rows, union, node, p.conflict)
 }
 
 // InsertMany inserts one bounded atomic batch and hydrates RETURNING rows.
 func (t Table[M, K]) InsertMany(ctx context.Context, tx database.Transactor, rows [][]Assignment[M]) ([]M, error) {
-	return insertMany[M](ctx, tx, newQuery(t.core), rows)
+	return insertMany[M](ctx, tx, newQuery(t.core), rows, nil)
 }
-func insertMany[M any](ctx context.Context, writer database.Transactor, q queryState, rows [][]Assignment[M]) ([]M, error) {
+func insertMany[M any](ctx context.Context, writer database.Transactor, q queryState, rows [][]Assignment[M], policy *conflictPolicy) ([]M, error) {
 	if err := writeContext(ctx, writer); err != nil {
 		return nil, err
 	}
+	// Upsert explicitly skips per-model callbacks; an acknowledgement is redundant.
+	if policy != nil {
+		q.ast.SkipModelHooks = false
+	}
+	q.ast.ScopeContext = ctx
+
 	if err := validateQuery(q); err != nil {
 		return nil, err
 	}
@@ -526,6 +579,11 @@ func insertMany[M any](ctx context.Context, writer database.Transactor, q queryS
 		}
 		p.batch[i] = item.assignments
 	}
+	p, err := p.withConflict(policy)
+	if err != nil {
+		return nil, err
+	}
+
 	if len(rows) == 0 {
 		_, err := p.compile()
 		return []M{}, err
@@ -563,7 +621,7 @@ func autocommit(ctx context.Context, p writePlan, source clock.Clock, send autoc
 	if err != nil {
 		return err, false
 	}
-	err = returningN(ctx, rows, scan, p.returnCount(), p.bounded)
+	err = p.returning(ctx, rows, scan)
 	if err != nil {
 		return inspectOutcome(err, true)
 	}
@@ -637,9 +695,12 @@ func (p writePlan) mutate(ctx context.Context) (writePlan, error) {
 			}
 		}
 		p.batch = rows
-		return p, nil
+		return p.mutateConflict(ctx)
 	}
 	var err error
 	p.assignments, err = querycore.MutateAssignments(ctx, p.assignments, p.query.table.mutators)
-	return p, err
+	if err != nil {
+		return p, err
+	}
+	return p.mutateConflict(ctx)
 }

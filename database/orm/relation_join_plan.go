@@ -9,6 +9,7 @@ import (
 )
 
 type relationJoin struct {
+	defaults      []querycore.MutationAssignment
 	pivot         queryState
 	first, second querycore.FieldRef
 	hop           bool

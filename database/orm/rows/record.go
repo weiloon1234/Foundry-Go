@@ -47,6 +47,11 @@ func ModelRecord[M any](q orm.Query[M]) Record[M] {
 }
 
 func recordDefinition[R any](owner any) ormcore.Record {
+	if d, ok := owner.(*valueRecordDefinition); ok && d != nil {
+		r := d.record
+		r.Err = ormcore.ValidateRecord(r, reflect.TypeFor[R]())
+		return r
+	}
 	if row, ok := owner.(*rowCore); ok {
 		if row == nil || row.typ != reflect.TypeFor[R]() {
 			return ormcore.Record{Err: ormcore.Invalid("record requires its row declaration")}

@@ -63,6 +63,7 @@ type columnCore struct {
 	scan             func(unsafe.Pointer) any
 	get              func(unsafe.Pointer) (driver.Value, error)
 	automatic        func(any) (querycore.AssignmentValue, error)
+	storedAssignment func(any) (querycore.AssignmentValue, error)
 	kind             codec.ParameterType
 	role             string
 	uuid             bool

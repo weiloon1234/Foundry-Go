@@ -665,3 +665,102 @@ Redacted fields and partially redacted JSON cannot hydrate fabricated values;
 inspect `Snapshot()` for deliberate export. The same declared codecs restore
 persisted keys and historical field values. Audit adapters are package functions
 and add no methods or per-column closures to ordinary reads.
+
+## Pivot relation writes
+
+Relation writes are package functions; `ThroughRelation`, `Query` and `Table`
+keep their existing method sets. Inputs and results retain the concrete source,
+target and pivot types:
+
+```go
+pivot, err := orm.Attach(ctx, db, UserRelations.Groups, user, group,
+    Memberships.Role.Set("member"))
+changes, err := orm.Sync(ctx, db, UserRelations.Groups, user, groups,
+    []orm.Assignment[Membership]{Memberships.Role.Set("member")}, nil)
+removed, err := orm.Detach(ctx, db, UserRelations.Groups, user, group)
+```
+
+`AttachMany`, `SyncWithoutDetaching`, `Toggle`, `DetachMany`, `DetachAll` and
+`UpdatePivot` cover bounded bulk operations. `Sync` accepts separate create and
+update assignment slices; a nil update leaves retained links unchanged. Endpoint
+keys and morph discriminators fill omitted assignments. Explicit assignments and
+hooks may change them, but inserted pivots must satisfy the relation's endpoint
+and filter postconditions. Attach permits duplicate existing links; constraints
+remain the migration's responsibility. Target inputs are deduplicated by refreshed
+relation keys in input order. Nullable keys use their stored value type even when
+assignment inputs differ. If a pivot key or morph discriminator has a distinct
+mutator input, supply that typed assignment explicitly: its stored key cannot
+synthesize an input. Missing distinct inputs fail before pivot hooks and mutation
+SQL, matching the old API. Explicit assignments and hook replacements run the
+mutator once; typed draft getters retain the original input type.
+Single Attach rechecks both original endpoint identities and their scopes after
+pivot hooks, inside the same transaction.
+
+Writes refresh and share-lock endpoint identities, skip retrieval callbacks and
+retain global scopes, target filters, pivot filters and soft-delete visibility.
+Bulk operations that read current links take `FOR NO KEY UPDATE` on the source to
+serialize competing changes. Existing links are locked in primary-key order.
+Like the old API, bulk sync/detachment selects existing links by pivot filters;
+target filters constrain requested endpoints and inserted-link checks.
+`Detach` soft-deletes when declared; `ForceDetach` requires a soft-delete pivot
+and preserves selected pivot visibility, including `WithTrashedPivot()`.
+
+Pivot hooks or observers select the ordinary per-model B5b lifecycle. Otherwise,
+create/update/removal uses one set statement per change kind. No per-row savepoints
+are added: each operation owns one transaction, or one savepoint inside the caller's
+transaction. With primary endpoint keys, attachment uses four statements for any
+hook-free batch (source, targets, INSERT, postcondition). Sync adds a current-links
+read and one statement for each nonempty update/removal; inserts also add their
+postcondition. Hooked inserts cost one statement per pivot; hooked updates/removals
+also select candidates and lock each original. Internal reads do not call Retrieved.
+
+`WithRelationWriteLimit(links, n)` lowers the existing atomic row bound. Oversized
+inputs and current/candidate sets fail; set RETURNING rows are bounded and an excess
+rolls back the operation with `fault.Invalid`. Endpoint cardinality violations
+remain `database.TooManyRows`. Ordering and eager-child options are rejected on write
+relations. Empty target batches still refresh the source, as the old API does.
+
+Errors never return successful partial results. Unknown commit and committed
+callback failures preserve `WriteError[P]`, `WriteError[[]P]` or
+`WriteError[PivotChanges[P]]` according to the function's result. `Candidate()` is
+reconciliation data, not proof of persistence or permission to retry. After-commit
+callbacks remain owned by the outer transaction.
+
+## Conflicts and upserts
+
+Upserts use package functions and an explicit immutable conflict policy:
+
+```go
+policy := orm.OnConflict(orm.ConflictKey(Users.Email)).DoUpdate(
+    orm.ConflictIncoming(Users.Name), // EXCLUDED, already transformed
+    orm.ConflictNull(Users.Nickname),
+)
+item, err := orm.Upsert(ctx, db, Users.Query(), policy,
+    Users.Email.Set("ada@example.test"), Users.Name.Set("Ada"))
+```
+
+Conflict captures are framework-owned. `ConflictSet` accepts declared columns;
+application embedding wrappers cannot replace their setters. `ConflictNull` uses
+sealed nullable metadata and never calls an application `SetNull` override.
+
+`ConflictSet(column, input)` accepts the column's ordinary write input, including
+its distinct mutator input. Literal updates transform once per policy execution;
+`ConflictIncoming` copies the destination's own proposed value without transforming
+it twice. Omitted proposed fields use database defaults or NULL. Encrypted fields
+cannot be conflict update targets. `OnConflictConstraint[User]("users_email_key")`
+selects a named constraint. PostgreSQL owns constraint/index existence.
+
+`UpsertMany` accepts a bounded batch of assignment slices. Both APIs skip local
+hooks, observers, retrieval callbacks and automatic audit, matching the generated
+upsert API; `WithoutModelHooks` is unnecessary. Mutators, encryption of proposed
+insert fields, timestamps and complete RETURNING hydration still apply. Managed
+update timestamps copy the normalized proposed instant. A skipped conflict has no
+returned model; batch result order does not map results to input positions.
+
+`policy.Where(...)` conditions the update using the stored row. Destination global
+scopes also constrain DO UPDATE. An unconditional update suppressed by those scopes
+returns a conflict error and rolls back the whole batch. Inserts remain unfiltered.
+Conflicting repeated update targets are PostgreSQL errors. Caller transactions use
+the existing savepoint behavior; reconciliation failures retain typed candidates
+in `WriteError`. Column/constraint targets ship in slice 6e1; calculated index targets
+and stored/proposed row calculations belong to the next slice.

@@ -24,7 +24,7 @@ const exceptAllSet = querycore.ExceptAllSet
 
 type setNode = querycore.SetNode
 
-const setAlias = "foundry_set"
+const setAlias = querycore.SetAlias
 
 // Set is the input scope of a combined result, separate from either input's
 // scope. Use the result's Scope with generated model/projection FieldsAt methods.
@@ -55,24 +55,10 @@ func combineRecordQueries[R any](left, right recordQuery[R], operator setOperato
 }
 
 func compatibleRecords[R any](left, right recordQuery[R]) error {
-	for _, r := range []recordQuery[R]{left, right} {
-		if r.err != nil {
-			return r.err
-		}
-		if len(r.columns) == 0 || len(r.columns) > MaxExpressionNodes || len(r.columns) != len(r.node.Selections) || r.scan == nil {
-			return fault.New(fault.Invalid, "set input requires a complete record and decoder")
-		}
-	}
-	if len(left.columns) != len(right.columns) {
-		return fault.New(fault.Invalid, "set input column counts differ")
-	}
-	for i, l := range left.columns {
-		r := right.columns[i]
-		if l.Name != r.Name || l.Nullable != r.Nullable {
-			return fault.New(fault.Invalid, "set input record layouts differ")
-		}
-	}
-	return nil
+	return querycore.CompatibleRecords(
+		querycore.RecordLayout{Node: left.node, Columns: left.columns, HasDecoder: left.scan != nil, Err: left.err},
+		querycore.RecordLayout{Node: right.node, Columns: right.columns, HasDecoder: right.scan != nil, Err: right.err},
+	)
 }
 
 // Scope exposes the combined record for generated typed field access.

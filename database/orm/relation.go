@@ -85,6 +85,7 @@ type relationBudget struct {
 	remaining, attachments int
 }
 type relationPlan struct {
+	writeLimit     int
 	aggregate      *aggregatePlan
 	singular       bool
 	join           *relationJoin
