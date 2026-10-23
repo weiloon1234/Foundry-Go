@@ -174,6 +174,9 @@ func bindField[R, V any](b Builder[R], ptr *V, c codec.Codec[V]) Field[R, V] {
 		return Field[R, V]{core: f}
 	}
 	field := d.typ.Field(index)
+	if ormcore.EncryptedType(field.Type) {
+		d.errors = append(d.errors, fmt.Errorf("row %s: encrypted values cannot be opened by projections; use a table with EncryptedTextOf/EncryptedJSONOf", field.Name))
+	}
 	f.offset = field.Offset
 	name := modelmeta.Snake(field.Name)
 	tags, err := modelmeta.ParseTags(string(field.Tag))

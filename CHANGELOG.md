@@ -8,6 +8,10 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Share encrypted-field orchestration across old/new data layers; add restricted
+  encrypted handles, typed password codecs and write-outcome coverage (Stage 3.1b).
+  Reject encrypted types bound as ordinary columns or projections at startup.
+
 - Add typed JSON and interval column constructors, literal `IContains`, and production
   codec/ownership coverage with 30 compiler-rule ports (Stage 3.1a). JSON retains
   `Asc`/`Desc` and `IsJSONNull`; `Kind`/`Length` expressions remain Stage 6d.

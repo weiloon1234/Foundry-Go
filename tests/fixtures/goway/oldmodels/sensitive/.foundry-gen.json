@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "files": {
+    "account_foundry.gen.go": "8a96d19b2bb936d476f88187bae463c8a75dacee44a6b4b62a507d368f074cfe",
+    "vault_foundry.gen.go": "4da12605c7f5746a4e3fcb444610949982f6a8dd7179497a672da38073605ce1"
+  }
+}

@@ -16,6 +16,8 @@ func executionContext(ctx context.Context, executor database.Executor) error {
 }
 
 // Each streams complete models, closing on failure or early callback return.
+// Rows yielded before a later hydration failure remain yielded; the failed row
+// and its successors are not.
 // Eager relations or possible retrieval hooks use DefaultChunkSize batches,
 // closing rows before I/O callbacks. Unknown executor wrappers cannot prove
 // hooks absent. Batches advance by keyset on the ordered fields and primary key

@@ -72,7 +72,7 @@ Their terminal methods require `*database.Tx`. Ordinary reads accept
 transaction behavior. A `*orm.WriteError[M]` preserves a hydrated candidate when
 transaction confirmation is uncertain. The candidate does not prove persistence.
 
-Hooks, mutators and encryption remain outside this increment. Direct
+Hooks and mutators remain outside this increment. Direct
 relations, inner joins and projections are described below.
 
 The key field is bound only by `TableOf`. Derive ordered numeric capabilities
@@ -190,4 +190,27 @@ calendar and elapsed components. Interval `Sum`/`Avg` capabilities remain Stage 
 from NULL. `Text.IContains` and `NullableText.IContains` treat `%`, `_` and `\`
 as literal substring characters and match case-insensitively. For example,
 `Users.Email.IContains("@EXAMPLE.com")` binds a value; it never interpolates SQL.
-Password and encrypted columns remain Stage 3.1b.
+Stage 3.1b adds `PasswordOf`/`NullablePasswordOf`, which preserve typed hash
+scalar comparisons, sorting and assignment while rejecting plaintext and text
+patterns. The password codec retains its sensitivity and redaction.
+
+`EncryptedTextOf`/`EncryptedJSONOf` and their nullable constructors expose typed
+`Set`; nullable handles also expose `SetNull`, `IsNull` and `IsNotNull`. They do
+not support ordering, value comparisons or row projections. Single-model writes
+seal after UUID generation, inside the transaction using its keyring. Every
+set-based encrypted assignment is rejected, even with a primary-key equality.
+Hydration opens using each row's table, column and key through the same shared
+owner as the generated API. Failures publish no partial model. Table/column/key
+renames require re-encryption; see [encryption](../../docs/guides/encryption.md).
+Unknown or committed callback failures retain reconciliation candidates through
+`WriteError`; a candidate never proves successful commit.
+
+Encrypted Go values (including `value.Nullable` wrappers) must use the
+`EncryptedTextOf`/`EncryptedJSONOf` constructors or their nullable forms.
+`ColumnOf` with an explicit encrypted codec is rejected at startup. Row
+projections reject encrypted values because they cannot open them yet.
+
+Hydration publishes only complete, successfully opened models. Buffered reads,
+page reads, eager loads, and each chunk discard the failing batch. Streaming
+`Each` retains rows already delivered before an error; it never delivers the
+failing row or any later row. This matches the old API's streaming behavior.

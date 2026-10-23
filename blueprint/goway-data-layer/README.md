@@ -39,6 +39,7 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 2 | Branch, permanent consumer, catalogue, emitter/release audit, synthetic harness | In progress. Core and permanent fixture ported at `686c6f2`; guardrails are this increment. |
 | 3.0 | Column footprint: flatten column types (R9), then measure receiver form and codec sharing; method-set trims only with approval | Done. 70-model gate: functions and bytes pass; compiler RSS 5.14 GB median against a 5 GB target, accepted as a recorded miss (2026-10-23) |
 | 3.1a | Declarations/codecs: JSON, interval, natural keys, binary ownership and IContains | Implemented; local acceptance passes (segmented fixes); PostgreSQL sources compile/vet, execution belongs to the lead |
+| 3.1b | Writes, encrypted fields and password hashes | Implemented; local acceptance passes in segments; live PostgreSQL belongs to the lead |
 | 3.1 | Complete declaration, reads, writes, typed raw hydration and model cursors | Planned |
 | 4 | Full relations, pivots, through relations, eager limits, filters and relation writes | Planned |
 | 5 | Lifecycle, mutators, change sets, scopes and observers | Planned |
@@ -239,7 +240,7 @@ sorting and assignments. All four handles declare direct methods over shared
 state (R9), because existing kinds do not express these capability boundaries.
 JSON Kind/Length expressions, paths and interval functions remain Stage 6d.
 Interval `Sum`/`Avg` (the old private `summaryData` capability) remain Stage 6a.
-A parity test compares the core method names against the old JSON/interval fields.
+A parity test compares the core method signatures against the old JSON/interval fields.
 Existing staged column-comparison, grouping, subquery and conflict APIs remain
 with their owning slices; interval adds no numeric adjustments or text patterns.
 `IContains` delegates to the existing case-insensitive literal-pattern compiler.
@@ -323,7 +324,7 @@ consumer retains Stage 1 golden coverage and adds Stage 3.1a declaration/codec c
 | --- | --- | --- |
 | IDs, nullables, numeric/temporal values, enums and bytes | Plain structs and generated codecs | Constructors/codecs retained; natural keys and binary ownership covered in 3.1a |
 | JSON documents and intervals | Generated JSON/interval fields | `JSONOf`/`NullableJSONOf`: equality, membership, containment, assignment, `Asc`/`Desc` and `IsJSONNull`; no range comparisons/text patterns. `IntervalOf`/`NullableIntervalOf`: ordered comparisons, sorting and assignment. Kind/Length expressions, paths and interval functions stay 6d |
-| Password and encrypted fields | Typed values and lifecycle codecs | Stage 3.1b; unchanged here |
+| Password and encrypted fields | Typed values and lifecycle codecs | Stage 3.1b: password scalar capabilities; encrypted typed assignments/null predicates, shared sealing/opening, transaction-keyring enforcement |
 | Column/default tags | Generator reads tags | Startup metadata reads the same tags, Stage 3 |
 | Table name/options | Model annotation | `orm.Define` and typed options, Stage 3 |
 | Accessors | Handwritten `Access<Field>` methods | Same Go methods; no per-field generated hover notices |
@@ -395,8 +396,8 @@ intentionally accepts byte slices, while identity does not.
 <!-- catalogue-summary -->
 | Disposition | Cases |
 | --- | ---: |
-| ported | 51 |
-| port | 531 |
+| ported | 63 |
+| port | 519 |
 | merge | 0 |
 | obsolete | 0 |
 | unaffected | 444 |
@@ -434,7 +435,7 @@ intentionally accepts byte slices, while identity does not.
 | 7 | 81 |
 | — | 444 |
 
-51 old catalogue rows are covered by 43 distinct Go-way cases.
+63 old catalogue rows are covered by 55 distinct Go-way cases.
 
 ## Emitter audit
 
@@ -545,3 +546,53 @@ release-tool and Python checks, real candidate inventory, and vet of both N=5
 modules (40 handlers and 5 reports each). The 70-model measurement and full
 framework/database gates remain with the lead. This increment does not mark
 Stage 2 or later parity stages complete.
+
+## Stage 3.1b writes and sensitive fields
+
+The lead verified the preceding acceptance set and both PostgreSQL suites.
+Security-review fixes below await the lead’s selective verification. See [the evidence](../../docs/evidence/goway-stage31b-writes-sensitive-fields.json). `internal/querycore` owns sealing, key discovery, transaction-keyring
+lookup and open scope for both APIs. `encrypted.Binding` remains the sole owner of
+purpose/table/column/row-key AAD. Existing generated API behavior is unchanged.
+
+Password constructors retain scalar hash comparisons, sorting and assignment,
+including nullable operations, with no text patterns or plaintext setters.
+Encrypted handles support typed assignment; nullable forms additionally support
+null assignment and null predicates. All set-based encrypted assignments are
+rejected before SQL, even with a primary-key predicate. Single-model and batch
+inserts seal each row after its application key is known, using the transaction's
+keyring; reads publish no partial models on decryption failure.
+
+Sensitive fixtures live under `models/sensitive` and `oldmodels/sensitive` so the
+original fixed-shape probes remain comparable. Dedicated probes cover both
+handle kinds with text/JSON values and required/nullable password constructors.
+The sensitive golden checks compare SQL, binding shapes and decrypted values in
+both API directions. PostgreSQL sources also cover nullable values, wrong-row and
+wrong-column ciphertext, keyed updates and password round trips. Tests cover
+RETURNING failure, unknown commit, committed callback failure, savepoint rollback,
+batch defaults and returned order. Twelve catalogue rows are ported.
+
+All 19 existing probes retain their Stage 3.1a function counts and unchanged
+ceilings. New Go 1.27.1 darwin/arm64 archive T/t counts and ceilings:
+
+| Probe | Functions | Ceiling |
+| --- | ---: | ---: |
+| column_encrypted_text | 1127 | 1297 |
+| column_nullable_encrypted_text | 1359 | 1563 |
+| column_encrypted_json | 1217 | 1400 |
+| column_nullable_encrypted_json | 1449 | 1667 |
+| column_password | 1190 | 1369 |
+| column_nullable_password | 1417 | 1630 |
+| sensitive_models | 2606 | 2997 |
+
+Security-review follow-up closes explicit-codec declaration bypasses for encrypted
+Go types, including nullable values and row projections. The shared declaration
+check inspects the `encrypted.Value` method contract without calling user code.
+Hydration caches the primary column at declaration seal and binds the key lazily
+once per row. Footprint ceilings remain unchanged; the table above records the
+preceding measurement, not a new measurement of this revision.
+
+Added regression sources cover unsealed plaintext and key-material redaction,
+read/write publication failures, and old/new streaming parity. `Each` keeps rows
+already yielded before a later open failure; buffered reads and failing chunks
+publish nothing. PostgreSQL coverage now inspects stored envelopes, persists
+new-API `SetNull`, and checks `fault.Invalid` for wrong row, column and table.

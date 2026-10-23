@@ -1,0 +1,391 @@
+{
+  "base_commit": "98030c3",
+  "scope": "Stage 3.1b only; no 3.1c or commit",
+  "decisions": [
+    "Password scalar capabilities preserved; plaintext rejected",
+    "All set-based encrypted assignments rejected including primary-key constrained writes"
+  ],
+  "shared_owner": {
+    "before": "database/query/encrypted_fields.go @98030c3",
+    "moves": [
+      {
+        "name": "sealMutation / SealAssignments",
+        "before_line": 63,
+        "after": "internal/querycore/encrypted_fields.go",
+        "after_line": 26
+      },
+      {
+        "name": "assignedKey / AssignedKey",
+        "before_line": 93,
+        "after": "internal/querycore/encrypted_fields.go",
+        "after_line": 56
+      },
+      {
+        "name": "predicateKey / PredicateKey",
+        "before_line": 105,
+        "after": "internal/querycore/encrypted_fields.go",
+        "after_line": 68
+      },
+      {
+        "name": "primaryEqualities / PrimaryEqualities",
+        "before_line": 137,
+        "after": "internal/querycore/encrypted_fields.go",
+        "after_line": 100
+      },
+      {
+        "name": "transactionKeys / TransactionKeys",
+        "before_line": 215,
+        "after": "internal/querycore/encrypted_fields.go",
+        "after_line": 129
+      },
+      {
+        "name": "openScope / OpenScope",
+        "before_line": 257,
+        "after": "internal/querycore/encrypted_fields.go",
+        "after_line": 136
+      }
+    ],
+    "value_helpers": "internal/querycore/encrypted_value.go; generics keyed by V only; old public functions delegate"
+  },
+  "context": {
+    "owner": "database/encrypted/encrypted.go:encrypted.Binding (unchanged)",
+    "purpose": "foundry.model.field.v1",
+    "encoding": "unchanged quoted table/column plus canonical bound primary value, authenticated by unchanged encryption.Context length-prefixed AAD",
+    "proof": [
+      "TestSensitiveOldAndNewAgree: old insert/new read and new insert/old read, mixed updates, text/JSON/nullable fields, SQL and parameter shapes",
+      "TestEncryptedWriteBoundaries: wrong table, column and row key; later bad row discards all models",
+      "TestEncryptedBatchUsesEachGeneratedKey: distinct UUIDv7 keys seal independently"
+    ]
+  },
+  "constructors": [
+    "EncryptedTextOf",
+    "EncryptedJSONOf",
+    "NullableEncryptedTextOf",
+    "NullableEncryptedJSONOf",
+    "PasswordOf",
+    "NullablePasswordOf"
+  ],
+  "surface_additions": {
+    "orm.Encrypted": [
+      "Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]"
+    ],
+    "*orm.Encrypted": [
+      "Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]"
+    ],
+    "orm.NullableEncrypted": [
+      "IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]",
+      "SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]"
+    ],
+    "*orm.NullableEncrypted": [
+      "IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+      "Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]",
+      "SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]"
+    ]
+  },
+  "surface_removals_or_signature_changes": [],
+  "capabilities": {
+    "Encrypted": [
+      "Set"
+    ],
+    "NullableEncrypted": [
+      "Set",
+      "SetNull",
+      "IsNull",
+      "IsNotNull"
+    ],
+    "Password": "existing Column[M,password.Hash]: Eq/Ne/In/NotIn/Asc/Desc/Set",
+    "NullablePassword": "existing NullableColumn[M,password.Hash]: scalar plus IsNull/IsNotNull/SetNull",
+    "password_parity": "TestColumnKindCoreParity compares signature shapes against old fields"
+  },
+  "executors": "Existing database.Transactor only. Encrypted inserts bypass autocommit, and seal after conventions inside the supplied transaction using its keyring. Set-based assignments fail before SQL/transaction. Nullable clearing retains the same sealing/keyring requirement as old API.",
+  "outcomes": [
+    "Failed RETURNING rolls back with no candidate",
+    "Unknown commit returns WriteError with candidate, Unknown classification and one attempt",
+    "After-commit callback failure retains candidate and Committed classification",
+    "Failed nested RETURNING rolls back savepoint while outer transaction remains usable",
+    "Batch omitted default versus explicit false and RETURNING stream order"
+  ],
+  "diagnostics": "TestSensitiveDiagnostics covers Error, String, GoString, JSON and slog with plaintext/ciphertext/key-material sentinels; TestPasswordCodecBoundary rejects and does not disclose stored plaintext or send zero hashes to SQL",
+  "catalogue": {
+    "ported_rows": [
+      "encrypted_draft_plaintext",
+      "encrypted_field_order",
+      "encrypted_field_predicate",
+      "password_model_predicate",
+      "password_model_like",
+      "password_model_setter",
+      "batch_draft_owner",
+      "batch_result_owner",
+      "delete_key_owner",
+      "update_key_owner",
+      "projected_record_write",
+      "timestamp_draft"
+    ],
+    "total_ported": 63,
+    "remaining_port": 519,
+    "unaffected": 444,
+    "fixture_compilefail_count": 69
+  },
+  "fixture_layout": "models/sensitive and oldmodels/sensitive preserve the original fixed-shape workload; dedicated sensitive_models and six field probes cover the added package. Ownership manifest generated by Makefile path.",
+  "footprint": {
+    "column_json": {
+      "functions": 1280,
+      "bytes": 5222268,
+      "baseline": 1280,
+      "ceiling": 1472
+    },
+    "column_nullable_json": {
+      "functions": 1522,
+      "bytes": 6369146,
+      "baseline": 1522,
+      "ceiling": 1751
+    },
+    "column_interval": {
+      "functions": 1178,
+      "bytes": 4895754,
+      "baseline": 1178,
+      "ceiling": 1355
+    },
+    "column_nullable_interval": {
+      "functions": 1406,
+      "bytes": 6030984,
+      "baseline": 1406,
+      "ceiling": 1617
+    },
+    "column_time": {
+      "functions": 1194,
+      "bytes": 4803362,
+      "baseline": 1194,
+      "ceiling": 1374
+    },
+    "column_enum": {
+      "functions": 1232,
+      "bytes": 5004648,
+      "baseline": 1232,
+      "ceiling": 1417
+    },
+    "relation_with": {
+      "functions": 1847,
+      "bytes": 7640760,
+      "baseline": 1847,
+      "ceiling": 2125
+    },
+    "model_type": {
+      "functions": 299,
+      "bytes": 1262906,
+      "baseline": 299,
+      "ceiling": 344
+    },
+    "table_ref": {
+      "functions": 803,
+      "bytes": 3871908,
+      "baseline": 803,
+      "ceiling": 924
+    },
+    "onequery": {
+      "functions": 803,
+      "bytes": 3744328,
+      "baseline": 803,
+      "ceiling": 924
+    },
+    "q_with": {
+      "functions": 1059,
+      "bytes": 4703442,
+      "baseline": 1053,
+      "ceiling": 1211
+    },
+    "q_select": {
+      "functions": 836,
+      "bytes": 3941876,
+      "baseline": 836,
+      "ceiling": 962
+    },
+    "q_join": {
+      "functions": 1604,
+      "bytes": 7443574,
+      "baseline": 1598,
+      "ceiling": 1838
+    },
+    "report_pipeline": {
+      "functions": 1914,
+      "bytes": 10038702,
+      "baseline": 1905,
+      "ceiling": 2191
+    },
+    "models": {
+      "functions": 6163,
+      "bytes": 26153628,
+      "baseline": 6147,
+      "ceiling": 7070
+    },
+    "column_number": {
+      "functions": 1172,
+      "bytes": 4762058,
+      "baseline": 1172,
+      "ceiling": 1348
+    },
+    "column_nullable_text": {
+      "functions": 1460,
+      "bytes": 5866464,
+      "baseline": 1456,
+      "ceiling": 1675
+    },
+    "models_1": {
+      "functions": 1623,
+      "bytes": 6540260,
+      "baseline": 1619,
+      "ceiling": 1862
+    },
+    "models_3": {
+      "functions": 2443,
+      "bytes": 9984918,
+      "baseline": 2435,
+      "ceiling": 2801
+    },
+    "column_encrypted_text": {
+      "functions": 1127,
+      "bytes": 4714416,
+      "baseline": null,
+      "ceiling": 1297
+    },
+    "column_nullable_encrypted_text": {
+      "functions": 1359,
+      "bytes": 5873526,
+      "baseline": null,
+      "ceiling": 1563
+    },
+    "column_encrypted_json": {
+      "functions": 1217,
+      "bytes": 5022564,
+      "baseline": null,
+      "ceiling": 1400
+    },
+    "column_nullable_encrypted_json": {
+      "functions": 1449,
+      "bytes": 6204432,
+      "baseline": null,
+      "ceiling": 1667
+    },
+    "column_password": {
+      "functions": 1190,
+      "bytes": 4945376,
+      "baseline": null,
+      "ceiling": 1369
+    },
+    "column_nullable_password": {
+      "functions": 1417,
+      "bytes": 6041370,
+      "baseline": null,
+      "ceiling": 1630
+    },
+    "sensitive_models": {
+      "functions": 2606,
+      "bytes": 11470174,
+      "baseline": null,
+      "ceiling": 2997
+    }
+  },
+  "existing_probe_function_changes": [],
+  "measurement": "go list -export and streamed go tool nm T/t counts, same task cache, Go 1.27.1 darwin/arm64; no RSS/70-model performance claim",
+  "postgres": {
+    "source": "tests/fixtures/goway/pgsmoke/sensitive_test.go",
+    "isolation": "postgres.Isolate; retained schema, no destructive operations",
+    "key_setup": "existing encryption.GenerateKey/NewKeyring test pattern, field_test key id",
+    "coverage": [
+      "Encrypted generated-key insert, update and find",
+      "Text/JSON nullable NULL and values",
+      "Old-to-new and new-to-old encrypted reads and updates",
+      "Wrong-row failure in both APIs; wrong-column failure",
+      "Password and nullable password round trips, typed equality/sorting and cross-API reads"
+    ]
+  },
+  "checks": {
+    "go build ./...": "pass (nonfatal sandbox module-stat-cache write warning)",
+    "go vet ./database/... ./internal/...": "pass; later test-only additions were compiled by focused race tests",
+    "go test -race ./database ./database/query ./database/orm/... ./database/encrypted/... ./internal/querycore/... ./internal/ormcore/... ./auth/password/...": "pass; later wrong-binding/default/password/batch tests passed focused race reruns",
+    "make generate GENERATION_DIRS=tests/fixtures/goway": "pass; generated account/vault plus ownership manifest",
+    "make generate-check": "pass",
+    "fixture: go vet ./...": "pass after correcting generated QuerySensitiveVaults/QuerySensitiveAccounts names; final root vet passed",
+    "fixture: go test ./...": "pass in segments: full run passed all 69 compiler cases, 26 footprint probes, original golden and other packages; sensitive golden initially failed due to driver LIMIT/key confusion, then passed after driver fix; additional password golden passed separately",
+    "python3 -m unittest discover -s tools -p \"*_test.py\"": "24 passed; two sandbox-blocked native process/resource tests passed targeted native-access rerun",
+    "python3 tools/goway_catalogue.py": "pass (63 ported rows / 55 distinct cases)",
+    "PostgreSQL": "sources compile/vet; skipped without service URL; lead executes live tests",
+    "make docs-check": "pass",
+    "gofmt -l": "clean",
+    "git diff --check": "pass"
+  },
+  "corrections": [
+    "Generated query names derive from sensitive_* table names",
+    "In-memory sensitive driver locates primary-key placeholder instead of treating last LIMIT argument as key"
+  ],
+  "source_sha256": {
+    "CHANGELOG.md": "455fa3088648828de99abdc9022c47b2e2589219c374fc4ff5bd9d31731b47b2",
+    "blueprint/goway-data-layer/README.md": "b76fffb2c45a2c436d81913a3bb8aea475bdb8e0413469e9a067ebb251dac3a0",
+    "database/orm/README.md": "82d861dd92180f73d76c745e885ce544e8f0d429bf95513b6f582f21c670904e",
+    "database/orm/column_kinds_test.go": "300c7801bfb0ce0985ac4cef16780984aa215539d7d6dc083540c8dc74aaaf1f",
+    "database/orm/column_sensitive.go": "3c5d39f435cae9f38d196a94c3f20b8438697721a208921ef9f554fb5b7e565c",
+    "database/orm/declaration.go": "edc4dc0329f4e59a39593cd7c5cb1f6ed4fe7dc9cbc6eaa8676a5b81c64f09ce",
+    "database/orm/encrypted_write.go": "9c42142a599cbfa68f15e94d1b5daf65b9d909a0a8864b4c79a287370e8ed9cc",
+    "database/orm/orm_test.go": "894241bd3a973d9302cf1472f14a0142d2aa9d3323b106ab8343112c7a3ac662",
+    "database/orm/query.go": "85fa8da21aa4ab1c44b2dde5014b14874d58a854656218096dcaf3acad2fbd03",
+    "database/orm/rows/declaration.go": "9f404b29712c6d7952413d9ef4a325d4254db9a0b483a14cb14af97bed22ae0e",
+    "database/orm/rows/sensitive_test.go": "b49314cb14eb618c4b640d7e74ad90cefea2ec2cd6e6026179dde701169e3adb",
+    "database/orm/sensitive_declaration_test.go": "287e2bc665621e4ca5ac8ed1c5f1db611f6daa3a97d30aaeceb928f1a8fc5a7f",
+    "database/orm/sensitive_publication_test.go": "38e54883cc19076a4975e3e0f63534a6d9f61d5af3a67bc87f3b158106cd1622",
+    "database/orm/sensitive_test.go": "b3153b1b8472c52428ac19514686296c8aeeb4ba29c7fded906fbfe4d9a8c179",
+    "database/orm/testdata/public-methods.txt": "cb37eafe7add0dc064a7c7c14a06b671d9a0d215072a27e857c140a18ad2fb4e",
+    "database/orm/write.go": "d16211510fe3d51ce2ebfb822d7422ad07d6ee5d603cc377780459494464662a",
+    "database/query/encrypted_fields.go": "4bb53468e318656ebb9eae36952723d0b29f9f9b41093c06a7cf0376ed7ca1fd",
+    "database/query/execution.go": "88175970fac9cf4af1c8b4d28e5227d89f5c14607b3852ef7bd7e0b419846602",
+    "internal/ormcore/encrypted_type.go": "89aee1722ea485c3d07686992e5e775207ec0e87a22d7c0cddd1ae4d2d5de1c5",
+    "internal/ormcore/encrypted_type_test.go": "be667c2320e847e59f0baeed8f88e720eceb08ed16bb1726fb1eb98edbb64301",
+    "internal/querycore/encrypted_fields.go": "c2799f469888bc72c5932ad39b9ca155df1fabefd466887fc790275504318d3e",
+    "internal/querycore/encrypted_value.go": "1857a5f40658eb1ea7412f641c4c49b85935b0546a4e44bd313e96aa7adc45f9",
+    "tests/fixtures/goway/compiler_cases_test.go": "196a75664f26db0cf47166f68e3ac5b5b717c9da01c53a88b09ac65d90573eaf",
+    "tests/fixtures/goway/footprint_test.go": "e0b01b175ac6ea735322638339ccb1f82150a3893e4401a9f9df336d7d288929",
+    "tests/fixtures/goway/models/sensitive/models.go": "4ccd48e0f8330978d3c99f556da7a2cf3645d7cb122b406b89ef73780c61e7e0",
+    "tests/fixtures/goway/oldmodels/sensitive/.foundry-gen.json": "75f486cc45f43fc8a357fe727d107b09afa08d68eb0b1e9f6ea0ce926157e558",
+    "tests/fixtures/goway/oldmodels/sensitive/account_foundry.gen.go": "8a96d19b2bb936d476f88187bae463c8a75dacee44a6b4b62a507d368f074cfe",
+    "tests/fixtures/goway/oldmodels/sensitive/models.go": "b266ff1c22725961e208ee2afab577d119c8aed1aa710b998d5801f5324852e0",
+    "tests/fixtures/goway/oldmodels/sensitive/vault_foundry.gen.go": "4da12605c7f5746a4e3fcb444610949982f6a8dd7179497a672da38073605ce1",
+    "tests/fixtures/goway/pgsmoke/sensitive_test.go": "2d6957d089acedf5611282b69aabb26624e6bdc926b355849a6ed8a2a9c97dc7",
+    "tests/fixtures/goway/sensitive_driver_test.go": "c1f62efab752d343240dccb6115d76c7a962a00bdba16cd140c1a9944f71f89c",
+    "tests/fixtures/goway/sensitive_golden_test.go": "78072b73d3086b4dd7f6e6a1a33841bf70acee8e55b5e2cec03bec343d08b2d3",
+    "tests/fixtures/goway/testdata/compilefail/batch_draft_owner/invalid.go": "c13f43b8c0ba550dd1751781d8df32fae81fd473f97d1bb3603752ef06a23297",
+    "tests/fixtures/goway/testdata/compilefail/batch_result_owner/invalid.go": "8f420995aea9f14118a9ff2812293bf5090c5840454f669a75e53a9cc15919e8",
+    "tests/fixtures/goway/testdata/compilefail/delete_key_owner/invalid.go": "6ca764f40a8820c54aefd8afbc8e0d524b319f4e9699375e3a5e51c1b64822fb",
+    "tests/fixtures/goway/testdata/compilefail/encrypted_draft_plaintext/invalid.go": "db0216c9e498ed8091b2e7da2b8f43cfcb4be218db1fbd5978bdfd6979e98b59",
+    "tests/fixtures/goway/testdata/compilefail/encrypted_field_order/invalid.go": "1485443e0e61f2dc1be080ae70c764b1efd8cffedce96bcffa87ca9b70c12e63",
+    "tests/fixtures/goway/testdata/compilefail/encrypted_field_predicate/invalid.go": "57a31ab061699de49efb6948488593183eb7c9b0dc7f30df0d44a6f131319eeb",
+    "tests/fixtures/goway/testdata/compilefail/password_model_like/invalid.go": "b6aa03d767d01a230e34f44be9597f64e13a4af179d4b40198627ce77468bb0a",
+    "tests/fixtures/goway/testdata/compilefail/password_model_predicate/invalid.go": "2d149935f4290967dc3e12c7359a6daf25d8ab05cbbc6b94c007f9b72d2753a2",
+    "tests/fixtures/goway/testdata/compilefail/password_model_setter/invalid.go": "9804f401f3781b52dfafc42a39a30d07c2b5e3ef3961745983f3d8db845aee69",
+    "tests/fixtures/goway/testdata/compilefail/projected_record_write/invalid.go": "29a336ef69024cbb350d44878f48f1f3c0a2f66439078d5a8fd78ed084cd4b83",
+    "tests/fixtures/goway/testdata/compilefail/timestamp_draft/invalid.go": "30c57035cc89cb4738a2359a69f354473c88ccdea32514ca882d801f43aa3412",
+    "tests/fixtures/goway/testdata/compilefail/update_key_owner/invalid.go": "87600ec7a59935df57f860c705ab0259364bf80d970b30434a7bdb721446b25c",
+    "tests/fixtures/goway/testdata/footprint/column_encrypted_json/probe.go": "9de0c317907a123c4a92f280d5c50b557c885a9195b6c1aec174b0f1c14e5925",
+    "tests/fixtures/goway/testdata/footprint/column_encrypted_text/probe.go": "bf5f4a98feec674e219f9fa97e29e1ac9d9071cfc426ea96f97e723b7156ffd1",
+    "tests/fixtures/goway/testdata/footprint/column_nullable_encrypted_json/probe.go": "b9220a3a872d6d71019bd60a02ddbc0a34f75c00b34879c03d17beb7ce686f90",
+    "tests/fixtures/goway/testdata/footprint/column_nullable_encrypted_text/probe.go": "ab12bdc6e966cc487e5ce0fefaf4ce5956b50d11dc204155bbff4f588b424b78",
+    "tests/fixtures/goway/testdata/footprint/column_nullable_password/probe.go": "63b2dd3fe1ba61bb962e3e0cd7f979894b518bbae5da7919a70073e0e49b6b88",
+    "tests/fixtures/goway/testdata/footprint/column_password/probe.go": "7890bd7374a42766edf9af757e1d3713f6886dbe93e190fdc6234ad045cb3d3a"
+  },
+  "security_review_followup": {
+    "status": "implemented; verification deferred to lead under lead-orchestrated cadence",
+    "preceding_gate": "User reports full acceptance, cross-API PostgreSQL and consumer/vault PostgreSQL passed before these fixes.",
+    "changes": [
+      "Reject encrypted.Value implementations, including nullable wrappers, in ordinary table columns and row projections at startup.",
+      "Cache the primary column at declaration seal; lazily bind once per hydrated row.",
+      "Add plaintext/key-material diagnostic canaries and wrapped error renderings.",
+      "Add open-failure publication matrix, eager/soft-write cases and old/new streaming parity.",
+      "PostgreSQL sources inspect stored envelopes, wrong-table binding, persisted new SetNull, and precise fault.Invalid classification."
+    ],
+    "checks": "Not executed: race, fixture vet/test, docs-check and PostgreSQL belong to the lead. Modified Go files formatted with gofmt -w.",
+    "footprint": "All existing ceilings unchanged; measurements above predate review fixes.",
+    "surface": "No public ORM surface additions or removals."
+  },
+  "checks_scope": "Historical results for the implementation before security-review fixes; not verification of the refreshed source hashes."
+}

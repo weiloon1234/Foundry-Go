@@ -98,6 +98,9 @@ func planWrite[M any](q queryState, kind querycore.MutationKind, as []Assignment
 			p.assignments = append(p.assignments, a.core)
 		}
 	}
+	if many && querycore.HasEncryptedAssignments(p.assignments) {
+		return writePlan{}, querycore.SetEncryptedError()
+	}
 	if kind == querycore.DeleteModel && q.ast.HasSoftDeletes() {
 		p.kind = querycore.SoftDeleteModel
 		if p.query.ast.SoftDeleteScope == querycore.TrashedRecords {
@@ -309,7 +312,7 @@ func executeWrite(ctx context.Context, writer database.Transactor, p writePlan, 
 	}
 	p.query.ast.ScopeContext = ctx
 	// Exact pool owners can confirm a single INSERT without an explicit transaction.
-	if p.kind == querycore.InsertModel && !p.many {
+	if p.kind == querycore.InsertModel && !p.many && !p.encrypted() {
 		switch owner := writer.(type) {
 		case *database.DB:
 			if owner == nil {
@@ -322,7 +325,7 @@ func executeWrite(ctx context.Context, writer database.Transactor, p writePlan, 
 	}
 	var prepared querycore.Statement
 	var err error
-	if !p.needsClock() {
+	if !p.needsClock() && !p.encrypted() {
 		p, err = p.conventions(ctx, nil)
 		if err == nil {
 			prepared, err = p.compile()
@@ -337,8 +340,12 @@ func executeWrite(ctx context.Context, writer database.Transactor, p writePlan, 
 			return invalid("transactor supplied no transaction")
 		}
 		s := prepared
-		if p.needsClock() {
+		if p.needsClock() || p.encrypted() {
 			current, e := p.conventions(ctx, tx.Clock())
+			if e != nil {
+				return e
+			}
+			current, e = current.seal(ctx, tx)
 			if e != nil {
 				return e
 			}

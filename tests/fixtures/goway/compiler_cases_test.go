@@ -2,6 +2,19 @@ package goway_test
 
 func compilerCases() []compilerCase {
 	return []compilerCase{
+		{"encrypted_draft_plaintext", "as encrypted.Text value"},
+		{"encrypted_field_order", "has no field or method Asc"},
+		{"encrypted_field_predicate", "has no field or method Eq"},
+		{"password_model_predicate", "as password.Hash value"},
+		{"password_model_like", "has no field or method Like"},
+		{"password_model_setter", "as password.Hash value"},
+		{"batch_draft_owner", "[][]orm.Assignment[models.User]"},
+		{"batch_result_owner", "as []models.Order value"},
+		{"delete_key_owner", "model.ID[models.User]"},
+		{"update_key_owner", "model.ID[models.User]"},
+		{"projected_record_write", "orm.Assignment[models.User]"},
+		{"timestamp_draft", "as temporal.DateTime value"},
+
 		{"json_ordered_comparison", "has no field or method Gt"},
 		{"nullable_json_like", "has no field or method Like"},
 		{"interval_adjustment", "has no field or method Increment"},

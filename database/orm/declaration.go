@@ -12,9 +12,11 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/modelmeta"
+	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
@@ -39,6 +41,7 @@ type tableCore struct {
 	slots      map[int]*slotCore
 	model      querycore.ModelDefinition
 	columns    []*columnCore
+	primary    *columnCore
 	selections []querycore.SelectItem
 	err        error
 	check      func() error
@@ -55,6 +58,7 @@ type columnCore struct {
 	kind      codec.ParameterType
 	role      string
 	uuid      bool
+	open      func(database.Row, func() (driver.Value, error), unsafe.Pointer) error
 	sensitive bool
 	check     func() error
 }
@@ -228,8 +232,25 @@ func seal(d *declaration) {
 		}
 		names[c.metadata.Name] = c.field.Name
 
+		if c.metadata.Name == d.core.model.Primary {
+			d.core.primary = c
+		}
 		d.core.columns = append(d.core.columns, c)
 		d.core.model.Columns = append(d.core.model.Columns, c.metadata)
+	}
+	for _, c := range d.core.columns {
+		if c.open == nil {
+			if ormcore.EncryptedType(c.field.Type) {
+				d.fail(c.field.Name, "encrypted values require EncryptedTextOf/EncryptedJSONOf (or their nullable forms)")
+			}
+			continue
+		}
+		if c.metadata.DatabaseDefault || c.metadata.Name == d.core.model.Primary {
+			d.fail(c.field.Name, "encrypted fields cannot be primary keys or have database defaults")
+		}
+		if key := d.core.primary; key != nil && key.metadata.DatabaseDefault {
+			d.fail(c.field.Name, "encrypted fields require an application-assigned primary key")
+		}
 	}
 	configureConventions(d)
 	if _, err := d.core.model.ValidateColumns(true); err != nil {

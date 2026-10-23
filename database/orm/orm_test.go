@@ -407,15 +407,16 @@ func TestPublicMethodBudgets(t *testing.T) {
 
 // The connector exercises real database.Rows and transaction ownership without a server.
 type testConnector struct {
-	statements *[]string
-	bindings   *[][]any
-	onClose    func()
-	onBegin    func()
-	values     [][]driver.Value
-	columns    []string
-	commitErr  error
-	closeErr   error
-	respond    func(string) ([]string, [][]driver.Value)
+	statements   *[]string
+	bindings     *[][]any
+	onClose      func()
+	onBegin      func()
+	values       [][]driver.Value
+	columns      []string
+	commitErr    error
+	closeErr     error
+	respondBound func(string, []driver.NamedValue) ([]string, [][]driver.Value, error)
+	respond      func(string) ([]string, [][]driver.Value)
 }
 
 func (c testConnector) Connect(context.Context) (driver.Conn, error) { return testConnection{c}, nil }
@@ -454,6 +455,13 @@ func (c testConnection) QueryContext(_ context.Context, s string, args []driver.
 			values[i] = a.Value
 		}
 		*c.bindings = append(*c.bindings, values)
+	}
+	if c.respondBound != nil {
+		columns, values, err := c.respondBound(s, args)
+		if err != nil {
+			return nil, err
+		}
+		return &testDriverRows{columns: columns, values: values, closeErr: c.closeErr, onClose: c.onClose}, nil
 	}
 	if c.respond != nil {
 		columns, values := c.respond(s)

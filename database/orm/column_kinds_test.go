@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/weiloon1234/Foundry-Go/auth/password"
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -168,6 +169,8 @@ func TestColumnKindCoreParity(t *testing.T) {
 		"Kind": "6d", "Length": "6d",
 	}
 	pairs := []struct{ old, current reflect.Type }{
+		{reflect.TypeFor[query.ScalarField[kindRecord, password.Hash]](), reflect.TypeFor[Column[kindRecord, password.Hash]]()},
+		{reflect.TypeFor[query.NullableField[kindRecord, password.Hash]](), reflect.TypeFor[NullableColumn[kindRecord, password.Hash]]()},
 		{reflect.TypeFor[query.IntervalField[kindRecord, temporal.Interval]](), reflect.TypeFor[Interval[kindRecord]]()},
 		{reflect.TypeFor[query.NullableIntervalField[kindRecord, temporal.Interval]](), reflect.TypeFor[NullableInterval[kindRecord]]()},
 		{reflect.TypeFor[query.JSONField[kindRecord, value.JSON[string]]](), reflect.TypeFor[JSON[kindRecord, string]]()},

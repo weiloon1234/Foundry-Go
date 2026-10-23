@@ -24,14 +24,21 @@ type footprintBudget struct {
 
 const footprintFailureAdvice = "a generic method, field or codec helper has expanded the reachable surface; inspect database/orm surface guards and blueprint/goway-data-layer/README.md, Goals and rules (R1–R9)"
 
-// Stage 3.0 ceilings are retained; JSON/interval probes were measured in 3.1a.
+// Existing ceilings are retained; sensitive probes were measured in Stage 3.1b.
 // Go 1.27.1 darwin/arm64: T/t symbols in each package archive.
 // Budget is ceil(measured * 1.15), calculated exactly with integer arithmetic.
 var footprintBudgets = map[string]footprintBudget{
-	"column_json":              {"./testdata/footprint/column_json", 1280},
-	"column_nullable_json":     {"./testdata/footprint/column_nullable_json", 1522},
-	"column_interval":          {"./testdata/footprint/column_interval", 1178},
-	"column_nullable_interval": {"./testdata/footprint/column_nullable_interval", 1406},
+	"column_encrypted_text":          {"./testdata/footprint/column_encrypted_text", 1127},
+	"column_nullable_encrypted_text": {"./testdata/footprint/column_nullable_encrypted_text", 1359},
+	"column_encrypted_json":          {"./testdata/footprint/column_encrypted_json", 1217},
+	"column_nullable_encrypted_json": {"./testdata/footprint/column_nullable_encrypted_json", 1449},
+	"column_password":                {"./testdata/footprint/column_password", 1190},
+	"column_nullable_password":       {"./testdata/footprint/column_nullable_password", 1417},
+	"sensitive_models":               {"./models/sensitive", 2606},
+	"column_json":                    {"./testdata/footprint/column_json", 1280},
+	"column_nullable_json":           {"./testdata/footprint/column_nullable_json", 1522},
+	"column_interval":                {"./testdata/footprint/column_interval", 1178},
+	"column_nullable_interval":       {"./testdata/footprint/column_nullable_interval", 1406},
 
 	"column_time":   {"./testdata/footprint/column_time", 1194},
 	"column_enum":   {"./testdata/footprint/column_enum", 1232},
@@ -54,7 +61,7 @@ var footprintBudgets = map[string]footprintBudget{
 func TestFootprintBudgets(t *testing.T) {
 	testkit.TrackExternalInputs(t)
 
-	probeOrder := []string{"model_type", "table_ref", "onequery", "q_with", "q_select", "q_join", "report_pipeline", "models", "column_number", "column_nullable_text", "models_1", "models_3", "column_time", "column_enum", "relation_with", "column_json", "column_nullable_json", "column_interval", "column_nullable_interval"}
+	probeOrder := []string{"column_encrypted_text", "column_nullable_encrypted_text", "column_encrypted_json", "column_nullable_encrypted_json", "column_password", "column_nullable_password", "sensitive_models", "model_type", "table_ref", "onequery", "q_with", "q_select", "q_join", "report_pipeline", "models", "column_number", "column_nullable_text", "models_1", "models_3", "column_time", "column_enum", "relation_with", "column_json", "column_nullable_json", "column_interval", "column_nullable_interval"}
 	pkgArgs := make([]string, 0, len(probeOrder))
 	for _, name := range probeOrder {
 		pkgArgs = append(pkgArgs, footprintBudgets[name].pkg)

@@ -56,6 +56,10 @@ orm.CreatedAt
   Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
   NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
   Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+orm.Encrypted
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+*orm.Encrypted
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
 orm.Enum
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
   Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
@@ -195,6 +199,16 @@ orm.NullableColumn
   IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
   Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
   NotIn func(v ...V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+orm.NullableEncrypted
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+  SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
+*orm.NullableEncrypted
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
   Set func(v V) github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
   SetNull func() github.com/weiloon1234/Foundry-Go/database/orm.Assignment[M]
 orm.NullableEnum

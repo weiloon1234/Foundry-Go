@@ -2,6 +2,7 @@ package orm
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"reflect"
@@ -289,7 +290,38 @@ func hydrate(t *tableCore, row database.Row, base unsafe.Pointer) error {
 	for i, c := range t.columns {
 		destinations[i] = c.scan(base)
 	}
-	return row.Scan(destinations...)
+	if err := row.Scan(destinations...); err != nil {
+		return err
+	}
+	var key func() (driver.Value, error)
+	for _, c := range t.columns {
+		if c.open == nil {
+			continue
+		}
+		if key == nil {
+			// Resolve the column at declaration time and bind it lazily once per row.
+			// All-NULL encrypted fields still need neither a key nor an open scope.
+			var bound driver.Value
+			var bindErr error
+			resolved := false
+			key = func() (driver.Value, error) {
+				if !resolved {
+					resolved = true
+					if t.primary == nil {
+						bindErr = invalid("encrypted field requires a primary key")
+					} else {
+						bound, bindErr = t.primary.get(base)
+					}
+				}
+				return bound, bindErr
+			}
+		}
+		if err := c.open(row, key, base); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 type rowSource = ormcore.RowSource
@@ -462,7 +494,8 @@ func (q LockedQuery[M]) SkipLocked() LockedQuery[M] { q.state.behavior = queryco
 // Wait restores the default waiting behavior.
 func (q LockedQuery[M]) Wait() LockedQuery[M] { q.state.behavior = querycore.LockWait; return q }
 
-// Each streams models while rows remain open.
+// Each streams models while rows remain open. Rows yielded before a later
+// hydration failure remain yielded; the failed row and its successors are not.
 func (q Query[M]) Each(ctx context.Context, ex database.Executor, yield func(M) error) error {
 	if len(q.state.relations) > 0 {
 		return q.EachChunked(ctx, ex, query.DefaultChunkSize, yield)
