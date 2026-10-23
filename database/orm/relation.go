@@ -172,7 +172,7 @@ func HasManyOf[M, N any, K comparable](slot Many[M, N], local KeyColumn[M, K], f
 			return (*relation.Many[N])(unsafe.Add(parent, slot.core.offset)).IsLoaded()
 		}
 		p.load = relationLoader[M, N](local.ormColumn(nil), foreign.ormColumn(nil), func(parent *M, group []N) error {
-			*(*relation.Many[N])(unsafe.Add(unsafe.Pointer(parent), slot.core.offset)) = relation.FoundryCollection(sqlowner.Seal{}, group)
+			*(*relation.Many[N])(unsafe.Add(unsafe.Pointer(parent), slot.core.offset)) = relation.FoundryCollection(sqlowner.Collections(), group)
 			return nil
 		})
 	}

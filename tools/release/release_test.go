@@ -214,8 +214,27 @@ func TestGoWaySourceInventory(t *testing.T) {
 			t.Fatalf("inventory %s: count=%d, error=%v", directory, count, err)
 		}
 	}
-	if !included["blueprint/goway-data-layer/compilefail-mapping.tsv"] || policy.sourceName("unreviewed.tsv") {
-		t.Fatal("catalogue allowance must be limited to its reviewed path")
+	for _, name := range []string{
+		"blueprint/goway-data-layer/compilefail-mapping.tsv",
+		"database/orm/testdata/joined-has.sql",
+		"database/orm/testdata/public-methods.txt",
+		"docs/evidence/goway-6a12-capability-audit.tsv",
+	} {
+		if !included[name] {
+			t.Errorf("reviewed Go-way asset omitted: %s", name)
+		}
+	}
+	for _, name := range []string{
+		"unreviewed.tsv", "unreviewed.sql", "unreviewed.txt",
+		"database/orm/testdata/unreviewed.sql",
+		"database/orm/testdata/unreviewed.txt",
+		"other/testdata/joined-has.sql",
+		"other/testdata/public-methods.txt",
+		"docs/evidence/unreviewed.tsv",
+	} {
+		if policy.sourceName(filepath.FromSlash(name)) {
+			t.Errorf("Go-way asset allowance leaked to %s", name)
+		}
 	}
 	fixture, err := policy.inventory(filepath.Join(root, "tests/fixtures/goway"))
 	if err != nil {
@@ -225,7 +244,7 @@ func TestGoWaySourceInventory(t *testing.T) {
 	for _, file := range fixture {
 		present[file.Path] = true
 	}
-	for _, name := range []string{"go.mod", "golden_test.go", "compiler_batch_test.go", "footprint_test.go", "models/user.go", "oldmodels/models.go", "models/.foundry-gen.json", "oldmodels/.foundry-gen.json"} {
+	for _, name := range []string{"go.mod", "golden_test.go", "compiler_batch_test.go", "footprint_test.go", "models/user.go", "oldmodels/models.go", "models/.foundry-gen.json", "oldmodels/.foundry-gen.json", "oldmodels/joined/.foundry-gen.json", "oldmodels/mutators/.foundry-gen.json"} {
 		if !present[name] {
 			t.Errorf("Go-way consumer lost %s", name)
 		}

@@ -1,0 +1,1616 @@
+{
+  "slice": "6a1",
+  "base_commit": "e73175333d6134d0f0f5da17ab6f8bb4ae4e70a5",
+  "status": "Accepted lane C patch integrated with 4b/4c/B5a on 884beb7; full requested combined acceptance passed; live PostgreSQL execution remains for the lead; no commit.",
+  "scope": [
+    "row/selected phase separation",
+    "parameters and explicit NULL/nullable widening",
+    "typed arithmetic, casts and comparisons",
+    "Count and Exists selected aggregates",
+    "MapSelected with unchanged Map",
+    "computed model Where/OrderBy package functions",
+    "explicit reference-free provenance"
+  ],
+  "not_implemented": [
+    "summary aggregates/FILTER/GROUP BY/HAVING/DISTINCT (6a3)",
+    "raw fragments and no-raw guard (6a4)",
+    "specialized text functions (6d)"
+  ],
+  "public_types_and_sealed_interfaces": {
+    "expr.Aggregate": [
+      "Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "Param func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]",
+      "Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]"
+    ],
+    "expr.HavingPredicate": [],
+    "expr.NullableOrderedRowExpression": [
+      "Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]",
+      "Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]",
+      "Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "Param func(v github.com/weiloon1234/Foundry-Go/value.Nullable[V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]",
+      "Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]"
+    ],
+    "expr.NullableOrderedValueComparison": [
+      "Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]"
+    ],
+    "expr.OrderedAggregate": [
+      "Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "Param func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]",
+      "Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]"
+    ],
+    "expr.OrderedRowExpression": [
+      "Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]",
+      "Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]",
+      "Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "Param func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]",
+      "Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]"
+    ],
+    "expr.OrderedValueComparison": [
+      "Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]"
+    ],
+    "expr.RowExpression": [
+      "Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]",
+      "Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]",
+      "Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "Param func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]",
+      "Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]"
+    ],
+    "expr.RowValue": [
+      "rowValue func(*S) github.com/weiloon1234/Foundry-Go/database/orm/expr.rowData[V]"
+    ],
+    "expr.Selected": [
+      "Param func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]"
+    ],
+    "expr.ValueComparison": [
+      "Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+      "Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]"
+    ]
+  },
+  "public_function_additions": [
+    "orm.FoundryOrderBy func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], o github.com/weiloon1234/Foundry-Go/internal/ormcore.Order, seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.QuerySeal) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]",
+    "orm.FoundryWhere func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], p github.com/weiloon1234/Foundry-Go/internal/ormcore.Predicate, seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.QuerySeal) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]",
+    "rows.MapSelected func[S, R, V any](field github.com/weiloon1234/Foundry-Go/database/orm/rows.Field[R, V], expression github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Mapping[S, R]",
+    "expr.Abs func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, V]",
+    "expr.AbsNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, V]",
+    "expr.AbsNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]",
+    "expr.AbsValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]",
+    "expr.Add func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, V]",
+    "expr.AddNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, V]",
+    "expr.AddNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]",
+    "expr.AddValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]",
+    "expr.CompareValue func[S, V any](v github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.ValueComparison[S, V]",
+    "expr.Count func[S any]() github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedAggregate[S, int64]",
+    "expr.DecimalNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.exactNumber](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]",
+    "expr.DecimalNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.exactNumber](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/decimal.Decimal]]",
+    "expr.DecimalOf func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.exactNumber](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]",
+    "expr.DecimalValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.exactNumber](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]",
+    "expr.DistinctFrom func[S, V any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "expr.DistinctFromValue func[S, V any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+    "expr.Divide func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, V]",
+    "expr.DivideNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, V]",
+    "expr.DivideNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]",
+    "expr.DivideValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]",
+    "expr.Equal func[S, V any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "expr.EqualValue func[S, V any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+    "expr.Exists func[S any]() github.com/weiloon1234/Foundry-Go/database/orm/expr.Aggregate[S, bool]",
+    "expr.FloatNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, float64]",
+    "expr.FloatNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[float64]]",
+    "expr.FloatOf func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, float64]",
+    "expr.FloatValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, float64]",
+    "expr.FoundrySelected func[S, V any](e github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) github.com/weiloon1234/Foundry-Go/internal/ormcore.Expression",
+    "expr.Greater func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "expr.GreaterColumn func[M, V, P any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[M, V, P], right github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[M, V, P]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[M]",
+    "expr.GreaterNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "expr.GreaterNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+    "expr.GreaterOrEqual func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "expr.GreaterOrEqualNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "expr.GreaterOrEqualNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+    "expr.GreaterOrEqualValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+    "expr.GreaterValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+    "expr.Less func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "expr.LessNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "expr.LessNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+    "expr.LessOrEqual func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "expr.LessOrEqualNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "expr.LessOrEqualNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+    "expr.LessOrEqualValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+    "expr.LessValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+    "expr.Like func[S any, V ~string](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "expr.LikeNullable func[S any, V ~string](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "expr.LikeNullableValue func[S any, V ~string](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+    "expr.LikeValue func[S any, V ~string](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+    "expr.Multiply func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, V]",
+    "expr.MultiplyNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, V]",
+    "expr.MultiplyNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]",
+    "expr.MultiplyValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]",
+    "expr.Negate func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, V]",
+    "expr.NegateNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, V]",
+    "expr.NegateNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]",
+    "expr.NegateValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]",
+    "expr.NotDistinctFrom func[S, V any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "expr.NotDistinctFromValue func[S, V any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+    "expr.NotEqual func[S, V any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "expr.NotEqualValue func[S, V any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]",
+    "expr.NullFor func[S, V any](v github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]",
+    "expr.Nullable func[S, V any](e github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]",
+    "expr.NullableRow func[S, V any](v github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]",
+    "expr.OrderBy func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], orders ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[M]) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]",
+    "expr.OrderNullableRow func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](v github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, V]",
+    "expr.OrderNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](v github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedValueComparison[S, V]",
+    "expr.OrderRow func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](v github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, V]",
+    "expr.OrderValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](v github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedValueComparison[S, V]",
+    "expr.Param func[S, V, P any](column github.com/weiloon1234/Foundry-Go/database/orm.ExpressionColumn[S, V, P], v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]",
+    "expr.Remainder func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.exactNumber](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, V]",
+    "expr.RemainderNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.exactNumber](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, V]",
+    "expr.RemainderNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.exactNumber](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]",
+    "expr.RemainderValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.exactNumber](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]",
+    "expr.Select func[S, V any](v github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]",
+    "expr.Subtract func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, V]",
+    "expr.SubtractNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, V]",
+    "expr.SubtractNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]",
+    "expr.SubtractValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]",
+    "expr.Where func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], predicates ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[M]) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]"
+  ],
+  "surface": {
+    "existing_records_preserved": 126,
+    "new_records": 104,
+    "public_types": 11,
+    "public_functions": 83,
+    "unchanged_existing_method_signatures": true,
+    "existing_expression_internal_change": "Expression implements sealed RowValue through its projection closure. New private phase markers prevent cross-phase conversions. Existing exported method types are unchanged.",
+    "existing_function_parameter_spelling_changes": [
+      "orm.FoundryColumn: unnamed capability parameter renamed seal"
+    ],
+    "review_authorized_capability_signature_changes": {
+      "orm.FoundryColumn": "sqlowner.Seal -> sqlowner.MetadataSeal",
+      "orm.FoundryWhere and orm.FoundryOrderBy": "sqlowner.Seal -> sqlowner.QuerySeal",
+      "expr.FoundrySelected and existing expr metadata/scope bridges": "sqlowner.Seal -> sqlowner.ExpressionSeal",
+      "orm.FoundrySource and orm.FoundryCodec": "sqlowner.Seal -> sqlowner.MetadataSeal",
+      "database DB/PrimaryExecutor/Session/Tx FoundryObservers": "sqlowner.Seal -> sqlowner.ObserverSeal",
+      "database DB/PrimaryExecutor FoundryAutocommitQuery": "sqlowner.Seal -> sqlowner.AutocommitSeal",
+      "database.FoundryStatementUnknown": "sqlowner.Seal -> sqlowner.OutcomeSeal",
+      "relation.FoundryCollection and FoundryLinked": "sqlowner.Seal -> sqlowner.CollectionSeal"
+    },
+    "this_review_public_additions": []
+  },
+  "compilefail_rows": [
+    {
+      "case": "arithmetic_compare_value",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `var _ = query.Add(models.UserFields().Age, models.UserFields().Age).Gt(\"two\")`; expected: as int value",
+      "disposition": "ported",
+      "new-API equivalent or reason": "arithmetic_compare_value: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "arithmetic_float_remainder",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `var number = query.FloatOf(models.UserFields().Age) var _ = query.Remainder(number, number)`; expected: does not satisfy",
+      "disposition": "ported",
+      "new-API equivalent or reason": "arithmetic_float_remainder: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "arithmetic_nullable_operand",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `var _ = query.AddNullable(query.NullableRow(models.UserFields().Age), models.UserFields().Age)`; expected: does not match",
+      "disposition": "ported",
+      "new-API equivalent or reason": "arithmetic_nullable_operand: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "arithmetic_nullable_result",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `var a = query.NullableRow(models.UserFields().Age) var _ query.Expression[models.User, int] = query.AddNullable(a, a).Value()`; expected: as query.Expression[models.User, int] value",
+      "disposition": "ported",
+      "new-API equivalent or reason": "arithmetic_nullable_result: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "arithmetic_owner",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `type other struct{} var otherUsers = query.As[other](models.QueryUsers(), \"other\") var _ = query.Add(models.UserFields().Age, models.UserFieldsAt(otherUsers.Scope()).Age)`; expected: does not match",
+      "disposition": "ported",
+      "new-API equivalent or reason": "arithmetic_owner: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "arithmetic_row_phase",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `var _ = query.Add(query.Count[models.User]().Value(), models.UserFields().Age)`; expected: query.RowValue[",
+      "disposition": "ported",
+      "new-API equivalent or reason": "arithmetic_row_phase: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "arithmetic_text",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `var _ = query.Multiply(models.UserFields().Email, models.UserFields().Email)`; expected: does not satisfy",
+      "disposition": "ported",
+      "new-API equivalent or reason": "arithmetic_text: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "arithmetic_value",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `var _ = query.Add(models.UserFields().Age, models.UserFields().Email)`; expected: does not match",
+      "disposition": "ported",
+      "new-API equivalent or reason": "arithmetic_value: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "column_enum_range",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `func invalid() { _ = models.UserFields().Status.GtColumn(models.UserFields().Status) }`; expected: has no field or method GtColumn",
+      "disposition": "ported",
+      "new-API equivalent or reason": "column_enum_range: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "column_scope",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `func invalid() { _ = models.UserFields().ID.EqColumn(models.OrderFields().BuyerID) }`; expected: does not implement query.KeyField[",
+      "disposition": "ported",
+      "new-API equivalent or reason": "column_scope: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "column_value",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `func invalid() { _ = models.UserFields().Email.EqColumn(models.UserFields().Age) }`; expected: does not implement query.KeyField[",
+      "disposition": "ported",
+      "new-API equivalent or reason": "column_value: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "computed_model_order_owner",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `var _ = models.QueryOrders().OrderBy(query.Add(models.UserFields().Age, models.UserFields().Age).Asc())`; expected: as query.Order[models.Order] value",
+      "disposition": "ported",
+      "new-API equivalent or reason": "computed_model_order_owner: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "decimal_conversion_float",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `var _ = query.DecimalOf(query.FloatOf(models.UserFields().Age))`; expected: does not satisfy",
+      "disposition": "ported",
+      "new-API equivalent or reason": "decimal_conversion_float: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "parameter_id",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `var _ = foundryquery.Param(models.UserFields().ID, model.ID[models.Order]{})`; expected: wrong type for method fieldData",
+      "disposition": "ported",
+      "new-API equivalent or reason": "parameter_id: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "parameter_nullable_field",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `var _ = foundryquery.Param(models.UserFields().Nickname, value.Of(\"name\"))`; expected: wrong type for method fieldData",
+      "disposition": "ported",
+      "new-API equivalent or reason": "parameter_nullable_field: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "parameter_owner",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `var _ = models.QueryOrders().Where(foundryquery.Param(models.UserFields().Age, 2).Eq(2))`; expected: as query.Predicate[models.Order] value",
+      "disposition": "ported",
+      "new-API equivalent or reason": "parameter_owner: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "parameter_value",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `var _ = foundryquery.Param(models.UserFields().Age, \"old\")`; expected: as int value",
+      "disposition": "ported",
+      "new-API equivalent or reason": "parameter_value: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "value_compare_like_number",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `var _ = query.Like(models.UserFields().Age, models.UserFields().Age)`; expected: does not satisfy",
+      "disposition": "ported",
+      "new-API equivalent or reason": "value_compare_like_number: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "value_compare_nullable",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `var _ = query.Equal(models.UserFields().Nickname, models.UserFields().Email)`; expected: does not match",
+      "disposition": "ported",
+      "new-API equivalent or reason": "value_compare_nullable: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "value_compare_order_bool",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `var _ = query.Less(query.Exists[models.User]().Param(true), query.Exists[models.User]().Param(false))`; expected: does not satisfy",
+      "disposition": "ported",
+      "new-API equivalent or reason": "value_compare_order_bool: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "value_compare_owner",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `type aTag struct{} type bTag struct{} var a = query.As[aTag](models.QueryUsers(), \"a\") var b = query.As[bTag](models.QueryUsers(), \"b\") var af = models.UserFieldsAt(a.Scope()) var bf = models.UserFieldsAt(b.Scope()) var _ = query.Equal(models.UserFields().Age, af.Age)`; expected: does not match",
+      "disposition": "ported",
+      "new-API equivalent or reason": "value_compare_owner: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "value_compare_selected_owner",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `type aTag struct{} type bTag struct{} var a = query.As[aTag](models.QueryUsers(), \"a\") var b = query.As[bTag](models.QueryUsers(), \"b\") var af = models.UserFieldsAt(a.Scope()) var bf = models.UserFieldsAt(b.Scope()) var _ = query.EqualValue(query.Value(af.Age), query.Value(bf.Age))`; expected: does not match",
+      "disposition": "ported",
+      "new-API equivalent or reason": "value_compare_selected_owner: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "value_compare_selected_row",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `var _ = query.Equal(query.Count[models.User]().Value(), query.Count[models.User]().Value())`; expected: query.RowValue[",
+      "disposition": "ported",
+      "new-API equivalent or reason": "value_compare_selected_row: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "value_compare_selected_where",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `var _ = models.QueryUsers().Where(query.EqualValue(query.Value(models.UserFields().Age), query.Value(models.UserFields().Age)))`; expected: as query.Predicate[models.User] value",
+      "disposition": "ported",
+      "new-API equivalent or reason": "value_compare_selected_where: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    },
+    {
+      "case": "value_compare_type",
+      "area": "Expressions and aggregates",
+      "old typed rule (one line)": "Reject `var _ = query.Equal(models.UserFields().Age, models.UserFields().Email)`; expected: does not match",
+      "disposition": "ported",
+      "new-API equivalent or reason": "value_compare_type: thin row/selected expressions retain concrete owner, value, nullable and capability restrictions.",
+      "stage": "6a"
+    }
+  ],
+  "coverage": {
+    "unit": [
+      "nullable field projection codecs",
+      "arithmetic SQL/binding order and hydration",
+      "reference-free Count/Exists",
+      "zero/foreign declarations rejected before SQL",
+      "parameter byte-buffer snapshots",
+      "exact and approximate casts",
+      "computed model predicates/order and runtime declaration checks",
+      "explicit reference-free metadata cannot conceal foreign references",
+      "family-specific capability validation and non-convertibility",
+      "foreign scoped exemplars stay invalid through row/selected/ordered/nullable/cast/chained Param"
+    ],
+    "golden": [
+      "existing 56-statement workload",
+      "new old/new typed arithmetic, casts, nullable input, comparisons and ordering transcript"
+    ],
+    "postgres_sources": [
+      "all numeric operations, integer division and explicit casts",
+      "nullable propagation and comparisons",
+      "computed model clauses",
+      "Count/Exists empty input",
+      "soft-delete scope retained",
+      "transaction visibility and persisted rollback"
+    ],
+    "postgres_execution": "not run",
+    "independent_consumer": [
+      "generic-inference zero capabilities fail closed",
+      "inferred observer and autocommit catchers never receive authority in old or new API; writes preserve transaction fallback"
+    ]
+  },
+  "footprint": {
+    "toolchain": "go version go1.27.1 darwin/arm64",
+    "method": "warm shared GOCACHE; go list -export and go tool nm count defined archive T/t symbols; these are not runtime measurements",
+    "probes": [
+      {
+        "probe": "pivot",
+        "functions": 1005,
+        "baseline": 1005,
+        "ceiling": 1156,
+        "archive_bytes": 4533250
+      },
+      {
+        "probe": "through",
+        "functions": 928,
+        "baseline": 928,
+        "ceiling": 1068,
+        "archive_bytes": 4083318
+      },
+      {
+        "probe": "morph",
+        "functions": 1088,
+        "baseline": 1088,
+        "ceiling": 1252,
+        "archive_bytes": 4837520
+      },
+      {
+        "probe": "nested_with",
+        "functions": 1321,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 5747484
+      },
+      {
+        "probe": "has",
+        "functions": 1330,
+        "baseline": 1302,
+        "ceiling": 1498,
+        "archive_bytes": 5735690
+      },
+      {
+        "probe": "has_one",
+        "functions": 1321,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 5710220
+      },
+      {
+        "probe": "raw",
+        "functions": 1047,
+        "baseline": 1045,
+        "ceiling": 1202,
+        "archive_bytes": 4857960
+      },
+      {
+        "probe": "cursor",
+        "functions": 1133,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5003484
+      },
+      {
+        "probe": "key_chunk",
+        "functions": 818,
+        "baseline": 812,
+        "ceiling": 934,
+        "archive_bytes": 3838726
+      },
+      {
+        "probe": "column_encrypted_text",
+        "functions": 1160,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 4906256
+      },
+      {
+        "probe": "column_nullable_encrypted_text",
+        "functions": 1397,
+        "baseline": 1359,
+        "ceiling": 1563,
+        "archive_bytes": 6121392
+      },
+      {
+        "probe": "column_encrypted_json",
+        "functions": 1250,
+        "baseline": 1217,
+        "ceiling": 1400,
+        "archive_bytes": 5215818
+      },
+      {
+        "probe": "column_nullable_encrypted_json",
+        "functions": 1487,
+        "baseline": 1449,
+        "ceiling": 1667,
+        "archive_bytes": 6453766
+      },
+      {
+        "probe": "column_password",
+        "functions": 1228,
+        "baseline": 1190,
+        "ceiling": 1369,
+        "archive_bytes": 5158014
+      },
+      {
+        "probe": "column_nullable_password",
+        "functions": 1460,
+        "baseline": 1417,
+        "ceiling": 1630,
+        "archive_bytes": 6308204
+      },
+      {
+        "probe": "sensitive_models",
+        "functions": 2699,
+        "baseline": 2606,
+        "ceiling": 2997,
+        "archive_bytes": 12088956
+      },
+      {
+        "probe": "model_type",
+        "functions": 299,
+        "baseline": 299,
+        "ceiling": 344,
+        "archive_bytes": 1263166
+      },
+      {
+        "probe": "table_ref",
+        "functions": 810,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 3931756
+      },
+      {
+        "probe": "onequery",
+        "functions": 810,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 3795796
+      },
+      {
+        "probe": "q_with",
+        "functions": 1141,
+        "baseline": 1053,
+        "ceiling": 1211,
+        "archive_bytes": 5115286
+      },
+      {
+        "probe": "q_select",
+        "functions": 843,
+        "baseline": 836,
+        "ceiling": 962,
+        "archive_bytes": 3999236
+      },
+      {
+        "probe": "q_join",
+        "functions": 1630,
+        "baseline": 1598,
+        "ceiling": 1838,
+        "archive_bytes": 7590746
+      },
+      {
+        "probe": "report_pipeline",
+        "functions": 1962,
+        "baseline": 1905,
+        "ceiling": 2191,
+        "archive_bytes": 10333996
+      },
+      {
+        "probe": "models",
+        "functions": 6559,
+        "baseline": 6147,
+        "ceiling": 7070,
+        "archive_bytes": 28245702
+      },
+      {
+        "probe": "column_number",
+        "functions": 1198,
+        "baseline": 1172,
+        "ceiling": 1348,
+        "archive_bytes": 4901018
+      },
+      {
+        "probe": "column_nullable_text",
+        "functions": 1505,
+        "baseline": 1456,
+        "ceiling": 1675,
+        "archive_bytes": 6112486
+      },
+      {
+        "probe": "models_1",
+        "functions": 1668,
+        "baseline": 1619,
+        "ceiling": 1862,
+        "archive_bytes": 6786438
+      },
+      {
+        "probe": "models_3",
+        "functions": 2500,
+        "baseline": 2435,
+        "ceiling": 2801,
+        "archive_bytes": 10301922
+      },
+      {
+        "probe": "column_time",
+        "functions": 1234,
+        "baseline": 1194,
+        "ceiling": 1374,
+        "archive_bytes": 5012638
+      },
+      {
+        "probe": "column_enum",
+        "functions": 1273,
+        "baseline": 1232,
+        "ceiling": 1417,
+        "archive_bytes": 5211554
+      },
+      {
+        "probe": "relation_with",
+        "functions": 1938,
+        "baseline": 1847,
+        "ceiling": 2125,
+        "archive_bytes": 8097164
+      },
+      {
+        "probe": "column_json",
+        "functions": 1320,
+        "baseline": 1280,
+        "ceiling": 1472,
+        "archive_bytes": 5445506
+      },
+      {
+        "probe": "column_nullable_json",
+        "functions": 1567,
+        "baseline": 1522,
+        "ceiling": 1751,
+        "archive_bytes": 6647982
+      },
+      {
+        "probe": "column_interval",
+        "functions": 1218,
+        "baseline": 1178,
+        "ceiling": 1355,
+        "archive_bytes": 5126366
+      },
+      {
+        "probe": "column_nullable_interval",
+        "functions": 1451,
+        "baseline": 1406,
+        "ceiling": 1617,
+        "archive_bytes": 6321646
+      },
+      {
+        "probe": "input_key",
+        "functions": 984,
+        "baseline": 982,
+        "ceiling": 1130,
+        "archive_bytes": 4453274
+      },
+      {
+        "probe": "mutators",
+        "functions": 803,
+        "baseline": 801,
+        "ceiling": 922,
+        "archive_bytes": 4157362
+      },
+      {
+        "probe": "mutator_explicit",
+        "functions": 1613,
+        "baseline": 1605,
+        "ceiling": 1846,
+        "archive_bytes": 6551330
+      },
+      {
+        "probe": "input_column_kinds",
+        "functions": 5146,
+        "baseline": 5088,
+        "ceiling": 5852,
+        "archive_bytes": 21160680
+      },
+      {
+        "probe": "conditional_row",
+        "functions": 1683,
+        "baseline": 1681,
+        "ceiling": 1934,
+        "archive_bytes": 7600700
+      },
+      {
+        "probe": "conditional_selected",
+        "functions": 1513,
+        "baseline": 1511,
+        "ceiling": 1738,
+        "archive_bytes": 6866292
+      },
+      {
+        "probe": "expr_arithmetic",
+        "functions": 1164,
+        "baseline": 1162,
+        "ceiling": 1337,
+        "archive_bytes": 5388800
+      },
+      {
+        "probe": "expr_selected",
+        "functions": 1557,
+        "baseline": 1551,
+        "ceiling": 1784,
+        "archive_bytes": 6828964
+      }
+    ],
+    "existing_ceilings_raised": false,
+    "model_slope": {
+      "functions_for_two_added_models": 832,
+      "ceiling": 939
+    },
+    "existing_ceilings_changed": false,
+    "total_probes": 43
+  },
+  "environment": {
+    "GOWORK": "off",
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache"
+  },
+  "commands": [
+    {
+      "cwd": ".",
+      "command": "go build ./...",
+      "log": ".cache/laneC-6a12-integration/build.log",
+      "result": "pass",
+      "exit_code": 0
+    },
+    {
+      "cwd": ".",
+      "command": "go vet ./database/... ./internal/...",
+      "log": ".cache/laneC-6a12-integration/vet.log",
+      "result": "pass",
+      "exit_code": 0
+    },
+    {
+      "cwd": ".",
+      "command": "go test -race -timeout=20m ./database/... ./internal/querycore/... ./internal/ormcore/... ./internal/sqlowner/... ./internal/generate/... ./events/...",
+      "log": ".cache/laneC-6a12-integration/race.log",
+      "result": "pass",
+      "exit_code": 0
+    },
+    {
+      "cwd": ".",
+      "command": "make generate-check",
+      "log": ".cache/laneC-6a12-integration/generate-check.log",
+      "result": "pass",
+      "exit_code": 0
+    },
+    {
+      "cwd": ".",
+      "command": "cd tests/fixtures/goway && go vet ./...",
+      "log": ".cache/laneC-6a12-integration/fixture-vet.log",
+      "result": "pass",
+      "exit_code": 0
+    },
+    {
+      "cwd": ".",
+      "command": "cd tests/fixtures/goway && go test -v ./...",
+      "log": ".cache/laneC-6a12-integration/fixture-test.log",
+      "result": "pass",
+      "exit_code": 0
+    },
+    {
+      "cwd": ".",
+      "command": "python3 tools/goway_catalogue.py",
+      "log": ".cache/laneC-6a12-integration/catalogue.log",
+      "result": "pass",
+      "exit_code": 0
+    },
+    {
+      "cwd": ".",
+      "command": "make docs-check",
+      "log": ".cache/laneC-6a12-integration/docs-check.log",
+      "result": "pass",
+      "exit_code": 0
+    },
+    {
+      "cwd": ".",
+      "command": "sh tools/format-go.sh check /usr/local/go/bin/gofmt (gofmt -l over repository sources, including fixtures)",
+      "log": ".cache/laneC-6a12-integration/gofmt.log",
+      "result": "pass",
+      "exit_code": 0
+    },
+    {
+      "cwd": ".",
+      "command": "git diff --check",
+      "log": ".cache/laneC-6a12-integration/diff-check.log",
+      "result": "pass",
+      "exit_code": 0
+    }
+  ],
+  "corrections_during_acceptance": [
+    "Expected surface mismatch; actual snapshot recorded after asserting all 126 existing records unchanged.",
+    "New golden import aliased to avoid existing fixture rows type.",
+    "Two negative diagnostics tightened to actual Go errors; enum test supplies explicit generic arguments to identify missing Gt capability.",
+    "A footprint measurement subprocess initially omitted GOCACHE and failed before measurement; rerun with the required shared cache.",
+    "Moved operand assembly to the non-generic core during source cleanup, then reran A/B/C on final implementation.",
+    "Second review: fixed all accepted findings before compilation; A/B/C and shared-consumer checks passed on the first review-fix run. All original footprint ceilings remain unchanged."
+  ],
+  "shared_files_touched": [
+    "blueprint/goway-data-layer/compilefail-mapping.tsv",
+    "database/errors.go",
+    "database/execution.go",
+    "database/observers.go",
+    "database/orm/codecs.go",
+    "database/orm/expr/expression.go",
+    "database/orm/method_surface_test.go",
+    "database/orm/relation.go",
+    "database/orm/rows/constructors.go",
+    "database/orm/rows/join.go",
+    "database/orm/rows/projection.go",
+    "database/orm/sensitive_test.go",
+    "database/orm/source.go",
+    "database/orm/testdata/public-methods.txt",
+    "database/orm/write.go",
+    "database/postgres/session_limits_postgres_test.go",
+    "database/query/execute_autocommit.go",
+    "database/query/model_hooks.go",
+    "database/query/relation_direct.go",
+    "database/query/relation_through.go",
+    "database/query/write_each.go",
+    "database/relation/loaded.go",
+    "database/relation/through.go",
+    "database/routing.go",
+    "database/runtime_resilience_test.go",
+    "internal/ormcore/source.go",
+    "internal/sqlowner/seal.go",
+    "tests/fixtures/goway/compiler_cases_test.go",
+    "tests/fixtures/goway/footprint_test.go"
+  ],
+  "changed_files": [
+    "blueprint/goway-data-layer/compilefail-mapping.tsv",
+    "database/capability_test.go",
+    "database/errors.go",
+    "database/execution.go",
+    "database/observers.go",
+    "database/orm/codecs.go",
+    "database/orm/expr/README.md",
+    "database/orm/expr/aggregate.go",
+    "database/orm/expr/comparison.go",
+    "database/orm/expr/expression.go",
+    "database/orm/expr/model.go",
+    "database/orm/expr/numeric.go",
+    "database/orm/expr/operation.go",
+    "database/orm/expr/row.go",
+    "database/orm/expr/value.go",
+    "database/orm/method_surface_test.go",
+    "database/orm/relation.go",
+    "database/orm/rows/capability_test.go",
+    "database/orm/rows/constructors.go",
+    "database/orm/rows/expression_test.go",
+    "database/orm/rows/join.go",
+    "database/orm/rows/projection.go",
+    "database/orm/sensitive_test.go",
+    "database/orm/source.go",
+    "database/orm/testdata/public-methods.txt",
+    "database/orm/write.go",
+    "database/postgres/session_limits_postgres_test.go",
+    "database/query/execute_autocommit.go",
+    "database/query/model_hooks.go",
+    "database/query/relation_direct.go",
+    "database/query/relation_through.go",
+    "database/query/write_each.go",
+    "database/relation/capability_test.go",
+    "database/relation/loaded.go",
+    "database/relation/through.go",
+    "database/routing.go",
+    "database/runtime_resilience_test.go",
+    "internal/ormcore/expression.go",
+    "internal/ormcore/expression_test.go",
+    "internal/ormcore/references.go",
+    "internal/ormcore/references_test.go",
+    "internal/ormcore/source.go",
+    "internal/sqlowner/seal.go",
+    "internal/sqlowner/seal_test.go",
+    "tests/fixtures/goway/bridge_capability_test.go",
+    "tests/fixtures/goway/compiler_cases_test.go",
+    "tests/fixtures/goway/expression_golden_test.go",
+    "tests/fixtures/goway/footprint_test.go",
+    "tests/fixtures/goway/pgsmoke/expressions_test.go",
+    "tests/fixtures/goway/testdata/compilefail/arithmetic_compare_value/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/arithmetic_float_remainder/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/arithmetic_nullable_operand/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/arithmetic_nullable_result/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/arithmetic_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/arithmetic_row_phase/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/arithmetic_text/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/arithmetic_value/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/column_enum_range/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/column_scope/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/column_value/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/computed_model_order_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/decimal_conversion_float/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/parameter_id/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/parameter_nullable_field/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/parameter_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/parameter_value/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/phase_aggregate_to_row/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/phase_comparison_to_row/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/phase_having_to_predicate/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/phase_nullable_comparison_to_row/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/phase_nullable_row_to_selected/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/phase_ordered_aggregate_to_row/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/phase_ordered_comparison_to_row/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/phase_ordered_row_to_selected/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/phase_predicate_to_having/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/phase_row_to_selected/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/phase_selected_to_nullable_row/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/phase_selected_to_ordered_row/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/phase_selected_to_row/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/value_compare_like_number/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/value_compare_nullable/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/value_compare_order_bool/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/value_compare_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/value_compare_selected_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/value_compare_selected_row/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/value_compare_selected_where/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/value_compare_type/invalid.go",
+    "tests/fixtures/goway/testdata/footprint/expr_arithmetic/probe.go",
+    "tests/fixtures/goway/testdata/footprint/expr_selected/probe.go"
+  ],
+  "source_sha256": {
+    "CHANGELOG.md": "312ebe2a9127f9eda0882ba20125f5d12c8715e736d1054a0dd02cdd5a4fcccd",
+    "blueprint/00-master-architecture-and-parity.md": "5654ddc93463abe69de27eab860e4ec288295388c8fd1e9638cc2b7f022cbc81",
+    "blueprint/goway-data-layer/README.md": "a39d5890f48589e09557d7b7bc5f21b03d74327402704421a0ac236eff7d11f0",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "a4c0d9c2d76ce4aa538a259562d34d7f2000973ef1dcae02b2c2ad7fd4964a40",
+    "database/capability_test.go": "271d0e4dc5f4461a1c9b999f85d40ba31922a8a9c70739d17af81cc3e1e8bf11",
+    "database/errors.go": "25dac0afdde0091f6e4a6fdc340243d286199ee4f992285d3244ba56933de5b4",
+    "database/execution.go": "16cfedafc016d427ec05c3643f4d34a86e7d5ba7def61cb620a643fa5055c46b",
+    "database/observers.go": "89279b9a81586eb9f3ceffc5234f6f6f06519bc1b9edf13790fd96d3931a0b04",
+    "database/orm/capability_integration_test.go": "568f46228d671c303d4a5dae996dc27c6393a5231c8c995145e9549b2fbbe656",
+    "database/orm/codecs.go": "6d12cba6565441fa4d898d3de3e9bbcb623d5f76f60f191c727a6bde87f2cafa",
+    "database/orm/expr/README.md": "931d4bd6108d1611afc3aa12a7ee46647381b690a39d4d0e1e0568cd85cdad5c",
+    "database/orm/expr/aggregate.go": "5efd9c8ae4bc94da58cf9ac112fe9b09ce22cd9de123ca66cbe3c99dc8938722",
+    "database/orm/expr/comparison.go": "072efcc7b16b58be9c203f6fdf91490eef1b2d54be84a77fe8d28897d81e0188",
+    "database/orm/expr/expression.go": "a66bed02e4dc7110178d8fba719aa8e7c87c66c2769fd89aa633764d013c2fac",
+    "database/orm/expr/model.go": "5b0d475cde0bfea724a5c5da5561ce1c2ce97603e96fb5f2911da93487afe54c",
+    "database/orm/expr/numeric.go": "00dc9dbba79bc0d77ec00e82a60a8c2cacd5c9aacdf053a988f4beca3f67f05d",
+    "database/orm/expr/operation.go": "86099897ad4c3ee97f9fa90b8e91d439d22adce55a3068f1cdeb1fa173f06c3e",
+    "database/orm/expr/row.go": "1812d02ce49815ae0df558318da68be72b7079959af04427414aa70dbd215018",
+    "database/orm/expr/value.go": "fe14d3295bbbe9523ab3603180ae787285286d19f08985dd64cbb6c271e4d825",
+    "database/orm/method_surface_test.go": "99d92891f2f689c46aac3f0b45bae0e7d15256e0cb46e9f97ecc786de2c4f03c",
+    "database/orm/relation.go": "736deee343f9b36d5288617629b0a3937e5f674d6d875ec2d2d4c47ac0819657",
+    "database/orm/relation_through.go": "b0aecd51b516c873726a9ebd0773f27c1732936aa6d05ede4fc8c6a5bfc1800b",
+    "database/orm/relation_through_hop.go": "5c04495f0001473f6a40eb6972284d6af8b675086c6107d591a8fb1d9761330d",
+    "database/orm/rows/capability_test.go": "2aa8ab3d360c1c00c82845799dab20d844cd83f70fac55c8d0bc9646c7f1425e",
+    "database/orm/rows/constructors.go": "695121f96763cc38ed862b30e31adec0071fd0466137be19b3090e949eecec06",
+    "database/orm/rows/expression_test.go": "8e9131f23e1ab7a6a5a57a8419ec746bef4f3d11f122f07636fea11dc93dd66f",
+    "database/orm/rows/join.go": "83d5d6ed6d3695f0e1716452cbdc65268ba3b6f3ee64963439cff991de806513",
+    "database/orm/rows/projection.go": "9e8e727f2c828938f6ce2129d2cd038c4d5b68cfc2dd792a0cdfa147d6f713c0",
+    "database/orm/sensitive_test.go": "a9909ec6e3c0c700ad0be21049cf6b425b1d794e2d9c6d216a62f7a7312f6a17",
+    "database/orm/source.go": "947d02c1544a614613dd62a5af79263bc58f04c9956664faaf6e07a98b6a79f3",
+    "database/orm/testdata/public-methods.txt": "fc0b852f66a50a8e1872591a21528a9b8d89facf56345303f05ea186a0020bd4",
+    "database/orm/write.go": "1e9978e9450bfc00083c635afe367cb9335eda2027dfd950ce330e26ae4fdaf1",
+    "database/postgres/session_limits_postgres_test.go": "87b50742974d14e34cfbe41a0bccc649311ec67854450f4f8603b1a1bbc410da",
+    "database/query/execute_autocommit.go": "1c35cad610295476ea11058d006b5de3c4c74c60027f3a7ef8ba4c6c440c55b2",
+    "database/query/model_hooks.go": "fbc6762d69c2d6cfce3a80cc5f470380265335b9def27f270832b94dec6b5fd3",
+    "database/query/relation_direct.go": "2ca81b0985e0687484b2f7d212e52beb05364f4d33743b18c26d57a43536fdff",
+    "database/query/relation_through.go": "272f1ea3ce11c2dd290c162c5912166d4ad93f43bf7cb1f23edd42330dded4da",
+    "database/query/write_each.go": "7ea640c9cc507a22cf696420e90cb7cb45a8cb4618caf045e010d59dc4cf5abb",
+    "database/relation/capability_test.go": "f0fd2ed66dd4feb955a6425bd060b270824ec219146c0d3970cc31fbd7bf3907",
+    "database/relation/loaded.go": "4ca41d846cefe3d4dc748e14e0dcb9ddf8b868f67201d0ff5515bbf2cc1f98ad",
+    "database/relation/through.go": "8d1c44a7036ad28e38512ba121819b78fcd6c773d2694b9d271ddb00737f25a7",
+    "database/routing.go": "08ade2882c8c5506c3f2e54a3a3bf1bc467775c4e915b233bccd929c69077423",
+    "database/runtime_resilience_test.go": "b9d30a931a349d14ee81ec7ba1964659d1dbc25fc153408c384b6ee69f6aadcd",
+    "docs/evidence/goway-6a12-capability-audit.tsv": "1caf05653bb7d343cccaac2ece12586d09329d1215f64beaad9a32526957c57f",
+    "internal/ormcore/expression.go": "fc2aa047ff40acb4c0994b190ff0091096d2277b8ce2a3884b5302a3446b82d4",
+    "internal/ormcore/expression_test.go": "e81209232dc994db65d52606f4a561bf9ddffe883373d97effb426bef6de46ea",
+    "internal/ormcore/references.go": "fb30393a3944db8214aa29ad0a20ffccb4c5980a02e22b8424e932cf092ec0ac",
+    "internal/ormcore/references_test.go": "6e433ee1e4016f354cb534b8f573a57b62be7bd68d86f11daef600a880759cfc",
+    "internal/ormcore/source.go": "642d51ddce575abc913a7e2c7b4634683fd76c7f76a1c5f5b5cd96570cadf1a7",
+    "internal/sqlowner/seal.go": "b9f546f7111812d4a7245673425607c3bf7e4da73c048843f94c0f28df088cb8",
+    "internal/sqlowner/seal_test.go": "46e53cd1c2e05fbacd0388e0013164aa6c1df5dfad0eb694633b14fb118aea38",
+    "tests/fixtures/goway/bridge_capability_test.go": "36f9ad491a8f3bab1e40c5c51d642d205939c270300d22dd0bde7d7f339a281b",
+    "tests/fixtures/goway/compiler_cases_test.go": "74641084539ce1b59d83598a40984e628554b3f58e85c34b494d6829970ea56c",
+    "tests/fixtures/goway/expression_golden_test.go": "7b91e04300e06cb812a84cf8256c3b32f2b1a1764c6ae467ec6287611a964c3c",
+    "tests/fixtures/goway/footprint_test.go": "e553314d0b7b144bbff179c960cd883cbd428ae513b324659f15376803620c04",
+    "tests/fixtures/goway/pgsmoke/expressions_test.go": "a13145f586fe4519b8a46278921f82a5da98ec1e63d4bb5be9cf1793312c3701",
+    "tests/fixtures/goway/testdata/compilefail/arithmetic_compare_value/invalid.go": "c67bff6295ec5284155b9cf25665d4f708b6ff135b02e4decf3a81cd6f8aa654",
+    "tests/fixtures/goway/testdata/compilefail/arithmetic_float_remainder/invalid.go": "d66699ea4aa24443b017a19e0b958874ff38758e871ebb164e7906f5281b0c6c",
+    "tests/fixtures/goway/testdata/compilefail/arithmetic_nullable_operand/invalid.go": "52574ff1ab41a03f708f7297a6b4f3e94222cde271cca85b577fa231c68ecec7",
+    "tests/fixtures/goway/testdata/compilefail/arithmetic_nullable_result/invalid.go": "2609591afc3e888ca41a14ad782963e87e4f5098954e868ac5c011e2db1a7821",
+    "tests/fixtures/goway/testdata/compilefail/arithmetic_owner/invalid.go": "1d7b87b204ca92d62edf70df6803ba58785841e3c5239381ee830274084b1607",
+    "tests/fixtures/goway/testdata/compilefail/arithmetic_row_phase/invalid.go": "9e7a816f971f99b2147fea0718ae8b8f3f2abd3233dc88efdbf7e7047b415ab1",
+    "tests/fixtures/goway/testdata/compilefail/arithmetic_text/invalid.go": "4464bd757b6b1cf62433ace533e1e926f11341445a727d1107f5e95eef9216f5",
+    "tests/fixtures/goway/testdata/compilefail/arithmetic_value/invalid.go": "bf6a322359bd272008ee0a47c7b5fced4f99eb3c0effa4131d86dbb8a84faa9d",
+    "tests/fixtures/goway/testdata/compilefail/column_enum_range/invalid.go": "9cee92f09ad5b033634dd258b693815e0677fb60db0131b8347246ed1fd66ad4",
+    "tests/fixtures/goway/testdata/compilefail/column_scope/invalid.go": "deb92cbb487ec577b01c4249fd96287316f47049a83ca526cb8005ccb11dc4e8",
+    "tests/fixtures/goway/testdata/compilefail/column_value/invalid.go": "3c9ca4a5ec751c74045e129bb1eeb9f109061e22e8dde3e4b87694c921e0bc7a",
+    "tests/fixtures/goway/testdata/compilefail/computed_model_order_owner/invalid.go": "8d88ae07d621ee5067e607a3ef23901be0731e01d606b332e42fa271b66f330e",
+    "tests/fixtures/goway/testdata/compilefail/decimal_conversion_float/invalid.go": "f6e55a94a19fbe200bce05a1036dddcb91a9c1d61e09bcc384562337df782ec5",
+    "tests/fixtures/goway/testdata/compilefail/parameter_id/invalid.go": "890768d928b6d368c50c968e855618bc1f5cc693a7c0b0e06372101a2bed4709",
+    "tests/fixtures/goway/testdata/compilefail/parameter_nullable_field/invalid.go": "9d8af45b189c47de740c4fd0ea437657c5933fd5f97993d2b3953d0feebd5e1d",
+    "tests/fixtures/goway/testdata/compilefail/parameter_owner/invalid.go": "453843410d66e3e99311066262e90c7bcb95a4356204d422839fc252a9611aa5",
+    "tests/fixtures/goway/testdata/compilefail/parameter_value/invalid.go": "fb5f3f0b8d1e0a854e79d14482a7a63df8b820d90631b20a13d1af40bb1ceeec",
+    "tests/fixtures/goway/testdata/compilefail/phase_aggregate_to_row/invalid.go": "a78abbd77f4c67cd0b7f7dfcd9208cef93ef5976b038026e26f0147b720bfd71",
+    "tests/fixtures/goway/testdata/compilefail/phase_comparison_to_row/invalid.go": "04088b342240693101a73dad78ef2887397a7c9357b22e32f341a5e373343c43",
+    "tests/fixtures/goway/testdata/compilefail/phase_having_to_predicate/invalid.go": "48e86a2d75c155b3d57af5401b511b3bdb2b5bf4cddf1b60e9ff26d344fb93a0",
+    "tests/fixtures/goway/testdata/compilefail/phase_nullable_comparison_to_row/invalid.go": "dffee0844863438a700c3ba63dcf4e04ae839f0b235cbf6a8b46c1412d3fc07a",
+    "tests/fixtures/goway/testdata/compilefail/phase_nullable_row_to_selected/invalid.go": "16c2c25212280162dd17754e5b2a18cd5b4c93ab0c1b8851bedb9bed5a7bd96f",
+    "tests/fixtures/goway/testdata/compilefail/phase_ordered_aggregate_to_row/invalid.go": "43054ae7b6cffed97d83016cf95b2b8492025d86832f72f02bb2bcc3277a35d8",
+    "tests/fixtures/goway/testdata/compilefail/phase_ordered_comparison_to_row/invalid.go": "6ea08966885969fdf9c28c76dd13561186b3f7a4791702c127f2cca531c87a35",
+    "tests/fixtures/goway/testdata/compilefail/phase_ordered_row_to_selected/invalid.go": "8826177a6c04230590bcf9f584cbecf2d70179e9b2f6c36aa5d4d22aced53da2",
+    "tests/fixtures/goway/testdata/compilefail/phase_predicate_to_having/invalid.go": "666f1c536600d04b2ceeb5f7fbeb657c03ac56abb84c060f72f13b5f75085715",
+    "tests/fixtures/goway/testdata/compilefail/phase_row_to_selected/invalid.go": "9effd8e0606805500332a8f052c73598c7544973022af620872b83f959ff455e",
+    "tests/fixtures/goway/testdata/compilefail/phase_selected_to_nullable_row/invalid.go": "ab3b94de6044e3fb476527734f53bb013d7eae6deb8637454f046faf9159ac4b",
+    "tests/fixtures/goway/testdata/compilefail/phase_selected_to_ordered_row/invalid.go": "8fc1e34dae6df1a4f98fa48c00fb113f4dca48ba81270abe5fc3484dea7eb61b",
+    "tests/fixtures/goway/testdata/compilefail/phase_selected_to_row/invalid.go": "7040be2493c0af19d699d0b4ea441cf8510006314eed59ffceefe21ca32363bd",
+    "tests/fixtures/goway/testdata/compilefail/value_compare_like_number/invalid.go": "166dd9eff09c9f8f0cef6b7485dc4936243ea76b0f8185b079c0b5dbd684e41c",
+    "tests/fixtures/goway/testdata/compilefail/value_compare_nullable/invalid.go": "90f1e483f4dce457f5210a4304562aa469fbafd428cda5dbd0d625fd708dd259",
+    "tests/fixtures/goway/testdata/compilefail/value_compare_order_bool/invalid.go": "f33b3c6249a8969ac143dc16c1f84631fab12249e247f74c9f2c2431c51b70a0",
+    "tests/fixtures/goway/testdata/compilefail/value_compare_owner/invalid.go": "fe1b998cb49bd13b6819c8b7de95c29cdf508c4437eacd3c02a39ea001be80b8",
+    "tests/fixtures/goway/testdata/compilefail/value_compare_selected_owner/invalid.go": "cccf6540b4a96dfbfa340d837f19c3b4d9244369fb1af7f63fd247174edca079",
+    "tests/fixtures/goway/testdata/compilefail/value_compare_selected_row/invalid.go": "a686b22009c859198420ea9447b84e4f894e376c3e2981c902f7744c56bc45e1",
+    "tests/fixtures/goway/testdata/compilefail/value_compare_selected_where/invalid.go": "1fb89b7305140e294f4e17935eadfc91cd92e1d2eea69496242dc766ce75fa07",
+    "tests/fixtures/goway/testdata/compilefail/value_compare_type/invalid.go": "2d51b2d998ee0182357b60b45339fc870e76030ed5f689678a0329d24ed0ba29",
+    "tests/fixtures/goway/testdata/footprint/expr_arithmetic/probe.go": "e0f1729529c3d2d9a6c812ae13f01cd71799714fec47fce66e84686c6eeeb23e",
+    "tests/fixtures/goway/testdata/footprint/expr_selected/probe.go": "98f5598512703ad925aa0141ae9c3d8d7cdde23b70d39111649db292d82f66ee"
+  },
+  "shared_compiler_owner_sha256": {
+    "internal/querycore/scalar_operation.go": "ab08e1f2af633c980ea6332065098f39cf195ecb3f994efc03be0b42beab2553",
+    "internal/querycore/aggregate.go": "8ffdd465f082703774348733f011714e1698d7176d5d1adb30d50aef3a19cf2c",
+    "internal/querycore/parameter_expression.go": "fbf0c07d25a2be3fa038624b4d9f6ef1c76ab5ec8b4e0cdfc5e15eda427e53c7",
+    "internal/querycore/value_expression.go": "f39e215e002f180acb57d4476228c159b03153a0550c3f298dc9b07d65a4428d"
+  },
+  "logs": {
+    "A.log": {
+      "path": "/private/tmp/goway-6a1-capture-acceptance/A.log",
+      "sha256": "85715f41b0bde3273761f8b285e4cde3f1a30b6a1eb02b33a132a49c9a926dc7"
+    },
+    "B-compiler.log": {
+      "path": "/private/tmp/goway-6a1-capture-acceptance/B-compiler.log",
+      "sha256": "4e08b476d13ca2d89497b25d7f961a00e6e2794d3080c89c1356ca28a4776733"
+    },
+    "B-runtime-footprint.log": {
+      "path": "/private/tmp/goway-6a1-capture-acceptance/B-runtime-footprint.log",
+      "sha256": "9b150ddb632dc9bae878851620c88607dd972ac9ebc0d8b9bd66fe1ca4e05967"
+    },
+    "C-catalogue.log": {
+      "path": "/private/tmp/goway-6a1-capture-acceptance/C-catalogue.log",
+      "sha256": "8cc9620f7b247e9f4c7c16807d6237963f8aa1be97d81d5675b869be7416e45d"
+    },
+    "C-pgsmoke-compile.log": {
+      "path": "/private/tmp/goway-6a1-capture-acceptance/C-pgsmoke-compile.log",
+      "sha256": "46c65a8a6177e4cca1dbda927539bca63bf69f717de178ee040da2ae49fc3737"
+    },
+    "C-pgsmoke-vet.log": {
+      "path": "/private/tmp/goway-6a1-capture-acceptance/C-pgsmoke-vet.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "shared-consumers-compile.log": {
+      "path": "/private/tmp/goway-6a1-capture-acceptance/shared-consumers-compile.log",
+      "sha256": "e5e45d36926ef375969f3a5217a9f92fc63a374a4fee0b3c5384ae2d185a41cb"
+    },
+    "shared-owners.log": {
+      "path": "/private/tmp/goway-6a1-capture-acceptance/shared-owners.log",
+      "sha256": "1d5840c1e4b48595d54851828de939beaaaea6d0c44ef093bf976eb3ef005b49"
+    },
+    "integration": {
+      "go build ./...": {
+        "path": ".cache/laneC-6a12-integration/build.log",
+        "sha256": "973ffd11187739356d0a87a5e02a89835df4866019b0d9aa4dd3a49282ecf7b1"
+      },
+      "go vet ./database/... ./internal/...": {
+        "path": ".cache/laneC-6a12-integration/vet.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "go test -race -timeout=20m ./database/... ./internal/querycore/... ./internal/ormcore/... ./internal/sqlowner/... ./internal/generate/... ./events/...": {
+        "path": ".cache/laneC-6a12-integration/race.log",
+        "sha256": "6c84a58c930c279f70220743103929ebd0e525f66616e98e784ad4c4dd624b0b"
+      },
+      "make generate-check": {
+        "path": ".cache/laneC-6a12-integration/generate-check.log",
+        "sha256": "2d9a3b6531cf4b5135a1526d050d10b91ab02bd96a97d3e382a4352b8b56aaef"
+      },
+      "cd tests/fixtures/goway && go vet ./...": {
+        "path": ".cache/laneC-6a12-integration/fixture-vet.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "cd tests/fixtures/goway && go test -v ./...": {
+        "path": ".cache/laneC-6a12-integration/fixture-test.log",
+        "sha256": "5f4bc114e49131fd4a3fe6ddbba8812f17c3184f4a1928f78fea9a453fccf5b3"
+      },
+      "python3 tools/goway_catalogue.py": {
+        "path": ".cache/laneC-6a12-integration/catalogue.log",
+        "sha256": "aad0f1c8b3f5ac9e9532965fb4cec956369c64e8ac60d16c2334e5ddc6801e77"
+      },
+      "make docs-check": {
+        "path": ".cache/laneC-6a12-integration/docs-check.log",
+        "sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+      },
+      "sh tools/format-go.sh check /usr/local/go/bin/gofmt (gofmt -l over repository sources, including fixtures)": {
+        "path": ".cache/laneC-6a12-integration/gofmt.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "git diff --check": {
+        "path": ".cache/laneC-6a12-integration/diff-check.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  },
+  "docs_notes": "Stage 6a1 second-review fixes make row/selected/HAVING phases non-convertible, validate pointer-backed owner capabilities across ORM and earlier shared bridges, retain parameter scope/declaration ownership, and bound/deduplicate expression references. Scoped A/B/C plus shared-consumer checks pass, including 13 extra conversion negatives and external generic-inference reproduction. PostgreSQL execution remains lead-owned; existing footprint ceilings and wire contracts are unchanged.\nReview hardening: independent bridge capabilities are issued only to verified framework concrete owners; inferred application wrappers cannot capture them. Param retains scoped exemplar ownership errors.",
+  "vcs": "Only the explicitly requested git apply -3 --binary wrote Git state. Five conflicted index entries remain for the lead, with resolved working files. No other Git writes or commit.",
+  "review_fixes": [
+    {
+      "finding": "phase conversion bypass",
+      "status": "fixed",
+      "implementation": "Distinct private row/selected/predicate/HAVING marker fields prevent explicit struct conversions, including aggregate and ordered/nullable comparison forms.",
+      "tests": [
+        "13 external phase_* compile-fail cases, both conversion directions"
+      ]
+    },
+    {
+      "finding": "generic-inference zero-seal bypass and parameter ownership loss",
+      "status": "fixed",
+      "implementation": "Private non-nil pointer capabilities, now split into seven structurally non-convertible families; all ORM metadata/application bridges validate before reading/applying metadata. Earlier shared autocommit/observer/collection bridges are guarded or delegate to guarded concrete owners. Parameters preserve construction scope and declaration identity; exemplar errors propagate through every Param form.",
+      "tests": [
+        "TestInferredZeroBridgeCapabilitiesFailClosed (independent consumer open/apply generic helpers)",
+        "TestScopeBridgeRejectsZeroCapabilityWithValidMetadata",
+        "TestModelBridgesRejectZeroCapabilityWithValidMetadata",
+        "TestParameterOwnershipSurvivesReferenceFreeConstruction",
+        "TestCapabilitiesRejectZeroAndAcceptIssuedCopies",
+        "TestOwnerBridgesRejectZeroCapabilityBeforeEffects",
+        "TestOwnedCollectionsRejectZeroCapability"
+      ]
+    },
+    {
+      "finding": "exponential reference growth",
+      "status": "fixed",
+      "implementation": "Shared ownership core merges a stable deduplicated set bounded by querycore.MaxExpressionNodes for visited and retained references; arithmetic, binary comparisons and conjunctions reuse it.",
+      "tests": [
+        "TestExpressionReferencesStayBoundedAfter64SelfDoublings",
+        "TestReferenceSetDeduplicatesAndOwnsStorage",
+        "TestReferenceSetBoundsWorkAndRejectsInvalidIdentities"
+      ]
+    },
+    {
+      "finding": "capability capture through inferred structural observer implementation",
+      "status": "fixed",
+      "implementation": "writerObservers uses a concrete DB/PrimaryExecutor/Session/Tx/enclosingTransaction switch; removed enclosingTransaction structural bridge. Each bridge family has an independent validated sentinel and a distinct private field. Autocommit callbacks originate only from concrete DB/PrimaryExecutor switches in both APIs.",
+      "tests": [
+        "TestInferredCapabilityCatchersNeverReceiveAuthority (external inferred catcher[K], old read/create and ORM insert; observer and autocommit wrappers never called, transaction fallback preserved)",
+        "TestCapabilitiesRejectZeroAndAcceptIssuedCopies (all families reject zero and cannot convert to one another)",
+        "existing observer ownership, wrapper, lifecycle, autocommit and zero-capability tests"
+      ]
+    },
+    {
+      "finding": "Param launders a foreign scoped exemplar by dropping core.Err",
+      "status": "fixed",
+      "implementation": "All exemplar Param methods pass their full rowData into the shared parameter constructor; joins exemplar core.Err with codec/bind/reference errors, skips codec callbacks for an already invalid exemplar, retains construction references and scope.",
+      "tests": [
+        "TestParamPreservesInvalidScopedExemplar (row, selected, ordered, chained, nullable and cast forms; invalid before driver SQL)"
+      ]
+    }
+  ],
+  "additional_compilefail_cases": {
+    "phase_aggregate_to_row": "cannot convert",
+    "phase_comparison_to_row": "cannot convert",
+    "phase_having_to_predicate": "cannot convert",
+    "phase_nullable_comparison_to_row": "cannot convert",
+    "phase_nullable_row_to_selected": "cannot convert",
+    "phase_ordered_aggregate_to_row": "cannot convert",
+    "phase_ordered_comparison_to_row": "cannot convert",
+    "phase_ordered_row_to_selected": "cannot convert",
+    "phase_predicate_to_having": "cannot convert",
+    "phase_row_to_selected": "cannot convert",
+    "phase_selected_to_nullable_row": "cannot convert",
+    "phase_selected_to_ordered_row": "cannot convert",
+    "phase_selected_to_row": "cannot convert"
+  },
+  "compilefail_acceptance": {
+    "selected": 38,
+    "passed": 38,
+    "ported_old_rows": 25,
+    "new_phase_conversion_cases": 13
+  },
+  "capability_callsite_audit": [
+    {
+      "family": "observer",
+      "dispatch": "database/query/model_hooks.go: writerObservers",
+      "trust": "Concrete *database.DB, database.PrimaryExecutor, *database.Session, *database.Tx and private enclosingTransaction; unknown wrappers return known=false without receiving a seal."
+    },
+    {
+      "family": "autocommit",
+      "dispatch": [
+        "database/query/execute_mutation.go: executeMutation",
+        "database/query/execute_autocommit.go: executeAutocommitInsert",
+        "database/orm/write.go: executeWrite and autocommit"
+      ],
+      "trust": "Only bound methods from concrete *database.DB/database.PrimaryExecutor switches enter private helpers; no structural callback lookup."
+    },
+    {
+      "family": "metadata/expression/query",
+      "dispatch": [
+        "database/orm/source.go",
+        "database/orm/codecs.go",
+        "database/orm/expr/expression.go",
+        "database/orm/expr/value.go",
+        "database/orm/expr/model.go",
+        "database/orm/rows/{constructors,join,projection}.go"
+      ],
+      "trust": "Statically bound package functions with typed, validating family capabilities. ExpressionColumn/RowValue descriptors receive no capability."
+    },
+    {
+      "family": "collection/outcome",
+      "dispatch": [
+        "database/query/relation_direct.go",
+        "database/query/relation_through.go",
+        "database/orm/relation.go",
+        "database/query/execute_autocommit.go",
+        "database/orm/write.go"
+      ],
+      "trust": "Statically bound framework package functions; concrete delegates retain the same family capability."
+    },
+    {
+      "other_seal_markers": "frameworkadapter/errordiag",
+      "trust": "frameworkadapter never invokes the marker and checks concrete defining-package ownership. errordiag passes only its unrelated zero-sized diagnostic marker, which carries no SQL capability or sentinel; no issued SQL capability crosses that interface."
+    }
+  ],
+  "integration": {
+    "base_commit": "884beb7",
+    "patch_base": "e731753",
+    "patch_sha256": "b173fc63095f93578ba8677f8769a962be2230411d858ffbf18c543c6d0248e0",
+    "conflicts": {
+      "database/orm/codecs.go": "Combine MetadataSeal.Valid validation with B5a option.mutator rejection; add regression proving a valid seal cannot admit a mutator option.",
+      "database/orm/relation.go": "Keep 4b loaded-slot callback and current loader signature; issue Collections capability when adopting slices.",
+      "database/orm/testdata/public-methods.txt": "Union of existing relation/mutator records and lane C expression records; only approved MetadataSeal signature substitution.",
+      "tests/fixtures/goway/compiler_cases_test.go": "Union of 129 existing and 52 additional cases; 181 unique registered cases.",
+      "tests/fixtures/goway/footprint_test.go": "Union of 39 existing and four lane C probes; 43 probes with all previous baseline/ceilings unchanged."
+    },
+    "additional_capability_migrations": [
+      "database/orm/relation_through.go: FoundryLinked(Collections(), links)",
+      "database/orm/relation_through_hop.go: FoundryCollection(Collections(), rows)"
+    ],
+    "capability_audit": "docs/evidence/goway-6a12-capability-audit.tsv",
+    "capability_policy": "Seven validated SQL families; no legacy sqlowner.Seal or zero SQL-capability literals in production. Explicit negative tests retain zero tokens as rejection inputs. The accepted lane audit classifies errordiag/frameworkadapter markers as unrelated non-SQL ownership markers; their uses are listed separately.",
+    "observer_lookup": "writerObservers switches only over concrete DB, PrimaryExecutor, Session, Tx and private enclosingTransaction. Old read/write/set paths reuse it. B5a mutated writes retain their transaction path; no capability is dispatched through application-implementable interfaces.",
+    "catalogue": {
+      "total": 1026,
+      "ported": 137,
+      "port": 445,
+      "unaffected": 444,
+      "merge": 0,
+      "obsolete": 0,
+      "distinct_goway_cases_covering_ported_rows": 129,
+      "all_101_previous_ports_preserved": true
+    },
+    "compiler_cases": 181,
+    "footprint_probes": 43,
+    "all_39_previous_budgets_preserved": true,
+    "index": "Working files have no conflict markers. Five index entries remain unmerged after git apply -3; no other Git writes or commit, as instructed.",
+    "acceptance_status": "pass",
+    "recorded_at": "2026-10-23T07:38:57.393466+00:00",
+    "surface": "All previous records preserved apart from approved MetadataSeal bridge signature; 278 lines added. Current surface test passes.",
+    "capability_audit_entries": 150,
+    "production_sql_capability_issuance_sites": 33,
+    "postgres": "Smoke sources compile/vet; optional PostgreSQL tests skip without configured URL. No live PostgreSQL claim.",
+    "model_slope": {
+      "functions_for_two_added_models": 832,
+      "ceiling": 939
+    },
+    "origin_lane_footprint_probes": [
+      {
+        "probe": "expr_arithmetic",
+        "functions": 1162,
+        "baseline": 1162,
+        "ceiling": 1337,
+        "archive_bytes": 5361848
+      },
+      {
+        "probe": "expr_selected",
+        "functions": 1554,
+        "baseline": 1551,
+        "ceiling": 1784,
+        "archive_bytes": 6801784
+      },
+      {
+        "probe": "raw",
+        "functions": 1045,
+        "baseline": 1045,
+        "ceiling": 1202,
+        "archive_bytes": 4832222
+      },
+      {
+        "probe": "cursor",
+        "functions": 1131,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 4982406
+      },
+      {
+        "probe": "key_chunk",
+        "functions": 816,
+        "baseline": 812,
+        "ceiling": 934,
+        "archive_bytes": 3817078
+      },
+      {
+        "probe": "column_encrypted_text",
+        "functions": 1137,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 4768594
+      },
+      {
+        "probe": "column_nullable_encrypted_text",
+        "functions": 1369,
+        "baseline": 1359,
+        "ceiling": 1563,
+        "archive_bytes": 5928974
+      },
+      {
+        "probe": "column_encrypted_json",
+        "functions": 1227,
+        "baseline": 1217,
+        "ceiling": 1400,
+        "archive_bytes": 5076934
+      },
+      {
+        "probe": "column_nullable_encrypted_json",
+        "functions": 1459,
+        "baseline": 1449,
+        "ceiling": 1667,
+        "archive_bytes": 6260066
+      },
+      {
+        "probe": "column_password",
+        "functions": 1200,
+        "baseline": 1190,
+        "ceiling": 1369,
+        "archive_bytes": 4996504
+      },
+      {
+        "probe": "column_nullable_password",
+        "functions": 1427,
+        "baseline": 1417,
+        "ceiling": 1630,
+        "archive_bytes": 6093734
+      },
+      {
+        "probe": "sensitive_models",
+        "functions": 2626,
+        "baseline": 2606,
+        "ceiling": 2997,
+        "archive_bytes": 11565160
+      },
+      {
+        "probe": "model_type",
+        "functions": 299,
+        "baseline": 299,
+        "ceiling": 344,
+        "archive_bytes": 1263450
+      },
+      {
+        "probe": "table_ref",
+        "functions": 808,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 3905922
+      },
+      {
+        "probe": "onequery",
+        "functions": 808,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 3774210
+      },
+      {
+        "probe": "q_with",
+        "functions": 1064,
+        "baseline": 1053,
+        "ceiling": 1211,
+        "archive_bytes": 4722310
+      },
+      {
+        "probe": "q_select",
+        "functions": 841,
+        "baseline": 836,
+        "ceiling": 962,
+        "archive_bytes": 3977786
+      },
+      {
+        "probe": "q_join",
+        "functions": 1626,
+        "baseline": 1598,
+        "ceiling": 1838,
+        "archive_bytes": 7550322
+      },
+      {
+        "probe": "report_pipeline",
+        "functions": 1958,
+        "baseline": 1905,
+        "ceiling": 2191,
+        "archive_bytes": 10292152
+      },
+      {
+        "probe": "models",
+        "functions": 6203,
+        "baseline": 6147,
+        "ceiling": 7070,
+        "archive_bytes": 26301402
+      },
+      {
+        "probe": "column_number",
+        "functions": 1182,
+        "baseline": 1172,
+        "ceiling": 1348,
+        "archive_bytes": 4813154
+      },
+      {
+        "probe": "column_nullable_text",
+        "functions": 1470,
+        "baseline": 1456,
+        "ceiling": 1675,
+        "archive_bytes": 5918382
+      },
+      {
+        "probe": "models_1",
+        "functions": 1633,
+        "baseline": 1619,
+        "ceiling": 1862,
+        "archive_bytes": 6590788
+      },
+      {
+        "probe": "models_3",
+        "functions": 2465,
+        "baseline": 2435,
+        "ceiling": 2801,
+        "archive_bytes": 10088420
+      },
+      {
+        "probe": "column_time",
+        "functions": 1204,
+        "baseline": 1194,
+        "ceiling": 1374,
+        "archive_bytes": 4853858
+      },
+      {
+        "probe": "column_enum",
+        "functions": 1242,
+        "baseline": 1232,
+        "ceiling": 1417,
+        "archive_bytes": 5055846
+      },
+      {
+        "probe": "relation_with",
+        "functions": 1867,
+        "baseline": 1847,
+        "ceiling": 2125,
+        "archive_bytes": 7736878
+      },
+      {
+        "probe": "column_json",
+        "functions": 1290,
+        "baseline": 1280,
+        "ceiling": 1472,
+        "archive_bytes": 5273352
+      },
+      {
+        "probe": "column_nullable_json",
+        "functions": 1532,
+        "baseline": 1522,
+        "ceiling": 1751,
+        "archive_bytes": 6421630
+      },
+      {
+        "probe": "column_interval",
+        "functions": 1188,
+        "baseline": 1178,
+        "ceiling": 1355,
+        "archive_bytes": 4946824
+      },
+      {
+        "probe": "column_nullable_interval",
+        "functions": 1416,
+        "baseline": 1406,
+        "ceiling": 1617,
+        "archive_bytes": 6083458
+      }
+    ],
+    "docs_files": [
+      "CHANGELOG.md",
+      "blueprint/goway-data-layer/README.md",
+      "blueprint/00-master-architecture-and-parity.md"
+    ]
+  },
+  "origin_lane_commands": [
+    {
+      "set": "A",
+      "cwd": ".",
+      "command": "go test -p=2 ./database/orm/... ./internal/ormcore ./internal/querycore ./internal/sqlowner",
+      "log": "A.log",
+      "result": "pass"
+    },
+    {
+      "set": "B",
+      "cwd": "tests/fixtures/goway",
+      "command": "go test -p=2 -v -run '^TestInvalidPublicContractsFailCompilation$/(^arithmetic_|^computed_model_order_owner$|^decimal_conversion_float$|^column_|^value_compare_|^parameter_|^phase_)' .",
+      "log": "B-compiler.log",
+      "result": "38/38 pass"
+    },
+    {
+      "set": "B",
+      "cwd": "tests/fixtures/goway",
+      "command": "go test -p=2 -v -run '^(TestInferredCapabilityCatchersNeverReceiveAuthority|TestInferredZeroBridgeCapabilitiesFailClosed|TestStage6a1ExpressionGolden|TestOldAndNewDataLayersAgree|TestFootprintBudgets)$' .",
+      "log": "B-runtime-footprint.log",
+      "result": "pass; catcher and zero-inference regressions, both goldens and 31 footprint probes"
+    },
+    {
+      "set": "C",
+      "cwd": ".",
+      "command": "python3 tools/goway_catalogue.py",
+      "log": "C-catalogue.log",
+      "result": "pass; 25 Stage 6a rows ported; 13 additional conversion cases"
+    },
+    {
+      "set": "C",
+      "cwd": "tests/fixtures/goway",
+      "command": "go test -p=2 -run '^$' ./pgsmoke",
+      "log": "C-pgsmoke-compile.log",
+      "result": "pass; no PostgreSQL execution"
+    },
+    {
+      "set": "C",
+      "cwd": "tests/fixtures/goway",
+      "command": "go vet -p=2 ./pgsmoke",
+      "log": "C-pgsmoke-vet.log",
+      "result": "pass"
+    },
+    {
+      "set": "shared owners",
+      "cwd": ".",
+      "command": "go test -p=2 -v ./database ./database/relation ./database/query -run '^(TestOwnerBridgesRejectZeroCapabilityBeforeEffects|TestOwnedCollectionsRejectZeroCapability|TestObserverAdapterMustBeValidAndUnstartedPoolIsNotFrozen|TestRegisteredObserversRequireAdapterAndRunThroughActualTransaction|TestObserverFreeWrapperRetainsSingleMutationStatement|TestObserverOwnershipSurvivesSessionsTransactionsSavepointsAndWrappers|TestAutocommitStatementFailuresCarryOutcome|TestModelInsertOnPoolRunsOneAutocommitStatement|TestModelHookFactoryRunsInsideWriteAndAfterShapeValidation|TestSetBasedWritesRequireAcknowledgedHookSkipping)$'",
+      "log": "shared-owners.log",
+      "result": "pass; concrete owners and wrapper transaction/lifecycle behavior"
+    },
+    {
+      "set": "shared consumers",
+      "cwd": ".",
+      "command": "go test -p=2 -run '^$' ./database/query ./database/postgres",
+      "log": "shared-consumers-compile.log",
+      "result": "pass; compilation only"
+    },
+    {
+      "set": "format",
+      "command": "gofmt -w <changed Go files>; final gofmt -l on all changed Go files",
+      "result": "pass"
+    },
+    {
+      "set": "diff",
+      "command": "git diff --check",
+      "result": "pass"
+    }
+  ],
+  "not_implemented_in_6a1": [
+    "CASE/COALESCE/NULLIF (6a2)",
+    "summary aggregates/FILTER/GROUP BY/HAVING/DISTINCT (6a3)",
+    "raw fragments and no-raw guard (6a4)",
+    "specialized text functions (6d)"
+  ],
+  "implemented_by_6a2": "CASE/COALESCE/NULLIF integrated and covered by the combined acceptance."
+}

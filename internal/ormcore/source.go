@@ -15,6 +15,7 @@ import (
 
 // Source is a validated model/alias/join input without a result decoder.
 type Source struct {
+	Scope   reflect.Type
 	Node    querycore.SelectNode
 	Owners  map[string]any
 	Aliases map[string]reflect.Type
@@ -24,6 +25,7 @@ type Source struct {
 
 // Reference retains runtime declaration ownership after static scope checking.
 type Reference struct {
+	Scope reflect.Type
 	Table string
 	Owner any
 }
@@ -50,34 +52,62 @@ type Column[V any] struct {
 type Expression struct {
 	Node querycore.ValueExpression
 	Refs []Reference
-	Err  error
+	// ReferenceFree marks a constructed expression with no SQL column dependencies.
+	ReferenceFree bool
+	Err           error
 }
 
 // Predicate carries a scoped SQL condition.
 type Predicate struct {
 	Node querycore.Expression
 	Refs []Reference
-	Err  error
+	// ReferenceFree marks a constructed expression with no SQL column dependencies.
+	ReferenceFree bool
+	Err           error
 }
 
 // Order carries a scoped ordering.
 type Order struct {
 	Node querycore.OrderNode
 	Refs []Reference
-	Err  error
+	// ReferenceFree marks a constructed expression with no SQL column dependencies.
+	ReferenceFree bool
+	Err           error
 }
 
 func Invalid(message string) error { return fault.New(fault.Invalid, message) }
 func CheckReferences(s Source, refs []Reference) error {
-	if len(refs) == 0 {
+	if len(refs) == 0 || len(s.Owners) == 0 {
 		return Invalid("expression requires an owned source")
 	}
+	if len(refs) > querycore.MaxExpressionNodes {
+		return Invalid("expression references exceed their resource bound")
+	}
 	for _, r := range refs {
-		if r.Owner == nil || s.Owners[r.Table] != r.Owner {
+		if r.Scope != nil {
+			if r.Scope != s.Scope {
+				return Invalid("expression belongs to a different source scope")
+			}
+			if r.Table == "" && r.Owner == nil {
+				continue
+			}
+		}
+		if r.Owner == nil || !reflect.ValueOf(r.Owner).Comparable() || s.Owners[r.Table] != r.Owner {
 			return Invalid("expression belongs to a different source declaration")
 		}
 	}
 	return nil
+}
+
+// CheckReferenceSet distinguishes constructed constants from missing ownership.
+func CheckReferenceSet(s Source, refs []Reference, referenceFree bool) error {
+	if len(refs) == 0 && referenceFree {
+		if len(s.Owners) == 0 {
+			return Invalid("expression requires a declared source")
+		}
+		return nil
+	}
+	return CheckReferences(s, refs)
 }
 
 // NilDescriptor handles typed nils at public declaration boundaries.

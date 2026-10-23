@@ -116,7 +116,10 @@ func (tx *Tx) Observers() lifecycle.Observers { return tx.observers }
 // FoundryObservers is the sealed owner capability used by typed queries to prove
 // observer absence without I/O or pool locks. known is false while a prepared
 // pool can still bind observers; callers must then use the Tx they receive.
-func (db *DB) FoundryObservers(sqlowner.Seal) (set lifecycle.Observers, known bool) {
+func (db *DB) FoundryObservers(seal sqlowner.ObserverSeal) (set lifecycle.Observers, known bool) {
+	if !seal.Valid() {
+		return lifecycle.Observers{}, false
+	}
 	if db == nil {
 		return lifecycle.Observers{}, false
 	}
@@ -129,12 +132,15 @@ func (db *DB) FoundryObservers(sqlowner.Seal) (set lifecycle.Observers, known bo
 }
 
 // FoundryObservers reports the pinned pool's owner metadata.
-func (p PrimaryExecutor) FoundryObservers(seal sqlowner.Seal) (lifecycle.Observers, bool) {
+func (p PrimaryExecutor) FoundryObservers(seal sqlowner.ObserverSeal) (lifecycle.Observers, bool) {
 	return p.db.FoundryObservers(seal)
 }
 
 // FoundryObservers reports the session owner's frozen observer set.
-func (s *Session) FoundryObservers(sqlowner.Seal) (lifecycle.Observers, bool) {
+func (s *Session) FoundryObservers(seal sqlowner.ObserverSeal) (lifecycle.Observers, bool) {
+	if !seal.Valid() {
+		return lifecycle.Observers{}, false
+	}
 	if s == nil {
 		return lifecycle.Observers{}, false
 	}
@@ -142,7 +148,10 @@ func (s *Session) FoundryObservers(sqlowner.Seal) (lifecycle.Observers, bool) {
 }
 
 // FoundryObservers reports the transaction owner's frozen observer set.
-func (tx *Tx) FoundryObservers(sqlowner.Seal) (lifecycle.Observers, bool) {
+func (tx *Tx) FoundryObservers(seal sqlowner.ObserverSeal) (lifecycle.Observers, bool) {
+	if !seal.Valid() {
+		return lifecycle.Observers{}, false
+	}
 	if tx == nil {
 		return lifecycle.Observers{}, false
 	}

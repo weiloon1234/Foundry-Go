@@ -8,6 +8,12 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Add typed row and selected expressions, arithmetic, casts, comparisons,
+  Count/Exists and `rows.MapSelected` (6a1), plus CASE/COALESCE/NULLIF (6a2).
+  Keep row, selected and HAVING phases distinct; preserve parameter ownership and
+  deduplicate references. Internal SQL bridges now validate seven capability
+  families and dispatch observer lookup only through concrete framework owners.
+
 - Add typed field mutators, input-column kinds and `InputKeyOf`, with startup
   validation of `Mutate<Field>`/`Access<Field>` methods and redacted mutator errors
   shared by both data APIs (B5a). Stored lookup keys retain their type; distinct

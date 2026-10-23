@@ -187,7 +187,7 @@ func (r ThroughRelation[M, N, P]) loadRelation(ctx context.Context, executor dat
 			return nil, err
 		}
 		index := indices[i]
-		result[index] = r.set(result[index], relation.FoundryLinked(sqlowner.Seal{}, group))
+		result[index] = r.set(result[index], relation.FoundryLinked(sqlowner.Collections(), group))
 	}
 	return result, nil
 }

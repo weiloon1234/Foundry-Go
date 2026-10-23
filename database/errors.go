@@ -285,7 +285,10 @@ func poolExhausted(err error) error {
 // FoundryStatementUnknown labels a failure observed after a framework
 // autocommit statement was sent, such as a result that could not be decoded:
 // the statement's implicit transaction may already have committed.
-func FoundryStatementUnknown(_ sqlowner.Seal, operation string, cause error) error {
+func FoundryStatementUnknown(seal sqlowner.OutcomeSeal, operation string, cause error) error {
+	if !seal.Valid() {
+		return fault.New(fault.Invalid, "invalid SQL owner capability")
+	}
 	return &Error{operation: operation, detail: Detail{Code: CommitUnknown}, outcome: Unknown, cause: cause}
 }
 

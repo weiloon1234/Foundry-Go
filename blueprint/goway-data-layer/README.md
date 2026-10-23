@@ -47,9 +47,11 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 4b | Direct eager trees, has-one, LoadMissing, relation limits and existence filters | Done; committed at `470d585`. |
 | 4c | Typed pivots, through, one-of-many and polymorphic relations | Done; committed at `a89f509`. Live PostgreSQL execution remains for the lead. |
 | 4 | Full read relations, pivots, through, one-of-many, filters and aggregate slots | In progress; 4a–4c delivered, 4d aggregate-slot design and implementation remain planned. Relation writes belong to Stage 5b; per-parent limits are out of scope. |
-| B5a | Typed mutators, accessor validation, input-column kinds and InputKey | Accepted lane B patch integrated; combined acceptance passed with 129 compiler cases and 39 probes under unchanged ceilings. B5b–B5d remain deferred. |
+| B5a | Typed mutators, accessor validation, input-column kinds and InputKey | Done; committed at `884beb7`. B5b–B5d remain deferred. |
 | 5 | Lifecycle, mutators, change sets, scopes and observers | In progress; B5a integrated. Hooks, draft/write getters, retrieval dispatch, scopes, change tracking and audit remain deferred. Relation writes belong to 5b. |
-| 6a | Expressions, aggregates, grouping, having and raw fragments | Planned |
+| 6a1 | Expression phases, values, arithmetic, casts, comparisons, Count/Exists and MapSelected | Accepted lane C patch integrated; combined acceptance passed. Done pending the lead's commit. |
+| 6a2 | Row and selected CASE, COALESCE and NULLIF | Accepted lane C patch integrated; combined acceptance passed. Done pending the lead's commit. |
+| 6a | Expressions, aggregates, grouping, having and raw fragments | In progress; 6a1/6a2 integrated. Summary aggregates, grouping/HAVING/DISTINCT and raw fragments remain 6a3/6a4. |
 | 6b | Joins, aliases, correlation and lateral queries | Planned |
 | 6c | Rows/projections, CTEs, recursive queries, sets and result cursors | Planned |
 | 6d | Windows, JSON, temporal, interval, geographic and text expressions | Planned |
@@ -372,6 +374,9 @@ consumer retains Stage 1 golden coverage and adds core, direct and joined-relati
 | Typed raw hydration | Executor-level raw only | Stage 3.1d: model/row decoders, exact named column set, no scopes or automatic routing |
 | Chunks, pagination and locking | Generated wrappers and query runtime | Stage 3.1c: cursor/key-chunk package functions; keyed/locked lookup composition; shared tokens and unchanged HTTP shape |
 | Audit/history and pruning | Generated wrappers and query runtime | Stages 5/6e/7; preserve redaction, transaction and outcome contracts |
+| Arithmetic, casts and comparisons | Generated fields and query expressions | 6a1 delivered: typed row/selected package functions, explicit nullable variants and capability-specific comparisons |
+| Count and existence aggregates | Selected query aggregates | 6a1 delivered: `expr.Count`/`expr.Exists` and `rows.MapSelected`; summary aggregates and query grouping/HAVING remain 6a3 |
+| CASE, COALESCE and NULLIF | Conditional query expressions | 6a2 delivered: distinct row/selected phases, mandatory CASE fallback and one nullable layer; shared querycore validation |
 | Projections, joins, CTEs, sets, windows and subqueries | Generated selectors and `query` families | `orm/expr` and `orm/rows` functions, Stages 6a–6d |
 | Model binding, factories, datatables and database validation | Generated metadata and typed query interfaces | Table/column adapters, Stage 7; TS/OpenAPI/manifest contracts must remain identical |
 
@@ -386,12 +391,19 @@ remain compile-time constraints.
 | --- | --- | --- |
 | 1 | Existing executor `Exec`, `Query`, `database.ScanOne` and read-routed `DB.QueryRead`; transactions unchanged | Retained |
 | 2 | Typed model/declared-row hydration from raw SQL; validate selected columns rather than return partial models | Implemented Stage 3.1d: `Table.Raw` / `rows.Raw`, exact names in any order; no automatic scopes or read routing |
-| 3 | Opt-in typed fragments (`expr.Raw[S,V]`, `orm.WhereRaw[M]` sketches), composed with existing scopes and transaction | Planned Stage 6a |
+| 3 | Opt-in typed fragments (`expr.Raw[S,V]`, `orm.WhereRaw[M]` sketches), composed with existing scopes and transaction | Planned Stage 6a4; not part of the shipped 6a1/6a2 expression foundation |
 
 All levels bind arguments instead of interpolating values. Raw fragments require
 the caller to declare result types. A project may forbid raw call sites through
 the planned opt-in lint guard. Typed advanced SQL remains a first-class parity
 requirement; raw SQL does not substitute for porting its compiler rules.
+
+The 6a1/6a2 typed expression API distinguishes row values, selected values and
+HAVING conditions with different private phase markers. Explicit Go conversions
+cannot move aggregates or HAVING into row WHERE. `rows.Map` keeps row-only input;
+`rows.MapSelected` accepts selected values. `Grouped` explicitly lifts a predicate
+for selected CASE, while the shared compiler still enforces SQL grouping rules.
+Typed raw hydration remains level 2; these phase types do not add a raw fragment API.
 
 ## Compile-fail catalogue
 
@@ -428,8 +440,8 @@ intentionally accepts byte slices, while identity does not.
 <!-- catalogue-summary -->
 | Disposition | Cases |
 | --- | ---: |
-| ported | 101 |
-| port | 481 |
+| ported | 137 |
+| port | 445 |
 | merge | 0 |
 | obsolete | 0 |
 | unaffected | 444 |
@@ -467,7 +479,7 @@ intentionally accepts byte slices, while identity does not.
 | 7 | 81 |
 | — | 444 |
 
-101 old catalogue rows are covered by 93 distinct Go-way cases.
+137 old catalogue rows are covered by 129 distinct Go-way cases.
 
 ## Emitter audit
 
@@ -930,3 +942,47 @@ checks pass. B5b–B5d, including
 hooks, retrieval dispatch on Raw, scopes, change tracking and audit, remain deferred.
 The PostgreSQL test sources cover distinct inputs, explicit accessors, omission,
 NULL, rollback and typed key inputs; live execution remains for the lead.
+
+## Stage 6a1 and 6a2 expression foundation
+
+The accepted lane C patches are integrated with direct/joined relations and typed
+mutators. Evidence: [6a1](../../docs/evidence/goway-6a1.json) and
+[6a2](../../docs/evidence/goway-6a2.json). The
+[expression reference](../../database/orm/expr/README.md) describes the concrete API.
+
+6a1 adds row and selected value composition, arithmetic, casts and comparisons,
+Count/Exists, parameters, explicit NULL/nullable widening and `rows.MapSelected`.
+Reference-free parameters retain their construction scope and declaration owner;
+invalid exemplars stay invalid through `Param`. References form a bounded,
+stable, deduplicated set. Existing model WHERE/order composition uses package
+functions without adding Query or Table methods.
+
+6a2 adds row and selected CASE/COALESCE/NULLIF. CASE requires `Else` or `ElseNull`
+before selection or comparison. A required COALESCE fallback removes nullability;
+NULLIF and ElseNull add one layer. Explicit nullable variants preserve one layer.
+Selected CASE takes HAVING conditions; row CASE takes row predicates. Conditional
+argument validation and diagnostics have one querycore owner, reused by expression
+construction and compiler traversal.
+
+SQL bridges validate seven independent pointer-backed capability families:
+metadata, expression, query, observer, autocommit, outcome and collection. Issued
+capabilities never enter application-implementable interfaces. Observer lookup
+switches on concrete DB, primary, session, transaction and enclosing-transaction
+owners; unknown wrappers use their supplied transaction. Relation collection
+publication and B5a codec bridges use the appropriate validated family without
+losing loaded-slot behavior or mutator-option rejection. The
+[capability sweep](../../docs/evidence/goway-6a12-capability-audit.tsv) records each use.
+
+| New probe | Baseline functions | Unchanged ceiling |
+| --- | ---: | ---: |
+| `expr_arithmetic` | 1,162 | 1,337 |
+| `expr_selected` | 1,551 | 1,784 |
+| `conditional_row` | 1,681 | 1,934 |
+| `conditional_selected` | 1,511 | 1,738 |
+
+Both lanes' catalogue rows, surface entries and probes are retained. The combined
+fixture has 181 compiler cases and 43 footprint probes with all 39 pre-integration
+ceilings unchanged. Build, vet, race, generation, fixture, catalogue, documentation
+and formatting checks pass. PostgreSQL sources cover expression and conditional behavior;
+live execution remains for the lead. Summary aggregates, FILTER, GROUP BY,
+query HAVING and DISTINCT remain 6a3; raw fragments and the no-raw guard remain 6a4.

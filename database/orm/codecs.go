@@ -154,9 +154,9 @@ func keyCodec[M any, K comparable](opts []ColumnOption[K]) (codec.Codec[K], func
 }
 
 // FoundryCodec supplies an explicit codec option to the row declaration package.
-// Example: FoundryCodec(option, sqlowner.Seal{}).
-func FoundryCodec[V any](option ColumnOption[V], _ sqlowner.Seal) codec.Codec[V] {
-	if option.mutator {
+// Example: FoundryCodec(option, sqlowner.Metadata()).
+func FoundryCodec[V any](option ColumnOption[V], seal sqlowner.MetadataSeal) codec.Codec[V] {
+	if !seal.Valid() || option.mutator {
 		return codec.Codec[V]{}
 	}
 	return selectedCodec([]ColumnOption[V]{option})

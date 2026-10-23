@@ -30,7 +30,7 @@ func HasManyThroughOf[M, I, N any, A, B comparable](slot Many[M, N], local KeyCo
 			return (*relation.Many[N])(unsafe.Add(base, slot.core.offset)).IsLoaded()
 		}
 		p.load = relationLoader[M, N](a, f, func(parent *M, rows []N) error {
-			*(*relation.Many[N])(unsafe.Add(unsafe.Pointer(parent), slot.core.offset)) = relation.FoundryCollection(sqlowner.Seal{}, rows)
+			*(*relation.Many[N])(unsafe.Add(unsafe.Pointer(parent), slot.core.offset)) = relation.FoundryCollection(sqlowner.Collections(), rows)
 			return nil
 		})
 	}

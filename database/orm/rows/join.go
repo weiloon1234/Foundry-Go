@@ -68,21 +68,21 @@ type JoinOn[L, R any] struct {
 // As aliases a model query, preserving its filters and soft-delete scope.
 // Example: members := rows.As[memberSide](Members.Query(),"members").
 func As[A, M any](q orm.Query[M], alias string) Aliased[A, M] {
-	s := orm.FoundrySource(q, sqlowner.Seal{})
+	s := orm.FoundrySource(q, sqlowner.Metadata())
 	direct := len(s.Node.Predicates) == 0 && len(s.Node.Orders) == 0 && !s.Node.Limit.IsSet() && s.Node.Offset == 0
 	node := querycore.AliasNode(s.Node, s.Node.Source.Columns, direct, alias, reflect.TypeFor[Alias[A, M]](), s.Err)
 	owner := s.Owners[s.Node.Source.Name()]
-	return Aliased[A, M]{source: ormcore.Source{Node: node.Node, Aliases: node.Aliases, Owners: map[string]any{alias: owner}, Err: node.Err, Checks: s.Checks}, scope: ormcore.Scope{Reference: ormcore.Reference{Table: alias, Owner: owner}, Err: node.Err}}
+	return Aliased[A, M]{source: ormcore.Source{Scope: reflect.TypeFor[Alias[A, M]](), Node: node.Node, Aliases: node.Aliases, Owners: map[string]any{alias: owner}, Err: node.Err, Checks: s.Checks}, scope: ormcore.Scope{Reference: ormcore.Reference{Table: alias, Owner: owner}, Err: node.Err}}
 }
 
 // Scope selects the model scope of an alias. Example: expr.At(rows.Scope(members),Members.ID).
 func Scope[A, M any](a Aliased[A, M]) expr.Scope[Alias[A, M], M] {
-	return expr.FoundryScope[Alias[A, M], M](a.scope, sqlowner.Seal{})
+	return expr.FoundryScope[Alias[A, M], M](a.scope, sqlowner.Expressions())
 }
 
 // On joins expressions with the same value type. Example: rows.On(memberID,orderMemberID).
 func On[L, R any, K comparable, LP, RP any](left expr.Expression[L, K, LP], right expr.Expression[R, K, RP]) JoinOn[L, R] {
-	l, r := expr.FoundryExpression(left, sqlowner.Seal{}), expr.FoundryExpression(right, sqlowner.Seal{})
+	l, r := expr.FoundryExpression(left, sqlowner.Expressions()), expr.FoundryExpression(right, sqlowner.Expressions())
 	return JoinOn[L, R]{node: querycore.BinaryComparison{Left: l.Node, Right: r.Node, Operator: querycore.Equal}, left: l.Refs, right: r.Refs, err: errors.Join(l.Err, r.Err)}
 }
 
@@ -102,7 +102,7 @@ func InnerJoin[L, R any](left Source[L], right JoinTable[R], on JoinOn[L, R]) In
 		owners = map[string]any{}
 	}
 	maps.Copy(owners, r.Owners)
-	return InnerJoined[L, R]{source: ormcore.Source{Node: node.Node, Aliases: node.Aliases, Owners: owners, Err: node.Err, Checks: ormcore.AppendChecks(l.Checks, r.Checks...)}, left: l.Owners, right: r.Owners}
+	return InnerJoined[L, R]{source: ormcore.Source{Scope: reflect.TypeFor[Inner[L, R]](), Node: node.Node, Aliases: node.Aliases, Owners: owners, Err: node.Err, Checks: ormcore.AppendChecks(l.Checks, r.Checks...)}, left: l.Owners, right: r.Owners}
 }
 
 // LeftScope re-scopes only a model from the left input. Example: rows.LeftScope(joined,rows.Scope(members)).
@@ -115,10 +115,10 @@ func RightScope[L, R, M any](j InnerJoined[L, R], scope expr.Scope[R, M]) expr.S
 	return rescope[Inner[L, R]](scope, j.right, j.source.Err)
 }
 func rescope[S, Old, M any](scope expr.Scope[Old, M], owners map[string]any, err error) expr.Scope[S, M] {
-	c := expr.FoundryScopeData(scope, sqlowner.Seal{})
+	c := expr.FoundryScopeData(scope, sqlowner.Expressions())
 	c.Err = errors.Join(c.Err, err)
 	if c.Owner == nil || owners[c.Table] != c.Owner {
 		c.Err = errors.Join(c.Err, ormcore.Invalid("scope is not on this join side"))
 	}
-	return expr.FoundryScope[S, M](c, sqlowner.Seal{})
+	return expr.FoundryScope[S, M](c, sqlowner.Expressions())
 }

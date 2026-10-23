@@ -1,0 +1,151 @@
+file	line	symbol	family	context	status
+database/capability_test.go	12	AutocommitSeal	autocommit	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/capability_test.go	13	OutcomeSeal	outcome	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/capability_test.go	14	ObserverSeal	observer	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/encrypted/encrypted.go	35	Seal	encryption	non-SQL	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/encrypted/encrypted.go	147	Seal	encryption	non-SQL	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/encrypted/encrypted.go	205	Seal	encryption	non-SQL	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/encrypted/encrypted_test.go	48	Seal	encryption	non-SQL/test	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/encrypted/encrypted_test.go	75	Seal	encryption	non-SQL/test	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/encrypted/encrypted_test.go	82	Seal	encryption	non-SQL/test	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/encrypted/encrypted_test.go	85	Seal	encryption	non-SQL/test	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/encrypted/encrypted_test.go	122	Seal	encryption	non-SQL/test	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/encrypted/encrypted_test.go	146	Seal	encryption	non-SQL/test	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/encrypted/encrypted_test.go	160	Seal	encryption	non-SQL/test	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/encrypted/encrypted_test.go	164	Seal	encryption	non-SQL/test	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/encrypted/encrypted_test.go	172	Seal	encryption	non-SQL/test	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/errors.go	117	Seal	encryption	non-SQL	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/errors.go	288	OutcomeSeal	outcome	signature	Entry validates Valid() before effects/metadata; PrimaryExecutor delegates to concrete DB validation.
+database/execution.go	121	AutocommitSeal	autocommit	signature	Entry validates Valid() before effects/metadata; PrimaryExecutor delegates to concrete DB validation.
+database/observers.go	119	ObserverSeal	observer	signature	Entry validates Valid() before effects/metadata; PrimaryExecutor delegates to concrete DB validation.
+database/observers.go	135	ObserverSeal	observer	signature	Entry validates Valid() before effects/metadata; PrimaryExecutor delegates to concrete DB validation.
+database/observers.go	140	ObserverSeal	observer	signature	Entry validates Valid() before effects/metadata; PrimaryExecutor delegates to concrete DB validation.
+database/observers.go	151	ObserverSeal	observer	signature	Entry validates Valid() before effects/metadata; PrimaryExecutor delegates to concrete DB validation.
+database/orm/capability_integration_test.go	13	Metadata	metadata	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/orm/capability_integration_test.go	21	Metadata	metadata	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/orm/codecs.go	158	MetadataSeal	metadata	signature	Entry validates Valid() before effects/metadata; PrimaryExecutor delegates to concrete DB validation.
+database/orm/column_sensitive.go	66	Seal	encryption	non-SQL	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/orm/column_sensitive.go	75	Seal	encryption	non-SQL	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/orm/column_sensitive.go	88	Seal	encryption	non-SQL	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/orm/expr/expression.go	46	Metadata	metadata	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/expr/expression.go	59	Metadata	metadata	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/expr/expression.go	92	ExpressionSeal	expression	signature	Entry validates Valid() before effects/metadata; PrimaryExecutor delegates to concrete DB validation.
+database/orm/expr/expression.go	101	ExpressionSeal	expression	signature	Entry validates Valid() before effects/metadata; PrimaryExecutor delegates to concrete DB validation.
+database/orm/expr/expression.go	109	ExpressionSeal	expression	signature	Entry validates Valid() before effects/metadata; PrimaryExecutor delegates to concrete DB validation.
+database/orm/expr/expression.go	118	ExpressionSeal	expression	signature	Entry validates Valid() before effects/metadata; PrimaryExecutor delegates to concrete DB validation.
+database/orm/expr/expression.go	126	ExpressionSeal	expression	signature	Entry validates Valid() before effects/metadata; PrimaryExecutor delegates to concrete DB validation.
+database/orm/expr/model.go	13	Queries	query	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/expr/model.go	22	Queries	query	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/expr/value.go	61	Metadata	metadata	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/expr/value.go	141	ExpressionSeal	expression	signature	Entry validates Valid() before effects/metadata; PrimaryExecutor delegates to concrete DB validation.
+database/orm/raw_test.go	122	Seal	encryption	non-SQL/test	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/orm/relation.go	175	Collections	collection	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/relation_through.go	65	Collections	collection	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/relation_through_hop.go	33	Collections	collection	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/rows/capability_test.go	16	Expressions	expression	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/orm/rows/capability_test.go	17	ExpressionSeal	expression	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/orm/rows/capability_test.go	19	Expressions	expression	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/orm/rows/capability_test.go	28	Expressions	expression	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/orm/rows/capability_test.go	29	Expressions	expression	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/orm/rows/capability_test.go	30	QuerySeal	query	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/orm/rows/conditional_test.go	32	Expressions	expression	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/orm/rows/constructors.go	15	Metadata	metadata	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/rows/constructors.go	20	Metadata	metadata	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/rows/expression_test.go	132	Expressions	expression	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/orm/rows/expression_test.go	174	Expressions	expression	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/orm/rows/expression_test.go	175	Expressions	expression	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/orm/rows/expression_test.go	176	Expressions	expression	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/orm/rows/expression_test.go	182	Queries	query	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/orm/rows/expression_test.go	188	Queries	query	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/orm/rows/expression_test.go	199	Expressions	expression	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/orm/rows/expression_test.go	207	Expressions	expression	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/orm/rows/join.go	71	Metadata	metadata	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/rows/join.go	80	Expressions	expression	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/rows/join.go	85	Expressions	expression	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/rows/join.go	85	Expressions	expression	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/rows/join.go	118	Expressions	expression	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/rows/join.go	123	Expressions	expression	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/rows/projection.go	33	Expressions	expression	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/rows/projection.go	39	Expressions	expression	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/rows/projection.go	77	Metadata	metadata	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/rows/projection.go	78	Metadata	metadata	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/rows/projection.go	95	Expressions	expression	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/rows/projection.go	106	Expressions	expression	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/orm/sensitive_publication_test.go	34	Seal	encryption	non-SQL/test	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/orm/sensitive_publication_test.go	176	Seal	encryption	non-SQL/test	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/orm/sensitive_publication_test.go	223	Seal	encryption	non-SQL/test	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/orm/sensitive_test.go	132	Seal	encryption	non-SQL/test	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/orm/sensitive_test.go	152	Outcomes	outcome	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/orm/sensitive_test.go	160	Outcomes	outcome	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/orm/source.go	36	MetadataSeal	metadata	signature	Entry validates Valid() before effects/metadata; PrimaryExecutor delegates to concrete DB validation.
+database/orm/source.go	49	MetadataSeal	metadata	signature	Entry validates Valid() before effects/metadata; PrimaryExecutor delegates to concrete DB validation.
+database/orm/source.go	68	QuerySeal	query	signature	Entry validates Valid() before effects/metadata; PrimaryExecutor delegates to concrete DB validation.
+database/orm/source.go	81	QuerySeal	query	signature	Entry validates Valid() before effects/metadata; PrimaryExecutor delegates to concrete DB validation.
+database/orm/write.go	495	AutocommitSeal	autocommit	signature	Private callback type; callers supply only bound concrete DB/PrimaryExecutor methods.
+database/orm/write.go	506	Autocommit	autocommit	issued call	Private send callback bound only to concrete DB/PrimaryExecutor; no application interface dispatch.
+database/orm/write.go	540	Outcomes	outcome	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/postgres/session_limits_postgres_test.go	47	Autocommit	autocommit	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/query/encrypted_fields.go	23	Seal	encryption	non-SQL	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/query/encrypted_fields.go	31	Seal	encryption	non-SQL	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+database/query/execute_autocommit.go	15	AutocommitSeal	autocommit	signature	Private callback type; callers supply only bound concrete DB/PrimaryExecutor methods.
+database/query/execute_autocommit.go	35	Autocommit	autocommit	issued call	Private send callback bound only to concrete DB/PrimaryExecutor; no application interface dispatch.
+database/query/execute_autocommit.go	91	Outcomes	outcome	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/query/model_hooks.go	47	Observers	observer	issued call	Issued only in concrete-owner writerObservers type-switch cases; unknown wrappers receive no capability.
+database/query/model_hooks.go	49	Observers	observer	issued call	Issued only in concrete-owner writerObservers type-switch cases; unknown wrappers receive no capability.
+database/query/model_hooks.go	51	Observers	observer	issued call	Issued only in concrete-owner writerObservers type-switch cases; unknown wrappers receive no capability.
+database/query/model_hooks.go	53	Observers	observer	issued call	Issued only in concrete-owner writerObservers type-switch cases; unknown wrappers receive no capability.
+database/query/model_hooks.go	55	Observers	observer	issued call	Issued only in concrete-owner writerObservers type-switch cases; unknown wrappers receive no capability.
+database/query/relation_direct.go	277	Collections	collection	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/query/relation_through.go	190	Collections	collection	issued call	Issued to statically bound framework bridge; family checked before effects. Descriptors receive no capability.
+database/relation/capability_test.go	9	CollectionSeal	collection	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/relation/capability_test.go	16	Collections	collection	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/relation/loaded.go	65	CollectionSeal	collection	signature	Entry validates Valid() before effects/metadata; PrimaryExecutor delegates to concrete DB validation.
+database/relation/through.go	38	CollectionSeal	collection	signature	Entry validates Valid() before effects/metadata; PrimaryExecutor delegates to concrete DB validation.
+database/routing.go	178	AutocommitSeal	autocommit	signature	Entry validates Valid() before effects/metadata; PrimaryExecutor delegates to concrete DB validation.
+database/runtime_resilience_test.go	200	Autocommit	autocommit	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+database/runtime_resilience_test.go	230	Autocommit	autocommit	test	Negative/positive capability proof; zero or inferred tokens are rejection inputs only.
+internal/errordiag/describe.go	23	Seal	non-SQL diagnostic marker	non-SQL	Pre-existing non-SQL diagnostic marker; carries no SQL capability or sentinel; unchanged under accepted lane audit.
+internal/errordiag/describe.go	27	Seal	non-SQL diagnostic marker	non-SQL	Pre-existing non-SQL diagnostic marker; carries no SQL capability or sentinel; unchanged under accepted lane audit.
+internal/errordiag/describe.go	79	Seal	non-SQL diagnostic marker	non-SQL	Pre-existing non-SQL diagnostic marker; carries no SQL capability or sentinel; unchanged under accepted lane audit.
+internal/frameworkadapter/owned.go	18	Seal	non-SQL adapter marker	non-SQL	Pre-existing non-SQL adapter marker; never invoked, concrete defining-package ownership checked separately.
+internal/frameworkadapter/owned.go	22	Seal	non-SQL adapter marker	non-SQL	Pre-existing non-SQL adapter marker; never invoked, concrete defining-package ownership checked separately.
+internal/frameworkadapter/owned.go	26	Seal	non-SQL adapter marker	non-SQL	Pre-existing non-SQL adapter marker; never invoked, concrete defining-package ownership checked separately.
+internal/ormcore/encrypted_type.go	24	Seal	encryption	non-SQL	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+internal/ormcore/encrypted_type_test.go	14	Seal	encryption	non-SQL/test	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+internal/querycore/encrypted_fields.go	19	Seal	encryption	non-SQL	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+internal/querycore/encrypted_fields.go	39	Seal	encryption	non-SQL	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+internal/querycore/encrypted_fields.go	46	Seal	encryption	non-SQL	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+internal/querycore/encrypted_fields.go	50	Seal	encryption	non-SQL	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+internal/querycore/encrypted_value.go	16	Seal	encryption	non-SQL	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+internal/querycore/encrypted_value.go	29	Seal	encryption	non-SQL	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+internal/querycore/mutation.go	13	Seal	encryption	non-SQL	Encrypted-value sealing/scanning metadata or its test; not an SQL owner capability.
+internal/sqlowner/seal.go	8	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal.go	13	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal.go	16	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal.go	20	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal.go	25	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal.go	28	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal.go	32	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal.go	37	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal.go	40	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal.go	44	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal.go	49	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal.go	52	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal.go	56	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal.go	61	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal.go	64	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal.go	68	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal.go	73	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal.go	76	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal.go	80	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal.go	85	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal.go	88	family declaration/issuer/validator	sqlowner	implementation	Private pointer sentinel, distinct family field, validated equality; issuers return populated tokens.
+internal/sqlowner/seal_test.go	9	Metadata	metadata	test	Private capability validation test: populated issuances or intentionally invalid foreign-sentinel tokens; no application dispatch.
+internal/sqlowner/seal_test.go	9	Expressions	expression	test	Private capability validation test: populated issuances or intentionally invalid foreign-sentinel tokens; no application dispatch.
+internal/sqlowner/seal_test.go	9	Queries	query	test	Private capability validation test: populated issuances or intentionally invalid foreign-sentinel tokens; no application dispatch.
+internal/sqlowner/seal_test.go	9	Observers	observer	test	Private capability validation test: populated issuances or intentionally invalid foreign-sentinel tokens; no application dispatch.
+internal/sqlowner/seal_test.go	9	Autocommit	autocommit	test	Private capability validation test: populated issuances or intentionally invalid foreign-sentinel tokens; no application dispatch.
+internal/sqlowner/seal_test.go	9	Outcomes	outcome	test	Private capability validation test: populated issuances or intentionally invalid foreign-sentinel tokens; no application dispatch.
+internal/sqlowner/seal_test.go	9	Collections	collection	test	Private capability validation test: populated issuances or intentionally invalid foreign-sentinel tokens; no application dispatch.
+internal/sqlowner/seal_test.go	26	MetadataSeal	metadata	test	Private capability validation test: populated issuances or intentionally invalid foreign-sentinel tokens; no application dispatch.
+internal/sqlowner/seal_test.go	26	ObserverSeal	observer	test	Private capability validation test: populated issuances or intentionally invalid foreign-sentinel tokens; no application dispatch.

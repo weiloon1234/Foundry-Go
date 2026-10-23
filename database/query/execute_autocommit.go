@@ -12,7 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-type autocommitQuery func(sqlowner.Seal, context.Context, string, ...any) (*database.Rows, error)
+type autocommitQuery func(sqlowner.AutocommitSeal, context.Context, string, ...any) (*database.Rows, error)
 
 // executeAutocommitInsert sends one INSERT … RETURNING outside an explicit
 // transaction when no lifecycle callback can run on a pool: one round trip
@@ -32,7 +32,7 @@ func executeAutocommitInsert[M any](ctx context.Context, send autocommitQuery, s
 	if err != nil {
 		return *new(M), err
 	}
-	rows, err := send(sqlowner.Seal{}, statement.executionContext(ctx), statement.sql, statement.arguments...)
+	rows, err := send(sqlowner.Autocommit(), statement.executionContext(ctx), statement.sql, statement.arguments...)
 	if err != nil {
 		return *new(M), err
 	}
@@ -88,5 +88,5 @@ func autocommitOutcome(err error) (error, bool) {
 	case database.Unknown, database.Committed:
 		return err, true
 	}
-	return database.FoundryStatementUnknown(sqlowner.Seal{}, "model write", err), true
+	return database.FoundryStatementUnknown(sqlowner.Outcomes(), "model write", err), true
 }

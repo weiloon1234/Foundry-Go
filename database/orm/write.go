@@ -492,7 +492,7 @@ func insertMany[M any](ctx context.Context, writer database.Transactor, q queryS
 	return items, nil
 }
 
-type autocommitQuery func(sqlowner.Seal, context.Context, string, ...any) (*database.Rows, error)
+type autocommitQuery func(sqlowner.AutocommitSeal, context.Context, string, ...any) (*database.Rows, error)
 
 func autocommit(ctx context.Context, p writePlan, source clock.Clock, send autocommitQuery, scan func(database.Row) error) (error, bool) {
 	p, err := p.conventions(ctx, source)
@@ -503,7 +503,7 @@ func autocommit(ctx context.Context, p writePlan, source clock.Clock, send autoc
 	if err != nil {
 		return err, false
 	}
-	rows, err := send(sqlowner.Seal{}, s.Context(ctx), s.SQLText, s.Bindings...)
+	rows, err := send(sqlowner.Autocommit(), s.Context(ctx), s.SQLText, s.Bindings...)
 	if err != nil {
 		return err, false
 	}
@@ -537,7 +537,7 @@ func inspectOutcome(err error, autocommitted bool) (error, bool) {
 		case database.Unknown, database.Committed:
 			return err, true
 		}
-		return database.FoundryStatementUnknown(sqlowner.Seal{}, "model write", err), true
+		return database.FoundryStatementUnknown(sqlowner.Outcomes(), "model write", err), true
 	}
 	return err, reconcile
 }

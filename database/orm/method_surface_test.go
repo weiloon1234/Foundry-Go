@@ -27,6 +27,13 @@ func TestPublicMethodSurface(t *testing.T) {
 			}
 			recordMethodSurface(&out, pkg.Name()+"."+name, typ)
 		}
+		for _, name := range map[string][]string{
+			".":      {"FoundryOrderBy", "FoundryWhere"},
+			"./rows": {"MapSelected"},
+			"./expr": {"Coalesce", "CoalesceValue", "CoalesceNullable", "CoalesceNullableValue", "NullIf", "NullIfValue", "NullIfNullable", "NullIfNullableValue", "When", "WhenValue", "Grouped", "Abs", "AbsNullable", "AbsNullableValue", "AbsValue", "Add", "AddNullable", "AddNullableValue", "AddValue", "CompareValue", "Count", "DecimalNullable", "DecimalNullableValue", "DecimalOf", "DecimalValue", "DistinctFrom", "DistinctFromValue", "Divide", "DivideNullable", "DivideNullableValue", "DivideValue", "Equal", "EqualValue", "Exists", "FloatNullable", "FloatNullableValue", "FloatOf", "FloatValue", "FoundrySelected", "Greater", "GreaterColumn", "GreaterNullable", "GreaterNullableValue", "GreaterOrEqual", "GreaterOrEqualNullable", "GreaterOrEqualNullableValue", "GreaterOrEqualValue", "GreaterValue", "Less", "LessNullable", "LessNullableValue", "LessOrEqual", "LessOrEqualNullable", "LessOrEqualNullableValue", "LessOrEqualValue", "LessValue", "Like", "LikeNullable", "LikeNullableValue", "LikeValue", "Multiply", "MultiplyNullable", "MultiplyNullableValue", "MultiplyValue", "Negate", "NegateNullable", "NegateNullableValue", "NegateValue", "NotDistinctFrom", "NotDistinctFromValue", "NotEqual", "NotEqualValue", "NullFor", "Nullable", "NullableRow", "OrderBy", "OrderNullableRow", "OrderNullableValue", "OrderRow", "OrderValue", "Param", "Remainder", "RemainderNullable", "RemainderNullableValue", "RemainderValue", "Select", "Subtract", "SubtractNullable", "SubtractNullableValue", "SubtractValue", "Where"},
+		}[dir] {
+			out.WriteString(pkg.Name() + "." + name + " " + types.TypeString(pkg.Scope().Lookup(name).Type(), nil) + "\n")
+		}
 		if dir == "./rows" {
 			out.WriteString("rows.Raw " + types.TypeString(pkg.Scope().Lookup("Raw").Type(), nil) + "\n")
 		}

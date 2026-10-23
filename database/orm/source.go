@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
+	"reflect"
 )
 
 // ExpressionColumn preserves a column's model and SQL value type.
@@ -32,7 +33,11 @@ func nullableExpression[V any](c nullableColumnData[V]) (ormcore.Column[V], ormc
 }
 
 // FoundryColumn supplies comparison and projection codecs to expr/rows.
-func FoundryColumn[M, V, P any](column ExpressionColumn[M, V, P], _ sqlowner.Seal) (ormcore.Column[V], ormcore.Column[P]) {
+func FoundryColumn[M, V, P any](column ExpressionColumn[M, V, P], seal sqlowner.MetadataSeal) (ormcore.Column[V], ormcore.Column[P]) {
+	if !seal.Valid() {
+		return ormcore.Column[V]{Err: invalid("invalid SQL owner capability")}, ormcore.Column[P]{Err: invalid("invalid SQL owner capability")}
+	}
+
 	if nilInterface(column) {
 		return ormcore.Column[V]{Err: invalid("missing expression column")}, ormcore.Column[P]{Err: invalid("missing expression column")}
 	}
@@ -40,8 +45,12 @@ func FoundryColumn[M, V, P any](column ExpressionColumn[M, V, P], _ sqlowner.Sea
 }
 
 // FoundrySource supplies sealed model AST metadata to rows.
-// Example: FoundrySource(Orders.Query(),sqlowner.Seal{}).
-func FoundrySource[M any](q Query[M], _ sqlowner.Seal) ormcore.Source {
+// Example: FoundrySource(Orders.Query(),sqlowner.Metadata()).
+func FoundrySource[M any](q Query[M], seal sqlowner.MetadataSeal) ormcore.Source {
+	if !seal.Valid() {
+		return ormcore.Source{Err: invalid("invalid SQL owner capability")}
+	}
+
 	err := errors.Join(declarationCoreError(q.state.table), q.state.err, q.state.ast.Validate())
 	if len(q.state.relations) > 0 {
 		err = errors.Join(err, invalid("projection source cannot request eager-loaded model values"))
@@ -49,7 +58,34 @@ func FoundrySource[M any](q Query[M], _ sqlowner.Seal) ormcore.Source {
 	if err != nil {
 		return ormcore.Source{Err: err}
 	}
-	return ormcore.Source{Node: q.state.ast.ModelSelect(q.state.table.selections), Owners: map[string]any{q.state.ast.Table: q.state.table}, Checks: []func() error{sourceCheck(q.state)}}
+	return ormcore.Source{Scope: reflect.TypeFor[M](), Node: q.state.ast.ModelSelect(q.state.table.selections), Owners: map[string]any{q.state.ast.Table: q.state.table}, Checks: []func() error{sourceCheck(q.state)}}
 }
 
 func sourceCheck(q queryState) func() error { return func() error { return validateQuery(q) } }
+
+// FoundryWhere appends a sealed computed predicate in a model's original scope.
+// Example: FoundryWhere(q,p,sqlowner.Queries()).
+func FoundryWhere[M any](q Query[M], p ormcore.Predicate, seal sqlowner.QuerySeal) Query[M] {
+	if !seal.Valid() {
+		q.state.err = errors.Join(q.state.err, invalid("invalid SQL owner capability"))
+		return q
+	}
+
+	source := ormcore.Source{Scope: reflect.TypeFor[M](), Owners: map[string]any{q.state.ast.Table: q.state.table}}
+	err := errors.Join(p.Err, ormcore.CheckReferenceSet(source, p.Refs, p.ReferenceFree))
+	return q.Where(Predicate[M]{owner: q.state.table, expression: p.Node, err: err})
+}
+
+// FoundryOrderBy appends sealed computed row ordering in a model's original scope.
+// Example: FoundryOrderBy(q,o,sqlowner.Queries()).
+func FoundryOrderBy[M any](q Query[M], o ormcore.Order, seal sqlowner.QuerySeal) Query[M] {
+	if !seal.Valid() {
+		q.state.err = errors.Join(q.state.err, invalid("invalid SQL owner capability"))
+		return q
+	}
+
+	source := ormcore.Source{Scope: reflect.TypeFor[M](), Owners: map[string]any{q.state.ast.Table: q.state.table}}
+	err := errors.Join(o.Err, ormcore.CheckReferenceSet(source, o.Refs, o.ReferenceFree))
+	order := querycore.QueryOrder{Computed: &querycore.ComputedOrder{Expression: o.Node.Expression}, Descending: o.Node.Descending, Nulls: o.Node.Nulls}
+	return q.OrderBy(Order[M]{owner: q.state.table, core: order, err: err})
+}

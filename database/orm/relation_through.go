@@ -62,7 +62,7 @@ func ManyToManyOf[M, N, P any, A, B comparable](slot Through[M, N, P], local Key
 			return (*relation.Through[N, P])(unsafe.Add(base, slot.core.offset)).IsLoaded()
 		}
 		p.load = throughLoader[M, N, P](a, pa, pb, b, func(parent *M, links []relation.Link[N, P]) {
-			*(*relation.Through[N, P])(unsafe.Add(unsafe.Pointer(parent), slot.core.offset)) = relation.FoundryLinked(sqlowner.Seal{}, links)
+			*(*relation.Through[N, P])(unsafe.Add(unsafe.Pointer(parent), slot.core.offset)) = relation.FoundryLinked(sqlowner.Collections(), links)
 		})
 	}
 	return ThroughRelation[M, N, P]{plan: p}

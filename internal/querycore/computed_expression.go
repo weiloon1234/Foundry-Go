@@ -26,8 +26,8 @@ func VisitComputedValue(v ValueExpression, item func(ValueExpression) error, con
 		if v.Err != nil {
 			return true, v.Err
 		}
-		if len(v.Arguments) == 0 || len(v.Arguments) > MaxExpressionNodes || (v.Kind != CoalesceValues && v.Kind != NullIfValues) || (v.Kind == NullIfValues && len(v.Arguments) != 2) {
-			return true, fault.New(fault.Invalid, "invalid conditional value arguments")
+		if err := ValidateConditionalArguments(v.Kind, len(v.Arguments)); err != nil {
+			return true, err
 		}
 		for _, argument := range v.Arguments {
 			if err := item(argument); err != nil {

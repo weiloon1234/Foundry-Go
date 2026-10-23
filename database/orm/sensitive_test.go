@@ -149,7 +149,7 @@ func TestSensitiveDiagnostics(t *testing.T) {
 	_, keyFailure := encryption.ParseKey("diagnostic_test", secret.New("canary-key-material"))
 	_, ringFailure := encryption.NewKeyring("canary-key-material", key)
 	rawCause := errors.New("canary-plaintext canary-key-material")
-	hiddenCause := database.FoundryStatementUnknown(sqlowner.Seal{}, "write", rawCause)
+	hiddenCause := database.FoundryStatementUnknown(sqlowner.Outcomes(), "write", rawCause)
 	items := []any{sealed, key, ring, binding, r.Secret.Set(sealed), failure, keyFailure, ringFailure, hiddenCause,
 		r.Secret.Set(plain), r.Backup.Set(plain), r.Backup.SetNull(), r.Backup.IsNull(), r.Backup.IsNotNull(), r.Secret, r.Backup,
 		&WriteError[secureRecord]{cause: failure, candidate: secureRecord{Secret: plain, Backup: value.Of(plain)}},
@@ -157,7 +157,7 @@ func TestSensitiveDiagnostics(t *testing.T) {
 	for _, item := range items {
 		// Driver errors may retain arbitrary causes; public formatting must redact them.
 		cause := fmt.Errorf("wrapped: %v", item)
-		wrapped := database.FoundryStatementUnknown(sqlowner.Seal{}, "write", cause)
+		wrapped := database.FoundryStatementUnknown(sqlowner.Outcomes(), "write", cause)
 		for _, item := range []any{item, wrapped, &WriteError[secureRecord]{cause: wrapped, candidate: secureRecord{Secret: plain}}} {
 			for name, render := range map[string]func() string{
 				"String": func() string { return fmt.Sprint(item) },

@@ -30,7 +30,13 @@ type Query[S, R any] struct {
 
 // Map requires an exact result-field value type. Example: rows.Map(OrderRows.Amount,amount).
 func Map[S, R, V, P any](field Field[R, P], expression expr.Expression[S, V, P]) Mapping[S, R] {
-	return Mapping[S, R]{field: field.core, expression: expr.FoundryExpression(expression, sqlowner.Seal{})}
+	return Mapping[S, R]{field: field.core, expression: expr.FoundryExpression(expression, sqlowner.Expressions())}
+}
+
+// MapSelected binds a row field to an exactly typed selected value, including aggregates.
+// Example: rows.MapSelected(Totals.Count,expr.Count[Scope]().Value()).
+func MapSelected[S, R, V any](field Field[R, V], expression expr.Selected[S, V]) Mapping[S, R] {
+	return Mapping[S, R]{field: field.core, expression: expr.FoundrySelected(expression, sqlowner.Expressions())}
 }
 
 // Select maps every declared row field exactly once. Example: rows.Select(joined,OrderRows,rows.Map(OrderRows.ID,id),...).
@@ -57,7 +63,7 @@ func Select[S, R any](source Source[S], schema Schema[R], mappings ...Mapping[S,
 			q.source.Err = errors.Join(q.source.Err, ormcore.Invalid("projection field belongs to a different row declaration"))
 			continue
 		}
-		q.source.Err = errors.Join(q.source.Err, m.expression.Err, ormcore.CheckReferences(q.source, m.expression.Refs))
+		q.source.Err = errors.Join(q.source.Err, m.expression.Err, ormcore.CheckReferenceSet(q.source, m.expression.Refs, m.expression.ReferenceFree))
 		lowered[i] = querycore.ProjectionMapping{Column: m.field.column, Expression: m.expression.Node}
 	}
 	node, err := querycore.SelectProjection(q.source.Node, core.columns, lowered)
@@ -68,8 +74,8 @@ func Select[S, R any](source Source[S], schema Schema[R], mappings ...Mapping[S,
 
 // SelectValue selects just a column's value type. Example: rows.SelectValue(Orders.Query(),Orders.TotalCents).
 func SelectValue[M, V, P any](source orm.Query[M], column orm.ExpressionColumn[M, V, P]) Query[M, P] {
-	s := orm.FoundrySource(source, sqlowner.Seal{})
-	_, c := orm.FoundryColumn(column, sqlowner.Seal{})
+	s := orm.FoundrySource(source, sqlowner.Metadata())
+	_, c := orm.FoundryColumn(column, sqlowner.Metadata())
 	s.Err = errors.Join(s.Err, c.Err, ormcore.CheckReferences(s, []ormcore.Reference{c.Reference}))
 	s.Node.Selections = []querycore.SelectItem{{Expression: c.Field, Alias: "value"}}
 	return Query[M, P]{source: s, decode: func(row database.Row) (P, error) {
@@ -86,8 +92,8 @@ func SelectValue[M, V, P any](source orm.Query[M], column orm.ExpressionColumn[M
 func (q Query[S, R]) Where(predicates ...expr.Predicate[S]) Query[S, R] {
 	q.source.Node.Predicates = slices.Clone(q.source.Node.Predicates)
 	for _, p := range predicates {
-		c := expr.FoundryPredicate(p, sqlowner.Seal{})
-		q.source.Err = errors.Join(q.source.Err, c.Err, ormcore.CheckReferences(q.source, c.Refs))
+		c := expr.FoundryPredicate(p, sqlowner.Expressions())
+		q.source.Err = errors.Join(q.source.Err, c.Err, ormcore.CheckReferenceSet(q.source, c.Refs, c.ReferenceFree))
 		q.source.Node.Predicates = append(q.source.Node.Predicates, c.Node)
 	}
 	return q
@@ -97,8 +103,8 @@ func (q Query[S, R]) Where(predicates ...expr.Predicate[S]) Query[S, R] {
 func (q Query[S, R]) OrderBy(orders ...expr.Order[S]) Query[S, R] {
 	q.source.Node.Orders = slices.Clone(q.source.Node.Orders)
 	for _, o := range orders {
-		c := expr.FoundryOrder(o, sqlowner.Seal{})
-		q.source.Err = errors.Join(q.source.Err, c.Err, ormcore.CheckReferences(q.source, c.Refs))
+		c := expr.FoundryOrder(o, sqlowner.Expressions())
+		q.source.Err = errors.Join(q.source.Err, c.Err, ormcore.CheckReferenceSet(q.source, c.Refs, c.ReferenceFree))
 		q.source.Node.Orders = append(q.source.Node.Orders, c.Node)
 	}
 	return q

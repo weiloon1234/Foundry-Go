@@ -12,12 +12,12 @@ import (
 
 // FieldOf binds a custom row value with an explicit codec. Example: rows.FieldOf(b,&r.Code,orm.Codec(custom)).
 func FieldOf[R, V any](b Builder[R], ptr *V, option orm.ColumnOption[V]) Field[R, V] {
-	return bindField(b, ptr, orm.FoundryCodec(option, sqlowner.Seal{}))
+	return bindField(b, ptr, orm.FoundryCodec(option, sqlowner.Metadata()))
 }
 
 // NullableFieldOf binds a nullable custom value. Example: rows.NullableFieldOf(b,&r.Code,orm.Codec(custom)).
 func NullableFieldOf[R, V any](b Builder[R], ptr *value.Nullable[V], option orm.ColumnOption[V]) Field[R, value.Nullable[V]] {
-	inner := orm.FoundryCodec(option, sqlowner.Seal{})
+	inner := orm.FoundryCodec(option, sqlowner.Metadata())
 	var nullable codec.Codec[value.Nullable[V]]
 	if inner.Validate() == nil {
 		nullable = codec.Nullable(inner)

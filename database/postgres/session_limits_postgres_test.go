@@ -44,7 +44,7 @@ func TestPostgresAutocommitStatementsReportServerRejection(t *testing.T) {
 	db := pgtest.Isolate(t).Open(t)
 	execute(t, db, "CREATE TABLE autocommit_records(id bigint PRIMARY KEY)")
 	collect := func(statement string, args ...any) error {
-		rows, err := db.FoundryAutocommitQuery(sqlowner.Seal{}, t.Context(), statement, args...)
+		rows, err := db.FoundryAutocommitQuery(sqlowner.Autocommit(), t.Context(), statement, args...)
 		if err != nil {
 			return err
 		}

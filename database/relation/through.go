@@ -34,7 +34,7 @@ func (r Through[M, P]) Len() int { return r.items.Len() }
 func (r Through[M, P]) All() iter.Seq2[int, Link[M, P]] { return r.items.All() }
 
 // FoundryLinked adopts a freshly built, unshared link slice without copying.
-// Only framework loaders can name the seal; applications use Linked.
-func FoundryLinked[M, P any](seal sqlowner.Seal, items []Link[M, P]) Through[M, P] {
+// Only framework loaders can issue a valid seal; applications use Linked.
+func FoundryLinked[M, P any](seal sqlowner.CollectionSeal, items []Link[M, P]) Through[M, P] {
 	return Through[M, P]{items: FoundryCollection(seal, items)}
 }
