@@ -30,7 +30,7 @@ func (q Query[M]) validateSQLMapping(mapping modelValueMapping) (string, error) 
 	if !declared || mapping.typ != field.typ || mapping.expression == nil {
 		return "", fault.New(fault.Invalid, "SQL mapping has an undeclared or incompatible field")
 	}
-	if field.mutator.apply != nil {
+	if field.mutator.Apply != nil {
 		return "", fault.New(fault.Invalid, "SQL mapping cannot bypass a Go field mutator; supply a literal draft input")
 	}
 	if q.hasTimestamps() && name == q.definition.modelDefinition.Timestamps.Updated {

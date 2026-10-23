@@ -17,7 +17,11 @@ import (
 )
 
 // ColumnOption supplies a typed custom codec. Example: ColumnOf(b, &o.Code, Codec(custom)).
-type ColumnOption[V any] struct{ get func() codec.Codec[V] }
+type ColumnOption[V any] struct {
+	get     func() codec.Codec[V]
+	mutate  func(V) (V, error)
+	mutator bool
+}
 
 // Codec selects an explicit codec for a custom value. Example: Codec(codec.String[Code]()).
 func Codec[V any](c codec.Codec[V]) ColumnOption[V] {
@@ -40,13 +44,22 @@ type InstantValue interface{ time.Time | temporal.DateTime }
 func scalarCodec[V any]() codec.Codec[V] { return ormcore.ScalarCodec[V]() }
 
 func selectedCodec[V any](opts []ColumnOption[V]) codec.Codec[V] {
-	if len(opts) == 0 {
-		return scalarCodec[V]()
+	return optionCodec(scalarCodec[V](), opts)
+}
+func optionCodec[V any](fallback codec.Codec[V], opts []ColumnOption[V]) codec.Codec[V] {
+	selected := false
+	for _, opt := range opts {
+		if opt.get != nil {
+			if selected {
+				return codec.Codec[V]{}
+			}
+			fallback = opt.get()
+			selected = true
+		} else if !opt.mutator {
+			return codec.Codec[V]{}
+		}
 	}
-	if len(opts) != 1 || opts[0].get == nil {
-		return codec.Codec[V]{}
-	}
-	return opts[0].get()
+	return fallback
 }
 
 func isInstant(t reflect.Type) bool {
@@ -59,19 +72,21 @@ func invalid(message string) error { return fault.New(fault.Invalid, "orm: "+mes
 
 // IDOf declares a model-owned foreign ID column. Example: IDOf(b, &o.BuyerID).
 func IDOf[M, T any](b Builder[M], ptr *model.ID[T]) Column[M, model.ID[T]] {
-	return Column[M, model.ID[T]]{column: bindTyped(b.state, ptr, codec.ID[T](), false)}
+	return Column[M, model.ID[T]]{column: bindModel[M](b.state, ptr, codec.ID[T](), false)}
 }
 
 // NullableIDOf declares a nullable model-owned ID. Example: NullableIDOf(b, &u.IntroducerID).
 func NullableIDOf[M, T any](b Builder[M], ptr *value.Nullable[model.ID[T]]) NullableColumn[M, model.ID[T]] {
-	return NullableColumn[M, model.ID[T]]{nullableColumn: bindNullable(b.state, ptr, codec.ID[T]())}
+	return NullableColumn[M, model.ID[T]]{nullableColumn: bindNullableModel[M](b.state, ptr, codec.ID[T]())}
 }
 
 // Key selection happens once. Exact model IDs retain the original codec's
 // closures; named scalars use the same scalar codecs as ordinary columns.
 func keyCodec[M any, K comparable](opts []ColumnOption[K]) (codec.Codec[K], func() error) {
-	if len(opts) != 0 {
-		return selectedCodec(opts), nil
+	for _, opt := range opts {
+		if !opt.mutator {
+			return selectedCodec(opts), nil
+		}
 	}
 	if c, ok := any(codec.ID[M]()).(codec.Codec[K]); ok {
 		return c, nil
@@ -141,5 +156,8 @@ func keyCodec[M any, K comparable](opts []ColumnOption[K]) (codec.Codec[K], func
 // FoundryCodec supplies an explicit codec option to the row declaration package.
 // Example: FoundryCodec(option, sqlowner.Seal{}).
 func FoundryCodec[V any](option ColumnOption[V], _ sqlowner.Seal) codec.Codec[V] {
+	if option.mutator {
+		return codec.Codec[V]{}
+	}
 	return selectedCodec([]ColumnOption[V]{option})
 }

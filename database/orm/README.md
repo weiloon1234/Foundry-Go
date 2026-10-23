@@ -365,3 +365,66 @@ budgets. Each attached link consumes two values. Polymorphic inverses batch each
 concrete discriminator group; an empty eligible key set sends no statement.
 `Has` and `DoesntHave` also accept these descriptors without extra round trips.
 Relation writes and pivot lifecycle remain Stage 5b.
+## Field mutators and explicit accessors
+
+`orm.Check` reports invalid declarations before application resources start.
+`Mutate<Field>(Input) (Stored, error)` and `Access<Field>() (Result, error)` use
+value receivers and exact concrete types. Their suffix must name a persisted Go
+field, including after a rename. Binding happens once during `Define`; writes
+invoke typed functions without reflective dispatch. Mutators use a zero receiver,
+so use the input argument rather than receiver state. Accessors are ordinary
+explicit calls and never replace stored hydration or DTO mappings.
+
+For a same-type transformation, either declare the method or pass an option:
+
+```go
+Email: orm.TextOf(b, &m.Email, orm.Mutate(normalizeEmail)),
+```
+
+For distinct input and storage types, declare an input column:
+
+```go
+Email: orm.InputTextOf(b, &m.Email, normalizeEmailInput),
+Note:  orm.NullableInputTextOf[Member, LabelInput](b, &m.Note, nil),
+```
+
+A nil constructor transform selects the matching `Mutate<Field>` method. An
+explicit transform and a named mutator for the same field are a declaration
+error. `InputColumn`, `InputText`, `InputNumber`, `InputTime`, `InputEnum`,
+`InputJSON` and `InputInterval` retain their stored comparison, ordering and
+expression capabilities. Each also has a nullable form. `InputBytesOf` uses an
+owned binary codec with the `InputColumn` kind. `Set` takes only the concrete
+input type; predicates take only the stored type. Nullable `SetNull` keeps SQL
+NULL distinct from an omitted assignment or an assigned zero value.
+
+Mutators run in declaration order inside the write transaction, after automatic
+timestamps and before encryption and binding. They run once per assigned value,
+including values in a batch or a set update. Omitted fields and explicit SQL
+NULL skip scalar callbacks. Reusing assignments starts from the original input;
+direct binary inputs own their buffers. Other custom inputs retain ordinary Go
+copy semantics. Return an error to abort the transaction or savepoint. Panic and
+Goexit use the existing transaction isolation boundary. Keep transforms pure and
+free of I/O. Encrypted fields reject mutators; transform plaintext before creating
+the encrypted value. SQL adjustments cannot bypass a field's Go mutator.
+
+The independent [mutator consumer](../../tests/fixtures/goway/models/mutators/models.go)
+and its [PostgreSQL source](../../tests/fixtures/goway/pgsmoke/mutators_test.go)
+exercise distinct inputs, explicit getters, omission, NULL and rollback.
+
+Primary keys with distinct mutation inputs reuse the one primary declaration:
+
+```go
+table := orm.TableOf(b, &user.ID)
+id := orm.InputKeyOf[User, FreshID](b, table.Key(), nil)
+```
+
+`id.Set(FreshID{Value: storedID})` takes fresh input. `id.Eq(storedID)` and
+`table.Find(ctx, db, storedID)` retain the stored key type. Declare this adapter
+inside `Define`. Its nil transform selects the matching named method. A distinct
+input disables automatic UUID creation, so an omitted required key fails before
+SQL. Ordinary same-type UUID key mutators retain automatic UUID preparation.
+
+Mutator callback errors expose only a fixed field diagnostic through ordinary
+formatting. Their original cause remains available through `errors.Is` and
+`errors.As`. Required and nullable password constructors bind named mutators;
+encrypted fields continue to reject them.

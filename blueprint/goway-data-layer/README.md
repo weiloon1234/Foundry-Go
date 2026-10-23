@@ -45,9 +45,10 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 3.1 | Complete declaration, reads, writes, typed raw hydration and model cursors | Done. Stage 3 gate passed on 2026-10-23: `make verify`, `make test-postgres` (race) and `make typescript-check` |
 | 4a | N+1 detector foundations | Done; committed at `e731753` |
 | 4b | Direct eager trees, has-one, LoadMissing, relation limits and existence filters | Done; committed at `470d585`. |
-| 4c | Typed pivots, through, one-of-many and polymorphic relations | Accepted; Done pending the lead's commit. Local acceptance passed after second-review fixes; live PostgreSQL execution remains for the lead. |
+| 4c | Typed pivots, through, one-of-many and polymorphic relations | Done; committed at `a89f509`. Live PostgreSQL execution remains for the lead. |
 | 4 | Full read relations, pivots, through, one-of-many, filters and aggregate slots | In progress; 4a–4c delivered, 4d aggregate-slot design and implementation remain planned. Relation writes belong to Stage 5b; per-parent limits are out of scope. |
-| 5 | Lifecycle, mutators, change sets, scopes and observers | Planned |
+| B5a | Typed mutators, accessor validation, input-column kinds and InputKey | Accepted lane B patch integrated; combined acceptance passed with 129 compiler cases and 39 probes under unchanged ceilings. B5b–B5d remain deferred. |
+| 5 | Lifecycle, mutators, change sets, scopes and observers | In progress; B5a integrated. Hooks, draft/write getters, retrieval dispatch, scopes, change tracking and audit remain deferred. Relation writes belong to 5b. |
 | 6a | Expressions, aggregates, grouping, having and raw fragments | Planned |
 | 6b | Joins, aliases, correlation and lateral queries | Planned |
 | 6c | Rows/projections, CTEs, recursive queries, sets and result cursors | Planned |
@@ -347,12 +348,12 @@ consumer retains Stage 1 golden coverage and adds core, direct and joined-relati
 | Password and encrypted fields | Typed values and lifecycle codecs | Stage 3.1b: password scalar capabilities; encrypted typed assignments/null predicates, shared sealing/opening, transaction-keyring enforcement |
 | Column/default tags | Generator reads tags | Startup metadata reads the same tags, Stage 3 |
 | Table name/options | Model annotation | `orm.Define` and typed options, Stage 3 |
-| Accessors | Handwritten `Access<Field>` methods | Same Go methods; no per-field generated hover notices |
-| Mutators, including distinct input/stored types | `Mutate<Field>` plus generated input fields | Preserve methods; validate/bind once at startup or explicit mutator option; typed input `Set`, Stage 5 |
+| Accessors | Handwritten `Access<Field>` methods | B5a: exact startup signature and persisted-field validation; explicit calls remain ordinary Go methods and never replace stored hydration |
+| Mutators, including distinct input/stored types | `Mutate<Field>` plus generated input fields | B5a: typed named methods bound once at declaration or explicit `orm.Mutate`; required/nullable input-column kinds, once-only transactional transforms and redacted errors preserving cause identity |
 | Lifecycle and per-write factory state | Generated hooks and drafts | Typed framework hooks/write state and column handles, Stage 5 |
 | Retrieval hooks and observers | Generated adapters and registration | Explicit retrieval options/application observers, Stage 5 |
 | Timestamps and soft deletes | Field-name conventions and opt-out | Same behavior, `NoTimestamps`, optional explicit temporal bindings; core ported, completion Stage 3 |
-| Integer, UUID and natural keys | `primary=` annotation | `TableOf` binds concrete `K`; preserve UUID source/default rules, Stage 3 |
+| Integer, UUID and natural keys | `primary=` annotation | `TableOf` binds concrete `K`; B5a `InputKeyOf` accepts distinct assignment inputs while retaining stored lookup/predicate K. Distinct inputs disable automatic UUID synthesis |
 | Global scopes | `defineXGlobalScopes` | Typed scope options, Stage 5 |
 | Direct belongs-to, has-one, has-many, self and nullable-FK relations | Slots and generated relation sets | `BelongsToOf`/`HasOneOf`/`HasManyOf`; delivered in 4b, including singular cardinality checks |
 | Nested and constrained eager loads; LoadMissing | Descriptor `Where`/`OrderBy`/`With`, query `Load`/`LoadMissing` | Stage 4b: immutable descriptors, complete target batches at each level, package `Load`/`LoadMissing`, loaded-empty preservation and primary-key order tie-breakers |
@@ -427,8 +428,8 @@ intentionally accepts byte slices, while identity does not.
 <!-- catalogue-summary -->
 | Disposition | Cases |
 | --- | ---: |
-| ported | 93 |
-| port | 489 |
+| ported | 101 |
+| port | 481 |
 | merge | 0 |
 | obsolete | 0 |
 | unaffected | 444 |
@@ -437,7 +438,7 @@ intentionally accepts byte slices, while identity does not.
 | Area | Cases |
 | --- | ---: |
 | Authentication and security | 94 |
-| Bulk writes and conflict policies | 56 |
+| Bulk writes and conflict policies | 57 |
 | Cache, Redis and coordination | 61 |
 | Core reads, writes and codecs | 74 |
 | Events, jobs and messaging | 54 |
@@ -445,7 +446,7 @@ intentionally accepts byte slices, while identity does not.
 | Framework integrations | 81 |
 | HTTP, DTOs and transport contracts | 112 |
 | Joins and correlation | 101 |
-| Lifecycle, mutators and observers | 38 |
+| Lifecycle, mutators and observers | 37 |
 | Other framework services and contracts | 83 |
 | Relations and pivots | 25 |
 | Rows, CTEs and sets | 77 |
@@ -457,16 +458,16 @@ intentionally accepts byte slices, while identity does not.
 | 2a | 21 |
 | 3 | 60 |
 | 4 | 23 |
-| 5 | 38 |
+| 5 | 37 |
 | 6a | 70 |
 | 6b | 100 |
 | 6c | 73 |
 | 6d | 60 |
-| 6e | 56 |
+| 6e | 57 |
 | 7 | 81 |
 | — | 444 |
 
-93 old catalogue rows are covered by 85 distinct Go-way cases.
+101 old catalogue rows are covered by 93 distinct Go-way cases.
 
 ## Emitter audit
 
@@ -828,7 +829,7 @@ compiler-catalogue rows are ported in 4b, with five additional rejection cases.
 
 ## Stage 4c joined relation families
 
-Stage 4c is accepted and **Done pending the lead's commit**. Build, vet, race,
+Stage 4c is committed at `a89f509`. Build, vet, race,
 generation, fixture, catalogue and documentation checks pass after the second-review
 fixes. Live PostgreSQL execution remains for the lead. See the
 [4c evidence](../../docs/evidence/goway-stage4c-joined-relations.json) and
@@ -882,3 +883,50 @@ Existing footprint ceilings remain unchanged. The PostgreSQL test sources cover
 pivot payloads and duplicate rows, cardinality failures, through relations,
 one-of-many ties, morph groups, pivot soft deletion and statement counts.
 Stage 4d aggregate-slot design and Stage 5b relation writes remain separate.
+
+## B5a typed field mutators
+
+The accepted lane B patch is integrated with direct and joined relations. The
+[mutator evidence](../../docs/evidence/goway-b5a-mutators.json) records combined
+acceptance and source hashes. The [ORM recipe](../../database/orm/README.md#field-mutators-and-explicit-accessors)
+shows named methods, explicit transforms and primary-key inputs.
+
+`Mutate<Field>(Input) (Stored, error)` and `Access<Field>() (Result, error)` use
+value receivers and exact concrete types. Startup checks reject orphan names,
+invalid signatures and incompatible declarations. Typed adapters are bound once;
+writes do not dispatch through reflection. Accessors stay explicit Go calls.
+
+`orm.Mutate(fn)` configures same-type transformations. Required and nullable input
+column kinds accept a separate mutation input while comparisons retain stored
+values. They preserve omission, explicit NULL and supplied zero values. Inputs
+are captured with owned binary storage; transforms run once inside the owning
+transaction, before encryption and binding. Mutator diagnostics expose a fixed
+field-only message while retaining the cause for `errors.Is` and `errors.As`.
+Required and nullable password fields bind named mutators; encrypted fields
+continue to reject mutators.
+
+`InputKeyOf` adds a typed assignment input to the primary key already bound by
+`TableOf`. Stored key lookup and predicates retain K. Distinct key inputs disable
+automatic UUID creation; same-type UUID mutators retain it.
+
+Eight catalogue rows are ported: `binary_mutation_input`, `model_accessor_nullable`,
+`model_accessor_result`, `mutation_input_draft`, `mutation_input_predicate`,
+`mutator_nullable`, `mutator_owner` and `mutator_value`.
+`mutation_input_nullable` remains Stage 5/B5b pending draft/write getters that retain
+`Optional[Nullable[Input]]`. Its current input-column negative does not prove getter
+parity. `mutation_input_conflict` belongs to Stage 6e. The combined fixture has
+129 compiler cases and 39 footprint probes; both lanes' rows and probes are retained.
+
+| New B5a probe | Baseline functions | Unchanged ceiling |
+| --- | ---: | ---: |
+| `mutators` | 801 | 922 |
+| `mutator_explicit` | 1,605 | 1,846 |
+| `input_column_kinds` | 5,088 | 5,852 |
+| `input_key` | 982 | 1,130 |
+
+All 39 probes pass; the 35 pre-integration footprint ceilings remain unchanged.
+Combined build, vet, race, generation, fixture, catalogue, documentation and formatting
+checks pass. B5b–B5d, including
+hooks, retrieval dispatch on Raw, scopes, change tracking and audit, remain deferred.
+The PostgreSQL test sources cover distinct inputs, explicit accessors, omission,
+NULL, rollback and typed key inputs; live execution remains for the lead.

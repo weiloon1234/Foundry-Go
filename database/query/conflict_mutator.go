@@ -13,13 +13,13 @@ import (
 // passed through that pipeline and must not be transformed twice.
 func (q Query[M]) validateConflictMutator(u conflictUpdate) error {
 	field, declared := q.definition.modelField(u.Field.Column)
-	if !declared || field.conflictMutator.apply == nil {
+	if !declared || field.conflictMutator.Apply == nil {
 		return nil
 	}
 	if u.Literal != nil {
-		expected := field.conflictMutator.input
+		expected := field.conflictMutator.Input
 		if u.MutatedLiteral {
-			expected = field.conflictMutator.output
+			expected = field.conflictMutator.Output
 		}
 		if reflect.TypeOf(u.Literal.Value) != expected {
 			return fault.New(fault.Invalid, "conflict literal does not match its declared mutated field type")
@@ -56,7 +56,7 @@ func (p Conflict[M]) mutateLiterals(ctx context.Context, q Query[M]) (Conflict[M
 	for i := range p.state.Updates {
 		if p.state.Updates[i].Literal != nil {
 			p.state.Updates[i].Literal = &mutation.assignments[next].AssignmentValue
-			if field, ok := q.definition.modelField(p.state.Updates[i].Field.Column); ok && field.conflictMutator.apply != nil {
+			if field, ok := q.definition.modelField(p.state.Updates[i].Field.Column); ok && field.conflictMutator.Apply != nil {
 				p.state.Updates[i].MutatedLiteral = true
 			}
 			next++

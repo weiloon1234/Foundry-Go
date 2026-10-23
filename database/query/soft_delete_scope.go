@@ -43,7 +43,7 @@ func validateSoftDeleteField(model modelDefinition, field recordFieldMetadata, d
 		(field.typ != reflect.TypeFor[value.Nullable[time.Time]]() && field.typ != reflect.TypeFor[value.Nullable[temporal.DateTime]]()) {
 		return fault.New(fault.Invalid, "soft deletion requires a declared nullable instant field")
 	}
-	if field.mutator.apply != nil && field.mutator.input != field.typ {
+	if field.mutator.Apply != nil && field.mutator.Input != field.typ {
 		return fault.New(fault.Invalid, "soft deletion cannot synthesize distinct mutator inputs")
 	}
 	return nil

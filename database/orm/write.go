@@ -89,6 +89,11 @@ func planWrite[M any](q queryState, kind querycore.MutationKind, as []Assignment
 			if kind != querycore.UpdateModel || p.adjust != nil {
 				return writePlan{}, invalid("update accepts one numeric adjustment")
 			}
+			for _, field := range q.table.mutators {
+				if field.Column == a.adjust.Field.Column {
+					return writePlan{}, invalid("numeric adjustment cannot bypass a Go mutator")
+				}
+			}
 			p.adjust = a.adjust
 			if a.guard != nil {
 				p.bounded = true
@@ -158,7 +163,7 @@ func (p writePlan) conventions(ctx context.Context, source clock.Clock) (writePl
 	p.assignments = slices.Clone(p.assignments)
 	if p.kind == querycore.InsertModel {
 		for _, c := range p.query.table.columns {
-			if c.metadata.Name == p.query.table.model.Primary && !c.metadata.DatabaseDefault && c.uuid && !p.present(c.metadata.Name) {
+			if c.metadata.Name == p.query.table.model.Primary && !c.metadata.DatabaseDefault && c.uuid && (c.mutator.Input == nil || c.mutator.Input == c.field.Type) && !p.present(c.metadata.Name) {
 				id, err := model.NewID[struct{}]()
 				if err != nil {
 					return p, err
@@ -312,7 +317,7 @@ func executeWrite(ctx context.Context, writer database.Transactor, p writePlan, 
 	}
 	p.query.ast.ScopeContext = ctx
 	// Exact pool owners can confirm a single INSERT without an explicit transaction.
-	if p.kind == querycore.InsertModel && !p.many && !p.encrypted() {
+	if p.kind == querycore.InsertModel && !p.many && !p.encrypted() && !p.mutated() {
 		switch owner := writer.(type) {
 		case *database.DB:
 			if owner == nil {
@@ -325,7 +330,7 @@ func executeWrite(ctx context.Context, writer database.Transactor, p writePlan, 
 	}
 	var prepared querycore.Statement
 	var err error
-	if !p.needsClock() && !p.encrypted() {
+	if !p.needsClock() && !p.encrypted() && !p.mutated() {
 		p, err = p.conventions(ctx, nil)
 		if err == nil {
 			prepared, err = p.compile()
@@ -340,8 +345,12 @@ func executeWrite(ctx context.Context, writer database.Transactor, p writePlan, 
 			return invalid("transactor supplied no transaction")
 		}
 		s := prepared
-		if p.needsClock() || p.encrypted() {
+		if p.needsClock() || p.encrypted() || p.mutated() {
 			current, e := p.conventions(ctx, tx.Clock())
+			if e != nil {
+				return e
+			}
+			current, e = current.mutate(ctx)
 			if e != nil {
 				return e
 			}
@@ -553,4 +562,28 @@ func (t Table[M, K]) ForceDelete(ctx context.Context, tx database.Transactor, ke
 // ForceDeleteAll physically deletes matching rows within the selected scope.
 func (q Query[M]) ForceDeleteAll(ctx context.Context, tx database.Transactor) (int64, error) {
 	return writeAll[M](ctx, tx, q.state, querycore.ForceDeleteModel, nil)
+}
+
+func (p writePlan) mutated() bool {
+	return len(p.query.table.mutators) > 0 && p.kind.SqlKind() != querycore.DeleteModel
+}
+func (p writePlan) mutate(ctx context.Context) (writePlan, error) {
+	if !p.mutated() {
+		return p, nil
+	}
+	if p.batch != nil {
+		rows := make([][]querycore.MutationAssignment, len(p.batch))
+		for i, row := range p.batch {
+			var err error
+			rows[i], err = querycore.MutateAssignments(ctx, row, p.query.table.mutators)
+			if err != nil {
+				return p, err
+			}
+		}
+		p.batch = rows
+		return p, nil
+	}
+	var err error
+	p.assignments, err = querycore.MutateAssignments(ctx, p.assignments, p.query.table.mutators)
+	return p, err
 }

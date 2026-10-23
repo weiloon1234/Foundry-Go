@@ -28,13 +28,13 @@ type NullableInterval[M any] struct {
 
 // IntervalOf binds an interval without enabling numeric adjustments or text patterns.
 // Example: IntervalOf(b, &m.Period).
-func IntervalOf[M any](b Builder[M], ptr *temporal.Interval) Interval[M] {
-	return Interval[M]{interval: bindTyped(b.state, ptr, codec.Interval(), false)}
+func IntervalOf[M any](b Builder[M], ptr *temporal.Interval, opts ...ColumnOption[temporal.Interval]) Interval[M] {
+	return Interval[M]{interval: bindModel[M](b.state, ptr, optionCodec(codec.Interval(), opts), false, opts...)}
 }
 
 // NullableIntervalOf binds nullable intervals. Example: NullableIntervalOf(b, &m.MaybePeriod).
-func NullableIntervalOf[M any](b Builder[M], ptr *value.Nullable[temporal.Interval]) NullableInterval[M] {
-	return NullableInterval[M]{nullableInterval: bindNullable(b.state, ptr, codec.Interval())}
+func NullableIntervalOf[M any](b Builder[M], ptr *value.Nullable[temporal.Interval], opts ...ColumnOption[temporal.Interval]) NullableInterval[M] {
+	return NullableInterval[M]{nullableInterval: bindNullableModel[M](b.state, ptr, optionCodec(codec.Interval(), opts), opts...)}
 }
 
 // Eq compares a concrete value. Example: Records.Period.Eq(period).

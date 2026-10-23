@@ -1,19 +1,13 @@
 package generate
 
 import (
+	"github.com/weiloon1234/Foundry-Go/internal/modelmeta"
 	"go/types"
 	"slices"
 	"strings"
 )
 
-func fieldMethodPrefix(name string) string {
-	for _, prefix := range []string{"Mutate", "Access"} {
-		if strings.HasPrefix(name, prefix) {
-			return prefix
-		}
-	}
-	return ""
-}
+func fieldMethodPrefix(name string) string { return modelmeta.FieldMethodPrefix(name) }
 
 // Field methods are resolved through consumer Go type information on a fresh
 // checkout. Native explicit getters need no duplicate generated wrapper.
@@ -28,7 +22,7 @@ func discoverFieldMethods(p *packageInput, m *model) error {
 	}
 	for i := range m.typ.NumMethods() {
 		method := m.typ.Method(i)
-		prefix := fieldMethodPrefix(method.Name())
+		prefix := modelmeta.FieldMethodPrefix(method.Name())
 		if prefix == "" {
 			continue
 		}

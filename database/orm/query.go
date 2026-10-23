@@ -33,7 +33,7 @@ func TableOf[M any, K comparable](b Builder[M], ptr *K, opts ...ColumnOption[K])
 
 func keyOf[M any, K comparable](b Builder[M], ptr *K, opts ...ColumnOption[K]) Key[M, K] {
 	codec, check := keyCodec[M](opts)
-	c := bindTyped(b.state, ptr, codec, false)
+	c := bindModel[M](b.state, ptr, codec, false, opts...)
 	c.core.check = check
 	if b.state != nil && !b.state.sealed {
 		if c.core.uuid && reflect.TypeFor[K]() != reflect.TypeFor[model.ID[M]]() {

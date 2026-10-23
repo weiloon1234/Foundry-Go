@@ -8,6 +8,11 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Add typed field mutators, input-column kinds and `InputKeyOf`, with startup
+  validation of `Mutate<Field>`/`Access<Field>` methods and redacted mutator errors
+  shared by both data APIs (B5a). Stored lookup keys retain their type; distinct
+  mutation inputs disable automatic UUID creation.
+
 - Add typed pivot relations, has-one/has-many-through, one-of-many choices and
   polymorphic relations with immutable constraints and batch-bounded eager loading
   under shared scopes and budgets (Stage 4c). The old API remains unchanged.

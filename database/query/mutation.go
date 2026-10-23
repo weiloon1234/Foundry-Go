@@ -1,7 +1,6 @@
 package query
 
 import (
-	"database/sql/driver"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
@@ -41,8 +40,7 @@ func Assign[M any, V any](table, column string, c codec.Codec[V], v V) Assignmen
 }
 
 func captureAssignment[V any](c codec.Codec[V], v V) assignmentValue {
-	v = c.Clone(v)
-	return assignmentValue{Value: v, CopyValue: func() any { return c.Clone(v) }, Bind: func() (driver.Value, error) { return c.Bind(c.Clone(v)) }}
+	return querycore.CaptureAssignment(c, v)
 }
 
 // String and GoString keep pending values out of routine diagnostics.

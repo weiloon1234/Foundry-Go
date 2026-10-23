@@ -14,13 +14,13 @@ import (
 // PasswordOf binds a stored hash with scalar comparisons, sorting and assignment.
 // Plaintext verification belongs to password.Hasher. Example: Accounts.Digest.Eq(hash).
 func PasswordOf[M any](b Builder[M], ptr *password.Hash) Column[M, password.Hash] {
-	return Column[M, password.Hash]{column: bindTyped(b.state, ptr, password.Codec(), false)}
+	return Column[M, password.Hash]{column: bindModel[M](b.state, ptr, password.Codec(), false)}
 }
 
 // NullablePasswordOf adds SQL NULL operations to a sensitive stored hash.
 // Example: Accounts.Backup.SetNull().
 func NullablePasswordOf[M any](b Builder[M], ptr *value.Nullable[password.Hash]) NullableColumn[M, password.Hash] {
-	return NullableColumn[M, password.Hash]{nullableColumn: bindNullable(b.state, ptr, password.Codec())}
+	return NullableColumn[M, password.Hash]{nullableColumn: bindNullableModel[M](b.state, ptr, password.Codec())}
 }
 
 // Encrypted exposes only typed assignment; ciphertext has no predicate or ordering capabilities.

@@ -54,7 +54,7 @@ func TestBinaryAssignmentsAndMutatorsOwnReusableInputs(t *testing.T) {
 		}
 		mutator := newFieldMutator("body", c, func(v binaryInput) (binaryInput, error) { v[0]++; return v, nil })
 		for range 2 {
-			result, err := mutator.apply(a.mutationAssignment.AssignmentValue)
+			result, err := mutator.Apply(a.mutationAssignment.AssignmentValue)
 			if err != nil {
 				t.Fatal(err)
 			}

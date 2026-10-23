@@ -1,10 +1,8 @@
 package query
 
 import (
-	"database/sql/driver"
-
 	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 // AssignInput is a generated declaration boundary for a value that must pass
@@ -16,9 +14,7 @@ func AssignInput[M, I any](table, column string, input I) Assignment[M] {
 }
 
 func captureInput[I any](input I) assignmentValue {
-	return assignmentValue{Value: input, Bind: func() (driver.Value, error) {
-		return nil, fault.New(fault.Invalid, "mutation input must be transformed before SQL binding")
-	}}
+	return querycore.CaptureInput(input, nil)
 }
 
 // AssignClonedInput is the generated mutable-input boundary. The codec supplies
@@ -29,10 +25,7 @@ func AssignClonedInput[M, I any](table, column string, c codec.Codec[I], input I
 }
 
 func captureClonedInput[I any](c codec.Codec[I], input I) assignmentValue {
-	input = c.Clone(input)
-	a := captureInput(input)
-	a.CopyValue = func() any { return c.Clone(input) }
-	return a
+	return querycore.CaptureInput(input, c.Clone)
 }
 
 // MutationInputField supplies a generated conflict setter whose input differs

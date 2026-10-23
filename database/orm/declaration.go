@@ -45,22 +45,29 @@ type tableCore struct {
 	selections []querycore.SelectItem
 	err        error
 	check      func() error
+	mutators   []querycore.FieldMutator
 }
 
 type columnCore struct {
-	owner     *tableCore
-	field     reflect.StructField
-	metadata  querycore.Column
-	offset    uintptr
-	scan      func(unsafe.Pointer) any
-	get       func(unsafe.Pointer) (driver.Value, error)
-	automatic func(any) (querycore.AssignmentValue, error)
-	kind      codec.ParameterType
-	role      string
-	uuid      bool
-	open      func(database.Row, func() (driver.Value, error), unsafe.Pointer) error
-	sensitive bool
-	check     func() error
+	owner            *tableCore
+	field            reflect.StructField
+	metadata         querycore.Column
+	offset           uintptr
+	scan             func(unsafe.Pointer) any
+	get              func(unsafe.Pointer) (driver.Value, error)
+	automatic        func(any) (querycore.AssignmentValue, error)
+	kind             codec.ParameterType
+	role             string
+	uuid             bool
+	open             func(database.Row, func() (driver.Value, error), unsafe.Pointer) error
+	sensitive        bool
+	check            func() error
+	stored           reflect.Type
+	bindMutator      func(any) error
+	bindNamedMutator func(any) error
+	mutator          querycore.FieldMutator
+	explicitMutator  bool
+	requiresMutator  bool
 }
 
 // Option configures a declaration. Example: Define("logs", declare, NoTimestamps()).
@@ -253,6 +260,7 @@ func seal(d *declaration) {
 		}
 	}
 	configureConventions(d)
+	configureFieldMethods(d)
 	if _, err := d.core.model.ValidateColumns(true); err != nil {
 		d.errors = append(d.errors, fmt.Errorf("orm %s: %w", d.core.model.Table, err))
 	}

@@ -22,13 +22,13 @@ type NullableJSON[M, T any] struct {
 }
 
 // JSONOf binds immutable typed JSON through its existing codec. Example: JSONOf(b,&m.Settings).
-func JSONOf[M, T any](b Builder[M], ptr *value.JSON[T]) JSON[M, T] {
-	return JSON[M, T]{json: bindTyped(b.state, ptr, codec.JSON[T](), false)}
+func JSONOf[M, T any](b Builder[M], ptr *value.JSON[T], opts ...ColumnOption[value.JSON[T]]) JSON[M, T] {
+	return JSON[M, T]{json: bindModel[M](b.state, ptr, optionCodec(codec.JSON[T](), opts), false, opts...)}
 }
 
 // NullableJSONOf binds nullable typed JSON. Example: NullableJSONOf(b,&m.MaybeSettings).
-func NullableJSONOf[M, T any](b Builder[M], ptr *value.Nullable[value.JSON[T]]) NullableJSON[M, T] {
-	return NullableJSON[M, T]{nullableJSON: bindNullable(b.state, ptr, codec.JSON[T]())}
+func NullableJSONOf[M, T any](b Builder[M], ptr *value.Nullable[value.JSON[T]], opts ...ColumnOption[value.JSON[T]]) NullableJSON[M, T] {
+	return NullableJSON[M, T]{nullableJSON: bindNullableModel[M](b.state, ptr, optionCodec(codec.JSON[T](), opts), opts...)}
 }
 
 // Eq compares a concrete value. Example: Records.Settings.Eq(settings).

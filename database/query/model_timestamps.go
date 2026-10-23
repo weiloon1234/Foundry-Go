@@ -47,7 +47,7 @@ func validateTimestampField(model modelDefinition, name string, field recordFiel
 		(field.typ != reflect.TypeFor[time.Time]() && field.typ != reflect.TypeFor[temporal.DateTime]()) {
 		return fault.New(fault.Invalid, "managed timestamps require declared non-null instant fields")
 	}
-	if field.mutator.apply != nil && field.mutator.input != field.typ {
+	if field.mutator.Apply != nil && field.mutator.Input != field.typ {
 		return fault.New(fault.Invalid, "managed timestamps cannot synthesize distinct mutator inputs")
 	}
 	return nil

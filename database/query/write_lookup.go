@@ -230,7 +230,7 @@ func (q Query[M]) lookupDefaults(ctx context.Context) (Mutation[M], error) {
 				return nil
 			}
 			declared, found := q.definition.modelField(field.Column)
-			if !found || declared.assignment == nil || declared.mutator.apply != nil {
+			if !found || declared.assignment == nil || declared.mutator.Apply != nil {
 				return nil
 			}
 			raw, err := e.Bind(e.Values[0])

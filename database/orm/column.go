@@ -67,12 +67,31 @@ func (Assignment[M]) String() string { return "orm assignment" }
 // GoString redacts pending values in diagnostics. Example: fmt.Sprintf("%#v", assignment).
 func (Assignment[M]) GoString() string { return "orm assignment" }
 
-func bindTyped[V any](d *declaration, ptr *V, c codec.Codec[V], nullable bool) columnData[V] {
+func bindModel[M, V any](d *declaration, ptr *V, c codec.Codec[V], nullable bool, opts ...ColumnOption[V]) columnData[V] {
+	field := bindTyped(d, ptr, c, nullable, opts...)
+	bindNamedMutator[M, V, V](field.core)
+	return field
+}
+func bindNullableModel[M, V any](d *declaration, ptr *value.Nullable[V], c codec.Codec[V], opts ...ColumnOption[V]) nullableColumnData[V] {
+	field := bindNullable(d, ptr, c, opts...)
+	bindNamedMutator[M, V, V](field.base.core)
+	return field
+}
+func bindTyped[V any](d *declaration, ptr *V, c codec.Codec[V], nullable bool, opts ...ColumnOption[V]) columnData[V] {
 	core := bindField(d, unsafe.Pointer(ptr), reflect.TypeFor[V](), nullable, c.ParameterType())
 	if d != nil && !d.sealed && c.Validate() != nil {
 		d.fail(core.field.Name, "unsupported type or invalid codec; use orm.Codec(c)")
 	}
+	core.stored = reflect.TypeFor[V]()
 	core.sensitive = c.SensitiveValues()
+	core.bindMutator = func(fn any) error {
+		mutate, ok := fn.(func(V) (V, error))
+		if !ok {
+			return invalid("mutator input requires an Input column constructor matching its input type")
+		}
+		core.mutator = querycore.NewFieldMutator(core.metadata.Name, c, mutate)
+		return nil
+	}
 	core.get = func(base unsafe.Pointer) (driver.Value, error) { return c.Bind(*(*V)(unsafe.Add(base, core.offset))) }
 	core.scan = func(base unsafe.Pointer) any { return c.Scan((*V)(unsafe.Add(base, core.offset))) }
 	core.automatic = func(raw any) (querycore.AssignmentValue, error) {
@@ -82,14 +101,14 @@ func bindTyped[V any](d *declaration, ptr *V, c codec.Codec[V], nullable bool) c
 		}
 		return capture(c, v), nil
 	}
+	configureMutatorOptions(d, core, opts)
 	return columnWithCodec(core, c)
 }
 func columnWithCodec[V any](core *columnCore, c codec.Codec[V]) columnData[V] {
 	return columnData[V]{core: core, bind: c.Bind, decode: c.Decode, scanValue: func(v *V) any { return c.Scan(v) }, clone: c.Clone, assign: func(v V) querycore.AssignmentValue { return capture(c, v) }}
 }
 func capture[V any](c codec.Codec[V], v V) querycore.AssignmentValue {
-	v = c.Clone(v)
-	return querycore.AssignmentValue{Value: v, CopyValue: func() any { return c.Clone(v) }, Bind: func() (driver.Value, error) { return c.Bind(c.Clone(v)) }}
+	return querycore.CaptureAssignment(c, v)
 }
 func comparison[M, V any](c columnData[V], op querycore.Operator, vs []V) Predicate[M] {
 	if c.core == nil || c.core.owner == nil || c.bind == nil {
@@ -194,32 +213,33 @@ func nullAssignment[M, V any](c columnData[V]) Assignment[M] {
 
 // ColumnOf binds an ordinary field or explicit custom codec. Example: ColumnOf(b,&o.BuyerID).
 func ColumnOf[M, V any](b Builder[M], ptr *V, opts ...ColumnOption[V]) Column[M, V] {
-	return Column[M, V]{column: bindTyped(b.state, ptr, selectedCodec(opts), false)}
+	return Column[M, V]{column: bindModel[M](b.state, ptr, selectedCodec(opts), false, opts...)}
 }
 
 // NumberOf selects a numeric codec at startup. Example: NumberOf(b,&o.TotalCents).
-func NumberOf[M any, V NumberValue](b Builder[M], ptr *V) Number[M, V] {
-	return Number[M, V]{number: bindTyped(b.state, ptr, ormcore.NumberCodec[V](), false)}
+func NumberOf[M any, V NumberValue](b Builder[M], ptr *V, opts ...ColumnOption[V]) Number[M, V] {
+	return Number[M, V]{number: bindModel[M](b.state, ptr, optionCodec(ormcore.NumberCodec[V](), opts), false, opts...)}
 }
 
 // TextOf binds text. Example: TextOf(b,&o.Email).
-func TextOf[M any, V ~string](b Builder[M], ptr *V) Text[M, V] {
-	return Text[M, V]{text: bindTyped(b.state, ptr, codec.String[V](), false)}
+func TextOf[M any, V ~string](b Builder[M], ptr *V, opts ...ColumnOption[V]) Text[M, V] {
+	return Text[M, V]{text: bindModel[M](b.state, ptr, optionCodec(codec.String[V](), opts), false, opts...)}
 }
 
 // TimeOf binds a temporal field. Example: TimeOf(b,&o.CreatedAt).
-func TimeOf[M any, V TimeValue](b Builder[M], ptr *V) Time[M, V] {
-	return Time[M, V]{time: bindTyped(b.state, ptr, ormcore.TimeCodec[V](), false)}
+func TimeOf[M any, V TimeValue](b Builder[M], ptr *V, opts ...ColumnOption[V]) Time[M, V] {
+	return Time[M, V]{time: bindModel[M](b.state, ptr, optionCodec(ormcore.TimeCodec[V](), opts), false, opts...)}
 }
 
 // EnumOf uses generated enum metadata. Example: EnumOf(b,&o.Status).
 func EnumOf[M any, E interface {
 	enum.Scalar
 	EnumDescriptor() enum.Descriptor[E]
-}](b Builder[M], ptr *E) Enum[M, E] {
+}](b Builder[M], ptr *E, opts ...ColumnOption[E]) Enum[M, E] {
 	codec, check := enumCodec[E]()
-	c := bindTyped(b.state, ptr, codec, false)
+	c := bindModel[M](b.state, ptr, optionCodec(codec, opts), false, opts...)
 	c.core.check = check
+	checkEnumOptions(b.state, c.core, opts)
 	return Enum[M, E]{enum: c}
 }
 func enumCodec[E interface {
@@ -230,15 +250,25 @@ func enumCodec[E interface {
 }
 
 // BytesOf binds owned byte buffers. Example: BytesOf(b,&o.Payload).
-func BytesOf[M any, V ~[]byte](b Builder[M], ptr *V) Column[M, V] {
-	return Column[M, V]{column: bindTyped(b.state, ptr, codec.Bytes[V](), false)}
+func BytesOf[M any, V ~[]byte](b Builder[M], ptr *V, opts ...ColumnOption[V]) Column[M, V] {
+	return Column[M, V]{column: bindModel[M](b.state, ptr, optionCodec(codec.Bytes[V](), opts), false, opts...)}
 }
-func bindNullable[V any](d *declaration, ptr *value.Nullable[V], c codec.Codec[V]) nullableColumnData[V] {
+func bindNullable[V any](d *declaration, ptr *value.Nullable[V], c codec.Codec[V], opts ...ColumnOption[V]) nullableColumnData[V] {
 	var nullable codec.Codec[value.Nullable[V]]
 	if c.Validate() == nil {
 		nullable = codec.Nullable(c)
 	}
 	field := bindTyped(d, ptr, nullable, true)
+	field.core.stored = reflect.TypeFor[V]()
+	field.core.bindMutator = func(fn any) error {
+		mutate, ok := fn.(func(V) (V, error))
+		if !ok {
+			return invalid("mutator input requires a matching nullable Input column")
+		}
+		field.core.mutator = querycore.NewNullableFieldMutator(field.core.metadata.Name, c, mutate)
+		return nil
+	}
+	configureMutatorOptions(d, field.core, opts)
 	base := columnWithCodec(field.core, c)
 	base.assign = func(v V) querycore.AssignmentValue { return capture(nullable, value.Of(v)) }
 	return nullableColumnData[V]{base: base, nullable: func() columnData[value.Nullable[V]] { return field }}
@@ -246,38 +276,39 @@ func bindNullable[V any](d *declaration, ptr *value.Nullable[V], c codec.Codec[V
 
 // NullableColumnOf binds nullable scalar values. Example: NullableColumnOf(b,&o.IntroducerID).
 func NullableColumnOf[M, V any](b Builder[M], ptr *value.Nullable[V], opts ...ColumnOption[V]) NullableColumn[M, V] {
-	return NullableColumn[M, V]{nullableColumn: bindNullable(b.state, ptr, selectedCodec(opts))}
+	return NullableColumn[M, V]{nullableColumn: bindNullableModel[M](b.state, ptr, selectedCodec(opts), opts...)}
 }
 
 // NullableTextOf binds nullable text. Example: NullableTextOf(b,&o.Nickname).
-func NullableTextOf[M any, V ~string](b Builder[M], ptr *value.Nullable[V]) NullableText[M, V] {
-	return NullableText[M, V]{nullableText: bindNullable(b.state, ptr, codec.String[V]())}
+func NullableTextOf[M any, V ~string](b Builder[M], ptr *value.Nullable[V], opts ...ColumnOption[V]) NullableText[M, V] {
+	return NullableText[M, V]{nullableText: bindNullableModel[M](b.state, ptr, optionCodec(codec.String[V](), opts), opts...)}
 }
 
 // NullableNumberOf binds nullable numeric values. Example: NullableNumberOf(b,&o.Balance).
-func NullableNumberOf[M any, V NumberValue](b Builder[M], ptr *value.Nullable[V]) NullableNumber[M, V] {
-	return NullableNumber[M, V]{nullableNumber: bindNullable(b.state, ptr, ormcore.NumberCodec[V]())}
+func NullableNumberOf[M any, V NumberValue](b Builder[M], ptr *value.Nullable[V], opts ...ColumnOption[V]) NullableNumber[M, V] {
+	return NullableNumber[M, V]{nullableNumber: bindNullableModel[M](b.state, ptr, optionCodec(ormcore.NumberCodec[V](), opts), opts...)}
 }
 
 // NullableTimeOf binds nullable temporal values. Example: NullableTimeOf(b,&o.Birthday).
-func NullableTimeOf[M any, V TimeValue](b Builder[M], ptr *value.Nullable[V]) NullableTime[M, V] {
-	return NullableTime[M, V]{nullableTime: bindNullable(b.state, ptr, ormcore.TimeCodec[V]())}
+func NullableTimeOf[M any, V TimeValue](b Builder[M], ptr *value.Nullable[V], opts ...ColumnOption[V]) NullableTime[M, V] {
+	return NullableTime[M, V]{nullableTime: bindNullableModel[M](b.state, ptr, optionCodec(ormcore.TimeCodec[V](), opts), opts...)}
 }
 
 // NullableEnumOf binds nullable enums. Example: NullableEnumOf(b,&o.Status).
 func NullableEnumOf[M any, E interface {
 	enum.Scalar
 	EnumDescriptor() enum.Descriptor[E]
-}](b Builder[M], ptr *value.Nullable[E]) NullableEnum[M, E] {
+}](b Builder[M], ptr *value.Nullable[E], opts ...ColumnOption[E]) NullableEnum[M, E] {
 	codec, check := enumCodec[E]()
-	c := bindNullable(b.state, ptr, codec)
+	c := bindNullableModel[M](b.state, ptr, optionCodec(codec, opts), opts...)
 	c.base.core.check = check
+	checkEnumOptions(b.state, c.base.core, opts)
 	return NullableEnum[M, E]{nullableEnum: c}
 }
 
 // NullableBytesOf binds nullable binary values. Example: NullableBytesOf(b,&o.Payload).
-func NullableBytesOf[M any, V ~[]byte](b Builder[M], ptr *value.Nullable[V]) NullableColumn[M, V] {
-	return NullableColumn[M, V]{nullableColumn: bindNullable(b.state, ptr, codec.Bytes[V]())}
+func NullableBytesOf[M any, V ~[]byte](b Builder[M], ptr *value.Nullable[V], opts ...ColumnOption[V]) NullableColumn[M, V] {
+	return NullableColumn[M, V]{nullableColumn: bindNullableModel[M](b.state, ptr, optionCodec(codec.Bytes[V](), opts), opts...)}
 }
 
 // CreatedAtOf explicitly marks a creation timestamp. Example: CreatedAtOf(b,&o.CreatedAt).
