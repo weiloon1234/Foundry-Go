@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
@@ -130,8 +130,8 @@ func TestPostgresTableOperationsPreserveRequestAndServerBoundaries(t *testing.T)
 		assertTableHTTPFailure(t, err, 403)
 	}
 	spec := reportSpec()
-	spec.Source = func(context.Context, reportActor) (query.ProjectionQuery[reportRecord, ReportRow], error) {
-		return query.ProjectionQuery[reportRecord, ReportRow]{}, fault.New(fault.Invalid, "private-canary source bug")
+	spec.Source = func(context.Context, reportActor) (rows.Query[reportRecord, ReportRow], error) {
+		return rows.Query[reportRecord, ReportRow]{}, fault.New(fault.Invalid, "private-canary source bug")
 	}
 	brokenManager, brokenTable := reportManager(t, fixture, spec, nil)
 	for _, call := range calls[:4] {

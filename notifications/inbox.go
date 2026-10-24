@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	store "github.com/weiloon1234/Foundry-Go/internal/notificationstore"
@@ -76,9 +77,9 @@ func (i Inbox[M, K]) subject(ctx context.Context) (string, error) {
 	text, _ := data.Text()
 	return digest(i.recipient.scope(), text), nil
 }
-func (i Inbox[M, K]) rows(subject string) store.InboxQuery {
-	f := store.InboxFields()
-	return store.QueryFoundryNotificationInbox().Where(f.Scope.Eq(i.recipient.scope()), f.SubjectKey.Eq(subject))
+func (i Inbox[M, K]) rows(subject string) orm.Query[store.Inbox] {
+	f := store.Inboxes
+	return store.Inboxes.Query().Where(f.Scope.Eq(i.recipient.scope()), f.SubjectKey.Eq(subject))
 }
 func inboxRecord[M any](row store.Inbox) (Record[M], error) {
 	text, err := row.Data.Text()
@@ -102,9 +103,9 @@ func (i Inbox[M, K]) List(ctx context.Context, page query.PageRequest, unreadOnl
 	err = i.manager.within(ctx, func(tx *database.Tx) error {
 		q := i.rows(subject)
 		if unreadOnly {
-			q = q.Where(store.InboxFields().ReadAt.IsNull())
+			q = q.Where(store.Inboxes.ReadAt.IsNull())
 		}
-		page, err := q.OrderBy(store.InboxFields().CreatedAt.Desc(), store.InboxFields().ID.Desc()).Paginate(ctx, tx, page)
+		page, err := q.OrderBy(store.Inboxes.CreatedAt.Desc(), store.Inboxes.ID.Desc()).Paginate(ctx, tx, page)
 		if err != nil {
 			return err
 		}
@@ -136,7 +137,7 @@ func (i Inbox[M, K]) UnreadCount(ctx context.Context) (int64, error) {
 	var count int64
 	err = i.manager.within(ctx, func(tx *database.Tx) error {
 		var err error
-		count, err = i.rows(subject).Where(store.InboxFields().ReadAt.IsNull()).Count(ctx, tx)
+		count, err = i.rows(subject).Where(store.Inboxes.ReadAt.IsNull()).Count(ctx, tx)
 		return err
 	})
 	return count, err
@@ -167,7 +168,7 @@ func (i Inbox[M, K]) mark(ctx context.Context, id ID[M], read bool) (bool, error
 	err = i.manager.within(ctx, func(tx *database.Tx) error {
 		q := i.rows(subject)
 		key := model.IDFromBytes[store.Inbox](id.Bytes())
-		optional, err := q.ForUpdate().Find(ctx, tx, key)
+		optional, err := q.ForUpdate().Where(store.Inboxes.Key().Eq(key)).First(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -179,15 +180,15 @@ func (i Inbox[M, K]) mark(ctx context.Context, id ID[M], read bool) (bool, error
 		if read == !row.ReadAt.IsNull() {
 			return nil
 		}
-		draft := store.InboxDraft{}.ClearReadAt()
+		draft := []orm.Assignment[store.Inbox]{store.Inboxes.ReadAt.SetNull()}
 		if read {
 			now, err := i.manager.now()
 			if err != nil {
 				return err
 			}
-			draft = draft.SetReadAt(now)
+			draft[0] = store.Inboxes.ReadAt.Set(now)
 		}
-		_, err = q.Update(ctx, tx, key, draft)
+		_, err = orm.Update(ctx, tx, q, store.Inboxes.Key(), key, draft...)
 		return err
 	})
 	return found && err == nil, err
@@ -207,8 +208,8 @@ func (i Inbox[M, K]) Status(ctx context.Context, id ID[M]) (Report[M], error) {
 	}
 	key := model.IDFromBytes[store.Envelope](id.Bytes())
 	err = i.manager.within(ctx, func(tx *database.Tx) error {
-		f := store.EnvelopeFields()
-		_, err := store.QueryFoundryNotifications().Where(f.Scope.Eq(i.recipient.scope()), f.SubjectKey.Eq(subject)).RequireFind(ctx, tx, key)
+		f := store.Envelopes
+		_, err := store.Envelopes.Query().Where(f.Scope.Eq(i.recipient.scope()), f.SubjectKey.Eq(subject)).Where(store.Envelopes.Key().Eq(key)).Require(ctx, tx)
 		return err
 	})
 	if err != nil {

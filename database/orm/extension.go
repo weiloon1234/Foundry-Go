@@ -6,7 +6,8 @@ import (
 	"unsafe"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/internal/extensionslot"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
@@ -49,10 +50,17 @@ type ExtensionRelation[M any] struct {
 func (r ExtensionRelation[M]) relationPlan(*M) *relationPlan { return r.plan }
 func (r ExtensionRelation[M]) ormError() error               { return validateRelation(r.plan, nil) }
 
-// Extension adapts an existing framework slot loader to With, Load and LoadMissing.
-// Bind the descriptor to its runtime first. Example: orm.Extension(Articles.Title,title.From(manager).ExtensionSlot).
-func Extension[M, S any](slot Slot[M, S], source query.ExtensionSlot[M]) ExtensionRelation[M] {
-	name, table, kind, err, load := query.FoundryExtension(source, sqlowner.Queries())
+// FoundryExtension binds a shared external loader using a validated framework capability.
+// Example: orm.FoundryExtension(Articles.Title,loader,sqlowner.Queries()).
+func FoundryExtension[M, S any](slot Slot[M, S], source extensionslot.Slot[M], seal sqlowner.QuerySeal) ExtensionRelation[M] {
+	if !seal.Valid() {
+		return ExtensionRelation[M]{plan: &relationPlan{err: invalid("invalid extension slot bridge")}}
+	}
+	name, table, kind, err := source.Metadata()
+	return extensionRelation(slot, name, table, kind, err, source.Load)
+}
+
+func extensionRelation[M, S any](slot Slot[M, S], name, table string, kind reflect.Type, err error, load func(context.Context, database.Executor, []M, querycore.RelationLimits, *int, *int, bool) ([]M, error)) ExtensionRelation[M] {
 	p := &relationPlan{slot: slot.core, err: err, external: true}
 	if slot.core == nil || slot.core.owner == nil || slot.core.name != name || kind != reflect.TypeFor[S]() || slot.core.owner.model.Table != table || load == nil {
 		p.err = invalid("extension loader does not match its declared slot")
@@ -61,7 +69,7 @@ func Extension[M, S any](slot Slot[M, S], source query.ExtensionSlot[M]) Extensi
 	p.loaded = func(unsafe.Pointer) bool { return false } // The framework loader owns loaded-empty semantics.
 	p.load = func(ctx context.Context, ex database.Executor, _ *relationPlan, base unsafe.Pointer, count int, budget *relationBudget, _ int, missing bool) error {
 		parents := unsafe.Slice((*M)(base), count)
-		loaded, err := load(ctx, ex, parents, budget.limits, &budget.remaining, &budget.attachments, missing)
+		loaded, err := load(ctx, ex, parents, querycore.RelationLimits(budget.limits), &budget.remaining, &budget.attachments, missing)
 		if err != nil {
 			return err
 		}

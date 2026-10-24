@@ -20,7 +20,7 @@ type Primary[M any, K comparable] = keyColumn[M, K, primaryRole]
 type NumberPrimary[M any, K interface {
 	NumberValue
 	comparable
-}] = numberColumn[M, K, primaryRole]
+}] = numberKeyColumn[M, K, primaryRole]
 
 // TextPrimary preserves text primary capabilities. Example: TextKey(PrimaryOf(b, table.Key())).
 type TextPrimary[M any, K ~string] = textColumn[M, K, primaryRole]
@@ -29,7 +29,7 @@ type TextPrimary[M any, K ~string] = textColumn[M, K, primaryRole]
 type NumberLookupKey[M any, K interface {
 	NumberValue
 	comparable
-}] = numberColumn[M, K, lookupKeyRole]
+}] = numberKeyColumn[M, K, lookupKeyRole]
 
 // TextLookupKey retains the primary lookup role. Example: TextKey(table.Key()).
 type TextLookupKey[M any, K ~string] = textColumn[M, K, lookupKeyRole]

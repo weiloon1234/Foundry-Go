@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	store "github.com/weiloon1234/Foundry-Go/internal/notificationstore"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -28,7 +30,7 @@ func (i Inbox[M, K]) MarkAllRead(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	f := store.InboxFields()
+	f := store.Inboxes
 	total := 0
 	for {
 		changed := 0
@@ -45,8 +47,8 @@ func (i Inbox[M, K]) MarkAllRead(ctx context.Context) (int, error) {
 			if err != nil {
 				return err
 			}
-			updated, err := i.rows(subject).Where(f.ID.In(ids...), f.ReadAt.IsNull()).UpdateEach(ctx, tx, len(ids), func(context.Context, *database.Tx, store.Inbox) (store.InboxDraft, error) {
-				return store.InboxDraft{}.SetReadAt(now), nil
+			updated, err := orm.UpdateEach(ctx, tx, i.rows(subject).Where(f.ID.In(ids...), f.ReadAt.IsNull()), len(ids), func(context.Context, *database.Tx, store.Inbox) ([]orm.Assignment[store.Inbox], error) {
+				return []orm.Assignment[store.Inbox]{store.Inboxes.ReadAt.Set(now)}, nil
 			})
 			changed = len(updated)
 			return err
@@ -79,7 +81,7 @@ func (i Inbox[M, K]) Delete(ctx context.Context, id ID[M]) (bool, error) {
 	}
 	deleted := false
 	err = i.manager.within(ctx, func(tx *database.Tx) error {
-		removed, err := i.rows(subject).Where(store.InboxFields().ID.Eq(model.IDFromBytes[store.Inbox](id.Bytes()))).DeleteEach(ctx, tx, 1)
+		removed, err := orm.DeleteEach(ctx, tx, i.rows(subject).Where(store.Inboxes.ID.Eq(model.IDFromBytes[store.Inbox](id.Bytes()))), 1)
 		deleted = len(removed) == 1
 		return err
 	})
@@ -110,18 +112,18 @@ func (m *Manager) PruneInbox(ctx context.Context, cutoff time.Time, readOnly boo
 		return 0, err
 	}
 	defer release()
-	f := store.InboxFields()
+	f := store.Inboxes
 	deleted := 0
 	err = m.within(ctx, func(tx *database.Tx) error {
 		deleted = 0
-		predicates := []query.Predicate[store.Inbox]{f.CreatedAt.Lt(before)}
+		predicates := []orm.Predicate[store.Inbox]{f.CreatedAt.Lt(before)}
 		if readOnly {
 			predicates = append(predicates, f.ReadAt.IsNotNull())
 		}
 		// One bounded DELETE ... WHERE id IN (SELECT id ... LIMIT n): no
 		// rendered inbox data is loaded to choose the batch.
-		oldest := query.SelectValue(store.QueryFoundryNotificationInbox().Where(predicates...).OrderBy(f.CreatedAt.Asc(), f.ID.Asc()).Limit(limit), query.Value(f.ID))
-		removed, err := store.QueryFoundryNotificationInbox().Where(f.ID.InQuery(oldest)).DeleteAll(ctx, tx)
+		oldest := rows.SelectScalar(rows.From(store.Inboxes.Query().Where(predicates...).OrderBy(f.CreatedAt.Asc(), f.ID.Asc()).Limit(limit)), expr.Select(expr.Value(f.ID)))
+		removed, err := expr.Where(store.Inboxes.Query(), rows.InQuery(expr.Value(f.ID), oldest)).DeleteAll(ctx, tx)
 		deleted = int(removed)
 		return err
 	})

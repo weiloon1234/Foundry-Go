@@ -132,3 +132,12 @@ func PlanResultCursor(ctx context.Context, q ResultCursor, size int, token strin
 func (p CursorPlan) Token(base unsafe.Pointer) (string, error) {
 	return querycore.BuildCursor(p.Scope, len(p.Fields), func(i int) (driver.Value, error) { return p.Fields[i].Get(base) })
 }
+
+// CompileResultCursor plans canonical ordering without a page boundary or lookahead.
+func CompileResultCursor(ctx context.Context, q ResultCursor) (querycore.Statement, error) {
+	canonical, _, _, err := canonicalCursor(q)
+	if err != nil {
+		return querycore.Statement{}, err
+	}
+	return CompileRecord(ctx, canonical.Record)
+}

@@ -15,8 +15,8 @@ type JoinCondition struct {
 }
 
 // JoinComparison shares expression validation with ordinary row comparisons.
-func JoinComparison(left, right Expression, op querycore.Operator) JoinCondition {
-	p := CompareExpressions(left, right, op)
+func JoinComparison(left, right Expression, op querycore.Operator, text ...bool) JoinCondition {
+	p := CompareExpressions(left, right, op, text...)
 	return JoinCondition{Node: p.Node, Left: left.Refs, Right: right.Refs, LeftFree: left.ReferenceFree, RightFree: right.ReferenceFree, Err: p.Err}
 }
 

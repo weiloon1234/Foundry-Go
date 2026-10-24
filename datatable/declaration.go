@@ -8,7 +8,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/i18n"
@@ -35,9 +36,9 @@ type Spec[S, R, A any] struct {
 	Columns     []ColumnRegistration[S, R]
 	Filters     []FilterRegistration[S]
 	DefaultSort []Sort
-	Stable      []query.ProjectionOrder[S]
+	Stable      []expr.ProjectionOrder[S]
 	Authorize   func(context.Context, A, Action) error
-	Source      func(context.Context, A) (query.ProjectionQuery[S, R], error)
+	Source      func(context.Context, A) (rows.Query[S, R], error)
 	Exports     bool
 }
 
@@ -48,8 +49,8 @@ type tableDefinition[S, R, A any] struct {
 	metadata  tableMetadata
 	row       contract.JSON[R]
 	authorize func(context.Context, A, Action) error
-	source    func(context.Context, A) (query.ProjectionQuery[S, R], error)
-	stable    []query.ProjectionOrder[S]
+	source    func(context.Context, A) (rows.Query[S, R], error)
+	stable    []expr.ProjectionOrder[S]
 	columns   []columnExecution[S, R]
 	filters   map[string]func(Operator, []string) (condition[S], error)
 	err       error

@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -93,7 +94,7 @@ func (d ModelIdentity[M, K]) KeyToken(key K) (string, error) {
 	return token, err
 }
 
-const MaxIdentityBatch = 1000
+const MaxIdentityBatch = querycore.MaxIdentityBatch
 
 func (d ModelIdentity[M, K]) reader(keys []K, retained, lock bool) readResult[K] {
 	r := readResult[K]{err: d.Validate(), transaction: lock}

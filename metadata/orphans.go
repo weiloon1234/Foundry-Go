@@ -4,7 +4,8 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionmaintenance"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionrow"
@@ -64,21 +65,21 @@ func orphanTable() extensionmaintenance.Table[store.MetaIndex] {
 	return extensionmaintenance.Table[store.MetaIndex]{
 		Name: "metadata",
 		Scan: func(ctx context.Context, tx *database.Tx, owner extensions.OwnerName, scope, after string, limit int) ([]store.MetaIndex, error) {
-			f := store.MetaFields()
-			q := store.QueryFoundryModelMetadata().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)).OrderBy(f.Key.Asc()).Limit(limit)
+			f := store.Metadata
+			q := store.Metadata.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)).OrderBy(f.KeyColumn.Asc()).Limit(limit)
 			if after != "" {
-				q = q.Where(f.Key.Gt(after))
+				q = q.Where(f.KeyColumn.Gt(after))
 			}
 			return store.MetadataIndex(q).All(ctx, tx)
 		},
 		Lock: func(ctx context.Context, tx *database.Tx, owner extensions.OwnerName, scope string, keys []string) ([]store.MetaIndex, error) {
-			f := store.MetaFields()
-			return store.MetadataIndex(store.QueryFoundryModelMetadata().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope), f.Key.In(keys...)).OrderBy(f.Key.Asc())).ForUpdate().All(ctx, tx)
+			f := store.Metadata
+			return rows.ForUpdate(rows.Read(store.MetadataIndex(store.Metadata.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope), f.KeyColumn.In(keys...)).OrderBy(f.KeyColumn.Asc())))).All(ctx, tx)
 		},
 		Identity: maintenanceIdentity,
 		Key:      func(row store.MetaIndex) string { return row.Key }, SubjectKey: func(row store.MetaIndex) string { return row.SubjectKey },
 		Delete: func(ctx context.Context, tx *database.Tx, row store.MetaIndex) error {
-			_, err := store.QueryFoundryModelMetadata().Delete(ctx, tx, row.Key)
+			_, err := orm.Delete(ctx, tx, store.Metadata.Query(), store.Metadata.Key(), row.Key)
 			return err
 		},
 	}
@@ -116,13 +117,13 @@ func rescopeTable() extensionmaintenance.RescopeTable[store.MetaIndex] {
 	return extensionmaintenance.RescopeTable[store.MetaIndex]{
 		Name: "metadata.rescope",
 		Scan: func(ctx context.Context, tx *database.Tx, owner extensions.OwnerName, current, after string, limit int, lock bool) ([]store.MetaIndex, error) {
-			f := store.MetaFields()
-			q := store.QueryFoundryModelMetadata().Where(f.Owner.Eq(string(owner)), f.Scope.Ne(current)).OrderBy(f.Key.Asc()).Limit(limit)
+			f := store.Metadata
+			q := store.Metadata.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Ne(current)).OrderBy(f.KeyColumn.Asc()).Limit(limit)
 			if after != "" {
-				q = q.Where(f.Key.Gt(after))
+				q = q.Where(f.KeyColumn.Gt(after))
 			}
 			if lock {
-				return store.MetadataIndex(q).ForUpdate().All(ctx, tx)
+				return rows.ForUpdate(rows.Read(store.MetadataIndex(q))).All(ctx, tx)
 			}
 			return store.MetadataIndex(q).All(ctx, tx)
 		},
@@ -130,22 +131,22 @@ func rescopeTable() extensionmaintenance.RescopeTable[store.MetaIndex] {
 			return extensionrow.Identity{Key: row.Key, Owner: row.Owner, Scope: row.Scope, SubjectKey: row.SubjectKey, Identity: row.Identity}, []string{row.Name}
 		},
 		Exists: func(ctx context.Context, tx *database.Tx, key string) (bool, error) {
-			f := store.MetaFields()
-			return store.QueryFoundryModelMetadata().Where(f.Key.Eq(key)).Exists(ctx, tx)
+			f := store.Metadata
+			return store.Metadata.Query().Where(f.KeyColumn.Eq(key)).Exists(ctx, tx)
 		},
 		Move: func(ctx context.Context, tx *database.Tx, row store.MetaIndex, subject extensions.Subject, key string) error {
 			if !identifier.Semantic(row.Name) || row.Version == 0 {
 				return invalid()
 			}
-			q := store.QueryFoundryModelMetadata()
-			stored, err := q.RequireFind(ctx, tx, row.Key)
+			q := store.Metadata.Query()
+			stored, err := q.Where(store.Metadata.Key().Eq(row.Key)).Require(ctx, tx)
 			if err != nil {
 				return err
 			}
-			if _, err := q.Delete(ctx, tx, row.Key); err != nil {
+			if _, err := orm.Delete(ctx, tx, q, store.Metadata.Key(), row.Key); err != nil {
 				return err
 			}
-			_, err = q.Create(ctx, tx, store.MetaDraft{}.SetKey(key).SetOwner(row.Owner).SetScope(subject.Scope).SetSubjectKey(subject.Key).SetIdentity(subject.Identity).SetName(stored.Name).SetVersion(stored.Version).SetValue(stored.Value).SetCreatedAt(stored.CreatedAt).SetUpdatedAt(stored.UpdatedAt))
+			_, err = store.Metadata.Insert(ctx, tx, store.Metadata.KeyColumn.Set(key), store.Metadata.Owner.Set(row.Owner), store.Metadata.Scope.Set(subject.Scope), store.Metadata.SubjectKey.Set(subject.Key), store.Metadata.Identity.Set(subject.Identity), store.Metadata.Name.Set(stored.Name), store.Metadata.Version.Set(stored.Version), store.Metadata.Value.Set(stored.Value), store.Metadata.CreatedAt.Set(stored.CreatedAt), store.Metadata.UpdatedAt.Set(stored.UpdatedAt))
 			return err
 		},
 	}
@@ -162,8 +163,8 @@ func InspectUndeclared(ctx context.Context, m *Manager, owner extensions.OwnerNa
 		return Undeclared{}, err
 	}
 	return extensionmaintenance.InspectUndeclared(ctx, m.store, owner, func(ctx context.Context, tx *database.Tx, scope string, limit int) ([]string, error) {
-		f := store.MetaFields()
-		return query.SelectValue(store.QueryFoundryModelMetadata().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)), query.Value(f.Name)).Distinct().OrderBy(f.Name.Asc()).Limit(limit).All(ctx, tx)
+		f := store.Metadata
+		return rows.Distinct(rows.SelectValue(store.Metadata.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)).OrderBy(f.Name.Asc()).Limit(limit), f.Name)).All(ctx, tx)
 	}, func(scope, name string) bool {
 		_, declared := m.keys[extensions.Digest(scope, name)]
 		return declared

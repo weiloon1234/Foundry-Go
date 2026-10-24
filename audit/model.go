@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/audit/record"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/auditstore"
@@ -58,7 +59,7 @@ func (r *Recorder) RecordModel(ctx context.Context, tx *database.Tx, entry recor
 	if err != nil {
 		return err
 	}
-	_, err = auditstore.Append(ctx, tx, draft.SetOperation(entry.Operation()).SetAction("").SetVersion(0).SetRedacted(false))
+	_, err = auditstore.Append(ctx, tx, append(draft, auditstore.Entries.Operation.Set(entry.Operation()), auditstore.Entries.Action.Set(""), auditstore.Entries.Version.Set(0), auditstore.Entries.Redacted.Set(false)))
 	return err
 }
 
@@ -71,7 +72,7 @@ func ModelHistory[M, K any](ctx context.Context, executor database.Executor, rec
 	if err != nil {
 		return query.Page[ModelRecord[M, K]]{}, err
 	}
-	f := auditstore.EntryFields()
+	f := auditstore.Entries
 	page, err := auditstore.Page(ctx, executor, q.Where(f.Operation.Ne(0)), request)
 	if err != nil {
 		return query.Page[ModelRecord[M, K]]{}, err
@@ -98,7 +99,7 @@ func ModelTimeline[M, K any](ctx context.Context, executor database.Executor, re
 	if err != nil {
 		return Timeline[ModelRecord[M, K]]{}, err
 	}
-	f := auditstore.EntryFields()
+	f := auditstore.Entries
 	return readTimeline(ctx, executor, q.Where(f.Operation.Ne(0)), request, func(row auditstore.Entry) (ModelRecord[M, K], error) {
 		return restoreModel(subject, row)
 	})
@@ -106,25 +107,25 @@ func ModelTimeline[M, K any](ctx context.Context, executor database.Executor, re
 
 // subjectHistory selects rows for one stored subject through its indexed
 // lookup key and exact identity, in the selected area.
-func subjectHistory[M, K any](ctx context.Context, recorder *Recorder, subject model.Reference[M, K]) (auditstore.EntryQuery, error) {
+func subjectHistory[M, K any](ctx context.Context, recorder *Recorder, subject model.Reference[M, K]) (orm.Query[auditstore.Entry], error) {
 	area, err := recorder.area(ctx)
 	if err != nil {
-		return auditstore.EntryQuery{}, err
+		return orm.Query[auditstore.Entry]{}, err
 	}
 	identity, err := subject.Identity()
 	if err != nil {
-		return auditstore.EntryQuery{}, err
+		return orm.Query[auditstore.Entry]{}, err
 	}
 	key, err := identityKey(identity)
 	if err != nil {
-		return auditstore.EntryQuery{}, err
+		return orm.Query[auditstore.Entry]{}, err
 	}
 	stored, err := value.NewJSON(identity)
 	if err != nil {
-		return auditstore.EntryQuery{}, err
+		return orm.Query[auditstore.Entry]{}, err
 	}
-	f := auditstore.EntryFields()
-	return auditstore.QueryFoundryAudit().Where(f.Area.Eq(string(area)), f.SubjectKey.Eq(key), f.Subject.Eq(stored)), nil
+	f := auditstore.Entries
+	return auditstore.Entries.Query().Where(f.Area.Eq(string(area)), f.SubjectKey.Eq(key), f.Subject.Eq(stored)), nil
 }
 
 func restoreModel[M, K any](template model.Reference[M, K], row auditstore.Entry) (ModelRecord[M, K], error) {
@@ -163,42 +164,42 @@ func restoreModel[M, K any](template model.Reference[M, K], row auditstore.Entry
 
 // capturedDraft binds validated payload text with the context's attribution,
 // correlation and matched route. The redaction policy is stored per row.
-func capturedDraft(ctx context.Context, area Area, payload string, subject value.Nullable[model.Identity], redaction record.Redaction) (auditstore.EntryDraft, error) {
+func capturedDraft(ctx context.Context, area Area, payload string, subject value.Nullable[model.Identity], redaction record.Redaction) ([]orm.Assignment[auditstore.Entry], error) {
 	origin := attribution.FromContext(ctx)
 	if err := origin.Validate(); err != nil {
-		return auditstore.EntryDraft{}, err
+		return []orm.Assignment[auditstore.Entry]{}, err
 	}
 	if err := redaction.Validate(); err != nil {
-		return auditstore.EntryDraft{}, err
+		return []orm.Assignment[auditstore.Entry]{}, err
 	}
 	body, err := value.ParseJSON[json.RawMessage](payload)
 	if err != nil {
-		return auditstore.EntryDraft{}, err
+		return []orm.Assignment[auditstore.Entry]{}, err
 	}
 	source, err := value.NewJSON(origin)
 	if err != nil {
-		return auditstore.EntryDraft{}, err
+		return []orm.Assignment[auditstore.Entry]{}, err
 	}
-	draft := auditstore.EntryDraft{}.SetArea(string(area)).SetPayload(body).SetOrigin(source).SetRedaction(uint8(redaction))
+	draft := []orm.Assignment[auditstore.Entry]{auditstore.Entries.Area.Set(string(area)), auditstore.Entries.Payload.Set(body), auditstore.Entries.Origin.Set(source), auditstore.Entries.Redaction.Set(uint8(redaction))}
 	if correlation, present := CorrelationFromContext(ctx).Get(); present {
 		if err := correlation.Validate(); err != nil {
-			return auditstore.EntryDraft{}, err
+			return []orm.Assignment[auditstore.Entry]{}, err
 		}
-		draft = draft.SetCorrelation(string(correlation))
+		draft = append(draft, auditstore.Entries.Correlation.Set(string(correlation)))
 	} else {
-		draft = draft.ClearCorrelation()
+		draft = append(draft, auditstore.Entries.Correlation.SetNull())
 	}
 	route, _ := attribution.RouteFromContext(ctx)
-	draft = draft.SetRequestMethod(route.Method).SetRequestRoute(route.Name)
+	draft = append(draft, auditstore.Entries.RequestMethod.Set(route.Method), auditstore.Entries.RequestRoute.Set(route.Name))
 	if identity, present := subject.Get(); present {
 		if err := identity.Validate(); err != nil {
-			return auditstore.EntryDraft{}, err
+			return []orm.Assignment[auditstore.Entry]{}, err
 		}
 		key, err := value.NewJSON(identity)
 		if err != nil {
-			return auditstore.EntryDraft{}, err
+			return []orm.Assignment[auditstore.Entry]{}, err
 		}
-		return draft.SetSubject(key), nil
+		return append(draft, auditstore.Entries.Subject.Set(key)), nil
 	}
-	return draft.ClearSubject(), nil
+	return append(draft, auditstore.Entries.Subject.SetNull()), nil
 }

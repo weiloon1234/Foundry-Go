@@ -62,7 +62,10 @@ func TestResultCursorCanonicalOrderAndBoundary(t *testing.T) {
 		envelope, _ := decodeCursor(token.Token())
 		envelope.Values[1] = bad
 		data, _ := json.Marshal(envelope)
-		forged := Cursor[cursorRecord]{token: base64.RawURLEncoding.EncodeToString(data)}
+		forged, err := ParseCursor[cursorRecord](base64.RawURLEncoding.EncodeToString(data))
+		if err != nil {
+			t.Fatal(err)
+		}
 		if _, err := readCursorBoundary(CursorRequest[cursorRecord]{Size: 1, After: value.Set(forged)}, scope, fields, required); !errors.Is(err, fault.Invalid) {
 			t.Fatal("required codec bypassed", err)
 		}

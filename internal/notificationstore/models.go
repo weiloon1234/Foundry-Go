@@ -13,8 +13,6 @@ import (
 )
 
 // Envelope is a captured request, not a public inbox DTO.
-//
-//foundry:model table=foundry_notifications
 type Envelope struct {
 	ID          model.ID[Envelope]
 	Recipient   string
@@ -31,8 +29,6 @@ type Envelope struct {
 
 // Delivery persists a channel independently. Claim remains stable from Running
 // until completion; an abandoned Running row is never automatically resent.
-//
-//foundry:model table=foundry_notification_deliveries primary=Key
 type Delivery struct {
 	Key            string
 	NotificationID model.ID[Envelope]
@@ -46,8 +42,6 @@ type Delivery struct {
 }
 
 // Inbox becomes visible atomically with database-channel delivery completion.
-//
-//foundry:model table=foundry_notification_inbox
 type Inbox struct {
 	ID         model.ID[Inbox]
 	Scope      string

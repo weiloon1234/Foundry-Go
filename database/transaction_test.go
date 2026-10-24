@@ -436,3 +436,49 @@ func TestTransactionIdentityDistinguishesPoolsTransactionsAndSavepoints(t *testi
 		t.Fatal("uninitialized transaction claimed ownership")
 	}
 }
+
+// Returning an error is not permission to execute its formatting methods.
+type unformattedAfterCommitError struct {
+	mode  string
+	calls int
+}
+
+func (e *unformattedAfterCommitError) Error() string {
+	e.calls++
+	switch e.mode {
+	case "panic":
+		panic("private-after-commit")
+	case "goexit":
+		runtime.Goexit()
+	}
+	return "private-after-commit"
+}
+func TestAfterCommitWrapsErrorsBeforeIsolationFormatsThem(t *testing.T) {
+	for _, mode := range []string{"return", "panic", "goexit"} {
+		t.Run(mode, func(t *testing.T) {
+			state := &driverState{}
+			db := open(t, state, nil)
+			cause := &unformattedAfterCommitError{mode: mode}
+			continued := false
+			err := db.Transaction(t.Context(), func(tx *database.Tx) error {
+				if err := tx.AfterCommit(func(context.Context) error { return cause }); err != nil {
+					return err
+				}
+				return tx.AfterCommit(func(context.Context) error { continued = true; return nil })
+			})
+			var outcome *database.Error
+			var original *unformattedAfterCommitError
+			if !errors.Is(err, cause) || !errors.As(err, &original) || original != cause || !errors.As(err, &outcome) || outcome.Outcome() != database.Committed || !errors.Is(err, database.AfterCommitFailed) {
+				t.Fatal("after-commit lost cause or committed outcome")
+			}
+			for _, s := range []string{err.Error(), fmt.Sprintf("%v", err), fmt.Sprintf("%+v", err), fmt.Sprintf("%#v", err)} {
+				if strings.Contains(s, "private-after-commit") {
+					t.Fatal("after-commit disclosed application text")
+				}
+			}
+			if cause.calls != 0 || !continued || state.committed.Load() != 1 || state.rolledBack.Load() != 0 || db.Stats().Owners != 0 {
+				t.Fatal("formatting executed or callback lifetime changed", cause.calls)
+			}
+		})
+	}
+}

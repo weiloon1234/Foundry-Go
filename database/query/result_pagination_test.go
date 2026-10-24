@@ -51,17 +51,17 @@ func TestResultPageValidationAndImmutableWindows(t *testing.T) {
 	}
 	for _, bad := range []ProjectionQuery[cursorRecord, cursorRecord]{q.Limit(0), q.Offset(1), q.Offset(-1), SelectRecord(base, base.Scope()), {}, q.OrderBy(Order[cursorRecord]{field: fieldRef{Table: "wrong", Column: "id"}})} {
 		executor := &pageFailureExecutor{err: errors.New("unexpected executor access")}
-		if p, err := bad.Paginate(t.Context(), executor, PageRequest{1, 2}); err == nil || p.Items != nil || p.Total != 0 {
+		if p, err := bad.Paginate(t.Context(), executor, PageRequest{Number: 1, Size: 2}); err == nil || p.Items != nil || p.Total != 0 {
 			t.Fatal("invalid numbered page returned", err)
 		}
-		if p, err := bad.SimplePaginate(t.Context(), executor, PageRequest{1, 2}); err == nil || p.Items != nil || p.HasMore {
+		if p, err := bad.SimplePaginate(t.Context(), executor, PageRequest{Number: 1, Size: 2}); err == nil || p.Items != nil || p.HasMore {
 			t.Fatal("invalid simple page returned", err)
 		}
 		if executor.calls != 0 {
 			t.Fatal("invalid declaration reached database")
 		}
 	}
-	for _, request := range []PageRequest{{}, {0, 2}, {1, MaxPageSize + 1}, {math.MaxInt, 2}} {
+	for _, request := range []PageRequest{{}, {Number: 0, Size: 2}, {Number: 1, Size: MaxPageSize + 1}, {Number: math.MaxInt, Size: 2}} {
 		e := &pageFailureExecutor{err: errors.New("unexpected request")}
 		if _, err := q.SimplePaginate(t.Context(), e, request); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
@@ -82,7 +82,7 @@ func TestPageFailuresAndLookaheadOwnership(t *testing.T) {
 	stop := errors.New("read failed")
 	for _, total := range []int64{-1, 0, math.MaxInt64} {
 		read := false
-		page, err := readPage(PageRequest{1, 2}, func() (int64, error) { return total, nil }, func() ([]int, error) { read = true; return []int{1, 2}, nil })
+		page, err := readPage(PageRequest{Number: 1, Size: 2}, func() (int64, error) { return total, nil }, func() ([]int, error) { read = true; return []int{1, 2}, nil })
 		if total < 0 {
 			if !errors.Is(err, fault.Invalid) || read || page.Items != nil {
 				t.Fatal("negative count proceeded to rows")
@@ -91,11 +91,11 @@ func TestPageFailuresAndLookaheadOwnership(t *testing.T) {
 			t.Fatal("page count overflow", err)
 		}
 	}
-	page, err := readPage(PageRequest{1, 2}, func() (int64, error) { return 5, nil }, func() ([]int, error) { return []int{1}, stop })
+	page, err := readPage(PageRequest{Number: 1, Size: 2}, func() (int64, error) { return 5, nil }, func() ([]int, error) { return []int{1}, stop })
 	if !errors.Is(err, stop) || !reflect.DeepEqual(page, Page[int]{}) {
 		t.Fatal("partial page escaped")
 	}
-	page, err = readPage(PageRequest{1, 2}, func() (int64, error) { return 0, stop }, func() ([]int, error) { t.Fatal("read followed count failure"); return nil, nil })
+	page, err = readPage(PageRequest{Number: 1, Size: 2}, func() (int64, error) { return 0, stop }, func() ([]int, error) { t.Fatal("read followed count failure"); return nil, nil })
 	if !errors.Is(err, stop) || page.Items != nil {
 		t.Fatal("count error lost")
 	}
@@ -111,13 +111,13 @@ func TestPageFailuresAndLookaheadOwnership(t *testing.T) {
 	cancel()
 	for _, ctx := range []context.Context{nil, ctx, t.Context()} {
 		e := &pageFailureExecutor{err: stop}
-		if p, err := r.Paginate(ctx, e, PageRequest{1, 2}); err == nil || p.Items != nil {
+		if p, err := r.Paginate(ctx, e, PageRequest{Number: 1, Size: 2}); err == nil || p.Items != nil {
 			t.Fatal("failed page exposed results")
 		}
-		if p, err := r.SimplePaginate(ctx, e, PageRequest{1, 2}); err == nil || p.Items != nil {
+		if p, err := r.SimplePaginate(ctx, e, PageRequest{Number: 1, Size: 2}); err == nil || p.Items != nil {
 			t.Fatal("failed simple page exposed results")
 		}
-		if p, err := q.SimplePaginate(ctx, e, PageRequest{1, 2}); err == nil || p.Items != nil {
+		if p, err := q.SimplePaginate(ctx, e, PageRequest{Number: 1, Size: 2}); err == nil || p.Items != nil {
 			t.Fatal("failed model page exposed results")
 		}
 		if ctx == nil || ctx.Err() != nil {

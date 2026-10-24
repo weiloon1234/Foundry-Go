@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/auditstore"
@@ -193,8 +194,8 @@ func ActorActivity[M, K any](ctx context.Context, executor database.Executor, re
 	if err != nil {
 		return Timeline[Activity]{}, err
 	}
-	f := auditstore.EntryFields()
-	return readActivity(ctx, executor, auditstore.QueryFoundryAudit().Where(f.Area.Eq(string(area)), f.ActorKey.Eq(key)), request, func(item Activity) bool {
+	f := auditstore.Entries
+	return readActivity(ctx, executor, auditstore.Entries.Query().Where(f.Area.Eq(string(area)), f.ActorKey.Eq(key)), request, func(item Activity) bool {
 		stored, present := item.origin.Model()
 		return present && stored == identity
 	})
@@ -210,8 +211,8 @@ func SystemActivity(ctx context.Context, executor database.Executor, recorder *R
 	if err != nil {
 		return Timeline[Activity]{}, err
 	}
-	f := auditstore.EntryFields()
-	return readActivity(ctx, executor, auditstore.QueryFoundryAudit().Where(f.Area.Eq(string(area)), f.ActorKey.Eq(textKey("s:"+string(origin.System())))), request, func(item Activity) bool {
+	f := auditstore.Entries
+	return readActivity(ctx, executor, auditstore.Entries.Query().Where(f.Area.Eq(string(area)), f.ActorKey.Eq(textKey("s:"+string(origin.System())))), request, func(item Activity) bool {
 		return item.origin.System() == system
 	})
 }
@@ -226,11 +227,11 @@ func CorrelationActivity(ctx context.Context, executor database.Executor, record
 	if err := correlation.Validate(); err != nil {
 		return Timeline[Activity]{}, err
 	}
-	f := auditstore.EntryFields()
-	return readActivity(ctx, executor, auditstore.QueryFoundryAudit().Where(f.Area.Eq(string(area)), f.Correlation.Eq(string(correlation))), request, func(Activity) bool { return true })
+	f := auditstore.Entries
+	return readActivity(ctx, executor, auditstore.Entries.Query().Where(f.Area.Eq(string(area)), f.Correlation.Eq(string(correlation))), request, func(Activity) bool { return true })
 }
 
-func readActivity(ctx context.Context, executor database.Executor, q auditstore.EntryQuery, request TimelineRequest, keep func(Activity) bool) (Timeline[Activity], error) {
+func readActivity(ctx context.Context, executor database.Executor, q orm.Query[auditstore.Entry], request TimelineRequest, keep func(Activity) bool) (Timeline[Activity], error) {
 	if err := request.Validate(); err != nil {
 		return Timeline[Activity]{}, err
 	}
@@ -260,7 +261,7 @@ func readActivity(ctx context.Context, executor database.Executor, q auditstore.
 	return result, nil
 }
 
-func readTimeline[R any](ctx context.Context, executor database.Executor, q auditstore.EntryQuery, request TimelineRequest, decode func(auditstore.Entry) (R, error)) (Timeline[R], error) {
+func readTimeline[R any](ctx context.Context, executor database.Executor, q orm.Query[auditstore.Entry], request TimelineRequest, decode func(auditstore.Entry) (R, error)) (Timeline[R], error) {
 	if err := request.Validate(); err != nil {
 		return Timeline[R]{}, err
 	}

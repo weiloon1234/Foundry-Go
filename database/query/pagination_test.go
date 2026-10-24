@@ -15,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -31,12 +32,12 @@ func cursorQuery() Query[cursorRecord] {
 }
 
 func TestPageRequestBounds(t *testing.T) {
-	for _, request := range []PageRequest{{}, {0, 1}, {1, 0}, {1, -1}, {1, MaxPageSize + 1}, {math.MaxInt, 2}} {
-		if _, err := request.offset(); !errors.Is(err, fault.Invalid) {
+	for _, request := range []PageRequest{{}, {Number: 0, Size: 1}, {Number: 1, Size: 0}, {Number: 1, Size: -1}, {Number: 1, Size: MaxPageSize + 1}, {Number: math.MaxInt, Size: 2}} {
+		if _, err := querycore.PageOffset(request); !errors.Is(err, fault.Invalid) {
 			t.Fatalf("invalid page accepted: %+v", request)
 		}
 	}
-	if n, err := (PageRequest{math.MaxInt, 1}).offset(); err != nil || n != math.MaxInt-1 {
+	if n, err := querycore.PageOffset(PageRequest{Number: math.MaxInt, Size: 1}); err != nil || n != math.MaxInt-1 {
 		t.Fatal("valid offset overflowed")
 	}
 	base := cursorQuery()
@@ -109,8 +110,11 @@ func TestCursorBoundaryCompilationAndScope(t *testing.T) {
 		envelope, _ := decodeCursor(cursor.Token())
 		envelope.Values[0] = bad
 		data, _ := json.Marshal(envelope)
-		badCursor := Cursor[cursorRecord]{token: base64.RawURLEncoding.EncodeToString(data)}
-		if _, err := base.cursorPlan(CursorRequest[cursorRecord]{Size: 2, After: value.Set(badCursor)}); !errors.Is(err, fault.Invalid) {
+		badCursor, err := ParseCursor[cursorRecord](base64.RawURLEncoding.EncodeToString(data))
+		if err == nil {
+			_, err = base.cursorPlan(CursorRequest[cursorRecord]{Size: 2, After: value.Set(badCursor)})
+		}
+		if !errors.Is(err, fault.Invalid) {
 			t.Fatal("cursor bypassed its typed codec")
 		}
 	}

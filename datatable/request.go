@@ -6,7 +6,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
@@ -103,14 +103,14 @@ func DecodeRequest(ctx context.Context, data []byte) (Request, error) {
 func requestLimits() contract.JSONLimits {
 	return contract.JSONLimits{Bytes: MaxRequestBytes, Depth: 32, Nodes: 4096, Steps: 16384, Issues: 16}
 }
-func (r Request) page() (query.PageRequest, error) {
+func (r Request) page() (orm.PageRequest, error) {
 	if r.Page == 0 {
 		r.Page = 1
 	}
 	if r.Size == 0 {
 		r.Size = DefaultPageSize
 	}
-	p := query.PageRequest{Number: r.Page, Size: r.Size}
+	p := orm.PageRequest{Number: r.Page, Size: r.Size}
 	if err := p.Validate(); err != nil {
 		return p, foundryhttp.BadRequest.WithCause(err)
 	}

@@ -8,8 +8,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/extensions"
+	"github.com/weiloon1234/Foundry-Go/internal/extensionslot"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
 
 // ValueHandle retains typed slot capabilities behind shared callback state.
@@ -39,26 +40,26 @@ type valueHandleCore struct {
 // ValueOf declares a thin metadata handle retaining the concrete input and JSON contract.
 // Example: metadata.ValueOf(owner,"seo",spec,contract.StringJSON[string](),binding).
 func ValueOf[M any, K comparable, V any](owner extensions.Owner[M, K], name Name, spec Spec[V], inferred contract.JSON[V], binding extensions.SlotBinding[M, K, Value[V]]) ValueHandle[M, K, V] {
-	return ValueHandle[M, K, V]{core: wrapValueHandle(DefineValue(owner, name, spec, inferred, binding))}
+	return ValueHandle[M, K, V]{core: wrapValueHandle(defineValue(owner, name, spec, inferred, binding))}
 }
 
-func wrapValueHandle[M any, K comparable, V any](legacy ValueSlot[M, K, V]) *valueHandleCore {
+func wrapValueHandle[M any, K comparable, V any](state valueSlot[M, K, V]) *valueHandleCore {
 	return &valueHandleCore{
-		bind:         func(m *Manager) *valueHandleCore { return wrapValueHandle(legacy.From(m)) },
-		relation:     func(out unsafe.Pointer) { *(*query.ExtensionSlot[M])(out) = legacy.ExtensionSlot },
-		validate:     legacy.Validate,
-		describe:     legacy.Describe,
-		registration: legacy.Registration,
-		name:         legacy.Name,
+		bind:         func(m *Manager) *valueHandleCore { return wrapValueHandle(state.From(m)) },
+		relation:     func(out unsafe.Pointer) { *(*extensionslot.Slot[M])(out) = state.loader },
+		validate:     state.Validate,
+		describe:     state.Describe,
+		registration: state.Registration,
+		name:         state.Name,
 		save: func(ctx context.Context, owner unsafe.Pointer, input unsafe.Pointer) error {
-			return legacy.Save(ctx, *(*M)(owner), *(*V)(input))
+			return state.Save(ctx, *(*M)(owner), *(*V)(input))
 		},
 		saveIn: func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer, input unsafe.Pointer) error {
-			return legacy.SaveIn(ctx, tx, *(*M)(owner), *(*V)(input))
+			return state.SaveIn(ctx, tx, *(*M)(owner), *(*V)(input))
 		},
-		forget: func(ctx context.Context, owner unsafe.Pointer) (bool, error) { return legacy.Forget(ctx, *(*M)(owner)) },
+		forget: func(ctx context.Context, owner unsafe.Pointer) (bool, error) { return state.Forget(ctx, *(*M)(owner)) },
 		forgetIn: func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer) (bool, error) {
-			return legacy.ForgetIn(ctx, tx, *(*M)(owner))
+			return state.ForgetIn(ctx, tx, *(*M)(owner))
 		},
 	}
 }
@@ -75,11 +76,11 @@ func (s ValueHandle[M, K, V]) From(m *Manager) ValueHandle[M, K, V] {
 // Relation binds the loader to its concrete ORM field; mismatched fields fail validation.
 // Example: Articles.Query().With(slot.Relation(Articles.SEO)).
 func (s ValueHandle[M, K, V]) Relation(slot orm.Slot[M, Value[V]]) orm.ExtensionRelation[M] {
-	var source query.ExtensionSlot[M]
+	var source extensionslot.Slot[M]
 	if s.core != nil {
 		s.core.relation(unsafe.Pointer(&source))
 	}
-	return orm.Extension(slot, source)
+	return orm.FoundryExtension(slot, source, sqlowner.Queries())
 }
 
 // Validate checks the declaration and slot binding. Example: slot.Validate().

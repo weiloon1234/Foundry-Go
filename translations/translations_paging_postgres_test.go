@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	store "github.com/weiloon1234/Foundry-Go/internal/extensionstore"
 	"github.com/weiloon1234/Foundry-Go/internal/extensiontest"
@@ -207,12 +208,16 @@ func TestPostgresTranslationMatchingUsesValueHashIndex(t *testing.T) {
 		if _, err := tx.Exec(ctx, `SET LOCAL enable_seqscan = off`); err != nil {
 			return err
 		}
-		f := store.TranslationFields()
-		plan, err := store.QueryFoundryModelTranslations().Where(f.Value.Eq("Red")).Explain(ctx, tx)
+		f := store.Translations
+		statement, err := orm.Compile(orm.WithScopeContext(store.Translations.Query().Where(f.Value.Eq("Red")), ctx))
 		if err != nil {
 			return err
 		}
-		if !strings.Contains(string(plan.JSON()), "foundry_model_translations_value") {
+		var plan []byte
+		if err := database.ScanOne(ctx, tx, "EXPLAIN (FORMAT JSON, ANALYZE FALSE, VERBOSE FALSE, COSTS TRUE) "+statement.SQL(), statement.Arguments(), &plan); err != nil {
+			return err
+		}
+		if !strings.Contains(string(plan), "foundry_model_translations_value") {
 			t.Error("exact value lookup does not use the value hash index")
 		}
 		return nil

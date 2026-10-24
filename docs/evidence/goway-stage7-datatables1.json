@@ -1,0 +1,4353 @@
+{
+  "slice": "stage7-datatables1",
+  "recorded_at": "2026-10-24T05:25:36.882627+00:00",
+  "base_commit": "05b830c36d594558701e13449d1928660aae7214",
+  "status": "slice 1 and last-19 shared relation construction fix implemented; requested local acceptance passed; PostgreSQL test choreography fixed for lead live run; no commit",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r3",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off",
+    "toolchain": "go version go1.27.1 darwin/arm64"
+  },
+  "cache_rotation": "Completed pre-rotation checks retained. No command was interrupted. All subsequent Go commands used r3; no cache was deleted or trimmed.",
+  "api": {
+    "rows": [
+      "Compile(q) (orm.Statement,error)",
+      "Preflight(ctx,q) error",
+      "Count(ctx,executor,q) (int64,error)",
+      "Each(ctx,executor,q,func(R)error) error",
+      "Paginate(ctx,executor,q,orm.PageRequest) (orm.PageResult[R],error)",
+      "SimplePaginate(ctx,executor,q,orm.PageRequest) (orm.SimplePage[R],error)",
+      "ReorderUnwindowed(q,...expr.ProjectionOrder[S]) Query[S,R]"
+    ],
+    "expr": [
+      "ModelPredicate(orm.Predicate[M]) Predicate[M]",
+      "Has(orm.ExistenceRelation[M,N],...Predicate[N]) Predicate[M]",
+      "Or(...Predicate[S]) Predicate[S]",
+      "CompareRow(Expression[S,V,V]) RowComparison[S,V]",
+      "CompareNullableRow(Expression[S,V,value.Nullable[V]]) NullableRowComparison[S,V]",
+      "TextRow(orm.TextExpressionColumn[S,V,V]) TextRowExpression[S,V]",
+      "TextNullableRow(orm.TextExpressionColumn[S,V,value.Nullable[V]]) NullableTextRowExpression[S,V]"
+    ],
+    "new_types": {
+      "expr.RowComparison": [
+        "Eq",
+        "Ne",
+        "In"
+      ],
+      "expr.NullableRowComparison": [
+        "Eq",
+        "Ne",
+        "In",
+        "IsNull",
+        "IsNotNull"
+      ],
+      "orm.TextExpressionColumn": [
+        "sealed orderedColumn capability",
+        "Contains(V) orm.Predicate[M]",
+        "ExpressionColumn[M,V,P]"
+      ]
+    },
+    "sealed_bridges": [
+      "orm.FoundryStatement",
+      "orm.FoundryPredicate",
+      "orm.FoundryRelationPredicate"
+    ],
+    "capabilities": "Existing validated MetadataSeal family only; zero values fail closed; no seal is passed to an application-implementable interface.",
+    "new_query_table_column_methods": []
+  },
+  "surface_additions": [
+    "orm.TextExpressionColumn",
+    "  Contains func(V) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+    "  expressionColumn func(*M) (github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[V], github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[P])",
+    "  orderedColumn func()",
+    "orm.FoundryStatement func(s github.com/weiloon1234/Foundry-Go/internal/querycore.Statement, seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.MetadataSeal) (github.com/weiloon1234/Foundry-Go/database/orm.Statement, error)",
+    "orm.FoundryPredicate func[M any](p github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.MetadataSeal) github.com/weiloon1234/Foundry-Go/internal/ormcore.Predicate",
+    "orm.FoundryRelationPredicate func[M, N any](r github.com/weiloon1234/Foundry-Go/database/orm.ExistenceRelation[M, N], ps []github.com/weiloon1234/Foundry-Go/internal/ormcore.Predicate, seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.MetadataSeal) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]",
+    "rows.Compile func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]) (github.com/weiloon1234/Foundry-Go/database/orm.Statement, error)",
+    "rows.Preflight func[S, R any](ctx context.Context, q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]) error",
+    "rows.Count func[S, R any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]) (int64, error)",
+    "rows.Each func[S, R any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], yield func(R) error) error",
+    "rows.Paginate func[S, R any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], request github.com/weiloon1234/Foundry-Go/database/orm.PageRequest) (github.com/weiloon1234/Foundry-Go/database/orm.PageResult[R], error)",
+    "rows.SimplePaginate func[S, R any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], request github.com/weiloon1234/Foundry-Go/database/orm.PageRequest) (github.com/weiloon1234/Foundry-Go/database/orm.SimplePage[R], error)",
+    "rows.ReorderUnwindowed func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], orders ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]",
+    "expr.NullableRowComparison",
+    "  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "  In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "*expr.NullableRowComparison",
+    "  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "  In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "expr.RowComparison",
+    "  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "  In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "*expr.RowComparison",
+    "  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "  In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "expr.Or func[S any](ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+    "expr.ModelPredicate func[M any](p github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[M]",
+    "expr.Has func[M, N any](r github.com/weiloon1234/Foundry-Go/database/orm.ExistenceRelation[M, N], ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[M]",
+    "expr.CompareRow func[S, V any](e github.com/weiloon1234/Foundry-Go/database/orm/expr.Expression[S, V, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowComparison[S, V]",
+    "expr.CompareNullableRow func[S, V any](e github.com/weiloon1234/Foundry-Go/database/orm/expr.Expression[S, V, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableRowComparison[S, V]",
+    "expr.TextRow func[S any, V ~string](column github.com/weiloon1234/Foundry-Go/database/orm.TextExpressionColumn[S, V, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.TextRowExpression[S, V]",
+    "expr.TextNullableRow func[S any, V ~string](column github.com/weiloon1234/Foundry-Go/database/orm.TextExpressionColumn[S, V, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableTextRowExpression[S, V]"
+  ],
+  "compilefail": {
+    "ported_catalogue_rows": [],
+    "deferred": "The fourteen datatable_* rows remain owned by the slice 2 one-time runtime cutover. No mapping row was changed.",
+    "new_cases": [
+      "report_filter_enum_order",
+      "report_filter_enum_text",
+      "report_filter_not_phase",
+      "report_filter_nullable_enum_contains",
+      "report_filter_nullable_enum_gt",
+      "report_filter_or_phase",
+      "report_filter_relation_owner",
+      "report_text_nullable_enum_contains",
+      "report_text_nullable_enum_forged",
+      "report_text_nullable_enum_gt",
+      "report_text_nullable_enum_like",
+      "report_text_nullable_enum_value",
+      "report_text_required_enum_contains",
+      "report_text_required_enum_forged",
+      "report_text_required_enum_gt",
+      "report_text_required_enum_like",
+      "report_text_required_enum_value"
+    ]
+  },
+  "design": {
+    "execution": "Count and pagination delegate to existing rows.Read/ormcore.RecordCount, including querycore.CountNode. Each streams through ormcore.Read without a result collection.",
+    "validation": "querycore.ReorderUnwindowed and ResultPageWindow are shared by old query and new rows callers; validation and diagnostics retained.",
+    "filter_policy": "Existing datatable runtime remains unchanged. Its tests validate mixed-phase OR/NOT rejection, null-inclusive complements and explicit AllowLike. New adapter compile-fail cases retain enum, phase and relation-owner restrictions; filter goldens cover the equivalent expression algebra."
+  },
+  "coverage": [
+    "25 old/new projection cases: compile, count, streaming, numbered and lookahead pages over plain/group/HAVING/distinct/window/distinct-on sources",
+    "9 filter adapter SQL/binding comparisons including nullable negation, text escaping, enum membership, present-value nullable equality and related EXISTS",
+    "Streaming early error, panic, Goexit, decode failure, cancellation and close failure; no eager collection",
+    "Invalid plans and nil callbacks fail before I/O; immutable reorder; scope context freshness; foreign declaration rejection; zero-capability failures",
+    "PostgreSQL regression source: scoped transactional count, grouped HAVING count, pagination/lookahead and continued transaction use after early stream close (compiled and vetted only)"
+  ],
+  "footprint": {
+    "method": "Native go tool nm T/t export-archive symbols, using the existing fixture parser semantics; not a runtime benchmark. New probes use ceil(measured * 1.15).",
+    "new_probes": {
+      "report_reads": {
+        "pkg": "./testdata/footprint/report_reads",
+        "baseline": 1063,
+        "measured": 1063,
+        "ceiling": 1223,
+        "archive_bytes": 5009876
+      },
+      "report_filters": {
+        "pkg": "./testdata/footprint/report_filters",
+        "baseline": 2095,
+        "measured": 2111,
+        "ceiling": 2410,
+        "archive_bytes": 9434590
+      }
+    },
+    "existing": "All existing baselines/ceilings unchanged; current measured counts below. q_with and aggregate_families remain within their fixed ceilings.",
+    "probes": {
+      "report_reads": {
+        "pkg": "./testdata/footprint/report_reads",
+        "baseline": 1063,
+        "measured": 1063,
+        "ceiling": 1223,
+        "archive_bytes": 5009876
+      },
+      "report_filters": {
+        "pkg": "./testdata/footprint/report_filters",
+        "baseline": 2095,
+        "measured": 2111,
+        "ceiling": 2410,
+        "archive_bytes": 9434590
+      },
+      "result_cursor": {
+        "pkg": "./testdata/footprint/result_cursor",
+        "baseline": 2229,
+        "measured": 2229,
+        "ceiling": 2564,
+        "archive_bytes": 10360426
+      },
+      "result_reads": {
+        "pkg": "./testdata/footprint/result_reads",
+        "baseline": 1351,
+        "measured": 1351,
+        "ceiling": 1554,
+        "archive_bytes": 6414272
+      },
+      "cte_recursive": {
+        "pkg": "./testdata/footprint/cte_recursive",
+        "baseline": 1076,
+        "measured": 1105,
+        "ceiling": 1238,
+        "archive_bytes": 5362740
+      },
+      "record_sets": {
+        "pkg": "./testdata/footprint/record_sets",
+        "baseline": 1288,
+        "measured": 1294,
+        "ceiling": 1482,
+        "archive_bytes": 6305120
+      },
+      "value_sets": {
+        "pkg": "./testdata/footprint/value_sets",
+        "baseline": 2230,
+        "measured": 2237,
+        "ceiling": 2565,
+        "archive_bytes": 10100952
+      },
+      "uuid_seeks": {
+        "pkg": "./testdata/footprint/uuid_seeks",
+        "baseline": 1023,
+        "measured": 1023,
+        "ceiling": 1177,
+        "archive_bytes": 5055360
+      },
+      "each_writes": {
+        "pkg": "./testdata/footprint/each_writes",
+        "baseline": 888,
+        "measured": 888,
+        "ceiling": 1022,
+        "archive_bytes": 4429730
+      },
+      "json_paths": {
+        "pkg": "./testdata/footprint/json_paths",
+        "baseline": 6146,
+        "measured": 6148,
+        "ceiling": 7068,
+        "archive_bytes": 26602066
+      },
+      "json_functions": {
+        "pkg": "./testdata/footprint/json_functions",
+        "baseline": 2736,
+        "measured": 2739,
+        "ceiling": 3147,
+        "archive_bytes": 11646158
+      },
+      "scalar_text": {
+        "pkg": "./testdata/footprint/scalar_text",
+        "baseline": 2312,
+        "measured": 2315,
+        "ceiling": 2659,
+        "archive_bytes": 9527888
+      },
+      "scalar_temporal": {
+        "pkg": "./testdata/footprint/scalar_temporal",
+        "baseline": 2625,
+        "measured": 2629,
+        "ceiling": 3019,
+        "archive_bytes": 11838780
+      },
+      "framework_countries": {
+        "pkg": "github.com/weiloon1234/Foundry-Go/countries",
+        "baseline": 4122,
+        "measured": 4126,
+        "ceiling": 4741,
+        "archive_bytes": 17142068
+      },
+      "framework_jobarchive": {
+        "pkg": "github.com/weiloon1234/Foundry-Go/internal/jobarchive",
+        "baseline": 2280,
+        "measured": 2280,
+        "ceiling": 2622,
+        "archive_bytes": 9735540
+      },
+      "framework_idempotencystore": {
+        "pkg": "github.com/weiloon1234/Foundry-Go/internal/idempotencystore",
+        "baseline": 2249,
+        "measured": 2253,
+        "ceiling": 2587,
+        "archive_bytes": 9493562
+      },
+      "framework_mfastore": {
+        "pkg": "github.com/weiloon1234/Foundry-Go/internal/mfastore",
+        "baseline": 2947,
+        "measured": 2947,
+        "ceiling": 3390,
+        "archive_bytes": 12372994
+      },
+      "framework_challengestore": {
+        "pkg": "github.com/weiloon1234/Foundry-Go/internal/challengestore",
+        "baseline": 2558,
+        "measured": 2560,
+        "ceiling": 2942,
+        "archive_bytes": 11848800
+      },
+      "framework_sessionstore": {
+        "pkg": "github.com/weiloon1234/Foundry-Go/internal/sessionstore",
+        "baseline": 4166,
+        "measured": 4166,
+        "ceiling": 4791,
+        "archive_bytes": 17644196
+      },
+      "framework_tokenstore": {
+        "pkg": "github.com/weiloon1234/Foundry-Go/internal/tokenstore",
+        "baseline": 5315,
+        "measured": 5315,
+        "ceiling": 6113,
+        "archive_bytes": 22342376
+      },
+      "scoped_write": {
+        "pkg": "./testdata/footprint/scoped_write",
+        "baseline": 1111,
+        "measured": 1111,
+        "ceiling": 1278,
+        "archive_bytes": 5067398
+      },
+      "framework_outbox": {
+        "pkg": "github.com/weiloon1234/Foundry-Go/internal/outboxstore",
+        "baseline": 2896,
+        "measured": 2896,
+        "ceiling": 3331,
+        "archive_bytes": 12428296
+      },
+      "outbox_publisher": {
+        "pkg": "github.com/weiloon1234/Foundry-Go/outbox/publisher",
+        "baseline": 1324,
+        "measured": 1324,
+        "ceiling": 1523,
+        "archive_bytes": 6499924
+      },
+      "records": {
+        "pkg": "./testdata/footprint/records",
+        "baseline": 1313,
+        "measured": 1327,
+        "ceiling": 1510,
+        "archive_bytes": 6527016
+      },
+      "transaction_records": {
+        "pkg": "./testdata/footprint/transaction_records",
+        "baseline": 1296,
+        "measured": 1376,
+        "ceiling": 1491,
+        "archive_bytes": 6448478
+      },
+      "source_write": {
+        "pkg": "./testdata/footprint/source_write",
+        "baseline": 1311,
+        "measured": 1311,
+        "ceiling": 1508,
+        "archive_bytes": 6411914
+      },
+      "conflict_advanced": {
+        "pkg": "./testdata/footprint/conflict_advanced",
+        "baseline": 1817,
+        "measured": 1817,
+        "ceiling": 2090,
+        "archive_bytes": 9076346
+      },
+      "conflict": {
+        "pkg": "./testdata/footprint/conflict",
+        "baseline": 944,
+        "measured": 944,
+        "ceiling": 1086,
+        "archive_bytes": 4666082
+      },
+      "audit": {
+        "pkg": "./testdata/footprint/audit",
+        "baseline": 1313,
+        "measured": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6452634
+      },
+      "relation_write_declaration": {
+        "pkg": "./testdata/footprint/relation_write_declaration",
+        "baseline": 361,
+        "measured": 361,
+        "ceiling": 416,
+        "archive_bytes": 1507246
+      },
+      "relation_write_attach": {
+        "pkg": "./testdata/footprint/relation_write_attach",
+        "baseline": 1110,
+        "measured": 1110,
+        "ceiling": 1277,
+        "archive_bytes": 5085964
+      },
+      "relation_write_sync": {
+        "pkg": "./testdata/footprint/relation_write_sync",
+        "baseline": 1124,
+        "measured": 1124,
+        "ceiling": 1293,
+        "archive_bytes": 5155884
+      },
+      "aggregate_slot_declaration": {
+        "pkg": "./testdata/footprint/aggregate_slot_declaration",
+        "baseline": 1112,
+        "measured": 1127,
+        "ceiling": 1279,
+        "archive_bytes": 4836814
+      },
+      "aggregate_slot_direct": {
+        "pkg": "./testdata/footprint/aggregate_slot_direct",
+        "baseline": 1490,
+        "measured": 1490,
+        "ceiling": 1714,
+        "archive_bytes": 6123284
+      },
+      "aggregate_slot_pivot": {
+        "pkg": "./testdata/footprint/aggregate_slot_pivot",
+        "baseline": 2095,
+        "measured": 2092,
+        "ceiling": 2410,
+        "archive_bytes": 8742832
+      },
+      "aggregate_slot_nested": {
+        "pkg": "./testdata/footprint/aggregate_slot_nested",
+        "baseline": 2048,
+        "measured": 2050,
+        "ceiling": 2356,
+        "archive_bytes": 8454474
+      },
+      "pivot": {
+        "pkg": "./testdata/footprint/pivot",
+        "baseline": 1005,
+        "measured": 1072,
+        "ceiling": 1156,
+        "archive_bytes": 4919564
+      },
+      "through": {
+        "pkg": "./testdata/footprint/through",
+        "baseline": 928,
+        "measured": 986,
+        "ceiling": 1068,
+        "archive_bytes": 4423860
+      },
+      "morph": {
+        "pkg": "./testdata/footprint/morph",
+        "baseline": 1088,
+        "measured": 1155,
+        "ceiling": 1252,
+        "archive_bytes": 5221468
+      },
+      "nested_with": {
+        "pkg": "./testdata/footprint/nested_with",
+        "baseline": 1281,
+        "measured": 1403,
+        "ceiling": 1474,
+        "archive_bytes": 6249624
+      },
+      "has": {
+        "pkg": "./testdata/footprint/has",
+        "baseline": 1302,
+        "measured": 1412,
+        "ceiling": 1498,
+        "archive_bytes": 6243238
+      },
+      "has_one": {
+        "pkg": "./testdata/footprint/has_one",
+        "baseline": 1281,
+        "measured": 1403,
+        "ceiling": 1474,
+        "archive_bytes": 6210740
+      },
+      "raw": {
+        "pkg": "./testdata/footprint/raw",
+        "baseline": 1045,
+        "measured": 1096,
+        "ceiling": 1202,
+        "archive_bytes": 5202732
+      },
+      "cursor": {
+        "pkg": "./testdata/footprint/cursor",
+        "baseline": 1127,
+        "measured": 1186,
+        "ceiling": 1297,
+        "archive_bytes": 5352634
+      },
+      "key_chunk": {
+        "pkg": "./testdata/footprint/key_chunk",
+        "baseline": 812,
+        "measured": 862,
+        "ceiling": 934,
+        "archive_bytes": 4138368
+      },
+      "input_key": {
+        "pkg": "./testdata/footprint/input_key",
+        "baseline": 982,
+        "measured": 1049,
+        "ceiling": 1130,
+        "archive_bytes": 4848252
+      },
+      "mutators": {
+        "pkg": "./testdata/footprint/mutators",
+        "baseline": 801,
+        "measured": 855,
+        "ceiling": 922,
+        "archive_bytes": 4493752
+      },
+      "mutator_explicit": {
+        "pkg": "./testdata/footprint/mutator_explicit",
+        "baseline": 1605,
+        "measured": 1698,
+        "ceiling": 1846,
+        "archive_bytes": 7027256
+      },
+      "input_column_kinds": {
+        "pkg": "./testdata/footprint/input_column_kinds",
+        "baseline": 5088,
+        "measured": 5321,
+        "ceiling": 5852,
+        "archive_bytes": 22004678
+      },
+      "aggregate_group": {
+        "pkg": "./testdata/footprint/aggregate_group",
+        "baseline": 2426,
+        "measured": 2533,
+        "ceiling": 2790,
+        "archive_bytes": 11358698
+      },
+      "aggregate_families": {
+        "pkg": "./testdata/footprint/aggregate_families",
+        "baseline": 3799,
+        "measured": 4366,
+        "ceiling": 4369,
+        "archive_bytes": 19878752
+      },
+      "distinct": {
+        "pkg": "./testdata/footprint/distinct",
+        "baseline": 1135,
+        "measured": 1174,
+        "ceiling": 1306,
+        "archive_bytes": 5670748
+      },
+      "correlation": {
+        "pkg": "./testdata/footprint/correlation",
+        "baseline": 2752,
+        "measured": 2991,
+        "ceiling": 3165,
+        "archive_bytes": 13742842
+      },
+      "lateral": {
+        "pkg": "./testdata/footprint/lateral",
+        "baseline": 2852,
+        "measured": 3048,
+        "ceiling": 3280,
+        "archive_bytes": 15070730
+      },
+      "on_comparisons": {
+        "pkg": "./testdata/footprint/on_comparisons",
+        "baseline": 1454,
+        "measured": 1593,
+        "ceiling": 1673,
+        "archive_bytes": 7242586
+      },
+      "subqueries": {
+        "pkg": "./testdata/footprint/subqueries",
+        "baseline": 2837,
+        "measured": 3061,
+        "ceiling": 3263,
+        "archive_bytes": 13232754
+      },
+      "outer_join": {
+        "pkg": "./testdata/footprint/outer_join",
+        "baseline": 1668,
+        "measured": 1789,
+        "ceiling": 1919,
+        "archive_bytes": 8501992
+      },
+      "nullable_join_chain": {
+        "pkg": "./testdata/footprint/nullable_join_chain",
+        "baseline": 1695,
+        "measured": 1854,
+        "ceiling": 1950,
+        "archive_bytes": 8840094
+      },
+      "retrieval_read": {
+        "pkg": "./testdata/footprint/retrieval_read",
+        "baseline": 826,
+        "measured": 831,
+        "ceiling": 950,
+        "archive_bytes": 4111054
+      },
+      "global_scopes": {
+        "pkg": "./testdata/footprint/global_scopes",
+        "baseline": 1374,
+        "measured": 1389,
+        "ceiling": 1581,
+        "archive_bytes": 6397970
+      },
+      "conditional_row": {
+        "pkg": "./testdata/footprint/conditional_row",
+        "baseline": 1681,
+        "measured": 1805,
+        "ceiling": 1934,
+        "archive_bytes": 8224188
+      },
+      "conditional_selected": {
+        "pkg": "./testdata/footprint/conditional_selected",
+        "baseline": 1511,
+        "measured": 1649,
+        "ceiling": 1738,
+        "archive_bytes": 7555038
+      },
+      "expr_arithmetic": {
+        "pkg": "./testdata/footprint/expr_arithmetic",
+        "baseline": 1162,
+        "measured": 1256,
+        "ceiling": 1337,
+        "archive_bytes": 5895120
+      },
+      "expr_selected": {
+        "pkg": "./testdata/footprint/expr_selected",
+        "baseline": 1551,
+        "measured": 1698,
+        "ceiling": 1784,
+        "archive_bytes": 7533730
+      },
+      "lifecycle_write": {
+        "pkg": "./testdata/footprint/lifecycle_write",
+        "baseline": 930,
+        "measured": 949,
+        "ceiling": 1070,
+        "archive_bytes": 4719422
+      },
+      "lifecycle_changes": {
+        "pkg": "./testdata/footprint/lifecycle_changes",
+        "baseline": 1050,
+        "measured": 1069,
+        "ceiling": 1208,
+        "archive_bytes": 4956042
+      },
+      "raw_fragments": {
+        "pkg": "./testdata/footprint/raw_fragments",
+        "baseline": 1331,
+        "measured": 1380,
+        "ceiling": 1531,
+        "archive_bytes": 6197190
+      },
+      "window_rank": {
+        "pkg": "./testdata/footprint/window_rank",
+        "baseline": 1345,
+        "measured": 1346,
+        "ceiling": 1547,
+        "archive_bytes": 6142538
+      },
+      "window_frames": {
+        "pkg": "./testdata/footprint/window_frames",
+        "baseline": 1767,
+        "measured": 1769,
+        "ceiling": 2033,
+        "archive_bytes": 7919104
+      },
+      "column_encrypted_text": {
+        "pkg": "./testdata/footprint/column_encrypted_text",
+        "baseline": 1127,
+        "measured": 1231,
+        "ceiling": 1297,
+        "archive_bytes": 5321484
+      },
+      "column_nullable_encrypted_text": {
+        "pkg": "./testdata/footprint/column_nullable_encrypted_text",
+        "baseline": 1359,
+        "measured": 1472,
+        "ceiling": 1563,
+        "archive_bytes": 6564794
+      },
+      "column_encrypted_json": {
+        "pkg": "./testdata/footprint/column_encrypted_json",
+        "baseline": 1217,
+        "measured": 1321,
+        "ceiling": 1400,
+        "archive_bytes": 5631548
+      },
+      "column_nullable_encrypted_json": {
+        "pkg": "./testdata/footprint/column_nullable_encrypted_json",
+        "baseline": 1449,
+        "measured": 1562,
+        "ceiling": 1667,
+        "archive_bytes": 6897848
+      },
+      "column_password": {
+        "pkg": "./testdata/footprint/column_password",
+        "baseline": 1190,
+        "measured": 1299,
+        "ceiling": 1369,
+        "archive_bytes": 5573810
+      },
+      "column_nullable_password": {
+        "pkg": "./testdata/footprint/column_nullable_password",
+        "baseline": 1417,
+        "measured": 1535,
+        "ceiling": 1630,
+        "archive_bytes": 6746842
+      },
+      "sensitive_models": {
+        "pkg": "./models/sensitive",
+        "baseline": 2606,
+        "measured": 2821,
+        "ceiling": 2997,
+        "archive_bytes": 12796066
+      },
+      "column_json": {
+        "pkg": "./testdata/footprint/column_json",
+        "baseline": 1280,
+        "measured": 1391,
+        "ceiling": 1472,
+        "archive_bytes": 5862640
+      },
+      "column_nullable_json": {
+        "pkg": "./testdata/footprint/column_nullable_json",
+        "baseline": 1522,
+        "measured": 1642,
+        "ceiling": 1751,
+        "archive_bytes": 7087770
+      },
+      "column_interval": {
+        "pkg": "./testdata/footprint/column_interval",
+        "baseline": 1178,
+        "measured": 1293,
+        "ceiling": 1355,
+        "archive_bytes": 5565838
+      },
+      "column_nullable_interval": {
+        "pkg": "./testdata/footprint/column_nullable_interval",
+        "baseline": 1406,
+        "measured": 1530,
+        "ceiling": 1617,
+        "archive_bytes": 6783840
+      },
+      "column_time": {
+        "pkg": "./testdata/footprint/column_time",
+        "baseline": 1194,
+        "measured": 1309,
+        "ceiling": 1374,
+        "archive_bytes": 5445636
+      },
+      "column_enum": {
+        "pkg": "./testdata/footprint/column_enum",
+        "baseline": 1232,
+        "measured": 1344,
+        "ceiling": 1417,
+        "archive_bytes": 5624434
+      },
+      "relation_with": {
+        "pkg": "./testdata/footprint/relation_with",
+        "baseline": 1847,
+        "measured": 2047,
+        "ceiling": 2125,
+        "archive_bytes": 8757332
+      },
+      "model_type": {
+        "pkg": "./testdata/footprint/model_type",
+        "baseline": 299,
+        "measured": 299,
+        "ceiling": 344,
+        "archive_bytes": 1272428
+      },
+      "table_ref": {
+        "pkg": "./testdata/footprint/table_ref",
+        "baseline": 803,
+        "measured": 854,
+        "ceiling": 924,
+        "archive_bytes": 4259196
+      },
+      "onequery": {
+        "pkg": "./testdata/footprint/onequery",
+        "baseline": 803,
+        "measured": 854,
+        "ceiling": 924,
+        "archive_bytes": 4095412
+      },
+      "q_with": {
+        "pkg": "./testdata/footprint/q_with",
+        "baseline": 1053,
+        "measured": 1211,
+        "ceiling": 1211,
+        "archive_bytes": 5537724
+      },
+      "q_select": {
+        "pkg": "./testdata/footprint/q_select",
+        "baseline": 836,
+        "measured": 895,
+        "ceiling": 962,
+        "archive_bytes": 4324556
+      },
+      "q_join": {
+        "pkg": "./testdata/footprint/q_join",
+        "baseline": 1598,
+        "measured": 1766,
+        "ceiling": 1838,
+        "archive_bytes": 8396422
+      },
+      "report_pipeline": {
+        "pkg": "./testdata/footprint/report_pipeline",
+        "baseline": 1905,
+        "measured": 2120,
+        "ceiling": 2191,
+        "archive_bytes": 11277242
+      },
+      "models": {
+        "pkg": "./models",
+        "baseline": 6147,
+        "measured": 6849,
+        "ceiling": 7070,
+        "archive_bytes": 29913272
+      },
+      "column_number": {
+        "pkg": "./testdata/footprint/column_number",
+        "baseline": 1172,
+        "measured": 1267,
+        "ceiling": 1348,
+        "archive_bytes": 5307168
+      },
+      "column_nullable_text": {
+        "pkg": "./testdata/footprint/column_nullable_text",
+        "baseline": 1456,
+        "measured": 1584,
+        "ceiling": 1675,
+        "archive_bytes": 6558394
+      },
+      "models_1": {
+        "pkg": "./testdata/footprint/models_1",
+        "baseline": 1619,
+        "measured": 1751,
+        "ceiling": 1862,
+        "archive_bytes": 7246802
+      },
+      "models_3": {
+        "pkg": "./testdata/footprint/models_3",
+        "baseline": 2435,
+        "measured": 2605,
+        "ceiling": 2801,
+        "archive_bytes": 10849718
+      }
+    },
+    "existing_count_changes": {
+      "on_comparisons": {
+        "before": 1589,
+        "after": 1593
+      }
+    },
+    "growth_note": "The generic runtime text-capability assertion initially added 40 aggregate-family symbols and exceeded that fixed budget. Recording capability in the four existing text-column bridges removed that expansion. The report_filters probe grows by 16 symbols for the sealed adapter input, within its unchanged 2410 ceiling. on_comparisons adds four symbols for the existing selected-column bridge used to preserve text capability on both JOIN operands; it remains within its unchanged ceiling."
+  },
+  "acceptance": [
+    {
+      "command": "go build ./...",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "result": "pass",
+      "exit_code": 0,
+      "seconds": 9.3,
+      "log": "/private/tmp/goway-datatable1/review19-build.log",
+      "log_sha256": "cb34f302f94ae88536acb674ea2c7c877c849c3a9c958251f10dd9f082842272"
+    },
+    {
+      "command": "go vet ./database/... ./internal/...",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "result": "pass",
+      "exit_code": 0,
+      "seconds": 20.3,
+      "log": "/private/tmp/goway-datatable1/review19-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "go test -race ./database/orm ./database/orm/rows ./database/orm/expr ./database/query ./internal/querycore ./internal/ormcore ./datatable",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "result": "pass",
+      "exit_code": 0,
+      "seconds": 81.0,
+      "log": "/private/tmp/goway-datatable1/review19-race.log",
+      "log_sha256": "58631e356036b62e3eae452f78c45bf38aa76c83903e31fc322a6bbfae557b2a"
+    },
+    {
+      "command": "go vet ./...",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+      "result": "pass",
+      "exit_code": 0,
+      "seconds": 7.9,
+      "log": "/private/tmp/goway-datatable1/review19-fixture-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "go test -v . -run Golden|Agree|MatchesOldAPI|Parity|ScopePropagation|JoinedRetrieval|Mutator|Report|InvalidPublicContractsFailCompilation|FootprintBudgets",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+      "result": "pass",
+      "exit_code": 0,
+      "seconds": 65.9,
+      "log": "/private/tmp/goway-datatable1/review19-fixture.log",
+      "log_sha256": "23f8c2544e07335a6ec4eb13c20d43cee6b10a1ba9d247c57e21ffa8acff22c5"
+    },
+    {
+      "command": "go test -run ^$ ./pgsmoke",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+      "result": "pass",
+      "exit_code": 0,
+      "seconds": 17.3,
+      "log": "/private/tmp/goway-datatable1/review19-pg-compile.log",
+      "log_sha256": "4220e2ff988eea372e49beec25da5b8754745ae83ee22c4a1ab3981dca04c775"
+    },
+    {
+      "command": "python3 tools/goway_catalogue.py",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "result": "pass",
+      "exit_code": 0,
+      "seconds": 0.3,
+      "log": "/private/tmp/goway-datatable1/review19-catalogue.log",
+      "log_sha256": "2a146588a88fee0e4c3f5e4728690fe4d4b25cbb911dc6d561b193d777943be8"
+    },
+    {
+      "command": "make docs-check",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "result": "pass",
+      "exit_code": 0,
+      "seconds": 0.2,
+      "log": "/private/tmp/goway-datatable1/review19-docs.log",
+      "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+    },
+    {
+      "command": "git diff --check",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "result": "pass",
+      "exit_code": 0,
+      "seconds": 0.0,
+      "log": "/private/tmp/goway-datatable1/review19-diff-check.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "gofmt -l (all changed and new Go files)",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "result": "pass; no output",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-datatable1/review19-gofmt.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "logs_directory": "/private/tmp/goway-datatable1",
+  "shared_files_touched": [
+    "database/orm/column.go",
+    "database/orm/column_input.go",
+    "database/orm/column_methods.go",
+    "database/orm/method_surface_test.go",
+    "database/orm/relation_predicate.go",
+    "database/orm/testdata/public-methods.txt",
+    "database/query/comparison.go",
+    "database/query/join_value_condition.go",
+    "database/query/projection_reorder.go",
+    "database/query/result_pagination.go",
+    "database/query/text_capability.go",
+    "database/query/value_comparison.go",
+    "internal/ormcore/expression.go",
+    "internal/ormcore/join_condition.go",
+    "internal/ormcore/source.go",
+    "internal/querycore/ast.go",
+    "internal/querycore/compiler.go",
+    "internal/querycore/report.go",
+    "internal/querycore/text_capability_test.go",
+    "tests/fixtures/goway/compiler_cases_test.go",
+    "tests/fixtures/goway/footprint_test.go",
+    "tests/fixtures/goway/pgsmoke/store_capabilities_test.go"
+  ],
+  "files_touched": [
+    "database/orm/column.go",
+    "database/orm/column_input.go",
+    "database/orm/column_methods.go",
+    "database/orm/expr/README.md",
+    "database/orm/expr/comparison.go",
+    "database/orm/expr/filter.go",
+    "database/orm/expr/operation.go",
+    "database/orm/expr/value.go",
+    "database/orm/method_surface_test.go",
+    "database/orm/projection_bridge.go",
+    "database/orm/relation_predicate.go",
+    "database/orm/rows/README.md",
+    "database/orm/rows/declaration.go",
+    "database/orm/rows/join_condition.go",
+    "database/orm/rows/pagination.go",
+    "database/orm/rows/projection_test.go",
+    "database/orm/rows/read.go",
+    "database/orm/rows/report_read_test.go",
+    "database/orm/rows/result_read.go",
+    "database/orm/rows/results.md",
+    "database/orm/testdata/public-methods.txt",
+    "database/orm/text_capability.go",
+    "database/query/comparison.go",
+    "database/query/join_value_condition.go",
+    "database/query/projection_reorder.go",
+    "database/query/result_pagination.go",
+    "database/query/text_capability.go",
+    "database/query/value_comparison.go",
+    "docs/evidence/goway-stage7-datatables1.json",
+    "internal/ormcore/expression.go",
+    "internal/ormcore/join_condition.go",
+    "internal/ormcore/source.go",
+    "internal/querycore/ast.go",
+    "internal/querycore/compiler.go",
+    "internal/querycore/report.go",
+    "internal/querycore/text_capability_test.go",
+    "tests/fixtures/goway/compiler_cases_test.go",
+    "tests/fixtures/goway/footprint_test.go",
+    "tests/fixtures/goway/pgsmoke/report_projection_test.go",
+    "tests/fixtures/goway/pgsmoke/store_capabilities_test.go",
+    "tests/fixtures/goway/report_projection_golden_test.go",
+    "tests/fixtures/goway/report_text_capability_test.go",
+    "tests/fixtures/goway/testdata/compilefail/report_filter_enum_order/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/report_filter_enum_text/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/report_filter_not_phase/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/report_filter_nullable_enum_contains/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/report_filter_nullable_enum_gt/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/report_filter_or_phase/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/report_filter_relation_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_contains/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_forged/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_gt/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_like/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_value/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_contains/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_forged/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_gt/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_like/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_value/invalid.go",
+    "tests/fixtures/goway/testdata/footprint/report_filters/probe.go",
+    "tests/fixtures/goway/testdata/footprint/report_reads/probe.go"
+  ],
+  "source_sha256": {
+    ".gitattributes": "ede2b3a3bf33800daa62c4e0a732759de19d7471bffe2d99368c9b476fb9793f",
+    "CHANGELOG.md": "1e0f1644eec62a416f83b8f44859c0461aa1471a6ece866ae1c6adb006b68fc0",
+    "Makefile": "d7ba763cf5d6e779cd77d104e740664f25cb8fdecce29be13ab7cf3ea4dd22b4",
+    "blueprint/00-master-architecture-and-parity.md": "5073cf38eb1e71abfcd31d037cd44fa58eae99003d8fe434583204e0cfe923c9",
+    "blueprint/goway-data-layer/README.md": "452fe583a4ae2895cfd940aca8b8623b24593b84d13aef15eb6ba52662bb355d",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "0bc3b5f2c4b8d41fb9ad8236305a20bbb4ec9d79e81d3038bdc90a0b8ce93718",
+    "database/orm/README.md": "6e89e817ee8a8eb6077f5b192270445a20d25c71b12248e46edf72d957feee7c",
+    "database/orm/column.go": "ba0881ee7519a03dbe46602f0e62f18124a79dc4843391852a2e1e48f494f28a",
+    "database/orm/column_input.go": "a5c79a903ecf2d65e53f1314a1811dd673b8e265bb3c17df2e8d22fbaae33100",
+    "database/orm/column_methods.go": "0829b92f375e29e9887a88a66b68595d3c02d16fd53a7ba61ac16188f1f74a12",
+    "database/orm/explain.go": "442c95b5fc4671286a388026e2fd12593a6d4d57333356c646b5406fcf09528c",
+    "database/orm/expr/README.md": "746c1edf51aed27ad0988f10ca444f79f5b835657499741cb50128159cec7d7f",
+    "database/orm/expr/comparison.go": "3b08496df054577574cbf743bf660eb00cf4f9c639d5bd4ed646d3218a0e84ff",
+    "database/orm/expr/filter.go": "95e9045d589279914fcc51b25b9ed4c9215cad84c029abd1573ee05aecb8e235",
+    "database/orm/expr/operation.go": "87a7962f7742be722168704199c68c873b36ea26147a95f3ef0af62d59f96947",
+    "database/orm/expr/value.go": "2a293dc463f540131e3ef1a1bf4d6b592a3f68664d0656bb65e62e0f1a6fb6e7",
+    "database/orm/method_surface_test.go": "d511843a67ff772ceb33785f25cf78fd04ac63b17992aa5e89e7776d985aa6b9",
+    "database/orm/plan_contract_test.go": "53230cdacb9fb7d7450e0835e0d23f4b7227d63093b5b3c0a63e373637023b65",
+    "database/orm/projection_bridge.go": "8ca95766be55112be12017b683a9a0425dc48279bcfbe96ef23bfc3adb3e8539",
+    "database/orm/relation_predicate.go": "441ec3ff1532976517d4af0467d4ba46a9111de4051743f66a5a5d671cf4e853",
+    "database/orm/rows/README.md": "b8ac7bc5e6049904fa7430703de9bc05058672965445d12e5e308e0a67cd7d77",
+    "database/orm/rows/declaration.go": "dcd9d2728214c3ee459e4d2794b75ffa9c3248c0d19564ed1a95734ecef35845",
+    "database/orm/rows/explain.go": "726b9e8342e17dbeeaad92a91df1bf5b5a3d475fca1a286a9e452f81a48f027f",
+    "database/orm/rows/join_condition.go": "9767238fa6c8767d369a11931b12e9a1ed4cf866400064cfaf5963a43001bfec",
+    "database/orm/rows/pagination.go": "6fcb963c23d69ad5f8777c2059e406c483104abc267b4658c40e1c2d082e213d",
+    "database/orm/rows/projection_test.go": "7ff6a5d7a9dc405e2cf8c6309756acca7612c00f83f7afb5c0ffe2640e1e09a0",
+    "database/orm/rows/read.go": "64b557314a5ec27783edb342b129260d4f938d34478765707b5dcde7948ea56d",
+    "database/orm/rows/report_read_test.go": "0f502bff38ee3127d0a96a72c8160d6317fba7f04ac9d7b422238bde7d5cab5b",
+    "database/orm/rows/result_read.go": "fe77b57d69886e3ab4f074a0357870d7a98f0795b394d62da66c8fded2e1431b",
+    "database/orm/rows/results.md": "763299baf787c3b7211219abb61e2fcbd16a27092289ce79a339674a500a0166",
+    "database/orm/testdata/public-methods.txt": "5db41adab0a905820577b56bd809336ca4b24324850fa265f39ff7080b11865d",
+    "database/orm/text_capability.go": "2b6ab4f52b84b8824613b5c4f40fb79cdce880ee65ca6873161edbdba73046b4",
+    "database/orm/transaction_phase_test.go": "52dc79aba4c93dc129f04bcaa063b9e7db8bbea14c9ca1e2c63ec1c2c10b33b2",
+    "database/query/comparison.go": "ad9e7dba350a063ea772ab127795a23ffc1c60787e4e87fee7eeec69b5545e61",
+    "database/query/explain.go": "231fd08fe01b4fcb192792e69bd4216de3b5df5d4f53a3b881edcc83430ff713",
+    "database/query/explain_bridge.go": "173ff40cca2ff59259799acdae99f357d3bd10e0a6879b3781abcea0c92c9535",
+    "database/query/explain_decode.go": "85bee3e0f815c56a5ae383558fde13d594dc4f9d79d09696c7055e385c1f749b",
+    "database/query/join_value_condition.go": "b087a792150738d75494a70f7ae02ad01e803f57898370f96fd90418afedabf7",
+    "database/query/projection_reorder.go": "82b3f1aec5f22510a3fd409da18101dba11974f2f0f0171c2ec12bd72d34b3b6",
+    "database/query/result_pagination.go": "44168bbfda6a58f1503efd2c4a5cb7bc1091e0f6f2c47681fbd6e51d76da9577",
+    "database/query/text_capability.go": "97e680c9ef7b1116eaba1108e0f88e00c012fbcbd0e8764699617258a0f438e2",
+    "database/query/value_comparison.go": "f08aad7f855de5f7b9e48105ff47618c1fd112cc626f81aa298db6722c45ec8d",
+    "docs/guides/datatable.md": "cc072af82832dcf5c52224ac24bf23a206921e8d41452d857b1eb0d7227ca03f",
+    "internal/agent/gopls_acceptance_test.go": "0051ae1da8ed74c6968f9903305dcd6ead889f0d45c038fb47be5b9991958595",
+    "internal/ormcore/expression.go": "b2df33bee2416caaa64299d6bfe957d803e95ffb421f177fec451c4416d4df0d",
+    "internal/ormcore/join_condition.go": "4d319a55e6e5c350424bedbb55273a3fd5f2754f0b5a186b1565a54db55cef50",
+    "internal/ormcore/source.go": "f558b535d87f8bd070892cc348c75bf16fedebbea6c8207c7678d7e578875825",
+    "internal/querycore/ast.go": "850b6649bf3074474e36c38c48386cf0ee168f77141d7ea6e5b9119ac5a580ab",
+    "internal/querycore/batch_limits.go": "86d67b7a77585fdef475cb7dc646f3316d619358b37c7aa3b41a56bb5f6a7155",
+    "internal/querycore/compiler.go": "1dbe1b1328fe7487d9f6ceb3c6688ed16f35810dd4de3a747ea2683f52ff7b82",
+    "internal/querycore/explain.go": "47f9548025d2c44e3ed7b4a4c3a38b716537703105d162c61c07dd929cdacd75",
+    "internal/querycore/explain_decode.go": "f7c67243e6d6006798ae0ea60a4f4fd39456369ffe490e608a722387737a9d50",
+    "internal/querycore/report.go": "7043aca95fe79535e794f3ef6b13a3248a3edff147943c346b06c07538cfff21",
+    "internal/querycore/text_capability_test.go": "c9889ee7871dda8bebe3c93e44d3617350702df7765ae18bb25c69542c0b92f9",
+    "tests/fixtures/goway/compiler_cases_test.go": "279043aa8e09f93bdda08b99a2936c291661764adb64a669e5bfcc7554c9589c",
+    "tests/fixtures/goway/footprint_test.go": "831b0378d26004ab562dc59f75cdb815611be44ec8615ba95385556b507b3678",
+    "tests/fixtures/goway/pgsmoke/report_projection_test.go": "2f8a4cbe051aba96ffb0b1b9d59ceccf1af8bd526ca079f176ecf360883cb09a",
+    "tests/fixtures/goway/pgsmoke/store_capabilities_test.go": "5f44bf0daf4d699e0741cbdcb16416afc206e8200ff005486564379434eea545",
+    "tests/fixtures/goway/report_projection_golden_test.go": "92338fff9dabb385b89b6be2ee9f14d83d0eac6e2f9904f29a22db4acc8c48da",
+    "tests/fixtures/goway/report_text_capability_test.go": "5c75c056bc321902e0052bcfd5bb977b30cecda5dc1c200d0a99fee6510f75c7",
+    "tests/fixtures/goway/testdata/compilefail/report_filter_enum_order/invalid.go": "97c5c9a7f36f5cd8f7fff074e9ad17e1179c7c9ae915fe40e4a528bec09b065e",
+    "tests/fixtures/goway/testdata/compilefail/report_filter_enum_text/invalid.go": "60b411aadabdd42476893ed51707f1cdee5ef0bcbff5f11df74b32c23d1edc10",
+    "tests/fixtures/goway/testdata/compilefail/report_filter_not_phase/invalid.go": "3224c5e777a1d02ca65eb1cafb4bf660463dcb1d247feb192f5f184ae8a8a3c0",
+    "tests/fixtures/goway/testdata/compilefail/report_filter_nullable_enum_contains/invalid.go": "908d0f52fdcad071d0f59d2690c4546a0ba7f1943ba4037c7ff124e82902beec",
+    "tests/fixtures/goway/testdata/compilefail/report_filter_nullable_enum_gt/invalid.go": "a16f91f220b9272d69d8ed6dd8c8bebfb71c4bd1fbbba524b8feb46f083bc532",
+    "tests/fixtures/goway/testdata/compilefail/report_filter_or_phase/invalid.go": "4fbcac41e4d162a5351f33bef92a7b6018c818c6499ecf54ca1a77eea95927f0",
+    "tests/fixtures/goway/testdata/compilefail/report_filter_relation_owner/invalid.go": "4a42fe1746eb00676d5e59e225b082c3699d01da6c1c5b49303af5236499c61d",
+    "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_contains/invalid.go": "b32a0844ba7cb87e422c3aa4fe9c77b92479ca3def6bf58fba8a87b62843eda2",
+    "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_forged/invalid.go": "a6d795a7bae55ff0f2f8d3c68035bb22600d7fc7cb5b495784e328ee7b4541c2",
+    "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_gt/invalid.go": "c35b3496a3219ecba2afad11598862188b25695874ce1588fa611a14bd207773",
+    "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_like/invalid.go": "d25dc8f3d580b2a14dd28e12f2b85a4b65f06671d3db840670f6f0dac8f13732",
+    "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_value/invalid.go": "2f4c7dbb2156d3449993307116c2c87bfa278322b97ba0c4dce37cd1bbcf9b28",
+    "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_contains/invalid.go": "2b8c7a1ea86ee2a1aa4d3dbe2ce510f9613ca02446eb91ecb58eff5fa616451d",
+    "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_forged/invalid.go": "57d1a66c60fc0f572a4e6fb84d643f81590f5303fd866ce1747b6243a592dde7",
+    "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_gt/invalid.go": "6c32bce89dec09ca5fa3735c8967c00f7bb67d00848c1f298d979b7ff45738fe",
+    "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_like/invalid.go": "ab0deef6fd2246eeb21dedb9acaeb8a4a2bd98aaff91aaae1fbdd61efa95a844",
+    "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_value/invalid.go": "e5d09bfce45fca2c10433c4548ea90e0aab5ef19d832558ae2caf34c7f93cc20",
+    "tests/fixtures/goway/testdata/footprint/report_filters/probe.go": "1e5fb3700a00235ae9cfa00f44daeecb85696876dd86d72dcc8d84d33b2942b1",
+    "tests/fixtures/goway/testdata/footprint/report_reads/probe.go": "330ab3356fb9b3bf7b093489bd9c6b8ecf8909b0e0698a7e1ef2a07d178a0da0",
+    "tools/release/release_test.go": "bcdfd8c8201caa510183f8183b1a7e359669247329cc8f957b9d99593dea6e09",
+    "tools/release/source.go": "0a95269a9308b11ff714037a7a85f92ac4833dda4d2f7248089fd84c81621d40"
+  },
+  "docs_notes": "Projection report reads now have thin rows package functions, shared ordering/page validation, streaming exports and enum-preserving row/relation filter adapters. Package guides updated. Datatable runtime cutover, reporting DTO replacement and CHANGELOG/datatable migration guide belong to slices 2/3; lead-owned docs untouched. Text adapters now take sealed text columns directly (TextRow(Users.Name), TextNullableRow(Users.Nickname)); string-backed enums remain equality-only through these adapters. Shared compiler rejects pattern comparisons lacking text capability. Re-check: text adapters validate actual retrieved column capability; promoted markers do not authorize operations. Relation filter adapters validate both model types against the actual plan owners. Has/DoesntHave and projection relation filters now share actual source/target metadata validation. No additional consumer API migration is required for these fixes.",
+  "open_questions": [],
+  "limits": [
+    "PostgreSQL sources compiled/vetted only, as instructed.",
+    "No manifest/OpenAPI/TypeScript or generated DTO declarations changed in this slice."
+  ],
+  "review_fix": {
+    "finding": "last-17.md: enum capabilities erased by TextRow/TextNullableRow",
+    "resolution": "Text adapters take sealed text columns directly. FoundryColumn preserves text capability separately from codec representation. Literal and binary pattern compilation requires it. No new column methods or capability families.",
+    "adapter_audit": "CompareRow/CompareNullableRow expose equality/membership and nullable null tests only; enum negatives and positive equality coverage retained. ModelPredicate/Has preserve model declarations and row phase; Or/Not do not admit HAVING. Read/ordering/page functions preserve existing typed phases.",
+    "regressions": "12 additional external negatives: required/nullable enum Contains, Like and Gt; erased Value inputs; forged public methods; nullable CompareNullableRow text/ordering. Runtime compiler tests cover all eight literal pattern operators and both binary LIKE operators, plus enum selected/binary expressions and valid enum equality.",
+    "sql_parity": "25 old/new projection operations and 13 filter adapter cases, including required and nullable text ordering; existing old-query tests unchanged.",
+    "superseded_by": "review_recheck: promoted markers are not authoritative; validate the metadata actually retrieved."
+  },
+  "previous_review_acceptance": [
+    {
+      "command": "go build ./...",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "result": "pass",
+      "exit_code": 0,
+      "seconds": 14.6,
+      "log": "/private/tmp/goway-datatable1/review-build.log",
+      "log_sha256": "c833756d1027adf5a3f98c2674734b9217a39d6a0598d661121c0a9c3fe06193"
+    },
+    {
+      "command": "go vet ./database/... ./internal/...",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "result": "pass",
+      "exit_code": 0,
+      "seconds": 27.4,
+      "log": "/private/tmp/goway-datatable1/review-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "go test -race ./database/orm ./database/orm/rows ./database/orm/expr",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "result": "pass",
+      "exit_code": 0,
+      "seconds": 86.6,
+      "log": "/private/tmp/goway-datatable1/review-race.log",
+      "log_sha256": "1fba51583d95e67750cfdd818d227e8780739c9a1b7fc101abd37346d9268875"
+    },
+    {
+      "command": "go vet ./...",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+      "result": "pass",
+      "exit_code": 0,
+      "seconds": 7.0,
+      "log": "/private/tmp/goway-datatable1/review-fixture-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "go test -v . -run Report|Scalar|FootprintBudgets|InvalidPublicContractsFailCompilation/report_text_(required|nullable)_enum_forged$",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+      "result": "pass",
+      "exit_code": 0,
+      "seconds": 59.4,
+      "log": "/private/tmp/goway-datatable1/review-fixture.log",
+      "log_sha256": "4881b2d47cb4d15e98d5ce13559f8b07ef6f9d55e4f84ab10960abe03440bbe0"
+    },
+    {
+      "command": "go test -run ^$ ./pgsmoke",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+      "result": "pass",
+      "exit_code": 0,
+      "seconds": 18.2,
+      "log": "/private/tmp/goway-datatable1/review-pg-compile.log",
+      "log_sha256": "7c395a76f98ffe90b6000d700c36f26b3295143ed79b7d451034602881b38279"
+    },
+    {
+      "command": "python3 tools/goway_catalogue.py",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "result": "pass",
+      "exit_code": 0,
+      "seconds": 0.3,
+      "log": "/private/tmp/goway-datatable1/review-catalogue.log",
+      "log_sha256": "2a146588a88fee0e4c3f5e4728690fe4d4b25cbb911dc6d561b193d777943be8"
+    },
+    {
+      "command": "make docs-check",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "result": "pass",
+      "exit_code": 0,
+      "seconds": 0.2,
+      "log": "/private/tmp/goway-datatable1/review-docs.log",
+      "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+    },
+    {
+      "command": "git diff --check",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "result": "pass",
+      "exit_code": 0,
+      "seconds": 0.0,
+      "log": "/private/tmp/goway-datatable1/review-diff-check.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "gofmt -l <all changed/new Go sources>",
+      "result": "pass; no unformatted files",
+      "log": "/private/tmp/goway-datatable1/review-gofmt.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "previous_review_acceptance_segments": {
+    "initial_commands": [
+      {
+        "name": "build",
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+        "command": [
+          "go",
+          "build",
+          "./..."
+        ],
+        "exit_code": 0,
+        "seconds": 13.5
+      },
+      {
+        "name": "vet",
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+        "command": [
+          "go",
+          "vet",
+          "./database/...",
+          "./internal/..."
+        ],
+        "exit_code": 0,
+        "seconds": 33.0
+      },
+      {
+        "name": "race",
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "./database/orm",
+          "./database/orm/rows",
+          "./database/orm/expr",
+          "./database/query",
+          "./internal/querycore",
+          "./internal/ormcore",
+          "./datatable"
+        ],
+        "exit_code": 0,
+        "seconds": 98.2
+      },
+      {
+        "name": "fixture-vet",
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+        "command": [
+          "go",
+          "vet",
+          "./..."
+        ],
+        "exit_code": 0,
+        "seconds": 15.2
+      },
+      {
+        "name": "fixture",
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+        "command": [
+          "go",
+          "test",
+          "-v",
+          ".",
+          "-run",
+          "Golden|Agree|MatchesOldAPI|Parity|ScopePropagation|JoinedRetrieval|Mutator|Report|InvalidPublicContractsFailCompilation|FootprintBudgets"
+        ],
+        "exit_code": 1,
+        "seconds": 80.4
+      },
+      {
+        "name": "pg-compile",
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "./pgsmoke"
+        ],
+        "exit_code": 0,
+        "seconds": 18.6
+      },
+      {
+        "name": "catalogue",
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+        "command": [
+          "python3",
+          "tools/goway_catalogue.py"
+        ],
+        "exit_code": 0,
+        "seconds": 0.3
+      },
+      {
+        "name": "docs",
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+        "command": [
+          "make",
+          "docs-check"
+        ],
+        "exit_code": 0,
+        "seconds": 0.2
+      },
+      {
+        "name": "diff-check",
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+        "command": [
+          "git",
+          "diff",
+          "--check"
+        ],
+        "exit_code": 0,
+        "seconds": 0.0
+      }
+    ],
+    "initial_fixture_log": "/private/tmp/goway-datatable1/review-fixture-initial.log",
+    "initial_fixture_sha256": "67ac0aef001cf8d8e7938764c036b7c496cf48103269369ec0e1f744dca2f82f",
+    "corrections": "Two forged-wrapper negatives correctly failed compilation but needed explicit type arguments for the expected private-marker diagnostic. Generic capability assertion exceeded aggregate_families/report_pipeline ceilings; text-column bridges now set their metadata directly. No ceilings changed.",
+    "reused_passes": "The initial full race set passed for orm, rows, expr, query, querycore, ormcore and datatable. After specializing the ORM text bridges, affected orm/rows/expr races passed again; unchanged query/querycore/ormcore/datatable results retained. The initial complete fixture golden/compiler batch passed except the two diagnostic cases and two footprint ceilings; focused rerun passed the two cases, all 95 footprints, report goldens/runtime tests and Stage 6d2 scalar parity.",
+    "compiler_cases": 605,
+    "new_review_negatives": 12
+  },
+  "review_recheck": {
+    "finding": "last-18.md: nested embedding promotes a text marker from a zero-valued donor while an enum supplies the metadata",
+    "resolution": "TextRow and TextNullableRow validate the retrieved column Text metadata, independent of promoted markers. Invalidity is retained in both expression and codec metadata, covering comparisons, ordering, selected values and parameters. No public signatures changed.",
+    "sweep": {
+      "Has / FoundryRelationPredicate": "Fixed the analogous independently promoted relationTarget marker: source and target model types must match the actual relation plan owners before constructing a predicate. Added wrong-target regressions with no child predicates and with a scope-only raw predicate, plus a matching-owner embedded-relation positive.",
+      "CompareRow / CompareNullableRow": "Accept concrete Expression values, retain their owner/error metadata, and only expose equality/membership/null tests. No separate promoted capability marker.",
+      "ModelPredicate / Or / Not": "Accept concrete phase-specific Predicate values; preserve complete predicate ownership and errors.",
+      "projection reads / pagination / reorder": "Read concrete rows.Query data. ProjectionOrder retrieves its complete core, including provenance/error, without a second eligibility marker. Row/selected ordering is intentionally supported."
+    },
+    "regressions": [
+      "Exact reviewer required-enum construction, including explicit type arguments and Gt",
+      "Required and nullable nested donors, as both values and pointers; all 18 predicate operations (including empty IN) and four ordering forms reject before SQL",
+      "Selection, direct and selected parameters, nullable widening/null parameters, computed text, NOT/OR, GROUP BY and selected DISTINCT ON retain rejection",
+      "Count/Each reject before SQL or yield callbacks; input Contains is not called",
+      "Supported required/nullable Text and InputText families still compile",
+      "Nested relation target-marker mismatch rejected from the bound plan metadata"
+    ],
+    "test_file": "tests/fixtures/goway/report_text_capability_test.go",
+    "compilefail_cases": 605,
+    "footprint": "All 95 function counts, baselines and ceilings unchanged from the preceding reviewed fix.",
+    "surface": "No further additions/removals; cumulative slice remains 41 added snapshot lines and zero removed."
+  },
+  "acceptance_history": [
+    {
+      "review": "last-18",
+      "acceptance": [
+        {
+          "command": "go build ./...",
+          "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+          "result": "pass",
+          "exit_code": 0,
+          "seconds": 4.3,
+          "log": "/private/tmp/goway-datatable1/review18-build.log",
+          "log_sha256": "bb907617c11ac62e4f85864e2c86fc649123cb490ad5f993a0919eb9e30f5a2c"
+        },
+        {
+          "command": "go vet ./database/... ./internal/...",
+          "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+          "result": "pass",
+          "exit_code": 0,
+          "seconds": 16.0,
+          "log": "/private/tmp/goway-datatable1/review18-vet.log",
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "command": "go test -race ./database/orm ./database/orm/rows ./database/orm/expr ./database/query ./internal/querycore ./internal/ormcore ./datatable",
+          "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+          "result": "pass",
+          "exit_code": 0,
+          "seconds": 76.3,
+          "log": "/private/tmp/goway-datatable1/review18-race.log",
+          "log_sha256": "7b4987efb1c6c948a2ec5dffeed6651248c1f90d2b7b03fcffda0dcef0d5f0b1"
+        },
+        {
+          "command": "go vet ./...",
+          "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+          "result": "pass",
+          "exit_code": 0,
+          "seconds": 4.8,
+          "log": "/private/tmp/goway-datatable1/review18-fixture-vet.log",
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "command": "go test -v . -run Golden|Agree|MatchesOldAPI|Parity|ScopePropagation|JoinedRetrieval|Mutator|Report|InvalidPublicContractsFailCompilation|FootprintBudgets",
+          "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+          "result": "pass",
+          "exit_code": 0,
+          "seconds": 78.5,
+          "log": "/private/tmp/goway-datatable1/review18-fixture.log",
+          "log_sha256": "9fb3cda73d768902d04f88504ff533f0e409518d69fc84d0ebe0ed6bade20deb"
+        },
+        {
+          "command": "go test -run ^$ ./pgsmoke",
+          "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+          "result": "pass",
+          "exit_code": 0,
+          "seconds": 18.0,
+          "log": "/private/tmp/goway-datatable1/review18-pg-compile.log",
+          "log_sha256": "a86061aff29fae1564f90efbf65f5101833f14675167e87ed0717bf1c2f9c4e9"
+        },
+        {
+          "command": "python3 tools/goway_catalogue.py",
+          "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+          "result": "pass",
+          "exit_code": 0,
+          "seconds": 0.3,
+          "log": "/private/tmp/goway-datatable1/review18-catalogue.log",
+          "log_sha256": "2a146588a88fee0e4c3f5e4728690fe4d4b25cbb911dc6d561b193d777943be8"
+        },
+        {
+          "command": "make docs-check",
+          "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+          "result": "pass",
+          "exit_code": 0,
+          "seconds": 0.2,
+          "log": "/private/tmp/goway-datatable1/review18-docs.log",
+          "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+        },
+        {
+          "command": "git diff --check",
+          "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+          "result": "pass",
+          "exit_code": 0,
+          "seconds": 0.0,
+          "log": "/private/tmp/goway-datatable1/review18-diff-check.log",
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "command": "gofmt -l <all changed/new Go sources>",
+          "result": "pass; no unformatted files",
+          "log": "/private/tmp/goway-datatable1/review18-gofmt.log",
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    }
+  ],
+  "review19": {
+    "finding": "last-19.md: promoted relation target bypass through ModelPredicate(orm.Has/DoesntHave)",
+    "resolution": "Both Has (and therefore DoesntHave) and FoundryRelationPredicate use the single non-generic relationPredicatePlan helper to validate actual source and target model types before constructing predicates or erasing child types.",
+    "regressions": "External ModelPredicate regressions exercise Has and DoesntHave with no children, a scope-only raw child and a model-owned child, using both value and pointer nested wrappers. Matching metadata remains accepted. Existing direct expr.Has regressions remain.",
+    "files": [
+      "database/orm/relation_predicate.go",
+      "database/orm/projection_bridge.go",
+      "tests/fixtures/goway/report_text_capability_test.go"
+    ],
+    "footprint_changes_from_last18": {},
+    "surface": "No further public additions or removals; cumulative slice remains 41 added snapshot lines and zero removed."
+  },
+  "postgres_each_fix": {
+    "diagnosis": "Test choreography exhausted the two-connection isolated pool: locker and writer retain both connections, while lock polling through db attempts a third acquisition. The default five-second acquisition timeout prevents the observer from releasing the locked row.",
+    "source_evidence": [
+      "testkit/postgres/scope.go:13 (scopePoolSize = 2)",
+      "database/pool.go:55 (five-second AcquireTimeout)",
+      "database/pool.go:324 (bounded connection acquisition)",
+      "tests/fixtures/goway/pgsmoke/store_capabilities_test.go:154 (lock polling)"
+    ],
+    "fix": "Poll pg_blocking_pids on the existing locker transaction; it is idle while holding the row lock. Release only after observing the actual writer lock wait. Preserve complete-candidate overflow rejection before callbacks and unchanged-row assertions for both update and delete.",
+    "runtime_audit": "planEach still selects limit+1 candidates in primary-key order with waiting LockUpdate; eachCandidates rejects overflow before writeEach invokes drafts or lifecycle callbacks. No runtime change warranted by this failure.",
+    "files": [
+      "tests/fixtures/goway/pgsmoke/store_capabilities_test.go"
+    ],
+    "patch": "/private/tmp/goway-pg-each-fix.patch",
+    "patch_sha256": "77e8c1220d6a092cb4d8370ab25b59f6b59da002fd629be077dd44fdffdabb44",
+    "base_commit": "05b830c36d594558701e13449d1928660aae7214",
+    "verification": "PostgreSQL sources compile and vet; live two-transaction execution remains for the lead. Patch contains only the test fix relative to 05b830c."
+  },
+  "rebase_acceptance": {
+    "base": "f3cfffd7199988d51023dbe516e505bdb1538b50",
+    "completed_at": "2026-10-24T05:41:21.358169+00:00",
+    "initial": [
+      {
+        "name": "build",
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+        "command": [
+          "go",
+          "build",
+          "./..."
+        ],
+        "exit_code": 0,
+        "seconds": 12.1,
+        "log": "/private/tmp/goway-datatable1/rebase-build.log"
+      },
+      {
+        "name": "vet",
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+        "command": [
+          "go",
+          "vet",
+          "./database/...",
+          "./internal/..."
+        ],
+        "exit_code": 1,
+        "seconds": 31.5,
+        "log": "/private/tmp/goway-datatable1/rebase-vet.log"
+      },
+      {
+        "name": "race",
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "./database/orm",
+          "./database/orm/rows",
+          "./database/orm/expr",
+          "./database/query",
+          "./internal/querycore",
+          "./internal/ormcore",
+          "./datatable"
+        ],
+        "exit_code": 1,
+        "seconds": 125.5,
+        "log": "/private/tmp/goway-datatable1/rebase-race.log"
+      },
+      {
+        "name": "fixture-vet",
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+        "command": [
+          "go",
+          "vet",
+          "./..."
+        ],
+        "exit_code": 0,
+        "seconds": 15.6,
+        "log": "/private/tmp/goway-datatable1/rebase-fixture-vet.log"
+      }
+    ],
+    "resumed_on_r4": [
+      {
+        "name": "vet",
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+        "command": [
+          "go",
+          "vet",
+          "./database/orm/rows"
+        ],
+        "exit_code": 0,
+        "seconds": 7.3,
+        "log": "/private/tmp/goway-datatable1/rebase-r4-vet.log"
+      },
+      {
+        "name": "race",
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "./database/orm/rows"
+        ],
+        "exit_code": 0,
+        "seconds": 57.0,
+        "log": "/private/tmp/goway-datatable1/rebase-r4-race.log"
+      },
+      {
+        "name": "fixture",
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+        "command": [
+          "go",
+          "test",
+          "-v",
+          ".",
+          "-run",
+          "Golden|Agree|MatchesOldAPI|Parity|ScopePropagation|JoinedRetrieval|Mutator|Report|InvalidPublicContractsFailCompilation|FootprintBudgets"
+        ],
+        "exit_code": 0,
+        "seconds": 182.5,
+        "log": "/private/tmp/goway-datatable1/rebase-r4-fixture.log"
+      },
+      {
+        "name": "pg-compile",
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+        "command": [
+          "go",
+          "test",
+          "-run",
+          "^$",
+          "./pgsmoke"
+        ],
+        "exit_code": 0,
+        "seconds": 32.2,
+        "log": "/private/tmp/goway-datatable1/rebase-r4-pg-compile.log"
+      },
+      {
+        "name": "catalogue",
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+        "command": [
+          "python3",
+          "tools/goway_catalogue.py"
+        ],
+        "exit_code": 0,
+        "seconds": 0.3,
+        "log": "/private/tmp/goway-datatable1/rebase-r4-catalogue.log"
+      },
+      {
+        "name": "docs",
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+        "command": [
+          "make",
+          "docs-check"
+        ],
+        "exit_code": 0,
+        "seconds": 3.5,
+        "log": "/private/tmp/goway-datatable1/rebase-r4-docs.log"
+      },
+      {
+        "name": "diff-check",
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+        "command": [
+          "git",
+          "diff",
+          "--check"
+        ],
+        "exit_code": 0,
+        "seconds": 0.1,
+        "log": "/private/tmp/goway-datatable1/rebase-r4-diff-check.log"
+      }
+    ],
+    "resolution": "Merged distinct Input storage/role layouts with text capability metadata; unioned registries and docs. Fixed report_read_test to use PrimaryOf. Public snapshot regenerated: 41 additions, zero removals. ORM race suite including TestExportedTypesPreventPhaseConversions passed before rotation; no allowlist changes. Only rows vet/race needed reruns. Interrupted fixture run and remaining checks completed on r4.",
+    "source_sha256": {
+      "database/orm/column.go": "b054e126f82aa478efb2989193dc3f49dfd9c834d33de182c2191e784d2b0594",
+      "database/orm/column_input.go": "a5c79a903ecf2d65e53f1314a1811dd673b8e265bb3c17df2e8d22fbaae33100",
+      "database/orm/column_methods.go": "0829b92f375e29e9887a88a66b68595d3c02d16fd53a7ba61ac16188f1f74a12",
+      "database/orm/expr/README.md": "bdeaa4ed98ced7aa47244791518b4dd3ad0edd43b098b45b6a0be849101bf0d5",
+      "database/orm/expr/comparison.go": "3b08496df054577574cbf743bf660eb00cf4f9c639d5bd4ed646d3218a0e84ff",
+      "database/orm/expr/filter.go": "1b30b86a6b02ae4974adf1cf247b0dccd6070baad8460f90083042ac2a22c14c",
+      "database/orm/expr/operation.go": "87a7962f7742be722168704199c68c873b36ea26147a95f3ef0af62d59f96947",
+      "database/orm/expr/value.go": "2a293dc463f540131e3ef1a1bf4d6b592a3f68664d0656bb65e62e0f1a6fb6e7",
+      "database/orm/method_surface_test.go": "eb7e384c3e44cafaa93e3ce4b45912357088346293ef983d32d4a70a696284ef",
+      "database/orm/projection_bridge.go": "8ca95766be55112be12017b683a9a0425dc48279bcfbe96ef23bfc3adb3e8539",
+      "database/orm/relation_predicate.go": "441ec3ff1532976517d4af0467d4ba46a9111de4051743f66a5a5d671cf4e853",
+      "database/orm/rows/README.md": "b8ac7bc5e6049904fa7430703de9bc05058672965445d12e5e308e0a67cd7d77",
+      "database/orm/rows/declaration.go": "dcd9d2728214c3ee459e4d2794b75ffa9c3248c0d19564ed1a95734ecef35845",
+      "database/orm/rows/join_condition.go": "9767238fa6c8767d369a11931b12e9a1ed4cf866400064cfaf5963a43001bfec",
+      "database/orm/rows/pagination.go": "6fcb963c23d69ad5f8777c2059e406c483104abc267b4658c40e1c2d082e213d",
+      "database/orm/rows/projection_test.go": "7ff6a5d7a9dc405e2cf8c6309756acca7612c00f83f7afb5c0ffe2640e1e09a0",
+      "database/orm/rows/read.go": "64b557314a5ec27783edb342b129260d4f938d34478765707b5dcde7948ea56d",
+      "database/orm/rows/report_read_test.go": "0f502bff38ee3127d0a96a72c8160d6317fba7f04ac9d7b422238bde7d5cab5b",
+      "database/orm/rows/result_read.go": "8f3cc510f53a4f2e75a53cf84ea1c20129e16fe63f0bde8782110efbfb1db28c",
+      "database/orm/rows/results.md": "763299baf787c3b7211219abb61e2fcbd16a27092289ce79a339674a500a0166",
+      "database/orm/testdata/public-methods.txt": "7460dff57ef8948db316ee43517153b3d82b8c26062a3c816035de83073a1651",
+      "database/orm/text_capability.go": "2b6ab4f52b84b8824613b5c4f40fb79cdce880ee65ca6873161edbdba73046b4",
+      "database/query/comparison.go": "ad9e7dba350a063ea772ab127795a23ffc1c60787e4e87fee7eeec69b5545e61",
+      "database/query/join_value_condition.go": "b087a792150738d75494a70f7ae02ad01e803f57898370f96fd90418afedabf7",
+      "database/query/projection_reorder.go": "82b3f1aec5f22510a3fd409da18101dba11974f2f0f0171c2ec12bd72d34b3b6",
+      "database/query/result_pagination.go": "a3492a1ece1479a703d0ec3eb31b23a1f4aad55510f11bc872723a4d0a714182",
+      "database/query/text_capability.go": "97e680c9ef7b1116eaba1108e0f88e00c012fbcbd0e8764699617258a0f438e2",
+      "database/query/value_comparison.go": "f08aad7f855de5f7b9e48105ff47618c1fd112cc626f81aa298db6722c45ec8d",
+      "internal/ormcore/expression.go": "b2df33bee2416caaa64299d6bfe957d803e95ffb421f177fec451c4416d4df0d",
+      "internal/ormcore/join_condition.go": "4d319a55e6e5c350424bedbb55273a3fd5f2754f0b5a186b1565a54db55cef50",
+      "internal/ormcore/source.go": "f558b535d87f8bd070892cc348c75bf16fedebbea6c8207c7678d7e578875825",
+      "internal/querycore/ast.go": "850b6649bf3074474e36c38c48386cf0ee168f77141d7ea6e5b9119ac5a580ab",
+      "internal/querycore/compiler.go": "1dbe1b1328fe7487d9f6ceb3c6688ed16f35810dd4de3a747ea2683f52ff7b82",
+      "internal/querycore/report.go": "7043aca95fe79535e794f3ef6b13a3248a3edff147943c346b06c07538cfff21",
+      "internal/querycore/text_capability_test.go": "c9889ee7871dda8bebe3c93e44d3617350702df7765ae18bb25c69542c0b92f9",
+      "tests/fixtures/goway/compiler_cases_test.go": "a297db935cfce924dbcd31b621813bad9ed6935d0484c3e5e36ebe08bf139a8c",
+      "tests/fixtures/goway/footprint_test.go": "e324d6e189bee3333da992a918720f22028a4d4abb08c9a7383ad12a902e0781",
+      "tests/fixtures/goway/pgsmoke/report_projection_test.go": "2f8a4cbe051aba96ffb0b1b9d59ceccf1af8bd526ca079f176ecf360883cb09a",
+      "tests/fixtures/goway/report_projection_golden_test.go": "92338fff9dabb385b89b6be2ee9f14d83d0eac6e2f9904f29a22db4acc8c48da",
+      "tests/fixtures/goway/report_text_capability_test.go": "b3efc18e8d9934d69f17097516d789d1f877ea8bdc4828ba70e937d33cb33269",
+      "tests/fixtures/goway/testdata/compilefail/report_filter_enum_order/invalid.go": "97c5c9a7f36f5cd8f7fff074e9ad17e1179c7c9ae915fe40e4a528bec09b065e",
+      "tests/fixtures/goway/testdata/compilefail/report_filter_enum_text/invalid.go": "60b411aadabdd42476893ed51707f1cdee5ef0bcbff5f11df74b32c23d1edc10",
+      "tests/fixtures/goway/testdata/compilefail/report_filter_not_phase/invalid.go": "3224c5e777a1d02ca65eb1cafb4bf660463dcb1d247feb192f5f184ae8a8a3c0",
+      "tests/fixtures/goway/testdata/compilefail/report_filter_nullable_enum_contains/invalid.go": "908d0f52fdcad071d0f59d2690c4546a0ba7f1943ba4037c7ff124e82902beec",
+      "tests/fixtures/goway/testdata/compilefail/report_filter_nullable_enum_gt/invalid.go": "a16f91f220b9272d69d8ed6dd8c8bebfb71c4bd1fbbba524b8feb46f083bc532",
+      "tests/fixtures/goway/testdata/compilefail/report_filter_or_phase/invalid.go": "4fbcac41e4d162a5351f33bef92a7b6018c818c6499ecf54ca1a77eea95927f0",
+      "tests/fixtures/goway/testdata/compilefail/report_filter_relation_owner/invalid.go": "4a42fe1746eb00676d5e59e225b082c3699d01da6c1c5b49303af5236499c61d",
+      "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_contains/invalid.go": "b32a0844ba7cb87e422c3aa4fe9c77b92479ca3def6bf58fba8a87b62843eda2",
+      "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_forged/invalid.go": "a6d795a7bae55ff0f2f8d3c68035bb22600d7fc7cb5b495784e328ee7b4541c2",
+      "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_gt/invalid.go": "c35b3496a3219ecba2afad11598862188b25695874ce1588fa611a14bd207773",
+      "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_like/invalid.go": "d25dc8f3d580b2a14dd28e12f2b85a4b65f06671d3db840670f6f0dac8f13732",
+      "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_value/invalid.go": "2f4c7dbb2156d3449993307116c2c87bfa278322b97ba0c4dce37cd1bbcf9b28",
+      "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_contains/invalid.go": "2b8c7a1ea86ee2a1aa4d3dbe2ce510f9613ca02446eb91ecb58eff5fa616451d",
+      "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_forged/invalid.go": "57d1a66c60fc0f572a4e6fb84d643f81590f5303fd866ce1747b6243a592dde7",
+      "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_gt/invalid.go": "6c32bce89dec09ca5fa3735c8967c00f7bb67d00848c1f298d979b7ff45738fe",
+      "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_like/invalid.go": "ab0deef6fd2246eeb21dedb9acaeb8a4a2bd98aaff91aaae1fbdd61efa95a844",
+      "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_value/invalid.go": "e5d09bfce45fca2c10433c4548ea90e0aab5ef19d832558ae2caf34c7f93cc20",
+      "tests/fixtures/goway/testdata/footprint/report_filters/probe.go": "1e5fb3700a00235ae9cfa00f44daeecb85696876dd86d72dcc8d84d33b2942b1",
+      "tests/fixtures/goway/testdata/footprint/report_reads/probe.go": "330ab3356fb9b3bf7b093489bd9c6b8ecf8909b0e0698a7e1ef2a07d178a0da0"
+    },
+    "footprints": [
+      {
+        "name": "aggregate_families",
+        "measured": 4366,
+        "baseline": 3799,
+        "ceiling": 4369,
+        "archive_bytes": 19916334
+      },
+      {
+        "name": "aggregate_group",
+        "measured": 2533,
+        "baseline": 2426,
+        "ceiling": 2790,
+        "archive_bytes": 11406456
+      },
+      {
+        "name": "aggregate_slot_declaration",
+        "measured": 1127,
+        "baseline": 1112,
+        "ceiling": 1279,
+        "archive_bytes": 4877994
+      },
+      {
+        "name": "aggregate_slot_direct",
+        "measured": 1490,
+        "baseline": 1490,
+        "ceiling": 1714,
+        "archive_bytes": 6192234
+      },
+      {
+        "name": "aggregate_slot_nested",
+        "measured": 2050,
+        "baseline": 2048,
+        "ceiling": 2356,
+        "archive_bytes": 8599564
+      },
+      {
+        "name": "aggregate_slot_pivot",
+        "measured": 2092,
+        "baseline": 2095,
+        "ceiling": 2410,
+        "archive_bytes": 8868376
+      },
+      {
+        "name": "audit",
+        "measured": 1337,
+        "baseline": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6655252
+      },
+      {
+        "name": "column_encrypted_json",
+        "measured": 1321,
+        "baseline": 1217,
+        "ceiling": 1400,
+        "archive_bytes": 5670074
+      },
+      {
+        "name": "column_encrypted_text",
+        "measured": 1231,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5359980
+      },
+      {
+        "name": "column_enum",
+        "measured": 1344,
+        "baseline": 1232,
+        "ceiling": 1417,
+        "archive_bytes": 5662792
+      },
+      {
+        "name": "column_interval",
+        "measured": 1293,
+        "baseline": 1178,
+        "ceiling": 1355,
+        "archive_bytes": 5604538
+      },
+      {
+        "name": "column_json",
+        "measured": 1391,
+        "baseline": 1280,
+        "ceiling": 1472,
+        "archive_bytes": 5901146
+      },
+      {
+        "name": "column_nullable_encrypted_json",
+        "measured": 1562,
+        "baseline": 1449,
+        "ceiling": 1667,
+        "archive_bytes": 6937352
+      },
+      {
+        "name": "column_nullable_encrypted_text",
+        "measured": 1472,
+        "baseline": 1359,
+        "ceiling": 1563,
+        "archive_bytes": 6604270
+      },
+      {
+        "name": "column_nullable_interval",
+        "measured": 1530,
+        "baseline": 1406,
+        "ceiling": 1617,
+        "archive_bytes": 6823500
+      },
+      {
+        "name": "column_nullable_json",
+        "measured": 1642,
+        "baseline": 1522,
+        "ceiling": 1751,
+        "archive_bytes": 7127240
+      },
+      {
+        "name": "column_nullable_password",
+        "measured": 1535,
+        "baseline": 1417,
+        "ceiling": 1630,
+        "archive_bytes": 6786028
+      },
+      {
+        "name": "column_nullable_text",
+        "measured": 1584,
+        "baseline": 1456,
+        "ceiling": 1675,
+        "archive_bytes": 6597608
+      },
+      {
+        "name": "column_number",
+        "measured": 1267,
+        "baseline": 1172,
+        "ceiling": 1348,
+        "archive_bytes": 5374782
+      },
+      {
+        "name": "column_password",
+        "measured": 1299,
+        "baseline": 1190,
+        "ceiling": 1369,
+        "archive_bytes": 5612160
+      },
+      {
+        "name": "column_time",
+        "measured": 1309,
+        "baseline": 1194,
+        "ceiling": 1374,
+        "archive_bytes": 5512674
+      },
+      {
+        "name": "conditional_row",
+        "measured": 1805,
+        "baseline": 1681,
+        "ceiling": 1934,
+        "archive_bytes": 8300306
+      },
+      {
+        "name": "conditional_selected",
+        "measured": 1649,
+        "baseline": 1511,
+        "ceiling": 1738,
+        "archive_bytes": 7598744
+      },
+      {
+        "name": "conflict",
+        "measured": 968,
+        "baseline": 944,
+        "ceiling": 1086,
+        "archive_bytes": 4864706
+      },
+      {
+        "name": "conflict_advanced",
+        "measured": 1817,
+        "baseline": 1817,
+        "ceiling": 2090,
+        "archive_bytes": 9156056
+      },
+      {
+        "name": "correlation",
+        "measured": 2991,
+        "baseline": 2752,
+        "ceiling": 3165,
+        "archive_bytes": 13857962
+      },
+      {
+        "name": "cte_recursive",
+        "measured": 1131,
+        "baseline": 1076,
+        "ceiling": 1238,
+        "archive_bytes": 5510746
+      },
+      {
+        "name": "cursor",
+        "measured": 1186,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5430208
+      },
+      {
+        "name": "distinct",
+        "measured": 1174,
+        "baseline": 1135,
+        "ceiling": 1306,
+        "archive_bytes": 5715650
+      },
+      {
+        "name": "each_writes",
+        "measured": 888,
+        "baseline": 888,
+        "ceiling": 1022,
+        "archive_bytes": 4511180
+      },
+      {
+        "name": "expr_arithmetic",
+        "measured": 1256,
+        "baseline": 1162,
+        "ceiling": 1337,
+        "archive_bytes": 5939858
+      },
+      {
+        "name": "expr_selected",
+        "measured": 1698,
+        "baseline": 1551,
+        "ceiling": 1784,
+        "archive_bytes": 7577530
+      },
+      {
+        "name": "extension_declaration",
+        "measured": 30781,
+        "baseline": 30434,
+        "ceiling": 35000,
+        "archive_bytes": 140658434
+      },
+      {
+        "name": "extension_handles",
+        "measured": 1481,
+        "baseline": 1481,
+        "ceiling": 1704,
+        "archive_bytes": 6694186
+      },
+      {
+        "name": "extension_slots",
+        "measured": 2154,
+        "baseline": 2154,
+        "ceiling": 2478,
+        "archive_bytes": 9890366
+      },
+      {
+        "name": "extension_slots_old",
+        "measured": 30487,
+        "baseline": 30493,
+        "ceiling": 35067,
+        "archive_bytes": 140945924
+      },
+      {
+        "name": "framework_challengestore",
+        "measured": 2560,
+        "baseline": 2558,
+        "ceiling": 2942,
+        "archive_bytes": 11940380
+      },
+      {
+        "name": "framework_countries",
+        "measured": 4157,
+        "baseline": 4122,
+        "ceiling": 4741,
+        "archive_bytes": 17384984
+      },
+      {
+        "name": "framework_idempotencystore",
+        "measured": 2253,
+        "baseline": 2249,
+        "ceiling": 2587,
+        "archive_bytes": 9603546
+      },
+      {
+        "name": "framework_jobarchive",
+        "measured": 2280,
+        "baseline": 2280,
+        "ceiling": 2622,
+        "archive_bytes": 9863318
+      },
+      {
+        "name": "framework_mfastore",
+        "measured": 2947,
+        "baseline": 2947,
+        "ceiling": 3390,
+        "archive_bytes": 12478680
+      },
+      {
+        "name": "framework_outbox",
+        "measured": 2896,
+        "baseline": 2896,
+        "ceiling": 3331,
+        "archive_bytes": 12596098
+      },
+      {
+        "name": "framework_sessionstore",
+        "measured": 4166,
+        "baseline": 4166,
+        "ceiling": 4791,
+        "archive_bytes": 17793980
+      },
+      {
+        "name": "framework_tokenstore",
+        "measured": 5315,
+        "baseline": 5315,
+        "ceiling": 6113,
+        "archive_bytes": 22609142
+      },
+      {
+        "name": "global_scopes",
+        "measured": 1389,
+        "baseline": 1374,
+        "ceiling": 1581,
+        "archive_bytes": 6517432
+      },
+      {
+        "name": "has",
+        "measured": 1412,
+        "baseline": 1302,
+        "ceiling": 1498,
+        "archive_bytes": 6314876
+      },
+      {
+        "name": "has_one",
+        "measured": 1403,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6283978
+      },
+      {
+        "name": "input_column_kinds",
+        "measured": 5321,
+        "baseline": 5088,
+        "ceiling": 5852,
+        "archive_bytes": 22045510
+      },
+      {
+        "name": "input_key",
+        "measured": 1049,
+        "baseline": 982,
+        "ceiling": 1130,
+        "archive_bytes": 4889068
+      },
+      {
+        "name": "json_functions",
+        "measured": 2739,
+        "baseline": 2736,
+        "ceiling": 3147,
+        "archive_bytes": 11675668
+      },
+      {
+        "name": "json_paths",
+        "measured": 6148,
+        "baseline": 6146,
+        "ceiling": 7068,
+        "archive_bytes": 26632204
+      },
+      {
+        "name": "key_chunk",
+        "measured": 862,
+        "baseline": 812,
+        "ceiling": 934,
+        "archive_bytes": 4183666
+      },
+      {
+        "name": "lateral",
+        "measured": 3049,
+        "baseline": 2852,
+        "ceiling": 3280,
+        "archive_bytes": 15192694
+      },
+      {
+        "name": "lifecycle_changes",
+        "measured": 1093,
+        "baseline": 1050,
+        "ceiling": 1208,
+        "archive_bytes": 5154250
+      },
+      {
+        "name": "lifecycle_write",
+        "measured": 973,
+        "baseline": 930,
+        "ceiling": 1070,
+        "archive_bytes": 4917574
+      },
+      {
+        "name": "model_type",
+        "measured": 299,
+        "baseline": 299,
+        "ceiling": 344,
+        "archive_bytes": 1272430
+      },
+      {
+        "name": "models",
+        "measured": 6849,
+        "baseline": 6147,
+        "ceiling": 7070,
+        "archive_bytes": 30236166
+      },
+      {
+        "name": "models_1",
+        "measured": 1751,
+        "baseline": 1619,
+        "ceiling": 1862,
+        "archive_bytes": 7314902
+      },
+      {
+        "name": "models_3",
+        "measured": 2605,
+        "baseline": 2435,
+        "ceiling": 2801,
+        "archive_bytes": 11019716
+      },
+      {
+        "name": "morph",
+        "measured": 1155,
+        "baseline": 1088,
+        "ceiling": 1252,
+        "archive_bytes": 5291074
+      },
+      {
+        "name": "mutator_explicit",
+        "measured": 1717,
+        "baseline": 1605,
+        "ceiling": 1846,
+        "archive_bytes": 7169356
+      },
+      {
+        "name": "mutators",
+        "measured": 855,
+        "baseline": 801,
+        "ceiling": 922,
+        "archive_bytes": 4511458
+      },
+      {
+        "name": "nested_with",
+        "measured": 1403,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6323874
+      },
+      {
+        "name": "nullable_join_chain",
+        "measured": 1854,
+        "baseline": 1695,
+        "ceiling": 1950,
+        "archive_bytes": 8916076
+      },
+      {
+        "name": "on_comparisons",
+        "measured": 1593,
+        "baseline": 1454,
+        "ceiling": 1673,
+        "archive_bytes": 7318142
+      },
+      {
+        "name": "onequery",
+        "measured": 854,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 4140640
+      },
+      {
+        "name": "orm_binding",
+        "measured": 1101,
+        "baseline": 1089,
+        "ceiling": 1253,
+        "archive_bytes": 4635702
+      },
+      {
+        "name": "orm_factory",
+        "measured": 1093,
+        "baseline": 1093,
+        "ceiling": 1257,
+        "archive_bytes": 4771854
+      },
+      {
+        "name": "outbox_publisher",
+        "measured": 1324,
+        "baseline": 1324,
+        "ceiling": 1523,
+        "archive_bytes": 6618652
+      },
+      {
+        "name": "outer_join",
+        "measured": 1789,
+        "baseline": 1668,
+        "ceiling": 1919,
+        "archive_bytes": 8578068
+      },
+      {
+        "name": "pivot",
+        "measured": 1072,
+        "baseline": 1005,
+        "ceiling": 1156,
+        "archive_bytes": 4986504
+      },
+      {
+        "name": "q_join",
+        "measured": 1766,
+        "baseline": 1598,
+        "ceiling": 1838,
+        "archive_bytes": 8510890
+      },
+      {
+        "name": "q_select",
+        "measured": 895,
+        "baseline": 836,
+        "ceiling": 962,
+        "archive_bytes": 4368754
+      },
+      {
+        "name": "q_with",
+        "measured": 1211,
+        "baseline": 1053,
+        "ceiling": 1211,
+        "archive_bytes": 5620418
+      },
+      {
+        "name": "raw",
+        "measured": 1096,
+        "baseline": 1045,
+        "ceiling": 1202,
+        "archive_bytes": 5250888
+      },
+      {
+        "name": "raw_fragments",
+        "measured": 1380,
+        "baseline": 1331,
+        "ceiling": 1531,
+        "archive_bytes": 6241144
+      },
+      {
+        "name": "record_sets",
+        "measured": 1294,
+        "baseline": 1288,
+        "ceiling": 1482,
+        "archive_bytes": 6349454
+      },
+      {
+        "name": "records",
+        "measured": 1327,
+        "baseline": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6570546
+      },
+      {
+        "name": "relation_with",
+        "measured": 2047,
+        "baseline": 1847,
+        "ceiling": 2125,
+        "archive_bytes": 8802168
+      },
+      {
+        "name": "relation_write_attach",
+        "measured": 1110,
+        "baseline": 1110,
+        "ceiling": 1277,
+        "archive_bytes": 5149990
+      },
+      {
+        "name": "relation_write_declaration",
+        "measured": 361,
+        "baseline": 361,
+        "ceiling": 416,
+        "archive_bytes": 1507250
+      },
+      {
+        "name": "relation_write_sync",
+        "measured": 1124,
+        "baseline": 1124,
+        "ceiling": 1293,
+        "archive_bytes": 5219906
+      },
+      {
+        "name": "report_filters",
+        "measured": 2111,
+        "baseline": 2095,
+        "ceiling": 2410,
+        "archive_bytes": 9555164
+      },
+      {
+        "name": "report_pipeline",
+        "measured": 2120,
+        "baseline": 1905,
+        "ceiling": 2191,
+        "archive_bytes": 11460208
+      },
+      {
+        "name": "report_reads",
+        "measured": 1063,
+        "baseline": 1063,
+        "ceiling": 1223,
+        "archive_bytes": 5054572
+      },
+      {
+        "name": "result_cursor",
+        "measured": 2229,
+        "baseline": 2229,
+        "ceiling": 2564,
+        "archive_bytes": 10473030
+      },
+      {
+        "name": "result_reads",
+        "measured": 1385,
+        "baseline": 1351,
+        "ceiling": 1554,
+        "archive_bytes": 6589602
+      },
+      {
+        "name": "retrieval_read",
+        "measured": 831,
+        "baseline": 826,
+        "ceiling": 950,
+        "archive_bytes": 4174514
+      },
+      {
+        "name": "role_input_same",
+        "measured": 1360,
+        "baseline": 1360,
+        "ceiling": 1564,
+        "archive_bytes": 5613080
+      },
+      {
+        "name": "role_lookup_input",
+        "measured": 1226,
+        "baseline": 1226,
+        "ceiling": 1410,
+        "archive_bytes": 5192374
+      },
+      {
+        "name": "role_primary_number",
+        "measured": 1195,
+        "baseline": 1195,
+        "ceiling": 1375,
+        "archive_bytes": 5123014
+      },
+      {
+        "name": "role_primary_text",
+        "measured": 1216,
+        "baseline": 1216,
+        "ceiling": 1399,
+        "archive_bytes": 5177094
+      },
+      {
+        "name": "role_soft_read",
+        "measured": 1548,
+        "baseline": 1548,
+        "ceiling": 1781,
+        "archive_bytes": 6629650
+      },
+      {
+        "name": "role_soft_write",
+        "measured": 620,
+        "baseline": 620,
+        "ceiling": 713,
+        "archive_bytes": 2849502
+      },
+      {
+        "name": "role_source",
+        "measured": 905,
+        "baseline": 905,
+        "ceiling": 1041,
+        "archive_bytes": 4159158
+      },
+      {
+        "name": "role_time_read",
+        "measured": 1394,
+        "baseline": 1394,
+        "ceiling": 1604,
+        "archive_bytes": 5971094
+      },
+      {
+        "name": "scalar_temporal",
+        "measured": 2629,
+        "baseline": 2625,
+        "ceiling": 3019,
+        "archive_bytes": 11882792
+      },
+      {
+        "name": "scalar_text",
+        "measured": 2315,
+        "baseline": 2312,
+        "ceiling": 2659,
+        "archive_bytes": 9604974
+      },
+      {
+        "name": "scoped_write",
+        "measured": 1111,
+        "baseline": 1111,
+        "ceiling": 1278,
+        "archive_bytes": 5145034
+      },
+      {
+        "name": "sensitive_models",
+        "measured": 2821,
+        "baseline": 2606,
+        "ceiling": 2997,
+        "archive_bytes": 12869480
+      },
+      {
+        "name": "source_write",
+        "measured": 1311,
+        "baseline": 1311,
+        "ceiling": 1508,
+        "archive_bytes": 6511332
+      },
+      {
+        "name": "subqueries",
+        "measured": 3061,
+        "baseline": 2837,
+        "ceiling": 3263,
+        "archive_bytes": 13349044
+      },
+      {
+        "name": "table_ref",
+        "measured": 854,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 4307350
+      },
+      {
+        "name": "through",
+        "measured": 986,
+        "baseline": 928,
+        "ceiling": 1068,
+        "archive_bytes": 4490124
+      },
+      {
+        "name": "transaction_correlation",
+        "measured": 2908,
+        "baseline": 2908,
+        "ceiling": 3345,
+        "archive_bytes": 14736970
+      },
+      {
+        "name": "transaction_joins",
+        "measured": 1835,
+        "baseline": 1835,
+        "ceiling": 2111,
+        "archive_bytes": 9252064
+      },
+      {
+        "name": "transaction_records",
+        "measured": 1406,
+        "baseline": 1296,
+        "ceiling": 1491,
+        "archive_bytes": 6611174
+      },
+      {
+        "name": "uuid_seeks",
+        "measured": 1023,
+        "baseline": 1023,
+        "ceiling": 1177,
+        "archive_bytes": 5099168
+      },
+      {
+        "name": "value_sets",
+        "measured": 2237,
+        "baseline": 2230,
+        "ceiling": 2565,
+        "archive_bytes": 10218134
+      },
+      {
+        "name": "window_frames",
+        "measured": 1769,
+        "baseline": 1767,
+        "ceiling": 2033,
+        "archive_bytes": 7963780
+      },
+      {
+        "name": "window_rank",
+        "measured": 1346,
+        "baseline": 1345,
+        "ceiling": 1547,
+        "archive_bytes": 6187174
+      }
+    ]
+  },
+  "integration_batch6c_part1": {
+    "base_commit": "f3cfffd",
+    "status": "pass",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off"
+    },
+    "lane_source_sha256": {
+      "database/orm/column.go": "2d39a301902d017b05921513d1e1fdfc5dc4156a950355537ba3e5e0f05bcf44",
+      "database/orm/column_input.go": "eec2698c0c3e1398747b4dd9b20840b2f350c9e5cbaf7c0f9bf6914552d26a09",
+      "database/orm/column_methods.go": "51a3b2541cd4333ad77e2d67c72936f7249592d35dcbd50f440c4319ae48b37e",
+      "database/orm/expr/README.md": "bdeaa4ed98ced7aa47244791518b4dd3ad0edd43b098b45b6a0be849101bf0d5",
+      "database/orm/expr/comparison.go": "3b08496df054577574cbf743bf660eb00cf4f9c639d5bd4ed646d3218a0e84ff",
+      "database/orm/expr/filter.go": "1b30b86a6b02ae4974adf1cf247b0dccd6070baad8460f90083042ac2a22c14c",
+      "database/orm/expr/operation.go": "87a7962f7742be722168704199c68c873b36ea26147a95f3ef0af62d59f96947",
+      "database/orm/expr/value.go": "2a293dc463f540131e3ef1a1bf4d6b592a3f68664d0656bb65e62e0f1a6fb6e7",
+      "database/orm/method_surface_test.go": "7b1a13ef44b89ea8240d57fe190f03d78800a92ba049cd887ae34f93de8cdf0d",
+      "database/orm/projection_bridge.go": "8ca95766be55112be12017b683a9a0425dc48279bcfbe96ef23bfc3adb3e8539",
+      "database/orm/relation_predicate.go": "441ec3ff1532976517d4af0467d4ba46a9111de4051743f66a5a5d671cf4e853",
+      "database/orm/rows/README.md": "debc3f47ef25d16d6c9c81c52435bb68982f3cf2bb323f1e33f7193f6042263d",
+      "database/orm/rows/declaration.go": "dcd9d2728214c3ee459e4d2794b75ffa9c3248c0d19564ed1a95734ecef35845",
+      "database/orm/rows/join_condition.go": "9767238fa6c8767d369a11931b12e9a1ed4cf866400064cfaf5963a43001bfec",
+      "database/orm/rows/pagination.go": "6fcb963c23d69ad5f8777c2059e406c483104abc267b4658c40e1c2d082e213d",
+      "database/orm/rows/projection_test.go": "ba33efa678324b0d15ad9a75fdc23ac0cdb72f2b87b3132f30ac117d3877af42",
+      "database/orm/rows/read.go": "64b557314a5ec27783edb342b129260d4f938d34478765707b5dcde7948ea56d",
+      "database/orm/rows/report_read_test.go": "477ee07dd7886e4eb2133b0de6cb66c03408e2d2a9b945b9e55d4b8dd7e2b44b",
+      "database/orm/rows/result_read.go": "7d8cbce47f2fef7b7bb668a511f920e3f8302d5d0f2703026c95cdc6d1aae7d6",
+      "database/orm/rows/results.md": "763299baf787c3b7211219abb61e2fcbd16a27092289ce79a339674a500a0166",
+      "database/orm/testdata/public-methods.txt": "7ed5c6f0aa77169a8216ea00ae29204c345ea26d88e491c6a2bfb9f255d02048",
+      "database/orm/text_capability.go": "2b6ab4f52b84b8824613b5c4f40fb79cdce880ee65ca6873161edbdba73046b4",
+      "database/query/comparison.go": "ad9e7dba350a063ea772ab127795a23ffc1c60787e4e87fee7eeec69b5545e61",
+      "database/query/join_value_condition.go": "b087a792150738d75494a70f7ae02ad01e803f57898370f96fd90418afedabf7",
+      "database/query/projection_reorder.go": "82b3f1aec5f22510a3fd409da18101dba11974f2f0f0171c2ec12bd72d34b3b6",
+      "database/query/result_pagination.go": "a3492a1ece1479a703d0ec3eb31b23a1f4aad55510f11bc872723a4d0a714182",
+      "database/query/text_capability.go": "97e680c9ef7b1116eaba1108e0f88e00c012fbcbd0e8764699617258a0f438e2",
+      "database/query/value_comparison.go": "f08aad7f855de5f7b9e48105ff47618c1fd112cc626f81aa298db6722c45ec8d",
+      "internal/ormcore/expression.go": "b2df33bee2416caaa64299d6bfe957d803e95ffb421f177fec451c4416d4df0d",
+      "internal/ormcore/join_condition.go": "4d319a55e6e5c350424bedbb55273a3fd5f2754f0b5a186b1565a54db55cef50",
+      "internal/ormcore/source.go": "f558b535d87f8bd070892cc348c75bf16fedebbea6c8207c7678d7e578875825",
+      "internal/querycore/ast.go": "850b6649bf3074474e36c38c48386cf0ee168f77141d7ea6e5b9119ac5a580ab",
+      "internal/querycore/compiler.go": "1dbe1b1328fe7487d9f6ceb3c6688ed16f35810dd4de3a747ea2683f52ff7b82",
+      "internal/querycore/report.go": "7043aca95fe79535e794f3ef6b13a3248a3edff147943c346b06c07538cfff21",
+      "internal/querycore/text_capability_test.go": "c9889ee7871dda8bebe3c93e44d3617350702df7765ae18bb25c69542c0b92f9",
+      "tests/fixtures/goway/compiler_cases_test.go": "79a92efd0fe78a28c340580367f4deec68f3ea8ff5e0ddb624b3f33acdacffbd",
+      "tests/fixtures/goway/footprint_test.go": "aca815f3eea6bb470334409aa399346130024097ec5c2134c52e29f6034b0103",
+      "tests/fixtures/goway/pgsmoke/report_projection_test.go": "2f8a4cbe051aba96ffb0b1b9d59ceccf1af8bd526ca079f176ecf360883cb09a",
+      "tests/fixtures/goway/pgsmoke/store_capabilities_test.go": "5f44bf0daf4d699e0741cbdcb16416afc206e8200ff005486564379434eea545",
+      "tests/fixtures/goway/report_projection_golden_test.go": "92338fff9dabb385b89b6be2ee9f14d83d0eac6e2f9904f29a22db4acc8c48da",
+      "tests/fixtures/goway/report_text_capability_test.go": "b3efc18e8d9934d69f17097516d789d1f877ea8bdc4828ba70e937d33cb33269",
+      "tests/fixtures/goway/testdata/compilefail/report_filter_enum_order/invalid.go": "97c5c9a7f36f5cd8f7fff074e9ad17e1179c7c9ae915fe40e4a528bec09b065e",
+      "tests/fixtures/goway/testdata/compilefail/report_filter_enum_text/invalid.go": "60b411aadabdd42476893ed51707f1cdee5ef0bcbff5f11df74b32c23d1edc10",
+      "tests/fixtures/goway/testdata/compilefail/report_filter_not_phase/invalid.go": "3224c5e777a1d02ca65eb1cafb4bf660463dcb1d247feb192f5f184ae8a8a3c0",
+      "tests/fixtures/goway/testdata/compilefail/report_filter_nullable_enum_contains/invalid.go": "908d0f52fdcad071d0f59d2690c4546a0ba7f1943ba4037c7ff124e82902beec",
+      "tests/fixtures/goway/testdata/compilefail/report_filter_nullable_enum_gt/invalid.go": "a16f91f220b9272d69d8ed6dd8c8bebfb71c4bd1fbbba524b8feb46f083bc532",
+      "tests/fixtures/goway/testdata/compilefail/report_filter_or_phase/invalid.go": "4fbcac41e4d162a5351f33bef92a7b6018c818c6499ecf54ca1a77eea95927f0",
+      "tests/fixtures/goway/testdata/compilefail/report_filter_relation_owner/invalid.go": "4a42fe1746eb00676d5e59e225b082c3699d01da6c1c5b49303af5236499c61d",
+      "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_contains/invalid.go": "b32a0844ba7cb87e422c3aa4fe9c77b92479ca3def6bf58fba8a87b62843eda2",
+      "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_forged/invalid.go": "a6d795a7bae55ff0f2f8d3c68035bb22600d7fc7cb5b495784e328ee7b4541c2",
+      "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_gt/invalid.go": "c35b3496a3219ecba2afad11598862188b25695874ce1588fa611a14bd207773",
+      "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_like/invalid.go": "d25dc8f3d580b2a14dd28e12f2b85a4b65f06671d3db840670f6f0dac8f13732",
+      "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_value/invalid.go": "2f4c7dbb2156d3449993307116c2c87bfa278322b97ba0c4dce37cd1bbcf9b28",
+      "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_contains/invalid.go": "2b8c7a1ea86ee2a1aa4d3dbe2ce510f9613ca02446eb91ecb58eff5fa616451d",
+      "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_forged/invalid.go": "57d1a66c60fc0f572a4e6fb84d643f81590f5303fd866ce1747b6243a592dde7",
+      "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_gt/invalid.go": "6c32bce89dec09ca5fa3735c8967c00f7bb67d00848c1f298d979b7ff45738fe",
+      "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_like/invalid.go": "ab0deef6fd2246eeb21dedb9acaeb8a4a2bd98aaff91aaae1fbdd61efa95a844",
+      "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_value/invalid.go": "e5d09bfce45fca2c10433c4548ea90e0aab5ef19d832558ae2caf34c7f93cc20",
+      "tests/fixtures/goway/testdata/footprint/report_filters/probe.go": "1e5fb3700a00235ae9cfa00f44daeecb85696876dd86d72dcc8d84d33b2942b1",
+      "tests/fixtures/goway/testdata/footprint/report_reads/probe.go": "330ab3356fb9b3bf7b093489bd9c6b8ecf8909b0e0698a7e1ef2a07d178a0da0"
+    },
+    "conflicts": {
+      "6e4_8a": [],
+      "datatables": [
+        "database/orm/method_surface_test.go",
+        "database/orm/testdata/public-methods.txt",
+        "tests/fixtures/goway/footprint_test.go"
+      ]
+    },
+    "resolution": [
+      "Union registries and regenerate snapshot; no dropped case or ported row. All 109 existing footprint entries unchanged.",
+      "Both README/guide texts applied cleanly; integrated lead-owned status/docs separately.",
+      "Keep frozen generated TypeScript bytes intact; exact-file .gitattributes exceptions permit their pre-existing final blank lines. No baseline or generator output edited."
+    ],
+    "allowlist": {
+      "before": 71,
+      "after": 71,
+      "pending_roles": 0
+    },
+    "cache_rotation": {
+      "reason": "Lead requested rotation for disk pressure; no older cache used after the instruction.",
+      "completed_checks": "Build, snapshot, vet, race and fixture checks passed on r5 before rotation; unchanged source retains those results.",
+      "resumed_check": "Interrupted make generate-check rerun on r6; remaining Go commands use r6.",
+      "interrupted_log": ".cache/goway-batch6c1/generate-interrupted-r5.log"
+    },
+    "counts": {
+      "catalogue_rows": 1026,
+      "dispositions": {
+        "ported": 529,
+        "unaffected": 444,
+        "port": 53
+      },
+      "distinct_ported_cases": 521,
+      "compiler_cases": 772,
+      "footprint_probes": 118
+    },
+    "footprints": {
+      "aggregate_families": {
+        "functions": 4366,
+        "baseline": 3799,
+        "ceiling": 4369,
+        "archive_bytes": 19915222
+      },
+      "aggregate_group": {
+        "functions": 2533,
+        "baseline": 2426,
+        "ceiling": 2790,
+        "archive_bytes": 11405212
+      },
+      "aggregate_slot_declaration": {
+        "functions": 1127,
+        "baseline": 1112,
+        "ceiling": 1279,
+        "archive_bytes": 4877028
+      },
+      "aggregate_slot_direct": {
+        "functions": 1490,
+        "baseline": 1490,
+        "ceiling": 1714,
+        "archive_bytes": 6191294
+      },
+      "aggregate_slot_nested": {
+        "functions": 2050,
+        "baseline": 2048,
+        "ceiling": 2356,
+        "archive_bytes": 8598642
+      },
+      "aggregate_slot_pivot": {
+        "functions": 2092,
+        "baseline": 2095,
+        "ceiling": 2410,
+        "archive_bytes": 8867458
+      },
+      "audit": {
+        "functions": 1337,
+        "baseline": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6653876
+      },
+      "column_encrypted_json": {
+        "functions": 1321,
+        "baseline": 1217,
+        "ceiling": 1400,
+        "archive_bytes": 5669072
+      },
+      "column_encrypted_text": {
+        "functions": 1231,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5358988
+      },
+      "column_enum": {
+        "functions": 1344,
+        "baseline": 1232,
+        "ceiling": 1417,
+        "archive_bytes": 5661694
+      },
+      "column_interval": {
+        "functions": 1293,
+        "baseline": 1178,
+        "ceiling": 1355,
+        "archive_bytes": 5603554
+      },
+      "column_json": {
+        "functions": 1391,
+        "baseline": 1280,
+        "ceiling": 1472,
+        "archive_bytes": 5900148
+      },
+      "column_nullable_encrypted_json": {
+        "functions": 1562,
+        "baseline": 1449,
+        "ceiling": 1667,
+        "archive_bytes": 6936364
+      },
+      "column_nullable_encrypted_text": {
+        "functions": 1472,
+        "baseline": 1359,
+        "ceiling": 1563,
+        "archive_bytes": 6603292
+      },
+      "column_nullable_interval": {
+        "functions": 1530,
+        "baseline": 1406,
+        "ceiling": 1617,
+        "archive_bytes": 6822516
+      },
+      "column_nullable_json": {
+        "functions": 1642,
+        "baseline": 1522,
+        "ceiling": 1751,
+        "archive_bytes": 7126258
+      },
+      "column_nullable_password": {
+        "functions": 1535,
+        "baseline": 1417,
+        "ceiling": 1630,
+        "archive_bytes": 6785058
+      },
+      "column_nullable_text": {
+        "functions": 1584,
+        "baseline": 1456,
+        "ceiling": 1675,
+        "archive_bytes": 6596654
+      },
+      "column_number": {
+        "functions": 1267,
+        "baseline": 1172,
+        "ceiling": 1348,
+        "archive_bytes": 5373746
+      },
+      "column_password": {
+        "functions": 1299,
+        "baseline": 1190,
+        "ceiling": 1369,
+        "archive_bytes": 5611176
+      },
+      "column_time": {
+        "functions": 1309,
+        "baseline": 1194,
+        "ceiling": 1374,
+        "archive_bytes": 5511656
+      },
+      "conditional_row": {
+        "functions": 1805,
+        "baseline": 1681,
+        "ceiling": 1934,
+        "archive_bytes": 8299074
+      },
+      "conditional_selected": {
+        "functions": 1649,
+        "baseline": 1511,
+        "ceiling": 1738,
+        "archive_bytes": 7597472
+      },
+      "conflict": {
+        "functions": 968,
+        "baseline": 944,
+        "ceiling": 1086,
+        "archive_bytes": 4863994
+      },
+      "conflict_advanced": {
+        "functions": 1808,
+        "baseline": 1817,
+        "ceiling": 2090,
+        "archive_bytes": 9092278
+      },
+      "correlation": {
+        "functions": 2991,
+        "baseline": 2752,
+        "ceiling": 3165,
+        "archive_bytes": 13856718
+      },
+      "cte_recursive": {
+        "functions": 1131,
+        "baseline": 1076,
+        "ceiling": 1238,
+        "archive_bytes": 5509706
+      },
+      "cursor": {
+        "functions": 1186,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5429220
+      },
+      "datatable_projection": {
+        "functions": 2951,
+        "baseline": 2951,
+        "ceiling": 3394,
+        "archive_bytes": 12808418
+      },
+      "distinct": {
+        "functions": 1174,
+        "baseline": 1135,
+        "ceiling": 1306,
+        "archive_bytes": 5714544
+      },
+      "each_writes": {
+        "functions": 879,
+        "baseline": 888,
+        "ceiling": 1022,
+        "archive_bytes": 4449502
+      },
+      "expr_arithmetic": {
+        "functions": 1256,
+        "baseline": 1162,
+        "ceiling": 1337,
+        "archive_bytes": 5937450
+      },
+      "expr_selected": {
+        "functions": 1698,
+        "baseline": 1551,
+        "ceiling": 1784,
+        "archive_bytes": 7576276
+      },
+      "extension_declaration": {
+        "functions": 30764,
+        "baseline": 30434,
+        "ceiling": 35000,
+        "archive_bytes": 140528500
+      },
+      "extension_handles": {
+        "functions": 1481,
+        "baseline": 1481,
+        "ceiling": 1704,
+        "archive_bytes": 6692498
+      },
+      "extension_slots": {
+        "functions": 2154,
+        "baseline": 2154,
+        "ceiling": 2478,
+        "archive_bytes": 9887428
+      },
+      "extension_slots_old": {
+        "functions": 30466,
+        "baseline": 30493,
+        "ceiling": 35067,
+        "archive_bytes": 140788242
+      },
+      "framework_challengestore": {
+        "functions": 2560,
+        "baseline": 2558,
+        "ceiling": 2942,
+        "archive_bytes": 11939266
+      },
+      "framework_countries": {
+        "functions": 4157,
+        "baseline": 4122,
+        "ceiling": 4741,
+        "archive_bytes": 17383544
+      },
+      "framework_idempotencystore": {
+        "functions": 2253,
+        "baseline": 2249,
+        "ceiling": 2587,
+        "archive_bytes": 9602452
+      },
+      "framework_jobarchive": {
+        "functions": 2280,
+        "baseline": 2280,
+        "ceiling": 2622,
+        "archive_bytes": 9862234
+      },
+      "framework_mfastore": {
+        "functions": 2947,
+        "baseline": 2947,
+        "ceiling": 3390,
+        "archive_bytes": 12477546
+      },
+      "framework_outbox": {
+        "functions": 2896,
+        "baseline": 2896,
+        "ceiling": 3331,
+        "archive_bytes": 12594888
+      },
+      "framework_sessionstore": {
+        "functions": 4166,
+        "baseline": 4166,
+        "ceiling": 4791,
+        "archive_bytes": 17792848
+      },
+      "framework_tokenstore": {
+        "functions": 5315,
+        "baseline": 5315,
+        "ceiling": 6113,
+        "archive_bytes": 22608036
+      },
+      "global_scopes": {
+        "functions": 1389,
+        "baseline": 1374,
+        "ceiling": 1581,
+        "archive_bytes": 6516754
+      },
+      "has": {
+        "functions": 1412,
+        "baseline": 1302,
+        "ceiling": 1498,
+        "archive_bytes": 6313792
+      },
+      "has_one": {
+        "functions": 1403,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6282900
+      },
+      "input_column_kinds": {
+        "functions": 5321,
+        "baseline": 5088,
+        "ceiling": 5852,
+        "archive_bytes": 22044234
+      },
+      "input_key": {
+        "functions": 1049,
+        "baseline": 982,
+        "ceiling": 1130,
+        "archive_bytes": 4888076
+      },
+      "json_functions": {
+        "functions": 2739,
+        "baseline": 2736,
+        "ceiling": 3147,
+        "archive_bytes": 11674762
+      },
+      "json_paths": {
+        "functions": 6148,
+        "baseline": 6146,
+        "ceiling": 7068,
+        "archive_bytes": 26631268
+      },
+      "key_chunk": {
+        "functions": 862,
+        "baseline": 812,
+        "ceiling": 934,
+        "archive_bytes": 4182772
+      },
+      "lateral": {
+        "functions": 3049,
+        "baseline": 2852,
+        "ceiling": 3280,
+        "archive_bytes": 15191390
+      },
+      "lifecycle_changes": {
+        "functions": 1093,
+        "baseline": 1050,
+        "ceiling": 1208,
+        "archive_bytes": 5153548
+      },
+      "lifecycle_write": {
+        "functions": 973,
+        "baseline": 930,
+        "ceiling": 1070,
+        "archive_bytes": 4916678
+      },
+      "model_type": {
+        "functions": 299,
+        "baseline": 299,
+        "ceiling": 344,
+        "archive_bytes": 1272162
+      },
+      "models": {
+        "functions": 6838,
+        "baseline": 6147,
+        "ceiling": 7070,
+        "archive_bytes": 30170858
+      },
+      "models_1": {
+        "functions": 1751,
+        "baseline": 1619,
+        "ceiling": 1862,
+        "archive_bytes": 7313866
+      },
+      "models_3": {
+        "functions": 2605,
+        "baseline": 2435,
+        "ceiling": 2801,
+        "archive_bytes": 11018676
+      },
+      "morph": {
+        "functions": 1155,
+        "baseline": 1088,
+        "ceiling": 1252,
+        "archive_bytes": 5290270
+      },
+      "mutator_explicit": {
+        "functions": 1717,
+        "baseline": 1605,
+        "ceiling": 1846,
+        "archive_bytes": 7168396
+      },
+      "mutators": {
+        "functions": 855,
+        "baseline": 801,
+        "ceiling": 922,
+        "archive_bytes": 4510512
+      },
+      "nested_with": {
+        "functions": 1403,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6322796
+      },
+      "nullable_join_chain": {
+        "functions": 1854,
+        "baseline": 1695,
+        "ceiling": 1950,
+        "archive_bytes": 8914844
+      },
+      "on_comparisons": {
+        "functions": 1593,
+        "baseline": 1454,
+        "ceiling": 1673,
+        "archive_bytes": 7317048
+      },
+      "onequery": {
+        "functions": 854,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 4139748
+      },
+      "orm_binding": {
+        "functions": 1101,
+        "baseline": 1089,
+        "ceiling": 1253,
+        "archive_bytes": 4634704
+      },
+      "orm_factory": {
+        "functions": 1093,
+        "baseline": 1093,
+        "ceiling": 1257,
+        "archive_bytes": 4770870
+      },
+      "outbox_publisher": {
+        "functions": 1324,
+        "baseline": 1324,
+        "ceiling": 1523,
+        "archive_bytes": 6616674
+      },
+      "outer_join": {
+        "functions": 1789,
+        "baseline": 1668,
+        "ceiling": 1919,
+        "archive_bytes": 8576836
+      },
+      "pivot": {
+        "functions": 1072,
+        "baseline": 1005,
+        "ceiling": 1156,
+        "archive_bytes": 4985714
+      },
+      "prune_registry": {
+        "functions": 933,
+        "baseline": 933,
+        "ceiling": 1073,
+        "archive_bytes": 4794088
+      },
+      "q_join": {
+        "functions": 1766,
+        "baseline": 1598,
+        "ceiling": 1838,
+        "archive_bytes": 8509850
+      },
+      "q_select": {
+        "functions": 895,
+        "baseline": 836,
+        "ceiling": 962,
+        "archive_bytes": 4367684
+      },
+      "q_with": {
+        "functions": 1211,
+        "baseline": 1053,
+        "ceiling": 1211,
+        "archive_bytes": 5619514
+      },
+      "raw": {
+        "functions": 1096,
+        "baseline": 1045,
+        "ceiling": 1202,
+        "archive_bytes": 5249638
+      },
+      "raw_fragments": {
+        "functions": 1380,
+        "baseline": 1331,
+        "ceiling": 1531,
+        "archive_bytes": 6240174
+      },
+      "record_sets": {
+        "functions": 1294,
+        "baseline": 1288,
+        "ceiling": 1482,
+        "archive_bytes": 6348310
+      },
+      "records": {
+        "functions": 1327,
+        "baseline": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6569408
+      },
+      "relation_with": {
+        "functions": 2047,
+        "baseline": 1847,
+        "ceiling": 2125,
+        "archive_bytes": 8801114
+      },
+      "relation_write_attach": {
+        "functions": 1110,
+        "baseline": 1110,
+        "ceiling": 1277,
+        "archive_bytes": 5149188
+      },
+      "relation_write_declaration": {
+        "functions": 361,
+        "baseline": 361,
+        "ceiling": 416,
+        "archive_bytes": 1507064
+      },
+      "relation_write_sync": {
+        "functions": 1124,
+        "baseline": 1124,
+        "ceiling": 1293,
+        "archive_bytes": 5219080
+      },
+      "report_filters": {
+        "functions": 2112,
+        "baseline": 2095,
+        "ceiling": 2410,
+        "archive_bytes": 9556980
+      },
+      "report_pipeline": {
+        "functions": 2120,
+        "baseline": 1905,
+        "ceiling": 2191,
+        "archive_bytes": 11459038
+      },
+      "report_reads": {
+        "functions": 1063,
+        "baseline": 1063,
+        "ceiling": 1223,
+        "archive_bytes": 5053640
+      },
+      "result_cursor": {
+        "functions": 2229,
+        "baseline": 2229,
+        "ceiling": 2564,
+        "archive_bytes": 10471958
+      },
+      "result_reads": {
+        "functions": 1385,
+        "baseline": 1351,
+        "ceiling": 1554,
+        "archive_bytes": 6588626
+      },
+      "retrieval_read": {
+        "functions": 831,
+        "baseline": 826,
+        "ceiling": 950,
+        "archive_bytes": 4173764
+      },
+      "role_input_same": {
+        "functions": 1360,
+        "baseline": 1360,
+        "ceiling": 1564,
+        "archive_bytes": 5612088
+      },
+      "role_lookup_input": {
+        "functions": 1213,
+        "baseline": 1226,
+        "ceiling": 1410,
+        "archive_bytes": 5117616
+      },
+      "role_primary_number": {
+        "functions": 1182,
+        "baseline": 1195,
+        "ceiling": 1375,
+        "archive_bytes": 5043550
+      },
+      "role_primary_text": {
+        "functions": 1216,
+        "baseline": 1216,
+        "ceiling": 1399,
+        "archive_bytes": 5176128
+      },
+      "role_soft_read": {
+        "functions": 1548,
+        "baseline": 1548,
+        "ceiling": 1781,
+        "archive_bytes": 6628616
+      },
+      "role_soft_write": {
+        "functions": 620,
+        "baseline": 620,
+        "ceiling": 713,
+        "archive_bytes": 2848822
+      },
+      "role_source": {
+        "functions": 905,
+        "baseline": 905,
+        "ceiling": 1041,
+        "archive_bytes": 4157966
+      },
+      "role_time_read": {
+        "functions": 1394,
+        "baseline": 1394,
+        "ceiling": 1604,
+        "archive_bytes": 5970062
+      },
+      "scalar_temporal": {
+        "functions": 2629,
+        "baseline": 2625,
+        "ceiling": 3019,
+        "archive_bytes": 11881726
+      },
+      "scalar_text": {
+        "functions": 2315,
+        "baseline": 2312,
+        "ceiling": 2659,
+        "archive_bytes": 9603986
+      },
+      "scoped_write": {
+        "functions": 1111,
+        "baseline": 1111,
+        "ceiling": 1278,
+        "archive_bytes": 5144138
+      },
+      "sensitive_models": {
+        "functions": 2821,
+        "baseline": 2606,
+        "ceiling": 2997,
+        "archive_bytes": 12868468
+      },
+      "source_write": {
+        "functions": 1302,
+        "baseline": 1311,
+        "ceiling": 1508,
+        "archive_bytes": 6447764
+      },
+      "subqueries": {
+        "functions": 3061,
+        "baseline": 2837,
+        "ceiling": 3263,
+        "archive_bytes": 13347830
+      },
+      "table_ref": {
+        "functions": 854,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 4306222
+      },
+      "terminal_adjustment": {
+        "functions": 1382,
+        "baseline": 1382,
+        "ceiling": 1590,
+        "archive_bytes": 6767680
+      },
+      "terminal_create_or_first": {
+        "functions": 880,
+        "baseline": 880,
+        "ceiling": 1012,
+        "archive_bytes": 4481758
+      },
+      "terminal_explain": {
+        "functions": 1322,
+        "baseline": 1318,
+        "ceiling": 1516,
+        "archive_bytes": 5915122
+      },
+      "terminal_lookup": {
+        "functions": 893,
+        "baseline": 893,
+        "ceiling": 1027,
+        "archive_bytes": 4601002
+      },
+      "terminal_prune": {
+        "functions": 930,
+        "baseline": 930,
+        "ceiling": 1070,
+        "archive_bytes": 4776938
+      },
+      "through": {
+        "functions": 986,
+        "baseline": 928,
+        "ceiling": 1068,
+        "archive_bytes": 4489332
+      },
+      "transaction_correlation": {
+        "functions": 2908,
+        "baseline": 2908,
+        "ceiling": 3345,
+        "archive_bytes": 14735936
+      },
+      "transaction_joins": {
+        "functions": 1835,
+        "baseline": 1835,
+        "ceiling": 2111,
+        "archive_bytes": 9250958
+      },
+      "transaction_records": {
+        "functions": 1406,
+        "baseline": 1296,
+        "ceiling": 1491,
+        "archive_bytes": 6610060
+      },
+      "uuid_seeks": {
+        "functions": 1023,
+        "baseline": 1023,
+        "ceiling": 1177,
+        "archive_bytes": 5097672
+      },
+      "value_sets": {
+        "functions": 2237,
+        "baseline": 2230,
+        "ceiling": 2565,
+        "archive_bytes": 10217252
+      },
+      "window_frames": {
+        "functions": 1769,
+        "baseline": 1767,
+        "ceiling": 2033,
+        "archive_bytes": 7962762
+      },
+      "window_rank": {
+        "functions": 1346,
+        "baseline": 1345,
+        "ceiling": 1547,
+        "archive_bytes": 6186190
+      }
+    },
+    "commands": [
+      {
+        "command": "go build ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch6c1/build.log",
+        "cache_generation": "r5",
+        "log_sha256": "e948e6be0579bcebe8581327a3d5eadcdc1ea0b6133c373df87e8d00ae2b73f2"
+      },
+      {
+        "command": "go test ./database/orm -run PublicMethodSurface (snapshot regeneration)",
+        "status": "pass",
+        "log": ".cache/goway-batch6c1/surface-generation.log",
+        "cache_generation": "r5",
+        "log_sha256": "ab69a1d1da465228230e4083d11b83ca360e36b8246a091551f65649c6c32345"
+      },
+      {
+        "command": "go vet ./database/... ./internal/...",
+        "status": "pass",
+        "log": ".cache/goway-batch6c1/vet.log",
+        "cache_generation": "r5",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "go test -race ./database/... ./internal/... ./datatable/...",
+        "status": "pass",
+        "log": ".cache/goway-batch6c1/race.log",
+        "cache_generation": "r5",
+        "log_sha256": "5bd9259d20263de0664b279fd9a525e6f126cf4f883ca1ccaccfc1916622983d"
+      },
+      {
+        "command": "cd tests/fixtures/goway && go vet ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch6c1/fixture-vet.log",
+        "cache_generation": "r5",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "cd tests/fixtures/goway && go test -v ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch6c1/fixture-test.log",
+        "cache_generation": "r5",
+        "log_sha256": "f2d3c0b88df54c601eb7f02219b96862f538621c1616b3ce5a66c09e5d911135"
+      },
+      {
+        "command": "python3 tools/goway_catalogue.py",
+        "status": "pass",
+        "log": ".cache/goway-batch6c1/catalogue.log",
+        "cache_generation": "not applicable",
+        "log_sha256": "fb02892447e78d925c2461dbdb2a1c4634aef0c89eb9f23175f9d4905268f174"
+      },
+      {
+        "command": "make generate-check",
+        "status": "pass",
+        "log": ".cache/goway-batch6c1/generate.log",
+        "cache_generation": "r6",
+        "log_sha256": "aff9fb69af141873e6432dbf8aac79dce91e16c5bcf0f4ccc0cf5187ac3d14e4"
+      },
+      {
+        "command": "make datatable-contracts",
+        "status": "pass",
+        "log": ".cache/goway-batch6c1/contracts.log",
+        "cache_generation": "r6",
+        "log_sha256": "ca6f26d2b0bc0ed369892d3e547bf6c305a8f13d2813dfb8e458dff77cb935a7"
+      },
+      {
+        "command": "cd tests/fixtures/consumer && go test -race ./hookqueries -run '^TestGeneratedAfterCommitNeverFormatsLocalOrObserverErrors$'",
+        "status": "pass",
+        "log": ".cache/goway-batch6c1/aftercommit.log",
+        "cache_generation": "r6",
+        "log_sha256": "1e4eb5e240c59507db5cf938e0edfcff4a22cc762386ce244a6b07b12df9e3bd"
+      },
+      {
+        "command": "make release-tools-check",
+        "status": "pass",
+        "log": ".cache/goway-batch6c1/release-tools.log",
+        "cache_generation": "r6",
+        "log_sha256": "19fda938e96f10a4c1539b73d066a4f85259afe07cbed2383989351206b8a794"
+      },
+      {
+        "command": "make docs-check",
+        "status": "pass",
+        "log": ".cache/goway-batch6c1/docs.log",
+        "cache_generation": "r6",
+        "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+      },
+      {
+        "command": "gofmt -l (all repository Go files)",
+        "status": "pass",
+        "log": ".cache/goway-batch6c1/gofmt.log",
+        "cache_generation": "not applicable",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "git diff --check (working tree and staged)",
+        "status": "pass",
+        "log": ".cache/goway-batch6c1/diff-check.log",
+        "cache_generation": "not applicable",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "release_inventory": "Explicitly pin all 22 baseline files (including manifests/provenance) and the two reporting client fixtures. Existing JSON/TS/MJS/Markdown policy covers them; no policy widening.",
+    "stage_status": "6e and all approved Stage 6 slices done; Stage 6 measurement gate pending. Datatable slices 1\u20133 and Stage 8a lane B delivered; wider Stage 7/8 work remains.",
+    "not_run": [
+      "Live PostgreSQL and Redis (opt-in test sources compile)",
+      "Stage 6 whole-app measurement gate",
+      "Full gopls/editor and TypeScript runtime gates (historical lane evidence retained separately)"
+    ],
+    "git": "Authorized apply -3 --binary and add only; no commit."
+  },
+  "integration_batch6c_part2": {
+    "base_commit": "f3cfffd",
+    "includes_uncommitted_part1": true,
+    "status": "pass",
+    "updated_at": "2026-10-24T07:42:09.758498+00:00",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off",
+      "FOUNDRY_TEST_GOPLS": "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls"
+    },
+    "prior_source_hashes": {
+      "source_sha256": {
+        ".gitattributes": "ede2b3a3bf33800daa62c4e0a732759de19d7471bffe2d99368c9b476fb9793f",
+        "CHANGELOG.md": "39763da24968f420054c38faa33a2ad68eb43669f9c26ff37380b7424679c96d",
+        "Makefile": "d7ba763cf5d6e779cd77d104e740664f25cb8fdecce29be13ab7cf3ea4dd22b4",
+        "blueprint/00-master-architecture-and-parity.md": "4b16697250c575e71db7e9035d76c46028c768acf2d2df8dcc22033e7d31bc26",
+        "blueprint/goway-data-layer/README.md": "2e3d03fde4cd780821e64e86f39699f2ffc14c757581c432686df02e435a50a3",
+        "blueprint/goway-data-layer/compilefail-mapping.tsv": "6b1560f30c88cf3530af31e5d28cdef312250202e387830193ef5da43c84401e",
+        "database/orm/README.md": "04698ad0016015760bbd8088df878b70a3a18da803db74a4cfbd3cc418284d12",
+        "database/orm/column.go": "ba0881ee7519a03dbe46602f0e62f18124a79dc4843391852a2e1e48f494f28a",
+        "database/orm/column_input.go": "a5c79a903ecf2d65e53f1314a1811dd673b8e265bb3c17df2e8d22fbaae33100",
+        "database/orm/column_methods.go": "0829b92f375e29e9887a88a66b68595d3c02d16fd53a7ba61ac16188f1f74a12",
+        "database/orm/expr/README.md": "746c1edf51aed27ad0988f10ca444f79f5b835657499741cb50128159cec7d7f",
+        "database/orm/expr/comparison.go": "3b08496df054577574cbf743bf660eb00cf4f9c639d5bd4ed646d3218a0e84ff",
+        "database/orm/expr/filter.go": "95e9045d589279914fcc51b25b9ed4c9215cad84c029abd1573ee05aecb8e235",
+        "database/orm/expr/operation.go": "87a7962f7742be722168704199c68c873b36ea26147a95f3ef0af62d59f96947",
+        "database/orm/expr/value.go": "2a293dc463f540131e3ef1a1bf4d6b592a3f68664d0656bb65e62e0f1a6fb6e7",
+        "database/orm/method_surface_test.go": "1d56fe0c5915b6b8696e3cc96882bba7f881d683d29d0b4f9379d908bf9a1bed",
+        "database/orm/projection_bridge.go": "8ca95766be55112be12017b683a9a0425dc48279bcfbe96ef23bfc3adb3e8539",
+        "database/orm/relation_predicate.go": "441ec3ff1532976517d4af0467d4ba46a9111de4051743f66a5a5d671cf4e853",
+        "database/orm/rows/README.md": "b8ac7bc5e6049904fa7430703de9bc05058672965445d12e5e308e0a67cd7d77",
+        "database/orm/rows/declaration.go": "dcd9d2728214c3ee459e4d2794b75ffa9c3248c0d19564ed1a95734ecef35845",
+        "database/orm/rows/join_condition.go": "9767238fa6c8767d369a11931b12e9a1ed4cf866400064cfaf5963a43001bfec",
+        "database/orm/rows/pagination.go": "6fcb963c23d69ad5f8777c2059e406c483104abc267b4658c40e1c2d082e213d",
+        "database/orm/rows/projection_test.go": "7ff6a5d7a9dc405e2cf8c6309756acca7612c00f83f7afb5c0ffe2640e1e09a0",
+        "database/orm/rows/read.go": "64b557314a5ec27783edb342b129260d4f938d34478765707b5dcde7948ea56d",
+        "database/orm/rows/report_read_test.go": "0f502bff38ee3127d0a96a72c8160d6317fba7f04ac9d7b422238bde7d5cab5b",
+        "database/orm/rows/result_read.go": "8f3cc510f53a4f2e75a53cf84ea1c20129e16fe63f0bde8782110efbfb1db28c",
+        "database/orm/rows/results.md": "763299baf787c3b7211219abb61e2fcbd16a27092289ce79a339674a500a0166",
+        "database/orm/testdata/public-methods.txt": "8009b849316016bac754d5c2275a224ee6ad51c29573542b5ad5e0658d86ab27",
+        "database/orm/text_capability.go": "2b6ab4f52b84b8824613b5c4f40fb79cdce880ee65ca6873161edbdba73046b4",
+        "database/orm/transaction_phase_test.go": "52dc79aba4c93dc129f04bcaa063b9e7db8bbea14c9ca1e2c63ec1c2c10b33b2",
+        "database/query/comparison.go": "ad9e7dba350a063ea772ab127795a23ffc1c60787e4e87fee7eeec69b5545e61",
+        "database/query/join_value_condition.go": "b087a792150738d75494a70f7ae02ad01e803f57898370f96fd90418afedabf7",
+        "database/query/projection_reorder.go": "82b3f1aec5f22510a3fd409da18101dba11974f2f0f0171c2ec12bd72d34b3b6",
+        "database/query/result_pagination.go": "a3492a1ece1479a703d0ec3eb31b23a1f4aad55510f11bc872723a4d0a714182",
+        "database/query/text_capability.go": "97e680c9ef7b1116eaba1108e0f88e00c012fbcbd0e8764699617258a0f438e2",
+        "database/query/value_comparison.go": "f08aad7f855de5f7b9e48105ff47618c1fd112cc626f81aa298db6722c45ec8d",
+        "docs/guides/datatable.md": "cc072af82832dcf5c52224ac24bf23a206921e8d41452d857b1eb0d7227ca03f",
+        "internal/ormcore/expression.go": "b2df33bee2416caaa64299d6bfe957d803e95ffb421f177fec451c4416d4df0d",
+        "internal/ormcore/join_condition.go": "4d319a55e6e5c350424bedbb55273a3fd5f2754f0b5a186b1565a54db55cef50",
+        "internal/ormcore/source.go": "f558b535d87f8bd070892cc348c75bf16fedebbea6c8207c7678d7e578875825",
+        "internal/querycore/ast.go": "850b6649bf3074474e36c38c48386cf0ee168f77141d7ea6e5b9119ac5a580ab",
+        "internal/querycore/compiler.go": "1dbe1b1328fe7487d9f6ceb3c6688ed16f35810dd4de3a747ea2683f52ff7b82",
+        "internal/querycore/report.go": "7043aca95fe79535e794f3ef6b13a3248a3edff147943c346b06c07538cfff21",
+        "internal/querycore/text_capability_test.go": "c9889ee7871dda8bebe3c93e44d3617350702df7765ae18bb25c69542c0b92f9",
+        "tests/fixtures/goway/compiler_cases_test.go": "2d9e2c9cd775341ea36c58ee044620c4e2bd7b87e1ef455164c8e8df67ba6a8e",
+        "tests/fixtures/goway/footprint_test.go": "ae0973f9b89d93d3d63687bc92709248b69a746ecf77da51d9a1b26f8e58e8e8",
+        "tests/fixtures/goway/pgsmoke/report_projection_test.go": "2f8a4cbe051aba96ffb0b1b9d59ceccf1af8bd526ca079f176ecf360883cb09a",
+        "tests/fixtures/goway/pgsmoke/store_capabilities_test.go": "5f44bf0daf4d699e0741cbdcb16416afc206e8200ff005486564379434eea545",
+        "tests/fixtures/goway/report_projection_golden_test.go": "92338fff9dabb385b89b6be2ee9f14d83d0eac6e2f9904f29a22db4acc8c48da",
+        "tests/fixtures/goway/report_text_capability_test.go": "5c75c056bc321902e0052bcfd5bb977b30cecda5dc1c200d0a99fee6510f75c7",
+        "tests/fixtures/goway/testdata/compilefail/report_filter_enum_order/invalid.go": "97c5c9a7f36f5cd8f7fff074e9ad17e1179c7c9ae915fe40e4a528bec09b065e",
+        "tests/fixtures/goway/testdata/compilefail/report_filter_enum_text/invalid.go": "60b411aadabdd42476893ed51707f1cdee5ef0bcbff5f11df74b32c23d1edc10",
+        "tests/fixtures/goway/testdata/compilefail/report_filter_not_phase/invalid.go": "3224c5e777a1d02ca65eb1cafb4bf660463dcb1d247feb192f5f184ae8a8a3c0",
+        "tests/fixtures/goway/testdata/compilefail/report_filter_nullable_enum_contains/invalid.go": "908d0f52fdcad071d0f59d2690c4546a0ba7f1943ba4037c7ff124e82902beec",
+        "tests/fixtures/goway/testdata/compilefail/report_filter_nullable_enum_gt/invalid.go": "a16f91f220b9272d69d8ed6dd8c8bebfb71c4bd1fbbba524b8feb46f083bc532",
+        "tests/fixtures/goway/testdata/compilefail/report_filter_or_phase/invalid.go": "4fbcac41e4d162a5351f33bef92a7b6018c818c6499ecf54ca1a77eea95927f0",
+        "tests/fixtures/goway/testdata/compilefail/report_filter_relation_owner/invalid.go": "4a42fe1746eb00676d5e59e225b082c3699d01da6c1c5b49303af5236499c61d",
+        "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_contains/invalid.go": "b32a0844ba7cb87e422c3aa4fe9c77b92479ca3def6bf58fba8a87b62843eda2",
+        "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_forged/invalid.go": "a6d795a7bae55ff0f2f8d3c68035bb22600d7fc7cb5b495784e328ee7b4541c2",
+        "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_gt/invalid.go": "c35b3496a3219ecba2afad11598862188b25695874ce1588fa611a14bd207773",
+        "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_like/invalid.go": "d25dc8f3d580b2a14dd28e12f2b85a4b65f06671d3db840670f6f0dac8f13732",
+        "tests/fixtures/goway/testdata/compilefail/report_text_nullable_enum_value/invalid.go": "2f4c7dbb2156d3449993307116c2c87bfa278322b97ba0c4dce37cd1bbcf9b28",
+        "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_contains/invalid.go": "2b8c7a1ea86ee2a1aa4d3dbe2ce510f9613ca02446eb91ecb58eff5fa616451d",
+        "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_forged/invalid.go": "57d1a66c60fc0f572a4e6fb84d643f81590f5303fd866ce1747b6243a592dde7",
+        "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_gt/invalid.go": "6c32bce89dec09ca5fa3735c8967c00f7bb67d00848c1f298d979b7ff45738fe",
+        "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_like/invalid.go": "ab0deef6fd2246eeb21dedb9acaeb8a4a2bd98aaff91aaae1fbdd61efa95a844",
+        "tests/fixtures/goway/testdata/compilefail/report_text_required_enum_value/invalid.go": "e5d09bfce45fca2c10433c4548ea90e0aab5ef19d832558ae2caf34c7f93cc20",
+        "tests/fixtures/goway/testdata/footprint/report_filters/probe.go": "1e5fb3700a00235ae9cfa00f44daeecb85696876dd86d72dcc8d84d33b2942b1",
+        "tests/fixtures/goway/testdata/footprint/report_reads/probe.go": "330ab3356fb9b3bf7b093489bd9c6b8ecf8909b0e0698a7e1ef2a07d178a0da0",
+        "tools/release/release_test.go": "be35efc70a634482d1652befcda96105eed3f59e0bf4f66a6480a23da2a66f0f",
+        "tools/release/source.go": "0a95269a9308b11ff714037a7a85f92ac4833dda4d2f7248089fd84c81621d40"
+      }
+    },
+    "removed_source_paths": {
+      "source_sha256": []
+    },
+    "conflicts": {
+      "laneD": [
+        "database/orm/README.md",
+        "database/orm/method_surface_test.go",
+        "internal/agent/gopls_acceptance_test.go",
+        "tests/fixtures/goway/compiler_cases_test.go",
+        "tests/fixtures/goway/footprint_test.go"
+      ],
+      "laneC": []
+    },
+    "resolutions": [
+      "Union surface, compiler and footprint registries; regenerate snapshot; retain typed-role-adapted 3a declarations.",
+      "Merge README text and both editor-probe expectation sets.",
+      "Delete duplicate rows/each.go; rows/read.go remains sole Each owner and both regression suites remain.",
+      "Retain lane B batch_limits.go byte-identically (86d67b7a77585fdef475cb7dc646f3316d619358b37c7aa3b41a56bb5f6a7155).",
+      "Retain all 118 part-1 footprint baselines without raising ceilings.",
+      "Initial race run found part-1 rows.Explain imported the legacy engine. Move shared plan data/decoding/execution to querycore; retain legacy aliases and validated bridge; regenerate snapshot. Existing old/new Explain regressions and new alias identity regression cover the move."
+    ],
+    "counts": {
+      "catalogue_rows": 1026,
+      "dispositions": {
+        "ported": 534,
+        "unaffected": 444,
+        "port": 48
+      },
+      "distinct_ported_cases": 526,
+      "compiler_cases": 777,
+      "footprint_probes": 125
+    },
+    "footprints": {
+      "aggregate_families": {
+        "functions": 4366,
+        "baseline": 3799,
+        "ceiling": 4369,
+        "archive_bytes": 19912060
+      },
+      "aggregate_group": {
+        "functions": 2533,
+        "baseline": 2426,
+        "ceiling": 2790,
+        "archive_bytes": 11402046
+      },
+      "aggregate_slot_declaration": {
+        "functions": 1127,
+        "baseline": 1112,
+        "ceiling": 1279,
+        "archive_bytes": 4872846
+      },
+      "aggregate_slot_direct": {
+        "functions": 1490,
+        "baseline": 1490,
+        "ceiling": 1714,
+        "archive_bytes": 6188412
+      },
+      "aggregate_slot_nested": {
+        "functions": 2050,
+        "baseline": 2048,
+        "ceiling": 2356,
+        "archive_bytes": 8592824
+      },
+      "aggregate_slot_pivot": {
+        "functions": 2092,
+        "baseline": 2095,
+        "ceiling": 2410,
+        "archive_bytes": 8861642
+      },
+      "audit": {
+        "functions": 1337,
+        "baseline": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6649550
+      },
+      "column_encrypted_json": {
+        "functions": 1321,
+        "baseline": 1217,
+        "ceiling": 1400,
+        "archive_bytes": 5664900
+      },
+      "column_encrypted_text": {
+        "functions": 1231,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5354824
+      },
+      "column_enum": {
+        "functions": 1344,
+        "baseline": 1232,
+        "ceiling": 1417,
+        "archive_bytes": 5657360
+      },
+      "column_interval": {
+        "functions": 1293,
+        "baseline": 1178,
+        "ceiling": 1355,
+        "archive_bytes": 5599372
+      },
+      "column_json": {
+        "functions": 1391,
+        "baseline": 1280,
+        "ceiling": 1472,
+        "archive_bytes": 5895968
+      },
+      "column_nullable_encrypted_json": {
+        "functions": 1562,
+        "baseline": 1449,
+        "ceiling": 1667,
+        "archive_bytes": 6932196
+      },
+      "column_nullable_encrypted_text": {
+        "functions": 1472,
+        "baseline": 1359,
+        "ceiling": 1563,
+        "archive_bytes": 6599132
+      },
+      "column_nullable_interval": {
+        "functions": 1530,
+        "baseline": 1406,
+        "ceiling": 1617,
+        "archive_bytes": 6818336
+      },
+      "column_nullable_json": {
+        "functions": 1642,
+        "baseline": 1522,
+        "ceiling": 1751,
+        "archive_bytes": 7122076
+      },
+      "column_nullable_password": {
+        "functions": 1535,
+        "baseline": 1417,
+        "ceiling": 1630,
+        "archive_bytes": 6780896
+      },
+      "column_nullable_text": {
+        "functions": 1584,
+        "baseline": 1456,
+        "ceiling": 1675,
+        "archive_bytes": 6592474
+      },
+      "column_number": {
+        "functions": 1267,
+        "baseline": 1172,
+        "ceiling": 1348,
+        "archive_bytes": 5369564
+      },
+      "column_password": {
+        "functions": 1299,
+        "baseline": 1190,
+        "ceiling": 1369,
+        "archive_bytes": 5607010
+      },
+      "column_time": {
+        "functions": 1309,
+        "baseline": 1194,
+        "ceiling": 1374,
+        "archive_bytes": 5507474
+      },
+      "conditional_row": {
+        "functions": 1805,
+        "baseline": 1681,
+        "ceiling": 1934,
+        "archive_bytes": 8295910
+      },
+      "conditional_selected": {
+        "functions": 1649,
+        "baseline": 1511,
+        "ceiling": 1738,
+        "archive_bytes": 7594306
+      },
+      "conflict": {
+        "functions": 968,
+        "baseline": 944,
+        "ceiling": 1086,
+        "archive_bytes": 4860798
+      },
+      "conflict_advanced": {
+        "functions": 1808,
+        "baseline": 1817,
+        "ceiling": 2090,
+        "archive_bytes": 9089082
+      },
+      "correlation": {
+        "functions": 2991,
+        "baseline": 2752,
+        "ceiling": 3165,
+        "archive_bytes": 13851276
+      },
+      "cte_recursive": {
+        "functions": 1131,
+        "baseline": 1076,
+        "ceiling": 1238,
+        "archive_bytes": 5506506
+      },
+      "cursor": {
+        "functions": 1186,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5426842
+      },
+      "datatable_projection": {
+        "functions": 2951,
+        "baseline": 2951,
+        "ceiling": 3394,
+        "archive_bytes": 12803126
+      },
+      "distinct": {
+        "functions": 1174,
+        "baseline": 1135,
+        "ceiling": 1306,
+        "archive_bytes": 5711378
+      },
+      "each_writes": {
+        "functions": 879,
+        "baseline": 888,
+        "ceiling": 1022,
+        "archive_bytes": 4446310
+      },
+      "expr_arithmetic": {
+        "functions": 1256,
+        "baseline": 1162,
+        "ceiling": 1337,
+        "archive_bytes": 5934322
+      },
+      "expr_selected": {
+        "functions": 1698,
+        "baseline": 1551,
+        "ceiling": 1784,
+        "archive_bytes": 7573108
+      },
+      "extension_declaration": {
+        "functions": 11379,
+        "baseline": 30434,
+        "ceiling": 35000,
+        "archive_bytes": 56358278
+      },
+      "extension_handles": {
+        "functions": 1481,
+        "baseline": 1481,
+        "ceiling": 1704,
+        "archive_bytes": 6693890
+      },
+      "extension_slots": {
+        "functions": 2083,
+        "baseline": 2154,
+        "ceiling": 2478,
+        "archive_bytes": 9553172
+      },
+      "extension_slots_old": {
+        "functions": 9730,
+        "baseline": 30493,
+        "ceiling": 35067,
+        "archive_bytes": 49236160
+      },
+      "framework_attachmentstore": {
+        "functions": 4792,
+        "baseline": 4729,
+        "ceiling": 5439,
+        "archive_bytes": 20841164
+      },
+      "framework_auditstore": {
+        "functions": 4753,
+        "baseline": 4753,
+        "ceiling": 5466,
+        "archive_bytes": 20563070
+      },
+      "framework_challengestore": {
+        "functions": 2560,
+        "baseline": 2558,
+        "ceiling": 2942,
+        "archive_bytes": 11932802
+      },
+      "framework_countries": {
+        "functions": 4157,
+        "baseline": 4122,
+        "ceiling": 4741,
+        "archive_bytes": 17379304
+      },
+      "framework_extensionstore": {
+        "functions": 5640,
+        "baseline": 5407,
+        "ceiling": 6219,
+        "archive_bytes": 26971314
+      },
+      "framework_idempotencystore": {
+        "functions": 2253,
+        "baseline": 2249,
+        "ceiling": 2587,
+        "archive_bytes": 9598202
+      },
+      "framework_jobarchive": {
+        "functions": 2280,
+        "baseline": 2280,
+        "ceiling": 2622,
+        "archive_bytes": 9858040
+      },
+      "framework_mfastore": {
+        "functions": 2947,
+        "baseline": 2947,
+        "ceiling": 3390,
+        "archive_bytes": 12473348
+      },
+      "framework_notificationstore": {
+        "functions": 5165,
+        "baseline": 5119,
+        "ceiling": 5887,
+        "archive_bytes": 24218738
+      },
+      "framework_outbox": {
+        "functions": 2896,
+        "baseline": 2896,
+        "ceiling": 3331,
+        "archive_bytes": 12590620
+      },
+      "framework_sessionstore": {
+        "functions": 4166,
+        "baseline": 4166,
+        "ceiling": 4791,
+        "archive_bytes": 17786384
+      },
+      "framework_tokenstore": {
+        "functions": 5315,
+        "baseline": 5315,
+        "ceiling": 6113,
+        "archive_bytes": 22599314
+      },
+      "framework_webhookstore": {
+        "functions": 4769,
+        "baseline": 4705,
+        "ceiling": 5411,
+        "archive_bytes": 21728696
+      },
+      "global_scopes": {
+        "functions": 1389,
+        "baseline": 1374,
+        "ceiling": 1581,
+        "archive_bytes": 6511262
+      },
+      "has": {
+        "functions": 1412,
+        "baseline": 1302,
+        "ceiling": 1498,
+        "archive_bytes": 6309612
+      },
+      "has_one": {
+        "functions": 1403,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6278720
+      },
+      "input_column_kinds": {
+        "functions": 5321,
+        "baseline": 5088,
+        "ceiling": 5852,
+        "archive_bytes": 22040046
+      },
+      "input_key": {
+        "functions": 1049,
+        "baseline": 982,
+        "ceiling": 1130,
+        "archive_bytes": 4883892
+      },
+      "json_functions": {
+        "functions": 2739,
+        "baseline": 2736,
+        "ceiling": 3147,
+        "archive_bytes": 11671562
+      },
+      "json_paths": {
+        "functions": 6148,
+        "baseline": 6146,
+        "ceiling": 7068,
+        "archive_bytes": 26628068
+      },
+      "key_chunk": {
+        "functions": 862,
+        "baseline": 812,
+        "ceiling": 934,
+        "archive_bytes": 4179576
+      },
+      "lateral": {
+        "functions": 3049,
+        "baseline": 2852,
+        "ceiling": 3280,
+        "archive_bytes": 15185946
+      },
+      "lifecycle_changes": {
+        "functions": 1093,
+        "baseline": 1050,
+        "ceiling": 1208,
+        "archive_bytes": 5150326
+      },
+      "lifecycle_write": {
+        "functions": 973,
+        "baseline": 930,
+        "ceiling": 1070,
+        "archive_bytes": 4913520
+      },
+      "model_type": {
+        "functions": 299,
+        "baseline": 299,
+        "ceiling": 344,
+        "archive_bytes": 1272268
+      },
+      "models": {
+        "functions": 6838,
+        "baseline": 6147,
+        "ceiling": 7070,
+        "archive_bytes": 30159848
+      },
+      "models_1": {
+        "functions": 1751,
+        "baseline": 1619,
+        "ceiling": 1862,
+        "archive_bytes": 7309686
+      },
+      "models_3": {
+        "functions": 2605,
+        "baseline": 2435,
+        "ceiling": 2801,
+        "archive_bytes": 11015246
+      },
+      "morph": {
+        "functions": 1155,
+        "baseline": 1088,
+        "ceiling": 1252,
+        "archive_bytes": 5286378
+      },
+      "mutator_explicit": {
+        "functions": 1717,
+        "baseline": 1605,
+        "ceiling": 1846,
+        "archive_bytes": 7164216
+      },
+      "mutators": {
+        "functions": 855,
+        "baseline": 801,
+        "ceiling": 922,
+        "archive_bytes": 4506184
+      },
+      "nested_with": {
+        "functions": 1403,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6318622
+      },
+      "nullable_join_chain": {
+        "functions": 1854,
+        "baseline": 1695,
+        "ceiling": 1950,
+        "archive_bytes": 8911678
+      },
+      "on_comparisons": {
+        "functions": 1593,
+        "baseline": 1454,
+        "ceiling": 1673,
+        "archive_bytes": 7313810
+      },
+      "onequery": {
+        "functions": 854,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 4136524
+      },
+      "orm_binding": {
+        "functions": 1101,
+        "baseline": 1089,
+        "ceiling": 1253,
+        "archive_bytes": 4630438
+      },
+      "orm_factory": {
+        "functions": 1093,
+        "baseline": 1093,
+        "ceiling": 1257,
+        "archive_bytes": 4766546
+      },
+      "outbox_publisher": {
+        "functions": 1324,
+        "baseline": 1324,
+        "ceiling": 1523,
+        "archive_bytes": 6613986
+      },
+      "outer_join": {
+        "functions": 1789,
+        "baseline": 1668,
+        "ceiling": 1919,
+        "archive_bytes": 8573670
+      },
+      "pivot": {
+        "functions": 1072,
+        "baseline": 1005,
+        "ceiling": 1156,
+        "archive_bytes": 4982804
+      },
+      "prune_registry": {
+        "functions": 933,
+        "baseline": 933,
+        "ceiling": 1073,
+        "archive_bytes": 4790894
+      },
+      "q_join": {
+        "functions": 1766,
+        "baseline": 1598,
+        "ceiling": 1838,
+        "archive_bytes": 8504334
+      },
+      "q_select": {
+        "functions": 895,
+        "baseline": 836,
+        "ceiling": 962,
+        "archive_bytes": 4364518
+      },
+      "q_with": {
+        "functions": 1211,
+        "baseline": 1053,
+        "ceiling": 1211,
+        "archive_bytes": 5616290
+      },
+      "raw": {
+        "functions": 1096,
+        "baseline": 1045,
+        "ceiling": 1202,
+        "archive_bytes": 5245370
+      },
+      "raw_fragments": {
+        "functions": 1380,
+        "baseline": 1331,
+        "ceiling": 1531,
+        "archive_bytes": 6236972
+      },
+      "record_sets": {
+        "functions": 1294,
+        "baseline": 1288,
+        "ceiling": 1482,
+        "archive_bytes": 6345110
+      },
+      "records": {
+        "functions": 1327,
+        "baseline": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6566208
+      },
+      "relation_with": {
+        "functions": 2047,
+        "baseline": 1847,
+        "ceiling": 2125,
+        "archive_bytes": 8794676
+      },
+      "relation_write_attach": {
+        "functions": 1110,
+        "baseline": 1110,
+        "ceiling": 1277,
+        "archive_bytes": 5145328
+      },
+      "relation_write_declaration": {
+        "functions": 361,
+        "baseline": 361,
+        "ceiling": 416,
+        "archive_bytes": 1507182
+      },
+      "relation_write_sync": {
+        "functions": 1124,
+        "baseline": 1124,
+        "ceiling": 1293,
+        "archive_bytes": 5215220
+      },
+      "report_filters": {
+        "functions": 2112,
+        "baseline": 2095,
+        "ceiling": 2410,
+        "archive_bytes": 9551884
+      },
+      "report_pipeline": {
+        "functions": 2120,
+        "baseline": 1905,
+        "ceiling": 2191,
+        "archive_bytes": 11453592
+      },
+      "report_reads": {
+        "functions": 1063,
+        "baseline": 1063,
+        "ceiling": 1223,
+        "archive_bytes": 5048182
+      },
+      "result_cursor": {
+        "functions": 2229,
+        "baseline": 2229,
+        "ceiling": 2564,
+        "archive_bytes": 10471570
+      },
+      "result_reads": {
+        "functions": 1385,
+        "baseline": 1351,
+        "ceiling": 1554,
+        "archive_bytes": 6582044
+      },
+      "retrieval_read": {
+        "functions": 831,
+        "baseline": 826,
+        "ceiling": 950,
+        "archive_bytes": 4170574
+      },
+      "role_input_same": {
+        "functions": 1360,
+        "baseline": 1360,
+        "ceiling": 1564,
+        "archive_bytes": 5607908
+      },
+      "role_lookup_input": {
+        "functions": 1213,
+        "baseline": 1226,
+        "ceiling": 1410,
+        "archive_bytes": 5113434
+      },
+      "role_primary_number": {
+        "functions": 1182,
+        "baseline": 1195,
+        "ceiling": 1375,
+        "archive_bytes": 5039366
+      },
+      "role_primary_text": {
+        "functions": 1216,
+        "baseline": 1216,
+        "ceiling": 1399,
+        "archive_bytes": 5171946
+      },
+      "role_soft_read": {
+        "functions": 1548,
+        "baseline": 1548,
+        "ceiling": 1781,
+        "archive_bytes": 6624436
+      },
+      "role_soft_write": {
+        "functions": 620,
+        "baseline": 620,
+        "ceiling": 713,
+        "archive_bytes": 2845624
+      },
+      "role_source": {
+        "functions": 905,
+        "baseline": 905,
+        "ceiling": 1041,
+        "archive_bytes": 4154738
+      },
+      "role_time_read": {
+        "functions": 1394,
+        "baseline": 1394,
+        "ceiling": 1604,
+        "archive_bytes": 5965878
+      },
+      "rows_each": {
+        "functions": 899,
+        "baseline": 899,
+        "ceiling": 1034,
+        "archive_bytes": 4337886
+      },
+      "scalar_temporal": {
+        "functions": 2629,
+        "baseline": 2625,
+        "ceiling": 3019,
+        "archive_bytes": 11878524
+      },
+      "scalar_text": {
+        "functions": 2315,
+        "baseline": 2312,
+        "ceiling": 2659,
+        "archive_bytes": 9600784
+      },
+      "scoped_write": {
+        "functions": 1111,
+        "baseline": 1111,
+        "ceiling": 1278,
+        "archive_bytes": 5140940
+      },
+      "sensitive_models": {
+        "functions": 2821,
+        "baseline": 2606,
+        "ceiling": 2997,
+        "archive_bytes": 12862024
+      },
+      "source_write": {
+        "functions": 1302,
+        "baseline": 1311,
+        "ceiling": 1508,
+        "archive_bytes": 6444388
+      },
+      "subqueries": {
+        "functions": 3061,
+        "baseline": 2837,
+        "ceiling": 3263,
+        "archive_bytes": 13342388
+      },
+      "table_ref": {
+        "functions": 854,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 4302042
+      },
+      "terminal_adjustment": {
+        "functions": 1382,
+        "baseline": 1382,
+        "ceiling": 1590,
+        "archive_bytes": 6762212
+      },
+      "terminal_create_or_first": {
+        "functions": 880,
+        "baseline": 880,
+        "ceiling": 1012,
+        "archive_bytes": 4478566
+      },
+      "terminal_explain": {
+        "functions": 1322,
+        "baseline": 1318,
+        "ceiling": 1516,
+        "archive_bytes": 5912318
+      },
+      "terminal_lookup": {
+        "functions": 893,
+        "baseline": 893,
+        "ceiling": 1027,
+        "archive_bytes": 4597808
+      },
+      "terminal_prune": {
+        "functions": 930,
+        "baseline": 930,
+        "ceiling": 1070,
+        "archive_bytes": 4773742
+      },
+      "through": {
+        "functions": 986,
+        "baseline": 928,
+        "ceiling": 1068,
+        "archive_bytes": 4486422
+      },
+      "transaction_correlation": {
+        "functions": 2908,
+        "baseline": 2908,
+        "ceiling": 3345,
+        "archive_bytes": 14730458
+      },
+      "transaction_joins": {
+        "functions": 1835,
+        "baseline": 1835,
+        "ceiling": 2111,
+        "archive_bytes": 9247758
+      },
+      "transaction_records": {
+        "functions": 1406,
+        "baseline": 1296,
+        "ceiling": 1491,
+        "archive_bytes": 6606862
+      },
+      "uuid_seeks": {
+        "functions": 1023,
+        "baseline": 1023,
+        "ceiling": 1177,
+        "archive_bytes": 5095018
+      },
+      "validation_database": {
+        "functions": 1441,
+        "baseline": 1441,
+        "ceiling": 1658,
+        "archive_bytes": 6432798
+      },
+      "value_sets": {
+        "functions": 2237,
+        "baseline": 2230,
+        "ceiling": 2565,
+        "archive_bytes": 10211774
+      },
+      "window_frames": {
+        "functions": 1769,
+        "baseline": 1767,
+        "ceiling": 2033,
+        "archive_bytes": 7959560
+      },
+      "window_rank": {
+        "functions": 1346,
+        "baseline": 1345,
+        "ceiling": 1547,
+        "archive_bytes": 6182990
+      }
+    },
+    "commands": [
+      {
+        "command": "go build ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/build-final.log",
+        "log_sha256": "80ea93fcec2e3b1f0efabe554de07c45f6f4413f60a0b39cc953c183a93f24ca"
+      },
+      {
+        "command": "FOUNDRY_UPDATE_SURFACE=1 go test ./database/orm -run ^TestPublicMethodSurface$ (temporary regeneration hook removed afterward)",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/surface-final.log",
+        "log_sha256": "95ff4c05a8df16fcb0114cb3a8dfca91a8d949260afc0092a8208748694d843d"
+      },
+      {
+        "command": "go vet ./database/... ./internal/...",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/vet-final.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "go test -race ./database/... ./internal/... ./datatable/... ./countries/... ./validation/... ./extensions/... ./attachments/... ./metadata/... ./settings/... ./translations/... ./http/pagination/... ./http/modelbinding/... ./testkit/... ./notifications/... ./webhook/... ./audit/...",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/race.log",
+        "log_sha256": "d4bc7bbdfd14b98c0b2b5e2970ecceee0d2772b9cf74ecfa6cfcb3ddbba1500d",
+        "initial_status": "failed: legacy import guard plus sandbox-local-listener restrictions",
+        "recheck_command": "go test -race ./database/... ./internal/querycore/... ./internal/ormcore/... ./internal/websockettest ./attachments ./testkit/http ./testkit/websocket ./notifications",
+        "recheck_log": ".cache/goway-batch6c2/race-recheck.log",
+        "recheck_log_sha256": "8096d17d8ceb9686b113f1291caecf86e4d980a2c8b93a3fc4aec492893b3c05",
+        "resolution": "Affected query packages and listener-blocked packages rerun; unchanged passing generator/store/validation/extension/pagination segments retained."
+      },
+      {
+        "command": "cd tests/fixtures/goway && go vet ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/fixture-vet.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "cd tests/fixtures/goway && go test -v ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/fixture-test.log",
+        "log_sha256": "d0b0540475c3e8a40960411865300a5e6fbe3989a812aa9174e430db11858ded"
+      },
+      {
+        "command": "python3 tools/goway_catalogue.py",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/catalogue.log",
+        "log_sha256": "14246701806e1ebd0347fcca5ca500223fe5d8d4a73956bfc839c9091e9d7777"
+      },
+      {
+        "command": "make generate-check",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/generate.log",
+        "log_sha256": "aff9fb69af141873e6432dbf8aac79dce91e16c5bcf0f4ccc0cf5187ac3d14e4"
+      },
+      {
+        "command": "make release-tools-check",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/release-tools-final.log",
+        "log_sha256": "f623c1683d5e9bb41b54681434991b0b08d3a1ed056d729868cfe32271a43ed5",
+        "initial_status": "Sandbox blocked native /usr/bin/time sysctl and /bin/ps; rerun passed with OS access and unchanged source."
+      },
+      {
+        "command": "make datatable-contracts",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/contracts.log",
+        "log_sha256": "40a632ca12ad3804d339ba869ce681b78fc202f52cbd642a4909623d1505d241"
+      },
+      {
+        "command": "make docs-check",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/docs.log",
+        "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+      },
+      {
+        "command": "FOUNDRY_TEST_GOPLS=/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls make agent-smoke",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/agent.log",
+        "log_sha256": "c5fa055c3cbb284cfd52e08c58d9245376b48262b96e5caaad8723bbc1bf3da9"
+      },
+      {
+        "command": "gofmt -l (repository Go sources)",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/gofmt.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "git diff --check; git diff --cached --check",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/diff-check.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "release_inventory": "Pin all 59 stage7_3b store transcript JSON assets explicitly in TestGoWaySourceInventory; existing JSON policy retained, no widening.",
+    "stage_status": "All 13 stores, advisory validation/database and extension slots delivered. Stage 8a lanes B/C/D integrated; legacy compatibility/model generation remain. Stage 6 whole-app measurement gate pending.",
+    "not_run": [
+      "Live PostgreSQL/Redis (opt-in sources compiled)",
+      "Stage 6 whole-app measurement gate",
+      "Full TypeScript runtime gate (historical lane evidence retained separately)"
+    ],
+    "git": "Authorized apply -3 --binary/add only; no commit."
+  }
+}

@@ -253,8 +253,8 @@ func TestPostgresAttachmentConcurrentReplacementsAcrossManagers(t *testing.T) {
 		t.Fatal("single cardinality lost", err)
 	}
 	err = f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		fields := store.FileFields()
-		count, err := store.QueryFoundryAttachments().Where(fields.State.Ne(string(Cleaned))).Count(ctx, tx)
+		fields := store.Files
+		count, err := store.Files.Query().Where(fields.State.Ne(string(Cleaned))).Count(ctx, tx)
 		if count != 1 {
 			t.Error("unreconciled concurrent objects", count)
 		}

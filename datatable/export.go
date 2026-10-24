@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/i18n"
@@ -278,7 +279,7 @@ func (t Table[S, R, A]) Export(ctx context.Context, m *Manager, subject A, reque
 		defer writer.Abort()
 		cells := make([]exportCell, len(columns))
 		err = m.read(ctx, func(tx *database.Tx) error {
-			return source.rows.Limit(m.config.MaxExportRows+1).Each(ctx, tx, func(row R) error {
+			return rows.Each(ctx, tx, rows.Limit(source.rows, m.config.MaxExportRows+1), func(row R) error {
 				if err := ctx.Err(); err != nil {
 					return err
 				}

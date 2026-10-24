@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/extensionslot"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
 
@@ -49,7 +50,7 @@ func TestExtensionAdapterBatchAndMissingParity(t *testing.T) {
 				Batches []int
 				Invalid bool
 			}
-			for _, old := range []bool{true, false} {
+			for _, mode := range []string{"legacy", "compatibility", "native"} {
 				fields := extensionFields()
 				parents := []extensionModel{{ID: 1}, {ID: 2, External: externalValue{Loaded: true, Value: "retained"}}, {ID: 3}, {ID: 4}, {ID: 5}}
 				var batches []int
@@ -68,7 +69,7 @@ func TestExtensionAdapterBatchAndMissingParity(t *testing.T) {
 				limits.MaxRows = limit
 				var result []extensionModel
 				var err error
-				if old {
+				if mode == "legacy" {
 					q := extensionOld().WithRelationLimits(limits).With(slot)
 					if missing {
 						result, err = q.LoadMissing(t.Context(), db, parents)
@@ -77,6 +78,10 @@ func TestExtensionAdapterBatchAndMissingParity(t *testing.T) {
 					}
 				} else {
 					p := Extension(fields.External, slot)
+					if mode == "native" {
+						source := extensionslot.New(extensionslot.Binding[extensionModel, externalValue]{Name: binding.Name, Table: binding.Table, Get: binding.Get, Set: binding.Set, Loaded: binding.Loaded, Count: binding.Count, Fetch: extensionslot.Fetch[extensionModel, externalValue](binding.Fetch)})
+						p = FoundryExtension(fields.External, source, sqlowner.Queries())
+					}
 					p.plan = relationWithLimits(p.plan, &limits)
 					if missing {
 						result, err = LoadMissing(t.Context(), db, parents, p)
@@ -93,7 +98,7 @@ func TestExtensionAdapterBatchAndMissingParity(t *testing.T) {
 					Invalid bool
 				}{result, batches, errors.Is(err, fault.Invalid)})
 			}
-			if !reflect.DeepEqual(outcomes[0], outcomes[1]) {
+			if !reflect.DeepEqual(outcomes[0], outcomes[1]) || !reflect.DeepEqual(outcomes[0], outcomes[2]) {
 				t.Fatalf("extension parity: %#v", outcomes)
 			}
 			if limit == 10 && len(outcomes[1].Batches) != (5-btoi(missing)+1)/2 {
@@ -388,5 +393,32 @@ func TestZeroLookupsFailClosed(t *testing.T) {
 	}
 	if len(statements) != 0 {
 		t.Fatal("zero lookup executed SQL")
+	}
+}
+
+func TestNativeExtensionBridgeRequiresCapabilityAndSlotType(t *testing.T) {
+	fields := extensionFields()
+	source := extensionslot.New(extensionslot.Binding[extensionModel, externalValue]{Name: "External", Table: "adapter_owners", Get: func(m extensionModel) externalValue { return m.External }, Set: func(m extensionModel, v externalValue) extensionModel { m.External = v; return m }, Loaded: func(v externalValue) bool { return v.Loaded }, Count: func(externalValue) int { return 1 }, Fetch: func(context.Context, database.Executor, []extensionModel) ([]externalValue, error) {
+		t.Fatal("validation dispatched a loader")
+		return nil, nil
+	}})
+	for _, relation := range []ExtensionRelation[extensionModel]{FoundryExtension(fields.External, source, sqlowner.QuerySeal{}), FoundryExtension(fields.External, extensionslot.Slot[extensionModel]{}, sqlowner.Queries())} {
+		if err := Check(relation); !errors.Is(err, fault.Invalid) {
+			t.Fatalf("invalid bridge accepted: %v", err)
+		}
+	}
+	if err := Check(FoundryExtension(fields.External, source, sqlowner.Queries())); err != nil {
+		t.Fatal(err)
+	}
+	legacy := query.FoundryExtensionSlot(source, sqlowner.QuerySeal{})
+	if err := Check(Extension(fields.External, legacy)); !errors.Is(err, fault.Invalid) {
+		t.Fatal("zero legacy capability accepted", err)
+	}
+	wrongValue := extensionslot.New(extensionslot.Binding[extensionModel, string]{Name: "External", Table: "adapter_owners", Get: func(extensionModel) string { return "" }, Set: func(m extensionModel, _ string) extensionModel { return m }, Loaded: func(string) bool { return false }, Count: func(string) int { return 1 }, Fetch: func(context.Context, database.Executor, []extensionModel) ([]string, error) {
+		t.Fatal("wrong-value loader dispatched")
+		return nil, nil
+	}})
+	if err := Check(FoundryExtension(fields.External, wrongValue, sqlowner.Queries())); !errors.Is(err, fault.Invalid) {
+		t.Fatal("wrong slot value accepted", err)
 	}
 }

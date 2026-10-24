@@ -5,7 +5,8 @@ import (
 	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
@@ -97,8 +98,8 @@ func (m *Manager) orphanTable(queue *Queue, scheduled *[]model.ID[store.File]) e
 			return err == nil && !id.IsZero() && id.String() == key
 		},
 		Scan: func(ctx context.Context, tx *database.Tx, owner extensions.OwnerName, scope, after string, limit int) ([]store.FileIndex, error) {
-			f := store.FileFields()
-			q := store.QueryFoundryAttachments().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope), f.State.Ne(string(Cleaned)), f.State.Ne(string(Retained))).OrderBy(f.ID.Asc()).Limit(limit)
+			f := store.Files
+			q := store.Files.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope), f.State.Ne(string(Cleaned)), f.State.Ne(string(Retained))).OrderBy(f.ID.Asc()).Limit(limit)
 			if after != "" {
 				id, err := model.ParseID[store.File](after)
 				if err != nil {
@@ -106,8 +107,7 @@ func (m *Manager) orphanTable(queue *Queue, scheduled *[]model.ID[store.File]) e
 				}
 				// PostgreSQL orders UUID keys bytewise. Reuse the generated field's
 				// exact owner/codec metadata at this explicit range boundary.
-				ordered := query.OrderedField[store.File, model.ID[store.File]]{ScalarField: f.ID}
-				q = q.Where(ordered.Gt(id))
+				q = q.Where(orm.UUIDGreater(f.ID, id))
 			}
 			return store.Index(q).All(ctx, tx)
 		},
@@ -120,8 +120,8 @@ func (m *Manager) orphanTable(queue *Queue, scheduled *[]model.ID[store.File]) e
 				}
 				ids[i] = id
 			}
-			f := store.FileFields()
-			return store.Index(store.QueryFoundryAttachments().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope), f.ID.In(ids...), f.State.Ne(string(Cleaned)), f.State.Ne(string(Retained))).OrderBy(f.ID.Asc())).ForUpdate().All(ctx, tx)
+			f := store.Files
+			return rows.ForUpdate(rows.Read(store.Index(store.Files.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope), f.ID.In(ids...), f.State.Ne(string(Cleaned)), f.State.Ne(string(Retained))).OrderBy(f.ID.Asc())))).All(ctx, tx)
 		},
 		Identity: func(_ *extensions.Registry, owner extensions.OwnerName, scope string, row store.FileIndex) (model.Identity, error) {
 			if row.Owner != string(owner) || row.Scope != scope {
@@ -144,7 +144,7 @@ func (m *Manager) orphanTable(queue *Queue, scheduled *[]model.ID[store.File]) e
 			if err != nil {
 				return err
 			}
-			if _, err := store.QueryFoundryAttachments().Update(ctx, tx, row.ID, store.FileDraft{}.SetState(string(CleanupPending)).SetUpdatedAt(now)); err != nil {
+			if _, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), row.ID, store.Files.State.Set(string(CleanupPending)), store.Files.UpdatedAt.Set(now)); err != nil {
 				return err
 			}
 			if err := queue.enqueue(ctx, tx, operationID(row.ID)); err != nil {
@@ -168,8 +168,8 @@ func InspectUndeclared(ctx context.Context, m *Manager, owner extensions.OwnerNa
 		return Undeclared{}, err
 	}
 	return extensionmaintenance.InspectUndeclared(ctx, m.store, owner, func(ctx context.Context, tx *database.Tx, scope string, limit int) ([]string, error) {
-		f := store.FileFields()
-		return query.SelectValue(store.QueryFoundryAttachments().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)), query.Value(f.Collection)).Distinct().OrderBy(f.Collection.Asc()).Limit(limit).All(ctx, tx)
+		f := store.Files
+		return rows.Distinct(rows.SelectValue(store.Files.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)).OrderBy(f.Collection.Asc()).Limit(limit), f.Collection)).All(ctx, tx)
 	}, func(scope, name string) bool {
 		_, declared := m.collections[extensions.Digest(scope, name)]
 		return declared

@@ -5,6 +5,8 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	store "github.com/weiloon1234/Foundry-Go/internal/attachmentstore"
@@ -76,8 +78,8 @@ func (m *Manager) cleanupSubject(ctx context.Context, tx *database.Tx, owner ext
 	})
 }
 func (m *Manager) retireOwner(ctx context.Context, tx *database.Tx, subject extensions.Subject, queue *Queue) ([]model.ID[store.File], error) {
-	f := store.FileFields()
-	rows, err := store.Index(store.QueryFoundryAttachments().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key), f.State.In(string(Ready), string(Stored))).OrderBy(f.ID.Asc()).Limit(MaxOwnerIntents+1)).ForUpdate().All(ctx, tx)
+	f := store.Files
+	rows, err := rows.ForUpdate(rows.Read(store.Index(store.Files.Query().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key), f.State.In(string(Ready), string(Stored))).OrderBy(f.ID.Asc()).Limit(MaxOwnerIntents+1)))).All(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +95,7 @@ func (m *Manager) retireOwner(ctx context.Context, tx *database.Tx, subject exte
 		if _, err := m.validateIndex(row); err != nil {
 			return nil, err
 		}
-		if _, err := store.QueryFoundryAttachments().Update(ctx, tx, row.ID, store.FileDraft{}.SetState(string(CleanupPending)).SetUpdatedAt(now)); err != nil {
+		if _, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), row.ID, store.Files.State.Set(string(CleanupPending)), store.Files.UpdatedAt.Set(now)); err != nil {
 			return nil, err
 		}
 		if err := queue.enqueue(ctx, tx, operationID(row.ID)); err != nil {

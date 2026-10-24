@@ -1,0 +1,23 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "UPDATE \"foundry_notification_deliveries\" SET \"channel\" = $1 WHERE (\"foundry_notification_deliveries\".\"key\" = $2) RETURNING \"foundry_notification_deliveries\".\"key\", \"foundry_notification_deliveries\".\"notification_id\", \"foundry_notification_deliveries\".\"channel\", \"foundry_notification_deliveries\".\"kind\", \"foundry_notification_deliveries\".\"state\", \"foundry_notification_deliveries\".\"payload\", \"foundry_notification_deliveries\".\"claim\", \"foundry_notification_deliveries\".\"attempts\", \"foundry_notification_deliveries\".\"updated_at\"",
+      "Args": [
+        "updated",
+        "stored"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "07ccaa72fface9d99e6c059e58df4d2a117392b6d22d1ccbfa99fe26e1973507"
+}

@@ -6,8 +6,8 @@ import (
 	"unsafe"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -239,62 +239,59 @@ func requireRecord[R any](ctx context.Context, ex database.Executor, r ormcore.R
 
 // Paginate requires explicit ordering and no outer window; nested windows remain.
 // Example: rows.Read(report).Paginate(ctx,db,orm.Page(1,20)).
-func (q Result[S, R]) Paginate(ctx context.Context, ex database.Executor, request query.PageRequest) (query.Page[R], error) {
+func (q Result[S, R]) Paginate(ctx context.Context, ex database.Executor, request orm.PageRequest) (orm.PageResult[R], error) {
 	window, err := recordPage(ctx, ex, q.core, request, false)
 	if err != nil {
-		return query.Page[R]{}, err
+		return orm.PageResult[R]{}, err
 	}
 	total, err := ormcore.RecordCount(ctx, ex, q.core)
 	if err != nil {
-		return query.Page[R]{}, err
+		return orm.PageResult[R]{}, err
 	}
 	if total < 0 {
-		return query.Page[R]{}, ormcore.Invalid("database returned a negative page count")
+		return orm.PageResult[R]{}, ormcore.Invalid("database returned a negative page count")
 	}
 	items, err := readRecord[R](ctx, ex, window, false)
 	if err != nil {
-		return query.Page[R]{}, err
+		return orm.PageResult[R]{}, err
 	}
-	pages := total / int64(request.Size)
-	if total%int64(request.Size) != 0 {
-		pages++
-	}
-	return query.Page[R]{Items: items, Number: request.Number, Size: request.Size, Total: total, Pages: pages}, nil
+	pages := querycore.PageCount(total, request.Size)
+	return orm.PageResult[R]{Items: items, Number: request.Number, Size: request.Size, Total: total, Pages: pages}, nil
 }
 
 // SimplePaginate reads one lookahead row without a total. Example: rows.Read(report).SimplePaginate(ctx,db,orm.Page(1,20)).
-func (q Result[S, R]) SimplePaginate(ctx context.Context, ex database.Executor, request query.PageRequest) (query.SimplePage[R], error) {
+func (q Result[S, R]) SimplePaginate(ctx context.Context, ex database.Executor, request orm.PageRequest) (orm.SimplePage[R], error) {
 	window, err := recordPage(ctx, ex, q.core, request, true)
 	if err != nil {
-		return query.SimplePage[R]{}, err
+		return orm.SimplePage[R]{}, err
 	}
 	items, err := readRecord[R](ctx, ex, window, false)
 	if err != nil {
-		return query.SimplePage[R]{}, err
+		return orm.SimplePage[R]{}, err
 	}
 	more := len(items) > request.Size
 	if more {
 		clear(items[request.Size:])
 		items = items[:request.Size:request.Size]
 	}
-	return query.SimplePage[R]{Items: items, Number: request.Number, Size: request.Size, HasMore: more}, nil
+	return orm.SimplePage[R]{Items: items, Number: request.Number, Size: request.Size, HasMore: more}, nil
 }
-func recordPage(ctx context.Context, ex database.Executor, r ormcore.RecordSource, request query.PageRequest, lookahead bool) (ormcore.RecordSource, error) {
+func recordPage(ctx context.Context, ex database.Executor, r ormcore.RecordSource, request orm.PageRequest, lookahead bool) (ormcore.RecordSource, error) {
 	if err := ormcore.RecordExecution(ctx, ex, false); err != nil {
 		return r, err
 	}
-	if err := request.Validate(); err != nil {
+	offset, err := querycore.PageOffset(request)
+	if err != nil {
 		return r, err
 	}
-	if r.Transaction || r.Source.Node.Limit.IsSet() || r.Source.Node.Offset != 0 || len(r.Source.Node.Orders) == 0 {
+	if r.Transaction {
 		return r, ormcore.Invalid("result pagination requires explicit ordering and no outer Limit/Offset")
 	}
-	size := request.Size
-	if lookahead {
-		size++
+	node, err := querycore.ResultPageWindow(r.Source.Node, offset, request.Size, lookahead)
+	if err != nil {
+		return r, err
 	}
-	r.Source.Node.Limit = value.Set(size)
-	r.Source.Node.Offset = (request.Number - 1) * request.Size
-	_, err := ormcore.CompileRecord(ctx, r)
+	r.Source.Node = node
+	_, err = ormcore.CompileRecord(ctx, r)
 	return r, err
 }

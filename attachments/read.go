@@ -111,8 +111,8 @@ func (c Collection[M, K]) scanRows(ctx context.Context, tx *database.Tx, m *Mana
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
-	f := store.FileFields()
-	q := store.QueryFoundryAttachments().Where(f.Scope.Eq(c.definition.owner.Scope()), f.SubjectKey.In(keys...), f.Collection.Eq(string(c.Name())), f.Locale.In(locales...), f.State.Eq(string(Ready)))
+	f := store.Files
+	q := store.Files.Query().Where(f.Scope.Eq(c.definition.owner.Scope()), f.SubjectKey.In(keys...), f.Collection.Eq(string(c.Name())), f.Locale.In(locales...), f.State.Eq(string(Ready)))
 	if id, ok := only.Get(); ok {
 		q = q.Where(f.ID.Eq(model.IDFromBytes[store.File](id.Bytes())))
 	}

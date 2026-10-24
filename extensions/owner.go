@@ -14,9 +14,9 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -25,13 +25,12 @@ import (
 type OwnerName string
 type declarationID struct{ nonzero byte }
 
-// Owner binds one model and its concrete key to generated identity metadata.
+// Owner binds one model and its concrete key to framework identity metadata.
 // Reuse this exact declaration across attachments, metadata and translations.
 type Owner[M any, K comparable] struct{ definition *ownerDefinition[M, K] }
 type ownerDefinition[M any, K comparable] struct {
 	name     OwnerName
 	source   identitySource[M, K]
-	scope    func(...K) query.Predicate[M]
 	ormScope func(...K) orm.Predicate[M]
 	storage  string
 	previous []string
@@ -56,15 +55,6 @@ type OwnerOptions struct {
 	PreviousModels []string
 }
 
-func DefineOwner[M any, K comparable](name OwnerName, source query.ModelIdentity[M, K]) Owner[M, K] {
-	return DefineOwnerWith(name, source, OwnerOptions{})
-}
-
-// DefineOwnerWith declares an owner with an explicit persisted identity. Keep
-// StorageModel unchanged for the lifetime of the stored data.
-func DefineOwnerWith[M any, K comparable](name OwnerName, source query.ModelIdentity[M, K], options OwnerOptions) Owner[M, K] {
-	return Owner[M, K]{definition: &ownerDefinition[M, K]{name: name, source: source, scope: source.Scope, storage: options.StorageModel, previous: slices.Clone(options.PreviousModels), id: &declarationID{}}}
-}
 func (o Owner[M, K]) Validate() error {
 	if o.definition == nil || !identifier.Semantic(string(o.definition.name)) || reflect.TypeFor[M]().Kind() != reflect.Struct {
 		return invalid("invalid model extension owner")
@@ -148,12 +138,6 @@ func (o Owner[M, K]) Parse(identity model.Identity) (model.Reference[M, K], erro
 		identity = renamed
 	}
 	return o.definition.source.Parse(identity)
-}
-func (o Owner[M, K]) QueryScope(keys ...K) query.Predicate[M] {
-	if o.definition == nil {
-		return query.Predicate[M]{}
-	}
-	return o.definition.scope(keys...)
 }
 func (o Owner[M, K]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("model extension owner")) }
 
@@ -260,7 +244,7 @@ func (o Owner[M, K]) ActiveSubjects(ctx context.Context, executor database.Execu
 	if err := o.Check(registry); err != nil {
 		return nil, nil, err
 	}
-	if len(references) > query.MaxIdentityBatch {
+	if len(references) > querycore.MaxIdentityBatch {
 		return nil, nil, invalid("owner batch exceeds its limit")
 	}
 	keys := make([]K, len(references))

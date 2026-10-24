@@ -142,12 +142,12 @@ func (s slotDefinition[M, K, S]) Accepts(ctx context.Context, file FileSource) (
 }
 
 // AddFile appends file to owner's multiple-file collection.
-func (s ManySlot[M, K]) AddFile(ctx context.Context, owner M, file FileSource) (Result[M, K], error) {
+func (s manySlot[M, K]) AddFile(ctx context.Context, owner M, file FileSource) (Result[M, K], error) {
 	return withFile(ctx, file, func(upload Upload) (Result[M, K], error) { return s.Add(ctx, owner, upload) })
 }
 
 // Add appends one upload to owner's multiple-file collection.
-func (s ManySlot[M, K]) Add(ctx context.Context, owner M, upload Upload) (Result[M, K], error) {
+func (s manySlot[M, K]) Add(ctx context.Context, owner M, upload Upload) (Result[M, K], error) {
 	m, err := s.bound()
 	if err != nil {
 		return Result[M, K]{}, err
@@ -157,7 +157,7 @@ func (s ManySlot[M, K]) Add(ctx context.Context, owner M, upload Upload) (Result
 
 // AddIn publishes a prepared upload into owner's collection inside tx; see
 // ReplaceIn.
-func (s ManySlot[M, K]) AddIn(ctx context.Context, tx *database.Tx, owner M, prepared Prepared[M, K]) (Result[M, K], error) {
+func (s manySlot[M, K]) AddIn(ctx context.Context, tx *database.Tx, owner M, prepared Prepared[M, K]) (Result[M, K], error) {
 	m, err := s.bound()
 	if err != nil {
 		return Result[M, K]{}, err
@@ -166,7 +166,7 @@ func (s ManySlot[M, K]) AddIn(ctx context.Context, tx *database.Tx, owner M, pre
 }
 
 // Reorder sets the collection order to an exact permutation of its file IDs.
-func (s ManySlot[M, K]) Reorder(ctx context.Context, owner M, order []ID[M]) ([]Attachment[M, K], error) {
+func (s manySlot[M, K]) Reorder(ctx context.Context, owner M, order []ID[M]) ([]Attachment[M, K], error) {
 	m, err := s.bound()
 	if err != nil {
 		return nil, err

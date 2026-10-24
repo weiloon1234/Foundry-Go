@@ -1,0 +1,24 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "WITH \"foundry_write_source\" (\"foundry_source_key\") AS MATERIALIZED (SELECT \"foundry_model_translations\".\"key\" AS \"foundry_source_key\" FROM \"foundry_model_translations\" WHERE (\"foundry_model_translations\".\"scope\" = $1) ORDER BY \"foundry_model_translations\".\"key\" ASC LIMIT $2) DELETE FROM \"foundry_model_translations\" USING \"foundry_write_source\" WHERE (\"foundry_model_translations\".\"scope\" = $3) AND (\"foundry_model_translations\".\"key\" = \"foundry_write_source\".\"foundry_source_key\")",
+      "Args": [
+        "scope",
+        3,
+        "scope"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"
+}

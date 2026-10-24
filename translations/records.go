@@ -6,13 +6,16 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionrow"
 	store "github.com/weiloon1234/Foundry-Go/internal/extensionstore"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
@@ -80,9 +83,9 @@ func All[M any, K comparable](ctx context.Context, m *Manager, owner extensions.
 		if err != nil {
 			return err
 		}
-		f := store.TranslationFields()
+		f := store.Translations
 		bytes := 0
-		return store.QueryFoundryModelTranslations().Where(f.Scope.Eq(owner.Scope()), f.SubjectKey.Eq(subject)).OrderBy(f.Field.Asc(), f.Locale.Asc()).Limit(MaxRowsPerOwner+1).Each(ctx, tx, func(row store.Translation) error {
+		return store.Translations.Query().Where(f.Scope.Eq(owner.Scope()), f.SubjectKey.Eq(subject)).OrderBy(f.Field.Asc(), f.Locale.Asc()).Limit(MaxRowsPerOwner+1).Each(ctx, tx, func(row store.Translation) error {
 			bytes += len(row.Value)
 			if len(result) >= MaxRowsPerOwner || bytes > MaxBatchBytes {
 				return fault.New(fault.Conflict, "translation result exceeds its row or byte limit")
@@ -102,12 +105,12 @@ func All[M any, K comparable](ctx context.Context, m *Manager, owner extensions.
 
 // Matching creates a bounded materialized owner scope for one exact translation.
 // The following model query owns fresh visibility and authorization constraints.
-func (f Field[M, K]) Matching(ctx context.Context, m *Manager, locale i18n.LocaleID, text string) (query.Predicate[M], error) {
+func (f Field[M, K]) matchingKeys(ctx context.Context, m *Manager, locale i18n.LocaleID, text string) ([]K, error) {
 	if err := f.check(m); err != nil {
-		return query.Predicate[M]{}, err
+		return nil, err
 	}
 	if !validText(text, f.definition.options.MaxBytes) {
-		return query.Predicate[M]{}, invalid()
+		return nil, invalid()
 	}
 	var keys []K
 	err := m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
@@ -118,11 +121,11 @@ func (f Field[M, K]) Matching(ctx context.Context, m *Manager, locale i18n.Local
 		if !locales.Contains(locale) {
 			return invalid()
 		}
-		fields := store.TranslationFields()
+		fields := store.Translations
 		// The value hash index (000002_index_translation_values) serves the
 		// equality; only ownership/index columns are selected, never the text.
-		return store.TranslationsIndex(store.QueryFoundryModelTranslations().Where(fields.Scope.Eq(f.definition.owner.Scope()), fields.Field.Eq(string(f.Name())), fields.Locale.Eq(string(locale)), fields.Value.Eq(text)).OrderBy(fields.Key.Asc()).Limit(query.MaxIdentityBatch+1)).Each(ctx, tx, func(row store.TranslationIndex) error {
-			if len(keys) >= query.MaxIdentityBatch {
+		return rows.Each(ctx, tx, store.TranslationsIndex(store.Translations.Query().Where(fields.Scope.Eq(f.definition.owner.Scope()), fields.Field.Eq(string(f.Name())), fields.Locale.Eq(string(locale)), fields.Value.Eq(text)).OrderBy(fields.KeyColumn.Asc()).Limit(querycore.MaxIdentityBatch+1)), func(row store.TranslationIndex) error {
+			if len(keys) >= querycore.MaxIdentityBatch {
 				return fault.New(fault.Conflict, "translation matching scope exceeds its limit")
 			}
 			if err := validateOwnerIndex(extensionrow.Unknown(f.definition.owner), row); err != nil {
@@ -141,9 +144,9 @@ func (f Field[M, K]) Matching(ctx context.Context, m *Manager, locale i18n.Local
 		})
 	})
 	if err != nil {
-		return query.Predicate[M]{}, err
+		return nil, err
 	}
-	return f.definition.owner.QueryScope(keys...), nil
+	return keys, nil
 }
 func (f Field[M, K]) Clear(ctx context.Context, m *Manager, reference model.Reference[M, K]) (int, error) {
 	if err := f.check(m); err != nil {
@@ -167,8 +170,8 @@ func (f Field[M, K]) clear(ctx context.Context, tx *database.Tx, m *Manager, ref
 	if err != nil {
 		return 0, err
 	}
-	fields := store.TranslationFields()
-	return deleteRows(ctx, tx, store.QueryFoundryModelTranslations().Where(fields.Scope.Eq(subject.Scope), fields.SubjectKey.Eq(subject.Key), fields.Field.Eq(string(f.Name()))))
+	fields := store.Translations
+	return deleteRows(ctx, tx, store.Translations.Query().Where(fields.Scope.Eq(subject.Scope), fields.SubjectKey.Eq(subject.Key), fields.Field.Eq(string(f.Name()))))
 }
 func DeleteAll[M any, K comparable](ctx context.Context, m *Manager, owner extensions.Owner[M, K], reference model.Reference[M, K]) (int, error) {
 	if err := m.Validate(); err != nil {
@@ -189,16 +192,16 @@ func DeleteAll[M any, K comparable](ctx context.Context, m *Manager, owner exten
 	return count, nil
 }
 func deleteSubject(ctx context.Context, tx *database.Tx, subject extensions.Subject) (int, error) {
-	f := store.TranslationFields()
-	return deleteRows(ctx, tx, store.QueryFoundryModelTranslations().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key)))
+	f := store.Translations
+	return deleteRows(ctx, tx, store.Translations.Query().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key)))
 }
 
 // deleteRows removes every row selected by q in one set-based DELETE USING,
 // without hydrating translation text or issuing one statement per row. Callers
 // lock the owner first (or run after its deletion); per-owner rows are bounded
 // by MaxRowsPerOwner at write time.
-func deleteRows(ctx context.Context, tx *database.Tx, q store.TranslationQuery) (int, error) {
-	count, err := store.DeleteTranslationUsing(q, q).MatchKey(query.Value(store.TranslationFields().Key)).Exec(ctx, tx)
+func deleteRows(ctx context.Context, tx *database.Tx, q orm.Query[store.Translation]) (int, error) {
+	count, err := rows.DeleteUsing(q, rows.From(q)).Match(rows.MatchSource(store.Translations.KeyColumn, expr.Value(store.Translations.KeyColumn))).Exec(ctx, tx)
 	if err != nil {
 		return 0, err
 	}

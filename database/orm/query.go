@@ -10,7 +10,6 @@ import (
 	"unsafe"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -507,7 +506,7 @@ func (q LockedQuery[M]) Wait() LockedQuery[M] { q.state.behavior = querycore.Loc
 // Rows yielded before a later failed batch remain yielded.
 func (q Query[M]) Each(ctx context.Context, ex database.Executor, yield func(M) error) error {
 	if len(q.state.relations) > 0 {
-		return q.EachChunked(ctx, ex, query.DefaultChunkSize, yield)
+		return q.EachChunked(ctx, ex, querycore.DefaultChunkSize, yield)
 	}
 	return each(ctx, ex, q.state, yield)
 }
@@ -530,7 +529,7 @@ func each[M any](ctx context.Context, ex database.Executor, q queryState, yield 
 		return invalid("model iteration requires a callback")
 	}
 	if mayRetrieve(q.table, ex) {
-		return chunks(ctx, ex, q, query.DefaultChunkSize, eachBatch(ctx, yield))
+		return chunks(ctx, ex, q, querycore.DefaultChunkSize, eachBatch(ctx, yield))
 	}
 	return readModels(ctx, ex, q, func(row database.Row) error {
 		var item M

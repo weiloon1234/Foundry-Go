@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	store "github.com/weiloon1234/Foundry-Go/internal/notificationstore"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -52,13 +52,13 @@ func (m *Manager) Deliveries(ctx context.Context, state State, limit int, after 
 		return nil, err
 	}
 	defer release()
-	fields := store.DeliveryFields()
+	fields := store.Deliveries
 	var result []DeliveryInfo
 	err = m.within(ctx, func(tx *database.Tx) error {
 		result = nil
-		predicates := []query.Predicate[store.Delivery]{fields.State.Eq(string(state))}
+		predicates := []orm.Predicate[store.Delivery]{fields.State.Eq(string(state))}
 		if after.key != "" {
-			anchor, err := store.QueryFoundryNotificationDeliveries().Find(ctx, tx, after.key)
+			anchor, err := store.Deliveries.Query().Where(store.Deliveries.Key().Eq(after.key)).First(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -66,9 +66,9 @@ func (m *Manager) Deliveries(ctx context.Context, state State, limit int, after 
 			if !ok || row.State != string(state) {
 				return ErrDeliveryAnchorMoved
 			}
-			predicates = append(predicates, query.Or(fields.UpdatedAt.Gt(row.UpdatedAt), query.And(fields.UpdatedAt.Eq(row.UpdatedAt), fields.Key.Gt(row.Key))))
+			predicates = append(predicates, orm.Or(fields.UpdatedAt.Gt(row.UpdatedAt), orm.And(fields.UpdatedAt.Eq(row.UpdatedAt), fields.KeyColumn.Gt(row.Key))))
 		}
-		rows, err := store.QueryFoundryNotificationDeliveries().Where(predicates...).OrderBy(fields.UpdatedAt.Asc(), fields.Key.Asc()).Limit(limit).All(ctx, tx)
+		rows, err := store.Deliveries.Query().Where(predicates...).OrderBy(fields.UpdatedAt.Asc(), fields.KeyColumn.Asc()).Limit(limit).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -128,7 +128,7 @@ func (m *Manager) ResolveDelivery(ctx context.Context, id DeliveryID, expected S
 		if err != nil {
 			return err
 		}
-		_, err = store.QueryFoundryNotificationDeliveries().Update(ctx, tx, row.Key, store.DeliveryDraft{}.SetState(string(target)).SetClaim(model.ID[store.Delivery]{}).SetUpdatedAt(now))
+		_, err = orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), row.Key, store.Deliveries.State.Set(string(target)), store.Deliveries.Claim.Set(model.ID[store.Delivery]{}), store.Deliveries.UpdatedAt.Set(now))
 		changed = err == nil
 		return err
 	})

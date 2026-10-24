@@ -9,7 +9,8 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
@@ -67,7 +68,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		Schema: "public", MaxActive: 32, Timeout: time.Minute,
-		MaxPageSize: query.MaxPageSize, MaxOffset: 10_000,
+		MaxPageSize: orm.MaxPageSize, MaxOffset: 10_000,
 		MaxRowBytes: 256 << 10, MaxPageBytes: 4 << 20,
 		MaxExports: 2, MaxArtifacts: 16, ExportTimeout: 10 * time.Minute,
 		MaxExportRows: 50_000, MaxExportBytes: 64 << 20,
@@ -86,7 +87,7 @@ func (c Config) Validate() error {
 	if !sqlname.Valid(c.Schema) || c.MaxActive < 1 || c.MaxActive > 1024 || c.Timeout <= 0 || c.Timeout > 10*time.Minute {
 		return invalid("invalid datatable service configuration")
 	}
-	if c.MaxPageSize < DefaultPageSize || c.MaxPageSize > query.MaxPageSize || c.MaxOffset < 0 || c.MaxOffset > 10_000_000 || c.MaxRowBytes < 1 || c.MaxRowBytes > 4<<20 || c.MaxPageBytes < c.MaxRowBytes || c.MaxPageBytes > 64<<20 {
+	if c.MaxPageSize < DefaultPageSize || c.MaxPageSize > orm.MaxPageSize || c.MaxOffset < 0 || c.MaxOffset > 10_000_000 || c.MaxRowBytes < 1 || c.MaxRowBytes > 4<<20 || c.MaxPageBytes < c.MaxRowBytes || c.MaxPageBytes > 64<<20 {
 		return invalid("invalid datatable page configuration")
 	}
 	if c.MaxExports < 1 || c.MaxExports > 32 || c.MaxArtifacts < c.MaxExports || c.MaxArtifacts > 1024 || c.ExportTimeout <= 0 || c.ExportTimeout > time.Hour || c.MaxExportRows < 1 || c.MaxExportRows >= maxWorksheetRows {
@@ -318,11 +319,11 @@ func (m *Manager) read(ctx context.Context, fn func(*database.Tx) error) error {
 // Query returns one numbered page and the complete matching total: one count
 // query without the table's ordering and one ordered row query, in a single
 // read-only repeatable-read transaction.
-func (t Table[S, R, A]) Query(ctx context.Context, m *Manager, subject A, request Request) (query.Page[R], error) {
+func (t Table[S, R, A]) Query(ctx context.Context, m *Manager, subject A, request Request) (orm.PageResult[R], error) {
 	if err := t.check(m); err != nil {
-		return query.Page[R]{}, err
+		return orm.PageResult[R]{}, err
 	}
-	var result query.Page[R]
+	var result orm.PageResult[R]
 	err := m.calls.Run(ctx, "datatable query", func(ctx context.Context) error {
 		prepared, err := t.definition.prepare(request, m.config)
 		if err != nil {
@@ -333,16 +334,16 @@ func (t Table[S, R, A]) Query(ctx context.Context, m *Manager, subject A, reques
 			return err
 		}
 		err = m.read(ctx, func(tx *database.Tx) error {
-			total, err := source.count.Count(ctx, tx)
+			total, err := rows.Count(ctx, tx, source.count)
 			if err != nil {
 				return err
 			}
 			page := prepared.page
-			items, err := source.rows.Limit(page.Size).Offset((page.Number-1)*page.Size).All(ctx, tx)
+			items, err := rows.Offset(rows.Limit(source.rows, page.Size), (page.Number-1)*page.Size).All(ctx, tx)
 			if err != nil {
 				return err
 			}
-			result = query.Page[R]{Items: items, Number: page.Number, Size: page.Size, Total: total, Pages: (total + int64(page.Size) - 1) / int64(page.Size)}
+			result = orm.PageResult[R]{Items: items, Number: page.Number, Size: page.Size, Total: total, Pages: (total + int64(page.Size) - 1) / int64(page.Size)}
 			return result.Validate()
 		})
 		if err != nil {
@@ -351,7 +352,7 @@ func (t Table[S, R, A]) Query(ctx context.Context, m *Manager, subject A, reques
 		return t.checkPageBytes(ctx, m, result.Items)
 	})
 	if err != nil {
-		return query.Page[R]{}, err
+		return orm.PageResult[R]{}, err
 	}
 	return result, nil
 }
@@ -359,11 +360,11 @@ func (t Table[S, R, A]) Query(ctx context.Context, m *Manager, subject A, reques
 // SimpleQuery returns one page without counting: the row query reads one
 // lookahead row to report HasMore. Use it for large or expensive sources where
 // a total is not needed. Validation, authorization and scope match Query.
-func (t Table[S, R, A]) SimpleQuery(ctx context.Context, m *Manager, subject A, request Request) (query.SimplePage[R], error) {
+func (t Table[S, R, A]) SimpleQuery(ctx context.Context, m *Manager, subject A, request Request) (orm.SimplePage[R], error) {
 	if err := t.check(m); err != nil {
-		return query.SimplePage[R]{}, err
+		return orm.SimplePage[R]{}, err
 	}
-	var result query.SimplePage[R]
+	var result orm.SimplePage[R]
 	err := m.calls.Run(ctx, "datatable simple query", func(ctx context.Context) error {
 		prepared, err := t.definition.prepare(request, m.config)
 		if err != nil {
@@ -375,7 +376,7 @@ func (t Table[S, R, A]) SimpleQuery(ctx context.Context, m *Manager, subject A, 
 		}
 		err = m.read(ctx, func(tx *database.Tx) error {
 			var err error
-			result, err = source.rows.SimplePaginate(ctx, tx, prepared.page)
+			result, err = rows.SimplePaginate(ctx, tx, source.rows, prepared.page)
 			return err
 		})
 		if err != nil {
@@ -384,7 +385,7 @@ func (t Table[S, R, A]) SimpleQuery(ctx context.Context, m *Manager, subject A, 
 		return t.checkPageBytes(ctx, m, result.Items)
 	})
 	if err != nil {
-		return query.SimplePage[R]{}, err
+		return orm.SimplePage[R]{}, err
 	}
 	return result, nil
 }
@@ -419,7 +420,11 @@ func (t Table[S, R, A]) Count(ctx context.Context, m *Manager, subject A, reques
 		if err != nil {
 			return err
 		}
-		return m.read(ctx, func(tx *database.Tx) error { var err error; result, err = source.count.Count(ctx, tx); return err })
+		return m.read(ctx, func(tx *database.Tx) error {
+			var err error
+			result, err = rows.Count(ctx, tx, source.count)
+			return err
+		})
 	})
 	if err != nil {
 		return 0, err

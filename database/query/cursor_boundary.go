@@ -12,7 +12,7 @@ type cursorBoundary struct {
 }
 
 func validCursorRequest[R any](r CursorRequest[R]) bool {
-	return validPageSize(r.Size) && !(r.After.IsSet() && r.Before.IsSet())
+	return querycore.ValidCursorRequest(r.Size, r.After.IsSet(), r.Before.IsSet())
 }
 func readCursorBoundary[R any](request CursorRequest[R], scope string, fields []RecordField[R], required []bool) (cursorBoundary, error) {
 	if !validCursorRequest(request) {
@@ -27,7 +27,7 @@ func readCursorBoundary[R any](request CursorRequest[R], scope string, fields []
 	for i, f := range fields {
 		adapters[i] = querycore.CursorField{Sensitive: f.sensitive, Decode: f.decode}
 	}
-	b, err := querycore.ReadCursorBoundary(token.token, present, backward, scope, adapters, required)
+	b, err := querycore.ReadCursorBoundary(token.Token(), present, backward, scope, adapters, required)
 	return cursorBoundary{keys: b.Keys, backward: b.Backward, present: b.Present}, err
 }
 func cursorOrders(orders []queryOrder, backward bool) []queryOrder {

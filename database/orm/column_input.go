@@ -244,55 +244,57 @@ func (c InputText[M, I, V]) Between(a, b V) Predicate[M] { return between[M](c.i
 // Contains retains the stored text operation; Set alone accepts I.
 // Example: members.Email.Contains(StoredEmail("ada@example.test")).
 func (c InputText[M, I, V]) Contains(v V) Predicate[M] {
-	return comparison[M](c.inputTextStorage, querycore.Contains, []V{v})
+	return comparison[M](c.inputTextStorage, querycore.Contains, []V{v}, true)
 }
 
 // IContains retains the stored text operation; Set alone accepts I.
 // Example: members.Email.IContains(StoredEmail("ada@example.test")).
 func (c InputText[M, I, V]) IContains(v V) Predicate[M] {
-	return comparison[M](c.inputTextStorage, querycore.InsensitiveContains, []V{v})
+	return comparison[M](c.inputTextStorage, querycore.InsensitiveContains, []V{v}, true)
 }
 
 // StartsWith retains the stored text operation; Set alone accepts I.
 // Example: members.Email.StartsWith(StoredEmail("ada@example.test")).
 func (c InputText[M, I, V]) StartsWith(v V) Predicate[M] {
-	return comparison[M](c.inputTextStorage, querycore.StartsWith, []V{v})
+	return comparison[M](c.inputTextStorage, querycore.StartsWith, []V{v}, true)
 }
 
 // EndsWith retains the stored text operation; Set alone accepts I.
 // Example: members.Email.EndsWith(StoredEmail("ada@example.test")).
 func (c InputText[M, I, V]) EndsWith(v V) Predicate[M] {
-	return comparison[M](c.inputTextStorage, querycore.EndsWith, []V{v})
+	return comparison[M](c.inputTextStorage, querycore.EndsWith, []V{v}, true)
 }
 
 // Like retains the stored text operation; Set alone accepts I.
 // Example: members.Email.Like(StoredEmail("ada@example.test")).
 func (c InputText[M, I, V]) Like(v V) Predicate[M] {
-	return comparison[M](c.inputTextStorage, querycore.Like, []V{v})
+	return comparison[M](c.inputTextStorage, querycore.Like, []V{v}, true)
 }
 
 // ILike retains the stored text operation; Set alone accepts I.
 // Example: members.Email.ILike(StoredEmail("ada@example.test")).
 func (c InputText[M, I, V]) ILike(v V) Predicate[M] {
-	return comparison[M](c.inputTextStorage, querycore.InsensitiveLike, []V{v})
+	return comparison[M](c.inputTextStorage, querycore.InsensitiveLike, []V{v}, true)
 }
 
 // IStartsWith retains the stored text operation; Set alone accepts I.
 // Example: members.Email.IStartsWith(StoredEmail("ada@example.test")).
 func (c InputText[M, I, V]) IStartsWith(v V) Predicate[M] {
-	return comparison[M](c.inputTextStorage, querycore.InsensitiveStartsWith, []V{v})
+	return comparison[M](c.inputTextStorage, querycore.InsensitiveStartsWith, []V{v}, true)
 }
 
 // IEndsWith retains the stored text operation; Set alone accepts I.
 // Example: members.Email.IEndsWith(StoredEmail("ada@example.test")).
 func (c InputText[M, I, V]) IEndsWith(v V) Predicate[M] {
-	return comparison[M](c.inputTextStorage, querycore.InsensitiveEndsWith, []V{v})
+	return comparison[M](c.inputTextStorage, querycore.InsensitiveEndsWith, []V{v}, true)
 }
 
 func (c InputText[M, I, V]) ormColumn(*M) columnData[V] { return c.inputTextStorage }
 
 func (c InputText[M, I, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[V]) {
-	return requiredExpression(c.inputTextStorage)
+	comparison, projection := requiredExpression(c.inputTextStorage)
+	comparison.Text, projection.Text = true, true
+	return comparison, projection
 }
 
 // NullableInputText accepts I for writes and retains V for stored operations.
@@ -388,49 +390,49 @@ func (c NullableInputText[M, I, V]) Between(a, b V) Predicate[M] {
 // Contains retains the stored text operation; Set alone accepts I.
 // Example: members.Note.Contains(StoredLabel("ada@example.test")).
 func (c NullableInputText[M, I, V]) Contains(v V) Predicate[M] {
-	return comparison[M](c.nullableInputTextStorage.base, querycore.Contains, []V{v})
+	return comparison[M](c.nullableInputTextStorage.base, querycore.Contains, []V{v}, true)
 }
 
 // IContains retains the stored text operation; Set alone accepts I.
 // Example: members.Note.IContains(StoredLabel("ada@example.test")).
 func (c NullableInputText[M, I, V]) IContains(v V) Predicate[M] {
-	return comparison[M](c.nullableInputTextStorage.base, querycore.InsensitiveContains, []V{v})
+	return comparison[M](c.nullableInputTextStorage.base, querycore.InsensitiveContains, []V{v}, true)
 }
 
 // StartsWith retains the stored text operation; Set alone accepts I.
 // Example: members.Note.StartsWith(StoredLabel("ada@example.test")).
 func (c NullableInputText[M, I, V]) StartsWith(v V) Predicate[M] {
-	return comparison[M](c.nullableInputTextStorage.base, querycore.StartsWith, []V{v})
+	return comparison[M](c.nullableInputTextStorage.base, querycore.StartsWith, []V{v}, true)
 }
 
 // EndsWith retains the stored text operation; Set alone accepts I.
 // Example: members.Note.EndsWith(StoredLabel("ada@example.test")).
 func (c NullableInputText[M, I, V]) EndsWith(v V) Predicate[M] {
-	return comparison[M](c.nullableInputTextStorage.base, querycore.EndsWith, []V{v})
+	return comparison[M](c.nullableInputTextStorage.base, querycore.EndsWith, []V{v}, true)
 }
 
 // Like retains the stored text operation; Set alone accepts I.
 // Example: members.Note.Like(StoredLabel("ada@example.test")).
 func (c NullableInputText[M, I, V]) Like(v V) Predicate[M] {
-	return comparison[M](c.nullableInputTextStorage.base, querycore.Like, []V{v})
+	return comparison[M](c.nullableInputTextStorage.base, querycore.Like, []V{v}, true)
 }
 
 // ILike retains the stored text operation; Set alone accepts I.
 // Example: members.Note.ILike(StoredLabel("ada@example.test")).
 func (c NullableInputText[M, I, V]) ILike(v V) Predicate[M] {
-	return comparison[M](c.nullableInputTextStorage.base, querycore.InsensitiveLike, []V{v})
+	return comparison[M](c.nullableInputTextStorage.base, querycore.InsensitiveLike, []V{v}, true)
 }
 
 // IStartsWith retains the stored text operation; Set alone accepts I.
 // Example: members.Note.IStartsWith(StoredLabel("ada@example.test")).
 func (c NullableInputText[M, I, V]) IStartsWith(v V) Predicate[M] {
-	return comparison[M](c.nullableInputTextStorage.base, querycore.InsensitiveStartsWith, []V{v})
+	return comparison[M](c.nullableInputTextStorage.base, querycore.InsensitiveStartsWith, []V{v}, true)
 }
 
 // IEndsWith retains the stored text operation; Set alone accepts I.
 // Example: members.Note.IEndsWith(StoredLabel("ada@example.test")).
 func (c NullableInputText[M, I, V]) IEndsWith(v V) Predicate[M] {
-	return comparison[M](c.nullableInputTextStorage.base, querycore.InsensitiveEndsWith, []V{v})
+	return comparison[M](c.nullableInputTextStorage.base, querycore.InsensitiveEndsWith, []V{v}, true)
 }
 
 // IsNull retains the stored text operation; Set alone accepts I.
@@ -456,7 +458,9 @@ func (c NullableInputText[M, I, V]) ormColumn(*M) columnData[V] {
 }
 
 func (c NullableInputText[M, I, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[value.Nullable[V]]) {
-	return nullableExpression(c.nullableInputTextStorage)
+	comparison, projection := nullableExpression(c.nullableInputTextStorage)
+	comparison.Text, projection.Text = true, true
+	return comparison, projection
 }
 
 // InputNumber accepts I for writes and retains V for stored operations.

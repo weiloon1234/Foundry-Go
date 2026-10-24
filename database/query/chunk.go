@@ -7,15 +7,16 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 // MaxChunkSize shares the framework's bounded model collection size.
-const MaxChunkSize = MaxPageSize
+const MaxChunkSize = querycore.MaxChunkSize
 
 // DefaultChunkSize is the batch size used by Each with eager relations or
 // possible retrieval callbacks. Use EachChunked to choose an explicit size.
-const DefaultChunkSize = 100
+const DefaultChunkSize = querycore.DefaultChunkSize
 
 // Chunk processes complete model slices sequentially. It preserves filters,
 // ordering and the selected Limit/Offset window, appending the primary key as

@@ -109,7 +109,7 @@ func TestNotificationOutboxRollbackSavepointAndWorkerRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := writer.Transaction(t.Context(), func(tx *database.Tx) error {
-		count, err := store.QueryFoundryNotifications().Count(t.Context(), tx)
+		count, err := store.Envelopes.Query().Count(t.Context(), tx)
 		if count != 0 {
 			t.Error("partial notification persisted")
 		}

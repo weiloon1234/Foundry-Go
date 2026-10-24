@@ -181,47 +181,49 @@ func (c textColumn[M, V, R]) Between(a, b V) Predicate[M] { return between[M](c.
 
 // Contains matches a literal substring; wildcards are escaped. Example: Users.Email.Contains("@").
 func (c textColumn[M, V, R]) Contains(v V) Predicate[M] {
-	return comparison[M](c.text, querycore.Contains, []V{v})
+	return comparison[M](c.text, querycore.Contains, []V{v}, true)
 }
 
 // IContains matches a literal substring case-insensitively; wildcards are escaped. Example: Users.Email.IContains("Ada").
 func (c textColumn[M, V, R]) IContains(v V) Predicate[M] {
-	return comparison[M](c.text, querycore.InsensitiveContains, []V{v})
+	return comparison[M](c.text, querycore.InsensitiveContains, []V{v}, true)
 }
 
 // StartsWith matches a literal prefix; wildcards are escaped. Example: Users.Email.StartsWith("admin").
 func (c textColumn[M, V, R]) StartsWith(v V) Predicate[M] {
-	return comparison[M](c.text, querycore.StartsWith, []V{v})
+	return comparison[M](c.text, querycore.StartsWith, []V{v}, true)
 }
 
 // EndsWith matches a literal suffix; wildcards are escaped. Example: Users.Email.EndsWith("@example.com").
 func (c textColumn[M, V, R]) EndsWith(v V) Predicate[M] {
-	return comparison[M](c.text, querycore.EndsWith, []V{v})
+	return comparison[M](c.text, querycore.EndsWith, []V{v}, true)
 }
 
 // Like matches a LIKE pattern; % and _ are wildcards. Example: Users.Email.Like("%@example.com").
 func (c textColumn[M, V, R]) Like(v V) Predicate[M] {
-	return comparison[M](c.text, querycore.Like, []V{v})
+	return comparison[M](c.text, querycore.Like, []V{v}, true)
 }
 
 // ILike matches an ILIKE pattern case-insensitively; % and _ are wildcards. Example: Users.Email.ILike("%@EXAMPLE.com").
 func (c textColumn[M, V, R]) ILike(v V) Predicate[M] {
-	return comparison[M](c.text, querycore.InsensitiveLike, []V{v})
+	return comparison[M](c.text, querycore.InsensitiveLike, []V{v}, true)
 }
 
 // IStartsWith matches a literal prefix case-insensitively; wildcards are escaped. Example: Users.Email.IStartsWith("Admin").
 func (c textColumn[M, V, R]) IStartsWith(v V) Predicate[M] {
-	return comparison[M](c.text, querycore.InsensitiveStartsWith, []V{v})
+	return comparison[M](c.text, querycore.InsensitiveStartsWith, []V{v}, true)
 }
 
 // IEndsWith matches a literal suffix case-insensitively; wildcards are escaped. Example: Users.Email.IEndsWith("@EXAMPLE.com").
 func (c textColumn[M, V, R]) IEndsWith(v V) Predicate[M] {
-	return comparison[M](c.text, querycore.InsensitiveEndsWith, []V{v})
+	return comparison[M](c.text, querycore.InsensitiveEndsWith, []V{v}, true)
 }
 
 func (c textColumn[M, V, R]) ormColumn(*M) columnData[V] { return c.text }
 func (c textColumn[M, V, R]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[V]) {
-	return requiredExpression(c.text)
+	comparison, projection := requiredExpression(c.text)
+	comparison.Text, projection.Text = true, true
+	return comparison, projection
 }
 
 // Eq compares a concrete value. Example: createdAt.Eq(at) (createdAt is orm.Time[User, time.Time]).
@@ -496,42 +498,42 @@ func (c NullableText[M, V]) Between(a, b V) Predicate[M] {
 
 // Contains matches a literal substring; wildcards are escaped. Example: Users.Nickname.Contains("da").
 func (c NullableText[M, V]) Contains(v V) Predicate[M] {
-	return comparison[M](c.nullableText.base, querycore.Contains, []V{v})
+	return comparison[M](c.nullableText.base, querycore.Contains, []V{v}, true)
 }
 
 // IContains matches a literal substring case-insensitively; wildcards are escaped. Example: Users.Nickname.IContains("Ada").
 func (c NullableText[M, V]) IContains(v V) Predicate[M] {
-	return comparison[M](c.nullableText.base, querycore.InsensitiveContains, []V{v})
+	return comparison[M](c.nullableText.base, querycore.InsensitiveContains, []V{v}, true)
 }
 
 // StartsWith matches a literal prefix; wildcards are escaped. Example: Users.Nickname.StartsWith("Ada").
 func (c NullableText[M, V]) StartsWith(v V) Predicate[M] {
-	return comparison[M](c.nullableText.base, querycore.StartsWith, []V{v})
+	return comparison[M](c.nullableText.base, querycore.StartsWith, []V{v}, true)
 }
 
 // EndsWith matches a literal suffix; wildcards are escaped. Example: Users.Nickname.EndsWith("son").
 func (c NullableText[M, V]) EndsWith(v V) Predicate[M] {
-	return comparison[M](c.nullableText.base, querycore.EndsWith, []V{v})
+	return comparison[M](c.nullableText.base, querycore.EndsWith, []V{v}, true)
 }
 
 // Like matches a LIKE pattern; % and _ are wildcards. Example: Users.Nickname.Like("A%").
 func (c NullableText[M, V]) Like(v V) Predicate[M] {
-	return comparison[M](c.nullableText.base, querycore.Like, []V{v})
+	return comparison[M](c.nullableText.base, querycore.Like, []V{v}, true)
 }
 
 // ILike matches an ILIKE pattern case-insensitively; % and _ are wildcards. Example: Users.Nickname.ILike("a%").
 func (c NullableText[M, V]) ILike(v V) Predicate[M] {
-	return comparison[M](c.nullableText.base, querycore.InsensitiveLike, []V{v})
+	return comparison[M](c.nullableText.base, querycore.InsensitiveLike, []V{v}, true)
 }
 
 // IStartsWith matches a literal prefix case-insensitively; wildcards are escaped. Example: Users.Nickname.IStartsWith("ada").
 func (c NullableText[M, V]) IStartsWith(v V) Predicate[M] {
-	return comparison[M](c.nullableText.base, querycore.InsensitiveStartsWith, []V{v})
+	return comparison[M](c.nullableText.base, querycore.InsensitiveStartsWith, []V{v}, true)
 }
 
 // IEndsWith matches a literal suffix case-insensitively; wildcards are escaped. Example: Users.Nickname.IEndsWith("SON").
 func (c NullableText[M, V]) IEndsWith(v V) Predicate[M] {
-	return comparison[M](c.nullableText.base, querycore.InsensitiveEndsWith, []V{v})
+	return comparison[M](c.nullableText.base, querycore.InsensitiveEndsWith, []V{v}, true)
 }
 
 // IsNull matches SQL NULL. Example: Users.Nickname.IsNull().
@@ -549,7 +551,9 @@ func (c NullableText[M, V]) SetNull() Assignment[M] { return nullAssignment[M](c
 
 func (c NullableText[M, V]) ormColumn(*M) columnData[V] { return c.nullableText.base }
 func (c NullableText[M, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[value.Nullable[V]]) {
-	return nullableExpression(c.nullableText)
+	comparison, projection := nullableExpression(c.nullableText)
+	comparison.Text, projection.Text = true, true
+	return comparison, projection
 }
 
 // Eq compares a concrete value. Example: Users.Birthday.Eq(birthday).

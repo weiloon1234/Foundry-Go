@@ -7,10 +7,11 @@ import (
 )
 
 func compareRowValues[S, V any](left, right RowValue[S, V], op querycore.Operator) Predicate[S] {
-	return Predicate[S]{core: ormcore.CompareExpressions(rowInput(left).data.core, rowInput(right).data.core, op)}
+	l, r := rowInput(left).data, rowInput(right).data
+	return Predicate[S]{core: ormcore.CompareExpressions(l.core, r.core, op, l.column.Text && r.column.Text)}
 }
 func compareSelectedValues[S, V any](left, right Selected[S, V], op querycore.Operator) HavingPredicate[S] {
-	return HavingPredicate[S]{core: ormcore.CompareExpressions(left.data.core, right.data.core, op)}
+	return HavingPredicate[S]{core: ormcore.CompareExpressions(left.data.core, right.data.core, op, left.data.column.Text && right.data.column.Text)}
 }
 
 // Equal compares equal SQL values; NULL makes the condition unknown.

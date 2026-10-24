@@ -7,13 +7,14 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionrow"
 	store "github.com/weiloon1234/Foundry-Go/internal/extensionstore"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionvalue"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -77,9 +78,9 @@ func All[M any, K comparable](ctx context.Context, m *Manager, owner extensions.
 		if err != nil {
 			return err
 		}
-		f := store.MetaFields()
+		f := store.Metadata
 		var budget extensionvalue.BatchBudget
-		return store.QueryFoundryModelMetadata().Where(f.Scope.Eq(owner.Scope()), f.SubjectKey.Eq(subject)).OrderBy(f.Name.Asc()).Limit(MaxKeysPerOwner+1).Each(ctx, tx, func(row store.Meta) error {
+		return store.Metadata.Query().Where(f.Scope.Eq(owner.Scope()), f.SubjectKey.Eq(subject)).OrderBy(f.Name.Asc()).Limit(MaxKeysPerOwner+1).Each(ctx, tx, func(row store.Meta) error {
 			if len(result) >= MaxKeysPerOwner {
 				return invalid()
 			}
@@ -108,9 +109,9 @@ func validateOwnerRow[M any, K comparable](rows extensionrow.Rows[M, K], row sto
 // Matching yields a typed query predicate for owners with this exact canonical
 // JSON value. It is a bounded materialized scope; the subsequent model query
 // retains its own current visibility, filters and authorization constraints.
-func (k Key[M, K, V]) Matching(ctx context.Context, m *Manager, input V) (query.Predicate[M], error) {
+func (k Key[M, K, V]) matchingKeys(ctx context.Context, m *Manager, input V) ([]K, error) {
 	if err := k.check(m); err != nil {
-		return query.Predicate[M]{}, err
+		return nil, err
 	}
 	var keys []K
 	err := m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
@@ -118,12 +119,12 @@ func (k Key[M, K, V]) Matching(ctx context.Context, m *Manager, input V) (query.
 		if err != nil {
 			return err
 		}
-		f := store.MetaFields()
-		rows, err := store.MetadataIndex(store.QueryFoundryModelMetadata().Where(f.Scope.Eq(k.definition.owner.Scope()), f.Name.Eq(string(k.Name())), f.Version.Eq(uint32(k.Version())), f.Value.Eq(snapshot)).OrderBy(f.Key.Asc()).Limit(query.MaxIdentityBatch+1)).All(ctx, tx)
+		f := store.Metadata
+		rows, err := store.MetadataIndex(store.Metadata.Query().Where(f.Scope.Eq(k.definition.owner.Scope()), f.Name.Eq(string(k.Name())), f.Version.Eq(uint32(k.Version())), f.Value.Eq(snapshot)).OrderBy(f.KeyColumn.Asc()).Limit(querycore.MaxIdentityBatch+1)).All(ctx, tx)
 		if err != nil {
 			return err
 		}
-		if len(rows) > query.MaxIdentityBatch {
+		if len(rows) > querycore.MaxIdentityBatch {
 			return fault.New(fault.Conflict, "metadata matching scope exceeds its limit")
 		}
 		for _, row := range rows {
@@ -140,9 +141,9 @@ func (k Key[M, K, V]) Matching(ctx context.Context, m *Manager, input V) (query.
 		return nil
 	})
 	if err != nil {
-		return query.Predicate[M]{}, err
+		return nil, err
 	}
-	return k.definition.owner.QueryScope(keys...), nil
+	return keys, nil
 }
 
 // DeleteAll removes metadata for an active owner. Lifecycle cleanup uses Cleanup
@@ -166,8 +167,8 @@ func DeleteAll[M any, K comparable](ctx context.Context, m *Manager, owner exten
 	return count, nil
 }
 func deleteSubject(ctx context.Context, tx *database.Tx, subject extensions.Subject) (int, error) {
-	f := store.MetaFields()
-	rows, err := store.QueryFoundryModelMetadata().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key)).DeleteEach(ctx, tx, MaxKeysPerOwner)
+	f := store.Metadata
+	rows, err := orm.DeleteEach(ctx, tx, store.Metadata.Query().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key)), MaxKeysPerOwner)
 	return len(rows), err
 }
 

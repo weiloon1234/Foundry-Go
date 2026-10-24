@@ -6,11 +6,9 @@ import (
 	"unsafe"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
-	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -101,7 +99,7 @@ func (d ModelIdentity[M, K]) Scope(keys ...K) Predicate[M] {
 	if err := d.Validate(); err != nil {
 		return Predicate[M]{err: err}
 	}
-	if len(keys) > query.MaxIdentityBatch {
+	if len(keys) > querycore.MaxIdentityBatch {
 		return Predicate[M]{err: invalid("model identity batch exceeds its limit")}
 	}
 	return comparison[M](d.key, querycore.In, keys)
@@ -129,7 +127,7 @@ func identityKeys[M any, K comparable](ctx context.Context, ex database.Executor
 	if err := d.Validate(); err != nil {
 		return nil, err
 	}
-	if len(keys) > query.MaxIdentityBatch {
+	if len(keys) > querycore.MaxIdentityBatch {
 		return nil, invalid("model identity batch exceeds its limit")
 	}
 	if err := executionContext(ctx, ex); err != nil {
@@ -170,13 +168,4 @@ func identityKeys[M any, K comparable](ctx context.Context, ex database.Executor
 		return nil, err
 	}
 	return result, nil
-}
-
-// LegacyIdentityScope keeps extension predicates usable by generated consumers during migration.
-// Example: legacyQuery.Where(orm.LegacyIdentityScope(identity,ids...)).
-func LegacyIdentityScope[M any, K comparable](d ModelIdentity[M, K], keys ...K) query.Predicate[M] {
-	if d.Validate() != nil || len(keys) > query.MaxIdentityBatch {
-		return query.Predicate[M]{}
-	}
-	return query.FoundryPredicate[M](d.Scope(keys...).expression, sqlowner.Queries())
 }

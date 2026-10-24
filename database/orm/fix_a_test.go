@@ -99,8 +99,11 @@ func TestAdjustmentTargetsValidatedBeforeTransactionAndClock(t *testing.T) {
 	var statements []string
 	begins, calls := 0, 0
 	db := testDB(t, testConnector{statements: &statements, onBegin: func() { begins++ }}, database.WithClock(observedClock{&calls}))
+	managed := r.Amount.Increment(1)
+	managed.adjust.Field.Column = r.core.model.Timestamps.Updated
 	for _, as := range [][]Assignment[item]{
-		{NumberKey(r.Key()).Increment(1)},
+		{managed},
+		{adjustment[item](r.Key().key, int64(1), false, nil)},
 		{r.Amount.Set(10), r.Amount.Increment(1)},
 		{r.Amount.Increment(1), r.Amount.Set(10)},
 	} {

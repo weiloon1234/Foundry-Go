@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	store "github.com/weiloon1234/Foundry-Go/internal/attachmentstore"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/storage"
@@ -62,8 +63,8 @@ func (c Collection[M, K]) DetachKeepFile(ctx context.Context, m *Manager, owner 
 			if err != nil {
 				return err
 			}
-			f := store.FileFields()
-			row, err := store.QueryFoundryAttachments().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key), f.Collection.Eq(string(c.Name())), f.Locale.Eq(locale), f.State.Eq(string(Ready))).RequireFind(ctx, tx, model.IDFromBytes[store.File](id.Bytes()))
+			f := store.Files
+			row, err := store.Files.Query().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key), f.Collection.Eq(string(c.Name())), f.Locale.Eq(locale), f.State.Eq(string(Ready))).Where(store.Files.Key().Eq(model.IDFromBytes[store.File](id.Bytes()))).Require(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -74,7 +75,7 @@ func (c Collection[M, K]) DetachKeepFile(ctx context.Context, m *Manager, owner 
 			if err != nil {
 				return err
 			}
-			row, err = store.QueryFoundryAttachments().Update(ctx, tx, row.ID, store.FileDraft{}.SetState(string(Retained)).SetUpdatedAt(now))
+			row, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), row.ID, store.Files.State.Set(string(Retained)), store.Files.UpdatedAt.Set(now))
 			if err != nil {
 				return err
 			}
@@ -115,7 +116,7 @@ func (m *Manager) RetainedObject(ctx context.Context, id OperationID) (RetainedF
 	var result RetainedFile
 	err := m.reads.Run(ctx, "retained attachment lookup", func(ctx context.Context) error {
 		return m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
-			row, err := store.QueryFoundryAttachments().RequireFind(ctx, tx, fileID(id))
+			row, err := store.Files.Query().Where(store.Files.Key().Eq(fileID(id))).Require(ctx, tx)
 			if err != nil {
 				return err
 			}

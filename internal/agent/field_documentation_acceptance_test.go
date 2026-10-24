@@ -45,6 +45,7 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 		{"imported-config-field", "bootstrap/bootstrap_test.go", "keys.App.Features.Outbox.", "Events", "/bootstrap/settings_foundry.gen.go", []string{"EventOutbox", "durable job connections", "Empty connection selects the default", "jobs.DefaultPolicy"}},
 		{"validation-field", "clientcontracts/validation_fields_test.go", "clientcontracts.PayloadValidationFields().", "Titles", "/clientcontracts/payload_foundry.gen.go", []string{"keyed by the catalog's supported locales", "titles"}},
 		{"projection-selection", "projectionqueries/projections_postgres_test.go", "ID: query.Value(f.ID), ", "Email", "/reports/user_summary_foundry.gen.go", []string{"buyer contact address selected for this report"}},
+		{"orm-row-selection", "reporting/members.go", "rows.MapSelected(MemberRows.", "Name", "/reporting/rows.go", []string{"Display name selected for the member report"}},
 		{"extension-descriptor", "articles/loading_postgres_test.go", "articles.ArticleExtensions().", "Title", "/articles/article_foundry.gen.go", []string{"localized article heading shown to readers"}},
 		{"changes-field", "mutatorqueries/changes_postgres_test.go", "changes.Fields().", "Email", "/mutatorqueries/member_foundry.gen.go", []string{"Delivery address."}},
 		{"json-property", "jsonqueries/path_postgres_test.go", "prefs.", "Theme", "/jsonqueries/document_foundry.gen.go", []string{"reader appearance", "omitted uses the application default"}},

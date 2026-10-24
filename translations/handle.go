@@ -7,9 +7,10 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/i18n"
+	"github.com/weiloon1234/Foundry-Go/internal/extensionslot"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
@@ -46,41 +47,41 @@ type textHandleCore struct {
 // TextOf declares a thin translated-text handle with the existing manager policy.
 // Example: translations.TextOf(owner,"title",options,extensions.BindSlot(Articles.Key(),Articles.Title)).
 func TextOf[M any, K comparable](owner extensions.Owner[M, K], name Name, options Options, binding extensions.SlotBinding[M, K, Text]) TextHandle[M, K] {
-	return TextHandle[M, K]{core: wrapTextHandle(DefineText(owner, name, options, binding))}
+	return TextHandle[M, K]{core: wrapTextHandle(defineText(owner, name, options, binding))}
 }
 
-func wrapTextHandle[M any, K comparable](legacy TextSlot[M, K]) *textHandleCore {
+func wrapTextHandle[M any, K comparable](state textSlot[M, K]) *textHandleCore {
 	return &textHandleCore{
-		bind:         func(m *Manager) *textHandleCore { return wrapTextHandle(legacy.From(m)) },
-		relation:     func(out unsafe.Pointer) { *(*query.ExtensionSlot[M])(out) = legacy.ExtensionSlot },
-		validate:     legacy.Validate,
-		describe:     legacy.Describe,
-		registration: legacy.Registration,
-		name:         legacy.Name,
-		options:      legacy.Options,
-		rule:         legacy.Rule,
-		mergeRule:    legacy.MergeRule,
+		bind:         func(m *Manager) *textHandleCore { return wrapTextHandle(state.From(m)) },
+		relation:     func(out unsafe.Pointer) { *(*extensionslot.Slot[M])(out) = state.loader },
+		validate:     state.Validate,
+		describe:     state.Describe,
+		registration: state.Registration,
+		name:         state.Name,
+		options:      state.Options,
+		rule:         state.Rule,
+		mergeRule:    state.MergeRule,
 		save: func(ctx context.Context, owner unsafe.Pointer, input map[i18n.LocaleID]string) error {
-			return legacy.Save(ctx, *(*M)(owner), input)
+			return state.Save(ctx, *(*M)(owner), input)
 		},
 		saveIn: func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer, input map[i18n.LocaleID]string) error {
-			return legacy.SaveIn(ctx, tx, *(*M)(owner), input)
+			return state.SaveIn(ctx, tx, *(*M)(owner), input)
 		},
 		sync: func(ctx context.Context, owner unsafe.Pointer, input map[i18n.LocaleID]string) error {
-			return legacy.Sync(ctx, *(*M)(owner), input)
+			return state.Sync(ctx, *(*M)(owner), input)
 		},
 		syncIn: func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer, input map[i18n.LocaleID]string) error {
-			return legacy.SyncIn(ctx, tx, *(*M)(owner), input)
+			return state.SyncIn(ctx, tx, *(*M)(owner), input)
 		},
 		forget: func(ctx context.Context, owner unsafe.Pointer, locale i18n.LocaleID) (bool, error) {
-			return legacy.Forget(ctx, *(*M)(owner), locale)
+			return state.Forget(ctx, *(*M)(owner), locale)
 		},
 		forgetIn: func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer, locale i18n.LocaleID) (bool, error) {
-			return legacy.ForgetIn(ctx, tx, *(*M)(owner), locale)
+			return state.ForgetIn(ctx, tx, *(*M)(owner), locale)
 		},
-		clear: func(ctx context.Context, owner unsafe.Pointer) (int, error) { return legacy.Clear(ctx, *(*M)(owner)) },
+		clear: func(ctx context.Context, owner unsafe.Pointer) (int, error) { return state.Clear(ctx, *(*M)(owner)) },
 		clearIn: func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer) (int, error) {
-			return legacy.ClearIn(ctx, tx, *(*M)(owner))
+			return state.ClearIn(ctx, tx, *(*M)(owner))
 		},
 	}
 }
@@ -97,11 +98,11 @@ func (s TextHandle[M, K]) From(m *Manager) TextHandle[M, K] {
 // Relation binds the loader to its concrete ORM field; mismatched fields fail validation.
 // Example: Articles.Query().With(slot.Relation(Articles.Title)).
 func (s TextHandle[M, K]) Relation(slot orm.Slot[M, Text]) orm.ExtensionRelation[M] {
-	var source query.ExtensionSlot[M]
+	var source extensionslot.Slot[M]
 	if s.core != nil {
 		s.core.relation(unsafe.Pointer(&source))
 	}
-	return orm.Extension(slot, source)
+	return orm.FoundryExtension(slot, source, sqlowner.Queries())
 }
 
 // Validate checks the declaration and slot binding. Example: slot.Validate().

@@ -8,6 +8,35 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Complete all 13 framework-store migrations with webhook, notification,
+  attachment, extension and audit declarations. Preserve persisted identities,
+  scoped lifecycle writes, bounded streaming and reconciliation outcomes.
+- Move advisory database Unique/Exists rules to typed ORM stored-column lookups,
+  preserving rule metadata, scopes, batch bounds and redacted diagnostics.
+- Share extension loading through internal/extensionslot and page/cursor contracts
+  through querycore, including shared Explain execution and plan decoding. Typed extension slots and HTTP cursor schema identities stay
+  compatible; legacy adapters remain during Stage 8a retirement. Lanes B, C and D
+  are integrated, with B34 editor anchors covering the declaration APIs.
+
+- Complete the Stage 6 slices with creation/lookup writes, guarded adjustments,
+  bounded pruning and explain functions. The Stage 6 measurement gate is pending.
+  Numeric key handles no longer expose Increment/Decrement; ordinary numeric
+  columns retain positive finite magnitudes and AtMost/AtLeast guards.
+- Harden CreateOrFirst recovery to require its own insert's schema/table/index
+  identity and confirmed child-savepoint rollback. AfterCommit failures retain
+  committed outcomes and original causes without formatting application errors.
+- Move shared limits to querycore and concrete observer lookup to database.
+  Register ORM pruning through prune.ORMModel/ORMSoftModel; generated-query
+  compatibility adapters remain available during Stage 8a retirement work.
+- Use ordinary foundry:dto reporting declarations with handwritten row schemas.
+  Frozen contract byte gates retain manifest/OpenAPI/client artifacts; reporting
+  client and editor probes cover the datatable migration.
+
+- Cut datatable sources over to `orm/rows.Query`, expression predicates and typed
+  selected ordering. Migrate generated SQL selections to handwritten ORM/rows
+  declarations; retain DTO descriptors, authorization, bounded streaming exports
+  and repeatable-read pagination. See the datatable guide for consumer migration.
+
 - Complete Stage 6b with transaction-only joins, subqueries, correlation and
   LATERAL. A go/types conversion guard pins phase boundaries across ORM and the
   generated API; no temporary input-role conversion exceptions remain.

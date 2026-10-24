@@ -127,7 +127,7 @@ func columnWithCodec[V any](core *columnCore, c codec.Codec[V]) columnData[V] {
 func capture[V any](c codec.Codec[V], v V) querycore.AssignmentValue {
 	return querycore.CaptureAssignment(c, v)
 }
-func comparison[M, V any](c columnData[V], op querycore.Operator, vs []V) Predicate[M] {
+func comparison[M, V any](c columnData[V], op querycore.Operator, vs []V, text ...bool) Predicate[M] {
 	if c.core == nil || c.core.owner == nil || c.bind == nil {
 		return Predicate[M]{err: invalid("uninitialized column")}
 	}
@@ -135,7 +135,7 @@ func comparison[M, V any](c columnData[V], op querycore.Operator, vs []V) Predic
 	for i, v := range vs {
 		values[i] = c.clone(v)
 	}
-	return Predicate[M]{owner: c.core.owner, expression: querycore.Comparison{Operand: querycore.FieldRef{Table: c.core.owner.model.Table, Column: c.core.metadata.Name}, Operator: op, Values: values, Kind: c.core.kind, Bind: func(v any) (driver.Value, error) { return c.bind(v.(V)) }}}
+	return Predicate[M]{owner: c.core.owner, expression: querycore.Comparison{Operand: querycore.FieldRef{Table: c.core.owner.model.Table, Column: c.core.metadata.Name}, Operator: op, Values: values, Text: len(text) == 1 && text[0], Kind: c.core.kind, Bind: func(v any) (driver.Value, error) { return c.bind(v.(V)) }}}
 }
 
 func columnOrder[M, V any](c columnData[V], descending bool) Order[M] {
@@ -414,8 +414,8 @@ func junction[M any](or bool, ps []Predicate[M]) Predicate[M] {
 func NumberKey[M any, K interface {
 	NumberValue
 	comparable
-}, R keyRole](key keyColumn[M, K, R]) numberColumn[M, K, R] {
-	return numberColumn[M, K, R]{number: key.key}
+}, R keyRole](key keyColumn[M, K, R]) numberKeyColumn[M, K, R] {
+	return numberKeyColumn[M, K, R]{number: key.key}
 }
 
 // TextKey derives text capabilities without binding the field again.

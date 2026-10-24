@@ -7,7 +7,6 @@ import (
 	"unsafe"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -15,13 +14,13 @@ import (
 // CursorPaginate reads a bounded keyset page using the existing HTTP pagination
 // request/result adapters. Tokens are scoped positions, not authorization or a
 // snapshot. Example: orm.CursorPaginate(ctx, db, Orders.Query(), request.Page).
-func CursorPaginate[M any](ctx context.Context, ex database.Executor, q Query[M], request query.CursorRequest[M]) (query.CursorPage[M], error) {
+func CursorPaginate[M any](ctx context.Context, ex database.Executor, q Query[M], request CursorRequest[M]) (CursorPage[M], error) {
 	if err := executionContext(ctx, ex); err != nil {
-		return query.CursorPage[M]{}, err
+		return CursorPage[M]{}, err
 	}
 	q.state.ast.ScopeContext = ctx
 	if err := request.Validate(); err != nil {
-		return query.CursorPage[M]{}, err
+		return CursorPage[M]{}, err
 	}
 	token, present := request.After.Get()
 	backward := request.Before.IsSet()
@@ -30,11 +29,11 @@ func CursorPaginate[M any](ctx context.Context, ex database.Executor, q Query[M]
 	}
 	plan, err := newCursorPlan(q.state, request.Size, token.Token(), present, backward)
 	if err != nil {
-		return query.CursorPage[M]{}, err
+		return CursorPage[M]{}, err
 	}
 	items, err := allRows[M](ctx, ex, plan.query)
 	if err != nil {
-		return query.CursorPage[M]{}, err
+		return CursorPage[M]{}, err
 	}
 	more := len(items) > request.Size
 	if more {
@@ -42,12 +41,12 @@ func CursorPaginate[M any](ctx context.Context, ex database.Executor, q Query[M]
 		items = items[:request.Size:request.Size]
 	}
 	if err := loadPlans(ctx, ex, unsafe.Pointer(unsafe.SliceData(items)), len(items), plan.query.relations); err != nil {
-		return query.CursorPage[M]{}, err
+		return CursorPage[M]{}, err
 	}
 	if backward {
 		slices.Reverse(items)
 	}
-	page := query.CursorPage[M]{Items: items, Size: request.Size}
+	page := CursorPage[M]{Items: items, Size: request.Size}
 	if len(items) == 0 {
 		return page, nil
 	}
@@ -58,22 +57,22 @@ func CursorPaginate[M any](ctx context.Context, ex database.Executor, q Query[M]
 	if next {
 		text, err := plan.token(unsafe.Pointer(&items[len(items)-1]))
 		if err != nil {
-			return query.CursorPage[M]{}, err
+			return CursorPage[M]{}, err
 		}
-		cursor, err := query.ParseCursor[M](text)
+		cursor, err := ParseCursor[M](text)
 		if err != nil {
-			return query.CursorPage[M]{}, err
+			return CursorPage[M]{}, err
 		}
 		page.Next = value.Set(cursor)
 	}
 	if previous {
 		text, err := plan.token(unsafe.Pointer(&items[0]))
 		if err != nil {
-			return query.CursorPage[M]{}, err
+			return CursorPage[M]{}, err
 		}
-		cursor, err := query.ParseCursor[M](text)
+		cursor, err := ParseCursor[M](text)
 		if err != nil {
-			return query.CursorPage[M]{}, err
+			return CursorPage[M]{}, err
 		}
 		page.Previous = value.Set(cursor)
 	}

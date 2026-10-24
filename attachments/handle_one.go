@@ -7,8 +7,9 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/extensions"
+	"github.com/weiloon1234/Foundry-Go/internal/extensionslot"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -27,63 +28,63 @@ type oneHandleKind struct{}
 // OneOf declares a thin single-file handle with the existing manager policy.
 // Example: attachments.OneOf(owner,"files",policy,binding).
 func OneOf[M any, K comparable](owner extensions.Owner[M, K], name Name, policy Policy, binding extensions.SlotBinding[M, K, One[M]]) OneHandle[M, K] {
-	return OneHandle[M, K]{core: wrapOneHandle(DefineOne(owner, name, policy, binding))}
+	return OneHandle[M, K]{core: wrapOneHandle(defineOne(owner, name, policy, binding))}
 }
 
-func wrapOneHandle[M any, K comparable](legacy OneSlot[M, K]) *attachmentHandleCore {
+func wrapOneHandle[M any, K comparable](state oneSlot[M, K]) *attachmentHandleCore {
 	return &attachmentHandleCore{
-		bind:         func(m *Manager) *attachmentHandleCore { return wrapOneHandle(legacy.From(m)) },
-		relation:     func(out unsafe.Pointer) { *(*query.ExtensionSlot[M])(out) = legacy.ExtensionSlot },
-		validate:     legacy.Validate,
-		describe:     legacy.Describe,
-		registration: legacy.Registration,
-		name:         legacy.Name,
+		bind:         func(m *Manager) *attachmentHandleCore { return wrapOneHandle(state.From(m)) },
+		relation:     func(out unsafe.Pointer) { *(*extensionslot.Slot[M])(out) = state.loader },
+		validate:     state.Validate,
+		describe:     state.Describe,
+		registration: state.Registration,
+		name:         state.Name,
 		replace: func(ctx context.Context, owner unsafe.Pointer, upload Upload, out unsafe.Pointer) error {
-			result, err := legacy.Replace(ctx, *(*M)(owner), upload)
+			result, err := state.Replace(ctx, *(*M)(owner), upload)
 			*(*Result[M, K])(out) = result
 			return err
 		},
 		replaceFile: func(ctx context.Context, owner unsafe.Pointer, file FileSource, out unsafe.Pointer) error {
-			result, err := legacy.ReplaceFile(ctx, *(*M)(owner), file)
+			result, err := state.ReplaceFile(ctx, *(*M)(owner), file)
 			*(*Result[M, K])(out) = result
 			return err
 		},
 		prepare: func(ctx context.Context, owner unsafe.Pointer, upload Upload, out unsafe.Pointer) error {
-			result, err := legacy.Prepare(ctx, *(*M)(owner), upload)
+			result, err := state.Prepare(ctx, *(*M)(owner), upload)
 			*(*Prepared[M, K])(out) = result
 			return err
 		},
 		prepareFile: func(ctx context.Context, owner unsafe.Pointer, file FileSource, out unsafe.Pointer) error {
-			result, err := legacy.PrepareFile(ctx, *(*M)(owner), file)
+			result, err := state.PrepareFile(ctx, *(*M)(owner), file)
 			*(*Prepared[M, K])(out) = result
 			return err
 		},
 		replaceIn: func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer, prepared unsafe.Pointer, out unsafe.Pointer) error {
-			result, err := legacy.ReplaceIn(ctx, tx, *(*M)(owner), *(*Prepared[M, K])(prepared))
+			result, err := state.ReplaceIn(ctx, tx, *(*M)(owner), *(*Prepared[M, K])(prepared))
 			*(*Result[M, K])(out) = result
 			return err
 		},
 		discard: func(ctx context.Context, prepared unsafe.Pointer) error {
-			return legacy.Discard(ctx, *(*Prepared[M, K])(prepared))
+			return state.Discard(ctx, *(*Prepared[M, K])(prepared))
 		},
 		detach: func(ctx context.Context, owner unsafe.Pointer, id unsafe.Pointer) (ChangeResult, error) {
-			return legacy.Detach(ctx, *(*M)(owner), *(*ID[M])(id))
+			return state.Detach(ctx, *(*M)(owner), *(*ID[M])(id))
 		},
 		clear: func(ctx context.Context, owner unsafe.Pointer) (ChangeResult, error) {
-			return legacy.Clear(ctx, *(*M)(owner))
+			return state.Clear(ctx, *(*M)(owner))
 		},
-		accepts: func(ctx context.Context, file FileSource) (bool, error) { return legacy.Accepts(ctx, file) },
+		accepts: func(ctx context.Context, file FileSource) (bool, error) { return state.Accepts(ctx, file) },
 		url: func(ctx context.Context, owner unsafe.Pointer, file unsafe.Pointer) (string, error) {
-			return legacy.URL(ctx, *(*M)(owner), *(*File[M])(file))
+			return state.URL(ctx, *(*M)(owner), *(*File[M])(file))
 		},
 		temporaryURL: func(ctx context.Context, owner unsafe.Pointer, file unsafe.Pointer, options storage.LinkOptions) (storage.TemporaryURL, error) {
-			return legacy.TemporaryURL(ctx, *(*M)(owner), *(*File[M])(file), options)
+			return state.TemporaryURL(ctx, *(*M)(owner), *(*File[M])(file), options)
 		},
 		variantURL: func(ctx context.Context, owner unsafe.Pointer, file unsafe.Pointer, variant Variant) (string, error) {
-			return legacy.VariantURL(ctx, *(*M)(owner), *(*File[M])(file), variant)
+			return state.VariantURL(ctx, *(*M)(owner), *(*File[M])(file), variant)
 		},
 		publicURL: func(ctx context.Context, owner unsafe.Pointer) (value.Optional[string], error) {
-			return legacy.PublicURL(ctx, *(*M)(owner))
+			return state.PublicURL(ctx, *(*M)(owner))
 		},
 	}
 }
@@ -100,11 +101,11 @@ func (s OneHandle[M, K]) From(m *Manager) OneHandle[M, K] {
 // Relation binds the loader to its concrete ORM field; mismatched fields fail validation.
 // Example: Articles.Query().With(slot.Relation(Articles.Cover)).
 func (s OneHandle[M, K]) Relation(slot orm.Slot[M, One[M]]) orm.ExtensionRelation[M] {
-	var source query.ExtensionSlot[M]
+	var source extensionslot.Slot[M]
 	if s.core != nil {
 		s.core.relation(unsafe.Pointer(&source))
 	}
-	return orm.Extension(slot, source)
+	return orm.FoundryExtension(slot, source, sqlowner.Queries())
 }
 
 // Validate checks the declaration and slot binding. Example: slot.Validate().

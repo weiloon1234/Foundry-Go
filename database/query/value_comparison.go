@@ -8,11 +8,11 @@ import (
 func binaryOperator(op operator) (string, bool) { return querycore.BinaryOperator(op) }
 
 func compareRowValues[S, V any](left, right RowValue[S, V], op operator) Predicate[S] {
-	return Predicate[S]{expression: binaryComparison{Left: rowInput(left).Value().node, Right: rowInput(right).Value().node, Operator: op}}
+	return Predicate[S]{expression: binaryComparison{Left: rowInput(left).Value().node, Right: rowInput(right).Value().node, Operator: op, Text: op == like}}
 }
 
 func compareSelectedValues[S, V any](left, right Expression[S, V], op operator) HavingPredicate[S] {
-	return HavingPredicate[S]{expression: binaryComparison{Left: left.node, Right: right.node, Operator: op}}
+	return HavingPredicate[S]{expression: binaryComparison{Left: left.node, Right: right.node, Operator: op, Text: op == like}}
 }
 
 // Equal compares equal SQL values; NULL makes the condition unknown.

@@ -1,0 +1,24 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "UPDATE \"foundry_attachments\" SET \"owner\" = $1, \"updated_at\" = $2 WHERE (\"foundry_attachments\".\"id\" = $3) RETURNING \"foundry_attachments\".\"id\", \"foundry_attachments\".\"owner\", \"foundry_attachments\".\"scope\", \"foundry_attachments\".\"subject_key\", \"foundry_attachments\".\"identity\", \"foundry_attachments\".\"collection\", \"foundry_attachments\".\"locale\", \"foundry_attachments\".\"single\", \"foundry_attachments\".\"disk\", \"foundry_attachments\".\"object_key\", \"foundry_attachments\".\"original_name\", \"foundry_attachments\".\"content_type\", \"foundry_attachments\".\"size\", \"foundry_attachments\".\"digest\", \"foundry_attachments\".\"etag\", \"foundry_attachments\".\"object_version\", \"foundry_attachments\".\"width\", \"foundry_attachments\".\"height\", \"foundry_attachments\".\"properties\", \"foundry_attachments\".\"sort_order\", \"foundry_attachments\".\"state\", \"foundry_attachments\".\"writer_id\", \"foundry_attachments\".\"attempts\", \"foundry_attachments\".\"last_failure\", \"foundry_attachments\".\"created_at\", \"foundry_attachments\".\"updated_at\"",
+      "Args": [
+        "updated",
+        "2026-10-24T00:00:00Z",
+        "01890f47-1a00-7000-8000-000000000001"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "622afc621f8530ebd5a350d9d5f0615d5cfbadf2fe4eeae6253772e7d29ad726"
+}

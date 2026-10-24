@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/auth"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/datatable"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/pagination"
@@ -15,7 +15,7 @@ func New(dependencies datatable.Dependencies, config datatable.Config) (*datatab
 	return datatable.New(dependencies, config, Members.Registration(), Orders.Registration(), Totals.Registration())
 }
 
-func ListMembers(ctx context.Context, manager *datatable.Manager, guard auth.Guard[Operator], request datatable.Request) (query.Page[MemberRow], error) {
+func ListMembers(ctx context.Context, manager *datatable.Manager, guard auth.Guard[Operator], request datatable.Request) (orm.PageResult[MemberRow], error) {
 	return Members.Query(ctx, manager, FromGuard(guard), request)
 }
 

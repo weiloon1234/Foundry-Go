@@ -3,7 +3,9 @@ package oldreporting
 import (
 	"context"
 
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/datatable"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
@@ -12,7 +14,7 @@ import (
 
 type memberSide struct{}
 type orderSide struct{}
-type OrderScope = query.Inner[query.Alias[memberSide, Member], query.Alias[orderSide, Order]]
+type OrderScope = rows.Inner[rows.Alias[memberSide, Member], rows.Alias[orderSide, Order]]
 
 const (
 	OrderIDLabel i18n.MessageKey = "reports.order.id"
@@ -21,61 +23,64 @@ const (
 	TotalLabel   i18n.MessageKey = "reports.total.amount"
 )
 
-var Orders = orderTable()
-var Totals = totalTable()
+var Orders = datatable.Define(orderSpec())
+var Totals = datatable.Define(totalSpec())
 
-func orderTable() datatable.Table[OrderScope, OrderRow, Authority] {
-	members := query.As[memberSide](QueryReportMembers(), "members")
-	orders := query.As[orderSide](QueryReportOrders(), "orders")
-	m, o := MemberFieldsAt(members.Scope()), OrderFieldsAt(orders.Scope())
-	joined := query.InnerJoin(members, orders, query.On(m.ID, o.MemberID))
-	member := MemberFieldsAt(query.LeftScope(joined, members.Scope()))
-	order := OrderFieldsAt(query.RightScope(joined, orders.Scope()))
+func orderSpec() datatable.Spec[OrderScope, OrderRow, Authority] {
+	members := rows.As[memberSide](MemberModels.Query(), "members")
+	orders := rows.As[orderSide](OrderModels.Query(), "orders")
+	m, o := rows.Scope(members), rows.Scope(orders)
+	joined := rows.InnerJoin(members, orders, rows.On(expr.At(m, MemberModels.ID), expr.At(o, OrderModels.MemberID)))
+	member := rows.LeftScope(joined, m)
+	order := rows.RightScope(joined, o)
 	wire := OrderRowValidationFields()
 	text := foundryhttp.StringQuery[string]()
 	amount := foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal]()
-	base := SelectOrderRow(joined, OrderRowSelection[OrderScope]{ID: query.Value(order.ID), MemberName: query.Value(member.Name), Label: query.Value(order.Label), Amount: query.Value(order.Amount)})
-	return datatable.Define(datatable.Spec[OrderScope, OrderRow, Authority]{
+	base := rows.Select(joined, OrderRows,
+		rows.Map(OrderRows.ID, expr.At(order, OrderModels.ID)), rows.Map(OrderRows.MemberName, expr.At(member, MemberModels.Name)),
+		rows.Map(OrderRows.Label, expr.At(order, OrderModels.Label)), rows.Map(OrderRows.Amount, expr.At(order, OrderModels.Amount)))
+	return datatable.Spec[OrderScope, OrderRow, Authority]{
 		ID: "reports.orders", Row: OrderRowJSON(), Exports: true,
 		Columns: []datatable.ColumnRegistration[OrderScope, OrderRow]{
 			datatable.DefineColumn[OrderScope](wire.ID, OrderIDLabel).ExportAs(datatable.ScalarCell(foundryhttp.ModelIDQuery[Order]())).Registration(),
-			datatable.DefineColumn[OrderScope](wire.MemberName, MemberNameLabel).SortBy(query.Value(member.Name)).FilterBy(datatable.Where(text, member.Name)).Searchable().ExportAs(datatable.ScalarCell(text)).Registration(),
-			datatable.DefineColumn[OrderScope](wire.Label, OrderLabel).FilterBy(datatable.Where(text, order.Label)).Searchable().ExportAs(datatable.ScalarCell(text)).Registration(),
-			datatable.DefineColumn[OrderScope](wire.Amount, AmountLabel).SortBy(query.Value(order.Amount)).FilterBy(datatable.Where(amount, order.Amount)).ExportAs(datatable.ScalarCell(amount)).Registration(),
+			datatable.DefineColumn[OrderScope](wire.MemberName, MemberNameLabel).SortBy(expr.Select(expr.At(member, MemberModels.Name))).FilterBy(datatable.Where(text, expr.TextRowAt(member, MemberModels.Name))).Searchable().ExportAs(datatable.ScalarCell(text)).Registration(),
+			datatable.DefineColumn[OrderScope](wire.Label, OrderLabel).FilterBy(datatable.Where(text, expr.TextRowAt(order, OrderModels.Label))).Searchable().ExportAs(datatable.ScalarCell(text)).Registration(),
+			datatable.DefineColumn[OrderScope](wire.Amount, AmountLabel).SortBy(expr.Select(expr.At(order, OrderModels.Amount))).FilterBy(datatable.Where(amount, expr.OrderRow(expr.At(order, OrderModels.Amount)))).ExportAs(datatable.ScalarCell(amount)).Registration(),
 		},
 		DefaultSort: []datatable.Sort{{Column: wire.MemberName.Name(), Direction: datatable.Ascending}},
-		Stable:      []query.ProjectionOrder[OrderScope]{order.ID.Asc()}, Authorize: authorize,
-		Source: func(ctx context.Context, authority Authority) (query.ProjectionQuery[OrderScope, OrderRow], error) {
+		Stable:      []expr.ProjectionOrder[OrderScope]{expr.At(order, OrderModels.ID).Asc()}, Authorize: authorize,
+		Source: func(ctx context.Context, authority Authority) (rows.Query[OrderScope, OrderRow], error) {
 			actor, err := authority.subject(ctx)
 			if err != nil {
-				return query.ProjectionQuery[OrderScope, OrderRow]{}, err
+				return rows.Query[OrderScope, OrderRow]{}, err
 			}
-			return base.Where(member.TenantID.Eq(actor.TenantID), order.TenantID.Eq(actor.TenantID)), nil
+			return base.Where(expr.At(member, MemberModels.TenantID).Eq(actor.TenantID), expr.At(order, OrderModels.TenantID).Eq(actor.TenantID)), nil
 		},
-	})
+	}
 }
 
-func totalTable() datatable.Table[Order, MemberTotal, Authority] {
-	fields, wire := OrderFields(), MemberTotalValidationFields()
-	count, total := query.Count[Order](), query.Sum(fields.Amount)
+func totalSpec() datatable.Spec[Order, MemberTotal, Authority] {
+	fields, wire := OrderModels, MemberTotalValidationFields()
+	count, total := expr.Count[Order](), expr.Sum(fields.Amount)
 	amount := foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal]()
 	memberID := foundryhttp.ModelIDQuery[Member]()
-	return datatable.Define(datatable.Spec[Order, MemberTotal, Authority]{
+	return datatable.Spec[Order, MemberTotal, Authority]{
 		ID: "reports.totals", Row: MemberTotalJSON(), Exports: true,
 		Columns: []datatable.ColumnRegistration[Order, MemberTotal]{
-			datatable.DefineColumn[Order](wire.MemberID, MemberIDLabel).FilterBy(datatable.Where(memberID, fields.MemberID)).ExportAs(datatable.ScalarCell(memberID)).Registration(),
+			datatable.DefineColumn[Order](wire.MemberID, MemberIDLabel).FilterBy(datatable.Where(memberID, expr.CompareRow(expr.Value(fields.MemberID)))).ExportAs(datatable.ScalarCell(memberID)).Registration(),
 			datatable.DefineColumn[Order](wire.Count, CountLabel).SortBy(count.Value()).FilterBy(datatable.Having(foundryhttp.IntegerQuery[int64](), count)).ExportAs(datatable.ScalarCell(foundryhttp.IntegerQuery[int64]())).Registration(),
 			datatable.DefineColumn[Order](wire.Total, TotalLabel).SortBy(total.Value()).FilterBy(datatable.NullableHaving(amount, total)).ExportAs(datatable.NullableCell(amount)).Registration(),
 		},
 		DefaultSort: []datatable.Sort{{Column: wire.Total.Name(), Direction: datatable.Descending}},
-		Stable:      []query.ProjectionOrder[Order]{fields.MemberID.Asc()}, Authorize: authorize,
-		Source: func(ctx context.Context, authority Authority) (query.ProjectionQuery[Order, MemberTotal], error) {
+		Stable:      []expr.ProjectionOrder[Order]{expr.Value(fields.MemberID).Asc()}, Authorize: authorize,
+		Source: func(ctx context.Context, authority Authority) (rows.Query[Order, MemberTotal], error) {
 			actor, err := authority.subject(ctx)
 			if err != nil {
-				return query.ProjectionQuery[Order, MemberTotal]{}, err
+				return rows.Query[Order, MemberTotal]{}, err
 			}
-			source := QueryReportOrders().Where(fields.TenantID.Eq(actor.TenantID), OrderRelations().Member.Where(MemberFields().TenantID.Eq(actor.TenantID)).Exists())
-			return SelectMemberTotal(source, MemberTotalSelection[Order]{MemberID: query.Value(fields.MemberID), Count: count.Value(), Total: total.Value()}).GroupBy(fields.MemberID.Group()), nil
+			source := OrderModels.Query().Where(fields.TenantID.Eq(actor.TenantID), orm.Has(OrderModelRelations.Member, MemberModels.TenantID.Eq(actor.TenantID)))
+			return rows.GroupBy(rows.Select(rows.From(source), MemberTotals,
+				rows.Map(MemberTotals.MemberID, expr.Value(fields.MemberID)), rows.MapSelected(MemberTotals.Count, count.Value()), rows.MapSelected(MemberTotals.Total, total.Value())), expr.Group(expr.Value(fields.MemberID))), nil
 		},
-	})
+	}
 }

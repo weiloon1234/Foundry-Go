@@ -4,12 +4,10 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
-	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/internal/callback"
-	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
@@ -117,16 +115,12 @@ func (q Query[M]) InsertOrFirst(ctx context.Context, writer database.Transactor,
 		}
 		// tx (not the enclosing transaction) gives the insert its own savepoint,
 		// so a unique violation leaves the lookup transaction usable.
-		var statementErr error
+		var statementErr ormcore.InsertFailure
 		created, insertErr := executeMutation(ctx, tx, mutationPlan[M]{query: ForModel(*q.definition), kind: insertModel, mutation: mutation, statementFailure: &statementErr})
 		if insertErr == nil {
 			return q.requireLookupMatch(ctx, tx, created)
 		}
-		if statementErr == nil {
-			return *new(M), insertErr
-		}
-		// A failed savepoint rollback poisons tx, so the reads below then fail too.
-		conflict, err := q.ownUniqueViolation(ctx, tx, statementErr)
+		conflict, err := ormcore.OwnInsertConflict(ctx, tx, q.queryCore.Table, statementErr, insertErr)
 		if err != nil {
 			return *new(M), errors.Join(insertErr, err)
 		}
@@ -142,25 +136,6 @@ func (q Query[M]) InsertOrFirst(ctx context.Context, writer database.Transactor,
 		}
 		return models[0], nil
 	})
-}
-
-// ownUniqueViolation classifies the model INSERT statement's own failure: it
-// must carry a unique violation whose constraint is a unique index of the
-// model's table. Error inspection is bounded and contains extension methods.
-func (q Query[M]) ownUniqueViolation(ctx context.Context, tx *database.Tx, statementErr error) (bool, error) {
-	var constraint string
-	if err := callback.Isolated("classify lookup insert failure", func() error {
-		failure, found, complete := errorgraph.As[*database.Error](statementErr)
-		if complete && found && failure != nil && failure.Code() == database.UniqueViolation {
-			constraint = failure.Constraint()
-		}
-		return nil
-	}); err != nil || constraint == "" {
-		return false, err
-	}
-	var owned bool
-	err := database.ScanOne(ctx, tx, `SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_index i JOIN pg_catalog.pg_class c ON c.oid = i.indexrelid WHERE i.indisunique AND i.indrelid = to_regclass($1) AND c.relname = $2)`, []any{quotedTable(q.queryCore.Table), constraint}, &owned)
-	return owned, err
 }
 
 // requireLookupMatch verifies a created model satisfies the lookup query.
@@ -204,71 +179,20 @@ func (q Query[M]) createLookupModel(ctx context.Context, tx *database.Tx, draft 
 // Fields with custom mutators are skipped: a stored value is not a mutator
 // input. Conflicting equalities on one field supply no default.
 func (q Query[M]) lookupDefaults(ctx context.Context) (Mutation[M], error) {
-	values := make(map[string]driver.Value)
-	conflicted := make(map[string]bool)
-	var order []string
-	var collect func(expression) error
-	collect = func(e expression) error {
-		switch e := e.(type) {
-		case junction:
-			if e.Any {
-				return nil
-			}
-			for _, child := range e.Children {
-				if err := collect(child); err != nil {
-					return err
-				}
-			}
-		case scopeNode:
-			resolved, err := e.Resolved(ctx)
-			if err != nil {
-				return err
-			}
-			return collect(resolved)
-		case comparison:
-			field, ok := querycore.UnwrapSensitivity(e.Operand).(fieldRef)
-			if !ok || field.Table != q.queryCore.Table || e.Operator != equal || len(e.Values) != 1 || e.Bind == nil {
-				return nil
-			}
-			declared, found := q.definition.modelField(field.Column)
-			if !found || declared.assignment == nil || declared.mutator.Apply != nil {
-				return nil
-			}
-			raw, err := e.Bind(e.Values[0])
-			if err != nil || raw == nil {
-				return err
-			}
-			if previous, seen := values[field.Column]; seen {
-				if !driverValuesEqual(previous, raw) {
-					conflicted[field.Column] = true
-				}
-				return nil
-			}
-			values[field.Column] = raw
-			order = append(order, field.Column)
-		}
-		return nil
-	}
-	for _, e := range append(slices.Clone(q.queryCore.Predicates), q.queryCore.ScopePredicates()...) {
-		if err := collect(e); err != nil {
-			return Mutation[M]{}, err
-		}
+	values, err := querycore.LookupDefaults(ctx, q.queryCore, func(name string) bool {
+		f, ok := q.definition.modelField(name)
+		return ok && f.assignment != nil && f.mutator.Apply == nil
+	})
+	if err != nil {
+		return Mutation[M]{}, err
 	}
 	var defaults Mutation[M]
-	for _, column := range order {
-		if conflicted[column] {
-			continue
-		}
-		var err error
-		if defaults, err = q.withModelValue(defaults, column, values[column]); err != nil {
+	for _, v := range values {
+		if defaults, err = q.withModelValue(defaults, v.Column, v.Value); err != nil {
 			return Mutation[M]{}, err
 		}
 	}
 	return defaults, nil
 }
 
-func driverValuesEqual(a, b driver.Value) bool {
-	left, leftErr := encodeModelKey(a)
-	right, rightErr := encodeModelKey(b)
-	return leftErr == nil && rightErr == nil && left == right
-}
+func driverValuesEqual(a, b driver.Value) bool { return querycore.LookupValuesEqual(a, b) }

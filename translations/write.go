@@ -5,7 +5,7 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
@@ -108,8 +108,8 @@ func upsert[M any, K comparable](ctx context.Context, tx *database.Tx, m *Manage
 	if _, err := owner.Lock(ctx, tx, m.store.Registry(), reference); err != nil {
 		return err
 	}
-	q, f := store.QueryFoundryModelTranslations(), store.TranslationFields()
-	existing, err := store.TranslationsIndex(q.Where(f.Key.In(keys...))).All(ctx, tx)
+	q, f := store.Translations.Query(), store.Translations
+	existing, err := store.TranslationsIndex(q.Where(f.KeyColumn.In(keys...))).All(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -132,11 +132,11 @@ func upsert[M any, K comparable](ctx context.Context, tx *database.Tx, m *Manage
 	}
 	// One set-based INSERT ... ON CONFLICT for every assignment
 	// (MaxAssignments is below query.MaxInsertRows).
-	drafts := make([]store.TranslationDraft, len(assignments))
+	drafts := make([][]orm.Assignment[store.Translation], len(assignments))
 	for i, a := range assignments {
-		drafts[i] = store.TranslationDraft{}.SetKey(keys[i]).SetOwner(string(owner.Name())).SetScope(subject.Scope).SetSubjectKey(subject.Key).SetIdentity(subject.Identity).SetField(string(a.field.Name())).SetLocale(string(a.locale)).SetValue(a.text).SetCreatedAt(now).SetUpdatedAt(now)
+		drafts[i] = []orm.Assignment[store.Translation]{store.Translations.KeyColumn.Set(keys[i]), store.Translations.Owner.Set(string(owner.Name())), store.Translations.Scope.Set(subject.Scope), store.Translations.SubjectKey.Set(subject.Key), store.Translations.Identity.Set(subject.Identity), store.Translations.Field.Set(string(a.field.Name())), store.Translations.Locale.Set(string(a.locale)), store.Translations.Value.Set(a.text), store.Translations.CreatedAt.Set(now), store.Translations.UpdatedAt.Set(now)}
 	}
-	_, err = q.UpsertMany(ctx, tx, drafts, query.OnConflict(f.Key).Update(f.Value, f.UpdatedAt))
+	_, err = orm.UpsertMany(ctx, tx, q, orm.OnConflict(orm.ConflictKey(f.KeyColumn)).DoUpdate(orm.ConflictIncoming(f.Value), orm.ConflictIncoming(f.UpdatedAt)), drafts)
 	return err
 }
 func (f Field[M, K]) Forget(ctx context.Context, m *Manager, owner model.Reference[M, K], locale i18n.LocaleID) (bool, error) {
@@ -168,7 +168,7 @@ func (f Field[M, K]) forget(ctx context.Context, tx *database.Tx, m *Manager, ow
 	if err != nil {
 		return false, err
 	}
-	q, fields := store.QueryFoundryModelTranslations(), store.TranslationFields()
-	rows, err := q.Where(fields.Key.Eq(extensions.Digest(subject.Scope, subject.Key, string(f.Name()), string(locale)))).DeleteEach(ctx, tx, 1)
+	q, fields := store.Translations.Query(), store.Translations
+	rows, err := orm.DeleteEach(ctx, tx, q.Where(fields.KeyColumn.Eq(extensions.Digest(subject.Scope, subject.Key, string(f.Name()), string(locale)))), 1)
 	return len(rows) == 1, err
 }

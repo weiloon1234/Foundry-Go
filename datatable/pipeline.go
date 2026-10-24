@@ -3,13 +3,15 @@ package datatable
 import (
 	"context"
 
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
 type prepared[S any] struct {
-	page      query.PageRequest
+	page      orm.PageRequest
 	condition condition[S]
-	orders    []query.ProjectionOrder[S]
+	orders    []expr.ProjectionOrder[S]
 }
 
 func validateSortColumns(sorts []Sort, sortable func(string) bool) error {
@@ -125,7 +127,7 @@ func negateEach[S any](children []condition[S], combine func([]condition[S]) con
 // scopedSource is the authorized, filtered source. count omits the table's
 // ordering: sorting cannot change a total and only costs the database work.
 type scopedSource[S, R any] struct {
-	rows, count query.ProjectionQuery[S, R]
+	rows, count rows.Query[S, R]
 }
 
 func (d *tableDefinition[S, R, A]) scoped(ctx context.Context, subject A, action Action, p prepared[S]) (scopedSource[S, R], error) {
@@ -142,11 +144,11 @@ func (d *tableDefinition[S, R, A]) scoped(ctx context.Context, subject A, action
 	if err != nil {
 		return scopedSource[S, R]{}, err
 	}
-	filtered := q.Where(p.condition.where...).Having(p.condition.having...)
-	result := scopedSource[S, R]{rows: filtered.ReorderUnwindowed(p.orders...), count: filtered}
+	filtered := rows.Having(q.Where(p.condition.where...), p.condition.having...)
+	result := scopedSource[S, R]{rows: rows.ReorderUnwindowed(filtered, p.orders...), count: filtered}
 	// Compiling the ordered result also rejects windowed/DISTINCT ON sources
 	// before the unordered count can run.
-	if _, err := result.rows.Compile(); err != nil {
+	if err := rows.Preflight(ctx, result.rows); err != nil {
 		return scopedSource[S, R]{}, err
 	}
 	if err := ctx.Err(); err != nil {

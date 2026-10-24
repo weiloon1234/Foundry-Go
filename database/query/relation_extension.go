@@ -2,10 +2,11 @@ package query
 
 import (
 	"context"
-	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/extensionslot"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 // SlotFetch loads one slot value per parent, index-aligned, from a store other
@@ -36,100 +37,28 @@ type ExtensionBinding[M, S any] struct {
 // extension store rather than the model's own table. Extension slot
 // descriptors embed it, so With, Load, LoadMissing, pagination, chunked
 // iteration and nested relations load them alongside ordinary relations.
-type ExtensionSlot[M any] struct{ spec *extensionSlotSpec[M] }
+type ExtensionSlot[M any] struct{ core extensionslot.Slot[M] }
 
-type extensionSlotSpec[M any] struct {
-	name, table string
-	valueType   reflect.Type
-	err         error
-	load        func(context.Context, database.Executor, []M, *relationLoadState, bool) ([]M, error)
-}
-
-// NewExtensionSlot binds generated slot accessors to an external fetch.
+// NewExtensionSlot binds generated slot accessors to the shared external loader.
+// Example: query.NewExtensionSlot(binding).
 func NewExtensionSlot[M, S any](binding ExtensionBinding[M, S]) ExtensionSlot[M] {
-	spec := &extensionSlotSpec[M]{name: binding.Name, table: binding.Table, valueType: reflect.TypeFor[S]()}
-	switch {
-	case binding.Name == "" || binding.Table == "" || binding.Get == nil || binding.Set == nil || binding.Loaded == nil || binding.Count == nil:
-		spec.err = fault.New(fault.Invalid, "extension slot requires a generated binding")
-	case binding.Fetch == nil:
-		spec.err = binding.Unbound
-		if spec.err == nil {
-			spec.err = fault.New(fault.Missing, "extension slot is not bound to a runtime")
-		}
-	}
-	fetch := binding.Fetch
-	spec.load = func(ctx context.Context, executor database.Executor, parents []M, state *relationLoadState, missing bool) ([]M, error) {
-		selected, indices := selectedParents(parents, func(m M) bool { return missing && binding.Loaded(binding.Get(m)) })
-		if len(selected) == 0 {
-			return parents, nil
-		}
-		// Parent batches follow RelationLimits.BatchSize, as key batches do
-		// for ordinary relations; a store may split a batch further. Each
-		// batch charges the shared budget before the next one is fetched, so
-		// an over-budget load stops early instead of retaining every batch.
-		values := make([]S, 0, len(selected))
-		for start := 0; start < len(selected); start += state.limits.BatchSize {
-			batch := selected[start:min(start+state.limits.BatchSize, len(selected))]
-			fetched, err := fetch(ctx, executor, batch)
-			if err != nil {
-				return nil, err
-			}
-			if len(fetched) != len(batch) {
-				return nil, fault.New(fault.Invalid, "extension slot fetch returned a different number of values")
-			}
-			count := 0
-			for _, v := range fetched {
-				count += binding.Count(v)
-			}
-			if count > state.remaining {
-				return nil, fault.New(fault.Invalid, "related rows exceed the shared loading budget")
-			}
-			state.remaining -= count
-			if err := state.attach(count); err != nil {
-				return nil, err
-			}
-			values = append(values, fetched...)
-		}
-		result := parents // owned by loadRelations, which copied the caller slice once
-		for i, v := range values {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			result[indices[i]] = binding.Set(result[indices[i]], v)
-		}
-		return result, nil
-	}
-	return ExtensionSlot[M]{spec: spec}
+	return ExtensionSlot[M]{core: extensionslot.New(extensionslot.Binding[M, S]{Name: binding.Name, Table: binding.Table, Get: binding.Get, Set: binding.Set, Loaded: binding.Loaded, Count: binding.Count, Fetch: extensionslot.Fetch[M, S](binding.Fetch), Unbound: binding.Unbound})}
 }
-
-func (r ExtensionSlot[M]) relationName() string {
-	if r.spec == nil {
-		return ""
-	}
-	return r.spec.name
-}
-
+func (r ExtensionSlot[M]) relationName() string      { name, _, _, _ := r.core.Metadata(); return name }
 func (r ExtensionSlot[M]) copyRelation() Relation[M] { return r }
-
 func (r ExtensionSlot[M]) validateRelation(table string, depth int, limits RelationLimits) error {
-	if r.spec == nil {
-		return fault.New(fault.Invalid, "extension slot requires a generated descriptor")
-	}
-	if r.spec.err != nil {
-		return r.spec.err
+	_, owner, _, err := r.core.Metadata()
+	if err != nil {
+		return err
 	}
 	if depth > limits.MaxDepth {
 		return fault.New(fault.Invalid, "relation nesting exceeds its depth bound")
 	}
-	if table != r.spec.table {
+	if table != owner {
 		return fault.New(fault.Invalid, "extension slot belongs to a different model table")
 	}
 	return nil
 }
-
-func (r ExtensionSlot[M]) loadRelation(ctx context.Context, executor database.Executor, parents []M, state *relationLoadState, _ int, missing bool) ([]M, error) {
-	if r.spec == nil || r.spec.err != nil || r.spec.load == nil {
-		return nil, fault.New(fault.Invalid, "extension slot requires a bound descriptor")
-	}
-	return r.spec.load(ctx, executor, parents, state, missing)
+func (r ExtensionSlot[M]) loadRelation(ctx context.Context, ex database.Executor, parents []M, state *relationLoadState, _ int, missing bool) ([]M, error) {
+	return r.core.Load(ctx, ex, parents, querycore.RelationLimits(state.limits), &state.remaining, &state.attachments, missing)
 }

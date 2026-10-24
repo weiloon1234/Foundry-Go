@@ -9,7 +9,7 @@ import (
 	"sort"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 )
@@ -28,21 +28,11 @@ const (
 	Mass
 )
 
-// Target is one prunable model declaration; construct it with Model.
+// Target is one prunable model declaration; use ORMModel or ORMSoftModel.
 type Target struct {
 	name Name
 	mode Mode
 	run  func(context.Context, database.Transactor, int) (int64, error)
-}
-
-// Model declares that the models selected by query are obsolete. Keep the
-// selection's filters in the query (for example CreatedAt older than a
-// cutoff computed from TransactionTime); soft-delete models are force-deleted
-// within the query's visibility.
-func Model[M any](name Name, selection query.Query[M], mode Mode) Target {
-	return Target{name: name, mode: mode, run: func(ctx context.Context, db database.Transactor, size int) (int64, error) {
-		return selection.PruneBatch(ctx, db, size, mode == Mass)
-	}}
 }
 
 // Registry holds validated declarations in name order.
@@ -111,7 +101,7 @@ func (r *Registry) Run(ctx context.Context, db database.Transactor, options Opti
 	if ctx == nil || db == nil {
 		return Result{}, fault.New(fault.Invalid, "pruning requires a context and database")
 	}
-	if options.BatchSize < 1 || options.BatchSize > query.MaxPerModelWriteRows || options.MaxBatches < 1 {
+	if options.BatchSize < 1 || options.BatchSize > orm.MaxPerModelWriteRows || options.MaxBatches < 1 {
 		return Result{}, fault.New(fault.Invalid, "invalid prune bounds")
 	}
 	targets := r.targets

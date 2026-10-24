@@ -154,18 +154,18 @@ func (f Field[M, K]) loadIn(ctx context.Context, tx *database.Tx, m *Manager, ow
 	for i, id := range ids {
 		localeNames[i] = string(id)
 	}
-	fields := store.TranslationFields()
-	base := store.QueryFoundryModelTranslations().Where(fields.Scope.Eq(f.definition.owner.Scope()), fields.SubjectKey.In(keys...), fields.Field.Eq(string(f.Name())), fields.Locale.In(localeNames...))
+	fields := store.Translations
+	base := store.Translations.Query().Where(fields.Scope.Eq(f.definition.owner.Scope()), fields.SubjectKey.In(keys...), fields.Field.Eq(string(f.Name())), fields.Locale.In(localeNames...))
 	// UNIQUE(scope,subject_key,field,locale) bounds the pages structurally.
 	limit := len(keys) * len(ids)
 	rows, bytes, after := 0, 0, ""
 	for {
 		page := base
 		if after != "" {
-			page = page.Where(fields.Key.Gt(after))
+			page = page.Where(fields.KeyColumn.Gt(after))
 		}
 		count := 0
-		err := page.OrderBy(fields.Key.Asc()).Limit(MaxBatchRows).Each(ctx, tx, func(row store.Translation) error {
+		err := page.OrderBy(fields.KeyColumn.Asc()).Limit(MaxBatchRows).Each(ctx, tx, func(row store.Translation) error {
 			count++
 			rows++
 			after = row.Key

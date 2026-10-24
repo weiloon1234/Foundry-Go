@@ -4,7 +4,8 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionmaintenance"
@@ -50,16 +51,16 @@ func orphanTable() extensionmaintenance.Table[store.TranslationIndex] {
 	return extensionmaintenance.Table[store.TranslationIndex]{
 		Name: "translations",
 		Scan: func(ctx context.Context, tx *database.Tx, owner extensions.OwnerName, scope, after string, limit int) ([]store.TranslationIndex, error) {
-			f := store.TranslationFields()
-			q := store.QueryFoundryModelTranslations().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)).OrderBy(f.Key.Asc()).Limit(limit)
+			f := store.Translations
+			q := store.Translations.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)).OrderBy(f.KeyColumn.Asc()).Limit(limit)
 			if after != "" {
-				q = q.Where(f.Key.Gt(after))
+				q = q.Where(f.KeyColumn.Gt(after))
 			}
 			return store.TranslationsIndex(q).All(ctx, tx)
 		},
 		Lock: func(ctx context.Context, tx *database.Tx, owner extensions.OwnerName, scope string, keys []string) ([]store.TranslationIndex, error) {
-			f := store.TranslationFields()
-			return store.TranslationsIndex(store.QueryFoundryModelTranslations().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope), f.Key.In(keys...)).OrderBy(f.Key.Asc())).ForUpdate().All(ctx, tx)
+			f := store.Translations
+			return rows.ForUpdate(rows.Read(store.TranslationsIndex(store.Translations.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope), f.KeyColumn.In(keys...)).OrderBy(f.KeyColumn.Asc())))).All(ctx, tx)
 		},
 		Identity: func(registry *extensions.Registry, owner extensions.OwnerName, scope string, row store.TranslationIndex) (model.Identity, error) {
 			if !identifier.Semantic(row.Field) || i18n.LocaleID(row.Locale).Validate() != nil {
@@ -69,7 +70,7 @@ func orphanTable() extensionmaintenance.Table[store.TranslationIndex] {
 		},
 		Key: func(row store.TranslationIndex) string { return row.Key }, SubjectKey: func(row store.TranslationIndex) string { return row.SubjectKey },
 		Delete: func(ctx context.Context, tx *database.Tx, row store.TranslationIndex) error {
-			_, err := store.QueryFoundryModelTranslations().Delete(ctx, tx, row.Key)
+			_, err := orm.Delete(ctx, tx, store.Translations.Query(), store.Translations.Key(), row.Key)
 			return err
 		},
 	}
@@ -86,8 +87,8 @@ func InspectUndeclared(ctx context.Context, m *Manager, owner extensions.OwnerNa
 		return Undeclared{}, err
 	}
 	return extensionmaintenance.InspectUndeclared(ctx, m.store, owner, func(ctx context.Context, tx *database.Tx, scope string, limit int) ([]string, error) {
-		f := store.TranslationFields()
-		return query.SelectValue(store.QueryFoundryModelTranslations().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)), query.Value(f.Field)).Distinct().OrderBy(f.Field.Asc()).Limit(limit).All(ctx, tx)
+		f := store.Translations
+		return rows.Distinct(rows.SelectValue(store.Translations.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)).OrderBy(f.Field.Asc()).Limit(limit), f.Field)).All(ctx, tx)
 	}, func(scope, name string) bool {
 		_, declared := m.fields[extensions.Digest(scope, name)]
 		return declared

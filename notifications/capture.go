@@ -8,7 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	store "github.com/weiloon1234/Foundry-Go/internal/notificationstore"
@@ -141,12 +141,11 @@ func (m *Manager) persist(ctx context.Context, tx *database.Tx, captured *captur
 		return store.Envelope{}, err
 	}
 	r := captured.registration
-	draft := store.EnvelopeDraft{}.SetID(captured.id).SetRecipient(string(r.key.recipient)).SetScope(r.scope).SetSubjectKey(captured.subject).
-		SetIdentity(captured.identity).SetOrigin(captured.origin).SetName(string(r.key.name)).SetVersion(uint32(r.key.version)).SetPayload(captured.input).SetFingerprint(captured.fingerprint).SetCreatedAt(now)
-	if _, err := store.QueryFoundryNotifications().Upsert(ctx, tx, draft, query.OnConflict(store.EnvelopeFields().ID).DoNothing()); err != nil {
+	draft := []orm.Assignment[store.Envelope]{store.Envelopes.ID.Set(captured.id), store.Envelopes.Recipient.Set(string(r.key.recipient)), store.Envelopes.Scope.Set(r.scope), store.Envelopes.SubjectKey.Set(captured.subject), store.Envelopes.Identity.Set(captured.identity), store.Envelopes.Origin.Set(captured.origin), store.Envelopes.Name.Set(string(r.key.name)), store.Envelopes.Version.Set(uint32(r.key.version)), store.Envelopes.Payload.Set(captured.input), store.Envelopes.Fingerprint.Set(captured.fingerprint), store.Envelopes.CreatedAt.Set(now)}
+	if _, err := orm.Upsert(ctx, tx, store.Envelopes.Query(), orm.OnConflict(orm.ConflictKey(store.Envelopes.ID)).DoNothing(), draft...); err != nil {
 		return store.Envelope{}, err
 	}
-	row, err := store.QueryFoundryNotifications().ForUpdate().RequireFind(ctx, tx, captured.id)
+	row, err := store.Envelopes.Query().ForUpdate().Where(store.Envelopes.Key().Eq(captured.id)).Require(ctx, tx)
 	if err != nil {
 		return store.Envelope{}, err
 	}
@@ -157,7 +156,7 @@ func (m *Manager) persist(ctx context.Context, tx *database.Tx, captured *captur
 		// A notification captured before its binding's channel set changed keeps
 		// its original channels. Compare the input against the stored channel
 		// list; a differing input is still a conflict.
-		deliveries, err := store.QueryFoundryNotificationDeliveries().Where(store.DeliveryFields().NotificationID.Eq(captured.id)).Limit(MaxChannels+1).All(ctx, tx)
+		deliveries, err := store.Deliveries.Query().Where(store.Deliveries.NotificationID.Eq(captured.id)).Limit(MaxChannels+1).All(ctx, tx)
 		if err != nil {
 			return store.Envelope{}, err
 		}
@@ -174,9 +173,8 @@ func (m *Manager) persist(ctx context.Context, tx *database.Tx, captured *captur
 	}
 	for _, channel := range r.channels {
 		key := deliveryKey(captured.id, channel.id)
-		draft := store.DeliveryDraft{}.SetKey(key).SetNotificationID(captured.id).SetChannel(string(channel.id)).SetKind(channel.kind).
-			SetState(string(Pending)).SetPayload(empty).SetClaim(model.ID[store.Delivery]{}).SetAttempts(0).SetUpdatedAt(now)
-		if _, err := store.QueryFoundryNotificationDeliveries().Upsert(ctx, tx, draft, query.OnConflict(store.DeliveryFields().Key).DoNothing()); err != nil {
+		draft := []orm.Assignment[store.Delivery]{store.Deliveries.KeyColumn.Set(key), store.Deliveries.NotificationID.Set(captured.id), store.Deliveries.Channel.Set(string(channel.id)), store.Deliveries.Kind.Set(channel.kind), store.Deliveries.State.Set(string(Pending)), store.Deliveries.Payload.Set(empty), store.Deliveries.Claim.Set(model.ID[store.Delivery]{}), store.Deliveries.Attempts.Set(0), store.Deliveries.UpdatedAt.Set(now)}
+		if _, err := orm.Upsert(ctx, tx, store.Deliveries.Query(), orm.OnConflict(orm.ConflictKey(store.Deliveries.KeyColumn)).DoNothing(), draft...); err != nil {
 			return store.Envelope{}, err
 		}
 	}

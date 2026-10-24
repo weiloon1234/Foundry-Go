@@ -7,7 +7,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
-	"github.com/weiloon1234/Foundry-Go/internal/contractmeta"
 	"github.com/weiloon1234/Foundry-Go/validation"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -30,7 +29,9 @@ func (cursorCodec[M]) Format(cursor orm.Cursor[M]) (string, error) {
 // declarations. Its scalar metadata preserves the original model/result owner.
 // Successful parsing validates structure; query execution verifies scope.
 func CursorQuery[M any]() foundryhttp.QueryCodec[orm.Cursor[M]] {
-	return foundryhttp.DescribeURL[orm.Cursor[M]](cursorCodec[M]{}, contract.DefineScalar[orm.Cursor[M]](contract.Type{ID: contractmeta.TypeID(reflect.TypeFor[orm.Cursor[M]]()), Kind: contract.StringKind}))
+	// This published wire identity is independent of the shared Go implementation owner.
+	id := contract.TypeID("github.com/weiloon1234/Foundry-Go/database/query." + reflect.TypeFor[orm.Cursor[M]]().Name())
+	return foundryhttp.DescribeURL[orm.Cursor[M]](cursorCodec[M]{}, contract.DefineScalar[orm.Cursor[M]](contract.Type{ID: id, Kind: contract.StringKind}))
 }
 
 func cursorParameters[F, M any](filters foundryhttp.Query[F], config CursorConfig) foundryhttp.Query[parameters[F, orm.CursorRequest[M]]] {

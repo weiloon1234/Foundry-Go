@@ -38,6 +38,7 @@ type Scope struct {
 
 // Column retains typed closures without a heavy codec field.
 type Column[V any] struct {
+	Text      bool
 	Sensitive bool
 	Reference
 	Field    querycore.FieldRef

@@ -88,7 +88,11 @@ func TestCursorBoundaryDistinguishesInputFromMetadataFailures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.After = value.Set(Cursor[cursorRecord]{token: base64.RawURLEncoding.EncodeToString(data)})
+	foreign, err := ParseCursor[cursorRecord](base64.RawURLEncoding.EncodeToString(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.After = value.Set(foreign)
 	_, err = readCursorBoundary(request, first.scope, first.fields, []bool{true})
 	if !errors.As(err, &input) || !errors.Is(err, fault.Invalid) {
 		t.Fatal("bad boundary value not classified as input")

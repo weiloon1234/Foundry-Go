@@ -6,10 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -69,7 +69,7 @@ type Rows[M any, K comparable] struct {
 
 // For prepares validation of rows read for references, a bounded batch.
 func For[M any, K comparable](owner extensions.Owner[M, K], references []model.Reference[M, K]) (Rows[M, K], error) {
-	if len(references) > query.MaxIdentityBatch {
+	if len(references) > querycore.MaxIdentityBatch {
 		return Rows[M, K]{}, invalid()
 	}
 	rows := Rows[M, K]{owner: owner, expected: make(map[string]string, len(references))}

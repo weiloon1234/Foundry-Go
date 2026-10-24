@@ -1,0 +1,24 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "UPDATE \"foundry_model_metadata\" SET \"owner\" = $1, \"updated_at\" = $2 WHERE (\"foundry_model_metadata\".\"key\" = $3) RETURNING \"foundry_model_metadata\".\"key\", \"foundry_model_metadata\".\"owner\", \"foundry_model_metadata\".\"scope\", \"foundry_model_metadata\".\"subject_key\", \"foundry_model_metadata\".\"identity\", \"foundry_model_metadata\".\"name\", \"foundry_model_metadata\".\"version\", \"foundry_model_metadata\".\"value\", \"foundry_model_metadata\".\"created_at\", \"foundry_model_metadata\".\"updated_at\"",
+      "Args": [
+        "updated",
+        "2026-10-24T00:00:00Z",
+        "stored"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "ddfac32ecf0363493c897e93e2ebf9815d381bd1130411edf2bb47d60b1208ec"
+}

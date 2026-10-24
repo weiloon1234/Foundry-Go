@@ -1,0 +1,24 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "UPDATE \"foundry_settings\" SET \"kind\" = $1, \"updated_at\" = $2 WHERE (\"foundry_settings\".\"name\" = $3) RETURNING \"foundry_settings\".\"name\", \"foundry_settings\".\"version\", \"foundry_settings\".\"value\", \"foundry_settings\".\"kind\", \"foundry_settings\".\"parameters\", \"foundry_settings\".\"group_name\", \"foundry_settings\".\"label\", \"foundry_settings\".\"description\", \"foundry_settings\".\"sort_order\", \"foundry_settings\".\"is_public\", \"foundry_settings\".\"presentation_declared\", \"foundry_settings\".\"created_at\", \"foundry_settings\".\"updated_at\"",
+      "Args": [
+        "updated",
+        "2026-10-24T00:00:00Z",
+        "stored"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "0a94abb35058dcf63d90e5bbba65b72551fc7d1fbb16d74c68c2a2d241065efe"
+}

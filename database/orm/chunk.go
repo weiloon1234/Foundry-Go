@@ -8,14 +8,13 @@ import (
 	"unsafe"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 // MaxChunkSize is the existing bound on one model batch.
-const MaxChunkSize = query.MaxChunkSize
+const MaxChunkSize = querycore.MaxChunkSize
 
 // Chunk reads stable, bounded batches, closing rows before each callback.
 // It preserves the query window and advances by keyset when ordering permits;

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	store "github.com/weiloon1234/Foundry-Go/internal/webhookstore"
@@ -86,7 +86,7 @@ func (s *Service) CreateEndpoint(ctx context.Context, options EndpointOptions) (
 	var signing secret.String
 	err = s.calls.Run(ctx, "webhook endpoint registration", func(ctx context.Context) error {
 		return s.transaction(ctx, false, func(ctx context.Context, tx *database.Tx) error {
-			count, err := store.QueryFoundryWebhookEndpoints().Count(ctx, tx)
+			count, err := store.Endpoints.Query().Count(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -97,7 +97,7 @@ func (s *Service) CreateEndpoint(ctx context.Context, options EndpointOptions) (
 			if err != nil {
 				return err
 			}
-			if _, err := store.QueryFoundryWebhookEndpoints().Create(ctx, tx, store.EndpointDraft{}.SetID(id).SetURL(options.URL).SetEvents(events).SetActive(true).SetCreatedAt(now).SetUpdatedAt(now)); err != nil {
+			if _, err := store.Endpoints.Insert(ctx, tx, store.Endpoints.ID.Set(id), store.Endpoints.URL.Set(options.URL), store.Endpoints.Events.Set(events), store.Endpoints.Active.Set(true), store.Endpoints.CreatedAt.Set(now), store.Endpoints.UpdatedAt.Set(now)); err != nil {
 				return err
 			}
 			signing, err = s.addSecret(ctx, tx, id, now)
@@ -133,7 +133,7 @@ func (s *Service) UpdateEndpoint(ctx context.Context, id EndpointID, options End
 			if err != nil {
 				return err
 			}
-			row, err := store.QueryFoundryWebhookEndpoints().Update(ctx, tx, endpointKey(id), store.EndpointDraft{}.SetURL(options.URL).SetEvents(events).SetActive(active).SetUpdatedAt(now))
+			row, err := orm.Update(ctx, tx, store.Endpoints.Query(), store.Endpoints.Key(), endpointKey(id), store.Endpoints.URL.Set(options.URL), store.Endpoints.Events.Set(events), store.Endpoints.Active.Set(active), store.Endpoints.UpdatedAt.Set(now))
 			if err != nil {
 				return err
 			}
@@ -152,7 +152,7 @@ func (s *Service) Endpoint(ctx context.Context, id EndpointID) (EndpointInfo, er
 	var result EndpointInfo
 	err := s.calls.Run(ctx, "webhook endpoint lookup", func(ctx context.Context) error {
 		return s.transaction(ctx, true, func(ctx context.Context, tx *database.Tx) error {
-			row, err := store.QueryFoundryWebhookEndpoints().RequireFind(ctx, tx, endpointKey(id))
+			row, err := store.Endpoints.Query().Where(store.Endpoints.Key().Eq(endpointKey(id))).Require(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -174,11 +174,10 @@ func (s *Service) Endpoints(ctx context.Context, after EndpointID, limit int) ([
 	var result []EndpointInfo
 	err := s.calls.Run(ctx, "webhook endpoint listing", func(ctx context.Context) error {
 		return s.transaction(ctx, true, func(ctx context.Context, tx *database.Tx) error {
-			f := store.EndpointFields()
-			q := store.QueryFoundryWebhookEndpoints()
+			f := store.Endpoints
+			q := store.Endpoints.Query()
 			if !after.IsZero() {
-				ordered := query.OrderedField[store.Endpoint, model.ID[store.Endpoint]]{ScalarField: f.ID}
-				q = q.Where(ordered.Gt(endpointKey(after)))
+				q = q.Where(orm.UUIDGreater(f.ID, endpointKey(after)))
 			}
 			rows, err := q.OrderBy(f.ID.Asc()).Limit(limit).All(ctx, tx)
 			if err != nil {
@@ -220,7 +219,7 @@ func (s *Service) RotateSecretWithGrace(ctx context.Context, id EndpointID, grac
 	var signing secret.String
 	err := s.calls.Run(ctx, "webhook secret rotation", func(ctx context.Context) error {
 		return s.transaction(ctx, false, func(ctx context.Context, tx *database.Tx) error {
-			if _, err := store.QueryFoundryWebhookEndpoints().ForUpdate().RequireFind(ctx, tx, endpointKey(id)); err != nil {
+			if _, err := store.Endpoints.Query().ForUpdate().Where(store.Endpoints.Key().Eq(endpointKey(id))).Require(ctx, tx); err != nil {
 				return err
 			}
 			now, err := s.now()
@@ -241,7 +240,7 @@ func (s *Service) RotateSecretWithGrace(ctx context.Context, id EndpointID, grac
 			for _, row := range active {
 				current, present := row.ExpiresAt.Get()
 				if !present || current.UTC().After(expires.UTC()) {
-					if _, err := store.QueryFoundryWebhookSecrets().Update(ctx, tx, row.ID, store.SecretDraft{}.SetExpiresAt(expires)); err != nil {
+					if _, err := orm.Update(ctx, tx, store.Secrets.Query(), store.Secrets.Key(), row.ID, store.Secrets.ExpiresAt.Set(expires)); err != nil {
 						return err
 					}
 				}
@@ -272,7 +271,7 @@ func (s *Service) addSecret(ctx context.Context, tx *database.Tx, endpoint model
 	if err != nil {
 		return secret.String{}, err
 	}
-	_, err = store.QueryFoundryWebhookSecrets().Create(ctx, tx, store.SecretDraft{}.SetID(id).SetEndpointID(endpoint).SetCiphertext(sealed.Encoded()).ClearExpiresAt().SetCreatedAt(now))
+	_, err = store.Secrets.Insert(ctx, tx, store.Secrets.ID.Set(id), store.Secrets.EndpointID.Set(endpoint), store.Secrets.Ciphertext.Set(sealed.Encoded()), store.Secrets.ExpiresAt.SetNull(), store.Secrets.CreatedAt.Set(now))
 	if err != nil {
 		return secret.String{}, err
 	}
@@ -286,8 +285,8 @@ func secretContext(endpoint model.ID[store.Endpoint], id model.ID[store.Secret])
 
 // signingSecrets returns unexpired secrets, newest first.
 func (s *Service) signingSecrets(ctx context.Context, tx *database.Tx, endpoint model.ID[store.Endpoint], now temporal.DateTime) ([]store.Secret, error) {
-	f := store.SecretFields()
-	rows, err := store.QueryFoundryWebhookSecrets().Where(f.EndpointID.Eq(endpoint), query.Or(f.ExpiresAt.IsNull(), f.ExpiresAt.Gt(now))).OrderBy(f.CreatedAt.Desc(), f.ID.Desc()).Limit(MaxSigningSecrets+1).All(ctx, tx)
+	f := store.Secrets
+	rows, err := store.Secrets.Query().Where(f.EndpointID.Eq(endpoint), orm.Or(f.ExpiresAt.IsNull(), f.ExpiresAt.Gt(now))).OrderBy(f.CreatedAt.Desc(), f.ID.Desc()).Limit(MaxSigningSecrets+1).All(ctx, tx)
 	if err != nil {
 		return nil, err
 	}

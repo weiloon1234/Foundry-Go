@@ -1,0 +1,24 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "UPDATE \"foundry_model_translations\" SET \"owner\" = $1, \"updated_at\" = $2 WHERE (\"foundry_model_translations\".\"key\" = $3) RETURNING \"foundry_model_translations\".\"key\", \"foundry_model_translations\".\"owner\", \"foundry_model_translations\".\"scope\", \"foundry_model_translations\".\"subject_key\", \"foundry_model_translations\".\"identity\", \"foundry_model_translations\".\"field\", \"foundry_model_translations\".\"locale\", \"foundry_model_translations\".\"value\", \"foundry_model_translations\".\"created_at\", \"foundry_model_translations\".\"updated_at\"",
+      "Args": [
+        "updated",
+        "2026-10-24T00:00:00Z",
+        "stored"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "fad0043b9e0c9c138cef54001f39dec37d2d02c994e089309b96a40a0c9b8310"
+}

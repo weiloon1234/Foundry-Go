@@ -8,7 +8,6 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/internal/lifecore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
@@ -96,7 +95,7 @@ func RegisterObserver[M any](r *foundation.Registrar, pool foundation.Key[*datab
 }
 
 func ownerObservers(writer any) (lifecycle.Observers, bool) {
-	return query.FoundryObservers(writer, sqlowner.Observers())
+	return database.FoundryObservers(writer, sqlowner.Observers())
 }
 func observed[M any](set lifecycle.Observers, kind querycore.MutationKind) bool {
 	if kind.Deletes() {

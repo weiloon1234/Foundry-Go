@@ -209,6 +209,18 @@ func TestCursorLinksRequireApprovedPublicOrigins(t *testing.T) {
 }
 
 func TestCursorQueryCodecPreservesTypedPosition(t *testing.T) {
+	info, err := cursorEndpoint(pagination.DefaultCursorConfig()).Description()
+	if err != nil {
+		t.Fatal(err)
+	}
+	const cursorID = "github.com/weiloon1234/Foundry-Go/database/query.Cursor[github.com/weiloon1234/Foundry-Go/http/pagination_test.cursorSource]"
+	for _, field := range info.Query {
+		if field.Name == "after" || field.Name == "before" {
+			if field.Scalar == nil || string(field.Scalar.Value.ID) != cursorID {
+				t.Fatal("published cursor scalar identity changed", field.Name)
+			}
+		}
+	}
 	codec := pagination.CursorQuery[cursorSource]()
 	token := tokenFor[cursorSource](t)
 	raw, err := codec.Format(token)

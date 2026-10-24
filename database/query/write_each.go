@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 // enclosingTransaction runs a nested model write directly on the transaction of
@@ -25,7 +26,7 @@ func (e enclosingTransaction) Transaction(_ context.Context, fn func(*database.T
 
 // MaxPerModelWriteRows bounds one atomic operation that runs ordinary model
 // writes per row. It shares the established atomic insert row budget.
-const MaxPerModelWriteRows = MaxInsertRows
+const MaxPerModelWriteRows = querycore.MaxPerModelWriteRows
 
 // InsertEach creates each supplied input through the ordinary model lifecycle.
 // The bounded batch is atomic and results preserve input order. Unlike

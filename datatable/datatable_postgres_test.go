@@ -24,7 +24,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/i18n"
@@ -182,7 +182,7 @@ func TestPostgresDatatableScopesPaginationAndQueryCount(t *testing.T) {
 		t.Fatal("server scope was not reevaluated for the actor", err)
 	}
 	before = fixture.Queries.Load()
-	if result, err := table.Query(t.Context(), manager, reportActor{Tenant: 7}, Request{}); !errors.Is(err, auth.Forbidden) || !reflect.DeepEqual(result, query.Page[ReportRow]{}) {
+	if result, err := table.Query(t.Context(), manager, reportActor{Tenant: 7}, Request{}); !errors.Is(err, auth.Forbidden) || !reflect.DeepEqual(result, orm.PageResult[ReportRow]{}) {
 		t.Fatal("unauthorized query returned a page", err)
 	}
 	if _, err := table.Count(t.Context(), manager, actor, Request{Sort: []Sort{{Column: "id;DROP TABLE report_rows", Direction: Ascending}}}); err == nil {
@@ -293,7 +293,7 @@ func TestPostgresDatatableExportFailuresRemovePartialFiles(t *testing.T) {
 		})
 	}
 	manager, table := reportManager(t, fixture, reportSpec(), func(c *Config) { c.MaxRowBytes = 64; c.MaxPageBytes = 64 })
-	if page, err := table.Query(t.Context(), manager, reportActor{Tenant: 7, Allowed: true}, Request{}); err == nil || !reflect.DeepEqual(page, query.Page[ReportRow]{}) {
+	if page, err := table.Query(t.Context(), manager, reportActor{Tenant: 7, Allowed: true}, Request{}); err == nil || !reflect.DeepEqual(page, orm.PageResult[ReportRow]{}) {
 		t.Fatal("page byte limit leaked a partial result", err)
 	}
 }

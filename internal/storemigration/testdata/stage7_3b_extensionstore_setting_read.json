@@ -1,0 +1,15 @@
+{
+  "Statements": [
+    {
+      "SQL": "SELECT \"foundry_settings\".\"name\", \"foundry_settings\".\"version\", \"foundry_settings\".\"value\", \"foundry_settings\".\"kind\", \"foundry_settings\".\"parameters\", \"foundry_settings\".\"group_name\", \"foundry_settings\".\"label\", \"foundry_settings\".\"description\", \"foundry_settings\".\"sort_order\", \"foundry_settings\".\"is_public\", \"foundry_settings\".\"presentation_declared\", \"foundry_settings\".\"created_at\", \"foundry_settings\".\"updated_at\" FROM \"foundry_settings\" WHERE (\"foundry_settings\".\"name\" = $1) ORDER BY \"foundry_settings\".\"name\" ASC LIMIT $2",
+      "Args": [
+        "stored",
+        1
+      ]
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "0a94abb35058dcf63d90e5bbba65b72551fc7d1fbb16d74c68c2a2d241065efe"
+}

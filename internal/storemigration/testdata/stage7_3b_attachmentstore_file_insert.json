@@ -1,0 +1,47 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "INSERT INTO \"foundry_attachments\" (\"id\", \"owner\", \"scope\", \"subject_key\", \"identity\", \"collection\", \"locale\", \"single\", \"disk\", \"object_key\", \"original_name\", \"content_type\", \"size\", \"digest\", \"etag\", \"object_version\", \"width\", \"height\", \"properties\", \"sort_order\", \"state\", \"writer_id\", \"attempts\", \"last_failure\", \"created_at\", \"updated_at\") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26) RETURNING \"foundry_attachments\".\"id\", \"foundry_attachments\".\"owner\", \"foundry_attachments\".\"scope\", \"foundry_attachments\".\"subject_key\", \"foundry_attachments\".\"identity\", \"foundry_attachments\".\"collection\", \"foundry_attachments\".\"locale\", \"foundry_attachments\".\"single\", \"foundry_attachments\".\"disk\", \"foundry_attachments\".\"object_key\", \"foundry_attachments\".\"original_name\", \"foundry_attachments\".\"content_type\", \"foundry_attachments\".\"size\", \"foundry_attachments\".\"digest\", \"foundry_attachments\".\"etag\", \"foundry_attachments\".\"object_version\", \"foundry_attachments\".\"width\", \"foundry_attachments\".\"height\", \"foundry_attachments\".\"properties\", \"foundry_attachments\".\"sort_order\", \"foundry_attachments\".\"state\", \"foundry_attachments\".\"writer_id\", \"foundry_attachments\".\"attempts\", \"foundry_attachments\".\"last_failure\", \"foundry_attachments\".\"created_at\", \"foundry_attachments\".\"updated_at\"",
+      "Args": [
+        "01890f47-1a00-7000-8000-000000000001",
+        "inserted",
+        "inserted",
+        "inserted",
+        "{\"key\":{\"k\":\"int\",\"t\":\"7\"},\"model\":\"subjects\"}",
+        "inserted",
+        "inserted",
+        true,
+        "inserted",
+        "inserted",
+        "inserted",
+        "inserted",
+        1,
+        "inserted",
+        "inserted",
+        "inserted",
+        1,
+        1,
+        "{}",
+        1,
+        "inserted",
+        "01890f47-1a00-7000-8000-000000000001",
+        1,
+        "inserted",
+        "2026-10-23T23:00:00Z",
+        "2026-10-24T00:00:00Z"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "622afc621f8530ebd5a350d9d5f0615d5cfbadf2fe4eeae6253772e7d29ad726"
+}

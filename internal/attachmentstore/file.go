@@ -1,4 +1,4 @@
-// Package attachmentstore owns ordinary generated attachment intent and file
+// Package attachmentstore owns ordinary declared attachment intent and file
 // records. Public attachment APIs own state transitions and storage effects.
 package attachmentstore
 
@@ -13,7 +13,6 @@ import (
 
 type Writer struct{}
 
-//foundry:model table=foundry_attachments primary=ID
 type File struct {
 	ID            model.ID[File]
 	Owner         string
@@ -39,17 +38,15 @@ type File struct {
 	WriterID      model.ID[Writer]
 	Attempts      uint32
 	LastFailure   string
-	// Foundry field behavior (generated): Managed creation timestamp: persistence supplies the owning application clock when omitted, after before-write hooks and before field mutators. An explicit input is preserved.
+	// CreatedAt preserves explicit input; persistence supplies the owning clock when omitted.
 	CreatedAt temporal.DateTime
-	// Foundry field behavior (generated): Managed update timestamp: persistence replaces assigned or omitted input with the owning application clock after before-write hooks and before field mutators. Conflict updates copy its normalized proposed value.
+	// UpdatedAt is refreshed from the owning clock after before-write hooks and before mutators.
 	UpdatedAt temporal.DateTime
 }
 
 func (File) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("attachment intent")) }
 
 // Inspection does not materialize custom properties or upload content metadata.
-//
-//foundry:projection
 type FileIndex struct {
 	ID         model.ID[File]
 	Owner      string

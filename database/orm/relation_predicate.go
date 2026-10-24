@@ -3,6 +3,8 @@ package orm
 import (
 	"database/sql/driver"
 	"errors"
+	"reflect"
+
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
@@ -19,14 +21,29 @@ func Has[M, N any](r ExistenceRelation[M, N], ps ...Predicate[N]) Predicate[M] {
 	if nilInterface(r) {
 		return Predicate[M]{err: invalid("nil relation descriptor")}
 	}
-	p := relationWhere(r.relationPlan(nil), ps)
-	return relationExistence[M](p)
+	plan, err := relationPredicatePlan(r.relationPlan(nil), reflect.TypeFor[M](), reflect.TypeFor[N]())
+	if err != nil {
+		return Predicate[M]{err: err}
+	}
+	return relationExistence[M](relationWhere(plan, ps))
 }
 
 // DoesntHave matches parents with no scoped related match, without extra SQL.
 // Example: Users.Query().Where(orm.DoesntHave(UserRelations.Orders)).
 func DoesntHave[M, N any](r ExistenceRelation[M, N], ps ...Predicate[N]) Predicate[M] {
 	return Not(Has(r, ps...))
+}
+
+// Validate the actual metadata before child predicate types are erased. A
+// promoted relationTarget marker alone cannot establish either model owner.
+func relationPredicatePlan(plan *relationPlan, source, target reflect.Type) (*relationPlan, error) {
+	if plan == nil || plan.target == nil {
+		return nil, invalid("relation requires bound target metadata")
+	}
+	if plan.slot == nil || plan.slot.owner == nil || plan.slot.owner.typ != source || plan.target.typ != target {
+		return nil, invalid("relation model types do not match bound metadata")
+	}
+	return plan, nil
 }
 
 func relationExistence[M any](p *relationPlan) Predicate[M] {

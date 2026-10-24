@@ -39,7 +39,7 @@ and `ReadValues` for their corresponding adapters. No methods are added to
 outer limit or offset. Counts retain the selected window, grouping and distinct
 semantics; simple pages use a lookahead without a count. Complete model reads
 retain their retrieval lifecycle. These adapters collect complete batches;
-streaming `Each` is not introduced by this slice.
+streaming projections use the package function `rows.Each(ctx, executor, query, yield)`; see [report reads](README.md#report-reads).
 
 `SelectTransactionValue(source, expr.Select(field))` keeps the scalar type and
 requires `*database.Tx` for every terminal. `TransactionRead` and

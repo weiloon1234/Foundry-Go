@@ -1,0 +1,3 @@
+# Frozen generated contract bytes include an intentional final blank line.
+/tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/client/contracts_runtime_foundry.gen.ts whitespace=-blank-at-eof
+/tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/reporting/contracts_runtime_foundry.gen.ts whitespace=-blank-at-eof

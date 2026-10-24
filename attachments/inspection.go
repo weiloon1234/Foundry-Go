@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	store "github.com/weiloon1234/Foundry-Go/internal/attachmentstore"
 	"github.com/weiloon1234/Foundry-Go/storage"
@@ -25,7 +25,7 @@ func (m *Manager) Inspect(ctx context.Context, id OperationID) (ReconcileResult,
 	var result ReconcileResult
 	err := m.reads.Run(ctx, "attachment intent inspection", func(ctx context.Context) error {
 		return m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
-			row, err := store.QueryFoundryAttachments().RequireFind(ctx, tx, fileID(id))
+			row, err := store.Files.Query().Where(store.Files.Key().Eq(fileID(id))).Require(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -129,8 +129,8 @@ func (m *Manager) InspectStorage(ctx context.Context, options StorageInspection)
 		referenced := make(map[string]bool, len(keys))
 		if len(keys) > 0 {
 			if err := m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
-				f := store.FileFields()
-				rows, err := query.SelectValue(store.QueryFoundryAttachments().Where(f.Disk.Eq(string(options.Disk.ID())), f.ObjectKey.In(keys...)).Limit(storage.MaxPageSize+1), query.Value(f.ObjectKey)).All(ctx, tx)
+				f := store.Files
+				rows, err := rows.SelectValue(store.Files.Query().Where(f.Disk.Eq(string(options.Disk.ID())), f.ObjectKey.In(keys...)).Limit(storage.MaxPageSize+1), f.ObjectKey).All(ctx, tx)
 				if err != nil {
 					return err
 				}

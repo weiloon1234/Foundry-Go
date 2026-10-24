@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -194,11 +195,11 @@ func executeWrite[R any](ctx context.Context, writer database.Transactor, write 
 
 // returning runs the plan's own single-row statement.
 func (p mutationPlan[M]) returning(ctx context.Context, tx *database.Tx, statement Statement) (M, error) {
-	result, err := returningOne(ctx, tx, statement, p.query.definition.scan)
-	if err != nil && p.statementFailure != nil {
-		*p.statementFailure = err
+	items, err := returningModels(ctx, tx, statement, p.query.definition.scan, 1, 1, p.statementFailure)
+	if err != nil {
+		return *new(M), err
 	}
-	return result, err
+	return items[0], nil
 }
 
 func returningOne[M any](ctx context.Context, tx *database.Tx, statement Statement, scan func(database.Row) (M, error)) (M, error) {
@@ -209,8 +210,12 @@ func returningOne[M any](ctx context.Context, tx *database.Tx, statement Stateme
 	return items[0], nil
 }
 
-func returningModels[M any](ctx context.Context, tx *database.Tx, statement Statement, scan func(database.Row) (M, error), minimum, maximum int) (result []M, err error) {
-	rows, err := tx.Query(statement.executionContext(ctx), statement.sql, statement.arguments...)
+func returningModels[M any](ctx context.Context, tx *database.Tx, statement Statement, scan func(database.Row) (M, error), minimum, maximum int, failure ...*ormcore.InsertFailure) (result []M, err error) {
+	var capture *ormcore.InsertFailure
+	if len(failure) == 1 {
+		capture = failure[0]
+	}
+	rows, err := ormcore.InsertRows(ctx, tx, statement.coreStatement(), capture)
 	if err != nil {
 		return nil, err
 	}

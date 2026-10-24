@@ -26,8 +26,8 @@ func FindModel[M, K any](ctx context.Context, executor database.Executor, record
 	if id.IsZero() {
 		return value.Optional[ModelRecord[M, K]]{}, fault.New(fault.Invalid, "model audit lookup requires a nonzero ID")
 	}
-	f := auditstore.EntryFields()
-	selected, err := auditstore.QueryFoundryAudit().Where(f.Area.Eq(string(area)), f.Operation.Ne(0)).Find(ctx, executor, model.IDFromBytes[auditstore.Entry](id.Bytes()))
+	f := auditstore.Entries
+	selected, err := auditstore.Entries.Query().Where(f.Area.Eq(string(area)), f.Operation.Ne(0)).Where(auditstore.Entries.Key().Eq(model.IDFromBytes[auditstore.Entry](id.Bytes()))).First(ctx, executor)
 	if err != nil {
 		return value.Optional[ModelRecord[M, K]]{}, err
 	}

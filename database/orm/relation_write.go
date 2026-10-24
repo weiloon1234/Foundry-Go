@@ -6,12 +6,11 @@ import (
 	"unsafe"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 // MaxRelationWriteRows bounds one atomic relation write. Example: len(targets) <= orm.MaxRelationWriteRows.
-const MaxRelationWriteRows = query.MaxPerModelWriteRows
+const MaxRelationWriteRows = querycore.MaxPerModelWriteRows
 
 // PivotChanges contains reconciliation-ready concrete pivot models. Example: changes.Attached[0].ID.
 type PivotChanges[P any] struct {

@@ -16,7 +16,8 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/httpclient"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
@@ -217,7 +218,7 @@ func Send[P any](ctx context.Context, tx *database.Tx, queue Queue, endpoint End
 			return err
 		}
 		return queue.service.join(ctx, tx, func(ctx context.Context, tx *database.Tx) error {
-			row, err := store.QueryFoundryWebhookEndpoints().RequireFind(ctx, tx, endpointKey(endpoint))
+			row, err := store.Endpoints.Query().Where(store.Endpoints.Key().Eq(endpointKey(endpoint))).Require(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -258,8 +259,8 @@ func Publish[P any](ctx context.Context, tx *database.Tx, queue Queue, event Eve
 			return err
 		}
 		return queue.service.join(ctx, tx, func(ctx context.Context, tx *database.Tx) error {
-			f := store.EndpointFields()
-			rows, err := store.QueryFoundryWebhookEndpoints().Where(f.Active.Eq(true)).OrderBy(f.ID.Asc()).Limit(queue.service.config.MaxEndpoints+1).All(ctx, tx)
+			f := store.Endpoints
+			rows, err := store.Endpoints.Query().Where(f.Active.Eq(true)).OrderBy(f.ID.Asc()).Limit(queue.service.config.MaxEndpoints+1).All(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -301,7 +302,7 @@ func (q Queue) record(ctx context.Context, tx *database.Tx, endpoint model.ID[st
 	if err != nil {
 		return id, err
 	}
-	if _, err := store.QueryFoundryWebhookDeliveries().Create(ctx, tx, store.DeliveryDraft{}.SetID(id).SetEndpointID(endpoint).SetEvent(string(kind)).SetPayload(body).SetState(string(Pending)).SetAttempts(0).SetLastStatus(0).SetLastFailure("").SetCreatedAt(now).SetUpdatedAt(now)); err != nil {
+	if _, err := store.Deliveries.Insert(ctx, tx, store.Deliveries.ID.Set(id), store.Deliveries.EndpointID.Set(endpoint), store.Deliveries.Event.Set(string(kind)), store.Deliveries.Payload.Set(body), store.Deliveries.State.Set(string(Pending)), store.Deliveries.Attempts.Set(0), store.Deliveries.LastStatus.Set(0), store.Deliveries.LastFailure.Set(""), store.Deliveries.CreatedAt.Set(now), store.Deliveries.UpdatedAt.Set(now)); err != nil {
 		return id, err
 	}
 	return id, q.enqueue(ctx, tx, id)
@@ -343,13 +344,13 @@ func (s *Service) Deliver(ctx context.Context, id DeliveryID) error {
 		category := "store_failed"
 		err := s.transaction(ctx, true, func(ctx context.Context, tx *database.Tx) error {
 			var err error
-			if delivery, err = store.QueryFoundryWebhookDeliveries().RequireFind(ctx, tx, deliveryKey(id)); err != nil {
+			if delivery, err = store.Deliveries.Query().Where(store.Deliveries.Key().Eq(deliveryKey(id))).Require(ctx, tx); err != nil {
 				return err
 			}
 			if delivery.State != string(Pending) {
 				return nil
 			}
-			if endpoint, err = store.QueryFoundryWebhookEndpoints().RequireFind(ctx, tx, delivery.EndpointID); err != nil {
+			if endpoint, err = store.Endpoints.Query().Where(store.Endpoints.Key().Eq(delivery.EndpointID)).Require(ctx, tx); err != nil {
 				return err
 			}
 			if !endpoint.Active {
@@ -462,7 +463,7 @@ func classify(status int, err error) (int32, string, bool) {
 
 func (s *Service) recordAttempt(ctx context.Context, id model.ID[store.Delivery], status int32, category string, state DeliveryState) error {
 	return s.transaction(ctx, false, func(ctx context.Context, tx *database.Tx) error {
-		row, err := store.QueryFoundryWebhookDeliveries().ForUpdate().RequireFind(ctx, tx, id)
+		row, err := store.Deliveries.Query().ForUpdate().Where(store.Deliveries.Key().Eq(id)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -478,11 +479,11 @@ func (s *Service) recordAttempt(ctx context.Context, id model.ID[store.Delivery]
 		if attempts < 1<<32-1 {
 			attempts++
 		}
-		draft := store.DeliveryDraft{}.SetAttempts(attempts).SetLastStatus(status).SetLastFailure(category).SetState(string(state)).SetUpdatedAt(now)
+		draft := []orm.Assignment[store.Delivery]{store.Deliveries.Attempts.Set(attempts), store.Deliveries.LastStatus.Set(status), store.Deliveries.LastFailure.Set(category), store.Deliveries.State.Set(string(state)), store.Deliveries.UpdatedAt.Set(now)}
 		if state == Succeeded {
-			draft = draft.SetDeliveredAt(now)
+			draft = append(draft, store.Deliveries.DeliveredAt.Set(now))
 		}
-		_, err = store.QueryFoundryWebhookDeliveries().Update(ctx, tx, id, draft)
+		_, err = orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), id, draft...)
 		return err
 	})
 }
@@ -491,7 +492,7 @@ func (s *Service) recordAttempt(ctx context.Context, id model.ID[store.Delivery]
 // its last attempt's category when one was logged.
 func (s *Service) finalize(ctx context.Context, id model.ID[store.Delivery], reason string) error {
 	return s.transaction(ctx, false, func(ctx context.Context, tx *database.Tx) error {
-		row, err := store.QueryFoundryWebhookDeliveries().ForUpdate().RequireFind(ctx, tx, id)
+		row, err := store.Deliveries.Query().ForUpdate().Where(store.Deliveries.Key().Eq(id)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -506,7 +507,7 @@ func (s *Service) finalize(ctx context.Context, id model.ID[store.Delivery], rea
 		if category == "" {
 			category = reason[:min(len(reason), failureCategoryBytes)]
 		}
-		_, err = store.QueryFoundryWebhookDeliveries().Update(ctx, tx, id, store.DeliveryDraft{}.SetState(string(Failed)).SetLastFailure(category).SetUpdatedAt(now))
+		_, err = orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), id, store.Deliveries.State.Set(string(Failed)), store.Deliveries.LastFailure.Set(category), store.Deliveries.UpdatedAt.Set(now))
 		return err
 	})
 }
@@ -523,7 +524,7 @@ func (q Queue) Replay(ctx context.Context, id DeliveryID) error {
 	}
 	return q.service.calls.Run(ctx, "webhook replay", func(ctx context.Context) error {
 		return q.service.transaction(ctx, false, func(ctx context.Context, tx *database.Tx) error {
-			row, err := store.QueryFoundryWebhookDeliveries().ForUpdate().RequireFind(ctx, tx, deliveryKey(id))
+			row, err := store.Deliveries.Query().ForUpdate().Where(store.Deliveries.Key().Eq(deliveryKey(id))).Require(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -547,10 +548,10 @@ func (q Queue) ReplayFailed(ctx context.Context, endpoint value.Optional[Endpoin
 	err := q.service.calls.Run(ctx, "webhook failed replay", func(ctx context.Context) error {
 		return q.service.transaction(ctx, false, func(ctx context.Context, tx *database.Tx) error {
 			count = 0
-			e := store.EndpointFields()
-			endpoints := store.QueryFoundryWebhookEndpoints().Where(e.Active.Eq(true))
+			e := store.Endpoints
+			endpoints := store.Endpoints.Query().Where(e.Active.Eq(true))
 			if id, ok := endpoint.Get(); ok {
-				row, err := store.QueryFoundryWebhookEndpoints().RequireFind(ctx, tx, endpointKey(id))
+				row, err := store.Endpoints.Query().Where(store.Endpoints.Key().Eq(endpointKey(id))).Require(ctx, tx)
 				if err != nil {
 					return err
 				}
@@ -559,12 +560,12 @@ func (q Queue) ReplayFailed(ctx context.Context, endpoint value.Optional[Endpoin
 				}
 				endpoints = endpoints.Where(e.ID.Eq(row.ID))
 			}
-			active, err := query.SelectValue(endpoints.OrderBy(e.ID.Asc()).Limit(q.service.config.MaxEndpoints+1), query.Value(e.ID)).All(ctx, tx)
+			active, err := rows.SelectValue(endpoints.OrderBy(e.ID.Asc()).Limit(q.service.config.MaxEndpoints+1), e.ID).All(ctx, tx)
 			if err != nil || len(active) == 0 {
 				return err
 			}
-			f := store.DeliveryFields()
-			rows, err := store.QueryFoundryWebhookDeliveries().Where(f.State.Eq(string(Failed)), f.EndpointID.In(active...)).OrderBy(f.ID.Asc()).Limit(limit).ForUpdate().All(ctx, tx)
+			f := store.Deliveries
+			rows, err := store.Deliveries.Query().Where(f.State.Eq(string(Failed)), f.EndpointID.In(active...)).OrderBy(f.ID.Asc()).Limit(limit).ForUpdate().All(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -585,7 +586,7 @@ func (q Queue) ReplayFailed(ctx context.Context, endpoint value.Optional[Endpoin
 	return count, nil
 }
 func (q Queue) reset(ctx context.Context, tx *database.Tx, row store.Delivery) error {
-	endpoint, err := store.QueryFoundryWebhookEndpoints().RequireFind(ctx, tx, row.EndpointID)
+	endpoint, err := store.Endpoints.Query().Where(store.Endpoints.Key().Eq(row.EndpointID)).Require(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -596,7 +597,7 @@ func (q Queue) reset(ctx context.Context, tx *database.Tx, row store.Delivery) e
 	if err != nil {
 		return err
 	}
-	if _, err := store.QueryFoundryWebhookDeliveries().Update(ctx, tx, row.ID, store.DeliveryDraft{}.SetState(string(Pending)).SetUpdatedAt(now)); err != nil {
+	if _, err := orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), row.ID, store.Deliveries.State.Set(string(Pending)), store.Deliveries.UpdatedAt.Set(now)); err != nil {
 		return err
 	}
 	return q.enqueue(ctx, tx, row.ID)
@@ -624,8 +625,8 @@ func (s *Service) Deliveries(ctx context.Context, selection DeliveryQuery) ([]De
 	var result []DeliveryInfo
 	err := s.calls.Run(ctx, "webhook delivery inspection", func(ctx context.Context) error {
 		return s.transaction(ctx, true, func(ctx context.Context, tx *database.Tx) error {
-			f := store.DeliveryFields()
-			q := store.QueryFoundryWebhookDeliveries()
+			f := store.Deliveries
+			q := store.Deliveries.Query()
 			if id, ok := selection.Endpoint.Get(); ok {
 				q = q.Where(f.EndpointID.Eq(endpointKey(id)))
 			}
@@ -633,8 +634,7 @@ func (s *Service) Deliveries(ctx context.Context, selection DeliveryQuery) ([]De
 				q = q.Where(f.State.Eq(string(state)))
 			}
 			if !selection.After.IsZero() {
-				ordered := query.OrderedField[store.Delivery, model.ID[store.Delivery]]{ScalarField: f.ID}
-				q = q.Where(ordered.Gt(deliveryKey(selection.After)))
+				q = q.Where(orm.UUIDGreater(f.ID, deliveryKey(selection.After)))
 			}
 			rows, err := q.OrderBy(f.ID.Asc()).Limit(selection.Limit).All(ctx, tx)
 			for _, row := range rows {
@@ -671,12 +671,12 @@ func (s *Service) PruneDeliveries(ctx context.Context, olderThan time.Duration, 
 			if err != nil {
 				return err
 			}
-			f := store.DeliveryFields()
-			ids, err := query.SelectValue(store.QueryFoundryWebhookDeliveries().Where(f.State.In(string(Succeeded), string(Failed)), f.UpdatedAt.Lt(cutoff)).OrderBy(f.UpdatedAt.Asc(), f.ID.Asc()).Limit(limit), query.Value(f.ID)).All(ctx, tx)
+			f := store.Deliveries
+			ids, err := rows.SelectValue(store.Deliveries.Query().Where(f.State.In(string(Succeeded), string(Failed)), f.UpdatedAt.Lt(cutoff)).OrderBy(f.UpdatedAt.Asc(), f.ID.Asc()).Limit(limit), f.ID).All(ctx, tx)
 			if err != nil || len(ids) == 0 {
 				return err
 			}
-			deleted, err := store.QueryFoundryWebhookDeliveries().Where(f.ID.In(ids...), f.State.In(string(Succeeded), string(Failed))).DeleteAll(ctx, tx)
+			deleted, err := store.Deliveries.Query().Where(f.ID.In(ids...), f.State.In(string(Succeeded), string(Failed))).DeleteAll(ctx, tx)
 			count = int(deleted)
 			return err
 		})

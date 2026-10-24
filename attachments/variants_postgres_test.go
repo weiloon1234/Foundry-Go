@@ -52,9 +52,9 @@ func variantRows(t *testing.T, f attachmentFixture, id OperationID) []store.Vari
 	t.Helper()
 	var rows []store.Variant
 	err := f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		v := store.VariantFields()
+		v := store.Variants
 		var err error
-		rows, err = store.QueryFoundryAttachmentVariants().Where(v.FileID.Eq(fileID(id))).OrderBy(v.Name.Asc(), v.CreatedAt.Asc()).All(ctx, tx)
+		rows, err = store.Variants.Query().Where(v.FileID.Eq(fileID(id))).OrderBy(v.Name.Asc(), v.CreatedAt.Asc()).All(ctx, tx)
 		return err
 	})
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	store "github.com/weiloon1234/Foundry-Go/internal/notificationstore"
@@ -22,7 +23,7 @@ func (m *Manager) load(ctx context.Context, id model.ID[store.Envelope]) (store.
 	var deliveries []store.Delivery
 	err := m.within(ctx, func(tx *database.Tx) error {
 		var err error
-		envelope, err = store.QueryFoundryNotifications().RequireFind(ctx, tx, id)
+		envelope, err = store.Envelopes.Query().Where(store.Envelopes.Key().Eq(id)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -39,7 +40,7 @@ func (m *Manager) load(ctx context.Context, id model.ID[store.Envelope]) (store.
 		if err != nil {
 			return err
 		}
-		deliveries, err = store.QueryFoundryNotificationDeliveries().Where(store.DeliveryFields().NotificationID.Eq(id)).Limit(MaxChannels+1).All(ctx, tx)
+		deliveries, err = store.Deliveries.Query().Where(store.Deliveries.NotificationID.Eq(id)).Limit(MaxChannels+1).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -66,7 +67,7 @@ func (m *Manager) outcomes(ctx context.Context, id model.ID[store.Envelope]) ([]
 	var deliveries []store.Delivery
 	err := m.within(ctx, func(tx *database.Tx) error {
 		var err error
-		deliveries, err = store.QueryFoundryNotificationDeliveries().Where(store.DeliveryFields().NotificationID.Eq(id)).Limit(MaxChannels+1).All(ctx, tx)
+		deliveries, err = store.Deliveries.Query().Where(store.Deliveries.NotificationID.Eq(id)).Limit(MaxChannels+1).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -192,7 +193,7 @@ func (m *Manager) attempt(ctx context.Context, envelope store.Envelope, identity
 			if err != nil {
 				return err
 			}
-			row, err = store.QueryFoundryNotificationDeliveries().Update(ctx, tx, row.Key, store.DeliveryDraft{}.SetPayload(snapshot).SetState(string(Prepared)).SetUpdatedAt(now))
+			row, err = orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), row.Key, store.Deliveries.Payload.Set(snapshot), store.Deliveries.State.Set(string(Prepared)), store.Deliveries.UpdatedAt.Set(now))
 			return err
 		})
 		if err != nil {
@@ -255,7 +256,7 @@ func (m *Manager) attempt(ctx context.Context, envelope store.Envelope, identity
 		if err != nil {
 			return err
 		}
-		row, err = store.QueryFoundryNotificationDeliveries().Update(ctx, tx, row.Key, store.DeliveryDraft{}.SetClaim(claim).SetState(string(Running)).SetAttempts(current.Attempts+1).SetUpdatedAt(now))
+		row, err = orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), row.Key, store.Deliveries.Claim.Set(claim), store.Deliveries.State.Set(string(Running)), store.Deliveries.Attempts.Set(current.Attempts+1), store.Deliveries.UpdatedAt.Set(now))
 		owned = err == nil
 		return err
 	})
@@ -296,13 +297,13 @@ func (m *Manager) attempt(ctx context.Context, envelope store.Envelope, identity
 		if err != nil {
 			return err
 		}
-		_, err = store.QueryFoundryNotificationDeliveries().Update(cleanup, tx, row.Key, store.DeliveryDraft{}.SetState(string(state)).SetUpdatedAt(now))
+		_, err = orm.Update(cleanup, tx, store.Deliveries.Query(), store.Deliveries.Key(), row.Key, store.Deliveries.State.Set(string(state)), store.Deliveries.UpdatedAt.Set(now))
 		return err
 	})
 }
 
 func lockDelivery(ctx context.Context, tx *database.Tx, key string) (store.Delivery, error) {
-	return store.QueryFoundryNotificationDeliveries().ForUpdate().RequireFind(ctx, tx, key)
+	return store.Deliveries.Query().ForUpdate().Where(store.Deliveries.Key().Eq(key)).Require(ctx, tx)
 }
 func (m *Manager) finishUnclaimed(ctx context.Context, key string, expected, state State) error {
 	return m.within(ctx, func(tx *database.Tx) error {
@@ -314,7 +315,7 @@ func (m *Manager) finishUnclaimed(ctx context.Context, key string, expected, sta
 		if err != nil {
 			return err
 		}
-		_, err = store.QueryFoundryNotificationDeliveries().Update(ctx, tx, key, store.DeliveryDraft{}.SetState(string(state)).SetUpdatedAt(now))
+		_, err = orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), key, store.Deliveries.State.Set(string(state)), store.Deliveries.UpdatedAt.Set(now))
 		return err
 	})
 }
@@ -331,12 +332,11 @@ func (m *Manager) completeDatabase(ctx context.Context, envelope store.Envelope,
 		if err != nil {
 			return err
 		}
-		draft := store.InboxDraft{}.SetID(model.IDFromBytes[store.Inbox](envelope.ID.Bytes())).SetScope(envelope.Scope).SetSubjectKey(envelope.SubjectKey).
-			SetName(envelope.Name).SetVersion(envelope.Version).SetData(row.Payload).SetCreatedAt(envelope.CreatedAt)
-		if _, err := store.QueryFoundryNotificationInbox().Create(ctx, tx, draft); err != nil {
+		draft := []orm.Assignment[store.Inbox]{store.Inboxes.ID.Set(model.IDFromBytes[store.Inbox](envelope.ID.Bytes())), store.Inboxes.Scope.Set(envelope.Scope), store.Inboxes.SubjectKey.Set(envelope.SubjectKey), store.Inboxes.Name.Set(envelope.Name), store.Inboxes.Version.Set(envelope.Version), store.Inboxes.Data.Set(row.Payload), store.Inboxes.CreatedAt.Set(envelope.CreatedAt)}
+		if _, err := store.Inboxes.Insert(ctx, tx, draft...); err != nil {
 			return err
 		}
-		_, err = store.QueryFoundryNotificationDeliveries().Update(ctx, tx, row.Key, store.DeliveryDraft{}.SetState(string(Delivered)).SetAttempts(row.Attempts+1).SetUpdatedAt(now))
+		_, err = orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), row.Key, store.Deliveries.State.Set(string(Delivered)), store.Deliveries.Attempts.Set(row.Attempts+1), store.Deliveries.UpdatedAt.Set(now))
 		return err
 	})
 }

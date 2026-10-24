@@ -1,0 +1,31 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "INSERT INTO \"foundry_model_metadata\" (\"key\", \"owner\", \"scope\", \"subject_key\", \"identity\", \"name\", \"version\", \"value\", \"created_at\", \"updated_at\") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING \"foundry_model_metadata\".\"key\", \"foundry_model_metadata\".\"owner\", \"foundry_model_metadata\".\"scope\", \"foundry_model_metadata\".\"subject_key\", \"foundry_model_metadata\".\"identity\", \"foundry_model_metadata\".\"name\", \"foundry_model_metadata\".\"version\", \"foundry_model_metadata\".\"value\", \"foundry_model_metadata\".\"created_at\", \"foundry_model_metadata\".\"updated_at\"",
+      "Args": [
+        "stored",
+        "inserted",
+        "inserted",
+        "inserted",
+        "{\"key\":{\"k\":\"int\",\"t\":\"7\"},\"model\":\"subjects\"}",
+        "inserted",
+        1,
+        "{}",
+        "2026-10-23T23:00:00Z",
+        "2026-10-24T00:00:00Z"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "ddfac32ecf0363493c897e93e2ebf9815d381bd1130411edf2bb47d60b1208ec"
+}

@@ -1,0 +1,26 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "WITH \"foundry_write_source\" (\"foundry_source_key\") AS MATERIALIZED (SELECT \"foundry_audit\".\"id\" AS \"foundry_source_key\" FROM \"foundry_audit\" WHERE (\"foundry_audit\".\"area\" = $1) AND (\"foundry_audit\".\"created_at\" \u003c $2) ORDER BY \"foundry_audit\".\"created_at\" ASC, \"foundry_audit\".\"sequence\" ASC LIMIT $3) DELETE FROM \"foundry_audit\" USING \"foundry_write_source\" WHERE (\"foundry_audit\".\"area\" = $4) AND (\"foundry_audit\".\"created_at\" \u003c $5) AND (\"foundry_audit\".\"id\" = \"foundry_write_source\".\"foundry_source_key\")",
+      "Args": [
+        "area",
+        "2026-10-23T23:00:00Z",
+        3,
+        "area",
+        "2026-10-23T23:00:00Z"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"
+}

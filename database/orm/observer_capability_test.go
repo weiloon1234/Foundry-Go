@@ -66,6 +66,9 @@ func TestObserverCatcherCannotProveAbsenceOrCaptureCapability(t *testing.T) {
 			if _, known := unsealedObservers(query.FoundryObservers, db); known {
 				t.Fatal("zero capability opened the shared observer bridge")
 			}
+			if _, known := unsealedObservers(database.FoundryObservers, db); known {
+				t.Fatal("zero capability opened the concrete-owner bridge")
+			}
 			// A concrete owner can prove absence; a wrapper always requires ack.
 			_, err := q.Query().UpdateAll(t.Context(), db, q.Name.Set("name"))
 			if registered && !errors.Is(err, fault.Invalid) || !registered && err != nil {

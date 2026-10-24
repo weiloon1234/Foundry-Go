@@ -110,6 +110,9 @@ func (c *Compiler) ExpressionAt(e Expression, grouped map[FieldRef]bool, groupin
 	case SubqueryPredicate:
 		return c.SubqueryPredicate(e, grouped, grouping)
 	case BinaryComparison:
+		if (e.Operator == Like || e.Operator == InsensitiveLike) && !e.Text {
+			return "", fault.New(fault.Invalid, "text pattern operations require a text capability")
+		}
 		op, ok := BinaryOperator(e.Operator)
 		if !ok {
 			return "", fault.New(fault.Invalid, "invalid value comparison operator")
@@ -188,6 +191,9 @@ func (c *Compiler) ConditionClauseAt(sql *strings.Builder, clause string, predic
 }
 
 func (c *Compiler) Comparison(e Comparison, grouped map[FieldRef]bool, grouping bool) (string, error) {
+	if (e.Operator == Like || e.Operator == InsensitiveLike || EscapedPattern(e.Operator)) && !e.Text {
+		return "", fault.New(fault.Invalid, "text pattern operations require a text capability")
+	}
 	argumentStart := len(c.Arguments)
 	field, err := c.SelectedExpression(e.Operand, grouped, grouping)
 	if err != nil {

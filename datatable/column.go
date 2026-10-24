@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/validation"
@@ -74,7 +74,7 @@ type filterDeclaration[S any] struct {
 type columnDeclaration[S, R any] struct {
 	name       string
 	label      i18n.MessageKey
-	order      func(Direction) query.ProjectionOrder[S]
+	order      func(Direction) expr.ProjectionOrder[S]
 	filter     *filterDeclaration[S]
 	searchable bool
 	cellInfo   *FilterInfo
@@ -83,7 +83,7 @@ type columnDeclaration[S, R any] struct {
 }
 
 type columnExecution[S, R any] struct {
-	order  func(Direction) query.ProjectionOrder[S]
+	order  func(Direction) expr.ProjectionOrder[S]
 	filter func(Operator, []string) (condition[S], error)
 	cell   func(context.Context, R, Presentation) (exportCell, error)
 }
@@ -103,8 +103,11 @@ func DefineColumn[S, R, V any](field validation.Field[R, V], label i18n.MessageK
 	}
 	return c
 }
-func (c Column[S, R, V]) SortBy(expression query.Expression[S, V]) Column[S, R, V] {
-	c.declaration.order = func(direction Direction) query.ProjectionOrder[S] {
+
+// SortBy binds a selected value of the same scope and DTO field type.
+// Example: column.SortBy(expr.Select(expr.Value(Users.Name))).
+func (c Column[S, R, V]) SortBy(expression expr.Selected[S, V]) Column[S, R, V] {
+	c.declaration.order = func(direction Direction) expr.ProjectionOrder[S] {
 		if direction == Descending {
 			return expression.Desc()
 		}

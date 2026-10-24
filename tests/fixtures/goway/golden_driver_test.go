@@ -44,8 +44,10 @@ func (transaction) Commit() error   { return nil }
 func (transaction) Rollback() error { return nil }
 
 type goldenCapture struct {
-	reply   func(string, []driver.NamedValue) ([]string, [][]driver.Value)
-	onClose func()
+	queryError func(string) error
+	classify   func(error) database.Detail
+	reply      func(string, []driver.NamedValue) ([]string, [][]driver.Value)
+	onClose    func()
 
 	quiet           bool // Benchmarks count real driver calls without formatting golden output.
 	detector        *database.StatementDetector
@@ -90,6 +92,11 @@ func (g *connection) ExecContext(_ context.Context, s string, args []driver.Name
 }
 func (g *connection) QueryContext(_ context.Context, s string, args []driver.NamedValue) (driver.Rows, error) {
 	g.printSQL(s, args)
+	if g.queryError != nil {
+		if err := g.queryError(s); err != nil {
+			return nil, err
+		}
+	}
 	if g.reply != nil {
 		columns, batch := g.reply(s, args)
 		return &rows{columns: columns, batch: batch, onClose: g.onClose}, nil
@@ -197,7 +204,7 @@ func (g *goldenCapture) open(ctx context.Context) *database.DB {
 	if g.detector != nil {
 		options = append(options, database.WithStatementDetector(g.detector))
 	}
-	return must(database.Open(ctx, database.Adapter{Connector: connector{capture: g}}, database.DefaultPoolConfig(), options...))
+	return must(database.Open(ctx, database.Adapter{Connector: connector{capture: g}, Classify: g.classify}, database.DefaultPoolConfig(), options...))
 }
 func check(err error) {
 	if err != nil {

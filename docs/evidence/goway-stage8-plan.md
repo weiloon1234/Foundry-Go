@@ -1,0 +1,1243 @@
+# Stage 8 model-generator retirement inventory
+
+Planning inventory, 2026-10-24. No retirement edits are included. This describes this Lane D worktree, including the accepted Stage 7 adapters, stores and validation changes; concurrent lane changes still require integration. Authority: PLAN §4.9 and Stages 7–10. The path census below is a conservative source inventory, not a claim that every importing file calls a retired API.
+
+## Remaining owners and dependencies
+
+| Area | Remaining dependency and action | Proposed owner |
+| --- | --- | --- |
+| `database/query` | Legacy model engine, descriptors, generated bindings and their tests. Retire only after extracting shared contracts and migrating callers. Do not delete the directory wholesale first. | Lead coordinates A/B/C/D by existing feature ownership |
+| `database/orm` and `rows` | Still import query for page/cursor types, parsing, batching limits, morph names, relation limits, observer capabilities, extension bindings and legacy identity predicates. Move shared implementations to their actual common owner, then remove aliases/bridges in a coordinated compatibility change. | A: relations; B: lifecycle/writes; C: rows/expressions; D: identity/extensions/pagination |
+| `extensions`, `attachments`, `translations`, `metadata`, `internal/extensionrow`, `internal/extensiontest` | Stage 7 thin handles still reuse managers and legacy `ExtensionSlot`, `ExtensionBinding`, `ModelIdentity`, `Predicate`, `SlotFetch` internally. Replace backing contracts without reintroducing heavy generic descriptor families; keep concrete owner/key/value restrictions and validated capability families. | D, Stage 8 shared-adapter slice |
+| `http/modelbinding`, `testkit/factory` | ORM entry points exist, but legacy `ByField`, `Through`, `ThroughSelected` and factory `New` still accept generated-query/draft contracts. Migrate their consumers before removing those entry points. `ByKey` structural adapters remain useful. | D |
+| `http/pagination`, `jobs/archive`, `notifications`, `audit`, `internal/auditstore` | Pagination test consumers still use old models; public page/cursor aliases, `ParseCursor`, bounds and audit identity surfaces retain query dependencies. Preserve cursor bytes, JSON fields, redaction and identity compatibility. All 13 framework stores already use ORM declarations; these are shared/API dependencies, not unfinished store migrations. | D |
+| `application` | Maintenance scheduling still uses query limits; table registration/seeders and pagination consumer work are externally owned. | A; integrate its accepted delta first |
+| `database/prune` | Still accepts old `query.Query` and per-model bounds. | B, 6e4 prerequisite |
+| `datatable` | Old query fields, filters and pipeline remain in this worktree; dedicated ORM migration is another lane's work. | C; integrate before retirement |
+| `database/*_test.go`, ORM tests | Old mutation, routing, locking, hooks, pagination and cursor fixtures/parity baselines. Port behavior assertions; do not merely delete coverage with the engine. | B writes/lifecycle; A relations; C rows/SQL; D adapters |
+| `tests/fixtures/consumer` | Generated model declarations/outputs, projections, drafts, query namespaces, compile-fail programs, DB tests and contract fixtures. Some apparently unrelated consumers import model packages only for IDs/enums/DTOs: retain those identities and enum/DTO generation. Exact paths below. | Stage 9 consumer owners, brought forward as retirement prerequisites; A relations, B writes/lifecycle, C SQL/datatables, D adapters/extensions/validation |
+| `tests/fixtures/goway` | `oldmodels`, old/new golden comparisons, legacy footprint baseline and compile-fail fixtures. Freeze numeric parity evidence, then migrate active tests/probes before removing old code. Keep ORM negative typing coverage and its catalogue mapping. | Existing slice owner per catalogue; lead owns baseline retirement decision |
+| Plugin fixtures / starter-like output | `plugin_base` and `plugin_dep` currently have no detected generated-model imports. `plugin_dep/scaffold.go` emits an ordinary report struct and is not a model scaffold. Framework `foundry make model` and extension scaffold templates still emit model declarations: update these and their tests, rather than dropping the command. | Generator/scaffold slice, with A application consumers |
+| `internal/agent` | gopls probe source strings still deliberately reference generated drafts, fields, relations, projections and definitions. These are not imports and require explicit replacement with ORM completions/hover/definition probes alongside each migrated consumer. Retain DTO/config/HTTP-query/path probes. | D editor harness; consumer lane supplies replacement anchors |
+| Docs/tools | Guides and examples advertise generated namespaces; catalogue, synthetic benchmark tools and their tests know legacy model generation. Historical evidence/changelog is historical, not runnable migration work. Lead-owned blueprint/master/changelog edits must be integrated by lead. | D inventory; feature lane updates guides; lead owns shared docs |
+
+The legacy engine subtree currently contains 282 files under `database/query`; all belong to the coordinated retirement review, including internal files that do not import their own package. Also review `database/relation` slots and aggregate declarations with Lane A; retain anything still used by ORM or typed identities until its caller is migrated. `orm.FoundryModel` in `database/orm/source.go` and its use in `database/orm/rows/clauses.go` are the new validated source bridge, not the obsolete generated `FoundryModel()` method: do not remove them by name matching. `database/orm/relation_pivot_mutation.go` only mentions the old draft method in a parity comment.
+
+No request-wide scalar-validation batching is proposed here.
+
+## Generator deletion and retention
+
+Delete after the caller gate: every `internal/generate/emit_model_*.go` (exact list below), `emit_mutation_input.go`, `emit_projection.go`; model-only discovery in `discover_extensions.go`, `discover_field_methods.go`, `discover_hooks.go`, `discover_model_scopes.go`, `discover_soft_deletes.go`, `discover_timestamps.go`, `discover_projection.go`; model declaration/registration support in `model_declarations.go`; projection-only support in `projection_variants.go`. Before whole-file deletion, move any helper still used by retained DTO generation to its shared owner.
+
+Surgically remove model/projection metadata, dispatch, name reservations and traversal from `discover.go`, `emit.go`, `declarations.go`, `generated_names.go`, `load.go`, `graph.go`, field/source documentation and scaffold code. **Keep `graph.go`**: it also owns general package loading, imports, selected-build/type-checking and overlays. Keep `scaffold.go`, `scaffold_developer.go` and the make-model command, replacing their model/extension renderers with ORM declarations. Retire model-specific test expectations only after equivalent runtime/compiler/editor cases exist; convert shared generation/recovery test examples to retained directives.
+
+Keep DTO, generic DTO, validation, config, enum, message, multipart, union, HTTP path and **HTTP query-string** discovery/emission. In particular `discover_query.go` and `emit_query.go` are not SQL generators. Keep `emit_json_paths.go`'s declared contract/path generation, separating its current legacy SQL descriptor references from retained functionality. Keep DTO JSON identity codecs, `json_shape.go`, `url_scalar.go` and typed `model.ID` support; deleting model generation does not authorize changing identity wire contracts. A `projection dto=true` becomes an ordinary DTO plus ORM rows declaration with identical public JSON.
+
+Keep generation orchestration, module/package graph, artifacts, distribution, ownership publication, locks, recovery, guards, config/DTO scaffold paths and contract/TypeScript exporters. `Makefile` remains the only regeneration entry point; retain generation directories that still own enums or contracts even after their last generated model disappears. Existing generation tests for collision detection, module selection, interrupted publication, foreign edits and plugin provenance remain required.
+
+## Ownership manifests
+
+`internal/generate/write.go` owns `.foundry-gen.json`: version, per-output SHA-256, and optional distribution provenance. Use its ordinary publication plan through Makefile generation after removing model directives. It verifies old ownership/content/hash before deleting obsolete owned outputs. Do not hand-delete generated files, glob-delete manifests or rewrite hashes to accept edits. A previously owned directory with no outputs receives an empty `files` manifest; a fresh empty directory gets no manifest. Mixed directories retain DTO/enum/contract entries. Ensure discovery still visits previously owned, now directive-free directories, or cleanup cannot reach them.
+
+Preserve `.foundry-generate.lock`, journals, rollback/recovery, source-documentation recovery and plugin distribution policies. Replace generated creation/update-time notices with accurate declaration documentation before retiring their model-only writer. Hash retained DTO/manifest/OpenAPI/TypeScript artifacts before/after migration and distinguish intentional ownership-file removal from any wire-contract change. Regenerate, never hand-edit outputs.
+
+## Proposed slices and risks
+
+1. **8a, prerequisites and shared contracts:** integrate A application/seeders, B 6e4/roles and C datatables. D removes residual adapter dependencies, with A/B/C extracting their shared relation/lifecycle/SQL contracts. Preserve capability validation, redaction, cursor formats, bounds and callback isolation. Do not widen Query/Table surfaces.
+2. **8b, consumers and scaffolds:** split consumer migration by the ownership table; migrate generated identities without changing IDs/codecs, convert projections to rows plus DTOs, port compile-fail catalogue cases and editor probes, rewrite make-model/extension scaffolds. Stage 9 currently schedules consumer migration *after* retirement: the lead must bring these blocking consumers forward or explicitly approve a separately isolated legacy evidence module. Silently excluding fixtures from the gate is not an acceptable resolution.
+3. **8c, generator surgery and owned cleanup:** remove model emit/discovery paths, regenerate through Makefile, verify retained contract bytes and ownership cleanup/recovery. Delete obsolete model tests only with replacement coverage identified. Keep HTTP query generation and general graph/publication infrastructure.
+4. **8d, runtime retirement and evidence:** remove unused legacy query/model adapters and baselines only after no active imports remain; retain or relocate truly shared value/identity contracts. Refresh catalogue, surface snapshots, footprint probes, synthetic tooling, guides and editor gate. Lead integrates shared docs. Preserve historical old/new evidence rather than claiming parity after deleting its oracle.
+
+Principal risks: same-package generated symbol use missed by import-only searches; generated DTOs importing persistent identities; generator tests containing code as strings; oldmodels providing active footprint/golden oracles; runtime aliases hiding dependencies; deletion of mixed contract outputs; manifest-only directories skipped by discovery; changing errors, redaction, lifecycle batching or unknown-commit reconciliation while moving shared owners. Re-measure footprints when replacing bridges; existing ceilings must not rise. No deletion is authorized by this inventory.
+
+## Exact source census
+
+Paths are repository-relative. `Q` means direct `database/query` import; `I` imports a package with generated model/projection output (possibly for an enum/identity only); `L` is a same-package generated-symbol lexical reference; `D` declares a model/projection. The census intentionally overincludes package imports and lexical references; the assigned lane must classify individual symbols before editing. Generator/agent source strings are covered by the explicit sections above, not fully inferred by imports. Generated model/projection outputs are listed separately. Documentation matches include historical records, which should remain historical.
+
+### Go references (1285 files)
+
+- `application/` — A: `maintenance_schedule.go` [Q]; `maintenance_schedule_test.go` [Q].
+- `attachments/` — 8a shared adapters / feature owner in table above: `collections_postgres_test.go` [Q]; `handle_many.go` [Q]; `handle_one.go` [Q]; `scopes.go` [Q]; `slot.go` [Q].
+- `audit/` — 8a shared adapters / feature owner in table above: `history_postgres_test.go` [Q]; `model.go` [Q]; `retention.go` [Q]; `timeline.go` [Q].
+- `audit/command/` — 8a shared adapters / feature owner in table above: `command.go` [Q].
+- `database/` — 8a shared adapters / feature owner in table above: `model_batch_write_test.go` [Q]; `model_hooks_test.go` [Q]; `model_lock_test.go` [Q]; `model_mutation_test.go` [Q]; `model_pagination_test.go` [Q]; `model_upsert_test.go` [Q]; `result_cursor_test.go` [Q]; `retrieval_dispatch_test.go` [Q]; `routing_test.go` [Q].
+- `database/orm/` — 8a shared adapters / feature owner in table above: `chunk.go` [Q]; `column_kinds_test.go` [Q]; `cursor.go` [Q]; `cursor_position_test.go` [Q]; `cursor_test.go` [Q]; `extension.go` [Q]; `hooks.go` [Q]; `identity.go` [Q]; `insert_each.go` [Q]; `integration_adapters_test.go` [Q]; `observer_capability_test.go` [Q]; `pagination.go` [Q]; `pagination_types.go` [Q]; `query.go` [Q]; `read_routing_test.go` [Q]; `relation_morph.go` [Q]; `relation_tree.go` [Q]; `relation_write.go` [Q]; `scope_source_failure_test.go` [Q]; `source_write.go` [Q]; `write.go` [Q]; `write_each.go` [Q]; `write_keyed_test.go` [Q].
+- `database/orm/rows/` — 8a shared adapters / feature owner in table above: `result_cursor.go` [Q]; `result_cursor_test.go` [Q]; `result_read.go` [Q]; `result_read_test.go` [Q]; `result_sensitivity_test.go` [Q].
+- `database/prune/` — B: `prune.go` [Q].
+- `database/query/` — A/B/C/D by feature; 8d retirement: `pagination_metadata_test.go` [Q].
+- `datatable/` — C: `column.go` [Q]; `datatable_postgres_test.go` [Q]; `declaration.go` [Q]; `declaration_test.go` [Q]; `filter.go` [Q]; `manager.go` [Q]; `metadata.go` [Q]; `pipeline.go` [Q]; `request.go` [Q]; `request_http_test.go` [Q]; `request_test.go` [Q]; `table_fixture_test.go` [Q].
+- `extensions/` — 8a shared adapters / feature owner in table above: `orm.go` [Q]; `owner.go` [Q]; `registry.go` [Q].
+- `http/modelbinding/` — 8a shared adapters / feature owner in table above: `field.go` [Q]; `nested.go` [Q].
+- `http/pagination/` — 8a shared adapters / feature owner in table above: `authenticated_endpoint_test.go` [Q]; `cursor_test.go` [Q]; `endpoint_test.go` [Q]; `labels_test.go` [Q]; `map_test.go` [Q].
+- `internal/auditstore/` — 8a shared adapters / feature owner in table above: `store.go` [Q].
+- `internal/extensionrow/` — 8a shared adapters / feature owner in table above: `identity.go` [Q]; `identity_test.go` [Q].
+- `internal/extensiontest/` — 8a shared adapters / feature owner in table above: `fixture.go` [Q].
+- `internal/generate/` — 8c generator (8b scaffolds): `aggregates_test.go` [Q,D]; `binary_model_test.go` [D]; `closure_guard_test.go` [Q,D]; `directive_forms_test.go` [D]; `dto_test.go` [D]; `encrypted_model_test.go` [D]; `extensions_test.go` [D]; `field_documentation_recovery_test.go` [D]; `field_documentation_test.go` [D]; `generate_diagnostics_test.go` [D]; `generate_test.go` [D]; `graph_test.go` [D]; `interval_test.go` [Q,D]; `join_test.go` [Q,D]; `json_test.go` [Q,D]; `load.go` [D]; `model_audit_test.go` [D]; `model_changes_test.go` [D]; `model_each_test.go` [Q,D]; `model_global_scopes_test.go` [Q,D]; `model_hooks_test.go` [D]; `model_insert_select_test.go` [Q,D]; `model_lookup_test.go` [D]; `model_reference_test.go` [D]; `model_retrieval_hooks_test.go` [D]; `model_source_write_test.go` [Q,D]; `multipart_test.go` [D]; `mutation_input_test.go` [Q,D]; `mutators_test.go` [D]; `password_model_test.go` [D]; `projection_dto_test.go` [D]; `projection_test.go` [Q,D]; `relation_writes_test.go` [Q,D]; `relations_test.go` [Q,D]; `scaffold_developer.go` [D]; `soft_deletes_test.go` [D]; `source_documentation_test.go` [D]; `timestamps_test.go` [D].
+- `jobs/archive/` — 8a shared adapters / feature owner in table above: `archive.go` [Q].
+- `metadata/` — 8a shared adapters / feature owner in table above: `handle.go` [Q]; `records.go` [Q]; `slot.go` [Q].
+- `notifications/` — 8a shared adapters / feature owner in table above: `bulk_postgres_test.go` [Q]; `collision_postgres_test.go` [Q]; `delivery_postgres_test.go` [Q]; `inbox.go` [Q]; `operations_postgres_test.go` [Q].
+- `testkit/factory/` — 8a shared adapters / feature owner in table above: `factory.go` [Q]; `factory_test.go` [Q].
+- `tests/fixtures/consumer/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `codecs_test.go` [I]; `generated_test.go` [Q,I]; `model_aggregates_postgres_test.go` [Q,I]; `model_changes_test.go` [I]; `model_pagination_postgres_test.go` [Q,I]; `model_query_postgres_test.go` [Q,I]; `model_relations_postgres_test.go` [Q,I]; `model_through_postgres_test.go` [Q,I]; `model_validation_named_postgres_test.go` [I]; `model_validation_postgres_test.go` [I]; `model_write_postgres_test.go` [I]; `observer_ownership_test.go` [I]; `orm_benchmark_test.go` [Q,I]; `package_graph_test.go` [I]; `postgres_test.go` [I].
+- `tests/fixtures/consumer/advancedqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `subqueries_postgres_test.go` [Q,I].
+- `tests/fixtures/consumer/articles/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `application_postgres_test.go` [I,L]; `article.go` [Q,L,D]; `article_test.go` [Q,I,L]; `cleanup_postgres_test.go` [I,L]; `direct_postgres_test.go` [I,L]; `durable_cleanup_postgres_test.go` [I,L]; `email_postgres_test.go` [I,L]; `foundry_extensions_foundry.gen.go` [L]; `http.go` [Q,L]; `http_postgres_test.go` [I]; `loading_benchmark_test.go` [I,L]; `loading_postgres_test.go` [Q,I,L]; `owner_postgres_test.go` [I,L]; `statements_postgres_test.go` [Q,I,L]; `undeclared_postgres_test.go` [I,L]; `writes_postgres_test.go` [I,L].
+- `tests/fixtures/consumer/auditqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `audit_postgres_test.go` [Q,I,L]; `domain.go` [L]; `history.go` [L]; `models.go` [L,D]; `registration_test.go` [I,L].
+- `tests/fixtures/consumer/authenticating/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `access_scopes.go` [I]; `access_scopes_test.go` [I]; `accounts.go` [I]; `accounts_test.go` [I]; `attribution.go` [I]; `browser.go` [I]; `browser_tokens.go` [I]; `browser_tokens_test.go` [I]; `composed_routes.go` [I]; `composed_routes_test.go` [I]; `permissions.go` [I]; `sessions.go` [I]; `sessions_test.go` [I]; `token_routes.go` [I]; `tokens.go` [I]; `tokens_test.go` [I].
+- `tests/fixtures/consumer/background/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `module_test.go` [I]; `operations_test.go` [I]; `welcome.go` [I]; `welcome_test.go` [I].
+- `tests/fixtures/consumer/binarymodels/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `postgres_test.go` [Q,I,L]; `record.go` [Q,L,D]; `record_test.go` [I].
+- `tests/fixtures/consumer/bootstrap/` — A: `auth.go` [L]; `bootstrap_test.go` [L]; `models.go` [D]; `persistent_test.go` [I].
+- `tests/fixtures/consumer/bootstrap/cmd/serve/` — A: `main.go` [I].
+- `tests/fixtures/consumer/caching/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `counters.go` [I]; `counters_test.go` [I]; `distributed_test.go` [I]; `entries.go` [I]; `entries_test.go` [I]; `flexible_test.go` [I]; `profiles.go` [I]; `profiles_test.go` [I]; `redis_test.go` [I]; `tags.go` [I]; `tags_test.go` [I].
+- `tests/fixtures/consumer/catalog/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `product.go` [Q,I,L,D].
+- `tests/fixtures/consumer/chunkqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `chunks_postgres_test.go` [Q,I].
+- `tests/fixtures/consumer/clientcontracts/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `contracts.go` [Q,I]; `dto.go` [I]; `owner_index_foundry.gen.go` [I]; `payload_foundry.gen.go` [I].
+- `tests/fixtures/consumer/comparisonqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `joins_postgres_test.go` [Q,I]; `predicates_postgres_test.go` [Q,I]; `subqueries_postgres_test.go` [Q,I].
+- `tests/fixtures/consumer/configuredprofile/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `settings.go` [I].
+- `tests/fixtures/consumer/coordination/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `members.go` [I]; `members_test.go` [I].
+- `tests/fixtures/consumer/correlations/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `correlations_postgres_test.go` [Q,I].
+- `tests/fixtures/consumer/correlations/nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `nullable_postgres_test.go` [Q,I].
+- `tests/fixtures/consumer/ctes/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `ctes_postgres_test.go` [Q,I].
+- `tests/fixtures/consumer/cursorqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `cursors_postgres_test.go` [Q,I].
+- `tests/fixtures/consumer/distinctqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `distinct_postgres_test.go` [Q,I].
+- `tests/fixtures/consumer/eventqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `configured_outbox_postgres_test.go` [I]; `durable.go` [I]; `durable_postgres_test.go` [I,L]; `event_link.go` [D]; `events.go` [I]; `events_postgres_test.go` [I].
+- `tests/fixtures/consumer/expressionqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `expressions_postgres_test.go` [Q,I]; `expressions_test.go` [Q,I].
+- `tests/fixtures/consumer/filterqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `filters_postgres_test.go` [Q,I].
+- `tests/fixtures/consumer/framequeries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `named_postgres_test.go` [Q,I,L]; `ranges_postgres_test.go` [Q,I,L]; `sample.go` [D].
+- `tests/fixtures/consumer/hookqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `hooks_postgres_test.go` [Q,I,L]; `member.go` [L,D].
+- `tests/fixtures/consumer/httpcompression/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `compression_test.go` [I].
+- `tests/fixtures/consumer/httpcookies/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `cookies.go` [I]; `cookies_test.go` [I].
+- `tests/fixtures/consumer/httpcors/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `router_test.go` [I].
+- `tests/fixtures/consumer/httpdownloads/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `downloads.go` [I]; `downloads_test.go` [I].
+- `tests/fixtures/consumer/httpdto/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `dto.go` [I]; `dto_test.go` [I]; `encoding_test.go` [I]; `inventory_response_foundry.gen.go` [I]; `map_keys.go` [I]; `map_keys_test.go` [I]; `order_response_foundry.gen.go` [I]; `update_user_foundry.gen.go` [I]; `user_response_foundry.gen.go` [I].
+- `tests/fixtures/consumer/httpendpoints/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `endpoints_test.go` [I].
+- `tests/fixtures/consumer/httpetags/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `etags.go` [I]; `etags_test.go` [I].
+- `tests/fixtures/consumer/httpkernel/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `generated_routes_test.go` [I]; `path_declarations.go` [I]; `user_feed_path_foundry.gen.go` [I]; `user_path_foundry.gen.go` [I].
+- `tests/fixtures/consumer/httpmiddleware/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `router_test.go` [I].
+- `tests/fixtures/consumer/httpmodels/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `bindings.go` [I]; `bindings_postgres_test.go` [I]; `bindings_test.go` [I].
+- `tests/fixtures/consumer/httppagination/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `authenticated.go` [Q,I]; `cursor.go` [I]; `cursor_test.go` [Q,I]; `member_response_foundry.gen.go` [I]; `pagination.go` [Q,I]; `pagination_test.go` [Q,I].
+- `tests/fixtures/consumer/httpproxy/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `router_test.go` [I].
+- `tests/fixtures/consumer/httpquery/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `query.go` [I]; `query_test.go` [I]; `search_input_foundry.gen.go` [I].
+- `tests/fixtures/consumer/httpsecurity/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `public_urls_test.go` [I]; `router_test.go` [I].
+- `tests/fixtures/consumer/httpsigned/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `links_test.go` [I].
+- `tests/fixtures/consumer/httpstreams/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `streams.go` [I]; `streams_test.go` [I].
+- `tests/fixtures/consumer/httpvalidation/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `async.go` [I]; `async_test.go` [I]; `validation_test.go` [I].
+- `tests/fixtures/consumer/idempotenthttp/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `application.go` [L]; `concurrency_test.go` [L]; `models.go` [D]; `publication_test.go` [L].
+- `tests/fixtures/consumer/inputqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `hooks.go` [L]; `inputs_postgres_test.go` [Q,I,L]; `inputs_test.go` [I,L]; `models.go` [L,D].
+- `tests/fixtures/consumer/internal/queryfixture/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `postgres.go` [I].
+- `tests/fixtures/consumer/intervalqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `calculation_postgres_test.go` [Q,I,L]; `codec_postgres_test.go` [Q,I,L]; `failure_postgres_test.go` [Q,I,L]; `fixture_test.go` [Q,I,L]; `models.go` [Q,L,D]; `relations_postgres_test.go` [Q,I,L].
+- `tests/fixtures/consumer/isolatedhttp/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `application.go` [L]; `isolation_test.go` [L]; `models.go` [D].
+- `tests/fixtures/consumer/joinqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `joins_postgres_test.go` [Q,I].
+- `tests/fixtures/consumer/joinqueries/inner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `inner_postgres_test.go` [Q,I].
+- `tests/fixtures/consumer/joinqueries/natural/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `natural_postgres_test.go` [Q,I].
+- `tests/fixtures/consumer/joinqueries/outer/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `outer_postgres_test.go` [Q,I].
+- `tests/fixtures/consumer/jsonqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `composition_postgres_test.go` [Q,I,L]; `failure_postgres_test.go` [Q,I,L]; `fixture_test.go` [I,L]; `models.go` [Q,L,D]; `path_postgres_test.go` [Q,I,L]; `query_postgres_test.go` [Q,I,L].
+- `tests/fixtures/consumer/keyqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `keys_postgres_test.go` [Q,I,L]; `keys_test.go` [Q,I,L]; `reports.go` [D].
+- `tests/fixtures/consumer/lateralqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `composition_postgres_test.go` [Q,I,L]; `records_postgres_test.go` [Q,I,L]; `reports.go` [I,D].
+- `tests/fixtures/consumer/limiting/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `members.go` [I]; `members_test.go` [I].
+- `tests/fixtures/consumer/linkqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `concurrency_postgres_test.go` [I,L]; `each_concurrency_postgres_test.go` [I,L]; `each_modes_postgres_test.go` [I,L]; `each_postgres_test.go` [I,L]; `fixture_test.go` [I,L]; `hooks.go` [L]; `insert_models.go` [L,D]; `insert_select_postgres_test.go` [Q,I,L]; `keys_postgres_test.go` [I,L]; `lifecycle_postgres_test.go` [I,L]; `lookup_concurrency_postgres_test.go` [I,L]; `lookup_postgres_test.go` [Q,I,L]; `models.go` [Q,L,D]; `source_write_postgres_test.go` [Q,I,L].
+- `tests/fixtures/consumer/lockqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `clauses_postgres_test.go` [Q,I]; `locking_postgres_test.go` [Q,I].
+- `tests/fixtures/consumer/messaging/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `members.go` [I]; `members_test.go` [I].
+- `tests/fixtures/consumer/models/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `aggregates.go` [Q,L]; `ledger.go` [D]; `location.go` [D]; `measurement.go` [D]; `membership.go` [Q,L,D]; `models.go` [L,D]; `relations.go` [Q,L]; `write_record.go` [D].
+- `tests/fixtures/consumer/modelvalidation/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `rules.go` [I]; `tables.go` [I].
+- `tests/fixtures/consumer/multifactor/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `account.go` [L,D]; `completion_postgres_test.go` [I,L]; `factors_postgres_test.go` [I,L]; `http_postgres_test.go` [I]; `primitives_test.go` [I]; `security.go` [L]; `security_postgres_test.go` [I,L].
+- `tests/fixtures/consumer/mutatorqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `accessors_test.go` [I]; `changes_postgres_test.go` [I,L]; `member.go` [L,D]; `mutators_postgres_test.go` [Q,I,L]; `reference_test.go` [I].
+- `tests/fixtures/consumer/nestedbindings/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `bindings.go` [L]; `bindings_postgres_test.go` [Q,I,L]; `models.go` [Q,L,D].
+- `tests/fixtures/consumer/notifying/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `order_card_foundry.gen.go` [I]; `order_placed_foundry.gen.go` [I]; `orders.go` [Q,I]; `orders_test.go` [Q,I].
+- `tests/fixtures/consumer/observerqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `models.go` [L,D]; `observer_scope_postgres_test.go` [I,L]; `observers_postgres_test.go` [Q,I,L]; `row_observers_postgres_test.go` [I,L].
+- `tests/fixtures/consumer/officequeries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `desk_scope_postgres_test.go` [I,L]; `models.go` [Q,L,D]; `office_postgres_test.go` [Q,I,L].
+- `tests/fixtures/consumer/pagequeries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `pages_postgres_test.go` [Q,I].
+- `tests/fixtures/consumer/passwords/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `account.go` [L,D]; `account_postgres_test.go` [Q,I,L]; `lockout_postgres_test.go` [I]; `login.go` [L]; `login_postgres_test.go` [I,L]; `passwords_test.go` [I].
+- `tests/fixtures/consumer/pivothooks/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `create_or_first_postgres_test.go` [I,L]; `hooks.go` [L]; `models.go` [Q,L,D]; `pivot_hooks_postgres_test.go` [I,L].
+- `tests/fixtures/consumer/productionprofile/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `field_capabilities_bench_test.go` [Q,I,L]; `queries.go` [Q,L]; `queries_test.go` [I]; `record.go` [D].
+- `tests/fixtures/consumer/productionprofile/cmd/profile/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `main.go` [I].
+- `tests/fixtures/consumer/productionprofile/cmd/queryresources/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `main.go` [I].
+- `tests/fixtures/consumer/profiles/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `animated_images_test.go` [I]; `avif_images_test.go` [I]; `image_encoding_test.go` [I]; `image_labels_test.go` [I]; `image_runtime_test.go` [I]; `images_test.go` [I]; `native_images_test.go` [I]; `profile.go` [Q,L,D]; `profile_test.go` [I,L].
+- `tests/fixtures/consumer/projectionqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `projections_postgres_test.go` [Q,I].
+- `tests/fixtures/consumer/realtime/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `orders.go` [I]; `orders_test.go` [I].
+- `tests/fixtures/consumer/recordqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `records_postgres_test.go` [Q,I].
+- `tests/fixtures/consumer/recovering/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `credentials.go` [L]; `credentials_postgres_test.go` [I]; `hooks.go` [L]; `http_postgres_test.go` [I,L]; `link_requests_postgres_test.go` [I,L]; `member.go` [D]; `recovery.go` [L]; `recovery_postgres_test.go` [I,L]; `revision_postgres_test.go` [I,L].
+- `tests/fixtures/consumer/recursivequeries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `node.go` [D]; `recursive_postgres_test.go` [Q,I,L].
+- `tests/fixtures/consumer/rediscommands/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `commands.go` [I]; `commands_test.go` [I].
+- `tests/fixtures/consumer/redisdata/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `members.go` [I]; `members_test.go` [I]; `rankings.go` [I]; `rankings_test.go` [I].
+- `tests/fixtures/consumer/relationshipfilters/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `filters_postgres_test.go` [Q,I].
+- `tests/fixtures/consumer/reporting/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `application_test.go` [I]; `export_job_postgres_test.go` [I]; `fixture_test.go` [I,L]; `http.go` [Q,L]; `http_postgres_test.go` [I]; `member_import_test.go` [I]; `members.go` [Q,L]; `models.go` [Q,L,D]; `orders.go` [Q,L]; `reporting_postgres_test.go` [I,L].
+- `tests/fixtures/consumer/reports/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `join_projections.go` [I,D]; `projections.go` [I,D]; `subquery_projections.go` [I,D].
+- `tests/fixtures/consumer/retrievalqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `composition_postgres_test.go` [Q,I,L]; `hooks.go` [L]; `iteration_postgres_test.go` [Q,I,L]; `models.go` [Q,L,D]; `retrieval_postgres_test.go` [I,L].
+- `tests/fixtures/consumer/scalarqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `composition_postgres_test.go` [Q,I,L]; `geographic_test.go` [Q,I,L]; `sample.go` [D]; `scalars_postgres_test.go` [Q,I,L].
+- `tests/fixtures/consumer/setqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `sets_postgres_test.go` [Q,I].
+- `tests/fixtures/consumer/softqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `factory_postgres_test.go` [I,L]; `fixture_test.go` [I,L]; `hooks.go` [L]; `lifecycle_postgres_test.go` [I,L]; `models.go` [Q,L,D]; `visibility_postgres_test.go` [Q,I,L].
+- `tests/fixtures/consumer/teamworkflow/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `client_test.go` [L]; `models.go` [Q,L,D]; `routes.go` [Q,L]; `service.go` [L]; `workflow_test.go` [L].
+- `tests/fixtures/consumer/temporalqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `calendar_postgres_test.go` [Q,I,L]; `composition_postgres_test.go` [Q,I,L]; `extract_postgres_test.go` [Q,I,L]; `fixture_test.go` [Q,I,L]; `sample.go` [D].
+- `tests/fixtures/consumer/tenantqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `models.go` [Q,L,D]; `pivot_concurrency_postgres_test.go` [I,L]; `prune_postgres_test.go` [I,L]; `tenant_postgres_test.go` [Q,I,L]; `upsert_scope_postgres_test.go` [Q,I,L].
+- `tests/fixtures/consumer/testdata/compilefail/aggregate_enum_sum/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/aggregate_filter_after_window/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/aggregate_filter_boolean_order/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/aggregate_filter_having/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/aggregate_filter_nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/aggregate_filter_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/aggregate_filter_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/aggregate_input/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/aggregate_nonnullable_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/aggregate_order_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/aggregate_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/aggregate_pivot_input/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/aggregate_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/aggregate_temporal_avg/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/aggregate_text_sum/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/alias_predicate_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/arithmetic_compare_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/arithmetic_float_remainder/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/arithmetic_nullable_operand/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/arithmetic_nullable_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/arithmetic_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/arithmetic_row_phase/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/arithmetic_text/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/arithmetic_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/assignment_owner_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q].
+- `tests/fixtures/consumer/testdata/compilefail/attachment_id_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/attachment_locale/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/attachment_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/attachment_query_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/audit_field_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/audit_history_id/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/audit_model_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/audit_payload/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/audit_policy_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/audit_policy_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/audit_transaction/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_assurance/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_bound_resource_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_bound_subject_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_handler_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_model_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_optional_bound_subject/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_optional_handler/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_optional_raw_handler/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_permission_http_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_permission_name/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_permission_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_permission_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_policy_guard/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_policy_resource/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_proof_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_provider_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_raw_handler_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_raw_scope_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_raw_signed_path/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_scope_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_scope_descriptor_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_scope_http_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_scope_name_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_scope_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_scope_proof_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_signed_handler_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_strategy_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/auth_test_helper_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/batch_draft_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/batch_result_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/binary_comparison_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/binary_identity_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/binary_mutation_input/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/binary_nullable_projection/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/binary_scalar_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/binary_scope_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/bootstrap_actor_binding/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/bootstrap_actor_handler/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/browser_proof_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/browser_session_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/cache_batch_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/cache_counter_delta/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/cache_counter_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/cache_counter_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/cache_exists_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/cache_expiry_ttl/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/cache_getter_payload/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/cache_key_codec/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/cache_key_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/cache_payload/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/cache_remember_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/cache_remember_loader/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/cache_tag_invalidation_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/cache_tag_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/cache_ttl/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/case_aggregate_condition/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/case_aggregate_row_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/case_owner_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/case_result_nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/case_result_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/case_result_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/case_selected_predicate/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/case_unfinished/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/case_window_row_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/chunk_callback_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/chunk_each_callback_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/chunk_each_key_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/chunk_key_callback_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/coalesce_fallback_nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/coalesce_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/coalesce_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/codec_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/codec_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/column_enum_range/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/column_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/column_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/computed_group_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/computed_group_selected_list/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/computed_model_order_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/computed_partition_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/conflict_calculated_target/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/conflict_calculation_model_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/conflict_calculation_nullability/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/conflict_calculation_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/conflict_calculation_selected/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/conflict_calculation_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/conflict_condition_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/conflict_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/conflict_nonnullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/conflict_nullable_calculation_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/conflict_rows_ordinary_where/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/conflict_rows_select/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/conflict_rows_where_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/conflict_target_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/conflict_update_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/conflict_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/correlation_column_id/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/correlation_exists_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/correlation_inner_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/correlation_input_selection/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/correlation_membership_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/correlation_model_fields/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/correlation_nullable_fields/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/correlation_nullable_membership/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/correlation_nullable_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/correlation_outer_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/correlation_query_escape/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/correlation_scalar_nullability/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/correlation_scalar_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/correlation_scope_unlifted/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/correlation_source_escape/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/correlation_uncorrelated_membership/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/country_key_contract/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/create_draft_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/cross_join_nullable_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/cross_join_scope_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/cte_membership_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/cte_model_write/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/cte_nullable_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/cte_record_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/cte_record_fields/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/cursor_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/cursor_request_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/data_batch_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/data_expiry_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/data_hash_field/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/data_hash_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/data_hash_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/data_set_member/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/data_set_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/data_set_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/datatable_cell_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/datatable_column_row/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/datatable_column_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/datatable_column_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/datatable_filter_nullability/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/datatable_filter_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/datatable_group_filter_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/datatable_having_phase/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/datatable_id/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/datatable_label/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/datatable_projection_row/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/datatable_relation_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/datatable_subject/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/decimal_conversion_float/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/decimal_float/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/decimal_text_operator/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/delete_key_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/derived_enum_operator/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/derived_nullable_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/derived_predicate_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/derived_record_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/diagnostics_permission_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/distinct_key_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/distinct_predicate_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/distinct_scalar_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/distinct_write/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/draft_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/each_create_draft/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/each_delete_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/each_update_draft/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/each_update_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/each_write_limit/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/encrypted_conflict_update/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/encrypted_draft_plaintext/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/encrypted_field_order/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/encrypted_field_predicate/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/event_commit_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/event_listener_payload/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/event_model_id/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/event_payload_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/event_recorder_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/event_topic_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/exists_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/extension_identity_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/extension_policy_kind/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/extension_rule_field/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/extension_runtime_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/extension_slot_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/extension_slot_query/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/extension_value_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/extension_write_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/factory_draft_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/factory_sequence_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/factory_state_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/field_in_having/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/find_natural_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/find_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/generated_observer_factory/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/generated_observer_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/geographic_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/global_scope_owner_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q].
+- `tests/fixtures/consumer/testdata/compilefail/having_boolean_range/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/having_combination_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/having_in_where/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/having_nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/having_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/having_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/hook_callback_typo/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/hook_changes_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/hook_draft_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/hook_snapshot_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/http_asset_path/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/http_cookie_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/http_cursor_mapping_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/http_cursor_navigation_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q].
+- `tests/fixtures/consumer/testdata/compilefail/http_cursor_request_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/http_cursor_result_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/http_download_model_id/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/http_dto_enum_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/http_dto_model_id/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/http_generated_path_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/http_model_binding_handler/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/http_model_binding_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/http_model_binding_locked/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/http_model_binding_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/http_model_binding_response/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/http_pagination_auth_numbered/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q].
+- `tests/fixtures/consumer/testdata/compilefail/http_pagination_auth_simple/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q].
+- `tests/fixtures/consumer/testdata/compilefail/http_pagination_handler/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q].
+- `tests/fixtures/consumer/testdata/compilefail/http_pagination_map_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/http_pagination_simple_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q].
+- `tests/fixtures/consumer/testdata/compilefail/http_query_model_id/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/http_signed_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/idempotency_actor/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/idempotency_input/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/idempotency_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/idempotency_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/idempotency_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/idempotency_transaction/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/imported_enum_text_operator/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/importer_column_row/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/index_key_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/index_key_selected/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/index_key_string/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/index_predicate_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/index_proposed_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/insert_select_draft/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/insert_select_id/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/insert_select_mutator/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/insert_select_nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/insert_select_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/insert_select_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/insert_select_timestamp/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/insert_select_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/interval_clock_instant/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/interval_draft_text/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/interval_find_number/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/interval_like/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/interval_nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/interval_projection_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/interval_result_phase/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/interval_selected_row/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/interval_sum_decimal/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/interval_wrong_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/join_combination_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/join_compare_nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/join_compare_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/join_compare_selected/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/join_compare_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/join_full_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/join_key_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/join_kind_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/join_like_number/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/join_natural_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/join_nullable_chain/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/join_nullable_fields/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/join_nullable_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/join_on_filter_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/join_outer_preserved/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/join_right_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/join_scope_outside/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/join_scope_unlifted/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/join_side_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/join_where_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/json_contains_payload/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/json_draft_payload/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/json_kind_boolean/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/json_like/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/json_nullable_input/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/json_path_array_index/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/json_path_map_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/json_path_numeric_like/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/json_path_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/json_path_payload/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/json_path_row_phase/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/json_path_scalar_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/json_path_unknown_field/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/json_predicate_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/json_projection_payload/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/json_selected_row/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/json_sum/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lateral_model_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lateral_nullable_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lateral_on_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lateral_ordinary_join/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lateral_outer/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lateral_predicate_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lateral_projection_execute/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lateral_projection_ordinary/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lateral_projection_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lateral_projection_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lateral_record_alias/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lateral_record_cte/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lateral_record_execute/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lateral_scope_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lateral_uncorrelated_alias/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lease_callback/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/lease_codec/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/lease_key_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/lease_proof_callback/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/lease_wait_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/lock_clause_nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lock_clause_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lock_clause_owner_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lock_clause_pool/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lock_clause_session/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lock_clause_source/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/locked_analyze_executor/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/locked_count/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/locked_explain_executor/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/locked_key_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/locked_model_id/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/locked_mutation/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/locked_nullable_target/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/locked_pool/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/locked_predicate_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/locked_projection_pool/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/locked_result_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/locked_subquery/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/locked_target_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/lookup_create_draft/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/lookup_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/lookup_update_create_draft/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/lookup_update_draft/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/lookup_update_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/metadata_owner_contract/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/metadata_value_contract/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mfa_browser_factor_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mfa_completion_result_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mfa_confirmation_recovery/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mfa_confirmation_request_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mfa_enrollment_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mfa_enrollment_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mfa_factor_code_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mfa_http_enrollment_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mfa_http_recovery_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mfa_model_lock_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mfa_observer_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mfa_password_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mfa_retirement_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mfa_session_factor_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mfa_throttle_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mfa_token_factor_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mfa_totp_secret_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/model_accessor_nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/model_accessor_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/model_change_draft/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/model_change_field_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/model_change_ignored_field/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/model_change_snapshots/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/model_change_unknown_field/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mutation_input_conflict/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mutation_input_draft/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mutation_input_nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mutation_input_predicate/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/mutation_input_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/mutation_owner_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q].
+- `tests/fixtures/consumer/testdata/compilefail/mutator_nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/mutator_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/mutator_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/named_window_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/nested_bundle_handler/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/nested_field_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/nested_locked_source/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/nested_path_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/nested_policy_actor/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/nested_relation_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/nonnullable_clear/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/notification_channel_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/notification_channel_payload/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/notification_data_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/notification_payload_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/notification_read_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/notification_recipient_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/notification_transport_payload/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/numeric_text_operator/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/observer_constructor_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/observer_factory_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/outbox_field_id/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/outbox_id_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/outbox_model_id/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/outbox_payload_id/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/outbox_payload_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/outbox_transaction_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/parameter_id/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/parameter_nullable_field/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/parameter_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/parameter_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/password_issuance_lock_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/password_lockout_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/password_login_hash/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/password_login_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/password_login_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/password_model_like/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/password_model_predicate/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/password_model_setter/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/password_recheck_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/pivot_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/pivot_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/pivot_order/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/pivot_payload/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/pivot_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/predicate_owner_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q].
+- `tests/fixtures/consumer/testdata/compilefail/projected_record_write/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/projection_aggregate_group/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/projection_builder_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/projection_field/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/projection_group_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/projection_mapping_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/projection_nullability/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/projection_order_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/projection_page_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/projection_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/projection_where_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/projection_write/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/proof_scope_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/pubsub_key_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/pubsub_payload/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/pubsub_received_payload/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/query_icontains_nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/query_icontains_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/query_id/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/query_order_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/query_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/query_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/range_boundary_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/range_boundary_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/range_distance_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/range_nullable_distance/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/range_numeric_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/range_numeric_text/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/range_ordinary_boundary/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/range_temporal_distance/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/range_temporal_number/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/rate_limit_cost/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/rate_limit_key_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/rate_limit_resolver/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/raw_data_export_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/raw_expiry_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/raw_key_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/record_selection_nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/record_selection_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/record_selection_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/record_selection_unlifted/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/record_selection_write/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/recovery_lock_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/recovery_password_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/recovery_reference_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/recovery_request_delivery_purpose/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/recovery_request_identifier/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/recovery_request_lookup_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/recovery_request_password_hash/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/recovery_request_token_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/recovery_request_token_purpose/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/recovery_result_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/recovery_revision_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/recovery_revision_identity/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/recovery_revision_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/recovery_token_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/recovery_token_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/recovery_token_purpose/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/recursive_field_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/recursive_natural_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/recursive_self_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/recursive_self_execute/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/recursive_self_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/recursive_self_write/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/recursive_step_record/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/reference_key_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/reference_model_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/reference_natural_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/relation_attach_draft/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/relation_attach_source/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/relation_attach_target/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/relation_create_defaults_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/relation_detach_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/relation_exists_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/relation_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/relation_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/relation_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/relation_target/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/result_cursor_fields_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/result_cursor_key_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/result_cursor_order_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/result_cursor_predicate_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/result_cursor_request_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/result_cursor_source/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/result_cursor_write/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/retrieval_callback_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/retrieval_callback_typo/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/retrieval_observer_factory/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/retrieval_observer_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/retrieval_write_observer/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/revocation_group_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/revocation_name_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/revocation_reference_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/routing_primary_lock/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/scalar_field_owner_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q].
+- `tests/fixtures/consumer/testdata/compilefail/scalar_nullability/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/scalar_nullable_input/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/scalar_row_identity_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/scalar_row_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/scalar_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/scoped_model_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/selected_boolean_order/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/selected_calculation_order/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/selected_comparison_row/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/selected_distinct_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/selected_group_phase/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/selected_key_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/selected_key_row_list/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/selected_partition_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/session_id_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/session_metadata_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/session_proof_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/session_reference_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/set_input_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/set_model_write/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/set_nullable_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/set_output_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/set_projection_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/set_record_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/set_record_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/set_record_scalar/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/set_value_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/settings_value_contract/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/simple_page_nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/simple_page_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/simple_page_total/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q].
+- `tests/fixtures/consumer/testdata/compilefail/soft_change_operation/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/soft_force_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/soft_pivot_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/soft_restore_hook/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/soft_restore_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/source_delete_force/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/source_delete_id/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/source_delete_values/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/source_update_draft/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/source_update_id/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/source_update_mutator/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/source_update_nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/source_update_primary/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/source_update_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/source_update_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/source_update_timestamp/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/source_update_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/startup_browser_actor/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/startup_job_payload/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/subquery_filter_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/subquery_id/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/subquery_nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/subquery_selection_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/subquery_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/substring_text_position/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/temporal_calendar_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/temporal_clock_calendar/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/temporal_date_clock/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/temporal_date_unit/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/temporal_decimal_seconds/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/temporal_float_epoch/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/temporal_instant_calendar/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/temporal_nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/temporal_predicate_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/temporal_selected_row/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/temporal_selected_where/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/temporal_string_interval/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/temporal_string_zone/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/temporal_timestamp_unit/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/text_numeric/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/text_operand_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/text_pattern_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/timestamp_draft/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/token_http_key/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/token_http_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/token_id_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/token_model_scopes/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/token_option_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/token_proof_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/token_result_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_correlated_parent/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_correlated_projection_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_correlated_record_execute/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_correlated_record_ordinary/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_correlated_source_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_correlated_value_execute/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_correlated_value_ordinary/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_correlated_value_unbound/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_correlation_inner_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_correlation_ordinary_source/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_correlation_outer_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_correlation_scope_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_correlation_unbound_record/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_correlation_unlifted_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_cte_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_exists_source/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_lateral_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_lateral_nullable_record/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_lateral_on_scope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_lateral_ordinary_join/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_lateral_parent/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_lateral_pool/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_lateral_unbound/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_locked_value_count/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_locked_value_session/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_nullable_lock/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_nullable_record/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_ordinary_cte/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_pool/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_projection_mutation/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_projection_ordinary/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_projection_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_record_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_scope_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_session/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_source_alias/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_source_cte/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_source_join/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_source_projection/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_source_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_value_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_value_nullability/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_value_operand_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_value_ordinary_anchor/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_value_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_value_owner_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_value_pool/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_value_result/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_value_scalar_escape/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_value_selected_operand/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/transaction_value_source/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/translation_locale_contract/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/translation_owner_contract/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/update_draft_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/update_key_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/upsert_draft_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/upsert_policy_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/upsert_result_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/validation_batch_id/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/validation_database_id/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/validation_database_locked/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/validation_database_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/validation_database_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/validation_generated_id/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/value_compare_like_number/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/value_compare_nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/value_compare_order_bool/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/value_compare_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/value_compare_selected_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/value_compare_selected_row/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/value_compare_selected_where/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/value_compare_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/value_cursor_nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/websocket_diagnostics_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/websocket_direction/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/websocket_disconnect_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/websocket_disconnect_raw/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/websocket_event_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/websocket_handler_subject/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/websocket_payload/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/websocket_registration_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/websocket_relay_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/websocket_room_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/where_doesnt_have_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/where_has_aggregate/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/where_has_find_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/where_has_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/window_aggregate_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/window_fallback_value/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/window_frame_conversion/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q].
+- `tests/fixtures/consumer/testdata/compilefail/window_order_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/window_partition_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/window_range_distance/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/window_result_nullable/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/window_result_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/window_value_owner/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/window_where/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [Q,I].
+- `tests/fixtures/consumer/testdata/compilefail/workflow_action_payload/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/workflow_bound_model/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/workflow_envelope/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/compilefail/workflow_transaction/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `invalid.go` [I].
+- `tests/fixtures/consumer/testdata/footprint/model_draft/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `probe.go` [I].
+- `tests/fixtures/consumer/testdata/footprint/model_isolated/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `probe.go` [I].
+- `tests/fixtures/consumer/testdata/footprint/model_type/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `probe.go` [I].
+- `tests/fixtures/consumer/timequeries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `clock_callbacks_test.go` [Q,I,L]; `hooks.go` [L]; `models.go` [L,D]; `timestamps_postgres_test.go` [Q,I,L].
+- `tests/fixtures/consumer/tooling/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `database.go` [Q,I]; `helpers_test.go` [I]; `production.go` [I]; `production_test.go` [I]; `routing.go` [I].
+- `tests/fixtures/consumer/transactionqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `composition_postgres_test.go` [Q,L]; `correlations_postgres_test.go` [Q,L]; `joins_postgres_test.go` [Q,L]; `models.go` [Q,L,D]; `subqueries_postgres_test.go` [Q,L].
+- `tests/fixtures/consumer/upsertqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `calculations_postgres_test.go` [Q,I,L]; `index_targets_postgres_test.go` [Q,I]; `models.go` [D]; `upserts_postgres_test.go` [Q,I,L].
+- `tests/fixtures/consumer/vault/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `entry.go` [D]; `entry_postgres_test.go` [Q,I,L].
+- `tests/fixtures/consumer/windowqueries/` — 8b / Stage 9 consumers; feature lanes A/B/C/D as above: `reports.go` [I,D]; `windows_postgres_test.go` [Q,I,L].
+- `tests/fixtures/goway/` — catalogue slice owner; lead baseline decision: `aggregate_golden_test.go` [Q,I]; `audit_golden_test.go` [I]; `bridge_capability_test.go` [I]; `composition_golden_test.go` [Q,I]; `conditional_golden_test.go` [Q,I]; `conflict_advanced_golden_test.go` [Q,I]; `conflict_golden_test.go` [Q,I]; `correlation_lateral_golden_test.go` [Q,I]; `expression_golden_test.go` [Q,I]; `extension_handles_test.go` [I]; `golden_old_loading_test.go` [Q,I]; `golden_old_queries_test.go` [Q,I]; `golden_old_relations_test.go` [Q,I]; `integration_adapters_test.go` [I]; `joins_golden_test.go` [Q,I]; `json_path_golden_test.go` [Q]; `lifecycle_golden_test.go` [I]; `mutators_golden_test.go` [I]; `nested_binding_orm_test.go` [Q]; `on_conditions_golden_test.go` [Q,I]; `reads_golden_test.go` [Q,I]; `records_golden_test.go` [Q,I]; `relation_aggregates_golden_test.go` [Q,I]; `relation_writes_test.go` [I]; `relations_golden_test.go` [Q,I]; `relations_joined_golden_test.go` [Q,I]; `result_read_golden_test.go` [Q,I]; `retrieval_scope_golden_test.go` [I]; `scalar_golden_test.go` [Q]; `sensitive_golden_test.go` [I]; `source_write_golden_test.go` [Q,I]; `statement_detector_test.go` [Q,I]; `store_capabilities_golden_test.go` [Q,I]; `subqueries_golden_test.go` [Q,I]; `validation_database_test.go` [Q,I]; `window_golden_test.go` [Q,I].
+- `tests/fixtures/goway/models/aggregates/` — catalogue slice owner; lead baseline decision: `models.go` [Q].
+- `tests/fixtures/goway/models/joined/` — catalogue slice owner; lead baseline decision: `models.go` [Q].
+- `tests/fixtures/goway/oldmodels/` — catalogue slice owner; lead baseline decision: `models.go` [Q,L,D].
+- `tests/fixtures/goway/oldmodels/extensions/` — catalogue slice owner; lead baseline decision: `foundry_extensions_foundry.gen.go` [L]; `models.go` [L,D].
+- `tests/fixtures/goway/oldmodels/hooks/` — catalogue slice owner; lead baseline decision: `models.go` [L,D].
+- `tests/fixtures/goway/oldmodels/joined/` — catalogue slice owner; lead baseline decision: `models.go` [Q,L,D].
+- `tests/fixtures/goway/oldmodels/mutators/` — catalogue slice owner; lead baseline decision: `key.go` [L,D]; `models.go` [L,D].
+- `tests/fixtures/goway/oldmodels/reads/` — catalogue slice owner; lead baseline decision: `models.go` [Q,L,D].
+- `tests/fixtures/goway/oldmodels/sensitive/` — catalogue slice owner; lead baseline decision: `models.go` [D].
+- `tests/fixtures/goway/oldreporting/` — catalogue slice owner; lead baseline decision: `http.go` [Q,L]; `members.go` [Q,L]; `models.go` [Q,L,D]; `orders.go` [Q,L].
+- `tests/fixtures/goway/pgsmoke/` — catalogue slice owner; lead baseline decision: `audit_test.go` [Q]; `mutators_test.go` [I]; `reads_test.go` [Q]; `result_cursor_test.go` [Q]; `sensitive_test.go` [I].
+- `tests/fixtures/goway/testdata/compilefail/cursor_owner/` — catalogue slice owner; lead baseline decision: `invalid.go` [Q].
+- `tests/fixtures/goway/testdata/compilefail/cursor_request_owner/` — catalogue slice owner; lead baseline decision: `invalid.go` [Q].
+- `tests/fixtures/goway/testdata/compilefail/old_text_comparison_nullable_owner_conversion/` — catalogue slice owner; lead baseline decision: `invalid.go` [Q,I].
+- `tests/fixtures/goway/testdata/compilefail/old_text_comparison_owner_conversion/` — catalogue slice owner; lead baseline decision: `invalid.go` [Q,I].
+- `tests/fixtures/goway/testdata/compilefail/projection_page_owner/` — catalogue slice owner; lead baseline decision: `invalid.go` [Q].
+- `tests/fixtures/goway/testdata/compilefail/result_cursor_request_owner/` — catalogue slice owner; lead baseline decision: `invalid.go` [Q].
+- `tests/fixtures/goway/testdata/compilefail/simple_page_nullable/` — catalogue slice owner; lead baseline decision: `invalid.go` [Q].
+- `tests/fixtures/goway/testdata/compilefail/value_cursor_nullable/` — catalogue slice owner; lead baseline decision: `invalid.go` [Q].
+- `tests/fixtures/goway/testdata/footprint/cursor/` — catalogue slice owner; lead baseline decision: `use.go` [Q].
+- `tests/fixtures/goway/testdata/footprint/extension_slots_old/` — catalogue slice owner; lead baseline decision: `probe.go` [I].
+- `tests/fixtures/goway/testdata/footprint/result_cursor/` — catalogue slice owner; lead baseline decision: `probe.go` [Q].
+- `tests/fixtures/goway/testdata/footprint/result_reads/` — catalogue slice owner; lead baseline decision: `probe.go` [Q].
+- `tests/fixtures/goway/testdata/noraw/positive/` — catalogue slice owner; lead baseline decision: `typed.go` [Q].
+- `translations/` — 8a shared adapters / feature owner in table above: `handle.go` [Q]; `records.go` [Q]; `slot.go` [Q].
+
+### Generated model/projection/extension outputs (137)
+
+- `tests/fixtures/consumer/articles/article_foundry.gen.go`
+- `tests/fixtures/consumer/articles/author_foundry.gen.go`
+- `tests/fixtures/consumer/auditqueries/account_foundry.gen.go`
+- `tests/fixtures/consumer/auditqueries/label_foundry.gen.go`
+- `tests/fixtures/consumer/binarymodels/record_foundry.gen.go`
+- `tests/fixtures/consumer/binarymodels/view_foundry.gen.go`
+- `tests/fixtures/consumer/bootstrap/member_foundry.gen.go`
+- `tests/fixtures/consumer/bootstrap/operator_foundry.gen.go`
+- `tests/fixtures/consumer/catalog/product_foundry.gen.go`
+- `tests/fixtures/consumer/eventqueries/event_link_foundry.gen.go`
+- `tests/fixtures/consumer/framequeries/sample_foundry.gen.go`
+- `tests/fixtures/consumer/hookqueries/log_foundry.gen.go`
+- `tests/fixtures/consumer/hookqueries/member_foundry.gen.go`
+- `tests/fixtures/consumer/idempotenthttp/order_foundry.gen.go`
+- `tests/fixtures/consumer/idempotenthttp/workspace_foundry.gen.go`
+- `tests/fixtures/consumer/inputqueries/member_foundry.gen.go`
+- `tests/fixtures/consumer/intervalqueries/label_foundry.gen.go`
+- `tests/fixtures/consumer/intervalqueries/link_foundry.gen.go`
+- `tests/fixtures/consumer/intervalqueries/plan_foundry.gen.go`
+- `tests/fixtures/consumer/intervalqueries/sample_foundry.gen.go`
+- `tests/fixtures/consumer/intervalqueries/summary_foundry.gen.go`
+- `tests/fixtures/consumer/isolatedhttp/record_foundry.gen.go`
+- `tests/fixtures/consumer/jsonqueries/document_foundry.gen.go`
+- `tests/fixtures/consumer/jsonqueries/policy_foundry.gen.go`
+- `tests/fixtures/consumer/jsonqueries/snapshot_foundry.gen.go`
+- `tests/fixtures/consumer/keyqueries/bucket_count_foundry.gen.go`
+- `tests/fixtures/consumer/lateralqueries/ranked_order_foundry.gen.go`
+- `tests/fixtures/consumer/lateralqueries/user_order_foundry.gen.go`
+- `tests/fixtures/consumer/linkqueries/archive_foundry.gen.go`
+- `tests/fixtures/consumer/linkqueries/friendship_foundry.gen.go`
+- `tests/fixtures/consumer/linkqueries/group_foundry.gen.go`
+- `tests/fixtures/consumer/linkqueries/member_foundry.gen.go`
+- `tests/fixtures/consumer/linkqueries/membership_foundry.gen.go`
+- `tests/fixtures/consumer/linkqueries/natural_link_foundry.gen.go`
+- `tests/fixtures/consumer/linkqueries/nullable_link_foundry.gen.go`
+- `tests/fixtures/consumer/models/country_foundry.gen.go`
+- `tests/fixtures/consumer/models/friendship_foundry.gen.go`
+- `tests/fixtures/consumer/models/group_foundry.gen.go`
+- `tests/fixtures/consumer/models/ledger_entry_foundry.gen.go`
+- `tests/fixtures/consumer/models/location_foundry.gen.go`
+- `tests/fixtures/consumer/models/measurement_foundry.gen.go`
+- `tests/fixtures/consumer/models/membership_foundry.gen.go`
+- `tests/fixtures/consumer/models/order_foundry.gen.go`
+- `tests/fixtures/consumer/models/user_foundry.gen.go`
+- `tests/fixtures/consumer/models/write_record_foundry.gen.go`
+- `tests/fixtures/consumer/multifactor/account_foundry.gen.go`
+- `tests/fixtures/consumer/mutatorqueries/member_foundry.gen.go`
+- `tests/fixtures/consumer/nestedbindings/project_foundry.gen.go`
+- `tests/fixtures/consumer/nestedbindings/task_foundry.gen.go`
+- `tests/fixtures/consumer/nestedbindings/team_foundry.gen.go`
+- `tests/fixtures/consumer/observerqueries/effect_foundry.gen.go`
+- `tests/fixtures/consumer/observerqueries/plain_foundry.gen.go`
+- `tests/fixtures/consumer/observerqueries/record_foundry.gen.go`
+- `tests/fixtures/consumer/officequeries/desk_foundry.gen.go`
+- `tests/fixtures/consumer/officequeries/employee_foundry.gen.go`
+- `tests/fixtures/consumer/officequeries/label_foundry.gen.go`
+- `tests/fixtures/consumer/officequeries/labeling_foundry.gen.go`
+- `tests/fixtures/consumer/officequeries/note_foundry.gen.go`
+- `tests/fixtures/consumer/officequeries/office_foundry.gen.go`
+- `tests/fixtures/consumer/officequeries/region_foundry.gen.go`
+- `tests/fixtures/consumer/passwords/account_foundry.gen.go`
+- `tests/fixtures/consumer/passwords/credential_projection_foundry.gen.go`
+- `tests/fixtures/consumer/pivothooks/assignment_foundry.gen.go`
+- `tests/fixtures/consumer/pivothooks/person_foundry.gen.go`
+- `tests/fixtures/consumer/pivothooks/project_foundry.gen.go`
+- `tests/fixtures/consumer/productionprofile/record_foundry.gen.go`
+- `tests/fixtures/consumer/profiles/profile_foundry.gen.go`
+- `tests/fixtures/consumer/recovering/member_foundry.gen.go`
+- `tests/fixtures/consumer/recursivequeries/node_foundry.gen.go`
+- `tests/fixtures/consumer/reporting/member_foundry.gen.go`
+- `tests/fixtures/consumer/reporting/member_row_foundry.gen.go`
+- `tests/fixtures/consumer/reporting/member_total_foundry.gen.go`
+- `tests/fixtures/consumer/reporting/operator_foundry.gen.go`
+- `tests/fixtures/consumer/reporting/order_foundry.gen.go`
+- `tests/fixtures/consumer/reporting/order_row_foundry.gen.go`
+- `tests/fixtures/consumer/reports/buyer_totals_foundry.gen.go`
+- `tests/fixtures/consumer/reports/location_row_foundry.gen.go`
+- `tests/fixtures/consumer/reports/order_buyer_row_foundry.gen.go`
+- `tests/fixtures/consumer/reports/order_summary_foundry.gen.go`
+- `tests/fixtures/consumer/reports/referral_order_row_foundry.gen.go`
+- `tests/fixtures/consumer/reports/referral_row_foundry.gen.go`
+- `tests/fixtures/consumer/reports/scalar_report_foundry.gen.go`
+- `tests/fixtures/consumer/reports/user_order_stats_foundry.gen.go`
+- `tests/fixtures/consumer/reports/user_pair_foundry.gen.go`
+- `tests/fixtures/consumer/reports/user_summary_foundry.gen.go`
+- `tests/fixtures/consumer/retrievalqueries/group_foundry.gen.go`
+- `tests/fixtures/consumer/retrievalqueries/member_foundry.gen.go`
+- `tests/fixtures/consumer/retrievalqueries/member_label_foundry.gen.go`
+- `tests/fixtures/consumer/retrievalqueries/membership_foundry.gen.go`
+- `tests/fixtures/consumer/scalarqueries/calculation_foundry.gen.go`
+- `tests/fixtures/consumer/scalarqueries/sample_foundry.gen.go`
+- `tests/fixtures/consumer/softqueries/group_foundry.gen.go`
+- `tests/fixtures/consumer/softqueries/member_foundry.gen.go`
+- `tests/fixtures/consumer/softqueries/member_label_foundry.gen.go`
+- `tests/fixtures/consumer/softqueries/membership_foundry.gen.go`
+- `tests/fixtures/consumer/teamworkflow/project_foundry.gen.go`
+- `tests/fixtures/consumer/teamworkflow/submission_foundry.gen.go`
+- `tests/fixtures/consumer/teamworkflow/team_foundry.gen.go`
+- `tests/fixtures/consumer/temporalqueries/calendar_summary_foundry.gen.go`
+- `tests/fixtures/consumer/temporalqueries/sample_foundry.gen.go`
+- `tests/fixtures/consumer/tenantqueries/document_foundry.gen.go`
+- `tests/fixtures/consumer/tenantqueries/document_tag_foundry.gen.go`
+- `tests/fixtures/consumer/tenantqueries/tag_foundry.gen.go`
+- `tests/fixtures/consumer/timequeries/manual_foundry.gen.go`
+- `tests/fixtures/consumer/timequeries/member_foundry.gen.go`
+- `tests/fixtures/consumer/transactionqueries/pair_foundry.gen.go`
+- `tests/fixtures/consumer/transactionqueries/record_foundry.gen.go`
+- `tests/fixtures/consumer/transactionqueries/summary_foundry.gen.go`
+- `tests/fixtures/consumer/transactionqueries/totals_foundry.gen.go`
+- `tests/fixtures/consumer/upsertqueries/excluded_record_foundry.gen.go`
+- `tests/fixtures/consumer/vault/entry_foundry.gen.go`
+- `tests/fixtures/consumer/windowqueries/navigation_row_foundry.gen.go`
+- `tests/fixtures/consumer/windowqueries/ranking_row_foundry.gen.go`
+- `tests/fixtures/consumer/windowqueries/window_total_foundry.gen.go`
+- `tests/fixtures/goway/oldmodels/extensions/article_foundry.gen.go`
+- `tests/fixtures/goway/oldmodels/extensions/author_foundry.gen.go`
+- `tests/fixtures/goway/oldmodels/hooks/member_foundry.gen.go`
+- `tests/fixtures/goway/oldmodels/joined/parent_foundry.gen.go`
+- `tests/fixtures/goway/oldmodels/joined/pivot_foundry.gen.go`
+- `tests/fixtures/goway/oldmodels/joined/target_foundry.gen.go`
+- `tests/fixtures/goway/oldmodels/ledger_entry_foundry.gen.go`
+- `tests/fixtures/goway/oldmodels/mutators/key_record_foundry.gen.go`
+- `tests/fixtures/goway/oldmodels/mutators/member_foundry.gen.go`
+- `tests/fixtures/goway/oldmodels/order_foundry.gen.go`
+- `tests/fixtures/goway/oldmodels/reads/group_foundry.gen.go`
+- `tests/fixtures/goway/oldmodels/reads/member_foundry.gen.go`
+- `tests/fixtures/goway/oldmodels/reads/membership_foundry.gen.go`
+- `tests/fixtures/goway/oldmodels/sensitive/account_foundry.gen.go`
+- `tests/fixtures/goway/oldmodels/sensitive/vault_foundry.gen.go`
+- `tests/fixtures/goway/oldmodels/user_foundry.gen.go`
+- `tests/fixtures/goway/oldmodels/write_record_foundry.gen.go`
+- `tests/fixtures/goway/oldreporting/member_foundry.gen.go`
+- `tests/fixtures/goway/oldreporting/member_row_foundry.gen.go`
+- `tests/fixtures/goway/oldreporting/member_total_foundry.gen.go`
+- `tests/fixtures/goway/oldreporting/operator_foundry.gen.go`
+- `tests/fixtures/goway/oldreporting/order_foundry.gen.go`
+- `tests/fixtures/goway/oldreporting/order_row_foundry.gen.go`
+
+### Model emitter files to retire
+
+- `internal/generate/emit_model_aggregates.go`
+- `internal/generate/emit_model_audit.go`
+- `internal/generate/emit_model_changes.go`
+- `internal/generate/emit_model_each.go`
+- `internal/generate/emit_model_extensions.go`
+- `internal/generate/emit_model_fields.go`
+- `internal/generate/emit_model_hooks.go`
+- `internal/generate/emit_model_insert_select.go`
+- `internal/generate/emit_model_locking.go`
+- `internal/generate/emit_model_lookup.go`
+- `internal/generate/emit_model_mutation.go`
+- `internal/generate/emit_model_ownership.go`
+- `internal/generate/emit_model_query.go`
+- `internal/generate/emit_model_reference.go`
+- `internal/generate/emit_model_relations.go`
+- `internal/generate/emit_model_retrieval_hooks.go`
+- `internal/generate/emit_model_set_writes.go`
+- `internal/generate/emit_model_source_write.go`
+
+### Documentation and tool matches (145)
+
+- `CHANGELOG.md` — Lead-owned/historical; propose updates, do not edit here.
+- `README.md` — Feature guide owner / 8d tooling and docs.
+- `blueprint/00-master-architecture-and-parity.md` — Lead-owned/historical; propose updates, do not edit here.
+- `blueprint/03-generation-and-language-tooling.md` — Lead-owned/historical; propose updates, do not edit here.
+- `blueprint/05-typed-model-and-query-core.md` — Lead-owned/historical; propose updates, do not edit here.
+- `blueprint/06-relations-and-advanced-queries.md` — Lead-owned/historical; propose updates, do not edit here.
+- `blueprint/25-deferred-extensions.md` — Lead-owned/historical; propose updates, do not edit here.
+- `blueprint/consumer-startup/README.md` — Lead-owned/historical; propose updates, do not edit here.
+- `blueprint/goway-data-layer/README.md` — Lead-owned/historical; propose updates, do not edit here.
+- `blueprint/model-extension-slots/01-slot-declarations-and-generation.md` — Lead-owned/historical; propose updates, do not edit here.
+- `blueprint/model-extension-slots/02-slot-loading-and-reads.md` — Lead-owned/historical; propose updates, do not edit here.
+- `blueprint/model-extension-slots/README.md` — Lead-owned/historical; propose updates, do not edit here.
+- `database/orm/README.md` — Feature guide owner / 8d tooling and docs.
+- `database/orm/expr/README.md` — Feature guide owner / 8d tooling and docs.
+- `docs/evidence/documentation-ide-drift-20261020.json` — Historical evidence; retain.
+- `docs/evidence/final-readiness-20260927.json` — Historical evidence; retain.
+- `docs/evidence/goway-6a1.json` — Historical evidence; retain.
+- `docs/evidence/goway-6a2.json` — Historical evidence; retain.
+- `docs/evidence/goway-6a3.json` — Historical evidence; retain.
+- `docs/evidence/goway-6a4.json` — Historical evidence; retain.
+- `docs/evidence/goway-6b1-report.md` — Historical evidence; retain.
+- `docs/evidence/goway-6b1.json` — Historical evidence; retain.
+- `docs/evidence/goway-6b2-report.md` — Historical evidence; retain.
+- `docs/evidence/goway-6b2.json` — Historical evidence; retain.
+- `docs/evidence/goway-6b3-report.md` — Historical evidence; retain.
+- `docs/evidence/goway-6b3.json` — Historical evidence; retain.
+- `docs/evidence/goway-6c1-report.md` — Historical evidence; retain.
+- `docs/evidence/goway-6c1.json` — Historical evidence; retain.
+- `docs/evidence/goway-6c2-report.md` — Historical evidence; retain.
+- `docs/evidence/goway-6c2.json` — Historical evidence; retain.
+- `docs/evidence/goway-6c3-report.md` — Historical evidence; retain.
+- `docs/evidence/goway-6c3.json` — Historical evidence; retain.
+- `docs/evidence/goway-6d1.json` — Historical evidence; retain.
+- `docs/evidence/goway-6d2.json` — Historical evidence; retain.
+- `docs/evidence/goway-6d3.json` — Historical evidence; retain.
+- `docs/evidence/goway-6e-plan.md` — Historical evidence; retain.
+- `docs/evidence/goway-6e1-conflicts-upsert.json` — Historical evidence; retain.
+- `docs/evidence/goway-6e2-advanced-conflicts.json` — Historical evidence; retain.
+- `docs/evidence/goway-6e3-source-writes.json` — Historical evidence; retain.
+- `docs/evidence/goway-6e3-static-role-feasibility.json` — Historical evidence; retain.
+- `docs/evidence/goway-b5a-mutators.json` — Historical evidence; retain.
+- `docs/evidence/goway-b5b-lifecycle.json` — Historical evidence; retain.
+- `docs/evidence/goway-b5c-retrieval-scopes.json` — Historical evidence; retain.
+- `docs/evidence/goway-b5d-audit.json` — Historical evidence; retain.
+- `docs/evidence/goway-stage3-column-footprint.json` — Historical evidence; retain.
+- `docs/evidence/goway-stage31a-declarations-codecs.json` — Historical evidence; retain.
+- `docs/evidence/goway-stage31b-writes-sensitive-fields.json` — Historical evidence; retain.
+- `docs/evidence/goway-stage31c-reads.json` — Historical evidence; retain.
+- `docs/evidence/goway-stage31d-raw.json` — Historical evidence; retain.
+- `docs/evidence/goway-stage4a-detector.json` — Historical evidence; retain.
+- `docs/evidence/goway-stage4b-relations.json` — Historical evidence; retain.
+- `docs/evidence/goway-stage4c-joined-relations.json` — Historical evidence; retain.
+- `docs/evidence/goway-stage4d.json` — Historical evidence; retain.
+- `docs/evidence/goway-stage5b-relation-writes.json` — Historical evidence; retain.
+- `docs/evidence/goway-stage5b-report.md` — Historical evidence; retain.
+- `docs/evidence/goway-stage7-slice1.json` — Historical evidence; retain.
+- `docs/evidence/goway-stage7-slice2.json` — Historical evidence; retain.
+- `docs/evidence/goway-stage7-slice3a-report.md` — Historical evidence; retain.
+- `docs/evidence/goway-stage7-slice3a.json` — Historical evidence; retain.
+- `docs/evidence/goway-stage7-slice3b.json` — Historical evidence; retain.
+- `docs/evidence/goway-stage7-store-capabilities.json` — Historical evidence; retain.
+- `docs/evidence/goway-stage7-validation-database-report.md` — Historical evidence; retain.
+- `docs/evidence/goway-stage7-validation-database.json` — Historical evidence; retain.
+- `docs/evidence/model-extension-slots-e05.json` — Historical evidence; retain.
+- `docs/evidence/module-review-20260923.json` — Historical evidence; retain.
+- `docs/evidence/orm-performance-20261011.json` — Historical evidence; retain.
+- `docs/evidence/outbox-timestamp-b06-20260928.json` — Historical evidence; retain.
+- `docs/evidence/performance-security-review.json` — Historical evidence; retain.
+- `docs/evidence/query-build-resources-20261019.json` — Historical evidence; retain.
+- `docs/evidence/query-write-build-resources-20261020.json` — Historical evidence; retain.
+- `docs/evidence/queued-event-outbox-20261019.json` — Historical evidence; retain.
+- `docs/evidence/security-gap-review-20260923.json` — Historical evidence; retain.
+- `docs/evidence/stabilization-20260929.json` — Historical evidence; retain.
+- `docs/evidence/typed-api-t04.json` — Historical evidence; retain.
+- `docs/evidence/typed-api-t07.json` — Historical evidence; retain.
+- `docs/evidence/typed-field-compilation-20261019.json` — Historical evidence; retain.
+- `docs/evidence/typed-runtime-cost-20261020.json` — Historical evidence; retain.
+- `docs/evidence/validation-expanded-20260926.json` — Historical evidence; retain.
+- `docs/guides/authentication.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/computed-query-keys.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/conditional-expressions.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/database-routing.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/database-runtime.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/datatable.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/developer-tooling-and-testing.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/encryption.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/http-model-binding.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/http-pagination.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/http-query-composition.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/idempotent-operations.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/interval-queries.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/json-models.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/lateral-joins.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-aggregate-filters.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-aggregates.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-batch-writes.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-chunks.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-correlations.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-ctes.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-distinct.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-extension-slots.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-extensions.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-generation.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-global-scopes.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-hooks.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-insert-from-query.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-joins.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-lookup-writes.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-mutators.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-pagination.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-projections.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-pruning.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-queries.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-recursive-ctes.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-relation-writes.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-relations.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-relationship-filters.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-retrieval.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-set-operations.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-soft-deletes.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-source-writes.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-subqueries.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-timestamps.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-upserts.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-windows.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/model-writes.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/parity-reconciliation.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/password-hashing.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/query-build-resources.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/query-plans.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/result-cursor-pagination.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/row-locking.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/scalar-calculations.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/scoped-model-binding.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/temporal-calculations.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/transaction-correlations.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/transaction-query-composition.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/typed-field-computations.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/validation-expanded.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/value-comparisons-and-joins.md` — Feature guide owner / 8d tooling and docs.
+- `docs/guides/window-ranges-and-names.md` — Feature guide owner / 8d tooling and docs.
+- `tools/goway_catalogue.py` — Feature guide owner / 8d tooling and docs.
+- `tools/goway_catalogue_test.py` — Feature guide owner / 8d tooling and docs.
+- `tools/goway_synthetic.py` — Feature guide owner / 8d tooling and docs.
+- `tools/goway_synthetic_test.py` — Feature guide owner / 8d tooling and docs.

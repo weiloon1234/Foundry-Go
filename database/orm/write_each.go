@@ -7,7 +7,6 @@ import (
 	"unsafe"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/lifecore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
@@ -16,7 +15,7 @@ import (
 )
 
 // MaxPerModelWriteRows bounds one atomic lifecycle batch. Example: limit <= orm.MaxPerModelWriteRows.
-const MaxPerModelWriteRows = query.MaxPerModelWriteRows
+const MaxPerModelWriteRows = querycore.MaxPerModelWriteRows
 
 // UpdateEach locks the complete candidate set in primary-key order, then derives
 // typed assignments and runs each ordinary model lifecycle in one transaction.
@@ -117,7 +116,11 @@ func writeEach[M any](ctx context.Context, writer database.Transactor, q querySt
 					return err
 				}
 				// Isolate panic/Goexit while retaining the transaction until callback exit.
-				err = callback.Isolated("per-model update draft", func() error { var err error; assignments, err = draft(work, tx, candidate); return err })
+				err = callback.Isolated("per-model update draft", func() error {
+					var err error
+					assignments, err = draft(work, tx, candidate)
+					return lifecore.Failure("per-model update draft failed", err)
+				})
 				if err != nil {
 					return err
 				}

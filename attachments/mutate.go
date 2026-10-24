@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	store "github.com/weiloon1234/Foundry-Go/internal/attachmentstore"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -43,8 +44,8 @@ func (c Collection[M, K]) detach(ctx context.Context, m *Manager, owner model.Re
 			if err != nil {
 				return err
 			}
-			f := store.FileFields()
-			q := store.QueryFoundryAttachments().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key), f.Collection.Eq(string(c.Name())), f.Locale.Eq(locale), f.State.Eq(string(Ready)))
+			f := store.Files
+			q := store.Files.Query().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key), f.Collection.Eq(string(c.Name())), f.Locale.Eq(locale), f.State.Eq(string(Ready)))
 			if id, ok := only.Get(); ok {
 				q = q.Where(f.ID.Eq(model.IDFromBytes[store.File](id.Bytes())))
 			}
@@ -63,7 +64,7 @@ func (c Collection[M, K]) detach(ctx context.Context, m *Manager, owner model.Re
 				if _, err := c.attachment(m, row); err != nil {
 					return err
 				}
-				if _, err := store.QueryFoundryAttachments().Update(ctx, tx, row.ID, store.FileDraft{}.SetState(string(CleanupPending)).SetUpdatedAt(now)); err != nil {
+				if _, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), row.ID, store.Files.State.Set(string(CleanupPending)), store.Files.UpdatedAt.Set(now)); err != nil {
 					return err
 				}
 				if err := c.queue.enqueue(ctx, tx, operationID(row.ID)); err != nil {
@@ -141,8 +142,8 @@ func (c Collection[M, K]) Reorder(ctx context.Context, m *Manager, owner model.R
 			if err != nil {
 				return err
 			}
-			f := store.FileFields()
-			rows, err := store.QueryFoundryAttachments().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key), f.Collection.Eq(string(c.Name())), f.Locale.Eq(locale), f.State.Eq(string(Ready))).OrderBy(f.ID.Asc()).Limit(MaxCollectionFiles+1).All(ctx, tx)
+			f := store.Files
+			rows, err := store.Files.Query().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key), f.Collection.Eq(string(c.Name())), f.Locale.Eq(locale), f.State.Eq(string(Ready))).OrderBy(f.ID.Asc()).Limit(MaxCollectionFiles+1).All(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -162,7 +163,7 @@ func (c Collection[M, K]) Reorder(ctx context.Context, m *Manager, owner model.R
 				return err
 			}
 			for i, id := range ids {
-				row, err := store.QueryFoundryAttachments().Update(ctx, tx, id, store.FileDraft{}.SetSortOrder(int32(i)).SetUpdatedAt(now))
+				row, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, store.Files.SortOrder.Set(int32(i)), store.Files.UpdatedAt.Set(now))
 				if err != nil {
 					return err
 				}
@@ -205,9 +206,9 @@ func (c Collection[M, K]) SetProperties(ctx context.Context, m *Manager, owner m
 			if err != nil {
 				return err
 			}
-			f := store.FileFields()
-			q := store.QueryFoundryAttachments().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key), f.Collection.Eq(string(c.Name())), f.Locale.Eq(locale), f.State.Eq(string(Ready)))
-			row, err := q.RequireFind(ctx, tx, model.IDFromBytes[store.File](id.Bytes()))
+			f := store.Files
+			q := store.Files.Query().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key), f.Collection.Eq(string(c.Name())), f.Locale.Eq(locale), f.State.Eq(string(Ready)))
+			row, err := q.Where(store.Files.Key().Eq(model.IDFromBytes[store.File](id.Bytes()))).Require(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -218,7 +219,7 @@ func (c Collection[M, K]) SetProperties(ctx context.Context, m *Manager, owner m
 			if err != nil {
 				return err
 			}
-			row, err = q.Update(ctx, tx, row.ID, store.FileDraft{}.SetProperties(properties).SetUpdatedAt(now))
+			row, err = orm.Update(ctx, tx, q, store.Files.Key(), row.ID, store.Files.Properties.Set(properties), store.Files.UpdatedAt.Set(now))
 			if err != nil {
 				return err
 			}

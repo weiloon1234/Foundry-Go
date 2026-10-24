@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionmaintenance"
@@ -42,13 +44,13 @@ func rescopeTable() extensionmaintenance.RescopeTable[store.TranslationIndex] {
 	return extensionmaintenance.RescopeTable[store.TranslationIndex]{
 		Name: "translations.rescope",
 		Scan: func(ctx context.Context, tx *database.Tx, owner extensions.OwnerName, current, after string, limit int, lock bool) ([]store.TranslationIndex, error) {
-			f := store.TranslationFields()
-			q := store.QueryFoundryModelTranslations().Where(f.Owner.Eq(string(owner)), f.Scope.Ne(current)).OrderBy(f.Key.Asc()).Limit(limit)
+			f := store.Translations
+			q := store.Translations.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Ne(current)).OrderBy(f.KeyColumn.Asc()).Limit(limit)
 			if after != "" {
-				q = q.Where(f.Key.Gt(after))
+				q = q.Where(f.KeyColumn.Gt(after))
 			}
 			if lock {
-				return store.TranslationsIndex(q).ForUpdate().All(ctx, tx)
+				return rows.ForUpdate(rows.Read(store.TranslationsIndex(q))).All(ctx, tx)
 			}
 			return store.TranslationsIndex(q).All(ctx, tx)
 		},
@@ -56,22 +58,22 @@ func rescopeTable() extensionmaintenance.RescopeTable[store.TranslationIndex] {
 			return extensionrow.Identity{Key: row.Key, Owner: row.Owner, Scope: row.Scope, SubjectKey: row.SubjectKey, Identity: row.Identity}, []string{row.Field, row.Locale}
 		},
 		Exists: func(ctx context.Context, tx *database.Tx, key string) (bool, error) {
-			f := store.TranslationFields()
-			return store.QueryFoundryModelTranslations().Where(f.Key.Eq(key)).Exists(ctx, tx)
+			f := store.Translations
+			return store.Translations.Query().Where(f.KeyColumn.Eq(key)).Exists(ctx, tx)
 		},
 		Move: func(ctx context.Context, tx *database.Tx, row store.TranslationIndex, subject extensions.Subject, key string) error {
 			if !identifier.Semantic(row.Field) || i18n.LocaleID(row.Locale).Validate() != nil {
 				return invalid()
 			}
-			q := store.QueryFoundryModelTranslations()
-			stored, err := q.RequireFind(ctx, tx, row.Key)
+			q := store.Translations.Query()
+			stored, err := q.Where(store.Translations.Key().Eq(row.Key)).Require(ctx, tx)
 			if err != nil {
 				return err
 			}
-			if _, err := q.Delete(ctx, tx, row.Key); err != nil {
+			if _, err := orm.Delete(ctx, tx, q, store.Translations.Key(), row.Key); err != nil {
 				return err
 			}
-			_, err = q.Create(ctx, tx, store.TranslationDraft{}.SetKey(key).SetOwner(row.Owner).SetScope(subject.Scope).SetSubjectKey(subject.Key).SetIdentity(subject.Identity).SetField(stored.Field).SetLocale(stored.Locale).SetValue(stored.Value).SetCreatedAt(stored.CreatedAt).SetUpdatedAt(stored.UpdatedAt))
+			_, err = store.Translations.Insert(ctx, tx, store.Translations.KeyColumn.Set(key), store.Translations.Owner.Set(row.Owner), store.Translations.Scope.Set(subject.Scope), store.Translations.SubjectKey.Set(subject.Key), store.Translations.Identity.Set(subject.Identity), store.Translations.Field.Set(stored.Field), store.Translations.Locale.Set(stored.Locale), store.Translations.Value.Set(stored.Value), store.Translations.CreatedAt.Set(stored.CreatedAt), store.Translations.UpdatedAt.Set(stored.UpdatedAt))
 			return err
 		},
 	}

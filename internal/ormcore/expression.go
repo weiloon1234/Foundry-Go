@@ -43,13 +43,13 @@ func Operation(kind querycore.ScalarOperation, result codec.ParameterType, argum
 }
 
 // CompareExpressions preserves both operands' declaration provenance.
-func CompareExpressions(left, right Expression, op querycore.Operator) Predicate {
+func CompareExpressions(left, right Expression, op querycore.Operator, text ...bool) Predicate {
 	refs, referenceErr := MergeReferences(left.Refs, right.Refs)
 	err := errors.Join(left.Err, right.Err, referenceErr)
 	if left.Node == nil || right.Node == nil {
 		err = errors.Join(err, Invalid("uninitialized comparison operand"))
 	}
-	return Predicate{Node: querycore.BinaryComparison{Left: left.Node, Right: right.Node, Operator: op}, Refs: refs, ReferenceFree: left.ReferenceFree && right.ReferenceFree, Err: err}
+	return Predicate{Node: querycore.BinaryComparison{Left: left.Node, Right: right.Node, Operator: op, Text: len(text) == 1 && text[0]}, Refs: refs, ReferenceFree: left.ReferenceFree && right.ReferenceFree, Err: err}
 }
 
 // Conjunction joins conditions without duplicating retained ownership references.

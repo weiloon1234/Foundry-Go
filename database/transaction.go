@@ -242,14 +242,20 @@ func runTransaction(ctx context.Context, conn *sql.Conn, owner *DB, classify cla
 		failures = append(failures, err)
 	}
 	for _, fn := range tx.callbacks() {
-		if err := callback.Isolated("after commit", func() error { return fn(ctx) }); err != nil {
+		if err := callback.Isolated("after commit", func() error { return afterCommitFailure(fn(ctx)) }); err != nil {
 			failures = append(failures, err)
 		}
 	}
-	if len(failures) != 0 {
-		return &Error{operation: "after commit", detail: Detail{Code: AfterCommitFailed}, outcome: Committed, cause: errors.Join(failures...)}
+	return afterCommitFailure(errors.Join(failures...))
+}
+
+// The committed outcome must wrap application errors before callback isolation
+// formats them. Never invoke application Error/Format methods after commitment.
+func afterCommitFailure(cause error) error {
+	if cause == nil {
+		return nil
 	}
-	return nil
+	return &Error{operation: "after commit", detail: Detail{Code: AfterCommitFailed}, outcome: Committed, cause: cause}
 }
 
 func (tx *Tx) setState(state TxState) { tx.mu.Lock(); defer tx.mu.Unlock(); tx.state = state }

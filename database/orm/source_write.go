@@ -7,7 +7,6 @@ import (
 	"unsafe"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
@@ -173,7 +172,7 @@ func sourceValues[M any](p sourceWritePlan, values []Assignment[M]) sourceWriteP
 	return p
 }
 func sourceReturning[M any](ctx context.Context, writer database.Transactor, p sourceWritePlan, limit int) ([]M, error) {
-	if limit <= 0 || limit > query.MaxInsertRows {
+	if limit <= 0 || limit > querycore.MaxInsertRows {
 		return nil, invalid("source write returning requires a positive bounded result limit")
 	}
 	var candidate []M

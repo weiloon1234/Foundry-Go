@@ -8,9 +8,9 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/extensionslot"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -60,7 +60,7 @@ func (Many[M]) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte("attachment
 func (Many[M]) MarshalJSON() ([]byte, error) { return nil, invalid() }
 
 // slotDefinition shares declaration, binding, manager, loading and links for
-// both slot kinds; OneSlot and ManySlot promote its exported methods.
+// both slot kinds; oneSlot and manySlot promote its exported methods.
 type slotDefinition[M any, K comparable, S any] struct {
 	collection Collection[M, K]
 	binding    extensions.SlotBinding[M, K, S]
@@ -68,30 +68,30 @@ type slotDefinition[M any, K comparable, S any] struct {
 	err        error
 }
 
-// OneSlot binds one model's One field to its single-file collection.
+// oneSlot binds one model's One field to its single-file collection.
 // Generated <Model>Extensions() constructs it; applications bind a manager once
 // with From. A bound slot is an eager-loading relation for With and Load.
-type OneSlot[M any, K comparable] struct {
-	query.ExtensionSlot[M]
+type oneSlot[M any, K comparable] struct {
+	loader extensionslot.Slot[M]
 	slotDefinition[M, K, One[M]]
 }
 
-// ManySlot binds one model's Many field to its multiple-file collection.
-type ManySlot[M any, K comparable] struct {
-	query.ExtensionSlot[M]
+// manySlot binds one model's Many field to its multiple-file collection.
+type manySlot[M any, K comparable] struct {
+	loader extensionslot.Slot[M]
 	slotDefinition[M, K, Many[M]]
 }
 
-// DefineOne is the generated declaration boundary for a One slot. The slot
+// defineOne is the generated declaration boundary for a One slot. The slot
 // type selects Single cardinality; a policy declaring Multiple is invalid.
-func DefineOne[M any, K comparable](owner extensions.Owner[M, K], name Name, policy Policy, binding extensions.SlotBinding[M, K, One[M]]) OneSlot[M, K] {
-	return OneSlot[M, K]{slotDefinition: defineSlot(owner, name, policy, Single, binding)}.From(nil)
+func defineOne[M any, K comparable](owner extensions.Owner[M, K], name Name, policy Policy, binding extensions.SlotBinding[M, K, One[M]]) oneSlot[M, K] {
+	return oneSlot[M, K]{slotDefinition: defineSlot(owner, name, policy, Single, binding)}.From(nil)
 }
 
-// DefineMany is the generated declaration boundary for a Many slot. The slot
+// defineMany is the generated declaration boundary for a Many slot. The slot
 // type selects Multiple cardinality; a policy declaring Single is invalid.
-func DefineMany[M any, K comparable](owner extensions.Owner[M, K], name Name, policy Policy, binding extensions.SlotBinding[M, K, Many[M]]) ManySlot[M, K] {
-	return ManySlot[M, K]{slotDefinition: defineSlot(owner, name, policy, Multiple, binding)}.From(nil)
+func defineMany[M any, K comparable](owner extensions.Owner[M, K], name Name, policy Policy, binding extensions.SlotBinding[M, K, Many[M]]) manySlot[M, K] {
+	return manySlot[M, K]{slotDefinition: defineSlot(owner, name, policy, Multiple, binding)}.From(nil)
 }
 
 func defineSlot[M any, K comparable, S any](owner extensions.Owner[M, K], name Name, policy Policy, cardinality Cardinality, binding extensions.SlotBinding[M, K, S]) slotDefinition[M, K, S] {
@@ -108,9 +108,9 @@ func defineSlot[M any, K comparable, S any](owner extensions.Owner[M, K], name N
 
 // From returns a copy that borrows the manager. A nil manager leaves the slot
 // unbound; loading, links and writes then report fault.Missing.
-func (s OneSlot[M, K]) From(m *Manager) OneSlot[M, K] {
+func (s oneSlot[M, K]) From(m *Manager) oneSlot[M, K] {
 	s.manager = m
-	s.ExtensionSlot = relationOf(s.slotDefinition, m, func(o One[M]) bool { return o.loaded }, func(o One[M]) int { return boolCount(o.file != nil) }, func(files []File[M]) (One[M], error) {
+	s.loader = relationOf(s.slotDefinition, m, func(o One[M]) bool { return o.loaded }, func(o One[M]) int { return boolCount(o.file != nil) }, func(files []File[M]) (One[M], error) {
 		switch len(files) {
 		case 0:
 			return One[M]{loaded: true}, nil
@@ -124,9 +124,9 @@ func (s OneSlot[M, K]) From(m *Manager) OneSlot[M, K] {
 
 // From returns a copy that borrows the manager. A nil manager leaves the slot
 // unbound; loading, links and writes then report fault.Missing.
-func (s ManySlot[M, K]) From(m *Manager) ManySlot[M, K] {
+func (s manySlot[M, K]) From(m *Manager) manySlot[M, K] {
 	s.manager = m
-	s.ExtensionSlot = relationOf(s.slotDefinition, m, func(files Many[M]) bool { return files.loaded }, func(files Many[M]) int { return len(files.files) }, func(files []File[M]) (Many[M], error) {
+	s.loader = relationOf(s.slotDefinition, m, func(files Many[M]) bool { return files.loaded }, func(files Many[M]) int { return len(files.files) }, func(files []File[M]) (Many[M], error) {
 		return Many[M]{files: files, loaded: true}, nil
 	})
 	return s
@@ -134,8 +134,8 @@ func (s ManySlot[M, K]) From(m *Manager) ManySlot[M, K] {
 
 // relationOf builds the eager-loading relation; an unbound slot reports its
 // Missing fault when validated, before parent SQL.
-func relationOf[M any, K comparable, S any](s slotDefinition[M, K, S], m *Manager, loaded func(S) bool, count func(S) int, convert func([]File[M]) (S, error)) query.ExtensionSlot[M] {
-	binding := query.ExtensionBinding[M, S]{Name: s.binding.Field, Get: s.binding.Get, Set: s.binding.Set, Loaded: loaded, Count: count, Unbound: s.unbound()}
+func relationOf[M any, K comparable, S any](s slotDefinition[M, K, S], m *Manager, loaded func(S) bool, count func(S) int, convert func([]File[M]) (S, error)) extensionslot.Slot[M] {
+	binding := extensionslot.Binding[M, S]{Name: s.binding.Field, Get: s.binding.Get, Set: s.binding.Set, Loaded: loaded, Count: count, Unbound: s.unbound()}
 	if s.collection.definition != nil {
 		binding.Table = s.collection.definition.owner.ModelName()
 	}
@@ -158,7 +158,7 @@ func relationOf[M any, K comparable, S any](s slotDefinition[M, K, S], m *Manage
 			return result, nil
 		}
 	}
-	return query.NewExtensionSlot(binding)
+	return extensionslot.New(binding)
 }
 
 // files loads ready files for parents in owner parts that fit MaxBatchFiles;
@@ -308,7 +308,7 @@ func (s slotDefinition[M, K, S]) VariantURL(ctx context.Context, owner M, file F
 
 // PublicURL derives the public URL of owner's loaded file without I/O. It is
 // absent when the loaded slot holds no file and fails when it was not loaded.
-func (s OneSlot[M, K]) PublicURL(ctx context.Context, owner M) (value.Optional[string], error) {
+func (s oneSlot[M, K]) PublicURL(ctx context.Context, owner M) (value.Optional[string], error) {
 	file, loaded := s.binding.Get(owner).Get()
 	if !loaded {
 		return value.Optional[string]{}, notLoaded()
@@ -326,7 +326,7 @@ func (s OneSlot[M, K]) PublicURL(ctx context.Context, owner M) (value.Optional[s
 
 // PublicURLs derives the public URLs of owner's loaded files in collection
 // order without I/O. It fails when the slot was not loaded.
-func (s ManySlot[M, K]) PublicURLs(ctx context.Context, owner M) ([]string, error) {
+func (s manySlot[M, K]) PublicURLs(ctx context.Context, owner M) ([]string, error) {
 	files, loaded := s.binding.Get(owner).Get()
 	if !loaded {
 		return nil, notLoaded()
@@ -351,9 +351,9 @@ func boolCount(present bool) int {
 	return 0
 }
 
-func (OneSlot[M, K]) Format(s fmt.State, _ rune) {
+func (oneSlot[M, K]) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("attachment slot descriptor"))
 }
-func (ManySlot[M, K]) Format(s fmt.State, _ rune) {
+func (manySlot[M, K]) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("attachment collection slot descriptor"))
 }

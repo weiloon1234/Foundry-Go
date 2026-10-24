@@ -220,7 +220,7 @@ func bindField[R, V any](b Builder[R], ptr *V, c codec.Codec[V]) Field[R, V] {
 	f.scan = func(base unsafe.Pointer) any { return c.Scan((*V)(unsafe.Add(base, f.offset))) }
 	d.fields[index] = f
 	return Field[R, V]{core: f, column: func() ormcore.Column[V] {
-		return ormcore.Column[V]{Sensitive: c.SensitiveValues(), Kind: c.ParameterType(), Nullable: f.column.Nullable, Bind: c.Bind, Clone: c.Clone, Scan: func(v *V) any { return c.Scan(v) }, Err: f.owner.err}
+		return ormcore.Column[V]{Text: c.ParameterType() == codec.TypeText, Sensitive: c.SensitiveValues(), Kind: c.ParameterType(), Nullable: f.column.Nullable, Bind: c.Bind, Clone: c.Clone, Scan: func(v *V) any { return c.Scan(v) }, Err: f.owner.err}
 	}}
 }
 func seal(d *declaration) {

@@ -5,7 +5,7 @@ import (
 )
 
 func compareJoinValues[L, R, V any](left RowValue[L, V], right RowValue[R, V], op operator) JoinOn[L, R] {
-	return JoinOn[L, R]{expression: binaryComparison{Left: rowInput(left).Value().node, Right: rowInput(right).Value().node, Operator: op}}
+	return JoinOn[L, R]{expression: binaryComparison{Left: rowInput(left).Value().node, Right: rowInput(right).Value().node, Operator: op, Text: op == like}}
 }
 
 // OnEqual compares equal SQL values; NULL makes the condition unknown.

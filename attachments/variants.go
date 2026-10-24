@@ -9,7 +9,8 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/imaging"
@@ -256,7 +257,7 @@ func (m *Manager) variantSource(ctx context.Context, id model.ID[store.File], re
 	var selected []Variant
 	err := m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		original, err = store.QueryFoundryAttachments().RequireFind(ctx, tx, id)
+		original, err = store.Files.Query().Where(store.Files.Key().Eq(id)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -274,8 +275,8 @@ func (m *Manager) variantSource(ctx context.Context, id model.ID[store.File], re
 		if replace || len(selected) == 0 {
 			return nil
 		}
-		v := store.VariantFields()
-		names, err := query.SelectValue(store.QueryFoundryAttachmentVariants().Where(v.FileID.Eq(id), v.State.Eq(string(VariantReady))).Limit(MaxVariants*2), query.Value(v.Name)).All(ctx, tx)
+		v := store.Variants
+		names, err := rows.SelectValue(store.Variants.Query().Where(v.FileID.Eq(id), v.State.Eq(string(VariantReady))).Limit(MaxVariants*2), v.Name).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -368,15 +369,15 @@ func (m *Manager) produceVariant(ctx context.Context, original store.File, varia
 
 func (m *Manager) stageVariant(ctx context.Context, original store.File, id model.ID[store.Variant], name VariantName, key storage.ObjectKey, media storage.MediaType, size int64, digest storage.SHA256, info imaging.Info) error {
 	return m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		current, err := store.QueryFoundryAttachments().ForUpdate().RequireFind(ctx, tx, original.ID)
+		current, err := store.Files.Query().ForUpdate().Where(store.Files.Key().Eq(original.ID)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
 		if current.State != string(Ready) || current.ETag != original.ETag || current.ObjectVersion != original.ObjectVersion {
 			return errOriginalSuperseded
 		}
-		v := store.VariantFields()
-		count, err := store.QueryFoundryAttachmentVariants().Where(v.FileID.Eq(original.ID), v.State.Ne(string(VariantCleaned))).Count(ctx, tx)
+		v := store.Variants
+		count, err := store.Variants.Query().Where(v.FileID.Eq(original.ID), v.State.Ne(string(VariantCleaned))).Count(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -387,7 +388,7 @@ func (m *Manager) stageVariant(ctx context.Context, original store.File, id mode
 		if err != nil {
 			return err
 		}
-		_, err = store.QueryFoundryAttachmentVariants().Create(ctx, tx, store.VariantDraft{}.SetID(id).SetFileID(original.ID).SetName(string(name)).SetDisk(original.Disk).SetObjectKey(key.String()).SetContentType(string(media)).SetSize(size).SetDigest(digest.String()).SetETag("").SetObjectVersion("").SetWidth(int32(info.Width)).SetHeight(int32(info.Height)).SetState(string(VariantWriting)).SetWriterID(m.writer).SetAttempts(0).SetLastFailure("").SetCreatedAt(now).SetUpdatedAt(now))
+		_, err = store.Variants.Insert(ctx, tx, store.Variants.ID.Set(id), store.Variants.FileID.Set(original.ID), store.Variants.Name.Set(string(name)), store.Variants.Disk.Set(original.Disk), store.Variants.ObjectKey.Set(key.String()), store.Variants.ContentType.Set(string(media)), store.Variants.Size.Set(size), store.Variants.Digest.Set(digest.String()), store.Variants.ETag.Set(""), store.Variants.ObjectVersion.Set(""), store.Variants.Width.Set(int32(info.Width)), store.Variants.Height.Set(int32(info.Height)), store.Variants.State.Set(string(VariantWriting)), store.Variants.WriterID.Set(m.writer), store.Variants.Attempts.Set(0), store.Variants.LastFailure.Set(""), store.Variants.CreatedAt.Set(now), store.Variants.UpdatedAt.Set(now))
 		return err
 	})
 }
@@ -402,7 +403,7 @@ func (m *Manager) recordVariantFailure(ctx context.Context, id model.ID[store.Va
 	cleanupCtx, cancel := m.cleanupContext(ctx)
 	defer cancel()
 	return m.store.Write(cleanupCtx, func(ctx context.Context, tx *database.Tx) error {
-		row, err := store.QueryFoundryAttachmentVariants().ForUpdate().RequireFind(ctx, tx, id)
+		row, err := store.Variants.Query().ForUpdate().Where(store.Variants.Key().Eq(id)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -413,7 +414,7 @@ func (m *Manager) recordVariantFailure(ctx context.Context, id model.ID[store.Va
 		if err != nil {
 			return err
 		}
-		_, err = store.QueryFoundryAttachmentVariants().Update(ctx, tx, id, store.VariantDraft{}.SetState(string(next)).SetLastFailure("upload_failed").SetUpdatedAt(now))
+		_, err = orm.Update(ctx, tx, store.Variants.Query(), store.Variants.Key(), id, store.Variants.State.Set(string(next)), store.Variants.LastFailure.Set("upload_failed"), store.Variants.UpdatedAt.Set(now))
 		return err
 	})
 }
@@ -425,11 +426,11 @@ func (m *Manager) publishVariant(ctx context.Context, fileID model.ID[store.File
 	var retired []model.ID[store.Variant]
 	err := m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
 		retired = nil
-		original, err := store.QueryFoundryAttachments().ForUpdate().RequireFind(ctx, tx, fileID)
+		original, err := store.Files.Query().ForUpdate().Where(store.Files.Key().Eq(fileID)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
-		row, err := store.QueryFoundryAttachmentVariants().ForUpdate().RequireFind(ctx, tx, id)
+		row, err := store.Variants.Query().ForUpdate().Where(store.Variants.Key().Eq(id)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -444,26 +445,26 @@ func (m *Manager) publishVariant(ctx context.Context, fileID model.ID[store.File
 		if err != nil {
 			return err
 		}
-		pinned := store.VariantDraft{}.SetETag(string(object.ETag)).SetObjectVersion(string(object.Version)).SetUpdatedAt(now)
+		pinned := []orm.Assignment[store.Variant]{store.Variants.ETag.Set(string(object.ETag)), store.Variants.ObjectVersion.Set(string(object.Version)), store.Variants.UpdatedAt.Set(now)}
 		if original.State != string(Ready) {
-			if _, err := store.QueryFoundryAttachmentVariants().Update(ctx, tx, id, pinned.SetState(string(VariantCleanup)).SetLastFailure("original_superseded")); err != nil {
+			if _, err := orm.Update(ctx, tx, store.Variants.Query(), store.Variants.Key(), id, append(pinned, store.Variants.State.Set(string(VariantCleanup)), store.Variants.LastFailure.Set("original_superseded"))...); err != nil {
 				return err
 			}
 			retired = append(retired, id)
 			return nil
 		}
-		v := store.VariantFields()
-		previous, err := store.QueryFoundryAttachmentVariants().Where(v.FileID.Eq(fileID), v.Name.Eq(row.Name), v.State.Eq(string(VariantReady))).ForUpdate().All(ctx, tx)
+		v := store.Variants
+		previous, err := store.Variants.Query().Where(v.FileID.Eq(fileID), v.Name.Eq(row.Name), v.State.Eq(string(VariantReady))).ForUpdate().All(ctx, tx)
 		if err != nil {
 			return err
 		}
 		for _, old := range previous {
-			if _, err := store.QueryFoundryAttachmentVariants().Update(ctx, tx, old.ID, store.VariantDraft{}.SetState(string(VariantCleanup)).SetUpdatedAt(now)); err != nil {
+			if _, err := orm.Update(ctx, tx, store.Variants.Query(), store.Variants.Key(), old.ID, store.Variants.State.Set(string(VariantCleanup)), store.Variants.UpdatedAt.Set(now)); err != nil {
 				return err
 			}
 			retired = append(retired, old.ID)
 		}
-		_, err = store.QueryFoundryAttachmentVariants().Update(ctx, tx, id, pinned.SetState(string(VariantReady)))
+		_, err = orm.Update(ctx, tx, store.Variants.Query(), store.Variants.Key(), id, append(pinned, store.Variants.State.Set(string(VariantReady)))...)
 		return err
 	})
 	return retired, err
@@ -472,8 +473,8 @@ func (m *Manager) publishVariant(ctx context.Context, fileID model.ID[store.File
 // retireVariants moves an original's ready variants to cleanup inside the
 // caller's transaction and returns every variant awaiting cleanup.
 func (m *Manager) retireVariants(ctx context.Context, tx *database.Tx, fileID model.ID[store.File]) ([]model.ID[store.Variant], error) {
-	v := store.VariantFields()
-	rows, err := store.QueryFoundryAttachmentVariants().Where(v.FileID.Eq(fileID), v.State.In(string(VariantReady), string(VariantCleanup))).OrderBy(v.ID.Asc()).Limit(maxVariantIntents).ForUpdate().All(ctx, tx)
+	v := store.Variants
+	rows, err := store.Variants.Query().Where(v.FileID.Eq(fileID), v.State.In(string(VariantReady), string(VariantCleanup))).OrderBy(v.ID.Asc()).Limit(maxVariantIntents).ForUpdate().All(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -484,7 +485,7 @@ func (m *Manager) retireVariants(ctx context.Context, tx *database.Tx, fileID mo
 	ids := make([]model.ID[store.Variant], 0, len(rows))
 	for _, row := range rows {
 		if row.State == string(VariantReady) {
-			if _, err := store.QueryFoundryAttachmentVariants().Update(ctx, tx, row.ID, store.VariantDraft{}.SetState(string(VariantCleanup)).SetUpdatedAt(now)); err != nil {
+			if _, err := orm.Update(ctx, tx, store.Variants.Query(), store.Variants.Key(), row.ID, store.Variants.State.Set(string(VariantCleanup)), store.Variants.UpdatedAt.Set(now)); err != nil {
 				return nil, err
 			}
 		}
@@ -519,10 +520,10 @@ func (m *Manager) cleanupVariant(ctx context.Context, id model.ID[store.Variant]
 	var original store.File
 	err := m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		if row, err = store.QueryFoundryAttachmentVariants().RequireFind(ctx, tx, id); err != nil {
+		if row, err = store.Variants.Query().Where(store.Variants.Key().Eq(id)).Require(ctx, tx); err != nil {
 			return err
 		}
-		original, err = store.QueryFoundryAttachments().RequireFind(ctx, tx, row.FileID)
+		original, err = store.Files.Query().Where(store.Files.Key().Eq(row.FileID)).Require(ctx, tx)
 		return err
 	})
 	if err != nil {
@@ -554,7 +555,7 @@ func (m *Manager) cleanupVariant(ctx context.Context, id model.ID[store.Variant]
 	journalCtx, cancel := m.cleanupContext(ctx)
 	defer cancel()
 	journalErr := m.store.Write(journalCtx, func(ctx context.Context, tx *database.Tx) error {
-		current, err := store.QueryFoundryAttachmentVariants().ForUpdate().RequireFind(ctx, tx, id)
+		current, err := store.Variants.Query().ForUpdate().Where(store.Variants.Key().Eq(id)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -573,13 +574,13 @@ func (m *Manager) cleanupVariant(ctx context.Context, id model.ID[store.Variant]
 		if attempts < 1<<32-1 {
 			attempts++
 		}
-		draft := store.VariantDraft{}.SetAttempts(attempts).SetUpdatedAt(now)
+		draft := []orm.Assignment[store.Variant]{store.Variants.Attempts.Set(attempts), store.Variants.UpdatedAt.Set(now)}
 		if deleteErr == nil {
-			draft = draft.SetState(string(VariantCleaned)).SetLastFailure("")
+			draft = append(draft, store.Variants.State.Set(string(VariantCleaned)), store.Variants.LastFailure.Set(""))
 		} else {
-			draft = draft.SetLastFailure("storage_delete_failed")
+			draft = append(draft, store.Variants.LastFailure.Set("storage_delete_failed"))
 		}
-		_, err = store.QueryFoundryAttachmentVariants().Update(ctx, tx, id, draft)
+		_, err = orm.Update(ctx, tx, store.Variants.Query(), store.Variants.Key(), id, draft...)
 		return err
 	})
 	return errors.Join(deleteErr, journalErr)
@@ -598,8 +599,8 @@ func (m *Manager) sweepVariants(ctx context.Context, cutoff temporal.DateTime, l
 	m.mu.Unlock()
 	var rows []store.Variant
 	err := m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
-		v := store.VariantFields()
-		found, err := store.QueryFoundryAttachmentVariants().Where(query.Or(v.State.Eq(string(VariantCleanup)), query.And(v.State.In(string(VariantWriting), string(VariantUncertain)), v.UpdatedAt.Lte(cutoff)))).OrderBy(v.UpdatedAt.Asc(), v.ID.Asc()).Limit(limit+len(active)).All(ctx, tx)
+		v := store.Variants
+		found, err := store.Variants.Query().Where(orm.Or(v.State.Eq(string(VariantCleanup)), orm.And(v.State.In(string(VariantWriting), string(VariantUncertain)), v.UpdatedAt.Lte(cutoff)))).OrderBy(v.UpdatedAt.Asc(), v.ID.Asc()).Limit(limit+len(active)).All(ctx, tx)
 		for _, row := range found {
 			if !active[row.ID] && len(rows) < limit {
 				rows = append(rows, row)
@@ -630,10 +631,10 @@ func (m *Manager) settleVariant(ctx context.Context, id model.ID[store.Variant],
 	fenced := false
 	err := m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		if row, err = store.QueryFoundryAttachmentVariants().ForUpdate().RequireFind(ctx, tx, id); err != nil {
+		if row, err = store.Variants.Query().ForUpdate().Where(store.Variants.Key().Eq(id)).Require(ctx, tx); err != nil {
 			return err
 		}
-		if original, err = store.QueryFoundryAttachments().RequireFind(ctx, tx, row.FileID); err != nil {
+		if original, err = store.Files.Query().Where(store.Files.Key().Eq(row.FileID)).Require(ctx, tx); err != nil {
 			return err
 		}
 		if err := m.validateVariant(row, original); err != nil {
@@ -647,7 +648,7 @@ func (m *Manager) settleVariant(ctx context.Context, id model.ID[store.Variant],
 			return err
 		}
 		// Fence the original writer before inspecting storage.
-		row, err = store.QueryFoundryAttachmentVariants().Update(ctx, tx, id, store.VariantDraft{}.SetState(string(VariantUncertain)).SetWriterID(m.writer).SetLastFailure("automatic_settlement").SetUpdatedAt(now))
+		row, err = orm.Update(ctx, tx, store.Variants.Query(), store.Variants.Key(), id, store.Variants.State.Set(string(VariantUncertain)), store.Variants.WriterID.Set(m.writer), store.Variants.LastFailure.Set("automatic_settlement"), store.Variants.UpdatedAt.Set(now))
 		fenced = err == nil
 		return err
 	})
@@ -668,7 +669,7 @@ func (m *Manager) settleVariant(ctx context.Context, id model.ID[store.Variant],
 		return statErr
 	}
 	err = m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		current, err := store.QueryFoundryAttachmentVariants().ForUpdate().RequireFind(ctx, tx, id)
+		current, err := store.Variants.Query().ForUpdate().Where(store.Variants.Key().Eq(id)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -679,13 +680,13 @@ func (m *Manager) settleVariant(ctx context.Context, id model.ID[store.Variant],
 		if err != nil {
 			return err
 		}
-		draft := store.VariantDraft{}.SetUpdatedAt(now).SetLastFailure("")
+		draft := []orm.Assignment[store.Variant]{store.Variants.UpdatedAt.Set(now), store.Variants.LastFailure.Set("")}
 		if absent {
-			draft = draft.SetState(string(VariantCleaned))
+			draft = append(draft, store.Variants.State.Set(string(VariantCleaned)))
 		} else {
-			draft = draft.SetState(string(VariantCleanup)).SetETag(string(info.ETag)).SetObjectVersion(string(info.Version))
+			draft = append(draft, store.Variants.State.Set(string(VariantCleanup)), store.Variants.ETag.Set(string(info.ETag)), store.Variants.ObjectVersion.Set(string(info.Version)))
 		}
-		_, err = store.QueryFoundryAttachmentVariants().Update(ctx, tx, id, draft)
+		_, err = orm.Update(ctx, tx, store.Variants.Query(), store.Variants.Key(), id, draft...)
 		return err
 	})
 	if err != nil || absent {
@@ -709,8 +710,8 @@ func (c Collection[M, K]) loadVariants(ctx context.Context, tx *database.Tx, m *
 	if len(ids) == 0 {
 		return nil
 	}
-	v := store.VariantFields()
-	rows, err := store.QueryFoundryAttachmentVariants().Where(v.FileID.In(ids...), v.State.Eq(string(VariantReady))).OrderBy(v.FileID.Asc(), v.Name.Asc()).Limit(len(ids)*MaxVariants*2+1).All(ctx, tx)
+	v := store.Variants
+	rows, err := store.Variants.Query().Where(v.FileID.In(ids...), v.State.Eq(string(VariantReady))).OrderBy(v.FileID.Asc(), v.Name.Asc()).Limit(len(ids)*MaxVariants*2+1).All(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -851,14 +852,13 @@ func (m *Manager) RegenerateVariants(ctx context.Context, owner extensions.Owner
 	err := m.calls.Run(ctx, "attachment variant regeneration", func(ctx context.Context) error {
 		var ids []model.ID[store.File]
 		err := m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
-			f := store.FileFields()
-			q := store.QueryFoundryAttachments().Where(f.Owner.Eq(string(owner)), f.Collection.Eq(string(collection)), f.State.Eq(string(Ready)))
+			f := store.Files
+			q := store.Files.Query().Where(f.Owner.Eq(string(owner)), f.Collection.Eq(string(collection)), f.State.Eq(string(Ready)))
 			if !options.Cursor.IsZero() {
-				ordered := query.OrderedField[store.File, model.ID[store.File]]{ScalarField: f.ID}
-				q = q.Where(ordered.Gt(options.Cursor.after))
+				q = q.Where(orm.UUIDGreater(f.ID, options.Cursor.after))
 			}
 			var err error
-			ids, err = query.SelectValue(q.OrderBy(f.ID.Asc()).Limit(options.Limit+1), query.Value(f.ID)).All(ctx, tx)
+			ids, err = rows.SelectValue(q.OrderBy(f.ID.Asc()).Limit(options.Limit+1), f.ID).All(ctx, tx)
 			return err
 		})
 		if err != nil {

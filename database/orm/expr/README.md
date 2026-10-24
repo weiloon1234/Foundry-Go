@@ -385,3 +385,40 @@ UUID seeks use `UUIDLess`, `UUIDLessOrEqual`, `UUIDGreater` and
 and expression scope remain distinct types. Nullable row expressions use the
 `Nullable` variants and compare a present UUID. Ordering is PostgreSQL bytewise
 UUID ordering, not a guarantee about UUID generation time.
+
+## Projection filter adapters
+
+`ModelPredicate(Users.State.Eq(Active))` retains model declaration ownership in a
+projection's row phase. `Has(UserRelations.Orders, childPredicate)` lifts expression
+predicates through the existing scoped relation EXISTS compiler. A child from
+another declaration fails validation even when its Go model type matches. The
+bound relation plan must also match both model types; a promoted target marker
+from another embedded relation cannot change them.
+
+`CompareRow(Value(Users.State))` supplies equality and membership
+without adding ordered or text operations to enums. `CompareNullableRow` retains
+present-value comparisons and adds null tests for nullable fields. Use `OrderRow` or
+`OrderNullableRow` for computed ordered values. Stored text adapters take the
+column itself: `TextRow(Users.Name)` and `TextNullableRow(Users.Nickname)`. Their
+`orm.TextExpressionColumn` input rejects direct non-text handles; `Value`
+erases that static capability and cannot be passed to these adapters. Both
+adapters validate the retrieved column's own text metadata before granting
+operations. Nested embedding cannot borrow a text marker from another handle:
+an invalid adapter retains its error through comparisons, ordering, selection
+and parameters. String-backed enums cannot acquire text or ordered comparisons
+through these adapters. Computed text functions already return text
+comparison handles. Present values remain the inputs for nullable comparisons.
+The compiler also rejects literal and expression LIKE predicates without a text
+capability, independently of the codec's string representation.
+
+`Or` and `Not` accept only row predicates; `HavingOr` and `HavingPredicate.Not`
+retain the group phase. Report filters must reject mixed WHERE/HAVING OR/NOT.
+SQL NOT alone excludes unknown results: null-inclusive report negation uses
+`expr.Or(expr.Not(note.Eq("Ada")), note.IsNull())`. Literal `Contains`/`IContains`
+escape wildcards, while `Like` deliberately accepts patterns. The datatable
+request policy continues to require explicit `AllowLike` and owns mixed-phase
+validation and null-inclusive negation; its API cutover is a separate slice.
+
+For joined or aliased report columns, use `TextRowAt(scope, column)` or
+`TextNullableRowAt(scope, column)`. They retain the column’s actual text capability
+and its validated scope; promoted markers cannot authorize an enum as text.

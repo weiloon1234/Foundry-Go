@@ -11,20 +11,11 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// CursorRequest selects a bounded forward or backward page in the query's
-// declared order. After and Before are mutually exclusive; omit both to start.
-type CursorRequest[M any] struct {
-	Size          int
-	After, Before value.Optional[Cursor[M]]
-}
+// CursorRequest selects a bounded forward or backward page.
+type CursorRequest[M any] = querycore.CursorRequest[M]
 
-// CursorPage keeps canonical query order even for backward traversal. Next and
-// Previous are navigation hints, not guarantees against concurrent data changes.
-type CursorPage[M any] struct {
-	Items          []M
-	Size           int
-	Next, Previous value.Optional[Cursor[M]]
-}
+// CursorPage preserves canonical order and typed navigation hints.
+type CursorPage[M any] = querycore.CursorPage[M]
 
 type cursorPlan[M any] struct {
 	query              Query[M]

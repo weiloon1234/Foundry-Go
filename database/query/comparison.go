@@ -9,12 +9,12 @@ import (
 )
 
 // Model fields and aggregate conditions share binding and comparison semantics.
-func typedComparison[V any](operand valueExpression, op operator, c codec.Codec[V], values []V) comparison {
+func typedComparison[V any](operand valueExpression, op operator, c codec.Codec[V], values []V, text ...bool) comparison {
 	bindings := make([]any, len(values))
 	for i, v := range values {
 		bindings[i] = c.Clone(v)
 	}
-	return comparison{Operand: querycore.WithSensitivity(operand, c.SensitiveValues()), Operator: op, Values: bindings, Kind: c.ParameterType(), Bind: func(raw any) (driver.Value, error) {
+	return comparison{Operand: querycore.WithSensitivity(operand, c.SensitiveValues()), Operator: op, Values: bindings, Text: len(text) == 1 && text[0], Kind: c.ParameterType(), Bind: func(raw any) (driver.Value, error) {
 		v, ok := raw.(V)
 		if !ok {
 			return nil, fault.New(fault.Invalid, "invalid typed query binding")

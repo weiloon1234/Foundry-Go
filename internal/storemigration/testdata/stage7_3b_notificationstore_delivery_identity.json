@@ -1,0 +1,15 @@
+{
+  "Statements": [
+    {
+      "SQL": "SELECT \"foundry_notification_deliveries\".\"key\", \"foundry_notification_deliveries\".\"notification_id\", \"foundry_notification_deliveries\".\"channel\", \"foundry_notification_deliveries\".\"kind\", \"foundry_notification_deliveries\".\"state\", \"foundry_notification_deliveries\".\"payload\", \"foundry_notification_deliveries\".\"claim\", \"foundry_notification_deliveries\".\"attempts\", \"foundry_notification_deliveries\".\"updated_at\" FROM \"foundry_notification_deliveries\" WHERE (\"foundry_notification_deliveries\".\"key\" = $1) ORDER BY \"foundry_notification_deliveries\".\"key\" ASC LIMIT $2",
+      "Args": [
+        "stored",
+        1
+      ]
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "5b74874f8fa123d46ce33d9c13d6dcc6801818c5c137950e492c16ace771f697"
+}

@@ -10,7 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// Private callbacks retain legacy operations without exposing their generic descriptor graph.
+// Private callbacks retain shared slot operations without exposing their generic descriptor graph.
 // Argument/result pointers are synchronous and never retained by these callbacks.
 type attachmentHandleCore struct {
 	bind         func(*Manager) *attachmentHandleCore

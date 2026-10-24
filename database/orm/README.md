@@ -985,8 +985,12 @@ reconciliation candidates; no automatic retry occurs. Generated-model factory
 and binding adapters remain available during the staged migration.
 
 Pagination adapters consume `orm.PageResult`, `orm.SimplePage`, `orm.CursorRequest`
-and `orm.CursorPage`. These are aliases of the existing wire types, so reflected
-contract identities and serialized cursor positions remain unchanged.
+and `orm.CursorPage`. These and the legacy `query` names alias one set of shared SQL pagination
+contracts in `internal/querycore`. Validation, field shapes, cursor bytes and
+redacted formatting are unchanged; the reflected defining package is now the
+shared owner. Applications continue using the public aliases. HTTP pagination
+retains the published cursor schema identity, so manifests and generated clients
+do not inherit the implementation package move.
 
 The extension namespace uses `TextHandle`, `OneHandle`, `ManyHandle` and
 `ValueHandle`: direct typed methods over private, non-generic callback state.
@@ -995,3 +999,100 @@ they do not expose legacy `Field`, `Collection` or `Key` descriptor families.
 `OneHandle` and `ManyHandle` remain distinct, non-convertible capabilities.
 Lookup diagnostics (`Keyed`, `Unique`, `RelatedUnique`) redact scoped values under
 ordinary, detailed and Go-syntax formatting.
+
+## Lifecycle terminals and query plans
+
+`CreateEach(ctx, db, query, drafts)` runs one normal creation lifecycle per input,
+atomically, in input order. A valid empty batch does not acquire a transaction.
+`CreateOrFirst(ctx, db, query, assignments...)` tries insertion first in a
+savepoint. Only a unique violation from that INSERT on the model's own table
+allows recovery: after rollback, it reads the first matching competitor. Recovery
+requires server-reported schema, table and constraint metadata matching the
+resolved destination; missing metadata preserves the violation. Hooks,
+observers, hydration errors and uncertain outcomes never trigger recovery or
+retry. The query must select the conflicting row; snapshot isolation can hide a
+competitor, in which case the violation is returned. Internal reads skip Retrieved.
+`FirstOrCreate` locks the first primary-ordered match, while `UpdateOrCreate`
+accepts separate creation assignments and a typed update callback. Only the chosen
+branch prepares assignments. Omitted creation fields inherit unambiguous top-level
+equality predicates, including global scopes; mutated fields require explicit input.
+A created row must satisfy the original query. Concurrent absent rows rely on
+physical unique constraints; these functions do not retry. Internal model reads
+skip retrieval callbacks. Read ordering, windows and eager loads are rejected.
+
+`PruneBatch(ctx, db, query, size, mass)` physically removes a bounded batch of
+ordinary models. Soft-delete models use `ForcePruneBatch(ctx, db, query, soft,
+size, mass)` with their declaration token. Selection locks rows in primary-key
+order and preserves filters and visibility. With `mass=false`, every model runs
+its deletion lifecycle. `mass=true` explicitly acknowledges one DELETE without
+per-model hooks, observers or audit. Each batch is atomic. `prune.ORMModel` and
+`prune.ORMSoftModel` register these operations with the [bounded prune registry](../prune/README.md).
+The registry uses `orm.MaxPerModelWriteRows`; generated-query `prune.Model`
+remains a compatibility adapter during retirement.
+
+`Explain` returns a bounded typed PostgreSQL `Plan` without running the SELECT;
+`ExplainAnalyze` explicitly executes it. Neither hydrates models, dispatches
+retrieval callbacks nor runs eager loads. Locked models use `ExplainLocked` or
+`ExplainAnalyzeLocked`, requiring `*database.Tx`. The corresponding `rows`
+functions accept ordinary `Result`, locked results or transaction-owned records
+and scalars. Adapt projections, scalars and sets through the existing `rows.Read*`
+functions. `rows.ExplainCursor`/`ExplainValueCursor` and their Analyze variants
+plan canonical cursor ordering without adding a page boundary. Plan formatting is
+redacted; explicit `Root` and `JSON` accessors return
+owned snapshots and may expose server predicates and bound values.
+
+Numeric adjustments retain `Number.Increment`/`Decrement` and nullable equivalents.
+Amounts are positive and finite; `AtMost` guards increments and `AtLeast` guards
+decrements. Numeric primary and lookup-key adapters expose comparisons, ordering
+and identity assignment, but no adjustment methods. Managed timestamps and input
+columns also have no numeric adjustment capability. A guarded per-key update
+returning no row reports `ErrBoundExceeded` (including missing keys).
+
+
+Projection callbacks use `rows.Each(ctx, db, report, consume)`. They receive one
+fully decoded value at a time while rows remain open. Callback errors stop further
+decoding and close the result; values already consumed remain consumed if a later
+decode or close fails. Use `report.All` when the caller needs an all-or-error slice.
+
+## Advisory validation lookups
+
+`validation/database` accepts an ORM model query and one typed stored column:
+
+```go
+available := databasevalidation.Unique(db, Users.Query(), Users.Email)
+active := databasevalidation.Exists(db, Users.Query().Where(Users.Status.Eq(StatusActive)), Users.Key())
+```
+
+`orm.Lookup(Users.Query(), Users.Email)` is the underlying observation handle.
+It preserves filters, global scopes, soft-delete visibility and stored codecs,
+without hydrating models, retrieval hooks or implicit transactions. Nullable and
+mutated columns accept their non-null stored value type. Batch observations use
+SQL equality in groups of 64; empty lists perform no I/O. Ordered, paginated,
+eager-loaded and locked sources cannot be used as complete lookup scopes.
+
+`databasevalidation.Scoped` derives a scope at check time;
+`databasevalidation.UniqueIgnoring` derives a typed key exclusion from a supplied
+`validation.Slot`. Keep tenant predicates and derive exclusions from trusted route
+or actor data. Errors never prove availability. These reads are advisory: database
+constraints still govern writes. See [validation](../../docs/guides/validation.md#advisory-database-rules)
+for composition and safe metadata exports.
+
+### Shared extension loading
+
+Declaration-based attachment, translation and metadata handles use the shared
+external-slot loader in `internal/extensionslot`. Public handles retain concrete
+owner, key and value types through direct method shells over private callback
+state. Loading keeps per-slot parent batches, loaded-empty values, separate fetched
+and attached budgets, and the caller's executor. Failed fetches do not attach an
+incomplete batch tree.
+
+`FoundryExtension` and the legacy query adapter require a validated query-family
+capability. They accept concrete framework slot state; capabilities are never
+passed to slot accessors or application callbacks. Legacy generated slot and owner
+entry points remain available during consumer migration. Their predicate conversion
+happens only at those compatibility entry points; ORM owners retain ORM identity
+and scope declarations.
+
+Bounded Explain execution and plan decoding also share querycore. The public
+`orm.Plan`/`PlanNode` and legacy aliases retain their methods and data contract;
+their defining Go package is now the internal shared owner.

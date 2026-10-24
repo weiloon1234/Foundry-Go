@@ -1,0 +1,15 @@
+{
+  "Statements": [
+    {
+      "SQL": "SELECT \"foundry_notifications\".\"id\", \"foundry_notifications\".\"recipient\", \"foundry_notifications\".\"scope\", \"foundry_notifications\".\"subject_key\", \"foundry_notifications\".\"identity\", \"foundry_notifications\".\"origin\", \"foundry_notifications\".\"name\", \"foundry_notifications\".\"version\", \"foundry_notifications\".\"payload\", \"foundry_notifications\".\"fingerprint\", \"foundry_notifications\".\"created_at\" FROM \"foundry_notifications\" WHERE (\"foundry_notifications\".\"id\" = $1) ORDER BY \"foundry_notifications\".\"id\" ASC LIMIT $2",
+      "Args": [
+        "01890f47-1a00-7000-8000-000000000001",
+        1
+      ]
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "f6568eea45bdeb0233414aa114fc364020319e93efc916c90ac22af1fd275728"
+}

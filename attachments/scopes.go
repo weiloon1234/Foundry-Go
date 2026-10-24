@@ -4,17 +4,17 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	store "github.com/weiloon1234/Foundry-Go/internal/attachmentstore"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 // Matching returns a bounded materialized predicate for owners with a ready
 // attachment in this collection and exact locale. The later owner query retains
 // its normal visibility and authorization filters; this is not a live subquery.
-func (c Collection[M, K]) Matching(ctx context.Context, m *Manager) (query.Predicate[M], error) {
+func (c Collection[M, K]) matchingKeys(ctx context.Context, m *Manager) ([]K, error) {
 	if err := c.check(m); err != nil {
-		return query.Predicate[M]{}, err
+		return nil, err
 	}
 	var keys []K
 	err := m.reads.Run(ctx, "attachment owner scope", func(ctx context.Context) error {
@@ -23,8 +23,8 @@ func (c Collection[M, K]) Matching(ctx context.Context, m *Manager) (query.Predi
 			if err != nil {
 				return err
 			}
-			f := store.FileFields()
-			rows, err := store.Index(store.QueryFoundryAttachments().Where(f.Scope.Eq(c.definition.owner.Scope()), f.Collection.Eq(string(c.Name())), f.Locale.Eq(locale), f.State.Eq(string(Ready))).OrderBy(f.SubjectKey.Asc(), f.ID.Asc()).Limit(MaxBatchFiles+1)).All(ctx, tx)
+			f := store.Files
+			rows, err := store.Index(store.Files.Query().Where(f.Scope.Eq(c.definition.owner.Scope()), f.Collection.Eq(string(c.Name())), f.Locale.Eq(locale), f.State.Eq(string(Ready))).OrderBy(f.SubjectKey.Asc(), f.ID.Asc()).Limit(MaxBatchFiles+1)).All(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -41,7 +41,7 @@ func (c Collection[M, K]) Matching(ctx context.Context, m *Manager) (query.Predi
 					continue
 				}
 				seen[subject] = true
-				if len(seen) > query.MaxIdentityBatch {
+				if len(seen) > querycore.MaxIdentityBatch {
 					return fault.New(fault.Conflict, "attachment scope exceeds its owner limit")
 				}
 				identity, err := row.Identity.Decode()
@@ -58,7 +58,7 @@ func (c Collection[M, K]) Matching(ctx context.Context, m *Manager) (query.Predi
 		})
 	})
 	if err != nil {
-		return query.Predicate[M]{}, err
+		return nil, err
 	}
-	return c.definition.owner.QueryScope(keys...), nil
+	return keys, nil
 }

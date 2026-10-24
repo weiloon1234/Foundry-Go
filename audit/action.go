@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/audit/record"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/auditstore"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
@@ -94,7 +95,7 @@ func (a Action[P]) record(ctx context.Context, tx *database.Tx, recorder *Record
 	if err != nil {
 		return ActionID[P]{}, err
 	}
-	row, err := auditstore.Append(ctx, tx, draft.SetOperation(0).SetAction(string(a.name)).SetVersion(uint32(a.version)).SetRedacted(captured.Redacted()))
+	row, err := auditstore.Append(ctx, tx, append(draft, auditstore.Entries.Operation.Set(0), auditstore.Entries.Action.Set(string(a.name)), auditstore.Entries.Version.Set(uint32(a.version)), auditstore.Entries.Redacted.Set(captured.Redacted())))
 	if err != nil {
 		return ActionID[P]{}, err
 	}
@@ -130,7 +131,7 @@ func (a Action[P]) Find(ctx context.Context, executor database.Executor, recorde
 	if id.IsZero() {
 		return value.Optional[ActionRecord[P]]{}, fault.New(fault.Invalid, "audit lookup requires a nonzero ID")
 	}
-	selected, err := q.Find(ctx, executor, model.IDFromBytes[auditstore.Entry](id.Bytes()))
+	selected, err := q.Where(auditstore.Entries.Key().Eq(model.IDFromBytes[auditstore.Entry](id.Bytes()))).First(ctx, executor)
 	if err != nil {
 		return value.Optional[ActionRecord[P]]{}, err
 	}
@@ -167,20 +168,20 @@ func ActionTimelineFor[M, K, P any](ctx context.Context, executor database.Execu
 	if err != nil {
 		return Timeline[ActionRecord[P]]{}, err
 	}
-	f := auditstore.EntryFields()
+	f := auditstore.Entries
 	return readTimeline(ctx, executor, q.Where(f.Action.Eq(string(action.name)), f.Version.Eq(uint32(action.version)), f.Operation.Eq(0)), request, restoreAction[P])
 }
 
-func (a Action[P]) history(ctx context.Context, recorder *Recorder) (auditstore.EntryQuery, error) {
+func (a Action[P]) history(ctx context.Context, recorder *Recorder) (orm.Query[auditstore.Entry], error) {
 	area, err := recorder.area(ctx)
 	if err != nil {
-		return auditstore.EntryQuery{}, err
+		return orm.Query[auditstore.Entry]{}, err
 	}
 	if err := a.Validate(); err != nil {
-		return auditstore.EntryQuery{}, err
+		return orm.Query[auditstore.Entry]{}, err
 	}
-	f := auditstore.EntryFields()
-	return auditstore.QueryFoundryAudit().Where(f.Area.Eq(string(area)), f.Action.Eq(string(a.name)), f.Version.Eq(uint32(a.version)), f.Operation.Eq(0)), nil
+	f := auditstore.Entries
+	return auditstore.Entries.Query().Where(f.Area.Eq(string(area)), f.Action.Eq(string(a.name)), f.Version.Eq(uint32(a.version)), f.Operation.Eq(0)), nil
 }
 
 func restoreAction[P any](row auditstore.Entry) (ActionRecord[P], error) {

@@ -2,81 +2,27 @@ package query
 
 import (
 	"context"
-	"math"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 // MaxPageSize bounds returned rows for numbered, simple and cursor pagination.
-const MaxPageSize = 1000
+const MaxPageSize = querycore.MaxPageSize
 
-// PageRequest selects a one-based page. Size must be between 1 and MaxPageSize.
-// Invalid requests fail rather than being silently clamped.
-type PageRequest struct{ Number, Size int }
+// PageRequest selects a one-based page with the shared validation contract.
+type PageRequest = querycore.PageRequest
 
-// Page contains complete results and an unpaginated matching count. Count and
-// rows are separate queries; use a repeatable-read transaction for one snapshot.
-type Page[M any] struct {
-	Items        []M
-	Number, Size int
-	Total, Pages int64
-}
+// Page contains complete results and an unpaginated matching count.
+type Page[M any] = querycore.Page[M]
 
-// SimplePage contains complete results without a total count. HasMore indicates
-// an extra row existed after this page in the read's snapshot. Number > 1 permits
-// backward navigation; neither direction guarantees rows survive a later request.
-type SimplePage[R any] struct {
-	Items        []R
-	Number, Size int
-	HasMore      bool
-}
+// SimplePage contains results and lookahead metadata without a total count.
+type SimplePage[R any] = querycore.SimplePage[R]
 
-func validPageSize(size int) bool { return size > 0 && size <= MaxPageSize }
+func validPageSize(size int) bool { return querycore.ValidPageSize(size) }
 
-func (r PageRequest) offset() (int, error) {
-	if r.Number < 1 || !validPageSize(r.Size) || r.Number-1 > math.MaxInt/r.Size {
-		return 0, fault.New(fault.Invalid, "invalid page number, size or offset overflow")
-	}
-	return (r.Number - 1) * r.Size, nil
-}
-
-// Validate checks number, size and offset representability without database I/O.
-// Transport adapters reuse this contract rather than computing offsets.
-func (r PageRequest) Validate() error { _, err := r.offset(); return err }
-
-func pageCount(total int64, size int) int64 {
-	pages := total / int64(size)
-	if total%int64(size) != 0 {
-		pages++
-	}
-	return pages
-}
-
-// Validate checks page metadata and the bounded item count. It does not assert
-// that Total and Items came from one snapshot: counting and reading may observe
-// different database states. Empty and beyond-last pages remain valid.
-func (p Page[R]) Validate() error {
-	if err := (PageRequest{Number: p.Number, Size: p.Size}).Validate(); err != nil {
-		return err
-	}
-	if p.Total < 0 || p.Pages != pageCount(p.Total, p.Size) || len(p.Items) > p.Size {
-		return fault.New(fault.Invalid, "invalid numbered page metadata")
-	}
-	return nil
-}
-
-// Validate checks a bounded simple page without fabricating totals. HasMore
-// requires a full page because its hidden lookahead row was removed by the read.
-func (p SimplePage[R]) Validate() error {
-	if err := (PageRequest{Number: p.Number, Size: p.Size}).Validate(); err != nil {
-		return err
-	}
-	if len(p.Items) > p.Size || p.HasMore && len(p.Items) != p.Size {
-		return fault.New(fault.Invalid, "invalid simple page metadata")
-	}
-	return nil
-}
+func pageCount(total int64, size int) int64 { return querycore.PageCount(total, size) }
 
 // paginationBase preserves filters and order, appending the primary key as the
 // final ascending tie-breaker when absent. Existing windows are ambiguous here.
@@ -111,7 +57,7 @@ func (q Query[M]) Paginate(ctx context.Context, executor database.Executor, requ
 		return Page[M]{}, err
 	}
 	q = q.inContext(ctx)
-	offset, err := request.offset()
+	offset, err := querycore.PageOffset(request)
 	if err != nil {
 		return Page[M]{}, err
 	}
@@ -156,7 +102,7 @@ func (q Query[M]) SimplePaginate(ctx context.Context, executor database.Executor
 		return SimplePage[M]{}, err
 	}
 	q = q.inContext(ctx)
-	offset, err := request.offset()
+	offset, err := querycore.PageOffset(request)
 	if err != nil {
 		return SimplePage[M]{}, err
 	}

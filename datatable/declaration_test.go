@@ -10,7 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/i18n"
@@ -64,7 +64,7 @@ func TestTableRejectsMissingAuthorityAndConflictingDeclarations(t *testing.T) {
 		"no scope":         func(s *Spec[reportRecord, ReportRow, reportActor]) { s.Source = nil },
 		"no unique order":  func(s *Spec[reportRecord, ReportRow, reportActor]) { s.Stable = nil },
 		"nil order": func(s *Spec[reportRecord, ReportRow, reportActor]) {
-			s.Stable = []query.ProjectionOrder[reportRecord]{nil}
+			s.Stable = []expr.ProjectionOrder[reportRecord]{nil}
 		},
 		"no columns":       func(s *Spec[reportRecord, ReportRow, reportActor]) { s.Columns = nil },
 		"duplicate column": func(s *Spec[reportRecord, ReportRow, reportActor]) { s.Columns = append(s.Columns, s.Columns[0]) },
@@ -175,7 +175,7 @@ func TestSearchableColumnsCannotSpanWhereAndHavingPhases(t *testing.T) {
 
 func TestTableOwnsNestedFilterDeclarations(t *testing.T) {
 	spec := reportSpec()
-	spec.Filters = []FilterRegistration[reportRecord]{DefineFilter("count", "reports.count", Having(foundryhttp.IntegerQuery[int64](), query.Count[reportRecord]()))}
+	spec.Filters = []FilterRegistration[reportRecord]{DefineFilter("count", "reports.count", Having(foundryhttp.IntegerQuery[int64](), expr.Count[reportRecord]()))}
 	table := Define(spec)
 	before, err := table.Description()
 	if err != nil {

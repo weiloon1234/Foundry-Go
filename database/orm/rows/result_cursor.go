@@ -7,8 +7,8 @@ import (
 	"unsafe"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
@@ -83,8 +83,8 @@ func (q CursorQuery[R]) UniqueBy(keys ...expr.GroupKey[CursorScope[R]]) CursorQu
 }
 
 // Paginate reads one lookahead row; tokens are positions, not authorization.
-// Example: c.Paginate(ctx,db,query.CursorRequest[R]{Size:20}).
-func (q CursorQuery[R]) Paginate(ctx context.Context, ex database.Executor, r query.CursorRequest[R]) (query.CursorPage[R], error) {
+// Example: c.Paginate(ctx,db,orm.CursorRequest[R]{Size:20}).
+func (q CursorQuery[R]) Paginate(ctx context.Context, ex database.Executor, r orm.CursorRequest[R]) (orm.CursorPage[R], error) {
 	return cursorPage(ctx, ex, q.core, r)
 }
 
@@ -114,8 +114,8 @@ func (q ValueCursorQuery[V]) UniqueBy(keys ...expr.GroupKey[CursorScope[V]]) Val
 }
 
 // Paginate reads one lookahead row; tokens are positions, not authorization.
-// Example: c.Paginate(ctx,db,query.CursorRequest[V]{Size:20}).
-func (q ValueCursorQuery[V]) Paginate(ctx context.Context, ex database.Executor, r query.CursorRequest[V]) (query.CursorPage[V], error) {
+// Example: c.Paginate(ctx,db,orm.CursorRequest[V]{Size:20}).
+func (q ValueCursorQuery[V]) Paginate(ctx context.Context, ex database.Executor, r orm.CursorRequest[V]) (orm.CursorPage[V], error) {
 	return cursorPage(ctx, ex, q.core, r)
 }
 
@@ -133,15 +133,15 @@ func cursorKeys[S any](q ormcore.ResultCursor, keys []expr.GroupKey[S]) ormcore.
 	}
 	return ormcore.CursorUnique(q, inputs)
 }
-func cursorPage[R any](ctx context.Context, ex database.Executor, q ormcore.ResultCursor, request query.CursorRequest[R]) (query.CursorPage[R], error) {
+func cursorPage[R any](ctx context.Context, ex database.Executor, q ormcore.ResultCursor, request orm.CursorRequest[R]) (orm.CursorPage[R], error) {
 	if ctx == nil || ormcore.NilDescriptor(ex) {
-		return query.CursorPage[R]{}, ormcore.Invalid("cursor requires a context and executor")
+		return orm.CursorPage[R]{}, ormcore.Invalid("cursor requires a context and executor")
 	}
 	if err := ctx.Err(); err != nil {
-		return query.CursorPage[R]{}, err
+		return orm.CursorPage[R]{}, err
 	}
 	if err := request.Validate(); err != nil {
-		return query.CursorPage[R]{}, err
+		return orm.CursorPage[R]{}, err
 	}
 	token, present := request.After.Get()
 	backward := request.Before.IsSet()
@@ -150,11 +150,11 @@ func cursorPage[R any](ctx context.Context, ex database.Executor, q ormcore.Resu
 	}
 	plan, err := ormcore.PlanResultCursor(ctx, q, request.Size, token.Token(), present, backward)
 	if err != nil {
-		return query.CursorPage[R]{}, err
+		return orm.CursorPage[R]{}, err
 	}
 	items, err := readRecord[R](ctx, ex, plan.Record, false)
 	if err != nil {
-		return query.CursorPage[R]{}, err
+		return orm.CursorPage[R]{}, err
 	}
 	more := len(items) > request.Size
 	if more {
@@ -164,7 +164,7 @@ func cursorPage[R any](ctx context.Context, ex database.Executor, q ormcore.Resu
 	if backward {
 		slices.Reverse(items)
 	}
-	page := query.CursorPage[R]{Items: items, Size: request.Size}
+	page := orm.CursorPage[R]{Items: items, Size: request.Size}
 	if len(items) == 0 {
 		return page, nil
 	}
@@ -172,24 +172,24 @@ func cursorPage[R any](ctx context.Context, ex database.Executor, q ormcore.Resu
 	if backward {
 		next, previous = present, more
 	}
-	makeToken := func(item *R) (query.Cursor[R], error) {
+	makeToken := func(item *R) (orm.Cursor[R], error) {
 		token, err := plan.Token(unsafe.Pointer(item))
 		if err != nil {
-			return query.Cursor[R]{}, err
+			return orm.Cursor[R]{}, err
 		}
-		return query.ParseCursor[R](token)
+		return orm.ParseCursor[R](token)
 	}
 	if next {
 		c, err := makeToken(&items[len(items)-1])
 		if err != nil {
-			return query.CursorPage[R]{}, err
+			return orm.CursorPage[R]{}, err
 		}
 		page.Next = value.Set(c)
 	}
 	if previous {
 		c, err := makeToken(&items[0])
 		if err != nil {
-			return query.CursorPage[R]{}, err
+			return orm.CursorPage[R]{}, err
 		}
 		page.Previous = value.Set(c)
 	}

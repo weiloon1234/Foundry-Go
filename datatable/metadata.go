@@ -6,7 +6,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/i18n"
@@ -177,7 +177,7 @@ func (b *requestBudget) text(text string, maximum int) error {
 	b.bytes += len(text)
 	return nil
 }
-func (m *tableMetadata) validateRequest(request Request, config Config) (query.PageRequest, error) {
+func (m *tableMetadata) validateRequest(request Request, config Config) (orm.PageRequest, error) {
 	page, err := request.page()
 	if err != nil {
 		return page, err

@@ -6,10 +6,10 @@ records the checks and operational limits.
 
 ## Declare one row and its columns
 
-Use an explicit response projection:
+Declare an explicit response DTO:
 
 ```go
-//foundry:projection dto=true
+//foundry:dto
 type MemberRow struct {
     ID       model.ID[Member]       `json:"id"`
     Name     string                 `json:"name"`
@@ -18,12 +18,11 @@ type MemberRow struct {
 }
 ```
 
-The opt-in adds the ordinary DTO JSON descriptor and validation field selectors
-to the projection's existing generated file. `MemberRowJSON()` owns its wire
-graph; `MemberRowValidationFields()` owns JSON names and Go getters;
-`MemberRowProjection()` owns SQL output mapping. An ordinary projection does not
-become a public DTO. Persistence models, persistence tags and unsupported custom
-codecs remain rejected at DTO boundaries. Use JSON tags for public property names
+The ordinary DTO annotation generates the JSON descriptor and validation field
+selectors. `MemberRowJSON()` owns its wire graph; `MemberRowValidationFields()` owns JSON names and Go getters.
+A handwritten `rows.Define` schema owns SQL output mapping. SQL projections do
+not become public DTOs implicitly. Persistence models, persistence tags and
+unsupported custom codecs remain rejected at DTO boundaries. Use JSON tags for public property names
 and typed projection mappings for the selected SQL expressions.
 
 `datatable.DefineColumn[Source](wire.Name, label)` retains source scope, response
@@ -42,6 +41,46 @@ The [consumer member table](../../tests/fixtures/consumer/reporting/members.go)
 combines a computed name, enum/nullable/exact-decimal columns and a declared
 relation filter. [Joined and grouped tables](../../tests/fixtures/consumer/reporting/orders.go)
 reuse the same column API.
+
+## Migrate report sources to ORM declarations
+
+The Go-way branch makes one source cutover: `Spec.Source` returns
+`rows.Query[S, R]` instead of `query.ProjectionQuery[S, R]`. There is no legacy
+query adapter. Keep the DTO type, package, JSON descriptor and validation fields;
+replace SQL projection selection with a handwritten `rows.Define` schema and
+`rows.Select` mappings. The [report declarations](../../tests/fixtures/consumer/reporting/orm.go)
+use `orm.PrimaryOf` and `orm.SoftDeleteOf` to retain declaration roles; the
+[row schemas](../../tests/fixtures/consumer/reporting/rows.go) retain exact DTO
+field types. Existing generated DTO descriptors continue to own wire metadata.
+
+Use `expr.Select(expr.Value(Users.Name))` in `SortBy`, or a computed/aggregate
+expression's `.Value()`. `Stable` is now `[]expr.ProjectionOrder[S]`, including a
+unique final key. Filters take `expr.Predicate[S]` for WHERE and
+`expr.HavingPredicate[S]` for HAVING:
+
+| Operand | Filter adapter |
+| --- | --- |
+| Required text | `expr.TextRow(Users.Name)` |
+| Nullable text | `expr.TextNullableRow(Users.Nickname)` |
+| Required number | `expr.OrderRow(expr.Value(Users.Age))` |
+| Nullable number | `expr.OrderNullableRow(expr.Value(Users.Score))` |
+| Enum or equality-only field | `expr.CompareRow(expr.Value(Users.State))` |
+| Nullable enum | `expr.CompareNullableRow(expr.Value(Users.State))` |
+| Joined text | `expr.TextRowAt(memberScope, Members.Name)` |
+| Aggregate | `expr.Count[User]()` or `expr.Sum(Orders.Amount)` |
+
+`Related` now maps `expr.Predicate[Child]` to `expr.Predicate[Parent]`, normally
+with `expr.Has(ParentRelations.Children, predicate)`. `expr.ModelPredicate`
+adapts an existing `orm.Predicate`. Use `rows.GroupBy` and `rows.Having` for grouped
+reports, and `rows.MapSelected` for aggregates. Text adapters validate the actual
+column capability, including when the field is embedded or aliased. Enums keep
+their equality-only filter operators; LIKE still requires `AllowLike()`.
+
+Request and response fields, operator lists and DTO identities are retained.
+WHERE/HAVING mixing still rejects OR and NOT; nullable negation still includes
+SQL NULL. Pagination and export retain their limits and read-only repeatable-read
+transactions. Exports call `rows.Each` with the bounded lookahead limit and never
+collect all rows in memory.
 
 ## Authorization and server scope
 
@@ -140,10 +179,10 @@ folding. `%`, `_` and `!` stay literal for these substring operators; `like`
 permits SQL pattern syntax only when explicitly allowed. `Define` rejects a
 table whose searchable columns span the WHERE and HAVING phases.
 
-`table.Query(ctx, manager, authority, request)` returns `query.Page[R]` using one
+`table.Query(ctx, manager, authority, request)` returns `orm.PageResult[R]` using one
 count and one row query in a read-only repeatable-read transaction. The count
 query omits the table's ordering. `table.SimpleQuery(...)` returns
-`query.SimplePage[R]` from a single row query with one lookahead row and no
+`orm.SimplePage[R]` from a single row query with one lookahead row and no
 count; use it when a total is not needed. `table.Count(...)` applies the same
 filters and authorization with one unordered count query. Pagination is
 validated for all three; count represents the complete matching result. The
@@ -359,3 +398,18 @@ bounded to eight times the cell limit plus 4 KiB whatever `<` or `>` it
 contains, so compression bombs and oversized tokens fail with `fault.Invalid`
 instead of exhausting memory. Document type declarations are rejected. Only the shared-string
 table is held in memory; rows are never buffered beyond one chunk.
+
+## Contract migration acceptance
+
+`make datatable-contracts` compares the generated manifest, OpenAPI, full and
+surface TypeScript entries, shared runtime modules and React/Vue adapters byte
+for byte with the pre-cutover baseline. It checks both the existing client
+fixture and a reporting fixture containing Members, Orders, Totals and the
+actual guarded query/download routes. Baseline provenance lives beside the
+[frozen artifacts](../../tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/README.md).
+The gate never updates those artifacts automatically.
+
+`make typescript-check` also runs reporting codec, type and anonymous HTTP checks.
+`make agent-smoke` covers handwritten ORM declarations and row mappings through
+real completion, hover and definition requests. Select the existing native tools
+as described in the [tooling guide](developer-tooling-and-testing.md).

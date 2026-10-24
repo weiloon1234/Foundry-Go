@@ -7,7 +7,7 @@ import (
 
 // MaxInsertRows bounds one atomic insert/upsert statement. The shared parameter
 // bound additionally limits its row/column cells and actual bound values.
-const MaxInsertRows = 1000
+const MaxInsertRows = querycore.MaxInsertRows
 
 type insertPlan[M any] struct {
 	query    Query[M]

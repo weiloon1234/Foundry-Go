@@ -13,7 +13,7 @@ import (
 // Lookup checks whether a concrete value exists in an explicitly scoped source.
 // Validate checks its declaration without I/O. Exists must honor the context and
 // retain ownership of its work until return. The database adapter supplies this
-// contract from generated queries; applications can provide other typed sources.
+// contract from ORM declarations; applications can provide other typed sources.
 type Lookup[T any] interface {
 	Validate() error
 	Exists(context.Context, T) (bool, error)

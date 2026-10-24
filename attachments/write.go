@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	store "github.com/weiloon1234/Foundry-Go/internal/attachmentstore"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
@@ -275,8 +276,8 @@ func (c Collection[M, K]) Discard(ctx context.Context, m *Manager, prepared Prep
 // ownerIntentBound refuses more than MaxOwnerIntents unresolved intents for one
 // owner, counting adding intents about to be recorded. Hold the owner lock.
 func ownerIntentBound(ctx context.Context, tx *database.Tx, scope, subject string, adding int64) error {
-	f := store.FileFields()
-	count, err := store.QueryFoundryAttachments().Where(f.Scope.Eq(scope), f.SubjectKey.Eq(subject), f.State.Ne(string(Cleaned)), f.State.Ne(string(Retained))).Count(ctx, tx)
+	f := store.Files
+	count, err := store.Files.Query().Where(f.Scope.Eq(scope), f.SubjectKey.Eq(subject), f.State.Ne(string(Cleaned)), f.State.Ne(string(Retained))).Count(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -380,7 +381,7 @@ func (c Collection[M, K]) stage(ctx context.Context, m *Manager, id model.ID[sto
 		if err != nil {
 			return err
 		}
-		result, err = store.QueryFoundryAttachments().Create(ctx, tx, store.FileDraft{}.SetID(id).SetOwner(string(c.definition.owner.Name())).SetScope(subject.Scope).SetSubjectKey(subject.Key).SetIdentity(subject.Identity).SetCollection(string(c.Name())).SetLocale(locale).SetSingle(c.definition.policy.Cardinality == Single).SetDisk(string(c.definition.policy.Disk.ID())).SetObjectKey(key.String()).SetOriginalName(candidate.info.OriginalName).SetContentType(string(candidate.info.MediaType)).SetSize(candidate.info.Size).SetDigest(candidate.digest.String()).SetETag("").SetObjectVersion("").SetWidth(int32(candidate.info.Width)).SetHeight(int32(candidate.info.Height)).SetProperties(candidate.properties).SetSortOrder(0).SetState(string(Writing)).SetWriterID(m.writer).SetAttempts(0).SetLastFailure("").SetCreatedAt(now).SetUpdatedAt(now))
+		result, err = store.Files.Insert(ctx, tx, store.Files.ID.Set(id), store.Files.Owner.Set(string(c.definition.owner.Name())), store.Files.Scope.Set(subject.Scope), store.Files.SubjectKey.Set(subject.Key), store.Files.Identity.Set(subject.Identity), store.Files.Collection.Set(string(c.Name())), store.Files.Locale.Set(locale), store.Files.Single.Set(c.definition.policy.Cardinality == Single), store.Files.Disk.Set(string(c.definition.policy.Disk.ID())), store.Files.ObjectKey.Set(key.String()), store.Files.OriginalName.Set(candidate.info.OriginalName), store.Files.ContentType.Set(string(candidate.info.MediaType)), store.Files.Size.Set(candidate.info.Size), store.Files.Digest.Set(candidate.digest.String()), store.Files.ETag.Set(""), store.Files.ObjectVersion.Set(""), store.Files.Width.Set(int32(candidate.info.Width)), store.Files.Height.Set(int32(candidate.info.Height)), store.Files.Properties.Set(candidate.properties), store.Files.SortOrder.Set(0), store.Files.State.Set(string(Writing)), store.Files.WriterID.Set(m.writer), store.Files.Attempts.Set(0), store.Files.LastFailure.Set(""), store.Files.CreatedAt.Set(now), store.Files.UpdatedAt.Set(now))
 		return err
 	})
 	if err != nil {
@@ -390,7 +391,7 @@ func (c Collection[M, K]) stage(ctx context.Context, m *Manager, id model.ID[sto
 }
 func (m *Manager) pinStored(ctx context.Context, id model.ID[store.File], object storage.ObjectInfo) error {
 	return m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		row, err := store.QueryFoundryAttachments().ForUpdate().RequireFind(ctx, tx, id)
+		row, err := store.Files.Query().ForUpdate().Where(store.Files.Key().Eq(id)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -408,7 +409,7 @@ func (m *Manager) pinStored(ctx context.Context, id model.ID[store.File], object
 		if err != nil {
 			return err
 		}
-		_, err = store.QueryFoundryAttachments().Update(ctx, tx, id, store.FileDraft{}.SetETag(string(object.ETag)).SetObjectVersion(string(object.Version)).SetState(string(Stored)).SetUpdatedAt(now))
+		_, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, store.Files.ETag.Set(string(object.ETag)), store.Files.ObjectVersion.Set(string(object.Version)), store.Files.State.Set(string(Stored)), store.Files.UpdatedAt.Set(now))
 		return err
 	})
 }
@@ -422,7 +423,7 @@ func (m *Manager) recordPutFailure(ctx context.Context, id model.ID[store.File],
 	cleanupCtx, cancel := m.cleanupContext(ctx)
 	defer cancel()
 	return m.store.Write(cleanupCtx, func(ctx context.Context, tx *database.Tx) error {
-		row, err := store.QueryFoundryAttachments().ForUpdate().RequireFind(ctx, tx, id)
+		row, err := store.Files.Query().ForUpdate().Where(store.Files.Key().Eq(id)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -436,7 +437,7 @@ func (m *Manager) recordPutFailure(ctx context.Context, id model.ID[store.File],
 		if err != nil {
 			return err
 		}
-		_, err = store.QueryFoundryAttachments().Update(ctx, tx, id, store.FileDraft{}.SetState(string(next)).SetLastFailure("upload_failed").SetUpdatedAt(now))
+		_, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, store.Files.State.Set(string(next)), store.Files.LastFailure.Set("upload_failed"), store.Files.UpdatedAt.Set(now))
 		return err
 	})
 }
@@ -449,7 +450,7 @@ func (c Collection[M, K]) publish(ctx context.Context, outer *database.Tx, m *Ma
 		if err != nil {
 			return err
 		}
-		row, err := store.QueryFoundryAttachments().ForUpdate().RequireFind(ctx, tx, id)
+		row, err := store.Files.Query().ForUpdate().Where(store.Files.Key().Eq(id)).Require(ctx, tx)
 		if outer != nil && errors.Is(err, database.NotFound) {
 			return fault.New(fault.Invalid, "prepared upload is not visible to this transaction; prepare it before the transaction begins")
 		}
@@ -462,7 +463,7 @@ func (c Collection[M, K]) publish(ctx context.Context, outer *database.Tx, m *Ma
 		if row.State != string(Stored) || row.WriterID != m.writer || row.Scope != subject.Scope || row.SubjectKey != subject.Key || row.Collection != string(c.Name()) {
 			return fault.New(fault.Conflict, "upload is no longer available for publication")
 		}
-		f := store.FileFields()
+		f := store.Files
 		if outer != nil {
 			// Staging locked only an owner that already existed; recount
 			// under this lock, including the upload being published.
@@ -470,7 +471,7 @@ func (c Collection[M, K]) publish(ctx context.Context, outer *database.Tx, m *Ma
 				return err
 			}
 		}
-		existing, err := store.QueryFoundryAttachments().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key), f.Collection.Eq(row.Collection), f.Locale.Eq(row.Locale), f.State.Eq(string(Ready))).OrderBy(f.SortOrder.Asc(), f.ID.Asc()).Limit(MaxCollectionFiles+1).All(ctx, tx)
+		existing, err := store.Files.Query().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key), f.Collection.Eq(row.Collection), f.Locale.Eq(row.Locale), f.State.Eq(string(Ready))).OrderBy(f.SortOrder.Asc(), f.ID.Asc()).Limit(MaxCollectionFiles+1).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -497,7 +498,7 @@ func (c Collection[M, K]) publish(ctx context.Context, outer *database.Tx, m *Ma
 				if _, err := m.validateRow(previous); err != nil {
 					return err
 				}
-				if _, err := store.QueryFoundryAttachments().Update(ctx, tx, previous.ID, store.FileDraft{}.SetState(string(CleanupPending)).SetUpdatedAt(now)); err != nil {
+				if _, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), previous.ID, store.Files.State.Set(string(CleanupPending)), store.Files.UpdatedAt.Set(now)); err != nil {
 					return err
 				}
 				if err := c.queue.enqueue(ctx, tx, operationID(previous.ID)); err != nil {
@@ -506,7 +507,7 @@ func (c Collection[M, K]) publish(ctx context.Context, outer *database.Tx, m *Ma
 				removed = append(removed, previous.ID)
 			}
 		}
-		row, err = store.QueryFoundryAttachments().Update(ctx, tx, id, store.FileDraft{}.SetState(string(Ready)).SetSortOrder(position).SetUpdatedAt(now))
+		row, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, store.Files.State.Set(string(Ready)), store.Files.SortOrder.Set(position), store.Files.UpdatedAt.Set(now))
 		if err != nil {
 			return err
 		}
@@ -526,7 +527,7 @@ func (c Collection[M, K]) publish(ctx context.Context, outer *database.Tx, m *Ma
 		if _, err = c.definition.owner.Lock(ctx, tx, m.store.Registry(), owner); err != nil {
 			return err
 		}
-		final, err := store.QueryFoundryAttachments().RequireFind(ctx, tx, id)
+		final, err := store.Files.Query().Where(store.Files.Key().Eq(id)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -554,7 +555,7 @@ func (c Collection[M, K]) publish(ctx context.Context, outer *database.Tx, m *Ma
 
 func (m *Manager) scheduleCleanup(ctx context.Context, id model.ID[store.File], queue *Queue, failure string) error {
 	return m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		row, err := store.QueryFoundryAttachments().ForUpdate().RequireFind(ctx, tx, id)
+		row, err := store.Files.Query().ForUpdate().Where(store.Files.Key().Eq(id)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -571,7 +572,7 @@ func (m *Manager) scheduleCleanup(ctx context.Context, id model.ID[store.File], 
 		if err != nil {
 			return err
 		}
-		if _, err := store.QueryFoundryAttachments().Update(ctx, tx, id, store.FileDraft{}.SetState(string(CleanupPending)).SetLastFailure(failure).SetUpdatedAt(now)); err != nil {
+		if _, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, store.Files.State.Set(string(CleanupPending)), store.Files.LastFailure.Set(failure), store.Files.UpdatedAt.Set(now)); err != nil {
 			return err
 		}
 		return queue.enqueue(ctx, tx, operationID(id))

@@ -6,7 +6,6 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
@@ -27,7 +26,7 @@ type identitySource[M any, K comparable] interface {
 // DefineORMOwner binds a declaration's identity to the existing extension stores.
 // Pin StorageModel before renaming a table. Example: extensions.DefineORMOwner("articles",orm.IdentityOf(Articles.Table,Articles.Key()),extensions.OwnerOptions{StorageModel:"articles"}).
 func DefineORMOwner[M any, K comparable](name OwnerName, source orm.ModelIdentity[M, K], options OwnerOptions) Owner[M, K] {
-	return Owner[M, K]{definition: &ownerDefinition[M, K]{name: name, source: source, scope: func(keys ...K) query.Predicate[M] { return orm.LegacyIdentityScope(source, keys...) }, ormScope: source.Scope, storage: options.StorageModel, previous: slices.Clone(options.PreviousModels), id: &declarationID{}}}
+	return Owner[M, K]{definition: &ownerDefinition[M, K]{name: name, source: source, ormScope: source.Scope, storage: options.StorageModel, previous: slices.Clone(options.PreviousModels), id: &declarationID{}}}
 }
 
 // Scope returns an ORM predicate from the owner's concrete primary keys.

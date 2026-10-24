@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/internal/lifecore"
 )
 
 // Caller-owned update drafts share the same recursion boundary whether the
@@ -13,5 +14,6 @@ func modelUpdateMutation[M any](ctx context.Context, tx *database.Tx, current M,
 	if err != nil {
 		return Mutation[M]{}, err
 	}
-	return draft(callbackContext, tx, current)
+	mutation, err := draft(callbackContext, tx, current)
+	return mutation, lifecore.Failure("model update draft failed", err)
 }

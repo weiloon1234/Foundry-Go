@@ -60,9 +60,9 @@ func defineOrderRelations() OrderRelationSet {
 	return OrderRelationSet{Member: query.BelongsTo(OrderFields().MemberID, MemberFields().ID)}
 }
 
-// One declaration supplies SQL projection mapping, JSON and typed selectors.
+// Ordinary DTO declarations own JSON and validation; rows.go owns SQL mappings.
 //
-//foundry:projection dto=true
+//foundry:dto
 type MemberRow struct {
 	ID       model.ID[Member]       `json:"id"`
 	Name     string                 `json:"name"`
@@ -71,7 +71,7 @@ type MemberRow struct {
 	Balance  decimal.Decimal        `json:"balance"`
 }
 
-//foundry:projection dto=true
+//foundry:dto
 type OrderRow struct {
 	ID         model.ID[Order] `json:"id"`
 	MemberName string          `json:"memberName"`
@@ -79,7 +79,7 @@ type OrderRow struct {
 	Amount     decimal.Decimal `json:"amount"`
 }
 
-//foundry:projection dto=true
+//foundry:dto
 type MemberTotal struct {
 	MemberID model.ID[Member]                `json:"memberId"`
 	Count    int64                           `json:"count"`

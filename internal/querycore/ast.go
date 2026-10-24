@@ -69,6 +69,8 @@ type RowComparison struct {
 func (RowComparison) ExpressionNode() {}
 
 type Comparison struct {
+	// Text is supplied by text-capable builders, never inferred from a string codec.
+	Text     bool
 	Operand  ValueExpression
 	Operator Operator
 	Values   []any
@@ -82,6 +84,7 @@ func (Comparison) ExpressionNode() {}
 
 // binaryComparison compares SQL operands without treating either as a literal binding.
 type BinaryComparison struct {
+	Text        bool
 	Left, Right ValueExpression
 	Operator    Operator
 }

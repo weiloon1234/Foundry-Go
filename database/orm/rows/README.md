@@ -173,3 +173,31 @@ See [completed-result cursors and read terminals](results.md) for output scopes,
 keyset navigation, numbered pages and transaction-only projection locks.
 
 See [transaction composition](transactions.md) for transaction joins, subqueries, correlation and LATERAL.
+
+## Report reads
+
+Use package functions when a report retains a `rows.Query[S, R]`:
+
+```go
+q := rows.ReorderUnwindowed(report, name.Asc(), id.Asc())
+if err := rows.Preflight(ctx, q); err != nil { return err }
+total, err := rows.Count(ctx, tx, q)
+page, err := rows.Paginate(ctx, tx, q, orm.Page(1, 20))
+more, err := rows.SimplePaginate(ctx, tx, q, orm.Page(1, 20))
+err = rows.Each(ctx, tx, rows.Limit(q, 10001), writeCSV)
+```
+
+`Compile(q)` returns an immutable `orm.Statement` for inspection. `Preflight`
+uses the executing request context, resolving context scopes without opening a
+connection. Execution uses its own current context and the supplied executor.
+`Count` wraps the complete selection, preserving grouping, HAVING, DISTINCT and
+existing result windows. Pagination requires explicit ordering and no outer
+limit/offset. Supply a unique final tie-breaker. Use a repeatable-read transaction
+when the count and page must share one snapshot.
+
+`ReorderUnwindowed` replaces only outer ordering. It rejects outer LIMIT/OFFSET,
+DISTINCT ON and an empty order list; nested windows and scopes survive.
+`Each` retains one decoded result at a time. A callback error, panic, Goexit,
+decoding failure or cancellation closes the rows; completed callbacks cannot be
+undone. It does not run complete-model retrieval hooks, matching projection reads.
+Exports should set their own row limit and stop on the first excess row.

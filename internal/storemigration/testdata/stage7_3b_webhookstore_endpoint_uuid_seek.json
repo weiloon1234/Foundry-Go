@@ -1,0 +1,15 @@
+{
+  "Statements": [
+    {
+      "SQL": "SELECT \"foundry_webhook_endpoints\".\"id\", \"foundry_webhook_endpoints\".\"url\", \"foundry_webhook_endpoints\".\"events\", \"foundry_webhook_endpoints\".\"active\", \"foundry_webhook_endpoints\".\"created_at\", \"foundry_webhook_endpoints\".\"updated_at\" FROM \"foundry_webhook_endpoints\" WHERE (\"foundry_webhook_endpoints\".\"id\" \u003e $1) ORDER BY \"foundry_webhook_endpoints\".\"id\" ASC LIMIT $2",
+      "Args": [
+        "01890f47-1a00-7000-8000-000000000001",
+        2
+      ]
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "a1f517051dd8f1fc78719d2fe1f86c8ab5628e112eac481e91bd0a5e69202958"
+}

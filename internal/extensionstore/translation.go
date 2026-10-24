@@ -8,7 +8,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-//foundry:model table=foundry_model_translations primary=Key
 type Translation struct {
 	Key        string
 	Owner      string
@@ -18,9 +17,9 @@ type Translation struct {
 	Field      string
 	Locale     string
 	Value      string
-	// Foundry field behavior (generated): Managed creation timestamp: persistence supplies the owning application clock when omitted, after before-write hooks and before field mutators. An explicit input is preserved.
+	// CreatedAt preserves explicit input; persistence supplies the owning clock when omitted.
 	CreatedAt temporal.DateTime
-	// Foundry field behavior (generated): Managed update timestamp: persistence replaces assigned or omitted input with the owning application clock after before-write hooks and before field mutators. Conflict updates copy its normalized proposed value.
+	// UpdatedAt is refreshed from the owning clock after before-write hooks and before mutators.
 	UpdatedAt temporal.DateTime
 }
 

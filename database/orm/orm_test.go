@@ -413,6 +413,7 @@ type testConnector struct {
 	onBegin      func()
 	values       [][]driver.Value
 	columns      []string
+	execError    func(string) error
 	commitErr    error
 	closeErr     error
 	respondBound func(string, []driver.NamedValue) ([]string, [][]driver.Value, error)
@@ -442,6 +443,11 @@ func (c testConnection) Ping(context.Context) error { return nil }
 func (c testConnection) ExecContext(_ context.Context, s string, _ []driver.NamedValue) (driver.Result, error) {
 	if c.statements != nil {
 		*c.statements = append(*c.statements, s)
+	}
+	if c.execError != nil {
+		if err := c.execError(s); err != nil {
+			return nil, err
+		}
 	}
 	return driver.RowsAffected(1), nil
 }

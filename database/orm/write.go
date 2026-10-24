@@ -10,9 +10,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -64,15 +64,16 @@ func (e *WriteError[R]) Unwrap() error { return e.cause }
 func (e *WriteError[R]) Candidate() R { return e.candidate }
 
 type writePlan struct {
-	query       queryState
-	kind        querycore.MutationKind
-	assignments []querycore.MutationAssignment
-	many        bool
-	adjust      *querycore.Adjustment
-	bounded     bool
-	batch       [][]querycore.MutationAssignment
-	returnLimit int
-	conflict    *querycore.Conflict
+	statementFailure *ormcore.InsertFailure
+	query            queryState
+	kind             querycore.MutationKind
+	assignments      []querycore.MutationAssignment
+	many             bool
+	adjust           *querycore.Adjustment
+	bounded          bool
+	batch            [][]querycore.MutationAssignment
+	returnLimit      int
+	conflict         *querycore.Conflict
 }
 
 func planWrite[M any](q queryState, kind querycore.MutationKind, as []Assignment[M], many bool, deferIdentity ...bool) (writePlan, error) {
@@ -457,7 +458,7 @@ func writeInTransaction(ctx context.Context, tx *database.Tx, p writePlan, prepa
 		}
 		*count = result.RowsAffected
 	} else {
-		rows, e := tx.Query(s.Context(ctx), s.SQLText, s.Bindings...)
+		rows, e := ormcore.InsertRows(ctx, tx, s, p.statementFailure)
 		if e != nil {
 			return e
 		}
@@ -567,7 +568,7 @@ func insertMany[M any](ctx context.Context, writer database.Transactor, q queryS
 	if err := validateQuery(q); err != nil {
 		return nil, err
 	}
-	if len(rows) > query.MaxInsertRows {
+	if len(rows) > querycore.MaxInsertRows {
 		return nil, invalid("model insert exceeds its row bound")
 	}
 	p := writePlan{query: q, kind: querycore.InsertModel, batch: make([][]querycore.MutationAssignment, len(rows))}

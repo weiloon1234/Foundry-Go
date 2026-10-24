@@ -11,7 +11,9 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/contract"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/validation"
@@ -45,7 +47,7 @@ func TestRequestAllowlistBoundsAndStableOrdering(t *testing.T) {
 	}
 	config := DefaultConfig()
 	invalidRequests := []Request{
-		{Page: -1}, {Size: -1}, {Page: math.MaxInt, Size: 2}, {Size: query.MaxPageSize + 1}, {Page: config.MaxOffset + 2, Size: 1},
+		{Page: -1}, {Size: -1}, {Page: math.MaxInt, Size: 2}, {Size: orm.MaxPageSize + 1}, {Page: config.MaxOffset + 2, Size: 1},
 		{Sort: []Sort{{Column: "name; SELECT 1", Direction: Ascending}}},
 		{Sort: []Sort{{Column: "id", Direction: "DESC NULLS FIRST"}}},
 		{Sort: []Sort{{Column: "id", Direction: Ascending}, {Column: "id", Direction: Descending}}},
@@ -93,7 +95,7 @@ func TestRequestAllowlistBoundsAndStableOrdering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	statement, err := source.rows.Compile()
+	statement, err := rows.Compile(source.rows)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +107,7 @@ func TestRequestAllowlistBoundsAndStableOrdering(t *testing.T) {
 	if !reflect.DeepEqual(statement.Arguments(), []any{int64(7), "%Alpha !%!_!!%"}) {
 		t.Fatal("client strings changed SQL binding", statement.Arguments())
 	}
-	counted, err := source.count.Compile()
+	counted, err := rows.Compile(source.count)
 	if err != nil || strings.Contains(counted.SQL(), "ORDER BY") || !strings.Contains(counted.SQL(), `ILIKE $2 ESCAPE '!'`) || !reflect.DeepEqual(counted.Arguments(), statement.Arguments()) {
 		t.Fatal("count query kept the table ordering or lost its filters", counted.SQL(), err)
 	}
@@ -137,7 +139,7 @@ func TestLikeRequiresExplicitOptIn(t *testing.T) {
 	if _, err := table.definition.prepare(Request{Filters: []Filter{{Op: Like, Column: "name", Values: []string{"A%"}}}}, DefaultConfig()); !errors.Is(err, fault.Invalid) {
 		t.Fatal("request used an undeclared like filter", err)
 	}
-	spec.Columns[1] = DefineColumn[reportRecord](validation.DefineField("name", func(row ReportRow) string { return row.Name }), "reports.name").SortBy(query.Value(name)).FilterBy(Where(text, name).AllowLike()).Registration()
+	spec.Columns[1] = DefineColumn[reportRecord](validation.DefineField("name", func(row ReportRow) string { return row.Name }), "reports.name").SortBy(name.Value()).FilterBy(Where(text, name).AllowLike()).Registration()
 	table = Define(spec)
 	if err := table.Validate(); err != nil {
 		t.Fatal(err)
@@ -150,7 +152,7 @@ func TestLikeRequiresExplicitOptIn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if statement, err := source.rows.Compile(); err != nil || !strings.Contains(statement.SQL(), " LIKE $2") || !reflect.DeepEqual(statement.Arguments(), []any{int64(7), "A%"}) {
+	if statement, err := rows.Compile(source.rows); err != nil || !strings.Contains(statement.SQL(), " LIKE $2") || !reflect.DeepEqual(statement.Arguments(), []any{int64(7), "A%"}) {
 		t.Fatal("explicit like lost its pattern", err)
 	}
 }
@@ -167,7 +169,7 @@ func TestNegatedFiltersIncludeRowsWithNullOperands(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		statement, err := source.count.Compile()
+		statement, err := rows.Compile(source.count)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -228,7 +230,7 @@ func TestRequestValidatesEntireShapeBeforeCallingScalarExtensions(t *testing.T) 
 
 func TestFilterGroupsPreserveWhereAndHavingPhases(t *testing.T) {
 	spec := reportSpec()
-	spec.Filters = []FilterRegistration[reportRecord]{DefineFilter("count", "reports.count", Having(foundryhttp.IntegerQuery[int64](), query.Count[reportRecord]()))}
+	spec.Filters = []FilterRegistration[reportRecord]{DefineFilter("count", "reports.count", Having(foundryhttp.IntegerQuery[int64](), expr.Count[reportRecord]()))}
 	table := Define(spec)
 	if err := table.Validate(); err != nil {
 		t.Fatal(err)
@@ -252,7 +254,7 @@ func TestFilterGroupsPreserveWhereAndHavingPhases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	statement, err := source.rows.Compile()
+	statement, err := rows.Compile(source.rows)
 	if err != nil || !strings.Contains(statement.SQL(), " OR ") || !strings.Contains(statement.SQL(), " AND ") || !reflect.DeepEqual(statement.Arguments(), []any{int64(7), int64(1), int64(3), int64(8)}) {
 		t.Fatal("OR did not keep BETWEEN endpoints together", statement.SQL(), err)
 	}
@@ -263,7 +265,7 @@ func TestAuthorizationPrecedesSourceAndIsActionSpecific(t *testing.T) {
 	sourceCalls := 0
 	var actions []Action
 	base := spec.Source
-	spec.Source = func(ctx context.Context, a reportActor) (query.ProjectionQuery[reportRecord, ReportRow], error) {
+	spec.Source = func(ctx context.Context, a reportActor) (rows.Query[reportRecord, ReportRow], error) {
 		sourceCalls++
 		return base(ctx, a)
 	}
@@ -320,7 +322,7 @@ func FuzzDatatableRequestBounds(f *testing.F) {
 
 func TestNestedFilterCallbacksKeepDeclarationOrderAndPhaseErrors(t *testing.T) {
 	spec := reportSpec()
-	spec.Filters = []FilterRegistration[reportRecord]{DefineFilter("count", "reports.count", Having(foundryhttp.IntegerQuery[int64](), query.Count[reportRecord]()))}
+	spec.Filters = []FilterRegistration[reportRecord]{DefineFilter("count", "reports.count", Having(foundryhttp.IntegerQuery[int64](), expr.Count[reportRecord]()))}
 	var calls []string
 	for _, index := range []int{0, 1, 2} {
 		declaration := spec.Columns[index].declaration

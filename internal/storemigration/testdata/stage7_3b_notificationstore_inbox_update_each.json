@@ -1,0 +1,31 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "SELECT \"foundry_notification_inbox\".\"id\", \"foundry_notification_inbox\".\"scope\", \"foundry_notification_inbox\".\"subject_key\", \"foundry_notification_inbox\".\"name\", \"foundry_notification_inbox\".\"version\", \"foundry_notification_inbox\".\"data\", \"foundry_notification_inbox\".\"created_at\", \"foundry_notification_inbox\".\"read_at\" FROM \"foundry_notification_inbox\" WHERE (\"foundry_notification_inbox\".\"id\" = ANY($1)) ORDER BY \"foundry_notification_inbox\".\"id\" ASC LIMIT $2 FOR UPDATE",
+      "Args": [
+        "{\"01890f47-1a00-7000-8000-000000000001\"}",
+        2
+      ]
+    },
+    {
+      "SQL": "UPDATE \"foundry_notification_inbox\" SET \"read_at\" = $1 WHERE (\"foundry_notification_inbox\".\"id\" = ANY($2)) AND (\"foundry_notification_inbox\".\"id\" = $3) RETURNING \"foundry_notification_inbox\".\"id\", \"foundry_notification_inbox\".\"scope\", \"foundry_notification_inbox\".\"subject_key\", \"foundry_notification_inbox\".\"name\", \"foundry_notification_inbox\".\"version\", \"foundry_notification_inbox\".\"data\", \"foundry_notification_inbox\".\"created_at\", \"foundry_notification_inbox\".\"read_at\"",
+      "Args": [
+        "2026-10-23T23:00:00Z",
+        "{\"01890f47-1a00-7000-8000-000000000001\"}",
+        "01890f47-1a00-7000-8000-000000000001"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "8ad98ef557711ae1ed7386634abec5b757b356fcd8bae1fb4bab7b677fbb8298"
+}

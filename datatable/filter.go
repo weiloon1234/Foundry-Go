@@ -3,7 +3,7 @@ package datatable
 import (
 	"slices"
 
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -28,40 +28,40 @@ type FilterInfo struct {
 // the null-aware negation "this condition is not TRUE": SQL NOT alone would
 // also drop rows where a NULL column makes the condition unknown.
 type condition[S any] struct {
-	where      []query.Predicate[S]
-	having     []query.HavingPredicate[S]
+	where      []expr.Predicate[S]
+	having     []expr.HavingPredicate[S]
 	complement func() condition[S]
 }
 
-func rowCondition[S any](p query.Predicate[S]) condition[S] {
-	return condition[S]{where: []query.Predicate[S]{p}}
+func rowCondition[S any](p expr.Predicate[S]) condition[S] {
+	return condition[S]{where: []expr.Predicate[S]{p}}
 }
-func groupCondition[S any](p query.HavingPredicate[S]) condition[S] {
-	return condition[S]{having: []query.HavingPredicate[S]{p}}
+func groupCondition[S any](p expr.HavingPredicate[S]) condition[S] {
+	return condition[S]{having: []expr.HavingPredicate[S]{p}}
 }
 
 // sqlNot is three-valued SQL NOT of one single-phase condition.
 func (c condition[S]) sqlNot() condition[S] {
 	if len(c.where) > 0 {
-		return rowCondition(query.And(c.where...).Not())
+		return rowCondition(expr.Not(expr.And(c.where...)))
 	}
-	return groupCondition(query.HavingAnd(c.having...).Not())
+	return groupCondition(expr.HavingAnd(c.having...).Not())
 }
 
 // anyOf ORs single-phase conditions of the same phase.
 func anyOf[S any](children []condition[S]) condition[S] {
 	if len(children) > 0 && len(children[0].where) > 0 {
-		parts := make([]query.Predicate[S], len(children))
+		parts := make([]expr.Predicate[S], len(children))
 		for i, c := range children {
-			parts[i] = query.And(c.where...)
+			parts[i] = expr.And(c.where...)
 		}
-		return rowCondition(query.Or(parts...))
+		return rowCondition(expr.Or(parts...))
 	}
-	parts := make([]query.HavingPredicate[S], len(children))
+	parts := make([]expr.HavingPredicate[S], len(children))
 	for i, c := range children {
-		parts[i] = query.HavingAnd(c.having...)
+		parts[i] = expr.HavingAnd(c.having...)
 	}
-	return groupCondition(query.HavingOr(parts...))
+	return groupCondition(expr.HavingOr(parts...))
 }
 
 // allOf concatenates AND-ed predicates, preserving both phases.
@@ -123,24 +123,24 @@ func (s FilterSource[S, V]) Description() (FilterInfo, error) {
 }
 
 type RowEquality[S, V any] interface {
-	Eq(V) query.Predicate[S]
-	Ne(V) query.Predicate[S]
-	In(...V) query.Predicate[S]
+	Eq(V) expr.Predicate[S]
+	Ne(V) expr.Predicate[S]
+	In(...V) expr.Predicate[S]
 }
 type RowNullable[S, V any] interface {
 	RowEquality[S, V]
-	IsNull() query.Predicate[S]
-	IsNotNull() query.Predicate[S]
+	IsNull() expr.Predicate[S]
+	IsNotNull() expr.Predicate[S]
 }
 type GroupEquality[S, V any] interface {
-	Eq(V) query.HavingPredicate[S]
-	Ne(V) query.HavingPredicate[S]
-	In(...V) query.HavingPredicate[S]
+	Eq(V) expr.HavingPredicate[S]
+	Ne(V) expr.HavingPredicate[S]
+	In(...V) expr.HavingPredicate[S]
 }
 type GroupNullable[S, V any] interface {
 	GroupEquality[S, V]
-	IsNull() query.HavingPredicate[S]
-	IsNotNull() query.HavingPredicate[S]
+	IsNull() expr.HavingPredicate[S]
+	IsNotNull() expr.HavingPredicate[S]
 }
 
 type comparisons[V, P any] interface {
@@ -316,7 +316,7 @@ func (s FilterSource[S, V]) enabled() func(Operator, []string) (condition[S], er
 // as child.Where(predicate).Exists(). It cannot lift HAVING into a row filter.
 // The callback is server-owned; the table operation owns its isolation/lifetime.
 // The lifted comparison is never unknown, so its negation is NOT EXISTS.
-func Related[S, C, V any](source FilterSource[C, V], exists func(query.Predicate[C]) query.Predicate[S]) FilterSource[S, V] {
+func Related[S, C, V any](source FilterSource[C, V], exists func(expr.Predicate[C]) expr.Predicate[S]) FilterSource[S, V] {
 	result := FilterSource[S, V]{info: source.info, err: source.Validate()}
 	if result.err != nil {
 		return result
@@ -331,7 +331,7 @@ func Related[S, C, V any](source FilterSource[C, V], exists func(query.Predicate
 		if err != nil {
 			return condition[S]{}, err
 		}
-		return leaf(rowCondition(exists(query.And(c.where...))), nil), nil
+		return leaf(rowCondition(exists(expr.And(c.where...))), nil), nil
 	}
 	return result
 }

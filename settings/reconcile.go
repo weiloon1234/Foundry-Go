@@ -5,6 +5,8 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	store "github.com/weiloon1234/Foundry-Go/internal/extensionstore"
 )
 
@@ -47,9 +49,9 @@ func Reconcile(ctx context.Context, m *Manager) (Reconciliation, error) {
 		if len(names) == 0 {
 			return nil
 		}
-		f := store.SettingFields()
-		q := store.QueryFoundrySettings()
-		states, err := store.SettingStates(q.Where(f.Name.In(names...)).OrderBy(f.Name.Asc()).Limit(MaxKeys+1)).ForUpdate().All(ctx, tx)
+		f := store.Settings
+		q := store.Settings.Query()
+		states, err := rows.ForUpdate(rows.Read(store.SettingStates(q.Where(f.Name.In(names...)).OrderBy(f.Name.Asc()).Limit(MaxKeys+1)))).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -84,7 +86,7 @@ func Reconcile(ctx context.Context, m *Manager) (Reconciliation, error) {
 			return err
 		}
 		for _, name := range upgrades {
-			row, err := q.RequireFind(ctx, tx, string(name))
+			row, err := q.Where(store.Settings.Key().Eq(string(name))).Require(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -92,12 +94,12 @@ func Reconcile(ctx context.Context, m *Manager) (Reconciliation, error) {
 			if err != nil {
 				return err
 			}
-			if _, err := q.Update(ctx, tx, string(name), store.SettingDraft{}.SetValue(converted).SetVersion(uint32(m.keys[name].version)).SetUpdatedAt(now)); err != nil {
+			if _, err := orm.Update(ctx, tx, q, store.Settings.Key(), string(name), store.Settings.Value.Set(converted), store.Settings.Version.Set(uint32(m.keys[name].version)), store.Settings.UpdatedAt.Set(now)); err != nil {
 				return err
 			}
 		}
 		for _, name := range presented {
-			if _, err := q.Update(ctx, tx, string(name), presentationDraft(store.SettingDraft{}, m.keys[name].presentation).SetUpdatedAt(now)); err != nil {
+			if _, err := orm.Update(ctx, tx, q, store.Settings.Key(), string(name), append(presentationDraft([]orm.Assignment[store.Setting]{}, m.keys[name].presentation), store.Settings.UpdatedAt.Set(now))...); err != nil {
 				return err
 			}
 		}

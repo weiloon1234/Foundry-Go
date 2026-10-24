@@ -165,11 +165,12 @@ func TestRowStartupAndMappingErrors(t *testing.T) {
 }
 
 type driverState struct {
-	sql      string
-	columns  []string
-	rows     [][]driver.Value
-	closed   bool
-	closeErr error
+	arguments []driver.NamedValue
+	sql       string
+	columns   []string
+	rows      [][]driver.Value
+	closed    bool
+	closeErr  error
 }
 type testDriver struct{ state *driverState }
 
@@ -183,8 +184,9 @@ func (c *testConn) Prepare(string) (driver.Stmt, error) { return nil, errors.New
 func (c *testConn) Close() error                        { return nil }
 func (c *testConn) Begin() (driver.Tx, error)           { return nil, errors.New("unexpected transaction") }
 func (c *testConn) Ping(context.Context) error          { return nil }
-func (c *testConn) QueryContext(_ context.Context, sql string, _ []driver.NamedValue) (driver.Rows, error) {
+func (c *testConn) QueryContext(_ context.Context, sql string, args []driver.NamedValue) (driver.Rows, error) {
 	c.state.sql = sql
+	c.state.arguments = append([]driver.NamedValue(nil), args...)
 	return &testRows{state: c.state}, nil
 }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
@@ -18,7 +17,7 @@ func InsertEach[M any, K comparable](ctx context.Context, writer database.Transa
 	if err := tableError(table.core); err != nil {
 		return nil, err
 	}
-	if len(rows) > query.MaxPerModelWriteRows {
+	if len(rows) > querycore.MaxPerModelWriteRows {
 		return nil, invalid("per-model insert count exceeds its bound")
 	}
 	plans := make([]writePlan, len(rows))

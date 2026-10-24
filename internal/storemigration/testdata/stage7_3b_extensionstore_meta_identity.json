@@ -1,0 +1,15 @@
+{
+  "Statements": [
+    {
+      "SQL": "SELECT \"foundry_model_metadata\".\"key\", \"foundry_model_metadata\".\"owner\", \"foundry_model_metadata\".\"scope\", \"foundry_model_metadata\".\"subject_key\", \"foundry_model_metadata\".\"identity\", \"foundry_model_metadata\".\"name\", \"foundry_model_metadata\".\"version\", \"foundry_model_metadata\".\"value\", \"foundry_model_metadata\".\"created_at\", \"foundry_model_metadata\".\"updated_at\" FROM \"foundry_model_metadata\" WHERE (\"foundry_model_metadata\".\"key\" = $1) ORDER BY \"foundry_model_metadata\".\"key\" ASC LIMIT $2",
+      "Args": [
+        "stored",
+        1
+      ]
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "32f477c15bf20894f174490b4eb585947652b33ab69129493e8950c4a2ebeeb5"
+}

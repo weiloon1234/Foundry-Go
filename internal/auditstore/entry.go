@@ -19,8 +19,6 @@ import (
 // the database-assigned insertion order. SubjectKey and ActorKey are generated
 // lookup keys derived from Subject and Origin; they are never written directly.
 // Registration never installs audit observers for this private storage model.
-//
-//foundry:model table=foundry_audit
 type Entry struct {
 	ID            model.ID[Entry]
 	Sequence      int64 `foundry:"default=database"`
@@ -44,8 +42,6 @@ type Entry struct {
 func (Entry) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("stored audit entry")) }
 
 // Activity is the payload-free projection used by heterogeneous timelines.
-//
-//foundry:projection
 type Activity struct {
 	ID            model.ID[Entry]
 	Sequence      int64

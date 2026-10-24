@@ -39,37 +39,22 @@ func (d Definition[M]) WithObserverHooks(factory func(context.Context, lifecycle
 	return d
 }
 
-// writerObservers trusts only concrete framework owners. A structural assertion
-// would let an application infer and capture the observer capability. Unknown
-// wrappers use the transaction they supply and its frozen observer snapshot.
+// writerObservers unwraps only this engine's private atomic-batch adapter.
+// Concrete database ownership and capability validation live in database.
 func writerObservers(writer any) (lifecycle.Observers, bool) {
 	switch owner := writer.(type) {
-	case *database.DB:
-		return owner.FoundryObservers(sqlowner.Observers())
-	case database.PrimaryExecutor:
-		return owner.FoundryObservers(sqlowner.Observers())
-	case *database.PrimaryExecutor:
-		if owner == nil {
-			return lifecycle.Observers{}, false
-		}
-		return owner.FoundryObservers(sqlowner.Observers())
-	case *database.Session:
-		return owner.FoundryObservers(sqlowner.Observers())
-	case *database.Tx:
-		return owner.FoundryObservers(sqlowner.Observers())
 	case enclosingTransaction:
-		return owner.tx.FoundryObservers(sqlowner.Observers())
+		writer = owner.tx
 	case *enclosingTransaction:
 		if owner == nil {
 			return lifecycle.Observers{}, false
 		}
-		return owner.tx.FoundryObservers(sqlowner.Observers())
-	default:
-		return lifecycle.Observers{}, false
+		writer = owner.tx
 	}
+	return database.FoundryObservers(writer, sqlowner.Observers())
 }
 
-// FoundryObservers shares the concrete framework-owner lookup with ORM. The
+// FoundryObservers retains the legacy bridge to database.FoundryObservers. The
 // observer capability is validated here and is never sent to application code.
 // Unknown wrappers cannot prove observer absence.
 // Example (framework only): FoundryObservers(db, sqlowner.Observers()).

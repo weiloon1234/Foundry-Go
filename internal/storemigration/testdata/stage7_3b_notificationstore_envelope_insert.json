@@ -1,0 +1,32 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "INSERT INTO \"foundry_notifications\" (\"id\", \"recipient\", \"scope\", \"subject_key\", \"identity\", \"origin\", \"name\", \"version\", \"payload\", \"fingerprint\", \"created_at\") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING \"foundry_notifications\".\"id\", \"foundry_notifications\".\"recipient\", \"foundry_notifications\".\"scope\", \"foundry_notifications\".\"subject_key\", \"foundry_notifications\".\"identity\", \"foundry_notifications\".\"origin\", \"foundry_notifications\".\"name\", \"foundry_notifications\".\"version\", \"foundry_notifications\".\"payload\", \"foundry_notifications\".\"fingerprint\", \"foundry_notifications\".\"created_at\"",
+      "Args": [
+        "01890f47-1a00-7000-8000-000000000001",
+        "inserted",
+        "inserted",
+        "inserted",
+        "{\"key\":{\"k\":\"int\",\"t\":\"7\"},\"model\":\"subjects\"}",
+        "{\"request\":{},\"system\":\"migration\"}",
+        "inserted",
+        1,
+        "{}",
+        "inserted",
+        "2026-10-23T23:00:00Z"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "f6568eea45bdeb0233414aa114fc364020319e93efc916c90ac22af1fd275728"
+}

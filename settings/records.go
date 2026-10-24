@@ -9,7 +9,8 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	store "github.com/weiloon1234/Foundry-Go/internal/extensionstore"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionvalue"
@@ -103,8 +104,8 @@ func (k Key[V]) Find(ctx context.Context, m *Manager) (value.Optional[Record], e
 	}
 	var result value.Optional[Record]
 	err := m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
-		f := store.SettingFields()
-		row, err := store.QueryFoundrySettings().Where(f.Name.Eq(string(k.Name()))).First(ctx, tx)
+		f := store.Settings
+		row, err := store.Settings.Query().Where(f.Name.Eq(string(k.Name()))).First(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -177,9 +178,9 @@ func (m *Manager) listNames(filter Filter) ([]string, error) {
 	slices.Sort(names)
 	return names, nil
 }
-func (m *Manager) listQuery(names []string, filter Filter) store.SettingQuery {
-	f := store.SettingFields()
-	q := store.QueryFoundrySettings().Where(f.Name.In(names...))
+func (m *Manager) listQuery(names []string, filter Filter) orm.Query[store.Setting] {
+	f := store.Settings
+	q := store.Settings.Query().Where(f.Name.In(names...))
 	if filter.Group != "" {
 		q = q.Where(f.GroupName.Eq(string(filter.Group)))
 	}
@@ -214,11 +215,11 @@ func ListPage(ctx context.Context, m *Manager, filter Filter, after Cursor, limi
 		if len(names) == 0 {
 			return nil
 		}
-		f := store.SettingFields()
+		f := store.Settings
 		q := m.listQuery(names, filter)
 		if !after.IsZero() {
 			g, o, n := string(after.Group), after.Order, string(after.Name)
-			q = q.Where(query.Or(f.GroupName.Gt(g), query.And(f.GroupName.Eq(g), query.Or(f.SortOrder.Gt(o), query.And(f.SortOrder.Eq(o), f.Name.Gt(n))))))
+			q = q.Where(orm.Or(f.GroupName.Gt(g), orm.And(f.GroupName.Eq(g), orm.Or(f.SortOrder.Gt(o), orm.And(f.SortOrder.Eq(o), f.Name.Gt(n))))))
 		}
 		var budget extensionvalue.BatchBudget
 		err := q.Limit(limit+1).Each(ctx, tx, func(row store.Setting) error {
@@ -319,7 +320,7 @@ func Groups(ctx context.Context, m *Manager) ([]Group, error) {
 		if len(names) == 0 {
 			return nil
 		}
-		return store.SettingStates(m.listQuery(names, Filter{}).Limit(MaxKeys+1)).Each(ctx, tx, func(row store.SettingState) error {
+		return rows.Each(ctx, tx, store.SettingStates(m.listQuery(names, Filter{}).Limit(MaxKeys+1)), func(row store.SettingState) error {
 			if !identifier.Semantic(row.GroupName) {
 				return invalid()
 			}
@@ -409,9 +410,9 @@ func (m *Manager) load(ctx context.Context, names []Name) (Batch, error) {
 		for _, name := range missing {
 			loaded[Name(name)] = value.Optional[Record]{}
 		}
-		f := store.SettingFields()
+		f := store.Settings
 		retained := 0
-		return store.QueryFoundrySettings().Where(f.Name.In(missing...)).OrderBy(f.Name.Asc()).Each(ctx, tx, func(row store.Setting) error {
+		return store.Settings.Query().Where(f.Name.In(missing...)).OrderBy(f.Name.Asc()).Each(ctx, tx, func(row store.Setting) error {
 			record, err := m.record(ctx, row)
 			if err != nil {
 				return err

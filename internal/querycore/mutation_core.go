@@ -68,6 +68,9 @@ func ReadMutationAssignments(assignments []MutationAssignment) (map[FieldRef]Ass
 
 // ValidateAdjustment checks the target before a write acquires resources or samples time.
 func (q QueryCore) ValidateAdjustment(a *Adjustment, c *Compiler, assigned map[string]MutationAssignment) error {
+	if q.Model.Timestamps != nil && a.Field.Column == q.Model.Timestamps.Updated {
+		return fault.New(fault.Invalid, "numeric adjustment cannot target a managed update timestamp")
+	}
 	if err := a.Field.Validate(q.Table); err != nil {
 		return err
 	}

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	store "github.com/weiloon1234/Foundry-Go/internal/extensionstore"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionvalue"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -75,24 +75,24 @@ func (k Key[V]) write(ctx context.Context, m *Manager, outer *database.Tx, input
 		if err != nil {
 			return err
 		}
-		q, f := store.QueryFoundrySettings(), store.SettingFields()
-		draft := store.SettingDraft{}.SetValue(snapshot).SetVersion(uint32(k.Version())).SetUpdatedAt(now)
+		q, f := store.Settings.Query(), store.Settings
+		draft := []orm.Assignment[store.Setting]{store.Settings.Value.Set(snapshot), store.Settings.Version.Set(uint32(k.Version())), store.Settings.UpdatedAt.Set(now)}
 		if mode == setValue {
-			_, err := q.Update(ctx, tx, string(k.Name()), draft)
+			_, err := orm.Update(ctx, tx, q, store.Settings.Key(), string(k.Name()), draft...)
 			return err
 		}
-		draft = presentationDraft(draft, k.definition.presentation).SetPresentationDeclared(true).SetName(string(k.Name())).SetCreatedAt(now)
+		draft = append(presentationDraft(draft, k.definition.presentation), store.Settings.PresentationDeclared.Set(true), store.Settings.Name.Set(string(k.Name())), store.Settings.CreatedAt.Set(now))
 		if mode == createValue {
-			_, err := q.Create(ctx, tx, draft)
+			_, err := store.Settings.Insert(ctx, tx, draft...)
 			return err
 		}
 		// Ensure refreshes only a declaration-owned presentation; the value,
 		// version and an explicitly configured presentation stay unchanged.
-		conflict := query.OnConflict(f.Name).Update(f.Kind, f.Parameters, f.GroupName, f.Label, f.Description, f.SortOrder, f.IsPublic).Where(f.PresentationDeclared.Eq(true))
+		conflict := orm.OnConflict(orm.ConflictKey(f.Name)).DoUpdate(orm.ConflictIncoming(f.Kind), orm.ConflictIncoming(f.Parameters), orm.ConflictIncoming(f.GroupName), orm.ConflictIncoming(f.Label), orm.ConflictIncoming(f.Description), orm.ConflictIncoming(f.SortOrder), orm.ConflictIncoming(f.IsPublic)).Where(f.PresentationDeclared.Eq(true))
 		if mode == upsertValue {
-			conflict = query.OnConflict(f.Name).Update(f.Value, f.Version, f.UpdatedAt)
+			conflict = orm.OnConflict(orm.ConflictKey(f.Name)).DoUpdate(orm.ConflictIncoming(f.Value), orm.ConflictIncoming(f.Version), orm.ConflictIncoming(f.UpdatedAt))
 		}
-		_, err = q.Upsert(ctx, tx, draft, conflict)
+		_, err = orm.Upsert(ctx, tx, q, conflict, draft...)
 		return err
 	}
 	defer m.invalidate(k.Name())
@@ -114,8 +114,8 @@ func (m *Manager) invalidateAfterCommit(tx *database.Tx, names ...Name) error {
 		return nil
 	})
 }
-func presentationDraft(d store.SettingDraft, p Presentation) store.SettingDraft {
-	return d.SetKind(string(p.Kind)).SetParameters(p.Parameters).SetGroupName(string(p.Group)).SetLabel(p.Label).SetDescription(p.Description).SetSortOrder(p.Order).SetIsPublic(p.Public)
+func presentationDraft(d []orm.Assignment[store.Setting], p Presentation) []orm.Assignment[store.Setting] {
+	return append(d, store.Settings.Kind.Set(string(p.Kind)), store.Settings.Parameters.Set(p.Parameters), store.Settings.GroupName.Set(string(p.Group)), store.Settings.Label.Set(p.Label), store.Settings.Description.Set(p.Description), store.Settings.SortOrder.Set(p.Order), store.Settings.IsPublic.Set(p.Public))
 }
 
 // Configure explicitly takes ownership of the persisted presentation. Later
@@ -147,7 +147,7 @@ func (k Key[V]) present(ctx context.Context, m *Manager, p Presentation, declare
 		if err != nil {
 			return err
 		}
-		_, err = store.QueryFoundrySettings().Update(ctx, tx, string(k.Name()), presentationDraft(store.SettingDraft{}, p).SetPresentationDeclared(declared).SetUpdatedAt(now))
+		_, err = orm.Update(ctx, tx, store.Settings.Query(), store.Settings.Key(), string(k.Name()), append(presentationDraft([]orm.Assignment[store.Setting]{}, p), store.Settings.PresentationDeclared.Set(declared), store.Settings.UpdatedAt.Set(now))...)
 		return err
 	})
 }
@@ -159,8 +159,8 @@ func (k Key[V]) Remove(ctx context.Context, m *Manager) (bool, error) {
 	defer m.invalidate(k.Name())
 	m.invalidate(k.Name())
 	err := m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		q, f := store.QueryFoundrySettings(), store.SettingFields()
-		rows, err := q.Where(f.Name.Eq(string(k.Name()))).DeleteEach(ctx, tx, 1)
+		q, f := store.Settings.Query(), store.Settings
+		rows, err := orm.DeleteEach(ctx, tx, q.Where(f.Name.Eq(string(k.Name()))), 1)
 		removed = len(rows) == 1
 		return err
 	})

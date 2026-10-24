@@ -1,0 +1,27 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "INSERT INTO \"foundry_webhook_endpoints\" (\"id\", \"url\", \"events\", \"active\", \"created_at\", \"updated_at\") VALUES ($1, $2, $3, $4, $5, $6) RETURNING \"foundry_webhook_endpoints\".\"id\", \"foundry_webhook_endpoints\".\"url\", \"foundry_webhook_endpoints\".\"events\", \"foundry_webhook_endpoints\".\"active\", \"foundry_webhook_endpoints\".\"created_at\", \"foundry_webhook_endpoints\".\"updated_at\"",
+      "Args": [
+        "01890f47-1a00-7000-8000-000000000001",
+        "inserted",
+        "[]",
+        true,
+        "2026-10-23T23:00:00Z",
+        "2026-10-24T00:00:00Z"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "d25c84362dda81daaf369e31eaf7f43bc9f0f86884a7425f7d92abe57ffcd667"
+}

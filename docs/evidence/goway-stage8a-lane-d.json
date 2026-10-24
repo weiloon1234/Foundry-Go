@@ -1,0 +1,2275 @@
+{
+  "slice": "stage8a-lane-d",
+  "timestamp_utc": "2026-10-24T06:42:20.064970+00:00",
+  "status": "all requested acceptance passed",
+  "toolchain": "go1.27.1 darwin/arm64",
+  "editor": {
+    "gopls": "v0.23.0",
+    "probes": 466,
+    "seconds": 387.013
+  },
+  "base_commit": "f3cfffd7199988d51023dbe516e505bdb1538b50",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r5",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off"
+  },
+  "build": "passed before cache rotation; source unchanged except import formatting",
+  "acceptance": [
+    {
+      "segment": "vet",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage8a/final-vet.log"
+    },
+    {
+      "segment": "race-core",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage8a/final-race-core.log"
+    },
+    {
+      "segment": "race-stores",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage8a/final-race-stores.log"
+    },
+    {
+      "segment": "race-consumers",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage8a/final-race-consumers.log"
+    },
+    {
+      "segment": "footprints",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage8a/final-footprints.log"
+    },
+    {
+      "segment": "fixtures",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage8a/final-fixtures.log"
+    },
+    {
+      "segment": "catalogue",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage8a/final-catalogue.log"
+    },
+    {
+      "segment": "generate",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage8a/final-generate.log"
+    },
+    {
+      "segment": "generate-check",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage8a/final-generate-check.log"
+    },
+    {
+      "segment": "typescript",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage8a/final-typescript.log"
+    },
+    {
+      "segment": "docs",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage8a/final-docs.log"
+    },
+    {
+      "segment": "format",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage8a/final-format.log"
+    },
+    {
+      "segment": "diff",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage8a/final-diff.log"
+    },
+    {
+      "segment": "editor",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage8a/final-editor.log"
+    }
+  ],
+  "footprint": [
+    {
+      "probe": "aggregate_families",
+      "functions": 4366,
+      "baseline": 3799,
+      "ceiling": 4369,
+      "archive_bytes": 19908676
+    },
+    {
+      "probe": "aggregate_group",
+      "functions": 2533,
+      "baseline": 2426,
+      "ceiling": 2790,
+      "archive_bytes": 11403490
+    },
+    {
+      "probe": "aggregate_slot_declaration",
+      "functions": 1127,
+      "baseline": 1112,
+      "ceiling": 1279,
+      "archive_bytes": 4877378
+    },
+    {
+      "probe": "aggregate_slot_direct",
+      "functions": 1490,
+      "baseline": 1490,
+      "ceiling": 1714,
+      "archive_bytes": 6186832
+    },
+    {
+      "probe": "aggregate_slot_nested",
+      "functions": 2050,
+      "baseline": 2048,
+      "ceiling": 2356,
+      "archive_bytes": 8591670
+    },
+    {
+      "probe": "aggregate_slot_pivot",
+      "functions": 2092,
+      "baseline": 2095,
+      "ceiling": 2410,
+      "archive_bytes": 8859994
+    },
+    {
+      "probe": "audit",
+      "functions": 1337,
+      "baseline": 1313,
+      "ceiling": 1510,
+      "archive_bytes": 6650250
+    },
+    {
+      "probe": "column_encrypted_json",
+      "functions": 1321,
+      "baseline": 1217,
+      "ceiling": 1400,
+      "archive_bytes": 5669632
+    },
+    {
+      "probe": "column_encrypted_text",
+      "functions": 1231,
+      "baseline": 1127,
+      "ceiling": 1297,
+      "archive_bytes": 5359454
+    },
+    {
+      "probe": "column_enum",
+      "functions": 1344,
+      "baseline": 1232,
+      "ceiling": 1417,
+      "archive_bytes": 5661740
+    },
+    {
+      "probe": "column_interval",
+      "functions": 1293,
+      "baseline": 1178,
+      "ceiling": 1355,
+      "archive_bytes": 5603336
+    },
+    {
+      "probe": "column_json",
+      "functions": 1391,
+      "baseline": 1280,
+      "ceiling": 1472,
+      "archive_bytes": 5900168
+    },
+    {
+      "probe": "column_nullable_encrypted_json",
+      "functions": 1562,
+      "baseline": 1449,
+      "ceiling": 1667,
+      "archive_bytes": 6936586
+    },
+    {
+      "probe": "column_nullable_encrypted_text",
+      "functions": 1472,
+      "baseline": 1359,
+      "ceiling": 1563,
+      "archive_bytes": 6603418
+    },
+    {
+      "probe": "column_nullable_interval",
+      "functions": 1530,
+      "baseline": 1406,
+      "ceiling": 1617,
+      "archive_bytes": 6821952
+    },
+    {
+      "probe": "column_nullable_json",
+      "functions": 1642,
+      "baseline": 1522,
+      "ceiling": 1751,
+      "archive_bytes": 7126060
+    },
+    {
+      "probe": "column_nullable_password",
+      "functions": 1535,
+      "baseline": 1417,
+      "ceiling": 1630,
+      "archive_bytes": 6784762
+    },
+    {
+      "probe": "column_nullable_text",
+      "functions": 1584,
+      "baseline": 1456,
+      "ceiling": 1675,
+      "archive_bytes": 6595596
+    },
+    {
+      "probe": "column_number",
+      "functions": 1267,
+      "baseline": 1172,
+      "ceiling": 1348,
+      "archive_bytes": 5373772
+    },
+    {
+      "probe": "column_password",
+      "functions": 1299,
+      "baseline": 1190,
+      "ceiling": 1369,
+      "archive_bytes": 5611096
+    },
+    {
+      "probe": "column_time",
+      "functions": 1309,
+      "baseline": 1194,
+      "ceiling": 1374,
+      "archive_bytes": 5511382
+    },
+    {
+      "probe": "conditional_row",
+      "functions": 1805,
+      "baseline": 1681,
+      "ceiling": 1934,
+      "archive_bytes": 8295408
+    },
+    {
+      "probe": "conditional_selected",
+      "functions": 1649,
+      "baseline": 1511,
+      "ceiling": 1738,
+      "archive_bytes": 7596652
+    },
+    {
+      "probe": "conflict",
+      "functions": 968,
+      "baseline": 944,
+      "ceiling": 1086,
+      "archive_bytes": 4861530
+    },
+    {
+      "probe": "conflict_advanced",
+      "functions": 1817,
+      "baseline": 1817,
+      "ceiling": 2090,
+      "archive_bytes": 9150698
+    },
+    {
+      "probe": "correlation",
+      "functions": 2991,
+      "baseline": 2752,
+      "ceiling": 3165,
+      "archive_bytes": 13850428
+    },
+    {
+      "probe": "cte_recursive",
+      "functions": 1131,
+      "baseline": 1076,
+      "ceiling": 1238,
+      "archive_bytes": 5509208
+    },
+    {
+      "probe": "cursor",
+      "functions": 1186,
+      "baseline": 1127,
+      "ceiling": 1297,
+      "archive_bytes": 5425666
+    },
+    {
+      "probe": "distinct",
+      "functions": 1174,
+      "baseline": 1135,
+      "ceiling": 1306,
+      "archive_bytes": 5714072
+    },
+    {
+      "probe": "each_writes",
+      "functions": 888,
+      "baseline": 888,
+      "ceiling": 1022,
+      "archive_bytes": 4508030
+    },
+    {
+      "probe": "expr_arithmetic",
+      "functions": 1256,
+      "baseline": 1162,
+      "ceiling": 1337,
+      "archive_bytes": 5929388
+    },
+    {
+      "probe": "expr_selected",
+      "functions": 1698,
+      "baseline": 1551,
+      "ceiling": 1784,
+      "archive_bytes": 7575124
+    },
+    {
+      "probe": "extension_declaration",
+      "functions": 11383,
+      "baseline": 30434,
+      "ceiling": 35000,
+      "archive_bytes": 56366962
+    },
+    {
+      "probe": "extension_handles",
+      "functions": 1481,
+      "baseline": 1481,
+      "ceiling": 1704,
+      "archive_bytes": 6693556
+    },
+    {
+      "probe": "extension_slots",
+      "functions": 2083,
+      "baseline": 2154,
+      "ceiling": 2478,
+      "archive_bytes": 9555854
+    },
+    {
+      "probe": "extension_slots_old",
+      "functions": 9733,
+      "baseline": 30493,
+      "ceiling": 35067,
+      "archive_bytes": 49278620
+    },
+    {
+      "probe": "framework_attachmentstore",
+      "functions": 4792,
+      "baseline": 4729,
+      "ceiling": 5439,
+      "archive_bytes": 20835090
+    },
+    {
+      "probe": "framework_auditstore",
+      "functions": 4753,
+      "baseline": 4753,
+      "ceiling": 5466,
+      "archive_bytes": 20558314
+    },
+    {
+      "probe": "framework_challengestore",
+      "functions": 2560,
+      "baseline": 2558,
+      "ceiling": 2942,
+      "archive_bytes": 11935120
+    },
+    {
+      "probe": "framework_countries",
+      "functions": 4157,
+      "baseline": 4122,
+      "ceiling": 4741,
+      "archive_bytes": 17377374
+    },
+    {
+      "probe": "framework_extensionstore",
+      "functions": 5640,
+      "baseline": 5407,
+      "ceiling": 6219,
+      "archive_bytes": 26964640
+    },
+    {
+      "probe": "framework_idempotencystore",
+      "functions": 2253,
+      "baseline": 2249,
+      "ceiling": 2587,
+      "archive_bytes": 9599112
+    },
+    {
+      "probe": "framework_jobarchive",
+      "functions": 2280,
+      "baseline": 2280,
+      "ceiling": 2622,
+      "archive_bytes": 9858714
+    },
+    {
+      "probe": "framework_mfastore",
+      "functions": 2947,
+      "baseline": 2947,
+      "ceiling": 3390,
+      "archive_bytes": 12473242
+    },
+    {
+      "probe": "framework_notificationstore",
+      "functions": 5165,
+      "baseline": 5119,
+      "ceiling": 5887,
+      "archive_bytes": 24215922
+    },
+    {
+      "probe": "framework_outbox",
+      "functions": 2896,
+      "baseline": 2896,
+      "ceiling": 3331,
+      "archive_bytes": 12590322
+    },
+    {
+      "probe": "framework_sessionstore",
+      "functions": 4166,
+      "baseline": 4166,
+      "ceiling": 4791,
+      "archive_bytes": 17785138
+    },
+    {
+      "probe": "framework_tokenstore",
+      "functions": 5315,
+      "baseline": 5315,
+      "ceiling": 6113,
+      "archive_bytes": 22596092
+    },
+    {
+      "probe": "framework_webhookstore",
+      "functions": 4769,
+      "baseline": 4705,
+      "ceiling": 5411,
+      "archive_bytes": 21726556
+    },
+    {
+      "probe": "global_scopes",
+      "functions": 1389,
+      "baseline": 1374,
+      "ceiling": 1581,
+      "archive_bytes": 6506246
+    },
+    {
+      "probe": "has",
+      "functions": 1412,
+      "baseline": 1302,
+      "ceiling": 1498,
+      "archive_bytes": 6307662
+    },
+    {
+      "probe": "has_one",
+      "functions": 1403,
+      "baseline": 1281,
+      "ceiling": 1474,
+      "archive_bytes": 6283104
+    },
+    {
+      "probe": "input_column_kinds",
+      "functions": 5321,
+      "baseline": 5088,
+      "ceiling": 5852,
+      "archive_bytes": 22036598
+    },
+    {
+      "probe": "input_key",
+      "functions": 1049,
+      "baseline": 982,
+      "ceiling": 1130,
+      "archive_bytes": 4888418
+    },
+    {
+      "probe": "json_functions",
+      "functions": 2739,
+      "baseline": 2736,
+      "ceiling": 3147,
+      "archive_bytes": 11670360
+    },
+    {
+      "probe": "json_paths",
+      "functions": 6148,
+      "baseline": 6146,
+      "ceiling": 7068,
+      "archive_bytes": 26626754
+    },
+    {
+      "probe": "key_chunk",
+      "functions": 862,
+      "baseline": 812,
+      "ceiling": 934,
+      "archive_bytes": 4182124
+    },
+    {
+      "probe": "lateral",
+      "functions": 3049,
+      "baseline": 2852,
+      "ceiling": 3280,
+      "archive_bytes": 15185636
+    },
+    {
+      "probe": "lifecycle_changes",
+      "functions": 1093,
+      "baseline": 1050,
+      "ceiling": 1208,
+      "archive_bytes": 5151038
+    },
+    {
+      "probe": "lifecycle_write",
+      "functions": 973,
+      "baseline": 930,
+      "ceiling": 1070,
+      "archive_bytes": 4914432
+    },
+    {
+      "probe": "model_type",
+      "functions": 299,
+      "baseline": 299,
+      "ceiling": 344,
+      "archive_bytes": 1272554
+    },
+    {
+      "probe": "models",
+      "functions": 6849,
+      "baseline": 6147,
+      "ceiling": 7070,
+      "archive_bytes": 30223010
+    },
+    {
+      "probe": "models_1",
+      "functions": 1751,
+      "baseline": 1619,
+      "ceiling": 1862,
+      "archive_bytes": 7312570
+    },
+    {
+      "probe": "models_3",
+      "functions": 2605,
+      "baseline": 2435,
+      "ceiling": 2801,
+      "archive_bytes": 11016340
+    },
+    {
+      "probe": "morph",
+      "functions": 1155,
+      "baseline": 1088,
+      "ceiling": 1252,
+      "archive_bytes": 5287774
+    },
+    {
+      "probe": "mutator_explicit",
+      "functions": 1717,
+      "baseline": 1605,
+      "ceiling": 1846,
+      "archive_bytes": 7166124
+    },
+    {
+      "probe": "mutators",
+      "functions": 855,
+      "baseline": 801,
+      "ceiling": 922,
+      "archive_bytes": 4507290
+    },
+    {
+      "probe": "nested_with",
+      "functions": 1403,
+      "baseline": 1281,
+      "ceiling": 1474,
+      "archive_bytes": 6323096
+    },
+    {
+      "probe": "nullable_join_chain",
+      "functions": 1854,
+      "baseline": 1695,
+      "ceiling": 1950,
+      "archive_bytes": 8911214
+    },
+    {
+      "probe": "on_comparisons",
+      "functions": 1589,
+      "baseline": 1454,
+      "ceiling": 1673,
+      "archive_bytes": 7296070
+    },
+    {
+      "probe": "onequery",
+      "functions": 854,
+      "baseline": 803,
+      "ceiling": 924,
+      "archive_bytes": 4139060
+    },
+    {
+      "probe": "orm_binding",
+      "functions": 1101,
+      "baseline": 1089,
+      "ceiling": 1253,
+      "archive_bytes": 4634976
+    },
+    {
+      "probe": "orm_factory",
+      "functions": 1093,
+      "baseline": 1093,
+      "ceiling": 1257,
+      "archive_bytes": 4771246
+    },
+    {
+      "probe": "outbox_publisher",
+      "functions": 1324,
+      "baseline": 1324,
+      "ceiling": 1523,
+      "archive_bytes": 6612904
+    },
+    {
+      "probe": "outer_join",
+      "functions": 1789,
+      "baseline": 1668,
+      "ceiling": 1919,
+      "archive_bytes": 8573216
+    },
+    {
+      "probe": "pivot",
+      "functions": 1072,
+      "baseline": 1005,
+      "ceiling": 1156,
+      "archive_bytes": 4983790
+    },
+    {
+      "probe": "q_join",
+      "functions": 1766,
+      "baseline": 1598,
+      "ceiling": 1838,
+      "archive_bytes": 8504860
+    },
+    {
+      "probe": "q_select",
+      "functions": 895,
+      "baseline": 836,
+      "ceiling": 962,
+      "archive_bytes": 4367218
+    },
+    {
+      "probe": "q_with",
+      "functions": 1211,
+      "baseline": 1053,
+      "ceiling": 1211,
+      "archive_bytes": 5615874
+    },
+    {
+      "probe": "raw",
+      "functions": 1096,
+      "baseline": 1045,
+      "ceiling": 1202,
+      "archive_bytes": 5249134
+    },
+    {
+      "probe": "raw_fragments",
+      "functions": 1380,
+      "baseline": 1331,
+      "ceiling": 1531,
+      "archive_bytes": 6238900
+    },
+    {
+      "probe": "record_sets",
+      "functions": 1294,
+      "baseline": 1288,
+      "ceiling": 1482,
+      "archive_bytes": 6345106
+    },
+    {
+      "probe": "records",
+      "functions": 1327,
+      "baseline": 1313,
+      "ceiling": 1510,
+      "archive_bytes": 6566214
+    },
+    {
+      "probe": "relation_with",
+      "functions": 2047,
+      "baseline": 1847,
+      "ceiling": 2125,
+      "archive_bytes": 8800886
+    },
+    {
+      "probe": "relation_write_attach",
+      "functions": 1110,
+      "baseline": 1110,
+      "ceiling": 1277,
+      "archive_bytes": 5146730
+    },
+    {
+      "probe": "relation_write_declaration",
+      "functions": 361,
+      "baseline": 361,
+      "ceiling": 416,
+      "archive_bytes": 1507374
+    },
+    {
+      "probe": "relation_write_sync",
+      "functions": 1124,
+      "baseline": 1124,
+      "ceiling": 1293,
+      "archive_bytes": 5216650
+    },
+    {
+      "probe": "report_pipeline",
+      "functions": 2120,
+      "baseline": 1905,
+      "ceiling": 2191,
+      "archive_bytes": 11449182
+    },
+    {
+      "probe": "result_cursor",
+      "functions": 2229,
+      "baseline": 2229,
+      "ceiling": 2564,
+      "archive_bytes": 10466912
+    },
+    {
+      "probe": "result_reads",
+      "functions": 1385,
+      "baseline": 1351,
+      "ceiling": 1554,
+      "archive_bytes": 6588012
+    },
+    {
+      "probe": "retrieval_read",
+      "functions": 831,
+      "baseline": 826,
+      "ceiling": 950,
+      "archive_bytes": 4171898
+    },
+    {
+      "probe": "role_input_same",
+      "functions": 1360,
+      "baseline": 1360,
+      "ceiling": 1564,
+      "archive_bytes": 5610604
+    },
+    {
+      "probe": "role_lookup_input",
+      "functions": 1226,
+      "baseline": 1226,
+      "ceiling": 1410,
+      "archive_bytes": 5191222
+    },
+    {
+      "probe": "role_primary_number",
+      "functions": 1195,
+      "baseline": 1195,
+      "ceiling": 1375,
+      "archive_bytes": 5121958
+    },
+    {
+      "probe": "role_primary_text",
+      "functions": 1216,
+      "baseline": 1216,
+      "ceiling": 1399,
+      "archive_bytes": 5175004
+    },
+    {
+      "probe": "role_soft_read",
+      "functions": 1548,
+      "baseline": 1548,
+      "ceiling": 1781,
+      "archive_bytes": 6628236
+    },
+    {
+      "probe": "role_soft_write",
+      "functions": 620,
+      "baseline": 620,
+      "ceiling": 713,
+      "archive_bytes": 2848330
+    },
+    {
+      "probe": "role_source",
+      "functions": 905,
+      "baseline": 905,
+      "ceiling": 1041,
+      "archive_bytes": 4156428
+    },
+    {
+      "probe": "role_time_read",
+      "functions": 1394,
+      "baseline": 1394,
+      "ceiling": 1604,
+      "archive_bytes": 5969370
+    },
+    {
+      "probe": "rows_each",
+      "functions": 899,
+      "baseline": 899,
+      "ceiling": 1034,
+      "archive_bytes": 4340392
+    },
+    {
+      "probe": "scalar_temporal",
+      "functions": 2629,
+      "baseline": 2625,
+      "ceiling": 3019,
+      "archive_bytes": 11879228
+    },
+    {
+      "probe": "scalar_text",
+      "functions": 2315,
+      "baseline": 2312,
+      "ceiling": 2659,
+      "archive_bytes": 9600092
+    },
+    {
+      "probe": "scoped_write",
+      "functions": 1111,
+      "baseline": 1111,
+      "ceiling": 1278,
+      "archive_bytes": 5140496
+    },
+    {
+      "probe": "sensitive_models",
+      "functions": 2821,
+      "baseline": 2606,
+      "ceiling": 2997,
+      "archive_bytes": 12867448
+    },
+    {
+      "probe": "source_write",
+      "functions": 1311,
+      "baseline": 1311,
+      "ceiling": 1508,
+      "archive_bytes": 6507954
+    },
+    {
+      "probe": "subqueries",
+      "functions": 3061,
+      "baseline": 2837,
+      "ceiling": 3263,
+      "archive_bytes": 13342404
+    },
+    {
+      "probe": "table_ref",
+      "functions": 854,
+      "baseline": 803,
+      "ceiling": 924,
+      "archive_bytes": 4305712
+    },
+    {
+      "probe": "through",
+      "functions": 986,
+      "baseline": 928,
+      "ceiling": 1068,
+      "archive_bytes": 4487408
+    },
+    {
+      "probe": "transaction_correlation",
+      "functions": 2908,
+      "baseline": 2908,
+      "ceiling": 3345,
+      "archive_bytes": 14729962
+    },
+    {
+      "probe": "transaction_joins",
+      "functions": 1835,
+      "baseline": 1835,
+      "ceiling": 2111,
+      "archive_bytes": 9250018
+    },
+    {
+      "probe": "transaction_records",
+      "functions": 1406,
+      "baseline": 1296,
+      "ceiling": 1491,
+      "archive_bytes": 6609616
+    },
+    {
+      "probe": "uuid_seeks",
+      "functions": 1023,
+      "baseline": 1023,
+      "ceiling": 1177,
+      "archive_bytes": 5092326
+    },
+    {
+      "probe": "validation_database",
+      "functions": 1441,
+      "baseline": 1441,
+      "ceiling": 1658,
+      "archive_bytes": 6432574
+    },
+    {
+      "probe": "value_sets",
+      "functions": 2237,
+      "baseline": 2230,
+      "ceiling": 2565,
+      "archive_bytes": 10212048
+    },
+    {
+      "probe": "window_frames",
+      "functions": 1769,
+      "baseline": 1767,
+      "ceiling": 2033,
+      "archive_bytes": 7961678
+    },
+    {
+      "probe": "window_rank",
+      "functions": 1346,
+      "baseline": 1345,
+      "ceiling": 1547,
+      "archive_bytes": 6185574
+    }
+  ],
+  "contracts": {
+    "make_generate": "0 generated, 0 removed in each module",
+    "make_generate_check": "passed",
+    "make_typescript_check": "passed",
+    "note": "Contract artifacts are emitted in test-owned temporary output; no tracked manifest/OpenAPI/TypeScript contract changes."
+  },
+  "source_sha256": {
+    "CHANGELOG.md": "1e0f1644eec62a416f83b8f44859c0461aa1471a6ece866ae1c6adb006b68fc0",
+    "Makefile": "d7ba763cf5d6e779cd77d104e740664f25cb8fdecce29be13ab7cf3ea4dd22b4",
+    "attachments/collections_postgres_test.go": "4ea2fb4ab407836fa3ff1f1fd515744fe70a98b155c850373f5c54eef262804c",
+    "attachments/fixture_test.go": "ae0257a1f646175179ff5cbae4e538cce326941db9ffe52da0a062817824a01d",
+    "attachments/handle_core.go": "031224f383d00c7876ec39a6af114ac339d7c2cd4f5164d5818d3d49adedd65b",
+    "attachments/handle_many.go": "2b2dab59114a81a12c59a35322cf17023adc4dda86a50fdf8df507523e3cbf50",
+    "attachments/handle_one.go": "ff6d92f29571cf0b79cd074676c1107ad6b83d9ff6806549606006b13338a445",
+    "attachments/inspection.go": "ad533dc5bcd482b1d2492fb0de85bd2047f172c2e82c010445771128bed7a881",
+    "attachments/lifecycle.go": "ec762844129de30ee744ad202dab12591f1f586208f16e778d1852052fcb333d",
+    "attachments/matching_legacy.go": "d1d1114d0224485320b70443e1ec570a0ab061be9c506c33d5c39124d68b203c",
+    "attachments/mutate.go": "8cc561e30b81fe70ff3f8ea718fe7bcc67cde2376626981da66d69fa99e1a83a",
+    "attachments/orphans.go": "67c1f8fcf4af5c1e4f18265b96ec6d74f5ceac2deba35ffe0eaf647a9db35164",
+    "attachments/read.go": "078323b97e5d338554c0d4a94e0ded24de428a29c766e2bde0f338f6bf2449f0",
+    "attachments/reconcile.go": "076a30bd01e840a3c13cac6df021505e10134ddd3e0b8236c7e12e118ab55cdb",
+    "attachments/retain.go": "22a6fd438d7e2f911bf1a6b44dfc50e58390e51a5ae261d9dd46aaa26b06d97d",
+    "attachments/scopes.go": "7c73bdc18eec35bd7f11d5429e79e42fa4c3c5218c8da256e0e52cc594faf5da",
+    "attachments/slot.go": "5ae51f4dc0b059c52d08b3c1b97feb7c5fea368c48712cbcb9fc8d0a7f5502aa",
+    "attachments/slot_legacy.go": "5488bbf3700d344a9280486731632c18790307e7931284c30a5fe8b3ddc62be1",
+    "attachments/slot_write.go": "43ce62c835eedbb5ce728b72ca1e102903a90454553d001491a7c05fae61a1bb",
+    "attachments/variants.go": "cf79fb7a8c01f8ca626f3f2fe58fabb8e800d7bdab28e6ee3b96cffe425ca1ea",
+    "attachments/variants_postgres_test.go": "db281e6f4957742690bc1bea85cc798361a252a06c34bbd2337688fdb21812b1",
+    "attachments/write.go": "94defed06caa0d505fcd24652d4ff3314c4b5ac79a10239ec5c6ef20a423e400",
+    "audit/action.go": "d99726dc2ef85234ec510232adeaf3fe8b42740c068b0d4bd035ee8ac41ab1a3",
+    "audit/model.go": "932222c2210c5cefe6d7272ffdbdfae9ceb8b942eaf2d257c03f0784bf8946f0",
+    "audit/model_lookup.go": "a0049bb20918c5c32bc5921a70c30e53891cb276d459895763922c1d4186ccdc",
+    "audit/timeline.go": "c47f7be7d3c74757f9dda0e846aebe3587ccea9f7d56be940dadf89b3e2b14b7",
+    "blueprint/00-master-architecture-and-parity.md": "5073cf38eb1e71abfcd31d037cd44fa58eae99003d8fe434583204e0cfe923c9",
+    "blueprint/goway-data-layer/README.md": "452fe583a4ae2895cfd940aca8b8623b24593b84d13aef15eb6ba52662bb355d",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "0bc3b5f2c4b8d41fb9ad8236305a20bbb4ec9d79e81d3038bdc90a0b8ce93718",
+    "database/orm/README.md": "6e89e817ee8a8eb6077f5b192270445a20d25c71b12248e46edf72d957feee7c",
+    "database/orm/explain.go": "442c95b5fc4671286a388026e2fd12593a6d4d57333356c646b5406fcf09528c",
+    "database/orm/extension.go": "2d43e3b1cec56b7bf11e85f4ef9ed99a2e34077df28bb311f746d1ad485bc638",
+    "database/orm/extension_legacy.go": "2b9ccdc650c8c1a2cb11acf5efc968ec9bc574c04f475e540ab9cebb82e893b2",
+    "database/orm/identity.go": "9fc2ee9ce90582839e62852b4ab8190dafab31e9dabde234432ebf939e856b5e",
+    "database/orm/identity_legacy.go": "969da2c76a850a9c1e32ad54886b84f71d088aede4eb857de30992d90454f5ad",
+    "database/orm/integration_adapters_test.go": "90aa74bc10d7cfce47c311861d1e3070300b250b0c880cf9961beeadb5331274",
+    "database/orm/lookup_value.go": "901422a54e79776b7dba567877604ededf29bbfed10cdbd75180da5f2b2299b4",
+    "database/orm/method_surface_test.go": "d511843a67ff772ceb33785f25cf78fd04ac63b17992aa5e89e7776d985aa6b9",
+    "database/orm/plan_contract_test.go": "53230cdacb9fb7d7450e0835e0d23f4b7227d63093b5b3c0a63e373637023b65",
+    "database/orm/rows/each_test.go": "b482b9e39d42a60207fdf18962564875d7e7ae66d40bb96f597719006b39fe3c",
+    "database/orm/rows/explain.go": "726b9e8342e17dbeeaad92a91df1bf5b5a3d475fca1a286a9e452f81a48f027f",
+    "database/orm/rows/read.go": "64b557314a5ec27783edb342b129260d4f938d34478765707b5dcde7948ea56d",
+    "database/orm/testdata/public-methods.txt": "5db41adab0a905820577b56bd809336ca4b24324850fa265f39ff7080b11865d",
+    "database/orm/transaction_phase_test.go": "52dc79aba4c93dc129f04bcaa063b9e7db8bbea14c9ca1e2c63ec1c2c10b33b2",
+    "database/query/explain.go": "231fd08fe01b4fcb192792e69bd4216de3b5df5d4f53a3b881edcc83430ff713",
+    "database/query/explain_bridge.go": "173ff40cca2ff59259799acdae99f357d3bd10e0a6879b3781abcea0c92c9535",
+    "database/query/explain_decode.go": "85bee3e0f815c56a5ae383558fde13d594dc4f9d79d09696c7055e385c1f749b",
+    "database/query/model_identity.go": "bf4483d84d2d48a26c62ccea8c6b9f0c6d579d16497097221de447b4bb9db9a4",
+    "database/query/relation_extension.go": "c58bd872d86231a903503ed11eceb1ec1b8cc988412943fb6086b7b26fe1a3e6",
+    "database/query/relation_extension_bridge.go": "0d54aa9c4419e7120e6c4abe0e8baecb5ab9a6c551b53d9cb6b2a17bcc841310",
+    "docs/evidence/goway-b34-editor-stage8-inventory.json": "be2d6eb955b6bece19a5ff72f9269a7e1ee8742864c5105b7848ebedb316a71e",
+    "docs/evidence/goway-stage7-slice3b-report.md": "eaee2ff5a89054f5e1de108c2e95e7c07d0399ca34ac0928b471da693049175d",
+    "docs/evidence/goway-stage7-slice3b.json": "167b23e6182c5b32c0cd1623d37844995f3c1d644e94058986172da82fdde36a",
+    "docs/evidence/goway-stage7-validation-database-report.md": "3bb182ef2cae8bb9a915c3028ed1ee9d00f41d7a1de0c4e696240a091a86cf72",
+    "docs/evidence/goway-stage7-validation-database.json": "b7539e7efae1b6534ddd36cf9d59a074e69dd2e9df5b662af80aaf2bff20de50",
+    "docs/evidence/goway-stage8-plan.md": "7ea381f631729c8140b38030a1726e6082a6a0feb4cc847aeef91bf13d29a6dd",
+    "docs/guides/validation.md": "8dd858b4d3a0b677fadbb4a8ee29909bfb301fa6dd722763a8eeaf16636c4813",
+    "extensions/orm.go": "2c29064b9944235ef9f7df08632896d9b4b6417ae4f14c95a2fd62c135724246",
+    "extensions/owner.go": "3d39ec5dca2293c08d2eee926289a98585cca607d40fbead4f1b2af079d23aaa",
+    "extensions/owner_legacy.go": "998f99760bc9909d436f589d5fa191f03561cb69681245e763452cc31c4a9905",
+    "extensions/registry.go": "43a2340295f74cc38a814ae0747f6acbb87854a0457851b991ea1925211d8d54",
+    "internal/agent/gopls_acceptance_test.go": "0051ae1da8ed74c6968f9903305dcd6ead889f0d45c038fb47be5b9991958595",
+    "internal/attachmentstore/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+    "internal/attachmentstore/declarations.go": "62f79f76bd437207b67b01fb753c90087c4ac3369de7a1d28781b6e7896a4d95",
+    "internal/attachmentstore/file.go": "92a080bfd7aec3cd34c646e757df47acf6efb833aa26d0fb6822c3ba490915b3",
+    "internal/attachmentstore/projections.go": "652ca5668fcee8d8045a6962e43926ffc592f18d89ef967119afcf49a64c722e",
+    "internal/attachmentstore/variant.go": "1444194d69945849d8fabdb0c284437238b2861837f28a64ca4825eb0dddc2f0",
+    "internal/auditstore/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+    "internal/auditstore/declarations.go": "a143c1623c1203b38c9c75bf721c0af54671e3e8f5a89689cefdff96d30add8c",
+    "internal/auditstore/entry.go": "81feaf1d837d8b0282fa260cab3c626f6ab30568a2600c9ace607e2b136899b1",
+    "internal/auditstore/projections.go": "d7a4c32552fd20a3d93e079d2c24405fdf4f81c4028537a86a637200f2447fbe",
+    "internal/auditstore/store.go": "d695a644d9048ed33c4aba2ca832cd8f4a5fb0010e41e9410be3f813317c4fbb",
+    "internal/extensionrow/identity.go": "a8831833f1079e41ac1f14ae1f436c9d9c886b0d5754b0d5ef167f3e32f3e816",
+    "internal/extensionslot/slot.go": "94f103c7a0e165b5dbf6662efd1ff9719c4eb10f42ee1c7772b1da732f015c27",
+    "internal/extensionslot/slot_test.go": "6f779dcd8a72969a2cd61977f1ede8259c692afaf211fc2d1c4a3d8d3135481f",
+    "internal/extensionstore/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+    "internal/extensionstore/declarations.go": "1413800bded9241fca7fd2e9f6807d3da29cfd0a74c1739636c72f83ba0849c9",
+    "internal/extensionstore/maintenance.go": "4875998d422c58e7397a7772c8fec033009365ce464a0319691cc6a404eb488d",
+    "internal/extensionstore/metadata.go": "8efa8aaceeaee96c75c87fbfe6024f45df4d5920176ebe2eda4a3ffb941cbc45",
+    "internal/extensionstore/projections.go": "1ea6b4d85ce6c75545acbbd6389f2b799fe10516ed3409674dd708a79f459607",
+    "internal/extensionstore/setting.go": "17a37eb5e218c9ea2ff75a96348970c91778c20856a0eac0960f72bbe6d5d8f4",
+    "internal/extensionstore/translation.go": "bb46c0974992978cec6c53f7e4d1a579fafa1fb50e77cbfabfbf7ff56f960d18",
+    "internal/notificationstore/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+    "internal/notificationstore/declarations.go": "949d0aace9ac367c8ba3290641132b69414566f538ac564fcc49e6abafb6566c",
+    "internal/notificationstore/models.go": "268b43ff31a5befb00e59b3400a1ed8b859ae3340dc6631de89304725f5242d6",
+    "internal/querycore/batch_limits.go": "86d67b7a77585fdef475cb7dc646f3316d619358b37c7aa3b41a56bb5f6a7155",
+    "internal/querycore/explain.go": "47f9548025d2c44e3ed7b4a4c3a38b716537703105d162c61c07dd929cdacd75",
+    "internal/querycore/explain_decode.go": "f7c67243e6d6006798ae0ea60a4f4fd39456369ffe490e608a722387737a9d50",
+    "internal/querycore/identity.go": "358c1c3a5714eea0bdabb24f78edefb5a36c92ab8359d7d915723406f0c7d584",
+    "internal/storemigration/README.md": "d246a6d923255cefb306972f7b3bf23d1ebe5c124a0a07a4bdf9a2728de825a3",
+    "internal/storemigration/stores_3b_test.go": "dc3c6767786f9381d751da3fc6be6af0566f7fe0f825c90f149508e1214505ab",
+    "internal/storemigration/testdata/stage7_3b_attachmentstore_file_delete_each.json": "f118bb704eddb93da93cd8ed4a090de26527f14aafd37f97c7ef025b1a763404",
+    "internal/storemigration/testdata/stage7_3b_attachmentstore_file_identity.json": "c92cd13fdae239100a938113bc2c5e29a1ee6cd5bd9fe8c4b11254315b5f169b",
+    "internal/storemigration/testdata/stage7_3b_attachmentstore_file_insert.json": "4a684c1b1c50b50218393b4bbd6d42641eb0dcae85dce41427cc24f55c64dcc7",
+    "internal/storemigration/testdata/stage7_3b_attachmentstore_file_read.json": "3d094ee3f10894f533bb5a19b79887633aaa756631c9ff4113c875ff1b3feae5",
+    "internal/storemigration/testdata/stage7_3b_attachmentstore_file_update_each.json": "a1fb5dc8f84ff04258d60fa39dc91fc02b5e65e4deb16f2dfae83796db3d5a1c",
+    "internal/storemigration/testdata/stage7_3b_attachmentstore_file_uuid_seek.json": "e132b0598b9d05be5ecdd58d030e84322803a08ee5cf27b444466feda8d3c32d",
+    "internal/storemigration/testdata/stage7_3b_attachmentstore_file_write.json": "15b79a29ce0a0ed9fa1597f6716598ac14312643905ab0942bd568fc23c89af8",
+    "internal/storemigration/testdata/stage7_3b_attachmentstore_variant_identity.json": "b48fa3f355941cdde2fb659dee1bbcf090867c63d056019b133324dd78a24258",
+    "internal/storemigration/testdata/stage7_3b_attachmentstore_variant_insert.json": "f1868f6a6310ac9c102522e4775e1efba16f0655602b9e6506c98f2efb93bb26",
+    "internal/storemigration/testdata/stage7_3b_attachmentstore_variant_read.json": "3fff6c9484dac4101f855e12c1d104d40bf260775468ea12861ec34ac6ae82dd",
+    "internal/storemigration/testdata/stage7_3b_attachmentstore_variant_uuid_seek.json": "2567b11e1244aa18a5688221d34dd40d04fa6baf6f7403eeb2c8af6bd867a903",
+    "internal/storemigration/testdata/stage7_3b_attachmentstore_variant_write.json": "d0636cc18b9778d2fc6355bb32d10fa3df688367c89b8868e561486cd75c122a",
+    "internal/storemigration/testdata/stage7_3b_auditstore_entry_identity.json": "e4b3e22b7e68d17952403226b03b108e9fc448e17b448e9c343ab999584b7e02",
+    "internal/storemigration/testdata/stage7_3b_auditstore_entry_insert.json": "090ceff34fd6753d2e20926619e57bfaea04a3dcb573a7fbd2b8ddd63b22d1c8",
+    "internal/storemigration/testdata/stage7_3b_auditstore_entry_prune.json": "8d6eddf4385ed2dad29088fb60e83253b581deb0d1cdfa029067d3b5a598df50",
+    "internal/storemigration/testdata/stage7_3b_auditstore_entry_read.json": "c78ae6460b02a69806437fe61d5dc21e9dd3c46e8173e48dc218497673d6ec56",
+    "internal/storemigration/testdata/stage7_3b_auditstore_entry_write.json": "a5a568d4c51b3bc81cfb59b6ae43887b7e8fb1aa3236751163d0a32fac5a8e51",
+    "internal/storemigration/testdata/stage7_3b_extensionstore_meta_identity.json": "2b59caa1842a0771c666c1e600e37c10dc7a165161703196585e6fbaed9b5565",
+    "internal/storemigration/testdata/stage7_3b_extensionstore_meta_insert.json": "60375ca802c095630f4bb50977bba92c64ba6c3be72ef957f97c9145e6f92794",
+    "internal/storemigration/testdata/stage7_3b_extensionstore_meta_read.json": "90656293d5a516a2c7051a0e12579117b473149cda14f33810db1f0c32210f92",
+    "internal/storemigration/testdata/stage7_3b_extensionstore_meta_write.json": "4310b58f7a0153681e9e40a760908382ef0bec33bc9a29949b1eae0f7e0e7b18",
+    "internal/storemigration/testdata/stage7_3b_extensionstore_setting_identity.json": "6398273f852fd63a90cb5b368fbe43db814416d6fa86dd6e7c3685eb6de12aa8",
+    "internal/storemigration/testdata/stage7_3b_extensionstore_setting_insert.json": "0521e0f1b21cc29a4f2fed698b9f38607af9ad3eeff2060a6dd016e388fb95a0",
+    "internal/storemigration/testdata/stage7_3b_extensionstore_setting_read.json": "3c39fede5366cda4dfa24241c25c6895c579bef0907be8fca7210c2523fd443a",
+    "internal/storemigration/testdata/stage7_3b_extensionstore_setting_write.json": "a1fc45ccf0bb39ec3acb6d7794e066268623b0189ee329425476532e7c11b659",
+    "internal/storemigration/testdata/stage7_3b_extensionstore_translation_identity.json": "a7176ca97cad6cf694db266563809be13d1b3e20633dfbe060c50ab98f91840d",
+    "internal/storemigration/testdata/stage7_3b_extensionstore_translation_insert.json": "4e5937c3ab386bd3546ccad669bacebeed53c32ed8bb02c0904105aba373b8de",
+    "internal/storemigration/testdata/stage7_3b_extensionstore_translation_read.json": "b83135b06f339976adcb73277a19b07d2ba9558e38011f618232b050fb260e47",
+    "internal/storemigration/testdata/stage7_3b_extensionstore_translation_source_delete.json": "d26f529ca2b971259aa627333cc6ef9b2f20c1a59128a8a65947966d08d46d54",
+    "internal/storemigration/testdata/stage7_3b_extensionstore_translation_write.json": "3be57b30935691b3d19bb6d4601039bde689d405e3c4a0be768292c7f533d19d",
+    "internal/storemigration/testdata/stage7_3b_notificationstore_delivery_identity.json": "d5a629b4236d8f84bab511c249010d4c9c7a54e9df4f6b35e012adf6dbb5db9c",
+    "internal/storemigration/testdata/stage7_3b_notificationstore_delivery_insert.json": "b99bfe0d449f11300a7bbeb02ee8a77a45fc9dcff4bd20662d000417d1552ec6",
+    "internal/storemigration/testdata/stage7_3b_notificationstore_delivery_read.json": "cb0651606f58c162a87179107f2ae8edbdb28b443fd8208d4cbcffe02a259684",
+    "internal/storemigration/testdata/stage7_3b_notificationstore_delivery_write.json": "8098be3a2945e7bdfb595b369e2ae863021c06c88c07a878633275575f028bdc",
+    "internal/storemigration/testdata/stage7_3b_notificationstore_envelope_identity.json": "33de60e91298c63d5e3748bf581e6a8082a02bd01b3cf37060789d0997f25327",
+    "internal/storemigration/testdata/stage7_3b_notificationstore_envelope_insert.json": "75aec2efcf76b27dc7f6d900cc57032d8b1c4417de92ef3fefc2fba6b2d37f1d",
+    "internal/storemigration/testdata/stage7_3b_notificationstore_envelope_read.json": "f2d68ee31be52f11267d1e4a8691090daaa6a84aee1a456020c2768fc0805376",
+    "internal/storemigration/testdata/stage7_3b_notificationstore_envelope_write.json": "fc7ab851a9fae5d521dc00552c5a51e6bc0660ee6f3dbf661be02d53b3c1e308",
+    "internal/storemigration/testdata/stage7_3b_notificationstore_inbox_delete_each.json": "9bef984a702df732a5aa4d6146703f7a6c1a7b38be825825d274083fb3268b7a",
+    "internal/storemigration/testdata/stage7_3b_notificationstore_inbox_identity.json": "046b84602a131f6831b6c07e330fafcecfb607754ef3311f83917fbd0853fd5a",
+    "internal/storemigration/testdata/stage7_3b_notificationstore_inbox_insert.json": "3e2bf180562437468eae1f013aacb4cbc799c27a1df5723a976af70d38513abc",
+    "internal/storemigration/testdata/stage7_3b_notificationstore_inbox_read.json": "5422d4bff3814a69b128a49031d1105e894d0c979e70f1b5322f1444b2ee4ef4",
+    "internal/storemigration/testdata/stage7_3b_notificationstore_inbox_update_each.json": "f32925a25695fcbb825c8d42ea98c12a8bc254ea7326ec6f2ff1a54e7045ad43",
+    "internal/storemigration/testdata/stage7_3b_notificationstore_inbox_write.json": "f8b35bd538872333721ccd561b5a6635a083de9a4b044cb523a378e5533bfe6a",
+    "internal/storemigration/testdata/stage7_3b_webhookstore_delivery_identity.json": "a9a02dfe2227b9726049fcfbfda7cead74e1c170f8e3c3045d17920f262fddf1",
+    "internal/storemigration/testdata/stage7_3b_webhookstore_delivery_insert.json": "297e932abcb68a07fc253578b0724ff93a5b5a511d9201c46f0fc1b535f27bbb",
+    "internal/storemigration/testdata/stage7_3b_webhookstore_delivery_read.json": "cb1d4d5f2bc9ef024f21593be868a7ab4fdc455c713d1154c99ae32e08557483",
+    "internal/storemigration/testdata/stage7_3b_webhookstore_delivery_uuid_seek.json": "f75b036ad34d9fcd49c3d28c2afd20902040c2af6d0fe01a375407b7340a4bc1",
+    "internal/storemigration/testdata/stage7_3b_webhookstore_delivery_write.json": "510205d84d073d9eafd880a545e035b32354062250d33dddcccfe68eabbe696b",
+    "internal/storemigration/testdata/stage7_3b_webhookstore_endpoint_identity.json": "5ff921dac32ced8099940bdbb43e865dd07833255073a6861a08b24126e563c1",
+    "internal/storemigration/testdata/stage7_3b_webhookstore_endpoint_insert.json": "88968946ecffa451780ba9638bc0530b9e7e46967f348d0755c88bf25d755de7",
+    "internal/storemigration/testdata/stage7_3b_webhookstore_endpoint_read.json": "12fc6887038827305bf39f0822d926d87a21e6db15218eff5a5af4ba93659654",
+    "internal/storemigration/testdata/stage7_3b_webhookstore_endpoint_uuid_seek.json": "82224b54aabe73570e1c34e26b47a24fc36837aef3c074497101a10cf6263f1d",
+    "internal/storemigration/testdata/stage7_3b_webhookstore_endpoint_write.json": "e04cdb8c2ac0d2cae8d38184022059a4e8669ef6988e075d7706e45e682a1f28",
+    "internal/storemigration/testdata/stage7_3b_webhookstore_secret_identity.json": "469929d33e1fe3d9e27410aaba84e26775c97f4806ef45bf21b160f4604c3b6c",
+    "internal/storemigration/testdata/stage7_3b_webhookstore_secret_insert.json": "987b7cb2d27507bc283acc2b40e3938a635d621479bb4b2daac76e932a314825",
+    "internal/storemigration/testdata/stage7_3b_webhookstore_secret_read.json": "f59914a66571a9b5dfccd10ea218be79c5735f8bc5a70d88b4defe8ecb6e4ea2",
+    "internal/storemigration/testdata/stage7_3b_webhookstore_secret_uuid_seek.json": "7e60b0b104e501878e3b9d7dfc52f02b6c222435168a7a3b9775b7bc0ac1493e",
+    "internal/storemigration/testdata/stage7_3b_webhookstore_secret_write.json": "8af6b2723369f1eac11a51d5525c4be0cfa8453f6e86e6582c66184d17de6de8",
+    "internal/webhookstore/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+    "internal/webhookstore/declarations.go": "38c3c8bff86073d98302912e78a370d00a8f4302009f33862304087783af5384",
+    "internal/webhookstore/store.go": "ecfd1deb3fe5c26f3bdd2997d4d8c16228e33489208eb5bd677bc7f2e6e3cfb0",
+    "metadata/handle.go": "a43eaf196a288e59475ad609294d26047d3845ed1d568564c26f9b52e1b10ed6",
+    "metadata/matching_legacy.go": "6c0cc48a635f81422541664a64dbd66984718b1796b33dd80c1c38ace09c9e46",
+    "metadata/orphans.go": "ec8a0baf11000c7df99125998fa42678bff776dfa6839f1bb223b09546a56b06",
+    "metadata/records.go": "03f032f836a9714907d81d6d127897249ce60c3e326ed862a2a3d29066eb8c85",
+    "metadata/slot.go": "949ba5e8f490239b7fff9195d71771baee44f72b730aff39ab854819a05dc77a",
+    "metadata/slot_legacy.go": "3b4973bb75e6b2380ba63dc642b7fc0c26cceb651c9c6c2825e08b3e92443648",
+    "metadata/values.go": "9715a5a9465796adca3bbb7c425c710c2d7792774a4525dfec03a99ba8f7da97",
+    "notifications/capture.go": "51ce6d02a26c76b3d280c0f2e4e3603585a24f7311155498b1096851b2a2c755",
+    "notifications/delivery.go": "766824fdf81be1fc21ff17fd4d381523e351fbb64203ee2a35bd219e77fdcdea",
+    "notifications/inbox.go": "6a7328bc994f83d64ce686baaf4f7339875eaa8b1059cf4b79752d16c5488fc8",
+    "notifications/inbox_operations.go": "66371d581d54d0ac02ff2ca893cc4b4ad5710729207f60bc584f3a8107ff5902",
+    "notifications/jobs_postgres_test.go": "ddd2c582d4f57ef8a1ef12fa0ab565ea72f013744d1f45c73c1adceebced2ce6",
+    "notifications/operations.go": "5578c134bdc46b50b1ed23b85750b2529a942dda4dbb36de1c651f3db89b8636",
+    "settings/reconcile.go": "1888142944172c3b77afc97172252d8146a5c1c19a9b38ea29f9834e5fc00844",
+    "settings/records.go": "dcb706e7de344082aa96eccb4ba599e79873e53d6c48f8fc088b5bdb99296c0c",
+    "settings/values.go": "8192992eca16e965060ed0efb14606312b82916ef94114295c6ac9791591cbd4",
+    "tests/fixtures/consumer/model_validation_named_postgres_test.go": "16af93ce7cc748ddd531ea685a3c12e8dd3c3c87433da24c7c06b30723c344af",
+    "tests/fixtures/consumer/model_validation_postgres_test.go": "ada98bec13cc6b1716a026f58b29cb0ab8da043cd35a5ca443174f5a748d7130",
+    "tests/fixtures/consumer/modelvalidation/rules.go": "cec8955f7aa308411d69ad72282f7034fc821f426118a814398d97c635f556aa",
+    "tests/fixtures/consumer/modelvalidation/tables.go": "406c48a14bc03a95cc0db46e96c819d325bcf41eb70afb381929c340a5c5995c",
+    "tests/fixtures/consumer/testdata/compilefail/validation_batch_id/invalid.go": "5777597d932bc305b686304daef67071cfa459fb8295e231df62d2d8a86f5bf1",
+    "tests/fixtures/consumer/testdata/compilefail/validation_database_id/invalid.go": "a06d320b548d86841e9779b0cacdcdfc2286ca2a0b4f942f041dac6c607dd0be",
+    "tests/fixtures/consumer/testdata/compilefail/validation_database_locked/invalid.go": "e3dbc3d6045ee06ec1d7b11a4b46427c21d8409788d1fe54f0b88dec38881085",
+    "tests/fixtures/consumer/testdata/compilefail/validation_database_owner/invalid.go": "4a519f0891138267562f1747cf91cff3cafa587a522bbc62e021f3560b751845",
+    "tests/fixtures/consumer/testdata/compilefail/validation_database_value/invalid.go": "d85a524de58cdf46393f3efe71c91ca16b6221472ac9e8da236bef9713f05b1a",
+    "tests/fixtures/goway/compiler_cases_test.go": "279043aa8e09f93bdda08b99a2936c291661764adb64a669e5bfcc7554c9589c",
+    "tests/fixtures/goway/footprint_test.go": "831b0378d26004ab562dc59f75cdb815611be44ec8615ba95385556b507b3678",
+    "tests/fixtures/goway/testdata/compilefail/validation_batch_id/invalid.go": "4c21b49e41ffff995a9d1ff5c982d08e526b1a9e98b0eb619fa1fccdf576c794",
+    "tests/fixtures/goway/testdata/compilefail/validation_database_id/invalid.go": "156f50555b685ea5242486070ab867e09036894b2fe3dd0945e562f6a0a1287d",
+    "tests/fixtures/goway/testdata/compilefail/validation_database_locked/invalid.go": "21fb0214cf5c34cac80b5057823d9b2a65617722c983c1485611281d11237204",
+    "tests/fixtures/goway/testdata/compilefail/validation_database_owner/invalid.go": "149190384eb8837d62247f51146a3084438ed90b56e3844989397d5bba1af6d8",
+    "tests/fixtures/goway/testdata/compilefail/validation_database_value/invalid.go": "5c037ce1e328ba4f572a463906aed3ef149b26b0daf317f252a4583eb02b590f",
+    "tests/fixtures/goway/testdata/footprint/rows_each/p.go": "d11c9c7cadc306b3173d8d047c60a3d7e0020490526f291f60d43fc0ad636803",
+    "tests/fixtures/goway/testdata/footprint/validation_database/probe.go": "6f0a303651acbaa1bf8076858b10ff96d26401e192e426b409f0792820ae5e32",
+    "tests/fixtures/goway/validation_database_test.go": "a3943acf7ef36e33b13302f524374ca11bfa53a206ce3063fb4bd4a9b79f999d",
+    "tools/release/release_test.go": "bcdfd8c8201caa510183f8183b1a7e359669247329cc8f957b9d99593dea6e09",
+    "tools/release/source.go": "0a95269a9308b11ff714037a7a85f92ac4833dda4d2f7248089fd84c81621d40",
+    "translations/handle.go": "2a0537efbb2879da2a4816de778f9566338204dd1d278d2c902ac328e6e1c893",
+    "translations/matching_legacy.go": "114e2fe669da3ff08f2a43350e587e050a1553b66816dd08d14586ad85fd3629",
+    "translations/orphans.go": "ca60ed44d07418d68b7c74e255f9c3359faa7387d75a5747eba3142c28a23992",
+    "translations/read.go": "9bfa39a94506392240c82b6defdf2d34ffae714850704b64b2a52cac272d520c",
+    "translations/records.go": "b7d0077fe31dcf3b545e6f5223f32223267863bf52df4a68a41be9c11823dc9f",
+    "translations/rescope.go": "0f6db4b44ec482032c39b593176b6dd705e8ae1f0b82faed41dd770054d620bf",
+    "translations/slot.go": "c633262bab969b8f3913a78f93e2da046301a57e95f20dc78c317513e730d7f7",
+    "translations/slot_legacy.go": "31de07adc6828209a15e8d76f063fdb6d23183297d36bf004f7e8f00c889a9b8",
+    "translations/translations_paging_postgres_test.go": "da341df8196c03e53205606590ded8592ec4761459cbdb3f54e0a6768b56013a",
+    "translations/write.go": "a9464178a27145f183b04d79f1c2247d218f9a19c56b5800b1ec0471c419f833",
+    "validation/database/lookup.go": "70e394ef8b0eb1c981389ffa70cb7b739e7077569f97e5e88bd96f1ed30e2f2f",
+    "validation/lookup.go": "b01ce7814854292249089b066c2d89661e54f0680b5da423b1dd4472114c8a6f",
+    "webhook/outbound/delivery.go": "854fcc51acc541df9beb7a5d98f7bdb1ee40cf82ca3848000a87cd4d159b90bd",
+    "webhook/outbound/endpoints.go": "abde9c6278f2b8c9a349da47363af061bbbdda61ebf2d9913e348155fbcfc155"
+  },
+  "commands": [
+    "vet go vet ./database/... ./internal/... ./attachments/... ./audit/... ./extensions/... ./metadata/... ./translations/... ./notifications/... ./settings/... ./webhook/... ./validation/... ./http/modelbinding/... ./http/pagination/... ./testkit/factory/...",
+    "race-core go test -race ./database/orm/... ./database/query/... ./internal/querycore/... ./internal/ormcore/... ./internal/extensionslot/...",
+    "race-stores go test -race ./internal/attachmentstore ./internal/auditstore ./internal/extensionstore ./internal/notificationstore ./internal/webhookstore ./internal/storemigration",
+    "race-consumers go test -race ./attachments/... ./audit/... ./extensions/... ./metadata/... ./translations/... ./notifications/... ./settings/... ./webhook/... ./validation/... ./http/modelbinding/... ./http/pagination/... ./testkit/factory/...",
+    "footprints sh -c 'cd tests/fixtures/goway && go test -run \"^TestFootprintBudgets$\" -v .'",
+    "fixtures make fixture-check",
+    "catalogue python3 tools/goway_catalogue.py",
+    "generate make generate",
+    "generate-check make generate-check",
+    "typescript make typescript-check",
+    "docs make docs-check",
+    "format make fmt-check",
+    "diff git diff --check",
+    "editor make agent-smoke"
+  ],
+  "public_additions": [
+    "orm.FoundryExtension",
+    "query.FoundryExtensionSlot"
+  ],
+  "limits": [
+    "No live PostgreSQL, per lane brief; PostgreSQL sources compiled and vetted",
+    "Legacy public APIs retained for pending consumers"
+  ],
+  "rebase_notes": [
+    "Preserved integrated typed-role 3a evidence and unioned registries",
+    "Managed timestamp roles and natural lookup keys adapted in 3b declarations; validation soft-delete carrier adapted",
+    "Rebase core gate found registry ordering and ValueLookup/KeyLookup convertibility; fixed and targeted races passed",
+    "TypeScript rerun with configured existing node/tsc passed",
+    "Editor rebase gate passed; moved legacy definitions updated for final editor gate"
+  ],
+  "integration_batch6c_part2": {
+    "base_commit": "f3cfffd",
+    "includes_uncommitted_part1": true,
+    "status": "pass",
+    "updated_at": "2026-10-24T07:42:09.782456+00:00",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off",
+      "FOUNDRY_TEST_GOPLS": "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls"
+    },
+    "prior_source_hashes": {
+      "source_sha256": {
+        "attachments/collections_postgres_test.go": "4ea2fb4ab407836fa3ff1f1fd515744fe70a98b155c850373f5c54eef262804c",
+        "attachments/fixture_test.go": "ae0257a1f646175179ff5cbae4e538cce326941db9ffe52da0a062817824a01d",
+        "attachments/handle_core.go": "031224f383d00c7876ec39a6af114ac339d7c2cd4f5164d5818d3d49adedd65b",
+        "attachments/handle_many.go": "2b2dab59114a81a12c59a35322cf17023adc4dda86a50fdf8df507523e3cbf50",
+        "attachments/handle_one.go": "ff6d92f29571cf0b79cd074676c1107ad6b83d9ff6806549606006b13338a445",
+        "attachments/inspection.go": "ad533dc5bcd482b1d2492fb0de85bd2047f172c2e82c010445771128bed7a881",
+        "attachments/lifecycle.go": "ec762844129de30ee744ad202dab12591f1f586208f16e778d1852052fcb333d",
+        "attachments/matching_legacy.go": "d1d1114d0224485320b70443e1ec570a0ab061be9c506c33d5c39124d68b203c",
+        "attachments/mutate.go": "8cc561e30b81fe70ff3f8ea718fe7bcc67cde2376626981da66d69fa99e1a83a",
+        "attachments/orphans.go": "67c1f8fcf4af5c1e4f18265b96ec6d74f5ceac2deba35ffe0eaf647a9db35164",
+        "attachments/read.go": "078323b97e5d338554c0d4a94e0ded24de428a29c766e2bde0f338f6bf2449f0",
+        "attachments/reconcile.go": "076a30bd01e840a3c13cac6df021505e10134ddd3e0b8236c7e12e118ab55cdb",
+        "attachments/retain.go": "22a6fd438d7e2f911bf1a6b44dfc50e58390e51a5ae261d9dd46aaa26b06d97d",
+        "attachments/scopes.go": "7c73bdc18eec35bd7f11d5429e79e42fa4c3c5218c8da256e0e52cc594faf5da",
+        "attachments/slot.go": "5ae51f4dc0b059c52d08b3c1b97feb7c5fea368c48712cbcb9fc8d0a7f5502aa",
+        "attachments/slot_legacy.go": "5488bbf3700d344a9280486731632c18790307e7931284c30a5fe8b3ddc62be1",
+        "attachments/slot_write.go": "43ce62c835eedbb5ce728b72ca1e102903a90454553d001491a7c05fae61a1bb",
+        "attachments/variants.go": "cf79fb7a8c01f8ca626f3f2fe58fabb8e800d7bdab28e6ee3b96cffe425ca1ea",
+        "attachments/variants_postgres_test.go": "db281e6f4957742690bc1bea85cc798361a252a06c34bbd2337688fdb21812b1",
+        "attachments/write.go": "94defed06caa0d505fcd24652d4ff3314c4b5ac79a10239ec5c6ef20a423e400",
+        "audit/action.go": "d99726dc2ef85234ec510232adeaf3fe8b42740c068b0d4bd035ee8ac41ab1a3",
+        "audit/model.go": "932222c2210c5cefe6d7272ffdbdfae9ceb8b942eaf2d257c03f0784bf8946f0",
+        "audit/model_lookup.go": "a0049bb20918c5c32bc5921a70c30e53891cb276d459895763922c1d4186ccdc",
+        "audit/timeline.go": "c47f7be7d3c74757f9dda0e846aebe3587ccea9f7d56be940dadf89b3e2b14b7",
+        "blueprint/goway-data-layer/compilefail-mapping.tsv": "bf3d1e4cc6e98efdbd2dbf8d4f5d23ef38ab3e6bd2219927eb09f912a1580318",
+        "database/orm/README.md": "690e8e3fdbe82b30a7a9edfd212cf649e0cbe462b73e660b9714e6b7ac4cdf1f",
+        "database/orm/extension.go": "2d43e3b1cec56b7bf11e85f4ef9ed99a2e34077df28bb311f746d1ad485bc638",
+        "database/orm/extension_legacy.go": "2b9ccdc650c8c1a2cb11acf5efc968ec9bc574c04f475e540ab9cebb82e893b2",
+        "database/orm/identity.go": "9fc2ee9ce90582839e62852b4ab8190dafab31e9dabde234432ebf939e856b5e",
+        "database/orm/identity_legacy.go": "969da2c76a850a9c1e32ad54886b84f71d088aede4eb857de30992d90454f5ad",
+        "database/orm/integration_adapters_test.go": "90aa74bc10d7cfce47c311861d1e3070300b250b0c880cf9961beeadb5331274",
+        "database/orm/lookup_value.go": "901422a54e79776b7dba567877604ededf29bbfed10cdbd75180da5f2b2299b4",
+        "database/orm/method_surface_test.go": "4eae9105726eecdfc4434dd30f8565d97699c7afb5eaa0c15d07e094d37fe0ee",
+        "database/orm/rows/each.go": "3056381b353770e7ddd32bf1e5c548daea3de212ac83e7f4fdc8606edc9510a7",
+        "database/orm/rows/each_test.go": "b482b9e39d42a60207fdf18962564875d7e7ae66d40bb96f597719006b39fe3c",
+        "database/orm/testdata/public-methods.txt": "a2013418bb1b310fca01fcf7eda1005af4ba1653d93565bf0ae964d940fba653",
+        "database/query/model_identity.go": "bf4483d84d2d48a26c62ccea8c6b9f0c6d579d16497097221de447b4bb9db9a4",
+        "database/query/relation_extension.go": "c58bd872d86231a903503ed11eceb1ec1b8cc988412943fb6086b7b26fe1a3e6",
+        "database/query/relation_extension_bridge.go": "0d54aa9c4419e7120e6c4abe0e8baecb5ab9a6c551b53d9cb6b2a17bcc841310",
+        "docs/evidence/goway-b34-editor-stage8-inventory.json": "9db1f4747c81dd01dd8f16559f95dd8654703c1663bc1be77bcf00edb15683f2",
+        "docs/evidence/goway-stage7-slice3b-report.md": "eaee2ff5a89054f5e1de108c2e95e7c07d0399ca34ac0928b471da693049175d",
+        "docs/evidence/goway-stage7-slice3b.json": "b7385b75405ae5724b731269b6e4c7d32a31e15635502b478d5ea300088edbe6",
+        "docs/evidence/goway-stage7-validation-database-report.md": "3bb182ef2cae8bb9a915c3028ed1ee9d00f41d7a1de0c4e696240a091a86cf72",
+        "docs/evidence/goway-stage7-validation-database.json": "d557252d66ee2c5bf71e54a78c22462226ea17d5b7f161e56c27ec66f7b9533e",
+        "docs/evidence/goway-stage8-plan.md": "7ea381f631729c8140b38030a1726e6082a6a0feb4cc847aeef91bf13d29a6dd",
+        "docs/guides/validation.md": "8dd858b4d3a0b677fadbb4a8ee29909bfb301fa6dd722763a8eeaf16636c4813",
+        "extensions/orm.go": "2c29064b9944235ef9f7df08632896d9b4b6417ae4f14c95a2fd62c135724246",
+        "extensions/owner.go": "3d39ec5dca2293c08d2eee926289a98585cca607d40fbead4f1b2af079d23aaa",
+        "extensions/owner_legacy.go": "998f99760bc9909d436f589d5fa191f03561cb69681245e763452cc31c4a9905",
+        "extensions/registry.go": "43a2340295f74cc38a814ae0747f6acbb87854a0457851b991ea1925211d8d54",
+        "internal/agent/gopls_acceptance_test.go": "fade612a603f9a471f672fe098a3248a126e90f4e9aa4b2972858b7d22e7d64b",
+        "internal/attachmentstore/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+        "internal/attachmentstore/declarations.go": "62f79f76bd437207b67b01fb753c90087c4ac3369de7a1d28781b6e7896a4d95",
+        "internal/attachmentstore/file.go": "92a080bfd7aec3cd34c646e757df47acf6efb833aa26d0fb6822c3ba490915b3",
+        "internal/attachmentstore/file_foundry.gen.go": null,
+        "internal/attachmentstore/file_index_foundry.gen.go": null,
+        "internal/attachmentstore/maintenance.go": null,
+        "internal/attachmentstore/projections.go": "652ca5668fcee8d8045a6962e43926ffc592f18d89ef967119afcf49a64c722e",
+        "internal/attachmentstore/variant.go": "1444194d69945849d8fabdb0c284437238b2861837f28a64ca4825eb0dddc2f0",
+        "internal/attachmentstore/variant_foundry.gen.go": null,
+        "internal/auditstore/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+        "internal/auditstore/activity_foundry.gen.go": null,
+        "internal/auditstore/declarations.go": "a143c1623c1203b38c9c75bf721c0af54671e3e8f5a89689cefdff96d30add8c",
+        "internal/auditstore/entry.go": "81feaf1d837d8b0282fa260cab3c626f6ab30568a2600c9ace607e2b136899b1",
+        "internal/auditstore/entry_foundry.gen.go": null,
+        "internal/auditstore/projections.go": "d7a4c32552fd20a3d93e079d2c24405fdf4f81c4028537a86a637200f2447fbe",
+        "internal/auditstore/store.go": "d695a644d9048ed33c4aba2ca832cd8f4a5fb0010e41e9410be3f813317c4fbb",
+        "internal/extensionrow/identity.go": "a8831833f1079e41ac1f14ae1f436c9d9c886b0d5754b0d5ef167f3e32f3e816",
+        "internal/extensionslot/slot.go": "94f103c7a0e165b5dbf6662efd1ff9719c4eb10f42ee1c7772b1da732f015c27",
+        "internal/extensionslot/slot_test.go": "6f779dcd8a72969a2cd61977f1ede8259c692afaf211fc2d1c4a3d8d3135481f",
+        "internal/extensionstore/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+        "internal/extensionstore/declarations.go": "1413800bded9241fca7fd2e9f6807d3da29cfd0a74c1739636c72f83ba0849c9",
+        "internal/extensionstore/maintenance.go": "4875998d422c58e7397a7772c8fec033009365ce464a0319691cc6a404eb488d",
+        "internal/extensionstore/meta_foundry.gen.go": null,
+        "internal/extensionstore/meta_index_foundry.gen.go": null,
+        "internal/extensionstore/metadata.go": "8efa8aaceeaee96c75c87fbfe6024f45df4d5920176ebe2eda4a3ffb941cbc45",
+        "internal/extensionstore/projections.go": "1ea6b4d85ce6c75545acbbd6389f2b799fe10516ed3409674dd708a79f459607",
+        "internal/extensionstore/setting.go": "17a37eb5e218c9ea2ff75a96348970c91778c20856a0eac0960f72bbe6d5d8f4",
+        "internal/extensionstore/setting_foundry.gen.go": null,
+        "internal/extensionstore/setting_state_foundry.gen.go": null,
+        "internal/extensionstore/translation.go": "bb46c0974992978cec6c53f7e4d1a579fafa1fb50e77cbfabfbf7ff56f960d18",
+        "internal/extensionstore/translation_foundry.gen.go": null,
+        "internal/extensionstore/translation_index_foundry.gen.go": null,
+        "internal/notificationstore/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+        "internal/notificationstore/declarations.go": "949d0aace9ac367c8ba3290641132b69414566f538ac564fcc49e6abafb6566c",
+        "internal/notificationstore/delivery_foundry.gen.go": null,
+        "internal/notificationstore/envelope_foundry.gen.go": null,
+        "internal/notificationstore/inbox_foundry.gen.go": null,
+        "internal/notificationstore/models.go": "268b43ff31a5befb00e59b3400a1ed8b859ae3340dc6631de89304725f5242d6",
+        "internal/querycore/identity.go": "358c1c3a5714eea0bdabb24f78edefb5a36c92ab8359d7d915723406f0c7d584",
+        "internal/storemigration/README.md": "d246a6d923255cefb306972f7b3bf23d1ebe5c124a0a07a4bdf9a2728de825a3",
+        "internal/storemigration/stores_3b_test.go": "dc3c6767786f9381d751da3fc6be6af0566f7fe0f825c90f149508e1214505ab",
+        "internal/storemigration/testdata/stage7_3b_attachmentstore_file_delete_each.json": "f118bb704eddb93da93cd8ed4a090de26527f14aafd37f97c7ef025b1a763404",
+        "internal/storemigration/testdata/stage7_3b_attachmentstore_file_identity.json": "c92cd13fdae239100a938113bc2c5e29a1ee6cd5bd9fe8c4b11254315b5f169b",
+        "internal/storemigration/testdata/stage7_3b_attachmentstore_file_insert.json": "4a684c1b1c50b50218393b4bbd6d42641eb0dcae85dce41427cc24f55c64dcc7",
+        "internal/storemigration/testdata/stage7_3b_attachmentstore_file_read.json": "3d094ee3f10894f533bb5a19b79887633aaa756631c9ff4113c875ff1b3feae5",
+        "internal/storemigration/testdata/stage7_3b_attachmentstore_file_update_each.json": "a1fb5dc8f84ff04258d60fa39dc91fc02b5e65e4deb16f2dfae83796db3d5a1c",
+        "internal/storemigration/testdata/stage7_3b_attachmentstore_file_uuid_seek.json": "e132b0598b9d05be5ecdd58d030e84322803a08ee5cf27b444466feda8d3c32d",
+        "internal/storemigration/testdata/stage7_3b_attachmentstore_file_write.json": "15b79a29ce0a0ed9fa1597f6716598ac14312643905ab0942bd568fc23c89af8",
+        "internal/storemigration/testdata/stage7_3b_attachmentstore_variant_identity.json": "b48fa3f355941cdde2fb659dee1bbcf090867c63d056019b133324dd78a24258",
+        "internal/storemigration/testdata/stage7_3b_attachmentstore_variant_insert.json": "f1868f6a6310ac9c102522e4775e1efba16f0655602b9e6506c98f2efb93bb26",
+        "internal/storemigration/testdata/stage7_3b_attachmentstore_variant_read.json": "3fff6c9484dac4101f855e12c1d104d40bf260775468ea12861ec34ac6ae82dd",
+        "internal/storemigration/testdata/stage7_3b_attachmentstore_variant_uuid_seek.json": "2567b11e1244aa18a5688221d34dd40d04fa6baf6f7403eeb2c8af6bd867a903",
+        "internal/storemigration/testdata/stage7_3b_attachmentstore_variant_write.json": "d0636cc18b9778d2fc6355bb32d10fa3df688367c89b8868e561486cd75c122a",
+        "internal/storemigration/testdata/stage7_3b_auditstore_entry_identity.json": "e4b3e22b7e68d17952403226b03b108e9fc448e17b448e9c343ab999584b7e02",
+        "internal/storemigration/testdata/stage7_3b_auditstore_entry_insert.json": "090ceff34fd6753d2e20926619e57bfaea04a3dcb573a7fbd2b8ddd63b22d1c8",
+        "internal/storemigration/testdata/stage7_3b_auditstore_entry_prune.json": "8d6eddf4385ed2dad29088fb60e83253b581deb0d1cdfa029067d3b5a598df50",
+        "internal/storemigration/testdata/stage7_3b_auditstore_entry_read.json": "c78ae6460b02a69806437fe61d5dc21e9dd3c46e8173e48dc218497673d6ec56",
+        "internal/storemigration/testdata/stage7_3b_auditstore_entry_write.json": "a5a568d4c51b3bc81cfb59b6ae43887b7e8fb1aa3236751163d0a32fac5a8e51",
+        "internal/storemigration/testdata/stage7_3b_extensionstore_meta_identity.json": "2b59caa1842a0771c666c1e600e37c10dc7a165161703196585e6fbaed9b5565",
+        "internal/storemigration/testdata/stage7_3b_extensionstore_meta_insert.json": "60375ca802c095630f4bb50977bba92c64ba6c3be72ef957f97c9145e6f92794",
+        "internal/storemigration/testdata/stage7_3b_extensionstore_meta_read.json": "90656293d5a516a2c7051a0e12579117b473149cda14f33810db1f0c32210f92",
+        "internal/storemigration/testdata/stage7_3b_extensionstore_meta_write.json": "4310b58f7a0153681e9e40a760908382ef0bec33bc9a29949b1eae0f7e0e7b18",
+        "internal/storemigration/testdata/stage7_3b_extensionstore_setting_identity.json": "6398273f852fd63a90cb5b368fbe43db814416d6fa86dd6e7c3685eb6de12aa8",
+        "internal/storemigration/testdata/stage7_3b_extensionstore_setting_insert.json": "0521e0f1b21cc29a4f2fed698b9f38607af9ad3eeff2060a6dd016e388fb95a0",
+        "internal/storemigration/testdata/stage7_3b_extensionstore_setting_read.json": "3c39fede5366cda4dfa24241c25c6895c579bef0907be8fca7210c2523fd443a",
+        "internal/storemigration/testdata/stage7_3b_extensionstore_setting_write.json": "a1fc45ccf0bb39ec3acb6d7794e066268623b0189ee329425476532e7c11b659",
+        "internal/storemigration/testdata/stage7_3b_extensionstore_translation_identity.json": "a7176ca97cad6cf694db266563809be13d1b3e20633dfbe060c50ab98f91840d",
+        "internal/storemigration/testdata/stage7_3b_extensionstore_translation_insert.json": "4e5937c3ab386bd3546ccad669bacebeed53c32ed8bb02c0904105aba373b8de",
+        "internal/storemigration/testdata/stage7_3b_extensionstore_translation_read.json": "b83135b06f339976adcb73277a19b07d2ba9558e38011f618232b050fb260e47",
+        "internal/storemigration/testdata/stage7_3b_extensionstore_translation_source_delete.json": "d26f529ca2b971259aa627333cc6ef9b2f20c1a59128a8a65947966d08d46d54",
+        "internal/storemigration/testdata/stage7_3b_extensionstore_translation_write.json": "3be57b30935691b3d19bb6d4601039bde689d405e3c4a0be768292c7f533d19d",
+        "internal/storemigration/testdata/stage7_3b_notificationstore_delivery_identity.json": "d5a629b4236d8f84bab511c249010d4c9c7a54e9df4f6b35e012adf6dbb5db9c",
+        "internal/storemigration/testdata/stage7_3b_notificationstore_delivery_insert.json": "b99bfe0d449f11300a7bbeb02ee8a77a45fc9dcff4bd20662d000417d1552ec6",
+        "internal/storemigration/testdata/stage7_3b_notificationstore_delivery_read.json": "cb0651606f58c162a87179107f2ae8edbdb28b443fd8208d4cbcffe02a259684",
+        "internal/storemigration/testdata/stage7_3b_notificationstore_delivery_write.json": "8098be3a2945e7bdfb595b369e2ae863021c06c88c07a878633275575f028bdc",
+        "internal/storemigration/testdata/stage7_3b_notificationstore_envelope_identity.json": "33de60e91298c63d5e3748bf581e6a8082a02bd01b3cf37060789d0997f25327",
+        "internal/storemigration/testdata/stage7_3b_notificationstore_envelope_insert.json": "75aec2efcf76b27dc7f6d900cc57032d8b1c4417de92ef3fefc2fba6b2d37f1d",
+        "internal/storemigration/testdata/stage7_3b_notificationstore_envelope_read.json": "f2d68ee31be52f11267d1e4a8691090daaa6a84aee1a456020c2768fc0805376",
+        "internal/storemigration/testdata/stage7_3b_notificationstore_envelope_write.json": "fc7ab851a9fae5d521dc00552c5a51e6bc0660ee6f3dbf661be02d53b3c1e308",
+        "internal/storemigration/testdata/stage7_3b_notificationstore_inbox_delete_each.json": "9bef984a702df732a5aa4d6146703f7a6c1a7b38be825825d274083fb3268b7a",
+        "internal/storemigration/testdata/stage7_3b_notificationstore_inbox_identity.json": "046b84602a131f6831b6c07e330fafcecfb607754ef3311f83917fbd0853fd5a",
+        "internal/storemigration/testdata/stage7_3b_notificationstore_inbox_insert.json": "3e2bf180562437468eae1f013aacb4cbc799c27a1df5723a976af70d38513abc",
+        "internal/storemigration/testdata/stage7_3b_notificationstore_inbox_read.json": "5422d4bff3814a69b128a49031d1105e894d0c979e70f1b5322f1444b2ee4ef4",
+        "internal/storemigration/testdata/stage7_3b_notificationstore_inbox_update_each.json": "f32925a25695fcbb825c8d42ea98c12a8bc254ea7326ec6f2ff1a54e7045ad43",
+        "internal/storemigration/testdata/stage7_3b_notificationstore_inbox_write.json": "f8b35bd538872333721ccd561b5a6635a083de9a4b044cb523a378e5533bfe6a",
+        "internal/storemigration/testdata/stage7_3b_webhookstore_delivery_identity.json": "a9a02dfe2227b9726049fcfbfda7cead74e1c170f8e3c3045d17920f262fddf1",
+        "internal/storemigration/testdata/stage7_3b_webhookstore_delivery_insert.json": "297e932abcb68a07fc253578b0724ff93a5b5a511d9201c46f0fc1b535f27bbb",
+        "internal/storemigration/testdata/stage7_3b_webhookstore_delivery_read.json": "cb1d4d5f2bc9ef024f21593be868a7ab4fdc455c713d1154c99ae32e08557483",
+        "internal/storemigration/testdata/stage7_3b_webhookstore_delivery_uuid_seek.json": "f75b036ad34d9fcd49c3d28c2afd20902040c2af6d0fe01a375407b7340a4bc1",
+        "internal/storemigration/testdata/stage7_3b_webhookstore_delivery_write.json": "510205d84d073d9eafd880a545e035b32354062250d33dddcccfe68eabbe696b",
+        "internal/storemigration/testdata/stage7_3b_webhookstore_endpoint_identity.json": "5ff921dac32ced8099940bdbb43e865dd07833255073a6861a08b24126e563c1",
+        "internal/storemigration/testdata/stage7_3b_webhookstore_endpoint_insert.json": "88968946ecffa451780ba9638bc0530b9e7e46967f348d0755c88bf25d755de7",
+        "internal/storemigration/testdata/stage7_3b_webhookstore_endpoint_read.json": "12fc6887038827305bf39f0822d926d87a21e6db15218eff5a5af4ba93659654",
+        "internal/storemigration/testdata/stage7_3b_webhookstore_endpoint_uuid_seek.json": "82224b54aabe73570e1c34e26b47a24fc36837aef3c074497101a10cf6263f1d",
+        "internal/storemigration/testdata/stage7_3b_webhookstore_endpoint_write.json": "e04cdb8c2ac0d2cae8d38184022059a4e8669ef6988e075d7706e45e682a1f28",
+        "internal/storemigration/testdata/stage7_3b_webhookstore_secret_identity.json": "469929d33e1fe3d9e27410aaba84e26775c97f4806ef45bf21b160f4604c3b6c",
+        "internal/storemigration/testdata/stage7_3b_webhookstore_secret_insert.json": "987b7cb2d27507bc283acc2b40e3938a635d621479bb4b2daac76e932a314825",
+        "internal/storemigration/testdata/stage7_3b_webhookstore_secret_read.json": "f59914a66571a9b5dfccd10ea218be79c5735f8bc5a70d88b4defe8ecb6e4ea2",
+        "internal/storemigration/testdata/stage7_3b_webhookstore_secret_uuid_seek.json": "7e60b0b104e501878e3b9d7dfc52f02b6c222435168a7a3b9775b7bc0ac1493e",
+        "internal/storemigration/testdata/stage7_3b_webhookstore_secret_write.json": "8af6b2723369f1eac11a51d5525c4be0cfa8453f6e86e6582c66184d17de6de8",
+        "internal/webhookstore/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+        "internal/webhookstore/declarations.go": "38c3c8bff86073d98302912e78a370d00a8f4302009f33862304087783af5384",
+        "internal/webhookstore/delivery_foundry.gen.go": null,
+        "internal/webhookstore/endpoint_foundry.gen.go": null,
+        "internal/webhookstore/secret_foundry.gen.go": null,
+        "internal/webhookstore/store.go": "ecfd1deb3fe5c26f3bdd2997d4d8c16228e33489208eb5bd677bc7f2e6e3cfb0",
+        "metadata/handle.go": "a43eaf196a288e59475ad609294d26047d3845ed1d568564c26f9b52e1b10ed6",
+        "metadata/matching_legacy.go": "6c0cc48a635f81422541664a64dbd66984718b1796b33dd80c1c38ace09c9e46",
+        "metadata/orphans.go": "ec8a0baf11000c7df99125998fa42678bff776dfa6839f1bb223b09546a56b06",
+        "metadata/records.go": "03f032f836a9714907d81d6d127897249ce60c3e326ed862a2a3d29066eb8c85",
+        "metadata/slot.go": "949ba5e8f490239b7fff9195d71771baee44f72b730aff39ab854819a05dc77a",
+        "metadata/slot_legacy.go": "3b4973bb75e6b2380ba63dc642b7fc0c26cceb651c9c6c2825e08b3e92443648",
+        "metadata/values.go": "9715a5a9465796adca3bbb7c425c710c2d7792774a4525dfec03a99ba8f7da97",
+        "notifications/capture.go": "51ce6d02a26c76b3d280c0f2e4e3603585a24f7311155498b1096851b2a2c755",
+        "notifications/delivery.go": "766824fdf81be1fc21ff17fd4d381523e351fbb64203ee2a35bd219e77fdcdea",
+        "notifications/inbox.go": "6a7328bc994f83d64ce686baaf4f7339875eaa8b1059cf4b79752d16c5488fc8",
+        "notifications/inbox_operations.go": "66371d581d54d0ac02ff2ca893cc4b4ad5710729207f60bc584f3a8107ff5902",
+        "notifications/jobs_postgres_test.go": "ddd2c582d4f57ef8a1ef12fa0ab565ea72f013744d1f45c73c1adceebced2ce6",
+        "notifications/operations.go": "5578c134bdc46b50b1ed23b85750b2529a942dda4dbb36de1c651f3db89b8636",
+        "settings/reconcile.go": "1888142944172c3b77afc97172252d8146a5c1c19a9b38ea29f9834e5fc00844",
+        "settings/records.go": "dcb706e7de344082aa96eccb4ba599e79873e53d6c48f8fc088b5bdb99296c0c",
+        "settings/values.go": "8192992eca16e965060ed0efb14606312b82916ef94114295c6ac9791591cbd4",
+        "tests/fixtures/consumer/model_validation_named_postgres_test.go": "16af93ce7cc748ddd531ea685a3c12e8dd3c3c87433da24c7c06b30723c344af",
+        "tests/fixtures/consumer/model_validation_postgres_test.go": "ada98bec13cc6b1716a026f58b29cb0ab8da043cd35a5ca443174f5a748d7130",
+        "tests/fixtures/consumer/modelvalidation/rules.go": "cec8955f7aa308411d69ad72282f7034fc821f426118a814398d97c635f556aa",
+        "tests/fixtures/consumer/modelvalidation/tables.go": "406c48a14bc03a95cc0db46e96c819d325bcf41eb70afb381929c340a5c5995c",
+        "tests/fixtures/consumer/testdata/compilefail/validation_batch_id/invalid.go": "5777597d932bc305b686304daef67071cfa459fb8295e231df62d2d8a86f5bf1",
+        "tests/fixtures/consumer/testdata/compilefail/validation_database_id/invalid.go": "a06d320b548d86841e9779b0cacdcdfc2286ca2a0b4f942f041dac6c607dd0be",
+        "tests/fixtures/consumer/testdata/compilefail/validation_database_locked/invalid.go": "e3dbc3d6045ee06ec1d7b11a4b46427c21d8409788d1fe54f0b88dec38881085",
+        "tests/fixtures/consumer/testdata/compilefail/validation_database_owner/invalid.go": "4a519f0891138267562f1747cf91cff3cafa587a522bbc62e021f3560b751845",
+        "tests/fixtures/consumer/testdata/compilefail/validation_database_value/invalid.go": "d85a524de58cdf46393f3efe71c91ca16b6221472ac9e8da236bef9713f05b1a",
+        "tests/fixtures/goway/compiler_cases_test.go": "caaee43226bdd60d7e11e9ec75797f47d2f328b75ce37ac544541a939e118c80",
+        "tests/fixtures/goway/footprint_test.go": "d384b5c3be5eaba57a02f607e412bebf15421ec7283f3797a7b9f630a83b0bd7",
+        "tests/fixtures/goway/testdata/compilefail/validation_batch_id/invalid.go": "4c21b49e41ffff995a9d1ff5c982d08e526b1a9e98b0eb619fa1fccdf576c794",
+        "tests/fixtures/goway/testdata/compilefail/validation_database_id/invalid.go": "156f50555b685ea5242486070ab867e09036894b2fe3dd0945e562f6a0a1287d",
+        "tests/fixtures/goway/testdata/compilefail/validation_database_locked/invalid.go": "21fb0214cf5c34cac80b5057823d9b2a65617722c983c1485611281d11237204",
+        "tests/fixtures/goway/testdata/compilefail/validation_database_owner/invalid.go": "149190384eb8837d62247f51146a3084438ed90b56e3844989397d5bba1af6d8",
+        "tests/fixtures/goway/testdata/compilefail/validation_database_value/invalid.go": "5c037ce1e328ba4f572a463906aed3ef149b26b0daf317f252a4583eb02b590f",
+        "tests/fixtures/goway/testdata/footprint/rows_each/p.go": "d11c9c7cadc306b3173d8d047c60a3d7e0020490526f291f60d43fc0ad636803",
+        "tests/fixtures/goway/testdata/footprint/validation_database/probe.go": "6f0a303651acbaa1bf8076858b10ff96d26401e192e426b409f0792820ae5e32",
+        "tests/fixtures/goway/validation_database_test.go": "a3943acf7ef36e33b13302f524374ca11bfa53a206ce3063fb4bd4a9b79f999d",
+        "translations/handle.go": "2a0537efbb2879da2a4816de778f9566338204dd1d278d2c902ac328e6e1c893",
+        "translations/matching_legacy.go": "114e2fe669da3ff08f2a43350e587e050a1553b66816dd08d14586ad85fd3629",
+        "translations/orphans.go": "ca60ed44d07418d68b7c74e255f9c3359faa7387d75a5747eba3142c28a23992",
+        "translations/read.go": "9bfa39a94506392240c82b6defdf2d34ffae714850704b64b2a52cac272d520c",
+        "translations/records.go": "b7d0077fe31dcf3b545e6f5223f32223267863bf52df4a68a41be9c11823dc9f",
+        "translations/rescope.go": "0f6db4b44ec482032c39b593176b6dd705e8ae1f0b82faed41dd770054d620bf",
+        "translations/slot.go": "c633262bab969b8f3913a78f93e2da046301a57e95f20dc78c317513e730d7f7",
+        "translations/slot_legacy.go": "31de07adc6828209a15e8d76f063fdb6d23183297d36bf004f7e8f00c889a9b8",
+        "translations/translations_paging_postgres_test.go": "da341df8196c03e53205606590ded8592ec4761459cbdb3f54e0a6768b56013a",
+        "translations/write.go": "a9464178a27145f183b04d79f1c2247d218f9a19c56b5800b1ec0471c419f833",
+        "validation/database/lookup.go": "70e394ef8b0eb1c981389ffa70cb7b739e7077569f97e5e88bd96f1ed30e2f2f",
+        "validation/lookup.go": "b01ce7814854292249089b066c2d89661e54f0680b5da423b1dd4472114c8a6f",
+        "webhook/outbound/delivery.go": "854fcc51acc541df9beb7a5d98f7bdb1ee40cf82ca3848000a87cd4d159b90bd",
+        "webhook/outbound/endpoints.go": "abde9c6278f2b8c9a349da47363af061bbbdda61ebf2d9913e348155fbcfc155"
+      }
+    },
+    "removed_source_paths": {
+      "source_sha256": [
+        "database/orm/rows/each.go",
+        "internal/attachmentstore/file_foundry.gen.go",
+        "internal/attachmentstore/file_index_foundry.gen.go",
+        "internal/attachmentstore/maintenance.go",
+        "internal/attachmentstore/variant_foundry.gen.go",
+        "internal/auditstore/activity_foundry.gen.go",
+        "internal/auditstore/entry_foundry.gen.go",
+        "internal/extensionstore/meta_foundry.gen.go",
+        "internal/extensionstore/meta_index_foundry.gen.go",
+        "internal/extensionstore/setting_foundry.gen.go",
+        "internal/extensionstore/setting_state_foundry.gen.go",
+        "internal/extensionstore/translation_foundry.gen.go",
+        "internal/extensionstore/translation_index_foundry.gen.go",
+        "internal/notificationstore/delivery_foundry.gen.go",
+        "internal/notificationstore/envelope_foundry.gen.go",
+        "internal/notificationstore/inbox_foundry.gen.go",
+        "internal/webhookstore/delivery_foundry.gen.go",
+        "internal/webhookstore/endpoint_foundry.gen.go",
+        "internal/webhookstore/secret_foundry.gen.go"
+      ]
+    },
+    "conflicts": {
+      "laneD": [
+        "database/orm/README.md",
+        "database/orm/method_surface_test.go",
+        "internal/agent/gopls_acceptance_test.go",
+        "tests/fixtures/goway/compiler_cases_test.go",
+        "tests/fixtures/goway/footprint_test.go"
+      ],
+      "laneC": []
+    },
+    "resolutions": [
+      "Union surface, compiler and footprint registries; regenerate snapshot; retain typed-role-adapted 3a declarations.",
+      "Merge README text and both editor-probe expectation sets.",
+      "Delete duplicate rows/each.go; rows/read.go remains sole Each owner and both regression suites remain.",
+      "Retain lane B batch_limits.go byte-identically (86d67b7a77585fdef475cb7dc646f3316d619358b37c7aa3b41a56bb5f6a7155).",
+      "Retain all 118 part-1 footprint baselines without raising ceilings.",
+      "Initial race run found part-1 rows.Explain imported the legacy engine. Move shared plan data/decoding/execution to querycore; retain legacy aliases and validated bridge; regenerate snapshot. Existing old/new Explain regressions and new alias identity regression cover the move."
+    ],
+    "counts": {
+      "catalogue_rows": 1026,
+      "dispositions": {
+        "ported": 534,
+        "unaffected": 444,
+        "port": 48
+      },
+      "distinct_ported_cases": 526,
+      "compiler_cases": 777,
+      "footprint_probes": 125
+    },
+    "footprints": {
+      "aggregate_families": {
+        "functions": 4366,
+        "baseline": 3799,
+        "ceiling": 4369,
+        "archive_bytes": 19912060
+      },
+      "aggregate_group": {
+        "functions": 2533,
+        "baseline": 2426,
+        "ceiling": 2790,
+        "archive_bytes": 11402046
+      },
+      "aggregate_slot_declaration": {
+        "functions": 1127,
+        "baseline": 1112,
+        "ceiling": 1279,
+        "archive_bytes": 4872846
+      },
+      "aggregate_slot_direct": {
+        "functions": 1490,
+        "baseline": 1490,
+        "ceiling": 1714,
+        "archive_bytes": 6188412
+      },
+      "aggregate_slot_nested": {
+        "functions": 2050,
+        "baseline": 2048,
+        "ceiling": 2356,
+        "archive_bytes": 8592824
+      },
+      "aggregate_slot_pivot": {
+        "functions": 2092,
+        "baseline": 2095,
+        "ceiling": 2410,
+        "archive_bytes": 8861642
+      },
+      "audit": {
+        "functions": 1337,
+        "baseline": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6649550
+      },
+      "column_encrypted_json": {
+        "functions": 1321,
+        "baseline": 1217,
+        "ceiling": 1400,
+        "archive_bytes": 5664900
+      },
+      "column_encrypted_text": {
+        "functions": 1231,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5354824
+      },
+      "column_enum": {
+        "functions": 1344,
+        "baseline": 1232,
+        "ceiling": 1417,
+        "archive_bytes": 5657360
+      },
+      "column_interval": {
+        "functions": 1293,
+        "baseline": 1178,
+        "ceiling": 1355,
+        "archive_bytes": 5599372
+      },
+      "column_json": {
+        "functions": 1391,
+        "baseline": 1280,
+        "ceiling": 1472,
+        "archive_bytes": 5895968
+      },
+      "column_nullable_encrypted_json": {
+        "functions": 1562,
+        "baseline": 1449,
+        "ceiling": 1667,
+        "archive_bytes": 6932196
+      },
+      "column_nullable_encrypted_text": {
+        "functions": 1472,
+        "baseline": 1359,
+        "ceiling": 1563,
+        "archive_bytes": 6599132
+      },
+      "column_nullable_interval": {
+        "functions": 1530,
+        "baseline": 1406,
+        "ceiling": 1617,
+        "archive_bytes": 6818336
+      },
+      "column_nullable_json": {
+        "functions": 1642,
+        "baseline": 1522,
+        "ceiling": 1751,
+        "archive_bytes": 7122076
+      },
+      "column_nullable_password": {
+        "functions": 1535,
+        "baseline": 1417,
+        "ceiling": 1630,
+        "archive_bytes": 6780896
+      },
+      "column_nullable_text": {
+        "functions": 1584,
+        "baseline": 1456,
+        "ceiling": 1675,
+        "archive_bytes": 6592474
+      },
+      "column_number": {
+        "functions": 1267,
+        "baseline": 1172,
+        "ceiling": 1348,
+        "archive_bytes": 5369564
+      },
+      "column_password": {
+        "functions": 1299,
+        "baseline": 1190,
+        "ceiling": 1369,
+        "archive_bytes": 5607010
+      },
+      "column_time": {
+        "functions": 1309,
+        "baseline": 1194,
+        "ceiling": 1374,
+        "archive_bytes": 5507474
+      },
+      "conditional_row": {
+        "functions": 1805,
+        "baseline": 1681,
+        "ceiling": 1934,
+        "archive_bytes": 8295910
+      },
+      "conditional_selected": {
+        "functions": 1649,
+        "baseline": 1511,
+        "ceiling": 1738,
+        "archive_bytes": 7594306
+      },
+      "conflict": {
+        "functions": 968,
+        "baseline": 944,
+        "ceiling": 1086,
+        "archive_bytes": 4860798
+      },
+      "conflict_advanced": {
+        "functions": 1808,
+        "baseline": 1817,
+        "ceiling": 2090,
+        "archive_bytes": 9089082
+      },
+      "correlation": {
+        "functions": 2991,
+        "baseline": 2752,
+        "ceiling": 3165,
+        "archive_bytes": 13851276
+      },
+      "cte_recursive": {
+        "functions": 1131,
+        "baseline": 1076,
+        "ceiling": 1238,
+        "archive_bytes": 5506506
+      },
+      "cursor": {
+        "functions": 1186,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5426842
+      },
+      "datatable_projection": {
+        "functions": 2951,
+        "baseline": 2951,
+        "ceiling": 3394,
+        "archive_bytes": 12803126
+      },
+      "distinct": {
+        "functions": 1174,
+        "baseline": 1135,
+        "ceiling": 1306,
+        "archive_bytes": 5711378
+      },
+      "each_writes": {
+        "functions": 879,
+        "baseline": 888,
+        "ceiling": 1022,
+        "archive_bytes": 4446310
+      },
+      "expr_arithmetic": {
+        "functions": 1256,
+        "baseline": 1162,
+        "ceiling": 1337,
+        "archive_bytes": 5934322
+      },
+      "expr_selected": {
+        "functions": 1698,
+        "baseline": 1551,
+        "ceiling": 1784,
+        "archive_bytes": 7573108
+      },
+      "extension_declaration": {
+        "functions": 11379,
+        "baseline": 30434,
+        "ceiling": 35000,
+        "archive_bytes": 56358278
+      },
+      "extension_handles": {
+        "functions": 1481,
+        "baseline": 1481,
+        "ceiling": 1704,
+        "archive_bytes": 6693890
+      },
+      "extension_slots": {
+        "functions": 2083,
+        "baseline": 2154,
+        "ceiling": 2478,
+        "archive_bytes": 9553172
+      },
+      "extension_slots_old": {
+        "functions": 9730,
+        "baseline": 30493,
+        "ceiling": 35067,
+        "archive_bytes": 49236160
+      },
+      "framework_attachmentstore": {
+        "functions": 4792,
+        "baseline": 4729,
+        "ceiling": 5439,
+        "archive_bytes": 20841164
+      },
+      "framework_auditstore": {
+        "functions": 4753,
+        "baseline": 4753,
+        "ceiling": 5466,
+        "archive_bytes": 20563070
+      },
+      "framework_challengestore": {
+        "functions": 2560,
+        "baseline": 2558,
+        "ceiling": 2942,
+        "archive_bytes": 11932802
+      },
+      "framework_countries": {
+        "functions": 4157,
+        "baseline": 4122,
+        "ceiling": 4741,
+        "archive_bytes": 17379304
+      },
+      "framework_extensionstore": {
+        "functions": 5640,
+        "baseline": 5407,
+        "ceiling": 6219,
+        "archive_bytes": 26971314
+      },
+      "framework_idempotencystore": {
+        "functions": 2253,
+        "baseline": 2249,
+        "ceiling": 2587,
+        "archive_bytes": 9598202
+      },
+      "framework_jobarchive": {
+        "functions": 2280,
+        "baseline": 2280,
+        "ceiling": 2622,
+        "archive_bytes": 9858040
+      },
+      "framework_mfastore": {
+        "functions": 2947,
+        "baseline": 2947,
+        "ceiling": 3390,
+        "archive_bytes": 12473348
+      },
+      "framework_notificationstore": {
+        "functions": 5165,
+        "baseline": 5119,
+        "ceiling": 5887,
+        "archive_bytes": 24218738
+      },
+      "framework_outbox": {
+        "functions": 2896,
+        "baseline": 2896,
+        "ceiling": 3331,
+        "archive_bytes": 12590620
+      },
+      "framework_sessionstore": {
+        "functions": 4166,
+        "baseline": 4166,
+        "ceiling": 4791,
+        "archive_bytes": 17786384
+      },
+      "framework_tokenstore": {
+        "functions": 5315,
+        "baseline": 5315,
+        "ceiling": 6113,
+        "archive_bytes": 22599314
+      },
+      "framework_webhookstore": {
+        "functions": 4769,
+        "baseline": 4705,
+        "ceiling": 5411,
+        "archive_bytes": 21728696
+      },
+      "global_scopes": {
+        "functions": 1389,
+        "baseline": 1374,
+        "ceiling": 1581,
+        "archive_bytes": 6511262
+      },
+      "has": {
+        "functions": 1412,
+        "baseline": 1302,
+        "ceiling": 1498,
+        "archive_bytes": 6309612
+      },
+      "has_one": {
+        "functions": 1403,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6278720
+      },
+      "input_column_kinds": {
+        "functions": 5321,
+        "baseline": 5088,
+        "ceiling": 5852,
+        "archive_bytes": 22040046
+      },
+      "input_key": {
+        "functions": 1049,
+        "baseline": 982,
+        "ceiling": 1130,
+        "archive_bytes": 4883892
+      },
+      "json_functions": {
+        "functions": 2739,
+        "baseline": 2736,
+        "ceiling": 3147,
+        "archive_bytes": 11671562
+      },
+      "json_paths": {
+        "functions": 6148,
+        "baseline": 6146,
+        "ceiling": 7068,
+        "archive_bytes": 26628068
+      },
+      "key_chunk": {
+        "functions": 862,
+        "baseline": 812,
+        "ceiling": 934,
+        "archive_bytes": 4179576
+      },
+      "lateral": {
+        "functions": 3049,
+        "baseline": 2852,
+        "ceiling": 3280,
+        "archive_bytes": 15185946
+      },
+      "lifecycle_changes": {
+        "functions": 1093,
+        "baseline": 1050,
+        "ceiling": 1208,
+        "archive_bytes": 5150326
+      },
+      "lifecycle_write": {
+        "functions": 973,
+        "baseline": 930,
+        "ceiling": 1070,
+        "archive_bytes": 4913520
+      },
+      "model_type": {
+        "functions": 299,
+        "baseline": 299,
+        "ceiling": 344,
+        "archive_bytes": 1272268
+      },
+      "models": {
+        "functions": 6838,
+        "baseline": 6147,
+        "ceiling": 7070,
+        "archive_bytes": 30159848
+      },
+      "models_1": {
+        "functions": 1751,
+        "baseline": 1619,
+        "ceiling": 1862,
+        "archive_bytes": 7309686
+      },
+      "models_3": {
+        "functions": 2605,
+        "baseline": 2435,
+        "ceiling": 2801,
+        "archive_bytes": 11015246
+      },
+      "morph": {
+        "functions": 1155,
+        "baseline": 1088,
+        "ceiling": 1252,
+        "archive_bytes": 5286378
+      },
+      "mutator_explicit": {
+        "functions": 1717,
+        "baseline": 1605,
+        "ceiling": 1846,
+        "archive_bytes": 7164216
+      },
+      "mutators": {
+        "functions": 855,
+        "baseline": 801,
+        "ceiling": 922,
+        "archive_bytes": 4506184
+      },
+      "nested_with": {
+        "functions": 1403,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6318622
+      },
+      "nullable_join_chain": {
+        "functions": 1854,
+        "baseline": 1695,
+        "ceiling": 1950,
+        "archive_bytes": 8911678
+      },
+      "on_comparisons": {
+        "functions": 1593,
+        "baseline": 1454,
+        "ceiling": 1673,
+        "archive_bytes": 7313810
+      },
+      "onequery": {
+        "functions": 854,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 4136524
+      },
+      "orm_binding": {
+        "functions": 1101,
+        "baseline": 1089,
+        "ceiling": 1253,
+        "archive_bytes": 4630438
+      },
+      "orm_factory": {
+        "functions": 1093,
+        "baseline": 1093,
+        "ceiling": 1257,
+        "archive_bytes": 4766546
+      },
+      "outbox_publisher": {
+        "functions": 1324,
+        "baseline": 1324,
+        "ceiling": 1523,
+        "archive_bytes": 6613986
+      },
+      "outer_join": {
+        "functions": 1789,
+        "baseline": 1668,
+        "ceiling": 1919,
+        "archive_bytes": 8573670
+      },
+      "pivot": {
+        "functions": 1072,
+        "baseline": 1005,
+        "ceiling": 1156,
+        "archive_bytes": 4982804
+      },
+      "prune_registry": {
+        "functions": 933,
+        "baseline": 933,
+        "ceiling": 1073,
+        "archive_bytes": 4790894
+      },
+      "q_join": {
+        "functions": 1766,
+        "baseline": 1598,
+        "ceiling": 1838,
+        "archive_bytes": 8504334
+      },
+      "q_select": {
+        "functions": 895,
+        "baseline": 836,
+        "ceiling": 962,
+        "archive_bytes": 4364518
+      },
+      "q_with": {
+        "functions": 1211,
+        "baseline": 1053,
+        "ceiling": 1211,
+        "archive_bytes": 5616290
+      },
+      "raw": {
+        "functions": 1096,
+        "baseline": 1045,
+        "ceiling": 1202,
+        "archive_bytes": 5245370
+      },
+      "raw_fragments": {
+        "functions": 1380,
+        "baseline": 1331,
+        "ceiling": 1531,
+        "archive_bytes": 6236972
+      },
+      "record_sets": {
+        "functions": 1294,
+        "baseline": 1288,
+        "ceiling": 1482,
+        "archive_bytes": 6345110
+      },
+      "records": {
+        "functions": 1327,
+        "baseline": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6566208
+      },
+      "relation_with": {
+        "functions": 2047,
+        "baseline": 1847,
+        "ceiling": 2125,
+        "archive_bytes": 8794676
+      },
+      "relation_write_attach": {
+        "functions": 1110,
+        "baseline": 1110,
+        "ceiling": 1277,
+        "archive_bytes": 5145328
+      },
+      "relation_write_declaration": {
+        "functions": 361,
+        "baseline": 361,
+        "ceiling": 416,
+        "archive_bytes": 1507182
+      },
+      "relation_write_sync": {
+        "functions": 1124,
+        "baseline": 1124,
+        "ceiling": 1293,
+        "archive_bytes": 5215220
+      },
+      "report_filters": {
+        "functions": 2112,
+        "baseline": 2095,
+        "ceiling": 2410,
+        "archive_bytes": 9551884
+      },
+      "report_pipeline": {
+        "functions": 2120,
+        "baseline": 1905,
+        "ceiling": 2191,
+        "archive_bytes": 11453592
+      },
+      "report_reads": {
+        "functions": 1063,
+        "baseline": 1063,
+        "ceiling": 1223,
+        "archive_bytes": 5048182
+      },
+      "result_cursor": {
+        "functions": 2229,
+        "baseline": 2229,
+        "ceiling": 2564,
+        "archive_bytes": 10471570
+      },
+      "result_reads": {
+        "functions": 1385,
+        "baseline": 1351,
+        "ceiling": 1554,
+        "archive_bytes": 6582044
+      },
+      "retrieval_read": {
+        "functions": 831,
+        "baseline": 826,
+        "ceiling": 950,
+        "archive_bytes": 4170574
+      },
+      "role_input_same": {
+        "functions": 1360,
+        "baseline": 1360,
+        "ceiling": 1564,
+        "archive_bytes": 5607908
+      },
+      "role_lookup_input": {
+        "functions": 1213,
+        "baseline": 1226,
+        "ceiling": 1410,
+        "archive_bytes": 5113434
+      },
+      "role_primary_number": {
+        "functions": 1182,
+        "baseline": 1195,
+        "ceiling": 1375,
+        "archive_bytes": 5039366
+      },
+      "role_primary_text": {
+        "functions": 1216,
+        "baseline": 1216,
+        "ceiling": 1399,
+        "archive_bytes": 5171946
+      },
+      "role_soft_read": {
+        "functions": 1548,
+        "baseline": 1548,
+        "ceiling": 1781,
+        "archive_bytes": 6624436
+      },
+      "role_soft_write": {
+        "functions": 620,
+        "baseline": 620,
+        "ceiling": 713,
+        "archive_bytes": 2845624
+      },
+      "role_source": {
+        "functions": 905,
+        "baseline": 905,
+        "ceiling": 1041,
+        "archive_bytes": 4154738
+      },
+      "role_time_read": {
+        "functions": 1394,
+        "baseline": 1394,
+        "ceiling": 1604,
+        "archive_bytes": 5965878
+      },
+      "rows_each": {
+        "functions": 899,
+        "baseline": 899,
+        "ceiling": 1034,
+        "archive_bytes": 4337886
+      },
+      "scalar_temporal": {
+        "functions": 2629,
+        "baseline": 2625,
+        "ceiling": 3019,
+        "archive_bytes": 11878524
+      },
+      "scalar_text": {
+        "functions": 2315,
+        "baseline": 2312,
+        "ceiling": 2659,
+        "archive_bytes": 9600784
+      },
+      "scoped_write": {
+        "functions": 1111,
+        "baseline": 1111,
+        "ceiling": 1278,
+        "archive_bytes": 5140940
+      },
+      "sensitive_models": {
+        "functions": 2821,
+        "baseline": 2606,
+        "ceiling": 2997,
+        "archive_bytes": 12862024
+      },
+      "source_write": {
+        "functions": 1302,
+        "baseline": 1311,
+        "ceiling": 1508,
+        "archive_bytes": 6444388
+      },
+      "subqueries": {
+        "functions": 3061,
+        "baseline": 2837,
+        "ceiling": 3263,
+        "archive_bytes": 13342388
+      },
+      "table_ref": {
+        "functions": 854,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 4302042
+      },
+      "terminal_adjustment": {
+        "functions": 1382,
+        "baseline": 1382,
+        "ceiling": 1590,
+        "archive_bytes": 6762212
+      },
+      "terminal_create_or_first": {
+        "functions": 880,
+        "baseline": 880,
+        "ceiling": 1012,
+        "archive_bytes": 4478566
+      },
+      "terminal_explain": {
+        "functions": 1322,
+        "baseline": 1318,
+        "ceiling": 1516,
+        "archive_bytes": 5912318
+      },
+      "terminal_lookup": {
+        "functions": 893,
+        "baseline": 893,
+        "ceiling": 1027,
+        "archive_bytes": 4597808
+      },
+      "terminal_prune": {
+        "functions": 930,
+        "baseline": 930,
+        "ceiling": 1070,
+        "archive_bytes": 4773742
+      },
+      "through": {
+        "functions": 986,
+        "baseline": 928,
+        "ceiling": 1068,
+        "archive_bytes": 4486422
+      },
+      "transaction_correlation": {
+        "functions": 2908,
+        "baseline": 2908,
+        "ceiling": 3345,
+        "archive_bytes": 14730458
+      },
+      "transaction_joins": {
+        "functions": 1835,
+        "baseline": 1835,
+        "ceiling": 2111,
+        "archive_bytes": 9247758
+      },
+      "transaction_records": {
+        "functions": 1406,
+        "baseline": 1296,
+        "ceiling": 1491,
+        "archive_bytes": 6606862
+      },
+      "uuid_seeks": {
+        "functions": 1023,
+        "baseline": 1023,
+        "ceiling": 1177,
+        "archive_bytes": 5095018
+      },
+      "validation_database": {
+        "functions": 1441,
+        "baseline": 1441,
+        "ceiling": 1658,
+        "archive_bytes": 6432798
+      },
+      "value_sets": {
+        "functions": 2237,
+        "baseline": 2230,
+        "ceiling": 2565,
+        "archive_bytes": 10211774
+      },
+      "window_frames": {
+        "functions": 1769,
+        "baseline": 1767,
+        "ceiling": 2033,
+        "archive_bytes": 7959560
+      },
+      "window_rank": {
+        "functions": 1346,
+        "baseline": 1345,
+        "ceiling": 1547,
+        "archive_bytes": 6182990
+      }
+    },
+    "commands": [
+      {
+        "command": "go build ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/build-final.log",
+        "log_sha256": "80ea93fcec2e3b1f0efabe554de07c45f6f4413f60a0b39cc953c183a93f24ca"
+      },
+      {
+        "command": "FOUNDRY_UPDATE_SURFACE=1 go test ./database/orm -run ^TestPublicMethodSurface$ (temporary regeneration hook removed afterward)",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/surface-final.log",
+        "log_sha256": "95ff4c05a8df16fcb0114cb3a8dfca91a8d949260afc0092a8208748694d843d"
+      },
+      {
+        "command": "go vet ./database/... ./internal/...",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/vet-final.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "go test -race ./database/... ./internal/... ./datatable/... ./countries/... ./validation/... ./extensions/... ./attachments/... ./metadata/... ./settings/... ./translations/... ./http/pagination/... ./http/modelbinding/... ./testkit/... ./notifications/... ./webhook/... ./audit/...",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/race.log",
+        "log_sha256": "d4bc7bbdfd14b98c0b2b5e2970ecceee0d2772b9cf74ecfa6cfcb3ddbba1500d",
+        "initial_status": "failed: legacy import guard plus sandbox-local-listener restrictions",
+        "recheck_command": "go test -race ./database/... ./internal/querycore/... ./internal/ormcore/... ./internal/websockettest ./attachments ./testkit/http ./testkit/websocket ./notifications",
+        "recheck_log": ".cache/goway-batch6c2/race-recheck.log",
+        "recheck_log_sha256": "8096d17d8ceb9686b113f1291caecf86e4d980a2c8b93a3fc4aec492893b3c05",
+        "resolution": "Affected query packages and listener-blocked packages rerun; unchanged passing generator/store/validation/extension/pagination segments retained."
+      },
+      {
+        "command": "cd tests/fixtures/goway && go vet ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/fixture-vet.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "cd tests/fixtures/goway && go test -v ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/fixture-test.log",
+        "log_sha256": "d0b0540475c3e8a40960411865300a5e6fbe3989a812aa9174e430db11858ded"
+      },
+      {
+        "command": "python3 tools/goway_catalogue.py",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/catalogue.log",
+        "log_sha256": "14246701806e1ebd0347fcca5ca500223fe5d8d4a73956bfc839c9091e9d7777"
+      },
+      {
+        "command": "make generate-check",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/generate.log",
+        "log_sha256": "aff9fb69af141873e6432dbf8aac79dce91e16c5bcf0f4ccc0cf5187ac3d14e4"
+      },
+      {
+        "command": "make release-tools-check",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/release-tools-final.log",
+        "log_sha256": "f623c1683d5e9bb41b54681434991b0b08d3a1ed056d729868cfe32271a43ed5",
+        "initial_status": "Sandbox blocked native /usr/bin/time sysctl and /bin/ps; rerun passed with OS access and unchanged source."
+      },
+      {
+        "command": "make datatable-contracts",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/contracts.log",
+        "log_sha256": "40a632ca12ad3804d339ba869ce681b78fc202f52cbd642a4909623d1505d241"
+      },
+      {
+        "command": "make docs-check",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/docs.log",
+        "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+      },
+      {
+        "command": "FOUNDRY_TEST_GOPLS=/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls make agent-smoke",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/agent.log",
+        "log_sha256": "c5fa055c3cbb284cfd52e08c58d9245376b48262b96e5caaad8723bbc1bf3da9"
+      },
+      {
+        "command": "gofmt -l (repository Go sources)",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/gofmt.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "git diff --check; git diff --cached --check",
+        "status": "pass",
+        "log": ".cache/goway-batch6c2/diff-check.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "release_inventory": "Pin all 59 stage7_3b store transcript JSON assets explicitly in TestGoWaySourceInventory; existing JSON policy retained, no widening.",
+    "stage_status": "All 13 stores, advisory validation/database and extension slots delivered. Stage 8a lanes B/C/D integrated; legacy compatibility/model generation remain. Stage 6 whole-app measurement gate pending.",
+    "not_run": [
+      "Live PostgreSQL/Redis (opt-in sources compiled)",
+      "Stage 6 whole-app measurement gate",
+      "Full TypeScript runtime gate (historical lane evidence retained separately)"
+    ],
+    "git": "Authorized apply -3 --binary/add only; no commit."
+  }
+}

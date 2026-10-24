@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/extensionslot"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
@@ -17,23 +18,22 @@ func FoundryExtension[M any](slot ExtensionSlot[M], seal sqlowner.QuerySeal) (st
 	if !seal.Valid() {
 		return "", "", nil, invalidExtensionBridge(), nil
 	}
-	if slot.spec == nil {
+	name, table, kind, err := slot.core.Metadata()
+	if kind == nil {
 		return "", "", nil, invalidExtensionBridge(), nil
 	}
-	spec := slot.spec
-	return spec.name, spec.table, spec.valueType, spec.err, func(ctx context.Context, ex database.Executor, parents []M, limits RelationLimits, remaining, attachments *int, missing bool) ([]M, error) {
-		if spec.err != nil {
-			return nil, spec.err
-		}
-		if spec.load == nil {
-			return nil, invalidExtensionBridge()
-		}
-		state := relationLoadState{limits: limits, remaining: *remaining, attachments: *attachments}
-		result, err := spec.load(ctx, ex, parents, &state, missing)
-		*remaining = state.remaining
-		*attachments = state.attachments
-		return result, err
+	return name, table, kind, err, func(ctx context.Context, ex database.Executor, parents []M, limits RelationLimits, remaining, attachments *int, missing bool) ([]M, error) {
+		return slot.core.Load(ctx, ex, parents, querycore.RelationLimits(limits), remaining, attachments, missing)
 	}
+}
+
+// FoundryExtensionSlot adapts the shared loader to the legacy relation API.
+// Example: query.FoundryExtensionSlot(slot,sqlowner.Queries()).
+func FoundryExtensionSlot[M any](slot extensionslot.Slot[M], seal sqlowner.QuerySeal) ExtensionSlot[M] {
+	if !seal.Valid() {
+		return ExtensionSlot[M]{}
+	}
+	return ExtensionSlot[M]{core: slot}
 }
 
 func invalidExtensionBridge() error { return fault.New(fault.Invalid, "invalid extension slot bridge") }

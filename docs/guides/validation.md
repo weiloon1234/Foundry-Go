@@ -385,21 +385,21 @@ and other available native formats. The rule does not close the engine.
 ## Advisory database rules
 
 Import `validation/database` as `databasevalidation`. The adapter composes the
-existing generated query and field descriptors:
+ORM declarations and typed column handles:
 
 ```go
-fields := models.UserFields()
-available := databasevalidation.Unique(db, models.QueryUsers(), fields.Email)
+fields := models.Users
+available := databasevalidation.Unique(db, models.Users.Query(), fields.Email)
 active := databasevalidation.Exists(
     db,
-    models.QueryUsers().Where(fields.Status.Eq(models.StatusActive)),
+    models.Users.Query().Where(fields.Status.Eq(models.StatusActive)),
     fields.ID,
 )
 
 // An update may retain the current user's existing address.
 availableForUpdate := databasevalidation.Unique(
     db,
-    models.QueryUsers().Where(fields.ID.Ne(currentUser.ID)),
+    models.Users.Query().Where(fields.ID.Ne(currentUser.ID)),
     fields.Email,
 )
 ```
@@ -425,7 +425,7 @@ failures, never proof that a value is available. Metadata exports stable rule
 IDs and safe messages, marks these checks server-only, and excludes SQL,
 credentials and scoped values.
 
-The adapter uses `query.Lookup` for typed stored-field lookup and the base
+The adapter uses `orm.Lookup` for typed stored-field lookup and the base
 `validation.Lookup[T]` interface for validation composition. This keeps ordinary
 validation independent of SQL and permits other explicitly injected, typed
 lookup implementations without a separate error or message system.
@@ -440,8 +440,8 @@ being updated, or the tenant of the authenticated actor. Declare a typed
 
 ```go
 current := validation.NewSlot[model.ID[models.User]]()
-fields := models.UserFields()
-email := databasevalidation.UniqueIgnoring(db, models.QueryUsers(), fields.Email, fields.ID, current)
+fields := models.Users
+email := databasevalidation.UniqueIgnoring(db, models.Users.Query(), fields.Email, fields.ID, current)
 
 body := validation.DefineField("body", func(in UpdateRequest) UpdateUser { return in.Body })
 endpoint := Update.WithValidation(validation.Provide(current,
@@ -462,9 +462,9 @@ from trusted route or actor data, never from an untrusted body field alone.
 every check, for example from typed request metadata:
 
 ```go
-lookup := databasevalidation.Scoped(db, func(ctx context.Context) (models.UserQuery, error) {
+lookup := databasevalidation.Scoped(db, func(ctx context.Context) (orm.Query[models.User], error) {
     tenant, err := tenantOf(ctx) // application-owned typed accessor
-    return models.QueryUsers().Where(fields.TenantID.Eq(tenant)), err
+    return models.Users.Query().Where(fields.TenantID.Eq(tenant)), err
 }, fields.ID)
 member := validation.Exists(lookup)
 ```

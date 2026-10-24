@@ -1,0 +1,32 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "INSERT INTO \"foundry_webhook_deliveries\" (\"id\", \"endpoint_id\", \"event\", \"payload\", \"state\", \"attempts\", \"last_status\", \"last_failure\", \"created_at\", \"updated_at\", \"delivered_at\") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING \"foundry_webhook_deliveries\".\"id\", \"foundry_webhook_deliveries\".\"endpoint_id\", \"foundry_webhook_deliveries\".\"event\", \"foundry_webhook_deliveries\".\"payload\", \"foundry_webhook_deliveries\".\"state\", \"foundry_webhook_deliveries\".\"attempts\", \"foundry_webhook_deliveries\".\"last_status\", \"foundry_webhook_deliveries\".\"last_failure\", \"foundry_webhook_deliveries\".\"created_at\", \"foundry_webhook_deliveries\".\"updated_at\", \"foundry_webhook_deliveries\".\"delivered_at\"",
+      "Args": [
+        "01890f47-1a00-7000-8000-000000000001",
+        "01890f47-1a00-7000-8000-000000000001",
+        "inserted",
+        "inserted",
+        "inserted",
+        1,
+        1,
+        "inserted",
+        "2026-10-23T23:00:00Z",
+        "2026-10-24T00:00:00Z",
+        null
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "5ace41cb85aee8d3977a039a950397656c679ed55c7093bc9e29a8aee466aa01"
+}

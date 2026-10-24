@@ -12,28 +12,11 @@ const MaxCursorBytes = querycore.MaxCursorBytes
 
 const MaxCursorFields = querycore.MaxCursorFields
 
-// Cursor is an opaque model/result-owned position. Tokens are versioned and scoped to
-// the query but are not signed/encrypted credentials. Apply authorization on
-// every request. Token explicitly exports the transport value; formatting omits it.
-type Cursor[M any] struct {
-	_     [0]*M
-	token string
-}
+// Cursor is an opaque result-owned position with redacted formatting.
+type Cursor[M any] = querycore.Cursor[M]
 
-func (c Cursor[M]) Token() string { return c.token }
-
-func (c Cursor[M]) String() string { return "[cursor]" }
-
-func (c Cursor[M]) GoString() string { return c.String() }
-
-// ParseCursor validates bounded transport structure. CursorPaginate additionally
-// verifies the model/query scope and decodes every key through its field codec.
-func ParseCursor[M any](token string) (Cursor[M], error) {
-	if _, err := decodeCursor(token); err != nil {
-		return Cursor[M]{}, err
-	}
-	return Cursor[M]{token: token}, nil
-}
+// ParseCursor validates bounded transport structure without granting query access.
+func ParseCursor[M any](token string) (Cursor[M], error) { return querycore.ParseCursor[M](token) }
 
 type cursorEnvelope = querycore.CursorEnvelope
 type cursorValue = querycore.CursorValue
@@ -70,5 +53,5 @@ func makeCursor[M any](scope string, fields []ModelField[M], model M) (Cursor[M]
 	if err != nil {
 		return Cursor[M]{}, err
 	}
-	return Cursor[M]{token: token}, nil
+	return ParseCursor[M](token)
 }

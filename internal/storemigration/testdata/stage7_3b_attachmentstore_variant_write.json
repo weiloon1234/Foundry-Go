@@ -1,0 +1,24 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "UPDATE \"foundry_attachment_variants\" SET \"name\" = $1, \"updated_at\" = $2 WHERE (\"foundry_attachment_variants\".\"id\" = $3) RETURNING \"foundry_attachment_variants\".\"id\", \"foundry_attachment_variants\".\"file_id\", \"foundry_attachment_variants\".\"name\", \"foundry_attachment_variants\".\"disk\", \"foundry_attachment_variants\".\"object_key\", \"foundry_attachment_variants\".\"content_type\", \"foundry_attachment_variants\".\"size\", \"foundry_attachment_variants\".\"digest\", \"foundry_attachment_variants\".\"etag\", \"foundry_attachment_variants\".\"object_version\", \"foundry_attachment_variants\".\"width\", \"foundry_attachment_variants\".\"height\", \"foundry_attachment_variants\".\"state\", \"foundry_attachment_variants\".\"writer_id\", \"foundry_attachment_variants\".\"attempts\", \"foundry_attachment_variants\".\"last_failure\", \"foundry_attachment_variants\".\"created_at\", \"foundry_attachment_variants\".\"updated_at\"",
+      "Args": [
+        "updated",
+        "2026-10-24T00:00:00Z",
+        "01890f47-1a00-7000-8000-000000000001"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "7495d071a1ab44c5bb831e87c357c4c50a1080b5f70b357afad093a3445e13c0"
+}

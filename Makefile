@@ -32,7 +32,7 @@ set -eu; for task_generate_dir in $(GENERATION_DIRS); do \
 done
 endef
 
-.PHONY: toolchain-check fmt fmt-check vet test race fixture-check generate generate-check gopls-install agent-smoke typescript-check test-postgres test-redis benchmark-orm benchmark-typescript docs-check release-tools-check security-check security-tools-check verify
+.PHONY: toolchain-check fmt fmt-check vet test race fixture-check generate generate-check gopls-install agent-smoke typescript-check datatable-contracts test-postgres test-redis benchmark-orm benchmark-typescript docs-check release-tools-check security-check security-tools-check verify
 
 toolchain-check:
 	$(GO) version
@@ -86,6 +86,9 @@ docs-check:
 release-tools-check:
 	cd tools/release && $(GO) vet ./... && $(GO) test ./...
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p '*_test.py'
+
+datatable-contracts:
+	cd tests/fixtures/consumer && $(GO) test -timeout=$(TEST_TIMEOUT) -v ./clientcontracts -run '^(TestDatatableContractBytes|TestReportingContractCoverage)$$'
 
 typescript-check:
 	@test -n "$$FOUNDRY_TEST_NODE" -a -n "$$FOUNDRY_TEST_TYPESCRIPT" || { printf 'Set FOUNDRY_TEST_NODE and FOUNDRY_TEST_TYPESCRIPT to existing native tool paths.\n'; exit 1; }

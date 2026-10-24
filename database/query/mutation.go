@@ -1,6 +1,7 @@
 package query
 
 import (
+	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
@@ -99,7 +100,7 @@ type mutationPlan[M any] struct {
 	adjust    *adjustment
 	// statementFailure, when set, receives the failure of the plan's own
 	// statement, so InsertOrFirst can tell it from errors raised by hooks.
-	statementFailure *error
+	statementFailure *ormcore.InsertFailure
 }
 
 func (m Mutation[M]) clone() Mutation[M] {

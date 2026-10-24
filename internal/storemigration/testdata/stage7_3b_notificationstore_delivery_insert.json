@@ -1,0 +1,30 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "INSERT INTO \"foundry_notification_deliveries\" (\"key\", \"notification_id\", \"channel\", \"kind\", \"state\", \"payload\", \"claim\", \"attempts\", \"updated_at\") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING \"foundry_notification_deliveries\".\"key\", \"foundry_notification_deliveries\".\"notification_id\", \"foundry_notification_deliveries\".\"channel\", \"foundry_notification_deliveries\".\"kind\", \"foundry_notification_deliveries\".\"state\", \"foundry_notification_deliveries\".\"payload\", \"foundry_notification_deliveries\".\"claim\", \"foundry_notification_deliveries\".\"attempts\", \"foundry_notification_deliveries\".\"updated_at\"",
+      "Args": [
+        "stored",
+        "01890f47-1a00-7000-8000-000000000001",
+        "inserted",
+        "inserted",
+        "inserted",
+        "{}",
+        "01890f47-1a00-7000-8000-000000000001",
+        1,
+        "2026-10-23T23:00:00Z"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "07ccaa72fface9d99e6c059e58df4d2a117392b6d22d1ccbfa99fe26e1973507"
+}

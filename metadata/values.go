@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionrow"
@@ -45,8 +46,8 @@ func (k Key[M, K, V]) set(ctx context.Context, tx *database.Tx, m *Manager, owne
 		return err
 	}
 	id := extensions.Digest(subject.Scope, subject.Key, string(k.Name()))
-	q, f := store.QueryFoundryModelMetadata(), store.MetaFields()
-	existing, err := q.Where(f.Key.Eq(id)).First(ctx, tx)
+	q, f := store.Metadata.Query(), store.Metadata
+	existing, err := q.Where(f.KeyColumn.Eq(id)).First(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -54,7 +55,7 @@ func (k Key[M, K, V]) set(ctx context.Context, tx *database.Tx, m *Manager, owne
 		if err := k.checkRow(extensionrow.ForSubject(k.definition.owner, subject), row, subject.Key); err != nil {
 			return err
 		}
-		_, err = q.Update(ctx, tx, id, store.MetaDraft{}.SetValue(snapshot).SetVersion(uint32(k.Version())).SetUpdatedAt(now))
+		_, err = orm.Update(ctx, tx, q, store.Metadata.Key(), id, store.Metadata.Value.Set(snapshot), store.Metadata.Version.Set(uint32(k.Version())), store.Metadata.UpdatedAt.Set(now))
 		return err
 	}
 	count, err := q.Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key)).Count(ctx, tx)
@@ -64,7 +65,7 @@ func (k Key[M, K, V]) set(ctx context.Context, tx *database.Tx, m *Manager, owne
 	if count >= MaxKeysPerOwner {
 		return fault.New(fault.Conflict, "model metadata key limit reached")
 	}
-	_, err = q.Create(ctx, tx, store.MetaDraft{}.SetKey(id).SetOwner(string(k.definition.owner.Name())).SetScope(subject.Scope).SetSubjectKey(subject.Key).SetIdentity(subject.Identity).SetName(string(k.Name())).SetVersion(uint32(k.Version())).SetValue(snapshot).SetCreatedAt(now).SetUpdatedAt(now))
+	_, err = store.Metadata.Insert(ctx, tx, store.Metadata.KeyColumn.Set(id), store.Metadata.Owner.Set(string(k.definition.owner.Name())), store.Metadata.Scope.Set(subject.Scope), store.Metadata.SubjectKey.Set(subject.Key), store.Metadata.Identity.Set(subject.Identity), store.Metadata.Name.Set(string(k.Name())), store.Metadata.Version.Set(uint32(k.Version())), store.Metadata.Value.Set(snapshot), store.Metadata.CreatedAt.Set(now), store.Metadata.UpdatedAt.Set(now))
 	return err
 }
 
@@ -164,9 +165,9 @@ func (k Key[M, K, V]) loadIn(ctx context.Context, tx *database.Tx, m *Manager, o
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
-	f := store.MetaFields()
+	f := store.Metadata
 	var budget extensionvalue.BatchBudget
-	err = store.QueryFoundryModelMetadata().Where(f.Scope.Eq(k.definition.owner.Scope()), f.SubjectKey.In(keys...), f.Name.Eq(string(k.Name()))).Each(ctx, tx, func(row store.Meta) error {
+	err = store.Metadata.Query().Where(f.Scope.Eq(k.definition.owner.Scope()), f.SubjectKey.In(keys...), f.Name.Eq(string(k.Name()))).Each(ctx, tx, func(row store.Meta) error {
 		if !active[row.SubjectKey] {
 			return invalid()
 		}
@@ -219,9 +220,9 @@ func (k Key[M, K, V]) forget(ctx context.Context, tx *database.Tx, m *Manager, o
 	if err != nil {
 		return false, err
 	}
-	q, f := store.QueryFoundryModelMetadata(), store.MetaFields()
+	q, f := store.Metadata.Query(), store.Metadata
 	id := extensions.Digest(subject.Scope, subject.Key, string(k.Name()))
-	found, err := q.Where(f.Key.Eq(id)).First(ctx, tx)
+	found, err := q.Where(f.KeyColumn.Eq(id)).First(ctx, tx)
 	if err != nil {
 		return false, err
 	}
@@ -232,7 +233,7 @@ func (k Key[M, K, V]) forget(ctx context.Context, tx *database.Tx, m *Manager, o
 	if err := k.checkRow(extensionrow.ForSubject(k.definition.owner, subject), row, subject.Key); err != nil {
 		return false, err
 	}
-	if _, err := q.Delete(ctx, tx, id); err != nil {
+	if _, err := orm.Delete(ctx, tx, q, store.Metadata.Key(), id); err != nil {
 		return false, err
 	}
 	return true, nil

@@ -4,24 +4,18 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/value"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 func (q readResult[R]) pageWindow(request PageRequest, lookahead bool) (readResult[R], error) {
-	offset, err := request.offset()
+	offset, err := querycore.PageOffset(request)
 	if err != nil {
 		return readResult[R]{}, err
 	}
-	if q.node.Limit.IsSet() || q.node.Offset != 0 || len(q.node.Orders) == 0 {
-		return readResult[R]{}, fault.New(fault.Invalid, "result pagination requires explicit ordering and no outer Limit/Offset")
+	q.node, err = querycore.ResultPageWindow(q.node, offset, request.Size, lookahead)
+	if err != nil {
+		return readResult[R]{}, err
 	}
-	size := request.Size
-	if lookahead {
-		size++
-	}
-	q.node.Limit = value.Set(size)
-	q.node.Offset = offset
 	if _, err := q.Compile(); err != nil {
 		return readResult[R]{}, err
 	}

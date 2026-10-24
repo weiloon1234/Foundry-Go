@@ -1,0 +1,15 @@
+{
+  "Statements": [
+    {
+      "SQL": "SELECT \"foundry_audit\".\"id\", \"foundry_audit\".\"sequence\", \"foundry_audit\".\"area\", \"foundry_audit\".\"operation\", \"foundry_audit\".\"action\", \"foundry_audit\".\"version\", \"foundry_audit\".\"subject\", \"foundry_audit\".\"subject_key\", \"foundry_audit\".\"payload\", \"foundry_audit\".\"redacted\", \"foundry_audit\".\"redaction\", \"foundry_audit\".\"origin\", \"foundry_audit\".\"actor_key\", \"foundry_audit\".\"correlation\", \"foundry_audit\".\"request_method\", \"foundry_audit\".\"request_route\", \"foundry_audit\".\"created_at\" FROM \"foundry_audit\" WHERE (\"foundry_audit\".\"id\" = $1) ORDER BY \"foundry_audit\".\"id\" ASC LIMIT $2",
+      "Args": [
+        "01890f47-1a00-7000-8000-000000000001",
+        1
+      ]
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "cc0b5ad338082bfcfd8e6d6f8d04476c7659d44faa3d5424b7b5e521a8cb87e7"
+}

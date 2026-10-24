@@ -5,8 +5,8 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -60,7 +60,7 @@ func (o Owner[M, K]) Registration() Declaration {
 		}
 		return o.Subject(ref)
 	}, retained: func(ctx context.Context, executor database.Executor, identities []model.Identity) (map[string]bool, error) {
-		if len(identities) > query.MaxIdentityBatch {
+		if len(identities) > querycore.MaxIdentityBatch {
 			return nil, invalid("owner batch exceeds its limit")
 		}
 		keys := make([]K, len(identities))
