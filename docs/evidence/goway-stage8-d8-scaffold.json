@@ -1,0 +1,632 @@
+{
+  "status": "all requested acceptance passed",
+  "editor": {
+    "gopls": "v0.23.0",
+    "probes": 466,
+    "seconds": 249.373
+  },
+  "slice": "stage8-d8-scaffold",
+  "timestamp_utc": "2026-10-24T20:23:07.677628+00:00",
+  "base_commit": "f3cfffd7199988d51023dbe516e505bdb1538b50",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off"
+  },
+  "supplemental_commands": [
+    "go test ./internal/generate ./cmd/foundry -run TestORMScaffold|TestDeveloperScaffold|TestModelScaffold|TestScaffoldCommandValidation",
+    "go test -race ./internal/generate -run TestORMScaffold|TestDeveloperScaffold|TestModelScaffold -update-scaffold-goldens",
+    "go build ./... (after naming fix)",
+    "go vet ./database/... ./internal/... ./cmd/foundry (after naming fix)"
+  ],
+  "commands": [
+    "build go build ./...",
+    "vet go vet ./database/... ./internal/... ./cmd/foundry",
+    "race-generator go test -race ./internal/generate ./cmd/foundry",
+    "race-core go test -race ./database/orm/... ./database/query/... ./internal/querycore/... ./internal/ormcore/... ./internal/extensionslot/...",
+    "fixtures make fixture-check",
+    "catalogue python3 tools/goway_catalogue.py",
+    "generate make generate",
+    "generate-check make generate-check",
+    "typescript make typescript-check",
+    "docs make docs-check",
+    "format make fmt-check",
+    "diff git diff --check",
+    "editor make agent-smoke"
+  ],
+  "acceptance": [
+    {
+      "segment": "build",
+      "exit_code": 0,
+      "cache": "/private/tmp/foundry-goway-codex-gocache-r5",
+      "log": "/private/tmp/goway-d8/build.log"
+    },
+    {
+      "segment": "vet",
+      "exit_code": 0,
+      "cache": "/private/tmp/foundry-goway-codex-gocache-r5",
+      "log": "/private/tmp/goway-d8/vet.log"
+    },
+    {
+      "segment": "race-generator",
+      "exit_code": 0,
+      "cache": "/private/tmp/foundry-goway-codex-gocache-r5",
+      "log": "/private/tmp/goway-d8/race-generator.log"
+    },
+    {
+      "segment": "race-core",
+      "exit_code": 0,
+      "cache": "/private/tmp/foundry-goway-codex-gocache-r5",
+      "log": "/private/tmp/goway-d8/race-core.log"
+    },
+    {
+      "segment": "race-scaffolds-final",
+      "exit_code": 0,
+      "cache": "/private/tmp/foundry-goway-codex-gocache-r5",
+      "log": "/private/tmp/goway-d8/race-scaffolds-final.log"
+    },
+    {
+      "segment": "build-final",
+      "exit_code": 0,
+      "cache": "/private/tmp/foundry-goway-codex-gocache-r5",
+      "log": "/private/tmp/goway-d8/build-final.log"
+    },
+    {
+      "segment": "vet-final",
+      "exit_code": 0,
+      "cache": "/private/tmp/foundry-goway-codex-gocache-r5",
+      "log": "/private/tmp/goway-d8/vet-final.log"
+    },
+    {
+      "segment": "fixtures",
+      "exit_code": 0,
+      "cache": "/private/tmp/foundry-goway-codex-gocache-r5",
+      "log": "/private/tmp/goway-d8/fixtures.log"
+    },
+    {
+      "segment": "catalogue",
+      "exit_code": 0,
+      "cache": "/private/tmp/foundry-goway-codex-gocache-r5",
+      "log": "/private/tmp/goway-d8/catalogue.log"
+    },
+    {
+      "segment": "generate",
+      "exit_code": 0,
+      "cache": "/private/tmp/foundry-goway-codex-gocache-r5",
+      "log": "/private/tmp/goway-d8/generate.log"
+    },
+    {
+      "segment": "generate-check",
+      "exit_code": 0,
+      "cache": "/private/tmp/foundry-goway-codex-gocache-r5",
+      "log": "/private/tmp/goway-d8/generate-check.log"
+    },
+    {
+      "segment": "typescript",
+      "exit_code": 0,
+      "cache": "/private/tmp/foundry-goway-codex-gocache-r5",
+      "log": "/private/tmp/goway-d8/typescript.log"
+    },
+    {
+      "segment": "docs",
+      "exit_code": 0,
+      "cache": "/private/tmp/foundry-goway-codex-gocache-r5",
+      "log": "/private/tmp/goway-d8/docs.log"
+    },
+    {
+      "segment": "format",
+      "exit_code": 0,
+      "cache": "/private/tmp/foundry-goway-codex-gocache-r5",
+      "log": "/private/tmp/goway-d8/format.log"
+    },
+    {
+      "segment": "diff",
+      "exit_code": 0,
+      "cache": "/private/tmp/foundry-goway-codex-gocache-r5",
+      "log": "/private/tmp/goway-d8/diff.log"
+    },
+    {
+      "segment": "editor-r6",
+      "exit_code": 0,
+      "cache": "/private/tmp/foundry-goway-codex-gocache-r6",
+      "log": "/private/tmp/goway-d8/editor-r6.log"
+    },
+    {
+      "segment": "docs-final-r6",
+      "exit_code": 0,
+      "cache": "/private/tmp/foundry-goway-codex-gocache-r6",
+      "log": "/private/tmp/goway-d8/docs-final-r6.log"
+    },
+    {
+      "segment": "diff-final-r6",
+      "exit_code": 0,
+      "cache": "/private/tmp/foundry-goway-codex-gocache-r6",
+      "log": "/private/tmp/goway-d8/diff-final-r6.log"
+    }
+  ],
+  "source_sha256": {
+    "CHANGELOG.md": "c48f993cd0c34ba19021d50f2f76bc3b0d4552a9272081ae9b0dd9d67a7c29c2",
+    "Makefile": "d7ba763cf5d6e779cd77d104e740664f25cb8fdecce29be13ab7cf3ea4dd22b4",
+    "blueprint/00-master-architecture-and-parity.md": "3e61d3f7c052a186b183b24d267ca41eff9e913763bd4f1bccd2137f7591e8e0",
+    "blueprint/goway-data-layer/README.md": "4e39f9a878f4bbcd1fde44d1e7134537a0e37a77f9bdea17fd850ac8aa9b5ba3",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "30ea06528c9377086f7c905dd34aa215a0a306809061a6be863ca4aa328506ed",
+    "cmd/foundry/scaffold.go": "ad19de7be1f45f3683fc78cc69c187e87fc0793230d6192fb2cbab9409d83cfd",
+    "database/orm/method_surface_test.go": "d511843a67ff772ceb33785f25cf78fd04ac63b17992aa5e89e7776d985aa6b9",
+    "database/orm/testdata/public-methods.txt": "5db41adab0a905820577b56bd809336ca4b24324850fa265f39ff7080b11865d",
+    "database/orm/transaction_phase_test.go": "52dc79aba4c93dc129f04bcaa063b9e7db8bbea14c9ca1e2c63ec1c2c10b33b2",
+    "docs/guides/developer-tooling-and-testing.md": "147fa5e089bd1b10f0ecf1b6c0f90f85cb8531970805936cb86d6de723ad985f",
+    "docs/guides/model-extension-slots.md": "b0bda365d0723076519ed586b5160265dedb4a90bd12dd4b9ad3b5b7629248b5",
+    "docs/guides/model-generation.md": "2e27076517005da4497d82703eae4d353f98cb91aacddfda202ffa7121a93505",
+    "docs/guides/model-scaffolding.md": "5955e93138b9ede8ad1a7aaeb1a63a499be69d0ee8d93656d441a45deaf5cc14",
+    "docs/guides/team-adoption.md": "b4bb6cfa90f7589566fd377c5d90e3584548600de3dd65c6718a22b09caef281",
+    "internal/agent/field_documentation_acceptance_test.go": "e908b17d52af9c34419984283a276b67d997f6b8aa47e8337df48f3f4f027b07",
+    "internal/agent/gopls_acceptance_test.go": "8a104ac3255c59923523240f041be31cfeec63bb71d157bc8328a2c11e065988",
+    "internal/generate/emit_dto.go": "0f0281fb29595f115cde23bdc7c96a81763cc5feb278ee308f90248cc69d11d2",
+    "internal/generate/emit_dto_validation.go": "cdc091e97fe991a3fca4e8db371730e4894ca054d4175524f68de02d4a67c334",
+    "internal/generate/generated_names.go": "e00968477eecdba350e532e3b05daa5225a80c939f97c905d47af289186d8dad",
+    "internal/generate/scaffold.go": "865deed46d6a228a5f82a10598140d8370d9521d52368d5c07d07e16d44de6c1",
+    "internal/generate/scaffold_developer.go": "35aa0bfabe5d74cb1b0d7bec0dffd07decc2d924feb8489c41365940627f0bf2",
+    "internal/generate/scaffold_developer_test.go": "5d6fc77a3bc15370a24de9efd1b7c5b96e3332e5dd50a8d3d5af1531d6ebac0f",
+    "internal/generate/scaffold_model.go": "ffc8fae9e810cf9862935ace08e57473be458d184f33d172837774be67745d4a",
+    "internal/generate/scaffold_model_names.go": "cfa3d2c1b5c10476d524eaf4a9d1c7f6ec2dd2bc35cc3b246e694918fdbba037",
+    "internal/generate/scaffold_model_test.go": "9b8b03b21c30a209f215c0baf5fcaaaa3b19e9c10388e97c119afb68aa8f2667",
+    "internal/generate/testdata/scaffold/extensions.golden": "3fd4d9526197dec1b7b6c31cb1b3b49ed8a81fcb8c8c017e81fd90c004a60ae0",
+    "internal/generate/testdata/scaffold/model.golden": "3a19bd94c10962430a5cc1786807c8fb1d40d85009ac80dbc6c7f1ea33b77143",
+    "tests/fixtures/consumer/mutatorqueries/orm.go": "6740c41b8aac4c954360afb13b3c40b056b165ce3f2a0197d2241d6924006d59",
+    "tests/fixtures/consumer/types_test.go": "c6400a84382588d397cfcd1e57c6572926cc2debe1051d2581ca9c726075addd",
+    "tests/fixtures/goway/compiler_cases_test.go": "93a12f0abecf551cfadf1ada5c5bef7d9893bc05cef837b2c2a9a5d84f17c416",
+    "tests/fixtures/goway/footprint_test.go": "0edfc2c1ef7ef9b3eaf76b859c4eb00470f1ee0c095b01ba38bfe3abedf6f043",
+    "tools/goway_catalogue_test.py": "3c5ceb41aa9dc9a17d1c919ea511e084be9309923b874ff97bbc4e331afeddf0",
+    "tools/release/release_test.go": "5cd219933d54b70b9d3f5fa3d89319a0592e00c4870c46cc31d463dc7230f1a0",
+    "tools/release/source.go": "d84fc823ad60ac0c21ba25e32e29432a78099d6efc5a36294fc5151796dd2f3d"
+  },
+  "surface_additions": [],
+  "catalogue_rows": [],
+  "footprint": "No runtime API or existing probe/ceiling changes in D8; fixture acceptance includes existing budgets.",
+  "decisions": [
+    "Preserved existing flags and persisted ID-only defaults. Typed-role and relation additions are handwritten and covered by executable scaffold tests.",
+    "WithTables is absent at this HEAD. Per-model helpers return []orm.CheckedTable for explicit models.Tables composition. No application integration files changed.",
+    "Model and extension declarations no longer require model generation; metadata DTO codecs retain ordinary generation and publication."
+  ],
+  "corrections": [
+    "Source review caught slot/table-operation name collisions; added a Slot suffix and a compile regression for Table, Key, Query and TableSlot.",
+    "Focused test still called legacy attachment Collection; replaced with thin handle Validate.",
+    "Initial golden-update flag was mistakenly passed to cmd/foundry tests; rerun without it passed."
+  ],
+  "cache_rotation": "Completed checks ran on r5. The interrupted editor gate was restarted on r6; no older cache was used after the rotation instruction.",
+  "limits": [
+    "No live PostgreSQL, per lane rules.",
+    "Model emitters/discovery remain for Stage 8c."
+  ],
+  "review_p2": {
+    "timestamp_utc": "2026-10-24T07:39:49.657365+00:00",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off"
+    },
+    "correction": "Allocate the full scaffold symbol set deterministically, reserving all default names and complete metadata codec/validation families before suffix selection. Shared naming functions keep emitted DTO bytes unchanged.",
+    "regressions": 8,
+    "editor": {
+      "gopls": "v0.23.0",
+      "consumer_probes": 466,
+      "field_probes": 17,
+      "seconds": 258.9
+    },
+    "resolved_noncode_failures": {
+      "fixtures": "Sandbox denied local HTTP listeners; fixtures-retry passed with local-listener access.",
+      "typescript": "Sandbox denied local HTTP listeners; typescript-retry passed with local-listener access."
+    },
+    "retry_commands": [
+      "make fixture-check",
+      "make typescript-check"
+    ],
+    "targeted_command": "go test -race ./internal/generate ./cmd/foundry -run 'TestORMScaffold|TestDeveloperScaffold|TestModelScaffold|TestScaffoldCommandValidation'",
+    "targeted_exit_code": 0,
+    "targeted_log": "/private/tmp/goway-d8-p2/scaffold-race.log",
+    "acceptance": [
+      {
+        "segment": "build",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-p2/build.log"
+      },
+      {
+        "segment": "vet",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-p2/vet.log"
+      },
+      {
+        "segment": "race-generator",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-p2/race-generator.log"
+      },
+      {
+        "segment": "fixtures",
+        "exit_code": 2,
+        "log": "/private/tmp/goway-d8-p2/fixtures.log"
+      },
+      {
+        "segment": "catalogue",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-p2/catalogue.log"
+      },
+      {
+        "segment": "generate",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-p2/generate.log"
+      },
+      {
+        "segment": "generate-check",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-p2/generate-check.log"
+      },
+      {
+        "segment": "typescript",
+        "exit_code": 2,
+        "log": "/private/tmp/goway-d8-p2/typescript.log"
+      },
+      {
+        "segment": "docs",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-p2/docs.log"
+      },
+      {
+        "segment": "format",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-p2/format.log"
+      },
+      {
+        "segment": "diff",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-p2/diff.log"
+      },
+      {
+        "segment": "editor",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-p2/editor.log"
+      },
+      {
+        "segment": "fixtures-retry",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-p2/fixtures-retry.log"
+      },
+      {
+        "segment": "typescript-retry",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-p2/typescript-retry.log"
+      },
+      {
+        "segment": "docs-final",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-p2/docs-final.log"
+      },
+      {
+        "segment": "diff-final",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-p2/diff-final.log"
+      }
+    ],
+    "commands": [
+      "go build ./...",
+      "go vet ./database/... ./internal/... ./cmd/foundry",
+      "go test -race ./internal/generate ./cmd/foundry",
+      "make fixture-check",
+      "python3 tools/goway_catalogue.py",
+      "make generate",
+      "make generate-check",
+      "make typescript-check",
+      "make docs-check",
+      "make fmt-check",
+      "git diff --check",
+      "make agent-smoke"
+    ],
+    "retained_evidence": "Runtime ORM/query/querycore/ormcore/extensionslot race results above are retained: this correction changes only scaffold/generator naming, tests and documentation. No runtime source changed."
+  },
+  "review_p2_identifiers": {
+    "timestamp_utc": "2026-10-24T20:23:07.677628+00:00",
+    "finding": "fg-review-laneD2/last-15.md",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off"
+    },
+    "correction": "Validate every allocated symbol family as nonblank Go identifiers excluding keywords and predeclared names; prefix invalid table-derived namespaces with Query before collision resolution.",
+    "compilation_cases": 22,
+    "invalid_sql_cases": 8,
+    "compatibility": "Ordinary names, default goldens and generated output unchanged. Existing SQL grammar continues to reject bare digit-leading and non-ASCII table names; Unicode Go model names compile.",
+    "commands": [
+      "go test -race ./internal/generate ./cmd/foundry -run 'TestORMScaffold|TestScaffoldIdentifierGrammar|TestDeveloperScaffold|TestModelScaffold|TestScaffoldCommandValidation'",
+      "go build ./...",
+      "go vet ./database/... ./internal/... ./cmd/foundry",
+      "python3 tools/goway_catalogue.py",
+      "make generate",
+      "make generate-check",
+      "make docs-check",
+      "make fmt-check",
+      "git diff --check"
+    ],
+    "acceptance": [
+      {
+        "segment": "scaffolds",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-identifiers/scaffolds.log"
+      },
+      {
+        "segment": "build",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-identifiers/build.log"
+      },
+      {
+        "segment": "vet",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-identifiers/vet.log"
+      },
+      {
+        "segment": "catalogue",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-identifiers/catalogue.log"
+      },
+      {
+        "segment": "generate",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-identifiers/generate.log"
+      },
+      {
+        "segment": "generate-check",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-identifiers/generate-check.log"
+      },
+      {
+        "segment": "docs",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-identifiers/docs.log"
+      },
+      {
+        "segment": "format",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-identifiers/format.log"
+      },
+      {
+        "segment": "diff",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-identifiers/diff.log"
+      },
+      {
+        "segment": "docs-final",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-identifiers/docs-final.log"
+      },
+      {
+        "segment": "diff-final",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-d8-identifiers/diff-final.log"
+      }
+    ],
+    "retained_evidence": "Prior full generator, fixture, runtime-race, TypeScript and editor results retained for unchanged code. This follow-up reruns the affected scaffold/CLI race tests and fast global checks; it does not repeat unrelated broader suites."
+  },
+  "rebase_validation": {
+    "base_commit": "6d80111",
+    "timestamp_utc": "2026-10-24T20:36:04.479433+00:00",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off"
+    },
+    "results": [
+      {
+        "command": "go test -race ./internal/generate ./cmd/foundry -run TestORMScaffold|TestScaffoldIdentifierGrammar|TestDeveloperScaffold|TestModelScaffold|TestScaffoldCommandValidation",
+        "exit_code": 0,
+        "log": "/private/tmp/goway-stage9-d1/d8-rebase.log"
+      },
+      {
+        "command": "go build ./...",
+        "exit_code": 0
+      },
+      {
+        "command": "go vet ./internal/generate ./cmd/foundry",
+        "exit_code": 0
+      },
+      {
+        "command": "make docs-check",
+        "exit_code": 0
+      },
+      {
+        "command": "git diff --check",
+        "exit_code": 0
+      }
+    ],
+    "scope": "Quick D8 acceptance on the new base; previous full gate remains historical. Generation is lead-owned at the Stage 9 barrier."
+  },
+  "integration_batch7a": {
+    "base_commit": "6d80111",
+    "status": "pass",
+    "updated_at": "2026-10-24T21:17:31.083493+00:00",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off",
+      "FOUNDRY_TEST_GOPLS": "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls"
+    },
+    "cache_rotation": "Build, vet, generation and race completed on r6 before rotation. Race log reconciled against all 109 requested packages using r7 go list; no interrupted package remains. All subsequent Go commands use r7.",
+    "lane_source_hashes": {
+      "source_sha256": {
+        "cmd/foundry/scaffold.go": "ad19de7be1f45f3683fc78cc69c187e87fc0793230d6192fb2cbab9409d83cfd",
+        "docs/guides/developer-tooling-and-testing.md": "147fa5e089bd1b10f0ecf1b6c0f90f85cb8531970805936cb86d6de723ad985f",
+        "docs/guides/model-extension-slots.md": "b0bda365d0723076519ed586b5160265dedb4a90bd12dd4b9ad3b5b7629248b5",
+        "docs/guides/model-generation.md": "2e27076517005da4497d82703eae4d353f98cb91aacddfda202ffa7121a93505",
+        "docs/guides/model-scaffolding.md": "5955e93138b9ede8ad1a7aaeb1a63a499be69d0ee8d93656d441a45deaf5cc14",
+        "docs/guides/team-adoption.md": "b4bb6cfa90f7589566fd377c5d90e3584548600de3dd65c6718a22b09caef281",
+        "internal/generate/emit_dto.go": "0f0281fb29595f115cde23bdc7c96a81763cc5feb278ee308f90248cc69d11d2",
+        "internal/generate/emit_dto_validation.go": "cdc091e97fe991a3fca4e8db371730e4894ca054d4175524f68de02d4a67c334",
+        "internal/generate/generated_names.go": "e00968477eecdba350e532e3b05daa5225a80c939f97c905d47af289186d8dad",
+        "internal/generate/scaffold.go": "865deed46d6a228a5f82a10598140d8370d9521d52368d5c07d07e16d44de6c1",
+        "internal/generate/scaffold_developer.go": "35aa0bfabe5d74cb1b0d7bec0dffd07decc2d924feb8489c41365940627f0bf2",
+        "internal/generate/scaffold_developer_test.go": "5d6fc77a3bc15370a24de9efd1b7c5b96e3332e5dd50a8d3d5af1531d6ebac0f",
+        "internal/generate/scaffold_model.go": "ffc8fae9e810cf9862935ace08e57473be458d184f33d172837774be67745d4a",
+        "internal/generate/scaffold_model_names.go": "cfa3d2c1b5c10476d524eaf4a9d1c7f6ec2dd2bc35cc3b246e694918fdbba037",
+        "internal/generate/scaffold_model_test.go": "9b8b03b21c30a209f215c0baf5fcaaaa3b19e9c10388e97c119afb68aa8f2667",
+        "internal/generate/testdata/scaffold/extensions.golden": "3fd4d9526197dec1b7b6c31cb1b3b49ed8a81fcb8c8c017e81fd90c004a60ae0",
+        "internal/generate/testdata/scaffold/model.golden": "3a19bd94c10962430a5cc1786807c8fb1d40d85009ac80dbc6c7f1ea33b77143"
+      }
+    },
+    "conflicts": {
+      "laneA": [
+        "tests/fixtures/goway/compiler_cases_test.go",
+        "tests/fixtures/goway/footprint_test.go"
+      ],
+      "laneB": [],
+      "laneC": [],
+      "laneD": [
+        "blueprint/goway-data-layer/compilefail-mapping.tsv"
+      ]
+    },
+    "resolutions": [
+      "Union compiler/probe registries, deduplicating identical entries without raising existing ceilings.",
+      "Merge catalogue by case against the common base; retain lane C transaction programs and lane D typed owner programs. No overlapping changed row required dropping either side.",
+      "README/guide changes applied cleanly; lead-owned docs integrated separately. Public ORM snapshot/convertibility allowlist unchanged."
+    ],
+    "counts": {
+      "catalogue_rows": 1026,
+      "dispositions": {
+        "ported": 561,
+        "unaffected": 444,
+        "port": 21
+      },
+      "distinct_ported_cases": 553,
+      "goway_compiler_cases": 805,
+      "goway_footprint_probes": 130
+    },
+    "commands": [
+      {
+        "command": "go build ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/build.log",
+        "log_sha256": "bfa2afaf4ea1d1fcc42371cd2038ce1f8d962dcf363c67e70bfad18c2129f6b5",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6"
+      },
+      {
+        "command": "go vet ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/vet.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6"
+      },
+      {
+        "command": "go test -race -timeout=20m ./database/... ./internal/... ./application/... ./http/... ./datatable/... ./value/... ./enum/...",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/race.log",
+        "log_sha256": "baaa2c5479f2d60e12b182056dccd8fa827d454b9387fd123e10a988e0b26e71",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6"
+      },
+      {
+        "command": "make fixture-check (vet and tests for plugin_base, plugin_dep, consumer and goway)",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/fixtures.log",
+        "log_sha256": "3011a7f5d0533e55902824ad10bf6ef972bc4f6406f6e56b81284ffe6f5204bd",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      },
+      {
+        "command": "python3 tools/goway_catalogue.py",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/catalogue.log",
+        "log_sha256": "838999c429f032b7a58dbb8318dd3dcf6de05e44e4f4b9d5cf0c0ee1af574b5d",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      },
+      {
+        "command": "make generate-check",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/generate.log",
+        "log_sha256": "aff9fb69af141873e6432dbf8aac79dce91e16c5bcf0f4ccc0cf5187ac3d14e4",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6"
+      },
+      {
+        "command": "make release-tools-check",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/release-tools.log",
+        "log_sha256": "d26d1688d0f8c284e5eab8878a52dc54d3d9335fc4f36bdf51e5706aa45ce0d2",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      },
+      {
+        "command": "make docs-check",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/docs.log",
+        "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      },
+      {
+        "command": "FOUNDRY_TEST_GOPLS=/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls make agent-smoke",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/agent.log",
+        "log_sha256": "c440e16a3c23f83164e362023c673a5f72cd4a78da1c1f02ff50070cda51d8ce",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      },
+      {
+        "command": "gofmt -l (all repository Go sources)",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/gofmt.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      },
+      {
+        "command": "git diff --check; git diff --cached --check",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/diff-check.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      }
+    ],
+    "final_targeted_checks": [
+      {
+        "command": "go vet ./internal/agent",
+        "status": "pass",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "go test -race ./internal/agent",
+        "status": "pass",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7",
+        "log_sha256": "3d6d2169b603c3ce0b57bd2a7b5b6465b76b4f9c4adb3d291fd406376fb2bb59"
+      }
+    ],
+    "editor_subtests_passed": 494,
+    "editor_fix": {
+      "initial_failure": "The migrated interval/transaction and change-tracking consumers removed generated-API expressions used by editor probes.",
+      "fix": "Update fourteen interval/transaction completion/hover/definition probes and one change-tracking documentation probe to the corresponding ORM APIs; add stored-value documentation to the handwritten MemberTable.Email field. All fifteen focused real-gopls probes passed.",
+      "initial_log": ".cache/goway-batch7a/agent-initial.log",
+      "initial_log_sha256": "e26f1fbbf778b23da667cb3c42ed8921333b167c07f67c84839b7f545da228a6",
+      "focused_log": ".cache/goway-batch7a/agent-focused.log",
+      "focused_log_sha256": "88e8ad32e055ea5a73341f1918413631a2d53ba8247059edeb736515f591f701",
+      "note": "An initial focused filter matched no tests; it was corrected before claiming the focused pass."
+    },
+    "verification_fix": {
+      "check": "make release-tools-check",
+      "initial_failure": "Seven Stage 7 rows are now ported; the Python regression still required port. Six consumer sources now use ORM identities instead of FoundryReference.",
+      "fix": "Accept pending or completed Stage 7 ownership and retain each migrated original FoundryReference expression as an explicit guard regression input. No runtime or catalogue disposition change.",
+      "initial_log": ".cache/goway-batch7a/release-tools-initial.log",
+      "initial_log_sha256": "5a3448b74047b52ab6cb107b0786fabc4128f21ac2a6e3c754fb1367ae4ffa98"
+    },
+    "generation": {
+      "make_generate_needed": false,
+      "generated_source_count": 398,
+      "unchanged_since_patch_application": true,
+      "accepted_patch_artifacts": [
+        "tests/fixtures/goway/integrations/.foundry-gen.json",
+        "tests/fixtures/goway/integrations/response_foundry.gen.go"
+      ],
+      "manual_generated_edits": false
+    },
+    "release_inventory": "Allow exactly internal/generate/testdata/scaffold/model.golden and extensions.golden; pin both in release tests, reject unreviewed/other-path golden files.",
+    "stage_status": "Stage 7 approved slices complete; Stage 8 D8 and Stage 9 wave 1 integrated. Full consumer cutovers and model/query emitter retirement remain open. Stage 6 whole-app measurement gate pending.",
+    "not_run": [
+      "Live PostgreSQL and Redis (opt-in sources compiled)",
+      "Stage 6 whole-app measurement gate"
+    ],
+    "git": "Only authorized apply -3 --binary/add writes; no commit."
+  }
+}

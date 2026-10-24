@@ -5,6 +5,7 @@ import (
 
 	"foundry.test/consumer/mutatorqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -21,28 +22,33 @@ func TestPostgresStoredFieldChangesAfterMutators(t *testing.T) {
 				return err
 			}
 		}
-		q := mutatorqueries.QueryMutatorMembers()
-		createDraft := mutatorqueries.MemberDraft{}.SetEmail(" ADA@EXAMPLE.TEST ")
-		before, err := q.Create(t.Context(), tx, createDraft)
+		q := mutatorqueries.Members
+		createDraft := []orm.Assignment[mutatorqueries.Member]{q.Email.Set(" ADA@EXAMPLE.TEST ")}
+		before, err := q.Insert(t.Context(), tx, createDraft...)
 		if err != nil {
 			return err
 		}
-		patch := mutatorqueries.MemberDraft{}.SetEmail("  ADA@example.test  ").SetNickname("")
-		after, err := q.Update(t.Context(), tx, before.ID, patch)
+		patch := []orm.Assignment[mutatorqueries.Member]{q.Email.Set("  ADA@example.test  "), q.Nickname.Set("")}
+		after, err := q.Update(t.Context(), tx, before.ID, patch...)
 		if err != nil {
 			return err
 		}
-		// The generated comparison owns every field and codec. The next hook
-		// increment will own automatic snapshot/assignment capture as well.
-		changes, err := mutatorqueries.CompareMember(value.Set(before), value.Set(after), patch)
+		// Comparison uses stored snapshots and the declaration codecs.
+		changes, err := orm.Compare(q.Table, value.Set(before), value.Set(after), patch...)
 		if err != nil {
 			return err
 		}
-		email := changes.Fields().Email
+		email, err := orm.ChangeOf(changes, q.Email)
+		if err != nil {
+			return err
+		}
 		if !email.Assigned() || email.Changed() {
 			t.Fatal("normalized assignment should not change stored email")
 		}
-		nickname := changes.Fields().Nickname
+		nickname, err := orm.NullableChangeOf(changes, q.Nickname)
+		if err != nil {
+			return err
+		}
 		if !nickname.Assigned() || !nickname.Changed() {
 			t.Fatal("NULL to normalized empty input was not a change")
 		}
@@ -51,20 +57,28 @@ func TestPostgresStoredFieldChangesAfterMutators(t *testing.T) {
 		}
 		// Create supplied an omitted UUID. The comparison boundary accepts the
 		// effective assignment draft; the hook pipeline will reconstruct it.
-		created, err := mutatorqueries.CompareMember(value.Optional[mutatorqueries.Member]{}, value.Set(before), createDraft.SetID(before.ID))
+		created, err := orm.Compare(q.Table, value.Optional[mutatorqueries.Member]{}, value.Set(before), append(createDraft, q.Key().Set(before.ID))...)
 		if err != nil {
 			return err
 		}
-		createdDefault := created.Fields().Attempts
-		if createdDefault.Assigned() || !createdDefault.Changed() || !created.Fields().ID.Assigned() {
+		createdDefault, err := orm.ChangeOf(created, q.Attempts)
+		if err != nil {
+			return err
+		}
+		createdID, err := orm.ChangeOf(created, q.Key())
+		if err != nil {
+			return err
+		}
+		if createdDefault.Assigned() || !createdDefault.Changed() || !createdID.Assigned() {
 			t.Fatal("database-owned default or generated UUID lost creation state")
 		}
 		removed, err := q.Delete(t.Context(), tx, after.ID)
 		if err != nil {
 			return err
 		}
-		deleted, err := mutatorqueries.CompareMember(value.Set(removed), value.Optional[mutatorqueries.Member]{}, mutatorqueries.MemberDraft{})
-		if err != nil || !deleted.Changed() || deleted.Assigned() || deleted.After().IsSet() || !deleted.Fields().ID.Changed() {
+		deleted, err := orm.Compare(q.Table, value.Set(removed), value.Optional[mutatorqueries.Member]{})
+		deletedID, fieldErr := orm.ChangeOf(deleted, q.Key())
+		if err != nil || fieldErr != nil || !deleted.Changed() || deleted.Assigned() || deleted.After().IsSet() || !deletedID.Changed() {
 			t.Fatalf("deletion lost persisted snapshot or existence change: %v", err)
 		}
 		return nil

@@ -12,7 +12,7 @@ import (
 type OperatorProvider = auth.Provider[Operator, model.ID[Operator]]
 
 func Operators(lookup func(context.Context, model.ID[Operator]) (value.Optional[Operator], error)) OperatorProvider {
-	return auth.DefineProvider("report.operators", (Operator{}).FoundryReference(), lookup, func(_ context.Context, operator Operator) (bool, error) { return operator.Active, nil })
+	return auth.DefineProvider("report.operators", OperatorIdentity.Reference(model.ID[Operator]{}), lookup, func(_ context.Context, operator Operator) (bool, error) { return operator.Active, nil })
 }
 
 // Access is registered with the same auth registry as the interactive guard.

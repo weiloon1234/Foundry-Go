@@ -2,9 +2,8 @@ package invalid
 
 import (
 	"foundry.test/consumer/linkqueries"
-	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-func invalid() {
-	_ = linkqueries.InsertArchiveFrom(linkqueries.QueryLinkMembers()).SelectName(foundryquery.Value(linkqueries.MemberFields().Alias))
-}
+var _ = rows.MapInsert(linkqueries.Archives.Name, expr.Value(linkqueries.Members.Alias))

@@ -4,4 +4,4 @@ import (
 	"foundry.test/consumer/reporting"
 )
 
-var invalid = reporting.MemberFields().Name.IContains(42)
+var invalid = reporting.MemberModels.Name.IContains(42)

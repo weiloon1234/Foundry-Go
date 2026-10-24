@@ -4,17 +4,18 @@ import (
 	"context"
 	f "foundry.test/consumer/transactionqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
 type a struct{}
 type b struct{}
 
-var source = query.AsTransaction[a](query.TransactionCTE("claimed", f.QueryRecords().ForUpdate()), "claim")
-var selected = query.SelectTransactionRecord(source, source.Scope())
+var source = rows.AsTransaction[a](rows.TransactionCTE("claimed", rows.LockedRecord(f.Records.Query().ForUpdate())), "claim")
+var selected = rows.SelectTransactionRecord(source, rows.TransactionScope(source))
 var _ context.Context
 var _ *database.Tx
 
-var other = query.AsTransaction[b](query.TransactionOf(f.QueryRecords()), "other")
-var joined = query.TransactionLeftJoin(source, other, query.On(f.RecordFieldsAt(source.Scope()).ID, f.RecordFieldsAt(other.Scope()).ID))
-var _ = query.SelectTransactionRecord(joined, query.NullableRightScope(joined, other.Scope()))
+var other = rows.AsTransaction[b](rows.TransactionOf(rows.ModelRecord(f.Records.Query())), "other")
+var joined = rows.TransactionLeftJoin(source, other, rows.OnEqual(expr.At(rows.TransactionScope(source), f.Records.ID), expr.At(rows.TransactionScope(other), f.Records.ID)))
+var _ = rows.SelectTransactionRecord(joined, rows.NullableRightScope(joined, rows.TransactionScope(other)))

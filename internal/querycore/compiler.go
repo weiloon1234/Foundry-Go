@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Statement is a compiled parameterized PostgreSQL statement. SQL and Arguments
@@ -222,7 +223,7 @@ func (c *Compiler) Comparison(e Comparison, grouped map[FieldRef]bool, grouping 
 	for i, value := range e.Values {
 		v, err := e.Bind(value)
 		if err != nil {
-			return "", err
+			return "", safeerror.Wrap("query comparison binding failed", err)
 		}
 		if v == nil {
 			return "", fault.New(fault.Invalid, "NULL comparison requires IsNull or IsNotNull")

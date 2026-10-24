@@ -8,5 +8,5 @@ import (
 )
 
 func bad(ctx context.Context, tx *database.Tx, sessions *recovering.Sessions, account passwords.Account) {
-	sessions.RevokeAllIn(ctx, tx, account.FoundryReference())
+	sessions.RevokeAllIn(ctx, tx, passwords.AccountIdentity.ReferenceOf(account))
 }

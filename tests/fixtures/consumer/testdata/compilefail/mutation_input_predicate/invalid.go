@@ -1,5 +1,7 @@
 package invalid
 
-import "foundry.test/consumer/inputqueries"
+import (
+	"foundry.test/consumer/inputqueries"
+)
 
-var _ = inputqueries.MemberFields().Email.Eq(inputqueries.EmailInput{})
+var _ = inputqueries.Members.Email.Eq(inputqueries.EmailInput{})

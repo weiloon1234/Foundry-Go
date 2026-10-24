@@ -1,7 +1,8 @@
 package invalid
 
-import "foundry.test/consumer/linkqueries"
+import (
+	"foundry.test/consumer/linkqueries"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
+)
 
-func invalid() {
-	_ = linkqueries.InsertArchiveFrom(linkqueries.QueryLinkMembers()).Values(linkqueries.MemberDraft{})
-}
+var _ = rows.InsertFrom(rows.From(linkqueries.Members.Query()), linkqueries.Archives.Query()).Values(linkqueries.Members.Name.Set("wrong"))

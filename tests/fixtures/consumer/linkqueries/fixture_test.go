@@ -8,6 +8,7 @@ import (
 	"foundry.test/consumer/linkqueries"
 	foundry "github.com/weiloon1234/Foundry-Go"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/postgres"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/testkit"
@@ -15,10 +16,21 @@ import (
 )
 
 func linkDatabase(t *testing.T) (*database.DB, *testkit.Clock, string) {
+	return linkDatabaseWith(t, false)
+}
+func linkORMDatabase(t *testing.T) (*database.DB, *testkit.Clock, string) {
+	return linkDatabaseWith(t, true)
+}
+func linkDatabaseWith(t *testing.T, useORM bool) (*database.DB, *testkit.Clock, string) {
 	t.Helper()
 	source := testkit.NewClock(time.Date(2032, 3, 4, 5, 6, 7, 123456789, time.UTC))
 	pool := foundation.NewKey[*database.DB]("link.pool")
 	observers := foundation.Module{Name: "observers", OnRegister: func(r *foundation.Registrar) error {
+		if useORM {
+			return orm.RegisterObserver(r, pool, orm.NewObserver[linkqueries.Membership]("provider.link"), func(foundation.Resolver) (func() orm.Hooks[linkqueries.Membership], error) {
+				return func() orm.Hooks[linkqueries.Membership] { return linkqueries.ORMHooks("provider") }, nil
+			})
+		}
 		return linkqueries.RegisterMembershipObserver(r, pool, linkqueries.NewMembershipObserver("provider.link"), func(foundation.Resolver) (func() linkqueries.MembershipHooks, error) {
 			return func() linkqueries.MembershipHooks { return linkqueries.Hooks("provider") }, nil
 		})

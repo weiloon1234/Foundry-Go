@@ -4,10 +4,10 @@ import (
 	"context"
 	"foundry.test/consumer/linkqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-func invalid(db *database.DB) {
-	var row linkqueries.Member
-	row, _ = linkqueries.QueryLinkMemberships().FirstOrCreate(context.Background(), db, linkqueries.MembershipDraft{})
-	_ = row
-}
+var db *database.DB
+var row linkqueries.Member
+
+func invalid() { row, _ = orm.FirstOrCreate(context.Background(), db, linkqueries.Memberships.Query()) }

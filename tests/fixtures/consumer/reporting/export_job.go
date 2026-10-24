@@ -36,7 +36,7 @@ func ExportDeclaration(manager *datatable.Manager, provider OperatorProvider, de
 		return jobs.Declaration{}, fault.New(fault.Invalid, "export destination is required")
 	}
 	handler, err := datatable.ExportHandler(Members, manager, func(ctx context.Context, payload ExportMembers) (Authority, datatable.Request, datatable.ExportOptions, error) {
-		actor, err := provider.Resolve(ctx, (Operator{ID: payload.OperatorID}).FoundryReference())
+		actor, err := provider.Resolve(ctx, OperatorIdentity.Reference(payload.OperatorID))
 		if err != nil {
 			return Authority{}, datatable.Request{}, datatable.ExportOptions{}, err
 		}

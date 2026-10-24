@@ -4,4 +4,4 @@ import (
 	"foundry.test/consumer/intervalqueries"
 )
 
-func invalid() { _ = intervalqueries.SampleFields().Period.Like("%day%") }
+func invalid() { _ = intervalqueries.Samples.Period.Like("%day%") }

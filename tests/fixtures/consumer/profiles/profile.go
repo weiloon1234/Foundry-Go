@@ -11,7 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/attachments"
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/imaging"
@@ -40,7 +40,7 @@ type Preferences struct {
 
 // StorageModel pins the persisted owner identity, so renaming the profiles table
 // later keeps its metadata, translations and attachments.
-var Owners = extensions.DefineOwnerWith("profiles", query.IdentityOf(QueryProfiles().Query, ProfileFields().ID), extensions.OwnerOptions{StorageModel: "profiles"})
+var Owners = extensions.DefineORMOwner("profiles", ProfileIdentity, extensions.OwnerOptions{StorageModel: "profiles"})
 var Files = storage.DefineDisk("profile-files")
 var Avatar = attachments.Define(Owners, "avatar", attachments.Policy{Disk: Files, Cardinality: attachments.Single, Accepted: []storage.MediaType{"image/png", "image/jpeg"}, Image: value.Set(imaging.NewPlan().Fill(32, 32, false).Format(imaging.PNG))})
 var Documents = attachments.Define(Owners, "documents", attachments.Policy{Disk: Files, Cardinality: attachments.Multiple, MaxFiles: 4, Accepted: []storage.MediaType{"text/plain"}})
@@ -72,13 +72,13 @@ func New(store *extensions.Store, disks *storage.Registry, image *imaging.Engine
 	return s, err
 }
 func (s Services) ReplaceAvatar(ctx context.Context, profile Profile, upload attachments.Upload) (attachments.Result[Profile, model.ID[Profile]], error) {
-	return Avatar.Replace(ctx, s.Attachments, profile.FoundryReference(), upload)
+	return Avatar.Replace(ctx, s.Attachments, ProfileIdentity.ReferenceOf(profile), upload)
 }
 func (s Services) SavePreferences(ctx context.Context, profile Profile, input Preferences) error {
-	return PreferencesKey.Set(ctx, s.Metadata, profile.FoundryReference(), input)
+	return PreferencesKey.Set(ctx, s.Metadata, ProfileIdentity.ReferenceOf(profile), input)
 }
 func (s Services) SaveLabel(ctx context.Context, profile Profile, locale i18n.LocaleID, text string) error {
-	return Label.Set(ctx, s.Translations, profile.FoundryReference(), locale, text)
+	return Label.Set(ctx, s.Translations, ProfileIdentity.ReferenceOf(profile), locale, text)
 }
 func (s Services) DefaultPageSize(ctx context.Context) (uint32, error) {
 	return PageSize.GetOr(ctx, s.Settings, 20)
@@ -92,10 +92,11 @@ func (s Services) LoadLocalized(ctx context.Context, profiles []model.Reference[
 	return Localized.LoadLocalized(ctx, s.Attachments, profiles)
 }
 
-// CleanupHooks is supplied through the generated typed observer declaration.
+// CleanupHooks is supplied through an ORM observer declaration.
+// Example: orm.NewObserver[Profile]("profile.extensions").Declare(services.CleanupHooks).
 // Deleted also runs for force-delete; operation metadata avoids duplicate hooks.
-func (s Services) CleanupHooks() ProfileHooks {
-	return ProfileHooks{Deleted: func(ctx context.Context, tx *database.Tx, changes ProfileChanges) error {
+func (s Services) CleanupHooks() orm.Hooks[Profile] {
+	return orm.Hooks[Profile]{Deleted: func(ctx context.Context, tx *database.Tx, changes orm.Changes[Profile]) error {
 		before, ok := changes.Before().Get()
 		if !ok {
 			return errors.New("profile cleanup requires prior model")
@@ -104,12 +105,12 @@ func (s Services) CleanupHooks() ProfileHooks {
 		if !ok {
 			return errors.New("profile cleanup requires lifecycle operation")
 		}
-		if err := metadata.Cleanup(ctx, tx, s.Metadata, Owners, before.FoundryReference(), operation); err != nil {
+		if err := metadata.Cleanup(ctx, tx, s.Metadata, Owners, ProfileIdentity.ReferenceOf(before), operation); err != nil {
 			return err
 		}
-		if err := translations.Cleanup(ctx, tx, s.Translations, Owners, before.FoundryReference(), operation); err != nil {
+		if err := translations.Cleanup(ctx, tx, s.Translations, Owners, ProfileIdentity.ReferenceOf(before), operation); err != nil {
 			return err
 		}
-		return attachments.Cleanup(ctx, tx, s.Attachments, Owners, before.FoundryReference(), operation, nil)
+		return attachments.Cleanup(ctx, tx, s.Attachments, Owners, ProfileIdentity.ReferenceOf(before), operation, nil)
 	}}
 }

@@ -35,7 +35,7 @@ func execute(ctx context.Context, executor sqlExecutor, classify classifier, ins
 	started := instrument.start()
 	rows := int64(-1)
 	defer func() { instrument.finish(ctx, "exec", statement, started, rows, err) }()
-	raw, err := executor.ExecContext(ctx, statement, arguments...)
+	raw, err := executor.ExecContext(ctx, statement, safeArguments(arguments)...)
 	if err != nil {
 		return Result{}, classify.wrap("execute", err)
 	}
@@ -58,7 +58,7 @@ func query(ctx context.Context, executor sqlExecutor, classify classifier, instr
 func queryStatement(ctx context.Context, executor sqlExecutor, classify classifier, instrument statementProbe, observers lifecycle.Observers, owner observerOwner, release func() error, statement string, arguments []any, autocommit bool) (*Rows, error) {
 	instrument = instrument.locate(ctx)
 	started := instrument.start()
-	rows, err := executor.QueryContext(ctx, statement, arguments...)
+	rows, err := executor.QueryContext(ctx, statement, safeArguments(arguments)...)
 	if err != nil {
 		failure := classify.wrap("query", err)
 		if autocommit {
@@ -202,7 +202,7 @@ func (r *Rows) Scan(destinations ...any) error {
 	if r.closed {
 		return failure("scan", Closed)
 	}
-	if err := r.raw.Scan(destinations...); err != nil {
+	if err := r.raw.Scan(safeDestinations(destinations)...); err != nil {
 		r.err = errors.Join(r.err, r.wrap("scan", err))
 		_ = r.close()
 		return r.err

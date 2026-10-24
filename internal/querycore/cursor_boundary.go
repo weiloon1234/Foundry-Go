@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type CursorField struct {
@@ -56,7 +57,7 @@ func ReadCursorBoundary(token string, present, backward bool, scope string, fiel
 			if err != nil && errorgraph.Is(err, fault.Invalid) {
 				return CursorInputFailure(err)
 			}
-			return err
+			return safeerror.Wrap("cursor key decoding failed", err)
 		})
 		if err != nil {
 			return CursorBoundary{}, err

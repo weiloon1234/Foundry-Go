@@ -3,6 +3,7 @@ package querycore
 import (
 	"encoding/json"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 	"strings"
 	"unicode/utf8"
@@ -41,7 +42,7 @@ func JSONMapKey[K comparable](key K) (string, error) {
 		}
 	}
 	if err != nil {
-		return "", fault.New(fault.Invalid, "invalid JSON map key")
+		return "", fault.Wrap(fault.Invalid, "invalid JSON map key", safeerror.Diagnostic("JSON map key failed", err))
 	}
 	return name, nil
 }

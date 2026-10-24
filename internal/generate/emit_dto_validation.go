@@ -62,8 +62,9 @@ func (e *emitter) emitTransportValidation(name string, root types.Type, position
 	input := e.localName("input")
 	params, args := e.genericDeclaration(root)
 	rootName := name + args
+	fieldNames, setName, cached := validationDescriptorNames(name)
 	e.line("// %sValidationFieldSet retains concrete DTO and value types for validation.", name)
-	e.line("type %sValidationFieldSet%s struct {", name, params)
+	e.line("type %s%s struct {", setName, params)
 	for _, field := range fields {
 		e.line("// %s validates the declared %s %s %q.", field.name, wireLabel, fieldLabel, field.wire)
 		e.emitFieldHelp(field.help)
@@ -77,10 +78,10 @@ func (e *emitter) emitTransportValidation(name string, root types.Type, position
 	e.line("// Compose rules with these fields; %s names and selectors are generated.", wireLabel)
 	if params == "" {
 		// Field descriptors are immutable values; build them once and return copies.
-		e.line("func %sValidationFields()%sValidationFieldSet{return foundry%sValidationFields()}", name, name, name)
-		e.line("var foundry%sValidationFields=%s.OnceValue(func()%sValidationFieldSet{return %sValidationFieldSet{", name, e.use("sync"), name, name)
+		e.line("func %s()%s{return %s()}", fieldNames, setName, cached)
+		e.line("var %s=%s.OnceValue(func()%s{return %s{", cached, e.use("sync"), setName, setName)
 	} else {
-		e.line("func %sValidationFields%s()%sValidationFieldSet%s{return %sValidationFieldSet%s{", name, params, name, args, name, args)
+		e.line("func %s%s()%s%s{return %s%s{", fieldNames, params, setName, args, setName, args)
 	}
 	for _, field := range fields {
 		e.line("%s:%s.DefineField(%q,func(%s %s)%s{", field.name, validation, field.wire, input, rootName, field.typ)

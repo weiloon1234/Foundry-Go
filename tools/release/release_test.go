@@ -218,6 +218,8 @@ func TestGoWaySourceInventory(t *testing.T) {
 	for _, name := range []string{
 		"blueprint/goway-data-layer/compilefail-mapping.tsv",
 		"database/orm/testdata/joined-has.sql",
+		"internal/generate/testdata/scaffold/model.golden",
+		"internal/generate/testdata/scaffold/extensions.golden",
 		"database/orm/testdata/public-methods.txt",
 		"database/orm/rows/transactions.md",
 		"database/orm/transaction_phase_test.go",
@@ -321,6 +323,8 @@ func TestGoWaySourceInventory(t *testing.T) {
 	}
 	for _, name := range []string{
 		"unreviewed.tsv", "unreviewed.sql", "unreviewed.txt",
+		"internal/generate/testdata/scaffold/unreviewed.golden",
+		"other/testdata/scaffold/model.golden",
 		"database/orm/testdata/unreviewed.sql",
 		"database/orm/testdata/unreviewed.txt",
 		"other/testdata/joined-has.sql",

@@ -39,12 +39,25 @@ class CatalogueTests(unittest.TestCase):
         sources = catalogue.cases()
         symbols = catalogue.generated_symbols()
         rows = {r["case"]: r for r in catalogue.read_mapping()}
+        # Stage 9 migrates these programs to explicit ORM identities. Keep their
+        # original generated-reference expressions as regression inputs, so the
+        # guard remains tested after the consumer no longer uses that API.
+        legacy_references = {
+            "auth_assurance": '(models.User{}).FoundryReference()',
+            "auth_provider_key": '(models.User{}).FoundryReference()',
+            "auth_scope_proof_owner": 'user.FoundryReference()',
+            "mfa_retirement_owner": 'u.FoundryReference()',
+            "recovery_reference_model": 'account.FoundryReference()',
+            "revocation_reference_model": 'account.FoundryReference()',
+        }
         for name in names:
             with self.subTest(case=name):
-                self.assertEqual((rows[name]["disposition"], rows[name]["stage"]), ("port", "7"))
+                self.assertIn((rows[name]["disposition"], rows[name]["stage"]),
+                              {("port", "7"), ("ported", "7")})
                 old = dict(rows[name], disposition="unaffected", stage="—", area="Authentication and security")
                 with self.assertRaisesRegex(ValueError, "generated data-layer"):
-                    catalogue.validate_classification(old, sources[name][0], symbols)
+                    catalogue.validate_classification(
+                        old, legacy_references.get(name, sources[name][0]), symbols)
 
     def test_retained_contracts_and_literals_are_not_generated_models(self):
         source = '''import messaging "example/messaging"

@@ -220,7 +220,7 @@ func (a *Authentication) middleware(source auth.CredentialName, resolve func(con
 // Keep the mapping shared by public login errors and guarded transport errors.
 func authenticationCode(err error) (ErrorCode, bool) {
 	var locked, unavailable, unauthenticated, forbidden, mfa, timeout, overloaded, limited bool
-	complete := errorgraph.Walk(err, func(current error) bool {
+	complete := walkTransportErrors(err, func(current error) bool {
 		locked = errorgraph.Matches(current, lockout.Locked)
 		if locked {
 			return false
@@ -262,7 +262,7 @@ func authenticationCode(err error) (ErrorCode, bool) {
 func authenticationError(err error) error {
 	result := err
 	failed := callback.Isolated("HTTP authentication error classification", func() error {
-		_, found, complete := errorgraph.As[classifiedError](err)
+		_, found, complete := transportErrorAs[classifiedError](err)
 		if !complete {
 			return fault.New(fault.Invalid, "HTTP authentication error classification exceeded traversal bounds")
 		}

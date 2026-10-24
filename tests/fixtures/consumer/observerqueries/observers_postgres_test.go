@@ -11,6 +11,7 @@ import (
 	"foundry.test/consumer/observerqueries"
 	foundry "github.com/weiloon1234/Foundry-Go"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/postgres"
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/foundation"
@@ -19,12 +20,30 @@ import (
 )
 
 func observerApp(t *testing.T) (*database.DB, *observerqueries.Stats, string) {
+	return observerAppWith(t, false)
+}
+func observerORMApp(t *testing.T) (*database.DB, *observerqueries.Stats, string) {
+	return observerAppWith(t, true)
+}
+func observerAppWith(t *testing.T, useORM bool) (*database.DB, *observerqueries.Stats, string) {
 	t.Helper()
 	pool := foundation.NewKey[*database.DB]("observer.pool")
 	statsKey := foundation.NewKey[*observerqueries.Stats]("observer.stats")
 	stats := &observerqueries.Stats{}
 	app := testkit.Start(t, foundry.New().Register(
 		foundation.Module{Name: "second", Requires: []foundation.ProviderID{"first"}, OnRegister: func(r *foundation.Registrar) error {
+			if useORM {
+				return orm.RegisterObserver(r, pool, orm.NewObserver[observerqueries.Record]("second"), func(s foundation.Resolver) (func() orm.Hooks[observerqueries.Record], error) {
+					stats, err := foundation.Resolve(s, statsKey)
+					if err != nil {
+						return nil, err
+					}
+					return func() orm.Hooks[observerqueries.Record] {
+						stats.Second.Add(1)
+						return observerqueries.ORMObserverHooks("second")
+					}, nil
+				})
+			}
 			return observerqueries.RegisterRecordObserver(r, pool, observerqueries.NewRecordObserver("second"), func(s foundation.Resolver) (func() observerqueries.RecordHooks, error) {
 				stats, err := foundation.Resolve(s, statsKey)
 				if err != nil {
@@ -40,6 +59,38 @@ func observerApp(t *testing.T) (*database.DB, *observerqueries.Stats, string) {
 		foundation.Module{Name: "first", OnRegister: func(r *foundation.Registrar) error {
 			if err := foundation.Provide(r, statsKey, stats); err != nil {
 				return err
+			}
+			if useORM {
+				if err := orm.RegisterObserver(r, pool, orm.NewObserver[observerqueries.Record]("first"), func(s foundation.Resolver) (func() orm.Hooks[observerqueries.Record], error) {
+					stats, err := foundation.Resolve(s, statsKey)
+					if err != nil {
+						return nil, err
+					}
+					return func() orm.Hooks[observerqueries.Record] {
+						stats.First.Add(1)
+						return observerqueries.ORMObserverHooks("first")
+					}, nil
+				}); err != nil {
+					return err
+				}
+				if err := orm.RegisterObserver(r, pool, orm.NewObserver[observerqueries.Plain]("plain"), func(s foundation.Resolver) (func() orm.Hooks[observerqueries.Plain], error) {
+					stats, err := foundation.Resolve(s, statsKey)
+					if err != nil {
+						return nil, err
+					}
+					return func() orm.Hooks[observerqueries.Plain] {
+						stats.Plain.Add(1)
+						return orm.Hooks[observerqueries.Plain]{Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[observerqueries.Plain]) error {
+							return orm.WriteSet(draft, observerqueries.Plains.Name.Set("registered default"))
+						}}
+					}, nil
+				}); err != nil {
+					return err
+				}
+				if err := orm.RegisterRetrievalObserver(r, pool, orm.NewRetrievalObserver[observerqueries.Record]("record.read"), retrievalConstructor[orm.RetrievalHooks[observerqueries.Record]](statsKey)); err != nil {
+					return err
+				}
+				return orm.RegisterRetrievalObserver(r, pool, orm.NewRetrievalObserver[observerqueries.Effect]("effect.read"), retrievalConstructor[orm.RetrievalHooks[observerqueries.Effect]](statsKey))
 			}
 			if err := observerqueries.RegisterRecordObserver(r, pool, observerqueries.NewRecordObserver("first"), func(s foundation.Resolver) (func() observerqueries.RecordHooks, error) {
 				stats, err := foundation.Resolve(s, statsKey)

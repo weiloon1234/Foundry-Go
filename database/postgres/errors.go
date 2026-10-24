@@ -1,7 +1,6 @@
 package postgres
 
 import (
-	"errors"
 	"io"
 	"net"
 	"strings"
@@ -9,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 )
 
 // sqlStateCodes maps exact PostgreSQL SQLSTATE values. Class fallbacks follow
@@ -45,16 +45,19 @@ var sqlStateCodes = map[string]database.Code{
 // Unknown completion states stay uncertain, including class 40's 40003.
 func classify(err error) database.Detail {
 	detail := database.Detail{Code: database.QueryFailed}
-	if errors.Is(err, pgx.ErrTxCommitRollback) {
+	if errorgraph.Is(err, pgx.ErrTxCommitRollback) {
 		detail.CommitRejected = true
 		return detail
 	}
-	if errors.Is(err, pgx.ErrTxClosed) {
+	if errorgraph.Is(err, pgx.ErrTxClosed) {
 		detail.Code = database.Closed
 		return detail
 	}
-	var server *pgconn.PgError
-	if errors.As(err, &server) {
+	server, found, complete := errorgraph.As[*pgconn.PgError](err)
+	if !complete || found && server == nil {
+		return detail
+	}
+	if found {
 		detail.SQLState, detail.Constraint = server.Code, server.ConstraintName
 		detail.Schema, detail.Table = server.SchemaName, server.TableName
 		if code, ok := sqlStateCodes[server.Code]; ok {
@@ -78,14 +81,34 @@ func classify(err error) database.Detail {
 	}
 	// pgconn reports requests that were never written to the server as safe to
 	// retry; such a statement cannot have committed outside a transaction.
-	detail.StatementRejected = pgconn.SafeToRetry(err)
-	var network net.Error
-	if errors.As(err, &network) {
+	// Keep the exact interface target used by pgconn.SafeToRetry, including
+	// application As implementations that expose a capability without error.
+	var retryable interface{ SafeToRetry() bool }
+	complete = errorgraph.Walk(err, func(current error) bool {
+		retryable, found = current.(interface{ SafeToRetry() bool })
+		if !found {
+			if as, ok := current.(interface{ As(any) bool }); ok {
+				found = as.As(&retryable)
+			}
+		}
+		return !found
+	})
+	if !complete {
+		return detail
+	}
+	if found {
+		detail.StatementRejected = retryable.SafeToRetry()
+	}
+	network, found, complete := errorgraph.As[net.Error](err)
+	if !complete {
+		return detail
+	}
+	if found {
 		detail.Code = database.Unavailable
 		if network.Timeout() {
 			detail.Code = database.DeadlineExceeded
 		}
-	} else if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+	} else if errorgraph.Is(err, io.EOF) || errorgraph.Is(err, io.ErrUnexpectedEOF) {
 		detail.Code = database.Unavailable
 	}
 	return detail

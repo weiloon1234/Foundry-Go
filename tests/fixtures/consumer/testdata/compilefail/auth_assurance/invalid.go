@@ -1,8 +1,10 @@
 package invalid
 
 import (
-	"foundry.test/consumer/models"
+	"foundry.test/consumer/profiles"
 	"github.com/weiloon1234/Foundry-Go/auth"
 )
 
-func bad() { _, _ = auth.NewProof((models.User{}).FoundryReference(), "authenticated") }
+func bad() {
+	_, _ = auth.NewProof(profiles.ProfileIdentity.ReferenceOf(profiles.Profile{}), "authenticated")
+}

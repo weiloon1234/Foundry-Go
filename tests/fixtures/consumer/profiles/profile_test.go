@@ -16,6 +16,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/postgres"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/i18n"
@@ -29,7 +30,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/translations"
 )
 
-func TestPublicModelExtensionConsumerAndGeneratedLifecycle(t *testing.T) {
+func TestPublicModelExtensionConsumerAndORMLifecycle(t *testing.T) {
 	config := pgtest.Config(t)
 	adapter, err := postgres.New(config)
 	if err != nil {
@@ -47,9 +48,9 @@ func TestPublicModelExtensionConsumerAndGeneratedLifecycle(t *testing.T) {
 		}
 	})
 	// Construction captures borrowed services. The factory is invoked only after
-	// assembly, for each generated write; it never discovers services globally.
+	// assembly, for each ORM write; it never discovers services globally.
 	var services profiles.Services
-	declaration, err := profiles.NewProfileObserver("profile.extensions").Declare(func() profiles.ProfileHooks { return services.CleanupHooks() })
+	declaration, err := orm.NewObserver[profiles.Profile]("profile.extensions").Declare(func() orm.Hooks[profiles.Profile] { return services.CleanupHooks() })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +142,7 @@ func TestPublicModelExtensionConsumerAndGeneratedLifecycle(t *testing.T) {
 	var profile profiles.Profile
 	if err := store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		profile, err = profiles.QueryProfiles().Create(ctx, tx, profiles.ProfileDraft{}.SetName("Consumer"))
+		profile, err = profiles.Profiles.Insert(ctx, tx, profiles.Profiles.Name.Set("Consumer"))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -151,7 +152,7 @@ func TestPublicModelExtensionConsumerAndGeneratedLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	preferences.Tags[0] = "caller changed"
-	stored, err := profiles.PreferencesKey.Get(t.Context(), services.Metadata, profile.FoundryReference())
+	stored, err := profiles.PreferencesKey.Get(t.Context(), services.Metadata, profiles.ProfileIdentity.ReferenceOf(profile))
 	snapshot, ok := stored.Get()
 	if err != nil || !ok || !snapshot.Dark || snapshot.Tags[0] != "saved" {
 		t.Fatal("typed DTO metadata", err)
@@ -159,7 +160,7 @@ func TestPublicModelExtensionConsumerAndGeneratedLifecycle(t *testing.T) {
 	if err := services.SaveLabel(t.Context(), profile, "en", "Profile"); err != nil {
 		t.Fatal(err)
 	}
-	label, err := profiles.Label.Resolve(t.Context(), services.Translations, profile.FoundryReference(), "ms")
+	label, err := profiles.Label.Resolve(t.Context(), services.Translations, profiles.ProfileIdentity.ReferenceOf(profile), "ms")
 	resolved, ok := label.Get()
 	if err != nil || !ok || resolved.Locale != "en" {
 		t.Fatal("typed locale fallback", err)
@@ -191,14 +192,14 @@ func TestPublicModelExtensionConsumerAndGeneratedLifecycle(t *testing.T) {
 	if err != nil || !ok || file.Info().Width != 32 {
 		t.Fatal("declarative image attachment", err)
 	}
-	if _, err := profiles.Localized.ForLocale("en").Add(t.Context(), services.Attachments, profile.FoundryReference(), attachments.Upload{Source: strings.NewReader("English file")}); err != nil {
+	if _, err := profiles.Localized.ForLocale("en").Add(t.Context(), services.Attachments, profiles.ProfileIdentity.ReferenceOf(profile), attachments.Upload{Source: strings.NewReader("English file")}); err != nil {
 		t.Fatal(err)
 	}
-	batch, err := services.LoadLocalized(t.Context(), []model.Reference[profiles.Profile, model.ID[profiles.Profile]]{profile.FoundryReference()})
+	batch, err := services.LoadLocalized(t.Context(), []model.Reference[profiles.Profile, model.ID[profiles.Profile]]{profiles.ProfileIdentity.ReferenceOf(profile)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := batch.Get(profile.FoundryReference())
+	loaded, err := batch.Get(profiles.ProfileIdentity.ReferenceOf(profile))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,43 +209,43 @@ func TestPublicModelExtensionConsumerAndGeneratedLifecycle(t *testing.T) {
 		t.Fatal("localized file batch", err)
 	}
 	if err := store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		_, err := profiles.QueryProfiles().Delete(ctx, tx, profile.ID)
+		_, err := profiles.Profiles.Delete(ctx, tx, profile.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := profiles.Avatar.List(t.Context(), services.Attachments, profile.FoundryReference()); !errors.Is(err, database.NotFound) {
-		t.Fatal("generated soft delete not respected", err)
+	if _, err := profiles.Avatar.List(t.Context(), services.Attachments, profiles.ProfileIdentity.ReferenceOf(profile)); !errors.Is(err, database.NotFound) {
+		t.Fatal("ORM soft delete not respected", err)
 	}
 	if err := store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		_, err := profiles.QueryProfiles().Restore(ctx, tx, profile.ID)
+		_, err := profiles.Profiles.Restore(ctx, tx, profile.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := profiles.Avatar.Find(t.Context(), services.Attachments, profile.FoundryReference(), file.ID()); err != nil {
+	if _, err := profiles.Avatar.Find(t.Context(), services.Attachments, profiles.ProfileIdentity.ReferenceOf(profile), file.ID()); err != nil {
 		t.Fatal("restored attachment lost", err)
 	}
 	rollback := errors.New("rollback deletion")
 	if err := store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		if _, err := profiles.QueryProfiles().ForceDelete(ctx, tx, profile.ID); err != nil {
+		if _, err := profiles.Profiles.ForceDelete(ctx, tx, profiles.Profiles.Soft, profile.ID); err != nil {
 			return err
 		}
 		return rollback
 	}); !errors.Is(err, rollback) {
 		t.Fatal(err)
 	}
-	if _, err := profiles.Avatar.Find(t.Context(), services.Attachments, profile.FoundryReference(), file.ID()); err != nil {
+	if _, err := profiles.Avatar.Find(t.Context(), services.Attachments, profiles.ProfileIdentity.ReferenceOf(profile), file.ID()); err != nil {
 		t.Fatal("parent rollback lost attachment", err)
 	}
 	if err := store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		_, err := profiles.QueryProfiles().ForceDelete(ctx, tx, profile.ID)
+		_, err := profiles.Profiles.ForceDelete(ctx, tx, profiles.Profiles.Soft, profile.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if state, err := services.Attachments.Inspect(t.Context(), upload.Operation); err != nil || state.State != attachments.Cleaned {
-		t.Fatal("generated hard-delete observer missed files", err)
+		t.Fatal("ORM hard-delete observer missed files", err)
 	}
 	if page, err := metadata.InspectOrphans(t.Context(), services.Metadata, profiles.Owners.Name(), metadata.Cursor{}, 10); err != nil || len(page.Orphans) != 0 {
 		t.Fatal("metadata lifecycle rows retained", err)

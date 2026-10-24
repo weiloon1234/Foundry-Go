@@ -8,13 +8,14 @@ import (
 	"foundry.test/consumer/intervalqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
 func TestPostgresIntervalOutputStyles(t *testing.T) {
 	runIntervals(t, func(tx *database.Tx, _ []intervalqueries.Sample) error {
-		f := intervalqueries.SampleFields()
+		f := intervalqueries.Samples
 		cases := []temporal.Interval{{}, temporal.Months(1), temporal.Days(3), temporal.Days(-3),
 			interval(t, 14, 3, 25*time.Hour+time.Microsecond), interval(t, -14, -3, -25*time.Hour-time.Microsecond),
 			interval(t, -14, 3, -25*time.Hour-time.Microsecond), interval(t, 14, -3, 25*time.Hour+time.Microsecond),
@@ -30,7 +31,7 @@ func TestPostgresIntervalOutputStyles(t *testing.T) {
 				return err
 			}
 			for _, want := range cases {
-				if got := intervalOne(t, tx, query.Param(f.Period, want).Value()); got != want {
+				if got := intervalOne(t, tx, expr.Param(f.Period, want).Value()); got != want {
 					t.Fatal(style, got, want)
 				}
 			}
@@ -57,13 +58,13 @@ func TestPostgresIntervalOutputStyles(t *testing.T) {
 
 func TestPostgresIntervalWritesAndDecodeFailure(t *testing.T) {
 	runIntervals(t, func(tx *database.Tx, _ []intervalqueries.Sample) error {
-		q := intervalqueries.QueryIntervalSamples()
-		f := intervalqueries.SampleFields()
-		got, err := q.Update(t.Context(), tx, 2, intervalqueries.SampleDraft{}.SetPeriod(temporal.Days(4)).SetMaybePeriod(temporal.Interval{}))
+		q := intervalqueries.Samples.Query()
+		f := intervalqueries.Samples
+		got, err := intervalqueries.Samples.Update(t.Context(), tx, 2, f.Period.Set(temporal.Days(4)), f.MaybePeriod.Set(temporal.Interval{}))
 		if err != nil || got.Period != temporal.Days(4) || got.MaybePeriod.IsNull() {
 			t.Fatal(got, err)
 		}
-		got, err = q.Update(t.Context(), tx, 2, intervalqueries.SampleDraft{}.ClearMaybePeriod())
+		got, err = intervalqueries.Samples.Update(t.Context(), tx, 2, f.MaybePeriod.SetNull())
 		if err != nil || got.Period != temporal.Days(4) || !got.MaybePeriod.IsNull() {
 			t.Fatal(got, err)
 		}
@@ -73,7 +74,7 @@ func TestPostgresIntervalWritesAndDecodeFailure(t *testing.T) {
 		if rows, err := q.OrderBy(f.ID.Asc()).All(t.Context(), tx); err == nil || rows != nil {
 			t.Fatal("bad later row published partial models", rows, err)
 		}
-		if rows, err := query.SelectValue(q.OrderBy(f.ID.Asc()), query.Value(f.Period)).All(t.Context(), tx); err == nil || rows != nil {
+		if rows, err := rows.ReadScalar(rows.SelectScalar(rows.From(q.OrderBy(f.ID.Asc())), expr.Select(expr.Value(f.Period)))).All(t.Context(), tx); err == nil || rows != nil {
 			t.Fatal("bad later row published partial values", rows, err)
 		}
 		return nil

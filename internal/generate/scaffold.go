@@ -114,10 +114,9 @@ func Scaffold(ctx context.Context, options ScaffoldOptions) (string, error) {
 	if err != nil || !options.hasSlots() {
 		return path, err
 	}
-	// The model's extension definition returns the generated extension set, so its
-	// declarations are generated now; the package compiles again afterwards.
+	// Generate any metadata DTO codecs; ORM declarations themselves remain handwritten.
 	if _, err := Generate(ctx, options.generation()); err != nil {
-		return path, fmt.Errorf("model %s was created; run foundry generate to create its slot declarations: %w", path, err)
+		return path, fmt.Errorf("model %s was created; run foundry generate to create its metadata codecs: %w", path, err)
 	}
 	return path, nil
 }
@@ -166,8 +165,8 @@ func scaffoldFile(ctx context.Context, options ScaffoldOptions, imports []string
 	}
 	overlay[name] = data
 	if options.hasSlots() {
-		// The model's extension definition returns the extension set generation creates for the
-		// new file, so check the file with the output generated for it.
+		// Metadata slots can refer to a DTO codec generated from the same file.
+		// Check that codec and the handwritten ORM declarations together.
 		if err := checkWithGeneration(ctx, graph, name, data); err != nil {
 			return "", err
 		}

@@ -5,14 +5,16 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
 func TestPostgresTransactionOuterAndCrossJoins(t *testing.T) {
 	ctx, db, path := transactionFixture(t)
-	left := query.AsTransaction[claimedAlias](QueryRecords().Where(RecordFields().ID.Lte(2)).ForKeyShare(), "left_records")
-	right := query.AsTransaction[otherAlias](QueryRecords().Where(RecordFields().ID.Gte(2)).ForKeyShare(), "right_records")
-	on := query.On(RecordFieldsAt(left.Scope()).ID, RecordFieldsAt(right.Scope()).ID)
+	left := rows.AsTransaction[claimedAlias](rows.LockedRecord(Records.Query().Where(orm.NumberKey(Records.ID).Lte(2)).ForKeyShare()), "left_records")
+	right := rows.AsTransaction[otherAlias](rows.LockedRecord(Records.Query().Where(orm.NumberKey(Records.ID).Gte(2)).ForKeyShare()), "right_records")
+	on := rows.OnEqual(recordAt(rows.TransactionScope(left)).ID, recordAt(rows.TransactionScope(right)).ID)
 	for _, kind := range []string{"left", "right", "full", "cross"} {
 		t.Run(kind, func(t *testing.T) {
 			if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
@@ -20,25 +22,25 @@ func TestPostgresTransactionOuterAndCrossJoins(t *testing.T) {
 				var err error
 				switch kind {
 				case "left":
-					joined := query.TransactionLeftJoin(left, right, on)
-					a := RecordFieldsAt(query.LeftScope(joined, left.Scope()))
-					b := RecordNullableFieldsAt(query.NullableRightScope(joined, right.Scope()))
-					pairs, err = ProjectTransactionPair(joined).SelectLeft(query.NullableRow(a.ID).Value()).SelectRight(query.Value(b.ID)).Query().All(ctx, tx)
+					joined := rows.TransactionLeftJoin(left, right, on)
+					a := recordAt(rows.LeftScope(joined, rows.TransactionScope(left)))
+					b := nullableRecordAt(rows.NullableRightScope(joined, rows.TransactionScope(right)))
+					pairs, err = rows.SelectTransaction(joined, Pairs, rows.MapSelected(Pairs.Left, expr.NullableRow(a.ID).Value()), rows.MapSelected(Pairs.Right, expr.Select(b.ID))).All(ctx, tx)
 				case "right":
-					joined := query.TransactionRightJoin(left, right, on)
-					a := RecordNullableFieldsAt(query.NullableLeftScope(joined, left.Scope()))
-					b := RecordFieldsAt(query.RightScope(joined, right.Scope()))
-					pairs, err = ProjectTransactionPair(joined).SelectLeft(query.Value(a.ID)).SelectRight(query.NullableRow(b.ID).Value()).Query().All(ctx, tx)
+					joined := rows.TransactionRightJoin(left, right, on)
+					a := nullableRecordAt(rows.NullableLeftScope(joined, rows.TransactionScope(left)))
+					b := recordAt(rows.RightScope(joined, rows.TransactionScope(right)))
+					pairs, err = rows.SelectTransaction(joined, Pairs, rows.MapSelected(Pairs.Left, expr.Select(a.ID)), rows.MapSelected(Pairs.Right, expr.NullableRow(b.ID).Value())).All(ctx, tx)
 				case "full":
-					joined := query.TransactionFullJoin(left, right, on)
-					a := RecordNullableFieldsAt(query.NullableLeftScope(joined, left.Scope()))
-					b := RecordNullableFieldsAt(query.NullableRightScope(joined, right.Scope()))
-					pairs, err = ProjectTransactionPair(joined).SelectLeft(query.Value(a.ID)).SelectRight(query.Value(b.ID)).Query().All(ctx, tx)
+					joined := rows.TransactionFullJoin(left, right, on)
+					a := nullableRecordAt(rows.NullableLeftScope(joined, rows.TransactionScope(left)))
+					b := nullableRecordAt(rows.NullableRightScope(joined, rows.TransactionScope(right)))
+					pairs, err = rows.SelectTransaction(joined, Pairs, rows.MapSelected(Pairs.Left, expr.Select(a.ID)), rows.MapSelected(Pairs.Right, expr.Select(b.ID))).All(ctx, tx)
 				case "cross":
-					joined := query.TransactionCrossJoin(left, right)
-					a := RecordFieldsAt(query.LeftScope(joined, left.Scope()))
-					b := RecordFieldsAt(query.RightScope(joined, right.Scope()))
-					pairs, err = ProjectTransactionPair(joined).SelectLeft(query.NullableRow(a.ID).Value()).SelectRight(query.NullableRow(b.ID).Value()).Query().All(ctx, tx)
+					joined := rows.TransactionCrossJoin(left, right)
+					a := recordAt(rows.LeftScope(joined, rows.TransactionScope(left)))
+					b := recordAt(rows.RightScope(joined, rows.TransactionScope(right)))
+					pairs, err = rows.SelectTransaction(joined, Pairs, rows.MapSelected(Pairs.Left, expr.NullableRow(a.ID).Value()), rows.MapSelected(Pairs.Right, expr.NullableRow(b.ID).Value())).All(ctx, tx)
 				}
 				if err != nil {
 					return err

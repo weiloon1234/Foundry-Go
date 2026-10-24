@@ -238,18 +238,18 @@ func (classify classifier) inspect(operation string, err error) *Error {
 		detail.Code = QueryFailed
 	}
 	switch {
-	case errors.Is(err, context.DeadlineExceeded):
+	case errorgraph.Is(err, context.DeadlineExceeded):
 		detail.Code = DeadlineExceeded
-	case errors.Is(err, context.Canceled):
+	case errorgraph.Is(err, context.Canceled):
 		detail.Code = Canceled
-	case errors.Is(err, sql.ErrNoRows):
+	case errorgraph.Is(err, sql.ErrNoRows):
 		detail.Code = NotFound
-	case errors.Is(err, sql.ErrConnDone), errors.Is(err, sql.ErrTxDone):
+	case errorgraph.Is(err, sql.ErrConnDone), errorgraph.Is(err, sql.ErrTxDone):
 		detail.Code = Closed
-	case errors.Is(err, driver.ErrBadConn):
+	case errorgraph.Is(err, driver.ErrBadConn):
 		detail.Code = Unavailable
 	}
-	return &Error{operation: operation, detail: detail, outcome: Unspecified, cause: err, notSent: errors.Is(err, driver.ErrBadConn)}
+	return &Error{operation: operation, detail: detail, outcome: Unspecified, cause: err, notSent: errorgraph.Is(err, driver.ErrBadConn)}
 }
 
 // statementOutcome labels a failure of one statement outside an explicit

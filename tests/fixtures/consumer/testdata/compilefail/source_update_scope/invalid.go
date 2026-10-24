@@ -2,9 +2,8 @@ package invalid
 
 import (
 	"foundry.test/consumer/linkqueries"
-	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-func invalid() {
-	_ = linkqueries.UpdateMemberFrom(linkqueries.QueryLinkMembers(), linkqueries.QueryLinkArchives()).SelectName(foundryquery.Value(linkqueries.MemberFields().Name))
-}
+var _ = rows.UpdateFrom(linkqueries.Members.Query(), rows.From(linkqueries.Archives.Query())).Select(rows.MapUpdate(linkqueries.Members.Name, expr.Value(linkqueries.Members.Name)))

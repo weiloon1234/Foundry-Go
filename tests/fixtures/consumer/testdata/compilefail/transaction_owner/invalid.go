@@ -4,16 +4,17 @@ import (
 	"context"
 	f "foundry.test/consumer/transactionqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
 type a struct{}
 type b struct{}
 
-var source = query.AsTransaction[a](query.TransactionCTE("claimed", f.QueryRecords().ForUpdate()), "claim")
-var selected = query.SelectTransactionRecord(source, source.Scope())
+var source = rows.AsTransaction[a](rows.TransactionCTE("claimed", rows.LockedRecord(f.Records.Query().ForUpdate())), "claim")
+var selected = rows.SelectTransactionRecord(source, rows.TransactionScope(source))
 var _ context.Context
 var _ *database.Tx
 
-var other = query.AsTransaction[b](query.TransactionOf(f.QueryRecords()), "other")
-var _ = selected.Where(f.RecordFieldsAt(other.Scope()).ID.Eq(1))
+var other = rows.AsTransaction[b](rows.TransactionOf(rows.ModelRecord(f.Records.Query())), "other")
+var _ = selected.Where(expr.At(rows.TransactionScope(other), f.Records.ID).Eq(1))

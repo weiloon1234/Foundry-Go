@@ -86,12 +86,15 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 7 datatables | Projection adapters, datatable cutover, reporting DTOs and contract/editor gates | Done pending the lead’s commit; slices 1–3 delivered. |
 | 7s3b | Last five stores and bounded projection consumers | Done pending the lead’s commit; all 13 framework stores use ORM declarations. |
 | 7 validation | Typed advisory database Unique/Exists rules | Done pending the lead’s commit; five catalogue rows ported and B34 editor anchors retained. |
-| 7 | Framework integrations and wire-contract parity | All 13 stores, validation/database, extension slots and datatables delivered. Broader program acceptance remains separate. |
+| 7 remainder | Application registration, seeder, pagination consumers and contained/redacted boundaries | Done pending the lead’s commit; application.WithTables and model-owned Tables lists are explicit. |
+| 7 | Framework integrations and wire-contract parity | COMPLETE for the approved slices: all 13 stores, validation/database, extension slots, datatables, application registration, seeding and pagination adapters. Whole-program acceptance remains separate. |
 | 8a lane B | Shared limits, concrete observer owner and ORM prune registry | Done pending the lead’s commit; generated-query compatibility retained. |
 | 8a lane C | Shared page and cursor contracts | Done pending the lead’s commit; querycore owns contracts, public aliases and HTTP schema identities retained. |
 | 8a lane D | Extension loading and identity backing contracts | Done pending the lead’s commit; shared internal loader, legacy compatibility entry points retained. |
-| 8 | Retire model generation and old query API; extend scaffold | In progress; Stage 8a lanes B, C and D delivered. Model generation and general old-API retirement remain coordinated work. |
-| 9 | Migrate consumer fixtures and compiler catalogue | Planned |
+| 8 D8 | Handwritten ORM model/extension scaffolds | Done pending the lead’s commit; existing flags, collision-safe names and DTO generation retained. |
+| 8 | Retire model generation and old query API; extend scaffold | In progress; Stage 8a and D8 delivered. Model/query emitter retirement remains Stage 8c. |
+| 9 wave 1 | B1 foundations, lane C reporting/interval/transaction consumers and D1 foundations | Done pending the lead’s commit; generated callers and parity oracles coexist. |
+| 9 | Migrate consumer fixtures and compiler catalogue | In progress; wave 1 integrated. Dependent consumer cutovers and generated-output cleanup remain. |
 | 10 | Guides, examples and editor coverage | Planned |
 | 11 | Full acceptance and whole-app performance evidence | Planned |
 | 12 | Consumer application migration, separately authorized | Later |
@@ -328,7 +331,7 @@ They use retained `postgres.Isolate` schemas. PostgreSQL execution is lead-owned
 | D4 | Validate field offsets at declaration/startup; use those offsets on the hot path. |
 | D5 | Assignment lists (`column.Set(value)`) preserve omitted/null/value distinctions. |
 | D6 | Work in this branch/worktree. The lead owns commits, pushes and synchronization with main. |
-| D7 | Explicit application table registration is planned; `orm.Check` already validates declarations in tests. Do not rely only on first-query validation. |
+| D7 | application.WithTables snapshots an explicit CheckedTable list and validates it through orm.Check before constructing providers/handlers. Model packages expose fresh Tables() lists; no registry or startup I/O. |
 | D8 | Extend the existing `foundry make` scaffold to write an initial model declaration once. |
 | D9 | Coexist with the old API until Stage 8; migrate subsystems before removal. |
 | D10 | Stage 1 is the gate. Its approved model ceiling is 40%, superseding the original 25%; retain measured usage budgets. |
@@ -465,6 +468,7 @@ consumer retains Stage 1 golden coverage and adds core, direct and joined-relati
 | Extension owner/slot declarations | Generated extension descriptors | 7s3a/8a lane D: SlotOf/IdentityOf, DefineORMOwner/BindSlot/DeclareORM and thin typed handles; internal/extensionslot owns batching, budgets and deferred attachment; legacy bridges retained |
 | Datatables | Generated SQL projections and DTOs | Slices 1–3: rows.Query/expr cutover, streaming exports, ordinary DTOs with handwritten schemas; frozen byte gates retain contracts |
 | Database validation | Generated metadata and typed query interfaces | Delivered: ORM ValueLookup plus typed stored columns; scoped advisory Unique/Exists, batches of 64, redaction and unchanged rule metadata |
+| Application tables and seeding | Generated declaration/check and seed adapters | Stage 7 remainder: explicit WithTables/CheckedTable lists, per-declaration callback containment and transaction-bound ORM seed writes |
 
 Generated field hover notices move to handwritten comments and declaration docs.
 Unsupported fields, undeclared persisted fields and invalid mutator signatures
@@ -527,8 +531,8 @@ intentionally accepts byte slices, while identity does not.
 
 | Disposition | Cases |
 | --- | ---: |
-| ported | 534 |
-| port | 48 |
+| ported | 561 |
+| port | 21 |
 | merge | 0 |
 | obsolete | 0 |
 | unaffected | 444 |
@@ -566,7 +570,7 @@ intentionally accepts byte slices, while identity does not.
 | 7 | 81 |
 | — | 444 |
 
-534 old catalogue rows are covered by 526 distinct Go-way cases.
+561 old catalogue rows are covered by 553 distinct Go-way cases.
 
 ## Emitter audit
 
@@ -1631,4 +1635,45 @@ acceptance and source hashes are retained in [store evidence](../../docs/evidenc
 [editor evidence](../../docs/evidence/goway-b34-editor-stage8-inventory.json),
 [lane C evidence](../../docs/evidence/goway-stage8a-lane-c.json) and
 [lane D evidence](../../docs/evidence/goway-stage8a-lane-d.json).
+The Stage 6 whole-app measurement gate remains pending.
+
+## Integration batch 7a: Stage 7 completion and consumer wave 1
+
+Stage 7’s approved slices are complete. application.WithTables snapshots explicit
+CheckedTable lists and calls the shared orm.Check before providers or handlers
+are constructed. Each declaration is isolated separately, preserving other errors
+when a declaration panics or exits. Models.Tables returns an owned interface slice;
+bootstrap does not retain each model’s generic table namespace. ORM seeders use
+the supplied transaction and ordinary writes. Pagination consumers retain the
+existing aliases, response shape, token bytes and authorization boundaries.
+
+Binding, decode, SQL and JSON-key diagnostics are redacted at their shared owners.
+Diagnostic causes remain inspectable with errors.Is/As; retained JSON causes do
+not independently classify an HTTP response. Explicit outer errors and joined
+siblings retain precedence, and direct JSON-key validation is unchanged. This
+integration does not claim the separately deferred H1 hardening inventory is closed.
+
+D8 changes the existing model scaffold to emit handwritten ORM table and extension
+declarations. Applications explicitly compose table registration; DTO codecs still
+generate. The existing flags are retained, and complete emitted symbol families
+are checked for collisions, Go keywords, predeclared names and valid identifiers.
+Generated model/query emitter retirement remains Stage 8c.
+
+Stage 9 wave 1 publishes B1 linkqueries, mutatorqueries, observerqueries and
+inputqueries foundations; lane C migrates reporting authority and independent
+intervalqueries/transactionqueries consumers; D1 publishes profiles, articles,
+passwords and multifactor foundations, with the profile service/lifecycle cutover.
+Only one lifecycle adapter family is registered per model/application. Concrete
+owners, stored/input types, extension subjects, identity encodings and contract
+bytes are preserved. Existing generated APIs, directives, manifests and independent
+old-API oracles remain until dependent callers migrate and generation authorizes
+cleanup. Full observer metadata inspection, typed draft unsetting and ORM extension
+matching remain recorded handoffs for later consumer slices.
+
+Current integration results and source hashes are recorded in the
+[Stage 7 remainder evidence](../../docs/evidence/goway-stage7-remainder.json),
+[B1 evidence](../../docs/evidence/goway-stage9-b1.json),
+[lane C wave 1 evidence](../../docs/evidence/goway-stage9-lane-c-wave1.json),
+[D8 evidence](../../docs/evidence/goway-stage8-d8-scaffold.json) and
+[D1 evidence](../../docs/evidence/goway-stage9-d1.json).
 The Stage 6 whole-app measurement gate remains pending.

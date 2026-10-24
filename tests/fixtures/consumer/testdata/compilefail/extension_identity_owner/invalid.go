@@ -1,9 +1,9 @@
 package invalid
 
 import (
-	"foundry.test/consumer/models"
+	"foundry.test/consumer/articles"
 	"foundry.test/consumer/profiles"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var invalid = query.IdentityOf(profiles.QueryProfiles().Query, models.UserFields().ID)
+var invalid = orm.IdentityOf(profiles.Profiles.Table, articles.Authors.Key())

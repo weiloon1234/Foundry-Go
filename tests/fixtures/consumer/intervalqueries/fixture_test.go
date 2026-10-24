@@ -6,7 +6,9 @@ import (
 
 	"foundry.test/consumer/intervalqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
@@ -64,11 +66,12 @@ func runIntervals(t *testing.T, check func(*database.Tx, []intervalqueries.Sampl
 		}
 		var samples []intervalqueries.Sample
 		for i, period := range []temporal.Interval{temporal.Months(1), temporal.Days(30), interval(t, 0, 0, 720*time.Hour), {}} {
-			draft := intervalqueries.SampleDraft{}.SetID(i + 1).SetPeriod(period).SetStart(start).SetEnd(end).SetLocalStart(localStart).SetLocalEnd(localEnd).SetClockStart(clockStart).SetClockEnd(clockEnd).SetDate(date)
+			f := intervalqueries.Samples
+			assignments := []orm.Assignment[intervalqueries.Sample]{f.ID.Set(i + 1), f.Period.Set(period), f.Start.Set(start), f.End.Set(end), f.LocalStart.Set(localStart), f.LocalEnd.Set(localEnd), f.ClockStart.Set(clockStart), f.ClockEnd.Set(clockEnd), f.Date.Set(date)}
 			if i != 1 {
-				draft = draft.SetMaybePeriod(period)
+				assignments = append(assignments, f.MaybePeriod.Set(period))
 			}
-			sample, err := intervalqueries.QueryIntervalSamples().Create(t.Context(), tx, draft)
+			sample, err := intervalqueries.Samples.Insert(t.Context(), tx, assignments...)
 			if err != nil {
 				return err
 			}
@@ -81,9 +84,9 @@ func runIntervals(t *testing.T, check func(*database.Tx, []intervalqueries.Sampl
 	}
 }
 
-func intervalOne[V any](t *testing.T, tx *database.Tx, expr query.Expression[intervalqueries.Sample, V]) V {
+func intervalOne[V any](t *testing.T, tx *database.Tx, selected expr.Selected[intervalqueries.Sample, V]) V {
 	t.Helper()
-	result, err := query.SelectValue(intervalqueries.QueryIntervalSamples().OrderBy(intervalqueries.SampleFields().ID.Asc()).Limit(1), expr).RequireFirst(t.Context(), tx)
+	result, err := rows.ReadScalar(rows.SelectScalar(rows.From(intervalqueries.Samples.Query().OrderBy(intervalqueries.Samples.ID.Asc()).Limit(1)), selected)).RequireFirst(t.Context(), tx)
 	if err != nil {
 		t.Fatal(err)
 	}

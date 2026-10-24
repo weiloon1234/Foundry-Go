@@ -68,7 +68,7 @@ func TestPublicReportHTTPAuthorizationRangesAndArtifactOwnership(t *testing.T) {
 		t.Fatal("anonymous export was admitted", anonymous.Code)
 	}
 	if err := f.transaction(t.Context(), func(tx *database.Tx) error {
-		_, err := tx.Exec(t.Context(), `UPDATE report_operators SET can_export=false`)
+		_, err := reporting.OperatorModels.Update(t.Context(), tx, f.operator, reporting.OperatorModels.CanExport.Set(false))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -150,7 +150,7 @@ func TestPublicReportQueryReturnsRequestErrorsUnchanged(t *testing.T) {
 		t.Fatal("healthy scoped query failed after rejection", response.Code, err)
 	}
 	if err := f.transaction(t.Context(), func(tx *database.Tx) error {
-		_, err := tx.Exec(t.Context(), `UPDATE report_operators SET can_view=false`)
+		_, err := reporting.OperatorModels.Update(t.Context(), tx, f.operator, reporting.OperatorModels.CanView.Set(false))
 		return err
 	}); err != nil {
 		t.Fatal(err)

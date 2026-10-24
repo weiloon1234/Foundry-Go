@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 )
 
@@ -92,9 +93,9 @@ func (d Descriptor[E]) validate() error {
 		if c.LabelKey != "" && c.LabelKey.Validate() != nil {
 			return fmt.Errorf("invalid enum label key")
 		}
-		data, err := json.Marshal(c.Value)
+		data, err := marshalWireValue(c.Value)
 		if err != nil {
-			return fmt.Errorf("invalid enum wire value: %w", err)
+			return err
 		}
 		if string(data) == "null" || wireValues[string(data)] {
 			return fmt.Errorf("invalid or duplicate serialized enum value")
@@ -142,11 +143,21 @@ func (d Descriptor[E]) Definition() (Definition, error) {
 	}
 	result := Definition{PackagePath: d.packagePath, Name: d.name, Cases: make([]WireCase, 0, len(d.cases))}
 	for _, c := range d.cases {
-		data, err := json.Marshal(c.Value)
+		data, err := marshalWireValue(c.Value)
 		if err != nil {
 			return Definition{}, err
 		}
 		result.Cases = append(result.Cases, WireCase{Name: c.Name, Value: data, LabelKey: c.LabelKey})
 	}
 	return result, nil
+}
+
+// marshalWireValue is the enum JSON boundary; custom marshaler errors remain
+// inspectable without exposing their messages in declaration diagnostics.
+func marshalWireValue(value any) ([]byte, error) {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return nil, fault.Wrap(fault.Invalid, "invalid enum wire value", err)
+	}
+	return data, nil
 }

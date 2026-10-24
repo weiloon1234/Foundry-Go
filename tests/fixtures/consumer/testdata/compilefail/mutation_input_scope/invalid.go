@@ -2,11 +2,12 @@ package invalid
 
 import (
 	"foundry.test/consumer/inputqueries"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
 type alias struct{}
 
-var source = query.As[alias](inputqueries.QueryInputMembers(), "other")
-var fields = inputqueries.MemberFieldsAt(source.Scope())
-var _ = query.OnConflict(inputqueries.MemberFields().ID).DoUpdate(fields.Email.Set(inputqueries.EmailInput{}))
+var source = rows.As[alias](inputqueries.Members.Query(), "other")
+var _ = orm.ConflictSet(expr.At(rows.Scope(source), inputqueries.Members.Email), inputqueries.EmailInput{})

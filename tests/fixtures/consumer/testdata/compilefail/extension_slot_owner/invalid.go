@@ -9,5 +9,5 @@ import (
 
 // An article slot keeps its owner type; another model's reference is rejected.
 func invalid(manager *translations.Manager, author articles.Author) {
-	_ = articles.ArticleExtensions().Title.Field().Set(context.Background(), manager, author.FoundryReference(), "en", "text")
+	_ = translations.Define(articles.ArticleOwner, "title", translations.Options{}).Set(context.Background(), manager, articles.AuthorIdentity.ReferenceOf(author), "en", "text")
 }

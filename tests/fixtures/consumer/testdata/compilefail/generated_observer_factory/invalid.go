@@ -3,11 +3,12 @@ package invalid
 import (
 	"foundry.test/consumer/observerqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 )
 
-func wrongFactory(r *foundation.Registrar, pool foundation.Key[*database.DB]) {
-	_ = observerqueries.RegisterRecordObserver(r, pool, observerqueries.NewRecordObserver("wrong"), func(foundation.Resolver) (func() observerqueries.PlainHooks, error) {
-		return func() observerqueries.PlainHooks { return observerqueries.PlainHooks{} }, nil
+func invalid(r *foundation.Registrar, pool foundation.Key[*database.DB]) {
+	_ = orm.RegisterObserver(r, pool, orm.NewObserver[observerqueries.Record]("wrong"), func(foundation.Resolver) (func() orm.Hooks[observerqueries.Plain], error) {
+		return func() orm.Hooks[observerqueries.Plain] { return orm.Hooks[observerqueries.Plain]{} }, nil
 	})
 }

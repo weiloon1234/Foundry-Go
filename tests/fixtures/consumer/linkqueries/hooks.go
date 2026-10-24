@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -14,6 +15,7 @@ var ErrVeto = errors.New("relation fixture veto")
 type Trace struct {
 	Steps        []string
 	Changes      []MembershipChanges
+	ORMChanges   []orm.Changes[Membership]
 	Committed    []lifecycle.Operation
 	Reads        int
 	VetoAt       string
@@ -37,31 +39,7 @@ func recordRead(ctx context.Context) {
 func membershipHooks() MembershipHooks { return Hooks("local") }
 
 func Hooks(owner string) MembershipHooks {
-	var captured *Trace
-	before := func(ctx context.Context, name string) error {
-		captured = traceFrom(ctx)
-		if captured == nil {
-			return nil
-		}
-		phase := owner + "." + name
-		captured.Steps = append(captured.Steps, phase)
-		if phase == "local.deleting" {
-			captured.Deletions++
-			if captured.VetoDeletion == captured.Deletions {
-				return ErrVeto
-			}
-		}
-		if captured.VetoAt == phase {
-			return ErrVeto
-		}
-		if captured.CancelAt == phase && captured.Cancel != nil {
-			captured.Cancel()
-		}
-		if captured.OnPhase != nil {
-			return captured.OnPhase(ctx, phase)
-		}
-		return nil
-	}
+	before, committed := membershipOperation(owner)
 	after := func(ctx context.Context, name string, changes MembershipChanges) error {
 		if trace := traceFrom(ctx); trace != nil {
 			trace.Changes = append(trace.Changes, changes)
@@ -87,10 +65,41 @@ func Hooks(owner string) MembershipHooks {
 			return after(ctx, "force-deleted", c)
 		},
 		AfterCommit: func(_ context.Context, operation lifecycle.Operation, _ MembershipChanges) error {
-			if captured != nil {
-				captured.Committed = append(captured.Committed, operation)
-			}
+			committed(operation)
 			return nil
 		},
+	}
+}
+
+func membershipOperation(owner string) (func(context.Context, string) error, func(lifecycle.Operation)) {
+	var captured *Trace
+	before := func(ctx context.Context, name string) error {
+		captured = traceFrom(ctx)
+		if captured == nil {
+			return nil
+		}
+		phase := owner + "." + name
+		captured.Steps = append(captured.Steps, phase)
+		if phase == "local.deleting" {
+			captured.Deletions++
+			if captured.VetoDeletion == captured.Deletions {
+				return ErrVeto
+			}
+		}
+		if captured.VetoAt == phase {
+			return ErrVeto
+		}
+		if captured.CancelAt == phase && captured.Cancel != nil {
+			captured.Cancel()
+		}
+		if captured.OnPhase != nil {
+			return captured.OnPhase(ctx, phase)
+		}
+		return nil
+	}
+	return before, func(operation lifecycle.Operation) {
+		if captured != nil {
+			captured.Committed = append(captured.Committed, operation)
+		}
 	}
 }

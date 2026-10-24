@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -12,6 +13,7 @@ import (
 type State struct {
 	BeforeInput value.Optional[EmailInput]
 	Captured    []MemberChanges
+	ORMCaptured []orm.Changes[Member]
 	VetoAfter   bool
 }
 

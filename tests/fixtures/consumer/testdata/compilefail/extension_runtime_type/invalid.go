@@ -7,5 +7,5 @@ import (
 
 // Descriptors bind the complete runtime, never an individual manager.
 func invalid(manager *translations.Manager) {
-	_ = articles.ArticleExtensions().From(manager)
+	_ = articles.ArticleSlots.From(manager)
 }

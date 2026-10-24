@@ -7,5 +7,5 @@ import (
 )
 
 func invalid(manager *metadata.Manager, profile profiles.Profile) {
-	_ = profiles.PreferencesKey.Set(context.Background(), manager, profile.FoundryReference(), "raw JSON")
+	_ = profiles.PreferencesKey.Set(context.Background(), manager, profiles.ProfileIdentity.ReferenceOf(profile), "raw JSON")
 }

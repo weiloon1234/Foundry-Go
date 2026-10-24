@@ -81,3 +81,13 @@ func (p *packageInput) checkGeneratedNames(outputs map[string]*ast.File, origins
 	}
 	return nil
 }
+
+// jsonDescriptorNames is shared by codec emission and scaffold name allocation.
+func jsonDescriptorNames(name string) (public, cached string) {
+	return name + "JSON", "foundry" + name + "JSON"
+}
+
+// validationDescriptorNames covers the package symbols of transport validation.
+func validationDescriptorNames(name string) (fields, set, cached string) {
+	return name + "ValidationFields", name + "ValidationFieldSet", "foundry" + name + "ValidationFields"
+}

@@ -40,6 +40,26 @@ router and the same validation. `.SPA(id, assetsKey, config)` adds a browser
 portal's client-route fallback to that router; see
 [SPA fallbacks with application.New](http-assets.md#spa-fallbacks-with-applicationnew).
 
+## ORM table validation
+
+Register handwritten ORM declarations explicitly at application construction:
+
+```go
+app, err := application.New(settings, application.WithTables(models.Tables()...)).Build(ctx)
+```
+
+`WithTables` reuses `orm.Check` and reports the list's declaration errors through
+`Build` before provider or handler construction. It snapshots the list and keeps
+validation local to the application; no process-wide table registry is created.
+Convert the thin `.Table` handles to `orm.CheckedTable` inside the model declaration
+package and return a fresh slice from `models.Tables()`. This keeps concrete table
+namespaces out of bootstrap; see the [declaration helper](../../tests/fixtures/goway/models/tables.go).
+Table declarations are immutable after `orm.Define`. `orm.Check` contains failures
+for each declaration and deferred column check, preserving the remaining diagnostics in declaration order. Custom
+enum marshaler errors use safe messages while retaining their causes for
+`errors.Is`/`errors.As`. Tests can call `orm.Check` directly. `Builder.Models`
+continues to register extension-slot declarations.
+
 ## Configuration and dependencies
 
 `Settings.TimeZone` defaults to `temporal.UTC`. The [application timezone guide](application-timezone.md)

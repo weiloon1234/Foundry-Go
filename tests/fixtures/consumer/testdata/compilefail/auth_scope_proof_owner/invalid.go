@@ -1,11 +1,12 @@
 package invalid
 
 import (
-	"foundry.test/consumer/models"
+	"foundry.test/consumer/articles"
+	"foundry.test/consumer/profiles"
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-func bad(user models.User, scopes auth.AccessScopes[models.Group]) {
-	_, _ = auth.NewScopedProof[models.User, model.ID[models.User]](user.FoundryReference(), auth.Authenticated, scopes)
+func bad(user profiles.Profile, scopes auth.AccessScopes[articles.Author]) {
+	_, _ = auth.NewScopedProof[profiles.Profile, model.ID[profiles.Profile]](profiles.ProfileIdentity.ReferenceOf(user), auth.Authenticated, scopes)
 }

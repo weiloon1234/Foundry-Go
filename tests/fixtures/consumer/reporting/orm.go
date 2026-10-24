@@ -45,3 +45,25 @@ var OrderModels = orm.Define("report_orders", func(b orm.Builder[Order], o *Orde
 var OrderModelRelations = struct{ Member orm.BelongsTo[Order, Member] }{orm.BelongsToOf(OrderModels.Member, OrderModels.MemberID, MemberModels.ID)}
 
 var MemberModelRelations = struct{ Orders orm.HasMany[Member, Order] }{orm.HasManyOf(MemberModels.Orders, MemberModels.ID, OrderModels.MemberID)}
+
+// OperatorModels owns authentication lookups and current report permissions.
+var OperatorModels = orm.Define("report_operators", func(b orm.Builder[Operator], o *Operator) OperatorModelColumns {
+	return OperatorModelColumns{
+		Table:     orm.TableOf(b, &o.ID),
+		TenantID:  orm.NumberOf(b, &o.TenantID),
+		Active:    orm.ColumnOf(b, &o.Active),
+		CanView:   orm.ColumnOf(b, &o.CanView),
+		CanExport: orm.ColumnOf(b, &o.CanExport),
+	}
+})
+
+type OperatorModelColumns struct {
+	orm.Table[Operator, model.ID[Operator]]
+	TenantID  orm.Number[Operator, int64]
+	Active    orm.Column[Operator, bool]
+	CanView   orm.Column[Operator, bool]
+	CanExport orm.Column[Operator, bool]
+}
+
+// OperatorIdentity preserves the stored report_operators identity and key codec.
+var OperatorIdentity = orm.IdentityOf(OperatorModels.Table, OperatorModels.Key())

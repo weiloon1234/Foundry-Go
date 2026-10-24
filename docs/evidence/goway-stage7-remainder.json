@@ -1,0 +1,2976 @@
+{
+  "slice": "stage7-additive-remainder",
+  "base_commit": "f3cfffd7199988d51023dbe516e505bdb1538b50",
+  "status": "passed: review21 JSONMapKey return boundary fixed; H1 deferred",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off"
+  },
+  "api_additions": [
+    "application.WithTables"
+  ],
+  "query_table_methods_added": 0,
+  "surface_snapshot_additions": [],
+  "catalogue_rows_ported": 14,
+  "compiler_negatives_added": 15,
+  "new_probes": [
+    {
+      "name": "framework_registration",
+      "pkg": "./integrations/registration",
+      "functions": 6195,
+      "ceiling": 8693,
+      "budget_baseline": 7559
+    },
+    {
+      "name": "framework_pagination",
+      "pkg": "./integrations",
+      "functions": 5306,
+      "ceiling": 6079,
+      "budget_baseline": 5286
+    },
+    {
+      "name": "framework_seeder",
+      "pkg": "./integrations/seeding",
+      "functions": 867,
+      "ceiling": 998,
+      "budget_baseline": 867
+    },
+    {
+      "name": "framework_registration_option",
+      "pkg": "./integrations/registrationoption",
+      "functions": 1012,
+      "baseline": 1012,
+      "ceiling": 1164
+    },
+    {
+      "name": "framework_application_control",
+      "pkg": "./integrations/applicationcontrol",
+      "functions": 5524,
+      "baseline": 5524,
+      "ceiling": 6353
+    }
+  ],
+  "old_combined_probe": {
+    "name": "framework_pagination_seed",
+    "functions": 11483,
+    "ceiling": 13206,
+    "historical": true
+  },
+  "existing_ceilings_raised": false,
+  "generated": "Makefile generation: one Response DTO and its ownership manifest; existing generated outputs unchanged",
+  "source_sha256": {
+    "CHANGELOG.md": "c48f993cd0c34ba19021d50f2f76bc3b0d4552a9272081ae9b0dd9d67a7c29c2",
+    "Makefile": "d7ba763cf5d6e779cd77d104e740664f25cb8fdecce29be13ab7cf3ea4dd22b4",
+    "application/tables.go": "139996e63732f20365a06ed04e146831423f23a5bbaa98985869aecc0ee3b776",
+    "application/tables_binding_test.go": "0a945990d80c41dc08cb3a2e524725f8c38c254fad773f801590a05866404dc9",
+    "application/tables_enum_test.go": "4ffddff1e4529af11467f3ca4c75cd9ff596c14606a3c2887d6a29febabdf480",
+    "application/tables_test.go": "77c8fe06d5c2c5043321d1d4870a0dcd1b4ff0195c3e3a9ee7a493cf1177aa42",
+    "blueprint/00-master-architecture-and-parity.md": "3e61d3f7c052a186b183b24d267ca41eff9e913763bd4f1bccd2137f7591e8e0",
+    "blueprint/goway-data-layer/README.md": "4e39f9a878f4bbcd1fde44d1e7134537a0e37a77f9bdea17fd850ac8aa9b5ba3",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "30ea06528c9377086f7c905dd34aa215a0a306809061a6be863ca4aa328506ed",
+    "database/codec/binding_error_test.go": "263e725507202290b7242648d74f3e205da83324dc94549606532335c2162029",
+    "database/codec/codec.go": "60fb0acff4099a23d2ca318d2d60efec87f02b19334752188c464cbca7518280",
+    "database/codec/decoding_error_test.go": "327a9b2a38d012b0c5323738e0fb28cf086e748ea2600278ce4e2c58813a7af8",
+    "database/decoding_paths_test.go": "fb5bac58662013c4b32c96e9e821c9e91b3d2b83b1fc2021579482316257ab62",
+    "database/errors.go": "a04bd75511c301a160b2cf0323243add7341c034d7d0ebdb5ed71debb1cd6bb8",
+    "database/execution.go": "7482a58124ff09d8823554f291c998ee6db85234cb8a59d7bece6ddc6b84be22",
+    "database/orm/check_columns_test.go": "b64d506b86b663e587e35d3ab5018e8998da94b8f39054a340447fa500940d32",
+    "database/orm/check_test.go": "2397c02b5738f4cd851b2a3f1cfaea8e5c855360442fb4e69d94c2d0f778e8c5",
+    "database/orm/declaration.go": "741ef110cbdeff1910a3a2e9e2b2993d2fedec3523b807920598dbcafd8b7245",
+    "database/orm/method_surface_test.go": "d511843a67ff772ceb33785f25cf78fd04ac63b17992aa5e89e7776d985aa6b9",
+    "database/orm/testdata/public-methods.txt": "5db41adab0a905820577b56bd809336ca4b24324850fa265f39ff7080b11865d",
+    "database/orm/transaction_phase_test.go": "52dc79aba4c93dc129f04bcaa063b9e7db8bbea14c9ca1e2c63ec1c2c10b33b2",
+    "database/postgres/error_graph_classification_test.go": "8075e1e8c40149752d1553cb603e3b60c986892ef62f0ee7cbca123537410927",
+    "database/postgres/errors.go": "a61a618fd77c27a3606434cd56786463daa1fb52c8c133eb06284e76385d1402",
+    "database/query/binding_error_test.go": "1fcf5fc1e1d5e6de41a500938985091cac680f2ed684d2443d7a8f72b119ad6d",
+    "database/query/cursor_codec_redaction_test.go": "14d46c217736c13f1200938823b4785b94d640ef372a1661cbe0f003105264a3",
+    "database/sql_callbacks.go": "337258394fe3b4426dcccd460259725d7d2350c0877d798e1c87d1198f96c26c",
+    "database/sql_callbacks_test.go": "c1bf63498df401ebcdac503fc36562094d8e3d8a6cd65cf8dc3c7dd45d62f30c",
+    "docs/guides/application-bootstrap.md": "f390a09d3c6a0fb2f9b1999d17fa335aa4b4ad6b49565b91c5864f7cb72bd5d9",
+    "docs/guides/http-cursor-pagination.md": "58fa36ba167a6cd9fc186311668ae719c07dc1c8e99b7bcb2a6ce70c100e591c",
+    "docs/guides/http-pagination.md": "d4a96c79f309e21026d73018a920f4162cf0d3eaf1377fde60f9575a185ff1b0",
+    "docs/guides/migrations-and-seeding.md": "72a143309b65a879c871c803c5b0ec680ee0020b438025d966d21bc776d5ea2d",
+    "enum/descriptor.go": "2751cc80caec9dd4829c3d37f4c16e3e71443fea98654471d309ba55e5da140c",
+    "enum/descriptor_error_test.go": "14c383e87f77ce9c57db6947fc2afb94cdb647093d8d4bf4b8e50658c886c274",
+    "http/authentication.go": "1df524945e55692980cbd08bc2bb51e73e02c6dec2ec256721dc68e12478ffbb",
+    "http/error_classification.go": "1ac61d5e3ef81a8e5324388b7d5c8277f296f7add23a46d87a790b44166cfa86",
+    "http/errors.go": "259dd4d44212c8a5ed7deb406fe9c5761b712a73e7497283e05a5fbe97881569",
+    "http/json_error_classification_test.go": "94e3d7e118bc24d6f6e7d4c3e85b3499675e174ece92e3835b710cc4999c7fbf",
+    "http/pagination/cursor_codec_error_test.go": "ddaf77fd8202e6d3c95c081331455f0a0949529bcc6c1878c2a1a64e94c5d5d8",
+    "internal/agent/field_documentation_acceptance_test.go": "e908b17d52af9c34419984283a276b67d997f6b8aa47e8337df48f3f4f027b07",
+    "internal/agent/gopls_acceptance_test.go": "8a104ac3255c59923523240f041be31cfeec63bb71d157bc8328a2c11e065988",
+    "internal/errorgraph/walk.go": "f36d620d442af56fd4f5b29bfdb33533e268a1b62d230e02f13ba98e483282bb",
+    "internal/errorgraph/walk_test.go": "bcc4ebbc58bfaeec16760a8db89706ee4c6639b3b2a1d76808ff5ed95354a9e5",
+    "internal/ormcore/codec.go": "f93dc88403201fdc8c5f8b48c68a98e3ff2d37f0fb5c62a82ff4bae5d6b0cc44",
+    "internal/querycore/compiler.go": "e5bf37d4bddf8ad357dbf4a02cf7c96ffd60eaf7ba3cba2b611d6755c156f855",
+    "internal/querycore/compiler_binding_test.go": "babdf5a1e07d4628c4d74b35d1c27d2265647d71737bc4efdf3f0ebd1968a1de",
+    "internal/querycore/cursor_boundary.go": "7a5da9f7708f3573887ad9008189b7549feb64c1a3efeca0146bb7e95b414513",
+    "internal/querycore/json_key_error_test.go": "b933045461b39cb2aab8034419949efb254d8c55b24d1edc5ab502a8a054dc01",
+    "internal/querycore/json_path.go": "3bc84b843326b4b53f51b0e5542cb2021b4ebb6b14123406f26298c932799fc0",
+    "internal/safeerror/error.go": "ec60fea49efbd4434a80a3e6859b6d168e14a52493e0a6e0a7314b1feb0aa137",
+    "internal/safeerror/error_test.go": "8fa0a10b7b19e2ca01c4f2771a25035a4b6e8af7fdfde38d4b9da56e864d6330",
+    "tests/fixtures/consumer/mutatorqueries/orm.go": "6740c41b8aac4c954360afb13b3c40b056b165ce3f2a0197d2241d6924006d59",
+    "tests/fixtures/consumer/types_test.go": "c6400a84382588d397cfcd1e57c6572926cc2debe1051d2581ca9c726075addd",
+    "tests/fixtures/goway/compiler_cases_test.go": "93a12f0abecf551cfadf1ada5c5bef7d9893bc05cef837b2c2a9a5d84f17c416",
+    "tests/fixtures/goway/footprint_test.go": "0edfc2c1ef7ef9b3eaf76b859c4eb00470f1ee0c095b01ba38bfe3abedf6f043",
+    "tests/fixtures/goway/go.mod": "6a12c9874b82f07d6a26a7344d54725f8860a8bd1eec63ea6d57e6ba633ddc34",
+    "tests/fixtures/goway/integrations/.foundry-gen.json": "00e584cde7f55c0296ee741008d646ea961aa7d3b3be708992c245113fa48db2",
+    "tests/fixtures/goway/integrations/applicationcontrol/application.go": "5cc8246197908117ec64fdb6eaec7a092e973dea8b7b53188f91238c33767a12",
+    "tests/fixtures/goway/integrations/pagination.go": "7370d582b1cd5d8798aa71f6c423850fce4ad7981a073e05f1c5a096d6f37ca4",
+    "tests/fixtures/goway/integrations/pagination_test.go": "29ca860af8ad33d4057aaa5f8262ab0ace5590a4501e1c0d9b239a8752f7e709",
+    "tests/fixtures/goway/integrations/registration/application.go": "e577b3c90cff418120bb627e387983e20f94cf08ba1b2f41852dc995442e3514",
+    "tests/fixtures/goway/integrations/registrationoption/option.go": "acbc18240cdd4844ce1729b8f87bfae4ec7845910be8dd53a7ca726f7b460c3b",
+    "tests/fixtures/goway/integrations/response_foundry.gen.go": "bf517076f221c1daabc8e04dc83d77a2e085e71d8471bdc766dafaa5228a3c24",
+    "tests/fixtures/goway/integrations/seeding/seeder.go": "bc5add521fc5759a87f90f4465cdfea017765a3a7e1a9a15d0b3e9c3ef4dfcdb",
+    "tests/fixtures/goway/models/tables.go": "c9a3d73b792af302433222c824ed540f9201f3a9ea355a47444966ec30421014",
+    "tests/fixtures/goway/models/tables_test.go": "e18c4b42f0fd37f72d09ad2a5332cec2935290ce4e62e6a49327439548831a44",
+    "tests/fixtures/goway/pgsmoke/seeder_pagination_test.go": "48a7262ec3d8f1174bfee63c84a2f5dd3b2506f71aa2971831e925f9bfba83ee",
+    "tests/fixtures/goway/stage7_remainder_golden_test.go": "d150d590ae52946e831da7b415c758b69d4a843c93d77bc76cfd0ec05e938f92",
+    "tests/fixtures/goway/testdata/compilefail/application_table_declaration/invalid.go": "fdd113809626b61021d917558719347b5bf3ea432ddb867d4a17f670881a8c0a",
+    "tests/fixtures/goway/testdata/compilefail/http_cursor_mapping_owner/invalid.go": "497c34583fa9e26f446f4ce99c0dc2e6ab2336655c7d0aa71f24e430196c8f15",
+    "tests/fixtures/goway/testdata/compilefail/http_cursor_navigation_owner/invalid.go": "8811844b693fef681af7788cf3b35a19c3f5c8b137389e5e7044c5321eea04d9",
+    "tests/fixtures/goway/testdata/compilefail/http_cursor_request_owner/invalid.go": "f3fa4203b91946249c02593d5bf21a6a71323ef591f7714cced1992806880f7a",
+    "tests/fixtures/goway/testdata/compilefail/http_cursor_result_owner/invalid.go": "8d730cad9a9b93c5ee082247f1d55b7e8e1eb0bf1f14ef0f7ee32ae1c18ad4c4",
+    "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_authorization/invalid.go": "ae797d70ef8c65bacdfb4e9c996c31916334fcafcb7c4e776628e3dcf0c182cb",
+    "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_cursor/invalid.go": "6d15a107fdd27efddd2bac96e85855d891800c91716c4a14eaf4613e0490d681",
+    "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_numbered/invalid.go": "c53560b5188c79166196f341ed978ca5d59c8843f6ae382668887290638c2b69",
+    "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_permission/invalid.go": "c8379864a0a7522f663489b9b5a663ec1265cb2cc118c76efdf19df09873c41a",
+    "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_scopes/invalid.go": "07bea74ebe3869abb0d7210dae81efdde433d1700ce870547be033cbc6e31f8a",
+    "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_simple/invalid.go": "27e8ffe44b839a0522f7bfca62d84b8dbc7d1ec99c287dd255c891c88b08944f",
+    "tests/fixtures/goway/testdata/compilefail/http_pagination_handler/invalid.go": "1d1244b3a5f2057ed2d1547b9bc01f64dcb385cc8c25eaf98ee9c40dd255094e",
+    "tests/fixtures/goway/testdata/compilefail/http_pagination_map_owner/invalid.go": "9a62b19409cd1ee3ed4fe2bff9571fac5cef75d43a00999c15ebee0e10e1f603",
+    "tests/fixtures/goway/testdata/compilefail/http_pagination_simple_result/invalid.go": "186a40e9247b5d718251e961493db9d2b6e6be989225e2b31519016213509d4a",
+    "tests/fixtures/goway/testdata/compilefail/http_pagination_simple_total/invalid.go": "d5060dfa3485cfc275c1693c0d0bfaa526f7cb8839824fa070262af2ee7d8675",
+    "tools/goway_catalogue_test.py": "3c5ceb41aa9dc9a17d1c919ea511e084be9309923b874ff97bbc4e331afeddf0",
+    "tools/release/release_test.go": "5cd219933d54b70b9d3f5fa3d89319a0592e00c4870c46cc31d463dc7230f1a0",
+    "tools/release/source.go": "d84fc823ad60ac0c21ba25e32e29432a78099d6efc5a36294fc5151796dd2f3d",
+    "value/json.go": "752abc1fa6f3a202cc7cce7ec5d8023cb12f985dfd2b294f9ecfc010fbf13b39",
+    "value/json_encoding.go": "ef5d4d80a3c187531548acddbfeb5d43b5d74c75b111b849afe4d244a096acce",
+    "value/json_key_encoding.go": "60febb211c4691c4eaf31655382214222d903fccd80c2693e25eccb810d12f74",
+    "value/json_key_encoding_test.go": "f6c0d1f252bc2afaf85d1018703ccf383b01e0ba26f6bbd29db7c4ea19d7de02",
+    "value/json_map.go": "b034627067fdc7453a665f57c65640bcf7697c3bc7e6359034dc94480685f7fb"
+  },
+  "shared_files": [
+    "blueprint/goway-data-layer/compilefail-mapping.tsv",
+    "database/codec/codec.go",
+    "database/errors.go",
+    "database/execution.go",
+    "database/orm/declaration.go",
+    "database/postgres/errors.go",
+    "docs/guides/application-bootstrap.md",
+    "docs/guides/http-cursor-pagination.md",
+    "docs/guides/http-pagination.md",
+    "docs/guides/migrations-and-seeding.md",
+    "enum/descriptor.go",
+    "http/authentication.go",
+    "http/errors.go",
+    "internal/errorgraph/walk.go",
+    "internal/errorgraph/walk_test.go",
+    "internal/ormcore/codec.go",
+    "internal/querycore/compiler.go",
+    "internal/querycore/cursor_boundary.go",
+    "internal/querycore/json_path.go",
+    "tests/fixtures/goway/compiler_cases_test.go",
+    "tests/fixtures/goway/footprint_test.go",
+    "tests/fixtures/goway/go.mod",
+    "value/json.go",
+    "value/json_encoding.go",
+    "value/json_map.go"
+  ],
+  "lead_owned_docs_edited": false,
+  "committed": false,
+  "limitations": [
+    "PostgreSQL compile/vet only; no live PostgreSQL",
+    "Separate archives repeat generic instantiations; split sums are not an isolated comparison with the historical combined probe"
+  ],
+  "logs": "/private/tmp/goway-stage7-remainder-review21",
+  "cache_rotation": "All review21 commands used r6 with GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off. Prior review cache records are historical.",
+  "updated_at_utc": "2026-10-24T20:27:50.276642+00:00",
+  "contract_artifact_sha256": {
+    "manifest.json": "abd227d084a4fd4306c25e20bff00bcc81fdb67ef12a77f4efb3c7b6d4f0ffa3",
+    "openapi.json": "88b03c554a21065aa30d732dfdaf148a3d98a1919ce37a968da07572b92b30de",
+    "contracts.ts": "b978e9c86ca9a985b7a027916f8bd65dc8ad312a0d9a26b8736d45748b0e98c6"
+  },
+  "contract_comparison": "Review21 fresh HEAD-overlay/current exports on r6: manifest JSON, OpenAPI JSON and TypeScript byte-identical.",
+  "compiler_cases_total": 735,
+  "footprint_probes_total": 114,
+  "existing_footprint_entries_unchanged": 112,
+  "critical_footprints": {
+    "q_with": {
+      "baseline": 1053,
+      "ceiling": 1211,
+      "functions": 1211
+    },
+    "aggregate_families": {
+      "baseline": 3799,
+      "ceiling": 4369,
+      "functions": 4366
+    }
+  },
+  "new_files": [
+    "application/tables.go",
+    "application/tables_binding_test.go",
+    "application/tables_enum_test.go",
+    "application/tables_test.go",
+    "database/codec/binding_error_test.go",
+    "database/codec/decoding_error_test.go",
+    "database/decoding_paths_test.go",
+    "database/orm/check_columns_test.go",
+    "database/orm/check_test.go",
+    "database/postgres/error_graph_classification_test.go",
+    "database/query/binding_error_test.go",
+    "database/query/cursor_codec_redaction_test.go",
+    "database/sql_callbacks.go",
+    "database/sql_callbacks_test.go",
+    "docs/evidence/goway-stage7-remainder-plan.md",
+    "docs/evidence/goway-stage7-remainder-report.md",
+    "docs/evidence/goway-stage7-remainder.json",
+    "enum/descriptor_error_test.go",
+    "http/error_classification.go",
+    "http/json_error_classification_test.go",
+    "http/pagination/cursor_codec_error_test.go",
+    "internal/querycore/compiler_binding_test.go",
+    "internal/querycore/json_key_error_test.go",
+    "internal/safeerror/error.go",
+    "internal/safeerror/error_test.go",
+    "tests/fixtures/goway/integrations/.foundry-gen.json",
+    "tests/fixtures/goway/integrations/applicationcontrol/application.go",
+    "tests/fixtures/goway/integrations/pagination.go",
+    "tests/fixtures/goway/integrations/pagination_test.go",
+    "tests/fixtures/goway/integrations/registration/application.go",
+    "tests/fixtures/goway/integrations/registrationoption/option.go",
+    "tests/fixtures/goway/integrations/response_foundry.gen.go",
+    "tests/fixtures/goway/integrations/seeding/seeder.go",
+    "tests/fixtures/goway/models/tables.go",
+    "tests/fixtures/goway/models/tables_test.go",
+    "tests/fixtures/goway/pgsmoke/seeder_pagination_test.go",
+    "tests/fixtures/goway/stage7_remainder_golden_test.go",
+    "tests/fixtures/goway/testdata/compilefail/application_table_declaration/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/http_cursor_mapping_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/http_cursor_navigation_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/http_cursor_request_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/http_cursor_result_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_authorization/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_cursor/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_numbered/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_permission/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_scopes/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_simple/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/http_pagination_handler/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/http_pagination_map_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/http_pagination_simple_result/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/http_pagination_simple_total/invalid.go",
+    "value/json_key_encoding.go",
+    "value/json_key_encoding_test.go"
+  ],
+  "prior_checks": [
+    {
+      "name": "build",
+      "command": [
+        "go",
+        "build",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "exit_code": 0,
+      "seconds": 9.17,
+      "cache": "r3 (completed before rotation)"
+    },
+    {
+      "name": "vet",
+      "command": [
+        "go",
+        "vet",
+        "./database/...",
+        "./internal/...",
+        "./application/...",
+        "./http/pagination/..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "exit_code": 0,
+      "seconds": 40.76,
+      "cache": "r3 (completed before rotation)"
+    },
+    {
+      "name": "race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database/orm/...",
+        "./database/query/...",
+        "./internal/querycore/...",
+        "./internal/ormcore/...",
+        "./application/...",
+        "./http/pagination/...",
+        "./database/seed/..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "exit_code": 0,
+      "seconds": 115.77,
+      "cache": "r3 (completed before rotation)"
+    },
+    {
+      "name": "fixture-vet",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "exit_code": 0,
+      "seconds": 15.3,
+      "cache": "r3 (completed before rotation)"
+    },
+    {
+      "name": "fixture-test",
+      "command": [
+        "go",
+        "test",
+        "-v",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 188.9
+    },
+    {
+      "name": "fixture-race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./integrations/..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 51.81
+    },
+    {
+      "name": "seed-protocol",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database",
+        "-run",
+        "Seeder"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 11.46
+    },
+    {
+      "name": "generate-check",
+      "command": [
+        "make",
+        "generate-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 14.11
+    },
+    {
+      "name": "catalogue",
+      "command": [
+        "python3",
+        "tools/goway_catalogue.py"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 0.27
+    },
+    {
+      "name": "format",
+      "command": [
+        "sh",
+        "tools/format-go.sh",
+        "check",
+        "/usr/local/go/bin/gofmt"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 0.72
+    },
+    {
+      "name": "docs",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 2.38
+    },
+    {
+      "name": "diff",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 0.07
+    },
+    {
+      "name": "consumer-contracts",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./httppagination/...",
+        "./clientcontracts",
+        "-run",
+        "TestConsumerClientManifestKeepsRealFeatureBoundaries|Test.*Pagination|Test.*Cursor"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 40.84
+    },
+    {
+      "name": "contract-before",
+      "command": [
+        "go",
+        "test",
+        "-overlay=/private/tmp/goway-stage7-remainder-rebased/contract-before-overlay.json",
+        "./clientcontracts",
+        "-run",
+        "^TestStage7ContractEvidence$"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 29.35
+    },
+    {
+      "name": "contract-current",
+      "command": [
+        "go",
+        "test",
+        "-overlay=/private/tmp/goway-stage7-remainder-rebased/contract-current-overlay.json",
+        "./clientcontracts",
+        "-run",
+        "^TestStage7ContractEvidence$"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 2.67
+    }
+  ],
+  "checks": [
+    {
+      "name": "build",
+      "command": [
+        "go",
+        "build",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 15.73
+    },
+    {
+      "name": "vet",
+      "command": [
+        "go",
+        "vet",
+        "./database/...",
+        "./internal/...",
+        "./application/...",
+        "./http/pagination/...",
+        "./enum/...",
+        "./value/...",
+        "./http/..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 29.1
+    },
+    {
+      "name": "race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database/orm/...",
+        "./database/query/...",
+        "./internal/querycore/...",
+        "./internal/ormcore/...",
+        "./application/...",
+        "./http/pagination/...",
+        "./database/seed/...",
+        "./enum/...",
+        "./database/codec/...",
+        "./database",
+        "./value",
+        "./internal/safeerror",
+        "./database/postgres",
+        "./http",
+        "./internal/errorgraph"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 103.11
+    },
+    {
+      "name": "fixture-vet",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 14.73
+    },
+    {
+      "name": "fixture-test",
+      "command": [
+        "go",
+        "test",
+        "-v",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 79.52
+    },
+    {
+      "name": "fixture-race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./integrations/...",
+        "./models"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 6.09
+    },
+    {
+      "name": "seed-protocol",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database",
+        "-run",
+        "Seeder"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 2.02
+    },
+    {
+      "name": "generate-check",
+      "command": [
+        "make",
+        "generate-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 6.5
+    },
+    {
+      "name": "catalogue",
+      "command": [
+        "python3",
+        "tools/goway_catalogue.py"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.23
+    },
+    {
+      "name": "format",
+      "command": [
+        "sh",
+        "tools/format-go.sh",
+        "check",
+        "/usr/local/go/bin/gofmt"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.61
+    },
+    {
+      "name": "docs",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.21
+    },
+    {
+      "name": "diff",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.02
+    },
+    {
+      "name": "consumer-contracts",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./httppagination/...",
+        "./clientcontracts",
+        "-run",
+        "TestConsumerClientManifestKeepsRealFeatureBoundaries|Test.*Pagination|Test.*Cursor"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 30.69
+    },
+    {
+      "name": "contract-before",
+      "command": [
+        "go",
+        "test",
+        "-overlay=/private/tmp/goway-stage7-remainder-review21/contract-before-overlay.json",
+        "./clientcontracts",
+        "-run",
+        "^TestStage7ContractEvidence$"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 3.76
+    },
+    {
+      "name": "contract-current",
+      "command": [
+        "go",
+        "test",
+        "-overlay=/private/tmp/goway-stage7-remainder-review21/contract-current-overlay.json",
+        "./clientcontracts",
+        "-run",
+        "^TestStage7ContractEvidence$"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 15.16
+    }
+  ],
+  "review16": {
+    "finding": "Per-declaration containment in shared orm.Check; aggregate errors before and after promoted nil, panic and Goexit",
+    "measurement_runs": [
+      {
+        "repeat": 0,
+        "phase": "before",
+        "package": "foundry.test/goway/integrations/registration",
+        "functions": 7557,
+        "archive_bytes": 38483084
+      },
+      {
+        "repeat": 0,
+        "phase": "before",
+        "package": "foundry.test/goway/integrations/registrationoption",
+        "functions": 2442,
+        "archive_bytes": 12614890
+      },
+      {
+        "repeat": 0,
+        "phase": "before",
+        "package": "foundry.test/goway/integrations/applicationcontrol",
+        "functions": 5524,
+        "archive_bytes": 28672702
+      },
+      {
+        "repeat": 0,
+        "phase": "after",
+        "package": "foundry.test/goway/integrations/registration",
+        "functions": 6195,
+        "archive_bytes": 33646206
+      },
+      {
+        "repeat": 0,
+        "phase": "after",
+        "package": "foundry.test/goway/integrations/registrationoption",
+        "functions": 1012,
+        "archive_bytes": 7499510
+      },
+      {
+        "repeat": 0,
+        "phase": "after",
+        "package": "foundry.test/goway/integrations/applicationcontrol",
+        "functions": 5524,
+        "archive_bytes": 28672702
+      },
+      {
+        "repeat": 1,
+        "phase": "before",
+        "package": "foundry.test/goway/integrations/registration",
+        "functions": 7557,
+        "archive_bytes": 38483084
+      },
+      {
+        "repeat": 1,
+        "phase": "before",
+        "package": "foundry.test/goway/integrations/registrationoption",
+        "functions": 2442,
+        "archive_bytes": 12614890
+      },
+      {
+        "repeat": 1,
+        "phase": "before",
+        "package": "foundry.test/goway/integrations/applicationcontrol",
+        "functions": 5524,
+        "archive_bytes": 28672702
+      },
+      {
+        "repeat": 1,
+        "phase": "after",
+        "package": "foundry.test/goway/integrations/registration",
+        "functions": 6195,
+        "archive_bytes": 33646206
+      },
+      {
+        "repeat": 1,
+        "phase": "after",
+        "package": "foundry.test/goway/integrations/registrationoption",
+        "functions": 1012,
+        "archive_bytes": 7499510
+      },
+      {
+        "repeat": 1,
+        "phase": "after",
+        "package": "foundry.test/goway/integrations/applicationcontrol",
+        "functions": 5524,
+        "archive_bytes": 28672702
+      },
+      {
+        "repeat": 2,
+        "phase": "before",
+        "package": "foundry.test/goway/integrations/registration",
+        "functions": 7557,
+        "archive_bytes": 38483084
+      },
+      {
+        "repeat": 2,
+        "phase": "before",
+        "package": "foundry.test/goway/integrations/registrationoption",
+        "functions": 2442,
+        "archive_bytes": 12614890
+      },
+      {
+        "repeat": 2,
+        "phase": "before",
+        "package": "foundry.test/goway/integrations/applicationcontrol",
+        "functions": 5524,
+        "archive_bytes": 28672702
+      },
+      {
+        "repeat": 2,
+        "phase": "after",
+        "package": "foundry.test/goway/integrations/registration",
+        "functions": 6195,
+        "archive_bytes": 33646206
+      },
+      {
+        "repeat": 2,
+        "phase": "after",
+        "package": "foundry.test/goway/integrations/registrationoption",
+        "functions": 1012,
+        "archive_bytes": 7499510
+      },
+      {
+        "repeat": 2,
+        "phase": "after",
+        "package": "foundry.test/goway/integrations/applicationcontrol",
+        "functions": 5524,
+        "archive_bytes": 28672702
+      },
+      {
+        "repeat": 3,
+        "phase": "before",
+        "package": "foundry.test/goway/integrations/registration",
+        "functions": 7557,
+        "archive_bytes": 38483084
+      },
+      {
+        "repeat": 3,
+        "phase": "before",
+        "package": "foundry.test/goway/integrations/registrationoption",
+        "functions": 2442,
+        "archive_bytes": 12614890
+      },
+      {
+        "repeat": 3,
+        "phase": "before",
+        "package": "foundry.test/goway/integrations/applicationcontrol",
+        "functions": 5524,
+        "archive_bytes": 28672702
+      },
+      {
+        "repeat": 3,
+        "phase": "after",
+        "package": "foundry.test/goway/integrations/registration",
+        "functions": 6195,
+        "archive_bytes": 33646206
+      },
+      {
+        "repeat": 3,
+        "phase": "after",
+        "package": "foundry.test/goway/integrations/registrationoption",
+        "functions": 1012,
+        "archive_bytes": 7499510
+      },
+      {
+        "repeat": 3,
+        "phase": "after",
+        "package": "foundry.test/goway/integrations/applicationcontrol",
+        "functions": 5524,
+        "archive_bytes": 28672702
+      },
+      {
+        "repeat": 4,
+        "phase": "before",
+        "package": "foundry.test/goway/integrations/registration",
+        "functions": 7557,
+        "archive_bytes": 38483084
+      },
+      {
+        "repeat": 4,
+        "phase": "before",
+        "package": "foundry.test/goway/integrations/registrationoption",
+        "functions": 2442,
+        "archive_bytes": 12614890
+      },
+      {
+        "repeat": 4,
+        "phase": "before",
+        "package": "foundry.test/goway/integrations/applicationcontrol",
+        "functions": 5524,
+        "archive_bytes": 28672702
+      },
+      {
+        "repeat": 4,
+        "phase": "after",
+        "package": "foundry.test/goway/integrations/registration",
+        "functions": 6195,
+        "archive_bytes": 33646206
+      },
+      {
+        "repeat": 4,
+        "phase": "after",
+        "package": "foundry.test/goway/integrations/registrationoption",
+        "functions": 1012,
+        "archive_bytes": 7499510
+      },
+      {
+        "repeat": 4,
+        "phase": "after",
+        "package": "foundry.test/goway/integrations/applicationcontrol",
+        "functions": 5524,
+        "archive_bytes": 28672702
+      }
+    ],
+    "retained_interface_boundary": true,
+    "same_base_before": {
+      "registration": 7557,
+      "option": 2442,
+      "application_only": 5524
+    },
+    "same_base_after": {
+      "registration": 6195,
+      "option": 1012,
+      "application_only": 5524
+    },
+    "new_control_ceilings": {
+      "option": 1164,
+      "application_only": 6353
+    },
+    "end_to_end_ceiling_unchanged": 8693,
+    "measurement_source_sha256": {
+      "/private/tmp/goway-stage7-remainder-review16/registration-before.go": "5715e2654f3e12f750e37aa916aee7def565bca06763a5b9954db6b1055b6cf6",
+      "/private/tmp/goway-stage7-remainder-review16/registration-after.go": "e577b3c90cff418120bb627e387983e20f94cf08ba1b2f41852dc995442e3514",
+      "/private/tmp/goway-stage7-remainder-review16/option-before.go": "d508232823bcbbceb90d934f0dcd8acc7ccab6aadb7b7c5d3ad00d2d7ffed472",
+      "/private/tmp/goway-stage7-remainder-review16/option-after.go": "acbc18240cdd4844ce1729b8f87bfae4ec7845910be8dd53a7ca726f7b460c3b",
+      "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway/models/tables.go": "c9a3d73b792af302433222c824ed540f9201f3a9ea355a47444966ec30421014",
+      "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/database/orm/declaration.go": "bcfa6ec059b9c968efe044dfaf8f987cf699b4b5383a5a8b1c3151301045f15c",
+      "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/application/tables.go": "139996e63732f20365a06ed04e146831423f23a5bbaa98985869aecc0ee3b776"
+    },
+    "model_package_growth": {
+      "before": 6849,
+      "after": 6851,
+      "ceiling": 7070,
+      "reason": "The model declaration package now owns the interface-slice helper; bootstrap avoids concrete table namespace conversion."
+    },
+    "other_existing_probe_counts_unchanged": true,
+    "regressions": [
+      "TestCheckCollectsErrorsAroundPromotedNil",
+      "TestCheckContinuesAfterCallbackExit",
+      "TestApplicationTablesFailBeforeConstructors",
+      "TestTablesReturnsOwnedDeclarations"
+    ],
+    "existing_ceiling_changes": []
+  },
+  "prior_logs": "/private/tmp/goway-stage7-remainder-rebased",
+  "review16_checks": [
+    {
+      "name": "build",
+      "command": [
+        "go",
+        "build",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 7.82
+    },
+    {
+      "name": "vet",
+      "command": [
+        "go",
+        "vet",
+        "./database/...",
+        "./internal/...",
+        "./application/...",
+        "./http/pagination/..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 37.08
+    },
+    {
+      "name": "race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database/orm/...",
+        "./database/query/...",
+        "./internal/querycore/...",
+        "./internal/ormcore/...",
+        "./application/...",
+        "./http/pagination/...",
+        "./database/seed/..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 105.13
+    },
+    {
+      "name": "fixture-vet",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 10.15
+    },
+    {
+      "name": "fixture-test",
+      "command": [
+        "go",
+        "test",
+        "-v",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 96.21
+    },
+    {
+      "name": "fixture-race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./integrations/...",
+        "./models"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 8.53
+    },
+    {
+      "name": "seed-protocol",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database",
+        "-run",
+        "Seeder"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 0.15
+    },
+    {
+      "name": "generate-check",
+      "command": [
+        "make",
+        "generate-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 11.1
+    },
+    {
+      "name": "catalogue",
+      "command": [
+        "python3",
+        "tools/goway_catalogue.py"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 0.36
+    },
+    {
+      "name": "format",
+      "command": [
+        "sh",
+        "tools/format-go.sh",
+        "check",
+        "/usr/local/go/bin/gofmt"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 0.83
+    },
+    {
+      "name": "docs",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 0.24
+    },
+    {
+      "name": "diff",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 0.02
+    },
+    {
+      "name": "consumer-contracts",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./httppagination/...",
+        "./clientcontracts",
+        "-run",
+        "TestConsumerClientManifestKeepsRealFeatureBoundaries|Test.*Pagination|Test.*Cursor"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 34.16
+    },
+    {
+      "name": "contract-before",
+      "command": [
+        "go",
+        "test",
+        "-overlay=/private/tmp/goway-stage7-remainder-review16/contract-before-overlay.json",
+        "./clientcontracts",
+        "-run",
+        "^TestStage7ContractEvidence$"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 3.84
+    },
+    {
+      "name": "contract-current",
+      "command": [
+        "go",
+        "test",
+        "-overlay=/private/tmp/goway-stage7-remainder-review16/contract-current-overlay.json",
+        "./clientcontracts",
+        "-run",
+        "^TestStage7ContractEvidence$"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 16.61
+    }
+  ],
+  "review16_logs": "/private/tmp/goway-stage7-remainder-review16",
+  "review17": {
+    "findings_fixed": [
+      "Shared enum marshaling boundary redacts errors with fault.Wrap; EnumCodec preserves the cause without copying its message.",
+      "Each deferred column check is isolated; core errors and ordered subsequent diagnostics survive panic/Goexit and are cached together."
+    ],
+    "regressions": [
+      "TestDescriptorRedactsWireErrorsAndPreservesCauses",
+      "TestApplicationTablesRedactEnumMarshalerErrors",
+      "TestCheckRetainsMixedColumnFailuresInOrder"
+    ],
+    "footprint_counts_and_ceilings_unchanged": true,
+    "footprint_probes": 114,
+    "public_signature_additions": [],
+    "shared_owners": [
+      "enum/descriptor.go",
+      "internal/ormcore/codec.go",
+      "database/orm/declaration.go"
+    ],
+    "acceptance_log_directory": "/private/tmp/goway-stage7-remainder-review17"
+  },
+  "review17_checks": [
+    {
+      "name": "build",
+      "command": [
+        "go",
+        "build",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 45.24
+    },
+    {
+      "name": "vet",
+      "command": [
+        "go",
+        "vet",
+        "./database/...",
+        "./internal/...",
+        "./application/...",
+        "./http/pagination/...",
+        "./enum/..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 57.0
+    },
+    {
+      "name": "race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database/orm/...",
+        "./database/query/...",
+        "./internal/querycore/...",
+        "./internal/ormcore/...",
+        "./application/...",
+        "./http/pagination/...",
+        "./database/seed/...",
+        "./enum/..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 132.27
+    },
+    {
+      "name": "fixture-vet",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 17.43
+    },
+    {
+      "name": "fixture-test",
+      "command": [
+        "go",
+        "test",
+        "-v",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 151.66
+    },
+    {
+      "name": "fixture-race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./integrations/...",
+        "./models"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 11.31
+    },
+    {
+      "name": "seed-protocol",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database",
+        "-run",
+        "Seeder"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 10.04
+    },
+    {
+      "name": "generate-check",
+      "command": [
+        "make",
+        "generate-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 16.99
+    },
+    {
+      "name": "catalogue",
+      "command": [
+        "python3",
+        "tools/goway_catalogue.py"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 0.51
+    },
+    {
+      "name": "format",
+      "command": [
+        "sh",
+        "tools/format-go.sh",
+        "check",
+        "/usr/local/go/bin/gofmt"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 0.67
+    },
+    {
+      "name": "docs",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 0.38
+    },
+    {
+      "name": "diff",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 0.03
+    },
+    {
+      "name": "consumer-contracts",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./httppagination/...",
+        "./clientcontracts",
+        "-run",
+        "TestConsumerClientManifestKeepsRealFeatureBoundaries|Test.*Pagination|Test.*Cursor"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 50.08
+    },
+    {
+      "name": "contract-before",
+      "command": [
+        "go",
+        "test",
+        "-overlay=/private/tmp/goway-stage7-remainder-review17/contract-before-overlay.json",
+        "./clientcontracts",
+        "-run",
+        "^TestStage7ContractEvidence$"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 3.94
+    },
+    {
+      "name": "contract-current",
+      "command": [
+        "go",
+        "test",
+        "-overlay=/private/tmp/goway-stage7-remainder-review17/contract-current-overlay.json",
+        "./clientcontracts",
+        "-run",
+        "^TestStage7ContractEvidence$"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r4",
+      "exit_code": 0,
+      "seconds": 24.67
+    }
+  ],
+  "review17_logs": "/private/tmp/goway-stage7-remainder-review17",
+  "review18": {
+    "shared_owners": [
+      "database/codec/codec.go",
+      "internal/querycore/compiler.go"
+    ],
+    "fix": "Wrap encoder/validator and comparison-binding failures in safe faults, without formatting causes. Both expression APIs inherit safe captured parameter errors from Codec.Bind.",
+    "regressions": [
+      "TestTablesRedactCompiledAndCapturedBindingErrors",
+      "TestBindRedactsEncoderAndValidatorFailures",
+      "TestComparisonRedactsBindingCallbackFailure",
+      "TestQueryRedactsCompiledAndCapturedBindingErrors"
+    ],
+    "main_audit": {
+      "commit": "10030ad4eaf6ecf6caf269dfb5e970b0816f366e",
+      "same_leak": true,
+      "locations": [
+        "database/codec/codec.go:54-56",
+        "internal/querycore/compiler.go:212-214",
+        "database/query/row_expression.go:66-68",
+        "database/query/compiler.go:25",
+        "database/codec/codec.go:111-119",
+        "internal/querycore/parameter_expression.go:56-58"
+      ],
+      "port": "Port Codec.Bind and Compiler.Comparison safe fault wrapping; legacy parameter capture inherits the shared binding fix."
+    },
+    "verification_cache": "r5",
+    "footprints_unchanged_from_review17": true,
+    "source_hash_count": 50
+  },
+  "review18_checks": [
+    {
+      "name": "build",
+      "command": [
+        "go",
+        "build",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r5",
+      "exit_code": 0,
+      "seconds": 56.11
+    },
+    {
+      "name": "vet",
+      "command": [
+        "go",
+        "vet",
+        "./database/...",
+        "./internal/...",
+        "./application/...",
+        "./http/pagination/...",
+        "./enum/..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r5",
+      "exit_code": 0,
+      "seconds": 243.55
+    },
+    {
+      "name": "race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database/orm/...",
+        "./database/query/...",
+        "./internal/querycore/...",
+        "./internal/ormcore/...",
+        "./application/...",
+        "./http/pagination/...",
+        "./database/seed/...",
+        "./enum/...",
+        "./database/codec/..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r5",
+      "exit_code": 0,
+      "seconds": 247.06
+    },
+    {
+      "name": "fixture-vet",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r5",
+      "exit_code": 0,
+      "seconds": 17.44
+    },
+    {
+      "name": "fixture-test",
+      "command": [
+        "go",
+        "test",
+        "-v",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r5",
+      "exit_code": 0,
+      "seconds": 89.15
+    },
+    {
+      "name": "fixture-race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./integrations/...",
+        "./models"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r5",
+      "exit_code": 0,
+      "seconds": 9.88
+    },
+    {
+      "name": "seed-protocol",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database",
+        "-run",
+        "Seeder"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r5",
+      "exit_code": 0,
+      "seconds": 9.3
+    },
+    {
+      "name": "generate-check",
+      "command": [
+        "make",
+        "generate-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r5",
+      "exit_code": 0,
+      "seconds": 10.84
+    },
+    {
+      "name": "catalogue",
+      "command": [
+        "python3",
+        "tools/goway_catalogue.py"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r5",
+      "exit_code": 0,
+      "seconds": 0.42
+    },
+    {
+      "name": "format",
+      "command": [
+        "sh",
+        "tools/format-go.sh",
+        "check",
+        "/usr/local/go/bin/gofmt"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r5",
+      "exit_code": 0,
+      "seconds": 1.09
+    },
+    {
+      "name": "docs",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r5",
+      "exit_code": 0,
+      "seconds": 0.8
+    },
+    {
+      "name": "diff",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r5",
+      "exit_code": 0,
+      "seconds": 0.03
+    },
+    {
+      "name": "consumer-contracts",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./httppagination/...",
+        "./clientcontracts",
+        "-run",
+        "TestConsumerClientManifestKeepsRealFeatureBoundaries|Test.*Pagination|Test.*Cursor"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r5",
+      "exit_code": 0,
+      "seconds": 45.87
+    },
+    {
+      "name": "contract-before",
+      "command": [
+        "go",
+        "test",
+        "-overlay=/private/tmp/goway-stage7-remainder-review18/contract-before-overlay.json",
+        "./clientcontracts",
+        "-run",
+        "^TestStage7ContractEvidence$"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r5",
+      "exit_code": 0,
+      "seconds": 21.21
+    },
+    {
+      "name": "contract-current",
+      "command": [
+        "go",
+        "test",
+        "-overlay=/private/tmp/goway-stage7-remainder-review18/contract-current-overlay.json",
+        "./clientcontracts",
+        "-run",
+        "^TestStage7ContractEvidence$"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r5",
+      "exit_code": 0,
+      "seconds": 24.91
+    }
+  ],
+  "review18_logs": "/private/tmp/goway-stage7-remainder-review18",
+  "review19": {
+    "finding4_first": true,
+    "neutral_redaction": "internal/safeerror/error.go",
+    "classification": "Original Invalid and infrastructure causes retained; bounded database and PostgreSQL inspection preserves precedence.",
+    "main_commit": "10030ad4eaf6ecf6caf269dfb5e970b0816f366e",
+    "main_port_files": {
+      "4": [
+        "database/codec/codec.go",
+        "internal/querycore/compiler.go",
+        "internal/safeerror/error.go (new)"
+      ],
+      "1": [
+        "database/codec/codec.go",
+        "database/query/cursor_boundary.go",
+        "value/json.go"
+      ],
+      "2": [
+        "database/execution.go",
+        "database/sql_callbacks.go (new)",
+        "database/errors.go",
+        "database/postgres/errors.go"
+      ],
+      "3": [
+        "value/json.go",
+        "value/json_encoding.go",
+        "value/json_map.go",
+        "value/json_key_encoding.go (new)",
+        "database/query/json_path.go"
+      ]
+    },
+    "prior_main_port": [
+      "enum/descriptor.go"
+    ],
+    "go_way_only_prior": [
+      "internal/ormcore/codec.go",
+      "database/orm/declaration.go"
+    ],
+    "initial_failures": [
+      "JSON key adapter must inspect original value type to preserve v1 string-key precedence",
+      "Legacy relation regression needed model-field key metadata"
+    ],
+    "initial_acceptance": [
+      {
+        "name": "build",
+        "command": [
+          "go",
+          "build",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 31.62
+      },
+      {
+        "name": "vet",
+        "command": [
+          "go",
+          "vet",
+          "./database/...",
+          "./internal/...",
+          "./application/...",
+          "./http/pagination/...",
+          "./enum/...",
+          "./value/..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 33.78
+      },
+      {
+        "name": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "./database/orm/...",
+          "./database/query/...",
+          "./internal/querycore/...",
+          "./internal/ormcore/...",
+          "./application/...",
+          "./http/pagination/...",
+          "./database/seed/...",
+          "./enum/...",
+          "./database/codec/...",
+          "./database",
+          "./value",
+          "./internal/safeerror"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r5",
+        "exit_code": 1,
+        "seconds": 112.61
+      },
+      {
+        "name": "fixture-vet",
+        "command": [
+          "go",
+          "vet",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 15.7
+      },
+      {
+        "name": "fixture-test",
+        "command": [
+          "go",
+          "test",
+          "-v",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 91.29
+      },
+      {
+        "name": "fixture-race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "./integrations/...",
+          "./models"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 8.39
+      },
+      {
+        "name": "seed-protocol",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "./database",
+          "-run",
+          "Seeder"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 2.58
+      },
+      {
+        "name": "generate-check",
+        "command": [
+          "make",
+          "generate-check"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 20.13
+      },
+      {
+        "name": "catalogue",
+        "command": [
+          "python3",
+          "tools/goway_catalogue.py"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 0.43
+      },
+      {
+        "name": "format",
+        "command": [
+          "sh",
+          "tools/format-go.sh",
+          "check",
+          "/usr/local/go/bin/gofmt"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 0.95
+      },
+      {
+        "name": "docs",
+        "command": [
+          "make",
+          "docs-check"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 0.5
+      },
+      {
+        "name": "diff",
+        "command": [
+          "git",
+          "diff",
+          "--check"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 0.03
+      },
+      {
+        "name": "consumer-contracts",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "./httppagination/...",
+          "./clientcontracts",
+          "-run",
+          "TestConsumerClientManifestKeepsRealFeatureBoundaries|Test.*Pagination|Test.*Cursor"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 43.07
+      },
+      {
+        "name": "contract-before",
+        "command": [
+          "go",
+          "test",
+          "-overlay=/private/tmp/goway-stage7-remainder-review19/contract-before-overlay.json",
+          "./clientcontracts",
+          "-run",
+          "^TestStage7ContractEvidence$"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 21.05
+      },
+      {
+        "name": "contract-current",
+        "command": [
+          "go",
+          "test",
+          "-overlay=/private/tmp/goway-stage7-remainder-review19/contract-current-overlay.json",
+          "./clientcontracts",
+          "-run",
+          "^TestStage7ContractEvidence$"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 24.89
+      }
+    ],
+    "correction_acceptance": [
+      {
+        "name": "build",
+        "command": [
+          "go",
+          "build",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 39.95
+      },
+      {
+        "name": "vet",
+        "command": [
+          "go",
+          "vet",
+          "./database/...",
+          "./internal/...",
+          "./application/...",
+          "./http/pagination/...",
+          "./enum/...",
+          "./value/..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 51.72
+      },
+      {
+        "name": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "./database/orm/...",
+          "./database/query/...",
+          "./internal/querycore/...",
+          "./internal/ormcore/...",
+          "./application/...",
+          "./http/pagination/...",
+          "./database/seed/...",
+          "./enum/...",
+          "./database/codec/...",
+          "./database",
+          "./value",
+          "./internal/safeerror",
+          "./database/postgres"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r5",
+        "exit_code": 1,
+        "seconds": 145.85
+      },
+      {
+        "name": "fixture-vet",
+        "command": [
+          "go",
+          "vet",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 27.35
+      },
+      {
+        "name": "fixture-test",
+        "command": [
+          "go",
+          "test",
+          "-v",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 157.97
+      },
+      {
+        "name": "fixture-race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "./integrations/...",
+          "./models"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 16.03
+      },
+      {
+        "name": "seed-protocol",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "./database",
+          "-run",
+          "Seeder"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 3.17
+      },
+      {
+        "name": "generate-check",
+        "command": [
+          "make",
+          "generate-check"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 26.28
+      },
+      {
+        "name": "catalogue",
+        "command": [
+          "python3",
+          "tools/goway_catalogue.py"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 0.91
+      },
+      {
+        "name": "format",
+        "command": [
+          "sh",
+          "tools/format-go.sh",
+          "check",
+          "/usr/local/go/bin/gofmt"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 2.19
+      },
+      {
+        "name": "docs",
+        "command": [
+          "make",
+          "docs-check"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 0.52
+      },
+      {
+        "name": "diff",
+        "command": [
+          "git",
+          "diff",
+          "--check"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 0.05
+      },
+      {
+        "name": "consumer-contracts",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "./httppagination/...",
+          "./clientcontracts",
+          "-run",
+          "TestConsumerClientManifestKeepsRealFeatureBoundaries|Test.*Pagination|Test.*Cursor"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 69.08
+      },
+      {
+        "name": "contract-before",
+        "command": [
+          "go",
+          "test",
+          "-overlay=/private/tmp/goway-stage7-remainder-review19/final/contract-before-overlay.json",
+          "./clientcontracts",
+          "-run",
+          "^TestStage7ContractEvidence$"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 48.71
+      },
+      {
+        "name": "contract-current",
+        "command": [
+          "go",
+          "test",
+          "-overlay=/private/tmp/goway-stage7-remainder-review19/final/contract-current-overlay.json",
+          "./clientcontracts",
+          "-run",
+          "^TestStage7ContractEvidence$"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+        "cache": "r5",
+        "exit_code": 0,
+        "seconds": 34.55
+      }
+    ],
+    "correction_failures": [
+      "Existing TestJSONKeyNativeTextAppenderAndOneWayEncoder exposed missing TextAppender support; preserve AppendText precedence over MarshalText."
+    ],
+    "targeted_correction": {
+      "command": "go test -race ./value ./database/postgres ./internal/querycore ./database/codec",
+      "cache": "r5 (before rotation)",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage7-remainder-review19/boundary-correction-tests.log"
+    },
+    "resume": {
+      "interrupted_step": "race",
+      "interrupted_cache": "r5",
+      "resumed_cache": "r6",
+      "completed_steps_preserved": [
+        "build",
+        "vet"
+      ]
+    },
+    "footprint_changes": {
+      "extension_declaration": {
+        "before": 30781,
+        "after": 30801,
+        "ceiling": 35000
+      },
+      "extension_handles": {
+        "before": 1481,
+        "after": 1501,
+        "ceiling": 1704
+      },
+      "extension_slots": {
+        "before": 2154,
+        "after": 2174,
+        "ceiling": 2478
+      },
+      "extension_slots_old": {
+        "before": 30487,
+        "after": 30507,
+        "ceiling": 35067
+      },
+      "framework_countries": {
+        "before": 4157,
+        "after": 4177,
+        "ceiling": 4741
+      },
+      "framework_outbox": {
+        "before": 2896,
+        "after": 2916,
+        "ceiling": 3331
+      },
+      "framework_pagination": {
+        "before": 5286,
+        "after": 5306,
+        "ceiling": 6079
+      },
+      "json_paths": {
+        "before": 6148,
+        "after": 6168,
+        "ceiling": 7068
+      }
+    },
+    "footprint_symbol_audit": {
+      "probe": "extension_handles",
+      "before": 1481,
+      "after": 1501,
+      "added": [
+        "go.shape.(*struct { internal/sync.node = internal/sync.node[go.shape.interface {},go.shape.interface {}]; internal/sync.dead sync/atomic.Bool; internal/sync.mu internal/sync.Mutex; internal/sync.parent *internal/sync.indirect[go.shape.interface {},go.shape.interface {}]; internal/sync.children [16]sync/atomic.Pointer[go.shape.struct { internal/sync.isEntry bool }] }).internal/sync.entry",
+        "go.shape.(*struct { internal/sync.node = internal/sync.node[go.shape.interface {},go.shape.interface {}]; internal/sync.dead sync/atomic.Bool; internal/sync.mu internal/sync.Mutex; internal/sync.parent *internal/sync.indirect[go.shape.interface {},go.shape.interface {}]; internal/sync.children [16]sync/atomic.Pointer[go.shape.struct { internal/sync.isEntry bool }] }).internal/sync.indirect",
+        "go.shape.(*struct { internal/sync.node = internal/sync.node[go.shape.interface {},go.shape.interface {}]; internal/sync.overflow sync/atomic.Pointer[internal/sync.entry[go.shape.interface {},go.shape.interface {}]]; internal/sync.key go.shape.interface {}; internal/sync.value go.shape.interface {} }).internal/sync.entry",
+        "go.shape.(*struct { internal/sync.node = internal/sync.node[go.shape.interface {},go.shape.interface {}]; internal/sync.overflow sync/atomic.Pointer[internal/sync.entry[go.shape.interface {},go.shape.interface {}]]; internal/sync.key go.shape.interface {}; internal/sync.value go.shape.interface {} }).internal/sync.indirect",
+        "go.shape.(*struct { internal/sync.node = internal/sync.node[interface {},interface {}]; internal/sync.dead sync/atomic.Bool; internal/sync.mu internal/sync.Mutex; internal/sync.parent *internal/sync.indirect[interface {},interface {}]; internal/sync.children [16]sync/atomic.Pointer[internal/sync.node[interface {},interface {}]] }).internal/sync.entry",
+        "go.shape.(*struct { internal/sync.node = internal/sync.node[interface {},interface {}]; internal/sync.dead sync/atomic.Bool; internal/sync.mu internal/sync.Mutex; internal/sync.parent *internal/sync.indirect[interface {},interface {}]; internal/sync.children [16]sync/atomic.Pointer[internal/sync.node[interface {},interface {}]] }).internal/sync.indirect",
+        "go.shape.(*struct { internal/sync.node = internal/sync.node[interface {},interface {}]; internal/sync.overflow sync/atomic.Pointer[internal/sync.entry[interface {},interface {}]]; internal/sync.key interface {}; internal/sync.value interface {} }).internal/sync.entry",
+        "go.shape.(*struct { internal/sync.node = internal/sync.node[interface {},interface {}]; internal/sync.overflow sync/atomic.Pointer[internal/sync.entry[interface {},interface {}]]; internal/sync.key interface {}; internal/sync.value interface {} }).internal/sync.indirect",
+        "internal/sync.(*entry[go.shape.interface {},go.shape.interface {}]).entry",
+        "internal/sync.(*entry[go.shape.interface {},go.shape.interface {}]).indirect",
+        "internal/sync.(*entry[interface {},interface {}]).entry",
+        "internal/sync.(*entry[interface {},interface {}]).indirect",
+        "internal/sync.(*indirect[go.shape.interface {},go.shape.interface {}]).entry",
+        "internal/sync.(*indirect[go.shape.interface {},go.shape.interface {}]).indirect",
+        "internal/sync.(*indirect[interface {},interface {}]).entry",
+        "internal/sync.(*indirect[interface {},interface {}]).indirect",
+        "type:.eq.M1K3M20[4M32]",
+        "type:.eq.M1K7M8EE",
+        "type:.eq.M32",
+        "type:.eq.[4M32]"
+      ],
+      "removed": [],
+      "scope": "HEAD runtime overlay from contract comparison; final current source; archive T/t counts.",
+      "encoding_only_overlay_count": 1481
+    },
+    "footprint_explanation": "The safe JSON transport key adapter in value/json_encoding.go exposes 16 compiler-generated internal/sync entry/indirect wrappers and 4 equality functions in eight consuming archives. Reverting only that file with an overlay restores extension_handles from 1501 to 1481. Existing ceilings unchanged; no runtime-performance claim.",
+    "acceptance_log_directory": "/private/tmp/goway-stage7-remainder-review19/accepted",
+    "all_findings_fixed": true,
+    "public_signature_additions": [],
+    "final_reporting_checks": [
+      {
+        "command": "make docs-check",
+        "cache": "r6",
+        "exit_code": 0
+      },
+      {
+        "command": "git diff --check",
+        "exit_code": 0
+      },
+      {
+        "command": "verify recorded source SHA-256",
+        "files": 70,
+        "mismatches": 0
+      }
+    ]
+  },
+  "review19_checks": [
+    {
+      "name": "build",
+      "command": [
+        "go",
+        "build",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r5",
+      "exit_code": 0,
+      "seconds": 36.01
+    },
+    {
+      "name": "vet",
+      "command": [
+        "go",
+        "vet",
+        "./database/...",
+        "./internal/...",
+        "./application/...",
+        "./http/pagination/...",
+        "./enum/...",
+        "./value/..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r5",
+      "exit_code": 0,
+      "seconds": 50.18
+    },
+    {
+      "name": "race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database/orm/...",
+        "./database/query/...",
+        "./internal/querycore/...",
+        "./internal/ormcore/...",
+        "./application/...",
+        "./http/pagination/...",
+        "./database/seed/...",
+        "./enum/...",
+        "./database/codec/...",
+        "./database",
+        "./value",
+        "./internal/safeerror",
+        "./database/postgres"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 203.87
+    },
+    {
+      "name": "fixture-vet",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 34.07
+    },
+    {
+      "name": "fixture-test",
+      "command": [
+        "go",
+        "test",
+        "-v",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 87.1
+    },
+    {
+      "name": "fixture-race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./integrations/...",
+        "./models"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 7.78
+    },
+    {
+      "name": "seed-protocol",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database",
+        "-run",
+        "Seeder"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 3.69
+    },
+    {
+      "name": "generate-check",
+      "command": [
+        "make",
+        "generate-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 8.05
+    },
+    {
+      "name": "catalogue",
+      "command": [
+        "python3",
+        "tools/goway_catalogue.py"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.24
+    },
+    {
+      "name": "format",
+      "command": [
+        "sh",
+        "tools/format-go.sh",
+        "check",
+        "/usr/local/go/bin/gofmt"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.61
+    },
+    {
+      "name": "docs",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.65
+    },
+    {
+      "name": "diff",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.02
+    },
+    {
+      "name": "consumer-contracts",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./httppagination/...",
+        "./clientcontracts",
+        "-run",
+        "TestConsumerClientManifestKeepsRealFeatureBoundaries|Test.*Pagination|Test.*Cursor"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 32.65
+    },
+    {
+      "name": "contract-before",
+      "command": [
+        "go",
+        "test",
+        "-overlay=/private/tmp/goway-stage7-remainder-review19/accepted/contract-before-overlay.json",
+        "./clientcontracts",
+        "-run",
+        "^TestStage7ContractEvidence$"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 19.04
+    },
+    {
+      "name": "contract-current",
+      "command": [
+        "go",
+        "test",
+        "-overlay=/private/tmp/goway-stage7-remainder-review19/accepted/contract-current-overlay.json",
+        "./clientcontracts",
+        "-run",
+        "^TestStage7ContractEvidence$"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 15.14
+    }
+  ],
+  "review19_logs": "/private/tmp/goway-stage7-remainder-review19/accepted",
+  "review20": {
+    "fixed_findings": [
+      6
+    ],
+    "deferred_to_H1": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "remaining_path_inventory": "deferred to separately scheduled H1; not implemented",
+    "before_regression": {
+      "command": "go test -overlay=/private/tmp/goway-stage7-remainder-review20/before-overlay.json ./http -run ^TestJSONDiagnosticCausesKeepHTTP500$",
+      "exit_code": 1,
+      "observation": "Without diagnostic boundary, direct/wrapped JSON failures classify BadRequest as HTTP 400; joined sibling precedence and deadline classification also regress."
+    },
+    "main_port_files": [
+      "value/json.go",
+      "internal/safeerror/error.go",
+      "internal/errorgraph/walk.go",
+      "http/errors.go",
+      "http/authentication.go",
+      "http/error_classification.go (new)"
+    ],
+    "public_signature_additions": [],
+    "footprint_counts_and_ceilings_unchanged": true,
+    "footprint_probes": 114,
+    "compiler_cases": 735,
+    "acceptance_log_directory": "/private/tmp/goway-stage7-remainder-review20",
+    "source_files_changed": [
+      "http/authentication.go",
+      "http/error_classification.go",
+      "http/errors.go",
+      "http/json_error_classification_test.go",
+      "internal/errorgraph/walk.go",
+      "internal/errorgraph/walk_test.go",
+      "internal/safeerror/error.go",
+      "internal/safeerror/error_test.go",
+      "value/json.go"
+    ],
+    "passing_regression": "TestJSONDiagnosticCausesKeepHTTP500; included in full HTTP race suite",
+    "final_reporting_checks": [
+      {
+        "command": "make docs-check",
+        "cache": "r6",
+        "exit_code": 0
+      },
+      {
+        "command": "git diff --check",
+        "exit_code": 0
+      }
+    ]
+  },
+  "review20_checks": [
+    {
+      "name": "build",
+      "command": [
+        "go",
+        "build",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 16.97
+    },
+    {
+      "name": "vet",
+      "command": [
+        "go",
+        "vet",
+        "./database/...",
+        "./internal/...",
+        "./application/...",
+        "./http/pagination/...",
+        "./enum/...",
+        "./value/...",
+        "./http/..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 33.16
+    },
+    {
+      "name": "race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database/orm/...",
+        "./database/query/...",
+        "./internal/querycore/...",
+        "./internal/ormcore/...",
+        "./application/...",
+        "./http/pagination/...",
+        "./database/seed/...",
+        "./enum/...",
+        "./database/codec/...",
+        "./database",
+        "./value",
+        "./internal/safeerror",
+        "./database/postgres",
+        "./http",
+        "./internal/errorgraph"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 124.03
+    },
+    {
+      "name": "fixture-vet",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 18.71
+    },
+    {
+      "name": "fixture-test",
+      "command": [
+        "go",
+        "test",
+        "-v",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 89.94
+    },
+    {
+      "name": "fixture-race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./integrations/...",
+        "./models"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 8.36
+    },
+    {
+      "name": "seed-protocol",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database",
+        "-run",
+        "Seeder"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 2.43
+    },
+    {
+      "name": "generate-check",
+      "command": [
+        "make",
+        "generate-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 9.46
+    },
+    {
+      "name": "catalogue",
+      "command": [
+        "python3",
+        "tools/goway_catalogue.py"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.65
+    },
+    {
+      "name": "format",
+      "command": [
+        "sh",
+        "tools/format-go.sh",
+        "check",
+        "/usr/local/go/bin/gofmt"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.66
+    },
+    {
+      "name": "docs",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.21
+    },
+    {
+      "name": "diff",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.02
+    },
+    {
+      "name": "consumer-contracts",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./httppagination/...",
+        "./clientcontracts",
+        "-run",
+        "TestConsumerClientManifestKeepsRealFeatureBoundaries|Test.*Pagination|Test.*Cursor"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 31.0
+    },
+    {
+      "name": "contract-before",
+      "command": [
+        "go",
+        "test",
+        "-overlay=/private/tmp/goway-stage7-remainder-review20/contract-before-overlay.json",
+        "./clientcontracts",
+        "-run",
+        "^TestStage7ContractEvidence$"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 49.75
+    },
+    {
+      "name": "contract-current",
+      "command": [
+        "go",
+        "test",
+        "-overlay=/private/tmp/goway-stage7-remainder-review20/contract-current-overlay.json",
+        "./clientcontracts",
+        "-run",
+        "^TestStage7ContractEvidence$"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 16.48
+    }
+  ],
+  "review20_logs": "/private/tmp/goway-stage7-remainder-review20",
+  "review21": {
+    "finding": "Only JSONMapKey formerly cause-discarding return; preserve direct ParseJSON validation classification",
+    "main_port_files": [
+      "database/query/json_path.go (worktree owner: internal/querycore/json_path.go)"
+    ],
+    "source_files_changed": [
+      "internal/querycore/json_path.go",
+      "http/json_error_classification_test.go"
+    ],
+    "before_regression": {
+      "command": [
+        "go",
+        "test",
+        "-overlay=/private/tmp/goway-stage7-remainder-review21/before-overlay.json",
+        "./http",
+        "-run",
+        "TestJSONDiagnosticCausesKeepHTTP500/map_path_(decoding|canonical_encoding)|TestParseJSONMapKeyValidationKeepsHTTPClassification"
+      ],
+      "exit_code": 1,
+      "observation": "Both map-path failures return 400 without return boundary; direct ParseJSON controls retain 400."
+    },
+    "public_signature_additions": [],
+    "H1": "deferred; no H1 implementation",
+    "footprint_counts_and_ceilings_unchanged": true,
+    "footprint_probes": 114,
+    "compiler_cases": 735,
+    "acceptance_log_directory": "/private/tmp/goway-stage7-remainder-review21",
+    "passing_regressions": [
+      "TestJSONDiagnosticCausesKeepHTTP500",
+      "TestParseJSONMapKeyValidationKeepsHTTPClassification"
+    ],
+    "final_reporting_checks": [
+      {
+        "command": "make docs-check",
+        "cache": "r6",
+        "exit_code": 0
+      },
+      {
+        "command": "git diff --check",
+        "exit_code": 0
+      }
+    ]
+  },
+  "integration_batch7a": {
+    "base_commit": "6d80111",
+    "status": "pass",
+    "updated_at": "2026-10-24T21:17:31.072207+00:00",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off",
+      "FOUNDRY_TEST_GOPLS": "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls"
+    },
+    "cache_rotation": "Build, vet, generation and race completed on r6 before rotation. Race log reconciled against all 109 requested packages using r7 go list; no interrupted package remains. All subsequent Go commands use r7.",
+    "lane_source_hashes": {
+      "source_sha256": {
+        "application/tables.go": "139996e63732f20365a06ed04e146831423f23a5bbaa98985869aecc0ee3b776",
+        "application/tables_binding_test.go": "0a945990d80c41dc08cb3a2e524725f8c38c254fad773f801590a05866404dc9",
+        "application/tables_enum_test.go": "4ffddff1e4529af11467f3ca4c75cd9ff596c14606a3c2887d6a29febabdf480",
+        "application/tables_test.go": "77c8fe06d5c2c5043321d1d4870a0dcd1b4ff0195c3e3a9ee7a493cf1177aa42",
+        "blueprint/goway-data-layer/compilefail-mapping.tsv": "d47b2d38603430696eb8e39b9810933c8a0caac3a7d883974de9fce9fe67618c",
+        "database/codec/binding_error_test.go": "263e725507202290b7242648d74f3e205da83324dc94549606532335c2162029",
+        "database/codec/codec.go": "60fb0acff4099a23d2ca318d2d60efec87f02b19334752188c464cbca7518280",
+        "database/codec/decoding_error_test.go": "327a9b2a38d012b0c5323738e0fb28cf086e748ea2600278ce4e2c58813a7af8",
+        "database/decoding_paths_test.go": "fb5bac58662013c4b32c96e9e821c9e91b3d2b83b1fc2021579482316257ab62",
+        "database/errors.go": "0e0c6cc2d57af69fc124fc377721eedcdddf17e7d52555aef80b989223863dae",
+        "database/execution.go": "7482a58124ff09d8823554f291c998ee6db85234cb8a59d7bece6ddc6b84be22",
+        "database/orm/check_columns_test.go": "b64d506b86b663e587e35d3ab5018e8998da94b8f39054a340447fa500940d32",
+        "database/orm/check_test.go": "2397c02b5738f4cd851b2a3f1cfaea8e5c855360442fb4e69d94c2d0f778e8c5",
+        "database/orm/declaration.go": "741ef110cbdeff1910a3a2e9e2b2993d2fedec3523b807920598dbcafd8b7245",
+        "database/postgres/error_graph_classification_test.go": "8075e1e8c40149752d1553cb603e3b60c986892ef62f0ee7cbca123537410927",
+        "database/postgres/errors.go": "6dca3b5072e53b0fb7dafa91ce0f935cef5a3cd99c2d3f2a05101ea7b802a640",
+        "database/query/binding_error_test.go": "1fcf5fc1e1d5e6de41a500938985091cac680f2ed684d2443d7a8f72b119ad6d",
+        "database/query/cursor_codec_redaction_test.go": "14d46c217736c13f1200938823b4785b94d640ef372a1661cbe0f003105264a3",
+        "database/sql_callbacks.go": "337258394fe3b4426dcccd460259725d7d2350c0877d798e1c87d1198f96c26c",
+        "database/sql_callbacks_test.go": "c1bf63498df401ebcdac503fc36562094d8e3d8a6cd65cf8dc3c7dd45d62f30c",
+        "docs/guides/application-bootstrap.md": "f390a09d3c6a0fb2f9b1999d17fa335aa4b4ad6b49565b91c5864f7cb72bd5d9",
+        "docs/guides/http-cursor-pagination.md": "58fa36ba167a6cd9fc186311668ae719c07dc1c8e99b7bcb2a6ce70c100e591c",
+        "docs/guides/http-pagination.md": "d4a96c79f309e21026d73018a920f4162cf0d3eaf1377fde60f9575a185ff1b0",
+        "docs/guides/migrations-and-seeding.md": "72a143309b65a879c871c803c5b0ec680ee0020b438025d966d21bc776d5ea2d",
+        "enum/descriptor.go": "2751cc80caec9dd4829c3d37f4c16e3e71443fea98654471d309ba55e5da140c",
+        "enum/descriptor_error_test.go": "14c383e87f77ce9c57db6947fc2afb94cdb647093d8d4bf4b8e50658c886c274",
+        "http/authentication.go": "1df524945e55692980cbd08bc2bb51e73e02c6dec2ec256721dc68e12478ffbb",
+        "http/error_classification.go": "1ac61d5e3ef81a8e5324388b7d5c8277f296f7add23a46d87a790b44166cfa86",
+        "http/errors.go": "259dd4d44212c8a5ed7deb406fe9c5761b712a73e7497283e05a5fbe97881569",
+        "http/json_error_classification_test.go": "94e3d7e118bc24d6f6e7d4c3e85b3499675e174ece92e3835b710cc4999c7fbf",
+        "http/pagination/cursor_codec_error_test.go": "ddaf77fd8202e6d3c95c081331455f0a0949529bcc6c1878c2a1a64e94c5d5d8",
+        "internal/errorgraph/walk.go": "f36d620d442af56fd4f5b29bfdb33533e268a1b62d230e02f13ba98e483282bb",
+        "internal/errorgraph/walk_test.go": "bcc4ebbc58bfaeec16760a8db89706ee4c6639b3b2a1d76808ff5ed95354a9e5",
+        "internal/ormcore/codec.go": "f93dc88403201fdc8c5f8b48c68a98e3ff2d37f0fb5c62a82ff4bae5d6b0cc44",
+        "internal/querycore/compiler.go": "e2845eb89b7845c41ed5772788c6decc8351fd720cf4e6bae3f53a5c33001eb9",
+        "internal/querycore/compiler_binding_test.go": "babdf5a1e07d4628c4d74b35d1c27d2265647d71737bc4efdf3f0ebd1968a1de",
+        "internal/querycore/cursor_boundary.go": "7a5da9f7708f3573887ad9008189b7549feb64c1a3efeca0146bb7e95b414513",
+        "internal/querycore/json_key_error_test.go": "b933045461b39cb2aab8034419949efb254d8c55b24d1edc5ab502a8a054dc01",
+        "internal/querycore/json_path.go": "3bc84b843326b4b53f51b0e5542cb2021b4ebb6b14123406f26298c932799fc0",
+        "internal/safeerror/error.go": "ec60fea49efbd4434a80a3e6859b6d168e14a52493e0a6e0a7314b1feb0aa137",
+        "internal/safeerror/error_test.go": "8fa0a10b7b19e2ca01c4f2771a25035a4b6e8af7fdfde38d4b9da56e864d6330",
+        "tests/fixtures/goway/compiler_cases_test.go": "b9614772e279602c171aa2d197545d20a0329137d08bcd5e1beac56f3352bb9c",
+        "tests/fixtures/goway/footprint_test.go": "71730d1ec8a021b979ea13da2003f6e51b43f52389d5102de94ec778e0af97bb",
+        "tests/fixtures/goway/go.mod": "6a12c9874b82f07d6a26a7344d54725f8860a8bd1eec63ea6d57e6ba633ddc34",
+        "tests/fixtures/goway/integrations/.foundry-gen.json": "00e584cde7f55c0296ee741008d646ea961aa7d3b3be708992c245113fa48db2",
+        "tests/fixtures/goway/integrations/applicationcontrol/application.go": "5cc8246197908117ec64fdb6eaec7a092e973dea8b7b53188f91238c33767a12",
+        "tests/fixtures/goway/integrations/pagination.go": "7370d582b1cd5d8798aa71f6c423850fce4ad7981a073e05f1c5a096d6f37ca4",
+        "tests/fixtures/goway/integrations/pagination_test.go": "29ca860af8ad33d4057aaa5f8262ab0ace5590a4501e1c0d9b239a8752f7e709",
+        "tests/fixtures/goway/integrations/registration/application.go": "e577b3c90cff418120bb627e387983e20f94cf08ba1b2f41852dc995442e3514",
+        "tests/fixtures/goway/integrations/registrationoption/option.go": "acbc18240cdd4844ce1729b8f87bfae4ec7845910be8dd53a7ca726f7b460c3b",
+        "tests/fixtures/goway/integrations/response_foundry.gen.go": "bf517076f221c1daabc8e04dc83d77a2e085e71d8471bdc766dafaa5228a3c24",
+        "tests/fixtures/goway/integrations/seeding/seeder.go": "bc5add521fc5759a87f90f4465cdfea017765a3a7e1a9a15d0b3e9c3ef4dfcdb",
+        "tests/fixtures/goway/models/tables.go": "c9a3d73b792af302433222c824ed540f9201f3a9ea355a47444966ec30421014",
+        "tests/fixtures/goway/models/tables_test.go": "e18c4b42f0fd37f72d09ad2a5332cec2935290ce4e62e6a49327439548831a44",
+        "tests/fixtures/goway/pgsmoke/seeder_pagination_test.go": "48a7262ec3d8f1174bfee63c84a2f5dd3b2506f71aa2971831e925f9bfba83ee",
+        "tests/fixtures/goway/stage7_remainder_golden_test.go": "d150d590ae52946e831da7b415c758b69d4a843c93d77bc76cfd0ec05e938f92",
+        "tests/fixtures/goway/testdata/compilefail/application_table_declaration/invalid.go": "fdd113809626b61021d917558719347b5bf3ea432ddb867d4a17f670881a8c0a",
+        "tests/fixtures/goway/testdata/compilefail/http_cursor_mapping_owner/invalid.go": "497c34583fa9e26f446f4ce99c0dc2e6ab2336655c7d0aa71f24e430196c8f15",
+        "tests/fixtures/goway/testdata/compilefail/http_cursor_navigation_owner/invalid.go": "8811844b693fef681af7788cf3b35a19c3f5c8b137389e5e7044c5321eea04d9",
+        "tests/fixtures/goway/testdata/compilefail/http_cursor_request_owner/invalid.go": "f3fa4203b91946249c02593d5bf21a6a71323ef591f7714cced1992806880f7a",
+        "tests/fixtures/goway/testdata/compilefail/http_cursor_result_owner/invalid.go": "8d730cad9a9b93c5ee082247f1d55b7e8e1eb0bf1f14ef0f7ee32ae1c18ad4c4",
+        "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_authorization/invalid.go": "ae797d70ef8c65bacdfb4e9c996c31916334fcafcb7c4e776628e3dcf0c182cb",
+        "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_cursor/invalid.go": "6d15a107fdd27efddd2bac96e85855d891800c91716c4a14eaf4613e0490d681",
+        "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_numbered/invalid.go": "c53560b5188c79166196f341ed978ca5d59c8843f6ae382668887290638c2b69",
+        "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_permission/invalid.go": "c8379864a0a7522f663489b9b5a663ec1265cb2cc118c76efdf19df09873c41a",
+        "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_scopes/invalid.go": "07bea74ebe3869abb0d7210dae81efdde433d1700ce870547be033cbc6e31f8a",
+        "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_simple/invalid.go": "27e8ffe44b839a0522f7bfca62d84b8dbc7d1ec99c287dd255c891c88b08944f",
+        "tests/fixtures/goway/testdata/compilefail/http_pagination_handler/invalid.go": "1d1244b3a5f2057ed2d1547b9bc01f64dcb385cc8c25eaf98ee9c40dd255094e",
+        "tests/fixtures/goway/testdata/compilefail/http_pagination_map_owner/invalid.go": "9a62b19409cd1ee3ed4fe2bff9571fac5cef75d43a00999c15ebee0e10e1f603",
+        "tests/fixtures/goway/testdata/compilefail/http_pagination_simple_result/invalid.go": "186a40e9247b5d718251e961493db9d2b6e6be989225e2b31519016213509d4a",
+        "tests/fixtures/goway/testdata/compilefail/http_pagination_simple_total/invalid.go": "d5060dfa3485cfc275c1693c0d0bfaa526f7cb8839824fa070262af2ee7d8675",
+        "value/json.go": "752abc1fa6f3a202cc7cce7ec5d8023cb12f985dfd2b294f9ecfc010fbf13b39",
+        "value/json_encoding.go": "ef5d4d80a3c187531548acddbfeb5d43b5d74c75b111b849afe4d244a096acce",
+        "value/json_key_encoding.go": "60febb211c4691c4eaf31655382214222d903fccd80c2693e25eccb810d12f74",
+        "value/json_key_encoding_test.go": "f6c0d1f252bc2afaf85d1018703ccf383b01e0ba26f6bbd29db7c4ea19d7de02",
+        "value/json_map.go": "b034627067fdc7453a665f57c65640bcf7697c3bc7e6359034dc94480685f7fb"
+      }
+    },
+    "conflicts": {
+      "laneA": [
+        "tests/fixtures/goway/compiler_cases_test.go",
+        "tests/fixtures/goway/footprint_test.go"
+      ],
+      "laneB": [],
+      "laneC": [],
+      "laneD": [
+        "blueprint/goway-data-layer/compilefail-mapping.tsv"
+      ]
+    },
+    "resolutions": [
+      "Union compiler/probe registries, deduplicating identical entries without raising existing ceilings.",
+      "Merge catalogue by case against the common base; retain lane C transaction programs and lane D typed owner programs. No overlapping changed row required dropping either side.",
+      "README/guide changes applied cleanly; lead-owned docs integrated separately. Public ORM snapshot/convertibility allowlist unchanged."
+    ],
+    "counts": {
+      "catalogue_rows": 1026,
+      "dispositions": {
+        "ported": 561,
+        "unaffected": 444,
+        "port": 21
+      },
+      "distinct_ported_cases": 553,
+      "goway_compiler_cases": 805,
+      "goway_footprint_probes": 130
+    },
+    "commands": [
+      {
+        "command": "go build ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/build.log",
+        "log_sha256": "bfa2afaf4ea1d1fcc42371cd2038ce1f8d962dcf363c67e70bfad18c2129f6b5",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6"
+      },
+      {
+        "command": "go vet ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/vet.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6"
+      },
+      {
+        "command": "go test -race -timeout=20m ./database/... ./internal/... ./application/... ./http/... ./datatable/... ./value/... ./enum/...",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/race.log",
+        "log_sha256": "baaa2c5479f2d60e12b182056dccd8fa827d454b9387fd123e10a988e0b26e71",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6"
+      },
+      {
+        "command": "make fixture-check (vet and tests for plugin_base, plugin_dep, consumer and goway)",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/fixtures.log",
+        "log_sha256": "3011a7f5d0533e55902824ad10bf6ef972bc4f6406f6e56b81284ffe6f5204bd",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      },
+      {
+        "command": "python3 tools/goway_catalogue.py",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/catalogue.log",
+        "log_sha256": "838999c429f032b7a58dbb8318dd3dcf6de05e44e4f4b9d5cf0c0ee1af574b5d",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      },
+      {
+        "command": "make generate-check",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/generate.log",
+        "log_sha256": "aff9fb69af141873e6432dbf8aac79dce91e16c5bcf0f4ccc0cf5187ac3d14e4",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6"
+      },
+      {
+        "command": "make release-tools-check",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/release-tools.log",
+        "log_sha256": "d26d1688d0f8c284e5eab8878a52dc54d3d9335fc4f36bdf51e5706aa45ce0d2",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      },
+      {
+        "command": "make docs-check",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/docs.log",
+        "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      },
+      {
+        "command": "FOUNDRY_TEST_GOPLS=/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls make agent-smoke",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/agent.log",
+        "log_sha256": "c440e16a3c23f83164e362023c673a5f72cd4a78da1c1f02ff50070cda51d8ce",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      },
+      {
+        "command": "gofmt -l (all repository Go sources)",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/gofmt.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      },
+      {
+        "command": "git diff --check; git diff --cached --check",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/diff-check.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      }
+    ],
+    "final_targeted_checks": [
+      {
+        "command": "go vet ./internal/agent",
+        "status": "pass",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "go test -race ./internal/agent",
+        "status": "pass",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7",
+        "log_sha256": "3d6d2169b603c3ce0b57bd2a7b5b6465b76b4f9c4adb3d291fd406376fb2bb59"
+      }
+    ],
+    "editor_subtests_passed": 494,
+    "editor_fix": {
+      "initial_failure": "The migrated interval/transaction and change-tracking consumers removed generated-API expressions used by editor probes.",
+      "fix": "Update fourteen interval/transaction completion/hover/definition probes and one change-tracking documentation probe to the corresponding ORM APIs; add stored-value documentation to the handwritten MemberTable.Email field. All fifteen focused real-gopls probes passed.",
+      "initial_log": ".cache/goway-batch7a/agent-initial.log",
+      "initial_log_sha256": "e26f1fbbf778b23da667cb3c42ed8921333b167c07f67c84839b7f545da228a6",
+      "focused_log": ".cache/goway-batch7a/agent-focused.log",
+      "focused_log_sha256": "88e8ad32e055ea5a73341f1918413631a2d53ba8247059edeb736515f591f701",
+      "note": "An initial focused filter matched no tests; it was corrected before claiming the focused pass."
+    },
+    "verification_fix": {
+      "check": "make release-tools-check",
+      "initial_failure": "Seven Stage 7 rows are now ported; the Python regression still required port. Six consumer sources now use ORM identities instead of FoundryReference.",
+      "fix": "Accept pending or completed Stage 7 ownership and retain each migrated original FoundryReference expression as an explicit guard regression input. No runtime or catalogue disposition change.",
+      "initial_log": ".cache/goway-batch7a/release-tools-initial.log",
+      "initial_log_sha256": "5a3448b74047b52ab6cb107b0786fabc4128f21ac2a6e3c754fb1367ae4ffa98"
+    },
+    "generation": {
+      "make_generate_needed": false,
+      "generated_source_count": 398,
+      "unchanged_since_patch_application": true,
+      "accepted_patch_artifacts": [
+        "tests/fixtures/goway/integrations/.foundry-gen.json",
+        "tests/fixtures/goway/integrations/response_foundry.gen.go"
+      ],
+      "manual_generated_edits": false
+    },
+    "release_inventory": "Allow exactly internal/generate/testdata/scaffold/model.golden and extensions.golden; pin both in release tests, reject unreviewed/other-path golden files.",
+    "stage_status": "Stage 7 approved slices complete; Stage 8 D8 and Stage 9 wave 1 integrated. Full consumer cutovers and model/query emitter retirement remain open. Stage 6 whole-app measurement gate pending.",
+    "not_run": [
+      "Live PostgreSQL and Redis (opt-in sources compiled)",
+      "Stage 6 whole-app measurement gate"
+    ],
+    "git": "Only authorized apply -3 --binary/add writes; no commit."
+  }
+}

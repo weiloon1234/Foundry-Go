@@ -9,6 +9,7 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlvalue"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -47,13 +48,14 @@ func (c Codec[T]) Validate() error {
 // Bind validates the concrete value and returns a supported SQL driver value.
 // Nil byte slices become SQL NULL. Non-nil byte buffers returned by custom
 // encoders are copied before publication, including non-null empty buffers.
+// Encoder and validator failures retain their causes behind a safe diagnostic.
 func (c Codec[T]) Bind(value T) (driver.Value, error) {
 	if err := c.Validate(); err != nil {
 		return nil, err
 	}
 	encoded, err := c.encode(value)
 	if err != nil {
-		return nil, err
+		return nil, safeerror.Wrap("database value binding failed", err)
 	}
 	if !driver.IsValue(encoded) {
 		return nil, invalid()
@@ -72,7 +74,7 @@ func (c Codec[T]) Decode(source any) (T, error) {
 	}
 	decoded, err := c.decode(source)
 	if err != nil {
-		return *new(T), err
+		return *new(T), safeerror.Wrap("database value decoding failed", err)
 	}
 	return decoded, nil
 }
@@ -100,7 +102,7 @@ func (s scanner[T]) Scan(source any) error {
 	}
 	decoded, err := s.decode(source)
 	if err != nil {
-		return err
+		return safeerror.Wrap("database value scanning failed", err)
 	}
 	*s.destination = decoded
 	return nil

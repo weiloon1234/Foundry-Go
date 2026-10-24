@@ -1,0 +1,30 @@
+package models
+
+import (
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/model"
+)
+
+// Widget is a persisted model. Add fields and their typed handles below.
+// Example: Widget{}.
+type Widget struct {
+	// ID is the concrete owner key. Example: record.ID.
+	ID model.ID[Widget] `foundry:"column=id"`
+}
+
+// WidgetTable holds the model's typed fields. Example: Widgets.Query().
+type WidgetTable struct {
+	// Table owns the primary key and operations. Example: Widgets.Key().Eq(id).
+	orm.Table[Widget, model.ID[Widget]]
+}
+
+// Widgets declares the persisted table. Example: Widgets.Find(ctx,db,id).
+var Widgets = orm.Define("widgets", func(b orm.Builder[Widget], m *Widget) WidgetTable {
+	return WidgetTable{Table: orm.TableOf(b, &m.ID)}
+})
+
+// WidgetTables supplies this declaration to the package's Tables helper.
+// Example: orm.Check(WidgetTables()...).
+func WidgetTables() []orm.CheckedTable { return []orm.CheckedTable{Widgets} }
+
+// Declare relations after the tables they reference to avoid initialization cycles.

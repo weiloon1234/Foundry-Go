@@ -1,5 +1,9 @@
 # Model, enum, projection and transport generation
 
+New `foundry make model` output uses [handwritten ORM declarations](model-scaffolding.md).
+It needs generation only for separate contract DTOs, including metadata values.
+This guide describes the retained model generator for existing directive-based consumers.
+
 Handwritten Go declarations own persistence names, transport fields and value types. Foundry generates documented, ordinary Go code in the same package. The [consumer models](../../tests/fixtures/consumer/models/models.go) and [consumer tests](../../tests/fixtures/consumer/generated_test.go) are compiling examples of the current API.
 
 The current generator emits executable [typed model reads](model-queries.md) and [writes](model-writes.md), complete row decoders, typed field codecs and mutation drafts. [Typed relations](model-relations.md) bind ordinary Go key declarations to generated slots and metadata, including concrete many-to-many pivots. [Automatic field mutators](model-mutators.md) connect typed handwritten methods to the shared write runtime. [Explicit getters](model-accessors.md) retain stored fields and share automatic getter/mutator field documentation. [Typed hooks and observers](model-hooks.md) integrate normal writes with transaction-bound lifecycle behavior; [events](events.md), the [transactional outbox](outbox.md) and [audit](audit.md) use the same lifecycle and transaction boundaries.

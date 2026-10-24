@@ -149,7 +149,7 @@ func localizedErrorResponse(ctx context.Context, err error, presenter *errorPres
 	// use callback.Invoke (panic containment, no goroutine); Isolated is kept
 	// for application handlers and hooks, where Goexit must also be caught.
 	classificationErr := callback.Invoke("HTTP error classification", func() error {
-		classified, found, complete := errorgraph.As[classifiedError](err)
+		classified, found, complete := transportErrorAs[classifiedError](err)
 		if !complete {
 			return fault.New(fault.Invalid, "HTTP error classification exceeded traversal bounds")
 		}
@@ -166,7 +166,7 @@ func localizedErrorResponse(ctx context.Context, err error, presenter *errorPres
 				issues = detailed.httpErrorIssues()
 			}
 		} else {
-			rejected, found, complete := errorgraph.As[*validation.Errors](err)
+			rejected, found, complete := transportErrorAs[*validation.Errors](err)
 			if !complete {
 				return fault.New(fault.Invalid, "HTTP validation error classification exceeded traversal bounds")
 			}

@@ -8,6 +8,18 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Complete Stage 7 with explicit application.WithTables registration, model-owned
+  Tables lists, transactional ORM seeding and pagination consumer coverage.
+  Declaration checks contain panic/Goexit per table; redacted binding, decoding,
+  SQL and JSON-key failures retain diagnostic causes without granting HTTP status.
+- Make the existing model scaffold emit handwritten ORM tables and extension
+  declarations, with collision-safe identifiers. DTO generation remains supported;
+  model/query emitter retirement remains a separate Stage 8 step.
+- Begin Stage 9 wave 1: publish link, mutator, observer, distinct-input, article,
+  profile, password and MFA declarations; migrate reporting authority, interval,
+  transaction and profile lifecycle consumers. Retain generated APIs and ownership
+  manifests until their dependent callers reach the cleanup barrier.
+
 - Complete all 13 framework-store migrations with webhook, notification,
   attachment, extension and audit declarations. Preserve persisted identities,
   scoped lifecycle writes, bounded streaming and reconciliation outcomes.

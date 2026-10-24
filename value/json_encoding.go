@@ -58,8 +58,10 @@ func EncodeJSON[T any](ctx context.Context, input T, limits JSONEncodingLimits) 
 		if err := budget.check(reflect.ValueOf(input), 0); err != nil {
 			return err
 		}
-		return jsonv2.MarshalWrite(&output, input, json.DefaultOptionsV1(),
+		keys := jsonKeyEncoding{}
+		err := jsonv2.MarshalWrite(&output, input, json.DefaultOptionsV1(), keys.options(),
 			jsontext.AllowInvalidUTF8(false), jsontext.AllowDuplicateNames(false))
+		return keys.failure(err)
 	})
 	if failure, ok := err.(*fault.Error); ok && failure.Code() == fault.Panicked {
 		return nil, fault.Wrap(fault.Internal, "JSON value codec failed", err)

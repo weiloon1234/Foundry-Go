@@ -74,12 +74,12 @@ func openFixture(t *testing.T) *fixture {
 		var found value.Optional[reporting.Operator]
 		err := f.transaction(ctx, func(tx *database.Tx) error {
 			var err error
-			found, err = reporting.QueryReportOperators().Find(ctx, tx, id)
+			found, err = reporting.OperatorModels.Find(ctx, tx, id)
 			return err
 		})
 		return found, err
 	})
-	proof, err := auth.NewProof((reporting.Operator{ID: f.operator}).FoundryReference(), auth.Authenticated)
+	proof, err := auth.NewProof(reporting.OperatorIdentity.Reference(f.operator), auth.Authenticated)
 	if err != nil {
 		t.Fatal(err)
 	}

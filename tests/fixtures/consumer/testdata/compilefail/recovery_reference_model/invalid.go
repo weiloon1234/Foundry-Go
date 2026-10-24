@@ -7,5 +7,5 @@ import (
 )
 
 func bad(ctx context.Context, reset *recovering.Reset, account passwords.Account) {
-	reset.Issue(ctx, account.FoundryReference())
+	reset.Issue(ctx, passwords.AccountIdentity.ReferenceOf(account))
 }

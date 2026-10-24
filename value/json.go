@@ -2,6 +2,7 @@ package value
 
 import (
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"io"
 	"reflect"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const (
@@ -37,9 +39,10 @@ func NewJSON[T any](input T) (JSON[T], error) {
 	if err := budget.check(reflect.ValueOf(input), 0); err != nil {
 		return JSON[T]{}, err
 	}
-	data, err := json.Marshal(input)
+	keys := jsonKeyEncoding{}
+	data, err := jsonv2.Marshal(input, json.DefaultOptionsV1(), keys.options())
 	if err != nil {
-		return JSON[T]{}, invalidJSON()
+		return JSON[T]{}, invalidJSONCause(keys.failure(err))
 	}
 	return ParseJSON[T](string(data))
 }
@@ -65,7 +68,10 @@ func ParseJSON[T any](text string) (JSON[T], error) {
 	return JSON[T]{text: canonical}, nil
 }
 
-func invalidJSON() error           { return fault.New(fault.Invalid, "invalid typed JSON value or schema") }
+func invalidJSON() error { return fault.New(fault.Invalid, "invalid typed JSON value or schema") }
+func invalidJSONCause(err error) error {
+	return fault.Wrap(fault.Invalid, "invalid typed JSON value or schema", safeerror.Diagnostic("JSON codec failed", err))
+}
 func (v JSON[T]) IsZero() bool     { return v.text == "" }
 func (v JSON[T]) IsJSONNull() bool { return v.text == "null" }
 
@@ -90,7 +96,7 @@ func decodeJSON[T any](text string) (T, error) {
 	decoder.UseNumber()
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&result); err != nil {
-		return *new(T), invalidJSON()
+		return *new(T), invalidJSONCause(err)
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return *new(T), invalidJSON()

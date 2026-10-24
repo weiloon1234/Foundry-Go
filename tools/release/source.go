@@ -88,6 +88,8 @@ func (policy sourcePolicy) sourceName(path string) bool {
 	// The TOML is loaded by mailing/configured_test.go; SPA assets by portals.go.
 	switch relative {
 	case "blueprint/goway-data-layer/compilefail-mapping.tsv",
+		"internal/generate/testdata/scaffold/model.golden",
+		"internal/generate/testdata/scaffold/extensions.golden",
 		"database/orm/testdata/joined-has.sql",
 		"database/orm/testdata/public-methods.txt",
 		"docs/evidence/goway-6a12-capability-audit.tsv",

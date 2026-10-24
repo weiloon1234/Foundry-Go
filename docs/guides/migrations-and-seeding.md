@@ -67,6 +67,11 @@ Rollback is never implicit and is destructive by nature. `migrate rollback --ste
 
 ## Transactional seeders
 
+Handwritten ORM declarations use the same `seed.Definition.Run(ctx, tx)` callback.
+Call the table's `Insert` with that supplied transaction and typed assignments;
+the normal defaults and write lifecycle apply. The [ORM seeder example](../../tests/fixtures/goway/integrations/seeding/seeder.go)
+uses this path without a generated draft or changes to the seeder registry.
+
 `seed.New` validates named `seed.Definition` values and their dependencies. Each definition has a typed `seed.ID` and `Run func(context.Context, *database.Tx) error`. Use the supplied transaction for all work. The registry snapshots dependency lists and orders them deterministically before execution.
 
 `registry.Run(ctx, db, selectedIDs...)` expands selected seeders to include prerequisites. Omitting selection runs the full registry. Invalid/duplicate selection fails before database I/O. Every seeder has a separate transaction and uses the normal [transaction lifecycle](database-runtime.md#transaction-scopes), including rollback on callback error/panic and after-commit behavior.

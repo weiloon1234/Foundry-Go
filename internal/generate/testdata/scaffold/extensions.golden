@@ -1,0 +1,129 @@
+package models
+
+import (
+	"github.com/weiloon1234/Foundry-Go/attachments"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/extensions"
+	"github.com/weiloon1234/Foundry-Go/extensions/slots"
+	"github.com/weiloon1234/Foundry-Go/metadata"
+	"github.com/weiloon1234/Foundry-Go/model"
+	"github.com/weiloon1234/Foundry-Go/storage"
+	"github.com/weiloon1234/Foundry-Go/translations"
+)
+
+// Article is a persisted model. Add fields and their typed handles below.
+// Example: Article{}.
+type Article struct {
+	// ID is the concrete owner key. Example: record.ID.
+	ID model.ID[Article] `foundry:"column=id"`
+	// Title holds translated text stored in foundry_model_translations as field "title", one row per locale. Example: record.Title.IsLoaded().
+	Title translations.Text
+	// Logo holds the single file of attachment collection "logo", recorded in foundry_attachments with its bytes on the policy's disk. Example: record.Logo.IsLoaded().
+	Logo attachments.One[Article]
+	// Gallery holds the ordered files of attachment collection "gallery", recorded in foundry_attachments with their bytes on the policy's disk. Example: record.Gallery.IsLoaded().
+	Gallery attachments.Many[Article]
+	// SEO holds the typed metadata value "seo" stored in foundry_model_metadata, with no model column. Example: record.SEO.IsLoaded().
+	SEO metadata.Value[ArticleSEO]
+}
+
+// ArticleTable holds the model's typed fields. Example: Articles.Query().
+type ArticleTable struct {
+	// Table owns the primary key and operations. Example: Articles.Key().Eq(id).
+	orm.Table[Article, model.ID[Article]]
+	// TitleSlot binds the external value. Example: extensions.BindSlot(Articles.Key(),Articles.TitleSlot).
+	TitleSlot orm.Slot[Article, translations.Text]
+	// LogoSlot binds the external value. Example: extensions.BindSlot(Articles.Key(),Articles.LogoSlot).
+	LogoSlot orm.Slot[Article, attachments.One[Article]]
+	// GallerySlot binds the external value. Example: extensions.BindSlot(Articles.Key(),Articles.GallerySlot).
+	GallerySlot orm.Slot[Article, attachments.Many[Article]]
+	// SEOSlot binds the external value. Example: extensions.BindSlot(Articles.Key(),Articles.SEOSlot).
+	SEOSlot orm.Slot[Article, metadata.Value[ArticleSEO]]
+}
+
+// Articles declares the persisted table. Example: Articles.Find(ctx,db,id).
+var Articles = orm.Define("articles", func(b orm.Builder[Article], m *Article) ArticleTable {
+	return ArticleTable{Table: orm.TableOf(b, &m.ID),
+		TitleSlot:   orm.SlotOf(b, &m.Title),
+		LogoSlot:    orm.SlotOf(b, &m.Logo),
+		GallerySlot: orm.SlotOf(b, &m.Gallery),
+		SEOSlot:     orm.SlotOf(b, &m.SEO),
+	}
+})
+
+// ArticleTables supplies this declaration to the package's Tables helper.
+// Example: orm.Check(ArticleTables()...).
+func ArticleTables() []orm.CheckedTable { return []orm.CheckedTable{Articles} }
+
+// Declare relations after the tables they reference to avoid initialization cycles.
+
+// ArticleSEO is Article.SEO's stored metadata. Add JSON-tagged fields; removing
+// or renaming one requires a metadata version increment. Example: ArticleSEO{}.
+//
+//foundry:dto
+type ArticleSEO struct{}
+
+// ArticleDisk names the attachment disk; configure it in storage settings.
+// Example: ArticleDisk.ID().
+var ArticleDisk = storage.DefineDisk("public")
+
+// ArticleExtensionOwner pins the persisted owner identity. Keep it stable when renaming tables.
+// Example: ArticleExtensionOwner.Reference(id).
+var ArticleExtensionOwner = extensions.DefineORMOwner("articles", orm.IdentityOf(Articles.Table, Articles.Key()), extensions.OwnerOptions{StorageModel: "articles"})
+
+// ArticleExtensionSlots groups typed external-store handles. Example: ArticleExtensions.From(runtime).
+type ArticleExtensionSlots struct {
+	// Title configures translated text stored in foundry_model_translations as field "title", one row per locale. Example: ArticleExtensions.Title.Registration().
+	Title translations.TextHandle[Article, model.ID[Article]]
+	// Logo configures the single file of attachment collection "logo", recorded in foundry_attachments with its bytes on the policy's disk. Example: ArticleExtensions.Logo.Registration().
+	Logo attachments.OneHandle[Article, model.ID[Article]]
+	// Gallery configures the ordered files of attachment collection "gallery", recorded in foundry_attachments with their bytes on the policy's disk. Example: ArticleExtensions.Gallery.Registration().
+	Gallery attachments.ManyHandle[Article, model.ID[Article]]
+	// SEO configures the typed metadata value "seo" stored in foundry_model_metadata, with no model column. Example: ArticleExtensions.SEO.Registration().
+	SEO metadata.ValueHandle[Article, model.ID[Article], ArticleSEO]
+}
+
+// ArticleExtensions declares policies independently of table initialization.
+// Example: ArticleExtensions.From(runtime).
+var ArticleExtensions = ArticleExtensionSlots{
+	Title: translations.TextOf(ArticleExtensionOwner, "title", translations.Options{}, extensions.BindSlot(Articles.Key(), Articles.TitleSlot)),
+	// List accepted media types (or an Image plan); assembly rejects an empty policy.
+	Logo: attachments.OneOf(ArticleExtensionOwner, "logo", attachments.Policy{Disk: ArticleDisk, Accepted: []storage.MediaType{}}, extensions.BindSlot(Articles.Key(), Articles.LogoSlot)),
+	// List accepted media types (or an Image plan); assembly rejects an empty policy.
+	Gallery: attachments.ManyOf(ArticleExtensionOwner, "gallery", attachments.Policy{Disk: ArticleDisk, Accepted: []storage.MediaType{}}, extensions.BindSlot(Articles.Key(), Articles.GallerySlot)),
+	SEO:     metadata.ValueOf(ArticleExtensionOwner, "seo", metadata.Spec[ArticleSEO]{}, ArticleSEOJSON(), extensions.BindSlot(Articles.Key(), Articles.SEOSlot)),
+}
+
+// From borrows runtime managers once. Example: ArticleExtensions.From(runtime).
+func (d ArticleExtensionSlots) From(runtime slots.Runtime) ArticleExtensionSlots {
+	d.Title = d.Title.From(runtime.Translations)
+	d.Logo = d.Logo.From(runtime.Attachments)
+	d.Gallery = d.Gallery.From(runtime.Attachments)
+	d.SEO = d.SEO.From(runtime.Metadata)
+	return d
+}
+
+// All returns typed eager loaders. Example: Articles.Query().With(bound.All()...).
+func (d ArticleExtensionSlots) All() []orm.Relation[Article] {
+	return []orm.Relation[Article]{
+		d.Title.Relation(Articles.TitleSlot),
+		d.Logo.Relation(Articles.LogoSlot),
+		d.Gallery.Relation(Articles.GallerySlot),
+		d.SEO.Relation(Articles.SEOSlot),
+	}
+}
+
+// ArticleExtensionDeclaration includes ordinary deletion cleanup.
+// Example: builder.Models(ArticleExtensionDeclaration()).
+func ArticleExtensionDeclaration() slots.Declaration {
+	return slots.DeclareORM(ArticleExtensionOwner, slots.Parts{
+		Translations: []translations.Registration{ArticleExtensions.Title.Registration()},
+		Attachments:  []attachments.Registration{ArticleExtensions.Logo.Registration(), ArticleExtensions.Gallery.Registration()},
+		Metadata:     []metadata.Registration{ArticleExtensions.SEO.Registration()},
+		Slots: []extensions.SlotDescription{
+			ArticleExtensions.Title.Describe(),
+			ArticleExtensions.Logo.Describe(),
+			ArticleExtensions.Gallery.Describe(),
+			ArticleExtensions.SEO.Describe(),
+		},
+	})
+}

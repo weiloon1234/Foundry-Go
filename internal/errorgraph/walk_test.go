@@ -17,6 +17,20 @@ type nonComparable []string
 
 func (nonComparable) Error() string { return "slice" }
 
+func TestWalkPrunedRetainsSiblingsWithoutUnwrappingPrunedNodes(t *testing.T) {
+	hidden := &cycle{}
+	sibling := errors.New("sibling")
+	joined := errors.Join(hidden, sibling)
+	var visited []error
+	complete := errorgraph.WalkPruned(joined, func(err error) bool {
+		visited = append(visited, err)
+		return true
+	}, func(err error) bool { return err == hidden })
+	if !complete || !slices.Equal(visited, []error{joined, sibling}) {
+		t.Fatal("pruning traversed a hidden cycle or lost a sibling")
+	}
+}
+
 func TestWalkRetainsOrderAndBoundsMalformedGraphs(t *testing.T) {
 	first, second := errors.New("first"), errors.New("second")
 	joined := errors.Join(first, second)

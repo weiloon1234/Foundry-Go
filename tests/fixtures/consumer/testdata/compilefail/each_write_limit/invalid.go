@@ -2,10 +2,12 @@ package invalid
 
 import (
 	"context"
+
 	"foundry.test/consumer/linkqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-func invalid(db *database.DB) {
-	_, _ = linkqueries.QueryLinkMemberships().DeleteEach(context.Background(), db, "10")
+func invalid(ctx context.Context, db *database.DB) {
+	_, _ = orm.DeleteEach(ctx, db, linkqueries.Memberships.Query(), "10")
 }

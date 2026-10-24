@@ -16,6 +16,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/modelmeta"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
@@ -163,7 +164,7 @@ func Check(tables ...CheckedTable) error {
 		if t == nil || reflect.ValueOf(t).Kind() == reflect.Pointer && reflect.ValueOf(t).IsNil() {
 			errs = append(errs, errors.New("orm: missing table"))
 		} else {
-			errs = append(errs, t.ormError())
+			errs = append(errs, callback.Isolated("validate ORM declaration", func() error { return t.ormError() }))
 		}
 	}
 	return errors.Join(errs...)
@@ -336,7 +337,7 @@ func seal(d *declaration) {
 		errs := []error{core.err}
 		for _, c := range core.columns {
 			if c.check != nil {
-				errs = append(errs, c.check())
+				errs = append(errs, callback.Isolated("validate ORM column "+core.model.Table+"."+c.field.Name, c.check))
 			}
 		}
 		return declarationError(errors.Join(errs...))

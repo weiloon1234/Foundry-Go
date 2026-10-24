@@ -8,6 +8,12 @@ import "reflect"
 // successfully. False means traversal exceeded its node/depth bounds. A callback
 // must return; this bounds graph traversal, not arbitrary work inside methods.
 func Walk(err error, visit func(error) bool) bool {
+	return WalkPruned(err, visit, nil)
+}
+
+// WalkPruned preserves Walk's order and bounds while omitting nodes and their
+// descendants when prune returns true. Joined siblings remain discoverable.
+func WalkPruned(err error, visit func(error) bool, prune func(error) bool) bool {
 	type frame struct {
 		err   error
 		depth int
@@ -23,6 +29,9 @@ func Walk(err error, visit func(error) bool) bool {
 			return false
 		}
 		if current.err == nil {
+			continue
+		}
+		if prune != nil && prune(current.err) {
 			continue
 		}
 		if !visit(current.err) {

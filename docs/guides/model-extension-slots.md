@@ -41,9 +41,12 @@ func defineArticleExtensions() ArticleExtensionSet {
 ```
 
 `foundry make model Article --table articles --translated Title --attachment Logo
---metadata SEO --disk public` scaffolds this shape and generates its declarations
-([scaffolding](developer-tooling-and-testing.md)); list each attachment policy's
-accepted media types before assembly.
+--metadata SEO --disk public` now creates [handwritten ORM declarations](model-scaffolding.md#add-extension-slots)
+with typed extension handles and generates only the metadata DTO codec. List each
+attachment policy's accepted media types before assembly. The directive-based
+examples on this page describe the retained legacy API for existing consumers;
+new scaffolded models use `orm.SlotOf`, `extensions.DefineORMOwner` and
+`slots.DeclareORM` instead.
 
 | Field type | Stored in | Policy entry | Zero policy |
 | --- | --- | --- | --- |

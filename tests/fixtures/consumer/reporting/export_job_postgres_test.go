@@ -151,7 +151,7 @@ func TestQueuedExportReloadsCurrentPermissionsBeforeEveryAttempt(t *testing.T) {
 	}))
 	id := queue.dispatch(t, exportPayload(f))
 	if err := f.transaction(t.Context(), func(tx *database.Tx) error {
-		_, err := tx.Exec(t.Context(), `UPDATE report_operators SET can_export=false`)
+		_, err := reporting.OperatorModels.Update(t.Context(), tx, f.operator, reporting.OperatorModels.CanExport.Set(false))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -163,7 +163,7 @@ func TestQueuedExportReloadsCurrentPermissionsBeforeEveryAttempt(t *testing.T) {
 	}
 	assertNoExportFiles(t, f)
 	if err := f.transaction(t.Context(), func(tx *database.Tx) error {
-		_, err := tx.Exec(t.Context(), `UPDATE report_operators SET can_export=true`)
+		_, err := reporting.OperatorModels.Update(t.Context(), tx, f.operator, reporting.OperatorModels.CanExport.Set(true))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -232,7 +232,7 @@ func TestQueuedExportRedeliveryUsesStableStorageIdentityAndClosesArtifacts(t *te
 	// A second export may observe new source values; storage must still retain
 	// the first complete delivery for this same execution identity.
 	if err := f.transaction(t.Context(), func(tx *database.Tx) error {
-		_, err := tx.Exec(t.Context(), `UPDATE report_members SET name='Changed' WHERE id='0193fd8c-2075-7000-8000-000000000011'`)
+		_, err := reporting.MemberModels.Update(t.Context(), tx, f.members[0], reporting.MemberModels.Name.Set("Changed"))
 		return err
 	}); err != nil {
 		t.Fatal(err)

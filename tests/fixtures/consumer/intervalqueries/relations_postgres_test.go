@@ -7,7 +7,7 @@ import (
 
 	"foundry.test/consumer/intervalqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -15,20 +15,20 @@ import (
 func TestPostgresIntervalRelationEquality(t *testing.T) {
 	runIntervals(t, func(tx *database.Tx, samples []intervalqueries.Sample) error {
 		for i, period := range []temporal.Interval{temporal.Months(1), temporal.Days(30), temporal.Days(2)} {
-			if _, err := intervalqueries.QueryIntervalPlans().Create(t.Context(), tx, intervalqueries.PlanDraft{}.SetID(i+1).SetPeriod(period)); err != nil {
+			if _, err := intervalqueries.Plans.Insert(t.Context(), tx, intervalqueries.Plans.ID.Set(i+1), intervalqueries.Plans.Period.Set(period)); err != nil {
 				return err
 			}
 		}
-		labels := intervalqueries.QueryIntervalLabels()
-		lf := intervalqueries.LabelFields()
-		if _, err := labels.Create(t.Context(), tx, intervalqueries.LabelDraft{}.SetID(temporal.Months(1)).SetName("month")); err != nil {
+		labels := intervalqueries.Labels
+		lf := intervalqueries.Labels
+		if _, err := labels.Insert(t.Context(), tx, lf.ID.Set(temporal.Months(1)), lf.Name.Set("month")); err != nil {
 			return err
 		}
-		if _, err := intervalqueries.QueryIntervalLinks().Create(t.Context(), tx, intervalqueries.LinkDraft{}.SetID(temporal.Months(2)).SetPlanPeriod(temporal.Days(30)).SetLabelID(interval(t, 0, 0, 720*time.Hour))); err != nil {
+		if _, err := intervalqueries.Links.Insert(t.Context(), tx, intervalqueries.Links.ID.Set(temporal.Months(2)), intervalqueries.Links.PlanPeriod.Set(temporal.Days(30)), intervalqueries.Links.LabelID.Set(interval(t, 0, 0, 720*time.Hour))); err != nil {
 			return err
 		}
-		rel, agg := intervalqueries.PlanRelations(), intervalqueries.PlanAggregates()
-		parents, err := intervalqueries.QueryIntervalPlans().OrderBy(intervalqueries.PlanFields().ID.Asc()).With(rel.Samples.OrderBy(intervalqueries.SampleFields().ID.Asc()), rel.Labels, agg.SampleCount, agg.TotalPeriod).All(t.Context(), tx)
+		rel, agg := intervalqueries.PlanLinks, intervalqueries.PlanValues
+		parents, err := intervalqueries.Plans.Query().OrderBy(intervalqueries.Plans.ID.Asc()).With(rel.Samples.OrderBy(intervalqueries.Samples.ID.Asc()), rel.Labels, agg.SampleCount, agg.TotalPeriod).All(t.Context(), tx)
 		if err != nil || len(parents) != 3 {
 			t.Fatal(parents, err)
 		}
@@ -57,11 +57,11 @@ func TestPostgresIntervalRelationEquality(t *testing.T) {
 		if !loaded || len(empty) != 0 || !sumLoaded || !sum.IsNull() {
 			t.Fatal(parents[2])
 		}
-		found, err := labels.RequireFind(t.Context(), tx, temporal.Days(30))
+		found, err := labels.Require(t.Context(), tx, temporal.Days(30))
 		if err != nil || found.ID != temporal.Months(1) {
 			t.Fatal(found, err)
 		}
-		updated, err := labels.Upsert(t.Context(), tx, intervalqueries.LabelDraft{}.SetID(temporal.Days(30)).SetName("changed"), query.OnConflict(lf.ID).DoUpdate(lf.Name.Incoming()))
+		updated, err := orm.Upsert(t.Context(), tx, labels.Query(), orm.OnConflict(orm.ConflictKey(lf.ID)).DoUpdate(orm.ConflictIncoming(lf.Name)), lf.ID.Set(temporal.Days(30)), lf.Name.Set("changed"))
 		record, ok := updated.Get()
 		if err != nil || !ok || record.ID != temporal.Months(1) || record.Name != "changed" {
 			t.Fatal(record, err)
@@ -76,11 +76,11 @@ func TestPostgresIntervalRelationEquality(t *testing.T) {
 
 func TestPostgresIntervalCursorEquality(t *testing.T) {
 	runIntervals(t, func(tx *database.Tx, _ []intervalqueries.Sample) error {
-		q := intervalqueries.QueryIntervalSamples().OrderBy(intervalqueries.SampleFields().Period.Asc())
-		request := query.CursorRequest[intervalqueries.Sample]{Size: 1}
+		q := intervalqueries.Samples.Query().OrderBy(intervalqueries.Samples.Period.Asc())
+		request := orm.CursorRequest[intervalqueries.Sample]{Size: 1}
 		var ids []int
 		for step := 0; step < 5; step++ {
-			page, err := q.CursorPaginate(t.Context(), tx, request)
+			page, err := orm.CursorPaginate(t.Context(), tx, q, request)
 			if err != nil {
 				return err
 			}
@@ -91,7 +91,7 @@ func TestPostgresIntervalCursorEquality(t *testing.T) {
 			if !set {
 				break
 			}
-			parsed, err := query.ParseCursor[intervalqueries.Sample](next.Token())
+			parsed, err := orm.ParseCursor[intervalqueries.Sample](next.Token())
 			if err != nil {
 				return err
 			}

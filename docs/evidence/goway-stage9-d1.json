@@ -1,0 +1,541 @@
+{
+  "slice": "stage9-d1",
+  "base_commit": "6d801119400fab31a6f9bd66bc2988ada795bf2d",
+  "timestamp_utc": "2026-10-24T20:38:58.159774+00:00",
+  "status": "targeted acceptance passed; missing capabilities and dependent cutovers reported",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off"
+  },
+  "source_sha256": {
+    "CHANGELOG.md": "c48f993cd0c34ba19021d50f2f76bc3b0d4552a9272081ae9b0dd9d67a7c29c2",
+    "Makefile": "d7ba763cf5d6e779cd77d104e740664f25cb8fdecce29be13ab7cf3ea4dd22b4",
+    "blueprint/00-master-architecture-and-parity.md": "3e61d3f7c052a186b183b24d267ca41eff9e913763bd4f1bccd2137f7591e8e0",
+    "blueprint/goway-data-layer/README.md": "4e39f9a878f4bbcd1fde44d1e7134537a0e37a77f9bdea17fd850ac8aa9b5ba3",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "30ea06528c9377086f7c905dd34aa215a0a306809061a6be863ca4aa328506ed",
+    "database/orm/method_surface_test.go": "d511843a67ff772ceb33785f25cf78fd04ac63b17992aa5e89e7776d985aa6b9",
+    "database/orm/testdata/public-methods.txt": "5db41adab0a905820577b56bd809336ca4b24324850fa265f39ff7080b11865d",
+    "database/orm/transaction_phase_test.go": "52dc79aba4c93dc129f04bcaa063b9e7db8bbea14c9ca1e2c63ec1c2c10b33b2",
+    "internal/agent/field_documentation_acceptance_test.go": "e908b17d52af9c34419984283a276b67d997f6b8aa47e8337df48f3f4f027b07",
+    "internal/agent/gopls_acceptance_test.go": "8a104ac3255c59923523240f041be31cfeec63bb71d157bc8328a2c11e065988",
+    "tests/fixtures/consumer/README.md": "8396b1a8651e408cfb0e9073e5d7c51a8a0cf6e61750c218914761df9fb3ca6a",
+    "tests/fixtures/consumer/articles/tables.go": "9ac60f419c16e51fae22d710c0450430dabd27096fd7e4ebdeb15b36deb379da",
+    "tests/fixtures/consumer/articles/tables_test.go": "6357b60b04a0f6ce1ec61b5ae534ba139d5e09f38031e49e683c9ab24746580e",
+    "tests/fixtures/consumer/multifactor/tables.go": "d55c31c4a5ccdffcf26cd8f12cce03beb77f9534750b72fa293e074fb22ab2d6",
+    "tests/fixtures/consumer/multifactor/tables_test.go": "2434e0cdfebd7e8060d1759936b54fa886a3849a4b89dddc3776bc35173a6573",
+    "tests/fixtures/consumer/mutatorqueries/orm.go": "6740c41b8aac4c954360afb13b3c40b056b165ce3f2a0197d2241d6924006d59",
+    "tests/fixtures/consumer/passwords/tables.go": "2b37a66c8f182484ddca5dfe1481600b5446c51322b7b83d2b1f657f15e9b382",
+    "tests/fixtures/consumer/passwords/tables_test.go": "d6d097e1987cd3f2411dc1c50774d1d3319ddaa7d1a7c287c6f455bb5f2518b8",
+    "tests/fixtures/consumer/profiles/profile.go": "a4e7398ba5fc486f6531c7b3918088364c2da3c1cf1688f96abb85d5a44957a4",
+    "tests/fixtures/consumer/profiles/profile_test.go": "b9c4027c0941b3337e90d770337a4e2df27d7a6ee920d434b93c99d9dd1cc847",
+    "tests/fixtures/consumer/profiles/tables.go": "df834b77b8291c9d452707bc67a39ad138a6884bd10080e121dd0956af1db77c",
+    "tests/fixtures/consumer/profiles/tables_test.go": "c683edd9fc0218310dc4ac4dbed45b2d763ff33f03c0dbbcb7274c7232ea1097",
+    "tests/fixtures/consumer/testdata/compilefail/attachment_id_owner/invalid.go": "da5beab300a4bf5ddf8cacf0c23bfa9d968f13d0c6df132b74193263992bba57",
+    "tests/fixtures/consumer/testdata/compilefail/attachment_owner/invalid.go": "8608ab258b044d6d09b303d971bc9cdf25b2f522cf218298fcc2048eed6d6e70",
+    "tests/fixtures/consumer/testdata/compilefail/auth_assurance/invalid.go": "ce332468b97bb33f950dabbb0b14cbcd845eb2bd8e673819bcf3c7887ff717e3",
+    "tests/fixtures/consumer/testdata/compilefail/auth_provider_key/invalid.go": "e227c43aed41b6d3cc6c57a5151aba19edaaf14b8b6f3fd7dbe8ed15ec7c365f",
+    "tests/fixtures/consumer/testdata/compilefail/auth_scope_proof_owner/invalid.go": "6ea0230e9e062571fd69775ae35dd9468315cfbedab65cb2ef813d6e1dc5730a",
+    "tests/fixtures/consumer/testdata/compilefail/extension_identity_owner/invalid.go": "59fa558f3ac85a1a19b5870aa09296484c55c4e9434687649c8f2cc30615def5",
+    "tests/fixtures/consumer/testdata/compilefail/extension_policy_kind/invalid.go": "57d48929358bc40b0eeb2792a8d525ff1972d1dd9de9b4fac14a6fcd37b91b9a",
+    "tests/fixtures/consumer/testdata/compilefail/extension_rule_field/invalid.go": "9d72f0c10724490d5839e72c4842078075576ee220574f0118ec342d304d0d3d",
+    "tests/fixtures/consumer/testdata/compilefail/extension_runtime_type/invalid.go": "764c25b66588ad1b146753ee9b036a8860b05f699f4426407dc6eeee2e00b044",
+    "tests/fixtures/consumer/testdata/compilefail/extension_slot_owner/invalid.go": "3db7cc48b2f61881a61740074823688f1b46e06d4ce8dd55029b8b43949ec0a4",
+    "tests/fixtures/consumer/testdata/compilefail/extension_slot_query/invalid.go": "a0dca58ca58def50c2719b5d54279904e92fd33358b5f27a882c83e6ab89782b",
+    "tests/fixtures/consumer/testdata/compilefail/extension_value_type/invalid.go": "ff296896f9d6959e39a44be4429cfcc4a121b00bc0c85d367ac6061758472d54",
+    "tests/fixtures/consumer/testdata/compilefail/extension_write_owner/invalid.go": "fae3d4088383bd8271fe3adf63a4f652c2265cf33e547cbfd679f0f4d66d13b0",
+    "tests/fixtures/consumer/testdata/compilefail/metadata_owner_contract/invalid.go": "c5dbb733ed0e9b7ce41a88b11a46bd33cd2d7d085ddd838035722b94b819e33a",
+    "tests/fixtures/consumer/testdata/compilefail/metadata_value_contract/invalid.go": "f7e8b869092d61d28c6217d4b0b9b99758e2d15d4bb583f4250f4d8ca13333f9",
+    "tests/fixtures/consumer/testdata/compilefail/mfa_retirement_owner/invalid.go": "d011885b14566159a1c7f52bc4eaf633e56c85776f9685f5d19c9c9e6f1061a6",
+    "tests/fixtures/consumer/testdata/compilefail/password_model_like/invalid.go": "30f66959c984e90b8d2938a152d5f53bd4165c2a697884ef40a53436fa405483",
+    "tests/fixtures/consumer/testdata/compilefail/password_model_predicate/invalid.go": "4a4e925ebb2f9770a7da2eb4cd0bca8fb1ad1ecdca86273868dc5a0a7e2ede5d",
+    "tests/fixtures/consumer/testdata/compilefail/password_model_setter/invalid.go": "59da3a6e40ca1cb3e0b563d3ae23f5ab330991d27c55af5318255273cbedc2c2",
+    "tests/fixtures/consumer/testdata/compilefail/recovery_reference_model/invalid.go": "9358cc62106240c3c2733e8d002adf551aac93203dad5446461cad2f240d1017",
+    "tests/fixtures/consumer/testdata/compilefail/revocation_reference_model/invalid.go": "304efc2e20500e737b1503008e3b2163212dc7e5a996c22d22d9ae5deeae7dc8",
+    "tests/fixtures/consumer/testdata/compilefail/translation_locale_contract/invalid.go": "88e6486f15e64eda696dfb3aa4f9a93babab9ceea4794caa1c07f3a80d4b878c",
+    "tests/fixtures/consumer/testdata/compilefail/translation_owner_contract/invalid.go": "bdfd7b27bf32732d55ca2a620ef587af254c1fd4c056d1c49ad7ce7d3f380993",
+    "tests/fixtures/consumer/types_test.go": "c6400a84382588d397cfcd1e57c6572926cc2debe1051d2581ca9c726075addd",
+    "tests/fixtures/goway/compiler_cases_test.go": "93a12f0abecf551cfadf1ada5c5bef7d9893bc05cef837b2c2a9a5d84f17c416",
+    "tests/fixtures/goway/footprint_test.go": "0edfc2c1ef7ef9b3eaf76b859c4eb00470f1ee0c095b01ba38bfe3abedf6f043",
+    "tests/fixtures/goway/models/identity/models.go": "408eadc3835324f1add620c90086fc8a2f9f593eca5ffd9dcf9de1a13fb38d0b",
+    "tests/fixtures/goway/models/identity/models_test.go": "b9884a6ab1e0056d30562fdd27b0ff94fb28c5d1bbc28e7cc56d37ea0635819e",
+    "tests/fixtures/goway/testdata/compilefail/attachment_id_owner/invalid.go": "a8c05eba19a9f55de6f3dd9ced82ae803aaf20bbc06fc39af58737bc526131f1",
+    "tests/fixtures/goway/testdata/compilefail/attachment_owner/invalid.go": "9004aaa3cf3b9bf879915fa16ca8bb575a6193cad60ee097d282ea66233fb2ba",
+    "tests/fixtures/goway/testdata/compilefail/auth_assurance/invalid.go": "51ba79994f2df0aed46e2512060d012906d9fa00d18402b04e4fb973cbc27b10",
+    "tests/fixtures/goway/testdata/compilefail/auth_provider_key/invalid.go": "239cc068cfc90d2c474796e5b26643b533311515b98b9715903e462104e62050",
+    "tests/fixtures/goway/testdata/compilefail/auth_scope_proof_owner/invalid.go": "8eb6f22a6e5893304211aaf0cc5e918f01d1413d62404bd8e4af774f0461fa80",
+    "tests/fixtures/goway/testdata/compilefail/country_key_contract/invalid.go": "269c2d7608ca5c09ce6a54a3fd1ba87dcefd832a3376b180f34f539db1307bfe",
+    "tests/fixtures/goway/testdata/compilefail/metadata_owner_contract/invalid.go": "e1311366341680f1aa7c19bb292cb3a2bfb4ffe994d3c50f615ee74e13f3ac57",
+    "tests/fixtures/goway/testdata/compilefail/metadata_value_contract/invalid.go": "0172bc82cf249aa0fefe9839d6c20481b0514cbc0a300fedb2170eab5877a0bb",
+    "tests/fixtures/goway/testdata/compilefail/mfa_retirement_owner/invalid.go": "a3737132bd6925cd92d2a61e3aa504cbcc5c054e732e7dda1506e0b7298a0ed2",
+    "tests/fixtures/goway/testdata/compilefail/recovery_reference_model/invalid.go": "344491033f7043e438c9949ece9e830a9146501ea15c5626252b51d85cbdb35c",
+    "tests/fixtures/goway/testdata/compilefail/revocation_reference_model/invalid.go": "49bd9c435637251874d1a7d4e0fbc20563712288b9fd0173d12cb73bc6a3ef5f",
+    "tests/fixtures/goway/testdata/compilefail/translation_locale_contract/invalid.go": "0ea7b9be7621f7aebf22981f0f6334307dd672753f463630b82f4f47ccb0ccef",
+    "tests/fixtures/goway/testdata/compilefail/translation_owner_contract/invalid.go": "0299df1510bd6cd62a2137549674cb102f431f807cfa3dfec509c0a8ea92a6f4",
+    "tools/goway_catalogue_test.py": "3c5ceb41aa9dc9a17d1c919ea511e084be9309923b874ff97bbc4e331afeddf0",
+    "tools/release/release_test.go": "5cd219933d54b70b9d3f5fa3d89319a0592e00c4870c46cc31d463dc7230f1a0",
+    "tools/release/source.go": "d84fc823ad60ac0c21ba25e32e29432a78099d6efc5a36294fc5151796dd2f3d"
+  },
+  "retained_artifacts_sha256": {
+    "tests/fixtures/consumer/articles/.foundry-gen.json": "0ab2593d1fa181e4fc6154b8db85f33ccb9e04a26a5ecb03d29cef2ff6bc9201",
+    "tests/fixtures/consumer/articles/article_foundry.gen.go": "25944d0815c26e5db7e65e247f12ecb3f1cbf417355644b48d47feb365d2b0e1",
+    "tests/fixtures/consumer/articles/article_input_foundry.gen.go": "ee3b685f762f4b7f1312564cc5b916352d89a5dd7896a4647d3d01c8552e8c99",
+    "tests/fixtures/consumer/articles/article_list_foundry.gen.go": "087688ac65d2068cc2279aa9fcae21110e95200498d1bdb7c10cf9e0706e88ce",
+    "tests/fixtures/consumer/articles/article_media_foundry.gen.go": "87f3e67272f82e6bcc473bb16764b21fc1acab0e23ad6bd85393ef331dc51123",
+    "tests/fixtures/consumer/articles/article_media_path_foundry.gen.go": "fd386fa467ffcc4efba0e34db612d9b9cfd9b5a01a1159b8031532815954bbbb",
+    "tests/fixtures/consumer/articles/article_path_foundry.gen.go": "a08f9a91139fae93c4518d39c394b0f7540358b5effa5bff652615906eb02699",
+    "tests/fixtures/consumer/articles/article_view_foundry.gen.go": "79b57914ff2d22865a4851fb8ee7d5db51e20c1b3d491796ada86a50d828f1e6",
+    "tests/fixtures/consumer/articles/author_foundry.gen.go": "2b6214c6d7bf2f9f5180a2638dc43d3051f4c665123bffb8e4125ab95bdf58dd",
+    "tests/fixtures/consumer/articles/file_view_foundry.gen.go": "e147a4eb00b124cfc3d8ed49fa52f1234df0314676f7459b297fac9ac0171645",
+    "tests/fixtures/consumer/articles/foundry_extensions_foundry.gen.go": "2ff3b264e15cdabf77d837a50b3d67a0e506cf58731871764471558f96fb82fd",
+    "tests/fixtures/consumer/articles/seo_foundry.gen.go": "86af2cd1fc229331ad2239d0233e4430d6c640489c3cba52e25fd9992aa919e3",
+    "tests/fixtures/consumer/genericdto/.foundry-gen.json": "23bf59715980add9130032d9b9144243e6d5d646f2104b63c1b854243702e67d",
+    "tests/fixtures/consumer/genericdto/combined_foundry.gen.go": "48fb54a58906881e262575b37e393c9df14906ef003e50b5e1bb13ead454532d",
+    "tests/fixtures/consumer/genericdto/envelope_foundry.gen.go": "4f0be8a0092b0f1d7dd29c71badad21f024f68c4f9fdfbb71ac1749957de626c",
+    "tests/fixtures/consumer/genericdto/project_dto_foundry.gen.go": "a9ac0d84c408d1eb7f064aa7ef773917d5db2974b8c5c5d02bb806561a5c1b17",
+    "tests/fixtures/consumer/genericdto/user_dto_foundry.gen.go": "f74c85b461c74df599489dee62241a469c502b9740527e58d15bb930d7d5424b",
+    "tests/fixtures/consumer/genericdto/user_envelope_foundry.gen.go": "1b74c605c2f3c0f8f1c65625f286315f316dd624d3a545e53d4985f12c32c0dc",
+    "tests/fixtures/consumer/httpuploads/.foundry-gen.json": "8df456e3c97ccb5c4c523a52e220ccfaac6d390b2c0530a8d37efd4416b095c4",
+    "tests/fixtures/consumer/httpuploads/profile_input_foundry.gen.go": "a2c763490ae839ea562df46f25f98de2c13192c3f066b0224d39b725717491e0",
+    "tests/fixtures/consumer/httpuploads/upload_reply_foundry.gen.go": "4ee9644cc6c43b24a18a1c052ea9264c23e76d76999a9cb2d91a06ab7491ac47",
+    "tests/fixtures/consumer/localization/.foundry-gen.json": "6b290e2ff5c97928d9bae660fc09b0228f8a53d53e3b4b94e056c171cab8d90e",
+    "tests/fixtures/consumer/localization/cart_args_foundry.gen.go": "30bb13167ffd370d27cd3c3878cecd5fed8d15e4fceba5a1249279935dfba940",
+    "tests/fixtures/consumer/localization/literal_args_foundry.gen.go": "4308c2e1b0438c4c81c32872d34cd91ae871129517d8a9dbe7f90bd7d05df96f",
+    "tests/fixtures/consumer/localization/locales/ar/messages.json": "29b690c7da1de977af837f15b5c7e94e0b6b3722fbe7b9e62a2270e068068278",
+    "tests/fixtures/consumer/localization/locales/en/messages.json": "38e28fdd778e7f4aa2b0176e77fd105bf194cf269b0089c6c34b5138d1a2e028",
+    "tests/fixtures/consumer/localization/locales/ms/messages.json": "8cac7428f20126270e02b8450b2f3398bc8927c81f0c7e56df7a3421d2f3d5c7",
+    "tests/fixtures/consumer/localization/manage_label_foundry.gen.go": "bccfa278913ba28dca3ff536a49b0e4746a189180750d747f0224345cb895555",
+    "tests/fixtures/consumer/localization/name_label_foundry.gen.go": "2b50e378a7124a428c92129c7fa37473ff6b68c5eed00b1dabae014615c5d11d",
+    "tests/fixtures/consumer/localization/position_args_foundry.gen.go": "2e68ab94c891101a71934f31560cacbe7e3d6e233fa5b5de6f11d53cf72b3405",
+    "tests/fixtures/consumer/localization/rule_args_foundry.gen.go": "a827361ebb9042e2afdc3c611e3d9e8e3ad055e95a215a5bdfd97cbb5433b40d",
+    "tests/fixtures/consumer/localization/status_foundry.gen.go": "ed86554f1d552bccf12fe4651d2d27f2f60a0d1c87e0e484ed73ae35e0eafdf0",
+    "tests/fixtures/consumer/localization/welcome_args_foundry.gen.go": "015e867ae2882939a246e15e154b5a237af279e72ec9da39e770d7092879c032",
+    "tests/fixtures/consumer/multifactor/.foundry-gen.json": "db2b0229acd7ca32afc8a40b046db68cf816bb23f46704cdb788b30fdd8e9dd6",
+    "tests/fixtures/consumer/multifactor/account_foundry.gen.go": "c197d6f5b143800da79a8751a541a81400a2a6b7c0e732866ce543bfe730b521",
+    "tests/fixtures/consumer/multifactor/confirmation_request_foundry.gen.go": "f60b8130948cc340c87fbf60971def30ce9b4af8260f73e4b08b675d1bce9917",
+    "tests/fixtures/consumer/multifactor/enrollment_request_foundry.gen.go": "81171ff71d8d1ed9438468e4a3ec8a47b040cbb4a6b4b3a34072a011a09f618f",
+    "tests/fixtures/consumer/multifactor/recovery_request_foundry.gen.go": "d37ef77c5e2f45f16092c996ca806916524a3e8cf47f5f8e0f3b7906c7256513",
+    "tests/fixtures/consumer/multifactor/regeneration_request_foundry.gen.go": "05ea29c316bdeeb2c13cbcd531cce5d5ffcd5c57ff7aa4075f06f0363c3d4068",
+    "tests/fixtures/consumer/multifactor/totp_request_foundry.gen.go": "d54441e36e83b66c0a66fd381d512a4769f6355c9b96084380ad827bbe3c235f",
+    "tests/fixtures/consumer/passwords/.foundry-gen.json": "97ef3b0596e4278523d4e05e9647bb0639e075ae14dde3051f17417fc394f30e",
+    "tests/fixtures/consumer/passwords/account_foundry.gen.go": "eefa2db54ccf1bb29dd7472cf3cc6269f96c72493e80aade0d8ba05d16032c61",
+    "tests/fixtures/consumer/passwords/credential_projection_foundry.gen.go": "cc2450a672f0c35ffb6d2b65a052e6f17441b3464335da3568f5cc5a7dd0b7ff",
+    "tests/fixtures/consumer/passwords/login_request_foundry.gen.go": "57468fb4225dbc44b78bb870aedcfdc5587b8e57d598b0be5d5fa54977136f8c",
+    "tests/fixtures/consumer/profiles/.foundry-gen.json": "5ab5cd249f781e2e2ef22563019261fce1769698f41a885b84451908895ae64f",
+    "tests/fixtures/consumer/profiles/preferences_foundry.gen.go": "edd41d4ff4949537e85c1f55c2be7844df1c8f90af37cd3ef179a22865dc67e1",
+    "tests/fixtures/consumer/profiles/profile_foundry.gen.go": "d3883598ededbf142d380d7d7cf2be5883175148ce080a18b551450cc945e2c2",
+    "tests/fixtures/consumer/requestflow/.foundry-gen.json": "87ccbaa11939c187eab5b9af8c4c8ad428438e4f3982234e02d01376208ee968",
+    "tests/fixtures/consumer/requestflow/json_submission_foundry.gen.go": "2eaf62ecbfa46f4c94dd780bd97f8a3997fc436f8532068a956d74b5309ef2be",
+    "tests/fixtures/consumer/requestflow/multipart_submission_foundry.gen.go": "4598dcab7185fdb445726170007f991ce118b863cbfbc500b4a460de7809c40a",
+    "tests/fixtures/consumer/requestflow/reply_foundry.gen.go": "bcf7f5f1029cd984af6b38f306a862744ea37cc4eee478b54972bcd6d1777b78",
+    "tests/fixtures/consumer/requestflow/submission_foundry.gen.go": "de3468e4d1ef0da8d9d636c07618027edaf9e68c2593358612422ce0fccb43b3",
+    "tests/fixtures/consumer/unions/.foundry-gen.json": "2ac5bbb55270196ad639de5e3dbfd885b7874cff8809335810902cd04f8db10f",
+    "tests/fixtures/consumer/unions/bank_dto_foundry.gen.go": "6e117ff95ddb3e9805e3cd702f5ba20a499e974e4c3869f1dbfc1169dc90f0bf",
+    "tests/fixtures/consumer/unions/card_dto_foundry.gen.go": "939308023ca8ce1a730ed3996ba40f2528a44de7a0dc6479616acd907177105a",
+    "tests/fixtures/consumer/unions/delivery_foundry.gen.go": "c90536ee8c10f87420d93592259512301fee046366f09e7d91926dedcd3a10c1",
+    "tests/fixtures/consumer/unions/payment_method_foundry.gen.go": "dddf5bed7bcba8cf9581914de2221e9d8fc9f62cba0f10b3865ffe057c4d83d6",
+    "tests/fixtures/consumer/unions/payment_request_foundry.gen.go": "d5470a3e0d167d2bff63f477b8aa0f98a92ab49d26a3a611d86782f3f763badb"
+  },
+  "limitations": [
+    "No live PostgreSQL; lifecycle and persisted-state test sources compiled and vetted.",
+    "Generation, TypeScript and editor integration gates belong to the lead at the Stage 9 barrier.",
+    "Recovery draft-unset and ORM extension matching remain missing capabilities; dependent cutovers are not claimed complete."
+  ],
+  "packages": {
+    "profiles": "service and lifecycle consumer migrated; generated APIs retained as permitted",
+    "articles": "publish-ready; dependent consumers retained",
+    "passwords": "publish-ready; dependent authentication operations retained",
+    "multifactor": "publish-ready; dependent authentication operations retained",
+    "retained_unchanged": [
+      "genericdto",
+      "unions",
+      "localization",
+      "httpuploads",
+      "requestflow",
+      "internal/authfixture",
+      "internal/clientfixture"
+    ]
+  },
+  "log_directory": "/private/tmp/goway-stage9-d1",
+  "framework_surface_additions": [],
+  "footprint_budget_changes": [],
+  "compiler_rows": [
+    "extension_identity_owner",
+    "extension_policy_kind",
+    "extension_rule_field",
+    "extension_runtime_type",
+    "extension_slot_owner",
+    "extension_slot_query",
+    "extension_value_type",
+    "extension_write_owner",
+    "attachment_id_owner",
+    "attachment_owner",
+    "metadata_owner_contract",
+    "metadata_value_contract",
+    "translation_owner_contract",
+    "translation_locale_contract",
+    "auth_provider_key",
+    "auth_assurance",
+    "auth_scope_proof_owner",
+    "mfa_retirement_owner",
+    "recovery_reference_model",
+    "revocation_reference_model",
+    "country_key_contract",
+    "password_model_setter",
+    "password_model_predicate",
+    "password_model_like"
+  ],
+  "newly_ported_rows": 13,
+  "previously_ported_consumer_cases_migrated": 11,
+  "catalogue_totals": {
+    "ported": 547,
+    "port": 35,
+    "unaffected": 444,
+    "total": 1026
+  },
+  "acceptance": [
+    {
+      "command": "go test ./profiles ./articles ./passwords ./multifactor ./genericdto ./unions ./localization ./httpuploads ./requestflow ./internal/authfixture ./internal/clientfixture",
+      "directory": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage9-d1/tests.log"
+    },
+    {
+      "command": "go build ./profiles ./articles ./passwords ./multifactor ./genericdto ./unions ./localization ./httpuploads ./requestflow ./internal/authfixture ./internal/clientfixture ./bootstrap",
+      "directory": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage9-d1/build.log"
+    },
+    {
+      "command": "go vet ./profiles ./articles ./passwords ./multifactor ./genericdto ./unions ./localization ./httpuploads ./requestflow ./internal/authfixture ./internal/clientfixture",
+      "directory": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage9-d1/vet.log"
+    },
+    {
+      "command": "go test -race ./profiles ./articles ./passwords ./multifactor ./genericdto ./unions ./localization ./httpuploads ./requestflow ./internal/authfixture ./internal/clientfixture",
+      "directory": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage9-d1/race.log"
+    },
+    {
+      "command": "go test -v . -run '^TestInvalidPublicContractsFailCompilation$/^(extension_identity_owner|extension_policy_kind|extension_rule_field|extension_runtime_type|extension_slot_owner|extension_slot_query|extension_value_type|extension_write_owner|attachment_id_owner|attachment_owner|metadata_owner_contract|metadata_value_contract|translation_owner_contract|translation_locale_contract|auth_provider_key|auth_assurance|auth_scope_proof_owner|mfa_retirement_owner|recovery_reference_model|revocation_reference_model|country_key_contract|password_model_setter|password_model_predicate|password_model_like)$'",
+      "directory": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage9-d1/consumer-compiler-final.log"
+    },
+    {
+      "command": "go test -v . -run '^TestInvalidPublicContractsFailCompilation$/^(extension_identity_owner|extension_policy_kind|extension_rule_field|extension_runtime_type|extension_slot_owner|extension_slot_query|extension_value_type|extension_write_owner|attachment_id_owner|attachment_owner|metadata_owner_contract|metadata_value_contract|translation_owner_contract|translation_locale_contract|auth_provider_key|auth_assurance|auth_scope_proof_owner|mfa_retirement_owner|recovery_reference_model|revocation_reference_model|country_key_contract|password_model_setter|password_model_predicate|password_model_like)$'",
+      "directory": "tests/fixtures/goway",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage9-d1/goway-compiler.log"
+    },
+    {
+      "command": "go build ./models/identity",
+      "directory": "tests/fixtures/goway",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage9-d1/identity-build.log"
+    },
+    {
+      "command": "go vet ./models/identity",
+      "directory": "tests/fixtures/goway",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage9-d1/identity-vet.log"
+    },
+    {
+      "command": "go test -race ./models/identity",
+      "directory": "tests/fixtures/goway",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage9-d1/identity-race.log"
+    },
+    {
+      "command": "go test -v . -run ^TestFootprintBudgets$",
+      "directory": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage9-d1/footprint.log"
+    },
+    {
+      "command": "python3 tools/goway_catalogue.py",
+      "directory": ".",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage9-d1/catalogue.log"
+    },
+    {
+      "command": "make docs-check",
+      "directory": ".",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage9-d1/docs.log"
+    },
+    {
+      "command": "git diff --check",
+      "directory": ".",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-stage9-d1/diff.log"
+    },
+    {
+      "command": "gofmt -l <all changed D1 Go sources>",
+      "exit_code": 0,
+      "output": "empty"
+    }
+  ],
+  "footprint": {
+    "model_type": {
+      "functions": 1159,
+      "functions_ceiling": 1449,
+      "symbols": 7267,
+      "symbols_ceiling": 9084,
+      "bytes": 4769542,
+      "bytes_ceiling": 5959555
+    },
+    "model_isolated": {
+      "functions": 139,
+      "functions_ceiling": 174,
+      "symbols": 1051,
+      "symbols_ceiling": 1314,
+      "bytes": 630100,
+      "bytes_ceiling": 786148
+    },
+    "model_draft": {
+      "functions": 225,
+      "functions_ceiling": 282,
+      "symbols": 1566,
+      "symbols_ceiling": 1958,
+      "bytes": 992806,
+      "bytes_ceiling": 1239298
+    },
+    "endpoint_plain": {
+      "functions": 1065,
+      "functions_ceiling": 1332,
+      "symbols": 7314,
+      "symbols_ceiling": 9143,
+      "bytes": 4851184,
+      "bytes_ceiling": 6059643
+    }
+  },
+  "corrections": [
+    "The initial formatter invocation used the consumer cwd with root-relative paths; no files were written, and formatting was rerun successfully from the repository root. No source/test failures occurred."
+  ],
+  "integration_batch7a": {
+    "base_commit": "6d80111",
+    "status": "pass",
+    "updated_at": "2026-10-24T21:17:31.086444+00:00",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off",
+      "FOUNDRY_TEST_GOPLS": "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls"
+    },
+    "cache_rotation": "Build, vet, generation and race completed on r6 before rotation. Race log reconciled against all 109 requested packages using r7 go list; no interrupted package remains. All subsequent Go commands use r7.",
+    "lane_source_hashes": {
+      "source_sha256": {
+        "blueprint/goway-data-layer/compilefail-mapping.tsv": "8af75bace6fbf0f5753242a11d873f24253f3ff4230103513fa58ec5a6fb7706",
+        "tests/fixtures/consumer/README.md": "8396b1a8651e408cfb0e9073e5d7c51a8a0cf6e61750c218914761df9fb3ca6a",
+        "tests/fixtures/consumer/articles/tables.go": "9ac60f419c16e51fae22d710c0450430dabd27096fd7e4ebdeb15b36deb379da",
+        "tests/fixtures/consumer/articles/tables_test.go": "6357b60b04a0f6ce1ec61b5ae534ba139d5e09f38031e49e683c9ab24746580e",
+        "tests/fixtures/consumer/multifactor/tables.go": "d55c31c4a5ccdffcf26cd8f12cce03beb77f9534750b72fa293e074fb22ab2d6",
+        "tests/fixtures/consumer/multifactor/tables_test.go": "2434e0cdfebd7e8060d1759936b54fa886a3849a4b89dddc3776bc35173a6573",
+        "tests/fixtures/consumer/passwords/tables.go": "2b37a66c8f182484ddca5dfe1481600b5446c51322b7b83d2b1f657f15e9b382",
+        "tests/fixtures/consumer/passwords/tables_test.go": "d6d097e1987cd3f2411dc1c50774d1d3319ddaa7d1a7c287c6f455bb5f2518b8",
+        "tests/fixtures/consumer/profiles/profile.go": "a4e7398ba5fc486f6531c7b3918088364c2da3c1cf1688f96abb85d5a44957a4",
+        "tests/fixtures/consumer/profiles/profile_test.go": "b9c4027c0941b3337e90d770337a4e2df27d7a6ee920d434b93c99d9dd1cc847",
+        "tests/fixtures/consumer/profiles/tables.go": "df834b77b8291c9d452707bc67a39ad138a6884bd10080e121dd0956af1db77c",
+        "tests/fixtures/consumer/profiles/tables_test.go": "c683edd9fc0218310dc4ac4dbed45b2d763ff33f03c0dbbcb7274c7232ea1097",
+        "tests/fixtures/consumer/testdata/compilefail/attachment_id_owner/invalid.go": "da5beab300a4bf5ddf8cacf0c23bfa9d968f13d0c6df132b74193263992bba57",
+        "tests/fixtures/consumer/testdata/compilefail/attachment_owner/invalid.go": "8608ab258b044d6d09b303d971bc9cdf25b2f522cf218298fcc2048eed6d6e70",
+        "tests/fixtures/consumer/testdata/compilefail/auth_assurance/invalid.go": "ce332468b97bb33f950dabbb0b14cbcd845eb2bd8e673819bcf3c7887ff717e3",
+        "tests/fixtures/consumer/testdata/compilefail/auth_provider_key/invalid.go": "e227c43aed41b6d3cc6c57a5151aba19edaaf14b8b6f3fd7dbe8ed15ec7c365f",
+        "tests/fixtures/consumer/testdata/compilefail/auth_scope_proof_owner/invalid.go": "6ea0230e9e062571fd69775ae35dd9468315cfbedab65cb2ef813d6e1dc5730a",
+        "tests/fixtures/consumer/testdata/compilefail/extension_identity_owner/invalid.go": "59fa558f3ac85a1a19b5870aa09296484c55c4e9434687649c8f2cc30615def5",
+        "tests/fixtures/consumer/testdata/compilefail/extension_policy_kind/invalid.go": "57d48929358bc40b0eeb2792a8d525ff1972d1dd9de9b4fac14a6fcd37b91b9a",
+        "tests/fixtures/consumer/testdata/compilefail/extension_rule_field/invalid.go": "9d72f0c10724490d5839e72c4842078075576ee220574f0118ec342d304d0d3d",
+        "tests/fixtures/consumer/testdata/compilefail/extension_runtime_type/invalid.go": "764c25b66588ad1b146753ee9b036a8860b05f699f4426407dc6eeee2e00b044",
+        "tests/fixtures/consumer/testdata/compilefail/extension_slot_owner/invalid.go": "3db7cc48b2f61881a61740074823688f1b46e06d4ce8dd55029b8b43949ec0a4",
+        "tests/fixtures/consumer/testdata/compilefail/extension_slot_query/invalid.go": "a0dca58ca58def50c2719b5d54279904e92fd33358b5f27a882c83e6ab89782b",
+        "tests/fixtures/consumer/testdata/compilefail/extension_value_type/invalid.go": "ff296896f9d6959e39a44be4429cfcc4a121b00bc0c85d367ac6061758472d54",
+        "tests/fixtures/consumer/testdata/compilefail/extension_write_owner/invalid.go": "fae3d4088383bd8271fe3adf63a4f652c2265cf33e547cbfd679f0f4d66d13b0",
+        "tests/fixtures/consumer/testdata/compilefail/metadata_owner_contract/invalid.go": "c5dbb733ed0e9b7ce41a88b11a46bd33cd2d7d085ddd838035722b94b819e33a",
+        "tests/fixtures/consumer/testdata/compilefail/metadata_value_contract/invalid.go": "f7e8b869092d61d28c6217d4b0b9b99758e2d15d4bb583f4250f4d8ca13333f9",
+        "tests/fixtures/consumer/testdata/compilefail/mfa_retirement_owner/invalid.go": "d011885b14566159a1c7f52bc4eaf633e56c85776f9685f5d19c9c9e6f1061a6",
+        "tests/fixtures/consumer/testdata/compilefail/password_model_like/invalid.go": "30f66959c984e90b8d2938a152d5f53bd4165c2a697884ef40a53436fa405483",
+        "tests/fixtures/consumer/testdata/compilefail/password_model_predicate/invalid.go": "4a4e925ebb2f9770a7da2eb4cd0bca8fb1ad1ecdca86273868dc5a0a7e2ede5d",
+        "tests/fixtures/consumer/testdata/compilefail/password_model_setter/invalid.go": "59da3a6e40ca1cb3e0b563d3ae23f5ab330991d27c55af5318255273cbedc2c2",
+        "tests/fixtures/consumer/testdata/compilefail/recovery_reference_model/invalid.go": "9358cc62106240c3c2733e8d002adf551aac93203dad5446461cad2f240d1017",
+        "tests/fixtures/consumer/testdata/compilefail/revocation_reference_model/invalid.go": "304efc2e20500e737b1503008e3b2163212dc7e5a996c22d22d9ae5deeae7dc8",
+        "tests/fixtures/consumer/testdata/compilefail/translation_locale_contract/invalid.go": "88e6486f15e64eda696dfb3aa4f9a93babab9ceea4794caa1c07f3a80d4b878c",
+        "tests/fixtures/consumer/testdata/compilefail/translation_owner_contract/invalid.go": "bdfd7b27bf32732d55ca2a620ef587af254c1fd4c056d1c49ad7ce7d3f380993",
+        "tests/fixtures/goway/compiler_cases_test.go": "2cb722311b27d9e63274d09b61e92eef38acd389e502016ab2afd45d711b46cd",
+        "tests/fixtures/goway/models/identity/models.go": "408eadc3835324f1add620c90086fc8a2f9f593eca5ffd9dcf9de1a13fb38d0b",
+        "tests/fixtures/goway/models/identity/models_test.go": "b9884a6ab1e0056d30562fdd27b0ff94fb28c5d1bbc28e7cc56d37ea0635819e",
+        "tests/fixtures/goway/testdata/compilefail/attachment_id_owner/invalid.go": "a8c05eba19a9f55de6f3dd9ced82ae803aaf20bbc06fc39af58737bc526131f1",
+        "tests/fixtures/goway/testdata/compilefail/attachment_owner/invalid.go": "9004aaa3cf3b9bf879915fa16ca8bb575a6193cad60ee097d282ea66233fb2ba",
+        "tests/fixtures/goway/testdata/compilefail/auth_assurance/invalid.go": "51ba79994f2df0aed46e2512060d012906d9fa00d18402b04e4fb973cbc27b10",
+        "tests/fixtures/goway/testdata/compilefail/auth_provider_key/invalid.go": "239cc068cfc90d2c474796e5b26643b533311515b98b9715903e462104e62050",
+        "tests/fixtures/goway/testdata/compilefail/auth_scope_proof_owner/invalid.go": "8eb6f22a6e5893304211aaf0cc5e918f01d1413d62404bd8e4af774f0461fa80",
+        "tests/fixtures/goway/testdata/compilefail/country_key_contract/invalid.go": "269c2d7608ca5c09ce6a54a3fd1ba87dcefd832a3376b180f34f539db1307bfe",
+        "tests/fixtures/goway/testdata/compilefail/metadata_owner_contract/invalid.go": "e1311366341680f1aa7c19bb292cb3a2bfb4ffe994d3c50f615ee74e13f3ac57",
+        "tests/fixtures/goway/testdata/compilefail/metadata_value_contract/invalid.go": "0172bc82cf249aa0fefe9839d6c20481b0514cbc0a300fedb2170eab5877a0bb",
+        "tests/fixtures/goway/testdata/compilefail/mfa_retirement_owner/invalid.go": "a3737132bd6925cd92d2a61e3aa504cbcc5c054e732e7dda1506e0b7298a0ed2",
+        "tests/fixtures/goway/testdata/compilefail/recovery_reference_model/invalid.go": "344491033f7043e438c9949ece9e830a9146501ea15c5626252b51d85cbdb35c",
+        "tests/fixtures/goway/testdata/compilefail/revocation_reference_model/invalid.go": "49bd9c435637251874d1a7d4e0fbc20563712288b9fd0173d12cb73bc6a3ef5f",
+        "tests/fixtures/goway/testdata/compilefail/translation_locale_contract/invalid.go": "0ea7b9be7621f7aebf22981f0f6334307dd672753f463630b82f4f47ccb0ccef",
+        "tests/fixtures/goway/testdata/compilefail/translation_owner_contract/invalid.go": "0299df1510bd6cd62a2137549674cb102f431f807cfa3dfec509c0a8ea92a6f4"
+      }
+    },
+    "conflicts": {
+      "laneA": [
+        "tests/fixtures/goway/compiler_cases_test.go",
+        "tests/fixtures/goway/footprint_test.go"
+      ],
+      "laneB": [],
+      "laneC": [],
+      "laneD": [
+        "blueprint/goway-data-layer/compilefail-mapping.tsv"
+      ]
+    },
+    "resolutions": [
+      "Union compiler/probe registries, deduplicating identical entries without raising existing ceilings.",
+      "Merge catalogue by case against the common base; retain lane C transaction programs and lane D typed owner programs. No overlapping changed row required dropping either side.",
+      "README/guide changes applied cleanly; lead-owned docs integrated separately. Public ORM snapshot/convertibility allowlist unchanged."
+    ],
+    "counts": {
+      "catalogue_rows": 1026,
+      "dispositions": {
+        "ported": 561,
+        "unaffected": 444,
+        "port": 21
+      },
+      "distinct_ported_cases": 553,
+      "goway_compiler_cases": 805,
+      "goway_footprint_probes": 130
+    },
+    "commands": [
+      {
+        "command": "go build ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/build.log",
+        "log_sha256": "bfa2afaf4ea1d1fcc42371cd2038ce1f8d962dcf363c67e70bfad18c2129f6b5",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6"
+      },
+      {
+        "command": "go vet ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/vet.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6"
+      },
+      {
+        "command": "go test -race -timeout=20m ./database/... ./internal/... ./application/... ./http/... ./datatable/... ./value/... ./enum/...",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/race.log",
+        "log_sha256": "baaa2c5479f2d60e12b182056dccd8fa827d454b9387fd123e10a988e0b26e71",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6"
+      },
+      {
+        "command": "make fixture-check (vet and tests for plugin_base, plugin_dep, consumer and goway)",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/fixtures.log",
+        "log_sha256": "3011a7f5d0533e55902824ad10bf6ef972bc4f6406f6e56b81284ffe6f5204bd",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      },
+      {
+        "command": "python3 tools/goway_catalogue.py",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/catalogue.log",
+        "log_sha256": "838999c429f032b7a58dbb8318dd3dcf6de05e44e4f4b9d5cf0c0ee1af574b5d",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      },
+      {
+        "command": "make generate-check",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/generate.log",
+        "log_sha256": "aff9fb69af141873e6432dbf8aac79dce91e16c5bcf0f4ccc0cf5187ac3d14e4",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6"
+      },
+      {
+        "command": "make release-tools-check",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/release-tools.log",
+        "log_sha256": "d26d1688d0f8c284e5eab8878a52dc54d3d9335fc4f36bdf51e5706aa45ce0d2",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      },
+      {
+        "command": "make docs-check",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/docs.log",
+        "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      },
+      {
+        "command": "FOUNDRY_TEST_GOPLS=/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls make agent-smoke",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/agent.log",
+        "log_sha256": "c440e16a3c23f83164e362023c673a5f72cd4a78da1c1f02ff50070cda51d8ce",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      },
+      {
+        "command": "gofmt -l (all repository Go sources)",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/gofmt.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      },
+      {
+        "command": "git diff --check; git diff --cached --check",
+        "status": "pass",
+        "log": ".cache/goway-batch7a/diff-check.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7"
+      }
+    ],
+    "final_targeted_checks": [
+      {
+        "command": "go vet ./internal/agent",
+        "status": "pass",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "go test -race ./internal/agent",
+        "status": "pass",
+        "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7",
+        "log_sha256": "3d6d2169b603c3ce0b57bd2a7b5b6465b76b4f9c4adb3d291fd406376fb2bb59"
+      }
+    ],
+    "editor_subtests_passed": 494,
+    "editor_fix": {
+      "initial_failure": "The migrated interval/transaction and change-tracking consumers removed generated-API expressions used by editor probes.",
+      "fix": "Update fourteen interval/transaction completion/hover/definition probes and one change-tracking documentation probe to the corresponding ORM APIs; add stored-value documentation to the handwritten MemberTable.Email field. All fifteen focused real-gopls probes passed.",
+      "initial_log": ".cache/goway-batch7a/agent-initial.log",
+      "initial_log_sha256": "e26f1fbbf778b23da667cb3c42ed8921333b167c07f67c84839b7f545da228a6",
+      "focused_log": ".cache/goway-batch7a/agent-focused.log",
+      "focused_log_sha256": "88e8ad32e055ea5a73341f1918413631a2d53ba8247059edeb736515f591f701",
+      "note": "An initial focused filter matched no tests; it was corrected before claiming the focused pass."
+    },
+    "verification_fix": {
+      "check": "make release-tools-check",
+      "initial_failure": "Seven Stage 7 rows are now ported; the Python regression still required port. Six consumer sources now use ORM identities instead of FoundryReference.",
+      "fix": "Accept pending or completed Stage 7 ownership and retain each migrated original FoundryReference expression as an explicit guard regression input. No runtime or catalogue disposition change.",
+      "initial_log": ".cache/goway-batch7a/release-tools-initial.log",
+      "initial_log_sha256": "5a3448b74047b52ab6cb107b0786fabc4128f21ac2a6e3c754fb1367ae4ffa98"
+    },
+    "generation": {
+      "make_generate_needed": false,
+      "generated_source_count": 398,
+      "unchanged_since_patch_application": true,
+      "accepted_patch_artifacts": [
+        "tests/fixtures/goway/integrations/.foundry-gen.json",
+        "tests/fixtures/goway/integrations/response_foundry.gen.go"
+      ],
+      "manual_generated_edits": false
+    },
+    "release_inventory": "Allow exactly internal/generate/testdata/scaffold/model.golden and extensions.golden; pin both in release tests, reject unreviewed/other-path golden files.",
+    "stage_status": "Stage 7 approved slices complete; Stage 8 D8 and Stage 9 wave 1 integrated. Full consumer cutovers and model/query emitter retirement remain open. Stage 6 whole-app measurement gate pending.",
+    "not_run": [
+      "Live PostgreSQL and Redis (opt-in sources compiled)",
+      "Stage 6 whole-app measurement gate"
+    ],
+    "git": "Only authorized apply -3 --binary/add writes; no commit."
+  }
+}

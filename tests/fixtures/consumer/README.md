@@ -18,6 +18,21 @@ attachments and typed metadata as model extension slots, registers them with
 `Builder.Models` and exercises generated deletion cleanup against PostgreSQL;
 see the [slot guide](../../../docs/guides/model-extension-slots.md).
 
+The Stage 9 foundations publish handwritten declarations beside the retained
+generated API: [profiles](profiles/tables.go), [articles](articles/tables.go),
+[passwords](passwords/tables.go) and [multifactor](multifactor/tables.go).
+Each package exposes `Tables()` for startup checking and an ORM identity that
+preserves existing stored references. Profiles' service cleanup uses ORM hooks;
+article slots use `ArticleSlots.From(runtime)` and
+`Articles.Query().With(bound.All()...)`. Register `ORMExtensionDeclaration()`
+for ORM article writes; keep the generated declaration for legacy writes until
+their cutover, and never register both observer families in one application.
+
+DTO, enum, configuration, localization and client generation remain supported.
+The generic DTO, union, localization, upload and request-flow contracts are
+retained unchanged. Model directives and generated files remain during the
+foundation phase; the integration barrier owns regeneration and later removal.
+
 The [portal consumer](spaportals/portals.go) declares browser portals with
 `Builder.SPA` beside a root public mount, content-hashed bundles and a typed API
 route, and checks client-route fallback, precedence and Build-time rejection;

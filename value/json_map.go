@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/internal/jsonshape"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Storage snapshots retain their own bounds. HTTP callers use CheckJSONKeys
@@ -67,7 +68,7 @@ func parseCustomJSONMapKey(ctx context.Context, key string, typ reflect.Type, ou
 	}
 	destination := reflect.New(reflect.MapOf(typ, reflect.TypeFor[struct{}]()))
 	if err := json.Unmarshal(data, destination.Interface()); err != nil {
-		return reflect.Value{}, err
+		return reflect.Value{}, safeerror.Wrap("JSON map key decoding failed", err)
 	}
 	if destination.Elem().Len() != 1 {
 		return reflect.Value{}, invalidJSON()

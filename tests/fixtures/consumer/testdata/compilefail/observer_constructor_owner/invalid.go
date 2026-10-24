@@ -1,15 +1,14 @@
 package invalid
 
 import (
-	"foundry.test/consumer/models"
+	"foundry.test/consumer/observerqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 )
 
-func wrongObserverConstructor(r *foundation.Registrar, pool foundation.Key[*database.DB]) {
-	observer := lifecycle.NewObserver[models.User, models.UserHooks]("user.audit")
-	_ = database.RegisterObserver(r, pool, observer, func(foundation.Resolver) (func() models.GroupHooks, error) {
-		return func() models.GroupHooks { return models.GroupHooks{} }, nil
+func invalid(r *foundation.Registrar, pool foundation.Key[*database.DB]) {
+	_ = orm.RegisterObserver(r, pool, orm.NewObserver[observerqueries.Record]("wrong"), func(foundation.Resolver) (func() orm.Hooks[observerqueries.Plain], error) {
+		return func() orm.Hooks[observerqueries.Plain] { return orm.Hooks[observerqueries.Plain]{} }, nil
 	})
 }

@@ -5,6 +5,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/enum"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"reflect"
@@ -110,7 +111,7 @@ func EnumCodec[E interface {
 	resolve := sync.OnceValue(func() enum.Descriptor[E] { var e E; return e.EnumDescriptor() })
 	check := sync.OnceValue(func() error {
 		if err := resolve().Validate(); err != nil {
-			return Invalid("orm: invalid enum descriptor: " + err.Error())
+			return fault.Wrap(fault.Invalid, "orm: invalid enum descriptor", err)
 		}
 		return nil
 	})

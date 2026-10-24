@@ -2,9 +2,10 @@ package invalid
 
 import (
 	"foundry.test/consumer/intervalqueries"
-	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
 func invalid() {
-	_ = intervalqueries.ProjectSummary(intervalqueries.QueryIntervalSamples()).SelectCount(foundryquery.Sum(intervalqueries.SampleFields().Period).Value())
+	_ = rows.MapSelected(intervalqueries.Summaries.Count, expr.SumInterval(intervalqueries.Samples.Period).Value())
 }

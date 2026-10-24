@@ -88,7 +88,13 @@ go mod tidy
 go test ./...
 ```
 
-Model generation supplies typed APIs; it does not create database tables.
+The model scaffold creates a handwritten ORM declaration and a `WidgetTables()`
+helper. Compose it into the application's `models.Tables()` list; model field and
+relation edits need no generation. See [model scaffolding](model-scaffolding.md)
+for typed timestamp, soft-delete, mutator and extension bindings. DTO and other
+contract declarations in this workflow still use generation.
+
+ORM declarations and generated contract codecs do not create database tables.
 Declare reviewed forward migrations for your models and include the enabled
 framework features from `app.Migrations()` in your explicit migration workflow.
 Ordinary application boot never applies schema changes. Configure PostgreSQL for

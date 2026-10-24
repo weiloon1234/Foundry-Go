@@ -1,5 +1,8 @@
 package invalid
 
-import "foundry.test/consumer/inputqueries"
+import (
+	"foundry.test/consumer/inputqueries"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+)
 
-var _ = inputqueries.MemberFields().Email.Set(inputqueries.StoredEmail("already stored"))
+var _ = orm.ConflictSet(inputqueries.Members.Email, inputqueries.StoredEmail("stored"))

@@ -7,5 +7,5 @@ import (
 )
 
 func invalid(manager *translations.Manager, profile profiles.Profile, raw string) {
-	_ = profiles.Label.Set(context.Background(), manager, profile.FoundryReference(), raw, "text")
+	_ = profiles.Label.Set(context.Background(), manager, profiles.ProfileIdentity.ReferenceOf(profile), raw, "text")
 }

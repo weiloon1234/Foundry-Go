@@ -4,8 +4,8 @@ import (
 	"context"
 	"foundry.test/consumer/linkqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-func invalid(db *database.DB) {
-	_, _ = linkqueries.QueryLinkMemberships().CreateEach(context.Background(), db, []linkqueries.MemberDraft{})
-}
+var db *database.DB
+var _, _ = orm.CreateEach(context.Background(), db, linkqueries.Memberships.Query(), [][]orm.Assignment[linkqueries.Member]{})

@@ -9,5 +9,5 @@ import (
 
 // An article slot writes only for an article.
 func invalid(author articles.Author) {
-	_ = articles.ArticleExtensions().Title.Save(context.Background(), author, map[i18n.LocaleID]string{"en": "x"})
+	_ = articles.ArticleSlots.Title.Save(context.Background(), author, map[i18n.LocaleID]string{"en": "x"})
 }

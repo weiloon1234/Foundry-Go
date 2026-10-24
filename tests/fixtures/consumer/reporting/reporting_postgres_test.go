@@ -17,7 +17,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/decimal"
 )
 
-func TestPublicDatatablesUseGeneratedRowsPoliciesAndRelationScopes(t *testing.T) {
+func TestPublicDatatablesUseRowsPoliciesAndRelationScopes(t *testing.T) {
 	f := openFixture(t)
 	scope := f.scope(t)
 	authority := reporting.FromGuard(f.guard)
@@ -73,7 +73,7 @@ func TestPublicDatatablesUseGeneratedRowsPoliciesAndRelationScopes(t *testing.T)
 		t.Fatal("generated decimal metadata changed", err)
 	}
 	if err := f.transaction(t.Context(), func(tx *database.Tx) error {
-		_, err := tx.Exec(t.Context(), `UPDATE report_operators SET can_view=false`)
+		_, err := reporting.OperatorModels.Update(t.Context(), tx, f.operator, reporting.OperatorModels.CanView.Set(false))
 		return err
 	}); err != nil {
 		t.Fatal(err)

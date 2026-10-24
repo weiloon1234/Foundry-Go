@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
@@ -22,10 +24,10 @@ func transactionFixture(t *testing.T) (context.Context, *database.DB, string) {
 		if _, err := tx.Exec(ctx, `CREATE TABLE records (id bigint PRIMARY KEY,name text NOT NULL)`); err != nil {
 			return err
 		}
-		_, err := QueryRecords().CreateMany(ctx, tx, []RecordDraft{
-			RecordDraft{}.SetID(1).SetName("Alpha"),
-			RecordDraft{}.SetID(2).SetName("Beta"),
-			RecordDraft{}.SetID(3).SetName("Gamma"),
+		_, err := orm.InsertEach(ctx, tx, Records.Table, [][]orm.Assignment[Record]{
+			{Records.ID.Set(1), Records.Name.Set("Alpha")},
+			{Records.ID.Set(2), Records.Name.Set("Beta")},
+			{Records.ID.Set(3), Records.Name.Set("Gamma")},
 		})
 		return err
 	}); err != nil {
@@ -45,10 +47,10 @@ func inTransaction(ctx context.Context, db *database.DB, path string, fn func(*d
 
 // Each call starts an independent transaction, even when a surrounding callback
 // already holds a transaction. NOWAIT makes lock ownership observable without sleeps.
-func assertIndependentLock(t *testing.T, ctx context.Context, db *database.DB, path string, q RecordLockedQuery, id int64, blocked bool) {
+func assertIndependentLock(t *testing.T, ctx context.Context, db *database.DB, path string, q orm.LockedQuery[Record], id int64, blocked bool) {
 	t.Helper()
 	err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
-		_, err := q.NoWait().RequireFind(ctx, tx, id)
+		_, err := q.NoWait().Where(Records.ID.Eq(id)).Require(ctx, tx)
 		return err
 	})
 	if !blocked {
@@ -63,34 +65,34 @@ func assertIndependentLock(t *testing.T, ctx context.Context, db *database.DB, p
 	}
 }
 
-func recordCTE(q query.TransactionRecordSource[Record]) query.TransactionQuery[query.TransactionAlias[claimedAlias, Record], Record] {
-	source := query.AsTransaction[claimedAlias](query.TransactionCTE("claimed", q), "candidate")
-	return query.SelectTransactionRecord(source, source.Scope())
+func recordCTE(q rows.TransactionRecordSource[Record]) rows.TransactionRead[rows.TransactionAlias[claimedAlias, Record], Record] {
+	source := rows.AsTransaction[claimedAlias](rows.TransactionCTE("claimed", q), "candidate")
+	return rows.SelectTransactionRecord(source, rows.TransactionScope(source))
 }
 
 func TestPostgresTransactionCTESkipLockedAndProjection(t *testing.T) {
 	ctx, db, path := transactionFixture(t)
 	err := inTransaction(ctx, db, path, func(holder *database.Tx) error {
-		if _, err := QueryRecords().ForUpdate().RequireFind(ctx, holder, 1); err != nil {
+		if _, err := Records.Query().ForUpdate().Where(Records.ID.Eq(1)).Require(ctx, holder); err != nil {
 			return err
 		}
 		return inTransaction(ctx, db, path, func(claimant *database.Tx) error {
-			rows, err := Claimed(ctx, claimant)
+			items, err := Claimed(ctx, claimant)
 			if err != nil {
 				return err
 			}
-			if len(rows) != 1 || rows[0] != (Summary{ID: 2, Name: "Beta"}) {
-				return errors.New("locked CTE lost its limit, skipped row or generated projection")
+			if len(items) != 1 || items[0] != (Summary{ID: 2, Name: "Beta"}) {
+				return errors.New("locked CTE lost its limit, skipped row or projection")
 			}
-			assertIndependentLock(t, ctx, db, path, QueryRecords().ForUpdate(), 2, true)
-			assertIndependentLock(t, ctx, db, path, QueryRecords().ForUpdate(), 3, false)
+			assertIndependentLock(t, ctx, db, path, Records.Query().ForUpdate(), 2, true)
+			assertIndependentLock(t, ctx, db, path, Records.Query().ForUpdate(), 3, false)
 			return nil
 		})
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertIndependentLock(t, ctx, db, path, QueryRecords().ForUpdate(), 2, false)
+	assertIndependentLock(t, ctx, db, path, Records.Query().ForUpdate(), 2, false)
 }
 
 func TestPostgresTransactionCTEAggregatesAndExistence(t *testing.T) {
@@ -98,10 +100,10 @@ func TestPostgresTransactionCTEAggregatesAndExistence(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			ctx, db, path := transactionFixture(t)
 			if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
-				q := QueryRecords().OrderBy(RecordFields().ID.Asc()).ForUpdate()
+				q := Records.Query().OrderBy(Records.ID.Asc()).ForUpdate()
 				switch mode {
 				case "count":
-					count, err := recordCTE(q).Count(ctx, tx)
+					count, err := recordCTE(rows.LockedRecord(q)).Count(ctx, tx)
 					if err != nil {
 						return err
 					}
@@ -114,10 +116,10 @@ func TestPostgresTransactionCTEAggregatesAndExistence(t *testing.T) {
 						return err
 					}
 					if result.Count != 3 {
-						return errors.New("outer aggregate lost complete generated result")
+						return errors.New("outer aggregate lost complete result")
 					}
 				case "exists":
-					exists, err := recordCTE(q.Limit(1)).Exists(ctx, tx)
+					exists, err := recordCTE(rows.LockedRecord(q.Limit(1))).Exists(ctx, tx)
 					if err != nil {
 						return err
 					}
@@ -125,8 +127,8 @@ func TestPostgresTransactionCTEAggregatesAndExistence(t *testing.T) {
 						return errors.New("CTE existence discarded selected row")
 					}
 				}
-				assertIndependentLock(t, ctx, db, path, QueryRecords().ForUpdate(), 1, true)
-				assertIndependentLock(t, ctx, db, path, QueryRecords().ForUpdate(), 2, mode != "exists")
+				assertIndependentLock(t, ctx, db, path, Records.Query().ForUpdate(), 1, true)
+				assertIndependentLock(t, ctx, db, path, Records.Query().ForUpdate(), 2, mode != "exists")
 				return nil
 			}); err != nil {
 				t.Fatal(err)
@@ -137,15 +139,15 @@ func TestPostgresTransactionCTEAggregatesAndExistence(t *testing.T) {
 
 func TestPostgresTransactionDerivedAndNestedJoinLocks(t *testing.T) {
 	ctx, db, path := transactionFixture(t)
-	first := QueryRecords().Where(RecordFields().ID.Eq(1)).ForNoKeyUpdate()
-	inner := query.AsTransaction[claimedAlias](query.TransactionCTE("first_claim", first).Materialized(), "inner_claim")
-	nested := query.TransactionCTE("second_claim", query.SelectTransactionRecord(inner, inner.Scope())).NotMaterialized()
-	left := query.AsTransaction[claimedAlias](nested, "candidate")
-	right := query.AsTransaction[otherAlias](query.TransactionOf(QueryRecords().Where(RecordFields().ID.Eq(2))), "other")
-	a, b := RecordFieldsAt(left.Scope()), RecordFieldsAt(right.Scope())
-	joined := query.TransactionInnerJoin(left, right, query.OnEqual(query.Add(a.ID, query.Param(a.ID, 1)), b.ID))
-	leftScope, rightScope := query.LeftScope(joined, left.Scope()), query.RightScope(joined, right.Scope())
-	q := query.SelectTransactionRecord(joined, leftScope).ForKeyShare().Of(rightScope)
+	first := Records.Query().Where(Records.ID.Eq(1)).ForNoKeyUpdate()
+	inner := rows.AsTransaction[claimedAlias](rows.TransactionCTE("first_claim", rows.LockedRecord(first)).Materialized(), "inner_claim")
+	nested := rows.TransactionCTE("second_claim", rows.SelectTransactionRecord(inner, rows.TransactionScope(inner))).NotMaterialized()
+	left := rows.AsTransaction[claimedAlias](nested, "candidate")
+	right := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(Records.ID.Eq(2)))), "other")
+	a, b := recordAt(rows.TransactionScope(left)), recordAt(rows.TransactionScope(right))
+	joined := rows.TransactionInnerJoin(left, right, rows.OnEqual(expr.Add(a.ID, expr.Select(a.ID).Param(1)), b.ID))
+	leftScope, rightScope := rows.LeftScope(joined, rows.TransactionScope(left)), rows.RightScope(joined, rows.TransactionScope(right))
+	q := rows.ForKeyShare(rows.SelectTransactionRecord(joined, leftScope)).Of(rows.Target(rightScope))
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
 		row, err := q.RequireFirst(ctx, tx)
 		if err != nil {
@@ -154,22 +156,22 @@ func TestPostgresTransactionDerivedAndNestedJoinLocks(t *testing.T) {
 		if row != (Record{ID: 1, Name: "Alpha"}) {
 			return errors.New("nested CTE/join lost complete record")
 		}
-		assertIndependentLock(t, ctx, db, path, QueryRecords().ForShare(), 1, true)
-		assertIndependentLock(t, ctx, db, path, QueryRecords().ForNoKeyUpdate(), 2, false)
-		assertIndependentLock(t, ctx, db, path, QueryRecords().ForUpdate(), 2, true)
-		assertIndependentLock(t, ctx, db, path, QueryRecords().ForUpdate(), 3, false)
+		assertIndependentLock(t, ctx, db, path, Records.Query().ForShare(), 1, true)
+		assertIndependentLock(t, ctx, db, path, Records.Query().ForNoKeyUpdate(), 2, false)
+		assertIndependentLock(t, ctx, db, path, Records.Query().ForUpdate(), 2, true)
+		assertIndependentLock(t, ctx, db, path, Records.Query().ForUpdate(), 3, false)
 		return nil
 	}); err != nil {
 		t.Fatal(err)
 	}
-	derived := query.AsTransaction[claimedAlias](first, "derived")
+	derived := rows.AsTransaction[claimedAlias](rows.LockedRecord(first), "derived")
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
-		_, err := query.SelectTransactionRecord(derived, derived.Scope()).RequireFirst(ctx, tx)
+		_, err := rows.SelectTransactionRecord(derived, rows.TransactionScope(derived)).RequireFirst(ctx, tx)
 		if err != nil {
 			return err
 		}
-		assertIndependentLock(t, ctx, db, path, QueryRecords().ForShare(), 1, true)
-		assertIndependentLock(t, ctx, db, path, QueryRecords().ForUpdate(), 2, false)
+		assertIndependentLock(t, ctx, db, path, Records.Query().ForShare(), 1, true)
+		assertIndependentLock(t, ctx, db, path, Records.Query().ForUpdate(), 2, false)
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -181,7 +183,7 @@ func TestPostgresTransactionComposedSavepoints(t *testing.T) {
 	rollback := errors.New("roll back composed lock")
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
 		err := tx.Transaction(ctx, func(nested *database.Tx) error {
-			if _, err := recordCTE(QueryRecords().Where(RecordFields().ID.Eq(1)).ForUpdate()).All(ctx, nested); err != nil {
+			if _, err := recordCTE(rows.LockedRecord(Records.Query().Where(Records.ID.Eq(1)).ForUpdate())).All(ctx, nested); err != nil {
 				return err
 			}
 			return rollback
@@ -190,23 +192,23 @@ func TestPostgresTransactionComposedSavepoints(t *testing.T) {
 			return errors.New("savepoint lost rollback error")
 		}
 		if err := tx.Transaction(ctx, func(nested *database.Tx) error {
-			_, err := recordCTE(QueryRecords().Where(RecordFields().ID.Eq(2)).ForUpdate()).All(ctx, nested)
+			_, err := recordCTE(rows.LockedRecord(Records.Query().Where(Records.ID.Eq(2)).ForUpdate())).All(ctx, nested)
 			return err
 		}); err != nil {
 			return err
 		}
-		assertIndependentLock(t, ctx, db, path, QueryRecords().ForUpdate(), 1, false)
-		assertIndependentLock(t, ctx, db, path, QueryRecords().ForUpdate(), 2, true)
+		assertIndependentLock(t, ctx, db, path, Records.Query().ForUpdate(), 1, false)
+		assertIndependentLock(t, ctx, db, path, Records.Query().ForUpdate(), 2, true)
 		return nil
 	}); err != nil {
 		t.Fatal(err)
 	}
-	assertIndependentLock(t, ctx, db, path, QueryRecords().ForUpdate(), 2, false)
+	assertIndependentLock(t, ctx, db, path, Records.Query().ForUpdate(), 2, false)
 }
 
 func TestPostgresTransactionComposedCancellationAndValidation(t *testing.T) {
 	ctx, db, path := transactionFixture(t)
-	q := recordCTE(QueryRecords().Where(RecordFields().ID.Eq(1)).ForUpdate())
+	q := recordCTE(rows.LockedRecord(Records.Query().Where(Records.ID.Eq(1)).ForUpdate()))
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
 		if _, err := q.All(ctx, tx); err != nil {
 			return err
@@ -225,10 +227,10 @@ func TestPostgresTransactionComposedCancellationAndValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
-		if _, err := q.ForUpdate().All(ctx, tx); !errors.Is(err, fault.Invalid) {
+		if _, err := rows.ForUpdate(q).All(ctx, tx); !errors.Is(err, fault.Invalid) {
 			return errors.New("outer CTE lock target was not rejected before SQL")
 		}
-		distinct := recordCTE(QueryRecords().Distinct().ForUpdate())
+		distinct := recordCTE(rows.ForUpdate(rows.Read(rows.Distinct(rows.FromModel(Records.Query())))))
 		if _, err := distinct.All(ctx, tx); !errors.Is(err, fault.Invalid) {
 			return errors.New("nested distinct lock was not rejected before SQL")
 		}

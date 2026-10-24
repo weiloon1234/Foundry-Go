@@ -1,5 +1,11 @@
 # Typed HTTP pagination
 
+Handwritten ORM consumers use `orm.PageResult[T]`, `orm.SimplePage[T]` and
+`orm.PageRequest`. These aliases retain the existing transport identities and
+work directly with `pagination.MapPage` and `pagination.MapSimplePage`. The
+[Go-way consumer](../../tests/fixtures/goway/integrations/pagination.go) demonstrates
+a complete ORM read and explicit response mapping.
+
 Declare a paginated endpoint with the generated domain filters and an explicit
 response DTO. Foundry parses page inputs, applies defaults and bounds, and builds
 response metadata and navigation links. The service uses the normal ORM API.

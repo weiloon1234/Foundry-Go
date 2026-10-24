@@ -1,5 +1,10 @@
 # Typed HTTP cursor pagination
 
+Handwritten ORM consumers use `orm.Cursor[M]`, `orm.CursorRequest[M]`,
+`orm.CursorPage[M]` and `orm.ParseCursor[M]`. These preserve existing cursor bytes,
+model ownership and contract identities; `orm.CursorPaginate` and
+`pagination.MapCursorPage` accept them directly.
+
 `DefineCursor` uses the normal ORM cursor paginator with generated domain filters
 and an explicit response DTO. The original model or projection type remains the
 cursor owner after mapping; it is separate from the public DTO type.

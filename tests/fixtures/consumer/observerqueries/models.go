@@ -10,6 +10,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -40,11 +41,12 @@ func (Record) MutateName(name string) (string, error) {
 var Veto = errors.New("observer veto")
 
 type Trace struct {
-	Calls   []string
-	Changes []RecordChanges
-	FailAt  string
-	Mode    string
-	Cancel  context.CancelFunc
+	Calls      []string
+	Changes    []RecordChanges
+	ORMChanges []orm.Changes[Record]
+	FailAt     string
+	Mode       string
+	Cancel     context.CancelFunc
 }
 type traceKey struct{}
 
@@ -66,7 +68,7 @@ func record(ctx context.Context, tx *database.Tx, trace *Trace, label string) er
 		trace.Calls = append(trace.Calls, label)
 	}
 	if tx != nil {
-		if _, err := QueryObservedEffects().Create(ctx, tx, EffectDraft{}.SetLabel(label)); err != nil {
+		if _, err := Effects.Insert(ctx, tx, Effects.Label.Set(label)); err != nil {
 			return err
 		}
 	}

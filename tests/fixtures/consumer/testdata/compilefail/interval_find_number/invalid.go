@@ -5,4 +5,4 @@ import (
 	"foundry.test/consumer/intervalqueries"
 )
 
-func invalid() { _, _ = intervalqueries.QueryIntervalLabels().Find(context.Background(), nil, 1) }
+func invalid() { _, _ = intervalqueries.Labels.Find(context.Background(), nil, 1) }

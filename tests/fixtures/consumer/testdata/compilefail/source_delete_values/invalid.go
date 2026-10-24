@@ -1,7 +1,8 @@
 package invalid
 
-import "foundry.test/consumer/linkqueries"
+import (
+	"foundry.test/consumer/linkqueries"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
+)
 
-func invalid() {
-	_ = linkqueries.DeleteMemberUsing(linkqueries.QueryLinkMembers(), linkqueries.QueryLinkArchives()).Values(linkqueries.MemberDraft{})
-}
+var _ = rows.DeleteUsing(linkqueries.Members.Query(), rows.From(linkqueries.Archives.Query())).Values(linkqueries.Members.Name.Set("wrong"))

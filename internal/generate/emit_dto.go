@@ -19,6 +19,7 @@ func (e *emitter) emitDTO(declaration dtoDeclaration) {
 		e.reserved[parameters.At(i).Obj().Name()] = true
 	}
 	contract := e.useNamed(framework+"/contract", "foundrycontract")
+	public, cached := jsonDescriptorNames(declaration.name)
 	e.line("// %sJSON describes the concrete %s JSON boundary.", declaration.name, declaration.name)
 	e.line("// Reuse this immutable descriptor for decoding and client contract export.")
 	e.line("// Fields are discovered from Go declarations; persistence models are not response DTOs.")
@@ -29,13 +30,13 @@ func (e *emitter) emitDTO(declaration dtoDeclaration) {
 	}
 	if params == "" {
 		// Non-generic descriptors are immutable; compile the schema once.
-		e.line("func %sJSON()%s.JSON[%s]{return foundry%sJSON()}", declaration.name, contract, declaration.name, declaration.name)
-		e.line("var foundry%sJSON=%s.OnceValue(func()%s.JSON[%s]{", declaration.name, e.use("sync"), contract, declaration.name)
+		e.line("func %s()%s.JSON[%s]{return %s()}", public, contract, declaration.name, cached)
+		e.line("var %s=%s.OnceValue(func()%s.JSON[%s]{", cached, e.use("sync"), contract, declaration.name)
 		fmt.Fprint(&e.body, "return ")
 		e.emitJSONValue(declaration.typ, declaration.dtoGraph, "DefineJSON")
 		e.line("})")
 	} else {
-		e.line("func %sJSON%s(%s)%s.JSON[%s%s]{", declaration.name, params, argumentDecl, contract, declaration.name, args)
+		e.line("func %s%s(%s)%s.JSON[%s%s]{", public, params, argumentDecl, contract, declaration.name, args)
 		fmt.Fprint(&e.body, "return ")
 		e.emitGenericJSONValue(declaration.typ, declaration.dtoGraph, arguments)
 		e.line("}")

@@ -47,7 +47,7 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 		{"projection-selection", "projectionqueries/projections_postgres_test.go", "ID: query.Value(f.ID), ", "Email", "/reports/user_summary_foundry.gen.go", []string{"buyer contact address selected for this report"}},
 		{"orm-row-selection", "reporting/members.go", "rows.MapSelected(MemberRows.", "Name", "/reporting/rows.go", []string{"Display name selected for the member report"}},
 		{"extension-descriptor", "articles/loading_postgres_test.go", "articles.ArticleExtensions().", "Title", "/articles/article_foundry.gen.go", []string{"localized article heading shown to readers"}},
-		{"changes-field", "mutatorqueries/changes_postgres_test.go", "changes.Fields().", "Email", "/mutatorqueries/member_foundry.gen.go", []string{"Delivery address."}},
+		{"changes-field", "mutatorqueries/changes_postgres_test.go", "orm.ChangeOf(changes, q.", "Email", "/mutatorqueries/orm.go", []string{"delivery address.", "stored values", "MutateEmail"}},
 		{"json-property", "jsonqueries/path_postgres_test.go", "prefs.", "Theme", "/jsonqueries/document_foundry.gen.go", []string{"reader appearance", "omitted uses the application default"}},
 	} {
 		t.Run(probe.name, func(t *testing.T) {
