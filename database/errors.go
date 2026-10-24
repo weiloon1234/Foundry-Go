@@ -77,8 +77,9 @@ const (
 )
 
 // Detail is the safe, structured classification produced by a driver adapter.
-// Constraint and SQLState are metadata, never query text, arguments or detail
-// messages. CommitRejected is true only when the server confirms no commit.
+// Schema, Table, Constraint and SQLState are metadata, never query text,
+// arguments or detail messages. CommitRejected is true only when the server
+// confirms no commit.
 // StatementRejected is true only when the adapter confirms a failed statement
 // outside an explicit transaction did not commit: it was never sent, or the
 // server rejected it before its implicit transaction could complete. Adapters
@@ -87,6 +88,8 @@ type Detail struct {
 	Code              Code
 	SQLState          string
 	Constraint        string
+	Schema            string
+	Table             string
 	CommitRejected    bool
 	StatementRejected bool
 }
@@ -111,6 +114,12 @@ func (e *Error) Code() Code           { return e.detail.Code }
 func (e *Error) SQLState() string     { return e.detail.SQLState }
 func (e *Error) Constraint() string   { return e.detail.Constraint }
 func (e *Error) Outcome() Outcome     { return e.outcome }
+
+// Schema returns the server-reported relation namespace. Example: failure.Schema().
+func (e *Error) Schema() string { return e.detail.Schema }
+
+// Table returns the server-reported relation name. Example: failure.Table().
+func (e *Error) Table() string { return e.detail.Table }
 
 // FoundryDiagnostic contributes the safe classification to redacted failure
 // diagnostics: operation, code, SQLSTATE, constraint and outcome only.

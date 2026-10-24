@@ -56,6 +56,7 @@ func classify(err error) database.Detail {
 	var server *pgconn.PgError
 	if errors.As(err, &server) {
 		detail.SQLState, detail.Constraint = server.Code, server.ConstraintName
+		detail.Schema, detail.Table = server.SchemaName, server.TableName
 		if code, ok := sqlStateCodes[server.Code]; ok {
 			detail.Code = code
 		} else {

@@ -109,9 +109,9 @@ func TestSQLStateClassificationPreservesCommitUncertainty(t *testing.T) {
 		{"23505", database.UniqueViolation, true}, {"23503", database.ForeignKeyViolation, true}, {"23502", database.NotNullViolation, true}, {"23514", database.CheckViolation, true}, {"40001", database.SerializationFailure, true}, {"40P01", database.Deadlock, true}, {"40003", database.QueryFailed, false}, {"08007", database.Unavailable, false}, {"57014", database.QueryCanceled, false}, {"28P01", database.Unavailable, false}, {"XX000", database.QueryFailed, false},
 		{"55P03", database.LockNotAvailable, false}, {"23P01", database.ExclusionViolation, true}, {"25006", database.ReadOnlyTransaction, false}, {"22001", database.StringDataRightTruncation, false}, {"22P02", database.InvalidTextRepresentation, false}, {"22003", database.NumericValueOutOfRange, false}, {"22012", database.DivisionByZero, false}, {"22023", database.DataException, false}, {"53100", database.InsufficientResources, false}, {"53300", database.Unavailable, false}, {"25P03", database.IdleInTransactionTimeout, false},
 	} {
-		original := &pgconn.PgError{Code: item.state, ConstraintName: "constraint_name", Message: "private statement", Detail: "private value"}
+		original := &pgconn.PgError{Code: item.state, ConstraintName: "constraint_name", SchemaName: "error_schema", TableName: "error_table", Message: "private statement", Detail: "private value"}
 		result := classify(fmt.Errorf("wrapped: %w", original))
-		if result.Code != item.code || result.CommitRejected != item.rejected || result.SQLState != item.state || result.Constraint != "constraint_name" {
+		if result.Code != item.code || result.CommitRejected != item.rejected || result.SQLState != item.state || result.Constraint != "constraint_name" || result.Schema != "error_schema" || result.Table != "error_table" {
 			t.Fatalf("SQLSTATE %s: %+v", item.state, result)
 		}
 	}
@@ -131,5 +131,18 @@ func TestSQLStateClassificationConfirmsOnlyRejectedAutocommitStatements(t *testi
 	}
 	if classify(errors.New("network response lost")).StatementRejected {
 		t.Fatal("unknown transport failure was treated as a rejected statement")
+	}
+}
+
+func TestConstraintIdentityMappingKeepsMissingMetadataMissing(t *testing.T) {
+	for _, server := range []*pgconn.PgError{
+		{Code: "23505", ConstraintName: "shared_index", TableName: "members"},
+		{Code: "23505", ConstraintName: "shared_index", SchemaName: "other"},
+		{Code: "23505", SchemaName: "other", TableName: "members"},
+	} {
+		got := classify(server)
+		if got.Schema != server.SchemaName || got.Table != server.TableName || got.Constraint != server.ConstraintName {
+			t.Fatal("invented constraint identity", got)
+		}
 	}
 }

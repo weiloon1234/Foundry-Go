@@ -144,21 +144,22 @@ func (q Query[M]) InsertOrFirst(ctx context.Context, writer database.Transactor,
 }
 
 // ownUniqueViolation classifies the model INSERT statement's own failure: it
-// must carry a unique violation whose constraint is a unique index of the
-// model's table. Error inspection is bounded and contains extension methods.
+// must carry a unique violation whose schema, table and constraint identify a
+// unique index of the resolved destination. Child relations are not accepted.
+// Error inspection is bounded and contains extension methods.
 func (q Query[M]) ownUniqueViolation(ctx context.Context, tx *database.Tx, statementErr error) (bool, error) {
-	var constraint string
+	var constraint, schema, relation string
 	if err := callback.Isolated("classify lookup insert failure", func() error {
 		failure, found, complete := errorgraph.As[*database.Error](statementErr)
 		if complete && found && failure != nil && failure.Code() == database.UniqueViolation {
-			constraint = failure.Constraint()
+			constraint, schema, relation = failure.Constraint(), failure.Schema(), failure.Table()
 		}
 		return nil
-	}); err != nil || constraint == "" {
+	}); err != nil || constraint == "" || schema == "" || relation == "" {
 		return false, err
 	}
 	var owned bool
-	err := database.ScanOne(ctx, tx, `SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_index i JOIN pg_catalog.pg_class c ON c.oid = i.indexrelid WHERE i.indisunique AND i.indrelid = to_regclass($1) AND c.relname = $2)`, []any{quotedTable(q.queryCore.Table), constraint}, &owned)
+	err := database.ScanOne(ctx, tx, `SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_index i JOIN pg_catalog.pg_class c ON c.oid = i.indexrelid JOIN pg_catalog.pg_class t ON t.oid = i.indrelid JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace WHERE i.indisunique AND i.indrelid = to_regclass($1) AND c.relname = $2 AND n.nspname = $3 AND t.relname = $4)`, []any{quotedTable(q.queryCore.Table), constraint, schema, relation}, &owned)
 	return owned, err
 }
 

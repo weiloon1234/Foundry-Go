@@ -436,3 +436,77 @@ func TestTransactionIdentityDistinguishesPoolsTransactionsAndSavepoints(t *testi
 		t.Fatal("uninitialized transaction claimed ownership")
 	}
 }
+
+// Returning an error is not permission to execute its formatting methods.
+type unformattedAfterCommitError struct {
+	mode  string
+	calls int
+}
+
+func (e *unformattedAfterCommitError) Error() string {
+	e.calls++
+	switch e.mode {
+	case "panic":
+		panic("private-after-commit")
+	case "goexit":
+		runtime.Goexit()
+	}
+	return "private-after-commit"
+}
+
+type unformattedAfterCommitFormatter struct {
+	*unformattedAfterCommitError
+	formatCalls int
+}
+
+func (e *unformattedAfterCommitFormatter) Format(state fmt.State, _ rune) {
+	e.formatCalls++
+	switch e.mode {
+	case "format-panic":
+		panic("private-after-commit")
+	case "format-goexit":
+		runtime.Goexit()
+	default:
+		fmt.Fprint(state, "private-after-commit")
+	}
+}
+
+func TestAfterCommitWrapsErrorsBeforeIsolationFormatsThem(t *testing.T) {
+	for _, mode := range []string{"return", "panic", "goexit", "format-return", "format-panic", "format-goexit"} {
+		t.Run(mode, func(t *testing.T) {
+			state := &driverState{}
+			db := open(t, state, nil)
+			application := &unformattedAfterCommitError{mode: mode}
+			formatter := &unformattedAfterCommitFormatter{unformattedAfterCommitError: application}
+			var cause error = application
+			if strings.HasPrefix(mode, "format-") {
+				cause = formatter
+			}
+			continued := false
+			err := db.Transaction(t.Context(), func(tx *database.Tx) error {
+				if err := tx.AfterCommit(func(context.Context) error { return cause }); err != nil {
+					return err
+				}
+				return tx.AfterCommit(func(context.Context) error { continued = true; return nil })
+			})
+			var outcome *database.Error
+			var original *unformattedAfterCommitError
+			identity := errors.As(err, &original) && original == application
+			if cause == formatter {
+				var originalFormatter *unformattedAfterCommitFormatter
+				identity = errors.As(err, &originalFormatter) && originalFormatter == formatter
+			}
+			if !errors.Is(err, cause) || !identity || !errors.As(err, &outcome) || outcome.Outcome() != database.Committed || !errors.Is(err, database.AfterCommitFailed) {
+				t.Fatal("after-commit lost cause or committed outcome")
+			}
+			for _, s := range []string{err.Error(), fmt.Sprintf("%v", err), fmt.Sprintf("%+v", err), fmt.Sprintf("%#v", err)} {
+				if strings.Contains(s, "private-after-commit") {
+					t.Fatal("after-commit disclosed application text")
+				}
+			}
+			if application.calls != 0 || formatter.formatCalls != 0 || !continued || state.committed.Load() != 1 || state.rolledBack.Load() != 0 || db.Stats().Owners != 0 {
+				t.Fatal("formatting executed or callback lifetime changed", application.calls, formatter.formatCalls)
+			}
+		})
+	}
+}

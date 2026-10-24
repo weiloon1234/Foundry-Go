@@ -287,7 +287,7 @@ func TestRawErrorsRemainClassifiableWithoutFormattingSecrets(t *testing.T) {
 	cause := errors.New("private-credential in SQL")
 	state := &driverState{exec: func(context.Context, string, []driver.NamedValue) (driver.Result, error) { return nil, cause }}
 	db, err := database.Open(t.Context(), database.Adapter{Connector: connector{state}, Classify: func(error) database.Detail {
-		return database.Detail{Code: database.UniqueViolation, SQLState: "23505", Constraint: "users_email_key"}
+		return database.Detail{Code: database.UniqueViolation, SQLState: "23505", Constraint: "users_email_key", Schema: "reported_schema", Table: "reported_table"}
 	}}, database.DefaultPoolConfig())
 	if err != nil {
 		t.Fatal(err)
@@ -295,7 +295,7 @@ func TestRawErrorsRemainClassifiableWithoutFormattingSecrets(t *testing.T) {
 	defer db.Close(t.Context())
 	_, err = db.Exec(t.Context(), "query-with-private-credential")
 	var failure *database.Error
-	if !errors.Is(err, database.UniqueViolation) || !errors.Is(err, cause) || !errors.As(err, &failure) || failure.SQLState() != "23505" || failure.Constraint() != "users_email_key" {
+	if !errors.Is(err, database.UniqueViolation) || !errors.Is(err, cause) || !errors.As(err, &failure) || failure.SQLState() != "23505" || failure.Constraint() != "users_email_key" || failure.Schema() != "reported_schema" || failure.Table() != "reported_table" {
 		t.Fatal("classification lost")
 	}
 	for _, format := range []string{"%v", "%+v", "%#v"} {

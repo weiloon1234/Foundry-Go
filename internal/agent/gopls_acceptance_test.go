@@ -351,9 +351,9 @@ func consumerEditorProbes() []consumerEditorProbe {
 
 		{"typed-mfa-observer", "multifactor/security.go", "factors.", "WithObserver", []string{"WithObserver", "RetireIn", "Verifier"}, []string{"Observer", "Account", "error"}, "/auth/mfa/observer.go"},
 		{"typed-mfa-retirement", "multifactor/security.go", "factors.", "RetireIn", []string{"RetireIn", "Disable"}, []string{"Reference", "Account", "database.Tx"}, "/auth/mfa/retirement.go"},
-		{"typed-auth-signed-endpoint", "authenticating/composed_routes.go", "endpoint.", "Signed", []string{"Signed", "WithPermissions", "Handle"}, []string{"URLSigner", "SignedAuthenticatedEndpoint", "User"}, "/http/signed_authenticated_endpoint.go"},
+		{"typed-auth-signed-endpoint", "authenticating/composed_routes.go", "return foundryhttp.", "SignedAuthenticated", []string{"SignedAuthenticated", "Signed", "SignedOptionalAuthentication"}, []string{"URLSigner", "SignedAuthenticatedEndpoint", "User"}, "/http/signed_authenticated_endpoint.go"},
 		{"typed-auth-resource-binding", "authenticating/composed_routes.go", "modelbinding.", "BindAuthenticated", []string{"BindAuthenticated", "ByKey"}, []string{"AuthenticatedTransport", "Resolver", "AuthenticatedEndpoint"}, "/http/modelbinding/authenticated_endpoint.go"},
-		{"typed-auth-native-route", "authenticating/composed_routes.go", "route.", "HandleRaw", []string{"HandleRaw", "Signed", "WithPermissions"}, []string{"ResponseWriter", "User", "NoPath"}, "/http/authenticated_route.go"},
+		{"typed-auth-native-route", "authenticating/composed_routes.go", "route.", "HandleRaw", []string{"HandleRaw", "WithPermissions", "WithScopes"}, []string{"ResponseWriter", "User", "NoPath"}, "/http/authenticated_route.go"},
 		{"typed-auth-permission", "authenticating/permissions.go", "ViewAccount.", "Authorize", []string{"Authorize", "Allows", "Registration"}, []string{"Guard", "User", "error"}, "/auth/permission.go"},
 		{"typed-http-permissions", "authenticating/permissions.go", "endpoint.", "WithPermissions", []string{"WithPermissions", "WithScopes", "Handle"}, []string{"Permission", "User", "AuthenticatedEndpoint"}, "/http/authenticated_endpoint.go"},
 		{"typed-auth-attribution", "authenticating/attribution.go", "guard.", "Origin", []string{"Origin", "WithAttribution", "Require"}, []string{"context.Context", "attribution.Origin", "error"}, "/auth/attribution.go"},

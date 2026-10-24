@@ -119,6 +119,8 @@ Before and after callbacks run synchronously with result rows closed. Use their 
 
 Passing an existing transaction to a normal write creates a savepoint. Failure rolls back the model and related hook writes; a successful savepoint transfers its after-commit callbacks to the parent. The outer transaction must commit before they run, and rolling back an ancestor discards them. A post-write callback can still veto persistence. An after-commit callback cannot roll back committed data.
 
+Local hooks and observers return failures through a safe `database.AfterCommitFailed` error with a committed outcome. The wrapper preserves `errors.Is` and `errors.As` identity without invoking the cause's formatting methods, even when its `Error()` would panic or call `runtime.Goexit`.
+
 The existing [model write outcomes](model-writes.md) apply: an uncertain commit or an after-commit failure from a write that owns the outer transaction retains a typed reconciliation candidate. A write inside a caller-owned transaction returns before that transaction's final outcome; the caller must handle its outer transaction error. No write or callback is automatically retried. In-process callbacks do not provide crash durability.
 
 Nested hook-aware writes propagate a context-bound depth counter and fail at `query.MaxLifecycleDepth`. This diagnoses accidental recursion without preventing useful writes to other models. Errors retain their identity through `errors.Is`; a nesting diagnostic is available through `errors.As` into `*fault.Error`. Always propagate the supplied context, since replacing it discards cancellation and nesting state.

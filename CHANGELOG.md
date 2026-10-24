@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Editor probes and database conflict and callback failures (B34–B36)
+
+- Update editor probes for `http.SignedAuthenticated` and authenticated route
+  completions after the endpoint constructor changes.
+- Preserve server-reported schema and table in `database.Detail` and expose them
+  through `database.Error.Schema()` and `.Table()`. `InsertOrFirst` requires the
+  schema, table and constraint to match the resolved destination's unique index.
+  Missing metadata, cross-schema collisions and child-relation violations fail
+  closed. Deferred commit failures do not trigger lookup or retry.
+- Wrap local and observer AfterCommit errors before callback isolation formats
+  them. Causes retain `errors.Is` and `errors.As` identity and the committed
+  outcome without invoking their `Error()` or formatting methods.
+
 ### Pubsub test synchronization and scope-source isolation (B32/B33)
 
 - Synchronize pubsub ownership and admission tests with blocked-goroutine barriers
