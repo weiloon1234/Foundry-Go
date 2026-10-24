@@ -216,3 +216,108 @@ specialize application generic bodies at every instantiation or trace wrappers.
 Conversely, same-signature application function values are flagged even when
 their implementations perform no SQL. No suppression comments or automatic edits
 are used.
+
+
+Window functions return selected values and compose with `rows.MapSelected`.
+Construct a window from an existing scope; it does not copy the source query's
+ordering, pagination or rows:
+
+```go
+amount := expr.Value(Orders.TotalCents)
+w := expr.WindowFor(rows.ModelScope(Orders.Query())).
+    PartitionBy(expr.Group(expr.Value(Orders.BuyerID))).
+    OrderBy(amount.Asc()).
+    RowsBetween(expr.UnboundedPreceding(), expr.CurrentRow())
+
+q := rows.Select(rows.FromModel(Orders.Query()), ReportRows,
+    rows.MapSelected(ReportRows.Rank, expr.RowNumber(w)),
+    rows.MapSelected(ReportRows.Total, expr.Over(expr.Sum(Orders.TotalCents), w)),
+    rows.MapSelected(ReportRows.Previous, expr.Lag(expr.Select(amount), 1, w)),
+)
+```
+
+`RowNumber`, `Rank` and `DenseRank` return `int64`; `PercentRank` and `CumeDist`
+return `float64`; `NTile` returns `int32`. `Lag`, `Lead`, `FirstValue`, `LastValue`
+and `NthValue` add one nullable layer because the requested row/frame may be
+empty. Their nullable variants retain exactly one layer. `LagOr`/`LeadOr` retain
+the input type and capture a fallback once; an existing row containing SQL NULL
+still returns NULL. Offsets, bucket counts and fallbacks are bound parameters.
+
+`expr.Over(aggregate, w)` retains the aggregate's codec and empty-frame rules:
+count returns zero, sum/avg/min/max remain nullable. Apply `Filter` before `Over`.
+PostgreSQL rejects COUNT DISTINCT windows. Windows cannot enter WHERE, row CASE,
+GROUP BY or HAVING; nested window evaluation at the same SELECT level is invalid.
+Ordinary aggregate results can supply window inputs, selected partition keys and
+ordering when the surrounding grouping is valid.
+
+`PartitionBy` takes row `GroupKey`s; `PartitionByValues` takes selected
+`ProjectionKey`s. `OrderBy` accepts row and selected expression orders. Use
+`expr.Value(column).Asc()` for a column order. Final result ordering is separate.
+Named windows (`w.Named("by_buyer")`) emit each referenced definition once.
+PostgreSQL's inheritance rules apply: extending a framed definition, replacing
+its order or adding a partition fails compilation. Derivation is immutable.
+
+`RowsBetween` and `GroupsBetween` accept current/unbounded positions and
+`Preceding(int64)`/`Following(int64)` offsets. `RangeBetween` accepts only
+current/unbounded positions. For value distances, build
+`r := expr.NumericRange(w, expr.Select(amount))` and then
+`r.Between(r.Preceding(int64(10)), r.CurrentRow())`. Numeric distances retain the
+order value's exact type. `TemporalRange` takes `temporal.Interval` distances;
+nullable range constructors still require present distances. The range builder
+establishes exactly one order; preexisting ordering is an error. Negative and
+non-finite distances, invalid boundary ordering and calendar distances for a
+clock value fail compilation. Frame exclusions support current row, group, ties
+and none. A zero `Window[S]` means `OVER ()`; zero frame/range descriptors are invalid.
+
+These package functions reuse the shared window compiler and existing ownership
+checks. They add no Query, Table, column or aggregate methods. Scopes and the
+supplied executor/transaction remain those of the surrounding read. Window
+results enter wire contracts only through explicitly declared row/DTO fields;
+this adds no manifest, OpenAPI or TypeScript schema source.
+
+## Text, temporal, interval and geographic calculations
+
+Scalar functions use the same SQL compiler and codecs as `database/query`.
+Pass `expr.Value(column)` (or `expr.At(scope, column)`) to row functions; promote
+with `.Value()` for `rows.MapSelected`. The `Value` suffixed variants accept
+selected values, including aggregates and windows. They never become WHERE
+predicates. Use `expr.TextValue` or `expr.TextNullableValue` for selected text
+conditions in `rows.Having`.
+
+```go
+name := expr.Lower(expr.Trim(expr.Value(Users.Email)))
+filtered := expr.Where(Users.Query(), name.IContains("example_"))
+// Contains/IContains/StartsWith/EndsWith treat wildcards literally;
+// Like/ILike accept SQL patterns. Collation belongs to the database.
+```
+
+Text functions include casing, trimming (including character sets), Unicode and
+byte lengths, strict concatenation, NULL-skipping `ConcatWS`, replacement and
+one-based substring positions. `SubstringAt` requires same-owner integer
+expressions; literal negative counts fail before execution. Named string inputs
+produce ordinary strings; nullable variants retain NULL except `ConcatWS`.
+
+Calendar extraction accepts dates/local timestamps, clock extraction accepts
+wall times/local timestamps, and epoch functions accept instants. `Second`,
+`Milliseconds`, `JulianDay` and `UnixSeconds` return exact decimals;
+`FromUnixMillis` requires integers. `DateUnit` and `TimestampUnit` are distinct.
+Select an explicit `LoadTimeZone`/`UTCZone` for instant/calendar conversions;
+`ResolveLocal` also requires `PostgresStandardTime` for DST gaps/overlaps.
+
+`AddDateInterval` returns a local timestamp, while `AddDateDays` retains a date.
+Interval calculations preserve months, days and elapsed time separately;
+`ShiftDate`, `ShiftLocal` and `ShiftInstant` accept interval expressions.
+`IntervalElapsed` returns `time.Duration`; clock shifts require whole
+microseconds. A calendar day across DST may differ from 24 elapsed hours.
+`TransactionTime(rows.ModelScope(q))` uses the surrounding transaction's start
+instant and retains that source's ownership. Database overflow remains an error.
+
+`NewGeographicPoint` validates finite latitude/longitude in degrees.
+`SphericalDistance` returns approximate metres on the IUGG mean-radius sphere;
+it is a surface distance, not a route. Nullable coordinates propagate NULL.
+Stored coordinates remain the application's responsibility.
+
+These functions add no Query/Table/column methods, bypass no surrounding scopes,
+and use the supplied executor or transaction. Results affect manifests, OpenAPI
+and TypeScript only through explicitly declared projection/DTO field codecs.
+JSON paths and JSON Kind/Length remain in the next slice.

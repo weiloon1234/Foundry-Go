@@ -19,7 +19,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
@@ -142,7 +142,7 @@ type Publisher struct {
 	writer  database.Transactor
 	config  Config
 	routes  map[routeKey]Route
-	claim   query.Predicate[outboxstore.Message]
+	claim   orm.Predicate[outboxstore.Message]
 	slots   *admission.Semaphore
 	running atomic.Bool
 }
@@ -164,9 +164,9 @@ func New(writer database.Transactor, config Config, routes ...Route) (*Publisher
 	if len(routes) == 0 || len(routes) > 128 {
 		return nil, fault.New(fault.Invalid, "outbox publisher requires 1 to 128 routes")
 	}
-	fields := outboxstore.MessageFields()
+	fields := outboxstore.Messages
 	index := make(map[routeKey]Route, len(routes))
-	claims := make([]query.Predicate[outboxstore.Message], 0, len(routes))
+	claims := make([]orm.Predicate[outboxstore.Message], 0, len(routes))
 	for _, route := range routes {
 		if !identifier.Semantic(route.Kind) || route.Publish == nil {
 			return nil, fault.New(fault.Invalid, "invalid outbox publication route")
@@ -179,9 +179,9 @@ func New(writer database.Transactor, config Config, routes ...Route) (*Publisher
 			return nil, fault.New(fault.Duplicate, "outbox publication route already registered")
 		}
 		index[key] = route
-		claims = append(claims, query.And(fields.Kind.Eq(route.Kind), fields.Destination.Eq(route.Destination)))
+		claims = append(claims, orm.And(fields.Kind.Eq(route.Kind), fields.Destination.Eq(route.Destination)))
 	}
-	return &Publisher{writer: writer, config: config, routes: index, claim: query.Or(claims...), slots: admission.New(config.MaxInFlight)}, nil
+	return &Publisher{writer: writer, config: config, routes: index, claim: orm.Or(claims...), slots: admission.New(config.MaxInFlight)}, nil
 }
 
 // PublishOne publishes at most one due row across all routes.
@@ -250,10 +250,10 @@ func (p *Publisher) publish(ctx context.Context, limit int, logger *slog.Logger)
 	if err != nil {
 		return nil, err
 	}
-	fields := outboxstore.MessageFields()
+	fields := outboxstore.Messages
 	var results []Result
 	err = p.writer.Transaction(transaction, func(tx *database.Tx) error {
-		rows, err := outboxstore.QueryFoundryOutbox().Where(p.claim, fields.PublishState.Eq(outbox.Pending), fields.PublishAfter.Lte(now)).OrderBy(fields.CreatedAt.Asc(), fields.ID.Asc()).ForUpdate().SkipLocked().Limit(held).All(transaction, tx)
+		rows, err := outboxstore.Messages.Query().Where(p.claim, fields.PublishState.Eq(outbox.Pending), fields.PublishAfter.Lte(now)).OrderBy(fields.CreatedAt.Asc(), fields.ID.Asc()).ForUpdate().SkipLocked().Limit(held).All(transaction, tx)
 		if err != nil {
 			return err
 		}
@@ -284,7 +284,7 @@ func (p *Publisher) publish(ctx context.Context, limit int, logger *slog.Logger)
 			if err != nil {
 				return err
 			}
-			if _, err := outboxstore.QueryFoundryOutbox().Update(transaction, tx, row.ID, draft); err != nil {
+			if _, err := outboxstore.Messages.Update(transaction, tx, row.ID, draft...); err != nil {
 				return err
 			}
 		}
@@ -314,7 +314,7 @@ func (p *Publisher) bookkeeping() time.Duration {
 
 // outcome classifies one attempt and derives its progress update. skipped means
 // the row's budget was already exhausted (for example after lowering it).
-func (p *Publisher) outcome(result *Result, skipped bool) (outboxstore.MessageDraft, error) {
+func (p *Publisher) outcome(result *Result, skipped bool) ([]orm.Assignment[outboxstore.Message], error) {
 	finishedAt := p.config.Clock.Now()
 	permanent := false
 	switch {
@@ -330,14 +330,15 @@ func (p *Publisher) outcome(result *Result, skipped bool) (outboxstore.MessageDr
 			result.State = outbox.Pending
 		}
 	}
-	draft := outboxstore.MessageDraft{}.SetPublishState(result.State).SetPublishAttempts(result.Attempts)
+	fields := outboxstore.Messages
+	draft := []orm.Assignment[outboxstore.Message]{fields.PublishState.Set(result.State), fields.PublishAttempts.Set(result.Attempts)}
 	switch result.State {
 	case outbox.Published:
 		finished, err := temporal.NewDateTime(finishedAt.Truncate(time.Microsecond))
 		if err != nil {
 			return draft, err
 		}
-		return draft.SetPublishedAt(finished).SetPublishReason(""), nil
+		return append(draft, fields.PublishedAt.Set(finished), fields.PublishReason.Set("")), nil
 	case outbox.Pending:
 		// Add the delay to the original sample, then round the deadline up.
 		// Truncating either operand could publish a retry early.
@@ -349,13 +350,13 @@ func (p *Publisher) outcome(result *Result, skipped bool) (outboxstore.MessageDr
 		if err != nil {
 			return draft, err
 		}
-		return draft.SetPublishAfter(next).SetPublishReason("transient"), nil
+		return append(draft, fields.PublishAfter.Set(next), fields.PublishReason.Set("transient")), nil
 	}
 	reason := "attempt_limit"
 	if permanent {
 		reason = "permanent"
 	}
-	return draft.SetPublishReason(reason), nil
+	return append(draft, fields.PublishReason.Set(reason)), nil
 }
 
 // Run publishes until ctx ends. Transient SQL, transaction and publication

@@ -11,6 +11,20 @@ import (
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
+// ValidateRangeOrder checks the representation required by a typed RANGE family.
+// Both query APIs use this declaration boundary; frame traversal validates the
+// resulting single ordering, bound values and positions separately.
+func ValidateRangeOrder(kind codec.ParameterType, temporal bool) error {
+	if temporal {
+		if kind != codec.TypeDate && kind != codec.TypeTime && kind != codec.TypeDateTime && kind != codec.TypeLocalDateTime {
+			return fault.New(fault.Invalid, "temporal RANGE requires a temporal codec representation")
+		}
+	} else if kind != codec.TypeInteger && kind != codec.TypeFloat && kind != codec.TypeDecimal {
+		return fault.New(fault.Invalid, "numeric RANGE requires a numeric codec representation")
+	}
+	return nil
+}
+
 type RangeDistance struct {
 	Parameter ParameterNode
 	Interval  *temporal.Interval

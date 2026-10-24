@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -25,9 +26,9 @@ func (q readResult[R]) retrievalChunks(ctx context.Context, executor database.Ex
 	// Complete-model selections retain field references. Compare only those
 	// comparable nodes; arbitrary computed expressions can contain slices.
 	present := false
-	if key, ok := primary.(fieldRef); ok {
+	if key, ok := querycore.UnwrapSensitivity(primary).(fieldRef); ok {
 		for _, order := range q.node.Orders {
-			if field, ok := order.Expression.(fieldRef); ok && field == key {
+			if field, ok := querycore.UnwrapSensitivity(order.Expression).(fieldRef); ok && field == key {
 				present = true
 				break
 			}
@@ -103,15 +104,15 @@ func (q readResult[R]) retrievalChunks(ctx context.Context, executor database.Ex
 // bound cannot change which rows or values are selected: every selection is a
 // plain column and nothing groups or deduplicates rows.
 func primaryKeyset(node selectNode, primary valueExpression) bool {
-	key, ok := primary.(fieldRef)
+	key, ok := querycore.UnwrapSensitivity(primary).(fieldRef)
 	if !ok || len(node.Orders) != 1 || node.Orders[0].Nulls != nullsDefault || len(node.Joins) != 0 || len(node.GroupBy) != 0 || len(node.Having) != 0 || node.Distinct.Kind != noDistinct {
 		return false
 	}
-	if field, ok := node.Orders[0].Expression.(fieldRef); !ok || field != key {
+	if field, ok := querycore.UnwrapSensitivity(node.Orders[0].Expression).(fieldRef); !ok || field != key {
 		return false
 	}
 	for _, selection := range node.Selections {
-		if _, ok := selection.Expression.(fieldRef); !ok {
+		if _, ok := querycore.UnwrapSensitivity(selection.Expression).(fieldRef); !ok {
 			return false
 		}
 	}

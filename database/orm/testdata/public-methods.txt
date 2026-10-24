@@ -79,12 +79,14 @@ orm.Conflict
   DoUpdate func(updates ...github.com/weiloon1234/Foundry-Go/database/orm.ConflictUpdate[M]) github.com/weiloon1234/Foundry-Go/database/orm.Conflict[M]
   GoString func() string
   String func() string
+  TargetWhere func(predicates ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]) github.com/weiloon1234/Foundry-Go/database/orm.Conflict[M]
   Where func(predicates ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]) github.com/weiloon1234/Foundry-Go/database/orm.Conflict[M]
 *orm.Conflict
   DoNothing func() github.com/weiloon1234/Foundry-Go/database/orm.Conflict[M]
   DoUpdate func(updates ...github.com/weiloon1234/Foundry-Go/database/orm.ConflictUpdate[M]) github.com/weiloon1234/Foundry-Go/database/orm.Conflict[M]
   GoString func() string
   String func() string
+  TargetWhere func(predicates ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]) github.com/weiloon1234/Foundry-Go/database/orm.Conflict[M]
   Where func(predicates ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]) github.com/weiloon1234/Foundry-Go/database/orm.Conflict[M]
 orm.ConflictColumn
 *orm.ConflictColumn
@@ -1315,6 +1317,9 @@ orm.Sync func[M, N, P any](ctx context.Context, writer github.com/weiloon1234/Fo
 orm.SyncWithoutDetaching func[M, N, P any](ctx context.Context, writer github.com/weiloon1234/Foundry-Go/database.Transactor, r github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P], source M, targets []N, create []github.com/weiloon1234/Foundry-Go/database/orm.Assignment[P], update []github.com/weiloon1234/Foundry-Go/database/orm.Assignment[P]) (github.com/weiloon1234/Foundry-Go/database/orm.PivotChanges[P], error)
 orm.Toggle func[M, N, P any](ctx context.Context, writer github.com/weiloon1234/Foundry-Go/database.Transactor, r github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P], source M, targets []N, create ...github.com/weiloon1234/Foundry-Go/database/orm.Assignment[P]) (github.com/weiloon1234/Foundry-Go/database/orm.PivotChanges[P], error)
 orm.UpdatePivot func[M, N, P any](ctx context.Context, writer github.com/weiloon1234/Foundry-Go/database.Transactor, r github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P], source M, target N, update ...github.com/weiloon1234/Foundry-Go/database/orm.Assignment[P]) ([]P, error)
+orm.FoundryConflictData func[M any](policy github.com/weiloon1234/Foundry-Go/database/orm.Conflict[M], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) github.com/weiloon1234/Foundry-Go/internal/ormcore.ConflictPolicy
+orm.FoundryConflict func[M any](metadata github.com/weiloon1234/Foundry-Go/internal/ormcore.ConflictPolicy, seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) github.com/weiloon1234/Foundry-Go/database/orm.Conflict[M]
+orm.FoundryConflictUpdate func[M any](metadata github.com/weiloon1234/Foundry-Go/internal/ormcore.ConflictAssignment, seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) github.com/weiloon1234/Foundry-Go/database/orm.ConflictUpdate[M]
 orm.ConflictKey func[M, V any](field interface{ormColumn(*M) github.com/weiloon1234/Foundry-Go/database/orm.columnData[V]}) github.com/weiloon1234/Foundry-Go/database/orm.ConflictColumn[M]
 orm.ConflictSet func[M, I, V any, F github.com/weiloon1234/Foundry-Go/database/orm.conflictAssignment[M, I, V]](field F, input I) github.com/weiloon1234/Foundry-Go/database/orm.ConflictUpdate[M]
 orm.ConflictNull func[M, V any](field github.com/weiloon1234/Foundry-Go/database/orm.ExpressionColumn[M, V, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm.ConflictUpdate[M]
@@ -1485,6 +1490,14 @@ rows.CommonTable
 *rows.CommonTable
   Materialized func() github.com/weiloon1234/Foundry-Go/database/orm/rows.CommonTable[R]
   NotMaterialized func() github.com/weiloon1234/Foundry-Go/database/orm/rows.CommonTable[R]
+rows.ConflictRow
+*rows.ConflictRow
+rows.ConflictRows
+  Proposed func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[github.com/weiloon1234/Foundry-Go/database/orm/rows.ConflictRow[M], M]
+  Stored func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[github.com/weiloon1234/Foundry-Go/database/orm/rows.ConflictRow[M], M]
+*rows.ConflictRows
+  Proposed func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[github.com/weiloon1234/Foundry-Go/database/orm/rows.ConflictRow[M], M]
+  Stored func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[github.com/weiloon1234/Foundry-Go/database/orm/rows.ConflictRow[M], M]
 rows.CorrelatedRecord
   Exists func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[O]
   Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.CorrelatedRecord[O, I, R]
@@ -1527,6 +1540,20 @@ rows.Cross
 *rows.Cross
 rows.CrossJoined
 *rows.CrossJoined
+rows.CursorQuery
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[R]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorQuery[R]
+  Paginate func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, r github.com/weiloon1234/Foundry-Go/database/query.CursorRequest[R]) (github.com/weiloon1234/Foundry-Go/database/query.CursorPage[R], error)
+  Scope func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[R], R]
+  UniqueBy func(keys ...github.com/weiloon1234/Foundry-Go/database/orm/expr.GroupKey[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[R]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorQuery[R]
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[R]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorQuery[R]
+*rows.CursorQuery
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[R]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorQuery[R]
+  Paginate func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, r github.com/weiloon1234/Foundry-Go/database/query.CursorRequest[R]) (github.com/weiloon1234/Foundry-Go/database/query.CursorPage[R], error)
+  Scope func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[R], R]
+  UniqueBy func(keys ...github.com/weiloon1234/Foundry-Go/database/orm/expr.GroupKey[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[R]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorQuery[R]
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[R]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorQuery[R]
+rows.CursorScope
+*rows.CursorScope
 rows.Field
 *rows.Field
 rows.Full
@@ -1557,6 +1584,32 @@ rows.Left
 *rows.Left
 rows.LeftJoined
 *rows.LeftJoined
+rows.LockTarget
+*rows.LockTarget
+rows.LockedResult
+  All func(ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx) ([]R, error)
+  First func(ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx) (github.com/weiloon1234/Foundry-Go/value.Optional[R], error)
+  Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
+  NoWait func() github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
+  Of func(targets ...github.com/weiloon1234/Foundry-Go/database/orm/rows.LockTarget[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
+  Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
+  RequireFirst func(ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx) (R, error)
+  SkipLocked func() github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
+  Wait func() github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
+*rows.LockedResult
+  All func(ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx) ([]R, error)
+  First func(ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx) (github.com/weiloon1234/Foundry-Go/value.Optional[R], error)
+  Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
+  NoWait func() github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
+  Of func(targets ...github.com/weiloon1234/Foundry-Go/database/orm/rows.LockTarget[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
+  Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
+  RequireFirst func(ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx) (R, error)
+  SkipLocked func() github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
+  Wait func() github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
 rows.Mapping
 *rows.Mapping
 rows.Query
@@ -1567,6 +1620,8 @@ rows.Query
   All func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) ([]R, error)
   OrderBy func(orders ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
   Where func(predicates ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
+rows.ReadSource
+  readSource func(*S, *R) github.com/weiloon1234/Foundry-Go/internal/ormcore.RecordSource
 rows.Record
 *rows.Record
 rows.RecordRead
@@ -1585,12 +1640,44 @@ rows.RecordSource
   recordData func(*R) github.com/weiloon1234/Foundry-Go/internal/ormcore.RecordSource
 rows.RecursiveSelf
 *rows.RecursiveSelf
+rows.Result
+  All func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) ([]R, error)
+  Count func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) (int64, error)
+  Exists func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) (bool, error)
+  First func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) (github.com/weiloon1234/Foundry-Go/value.Optional[R], error)
+  Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.Result[S, R]
+  Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.Result[S, R]
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Result[S, R]
+  Paginate func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, request github.com/weiloon1234/Foundry-Go/database/query.PageRequest) (github.com/weiloon1234/Foundry-Go/database/query.Page[R], error)
+  RequireFirst func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) (R, error)
+  SimplePaginate func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, request github.com/weiloon1234/Foundry-Go/database/query.PageRequest) (github.com/weiloon1234/Foundry-Go/database/query.SimplePage[R], error)
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Result[S, R]
+*rows.Result
+  All func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) ([]R, error)
+  Count func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) (int64, error)
+  Exists func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) (bool, error)
+  First func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) (github.com/weiloon1234/Foundry-Go/value.Optional[R], error)
+  Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.Result[S, R]
+  Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.Result[S, R]
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Result[S, R]
+  Paginate func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, request github.com/weiloon1234/Foundry-Go/database/query.PageRequest) (github.com/weiloon1234/Foundry-Go/database/query.Page[R], error)
+  RequireFirst func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) (R, error)
+  SimplePaginate func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, request github.com/weiloon1234/Foundry-Go/database/query.PageRequest) (github.com/weiloon1234/Foundry-Go/database/query.SimplePage[R], error)
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Result[S, R]
 rows.Right
 *rows.Right
 rows.RightJoined
 *rows.RightJoined
 rows.Row
 *rows.Row
+rows.RowLock
+  NoWait func() github.com/weiloon1234/Foundry-Go/database/orm/rows.RowLock[S]
+  SkipLocked func() github.com/weiloon1234/Foundry-Go/database/orm/rows.RowLock[S]
+  Wait func() github.com/weiloon1234/Foundry-Go/database/orm/rows.RowLock[S]
+*rows.RowLock
+  NoWait func() github.com/weiloon1234/Foundry-Go/database/orm/rows.RowLock[S]
+  SkipLocked func() github.com/weiloon1234/Foundry-Go/database/orm/rows.RowLock[S]
+  Wait func() github.com/weiloon1234/Foundry-Go/database/orm/rows.RowLock[S]
 rows.Scalar
 *rows.Scalar
 rows.Schema
@@ -1630,15 +1717,23 @@ rows.TransactionCommonTable
   NotMaterialized func() github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionCommonTable[R]
 rows.TransactionRead
   All func(ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx) ([]R, error)
+  Count func(ctx context.Context, ex *github.com/weiloon1234/Foundry-Go/database.Tx) (int64, error)
+  Exists func(ctx context.Context, ex *github.com/weiloon1234/Foundry-Go/database.Tx) (bool, error)
+  First func(ctx context.Context, ex *github.com/weiloon1234/Foundry-Go/database.Tx) (github.com/weiloon1234/Foundry-Go/value.Optional[R], error)
   Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRead[S, R]
   Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRead[S, R]
   OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRead[S, R]
+  RequireFirst func(ctx context.Context, ex *github.com/weiloon1234/Foundry-Go/database.Tx) (R, error)
   Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRead[S, R]
 *rows.TransactionRead
   All func(ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx) ([]R, error)
+  Count func(ctx context.Context, ex *github.com/weiloon1234/Foundry-Go/database.Tx) (int64, error)
+  Exists func(ctx context.Context, ex *github.com/weiloon1234/Foundry-Go/database.Tx) (bool, error)
+  First func(ctx context.Context, ex *github.com/weiloon1234/Foundry-Go/database.Tx) (github.com/weiloon1234/Foundry-Go/value.Optional[R], error)
   Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRead[S, R]
   Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRead[S, R]
   OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRead[S, R]
+  RequireFirst func(ctx context.Context, ex *github.com/weiloon1234/Foundry-Go/database.Tx) (R, error)
   Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRead[S, R]
 rows.TransactionRecord
 *rows.TransactionRecord
@@ -1646,6 +1741,42 @@ rows.TransactionRecordSource
   transactionRecord func(*R) github.com/weiloon1234/Foundry-Go/internal/ormcore.RecordSource
 rows.TransactionSelectionSource
   transactionSelection func(*S) github.com/weiloon1234/Foundry-Go/internal/ormcore.RecordSource
+rows.TransactionValue
+  All func(ctx context.Context, ex *github.com/weiloon1234/Foundry-Go/database.Tx) ([]V, error)
+  Count func(ctx context.Context, ex *github.com/weiloon1234/Foundry-Go/database.Tx) (int64, error)
+  Exists func(ctx context.Context, ex *github.com/weiloon1234/Foundry-Go/database.Tx) (bool, error)
+  First func(ctx context.Context, ex *github.com/weiloon1234/Foundry-Go/database.Tx) (github.com/weiloon1234/Foundry-Go/value.Optional[V], error)
+  Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionValue[S, V]
+  Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionValue[S, V]
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionValue[S, V]
+  RequireFirst func(ctx context.Context, ex *github.com/weiloon1234/Foundry-Go/database.Tx) (V, error)
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionValue[S, V]
+*rows.TransactionValue
+  All func(ctx context.Context, ex *github.com/weiloon1234/Foundry-Go/database.Tx) ([]V, error)
+  Count func(ctx context.Context, ex *github.com/weiloon1234/Foundry-Go/database.Tx) (int64, error)
+  Exists func(ctx context.Context, ex *github.com/weiloon1234/Foundry-Go/database.Tx) (bool, error)
+  First func(ctx context.Context, ex *github.com/weiloon1234/Foundry-Go/database.Tx) (github.com/weiloon1234/Foundry-Go/value.Optional[V], error)
+  Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionValue[S, V]
+  Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionValue[S, V]
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionValue[S, V]
+  RequireFirst func(ctx context.Context, ex *github.com/weiloon1234/Foundry-Go/database.Tx) (V, error)
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionValue[S, V]
+rows.ValueCursorQuery
+  Key func() github.com/weiloon1234/Foundry-Go/database/orm/expr.GroupKey[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[V]]
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[V]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueCursorQuery[V]
+  Paginate func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, r github.com/weiloon1234/Foundry-Go/database/query.CursorRequest[V]) (github.com/weiloon1234/Foundry-Go/database/query.CursorPage[V], error)
+  Scope func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[V], V]
+  UniqueBy func(keys ...github.com/weiloon1234/Foundry-Go/database/orm/expr.GroupKey[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[V]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueCursorQuery[V]
+  Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[V], V]
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[V]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueCursorQuery[V]
+*rows.ValueCursorQuery
+  Key func() github.com/weiloon1234/Foundry-Go/database/orm/expr.GroupKey[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[V]]
+  OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[V]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueCursorQuery[V]
+  Paginate func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, r github.com/weiloon1234/Foundry-Go/database/query.CursorRequest[V]) (github.com/weiloon1234/Foundry-Go/database/query.CursorPage[V], error)
+  Scope func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[V], V]
+  UniqueBy func(keys ...github.com/weiloon1234/Foundry-Go/database/orm/expr.GroupKey[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[V]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueCursorQuery[V]
+  Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[V], V]
+  Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[V]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueCursorQuery[V]
 rows.ValueRecord
 *rows.ValueRecord
 rows.ValueSetQuery
@@ -1764,6 +1895,31 @@ rows.Except func[R any](a github.com/weiloon1234/Foundry-Go/database/orm/rows.Re
 rows.ExceptValues func[V any](a github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueSource[V], b github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueSource[V]) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueSetQuery[V]
 rows.ExceptAll func[R any](a github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordSource[R], b github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordSource[R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.SetQuery[R]
 rows.ExceptAllValues func[V any](a github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueSource[V], b github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueSource[V]) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueSetQuery[V]
+rows.CursorFor func[R any](source github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordSource[R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorQuery[R]
+rows.ValueCursorFor func[V any](source github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueSource[V]) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueCursorQuery[V]
+rows.Read func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Result[S, R]
+rows.ReadScalar func[S, V any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Scalar[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Result[S, V]
+rows.ReadRecord func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordRead[S, R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Result[S, R]
+rows.ReadSet func[R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.SetQuery[R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Result[github.com/weiloon1234/Foundry-Go/database/orm/rows.Set[R], R]
+rows.ReadValues func[V any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueSetQuery[V]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Result[github.com/weiloon1234/Foundry-Go/database/orm/rows.Set[V], V]
+rows.SelectTransactionValue func[S, V any](source github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionSelectionSource[S], selected github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionValue[S, V]
+rows.Target func[S, R any](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.LockTarget[S]
+rows.LockRows func[S, R any](source github.com/weiloon1234/Foundry-Go/database/orm/rows.ReadSource[S, R], clauses ...github.com/weiloon1234/Foundry-Go/database/orm/rows.RowLock[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
+rows.UpdateLock func[S any](targets ...github.com/weiloon1234/Foundry-Go/database/orm/rows.LockTarget[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.RowLock[S]
+rows.NoKeyUpdateLock func[S any](targets ...github.com/weiloon1234/Foundry-Go/database/orm/rows.LockTarget[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.RowLock[S]
+rows.ShareLock func[S any](targets ...github.com/weiloon1234/Foundry-Go/database/orm/rows.LockTarget[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.RowLock[S]
+rows.KeyShareLock func[S any](targets ...github.com/weiloon1234/Foundry-Go/database/orm/rows.LockTarget[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.RowLock[S]
+rows.ForUpdate func[S, R any](source github.com/weiloon1234/Foundry-Go/database/orm/rows.ReadSource[S, R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
+rows.ForNoKeyUpdate func[S, R any](source github.com/weiloon1234/Foundry-Go/database/orm/rows.ReadSource[S, R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
+rows.ForShare func[S, R any](source github.com/weiloon1234/Foundry-Go/database/orm/rows.ReadSource[S, R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
+rows.ForKeyShare func[S, R any](source github.com/weiloon1234/Foundry-Go/database/orm/rows.ReadSource[S, R]) github.com/weiloon1234/Foundry-Go/database/orm/rows.LockedResult[S, R]
+rows.ConflictRowsOf func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M]) github.com/weiloon1234/Foundry-Go/database/orm/rows.ConflictRows[M]
+rows.OnConflictKeys func[M any](keys ...github.com/weiloon1234/Foundry-Go/database/orm/expr.GroupKey[M]) github.com/weiloon1234/Foundry-Go/database/orm.Conflict[M]
+rows.ConflictTargetWhere func[M any](policy github.com/weiloon1234/Foundry-Go/database/orm.Conflict[M], predicates ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[M]) github.com/weiloon1234/Foundry-Go/database/orm.Conflict[M]
+rows.ConflictWhereRows func[M any](policy github.com/weiloon1234/Foundry-Go/database/orm.Conflict[M], predicates ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[github.com/weiloon1234/Foundry-Go/database/orm/rows.ConflictRow[M]]) github.com/weiloon1234/Foundry-Go/database/orm.Conflict[M]
+rows.SetConflictValue func[M, V, P any](field github.com/weiloon1234/Foundry-Go/database/orm.ExpressionColumn[M, V, P], calculation github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[github.com/weiloon1234/Foundry-Go/database/orm/rows.ConflictRow[M], P]) github.com/weiloon1234/Foundry-Go/database/orm.ConflictUpdate[M]
+rows.ConflictScalarRowQuery func[M, I, V any](records github.com/weiloon1234/Foundry-Go/database/orm/rows.ConflictRows[M], inner github.com/weiloon1234/Foundry-Go/database/orm/rows.Scalar[I, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[github.com/weiloon1234/Foundry-Go/database/orm/rows.ConflictRow[M], github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+rows.ConflictScalarNullableRowQuery func[M, I, V any](records github.com/weiloon1234/Foundry-Go/database/orm/rows.ConflictRows[M], inner github.com/weiloon1234/Foundry-Go/database/orm/rows.Scalar[I, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[github.com/weiloon1234/Foundry-Go/database/orm/rows.ConflictRow[M], github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
 rows.Raw func[R any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, schema github.com/weiloon1234/Foundry-Go/database/orm/rows.Schema[R], sql string, args ...any) ([]R, error)
 expr.Aggregate
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
@@ -1807,6 +1963,14 @@ expr.Expression
   IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
   IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
   Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+expr.FrameBoundary
+  frameBoundary func() github.com/weiloon1234/Foundry-Go/internal/querycore.FrameBound
+expr.FrameOffset
+*expr.FrameOffset
+expr.FramePosition
+*expr.FramePosition
+expr.GeographicPoint
+*expr.GeographicPoint
 expr.GroupKey
 *expr.GroupKey
 expr.HavingPredicate
@@ -1893,6 +2057,86 @@ expr.NullableOrderedValueComparison
   Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
 expr.NullableScope
 *expr.NullableScope
+expr.NullableTextRowExpression
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
+  Contains func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
+  EndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IContains func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IEndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  ILike func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IStartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Like func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Param func(v github.com/weiloon1234/Foundry-Go/value.Nullable[V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+  StartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+*expr.NullableTextRowExpression
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
+  Contains func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
+  EndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IContains func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IEndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  ILike func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IStartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Like func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Param func(v github.com/weiloon1234/Foundry-Go/value.Nullable[V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+  StartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+expr.NullableTextValueComparison
+  Contains func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  EndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IContains func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IEndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  ILike func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IStartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Like func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  StartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+*expr.NullableTextValueComparison
+  Contains func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  EndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IContains func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IEndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  ILike func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IStartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Like func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  StartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
 expr.Order
   NullsFirst func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
   NullsLast func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
@@ -1981,6 +2225,26 @@ expr.ProjectionKey
 *expr.ProjectionKey
 expr.ProjectionOrder
   projectionOrder func(*S) github.com/weiloon1234/Foundry-Go/internal/ormcore.Order
+expr.RangeBoundary
+*expr.RangeBoundary
+expr.RangeWindow
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeWindow[S, D]
+  Between func(start github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeBoundary[S, D], end github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeBoundary[S, D]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  CurrentRow func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeBoundary[S, D]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeWindow[S, D]
+  Following func(v D) github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeBoundary[S, D]
+  Preceding func(v D) github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeBoundary[S, D]
+  UnboundedFollowing func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeBoundary[S, D]
+  UnboundedPreceding func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeBoundary[S, D]
+*expr.RangeWindow
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeWindow[S, D]
+  Between func(start github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeBoundary[S, D], end github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeBoundary[S, D]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  CurrentRow func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeBoundary[S, D]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeWindow[S, D]
+  Following func(v D) github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeBoundary[S, D]
+  Preceding func(v D) github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeBoundary[S, D]
+  UnboundedFollowing func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeBoundary[S, D]
+  UnboundedPreceding func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeBoundary[S, D]
 expr.RowExpression
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
   Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
@@ -2021,6 +2285,90 @@ expr.SelectedOrder
 *expr.SelectedOrder
   NullsFirst func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
   NullsLast func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
+expr.TextRowExpression
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
+  Contains func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
+  EndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IContains func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IEndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  ILike func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IStartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Like func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Param func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]
+  StartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
+*expr.TextRowExpression
+  Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
+  Contains func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
+  EndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IContains func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IEndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  ILike func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IStartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Like func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Param func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]
+  StartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
+expr.TextValueComparison
+  Contains func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  EndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IContains func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IEndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  ILike func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IStartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Like func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  StartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+*expr.TextValueComparison
+  Contains func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  EndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Gt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Gte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IContains func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IEndsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  ILike func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IStartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Like func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Lt func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Lte func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+  StartsWith func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+expr.TimeZone
+  String func() string
+*expr.TimeZone
+  String func() string
 expr.ValueCase
   Else func(result github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
   ElseNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
@@ -2041,6 +2389,30 @@ expr.ValueComparison
   IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
   IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
   Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]
+expr.Window
+  ExcludeCurrentRow func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  ExcludeGroup func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  ExcludeNone func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  ExcludeTies func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  GroupsBetween func(start github.com/weiloon1234/Foundry-Go/database/orm/expr.FrameBoundary, end github.com/weiloon1234/Foundry-Go/database/orm/expr.FrameBoundary) github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  Named func(name string) github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  OrderBy func(orders ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  PartitionBy func(keys ...github.com/weiloon1234/Foundry-Go/database/orm/expr.GroupKey[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  PartitionByValues func(keys ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionKey[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  RangeBetween func(start github.com/weiloon1234/Foundry-Go/database/orm/expr.FramePosition, end github.com/weiloon1234/Foundry-Go/database/orm/expr.FramePosition) github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  RowsBetween func(start github.com/weiloon1234/Foundry-Go/database/orm/expr.FrameBoundary, end github.com/weiloon1234/Foundry-Go/database/orm/expr.FrameBoundary) github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+*expr.Window
+  ExcludeCurrentRow func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  ExcludeGroup func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  ExcludeNone func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  ExcludeTies func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  GroupsBetween func(start github.com/weiloon1234/Foundry-Go/database/orm/expr.FrameBoundary, end github.com/weiloon1234/Foundry-Go/database/orm/expr.FrameBoundary) github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  Named func(name string) github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  OrderBy func(orders ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  PartitionBy func(keys ...github.com/weiloon1234/Foundry-Go/database/orm/expr.GroupKey[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  PartitionByValues func(keys ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionKey[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  RangeBetween func(start github.com/weiloon1234/Foundry-Go/database/orm/expr.FramePosition, end github.com/weiloon1234/Foundry-Go/database/orm/expr.FramePosition) github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+  RowsBetween func(start github.com/weiloon1234/Foundry-Go/database/orm/expr.FrameBoundary, end github.com/weiloon1234/Foundry-Go/database/orm/expr.FrameBoundary) github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
 expr.Related func[M, N, V any](source github.com/weiloon1234/Foundry-Go/database/orm.AggregateSource[M, N], computation github.com/weiloon1234/Foundry-Go/database/orm/expr.AggregateExpression[N, V]) github.com/weiloon1234/Foundry-Go/database/orm.AggregateRelation[M, V]
 expr.Sum func[S any, V interface{github.com/weiloon1234/Foundry-Go/database/orm/expr.exactNumber}, P any, C github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[S, V, P]](column C) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]
 expr.SumAt func[S, M any, V interface{github.com/weiloon1234/Foundry-Go/database/orm/expr.exactNumber}, P any, C github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[M, V, P]](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, M], column C) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]
@@ -2173,3 +2545,310 @@ expr.FoundrySelectedValue func[S, V any](core github.com/weiloon1234/Foundry-Go/
 expr.FoundryPredicateValue func[S any](core github.com/weiloon1234/Foundry-Go/internal/ormcore.Predicate, seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
 expr.Raw func[S, V any](sql string, args ...any) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
 expr.RawWithCodec func[S, V any](c github.com/weiloon1234/Foundry-Go/database/codec.Codec[V], sql string, args ...any) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
+expr.Lower func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.TextRowExpression[S, string]
+expr.LowerValue func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, string]
+expr.LowerNullable func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableTextRowExpression[S, string]
+expr.LowerNullableValue func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[string]]
+expr.Upper func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.TextRowExpression[S, string]
+expr.UpperValue func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, string]
+expr.UpperNullable func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableTextRowExpression[S, string]
+expr.UpperNullableValue func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[string]]
+expr.Trim func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.TextRowExpression[S, string]
+expr.TrimValue func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, string]
+expr.TrimNullable func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableTextRowExpression[S, string]
+expr.TrimNullableValue func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[string]]
+expr.TrimLeft func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.TextRowExpression[S, string]
+expr.TrimLeftValue func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, string]
+expr.TrimLeftNullable func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableTextRowExpression[S, string]
+expr.TrimLeftNullableValue func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[string]]
+expr.TrimRight func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.TextRowExpression[S, string]
+expr.TrimRightValue func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, string]
+expr.TrimRightNullable func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableTextRowExpression[S, string]
+expr.TrimRightNullableValue func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[string]]
+expr.TrimChars func[S any, V, W ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], other github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, W]) github.com/weiloon1234/Foundry-Go/database/orm/expr.TextRowExpression[S, string]
+expr.TrimCharsValue func[S any, V, W ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], other github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, W]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, string]
+expr.TrimCharsNullable func[S any, V, W ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], other github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[W]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableTextRowExpression[S, string]
+expr.TrimCharsNullableValue func[S any, V, W ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], other github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[W]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[string]]
+expr.TrimLeftChars func[S any, V, W ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], other github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, W]) github.com/weiloon1234/Foundry-Go/database/orm/expr.TextRowExpression[S, string]
+expr.TrimLeftCharsValue func[S any, V, W ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], other github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, W]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, string]
+expr.TrimLeftCharsNullable func[S any, V, W ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], other github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[W]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableTextRowExpression[S, string]
+expr.TrimLeftCharsNullableValue func[S any, V, W ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], other github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[W]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[string]]
+expr.TrimRightChars func[S any, V, W ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], other github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, W]) github.com/weiloon1234/Foundry-Go/database/orm/expr.TextRowExpression[S, string]
+expr.TrimRightCharsValue func[S any, V, W ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], other github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, W]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, string]
+expr.TrimRightCharsNullable func[S any, V, W ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], other github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[W]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableTextRowExpression[S, string]
+expr.TrimRightCharsNullableValue func[S any, V, W ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], other github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[W]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[string]]
+expr.Concat func[S any, V, W ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], other github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, W]) github.com/weiloon1234/Foundry-Go/database/orm/expr.TextRowExpression[S, string]
+expr.ConcatValue func[S any, V, W ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], other github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, W]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, string]
+expr.ConcatNullable func[S any, V, W ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], other github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[W]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableTextRowExpression[S, string]
+expr.ConcatNullableValue func[S any, V, W ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], other github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[W]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[string]]
+expr.Replace func[S any, V, W, X ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], other github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, W], replacement github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, X]) github.com/weiloon1234/Foundry-Go/database/orm/expr.TextRowExpression[S, string]
+expr.ReplaceValue func[S any, V, W, X ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], other github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, W], replacement github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, X]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, string]
+expr.ReplaceNullable func[S any, V, W, X ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], other github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[W]], replacement github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[X]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableTextRowExpression[S, string]
+expr.ReplaceNullableValue func[S any, V, W, X ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], other github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[W]], replacement github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[X]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[string]]
+expr.Length func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int64]
+expr.LengthValue func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.LengthNullable func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
+expr.LengthNullableValue func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]
+expr.OctetLength func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int64]
+expr.OctetLengthValue func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.OctetLengthNullable func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
+expr.OctetLengthNullableValue func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]
+expr.ConcatWS func[S any, V ~string](separator string, first github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], rest ...github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.TextRowExpression[S, string]
+expr.ConcatWSValue func[S any, V ~string](separator string, first github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], rest ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, string]
+expr.ConcatWSNullable func[S any, V ~string](separator string, first github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], rest ...github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.TextRowExpression[S, string]
+expr.ConcatWSNullableValue func[S any, V ~string](separator string, first github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], rest ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, string]
+expr.Substring func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], start int32, count int32) github.com/weiloon1234/Foundry-Go/database/orm/expr.TextRowExpression[S, string]
+expr.SubstringValue func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], start int32, count int32) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, string]
+expr.SubstringNullable func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], start int32, count int32) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableTextRowExpression[S, string]
+expr.SubstringNullableValue func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], start int32, count int32) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[string]]
+expr.SubstringFrom func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], start int32) github.com/weiloon1234/Foundry-Go/database/orm/expr.TextRowExpression[S, string]
+expr.SubstringFromValue func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], start int32) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, string]
+expr.SubstringFromNullable func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], start int32) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableTextRowExpression[S, string]
+expr.SubstringFromNullableValue func[S any, V ~string](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], start int32) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[string]]
+expr.SubstringAt func[S any, V ~string, I github.com/weiloon1234/Foundry-Go/database/orm/expr.integerNumber](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], start github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, I], count github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, I]) github.com/weiloon1234/Foundry-Go/database/orm/expr.TextRowExpression[S, string]
+expr.SubstringAtValue func[S any, V ~string, I github.com/weiloon1234/Foundry-Go/database/orm/expr.integerNumber](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], start github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, I], count github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, I]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, string]
+expr.SubstringAtNullable func[S any, V ~string, I github.com/weiloon1234/Foundry-Go/database/orm/expr.integerNumber](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], start github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, I], count github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, I]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableTextRowExpression[S, string]
+expr.SubstringAtNullableValue func[S any, V ~string, I github.com/weiloon1234/Foundry-Go/database/orm/expr.integerNumber](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], start github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, I], count github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, I]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[string]]
+expr.TextValue func[S any, V ~string](v github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.TextValueComparison[S, V]
+expr.TextNullableValue func[S any, V ~string](v github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableTextValueComparison[S, V]
+expr.TruncateDate func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Date], unit github.com/weiloon1234/Foundry-Go/database/orm/expr.DateUnit) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Date]
+expr.TruncateDateValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Date], unit github.com/weiloon1234/Foundry-Go/database/orm/expr.DateUnit) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Date]
+expr.TruncateDateNullable func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Date]], unit github.com/weiloon1234/Foundry-Go/database/orm/expr.DateUnit) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Date]
+expr.TruncateDateNullableValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Date]], unit github.com/weiloon1234/Foundry-Go/database/orm/expr.DateUnit) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Date]]
+expr.TruncateLocal func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime], unit github.com/weiloon1234/Foundry-Go/database/orm/expr.TimestampUnit) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.TruncateLocalValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime], unit github.com/weiloon1234/Foundry-Go/database/orm/expr.TimestampUnit) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.TruncateLocalNullable func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]], unit github.com/weiloon1234/Foundry-Go/database/orm/expr.TimestampUnit) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.TruncateLocalNullableValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]], unit github.com/weiloon1234/Foundry-Go/database/orm/expr.TimestampUnit) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]]
+expr.TruncateInstant func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], unit github.com/weiloon1234/Foundry-Go/database/orm/expr.TimestampUnit, zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, V]
+expr.TruncateInstantValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], unit github.com/weiloon1234/Foundry-Go/database/orm/expr.TimestampUnit, zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
+expr.TruncateInstantNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], unit github.com/weiloon1234/Foundry-Go/database/orm/expr.TimestampUnit, zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, V]
+expr.TruncateInstantNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], unit github.com/weiloon1234/Foundry-Go/database/orm/expr.TimestampUnit, zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+expr.FromUnixMillis func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.integerNumber](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.DateTime]
+expr.FromUnixMillisValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.integerNumber](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.DateTime]
+expr.FromUnixMillisNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.integerNumber](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.DateTime]
+expr.FromUnixMillisNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.integerNumber](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.DateTime]]
+expr.LocalAt func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.LocalAtValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.LocalAtNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.LocalAtNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]]
+expr.ResolveLocal func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime], zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone, policy github.com/weiloon1234/Foundry-Go/database/orm/expr.LocalResolution) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.DateTime]
+expr.ResolveLocalValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime], zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone, policy github.com/weiloon1234/Foundry-Go/database/orm/expr.LocalResolution) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.DateTime]
+expr.ResolveLocalNullable func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]], zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone, policy github.com/weiloon1234/Foundry-Go/database/orm/expr.LocalResolution) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.DateTime]
+expr.ResolveLocalNullableValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]], zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone, policy github.com/weiloon1234/Foundry-Go/database/orm/expr.LocalResolution) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.DateTime]]
+expr.DateOf func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Date]
+expr.DateOfValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Date]
+expr.DateOfNullable func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Date]
+expr.DateOfNullableValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Date]]
+expr.TimeOf func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Time]
+expr.TimeOfValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Time]
+expr.TimeOfNullable func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Time]
+expr.TimeOfNullableValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Time]]
+expr.CombineDateTime func[S any](date github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Date], clock github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Time]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.CombineDateTimeValue func[S any](date github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Date], clock github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Time]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.CombineDateTimeNullable func[S any](date github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Date]], clock github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Time]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.CombineDateTimeNullableValue func[S any](date github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Date]], clock github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Time]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]]
+expr.AddDateDays func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Date], days int32) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Date]
+expr.AddDateDaysValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Date], days int32) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Date]
+expr.AddDateDaysNullable func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Date]], days int32) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Date]
+expr.AddDateDaysNullableValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Date]], days int32) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Date]]
+expr.DateDifference func[S any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Date], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Date]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int64]
+expr.DateDifferenceValue func[S any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Date], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Date]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.DateDifferenceNullable func[S any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Date]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Date]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
+expr.DateDifferenceNullableValue func[S any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Date]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Date]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]
+expr.AddDateInterval func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Date], interval github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.AddDateIntervalValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Date], interval github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.AddDateIntervalNullable func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Date]], interval github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.AddDateIntervalNullableValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Date]], interval github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]]
+expr.SubtractDateInterval func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Date], interval github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.SubtractDateIntervalValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Date], interval github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.SubtractDateIntervalNullable func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Date]], interval github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.SubtractDateIntervalNullableValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Date]], interval github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]]
+expr.AddLocalInterval func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime], interval github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.AddLocalIntervalValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime], interval github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.AddLocalIntervalNullable func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]], interval github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.AddLocalIntervalNullableValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]], interval github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]]
+expr.SubtractLocalInterval func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime], interval github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.SubtractLocalIntervalValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime], interval github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.SubtractLocalIntervalNullable func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]], interval github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.SubtractLocalIntervalNullableValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]], interval github.com/weiloon1234/Foundry-Go/temporal.Interval) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]]
+expr.AddInstantInterval func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], interval github.com/weiloon1234/Foundry-Go/temporal.Interval, zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, V]
+expr.AddInstantIntervalValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], interval github.com/weiloon1234/Foundry-Go/temporal.Interval, zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
+expr.AddInstantIntervalNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], interval github.com/weiloon1234/Foundry-Go/temporal.Interval, zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, V]
+expr.AddInstantIntervalNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], interval github.com/weiloon1234/Foundry-Go/temporal.Interval, zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+expr.SubtractInstantInterval func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], interval github.com/weiloon1234/Foundry-Go/temporal.Interval, zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, V]
+expr.SubtractInstantIntervalValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], interval github.com/weiloon1234/Foundry-Go/temporal.Interval, zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
+expr.SubtractInstantIntervalNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], interval github.com/weiloon1234/Foundry-Go/temporal.Interval, zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, V]
+expr.SubtractInstantIntervalNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], interval github.com/weiloon1234/Foundry-Go/temporal.Interval, zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+expr.AddClockElapsed func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Time], duration time.Duration) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Time]
+expr.AddClockElapsedValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Time], duration time.Duration) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Time]
+expr.AddClockElapsedNullable func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Time]], duration time.Duration) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Time]
+expr.AddClockElapsedNullableValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Time]], duration time.Duration) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Time]]
+expr.SubtractClockElapsed func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Time], duration time.Duration) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Time]
+expr.SubtractClockElapsedValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Time], duration time.Duration) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Time]
+expr.SubtractClockElapsedNullable func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Time]], duration time.Duration) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Time]
+expr.SubtractClockElapsedNullableValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Time]], duration time.Duration) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Time]]
+expr.TransactionTime func[S, M any](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, M]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.DateTime]
+expr.Year func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int64]
+expr.YearValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.YearNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
+expr.YearNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]
+expr.Month func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int64]
+expr.MonthValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.MonthNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
+expr.MonthNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]
+expr.Day func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int64]
+expr.DayValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.DayNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
+expr.DayNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]
+expr.DayOfWeek func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int64]
+expr.DayOfWeekValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.DayOfWeekNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
+expr.DayOfWeekNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]
+expr.ISODayOfWeek func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int64]
+expr.ISODayOfWeekValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.ISODayOfWeekNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
+expr.ISODayOfWeekNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]
+expr.DayOfYear func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int64]
+expr.DayOfYearValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.DayOfYearNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
+expr.DayOfYearNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]
+expr.ISOWeek func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int64]
+expr.ISOWeekValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.ISOWeekNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
+expr.ISOWeekNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]
+expr.ISOYear func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int64]
+expr.ISOYearValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.ISOYearNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
+expr.ISOYearNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]
+expr.Quarter func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int64]
+expr.QuarterValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.QuarterNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
+expr.QuarterNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]
+expr.Century func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int64]
+expr.CenturyValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.CenturyNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
+expr.CenturyNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]
+expr.Decade func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int64]
+expr.DecadeValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.DecadeNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
+expr.DecadeNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]
+expr.Millennium func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int64]
+expr.MillenniumValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.MillenniumNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
+expr.MillenniumNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]
+expr.JulianDay func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]
+expr.JulianDayValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]
+expr.JulianDayNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]
+expr.JulianDayNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.calendarValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/decimal.Decimal]]
+expr.Hour func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.clockValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int64]
+expr.HourValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.clockValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.HourNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.clockValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
+expr.HourNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.clockValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]
+expr.Minute func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.clockValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int64]
+expr.MinuteValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.clockValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.MinuteNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.clockValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
+expr.MinuteNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.clockValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]
+expr.Second func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.clockValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]
+expr.SecondValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.clockValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]
+expr.SecondNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.clockValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]
+expr.SecondNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.clockValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/decimal.Decimal]]
+expr.Milliseconds func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.clockValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]
+expr.MillisecondsValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.clockValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]
+expr.MillisecondsNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.clockValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]
+expr.MillisecondsNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.clockValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/decimal.Decimal]]
+expr.Microseconds func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.clockValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int64]
+expr.MicrosecondsValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.clockValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.MicrosecondsNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.clockValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
+expr.MicrosecondsNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.clockValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]
+expr.UnixSeconds func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]
+expr.UnixSecondsValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]
+expr.UnixSecondsNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]
+expr.UnixSecondsNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/decimal.Decimal]]
+expr.UnixMilliseconds func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int64]
+expr.UnixMillisecondsValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.UnixMillisecondsNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
+expr.UnixMillisecondsNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]
+expr.LoadTimeZone func(name string) (github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone, error)
+expr.UTCZone func() github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone
+expr.AddIntervals func[S any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Interval], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.AddIntervalsValue func[S any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Interval], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.AddIntervalsNullable func[S any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.AddIntervalsNullableValue func[S any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]
+expr.SubtractIntervals func[S any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Interval], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.SubtractIntervalsValue func[S any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Interval], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.SubtractIntervalsNullable func[S any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.SubtractIntervalsNullableValue func[S any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]
+expr.NegateInterval func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.NegateIntervalValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.NegateIntervalNullable func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.NegateIntervalNullableValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]
+expr.LocalDifference func[S any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.LocalDifferenceValue func[S any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.LocalDifferenceNullable func[S any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.LocalDifferenceNullableValue func[S any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]
+expr.InstantDifference func[S any, L, R github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, L], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, R]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.InstantDifferenceValue func[S any, L, R github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, L], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, R]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.InstantDifferenceNullable func[S any, L, R github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[L]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[R]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.InstantDifferenceNullableValue func[S any, L, R github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[L]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[R]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]
+expr.ClockDifference func[S any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Time], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Time]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.ClockDifferenceValue func[S any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Time], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Time]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.ClockDifferenceNullable func[S any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Time]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Time]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.ClockDifferenceNullableValue func[S any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Time]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Time]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]
+expr.IntervalMonths func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int32]
+expr.IntervalMonthsValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int32]
+expr.IntervalMonthsNullable func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int32]
+expr.IntervalMonthsNullableValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int32]]
+expr.IntervalDays func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, int32]
+expr.IntervalDaysValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int32]
+expr.IntervalDaysNullable func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int32]
+expr.IntervalDaysNullableValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int32]]
+expr.IntervalElapsed func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, time.Duration]
+expr.IntervalElapsedValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, time.Duration]
+expr.IntervalElapsedNullable func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, time.Duration]
+expr.IntervalElapsedNullableValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[time.Duration]]
+expr.ShiftDate func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Date], interval github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.ShiftDateValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Date], interval github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.ShiftDateNullable func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Date]], interval github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.ShiftDateNullableValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Date]], interval github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]]
+expr.ShiftLocal func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime], interval github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.ShiftLocalValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime], interval github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.ShiftLocalNullable func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]], interval github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]
+expr.ShiftLocalNullableValue func[S any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]], interval github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime]]
+expr.ShiftInstant func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], interval github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/temporal.Interval], zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, V]
+expr.ShiftInstantValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], interval github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/temporal.Interval], zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
+expr.ShiftInstantNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], interval github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]], zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, V]
+expr.ShiftInstantNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.instantValue](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], interval github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/temporal.Interval]], zone github.com/weiloon1234/Foundry-Go/database/orm/expr.TimeZone) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+expr.NewGeographicPoint func(latitude float64, longitude float64) (github.com/weiloon1234/Foundry-Go/database/orm/expr.GeographicPoint, error)
+expr.SphericalDistance func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](latitude github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], longitude github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], origin github.com/weiloon1234/Foundry-Go/database/orm/expr.GeographicPoint) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, float64]
+expr.SphericalDistanceValue func[S any](latitude github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, float64], longitude github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, float64], origin github.com/weiloon1234/Foundry-Go/database/orm/expr.GeographicPoint) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, float64]
+expr.SphericalDistanceNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](latitude github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], longitude github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], origin github.com/weiloon1234/Foundry-Go/database/orm/expr.GeographicPoint) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, float64]
+expr.SphericalDistanceNullableValue func[S any](latitude github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[float64]], longitude github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[float64]], origin github.com/weiloon1234/Foundry-Go/database/orm/expr.GeographicPoint) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[float64]]
+expr.Over func[S, V any](aggregate github.com/weiloon1234/Foundry-Go/database/orm/expr.AggregateExpression[S, V], w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
+expr.RowNumber func[S any](w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.Rank func[S any](w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.DenseRank func[S any](w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int64]
+expr.PercentRank func[S any](w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, float64]
+expr.CumeDist func[S any](w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, float64]
+expr.NTile func[S any](buckets int32, w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, int32]
+expr.Lag func[S, V any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], offset int32, w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+expr.LagNullable func[S, V any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], offset int32, w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+expr.LagOr func[S, V any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], offset int32, fallback V, w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
+expr.Lead func[S, V any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], offset int32, w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+expr.LeadNullable func[S, V any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], offset int32, w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+expr.LeadOr func[S, V any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], offset int32, fallback V, w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
+expr.FirstValue func[S, V any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+expr.FirstNullableValue func[S, V any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+expr.LastValue func[S, V any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+expr.LastNullableValue func[S, V any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+expr.NthValue func[S, V any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], n int32, w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+expr.NthNullableValue func[S, V any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], n int32, w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
+expr.WindowFor func[S, M any](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, M]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+expr.UnboundedPreceding func() github.com/weiloon1234/Foundry-Go/database/orm/expr.FramePosition
+expr.CurrentRow func() github.com/weiloon1234/Foundry-Go/database/orm/expr.FramePosition
+expr.UnboundedFollowing func() github.com/weiloon1234/Foundry-Go/database/orm/expr.FramePosition
+expr.Preceding func(count int64) github.com/weiloon1234/Foundry-Go/database/orm/expr.FrameOffset
+expr.Following func(count int64) github.com/weiloon1234/Foundry-Go/database/orm/expr.FrameOffset
+expr.NumericRange func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S], input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeWindow[S, V]
+expr.NullableNumericRange func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S], input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeWindow[S, V]
+expr.TemporalRange func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.rangeTemporal](w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S], input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeWindow[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]
+expr.NullableTemporalRange func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.rangeTemporal](w github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S], input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RangeWindow[S, github.com/weiloon1234/Foundry-Go/temporal.Interval]

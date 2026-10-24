@@ -25,7 +25,7 @@ func (f ScalarField[M, V]) compareColumn(op operator, other KeyField[M, V]) Pred
 	if nilDescriptor(other) {
 		return Predicate[M]{}
 	}
-	return Predicate[M]{expression: binaryComparison{Left: f.ref, Right: other.relationKey().ref, Operator: op}}
+	return Predicate[M]{expression: binaryComparison{Left: f.rowValue().node, Right: other.relationKey().rowValue().node, Operator: op}}
 }
 
 func (f OrderedField[M, V]) LtColumn(other OrderedKeyField[M, V]) Predicate[M] {

@@ -14,7 +14,7 @@ func Aggregate(input Expression, kind querycore.AggregateKind, cast querycore.Ag
 	if !ok {
 		err = errors.Join(err, Invalid("aggregate requires a stored field"))
 	}
-	node := querycore.AggregateNode{Kind: kind, Cast: cast, Field: field}
+	node := querycore.AggregateNode{Kind: kind, Cast: cast, Field: field, Sensitive: input.Sensitive}
 	err = errors.Join(err, node.Validate(func(querycore.FieldRef) error { return nil }))
 	return Expression{Node: node, Refs: input.Refs, ReferenceFree: input.ReferenceFree, Err: err}
 }

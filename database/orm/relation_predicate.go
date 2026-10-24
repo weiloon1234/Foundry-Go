@@ -77,7 +77,7 @@ func relationExistsNode(p *relationPlan) querycore.Subquery {
 		if err != nil {
 			return querycore.Subquery{Err: err}
 		}
-		node = querycore.RelationHopJoin(node, alias, p.foreign, j.pivot.ast.Table, j.pivot.table.model.Columns, j.pivot.ast.EffectivePredicates(), j.second)
+		node = querycore.RelationHopJoin(node, alias, p.foreign, j.pivot.table.model.Source(j.pivot.ast.Table, ""), j.pivot.ast.EffectivePredicates(), j.second)
 		node.Predicates = append(node.Predicates, querycore.BinaryComparison{Left: querycore.FieldRef{Table: querycore.RelationHopAlias, Column: j.first.Column}, Right: p.local, Operator: querycore.Equal})
 		return querycore.RelationExistence(node, p.local.Table, columns)
 	}

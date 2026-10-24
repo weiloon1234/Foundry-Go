@@ -3,6 +3,7 @@ package query
 import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -15,9 +16,12 @@ type RowValue[S, V any] interface{ rowValue() rowValueData[S, V] }
 // Value promotes it to a selected expression; Eq/Ne/In remain row predicates.
 type RowExpression[S, V any] struct{ expression Expression[S, V] }
 
-func (e RowExpression[S, V]) rowValue() rowValueData[S, V] { return rowValueData[S, V](e.expression) }
+func (e RowExpression[S, V]) rowValue() rowValueData[S, V] { return rowValueData[S, V](e.Value()) }
 
-func (e RowExpression[S, V]) Value() Expression[S, V] { return e.expression }
+func (e RowExpression[S, V]) Value() Expression[S, V] {
+	e.expression.node = querycore.WithSensitivity(e.expression.node, e.expression.codec.SensitiveValues())
+	return e.expression
+}
 
 func (e RowExpression[S, V]) Asc() Order[S] { return rowOrder[S](e.expression.node, false) }
 
@@ -65,7 +69,7 @@ func (a NullableOrderedAggregate[S, V]) Param(v V) RowExpression[S, V] {
 
 func parameterExpression[S, V any](v V, c codec.Codec[V]) RowExpression[S, V] {
 	bound, err := c.Bind(v)
-	return RowExpression[S, V]{Expression[S, V]{node: parameterNode{Kind: c.ParameterType(), Value: bound, Err: err}, codec: c}}
+	return RowExpression[S, V]{Expression[S, V]{node: parameterNode{Kind: c.ParameterType(), Value: bound, Err: err, Sensitive: c.SensitiveValues()}, codec: c}}
 }
 
 // NullableRow explicitly widens a row value to one nullable layer without

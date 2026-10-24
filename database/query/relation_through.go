@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -158,7 +159,7 @@ func (r ThroughRelation[M, N, P]) validateMetadata(source string, depth int, lim
 		if err := validateRowValue(o.value, func(f fieldRef) error { return f.Validate(table) }, 0, &orderNodes); err != nil {
 			return err
 		}
-		field, plain := o.value.(fieldRef)
+		field, plain := querycore.UnwrapSensitivity(o.value).(fieldRef)
 		if !plain {
 			continue
 		}

@@ -10,12 +10,14 @@ import (
 // Projection plans erase scope identities only after Map/Project checked the
 // input, output and value types. Decoder/getter values stay concretely typed.
 type ProjectionColumn struct {
-	Name     string
-	Typ      reflect.Type
-	Nullable bool
+	Sensitive bool
+	Name      string
+	Typ       reflect.Type
+	Nullable  bool
 }
 
 type ProjectionMapping struct {
+	Sensitive  bool
 	Column     ProjectionColumn
 	Expression ValueExpression
 }
@@ -53,7 +55,7 @@ func SelectProjection(source SelectNode, columns []ProjectionColumn, mappings []
 		if !exists || mapping.Column.Typ != column.Typ {
 			return SelectNode{}, fault.New(fault.Invalid, "projection mapping does not match its declared field")
 		}
-		node.Selections[i] = SelectItem{Expression: mapping.Expression, Alias: column.Name}
+		node.Selections[i] = SelectItem{Expression: mapping.Expression, Alias: column.Name, Sensitive: column.Sensitive || mapping.Sensitive}
 	}
 	return node, nil
 }

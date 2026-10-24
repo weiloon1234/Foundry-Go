@@ -1,0 +1,24 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "DELETE FROM \"foundry_outbox\" WHERE (\"foundry_outbox\".\"id\" IN (SELECT \"foundry_outbox\".\"id\" AS \"value\" FROM \"foundry_outbox\" WHERE (\"foundry_outbox\".\"publish_state\" = $1) AND (\"foundry_outbox\".\"published_at\" \u003c $2) ORDER BY \"foundry_outbox\".\"published_at\" ASC, \"foundry_outbox\".\"id\" ASC LIMIT $3)) AND (\"foundry_outbox\".\"publish_state\" = $4)",
+      "Args": [
+        "published",
+        "2026-10-24T00:00:00Z",
+        2,
+        "published"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0
+}

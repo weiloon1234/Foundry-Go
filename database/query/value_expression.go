@@ -23,7 +23,7 @@ type Expression[S, V any] struct {
 }
 
 func (a Aggregate[M, V]) Value() Expression[M, V] {
-	return Expression[M, V]{node: a.node, codec: a.codec}
+	return Expression[M, V]{node: querycore.WithSensitivity(a.node, a.codec.SensitiveValues()), codec: a.codec}
 }
 
 // Nullable explicitly widens a non-nullable expression's result type without
@@ -39,4 +39,6 @@ type Group[S any] struct {
 	node valueExpression
 }
 
-func (f ScalarField[M, V]) Group() Group[M] { return Group[M]{node: f.ref} }
+func (f ScalarField[M, V]) Group() Group[M] {
+	return Group[M]{node: f.rowValue().node}
+}

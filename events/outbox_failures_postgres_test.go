@@ -35,7 +35,7 @@ func TestOutboxContainsEncoderFailuresAndReleasesAdmissionWithoutWriting(t *test
 				return errors.New("outbox encoder failure escaped or exposed data")
 			}
 		}
-		count, err := outboxstore.QueryFoundryOutbox().Count(t.Context(), tx)
+		count, err := outboxstore.Messages.Query().Count(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -98,7 +98,7 @@ func TestCanceledOutboxCaptureWaitsForEncoderExitAndLeavesNoRecord(t *testing.T)
 		t.Fatal("encoder exit did not release its transaction")
 	}
 	if err := within(t.Context(), func(tx *database.Tx) error {
-		count, err := outboxstore.QueryFoundryOutbox().Count(t.Context(), tx)
+		count, err := outboxstore.Messages.Query().Count(t.Context(), tx)
 		if err != nil {
 			return err
 		}

@@ -2,6 +2,7 @@ package rows
 
 import (
 	"context"
+	"database/sql/driver"
 	"reflect"
 	"unsafe"
 
@@ -60,7 +61,7 @@ func recordDefinition[R any](owner any) ormcore.Record {
 		for i, c := range row.columns {
 			columns[i] = querycore.Column{Name: c.Name, Nullable: c.Nullable}
 		}
-		return ormcore.Record{Type: row.typ, Owner: row, Columns: columns, Err: row.err, Checks: []func() error{row.check}, Scan: func(r database.Row, p unsafe.Pointer) error { return scanDeclaredRow(row, r, p) }}
+		return ormcore.Record{Fields: func() []ormcore.RecordField { return rowRecordFields(row) }, Type: row.typ, Owner: row, Columns: columns, Err: row.err, Checks: []func() error{row.check}, Scan: func(r database.Row, p unsafe.Pointer) error { return scanDeclaredRow(row, r, p) }}
 	}
 	return orm.FoundryRecord[R](ormcore.Scope{Reference: ormcore.Reference{Owner: owner}}, sqlowner.Metadata())
 }
@@ -167,3 +168,11 @@ func Limit[S, R any](q Query[S, R], n int) Query[S, R] { q.source.Node.Limit = v
 // Offset retains an ordinary projection's offset without adding Query methods.
 // Example: rows.Offset(report,10).
 func Offset[S, R any](q Query[S, R], n int) Query[S, R] { q.source.Node.Offset = n; return q }
+
+func rowRecordFields(row *rowCore) []ormcore.RecordField {
+	fields := make([]ormcore.RecordField, len(row.fields))
+	for i, f := range row.fields {
+		fields[i] = ormcore.RecordField{Name: f.column.Name, Sensitive: f.sensitive, Get: func(p unsafe.Pointer) (driver.Value, error) { return f.cursor(nil, p) }, Decode: func(raw any) (driver.Value, error) { return f.cursor(raw, nil) }}
+	}
+	return fields
+}

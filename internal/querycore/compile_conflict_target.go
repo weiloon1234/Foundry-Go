@@ -76,7 +76,7 @@ func (p Conflict) targetSQL(parent *Compiler, table string) (string, error) {
 		}
 		index.Add(planned)
 		keys[i] = c.fragment(planned.Sql, planned.Shape)
-		if _, field := key.(FieldRef); !field {
+		if _, field := UnwrapSensitivity(key).(FieldRef); !field {
 			keys[i] = "(" + keys[i] + ")"
 		}
 	}

@@ -1,0 +1,15 @@
+{
+  "Statements": [
+    {
+      "SQL": "SELECT \"foundry_outbox\".\"id\", \"foundry_outbox\".\"kind\", \"foundry_outbox\".\"destination\", \"foundry_outbox\".\"name\", \"foundry_outbox\".\"version\", \"foundry_outbox\".\"payload\", \"foundry_outbox\".\"origin\", \"foundry_outbox\".\"created_at\", \"foundry_outbox\".\"publish_state\", \"foundry_outbox\".\"publish_attempts\", \"foundry_outbox\".\"publish_after\", \"foundry_outbox\".\"published_at\", \"foundry_outbox\".\"publish_reason\" FROM \"foundry_outbox\" WHERE (\"foundry_outbox\".\"publish_state\" = $1) AND (\"foundry_outbox\".\"kind\" = $2) ORDER BY \"foundry_outbox\".\"created_at\" ASC, \"foundry_outbox\".\"id\" ASC LIMIT $3",
+      "Args": [
+        "failed",
+        "event",
+        2
+      ]
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0
+}

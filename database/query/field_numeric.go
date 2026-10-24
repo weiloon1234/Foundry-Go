@@ -46,17 +46,17 @@ func NewNullableFloatField[M any, V floatingNumber](table, column string, c code
 }
 
 func (f ExactField[M, V]) summaryData() summaryData[M, decimal.Decimal] {
-	return summaryData[M, decimal.Decimal]{field: f.ref, cast: exactNumberCast, codec: codec.Decimal()}
+	return summaryData[M, decimal.Decimal]{sensitive: f.codec.SensitiveValues(), field: f.ref, cast: exactNumberCast, codec: codec.Decimal()}
 }
 
 func (f NullableExactField[M, V]) summaryData() summaryData[M, decimal.Decimal] {
-	return summaryData[M, decimal.Decimal]{field: f.ref, cast: exactNumberCast, codec: codec.Decimal()}
+	return summaryData[M, decimal.Decimal]{sensitive: f.codec.SensitiveValues(), field: f.ref, cast: exactNumberCast, codec: codec.Decimal()}
 }
 
 func (f FloatField[M, V]) summaryData() summaryData[M, float64] {
-	return summaryData[M, float64]{field: f.ref, cast: floatNumberCast, codec: codec.Float[float64]()}
+	return summaryData[M, float64]{sensitive: f.codec.SensitiveValues(), field: f.ref, cast: floatNumberCast, codec: codec.Float[float64]()}
 }
 
 func (f NullableFloatField[M, V]) summaryData() summaryData[M, float64] {
-	return summaryData[M, float64]{field: f.ref, cast: floatNumberCast, codec: codec.Float[float64]()}
+	return summaryData[M, float64]{sensitive: f.codec.SensitiveValues(), field: f.ref, cast: floatNumberCast, codec: codec.Float[float64]()}
 }

@@ -31,7 +31,7 @@ func directAggregateInput[M, N any](spec relationSpec[M, N], validate func(strin
 			return validate(spec.source.queryCore.Table, depth, limits)
 		},
 		selectNode: func() selectNode {
-			return selectNode{Source: tableSource{Table: spec.target.queryCore.Table, Columns: spec.target.definition.modelDefinition.Columns}, Predicates: spec.target.queryCore.EffectivePredicates()}
+			return selectNode{Source: spec.target.definition.modelDefinition.Source(spec.target.queryCore.Table, ""), Predicates: spec.target.queryCore.EffectivePredicates()}
 		},
 	}
 }

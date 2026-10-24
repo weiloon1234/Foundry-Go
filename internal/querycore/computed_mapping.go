@@ -11,6 +11,8 @@ func MapComputedValue(v ValueExpression, item func(ValueExpression) ValueExpress
 		return ParameterNode{Err: err}, true
 	}
 	switch v := v.(type) {
+	case SensitiveValue:
+		return SensitiveValue{Value: item(v.Value)}, true
 	case OperationNode:
 		v.Arguments = slices.Clone(v.Arguments)
 		for i, a := range v.Arguments {

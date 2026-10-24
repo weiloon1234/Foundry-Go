@@ -101,7 +101,7 @@ func PrimaryEqualities(predicates []Expression, primary string, visit func(drive
 	for _, predicate := range predicates {
 		switch predicate := predicate.(type) {
 		case Comparison:
-			field, ok := predicate.Operand.(FieldRef)
+			field, ok := UnwrapSensitivity(predicate.Operand).(FieldRef)
 			if !ok || field.Column != primary || predicate.Operator != Equal {
 				continue
 			}

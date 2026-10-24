@@ -50,7 +50,7 @@ func (f ScalarField[M, V]) InNullableQuery(source ValueQuerySource[value.Nullabl
 }
 
 func (f ScalarField[M, V]) inSubquery(q subquery) Predicate[M] {
-	return Predicate[M]{expression: subqueryPredicate{Query: q, Operand: f.ref}}
+	return Predicate[M]{expression: subqueryPredicate{Query: q, Operand: f.rowValue().node}}
 }
 
 // ExistsQuery is an uncorrelated existence predicate. Outer anchors the result

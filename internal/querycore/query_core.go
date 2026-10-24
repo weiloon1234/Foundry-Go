@@ -34,6 +34,7 @@ type QueryCore struct {
 // modelDefinition contains immutable SQL metadata. Hydration, field getters and
 // lifecycle callbacks remain on Definition[M]; no service or model is boxed.
 type ModelDefinition struct {
+	Sensitive      map[string]bool
 	Table, Primary string
 	Columns        []Column
 	Timestamps     *TimestampColumns
@@ -157,17 +158,13 @@ func (q QueryCore) CompileModel(kind ReadKind, selections []SelectItem) (Stateme
 	if err != nil {
 		return Statement{}, err
 	}
-	switch kind {
-	case ReadCount:
-		statement = `SELECT COUNT(*) FROM (` + statement + `) AS "foundry_count"`
-	case ReadExists:
-		statement = "SELECT EXISTS(" + statement + ")"
-	}
+	prefix, suffix := ReadEnvelope(kind)
+	statement = prefix + statement + suffix
 	return c.Statement(statement), nil
 }
 
 func (q QueryCore) ModelSelect(selections []SelectItem) SelectNode {
-	node := SelectNode{Source: TableSource{Table: q.Table, Columns: q.Model.Columns}, Selections: selections, Predicates: q.EffectivePredicates(), Orders: OrderNodes(q.Orders), Limit: q.Limit, Offset: q.Offset}
+	node := SelectNode{Source: q.Model.Source(q.Table, ""), Selections: selections, Predicates: q.EffectivePredicates(), Orders: OrderNodes(q.Orders), Limit: q.Limit, Offset: q.Offset}
 	if q.DistinctOnKey != nil {
 		// One-of-many loading keeps the first row per relation key.
 		node.Distinct = DistinctSpec{Kind: DistinctOn, Keys: []ValueExpression{*q.DistinctOnKey}}
@@ -224,4 +221,16 @@ func CompileRead(node SelectNode, scopeContext context.Context, transaction bool
 		return Statement{}, err
 	}
 	return c.Statement(sql), nil
+}
+
+// ReadEnvelope owns scalar result wrappers and their internal output alias.
+func ReadEnvelope(kind ReadKind) (string, string) {
+	switch kind {
+	case ReadCount:
+		return `SELECT COUNT(*) FROM (`, `) AS "foundry_count"`
+	case ReadExists:
+		return "SELECT EXISTS(", ")"
+	default:
+		return "", ""
+	}
 }

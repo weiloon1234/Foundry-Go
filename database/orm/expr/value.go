@@ -82,13 +82,14 @@ func parameter[S, V any](exemplar rowData[V], v V) RowExpression[S, V] {
 		node.Value, node.Err = c.Bind(c.Clone(v))
 	}
 	node.Kind = c.Kind
+	node.Sensitive = c.Sensitive
 	refs, referenceErr := ormcore.MergeReferences(exemplar.core.Refs, []ormcore.Reference{{Scope: reflect.TypeFor[S]()}})
 	node.Err = errors.Join(err, node.Err, referenceErr)
 	return RowExpression[S, V]{data: rowData[V]{core: ormcore.Expression{Node: node, Refs: refs, ReferenceFree: true, Err: node.Err}, column: c}}
 }
 
 func columnCodec[V any](c codec.Codec[V]) ormcore.Column[V] {
-	return ormcore.Column[V]{Kind: c.ParameterType(), Nullable: value.IsNullableType[V](), Bind: c.Bind, Clone: c.Clone, Scan: func(v *V) any { return c.Scan(v) }, Err: c.Validate()}
+	return ormcore.Column[V]{Sensitive: c.SensitiveValues(), Kind: c.ParameterType(), Nullable: value.IsNullableType[V](), Bind: c.Bind, Clone: c.Clone, Scan: func(v *V) any { return c.Scan(v) }, Err: c.Validate()}
 }
 
 // NullableRow explicitly widens a row value by one nullable layer. Example: expr.NullableRow(expr.Value(Users.Age)).
@@ -104,7 +105,7 @@ func Nullable[S, V any](e Selected[S, V]) Selected[S, value.Nullable[V]] {
 
 func nullableData[V any](e rowData[V]) rowData[value.Nullable[V]] {
 	c := e.column
-	out := ormcore.Column[value.Nullable[V]]{Kind: c.Kind, Nullable: true, Err: c.Err}
+	out := ormcore.Column[value.Nullable[V]]{Sensitive: c.Sensitive, Kind: c.Kind, Nullable: true, Err: c.Err}
 	out.Scan = func(v *value.Nullable[V]) any { return ormcore.NullableScan(c.Scan, v) }
 	out.Bind = func(v value.Nullable[V]) (driver.Value, error) {
 		x, ok := v.Get()
@@ -144,5 +145,6 @@ func FoundrySelected[S, V any](e Selected[S, V], seal sqlowner.ExpressionSeal) o
 		return ormcore.Expression{Err: ormcore.Invalid("invalid SQL owner capability")}
 	}
 
+	e.data.core.Sensitive = e.data.core.Sensitive || e.data.column.Sensitive
 	return e.data.core
 }

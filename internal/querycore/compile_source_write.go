@@ -40,7 +40,7 @@ func (q QueryCore) sourceWriteSelection(destination, source SelectNode, key Sour
 		// Match using the destination's actual SQL key comparison. Partitioning
 		// the source expression alone could miss duplicates when the source and
 		// destination use different database comparison or collation semantics.
-		matched := SelectNode{Source: TableSource{Table: q.Table, Columns: q.Model.Columns},
+		matched := SelectNode{Source: q.Model.Source(q.Table, ""),
 			Joins: []JoinNode{{Source: TableSource{Cte: definition, Columns: columns}, Kind: InnerJoin,
 				On: BinaryComparison{Left: FieldRef{Table: q.Table, Column: q.Model.Primary}, Right: FieldRef{Table: definition.Name, Column: keyName}, Operator: Equal}}},
 			Selections: []SelectItem{{Expression: FieldRef{Table: q.Table, Column: q.Model.Primary}, Alias: keyName}},

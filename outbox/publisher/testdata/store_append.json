@@ -1,0 +1,27 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "INSERT INTO \"foundry_outbox\" (\"id\", \"kind\", \"destination\", \"name\", \"version\", \"payload\", \"origin\") VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING \"foundry_outbox\".\"id\", \"foundry_outbox\".\"kind\", \"foundry_outbox\".\"destination\", \"foundry_outbox\".\"name\", \"foundry_outbox\".\"version\", \"foundry_outbox\".\"payload\", \"foundry_outbox\".\"origin\", \"foundry_outbox\".\"created_at\", \"foundry_outbox\".\"publish_state\", \"foundry_outbox\".\"publish_attempts\", \"foundry_outbox\".\"publish_after\", \"foundry_outbox\".\"published_at\", \"foundry_outbox\".\"publish_reason\"",
+      "Args": [
+        "\u003cgenerated UUIDv7\u003e",
+        "event",
+        "events",
+        "notice",
+        1,
+        "{\"n\":1}",
+        "{\"request\":{}}"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0
+}

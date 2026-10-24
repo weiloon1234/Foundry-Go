@@ -112,6 +112,9 @@ func FoundryExpression[S, V, P any](e Expression[S, V, P], seal sqlowner.Express
 		return ormcore.Expression{Err: ormcore.Invalid("invalid SQL owner capability")}
 	}
 
+	if e.projection != nil {
+		e.core.Sensitive = e.core.Sensitive || e.projection().Sensitive
+	}
 	return e.core
 }
 

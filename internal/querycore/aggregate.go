@@ -27,10 +27,11 @@ const (
 )
 
 type AggregateNode struct {
-	Kind   AggregateKind
-	Field  FieldRef
-	Cast   AggregateCast
-	Filter *AggregateFilter
+	Sensitive bool
+	Kind      AggregateKind
+	Field     FieldRef
+	Cast      AggregateCast
+	Filter    *AggregateFilter
 }
 
 func (a AggregateNode) Validate(field func(FieldRef) error) error {

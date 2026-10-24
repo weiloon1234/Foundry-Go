@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -41,22 +42,7 @@ func cursorForRecord[R any](source recordQuery[R]) CursorQuery[R] {
 	if q.err != nil {
 		return q
 	}
-	if len(source.columns) == 0 || len(source.columns) != len(source.node.Selections) || len(source.columns) > MaxExpressionNodes || source.scan == nil {
-		q.err = fault.New(fault.Invalid, "cursor result requires bounded columns and a complete decoder")
-		return q
-	}
-	names, err := namesInSelects(source.node)
-	if err != nil {
-		q.err = err
-		return q
-	}
-	alias := names.Allocate("foundry_cursor")
-	inner := source.node
-	inner.Selections = slices.Clone(inner.Selections)
-	for i, column := range source.columns {
-		inner.Selections[i].Alias = column.Name
-	}
-	q.node = selectNode{Source: tableSource{Query: &inner, Alias: alias, Columns: source.columns}, Selections: columnSelections(alias, source.columns)}
+	q.node, q.err = querycore.ResultCursorNode(source.node, source.columns, source.scan != nil)
 	return q
 }
 
@@ -117,59 +103,28 @@ func (q CursorQuery[R]) canonical() (CursorQuery[R], []RecordField[R], []bool, e
 	if q.err != nil {
 		return fail(q.err)
 	}
-	if q.metadata == nil || q.metadata.scan == nil || q.node.Source.Query == nil || len(q.unique) == 0 || len(q.unique) > MaxCursorFields || len(q.orders) > MaxCursorFields {
-		return fail(fault.New(fault.Invalid, "cursor result requires metadata and a bounded UniqueBy declaration"))
+	if q.metadata == nil || q.metadata.scan == nil {
+		return fail(fault.New(fault.Invalid, "cursor result requires metadata"))
 	}
-	columns := make(map[string]columnData, len(q.metadata.columns))
-	for _, column := range q.metadata.columns {
-		columns[column.Name] = column
+	var err error
+	q.orders, err = querycore.ResultCursorOrders(q.node, q.metadata.columns, q.orders, q.unique)
+	if err != nil {
+		return fail(err)
 	}
-	seen := make(map[string]bool, len(q.orders))
-	valid := func(f fieldRef) bool { _, ok := columns[f.Column]; return ok && f.Table == q.node.Source.Name() }
-	for _, order := range q.orders {
-		if !valid(order.Field) || seen[order.Field.Column] {
-			return fail(fault.New(fault.Invalid, "cursor order uses an unknown or repeated output field"))
-		}
-		seen[order.Field.Column] = true
+
+	metadata := make([]querycore.ResultCursorField, len(q.metadata.fields))
+	for i, f := range q.metadata.fields {
+		metadata[i] = querycore.ResultCursorField{Name: f.column, Sensitive: f.sensitive, Valid: f.get != nil && f.decode != nil}
 	}
-	q.orders = slices.Clone(q.orders)
-	keys := make(map[string]bool, len(q.unique))
-	for _, key := range q.unique {
-		if !valid(key) || keys[key.Column] {
-			return fail(fault.New(fault.Invalid, "cursor identity uses an unknown or repeated output field"))
-		}
-		keys[key.Column] = true
-		if !seen[key.Column] {
-			q.orders = append(q.orders, queryOrder{Field: key})
-			seen[key.Column] = true
-		}
+	indices, required, err := querycore.ResultCursorFields(q.node, q.metadata.columns, q.orders, metadata)
+	if err != nil {
+		return fail(err)
 	}
-	if len(q.orders) > MaxCursorFields || len(q.metadata.fields) > len(q.metadata.columns) {
-		return fail(fault.New(fault.Invalid, "cursor result exceeds its field bound"))
+	fields := make([]RecordField[R], len(indices))
+	for i, index := range indices {
+		fields[i] = q.metadata.fields[index]
 	}
-	getters := make(map[string]RecordField[R], len(q.metadata.fields))
-	for _, field := range q.metadata.fields {
-		if _, exists := getters[field.column]; exists || field.get == nil || field.decode == nil {
-			return fail(fault.New(fault.Invalid, "cursor result has invalid field getters"))
-		}
-		if _, ok := columns[field.column]; !ok {
-			return fail(fault.New(fault.Invalid, "cursor getter is not a declared output field"))
-		}
-		getters[field.column] = field
-	}
-	fields := make([]RecordField[R], len(q.orders))
-	required := make([]bool, len(q.orders))
-	for i, order := range q.orders {
-		field, ok := getters[order.Field.Column]
-		if !ok {
-			return fail(fault.New(fault.Invalid, "cursor result requires generated codecs and getters for every ordered field"))
-		}
-		if field.sensitive {
-			return fail(fault.New(fault.Invalid, "sensitive fields cannot be cursor keys"))
-		}
-		fields[i] = field
-		required[i] = !columns[field.column].Nullable
-	}
+
 	q.node.Orders = orderNodes(q.orders)
 	return q, fields, required, nil
 }

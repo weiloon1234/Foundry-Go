@@ -45,7 +45,11 @@ type definitionCheck[M any] struct {
 // Define is an explicit declaration boundary for generated code. The decoder
 // must scan every declared column into a fresh M and publish only on success.
 func Define[M any](table, primary string, columns []Column, scan func(database.Row) (M, error), modelFields ...ModelField[M]) Definition[M] {
-	return Definition[M]{modelDefinition: modelDefinition{Table: table, Primary: primary, Columns: columnDataSlice(columns)}, scan: scan, modelFields: slices.Clone(modelFields)}
+	sensitive := make(map[string]bool, len(modelFields))
+	for _, field := range modelFields {
+		sensitive[field.column] = sensitive[field.column] || field.sensitive
+	}
+	return Definition[M]{modelDefinition: modelDefinition{Table: table, Primary: primary, Columns: columnDataSlice(columns), Sensitive: sensitive}, scan: scan, modelFields: slices.Clone(modelFields)}
 }
 
 func (d Definition[M]) Validate() error {

@@ -47,7 +47,10 @@ type Aggregate[M, V any] struct {
 // retaining their exact model and result type through relation declarations.
 type AggregateExpression[M, V any] interface{ aggregateValue() Aggregate[M, V] }
 
-func (a Aggregate[M, V]) aggregateValue() Aggregate[M, V] { return a }
+func (a Aggregate[M, V]) aggregateValue() Aggregate[M, V] {
+	a.node.Sensitive = a.node.Sensitive || a.codec.SensitiveValues()
+	return a
+}
 
 // Count counts rows, including rows with NULL fields. An empty group is zero.
 func Count[M any]() OrderedAggregate[M, int64] {
@@ -61,10 +64,10 @@ func Exists[M any]() Aggregate[M, bool] {
 
 // countField has no field-value type parameter: all stored types use the same
 // owner-bound int64 aggregate and shared codec.
-func countField[M any](field fieldRef, kind aggregateKind) OrderedAggregate[M, int64] {
-	return OrderedAggregate[M, int64]{Aggregate[M, int64]{node: aggregateNode{Kind: kind, Field: field}, codec: codec.Signed[int64]()}}
+func countField[M any](field fieldRef, kind aggregateKind, sensitive bool) OrderedAggregate[M, int64] {
+	return OrderedAggregate[M, int64]{Aggregate[M, int64]{node: aggregateNode{Kind: kind, Field: field, Sensitive: sensitive}, codec: codec.Signed[int64]()}}
 }
 
 func fieldExtremum[M any, V comparable](f ScalarField[M, V], kind aggregateKind) NullableOrderedAggregate[M, V] {
-	return nullableOrderedAggregate[M](aggregateNode{Kind: kind, Field: f.ref}, f.codec)
+	return nullableOrderedAggregate[M](aggregateNode{Kind: kind, Field: f.ref, Sensitive: f.codec.SensitiveValues()}, f.codec)
 }

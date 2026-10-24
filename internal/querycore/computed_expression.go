@@ -10,6 +10,8 @@ import (
 // qualification. Child callbacks retain the caller's row/group/window context.
 func VisitComputedValue(v ValueExpression, item func(ValueExpression) error, condition func(Expression) error) (bool, error) {
 	switch v := v.(type) {
+	case SensitiveValue:
+		return true, item(v.Value)
 	case OperationNode:
 		if err := v.Validate(); err != nil {
 			return true, err

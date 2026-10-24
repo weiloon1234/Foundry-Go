@@ -230,7 +230,7 @@ func (c *Compiler) Comparison(e Comparison, grouped map[FieldRef]bool, grouping 
 		}
 		bound[i] = v
 	}
-	if _, column := e.Operand.(FieldRef); column && !c.IndexTarget && (e.Operator == In || e.Operator == NotIn) {
+	if _, column := UnwrapSensitivity(e.Operand).(FieldRef); column && !c.IndexTarget && (e.Operator == In || e.Operator == NotIn) {
 		// One array parameter keeps statement text independent of list length,
 		// so the driver's statement cache is reused and lists are not limited
 		// by the protocol's parameter count. PostgreSQL infers the array element

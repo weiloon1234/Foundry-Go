@@ -17,8 +17,7 @@ const hopAlias = querycore.RelationHopAlias
 // relationHop is the intermediate model of HasManyThrough/HasOneThrough. Its
 // query supplies the intermediate's own filters: soft deletion and scopes.
 type relationHop struct {
-	table         string
-	columns       []columnData
+	source        tableSource
 	predicates    func() []expression
 	first, second fieldRef
 	validate      func() error
@@ -64,7 +63,7 @@ func hopSpec[M any, I ModelQuery[I], N any, A, B comparable](local KeyField[M, A
 			return intermediate.validateCore()
 		}}
 	if intermediate.definition != nil {
-		hop.table, hop.columns = intermediate.queryCore.Table, intermediate.definition.modelDefinition.Columns
+		hop.source = intermediate.definition.modelDefinition.Source(intermediate.queryCore.Table, hopAlias)
 	}
 	spec := relationSpec[M, N]{local: a.ref, foreign: b.ref, hop: hop}
 	spec.scope = func(ctx context.Context, source Query[M], target Query[N], parent M) (Query[N], bool, error) {
@@ -93,7 +92,7 @@ func hopSpec[M any, I ModelQuery[I], N any, A, B comparable](local KeyField[M, A
 
 // node selects the intermediate model under hopAlias with its own filters.
 func (h *relationHop) node() selectNode {
-	node := selectNode{Source: tableSource{Table: h.table, Alias: hopAlias, Columns: h.columns}}
+	node := selectNode{Source: h.source}
 	for _, predicate := range h.predicates() {
 		node.Predicates = append(node.Predicates, requalify(predicate, hopAlias))
 	}
@@ -102,7 +101,7 @@ func (h *relationHop) node() selectNode {
 
 // join adds the intermediate to a target select aliased as targetAlias.
 func (h *relationHop) join(node selectNode, targetAlias string, foreign fieldRef) selectNode {
-	return querycore.RelationHopJoin(node, targetAlias, foreign, h.table, h.columns, h.predicates(), h.second)
+	return querycore.RelationHopJoin(node, targetAlias, foreign, h.source, h.predicates(), h.second)
 }
 
 type hopRow[N any] struct {
@@ -206,7 +205,7 @@ func hopAggregateInput[M, N any](spec relationSpec[M, N], validate func(string, 
 			return validate(spec.source.queryCore.Table, depth, limits)
 		},
 		selectNode: func() selectNode {
-			node := selectNode{Source: tableSource{Table: spec.target.queryCore.Table, Alias: throughTargetAlias, Columns: spec.target.definition.modelDefinition.Columns}}
+			node := selectNode{Source: spec.target.definition.modelDefinition.Source(spec.target.queryCore.Table, throughTargetAlias)}
 			for _, predicate := range spec.target.queryCore.EffectivePredicates() {
 				node.Predicates = append(node.Predicates, requalify(predicate, throughTargetAlias))
 			}

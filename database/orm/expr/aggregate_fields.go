@@ -46,7 +46,7 @@ func FoundryAggregate[S, V any](a AggregateExpression[S, V], seal sqlowner.Expre
 }
 
 func aggregateField[S, V, R any](input ormcore.Column[V], kind querycore.AggregateKind, cast querycore.AggregateCast, result ormcore.Column[R]) rowData[R] {
-	core := ormcore.Aggregate(ormcore.Expression{Node: input.Field, Refs: []ormcore.Reference{input.Reference}, Err: input.Err}, kind, cast)
+	core := ormcore.Aggregate(ormcore.Expression{Sensitive: input.Sensitive, Node: input.Field, Refs: []ormcore.Reference{input.Reference}, Err: input.Err}, kind, cast)
 	core.Err = errors.Join(core.Err, result.Err)
 	return rowData[R]{core: core, column: result}
 }

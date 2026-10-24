@@ -13,7 +13,7 @@ func On[L, R any, K comparable](left KeyField[L, K], right KeyField[R, K]) JoinO
 	if nilDescriptor(left) || nilDescriptor(right) {
 		return JoinOn[L, R]{}
 	}
-	return JoinOn[L, R]{expression: binaryComparison{Left: left.relationKey().ref, Right: right.relationKey().ref, Operator: equal}}
+	return JoinOn[L, R]{expression: binaryComparison{Left: left.relationKey().rowValue().node, Right: right.relationKey().rowValue().node, Operator: equal}}
 }
 
 // OnAnd combines compatible join conditions, including composite join keys.

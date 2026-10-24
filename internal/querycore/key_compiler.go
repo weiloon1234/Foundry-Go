@@ -43,10 +43,10 @@ func (c *Compiler) RegisterKey(v ValueExpression, grouped bool) (*CompiledKey, e
 		i = c.Keys.Index.Add(p)
 		entry := &CompiledKey{Node: v}
 		c.Keys.Entries = append(c.Keys.Entries, entry)
-		if f, ok := v.(FieldRef); ok {
+		if f, ok := UnwrapSensitivity(v).(FieldRef); ok {
 			c.Keys.Fields[f] = entry
 		}
-		c.Keys.Kinds[reflect.TypeOf(v)] = true
+		c.Keys.Kinds[reflect.TypeOf(UnwrapSensitivity(v))] = true
 	}
 	entry := c.Keys.Entries[i]
 	if grouped && !entry.Grouped {
@@ -61,10 +61,10 @@ func (c *Compiler) MatchingKey(v ValueExpression, groupedOnly bool) (*CompiledKe
 		return nil, nil
 	}
 	var entry *CompiledKey
-	if f, ok := v.(FieldRef); ok {
+	if f, ok := UnwrapSensitivity(v).(FieldRef); ok {
 		entry = c.Keys.Fields[f]
 	} else {
-		if !c.Keys.Kinds[reflect.TypeOf(v)] {
+		if !c.Keys.Kinds[reflect.TypeOf(UnwrapSensitivity(v))] {
 			return nil, nil
 		}
 		p, err := c.PlanValue(v)
@@ -131,7 +131,7 @@ func (c *Compiler) GroupKeys(values []ValueExpression) (map[FieldRef]bool, error
 			return nil, fault.New(fault.Invalid, "repeated GROUP BY key")
 		}
 		seen[key] = true
-		if f, ok := v.(FieldRef); ok {
+		if f, ok := UnwrapSensitivity(v).(FieldRef); ok {
 			fields[f] = true
 		}
 	}

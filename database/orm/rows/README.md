@@ -168,3 +168,6 @@ Stage 6c CTE/set/cursor composition and Stage 6b4 transaction joins.
 
 See [CTEs, recursion and set operations](composition.md) for complete-record CTEs,
 transaction CTEs, recursive self scopes, and record/scalar set composition.
+
+See [completed-result cursors and read terminals](results.md) for output scopes,
+keyset navigation, numbered pages and transaction-only projection locks.

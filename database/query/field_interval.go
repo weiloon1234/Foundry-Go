@@ -23,9 +23,9 @@ func NewNullableIntervalField[M any, V intervalValue](table, column string, c co
 }
 
 func (f IntervalField[M, V]) summaryData() summaryData[M, V] {
-	return summaryData[M, V]{field: f.ref, cast: intervalValueCast, codec: f.codec}
+	return summaryData[M, V]{sensitive: f.codec.SensitiveValues(), field: f.ref, cast: intervalValueCast, codec: f.codec}
 }
 
 func (f NullableIntervalField[M, V]) summaryData() summaryData[M, V] {
-	return summaryData[M, V]{field: f.ref, cast: intervalValueCast, codec: f.codec}
+	return summaryData[M, V]{sensitive: f.codec.SensitiveValues(), field: f.ref, cast: intervalValueCast, codec: f.codec}
 }

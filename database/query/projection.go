@@ -52,7 +52,7 @@ type ProjectionQuery[S, P any] struct {
 func Project[S, P any](source ProjectionSource[S], definition ProjectionDefinition[P], mappings ...ProjectionMapping[S, P]) ProjectionQuery[S, P] {
 	lowered := make([]projectionMapping, len(mappings))
 	for i, m := range mappings {
-		lowered[i] = projectionMapping{Column: projectionColumn{Name: m.column.name, Typ: m.column.typ, Nullable: m.column.nullable}, Expression: m.expression}
+		lowered[i] = projectionMapping{Column: projectionColumn{Name: m.column.name, Typ: m.column.typ, Nullable: m.column.nullable}, Expression: m.expression, Sensitive: m.sensitive}
 	}
 	q := ProjectionQuery[S, P]{definition: definition, mappings: lowered}
 	if nilDescriptor(source) {

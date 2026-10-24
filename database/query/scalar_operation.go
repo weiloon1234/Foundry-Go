@@ -174,7 +174,7 @@ func numericRepresentation(kind codec.ParameterType) bool {
 }
 
 func operationArg[S, V any](e Expression[S, V]) operationArgument {
-	return operationArgument{Value: e.node, Kind: e.codec.ParameterType()}
+	return operationArgument{Value: querycore.WithSensitivity(e.node, e.codec.SensitiveValues()), Kind: e.codec.ParameterType()}
 }
 
 func operationValue[S, V any](op scalarOperation, result codec.Codec[V], arguments ...operationArgument) Expression[S, V] {

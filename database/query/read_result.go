@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -91,7 +92,8 @@ func (q readResult[P]) Count(ctx context.Context, executor database.Executor) (i
 	if err != nil {
 		return 0, err
 	}
-	s = s.envelope(`SELECT COUNT(*) FROM (`, `) AS "foundry_count"`)
+	prefix, suffix := querycore.ReadEnvelope(querycore.ReadCount)
+	s = s.envelope(prefix, suffix)
 	var n int64
 	err = database.ScanOne(s.executionContext(ctx), readExecutor{executor}, s.sql, s.arguments, codec.Signed[int64]().Scan(&n))
 	return n, err
@@ -109,7 +111,8 @@ func (q readResult[P]) Exists(ctx context.Context, executor database.Executor) (
 	if err != nil {
 		return false, err
 	}
-	s = s.envelope("SELECT EXISTS(", ")")
+	prefix, suffix := querycore.ReadEnvelope(querycore.ReadExists)
+	s = s.envelope(prefix, suffix)
 	var exists bool
 	err = database.ScanOne(s.executionContext(ctx), readExecutor{executor}, s.sql, s.arguments, codec.Bool[bool]().Scan(&exists))
 	return exists, err

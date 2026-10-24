@@ -8,6 +8,16 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Complete Stage 6c with result/scalar cursors, read/page adapters and transaction-only
+  result locks. Sensitive cursor keys fail before SQL across projections, sets,
+  CTEs, relation aggregates and computed expressions in both query APIs.
+- Add typed windows and frames (6d1), plus text, temporal, interval and geographic
+  functions (6d2), preserving row/selected phases, NULL behavior and codecs.
+- Add computed/partial conflict targets and stored/proposed calculations (6e2),
+  including scoped scalar subqueries; retain the documented set-write lifecycle.
+- Migrate the outbox store and publisher to ORM declarations (Stage 7 slice 1),
+  preserving public event/job APIs, locking, payload codecs and commit outcomes.
+
 - Complete Stage 5 with typed pivot relation writes: Attach/Detach/Sync/Toggle/
   UpdatePivot package functions reuse the lifecycle, scoped endpoint locks and
   atomic bounds. Hook-free batches use set writes; failures retain typed
@@ -26,7 +36,7 @@
   rejects ambiguous syntax; lint is a best-effort source policy, not a runtime proof.
 - Add complete model/projection record adapters and transaction-only record and
   projection composition (6c1), preserving derived windows, decoder identity,
-  retrieval callbacks and inner locks. Result cursors remain pending.
+  retrieval callbacks and inner locks; completed-result terminals follow in 6c3.
 - Add opt-in model audit policies and typed historical readers (B5d), reusing
   Automatic/Exclude/Redact, stored codecs and transactional observer capture.
   Updates capture touched fields; creates/deletes capture complete snapshots.

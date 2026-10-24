@@ -25,7 +25,7 @@ func expressionColumn[V any](c columnData[V]) ormcore.Column[V] {
 	if c.core == nil || c.core.owner == nil {
 		return ormcore.Column[V]{Err: invalid("uninitialized column")}
 	}
-	return ormcore.Column[V]{Reference: ormcore.Reference{Table: c.core.owner.model.Table, Owner: c.core.owner}, Field: querycore.FieldRef{Table: c.core.owner.model.Table, Column: c.core.metadata.Name}, Kind: c.core.kind, Nullable: c.core.metadata.Nullable, Bind: c.bind, Clone: c.clone, Scan: c.scanValue, Err: declarationCoreError(c.core.owner)}
+	return ormcore.Column[V]{Reference: ormcore.Reference{Table: c.core.owner.model.Table, Owner: c.core.owner}, Field: querycore.FieldRef{Table: c.core.owner.model.Table, Column: c.core.metadata.Name}, Sensitive: c.core.sensitive, Kind: c.core.kind, Nullable: c.core.metadata.Nullable, Bind: c.bind, Clone: c.clone, Scan: c.scanValue, Err: declarationCoreError(c.core.owner)}
 }
 func nullableExpression[V any](c nullableColumnData[V]) (ormcore.Column[V], ormcore.Column[value.Nullable[V]]) {
 	if c.nullable == nil {
@@ -60,7 +60,8 @@ func FoundrySource[M any](q Query[M], seal sqlowner.MetadataSeal) ormcore.Source
 	if err != nil {
 		return ormcore.Source{Err: err}
 	}
-	return ormcore.Source{Scope: reflect.TypeFor[M](), Node: q.state.ast.ModelSelect(q.state.table.selections), Owners: map[string]any{q.state.ast.Table: q.state.table}, Checks: []func() error{sourceCheck(q.state)}}
+	node := q.state.ast.ModelSelect(q.state.table.selections)
+	return ormcore.Source{Scope: reflect.TypeFor[M](), Node: node, Owners: map[string]any{q.state.ast.Table: q.state.table}, Checks: []func() error{sourceCheck(q.state)}}
 }
 
 func sourceCheck(q queryState) func() error { return func() error { return validateQuery(q) } }

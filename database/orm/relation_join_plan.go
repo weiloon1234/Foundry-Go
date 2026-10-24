@@ -71,7 +71,7 @@ func relationSelect(p *relationPlan, ctx context.Context) (querycore.SelectNode,
 		j := p.join
 		hop := j.pivot.ast
 		hop.ScopeContext = ctx
-		node = querycore.RelationHopJoin(node, q.ast.Table, p.foreign, hop.Table, hop.Model.Columns, hop.EffectivePredicates(), j.second)
+		node = querycore.RelationHopJoin(node, q.ast.Table, p.foreign, hop.Model.Source(hop.Table, ""), hop.EffectivePredicates(), j.second)
 	}
 	return node, nil
 }

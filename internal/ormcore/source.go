@@ -38,6 +38,7 @@ type Scope struct {
 
 // Column retains typed closures without a heavy codec field.
 type Column[V any] struct {
+	Sensitive bool
 	Reference
 	Field    querycore.FieldRef
 	Kind     codec.ParameterType
@@ -50,8 +51,9 @@ type Column[V any] struct {
 
 // Expression carries SQL and the referenced declarations for ownership checks.
 type Expression struct {
-	Node querycore.ValueExpression
-	Refs []Reference
+	Sensitive bool
+	Node      querycore.ValueExpression
+	Refs      []Reference
 	// ReferenceFree marks a constructed expression with no SQL column dependencies.
 	ReferenceFree bool
 	Err           error

@@ -2,7 +2,7 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -299,9 +299,9 @@ func SubstringValue[S any, V ~string](input Expression[S, V], start int32, count
 	args := []operationArgument{operationArg(input), operationArg(parameterExpression[S](start, codec.Signed[int32]()).Value())}
 	args = append(args, operationArg(parameterExpression[S](count, codec.Signed[int32]()).Value()))
 	result := operationValue[S](substringOperation, codec.String[string](), args...)
-	if count < 0 {
+	if err := querycore.ValidateSubstringCount(count); err != nil {
 		n := result.node.(operationNode)
-		n.Err = fault.New(fault.Invalid, "substring count cannot be negative")
+		n.Err = err
 		result.node = n
 	}
 	return result
@@ -318,9 +318,9 @@ func SubstringNullableValue[S any, V ~string](input Expression[S, value.Nullable
 	args := []operationArgument{operationArg(input), operationArg(parameterExpression[S](start, codec.Signed[int32]()).Value())}
 	args = append(args, operationArg(parameterExpression[S](count, codec.Signed[int32]()).Value()))
 	result := operationValue[S](substringOperation, codec.Nullable(codec.String[string]()), args...)
-	if count < 0 {
+	if err := querycore.ValidateSubstringCount(count); err != nil {
 		n := result.node.(operationNode)
-		n.Err = fault.New(fault.Invalid, "substring count cannot be negative")
+		n.Err = err
 		result.node = n
 	}
 	return result

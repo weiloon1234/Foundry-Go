@@ -51,8 +51,14 @@ func (w *surfaceWalker) walk(typ types.Type, path string) {
 		generic := t.TypeParams().Len() > 0 || t.TypeArgs().Len() > 0
 		if pkg := obj.Pkg(); pkg != nil && generic {
 			heavy := pkg.Path() == "github.com/weiloon1234/Foundry-Go/database/codec" && obj.Name() == "Codec"
-			if pkg.Path() == "github.com/weiloon1234/Foundry-Go/database/query" && obj.Name() != "Page" && obj.Name() != "SimplePage" {
-				heavy = true
+			if pkg.Path() == "github.com/weiloon1234/Foundry-Go/database/query" {
+				// Transport DTOs remain recursively checked below; query builders
+				// and their engine state remain forbidden regardless of method count.
+				switch obj.Name() {
+				case "Page", "SimplePage", "Cursor", "CursorRequest", "CursorPage":
+				default:
+					heavy = true
+				}
 			}
 			if heavy && !w.layerOnly {
 				w.violations = append(w.violations, path+" reaches "+t.String())
@@ -296,5 +302,17 @@ func TestSurfaceWalkerRejectsORMEngineFieldsAndReverseLayers(t *testing.T) {
 		if !strings.Contains(violations, name) {
 			t.Fatalf("missed %s: %s", name, violations)
 		}
+	}
+}
+
+func TestSurfaceWalkerCursorTransportIsThinButBuildersRemainForbidden(t *testing.T) {
+	pkg := surfacePackage(t, `package orm
+ import "github.com/weiloon1234/Foundry-Go/database/query"
+ type cursorTransport[R any] struct{Position query.Cursor[R];Request query.CursorRequest[R];Page query.CursorPage[R]}
+ type cursorEngine[R any] struct{Builder query.CursorQuery[R]}
+ `)
+	violations := strings.Join(checkSurface(pkg), "\n")
+	if strings.Contains(violations, "cursorTransport") || !strings.Contains(violations, "cursorEngine") {
+		t.Fatal(violations)
 	}
 }

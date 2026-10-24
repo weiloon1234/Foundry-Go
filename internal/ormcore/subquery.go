@@ -39,7 +39,7 @@ func SelectScalar(source Source, value Expression) Source {
 	if value.Node == nil {
 		source.Err = errors.Join(source.Err, Invalid("scalar selection requires a value"))
 	}
-	source.Node.Selections = []querycore.SelectItem{{Expression: value.Node, Alias: "value"}}
+	source.Node.Selections = []querycore.SelectItem{{Expression: value.Node, Alias: "value", Sensitive: value.Sensitive}}
 	return source
 }
 

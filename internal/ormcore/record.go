@@ -2,6 +2,7 @@ package ormcore
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
 	"reflect"
 	"slices"
@@ -13,7 +14,15 @@ import (
 
 // Record keeps an ordered complete decoder bound to its declaration and Go type.
 // Scan receives memory only after the typed adapter validates Type.
+type RecordField struct {
+	Name      string
+	Sensitive bool
+	Get       func(unsafe.Pointer) (driver.Value, error)
+	Decode    func(any) (driver.Value, error)
+}
+
 type Record struct {
+	Fields    func() []RecordField
 	Type      reflect.Type
 	Owner     any
 	Columns   []querycore.Column

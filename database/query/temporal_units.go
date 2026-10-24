@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
@@ -18,30 +18,23 @@ type clockValue interface {
 
 type instantValue interface{ time.Time | temporal.DateTime }
 
-type temporalUnit uint8
+type temporalUnit = querycore.TemporalUnit
 
 const (
-	unitMicrosecond temporalUnit = iota + 1
-	unitMillisecond
-	unitSecond
-	unitMinute
-	unitHour
-	unitDay
-	unitWeek
-	unitMonth
-	unitQuarter
-	unitYear
-	unitDecade
-	unitCentury
-	unitMillennium
+	unitMicrosecond = querycore.UnitMicrosecond
+	unitMillisecond = querycore.UnitMillisecond
+	unitSecond      = querycore.UnitSecond
+	unitMinute      = querycore.UnitMinute
+	unitHour        = querycore.UnitHour
+	unitDay         = querycore.UnitDay
+	unitWeek        = querycore.UnitWeek
+	unitMonth       = querycore.UnitMonth
+	unitQuarter     = querycore.UnitQuarter
+	unitYear        = querycore.UnitYear
+	unitDecade      = querycore.UnitDecade
+	unitCentury     = querycore.UnitCentury
+	unitMillennium  = querycore.UnitMillennium
 )
-
-func (u temporalUnit) name() string {
-	if u < unitMicrosecond || u > unitMillennium {
-		return ""
-	}
-	return [...]string{"", "microseconds", "milliseconds", "second", "minute", "hour", "day", "week", "month", "quarter", "year", "decade", "century", "millennium"}[u]
-}
 
 // DateUnit identifies a calendar boundary. Clock units cannot be supplied to
 // TruncateDate without an explicit invalid conversion.
@@ -77,29 +70,23 @@ const (
 	TimestampMillennium  TimestampUnit = TimestampUnit(unitMillennium)
 )
 
-// TimeZone names an explicitly selected IANA timezone. The zero value is invalid.
-// PostgreSQL resolves the name using its timezone database when executing SQL.
+// TimeZone names an explicitly selected IANA timezone; its zero value is invalid.
 type TimeZone struct{ name string }
 
-// LoadTimeZone validates a named zone using Go's timezone database. Local and
-// empty names are rejected to avoid process-specific timezone selection.
+// LoadTimeZone validates an explicit IANA timezone. Example: LoadTimeZone("Asia/Kuala_Lumpur").
 func LoadTimeZone(name string) (TimeZone, error) {
-	if _, err := temporal.LoadTimeZone(name); err != nil {
-		return TimeZone{}, fault.Wrap(fault.Invalid, "invalid query timezone", err)
-	}
-	return TimeZone{name: name}, nil
+	zone, err := querycore.LoadTimeZone(name)
+	return TimeZone{name: zone}, err
 }
 
-// UTCZone selects UTC without loading an application or session default.
-func UTCZone() TimeZone { return TimeZone{name: "UTC"} }
-
+// UTCZone selects UTC without a session default. Example: UTCZone().
+func UTCZone() TimeZone           { return TimeZone{name: "UTC"} }
 func (z TimeZone) String() string { return z.name }
 
-// LocalResolution makes PostgreSQL's choice at DST gaps/overlaps explicit.
-// This differs from temporal.LocalDateTime.In, which requires a unique instant.
+// LocalResolution explicitly selects PostgreSQL's DST gap/overlap policy.
 type LocalResolution uint8
 
-const PostgresStandardTime LocalResolution = 1
+const PostgresStandardTime LocalResolution = LocalResolution(querycore.PostgresStandardTime)
 
 func textOperationArgument[S any](text string, err error) operationArgument {
 	e := parameterExpression[S](text, codec.String[string]()).Value()
@@ -110,26 +97,17 @@ func textOperationArgument[S any](text string, err error) operationArgument {
 }
 
 func unitArgument[S any](unit, minimum temporalUnit) operationArgument {
-	var err error
-	if unit < minimum || unit > unitMillennium {
-		err = fault.New(fault.Invalid, "invalid temporal truncation unit")
-	}
-	return textOperationArgument[S](unit.name(), err)
+	name, err := querycore.TruncationUnitName(unit, minimum)
+	return textOperationArgument[S](name, err)
 }
 
 func zoneArgument[S any](zone TimeZone) operationArgument {
-	var err error
-	if zone.name == "" {
-		err = fault.New(fault.Invalid, "temporal operation requires a timezone")
-	}
-	return textOperationArgument[S](zone.name, err)
+	name, err := querycore.ZoneArgument(zone.name)
+	return textOperationArgument[S](name, err)
 }
-
 func resolutionArgument[S any](zone TimeZone, policy LocalResolution) operationArgument {
-	if policy != PostgresStandardTime {
-		return textOperationArgument[S]("", fault.New(fault.Invalid, "local resolution requires an explicit supported DST policy"))
-	}
-	return zoneArgument[S](zone)
+	name, err := querycore.ResolutionArgument(zone.name, uint8(policy))
+	return textOperationArgument[S](name, err)
 }
 
 func intervalArgument[S any](interval temporal.Interval) operationArgument {

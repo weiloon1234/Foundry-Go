@@ -1,0 +1,25 @@
+{
+  "Statements": [
+    {
+      "SQL": "SELECT COUNT(*) FROM (SELECT 1 FROM \"foundry_outbox\" WHERE (\"foundry_outbox\".\"publish_state\" = $1)) AS \"foundry_count\"",
+      "Args": [
+        "pending"
+      ]
+    },
+    {
+      "SQL": "SELECT COUNT(*) FROM (SELECT 1 FROM \"foundry_outbox\" WHERE (\"foundry_outbox\".\"publish_state\" = $1)) AS \"foundry_count\"",
+      "Args": [
+        "published"
+      ]
+    },
+    {
+      "SQL": "SELECT COUNT(*) FROM (SELECT 1 FROM \"foundry_outbox\" WHERE (\"foundry_outbox\".\"publish_state\" = $1)) AS \"foundry_count\"",
+      "Args": [
+        "failed"
+      ]
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0
+}

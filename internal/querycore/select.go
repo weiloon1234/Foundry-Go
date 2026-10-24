@@ -12,6 +12,7 @@ import (
 // All read paths share this relational SELECT node and compiler. Public typed
 // declarations resolve model ownership before entering this private boundary.
 type TableSource struct {
+	Sensitive    map[string]bool // Immutable base-column sensitivity, retained by direct aliases.
 	Table, Alias string
 	Columns      []Column
 	Query        *SelectNode

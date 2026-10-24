@@ -8,9 +8,10 @@ import (
 )
 
 type ParameterNode struct {
-	Kind  codec.ParameterType
-	Value driver.Value
-	Err   error
+	Sensitive bool
+	Kind      codec.ParameterType
+	Value     driver.Value
+	Err       error
 	// literal renders a generated declaration constant, such as a JSON
 	// property name, inline as an escaped schema literal instead of a bind
 	// parameter, so expression indexes on the same path can match. Values

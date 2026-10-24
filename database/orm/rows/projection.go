@@ -65,7 +65,7 @@ func Select[S, R any](source SelectionSource[S], schema Schema[R], mappings ...M
 			continue
 		}
 		q.source.Err = errors.Join(q.source.Err, m.expression.Err, ormcore.CheckReferenceSet(q.source, m.expression.Refs, m.expression.ReferenceFree))
-		lowered[i] = querycore.ProjectionMapping{Column: m.field.column, Expression: m.expression.Node}
+		lowered[i] = querycore.ProjectionMapping{Column: m.field.column, Expression: m.expression.Node, Sensitive: m.expression.Sensitive}
 	}
 	node, err := querycore.SelectProjection(q.source.Node, core.columns, lowered)
 	q.source.Node = node
@@ -78,7 +78,7 @@ func SelectValue[M, V, P any](source orm.Query[M], column orm.ExpressionColumn[M
 	s := orm.FoundrySource(source, sqlowner.Metadata())
 	_, c := orm.FoundryColumn(column, sqlowner.Metadata())
 	s.Err = errors.Join(s.Err, c.Err, ormcore.CheckReferences(s, []ormcore.Reference{c.Reference}))
-	s.Node.Selections = []querycore.SelectItem{{Expression: c.Field, Alias: "value"}}
+	s.Node.Selections = []querycore.SelectItem{{Expression: c.Field, Alias: "value", Sensitive: c.Sensitive}}
 	return Query[M, P]{source: s, decode: func(row database.Row) (P, error) {
 		var result P
 		if c.Scan == nil {

@@ -11,6 +11,7 @@ func (FieldRef) ValueNode() {}
 func (AggregateNode) ValueNode() {}
 
 type SelectItem struct {
+	Sensitive  bool // Explicit result-codec sensitivity, independent of its SQL expression.
 	Expression ValueExpression
 	Alias      string
 }
@@ -41,6 +42,8 @@ func (c *Compiler) RenderSelectedExpression(e ValueExpression, grouped map[Field
 	switch e := e.(type) {
 	case RawFragment:
 		return c.RawSQL(e)
+	case SensitiveValue:
+		return c.RenderSelectedExpression(e.Value, grouped, grouping)
 	case FieldRef:
 		if c.IndexTarget {
 			return Quoted(e.Column), nil

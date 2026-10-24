@@ -51,8 +51,8 @@ func NullableNumericRange[S any, V numericValue](w Window[S], input Expression[S
 
 func numericRange[S any, V numericValue](w Window[S], node valueExpression, kind codec.ParameterType, encode func(V) parameterNode) RangeWindow[S, V] {
 	r := RangeWindow[S, V]{window: w, order: orderNode{Expression: node}, kind: kind}
-	if r.kind != codec.TypeInteger && r.kind != codec.TypeFloat && r.kind != codec.TypeDecimal {
-		r.window.node.Err = fault.New(fault.Invalid, "numeric RANGE requires a numeric codec representation")
+	if err := querycore.ValidateRangeOrder(r.kind, false); err != nil {
+		r.window.node.Err = err
 	}
 	r.encode = func(v V) rangeDistance {
 		return rangeDistance{Parameter: encode(v)}
@@ -72,8 +72,8 @@ func NullableTemporalRange[S any, V rangeTemporal](w Window[S], input Expression
 
 func temporalRange[S any](w Window[S], node valueExpression, kind codec.ParameterType) RangeWindow[S, temporal.Interval] {
 	r := RangeWindow[S, temporal.Interval]{window: w, order: orderNode{Expression: node}, kind: kind}
-	if kind != codec.TypeDate && kind != codec.TypeTime && kind != codec.TypeDateTime && kind != codec.TypeLocalDateTime {
-		r.window.node.Err = fault.New(fault.Invalid, "temporal RANGE requires a temporal codec representation")
+	if err := querycore.ValidateRangeOrder(kind, true); err != nil {
+		r.window.node.Err = err
 	}
 	r.encode = func(v temporal.Interval) rangeDistance { return rangeDistance{Interval: &v} }
 	return r

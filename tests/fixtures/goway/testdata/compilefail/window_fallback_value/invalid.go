@@ -1,0 +1,9 @@
+package invalid
+
+import (
+	"foundry.test/goway/models"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
+)
+
+var _ = expr.LagOr(expr.Select(expr.Value(models.Users.Email)), 1, 123, expr.WindowFor(rows.ModelScope(models.Users.Query())))

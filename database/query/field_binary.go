@@ -30,7 +30,7 @@ func (f NullableBinaryField[M, V]) SetNull() ConflictUpdate[M] {
 	return ConflictUpdate[M]{update: conflictUpdate{Field: f.ref, Null: true}}
 }
 
-func (f BinaryField[M, V]) Group() Group[M] { return Group[M]{node: f.ref} }
+func (f BinaryField[M, V]) Group() Group[M] { return Group[M]{node: f.rowValue().node} }
 
 func (f BinaryField[M, V]) InCorrelatedQuery(source CorrelatedValueSource[M, V]) Predicate[M] {
 	return f.inSubquery(correlatedValueOf(source).subquery)
@@ -46,9 +46,9 @@ func (f BinaryField[M, V]) Ne(value V) Predicate[M] { return f.compare(notEqual,
 
 func (f BinaryField[M, V]) In(values ...V) Predicate[M] { return f.compare(in, values...) }
 
-func (f BinaryField[M, V]) Asc() Order[M] { return Order[M]{field: f.ref} }
+func (f BinaryField[M, V]) Asc() Order[M] { return rowOrder[M](f.rowValue().node, false) }
 
-func (f BinaryField[M, V]) Desc() Order[M] { return Order[M]{field: f.ref, descending: true} }
+func (f BinaryField[M, V]) Desc() Order[M] { return rowOrder[M](f.rowValue().node, true) }
 
 func (f BinaryField[M, V]) compare(op operator, values ...V) Predicate[M] {
 	return Predicate[M]{expression: typedComparison(f.ref, op, f.codec, values)}
@@ -75,7 +75,7 @@ func (f BinaryField[M, V]) InNullableQuery(source ValueQuerySource[value.Nullabl
 }
 
 func (f BinaryField[M, V]) inSubquery(q subquery) Predicate[M] {
-	return Predicate[M]{expression: subqueryPredicate{Query: q, Operand: f.ref}}
+	return Predicate[M]{expression: subqueryPredicate{Query: q, Operand: f.rowValue().node}}
 }
 
 func (f BinaryField[M, V]) NotIn(values ...V) Predicate[M] { return f.compare(notIn, values...) }

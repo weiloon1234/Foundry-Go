@@ -34,9 +34,9 @@ func (f ScalarField[M, V]) Ne(value V) Predicate[M] { return f.compare(notEqual,
 // In copies the values. An empty membership set represents no matching rows.
 func (f ScalarField[M, V]) In(values ...V) Predicate[M] { return f.compare(in, values...) }
 
-func (f ScalarField[M, V]) Asc() Order[M] { return Order[M]{field: f.ref} }
+func (f ScalarField[M, V]) Asc() Order[M] { return rowOrder[M](f.rowValue().node, false) }
 
-func (f ScalarField[M, V]) Desc() Order[M] { return Order[M]{field: f.ref, descending: true} }
+func (f ScalarField[M, V]) Desc() Order[M] { return rowOrder[M](f.rowValue().node, true) }
 
 func (f ScalarField[M, V]) compare(op operator, values ...V) Predicate[M] {
 	return Predicate[M]{expression: typedComparison(f.ref, op, f.codec, values)}

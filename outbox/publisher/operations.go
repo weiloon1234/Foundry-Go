@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/outboxstore"
@@ -36,9 +38,9 @@ func (s Selection) validate() (Selection, error) {
 	}
 	return s, nil
 }
-func (s Selection) predicates() []query.Predicate[outboxstore.Message] {
-	fields := outboxstore.MessageFields()
-	result := []query.Predicate[outboxstore.Message]{fields.PublishState.Eq(outbox.PublicationFailed)}
+func (s Selection) predicates() []orm.Predicate[outboxstore.Message] {
+	fields := outboxstore.Messages
+	result := []orm.Predicate[outboxstore.Message]{fields.PublishState.Eq(outbox.PublicationFailed)}
 	if !s.ID.IsZero() {
 		result = append(result, fields.ID.Eq(model.IDFromBytes[outboxstore.Message](s.ID.Bytes())))
 	}
@@ -64,17 +66,17 @@ func (p *Publisher) Requeue(ctx context.Context, selection Selection) (int, erro
 	if err != nil {
 		return 0, err
 	}
-	fields := outboxstore.MessageFields()
+	fields := outboxstore.Messages
 	changed := 0
 	err = p.writer.Transaction(ctx, func(tx *database.Tx) error {
 		changed = 0
-		rows, err := outboxstore.QueryFoundryOutbox().Where(selection.predicates()...).OrderBy(fields.CreatedAt.Asc(), fields.ID.Asc()).ForUpdate().SkipLocked().Limit(selection.Limit).All(ctx, tx)
+		rows, err := outboxstore.Messages.Query().Where(selection.predicates()...).OrderBy(fields.CreatedAt.Asc(), fields.ID.Asc()).ForUpdate().SkipLocked().Limit(selection.Limit).All(ctx, tx)
 		if err != nil {
 			return err
 		}
 		for _, row := range rows {
-			draft := outboxstore.MessageDraft{}.SetPublishState(outbox.Pending).SetPublishAttempts(0).SetPublishAfter(now).SetPublishReason("")
-			if _, err := outboxstore.QueryFoundryOutbox().Update(ctx, tx, row.ID, draft); err != nil {
+			draft := []orm.Assignment[outboxstore.Message]{fields.PublishState.Set(outbox.Pending), fields.PublishAttempts.Set(0), fields.PublishAfter.Set(now), fields.PublishReason.Set("")}
+			if _, err := outboxstore.Messages.Update(ctx, tx, row.ID, draft...); err != nil {
 				return err
 			}
 			changed++
@@ -101,14 +103,14 @@ func (p *Publisher) Prune(ctx context.Context, cutoff time.Time, limit int) (int
 	if err != nil {
 		return 0, err
 	}
-	fields := outboxstore.MessageFields()
+	fields := outboxstore.Messages
 	deleted := 0
 	err = p.writer.Transaction(ctx, func(tx *database.Tx) error {
 		// One bounded DELETE ... WHERE id IN (SELECT id ... LIMIT n): no row
 		// (payload included) is loaded to choose the batch. A concurrent prune
 		// of the same rows waits, then deletes none of them twice.
-		oldest := query.SelectValue(outboxstore.QueryFoundryOutbox().Where(fields.PublishState.Eq(outbox.Published), fields.PublishedAt.Lt(before)).OrderBy(fields.PublishedAt.Asc(), fields.ID.Asc()).Limit(limit), query.Value(fields.ID))
-		removed, err := outboxstore.QueryFoundryOutbox().Where(fields.ID.InQuery(oldest), fields.PublishState.Eq(outbox.Published)).DeleteAll(ctx, tx)
+		oldest := rows.SelectScalar(rows.FromModel(outboxstore.Messages.Query().Where(fields.PublishState.Eq(outbox.Published), fields.PublishedAt.Lt(before)).OrderBy(fields.PublishedAt.Asc(), fields.ID.Asc()).Limit(limit)), expr.Select(expr.Value(fields.ID)))
+		removed, err := expr.Where(outboxstore.Messages.Query(), rows.InQuery(expr.Value(fields.ID), oldest)).Where(fields.PublishState.Eq(outbox.Published)).DeleteAll(ctx, tx)
 		deleted = int(removed)
 		return err
 	})
@@ -142,11 +144,11 @@ func (p *Publisher) Failed(ctx context.Context, selection Selection) ([]Failure,
 	if p == nil || p.writer == nil || ctx == nil || selection.Limit > 100 {
 		return nil, fault.New(fault.Invalid, "outbox failure listing requires a publisher, context and at most 100 rows")
 	}
-	fields := outboxstore.MessageFields()
+	fields := outboxstore.Messages
 	var result []Failure
 	err = p.writer.Transaction(ctx, func(tx *database.Tx) error {
 		result = nil
-		rows, err := outboxstore.QueryFoundryOutbox().Where(selection.predicates()...).OrderBy(fields.CreatedAt.Asc(), fields.ID.Asc()).Limit(selection.Limit).All(ctx, tx)
+		rows, err := outboxstore.Messages.Query().Where(selection.predicates()...).OrderBy(fields.CreatedAt.Asc(), fields.ID.Asc()).Limit(selection.Limit).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -170,14 +172,14 @@ func (p *Publisher) Stats(ctx context.Context) (Stats, error) {
 	if p == nil || p.writer == nil || ctx == nil {
 		return Stats{}, fault.New(fault.Invalid, "outbox stats require an initialized publisher and context")
 	}
-	fields := outboxstore.MessageFields()
+	fields := outboxstore.Messages
 	var stats Stats
 	err := p.writer.Transaction(ctx, func(tx *database.Tx) error {
 		for _, item := range []struct {
 			state  outbox.PublicationState
 			target *int64
 		}{{outbox.Pending, &stats.Pending}, {outbox.Published, &stats.Published}, {outbox.PublicationFailed, &stats.Failed}} {
-			count, err := outboxstore.QueryFoundryOutbox().Where(fields.PublishState.Eq(item.state)).Count(ctx, tx)
+			count, err := outboxstore.Messages.Query().Where(fields.PublishState.Eq(item.state)).Count(ctx, tx)
 			if err != nil {
 				return err
 			}

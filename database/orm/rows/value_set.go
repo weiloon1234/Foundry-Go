@@ -2,6 +2,7 @@ package rows
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
 	"reflect"
 	"unsafe"
@@ -38,7 +39,19 @@ type valueRecordDefinition struct{ record ormcore.Record }
 // Example: rows.Values(rows.SelectScalar(rows.From(Users.Query()),expr.Select(expr.Value(Users.ID)))).
 func Values[S, V any](q Scalar[S, V]) ValueRecord[V] {
 	d := &valueRecordDefinition{}
-	d.record = ormcore.Record{Type: reflect.TypeFor[V](), Owner: d, Columns: []querycore.Column{{Name: "value", Nullable: value.IsNullableType[V]()}}, Err: q.column.Err, Scan: func(row database.Row, p unsafe.Pointer) error {
+	d.record = ormcore.Record{Fields: func() []ormcore.RecordField {
+		return []ormcore.RecordField{{Name: "value", Sensitive: q.column.Sensitive, Get: func(p unsafe.Pointer) (driver.Value, error) { return q.column.Bind(*(*V)(p)) }, Decode: func(raw any) (driver.Value, error) {
+			var v V
+			scanner, ok := q.column.Scan(&v).(interface{ Scan(any) error })
+			if !ok {
+				return nil, ormcore.Invalid("cursor value requires a scanner")
+			}
+			if err := scanner.Scan(raw); err != nil {
+				return nil, err
+			}
+			return q.column.Bind(v)
+		}}}
+	}, Type: reflect.TypeFor[V](), Owner: d, Columns: []querycore.Column{{Name: "value", Nullable: value.IsNullableType[V]()}}, Err: q.column.Err, Scan: func(row database.Row, p unsafe.Pointer) error {
 		if q.column.Scan == nil {
 			return ormcore.Invalid("value source requires a decoder")
 		}

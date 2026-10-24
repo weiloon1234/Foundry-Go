@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 // FirstOrInsert returns the first primary-ordered matching model, or creates
@@ -225,7 +226,7 @@ func (q Query[M]) lookupDefaults(ctx context.Context) (Mutation[M], error) {
 			}
 			return collect(resolved)
 		case comparison:
-			field, ok := e.Operand.(fieldRef)
+			field, ok := querycore.UnwrapSensitivity(e.Operand).(fieldRef)
 			if !ok || field.Table != q.queryCore.Table || e.Operator != equal || len(e.Values) != 1 || e.Bind == nil {
 				return nil
 			}

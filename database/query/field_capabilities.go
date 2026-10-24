@@ -2,6 +2,7 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -19,19 +20,19 @@ func (f BinaryField[S, V]) fieldData() valueField[S, V] { return f.valueField }
 type rowValueData[S, V any] Expression[S, V]
 
 func (f ScalarField[S, V]) rowValue() rowValueData[S, V] {
-	return rowValueData[S, V]{node: f.ref, codec: f.codec}
+	return rowValueData[S, V]{node: querycore.WithSensitivity(f.ref, f.codec.SensitiveValues()), codec: f.codec}
 }
 
 func (f NullableField[S, V]) rowValue() rowValueData[S, value.Nullable[V]] {
-	return rowValueData[S, value.Nullable[V]]{node: f.ref, codec: codec.Nullable(f.codec)}
+	return rowValueData[S, value.Nullable[V]]{node: querycore.WithSensitivity(f.ref, f.codec.SensitiveValues()), codec: codec.Nullable(f.codec)}
 }
 
 func (f BinaryField[S, V]) rowValue() rowValueData[S, V] {
-	return rowValueData[S, V]{node: f.ref, codec: f.codec}
+	return rowValueData[S, V]{node: querycore.WithSensitivity(f.ref, f.codec.SensitiveValues()), codec: f.codec}
 }
 
 func (f NullableBinaryField[S, V]) rowValue() rowValueData[S, value.Nullable[V]] {
-	return rowValueData[S, value.Nullable[V]]{node: f.ref, codec: codec.Nullable(f.codec)}
+	return rowValueData[S, value.Nullable[V]]{node: querycore.WithSensitivity(f.ref, f.codec.SensitiveValues()), codec: codec.Nullable(f.codec)}
 }
 
 // Value selects a row value with its exact owner, value type and nullability.
@@ -59,7 +60,7 @@ func CountField[S, V any, F FieldSource[S, V]](source F) OrderedAggregate[S, int
 	if nilDescriptor(source) {
 		return OrderedAggregate[S, int64]{}
 	}
-	return countField[S](source.fieldData().ref, countValues)
+	return countField[S](source.fieldData().ref, countValues, source.fieldData().codec.SensitiveValues())
 }
 
 // CountDistinctField counts distinct non-NULL stored values.
@@ -67,7 +68,7 @@ func CountDistinctField[S, V any, F FieldSource[S, V]](source F) OrderedAggregat
 	if nilDescriptor(source) {
 		return OrderedAggregate[S, int64]{}
 	}
-	return countField[S](source.fieldData().ref, countDistinct)
+	return countField[S](source.fieldData().ref, countDistinct, source.fieldData().codec.SensitiveValues())
 }
 
 // Min preserves an ordered field's exact type, returning NULL for an empty or
@@ -93,10 +94,11 @@ func Max[S any, V comparable, F OrderedKeyField[S, V]](source F) NullableOrdered
 type SummaryField[S, R any] interface{ summaryData() summaryData[S, R] }
 
 type summaryData[S, R any] struct {
-	_     [0]*S
-	field fieldRef
-	cast  aggregateCast
-	codec codec.Codec[R]
+	sensitive bool
+	_         [0]*S
+	field     fieldRef
+	cast      aggregateCast
+	codec     codec.Codec[R]
 }
 
 // Sum returns the sum of non-NULL values, or NULL for an empty/all-NULL group.
@@ -117,5 +119,5 @@ func Avg[S, R any, F SummaryField[S, R]](source F) NullableOrderedAggregate[S, R
 }
 
 func summarizeField[S, R any](data summaryData[S, R], kind aggregateKind) NullableOrderedAggregate[S, R] {
-	return nullableOrderedAggregate[S](aggregateNode{Kind: kind, Field: data.field, Cast: data.cast}, data.codec)
+	return nullableOrderedAggregate[S](aggregateNode{Kind: kind, Field: data.field, Cast: data.cast, Sensitive: data.sensitive || data.codec.SensitiveValues()}, data.codec)
 }

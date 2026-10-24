@@ -38,7 +38,7 @@ id, err := Created.Enqueue(ctx, tx, producer, RecordCreated{ID: after.ID})
 
 The ID is `outbox.ID[RecordCreated]`. An unrelated payload ID or model ID cannot
 be passed to its typed reload. Passing a pool instead of `*database.Tx` to enqueue
-fails compilation. The framework's internal model and generated query builder own
+fails compilation. The framework's internal ORM declaration and shared query core own
 the INSERT, codecs and hydration; application code does not build SQL or envelopes.
 
 ## Commit, rollback and cancellation

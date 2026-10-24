@@ -1,0 +1,18 @@
+{
+  "Statements": [
+    {
+      "SQL": "SELECT \"foundry_outbox\".\"id\", \"foundry_outbox\".\"kind\", \"foundry_outbox\".\"destination\", \"foundry_outbox\".\"name\", \"foundry_outbox\".\"version\", \"foundry_outbox\".\"payload\", \"foundry_outbox\".\"origin\", \"foundry_outbox\".\"created_at\", \"foundry_outbox\".\"publish_state\", \"foundry_outbox\".\"publish_attempts\", \"foundry_outbox\".\"publish_after\", \"foundry_outbox\".\"published_at\", \"foundry_outbox\".\"publish_reason\" FROM \"foundry_outbox\" WHERE (\"foundry_outbox\".\"kind\" = $1) AND (\"foundry_outbox\".\"destination\" = $2) AND (\"foundry_outbox\".\"name\" = $3) AND (\"foundry_outbox\".\"version\" = $4) AND (\"foundry_outbox\".\"id\" = $5) ORDER BY \"foundry_outbox\".\"id\" ASC LIMIT $6",
+      "Args": [
+        "event",
+        "events",
+        "notice",
+        1,
+        "01890f47-1a00-7000-8000-000000000001",
+        1
+      ]
+    }
+  ],
+  "Begins": 0,
+  "Commits": 0,
+  "Rollbacks": 0
+}

@@ -30,12 +30,21 @@ const footprintFailureAdvice = "a generic method, field or codec helper has expa
 // Go 1.27.1 darwin/arm64: T/t symbols in each package archive.
 // Budget is ceil(measured * 1.15), calculated exactly with integer arithmetic.
 var footprintBudgets = map[string]footprintBudget{
-	"cte_recursive": {"./testdata/footprint/cte_recursive", 1076},
-	"record_sets":   {"./testdata/footprint/record_sets", 1288},
-	"value_sets":    {"./testdata/footprint/value_sets", 2230},
+	"result_cursor": {"./testdata/footprint/result_cursor", 2229},
+	"result_reads":  {"./testdata/footprint/result_reads", 1351},
+
+	"cte_recursive":   {"./testdata/footprint/cte_recursive", 1076},
+	"record_sets":     {"./testdata/footprint/record_sets", 1288},
+	"value_sets":      {"./testdata/footprint/value_sets", 2230},
+	"scalar_text":     {"./testdata/footprint/scalar_text", 2312},
+	"scalar_temporal": {"./testdata/footprint/scalar_temporal", 2625},
+	// Framework store migration: actual declaration/write and publisher consumers.
+	"framework_outbox": {"github.com/weiloon1234/Foundry-Go/internal/outboxstore", 2896},
+	"outbox_publisher": {"github.com/weiloon1234/Foundry-Go/outbox/publisher", 1324},
 
 	"records":                    {"./testdata/footprint/records", 1313},
 	"transaction_records":        {"./testdata/footprint/transaction_records", 1296},
+	"conflict_advanced":          {"./testdata/footprint/conflict_advanced", 1817},
 	"conflict":                   {"./testdata/footprint/conflict", 944},
 	"audit":                      {"./testdata/footprint/audit", 1313},
 	"relation_write_declaration": {"./testdata/footprint/relation_write_declaration", 361},
@@ -80,6 +89,8 @@ var footprintBudgets = map[string]footprintBudget{
 	"lifecycle_changes":    {"./testdata/footprint/lifecycle_changes", 1050},
 
 	"raw_fragments": {"./testdata/footprint/raw_fragments", 1331},
+	"window_rank":   {"./testdata/footprint/window_rank", 1345},
+	"window_frames": {"./testdata/footprint/window_frames", 1767},
 
 	"column_encrypted_text":          {"./testdata/footprint/column_encrypted_text", 1127},
 	"column_nullable_encrypted_text": {"./testdata/footprint/column_nullable_encrypted_text", 1359},

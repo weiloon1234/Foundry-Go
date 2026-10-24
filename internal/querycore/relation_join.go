@@ -16,9 +16,9 @@ type RelationOrder struct {
 
 // RelationThroughSelect is the shared joined-model SELECT owner for both APIs.
 func RelationThroughSelect(target, pivot QueryCore, foreign, pivotForeign FieldRef, orders []RelationOrder, targetAlias, pivotAlias string) SelectNode {
-	node := SelectNode{Source: TableSource{Table: target.Table, Alias: targetAlias, Columns: target.Model.Columns},
+	node := SelectNode{Source: target.Model.Source(target.Table, targetAlias),
 		Selections: append(ColumnSelections(targetAlias, target.Model.Columns), ColumnSelections(pivotAlias, pivot.Model.Columns)...),
-		Joins:      []JoinNode{{Source: TableSource{Table: pivot.Table, Alias: pivotAlias, Columns: pivot.Model.Columns}, On: BinaryComparison{Left: FieldRef{Table: targetAlias, Column: foreign.Column}, Right: FieldRef{Table: pivotAlias, Column: pivotForeign.Column}, Operator: Equal}}}}
+		Joins:      []JoinNode{{Source: pivot.Model.Source(pivot.Table, pivotAlias), On: BinaryComparison{Left: FieldRef{Table: targetAlias, Column: foreign.Column}, Right: FieldRef{Table: pivotAlias, Column: pivotForeign.Column}, Operator: Equal}}}}
 	for _, p := range target.EffectivePredicates() {
 		node.Predicates = append(node.Predicates, Requalify(p, targetAlias))
 	}
@@ -33,7 +33,7 @@ func RelationThroughSelect(target, pivot QueryCore, foreign, pivotForeign FieldR
 		}
 		expr := RequalifyValue(o.Value, alias)
 		node.Orders = append(node.Orders, OrderNode{Expression: expr, Descending: o.Descending, Nulls: o.Nulls})
-		if f, ok := expr.(FieldRef); ok {
+		if f, ok := UnwrapSensitivity(expr).(FieldRef); ok {
 			seen[f] = true
 		}
 	}
@@ -46,8 +46,9 @@ func RelationThroughSelect(target, pivot QueryCore, foreign, pivotForeign FieldR
 }
 
 // RelationHopJoin adds the intermediate model with its own scopes.
-func RelationHopJoin(node SelectNode, targetAlias string, foreign FieldRef, table string, columns []Column, predicates []Expression, second FieldRef) SelectNode {
-	node.Joins = append(node.Joins, JoinNode{Source: TableSource{Table: table, Alias: RelationHopAlias, Columns: columns}, On: BinaryComparison{Left: FieldRef{Table: targetAlias, Column: foreign.Column}, Right: FieldRef{Table: RelationHopAlias, Column: second.Column}, Operator: Equal}})
+func RelationHopJoin(node SelectNode, targetAlias string, foreign FieldRef, source TableSource, predicates []Expression, second FieldRef) SelectNode {
+	source.Alias = RelationHopAlias
+	node.Joins = append(node.Joins, JoinNode{Source: source, On: BinaryComparison{Left: FieldRef{Table: targetAlias, Column: foreign.Column}, Right: FieldRef{Table: RelationHopAlias, Column: second.Column}, Operator: Equal}})
 	for _, p := range predicates {
 		node.Predicates = append(node.Predicates, Requalify(p, RelationHopAlias))
 	}

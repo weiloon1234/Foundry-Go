@@ -1,0 +1,1611 @@
+{
+  "slice": "Stage 7 slice 1: no-conflict framework stores",
+  "base_commit": "5cbe31dce4fe3c3e1aacef402ad637d161a87590",
+  "updated_at_utc": "2026-10-23T19:50:00+00:00",
+  "status": "Scoped acceptance passed in segments; one store migrated; no commit; no live PostgreSQL or Redis execution.",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r2",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off",
+    "services": "PostgreSQL/Redis opt-in environment variables unset; sources compiled and vetted only",
+    "toolchain": "go version go1.27.1 darwin/arm64"
+  },
+  "stores_migrated": [
+    "internal/outboxstore"
+  ],
+  "api": {
+    "internal_declarations": [
+      "outboxstore.Messages",
+      "outboxstore.MessageTable"
+    ],
+    "public_surface_additions": [],
+    "public_signatures_changed": [],
+    "query_table_methods_added": 0,
+    "capability_bridges_added": 0,
+    "dependencies_added": 0
+  },
+  "catalogue_rows_changed": [],
+  "parity": {
+    "golden_base": "5cbe31dce4fe3c3e1aacef402ad637d161a87590 via source overlay; generated source copied byte-for-byte, not edited",
+    "cases": [
+      "append",
+      "find",
+      "publish",
+      "retry",
+      "exhausted",
+      "unknown",
+      "requeue",
+      "prune",
+      "failed",
+      "stats"
+    ],
+    "compared": [
+      "SQL",
+      "bindings",
+      "savepoints",
+      "begin/commit/rollback counts"
+    ],
+    "normalization": "Generated UUID entropy only; valid nonzero UUIDv7 asserted",
+    "statements_excluding_savepoints": {
+      "append": 1,
+      "find": 1,
+      "publish": 2,
+      "retry": 2,
+      "exhausted": 2,
+      "unknown": 2,
+      "requeue": 2,
+      "prune": 1,
+      "failed": 1,
+      "stats": 3
+    },
+    "unknown_commit": "One publication attempt; reconciliation result retained without committed success or retry"
+  },
+  "footprint": {
+    "measurement": "Existing fixture parseFootprintSymbols counts T/t symbols in native Go package export archives; no runtime speed claim",
+    "all_probes": {
+      "aggregate_families": {
+        "functions": 4362,
+        "baseline": 3799,
+        "ceiling": 4369,
+        "archive_bytes": 19818300
+      },
+      "aggregate_group": {
+        "functions": 2529,
+        "baseline": 2426,
+        "ceiling": 2790,
+        "archive_bytes": 11312844
+      },
+      "aggregate_slot_declaration": {
+        "functions": 1127,
+        "baseline": 1112,
+        "ceiling": 1279,
+        "archive_bytes": 4834890
+      },
+      "aggregate_slot_direct": {
+        "functions": 1490,
+        "baseline": 1490,
+        "ceiling": 1714,
+        "archive_bytes": 6091302
+      },
+      "aggregate_slot_nested": {
+        "functions": 2050,
+        "baseline": 2048,
+        "ceiling": 2356,
+        "archive_bytes": 8419174
+      },
+      "aggregate_slot_pivot": {
+        "functions": 2092,
+        "baseline": 2095,
+        "ceiling": 2410,
+        "archive_bytes": 8727494
+      },
+      "audit": {
+        "functions": 1313,
+        "baseline": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6444488
+      },
+      "column_encrypted_json": {
+        "functions": 1321,
+        "baseline": 1217,
+        "ceiling": 1400,
+        "archive_bytes": 5630164
+      },
+      "column_encrypted_text": {
+        "functions": 1231,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5319982
+      },
+      "column_enum": {
+        "functions": 1344,
+        "baseline": 1232,
+        "ceiling": 1417,
+        "archive_bytes": 5621614
+      },
+      "column_interval": {
+        "functions": 1293,
+        "baseline": 1178,
+        "ceiling": 1355,
+        "archive_bytes": 5563152
+      },
+      "column_json": {
+        "functions": 1391,
+        "baseline": 1280,
+        "ceiling": 1472,
+        "archive_bytes": 5860076
+      },
+      "column_nullable_encrypted_json": {
+        "functions": 1562,
+        "baseline": 1449,
+        "ceiling": 1667,
+        "archive_bytes": 6895826
+      },
+      "column_nullable_encrypted_text": {
+        "functions": 1472,
+        "baseline": 1359,
+        "ceiling": 1563,
+        "archive_bytes": 6562686
+      },
+      "column_nullable_interval": {
+        "functions": 1530,
+        "baseline": 1406,
+        "ceiling": 1617,
+        "archive_bytes": 6780346
+      },
+      "column_nullable_json": {
+        "functions": 1642,
+        "baseline": 1522,
+        "ceiling": 1751,
+        "archive_bytes": 7084598
+      },
+      "column_nullable_password": {
+        "functions": 1535,
+        "baseline": 1417,
+        "ceiling": 1630,
+        "archive_bytes": 6743602
+      },
+      "column_nullable_text": {
+        "functions": 1584,
+        "baseline": 1456,
+        "ceiling": 1675,
+        "archive_bytes": 6554398
+      },
+      "column_number": {
+        "functions": 1267,
+        "baseline": 1172,
+        "ceiling": 1348,
+        "archive_bytes": 5304966
+      },
+      "column_password": {
+        "functions": 1299,
+        "baseline": 1190,
+        "ceiling": 1369,
+        "archive_bytes": 5571324
+      },
+      "column_time": {
+        "functions": 1309,
+        "baseline": 1194,
+        "ceiling": 1374,
+        "archive_bytes": 5443052
+      },
+      "conditional_row": {
+        "functions": 1803,
+        "baseline": 1681,
+        "ceiling": 1934,
+        "archive_bytes": 8195892
+      },
+      "conditional_selected": {
+        "functions": 1647,
+        "baseline": 1511,
+        "ceiling": 1738,
+        "archive_bytes": 7535216
+      },
+      "conflict": {
+        "functions": 940,
+        "baseline": 944,
+        "ceiling": 1086,
+        "archive_bytes": 4643002
+      },
+      "correlation": {
+        "functions": 2990,
+        "baseline": 2752,
+        "ceiling": 3165,
+        "archive_bytes": 13707106
+      },
+      "cte_recursive": {
+        "functions": 1076,
+        "baseline": 1076,
+        "ceiling": 1238,
+        "archive_bytes": 5216444
+      },
+      "cursor": {
+        "functions": 1186,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5344426
+      },
+      "distinct": {
+        "functions": 1174,
+        "baseline": 1135,
+        "ceiling": 1306,
+        "archive_bytes": 5661584
+      },
+      "expr_arithmetic": {
+        "functions": 1256,
+        "baseline": 1162,
+        "ceiling": 1337,
+        "archive_bytes": 5874248
+      },
+      "expr_selected": {
+        "functions": 1696,
+        "baseline": 1551,
+        "ceiling": 1784,
+        "archive_bytes": 7514788
+      },
+      "framework_outbox": {
+        "functions": 2896,
+        "baseline": 2896,
+        "ceiling": 3331,
+        "archive_bytes": 12418104
+      },
+      "global_scopes": {
+        "functions": 1389,
+        "baseline": 1374,
+        "ceiling": 1581,
+        "archive_bytes": 6384580
+      },
+      "has": {
+        "functions": 1412,
+        "baseline": 1302,
+        "ceiling": 1498,
+        "archive_bytes": 6234940
+      },
+      "has_one": {
+        "functions": 1403,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6208354
+      },
+      "input_column_kinds": {
+        "functions": 5321,
+        "baseline": 5088,
+        "ceiling": 5852,
+        "archive_bytes": 21986788
+      },
+      "input_key": {
+        "functions": 1049,
+        "baseline": 982,
+        "ceiling": 1130,
+        "archive_bytes": 4846406
+      },
+      "key_chunk": {
+        "functions": 862,
+        "baseline": 812,
+        "ceiling": 934,
+        "archive_bytes": 4135282
+      },
+      "lateral": {
+        "functions": 3046,
+        "baseline": 2852,
+        "ceiling": 3280,
+        "archive_bytes": 15037994
+      },
+      "lifecycle_changes": {
+        "functions": 1069,
+        "baseline": 1050,
+        "ceiling": 1208,
+        "archive_bytes": 4950118
+      },
+      "lifecycle_write": {
+        "functions": 949,
+        "baseline": 930,
+        "ceiling": 1070,
+        "archive_bytes": 4709684
+      },
+      "model_type": {
+        "functions": 299,
+        "baseline": 299,
+        "ceiling": 344,
+        "archive_bytes": 1272420
+      },
+      "models": {
+        "functions": 6849,
+        "baseline": 6147,
+        "ceiling": 7070,
+        "archive_bytes": 29890044
+      },
+      "models_1": {
+        "functions": 1751,
+        "baseline": 1619,
+        "ceiling": 1862,
+        "archive_bytes": 7242358
+      },
+      "models_3": {
+        "functions": 2605,
+        "baseline": 2435,
+        "ceiling": 2801,
+        "archive_bytes": 10843280
+      },
+      "morph": {
+        "functions": 1155,
+        "baseline": 1088,
+        "ceiling": 1252,
+        "archive_bytes": 5215744
+      },
+      "mutator_explicit": {
+        "functions": 1698,
+        "baseline": 1605,
+        "ceiling": 1846,
+        "archive_bytes": 7021460
+      },
+      "mutators": {
+        "functions": 855,
+        "baseline": 801,
+        "ceiling": 922,
+        "archive_bytes": 4486176
+      },
+      "nested_with": {
+        "functions": 1403,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6247328
+      },
+      "nullable_join_chain": {
+        "functions": 1853,
+        "baseline": 1695,
+        "ceiling": 1950,
+        "archive_bytes": 8817872
+      },
+      "on_comparisons": {
+        "functions": 1589,
+        "baseline": 1454,
+        "ceiling": 1673,
+        "archive_bytes": 7208892
+      },
+      "onequery": {
+        "functions": 854,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 4092286
+      },
+      "outbox_publisher": {
+        "functions": 1324,
+        "baseline": 1324,
+        "ceiling": 1523,
+        "archive_bytes": 6482732
+      },
+      "outer_join": {
+        "functions": 1788,
+        "baseline": 1668,
+        "ceiling": 1919,
+        "archive_bytes": 8479362
+      },
+      "pivot": {
+        "functions": 1072,
+        "baseline": 1005,
+        "ceiling": 1156,
+        "archive_bytes": 4915032
+      },
+      "q_join": {
+        "functions": 1766,
+        "baseline": 1598,
+        "ceiling": 1838,
+        "archive_bytes": 8381886
+      },
+      "q_select": {
+        "functions": 895,
+        "baseline": 836,
+        "ceiling": 962,
+        "archive_bytes": 4320592
+      },
+      "q_with": {
+        "functions": 1211,
+        "baseline": 1053,
+        "ceiling": 1211,
+        "archive_bytes": 5529528
+      },
+      "raw": {
+        "functions": 1095,
+        "baseline": 1045,
+        "ceiling": 1202,
+        "archive_bytes": 5193984
+      },
+      "raw_fragments": {
+        "functions": 1379,
+        "baseline": 1331,
+        "ceiling": 1531,
+        "archive_bytes": 6186512
+      },
+      "record_sets": {
+        "functions": 1288,
+        "baseline": 1288,
+        "ceiling": 1482,
+        "archive_bytes": 6281138
+      },
+      "records": {
+        "functions": 1313,
+        "baseline": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6466582
+      },
+      "relation_with": {
+        "functions": 2047,
+        "baseline": 1847,
+        "ceiling": 2125,
+        "archive_bytes": 8754716
+      },
+      "relation_write_attach": {
+        "functions": 1110,
+        "baseline": 1110,
+        "ceiling": 1277,
+        "archive_bytes": 5080282
+      },
+      "relation_write_declaration": {
+        "functions": 361,
+        "baseline": 361,
+        "ceiling": 416,
+        "archive_bytes": 1507238
+      },
+      "relation_write_sync": {
+        "functions": 1124,
+        "baseline": 1124,
+        "ceiling": 1293,
+        "archive_bytes": 5150202
+      },
+      "report_pipeline": {
+        "functions": 2120,
+        "baseline": 1905,
+        "ceiling": 2191,
+        "archive_bytes": 11251534
+      },
+      "retrieval_read": {
+        "functions": 831,
+        "baseline": 826,
+        "ceiling": 950,
+        "archive_bytes": 4106820
+      },
+      "sensitive_models": {
+        "functions": 2821,
+        "baseline": 2606,
+        "ceiling": 2997,
+        "archive_bytes": 12791202
+      },
+      "subqueries": {
+        "functions": 3059,
+        "baseline": 2837,
+        "ceiling": 3263,
+        "archive_bytes": 13194626
+      },
+      "table_ref": {
+        "functions": 854,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 4255376
+      },
+      "through": {
+        "functions": 986,
+        "baseline": 928,
+        "ceiling": 1068,
+        "archive_bytes": 4419328
+      },
+      "transaction_records": {
+        "functions": 1296,
+        "baseline": 1296,
+        "ceiling": 1491,
+        "archive_bytes": 6109492
+      },
+      "value_sets": {
+        "functions": 2230,
+        "baseline": 2230,
+        "ceiling": 2565,
+        "archive_bytes": 10059802
+      }
+    },
+    "new_probes": {
+      "framework_outbox": {
+        "functions": 2896,
+        "baseline": 2896,
+        "ceiling": 3331,
+        "archive_bytes": 12418104
+      },
+      "outbox_publisher": {
+        "functions": 1324,
+        "baseline": 1324,
+        "ceiling": 1523,
+        "archive_bytes": 6482732
+      }
+    },
+    "baseline_tight_probes": {
+      "q_with": {
+        "functions": 1211,
+        "baseline": 1053,
+        "ceiling": 1211,
+        "archive_bytes": 5529528
+      },
+      "aggregate_families": {
+        "functions": 4362,
+        "baseline": 3799,
+        "ceiling": 4369,
+        "archive_bytes": 19818300
+      }
+    },
+    "existing_ceilings_changed": false,
+    "preexisting_probe_count": 71,
+    "total_probes": 73
+  },
+  "contract_artifact_sha256": {
+    "base": {
+      "contracts_vue_foundry.gen.ts": "90772adf054a6c6ebd6c8e681f5e07139ed457cbcf1b1dd62d918693f7adce40",
+      ".foundry-generate.guard": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "contracts_runtime_foundry.gen.ts": "320809004634e61403f68c70430069ecfde83522bb9af2e2d83383383c9619f2",
+      "contracts_openapi_foundry.gen.json": "88b03c554a21065aa30d732dfdaf148a3d98a1919ce37a968da07572b92b30de",
+      "contracts_manifest_foundry.gen.json": "abd227d084a4fd4306c25e20bff00bcc81fdb67ef12a77f4efb3c7b6d4f0ffa3",
+      "contracts_foundry.gen.ts": "4e7d04978485be8e51660b3b183ed3630d69e25654ac8a0795bf5dae2e5d3e3d",
+      ".foundry-gen.json": "d4d19e558b8956d1a13b679585126ace5c9c83b6354c8e5fe250debfe377cfc1",
+      "contracts_runtime_realtime_foundry.gen.ts": "9ae67cab99361d96ffbcd10a597406c1ecb98ae548a10477c2d38ed8b8a21834",
+      "contracts_react_foundry.gen.ts": "5381e2b076a7f4fdd980708b2e512c3a55198a51bcac5db341667185811c6b23"
+    },
+    "current": {
+      "contracts_vue_foundry.gen.ts": "90772adf054a6c6ebd6c8e681f5e07139ed457cbcf1b1dd62d918693f7adce40",
+      ".foundry-generate.guard": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "contracts_runtime_foundry.gen.ts": "320809004634e61403f68c70430069ecfde83522bb9af2e2d83383383c9619f2",
+      "contracts_openapi_foundry.gen.json": "88b03c554a21065aa30d732dfdaf148a3d98a1919ce37a968da07572b92b30de",
+      "contracts_manifest_foundry.gen.json": "abd227d084a4fd4306c25e20bff00bcc81fdb67ef12a77f4efb3c7b6d4f0ffa3",
+      "contracts_foundry.gen.ts": "4e7d04978485be8e51660b3b183ed3630d69e25654ac8a0795bf5dae2e5d3e3d",
+      ".foundry-gen.json": "d4d19e558b8956d1a13b679585126ace5c9c83b6354c8e5fe250debfe377cfc1",
+      "contracts_runtime_realtime_foundry.gen.ts": "9ae67cab99361d96ffbcd10a597406c1ecb98ae548a10477c2d38ed8b8a21834",
+      "contracts_react_foundry.gen.ts": "5381e2b076a7f4fdd980708b2e512c3a55198a51bcac5db341667185811c6b23"
+    }
+  },
+  "generated_artifact_audit": {
+    "baseline_files": 434,
+    "unchanged_files": 432,
+    "changed": [
+      "internal/outboxstore/.foundry-gen.json",
+      "internal/outboxstore/message_foundry.gen.go"
+    ],
+    "mechanism": "make generate GENERATION_DIRS=internal/outboxstore removed one obsolete owned model; empty manifest retained; full make generate then ran after removing the directory from GENERATION_DIRS",
+    "hand_edited_generated_files": false
+  },
+  "commands": [
+    {
+      "name": "generate-store",
+      "command": [
+        "make",
+        "generate",
+        "GENERATION_DIRS=internal/outboxstore"
+      ],
+      "cwd": ".",
+      "exit_code": 0,
+      "log": "generate-store.log",
+      "log_sha256": "18a6af43ebc1d95c9a61e1182b727a066f3f16b796f2017e12920c8525e16d2b"
+    },
+    {
+      "name": "generate",
+      "command": [
+        "make",
+        "generate"
+      ],
+      "cwd": ".",
+      "exit_code": 0,
+      "log": "generate.log",
+      "log_sha256": "75bc528506ac7c52f2a172336010566dcfcc0763f0d993780cd5d314e7b46bf9"
+    },
+    {
+      "name": "build",
+      "command": [
+        "go",
+        "build",
+        "./..."
+      ],
+      "cwd": ".",
+      "exit_code": 0,
+      "seconds": 7.75,
+      "log": "build.log",
+      "log_sha256": "ebaebdf3943aa33664b93d513da4662fbbd0b83861025ea192c0622d79d8ef22"
+    },
+    {
+      "name": "vet",
+      "command": [
+        "go",
+        "vet",
+        "./database/...",
+        "./internal/...",
+        "./outbox/...",
+        "./events/...",
+        "./jobs/..."
+      ],
+      "cwd": ".",
+      "exit_code": 0,
+      "seconds": 23.09,
+      "log": "vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database/orm/...",
+        "./database/query/...",
+        "./internal/querycore/...",
+        "./internal/ormcore/...",
+        "./internal/outboxstore",
+        "./outbox/...",
+        "./events/...",
+        "./jobs/..."
+      ],
+      "cwd": ".",
+      "exit_code": 0,
+      "seconds": 110.44,
+      "log": "race.log",
+      "log_sha256": "cfcb7e309130e2104d86e5dcdd8d772c733f124e75cf7259f3f1a598d8786790"
+    },
+    {
+      "name": "baseline-oracle",
+      "command": [
+        "go",
+        "test",
+        "-overlay",
+        "/private/tmp/goway-stage7-slice1/base-overlay.json",
+        "./outbox/publisher",
+        "-run",
+        "^TestOutboxStoreParity$",
+        "-v"
+      ],
+      "cwd": ".",
+      "exit_code": 0,
+      "seconds": 1.59,
+      "log": "baseline-oracle.log",
+      "log_sha256": "202722d84fc12ae3e432e3da0de84218e16c22a3114fcbb66f9ea8b198737023"
+    },
+    {
+      "name": "fixture-vet",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "cwd": "tests/fixtures/goway",
+      "exit_code": 0,
+      "seconds": 16.36,
+      "log": "fixture-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "fixture-test",
+      "command": [
+        "go",
+        "test",
+        "-v",
+        "./..."
+      ],
+      "cwd": "tests/fixtures/goway",
+      "exit_code": 1,
+      "seconds": 60.36,
+      "log": "fixture-test.log",
+      "log_sha256": "66943f4cbefa6b1d85f392e2b7425068e109843d3cdbd0b9e524a3a62ab284ee"
+    },
+    {
+      "name": "consumer-vet",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "cwd": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "seconds": 43.96,
+      "log": "consumer-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "consumer-test",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./eventqueries",
+        "./observerqueries",
+        "./hookqueries",
+        "./clientcontracts"
+      ],
+      "cwd": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "seconds": 49.38,
+      "log": "consumer-test.log",
+      "log_sha256": "473e7655c10d11e7428be722a253dcf14f5e07834b9523c24c669d263a9b6415"
+    },
+    {
+      "name": "generate-check",
+      "command": [
+        "make",
+        "generate-check"
+      ],
+      "cwd": ".",
+      "exit_code": 0,
+      "seconds": 11.9,
+      "log": "generate-check.log",
+      "log_sha256": "ddfb827e22c7d063cdead2bfb71f2860451734393a7f885562f2217ed29c08f3"
+    },
+    {
+      "name": "catalogue",
+      "command": [
+        "python3",
+        "tools/goway_catalogue.py"
+      ],
+      "cwd": ".",
+      "exit_code": 0,
+      "seconds": 0.21,
+      "log": "catalogue.log",
+      "log_sha256": "5981cf61340244964a820fc23782abdfc2ec0b0314e5b7c3ce473a63fd8608f7"
+    },
+    {
+      "name": "docs",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "cwd": ".",
+      "exit_code": 0,
+      "seconds": 0.19,
+      "log": "docs.log",
+      "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+    },
+    {
+      "name": "contract-base",
+      "command": [
+        "go",
+        "run",
+        "-overlay",
+        "/private/tmp/goway-stage7-slice1/base-overlay.json",
+        "/private/tmp/goway-stage7-slice1/export.go",
+        "/private/tmp/goway-stage7-slice1/contracts-base"
+      ],
+      "cwd": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "seconds": 12.24,
+      "log": "contract-base.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "contract-current",
+      "command": [
+        "go",
+        "run",
+        "/private/tmp/goway-stage7-slice1/export.go",
+        "/private/tmp/goway-stage7-slice1/contracts-current"
+      ],
+      "cwd": "tests/fixtures/consumer",
+      "exit_code": 0,
+      "seconds": 1.74,
+      "log": "contract-current.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "footprint-baseline",
+      "command": [
+        "go",
+        "test",
+        "-v",
+        ".",
+        "-run",
+        "^TestFootprintBudgets/(q_with|aggregate_families)$"
+      ],
+      "cwd": "tests/fixtures/goway",
+      "exit_code": 0,
+      "seconds": 35.24,
+      "log": "footprint-baseline.log",
+      "GOFLAGS": "-p=4 -overlay=/private/tmp/goway-stage7-slice1/base-overlay.json",
+      "log_sha256": "31cde7d4eab49feb5094496c0ba1728ada546c61493ca00fe18f68c9a277f045"
+    },
+    {
+      "name": "footprint-fix",
+      "command": [
+        "go",
+        "test",
+        "-v",
+        ".",
+        "-run",
+        "^TestFootprintBudgets$"
+      ],
+      "cwd": "tests/fixtures/goway",
+      "exit_code": 0,
+      "seconds": 31.86,
+      "log": "footprint-fix.log",
+      "GOFLAGS": "-p=4",
+      "log_sha256": "bff10f1088309381343bd4a5b8ebfc8844c2878d9c13685a8934964ed60a2cd5"
+    },
+    {
+      "name": "format-final",
+      "command": [
+        "gofmt",
+        "-l",
+        "events/outbox_failures_postgres_test.go",
+        "internal/outboxstore/message.go",
+        "internal/outboxstore/store.go",
+        "outbox/publisher/operations.go",
+        "outbox/publisher/publisher.go",
+        "outbox/publisher/store_parity_test.go",
+        "outbox/publisher/timestamp_postgres_test.go",
+        "tests/fixtures/goway/footprint_test.go"
+      ],
+      "cwd": ".",
+      "exit_code": 0,
+      "seconds": 0.02,
+      "log": "format-final.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "diff-check-final",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "cwd": ".",
+      "exit_code": 0,
+      "seconds": 0.32,
+      "log": "diff-check-final.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "docs-final",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "cwd": ".",
+      "exit_code": 0,
+      "seconds": 0.19,
+      "log": "docs-final.log",
+      "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+    },
+    {
+      "name": "toolchain",
+      "command": [
+        "go",
+        "version"
+      ],
+      "cwd": ".",
+      "exit_code": 0,
+      "seconds": 0.01,
+      "log": "toolchain.log",
+      "log_sha256": "c528ba02b39880f1357f51dee70e41c1ef03e3a70c7a03055c080532b9635f58"
+    }
+  ],
+  "logs_directory": "/private/tmp/goway-stage7-slice1",
+  "corrections": [
+    {
+      "kind": "test harness",
+      "log": "baseline-goldens.log",
+      "description": "Fixed Payload.Text handling: it returns text and error.",
+      "log_sha256": "548eda6018d43e5ceb52f1521069aa0b9316adf1aa8c2242c63fe20d82851393"
+    },
+    {
+      "kind": "test harness",
+      "log": "baseline-goldens-fix.log",
+      "description": "Supplied attribution.Origin through its own JSON marshaler; empty object lacked the required request member.",
+      "log_sha256": "89466fcc456f20806baf6305034912517f57e379df9cb677c596948778df8801"
+    },
+    {
+      "kind": "new probe measurement",
+      "log": "fixture-test.log",
+      "description": "Preliminary counter missed symbols with spaces; canonical existing footprint harness measured 2896/1324. Initialized only the two new baselines from those measurements and reran the full footprint test; all pre-existing ceilings unchanged.",
+      "log_sha256": "66943f4cbefa6b1d85f392e2b7425068e109843d3cdbd0b9e524a3a62ab284ee"
+    }
+  ],
+  "acceptance_limits": [
+    "No live PostgreSQL/Redis; existing integration sources compile/vet and remain for lead execution.",
+    "No contract-source change; make typescript-check not required. Client-contract races and fresh baseline/current exports ran.",
+    "Slice-scoped acceptance; no claim of full make verify or completion of Stage 7."
+  ],
+  "remaining_blockers": {
+    "internal/mfastore": "Scoped keyed ordinary Update/Delete preserving filters and lifecycle/cardinality; do not replace with table-only writes.",
+    "countries/internal/jobarchive/internal/idempotencystore/internal/challengestore/internal/sessionstore/internal/tokenstore": "Conflict/upsert consumers deferred by explicit slice boundary, even where basic 6e1 policies suffice; auth also needs scoped writes.",
+    "internal/notificationstore": "Conflicts and bounded per-model update/delete adapters.",
+    "internal/webhookstore": "Ordered UUID seeks and scoped keyed writes.",
+    "internal/extensionstore": "Owner/slot adapters, conflicts and per-model/source writes; locked projections available.",
+    "internal/attachmentstore": "Owner/slot adapters and ordered UUID seeks.",
+    "internal/auditstore": "Bounded source deletion; B5d capture available."
+  },
+  "shared_files_changed": [
+    "Makefile",
+    "docs/guides/outbox.md",
+    "events/outbox_failures_postgres_test.go",
+    "internal/outboxstore/.foundry-gen.json",
+    "internal/outboxstore/message.go",
+    "internal/outboxstore/message_foundry.gen.go",
+    "internal/outboxstore/store.go",
+    "outbox/publisher/operations.go",
+    "outbox/publisher/publisher.go",
+    "outbox/publisher/timestamp_postgres_test.go",
+    "tests/fixtures/goway/footprint_test.go"
+  ],
+  "lead_owned_docs_changed": [],
+  "docs_notes": [
+    "Record outbox as one of thirteen framework-store packages migrated, including event/job enqueue and shared publication.",
+    "MFA remains blocked on predicate-preserving keyed writes; earlier inventory readiness was provisional.",
+    "Keep remaining Stage 7 integrations, live PostgreSQL acceptance and Stage 8 retirement open."
+  ],
+  "source_sha256": {
+    "CHANGELOG.md": "aa5c445745aaceba82fb2f49a6df11e516a3fe6f94d5726c94eb6f8532f79861",
+    "Makefile": "0d12d71da472f34d042684814f59c812f51f5529249fb85fa41462518e787f56",
+    "blueprint/00-master-architecture-and-parity.md": "8f85f55b41c80d76ea9dbe50b563c52e2a81bbfd0cc4e7716d12c3ec39a281a9",
+    "blueprint/goway-data-layer/README.md": "27623a70c1a02fa15930bc0743a22a543826a53dfd43f6bfd12b0bc5008b5eff",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "755bf7dbbb5c8e52c73f20f0553ebe99284668e5c5c94ff2de91d838681107e6",
+    "database/orm/method_surface_test.go": "28f49b3370cbd19193467235a37f36f74a9347b3a50ded17c0a53b60722babec",
+    "database/orm/testdata/public-methods.txt": "b2ea26aced42b05b46d12799c4bd00508e779aa023dc5a59ae397b525cd7aa69",
+    "database/query/conflict_mutator.go": "7cc44d2d1d947943dc87a0c54a68d39de929c50d4c44ff5d25639ce1b8f26c79",
+    "docs/evidence/goway-stage7-slice1-report.md": "ac3c02906e487a2c342e1a908622ad5297a45a61fe7b6e87042d7b15571608e5",
+    "docs/guides/outbox.md": "b9e356afd1ab31a70483e9c774689a375b217c84e4ce5a8620978ae4d76c8b10",
+    "events/outbox_failures_postgres_test.go": "5cf4d4af25312bcb8aee81a720c17572f327f23aef3a6670431c5de0bd696e09",
+    "internal/outboxstore/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+    "internal/outboxstore/message.go": "7c2585d8cc03fc1ba7b575311a6680b6a37a615de5c732f0890c1a9740afbd56",
+    "internal/outboxstore/store.go": "e72647c7365abfd7203b27ac67c2a57648e9638e8f015a8f50ebb68680e3c0ed",
+    "internal/querycore/conflict_mutator.go": "ecb10a98ffe4c0ed9921374897aeb6bdb50b9a08edc537251eb1e6f3a7bba62c",
+    "internal/querycore/conflict_mutator_sensitivity_test.go": "d400b3231e5c22866c05886e5a1aaba59725c437b66e447951be33bf8d09a5e3",
+    "internal/querycore/value_expression.go": "fae63280c95cd1fa438eb647f43cfd18b0aab6ceb9c132f7f6069ab380cfbd25",
+    "outbox/publisher/operations.go": "42eda79b7dbda397d6b0330f66ea6a2da3634699fa90cd77de7f6bc2f66a1372",
+    "outbox/publisher/publisher.go": "be1111fbf94b79a45ab16990c6a4469d1553190193fd2a20708f77d1c121992e",
+    "outbox/publisher/store_parity_test.go": "761795644affdd3515b1f696c4dfbae9de2b307ee0ae5f604170325ac628a0ae",
+    "outbox/publisher/testdata/store_append.json": "b4c81c795519e8da204580e7caa7beacb1fcb227391c22452dffd36ed4e0e0ce",
+    "outbox/publisher/testdata/store_exhausted.json": "bf442263c0c19b5762d66ee9ee0c6cd948b111cb5b05b891c9a29f2aa7635b71",
+    "outbox/publisher/testdata/store_failed.json": "e371f848739288bc0e39382b6b0707e7f0c19849ee6133d9eb8dcb1efe31225a",
+    "outbox/publisher/testdata/store_find.json": "b8635f26be4fbb9ca8eea5b65fd6438e710facdae01ae1b6a4b234a2b37d55b2",
+    "outbox/publisher/testdata/store_prune.json": "7623c50f8469682b3bc291f993b1e6f681173c6b0498ec963592dd51c65458fc",
+    "outbox/publisher/testdata/store_publish.json": "ab242b6f6bf0ab89bfc19a701d870137a8dcbd00d9fb8bbba86fb3b0b1d58233",
+    "outbox/publisher/testdata/store_requeue.json": "349b66f462a8b428d2db1e65429d03c4e46eec4e5e9fea398466d51caacf03d4",
+    "outbox/publisher/testdata/store_retry.json": "d937383a964f00b76725701f31ff853fec5d27eba7901ec1402c7fa17bbc993d",
+    "outbox/publisher/testdata/store_stats.json": "ba38846265fd94195105d305c78da73a72a9dab6dc3839f61bcc3053bd53776c",
+    "outbox/publisher/testdata/store_unknown.json": "ab242b6f6bf0ab89bfc19a701d870137a8dcbd00d9fb8bbba86fb3b0b1d58233",
+    "outbox/publisher/timestamp_postgres_test.go": "1ac9becc765a2b2e5d6ff9154dd12a959641d5911112e670b16ee3625d56d3bf",
+    "tests/fixtures/goway/compiler_cases_test.go": "49592ed8f756d5dd75452b39acfc1c803d3b29753f97ef4d2b3a084a4b9ad65b",
+    "tests/fixtures/goway/footprint_test.go": "365b04b6fd2ac1b6899f6090287e17b1be607ef27c4a82343ed12aa640359b75",
+    "tools/release/release_test.go": "00ef8719d808bce3e1d3bd14ed6701497a6b849604cf408634c01a120dcb9556",
+    "tools/release/source.go": "0a95269a9308b11ff714037a7a85f92ac4833dda4d2f7248089fd84c81621d40"
+  },
+  "removed_source_sha256": {
+    "internal/outboxstore/message_foundry.gen.go": "41cc99571c0b9dd58d3040e70fe24c37b6f232c0d53e2c3e7b41593008a64b53"
+  },
+  "source_hashes_validated": true,
+  "integration_batch5": {
+    "base_commit": "5cbe31d",
+    "status": "pass",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r2",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off"
+    },
+    "lane_source_sha256": {
+      "Makefile": "0d12d71da472f34d042684814f59c812f51f5529249fb85fa41462518e787f56",
+      "docs/evidence/goway-stage7-slice1-report.md": "ac3c02906e487a2c342e1a908622ad5297a45a61fe7b6e87042d7b15571608e5",
+      "docs/guides/outbox.md": "b9e356afd1ab31a70483e9c774689a375b217c84e4ce5a8620978ae4d76c8b10",
+      "events/outbox_failures_postgres_test.go": "5cf4d4af25312bcb8aee81a720c17572f327f23aef3a6670431c5de0bd696e09",
+      "internal/outboxstore/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "internal/outboxstore/message.go": "7c2585d8cc03fc1ba7b575311a6680b6a37a615de5c732f0890c1a9740afbd56",
+      "internal/outboxstore/store.go": "e72647c7365abfd7203b27ac67c2a57648e9638e8f015a8f50ebb68680e3c0ed",
+      "outbox/publisher/operations.go": "42eda79b7dbda397d6b0330f66ea6a2da3634699fa90cd77de7f6bc2f66a1372",
+      "outbox/publisher/publisher.go": "be1111fbf94b79a45ab16990c6a4469d1553190193fd2a20708f77d1c121992e",
+      "outbox/publisher/store_parity_test.go": "761795644affdd3515b1f696c4dfbae9de2b307ee0ae5f604170325ac628a0ae",
+      "outbox/publisher/testdata/store_append.json": "b4c81c795519e8da204580e7caa7beacb1fcb227391c22452dffd36ed4e0e0ce",
+      "outbox/publisher/testdata/store_exhausted.json": "bf442263c0c19b5762d66ee9ee0c6cd948b111cb5b05b891c9a29f2aa7635b71",
+      "outbox/publisher/testdata/store_failed.json": "e371f848739288bc0e39382b6b0707e7f0c19849ee6133d9eb8dcb1efe31225a",
+      "outbox/publisher/testdata/store_find.json": "b8635f26be4fbb9ca8eea5b65fd6438e710facdae01ae1b6a4b234a2b37d55b2",
+      "outbox/publisher/testdata/store_prune.json": "7623c50f8469682b3bc291f993b1e6f681173c6b0498ec963592dd51c65458fc",
+      "outbox/publisher/testdata/store_publish.json": "ab242b6f6bf0ab89bfc19a701d870137a8dcbd00d9fb8bbba86fb3b0b1d58233",
+      "outbox/publisher/testdata/store_requeue.json": "349b66f462a8b428d2db1e65429d03c4e46eec4e5e9fea398466d51caacf03d4",
+      "outbox/publisher/testdata/store_retry.json": "d937383a964f00b76725701f31ff853fec5d27eba7901ec1402c7fa17bbc993d",
+      "outbox/publisher/testdata/store_stats.json": "ba38846265fd94195105d305c78da73a72a9dab6dc3839f61bcc3053bd53776c",
+      "outbox/publisher/testdata/store_unknown.json": "ab242b6f6bf0ab89bfc19a701d870137a8dcbd00d9fb8bbba86fb3b0b1d58233",
+      "outbox/publisher/timestamp_postgres_test.go": "1ac9becc765a2b2e5d6ff9154dd12a959641d5911112e670b16ee3625d56d3bf",
+      "tests/fixtures/goway/footprint_test.go": "5def27d00a6667967de1e10307fcbfb3735bbe93f480faa7c99e284bca3c6688"
+    },
+    "conflicts": {
+      "6c3": [
+        "database/orm/method_surface_test.go",
+        "database/orm/testdata/public-methods.txt",
+        "database/query/conflict_mutator.go",
+        "internal/querycore/value_expression.go"
+      ],
+      "6d": [
+        "blueprint/goway-data-layer/compilefail-mapping.tsv",
+        "database/orm/method_surface_test.go",
+        "tests/fixtures/goway/compiler_cases_test.go",
+        "tests/fixtures/goway/footprint_test.go"
+      ],
+      "6e2": [
+        "database/orm/method_surface_test.go",
+        "database/orm/testdata/public-methods.txt",
+        "tests/fixtures/goway/compiler_cases_test.go",
+        "tests/fixtures/goway/footprint_test.go"
+      ],
+      "7s1": [
+        "tests/fixtures/goway/footprint_test.go"
+      ]
+    },
+    "resolution": [
+      "Union cases, probes, function registries and catalogue rows; retain ported classifications from both lanes. Regenerate public surface; all previous entries preserved. Deduplicate identical CTE/set footprint entries.",
+      "Retain the old API conflict-mutator delegate; move sensitivity-aware proposed-value identity into the shared querycore validator, with an integration regression. Retain both RawFragment and SensitiveValue compiler branches."
+    ],
+    "application_note": "First 6d apply stopped before changing files on registry/index checks; stage those files and retry succeeded. No partial patch replay.",
+    "counts": {
+      "catalogue_rows": 1026,
+      "dispositions": {
+        "ported": 421,
+        "unaffected": 444,
+        "port": 161
+      },
+      "distinct_ported_cases": 413,
+      "compiler_cases": 537,
+      "footprint_probes": 80
+    },
+    "footprints": {
+      "aggregate_families": {
+        "functions": 4366,
+        "baseline": 3799,
+        "ceiling": 4369,
+        "archive_bytes": 19869474
+      },
+      "aggregate_group": {
+        "functions": 2533,
+        "baseline": 2426,
+        "ceiling": 2790,
+        "archive_bytes": 11354004
+      },
+      "aggregate_slot_declaration": {
+        "functions": 1127,
+        "baseline": 1112,
+        "ceiling": 1279,
+        "archive_bytes": 4834212
+      },
+      "aggregate_slot_direct": {
+        "functions": 1490,
+        "baseline": 1490,
+        "ceiling": 1714,
+        "archive_bytes": 6116486
+      },
+      "aggregate_slot_nested": {
+        "functions": 2050,
+        "baseline": 2048,
+        "ceiling": 2356,
+        "archive_bytes": 8445198
+      },
+      "aggregate_slot_pivot": {
+        "functions": 2092,
+        "baseline": 2095,
+        "ceiling": 2410,
+        "archive_bytes": 8733044
+      },
+      "audit": {
+        "functions": 1313,
+        "baseline": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6445318
+      },
+      "column_encrypted_json": {
+        "functions": 1321,
+        "baseline": 1217,
+        "ceiling": 1400,
+        "archive_bytes": 5629080
+      },
+      "column_encrypted_text": {
+        "functions": 1231,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5318944
+      },
+      "column_enum": {
+        "functions": 1344,
+        "baseline": 1232,
+        "ceiling": 1417,
+        "archive_bytes": 5621276
+      },
+      "column_interval": {
+        "functions": 1293,
+        "baseline": 1178,
+        "ceiling": 1355,
+        "archive_bytes": 5562616
+      },
+      "column_json": {
+        "functions": 1391,
+        "baseline": 1280,
+        "ceiling": 1472,
+        "archive_bytes": 5859646
+      },
+      "column_nullable_encrypted_json": {
+        "functions": 1562,
+        "baseline": 1449,
+        "ceiling": 1667,
+        "archive_bytes": 6895036
+      },
+      "column_nullable_encrypted_text": {
+        "functions": 1472,
+        "baseline": 1359,
+        "ceiling": 1563,
+        "archive_bytes": 6561914
+      },
+      "column_nullable_interval": {
+        "functions": 1530,
+        "baseline": 1406,
+        "ceiling": 1617,
+        "archive_bytes": 6780272
+      },
+      "column_nullable_json": {
+        "functions": 1642,
+        "baseline": 1522,
+        "ceiling": 1751,
+        "archive_bytes": 7084556
+      },
+      "column_nullable_password": {
+        "functions": 1535,
+        "baseline": 1417,
+        "ceiling": 1630,
+        "archive_bytes": 6743552
+      },
+      "column_nullable_text": {
+        "functions": 1584,
+        "baseline": 1456,
+        "ceiling": 1675,
+        "archive_bytes": 6554378
+      },
+      "column_number": {
+        "functions": 1267,
+        "baseline": 1172,
+        "ceiling": 1348,
+        "archive_bytes": 5304136
+      },
+      "column_password": {
+        "functions": 1299,
+        "baseline": 1190,
+        "ceiling": 1369,
+        "archive_bytes": 5570740
+      },
+      "column_time": {
+        "functions": 1309,
+        "baseline": 1194,
+        "ceiling": 1374,
+        "archive_bytes": 5442312
+      },
+      "conditional_row": {
+        "functions": 1805,
+        "baseline": 1681,
+        "ceiling": 1934,
+        "archive_bytes": 8217562
+      },
+      "conditional_selected": {
+        "functions": 1649,
+        "baseline": 1511,
+        "ceiling": 1738,
+        "archive_bytes": 7551188
+      },
+      "conflict": {
+        "functions": 944,
+        "baseline": 944,
+        "ceiling": 1086,
+        "archive_bytes": 4661790
+      },
+      "conflict_advanced": {
+        "functions": 1817,
+        "baseline": 1817,
+        "ceiling": 2090,
+        "archive_bytes": 9069652
+      },
+      "correlation": {
+        "functions": 2991,
+        "baseline": 2752,
+        "ceiling": 3165,
+        "archive_bytes": 13733562
+      },
+      "cte_recursive": {
+        "functions": 1105,
+        "baseline": 1076,
+        "ceiling": 1238,
+        "archive_bytes": 5359712
+      },
+      "cursor": {
+        "functions": 1186,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5346686
+      },
+      "distinct": {
+        "functions": 1174,
+        "baseline": 1135,
+        "ceiling": 1306,
+        "archive_bytes": 5667586
+      },
+      "expr_arithmetic": {
+        "functions": 1256,
+        "baseline": 1162,
+        "ceiling": 1337,
+        "archive_bytes": 5881084
+      },
+      "expr_selected": {
+        "functions": 1698,
+        "baseline": 1551,
+        "ceiling": 1784,
+        "archive_bytes": 7529568
+      },
+      "framework_outbox": {
+        "functions": 2896,
+        "baseline": 2896,
+        "ceiling": 3331,
+        "archive_bytes": 12420374
+      },
+      "global_scopes": {
+        "functions": 1389,
+        "baseline": 1374,
+        "ceiling": 1581,
+        "archive_bytes": 6385804
+      },
+      "has": {
+        "functions": 1412,
+        "baseline": 1302,
+        "ceiling": 1498,
+        "archive_bytes": 6233950
+      },
+      "has_one": {
+        "functions": 1403,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6207798
+      },
+      "input_column_kinds": {
+        "functions": 5321,
+        "baseline": 5088,
+        "ceiling": 5852,
+        "archive_bytes": 21993542
+      },
+      "input_key": {
+        "functions": 1049,
+        "baseline": 982,
+        "ceiling": 1130,
+        "archive_bytes": 4845608
+      },
+      "key_chunk": {
+        "functions": 862,
+        "baseline": 812,
+        "ceiling": 934,
+        "archive_bytes": 4135494
+      },
+      "lateral": {
+        "functions": 3048,
+        "baseline": 2852,
+        "ceiling": 3280,
+        "archive_bytes": 15061866
+      },
+      "lifecycle_changes": {
+        "functions": 1069,
+        "baseline": 1050,
+        "ceiling": 1208,
+        "archive_bytes": 4951924
+      },
+      "lifecycle_write": {
+        "functions": 949,
+        "baseline": 930,
+        "ceiling": 1070,
+        "archive_bytes": 4714962
+      },
+      "model_type": {
+        "functions": 299,
+        "baseline": 299,
+        "ceiling": 344,
+        "archive_bytes": 1272144
+      },
+      "models": {
+        "functions": 6849,
+        "baseline": 6147,
+        "ceiling": 7070,
+        "archive_bytes": 29897812
+      },
+      "models_1": {
+        "functions": 1751,
+        "baseline": 1619,
+        "ceiling": 1862,
+        "archive_bytes": 7242448
+      },
+      "models_3": {
+        "functions": 2605,
+        "baseline": 2435,
+        "ceiling": 2801,
+        "archive_bytes": 10844320
+      },
+      "morph": {
+        "functions": 1155,
+        "baseline": 1088,
+        "ceiling": 1252,
+        "archive_bytes": 5216946
+      },
+      "mutator_explicit": {
+        "functions": 1698,
+        "baseline": 1605,
+        "ceiling": 1846,
+        "archive_bytes": 7021752
+      },
+      "mutators": {
+        "functions": 855,
+        "baseline": 801,
+        "ceiling": 922,
+        "archive_bytes": 4487342
+      },
+      "nested_with": {
+        "functions": 1403,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6246774
+      },
+      "nullable_join_chain": {
+        "functions": 1854,
+        "baseline": 1695,
+        "ceiling": 1950,
+        "archive_bytes": 8833504
+      },
+      "on_comparisons": {
+        "functions": 1589,
+        "baseline": 1454,
+        "ceiling": 1673,
+        "archive_bytes": 7219140
+      },
+      "onequery": {
+        "functions": 854,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 4092538
+      },
+      "outbox_publisher": {
+        "functions": 1324,
+        "baseline": 1324,
+        "ceiling": 1523,
+        "archive_bytes": 6491402
+      },
+      "outer_join": {
+        "functions": 1789,
+        "baseline": 1668,
+        "ceiling": 1919,
+        "archive_bytes": 8495412
+      },
+      "pivot": {
+        "functions": 1072,
+        "baseline": 1005,
+        "ceiling": 1156,
+        "archive_bytes": 4915624
+      },
+      "q_join": {
+        "functions": 1766,
+        "baseline": 1598,
+        "ceiling": 1838,
+        "archive_bytes": 8389068
+      },
+      "q_select": {
+        "functions": 895,
+        "baseline": 836,
+        "ceiling": 962,
+        "archive_bytes": 4321472
+      },
+      "q_with": {
+        "functions": 1211,
+        "baseline": 1053,
+        "ceiling": 1211,
+        "archive_bytes": 5531860
+      },
+      "raw": {
+        "functions": 1096,
+        "baseline": 1045,
+        "ceiling": 1202,
+        "archive_bytes": 5198760
+      },
+      "raw_fragments": {
+        "functions": 1380,
+        "baseline": 1331,
+        "ceiling": 1531,
+        "archive_bytes": 6193520
+      },
+      "record_sets": {
+        "functions": 1294,
+        "baseline": 1288,
+        "ceiling": 1482,
+        "archive_bytes": 6299172
+      },
+      "records": {
+        "functions": 1327,
+        "baseline": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6521090
+      },
+      "relation_with": {
+        "functions": 2047,
+        "baseline": 1847,
+        "ceiling": 2125,
+        "archive_bytes": 8753940
+      },
+      "relation_write_attach": {
+        "functions": 1110,
+        "baseline": 1110,
+        "ceiling": 1277,
+        "archive_bytes": 5081424
+      },
+      "relation_write_declaration": {
+        "functions": 361,
+        "baseline": 361,
+        "ceiling": 416,
+        "archive_bytes": 1507046
+      },
+      "relation_write_sync": {
+        "functions": 1124,
+        "baseline": 1124,
+        "ceiling": 1293,
+        "archive_bytes": 5151338
+      },
+      "report_pipeline": {
+        "functions": 2120,
+        "baseline": 1905,
+        "ceiling": 2191,
+        "archive_bytes": 11264516
+      },
+      "result_cursor": {
+        "functions": 2229,
+        "baseline": 2229,
+        "ceiling": 2564,
+        "archive_bytes": 10352806
+      },
+      "result_reads": {
+        "functions": 1351,
+        "baseline": 1351,
+        "ceiling": 1554,
+        "archive_bytes": 6411298
+      },
+      "retrieval_read": {
+        "functions": 831,
+        "baseline": 826,
+        "ceiling": 950,
+        "archive_bytes": 4107246
+      },
+      "scalar_temporal": {
+        "functions": 2629,
+        "baseline": 2625,
+        "ceiling": 3019,
+        "archive_bytes": 11833692
+      },
+      "scalar_text": {
+        "functions": 2315,
+        "baseline": 2312,
+        "ceiling": 2659,
+        "archive_bytes": 9521550
+      },
+      "sensitive_models": {
+        "functions": 2821,
+        "baseline": 2606,
+        "ceiling": 2997,
+        "archive_bytes": 12791990
+      },
+      "subqueries": {
+        "functions": 3061,
+        "baseline": 2837,
+        "ceiling": 3263,
+        "archive_bytes": 13224398
+      },
+      "table_ref": {
+        "functions": 854,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 4255424
+      },
+      "through": {
+        "functions": 986,
+        "baseline": 928,
+        "ceiling": 1068,
+        "archive_bytes": 4419920
+      },
+      "transaction_records": {
+        "functions": 1376,
+        "baseline": 1296,
+        "ceiling": 1491,
+        "archive_bytes": 6445362
+      },
+      "value_sets": {
+        "functions": 2237,
+        "baseline": 2230,
+        "ceiling": 2565,
+        "archive_bytes": 10093514
+      },
+      "window_frames": {
+        "functions": 1769,
+        "baseline": 1767,
+        "ceiling": 2033,
+        "archive_bytes": 7915526
+      },
+      "window_rank": {
+        "functions": 1346,
+        "baseline": 1345,
+        "ceiling": 1547,
+        "archive_bytes": 6139504
+      }
+    },
+    "surface_added_lines": 679,
+    "commands": [
+      {
+        "command": "go build ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch5/build.log",
+        "log_sha256": "bd81c3056caaf2f407faf9c90e878e23f2af7dad4058d3ff6621b9099471df86"
+      },
+      {
+        "command": "go vet ./database/... ./internal/...",
+        "status": "pass",
+        "log": ".cache/goway-batch5/vet.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "go test -race ./database/... ./internal/...",
+        "status": "pass",
+        "log": ".cache/goway-batch5/race.log",
+        "log_sha256": "fb31ae543737254789e868a6643c91628563922321b43fb1e02108d189e0d910"
+      },
+      {
+        "command": "go test -race ./outbox/... ./events/... ./jobs/...",
+        "status": "pass",
+        "log": ".cache/goway-batch5/store-race.log",
+        "log_sha256": "7643096734ec673e5326db47e0e0a25bcb2032e1c557e53d8da721ceab1f9e8e"
+      },
+      {
+        "command": "cd tests/fixtures/goway && go vet ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch5/fixture-vet.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "cd tests/fixtures/goway && go test -v ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch5/fixture-test.log",
+        "log_sha256": "1cba87c938e02b1f8e2db07bd903de67a09cd3f1704c7d8ab0c978b97b80887b"
+      },
+      {
+        "command": "python3 tools/goway_catalogue.py",
+        "status": "pass",
+        "log": ".cache/goway-batch5/catalogue.log",
+        "log_sha256": "a01c7fbf91f8979045fbd1187854162f88f551e2e54eae0340a765959a36d58d"
+      },
+      {
+        "command": "make generate-check",
+        "status": "pass",
+        "log": ".cache/goway-batch5/generate.log",
+        "log_sha256": "ddfb827e22c7d063cdead2bfb71f2860451734393a7f885562f2217ed29c08f3"
+      },
+      {
+        "command": "make release-tools-check",
+        "status": "pass",
+        "log": ".cache/goway-batch5/release-tools.log",
+        "log_sha256": "43bc44c5d9b53636bc12c3ffb73022b0a443156eda880e0dd70513b4f144095a"
+      },
+      {
+        "command": "make docs-check",
+        "status": "pass",
+        "log": ".cache/goway-batch5/docs.log",
+        "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+      },
+      {
+        "command": "gofmt -l (all repository Go files)",
+        "status": "pass",
+        "log": ".cache/goway-batch5/gofmt.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "git diff --check (working tree and staged)",
+        "status": "pass",
+        "log": ".cache/goway-batch5/diff-check.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "release_inventory": "Ten outbox transcript JSON fixtures explicitly pinned, plus eight result/window/scalar/advanced-conflict fixture and pgsmoke files. Existing JSON policy covers all new non-Go assets; no policy widening.",
+    "not_run": [
+      "Live PostgreSQL (opt-in sources compile/vet; execution remains lead checkpoint)",
+      "Benchmarks (not requested)"
+    ],
+    "git": "Only authorized apply -3 --binary and add for integration; no commit."
+  }
+}

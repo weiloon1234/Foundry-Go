@@ -30,7 +30,7 @@ func Coalesce[S, V any](first RowValue[S, value.Nullable[V]], fallback RowValue[
 // CoalesceValue is the selected-value counterpart, accepting aggregate/window
 // results as well as row values. Its result cannot become a row predicate.
 func CoalesceValue[S, V any](first Expression[S, value.Nullable[V]], fallback Expression[S, V]) Expression[S, V] {
-	n := conditionalNode{Kind: coalesceValues, Arguments: []valueExpression{first.node, fallback.node}}
+	n := conditionalNode{Kind: coalesceValues, Arguments: []valueExpression{querycore.WithSensitivity(first.node, first.codec.SensitiveValues()), querycore.WithSensitivity(fallback.node, fallback.codec.SensitiveValues())}}
 	if value.IsNullableType[V]() {
 		n.Err = fault.New(fault.Invalid, "non-null fallback must not be nullable")
 	}
@@ -49,9 +49,9 @@ func CoalesceNullable[S, V any](first RowValue[S, value.Nullable[V]], rest ...Ro
 
 // CoalesceNullableValue accepts selected nullable inputs and retains one nullable layer.
 func CoalesceNullableValue[S, V any](first Expression[S, value.Nullable[V]], rest ...Expression[S, value.Nullable[V]]) Expression[S, value.Nullable[V]] {
-	n := conditionalNode{Kind: coalesceValues, Arguments: []valueExpression{first.node}}
+	n := conditionalNode{Kind: coalesceValues, Arguments: []valueExpression{querycore.WithSensitivity(first.node, first.codec.SensitiveValues())}}
 	for _, item := range rest {
-		n.Arguments = append(n.Arguments, item.node)
+		n.Arguments = append(n.Arguments, querycore.WithSensitivity(item.node, item.codec.SensitiveValues()))
 	}
 	first.node = n
 	return first
@@ -65,7 +65,7 @@ func NullIf[S, V any](first, second RowValue[S, V]) RowExpression[S, value.Nulla
 
 // NullIfValue compares selected values and adds one nullable result layer.
 func NullIfValue[S, V any](first, second Expression[S, V]) Expression[S, value.Nullable[V]] {
-	n := conditionalNode{Kind: nullIfValues, Arguments: []valueExpression{first.node, second.node}}
+	n := conditionalNode{Kind: nullIfValues, Arguments: []valueExpression{querycore.WithSensitivity(first.node, first.codec.SensitiveValues()), querycore.WithSensitivity(second.node, second.codec.SensitiveValues())}}
 	if value.IsNullableType[V]() {
 		n.Err = fault.New(fault.Invalid, "nullable NULLIF input requires NullIfNullable")
 	}
@@ -79,7 +79,7 @@ func NullIfNullable[S, V any](first, second RowValue[S, value.Nullable[V]]) RowE
 
 // NullIfNullableValue compares selected nullable inputs without nesting wrappers.
 func NullIfNullableValue[S, V any](first, second Expression[S, value.Nullable[V]]) Expression[S, value.Nullable[V]] {
-	first.node = conditionalNode{Kind: nullIfValues, Arguments: []valueExpression{first.node, second.node}}
+	first.node = conditionalNode{Kind: nullIfValues, Arguments: []valueExpression{querycore.WithSensitivity(first.node, first.codec.SensitiveValues()), querycore.WithSensitivity(second.node, second.codec.SensitiveValues())}}
 	return first
 }
 
@@ -127,7 +127,7 @@ func (c ValueCase[S, V]) When(condition HavingPredicate[S], result Expression[S,
 }
 
 func (c ValueCase[S, V]) Else(result Expression[S, V]) Expression[S, V] {
-	return c.builder.finish(result.node)
+	return c.builder.finish(querycore.WithSensitivity(result.node, result.codec.SensitiveValues()))
 }
 
 func (c ValueCase[S, V]) ElseNull() Expression[S, value.Nullable[V]] { return c.builder.finishNull() }
@@ -136,7 +136,7 @@ func (c caseBuilder[S, V]) append(condition expression, result Expression[S, V])
 	if len(c.branches) == 0 {
 		c.codec = result.codec
 	}
-	c.branches = append(slices.Clone(c.branches), caseBranch{Condition: condition, Result: result.node})
+	c.branches = append(slices.Clone(c.branches), caseBranch{Condition: condition, Result: querycore.WithSensitivity(result.node, result.codec.SensitiveValues())})
 	return c
 }
 

@@ -299,6 +299,10 @@ func seal(d *declaration) {
 		}
 		d.core.columns = append(d.core.columns, c)
 		d.core.model.Columns = append(d.core.model.Columns, c.metadata)
+		if d.core.model.Sensitive == nil {
+			d.core.model.Sensitive = make(map[string]bool)
+		}
+		d.core.model.Sensitive[c.metadata.Name] = c.sensitive
 	}
 	for _, c := range d.core.columns {
 		if c.open == nil {

@@ -17,7 +17,7 @@ func aggregateSelect(a *aggregatePlan, ctx context.Context, keys []driver.Value,
 	r := a.input.plan
 	target := r.query.ast
 	target.ScopeContext = ctx
-	node := querycore.SelectNode{Source: querycore.TableSource{Table: target.Table, Columns: target.Model.Columns}, Predicates: slices.Clone(target.EffectivePredicates())}
+	node := querycore.SelectNode{Source: target.Model.Source(target.Table, ""), Predicates: slices.Clone(target.EffectivePredicates())}
 	alias, group := target.Table, r.foreign
 	var unique querycore.FieldRef
 	if j := r.join; j != nil {
@@ -29,7 +29,7 @@ func aggregateSelect(a *aggregatePlan, ctx context.Context, keys []driver.Value,
 			for i, p := range node.Predicates {
 				node.Predicates[i] = querycore.Requalify(p, alias)
 			}
-			node = querycore.RelationHopJoin(node, alias, r.foreign, pivot.Table, pivot.Model.Columns, pivot.EffectivePredicates(), j.second)
+			node = querycore.RelationHopJoin(node, alias, r.foreign, pivot.Model.Source(pivot.Table, ""), pivot.EffectivePredicates(), j.second)
 			group = querycore.FieldRef{Table: querycore.RelationHopAlias, Column: j.first.Column}
 		} else {
 			node = querycore.RelationThroughSelect(target, pivot, r.foreign, j.second, nil, alias, querycore.RelationPivotAlias)

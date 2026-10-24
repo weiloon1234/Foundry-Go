@@ -8,6 +8,9 @@ import (
 // Nested SELECTs are visited unless localSelect restricts discovery to this level;
 // traversal does not change scopes.
 type SelectWalk struct {
+	Parameter            func(ParameterNode)
+	Sensitive            func()
+	SubqueryVisitor      func(Subquery, int)
 	Named                func(*NamedWindow, int)
 	Window               func(WindowNode)
 	LocalSelect          bool
@@ -140,6 +143,10 @@ func (w *SelectWalk) SelectNode(s SelectNode, depth int) {
 }
 
 func (w *SelectWalk) Subquery(q Subquery, depth int) {
+	if w.SubqueryVisitor != nil {
+		w.SubqueryVisitor(q, depth)
+		return
+	}
 	if w.LocalSelect {
 		return
 	}
@@ -170,6 +177,12 @@ func (w *SelectWalk) Value(v ValueExpression, depth int) {
 	if !w.Visit(depth) {
 		return
 	}
+	if _, ok := v.(SensitiveValue); ok && w.Sensitive != nil {
+		w.Sensitive()
+	}
+	if p, ok := v.(ParameterNode); ok && w.Parameter != nil {
+		w.Parameter(p)
+	}
 	if handled, err := VisitComputedValue(v, func(v ValueExpression) error { w.Value(v, depth+1); return w.Err }, func(p Expression) error { w.Expression(p, depth+1); return w.Err }); handled {
 		w.Err = err
 		return
@@ -178,6 +191,9 @@ func (w *SelectWalk) Value(v ValueExpression, depth int) {
 	case FieldRef:
 		w.VisitField(v)
 	case AggregateNode:
+		if v.Sensitive && w.Sensitive != nil {
+			w.Sensitive()
+		}
 		w.VisitField(v.Field)
 		if v.Filter != nil {
 			if len(v.Filter.Predicates) > MaxExpressionNodes {

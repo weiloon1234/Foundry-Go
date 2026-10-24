@@ -28,7 +28,7 @@ func ValidateConflictMutator(u ConflictUpdate, field FieldMutator) error {
 	if u.Incoming || u.Null {
 		return nil
 	}
-	if source, ok := u.Value.(FieldRef); ok && source.Table == ConflictProposedTable && source.Column == u.Field.Column {
+	if source, ok := UnwrapSensitivity(u.Value).(FieldRef); ok && source.Table == ConflictProposedTable && source.Column == u.Field.Column {
 		return nil
 	}
 	return fault.New(fault.Invalid, "conflict field with a Go mutator requires Set, SetNull, or its own proposed value")

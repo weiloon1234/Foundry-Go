@@ -764,3 +764,38 @@ Conflicting repeated update targets are PostgreSQL errors. Caller transactions u
 the existing savepoint behavior; reconciliation failures retain typed candidates
 in `WriteError`. Column/constraint targets ship in slice 6e1; calculated index targets
 and stored/proposed row calculations belong to the next slice.
+
+Advanced conflict expressions use `orm/rows` and the existing `orm/expr` functions:
+
+```go
+records := rows.ConflictRowsOf(Products.Query())
+stored := expr.At(records.Stored(), Products.Price)
+proposed := expr.At(records.Proposed(), Products.Price)
+policy := rows.OnConflictKeys(expr.Group(expr.Value(Products.Code))).
+    TargetWhere(Products.Price.Gt(0)).
+    DoUpdate(rows.SetConflictValue(Products.Price, expr.Add(stored, proposed)))
+policy = rows.ConflictWhereRows(policy, expr.Greater(proposed, stored))
+```
+
+`OnConflictKeys` accepts row-phase index expressions. `TargetWhere` (or
+`rows.ConflictTargetWhere` for computed predicates) describes a partial index;
+its fixed migration values are rendered as schema constants. Ordinary insert
+inputs, update calculations and conditions remain bound parameters. PostgreSQL
+owns physical index compatibility. Subqueries and selected-phase expressions
+cannot be index targets.
+
+`ConflictRowsOf` exposes complete stored and proposed records in a distinct
+`rows.ConflictRow[M]` scope. Query filters do not become conflict conditions.
+The proposed record includes database defaults and trigger changes. Conflict
+rows cannot execute or serve as standalone SELECT sources. Use `rows.Correlate`
+with them for correlated scalar calculations and existence conditions;
+`rows.ConflictScalarRowQuery` and `rows.ConflictScalarNullableRowQuery` handle
+independent scalar selections. Source declarations and global scopes remain
+validated, and missing tenant context fails closed before SQL.
+
+`SetConflictValue` requires a declared destination and its exact stored type,
+including nullability. Use `expr.NullableRow` to widen a required result.
+Encrypted destinations remain excluded. A field with a Go mutator accepts only
+its own proposed value as a calculation; other SQL calculations cannot bypass
+that mutator. Upsert lifecycle, transaction and bounded RETURNING behavior are
+unchanged from the literal conflict API.

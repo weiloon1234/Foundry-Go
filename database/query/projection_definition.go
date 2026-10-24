@@ -48,6 +48,11 @@ func DefineProjection[P any](columns []ProjectionColumn[P], scan func(database.R
 	lowered := make([]projectionColumn, len(columns))
 	for i, c := range columns {
 		lowered[i] = projectionColumn{Name: c.name, Typ: c.typ, Nullable: c.nullable}
+		for _, field := range fields {
+			if field.column == c.name {
+				lowered[i].Sensitive = lowered[i].Sensitive || field.sensitive
+			}
+		}
 	}
 	return ProjectionDefinition[P]{columns: lowered, scan: scan, fields: slices.Clone(fields)}
 }
@@ -74,11 +79,12 @@ func (d ProjectionDefinition[P]) Validate() error {
 // ProjectionMapping binds one declared result field to an expression from S.
 // Map checks field value types; Project validates full and unique coverage.
 type ProjectionMapping[S, P any] struct {
+	sensitive  bool
 	_          [0]*S
 	column     ProjectionColumn[P]
 	expression valueExpression
 }
 
 func Map[S, P, V any](field ProjectionField[P, V], expression Expression[S, V]) ProjectionMapping[S, P] {
-	return ProjectionMapping[S, P]{column: field.column, expression: expression.node}
+	return ProjectionMapping[S, P]{column: field.column, expression: expression.node, sensitive: expression.codec.SensitiveValues()}
 }

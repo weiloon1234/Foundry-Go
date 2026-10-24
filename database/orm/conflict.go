@@ -166,3 +166,17 @@ func (p conflictPolicy) ownedBy(owner *tableCore) conflictPolicy {
 	}
 	return p
 }
+
+// TargetWhere declares a partial unique index predicate, separate from update conditions.
+// Fixed target values are rendered as schema constants. Example: policy.TargetWhere(Users.Active.Eq(true)).
+func (p Conflict[M]) TargetWhere(predicates ...Predicate[M]) Conflict[M] {
+	p.state.core.TargetCondition = slices.Clone(p.state.core.TargetCondition)
+	for _, predicate := range predicates {
+		p.state = p.state.ownedBy(predicate.owner)
+		if predicate.err != nil {
+			p.state.err = predicate.err
+		}
+		p.state.core.TargetCondition = append(p.state.core.TargetCondition, predicate.expression)
+	}
+	return p
+}

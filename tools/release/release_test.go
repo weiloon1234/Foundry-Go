@@ -219,6 +219,16 @@ func TestGoWaySourceInventory(t *testing.T) {
 		"database/orm/testdata/joined-has.sql",
 		"database/orm/testdata/public-methods.txt",
 		"docs/evidence/goway-6a12-capability-audit.tsv",
+		"outbox/publisher/testdata/store_append.json",
+		"outbox/publisher/testdata/store_exhausted.json",
+		"outbox/publisher/testdata/store_failed.json",
+		"outbox/publisher/testdata/store_find.json",
+		"outbox/publisher/testdata/store_prune.json",
+		"outbox/publisher/testdata/store_publish.json",
+		"outbox/publisher/testdata/store_requeue.json",
+		"outbox/publisher/testdata/store_retry.json",
+		"outbox/publisher/testdata/store_stats.json",
+		"outbox/publisher/testdata/store_unknown.json",
 	} {
 		if !included[name] {
 			t.Errorf("reviewed Go-way asset omitted: %s", name)
@@ -244,7 +254,7 @@ func TestGoWaySourceInventory(t *testing.T) {
 	for _, file := range fixture {
 		present[file.Path] = true
 	}
-	for _, name := range []string{"go.mod", "golden_test.go", "compiler_batch_test.go", "footprint_test.go", "models/user.go", "oldmodels/models.go", "models/.foundry-gen.json", "oldmodels/.foundry-gen.json", "oldmodels/joined/.foundry-gen.json", "oldmodels/mutators/.foundry-gen.json", "oldmodels/hooks/.foundry-gen.json", "oldmodels/reads/.foundry-gen.json", "testdata/noraw/contracts/probe.go", "testdata/noraw/negative/interfaces.go", "testdata/noraw/negative/probe.go", "testdata/noraw/negative/refs_test.go", "testdata/noraw/negative/signatures.go", "testdata/noraw/positive/probe.go", "testdata/noraw/positive/signatures.go", "testdata/noraw/positive/typed.go", "testdata/noraw/raw.test/probe.go", "testdata/noraw/raw.test/probe_test.go", "relation_writes_test.go", "composition_golden_test.go", "conflict_golden_test.go", "pgsmoke/relation_writes_test.go", "pgsmoke/composition_test.go", "pgsmoke/conflict_test.go"} {
+	for _, name := range []string{"go.mod", "golden_test.go", "compiler_batch_test.go", "footprint_test.go", "models/user.go", "oldmodels/models.go", "models/.foundry-gen.json", "oldmodels/.foundry-gen.json", "oldmodels/joined/.foundry-gen.json", "oldmodels/mutators/.foundry-gen.json", "oldmodels/hooks/.foundry-gen.json", "oldmodels/reads/.foundry-gen.json", "testdata/noraw/contracts/probe.go", "testdata/noraw/negative/interfaces.go", "testdata/noraw/negative/probe.go", "testdata/noraw/negative/refs_test.go", "testdata/noraw/negative/signatures.go", "testdata/noraw/positive/probe.go", "testdata/noraw/positive/signatures.go", "testdata/noraw/positive/typed.go", "testdata/noraw/raw.test/probe.go", "testdata/noraw/raw.test/probe_test.go", "relation_writes_test.go", "composition_golden_test.go", "conflict_golden_test.go", "pgsmoke/relation_writes_test.go", "pgsmoke/composition_test.go", "pgsmoke/conflict_test.go", "result_read_golden_test.go", "window_golden_test.go", "scalar_golden_test.go", "conflict_advanced_golden_test.go", "pgsmoke/result_cursor_test.go", "pgsmoke/windows_test.go", "pgsmoke/scalars_test.go", "pgsmoke/conflict_advanced_test.go"} {
 		if !present[name] {
 			t.Errorf("Go-way consumer lost %s", name)
 		}
