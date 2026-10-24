@@ -201,12 +201,13 @@ type secureSoftRecord struct {
 type secureSoftTable struct {
 	Table[secureSoftRecord, model.ID[secureSoftRecord]]
 	Secret Encrypted[secureSoftRecord, encrypted.Text]
+	Soft   SoftDeletable[secureSoftRecord]
 }
 
 func TestEncryptedSoftWriteReturningFailure(t *testing.T) {
 	r := Define("secure_soft_records", func(b Builder[secureSoftRecord], m *secureSoftRecord) secureSoftTable {
-		NullableTimeOf(b, &m.DeletedAt)
-		return secureSoftTable{TableOf(b, &m.ID), EncryptedTextOf(b, &m.Secret)}
+		deleted := SoftDeleteOf(b, &m.DeletedAt)
+		return secureSoftTable{TableOf(b, &m.ID), EncryptedTextOf(b, &m.Secret), SoftDeletes(deleted)}
 	})
 	if err := Check(r); err != nil {
 		t.Fatal(err)
@@ -231,7 +232,7 @@ func TestEncryptedSoftWriteReturningFailure(t *testing.T) {
 	for name, run := range map[string]func(*database.DB) (secureSoftRecord, error){
 		"Restore":     func(db *database.DB) (secureSoftRecord, error) { return r.Restore(t.Context(), db, id) },
 		"Delete":      func(db *database.DB) (secureSoftRecord, error) { return r.Delete(t.Context(), db, id) },
-		"ForceDelete": func(db *database.DB) (secureSoftRecord, error) { return r.ForceDelete(t.Context(), db, id) },
+		"ForceDelete": func(db *database.DB) (secureSoftRecord, error) { return r.ForceDelete(t.Context(), db, r.Soft, id) },
 	} {
 		t.Run(name, func(t *testing.T) {
 			var statements []string

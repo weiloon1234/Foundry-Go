@@ -95,7 +95,7 @@ func TestLifecycleOldAndNewAgree(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, err = q.ForceDelete(ctx, db, 1)
+			_, err = q.ForceDelete(ctx, db, q.Soft, 1)
 			if err != nil {
 				t.Fatal(err)
 			}

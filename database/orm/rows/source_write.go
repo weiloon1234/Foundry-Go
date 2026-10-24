@@ -11,12 +11,12 @@ import (
 )
 
 // MapInsert maps an exact stored SQL value without running a mutator. Example: rows.MapInsert(Archives.Name,expr.Value(Users.Name)).
-func MapInsert[S, M, V, P any](field orm.ExpressionColumn[M, V, P], expression expr.RowValue[S, P]) orm.InsertMapping[S, M] {
+func MapInsert[S, M, V, P any, C orm.InsertTarget[M, V, P]](field C, expression expr.RowValue[S, P]) orm.InsertMapping[S, M] {
 	return orm.FoundryInsertMapping[S, M](modelMapping(field, expression), sqlowner.Expressions())
 }
 
 // MapUpdate maps an exact stored SQL value to a non-primary field. Example: rows.MapUpdate(Users.Name,expr.Value(Archives.Name)).
-func MapUpdate[S, M, V, P any](field orm.ExpressionColumn[M, V, P], expression expr.RowValue[S, P]) orm.UpdateMapping[S, M] {
+func MapUpdate[S, M, V, P any, C orm.UpdateTarget[M, V, P]](field C, expression expr.RowValue[S, P]) orm.UpdateMapping[S, M] {
 	return orm.FoundryUpdateMapping[S, M](modelMapping(field, expression), sqlowner.Expressions())
 }
 
@@ -47,10 +47,10 @@ func UpdateFrom[S, M any](destination orm.Query[M], source SelectionSource[S]) o
 
 // DeleteUsing applies ordinary soft deletion and deduplicates source matches. Example: rows.DeleteUsing(Users.Query(),rows.From(Archives.Query())).Match(key).
 func DeleteUsing[S, M any](destination orm.Query[M], source SelectionSource[S]) orm.DeleteSource[S, M] {
-	return orm.FoundryDeleteUsing[S](destination, sourceOf(source), false, sqlowner.Queries())
+	return orm.FoundryDeleteUsing[S](destination, sourceOf(source), false, orm.SoftDeletable[M]{}, sqlowner.Queries())
 }
 
-// ForceDeleteUsing physically removes soft-delete models within the supplied visibility. Example: rows.ForceDeleteUsing(Users.Query().WithTrashed(),rows.From(Archives.Query())).Match(key).
-func ForceDeleteUsing[S, M any](destination orm.Query[M], source SelectionSource[S]) orm.DeleteSource[S, M] {
-	return orm.FoundryDeleteUsing[S](destination, sourceOf(source), true, sqlowner.Queries())
+// ForceDeleteUsing physically removes soft-delete models within the supplied visibility. Example: rows.ForceDeleteUsing(Users.Query().WithTrashed(),Users.Soft,rows.From(Archives.Query())).Match(key).
+func ForceDeleteUsing[S, M any](destination orm.Query[M], soft orm.SoftDeletable[M], source SelectionSource[S]) orm.DeleteSource[S, M] {
+	return orm.FoundryDeleteUsing[S](destination, sourceOf(source), true, soft, sqlowner.Queries())
 }

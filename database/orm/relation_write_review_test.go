@@ -216,7 +216,7 @@ type softWriteParent struct {
 }
 type softWriteParentTable struct {
 	Table[softWriteParent, int64]
-	DeletedAt NullableTime[softWriteParent, temporal.DateTime]
+	DeletedAt SoftDelete[softWriteParent, temporal.DateTime]
 	Links     Through[softWriteParent, writeTarget, writePivot]
 }
 
@@ -224,7 +224,7 @@ func TestAttachRechecksBothEndpointIdentitiesAfterHooks(t *testing.T) {
 	for _, endpoint := range []string{"source", "target"} {
 		t.Run(endpoint, func(t *testing.T) {
 			a := Define("soft_write_parents", func(b Builder[softWriteParent], m *softWriteParent) softWriteParentTable {
-				return softWriteParentTable{TableOf(b, &m.ID), NullableTimeOf(b, &m.DeletedAt), ThroughOf(b, &m.Links)}
+				return softWriteParentTable{TableOf(b, &m.ID), SoftDeleteOf(b, &m.DeletedAt), ThroughOf(b, &m.Links)}
 			})
 			hookRan := false
 			_, z, p, _ := writeRelationTables(WithHooks(func() Hooks[writePivot] {
@@ -322,9 +322,17 @@ func TestRelationWriteSameTypeDefaultsStillRunMutators(t *testing.T) {
 			calls := 0
 			mutate := func(v int64) (int64, error) { calls++; return v, nil }
 			a, z, _, _ := writeRelationTables()
-			p := Define("write_pivots", func(b Builder[writePivot], m *writePivot) writePivotTable {
+			type inputPivotTable struct {
+				Table[writePivot, int64]
+				ID        Key[writePivot, int64]
+				ParentID  InputNumber[writePivot, int64, int64]
+				TargetID  InputNumber[writePivot, int64, int64]
+				Role      Text[writePivot, string]
+				DeletedAt SoftDelete[writePivot, temporal.DateTime]
+			}
+			p := Define("write_pivots", func(b Builder[writePivot], m *writePivot) inputPivotTable {
 				table := TableOf(b, &m.ID)
-				return writePivotTable{table, table.Key(), NumberOf(b, &m.ParentID, Mutate(mutate)), NumberOf(b, &m.TargetID, Mutate(mutate)), TextOf(b, &m.Role), NullableTimeOf(b, &m.DeletedAt)}
+				return inputPivotTable{table, table.Key(), InputNumberOf(b, &m.ParentID, mutate), InputNumberOf(b, &m.TargetID, mutate), TextOf(b, &m.Role), SoftDeleteOf(b, &m.DeletedAt)}
 			})
 			r := ManyToManyOf(a.Links, a.ID, p.ParentID, p.TargetID, z.ID)
 			var statements []string

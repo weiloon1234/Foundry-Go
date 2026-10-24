@@ -45,13 +45,13 @@ type MemberTable struct {
 	Nickname  orm.NullableText[Member, string]
 	State     orm.Enum[Member, State]
 	Balance   orm.Number[Member, decimal.Decimal]
-	DeletedAt orm.NullableTime[Member, temporal.DateTime]
+	DeletedAt orm.SoftDelete[Member, temporal.DateTime]
 	Orders    orm.Many[Member, Order]
 }
 
 var Members = orm.Define("report_members", func(b orm.Builder[Member], m *Member) MemberTable {
 	tbl := orm.TableOf(b, &m.ID)
-	return MemberTable{Table: tbl, ID: tbl.Key(), TenantID: orm.NumberOf(b, &m.TenantID), Name: orm.TextOf(b, &m.Name), Nickname: orm.NullableTextOf(b, &m.Nickname), State: orm.EnumOf(b, &m.State), Balance: orm.NumberOf(b, &m.Balance), DeletedAt: orm.NullableTimeOf(b, &m.DeletedAt), Orders: orm.ManyOf(b, &m.Orders)}
+	return MemberTable{Table: tbl, ID: tbl.Key(), TenantID: orm.NumberOf(b, &m.TenantID), Name: orm.TextOf(b, &m.Name), Nickname: orm.NullableTextOf(b, &m.Nickname), State: orm.EnumOf(b, &m.State), Balance: orm.NumberOf(b, &m.Balance), DeletedAt: orm.SoftDeleteOf(b, &m.DeletedAt), Orders: orm.ManyOf(b, &m.Orders)}
 })
 
 type OrderTable struct {
@@ -61,13 +61,13 @@ type OrderTable struct {
 	MemberID  orm.Column[Order, model.ID[Member]]
 	Label     orm.Text[Order, string]
 	Amount    orm.Number[Order, decimal.Decimal]
-	DeletedAt orm.NullableTime[Order, temporal.DateTime]
+	DeletedAt orm.SoftDelete[Order, temporal.DateTime]
 	Member    orm.One[Order, Member]
 }
 
 var Orders = orm.Define("report_orders", func(b orm.Builder[Order], o *Order) OrderTable {
 	tbl := orm.TableOf(b, &o.ID)
-	return OrderTable{Table: tbl, ID: tbl.Key(), TenantID: orm.NumberOf(b, &o.TenantID), MemberID: orm.IDOf(b, &o.MemberID), Label: orm.TextOf(b, &o.Label), Amount: orm.NumberOf(b, &o.Amount), DeletedAt: orm.NullableTimeOf(b, &o.DeletedAt), Member: orm.OneOf(b, &o.Member)}
+	return OrderTable{Table: tbl, ID: tbl.Key(), TenantID: orm.NumberOf(b, &o.TenantID), MemberID: orm.IDOf(b, &o.MemberID), Label: orm.TextOf(b, &o.Label), Amount: orm.NumberOf(b, &o.Amount), DeletedAt: orm.SoftDeleteOf(b, &o.DeletedAt), Member: orm.OneOf(b, &o.Member)}
 })
 
 var OrderRelations = struct{ Member orm.BelongsTo[Order, Member] }{orm.BelongsToOf(Orders.Member, Orders.MemberID, Members.ID)}

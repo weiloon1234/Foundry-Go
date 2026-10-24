@@ -49,7 +49,7 @@ type writePivotTable struct {
 	ParentID  Number[writePivot, int64]
 	TargetID  Number[writePivot, int64]
 	Role      Text[writePivot, string]
-	DeletedAt NullableTime[writePivot, temporal.DateTime]
+	DeletedAt SoftDelete[writePivot, temporal.DateTime]
 }
 
 func writeRelationTables(opts ...Option) (writeParentTable, writeTargetTable, writePivotTable, ThroughRelation[writeParent, writeTarget, writePivot]) {
@@ -63,7 +63,7 @@ func writeRelationTables(opts ...Option) (writeParentTable, writeTargetTable, wr
 	})
 	p := Define("write_pivots", func(b Builder[writePivot], m *writePivot) writePivotTable {
 		t := TableOf(b, &m.ID)
-		return writePivotTable{t, t.Key(), NumberOf(b, &m.ParentID), NumberOf(b, &m.TargetID), TextOf(b, &m.Role), NullableTimeOf(b, &m.DeletedAt)}
+		return writePivotTable{t, t.Key(), NumberOf(b, &m.ParentID), NumberOf(b, &m.TargetID), TextOf(b, &m.Role), SoftDeleteOf(b, &m.DeletedAt)}
 	}, opts...)
 	return a, z, p, ManyToManyOf(a.Links, a.ID, p.ParentID, p.TargetID, z.ID)
 }
@@ -362,7 +362,7 @@ func TestRelationWriteDeletionLifecycle(t *testing.T) {
 				},
 			}
 		}
-		_, _, _, r := writeRelationTables()
+		_, _, pivots, r := writeRelationTables()
 		observer, err := NewDeletionObserver[writePivot]("deletion").Declare(hooks)
 		if err != nil {
 			t.Fatal(err)
@@ -370,7 +370,7 @@ func TestRelationWriteDeletionLifecycle(t *testing.T) {
 		var statements []string
 		db := hookDB(t, testConnector{statements: &statements, respond: pivotTestReply(1)}, observer)
 		if force {
-			_, err = ForceDetach(t.Context(), db, r.WithTrashedPivot(), writeParent{ID: 1}, writeTarget{ID: 10})
+			_, err = ForceDetach(t.Context(), db, r.WithTrashedPivot(), SoftDeletes(pivots.DeletedAt), writeParent{ID: 1}, writeTarget{ID: 10})
 		} else {
 			_, err = Detach(t.Context(), db, r, writeParent{ID: 1}, writeTarget{ID: 10})
 		}

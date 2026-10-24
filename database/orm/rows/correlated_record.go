@@ -25,23 +25,7 @@ func SelectCorrelatedRecord[O, I, R any](c CorrelatedSource[O, I], scope expr.Sc
 
 // ProjectCorrelated maps a complete declared record without granting execution. Example: rows.ProjectCorrelated(c,Totals,rows.MapSelected(Totals.Count,count)).
 func ProjectCorrelated[O, I, R any](c CorrelatedSource[O, I], schema Schema[R], mappings ...Mapping[Correlation[O, I], R]) CorrelatedRecord[O, I, R] {
-	q := Select(selectionAdapter[Correlation[O, I]]{c.core.Source}, schema, mappings...)
-	c.core.Source = q.source
-	r := ormcore.CorrelatedRecord{Correlation: c.core}
-	if !ormcore.NilDescriptor(schema) {
-		core, _ := schema.rowDefinition(nil)
-		if core != nil {
-			r.Owner = core
-			r.Columns = make([]querycore.Column, len(core.columns))
-			for i, column := range core.columns {
-				r.Columns[i] = querycore.Column{Name: column.Name, Nullable: column.Nullable}
-			}
-		}
-	}
-	if r.Owner == nil {
-		r.Correlation.Source.Err = errors.Join(r.Correlation.Source.Err, ormcore.Invalid("correlated projection requires a declaration"))
-	}
-	return CorrelatedRecord[O, I, R]{core: r}
+	return CorrelatedRecord[O, I, R]{core: projectCorrelation(c.core, schema, mappings)}
 }
 
 // Where appends lifted inner predicates. Example: record.Where(expr.Equal(childID,parentID)).
@@ -71,4 +55,24 @@ func (r CorrelatedRecord[O, I, R]) Offset(n int) CorrelatedRecord[O, I, R] {
 // Exists tests the record within its required outer scope. Example: record.Exists().
 func (r CorrelatedRecord[O, I, R]) Exists() expr.Predicate[O] {
 	return expr.FoundryPredicateValue[O](ormcore.CorrelatedExists(r.core.Correlation), sqlowner.Expressions())
+}
+
+func projectCorrelation[S, R any](c ormcore.Correlation, schema Schema[R], mappings []Mapping[S, R]) ormcore.CorrelatedRecord {
+	q := Select(selectionAdapter[S]{c.Source}, schema, mappings...)
+	c.Source = q.source
+	r := ormcore.CorrelatedRecord{Correlation: c}
+	if !ormcore.NilDescriptor(schema) {
+		core, _ := schema.rowDefinition(nil)
+		if core != nil {
+			r.Owner = core
+			r.Columns = make([]querycore.Column, len(core.columns))
+			for i, column := range core.columns {
+				r.Columns[i] = querycore.Column{Name: column.Name, Nullable: column.Nullable}
+			}
+		}
+	}
+	if r.Owner == nil {
+		r.Correlation.Source.Err = errors.Join(r.Correlation.Source.Err, ormcore.Invalid("correlated projection requires a declaration"))
+	}
+	return r
 }

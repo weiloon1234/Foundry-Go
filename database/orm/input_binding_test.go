@@ -97,7 +97,9 @@ func (sameInputUUID) MutateID(v model.ID[sameInputUUID]) (model.ID[sameInputUUID
 }
 func TestSameTypePrimaryMutatorRetainsUUIDPreparation(t *testing.T) {
 	fields := Define("same_input_uuid", func(b Builder[sameInputUUID], m *sameInputUUID) Table[sameInputUUID, model.ID[sameInputUUID]] {
-		return TableOf(b, &m.ID)
+		table := TableOf(b, &m.ID)
+		InputKeyOf[sameInputUUID, model.ID[sameInputUUID]](b, table.Key(), nil)
+		return table
 	})
 	if err := Check(fields); err != nil {
 		t.Fatal(err)

@@ -33,12 +33,12 @@ type hookedRow struct {
 }
 type hookedTable struct {
 	Table[hookedRow, int64]
-	Name    Text[hookedRow, string]
+	Name    InputText[hookedRow, string, string]
 	Note    NullableInputText[hookedRow, hookedInput, hookedStored]
 	Body    Column[hookedRow, []byte]
-	Created Time[hookedRow, time.Time]
-	Updated Time[hookedRow, time.Time]
-	Deleted NullableTime[hookedRow, time.Time]
+	Created CreatedAt[hookedRow, time.Time]
+	Updated UpdatedAt[hookedRow, time.Time]
+	Deleted SoftDelete[hookedRow, time.Time]
 }
 
 func hookedFields(factory func() Hooks[hookedRow], extra ...Option) hookedTable {
@@ -47,7 +47,17 @@ func hookedFields(factory func() Hooks[hookedRow], extra ...Option) hookedTable 
 		opts = append(opts, WithHooks(factory))
 	}
 	return Define("hooked", func(b Builder[hookedRow], m *hookedRow) hookedTable {
-		return hookedTable{TableOf(b, &m.ID), TextOf(b, &m.Name, Mutate(func(s string) (string, error) { return strings.TrimSpace(s), nil })), NullableInputTextOf(b, &m.Note, func(v hookedInput) (hookedStored, error) { return hookedStored(strings.TrimSpace(v.Text)), nil }), BytesOf(b, &m.Body), TimeOf(b, &m.CreatedAt), TimeOf(b, &m.UpdatedAt), NullableTimeOf(b, &m.DeletedAt)}
+		deleted := SoftDelete[hookedRow, time.Time]{}
+		disabled := false
+		for _, opt := range extra {
+			disabled = disabled || opt.noSoftDeletes
+		}
+		if disabled {
+			deleted.nullableTime = NullableTimeOf(b, &m.DeletedAt).nullableTime
+		} else {
+			deleted = SoftDeleteOf(b, &m.DeletedAt)
+		}
+		return hookedTable{TableOf(b, &m.ID), InputTextOf(b, &m.Name, func(s string) (string, error) { return strings.TrimSpace(s), nil }), NullableInputTextOf(b, &m.Note, func(v hookedInput) (hookedStored, error) { return hookedStored(strings.TrimSpace(v.Text)), nil }), BytesOf(b, &m.Body), CreatedAtOf(b, &m.CreatedAt), UpdatedAtOf(b, &m.UpdatedAt), deleted}
 	}, opts...)
 }
 func hookDB(t *testing.T, c testConnector, declarations ...lifecycle.Declaration) *database.DB {
@@ -277,7 +287,7 @@ func TestSpecialHookStagesAndForceDeleteVisibility(t *testing.T) {
 				_, err = q.Restore(t.Context(), db, 1)
 				want = []string{"restoring", "restored", "commit"}
 			case lifecycle.ForceDelete:
-				_, err = ForceDelete(t.Context(), db, q.Query().OnlyTrashed(), q.Key(), int64(1))
+				_, err = ForceDelete(t.Context(), db, q.Query().OnlyTrashed(), SoftDeletes(q.Deleted), q.Key(), int64(1))
 				want = []string{"force deleting", "deleting", "deleted", "force deleted", "commit"}
 				for _, sql := range statements {
 					if !strings.Contains(sql, `"deleted_at" IS NOT NULL`) {

@@ -171,3 +171,5 @@ transaction CTEs, recursive self scopes, and record/scalar set composition.
 
 See [completed-result cursors and read terminals](results.md) for output scopes,
 keyset navigation, numbered pages and transaction-only projection locks.
+
+See [transaction composition](transactions.md) for transaction joins, subqueries, correlation and LATERAL.

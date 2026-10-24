@@ -101,7 +101,7 @@ func TestLifecyclePersistedChangesRollbackAndCommit(t *testing.T) {
 	}
 	_, err = q.Delete(ctx, db, 1)
 	must(t, err)
-	_, err = q.ForceDelete(ctx, db, 1)
+	_, err = q.ForceDelete(ctx, db, q.Soft, 1)
 	if !errors.Is(err, database.NotFound) {
 		t.Fatal("force-delete visibility", err)
 	}
@@ -109,6 +109,6 @@ func TestLifecyclePersistedChangesRollbackAndCommit(t *testing.T) {
 	must(t, err)
 	_, err = q.Delete(ctx, db, 1)
 	must(t, err)
-	_, err = orm.ForceDelete(ctx, db, q.Query().WithTrashed(), q.Key(), int64(1))
+	_, err = orm.ForceDelete(ctx, db, q.Query().WithTrashed(), q.Soft, q.Key(), int64(1))
 	must(t, err)
 }

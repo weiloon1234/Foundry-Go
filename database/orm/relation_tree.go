@@ -86,6 +86,9 @@ func validateRelationMetadata(p *relationPlan, owner *tableCore) error {
 	if owner != nil && owner != p.slot.owner {
 		return invalid("relation belongs to a different table declaration")
 	}
+	if p.external {
+		return tableError(p.slot.owner)
+	}
 	if err := errors.Join(tableError(p.slot.owner), tableError(p.target), p.query.err); err != nil {
 		return err
 	}
@@ -107,6 +110,9 @@ func validateRelationAt(p *relationPlan, owner *tableCore, depth int, limits Rel
 	}
 	if err := validateRelationMetadata(p, owner); err != nil {
 		return err
+	}
+	if p.external {
+		return nil
 	}
 	if p.aggregate != nil {
 		if err := validateRelationAt(p.aggregate.input.plan, p.slot.owner, depth, limits, nodes); err != nil {

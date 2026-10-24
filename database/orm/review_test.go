@@ -175,7 +175,7 @@ func TestStartupAdviceAndShadowing(t *testing.T) {
 	type key struct{ ID int }
 	type shadow struct {
 		Table[key, int]
-		Query Number[key, int]
+		Query NumberLookupKey[key, int]
 	}
 	sh := Define("shadow", func(b Builder[key], m *key) shadow {
 		table := TableOf(b, &m.ID)
@@ -221,7 +221,7 @@ func TestExplicitRolesAndOptOuts(t *testing.T) {
 	if err := Check(no); err == nil || !strings.Contains(err.Error(), "conflicts") {
 		t.Fatalf("opt out: %v", err)
 	}
-	if timedRecords(NoSoftDeletes()).core.model.SoftDelete != nil {
+	if unmanagedTimed(NoSoftDeletes()).core.model.SoftDelete != nil {
 		t.Fatal("NoSoftDeletes ignored")
 	}
 	for _, scope := range []Query[timed]{timedRecords().Query().WithTrashed(), timedRecords().Query().OnlyTrashed(), timedRecords().Query().WithoutTrashed()} {
@@ -516,7 +516,7 @@ func TestTimestampKindAndNullabilityValidation(t *testing.T) {
 	}
 	table := Define("bad_times", func(b Builder[invalidTime], m *invalidTime) Table[invalidTime, int] {
 		ColumnOf(b, &m.CreatedAt, Codec(codec.Time().WithParameterType(codec.TypeText)))
-		TimeOf(b, &m.UpdatedAt)
+		UpdatedAtOf(b, &m.UpdatedAt)
 		TimeOf(b, &m.DeletedAt)
 		return TableOf(b, &m.ID)
 	})

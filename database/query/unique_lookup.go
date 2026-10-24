@@ -13,9 +13,10 @@ import (
 // scope. The key must be unique in that scope; a second match is an internal
 // data/configuration error. A database unique constraint remains recommended.
 type UniqueLookup[M any, K comparable] struct {
-	source Query[M]
-	field  ScalarField[M, K]
-	err    error
+	uniqueLookupPhase [0]struct{}
+	source            Query[M]
+	field             ScalarField[M, K]
+	err               error
 }
 
 // Unique retains filters, ordering, soft-delete visibility, retrieval hooks and

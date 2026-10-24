@@ -30,8 +30,18 @@ const footprintFailureAdvice = "a generic method, field or codec helper has expa
 // Go 1.27.1 darwin/arm64: T/t symbols in each package archive.
 // Budget is ceil(measured * 1.15), calculated exactly with integer arithmetic.
 var footprintBudgets = map[string]footprintBudget{
-	"result_cursor": {"./testdata/footprint/result_cursor", 2229},
-	"result_reads":  {"./testdata/footprint/result_reads", 1351},
+	"transaction_joins":       {"./testdata/footprint/transaction_joins", 1835},
+	"transaction_correlation": {"./testdata/footprint/transaction_correlation", 2908},
+	"result_cursor":           {"./testdata/footprint/result_cursor", 2229},
+	"result_reads":            {"./testdata/footprint/result_reads", 1351},
+	"role_time_read":          {"./testdata/footprint/role_time_read", 1394},
+	"role_primary_number":     {"./testdata/footprint/role_primary_number", 1195},
+	"role_primary_text":       {"./testdata/footprint/role_primary_text", 1216},
+	"role_lookup_input":       {"./testdata/footprint/role_lookup_input", 1226},
+	"role_soft_read":          {"./testdata/footprint/role_soft_read", 1548},
+	"role_soft_write":         {"./testdata/footprint/role_soft_write", 620},
+	"role_input_same":         {"./testdata/footprint/role_input_same", 1360},
+	"role_source":             {"./testdata/footprint/role_source", 905},
 
 	"cte_recursive": {"./testdata/footprint/cte_recursive", 1076},
 	"record_sets":   {"./testdata/footprint/record_sets", 1288},
@@ -42,8 +52,15 @@ var footprintBudgets = map[string]footprintBudget{
 	"json_paths":     {"./testdata/footprint/json_paths", 6146},
 	"json_functions": {"./testdata/footprint/json_functions", 2736},
 
-	"scalar_text":                {"./testdata/footprint/scalar_text", 2312},
-	"scalar_temporal":            {"./testdata/footprint/scalar_temporal", 2625},
+	"scalar_text":           {"./testdata/footprint/scalar_text", 2312},
+	"scalar_temporal":       {"./testdata/footprint/scalar_temporal", 2625},
+	"extension_handles":     {"./testdata/footprint/extension_handles", 1481},
+	"extension_declaration": {"foundry.test/goway/models/extensions", 30434},
+	"extension_slots":       {"./testdata/footprint/extension_slots", 2154},
+	"extension_slots_old":   {"./testdata/footprint/extension_slots_old", 30493},
+	"orm_factory":           {"./testdata/footprint/orm_factory", 1093},
+	"orm_binding":           {"./testdata/footprint/orm_binding", 1089},
+
 	"framework_countries":        {"github.com/weiloon1234/Foundry-Go/countries", 4122},
 	"framework_jobarchive":       {"github.com/weiloon1234/Foundry-Go/internal/jobarchive", 2280},
 	"framework_idempotencystore": {"github.com/weiloon1234/Foundry-Go/internal/idempotencystore", 2249},
@@ -240,6 +257,13 @@ func TestFootprintBudgets(t *testing.T) {
 			}
 		})
 	}
+	// Identical four-slot LoadMissing workloads: importer cost must remain well
+	// below the generated descriptor graph, not merely below its old ceiling.
+	t.Run("extension_namespace_reduction", func(t *testing.T) {
+		if functions["extension_slots"]*4 >= functions["extension_slots_old"] {
+			t.Fatalf("thin extension namespace must remain below one quarter of the generated baseline: new %d, old %d", functions["extension_slots"], functions["extension_slots_old"])
+		}
+	})
 	// The two packages have identical model shapes. Subtracting their totals
 	// removes shared value-type and package overhead; the delta covers two models.
 	const measuredGrowth = 816

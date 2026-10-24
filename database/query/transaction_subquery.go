@@ -58,7 +58,9 @@ func transactionSubqueryOf(source TransactionSubquerySource) subquery {
 	if nilDescriptor(source) {
 		return subquery{Err: fault.New(fault.Invalid, "transaction subquery requires a source")}
 	}
-	return source.transactionSubquery()
+	q := source.transactionSubquery()
+	q.Node.Source.RequiresTransaction = true
+	return q
 }
 
 // TransactionExistsQuery anchors an independent transaction SELECT in its outer scope.

@@ -13,6 +13,7 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
@@ -29,7 +30,9 @@ type declarationID struct{ nonzero byte }
 type Owner[M any, K comparable] struct{ definition *ownerDefinition[M, K] }
 type ownerDefinition[M any, K comparable] struct {
 	name     OwnerName
-	source   query.ModelIdentity[M, K]
+	source   identitySource[M, K]
+	scope    func(...K) query.Predicate[M]
+	ormScope func(...K) orm.Predicate[M]
 	storage  string
 	previous []string
 	id       *declarationID
@@ -60,7 +63,7 @@ func DefineOwner[M any, K comparable](name OwnerName, source query.ModelIdentity
 // DefineOwnerWith declares an owner with an explicit persisted identity. Keep
 // StorageModel unchanged for the lifetime of the stored data.
 func DefineOwnerWith[M any, K comparable](name OwnerName, source query.ModelIdentity[M, K], options OwnerOptions) Owner[M, K] {
-	return Owner[M, K]{definition: &ownerDefinition[M, K]{name: name, source: source, storage: options.StorageModel, previous: slices.Clone(options.PreviousModels), id: &declarationID{}}}
+	return Owner[M, K]{definition: &ownerDefinition[M, K]{name: name, source: source, scope: source.Scope, storage: options.StorageModel, previous: slices.Clone(options.PreviousModels), id: &declarationID{}}}
 }
 func (o Owner[M, K]) Validate() error {
 	if o.definition == nil || !identifier.Semantic(string(o.definition.name)) || reflect.TypeFor[M]().Kind() != reflect.Struct {
@@ -150,7 +153,7 @@ func (o Owner[M, K]) QueryScope(keys ...K) query.Predicate[M] {
 	if o.definition == nil {
 		return query.Predicate[M]{}
 	}
-	return o.definition.source.Scope(keys...)
+	return o.definition.scope(keys...)
 }
 func (o Owner[M, K]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("model extension owner")) }
 

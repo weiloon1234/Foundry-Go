@@ -30,12 +30,14 @@ func (Member) MutateNote(v coremodels.LabelInput) (coremodels.StoredLabel, error
 
 type MemberTable struct {
 	orm.Table[Member, int64]
-	Name      orm.Text[Member, string]
+	ID        orm.Primary[Member, int64]
+	Soft      orm.SoftDeletable[Member]
+	Name      orm.InputText[Member, string, string]
 	Note      orm.NullableInputText[Member, coremodels.LabelInput, coremodels.StoredLabel]
 	Body      orm.Column[Member, []byte]
-	CreatedAt orm.Time[Member, time.Time]
-	UpdatedAt orm.Time[Member, time.Time]
-	DeletedAt orm.NullableTime[Member, time.Time]
+	CreatedAt orm.CreatedAt[Member, time.Time]
+	UpdatedAt orm.UpdatedAt[Member, time.Time]
+	DeletedAt orm.SoftDelete[Member, time.Time]
 }
 
 var Members = Declare(LocalHooks)
@@ -43,7 +45,9 @@ var Members = Declare(LocalHooks)
 // Declare accepts an immutable per-write factory; runtime state belongs to its caller.
 func Declare(factory func() orm.Hooks[Member]) MemberTable {
 	return orm.Define("hook_members", func(b orm.Builder[Member], m *Member) MemberTable {
-		return MemberTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name), orm.NullableInputTextOf[Member, coremodels.LabelInput](b, &m.Note, nil), orm.BytesOf(b, &m.Body), orm.TimeOf(b, &m.CreatedAt), orm.TimeOf(b, &m.UpdatedAt), orm.NullableTimeOf(b, &m.DeletedAt)}
+		table := orm.TableOf(b, &m.ID)
+		deleted := orm.SoftDeleteOf(b, &m.DeletedAt)
+		return MemberTable{table, orm.PrimaryOf(b, table.Key()), orm.SoftDeletes(deleted), orm.InputTextOf[Member, string](b, &m.Name, nil), orm.NullableInputTextOf[Member, coremodels.LabelInput](b, &m.Note, nil), orm.BytesOf(b, &m.Body), orm.CreatedAtOf(b, &m.CreatedAt), orm.UpdatedAtOf(b, &m.UpdatedAt), deleted}
 	}, orm.WithHooks(factory))
 }
 

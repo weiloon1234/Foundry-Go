@@ -41,241 +41,241 @@ func (c Column[M, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[V]
 }
 
 // Eq compares a concrete value. Example: Orders.ID.Eq(id).
-func (c Key[M, K]) Eq(v K) Predicate[M] {
+func (c keyColumn[M, K, R]) Eq(v K) Predicate[M] {
 	return comparison[M](c.key, querycore.Equal, []K{v})
 }
 
 // Ne excludes a concrete value. Example: Orders.ID.Ne(id).
-func (c Key[M, K]) Ne(v K) Predicate[M] {
+func (c keyColumn[M, K, R]) Ne(v K) Predicate[M] {
 	return comparison[M](c.key, querycore.NotEqual, []K{v})
 }
 
 // In tests membership. Example: Orders.ID.In(a, b).
-func (c Key[M, K]) In(v ...K) Predicate[M] { return comparison[M](c.key, querycore.In, v) }
+func (c keyColumn[M, K, R]) In(v ...K) Predicate[M] { return comparison[M](c.key, querycore.In, v) }
 
 // NotIn excludes membership. Example: Orders.ID.NotIn(a, b).
-func (c Key[M, K]) NotIn(v ...K) Predicate[M] {
+func (c keyColumn[M, K, R]) NotIn(v ...K) Predicate[M] {
 	return comparison[M](c.key, querycore.NotIn, v)
 }
 
 // Asc sorts ascending. Example: Orders.ID.Asc().
-func (c Key[M, K]) Asc() Order[M] { return columnOrder[M](c.key, false) }
+func (c keyColumn[M, K, R]) Asc() Order[M] { return columnOrder[M](c.key, false) }
 
 // Desc sorts descending. Example: Orders.ID.Desc().
-func (c Key[M, K]) Desc() Order[M] { return columnOrder[M](c.key, true) }
+func (c keyColumn[M, K, R]) Desc() Order[M] { return columnOrder[M](c.key, true) }
 
 // Set assigns a value, including zero. Example: Orders.ID.Set(id).
-func (c Key[M, K]) Set(v K) Assignment[M] { return columnAssignment[M](c.key, v) }
+func (c keyColumn[M, K, R]) Set(v K) Assignment[M] { return columnAssignment[M](c.key, v) }
 
-func (c Key[M, K]) ormColumn(*M) columnData[K] { return c.key }
-func (c Key[M, K]) expressionColumn(*M) (ormcore.Column[K], ormcore.Column[K]) {
+func (c keyColumn[M, K, R]) ormColumn(*M) columnData[K] { return c.key }
+func (c keyColumn[M, K, R]) expressionColumn(*M) (ormcore.Column[K], ormcore.Column[K]) {
 	return requiredExpression(c.key)
 }
 
 // Eq compares a concrete value. Example: Orders.TotalCents.Eq(100).
-func (c Number[M, V]) Eq(v V) Predicate[M] {
+func (c numberColumn[M, V, R]) Eq(v V) Predicate[M] {
 	return comparison[M](c.number, querycore.Equal, []V{v})
 }
 
 // Ne excludes a concrete value. Example: Orders.TotalCents.Ne(100).
-func (c Number[M, V]) Ne(v V) Predicate[M] {
+func (c numberColumn[M, V, R]) Ne(v V) Predicate[M] {
 	return comparison[M](c.number, querycore.NotEqual, []V{v})
 }
 
 // In tests membership. Example: Orders.TotalCents.In(a, b).
-func (c Number[M, V]) In(v ...V) Predicate[M] {
+func (c numberColumn[M, V, R]) In(v ...V) Predicate[M] {
 	return comparison[M](c.number, querycore.In, v)
 }
 
 // NotIn excludes membership. Example: Orders.TotalCents.NotIn(a, b).
-func (c Number[M, V]) NotIn(v ...V) Predicate[M] {
+func (c numberColumn[M, V, R]) NotIn(v ...V) Predicate[M] {
 	return comparison[M](c.number, querycore.NotIn, v)
 }
 
 // Asc sorts ascending. Example: Orders.TotalCents.Asc().
-func (c Number[M, V]) Asc() Order[M] { return columnOrder[M](c.number, false) }
+func (c numberColumn[M, V, R]) Asc() Order[M] { return columnOrder[M](c.number, false) }
 
 // Desc sorts descending. Example: Orders.TotalCents.Desc().
-func (c Number[M, V]) Desc() Order[M] { return columnOrder[M](c.number, true) }
+func (c numberColumn[M, V, R]) Desc() Order[M] { return columnOrder[M](c.number, true) }
 
 // Set assigns a value, including zero. Example: Orders.TotalCents.Set(100).
-func (c Number[M, V]) Set(v V) Assignment[M] { return columnAssignment[M](c.number, v) }
+func (c numberColumn[M, V, R]) Set(v V) Assignment[M] { return columnAssignment[M](c.number, v) }
 
 // Gt compares ordered values. Example: Orders.TotalCents.Gt(100).
-func (c Number[M, V]) Gt(v V) Predicate[M] {
+func (c numberColumn[M, V, R]) Gt(v V) Predicate[M] {
 	return comparison[M](c.number, querycore.Greater, []V{v})
 }
 
 // Gte compares ordered values. Example: Orders.TotalCents.Gte(100).
-func (c Number[M, V]) Gte(v V) Predicate[M] {
+func (c numberColumn[M, V, R]) Gte(v V) Predicate[M] {
 	return comparison[M](c.number, querycore.GreaterOrEqual, []V{v})
 }
 
 // Lt compares ordered values. Example: Orders.TotalCents.Lt(100).
-func (c Number[M, V]) Lt(v V) Predicate[M] {
+func (c numberColumn[M, V, R]) Lt(v V) Predicate[M] {
 	return comparison[M](c.number, querycore.Less, []V{v})
 }
 
 // Lte compares ordered values. Example: Orders.TotalCents.Lte(100).
-func (c Number[M, V]) Lte(v V) Predicate[M] {
+func (c numberColumn[M, V, R]) Lte(v V) Predicate[M] {
 	return comparison[M](c.number, querycore.LessOrEqual, []V{v})
 }
 
 // Between includes both endpoints. Example: Orders.TotalCents.Between(a, b).
-func (c Number[M, V]) Between(a, b V) Predicate[M] { return between[M](c.number, a, b) }
+func (c numberColumn[M, V, R]) Between(a, b V) Predicate[M] { return between[M](c.number, a, b) }
 
-func (c Number[M, V]) ormColumn(*M) columnData[V] { return c.number }
-func (c Number[M, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[V]) {
+func (c numberColumn[M, V, R]) ormColumn(*M) columnData[V] { return c.number }
+func (c numberColumn[M, V, R]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[V]) {
 	return requiredExpression(c.number)
 }
 
 // Eq compares a concrete value. Example: Users.Email.Eq("@example.com").
-func (c Text[M, V]) Eq(v V) Predicate[M] {
+func (c textColumn[M, V, R]) Eq(v V) Predicate[M] {
 	return comparison[M](c.text, querycore.Equal, []V{v})
 }
 
 // Ne excludes a concrete value. Example: Users.Email.Ne("@example.com").
-func (c Text[M, V]) Ne(v V) Predicate[M] {
+func (c textColumn[M, V, R]) Ne(v V) Predicate[M] {
 	return comparison[M](c.text, querycore.NotEqual, []V{v})
 }
 
 // In tests membership. Example: Users.Email.In(a, b).
-func (c Text[M, V]) In(v ...V) Predicate[M] { return comparison[M](c.text, querycore.In, v) }
+func (c textColumn[M, V, R]) In(v ...V) Predicate[M] { return comparison[M](c.text, querycore.In, v) }
 
 // NotIn excludes membership. Example: Users.Email.NotIn(a, b).
-func (c Text[M, V]) NotIn(v ...V) Predicate[M] {
+func (c textColumn[M, V, R]) NotIn(v ...V) Predicate[M] {
 	return comparison[M](c.text, querycore.NotIn, v)
 }
 
 // Asc sorts ascending. Example: Users.Email.Asc().
-func (c Text[M, V]) Asc() Order[M] { return columnOrder[M](c.text, false) }
+func (c textColumn[M, V, R]) Asc() Order[M] { return columnOrder[M](c.text, false) }
 
 // Desc sorts descending. Example: Users.Email.Desc().
-func (c Text[M, V]) Desc() Order[M] { return columnOrder[M](c.text, true) }
+func (c textColumn[M, V, R]) Desc() Order[M] { return columnOrder[M](c.text, true) }
 
 // Set assigns a value, including zero. Example: Users.Email.Set("@example.com").
-func (c Text[M, V]) Set(v V) Assignment[M] { return columnAssignment[M](c.text, v) }
+func (c textColumn[M, V, R]) Set(v V) Assignment[M] { return columnAssignment[M](c.text, v) }
 
 // Gt compares ordered values. Example: Users.Email.Gt("@example.com").
-func (c Text[M, V]) Gt(v V) Predicate[M] {
+func (c textColumn[M, V, R]) Gt(v V) Predicate[M] {
 	return comparison[M](c.text, querycore.Greater, []V{v})
 }
 
 // Gte compares ordered values. Example: Users.Email.Gte("@example.com").
-func (c Text[M, V]) Gte(v V) Predicate[M] {
+func (c textColumn[M, V, R]) Gte(v V) Predicate[M] {
 	return comparison[M](c.text, querycore.GreaterOrEqual, []V{v})
 }
 
 // Lt compares ordered values. Example: Users.Email.Lt("@example.com").
-func (c Text[M, V]) Lt(v V) Predicate[M] {
+func (c textColumn[M, V, R]) Lt(v V) Predicate[M] {
 	return comparison[M](c.text, querycore.Less, []V{v})
 }
 
 // Lte compares ordered values. Example: Users.Email.Lte("@example.com").
-func (c Text[M, V]) Lte(v V) Predicate[M] {
+func (c textColumn[M, V, R]) Lte(v V) Predicate[M] {
 	return comparison[M](c.text, querycore.LessOrEqual, []V{v})
 }
 
 // Between includes both endpoints. Example: Users.Email.Between(a, b).
-func (c Text[M, V]) Between(a, b V) Predicate[M] { return between[M](c.text, a, b) }
+func (c textColumn[M, V, R]) Between(a, b V) Predicate[M] { return between[M](c.text, a, b) }
 
 // Contains matches a literal substring; wildcards are escaped. Example: Users.Email.Contains("@").
-func (c Text[M, V]) Contains(v V) Predicate[M] {
+func (c textColumn[M, V, R]) Contains(v V) Predicate[M] {
 	return comparison[M](c.text, querycore.Contains, []V{v})
 }
 
 // IContains matches a literal substring case-insensitively; wildcards are escaped. Example: Users.Email.IContains("Ada").
-func (c Text[M, V]) IContains(v V) Predicate[M] {
+func (c textColumn[M, V, R]) IContains(v V) Predicate[M] {
 	return comparison[M](c.text, querycore.InsensitiveContains, []V{v})
 }
 
 // StartsWith matches a literal prefix; wildcards are escaped. Example: Users.Email.StartsWith("admin").
-func (c Text[M, V]) StartsWith(v V) Predicate[M] {
+func (c textColumn[M, V, R]) StartsWith(v V) Predicate[M] {
 	return comparison[M](c.text, querycore.StartsWith, []V{v})
 }
 
 // EndsWith matches a literal suffix; wildcards are escaped. Example: Users.Email.EndsWith("@example.com").
-func (c Text[M, V]) EndsWith(v V) Predicate[M] {
+func (c textColumn[M, V, R]) EndsWith(v V) Predicate[M] {
 	return comparison[M](c.text, querycore.EndsWith, []V{v})
 }
 
 // Like matches a LIKE pattern; % and _ are wildcards. Example: Users.Email.Like("%@example.com").
-func (c Text[M, V]) Like(v V) Predicate[M] {
+func (c textColumn[M, V, R]) Like(v V) Predicate[M] {
 	return comparison[M](c.text, querycore.Like, []V{v})
 }
 
 // ILike matches an ILIKE pattern case-insensitively; % and _ are wildcards. Example: Users.Email.ILike("%@EXAMPLE.com").
-func (c Text[M, V]) ILike(v V) Predicate[M] {
+func (c textColumn[M, V, R]) ILike(v V) Predicate[M] {
 	return comparison[M](c.text, querycore.InsensitiveLike, []V{v})
 }
 
 // IStartsWith matches a literal prefix case-insensitively; wildcards are escaped. Example: Users.Email.IStartsWith("Admin").
-func (c Text[M, V]) IStartsWith(v V) Predicate[M] {
+func (c textColumn[M, V, R]) IStartsWith(v V) Predicate[M] {
 	return comparison[M](c.text, querycore.InsensitiveStartsWith, []V{v})
 }
 
 // IEndsWith matches a literal suffix case-insensitively; wildcards are escaped. Example: Users.Email.IEndsWith("@EXAMPLE.com").
-func (c Text[M, V]) IEndsWith(v V) Predicate[M] {
+func (c textColumn[M, V, R]) IEndsWith(v V) Predicate[M] {
 	return comparison[M](c.text, querycore.InsensitiveEndsWith, []V{v})
 }
 
-func (c Text[M, V]) ormColumn(*M) columnData[V] { return c.text }
-func (c Text[M, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[V]) {
+func (c textColumn[M, V, R]) ormColumn(*M) columnData[V] { return c.text }
+func (c textColumn[M, V, R]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[V]) {
 	return requiredExpression(c.text)
 }
 
 // Eq compares a concrete value. Example: createdAt.Eq(at) (createdAt is orm.Time[User, time.Time]).
-func (c Time[M, V]) Eq(v V) Predicate[M] {
+func (c timeColumn[M, V, R]) Eq(v V) Predicate[M] {
 	return comparison[M](c.time, querycore.Equal, []V{v})
 }
 
 // Ne excludes a concrete value. Example: createdAt.Ne(at) (createdAt is orm.Time[User, time.Time]).
-func (c Time[M, V]) Ne(v V) Predicate[M] {
+func (c timeColumn[M, V, R]) Ne(v V) Predicate[M] {
 	return comparison[M](c.time, querycore.NotEqual, []V{v})
 }
 
 // In tests membership. Example: createdAt.In(a, b) (createdAt is orm.Time[User, time.Time]).
-func (c Time[M, V]) In(v ...V) Predicate[M] { return comparison[M](c.time, querycore.In, v) }
+func (c timeColumn[M, V, R]) In(v ...V) Predicate[M] { return comparison[M](c.time, querycore.In, v) }
 
 // NotIn excludes membership. Example: createdAt.NotIn(a, b) (createdAt is orm.Time[User, time.Time]).
-func (c Time[M, V]) NotIn(v ...V) Predicate[M] {
+func (c timeColumn[M, V, R]) NotIn(v ...V) Predicate[M] {
 	return comparison[M](c.time, querycore.NotIn, v)
 }
 
 // Asc sorts ascending. Example: createdAt.Asc() (createdAt is orm.Time[User, time.Time]).
-func (c Time[M, V]) Asc() Order[M] { return columnOrder[M](c.time, false) }
+func (c timeColumn[M, V, R]) Asc() Order[M] { return columnOrder[M](c.time, false) }
 
 // Desc sorts descending. Example: createdAt.Desc() (createdAt is orm.Time[User, time.Time]).
-func (c Time[M, V]) Desc() Order[M] { return columnOrder[M](c.time, true) }
+func (c timeColumn[M, V, R]) Desc() Order[M] { return columnOrder[M](c.time, true) }
 
 // Set assigns a value, including zero. Example: createdAt.Set(at) (createdAt is orm.Time[User, time.Time]).
-func (c Time[M, V]) Set(v V) Assignment[M] { return columnAssignment[M](c.time, v) }
+func (c timeColumn[M, V, R]) Set(v V) Assignment[M] { return columnAssignment[M](c.time, v) }
 
 // Gt compares ordered values. Example: createdAt.Gt(at) (createdAt is orm.Time[User, time.Time]).
-func (c Time[M, V]) Gt(v V) Predicate[M] {
+func (c timeColumn[M, V, R]) Gt(v V) Predicate[M] {
 	return comparison[M](c.time, querycore.Greater, []V{v})
 }
 
 // Gte compares ordered values. Example: createdAt.Gte(at) (createdAt is orm.Time[User, time.Time]).
-func (c Time[M, V]) Gte(v V) Predicate[M] {
+func (c timeColumn[M, V, R]) Gte(v V) Predicate[M] {
 	return comparison[M](c.time, querycore.GreaterOrEqual, []V{v})
 }
 
 // Lt compares ordered values. Example: createdAt.Lt(at) (createdAt is orm.Time[User, time.Time]).
-func (c Time[M, V]) Lt(v V) Predicate[M] {
+func (c timeColumn[M, V, R]) Lt(v V) Predicate[M] {
 	return comparison[M](c.time, querycore.Less, []V{v})
 }
 
 // Lte compares ordered values. Example: createdAt.Lte(at) (createdAt is orm.Time[User, time.Time]).
-func (c Time[M, V]) Lte(v V) Predicate[M] {
+func (c timeColumn[M, V, R]) Lte(v V) Predicate[M] {
 	return comparison[M](c.time, querycore.LessOrEqual, []V{v})
 }
 
 // Between includes both endpoints. Example: createdAt.Between(a, b) (createdAt is orm.Time[User, time.Time]).
-func (c Time[M, V]) Between(a, b V) Predicate[M] { return between[M](c.time, a, b) }
+func (c timeColumn[M, V, R]) Between(a, b V) Predicate[M] { return between[M](c.time, a, b) }
 
-func (c Time[M, V]) ormColumn(*M) columnData[V] { return c.time }
-func (c Time[M, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[V]) {
+func (c timeColumn[M, V, R]) ormColumn(*M) columnData[V] { return c.time }
+func (c timeColumn[M, V, R]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[V]) {
 	return requiredExpression(c.time)
 }
 
@@ -553,76 +553,82 @@ func (c NullableText[M, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Col
 }
 
 // Eq compares a concrete value. Example: Users.Birthday.Eq(birthday).
-func (c NullableTime[M, V]) Eq(v V) Predicate[M] {
+func (c nullableTimeColumn[M, V, R]) Eq(v V) Predicate[M] {
 	return comparison[M](c.nullableTime.base, querycore.Equal, []V{v})
 }
 
 // Ne excludes a concrete value. Example: Users.Birthday.Ne(birthday).
-func (c NullableTime[M, V]) Ne(v V) Predicate[M] {
+func (c nullableTimeColumn[M, V, R]) Ne(v V) Predicate[M] {
 	return comparison[M](c.nullableTime.base, querycore.NotEqual, []V{v})
 }
 
 // In tests membership. Example: Users.Birthday.In(a, b).
-func (c NullableTime[M, V]) In(v ...V) Predicate[M] {
+func (c nullableTimeColumn[M, V, R]) In(v ...V) Predicate[M] {
 	return comparison[M](c.nullableTime.base, querycore.In, v)
 }
 
 // NotIn excludes membership. Example: Users.Birthday.NotIn(a, b).
-func (c NullableTime[M, V]) NotIn(v ...V) Predicate[M] {
+func (c nullableTimeColumn[M, V, R]) NotIn(v ...V) Predicate[M] {
 	return comparison[M](c.nullableTime.base, querycore.NotIn, v)
 }
 
 // Asc sorts ascending. Example: Users.Birthday.Asc().
-func (c NullableTime[M, V]) Asc() Order[M] { return columnOrder[M](c.nullableTime.base, false) }
+func (c nullableTimeColumn[M, V, R]) Asc() Order[M] {
+	return columnOrder[M](c.nullableTime.base, false)
+}
 
 // Desc sorts descending. Example: Users.Birthday.Desc().
-func (c NullableTime[M, V]) Desc() Order[M] { return columnOrder[M](c.nullableTime.base, true) }
+func (c nullableTimeColumn[M, V, R]) Desc() Order[M] {
+	return columnOrder[M](c.nullableTime.base, true)
+}
 
 // Set assigns a value, including zero. Example: Users.Birthday.Set(birthday).
-func (c NullableTime[M, V]) Set(v V) Assignment[M] {
+func (c nullableTimeColumn[M, V, R]) Set(v V) Assignment[M] {
 	return columnAssignment[M](c.nullableTime.base, v)
 }
 
 // Gt compares ordered values. Example: Users.Birthday.Gt(birthday).
-func (c NullableTime[M, V]) Gt(v V) Predicate[M] {
+func (c nullableTimeColumn[M, V, R]) Gt(v V) Predicate[M] {
 	return comparison[M](c.nullableTime.base, querycore.Greater, []V{v})
 }
 
 // Gte compares ordered values. Example: Users.Birthday.Gte(birthday).
-func (c NullableTime[M, V]) Gte(v V) Predicate[M] {
+func (c nullableTimeColumn[M, V, R]) Gte(v V) Predicate[M] {
 	return comparison[M](c.nullableTime.base, querycore.GreaterOrEqual, []V{v})
 }
 
 // Lt compares ordered values. Example: Users.Birthday.Lt(birthday).
-func (c NullableTime[M, V]) Lt(v V) Predicate[M] {
+func (c nullableTimeColumn[M, V, R]) Lt(v V) Predicate[M] {
 	return comparison[M](c.nullableTime.base, querycore.Less, []V{v})
 }
 
 // Lte compares ordered values. Example: Users.Birthday.Lte(birthday).
-func (c NullableTime[M, V]) Lte(v V) Predicate[M] {
+func (c nullableTimeColumn[M, V, R]) Lte(v V) Predicate[M] {
 	return comparison[M](c.nullableTime.base, querycore.LessOrEqual, []V{v})
 }
 
 // Between includes both endpoints. Example: Users.Birthday.Between(a, b).
-func (c NullableTime[M, V]) Between(a, b V) Predicate[M] {
+func (c nullableTimeColumn[M, V, R]) Between(a, b V) Predicate[M] {
 	return between[M](c.nullableTime.base, a, b)
 }
 
 // IsNull matches SQL NULL. Example: Users.Birthday.IsNull().
-func (c NullableTime[M, V]) IsNull() Predicate[M] {
+func (c nullableTimeColumn[M, V, R]) IsNull() Predicate[M] {
 	return comparison[M](c.nullableTime.base, querycore.IsNull, nil)
 }
 
 // IsNotNull excludes SQL NULL. Example: Users.Birthday.IsNotNull().
-func (c NullableTime[M, V]) IsNotNull() Predicate[M] {
+func (c nullableTimeColumn[M, V, R]) IsNotNull() Predicate[M] {
 	return comparison[M](c.nullableTime.base, querycore.IsNotNull, nil)
 }
 
 // SetNull explicitly clears this field. Example: Users.Birthday.SetNull().
-func (c NullableTime[M, V]) SetNull() Assignment[M] { return nullAssignment[M](c.nullableTime.base) }
+func (c nullableTimeColumn[M, V, R]) SetNull() Assignment[M] {
+	return nullAssignment[M](c.nullableTime.base)
+}
 
-func (c NullableTime[M, V]) ormColumn(*M) columnData[V] { return c.nullableTime.base }
-func (c NullableTime[M, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[value.Nullable[V]]) {
+func (c nullableTimeColumn[M, V, R]) ormColumn(*M) columnData[V] { return c.nullableTime.base }
+func (c nullableTimeColumn[M, V, R]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[value.Nullable[V]]) {
 	return nullableExpression(c.nullableTime)
 }
 

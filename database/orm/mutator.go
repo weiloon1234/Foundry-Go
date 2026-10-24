@@ -7,9 +7,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 )
 
-// Mutate transforms assigned non-null values once inside the owning transaction.
-// Omission and explicit NULL skip the callback. It must be pure and perform no I/O.
-// Example: TextOf(b, &m.Email, Mutate(normalizeEmail)).
+// Mutate describes a legacy stored-value transform option. Ordinary columns reject
+// it at startup; use the typed transform argument of an Input*Of constructor.
+// Example: TextOf(b, &m.Email, Mutate(normalizeEmail)) is rejected by Check.
 func Mutate[V any](fn func(V) (V, error)) ColumnOption[V] {
 	return ColumnOption[V]{mutate: fn, mutator: true}
 }
@@ -62,6 +62,10 @@ func configureFieldMethods(d *declaration) {
 			d.fail(c.field.Name, "encrypted fields cannot declare mutators; transform plaintext before assigning it")
 			continue
 		}
+		if !c.requiresMutator {
+			d.fail(c.field.Name, "mutated field requires "+inputCarrier(c)+"; ordinary column constructors cannot declare mutators")
+			continue
+		}
 		if c.bindNamedMutator == nil {
 			d.fail(c.field.Name, "missing typed model method adapter")
 			continue
@@ -75,6 +79,14 @@ func configureFieldMethods(d *declaration) {
 			d.fail(c.field.Name, "Input column requires a typed mutator or matching Mutate"+c.field.Name)
 		}
 		if c.mutator.Apply == nil {
+			continue
+		}
+		if !c.requiresMutator {
+			d.fail(c.field.Name, "mutated field requires "+inputCarrier(c)+"; ordinary column constructors cannot declare mutators")
+			continue
+		}
+		if c.primaryMapping {
+			d.fail(c.field.Name, "PrimaryOf cannot declare a mutated primary; use orm.InputKey and orm.InputKeyOf")
 			continue
 		}
 		if ormcore.EncryptedType(c.field.Type) {
@@ -110,4 +122,23 @@ func bindNamedMutator[M, I, V any](core *columnCore) {
 		}
 		return core.bindMutator(func(input I) (V, error) { var receiver M; return method(receiver, input) })
 	}
+}
+
+func inputCarrier(c *columnCore) string {
+	if c.metadata.Name == c.owner.model.Primary {
+		return "orm.InputKey and orm.InputKeyOf"
+	}
+	name := "InputColumn"
+	switch c.stored.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64:
+		name = "InputNumber"
+	case reflect.String:
+		name = "InputText"
+	}
+	if c.metadata.Nullable {
+		name = "Nullable" + name
+	}
+	return "orm." + name + " and orm." + name + "Of"
 }

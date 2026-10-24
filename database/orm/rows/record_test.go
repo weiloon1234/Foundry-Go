@@ -102,7 +102,7 @@ func TestRecordModelLifecycleAndFailureOwnership(t *testing.T) {
 			}
 			m := orm.Define("members", func(b orm.Builder[member], r *member) members {
 				tbl := orm.TableOf(b, &r.ID)
-				return members{tbl, tbl.Key(), orm.TextOf(b, &r.Name), orm.NullableTextOf(b, &r.Nickname)}
+				return members{tbl, orm.PrimaryOf(b, tbl.Key()), orm.TextOf(b, &r.Name), orm.NullableTextOf(b, &r.Nickname)}
 			}, orm.WithRetrievalHooks(func() orm.RetrievalHooks[member] {
 				factories++
 				return orm.RetrievalHooks[member]{Retrieved: func(_ context.Context, _ database.Executor, r member) error {

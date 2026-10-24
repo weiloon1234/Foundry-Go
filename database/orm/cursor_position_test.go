@@ -23,7 +23,7 @@ func TestEditedCursorPositionPreservesPredicates(t *testing.T) {
 	var tenant Number[positionRecord, int64]
 	r := Define("position_records", func(b Builder[positionRecord], m *positionRecord) Table[positionRecord, int64] {
 		tenant = NumberOf(b, &m.Tenant)
-		NullableTimeOf(b, &m.DeletedAt)
+		SoftDeleteOf(b, &m.DeletedAt)
 		return TableOf(b, &m.ID)
 	})
 	q := r.Query().Where(tenant.Eq(7)).OrderBy(r.Key().Asc())

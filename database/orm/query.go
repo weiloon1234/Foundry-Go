@@ -84,8 +84,9 @@ type Query[M any] struct {
 
 // LockedQuery requires a transaction for every terminal. Example: Orders.Query().ForUpdate().All(ctx,tx).
 type LockedQuery[M any] struct {
-	_     [0]*M
-	state queryState
+	_                [0]*M
+	lockedQueryPhase [0]struct{}
+	state            queryState
 }
 
 type queryState struct {

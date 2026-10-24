@@ -4,19 +4,19 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/auth"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
 // AuthenticatedNumberedEndpoint supplies a concrete actor before a numbered page read.
-type AuthenticatedNumberedEndpoint[P, F, A, T any] = authenticatedPageEndpoint[P, F, query.PageRequest, A, query.Page[T], NumberedResponse[T]]
+type AuthenticatedNumberedEndpoint[P, F, A, T any] = authenticatedPageEndpoint[P, F, orm.PageRequest, A, orm.PageResult[T], NumberedResponse[T]]
 
 // AuthenticatedSimpleEndpoint is the count-free authenticated page contract.
-type AuthenticatedSimpleEndpoint[P, F, A, T any] = authenticatedPageEndpoint[P, F, query.PageRequest, A, query.SimplePage[T], SimpleResponse[T]]
+type AuthenticatedSimpleEndpoint[P, F, A, T any] = authenticatedPageEndpoint[P, F, orm.PageRequest, A, orm.SimplePage[T], SimpleResponse[T]]
 
 // AuthenticatedCursorEndpoint keeps cursor owner M, actor A and public DTO T distinct.
-type AuthenticatedCursorEndpoint[P, F, M, A, T any] = authenticatedPageEndpoint[P, F, query.CursorRequest[M], A, CursorResult[M, T], CursorResponse[T]]
+type AuthenticatedCursorEndpoint[P, F, M, A, T any] = authenticatedPageEndpoint[P, F, orm.CursorRequest[M], A, CursorResult[M, T], CursorResponse[T]]
 
 type authenticatedPageEndpoint[P, F, W, A, Page, Response any] struct {
 	page      pageEndpoint[P, F, W, Page, Response]

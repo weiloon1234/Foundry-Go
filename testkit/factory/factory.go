@@ -1,4 +1,4 @@
-// Package factory builds typed generated drafts and persists them through the
+// Package factory builds typed ORM or generated drafts and persists them through the
 // ordinary model lifecycle. It never resets data or substitutes raw inserts.
 package factory
 
@@ -41,16 +41,18 @@ func (s *sequence) next() (Sequence, error) {
 
 // Factory owns a sequence and immutable state callbacks. Derived states share
 // their parent's sequence, preventing accidental reuse across variants. Each
-// New call has independent state. Callbacks must themselves support concurrent
+// Define or New call has independent state. Callbacks must themselves support concurrent
 // calls when the factory is shared; each invocation returns its own draft.
-type Factory[M Model[M], D query.CreateDraft[M]] struct {
-	query    query.Query[M]
+type Factory[M, D any] struct {
+	prepare  func([]D, bool) (func(context.Context, database.Transactor) ([]M, error), error)
 	build    Build[D]
 	states   []State[D]
 	after    []AfterCreate[M]
 	sequence *sequence
 }
 
+// New retains the generated-model constructor during migration. Prefer Define for ORM declarations.
+// Example: factory.New[User](buildGeneratedDraft).
 func New[M Model[M], D query.CreateDraft[M]](build Build[D]) (*Factory[M, D], error) {
 	if build == nil {
 		return nil, fault.New(fault.Invalid, "factory requires a typed draft builder")
@@ -64,11 +66,34 @@ func New[M Model[M], D query.CreateDraft[M]](build Build[D]) (*Factory[M, D], er
 	if err != nil {
 		return nil, err
 	}
-	return &Factory[M, D]{query: definition, build: build, sequence: &sequence{}}, nil
+	prepare := func(drafts []D, single bool) (func(context.Context, database.Transactor) ([]M, error), error) {
+		mutations := make([]query.Mutation[M], len(drafts))
+		for i, draft := range drafts {
+			err := callback.Isolated("prepare factory mutation", func() error {
+				var err error
+				mutations[i], err = draft.FoundryCreateMutation(query.Mutation[M]{})
+				return err
+			})
+			if err != nil {
+				return nil, err
+			}
+		}
+		return func(ctx context.Context, writer database.Transactor) ([]M, error) {
+			if single {
+				created, err := definition.Insert(ctx, writer, mutations[0])
+				if err != nil {
+					return nil, err
+				}
+				return []M{created}, nil
+			}
+			return definition.InsertEach(ctx, writer, mutations)
+		}, nil
+	}
+	return &Factory[M, D]{prepare: prepare, build: build, sequence: &sequence{}}, nil
 }
 
 func (f *Factory[M, D]) valid() error {
-	if f == nil || f.build == nil || f.sequence == nil {
+	if f == nil || f.build == nil || f.sequence == nil || f.prepare == nil {
 		return fault.New(fault.Invalid, "uninitialized test factory")
 	}
 	return nil
@@ -132,42 +157,36 @@ func (f *Factory[M, D]) Draft(ctx context.Context) (D, error) {
 	return draft, nil
 }
 
-func (f *Factory[M, D]) mutation(ctx context.Context) (query.Mutation[M], error) {
-	draft, err := f.Draft(ctx)
-	if err != nil {
-		return query.Mutation[M]{}, err
-	}
-	var mutation query.Mutation[M]
-	err = callback.Isolated("prepare factory mutation", func() error {
-		var err error
-		mutation, err = draft.FoundryCreateMutation(query.Mutation[M]{})
-		return err
-	})
-	return mutation, err
-}
-
-// Create uses normal generated defaults/UUID preparation, field transformations,
+// Create uses normal defaults/UUID preparation, field transformations,
 // model observers, timestamps and the caller's actual transaction owner. With
 // AfterCreating hooks, the insert and every hook share one transaction (a
 // savepoint inside the caller's transaction), so a failing hook leaves no row.
 func (f *Factory[M, D]) Create(ctx context.Context, writer database.Transactor) (M, error) {
-	mutation, err := f.mutation(ctx)
+	draft, err := f.Draft(ctx)
+	if err != nil {
+		return *new(M), err
+	}
+	run, err := f.prepare([]D{draft}, true)
 	if err != nil {
 		return *new(M), err
 	}
 	if len(f.after) == 0 {
-		return f.query.Insert(ctx, writer, mutation)
+		rows, err := run(ctx, writer)
+		if err != nil {
+			return *new(M), err
+		}
+		return rows[0], nil
 	}
 	if writer == nil {
 		return *new(M), fault.New(fault.Invalid, "factory requires a database writer")
 	}
 	var created M
 	err = writer.Transaction(ctx, func(tx *database.Tx) error {
-		inserted, err := f.query.Insert(ctx, tx, mutation)
+		rows, err := run(ctx, tx)
 		if err != nil {
 			return err
 		}
-		created, err = f.afterCreate(ctx, tx, inserted)
+		created, err = f.afterCreate(ctx, tx, rows[0])
 		return err
 	})
 	if err != nil {
@@ -194,23 +213,27 @@ func (f *Factory[M, D]) CreateMany(ctx context.Context, writer database.Transact
 	if count < 0 || count > MaxCount {
 		return nil, fault.New(fault.Invalid, "factory count exceeds its bound")
 	}
-	mutations := make([]query.Mutation[M], count)
-	for i := range mutations {
-		mutation, err := f.mutation(ctx)
+	drafts := make([]D, count)
+	for i := range drafts {
+		draft, err := f.Draft(ctx)
 		if err != nil {
 			return nil, err
 		}
-		mutations[i] = mutation
+		drafts[i] = draft
+	}
+	run, err := f.prepare(drafts, false)
+	if err != nil {
+		return nil, err
 	}
 	if len(f.after) == 0 {
-		return f.query.InsertEach(ctx, writer, mutations)
+		return run(ctx, writer)
 	}
 	if writer == nil {
 		return nil, fault.New(fault.Invalid, "factory requires a database writer")
 	}
 	var created []M
-	err := writer.Transaction(ctx, func(tx *database.Tx) error {
-		inserted, err := f.query.InsertEach(ctx, tx, mutations)
+	err = writer.Transaction(ctx, func(tx *database.Tx) error {
+		inserted, err := run(ctx, tx)
 		if err != nil {
 			return err
 		}

@@ -4,7 +4,7 @@
 package pagination
 
 import (
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/httpquery"
 )
@@ -52,7 +52,7 @@ func (c Config) Validate() error {
 	if !httpquery.ValidName(c.NumberParam) || !httpquery.ValidName(c.SizeParam) || c.NumberParam == c.SizeParam {
 		return fault.New(fault.Invalid, "pagination requires distinct valid query parameter names")
 	}
-	if c.MaximumPage < 0 || (query.PageRequest{Number: c.maximumPage(), Size: max(c.MaximumSize, 1)}).Validate() != nil {
+	if c.MaximumPage < 0 || (orm.PageRequest{Number: c.maximumPage(), Size: max(c.MaximumSize, 1)}).Validate() != nil {
 		return fault.New(fault.Invalid, "pagination maximum page must be representable with the maximum size")
 	}
 	if c.PageWindow < 0 || c.PageWindow > MaximumPageWindow {
@@ -73,7 +73,7 @@ func (c Config) maximumPage() int {
 }
 
 func validateSizeConfig(defaultSize, maximumSize int, links LinkMode) error {
-	if err := (query.PageRequest{Number: 1, Size: maximumSize}).Validate(); err != nil {
+	if err := (orm.PageRequest{Number: 1, Size: maximumSize}).Validate(); err != nil {
 		return err
 	}
 	if defaultSize < 1 || defaultSize > maximumSize || links != RelativeLinks && links != PublicLinks {

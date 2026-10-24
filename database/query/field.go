@@ -73,10 +73,13 @@ func (f TextField[M, V]) Contains(text V) Predicate[M] { return f.compare(contai
 
 // NullableField adds explicit null predicates. Eq still accepts a concrete V;
 // null comparisons must use IsNull/IsNotNull, never Eq(nil).
-type NullableField[M any, V comparable] struct{ ScalarField[M, V] }
+type NullableField[M any, V comparable] struct {
+	nullableFieldPhase [0]struct{}
+	ScalarField[M, V]
+}
 
 func NewNullableField[M any, V comparable](table, column string, c codec.Codec[V]) NullableField[M, V] {
-	return NullableField[M, V]{NewScalarField[M, V](table, column, c)}
+	return NullableField[M, V]{ScalarField: NewScalarField[M, V](table, column, c)}
 }
 
 func (f NullableField[M, V]) IsNull() Predicate[M] { return f.compare(isNull) }

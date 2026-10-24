@@ -75,7 +75,7 @@ func TestSourceWriteOldAndNewAgree(t *testing.T) {
 			f := n.Members
 			q := f.Query()
 			source := r.From(q.Where(f.Key().Eq(1)).OrderBy(f.Key().Asc()).Limit(2))
-			insertion := r.InsertFrom(source, q, r.MapInsert(f.Key(), expr.Value(f.Key())), r.MapInsert(f.Body, expr.Value(f.Body)), r.MapInsert(f.CreatedAt, expr.Value(f.CreatedAt))).Values(f.Name.Set(" normalized "), f.Note.Set(coremodels.LabelInput{Text: " label "}))
+			insertion := r.InsertFrom(source, q, r.MapInsert(f.ID, expr.Value(f.Key())), r.MapInsert(f.Body, expr.Value(f.Body)), r.MapInsert(f.CreatedAt, expr.Value(f.CreatedAt))).Values(f.Name.Set(" normalized "), f.Note.Set(coremodels.LabelInput{Text: " label "}))
 			_, err = insertion.Returning(ctx, db, 2)
 			check(err)
 			_, err = insertion.Exec(ctx, db)
@@ -89,7 +89,7 @@ func TestSourceWriteOldAndNewAgree(t *testing.T) {
 			check(err)
 			_, err = r.DeleteUsing(q.WithTrashed(), source).Match(r.MatchSource(f.Key(), expr.Value(f.Key()))).Returning(ctx, db, 2)
 			check(err)
-			_, err = r.ForceDeleteUsing(q.WithTrashed(), source).Match(r.MatchSource(f.Key(), expr.Value(f.Key()))).Returning(ctx, db, 2)
+			_, err = r.ForceDeleteUsing(q.WithTrashed(), f.Soft, source).Match(r.MatchSource(f.Key(), expr.Value(f.Key()))).Returning(ctx, db, 2)
 			check(err)
 		}
 		if len(trace) != 0 || closed != 5 {

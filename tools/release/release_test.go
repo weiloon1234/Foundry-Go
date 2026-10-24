@@ -192,7 +192,8 @@ func TestGoWaySourceInventory(t *testing.T) {
 			t.Fatal("nested fixture must remain a separate candidate consumer")
 		}
 	}
-	for _, directory := range []string{"database/orm", "internal/ormcore", "internal/modelmeta", "internal/querycore", "internal/noraw"} {
+	for _, directory := range []string{
+		"database/orm", "internal/ormcore", "internal/modelmeta", "internal/querycore", "internal/noraw"} {
 		count := 0
 		err := filepath.WalkDir(filepath.Join(root, directory), func(path string, entry os.DirEntry, err error) error {
 			if err != nil {
@@ -218,6 +219,8 @@ func TestGoWaySourceInventory(t *testing.T) {
 		"blueprint/goway-data-layer/compilefail-mapping.tsv",
 		"database/orm/testdata/joined-has.sql",
 		"database/orm/testdata/public-methods.txt",
+		"database/orm/rows/transactions.md",
+		"database/orm/transaction_phase_test.go",
 		"docs/evidence/goway-6a12-capability-audit.tsv",
 		"internal/storemigration/testdata/challenge_prune_projection.json",
 		"internal/storemigration/testdata/challengestore_entry_read.json",
@@ -277,7 +280,7 @@ func TestGoWaySourceInventory(t *testing.T) {
 	for _, file := range fixture {
 		present[file.Path] = true
 	}
-	for _, name := range []string{"go.mod", "golden_test.go", "compiler_batch_test.go", "footprint_test.go", "models/user.go", "oldmodels/models.go", "models/.foundry-gen.json", "oldmodels/.foundry-gen.json", "oldmodels/joined/.foundry-gen.json", "oldmodels/mutators/.foundry-gen.json", "oldmodels/hooks/.foundry-gen.json", "oldmodels/reads/.foundry-gen.json", "testdata/noraw/contracts/probe.go", "testdata/noraw/negative/interfaces.go", "testdata/noraw/negative/probe.go", "testdata/noraw/negative/refs_test.go", "testdata/noraw/negative/signatures.go", "testdata/noraw/positive/probe.go", "testdata/noraw/positive/signatures.go", "testdata/noraw/positive/typed.go", "testdata/noraw/raw.test/probe.go", "testdata/noraw/raw.test/probe_test.go", "relation_writes_test.go", "composition_golden_test.go", "conflict_golden_test.go", "pgsmoke/relation_writes_test.go", "pgsmoke/composition_test.go", "pgsmoke/conflict_test.go", "result_read_golden_test.go", "window_golden_test.go", "scalar_golden_test.go", "conflict_advanced_golden_test.go", "pgsmoke/result_cursor_test.go", "pgsmoke/windows_test.go", "pgsmoke/scalars_test.go", "pgsmoke/conflict_advanced_test.go", "source_write_golden_test.go", "json_path_golden_test.go", "store_capabilities_golden_test.go", "pgsmoke/source_write_test.go", "pgsmoke/json_paths_test.go", "pgsmoke/store_capabilities_test.go"} {
+	for _, name := range []string{"oldmodels/extensions/.foundry-gen.json", "pgsmoke/transaction_composition_test.go", "pgsmoke/integration_adapters_test.go", "go.mod", "golden_test.go", "compiler_batch_test.go", "footprint_test.go", "models/user.go", "oldmodels/models.go", "models/.foundry-gen.json", "oldmodels/.foundry-gen.json", "oldmodels/joined/.foundry-gen.json", "oldmodels/mutators/.foundry-gen.json", "oldmodels/hooks/.foundry-gen.json", "oldmodels/reads/.foundry-gen.json", "testdata/noraw/contracts/probe.go", "testdata/noraw/negative/interfaces.go", "testdata/noraw/negative/probe.go", "testdata/noraw/negative/refs_test.go", "testdata/noraw/negative/signatures.go", "testdata/noraw/positive/probe.go", "testdata/noraw/positive/signatures.go", "testdata/noraw/positive/typed.go", "testdata/noraw/raw.test/probe.go", "testdata/noraw/raw.test/probe_test.go", "relation_writes_test.go", "composition_golden_test.go", "conflict_golden_test.go", "pgsmoke/relation_writes_test.go", "pgsmoke/composition_test.go", "pgsmoke/conflict_test.go", "result_read_golden_test.go", "window_golden_test.go", "scalar_golden_test.go", "conflict_advanced_golden_test.go", "pgsmoke/result_cursor_test.go", "pgsmoke/windows_test.go", "pgsmoke/scalars_test.go", "pgsmoke/conflict_advanced_test.go", "source_write_golden_test.go", "json_path_golden_test.go", "store_capabilities_golden_test.go", "pgsmoke/source_write_test.go", "pgsmoke/json_paths_test.go", "pgsmoke/store_capabilities_test.go"} {
 		if !present[name] {
 			t.Errorf("Go-way consumer lost %s", name)
 		}

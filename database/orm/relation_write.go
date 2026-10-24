@@ -57,8 +57,14 @@ func Detach[M, N, P any](ctx context.Context, writer database.Transactor, r Thro
 }
 
 // ForceDetach physically removes matching soft-delete pivots in the selected visibility.
-// Example: orm.ForceDetach(ctx,db,UserRelations.Groups.WithTrashedPivot(),user,group).
-func ForceDetach[M, N, P any](ctx context.Context, writer database.Transactor, r ThroughRelation[M, N, P], source M, target N) ([]P, error) {
+// Example: orm.ForceDetach(ctx,db,UserRelations.Groups.WithTrashedPivot(),Memberships.Soft,user,group).
+func ForceDetach[M, N, P any](ctx context.Context, writer database.Transactor, r ThroughRelation[M, N, P], soft SoftDeletable[P], source M, target N) ([]P, error) {
+	if r.plan == nil || r.plan.join == nil {
+		return nil, invalid("force detachment requires a pivot declaration")
+	}
+	if err := checkSoftDelete(soft.capability, r.plan.join.pivot.table); err != nil {
+		return nil, err
+	}
 	return relationMutation(ctx, writer, r, source, []N{target}, nil, nil, pivotForceDetach, func(out pivotWriteResult) []P { return pivotModels[P](out.detached) })
 }
 

@@ -347,8 +347,12 @@ func modelCallbacks(table *tableCore, candidate unsafe.Pointer) *writeCallbacks 
 func WithoutModelHooks[M any](q Query[M]) Query[M] { q.state.ast.SkipModelHooks = true; return q }
 
 // ForceDelete physically deletes one key within the query's current visibility.
-// Example: ForceDelete(ctx,db,Orders.Query().WithTrashed(),Orders.Key(),id).
-func ForceDelete[M any, K comparable](ctx context.Context, writer database.Transactor, q Query[M], key Key[M, K], id K) (M, error) {
+// Example: ForceDelete(ctx,db,Orders.Query().WithTrashed(),Orders.Soft,Orders.Key(),id).
+func ForceDelete[M any, K comparable](ctx context.Context, writer database.Transactor, q Query[M], soft SoftDeletable[M], key Key[M, K], id K) (M, error) {
+	if err := checkSoftDelete(soft.capability, q.state.table); err != nil {
+		var zero M
+		return zero, err
+	}
 	if q.state.table == nil || key.key.core == nil || key.key.core != q.state.table.primary {
 		return *new(M), invalid("force delete requires this table's primary key")
 	}

@@ -34,7 +34,9 @@ func transactionValueOf[V any](source TransactionValueSource[V]) valueSubquery[V
 	if nilDescriptor(source) {
 		return valueSubquery[V]{subquery: subquery{Err: fault.New(fault.Invalid, "transaction value requires a source")}}
 	}
-	return source.transactionValue()
+	q := source.transactionValue()
+	q.subquery.Node.Source.RequiresTransaction = true
+	return q
 }
 
 // TransactionValueQuery selects one exact value while requiring Tx for all reads.

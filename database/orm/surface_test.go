@@ -140,9 +140,10 @@ func surfacePackageIn(t *testing.T, dir, extra string) *types.Package {
 	pkg, _, _ := surfacePackageSources(t, dir, extra)
 	return pkg
 }
-func surfacePackageSources(t *testing.T, dir, extra string) (*types.Package, []*ast.File, *types.Info) {
+func surfaceImporter(t *testing.T, fset *token.FileSet, dir string, paths ...string) (types.Importer, string) {
 	t.Helper()
-	command := exec.Command("go", "list", "-export", "-deps", "-json", ".", "github.com/weiloon1234/Foundry-Go/database/orm/rows")
+	args := append([]string{"list", "-export", "-deps", "-json"}, paths...)
+	command := exec.Command("go", args...)
 	command.Dir = dir
 	data, err := command.Output()
 	if err != nil {
@@ -169,7 +170,13 @@ func surfacePackageSources(t *testing.T, dir, extra string) (*types.Package, []*
 			packagePath = pkg.ImportPath
 		}
 	}
+	return importer.ForCompiler(fset, "gc", func(path string) (io.ReadCloser, error) { return os.Open(exports[path]) }), packagePath
+}
+
+func surfacePackageSources(t *testing.T, dir, extra string) (*types.Package, []*ast.File, *types.Info) {
+	t.Helper()
 	fset := token.NewFileSet()
+	imp, packagePath := surfaceImporter(t, fset, dir, ".", "github.com/weiloon1234/Foundry-Go/database/orm/rows")
 	var files []*ast.File
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -193,7 +200,7 @@ func surfacePackageSources(t *testing.T, dir, extra string) (*types.Package, []*
 		}
 		files = append(files, file)
 	}
-	config := types.Config{Importer: importer.ForCompiler(fset, "gc", func(path string) (io.ReadCloser, error) { return os.Open(exports[path]) })}
+	config := types.Config{Importer: imp}
 	info := &types.Info{Defs: map[*ast.Ident]types.Object{}, Uses: map[*ast.Ident]types.Object{}, Instances: map[*ast.Ident]types.Instance{}}
 	pkg, err := config.Check(packagePath, fset, files, info)
 	if err != nil {
@@ -314,5 +321,17 @@ func TestSurfaceWalkerCursorTransportIsThinButBuildersRemainForbidden(t *testing
 	violations := strings.Join(checkSurface(pkg), "\n")
 	if strings.Contains(violations, "cursorTransport") || !strings.Contains(violations, "cursorEngine") {
 		t.Fatal(violations)
+	}
+}
+
+func TestSurfaceWalkerAllowsWireAliasesButStillWalksTheirModels(t *testing.T) {
+	pkg := surfacePackage(t, `package orm
+ type wireOnly[M any] struct{ token Cursor[M]; request CursorRequest[M]; page CursorPage[M] }
+ type wireEngineModel[M any] struct{ query Query[M] }
+ type wireEngineLeak[M any] struct{ page CursorPage[wireEngineModel[M]] }
+ `)
+	violations := strings.Join(checkSurface(pkg), "\n")
+	if strings.Contains(violations, "wireOnly") || !strings.Contains(violations, "wireEngineLeak") {
+		t.Fatalf("wire alias traversal: %s", violations)
 	}
 }

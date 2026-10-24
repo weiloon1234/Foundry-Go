@@ -23,14 +23,14 @@ type transformRow struct {
 }
 type transformTable struct {
 	Table[transformRow, int64]
-	First Text[transformRow, string]
-	Maybe NullableText[transformRow, string]
-	Last  Text[transformRow, string]
+	First InputText[transformRow, string, string]
+	Maybe NullableInputText[transformRow, string, string]
+	Last  InputText[transformRow, string, string]
 }
 
 func transformFields(first, last func(string) (string, error), maybe func(string) (string, error)) transformTable {
 	return Define("transforms", func(b Builder[transformRow], m *transformRow) transformTable {
-		return transformTable{TableOf(b, &m.ID), TextOf(b, &m.First, Mutate(first)), NullableTextOf(b, &m.Maybe, Mutate(maybe)), TextOf(b, &m.Last, Mutate(last))}
+		return transformTable{TableOf(b, &m.ID), InputTextOf(b, &m.First, first), NullableInputTextOf(b, &m.Maybe, maybe), InputTextOf(b, &m.Last, last)}
 	})
 }
 func TestMutatorsPreservePresenceOrderAndStoredReads(t *testing.T) {
@@ -235,7 +235,7 @@ func TestFieldMethodStartupRejectsInvalidDeclarations(t *testing.T) {
 			return TableOf(b, &m.ID)
 		}),
 		Define("conflict", func(b Builder[namedMutator], m *namedMutator) Table[namedMutator, int64] {
-			TextOf(b, &m.Email, Mutate(func(v string) (string, error) { return v, nil }))
+			InputTextOf(b, &m.Email, func(v string) (string, error) { return v, nil })
 			return TableOf(b, &m.ID)
 		}),
 		Define("distinct", func(b Builder[distinctMutator], m *distinctMutator) Table[distinctMutator, int64] {
@@ -280,7 +280,7 @@ func (nativeMethodRow) MutateName(v string) (string, error) {
 }
 func TestNamedMutatorsUseNativeTypedCalls(t *testing.T) {
 	fields := Define("native_methods", func(b Builder[nativeMethodRow], m *nativeMethodRow) Table[nativeMethodRow, int64] {
-		TextOf(b, &m.Name)
+		InputTextOf[nativeMethodRow, string](b, &m.Name, nil)
 		return TableOf(b, &m.ID)
 	})
 	if err := Check(fields); err != nil {
@@ -318,17 +318,17 @@ func TestNumericAssignmentCannotBypassMutator(t *testing.T) {
 	}
 	type fields struct {
 		Table[row, int64]
-		Amount Number[row, int64]
+		Amount InputNumber[row, int64, int64]
 	}
 	table := Define("numeric_mutators", func(b Builder[row], m *row) fields {
-		return fields{TableOf(b, &m.ID), NumberOf(b, &m.Amount, Mutate(func(v int64) (int64, error) { t.Error("SQL adjustment invoked scalar mutator"); return v, nil }))}
+		return fields{TableOf(b, &m.ID), InputNumberOf(b, &m.Amount, func(v int64) (int64, error) { t.Error("SQL adjustment invoked scalar mutator"); return v, nil })}
 	})
 	if err := Check(table); err != nil {
 		t.Fatal(err)
 	}
 	var statements []string
 	db := testDB(t, testConnector{statements: &statements})
-	_, err := table.Update(t.Context(), db, 1, table.Amount.Increment(1))
+	_, err := table.Update(t.Context(), db, 1, (Number[row, int64]{number: table.Amount.ormColumn(nil)}).Increment(1))
 	if !errors.Is(err, fault.Invalid) || len(statements) != 0 {
 		t.Fatal("numeric mutator bypass", err)
 	}

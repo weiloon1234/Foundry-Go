@@ -673,12 +673,19 @@ func (t Table[M, K]) Restore(ctx context.Context, tx database.Transactor, key K)
 }
 
 // ForceDelete physically deletes one active key. Use the package ForceDelete function for other visibility.
-func (t Table[M, K]) ForceDelete(ctx context.Context, tx database.Transactor, key K) (M, error) {
+func (t Table[M, K]) ForceDelete(ctx context.Context, tx database.Transactor, soft SoftDeletable[M], key K) (M, error) {
+	if err := checkSoftDelete(soft.capability, t.core); err != nil {
+		var zero M
+		return zero, err
+	}
 	return writeOne[M](ctx, tx, t.Query().Where(t.Key().Eq(key)).state, querycore.ForceDeleteModel, nil)
 }
 
 // ForceDeleteAll physically deletes matching rows within the selected scope.
-func (q Query[M]) ForceDeleteAll(ctx context.Context, tx database.Transactor) (int64, error) {
+func (q Query[M]) ForceDeleteAll(ctx context.Context, tx database.Transactor, soft SoftDeletable[M]) (int64, error) {
+	if err := checkSoftDelete(soft.capability, q.state.table); err != nil {
+		return 0, err
+	}
 	return writeAll[M](ctx, tx, q.state, querycore.ForceDeleteModel, nil)
 }
 

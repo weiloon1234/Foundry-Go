@@ -22,7 +22,7 @@ func TestForceDeleteKeyPreservesDefaultAndExplicitVisibility(t *testing.T) {
 		var statements []string
 		var bindings [][]any
 		db := testDB(t, testConnector{statements: &statements, bindings: &bindings, columns: []string{"id", "created_at", "updated_at", "deleted_at"}, values: [][]driver.Value{{int64(1), now, now, deleted}}})
-		got, err := r.ForceDelete(t.Context(), db, 1)
+		got, err := r.ForceDelete(t.Context(), db, SoftDeletes(r.DeletedAt), 1)
 		if err != nil || got.ID != 1 || got.DeletedAt.IsNull() != (deleted == nil) {
 			t.Fatalf("ForceDelete: %+v, %v", got, err)
 		}
@@ -40,7 +40,7 @@ func TestForceDeleteKeyPreservesDefaultAndExplicitVisibility(t *testing.T) {
 	} {
 		var statements []string
 		db := testDB(t, testConnector{statements: &statements})
-		n, err := tc.q.Where(r.Key().Eq(1)).ForceDeleteAll(t.Context(), db)
+		n, err := tc.q.Where(r.Key().Eq(1)).ForceDeleteAll(t.Context(), db, SoftDeletes(r.DeletedAt))
 		if err != nil || n != 1 || !reflect.DeepEqual(statements, []string{tc.want}) {
 			t.Fatalf("ForceDeleteAll: %d, %v, %v", n, err, statements)
 		}
@@ -86,8 +86,8 @@ func TestAdjustmentTargetsValidatedBeforeTransactionAndClock(t *testing.T) {
 		Amount Number[item, int64]
 	}
 	r := Define("timed_amounts", func(b Builder[item], m *item) table {
-		TimeOf(b, &m.CreatedAt)
-		TimeOf(b, &m.UpdatedAt)
+		CreatedAtOf(b, &m.CreatedAt)
+		UpdatedAtOf(b, &m.UpdatedAt)
 		return table{TableOf(b, &m.ID), NumberOf(b, &m.Amount)}
 	})
 	if err := Check(r); err != nil {
@@ -137,7 +137,7 @@ func TestExplicitSoftDeleteConflictsWithNoSoftDeletes(t *testing.T) {
 	if len(statements) != 0 {
 		t.Fatal(statements)
 	}
-	if err := Check(timedRecords(NoSoftDeletes())); err != nil {
+	if err := Check(unmanagedTimed(NoSoftDeletes())); err != nil {
 		t.Fatalf("disabling convention: %v", err)
 	}
 }

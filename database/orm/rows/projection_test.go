@@ -23,7 +23,7 @@ type member struct {
 }
 type members struct {
 	orm.Table[member, int64]
-	ID       orm.Key[member, int64]
+	ID       orm.Primary[member, int64]
 	Name     orm.Text[member, string]
 	Nickname orm.NullableText[member, string]
 }
@@ -31,7 +31,7 @@ type members struct {
 func declareMembers() members {
 	return orm.Define("members", func(b orm.Builder[member], m *member) members {
 		tbl := orm.TableOf(b, &m.ID)
-		return members{tbl, tbl.Key(), orm.TextOf(b, &m.Name), orm.NullableTextOf(b, &m.Nickname)}
+		return members{tbl, orm.PrimaryOf(b, tbl.Key()), orm.TextOf(b, &m.Name), orm.NullableTextOf(b, &m.Nickname)}
 	})
 }
 

@@ -19,7 +19,7 @@ type WriteRecord struct {
 
 type WriteRecordTable struct {
 	orm.Table[WriteRecord, RecordKey]
-	Code    orm.Number[WriteRecord, RecordKey]
+	Code    orm.NumberLookupKey[WriteRecord, RecordKey]
 	Name    orm.Text[WriteRecord, string]
 	Enabled orm.Column[WriteRecord, bool]
 	Note    orm.NullableText[WriteRecord, string]

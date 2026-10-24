@@ -34,7 +34,7 @@ func TestSourceWriteDeclarationRestrictionsBeforeSQL(t *testing.T) {
 	f := h.Members
 	src := r.From(f.Query())
 	key := r.MatchSource(f.Key(), expr.Value(f.Key()))
-	insert := r.InsertFrom(src, f.Query(), r.MapInsert(f.Key(), expr.Value(f.Key())), r.MapInsert(f.Body, expr.Value(f.Body)))
+	insert := r.InsertFrom(src, f.Query(), r.MapInsert(f.ID, expr.Value(f.Key())), r.MapInsert(f.Body, expr.Value(f.Body)))
 	update := r.UpdateFrom(f.Query(), src).Match(key)
 	w := m.WriteRecords
 	ws := r.From(w.Query())
@@ -43,12 +43,7 @@ func TestSourceWriteDeclarationRestrictionsBeforeSQL(t *testing.T) {
 		return m.WriteRecordTable{Table: table, Code: orm.NumberKey(table.Key()), Name: orm.TextOf(b, &v.Name), Enabled: orm.ColumnOf(b, &v.Enabled), Note: orm.NullableTextOf(b, &v.Note), Amount: orm.NumberOf(b, &v.Amount)}
 	})
 	tests := map[string]sourceTerminal{
-		"insert_select_mutator":        insert.Select(r.MapInsert(f.Name, expr.Value(f.Name))),
-		"source_update_mutator":        update.Select(r.MapUpdate(f.Name, expr.Value(f.Name))),
-		"insert_select_timestamp":      insert.Select(r.MapInsert(f.UpdatedAt, expr.Value(f.UpdatedAt))),
-		"source_update_timestamp":      update.Select(r.MapUpdate(f.UpdatedAt, expr.Value(f.UpdatedAt))),
-		"source_update_primary":        update.Select(r.MapUpdate(f.Key(), expr.Value(f.Key()))),
-		"source_delete_force":          r.ForceDeleteUsing(w.Query(), ws).Match(r.MatchSource(w.Key(), expr.Value(w.Key()))),
+		"source_delete_force":          r.ForceDeleteUsing(w.Query(), orm.SoftDeletable[m.WriteRecord]{}, ws).Match(r.MatchSource(w.Key(), expr.Value(w.Key()))),
 		"missing required":             r.InsertFrom(src, f.Query()),
 		"overlap":                      insert.Values(f.Key().Set(1)),
 		"duplicate":                    insert.Select(r.MapInsert(f.Body, expr.Value(f.Body))),
@@ -80,6 +75,7 @@ type sourceScoped struct {
 }
 type sourceScopedTable struct {
 	orm.Table[sourceScoped, int64]
+	ID     orm.Primary[sourceScoped, int64]
 	Tenant orm.Number[sourceScoped, int64]
 	Name   orm.Text[sourceScoped, string]
 }
@@ -87,7 +83,8 @@ type sourceTenant struct{}
 
 func scopedSourceTable(name string) sourceScopedTable {
 	return orm.Define(name, func(b orm.Builder[sourceScoped], v *sourceScoped) sourceScopedTable {
-		return sourceScopedTable{orm.TableOf(b, &v.ID), orm.NumberOf(b, &v.Tenant), orm.TextOf(b, &v.Name)}
+		table := orm.TableOf(b, &v.ID)
+		return sourceScopedTable{table, orm.PrimaryOf(b, table.Key()), orm.NumberOf(b, &v.Tenant), orm.TextOf(b, &v.Name)}
 	}, orm.WithGlobalScopes(func(f sourceScopedTable) []orm.GlobalScope[sourceScoped] {
 		return []orm.GlobalScope[sourceScoped]{orm.Scope(f.Table, "tenant", func(ctx context.Context) (orm.Predicate[sourceScoped], error) {
 			tenant, ok := ctx.Value(sourceTenant{}).(int64)
@@ -101,7 +98,7 @@ func scopedSourceTable(name string) sourceScopedTable {
 func TestSourceWriteScopesDefaultsAndImmutableValues(t *testing.T) {
 	f, g := scopedSourceTable("source_records"), scopedSourceTable("destination_records")
 	source := r.From(f.Query().Where(f.Name.Ne("filtered")).Limit(3))
-	insertion := r.InsertFrom(source, g.Query(), r.MapInsert(g.Key(), expr.Value(f.Key())), r.MapInsert(g.Tenant, expr.Value(f.Tenant)), r.MapInsert(g.Name, expr.Value(f.Name)))
+	insertion := r.InsertFrom(source, g.Query(), r.MapInsert(g.ID, expr.Value(f.Key())), r.MapInsert(g.Tenant, expr.Value(f.Tenant)), r.MapInsert(g.Name, expr.Value(f.Name)))
 	update := r.UpdateFrom(g.Query(), source).Match(r.MatchSource(g.Key(), expr.Value(f.Key()))).Values(g.Name.Set("updated"))
 	for _, p := range []sourceTerminal{insertion, update, r.DeleteUsing(g.Query(), source).Match(r.MatchNullableSource(g.Key(), expr.NullableRow(expr.Value(f.Key()))))} {
 		c := &goldenCapture{}

@@ -38,7 +38,7 @@ type eagerFields struct {
 func eagerTable() eagerFields {
 	return orm.Define("relation_nodes", func(b orm.Builder[eagerNode], m *eagerNode) eagerFields {
 		table := orm.TableOf(b, &m.ID)
-		orm.NullableTimeOf(b, &m.DeletedAt)
+		orm.SoftDeleteOf(b, &m.DeletedAt)
 		return eagerFields{table, table.Key(), orm.NullableNumberOf(b, &m.ParentID), orm.TextOf(b, &m.Label), orm.OneOf(b, &m.Parent), orm.OneOf(b, &m.Featured), orm.ManyOf(b, &m.Children)}
 	})
 }

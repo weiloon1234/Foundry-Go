@@ -35,6 +35,7 @@ func (r TransactionRecord[R]) transactionRecord(*R) ormcore.RecordSource { retur
 func TransactionOf[R any](source RecordSource[R]) TransactionRecord[R] {
 	r := recordOf(source)
 	r.Transaction = true
+	r.Source.Node.Source.RequiresTransaction = true
 	return TransactionRecord[R]{core: r}
 }
 
@@ -69,6 +70,7 @@ func transactionRecordOf[R any](source TransactionRecordSource[R]) ormcore.Recor
 	}
 	r := source.transactionRecord(nil)
 	r.Source.Err = ormcore.ValidateRecordSource(r, reflect.TypeFor[R](), true)
+	r.Source.Node.Source.RequiresTransaction = true
 	return r
 }
 func transactionSelectionOf[S any](source TransactionSelectionSource[S]) ormcore.Source {
@@ -79,6 +81,7 @@ func transactionSelectionOf[S any](source TransactionSelectionSource[S]) ormcore
 	if !r.Transaction || r.Source.Scope != reflect.TypeFor[S]() {
 		r.Source.Err = ormcore.Invalid("transaction selection requires its declared scope")
 	}
+	r.Source.Node.Source.RequiresTransaction = true
 	return r.Source
 }
 

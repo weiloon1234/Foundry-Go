@@ -15,9 +15,11 @@ type KeyedMember struct {
 }
 type KeyedMemberTable struct {
 	orm.Table[KeyedMember, model.ID[KeyedMember]]
-	DeletedAt orm.NullableTime[KeyedMember, time.Time]
+	DeletedAt orm.SoftDelete[KeyedMember, time.Time]
+	Soft      orm.SoftDeletable[KeyedMember]
 }
 
 var KeyedMembers = orm.Define("hook_keyed_members", func(b orm.Builder[KeyedMember], m *KeyedMember) KeyedMemberTable {
-	return KeyedMemberTable{orm.TableOf(b, &m.ID), orm.NullableTimeOf(b, &m.DeletedAt)}
+	deleted := orm.SoftDeleteOf(b, &m.DeletedAt)
+	return KeyedMemberTable{orm.TableOf(b, &m.ID), deleted, orm.SoftDeletes(deleted)}
 })

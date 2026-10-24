@@ -149,7 +149,7 @@ func TestRelationWriteMorphDefaultsAndSingleStatements(t *testing.T) {
 			case "detach":
 				_, err = orm.Detach(t.Context(), db, j.Peers, j.Parent{ID: 1}, j.Target{ID: 10})
 			case "force":
-				_, err = orm.ForceDetach(t.Context(), db, j.Peers.WithTrashedPivot(), j.Parent{ID: 1}, j.Target{ID: 10})
+				_, err = orm.ForceDetach(t.Context(), db, j.Peers.WithTrashedPivot(), j.Pivots.Soft, j.Parent{ID: 1}, j.Target{ID: 10})
 			}
 			if err != nil {
 				t.Fatal(err, g.output.String())

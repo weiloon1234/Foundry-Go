@@ -30,7 +30,7 @@ type peopleTable struct {
 	ID        Key[relationPerson, int64]
 	ManagerID NullableNumber[relationPerson, int64]
 	Name      Text[relationPerson, string]
-	DeletedAt NullableTime[relationPerson, temporal.DateTime]
+	DeletedAt SoftDelete[relationPerson, temporal.DateTime]
 	Manager   One[relationPerson, relationPerson]
 	Reports   Many[relationPerson, relationPerson]
 }
@@ -38,7 +38,7 @@ type peopleTable struct {
 func people() peopleTable {
 	return Define("people", func(b Builder[relationPerson], p *relationPerson) peopleTable {
 		tbl := TableOf(b, &p.ID)
-		return peopleTable{Table: tbl, ID: tbl.Key(), ManagerID: NullableNumberOf(b, &p.ManagerID), Name: TextOf(b, &p.Name), DeletedAt: NullableTimeOf(b, &p.DeletedAt), Manager: OneOf(b, &p.Manager), Reports: ManyOf(b, &p.Reports)}
+		return peopleTable{Table: tbl, ID: tbl.Key(), ManagerID: NullableNumberOf(b, &p.ManagerID), Name: TextOf(b, &p.Name), DeletedAt: SoftDeleteOf(b, &p.DeletedAt), Manager: OneOf(b, &p.Manager), Reports: ManyOf(b, &p.Reports)}
 	})
 }
 
@@ -202,7 +202,7 @@ func TestRelationDeclarationPointerErrors(t *testing.T) {
 	bad := Define("bad", func(b Builder[relationPerson], p *relationPerson) peopleTable {
 		tbl := TableOf(b, &p.ID)
 		OneOf(b, &external)
-		return peopleTable{Table: tbl, ManagerID: NullableNumberOf(b, &p.ManagerID), Name: TextOf(b, &p.Name), DeletedAt: NullableTimeOf(b, &p.DeletedAt), Manager: OneOf(b, &p.Manager), Reports: ManyOf(b, &p.Reports)}
+		return peopleTable{Table: tbl, ManagerID: NullableNumberOf(b, &p.ManagerID), Name: TextOf(b, &p.Name), DeletedAt: SoftDeleteOf(b, &p.DeletedAt), Manager: OneOf(b, &p.Manager), Reports: ManyOf(b, &p.Reports)}
 	})
 	if err := Check(bad); err == nil || !strings.Contains(err.Error(), "offset") {
 		t.Fatal(err)

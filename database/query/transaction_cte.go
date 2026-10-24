@@ -18,6 +18,7 @@ func TransactionCTE[R any](name string, source TransactionRecordSource[R]) Trans
 	} else {
 		record = source.transactionRecord()
 	}
+	record.node.Source.RequiresTransaction = true
 	return TransactionCommonTable[R]{definition: CTE(name, transactionRecordAdapter[R]{record: record})}
 }
 

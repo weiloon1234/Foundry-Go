@@ -14,17 +14,23 @@ type jsonValue interface {
 // JSONField preserves the exact value.JSON payload type through equality,
 // membership, containment, selection and key operations. It does not expose
 // numeric aggregates or text operators on the whole document.
-type JSONField[M any, V jsonValue] struct{ ScalarField[M, V] }
+type JSONField[M any, V jsonValue] struct {
+	jsonFieldPhase [0]struct{}
+	ScalarField[M, V]
+}
 
 // NullableJSONField adds SQL NULL without changing the concrete JSON payload.
-type NullableJSONField[M any, V jsonValue] struct{ NullableField[M, V] }
+type NullableJSONField[M any, V jsonValue] struct {
+	nullableJSONFieldPhase [0]struct{}
+	NullableField[M, V]
+}
 
 func NewJSONField[M any, V jsonValue](table, column string, c codec.Codec[V]) JSONField[M, V] {
-	return JSONField[M, V]{NewScalarField[M, V](table, column, c)}
+	return JSONField[M, V]{ScalarField: NewScalarField[M, V](table, column, c)}
 }
 
 func NewNullableJSONField[M any, V jsonValue](table, column string, c codec.Codec[V]) NullableJSONField[M, V] {
-	return NullableJSONField[M, V]{NewNullableField[M, V](table, column, c)}
+	return NullableJSONField[M, V]{NullableField: NewNullableField[M, V](table, column, c)}
 }
 
 // Contains uses PostgreSQL JSONB containment. Array order and repeated elements

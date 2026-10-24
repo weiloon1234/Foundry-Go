@@ -2,10 +2,12 @@ package orm
 
 import (
 	"database/sql/driver"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/auth/password"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -28,13 +30,13 @@ func replacementHash() (password.Hash, error) {
 
 type passwordMutatorTable struct {
 	Table[passwordMutatorRow, int64]
-	Digest Column[passwordMutatorRow, password.Hash]
-	Backup NullableColumn[passwordMutatorRow, password.Hash]
+	Digest InputColumn[passwordMutatorRow, password.Hash, password.Hash]
+	Backup NullableInputColumn[passwordMutatorRow, password.Hash, password.Hash]
 }
 
 func TestPasswordConstructorsBindRequiredAndNullableMutators(t *testing.T) {
 	fields := Define("password_mutators", func(b Builder[passwordMutatorRow], m *passwordMutatorRow) passwordMutatorTable {
-		return passwordMutatorTable{TableOf(b, &m.ID), PasswordOf(b, &m.Digest), NullablePasswordOf(b, &m.Backup)}
+		return passwordMutatorTable{TableOf(b, &m.ID), InputColumnOf[passwordMutatorRow, password.Hash](b, &m.Digest, nil, Codec(password.Codec())), NullableInputColumnOf[passwordMutatorRow, password.Hash](b, &m.Backup, nil, Codec(password.Codec()))}
 	})
 	if err := Check(fields); err != nil {
 		t.Fatal(err)
@@ -66,5 +68,17 @@ func TestPasswordConstructorsBindRequiredAndNullableMutators(t *testing.T) {
 	got, err = fields.Update(t.Context(), db, 1, fields.Backup.SetNull())
 	if err != nil || !got.Backup.IsNull() || bindings[1][0] != nil {
 		t.Fatal("nullable hash mutator changed explicit NULL", err)
+	}
+}
+
+func TestPasswordMutatorDeclarationNamesInputCarrier(t *testing.T) {
+	fields := Define("password_roles", func(b Builder[passwordMutatorRow], m *passwordMutatorRow) Table[passwordMutatorRow, int64] {
+		PasswordOf(b, &m.Digest)
+		NullablePasswordOf(b, &m.Backup)
+		return TableOf(b, &m.ID)
+	})
+	err := Check(fields)
+	if !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "Digest") || !strings.Contains(err.Error(), "orm.InputColumnOf") || !strings.Contains(err.Error(), "Backup") || !strings.Contains(err.Error(), "orm.NullableInputColumnOf") {
+		t.Fatal(err)
 	}
 }

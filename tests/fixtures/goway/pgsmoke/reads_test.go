@@ -121,7 +121,7 @@ func TestEditedCursorPositionPreservesPredicates(t *testing.T) {
 	var tenant orm.Number[record, int64]
 	r := orm.Define("position_records", func(b orm.Builder[record], m *record) orm.Table[record, int64] {
 		tenant = orm.NumberOf(b, &m.Tenant)
-		orm.NullableTimeOf(b, &m.DeletedAt)
+		orm.SoftDeleteOf(b, &m.DeletedAt)
 		return orm.TableOf(b, &m.ID)
 	})
 	q := r.Query().Where(tenant.Eq(7)).OrderBy(r.Key().Asc())

@@ -3,8 +3,9 @@ package query
 // HavingPredicate filters groups and cannot be used as a row-level Predicate.
 // Aggregate comparison methods and Grouped construct these values.
 type HavingPredicate[S any] struct {
-	_          [0]*S
-	expression expression
+	havingPhase [0]struct{}
+	_           [0]*S
+	expression  expression
 }
 
 // Grouped lifts a row predicate into HAVING. Every referenced ordinary column

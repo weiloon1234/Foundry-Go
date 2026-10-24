@@ -8,12 +8,12 @@ type OrderedExpressionColumn[M, V, P any] interface {
 	orderedColumn()
 }
 
-func (Number[M, V]) orderedColumn()                 {}
+func (numberColumn[M, V, R]) orderedColumn()        {}
 func (NullableNumber[M, V]) orderedColumn()         {}
-func (Text[M, V]) orderedColumn()                   {}
+func (textColumn[M, V, R]) orderedColumn()          {}
 func (NullableText[M, V]) orderedColumn()           {}
-func (Time[M, V]) orderedColumn()                   {}
-func (NullableTime[M, V]) orderedColumn()           {}
+func (timeColumn[M, V, R]) orderedColumn()          {}
+func (nullableTimeColumn[M, V, R]) orderedColumn()  {}
 func (Interval[M]) orderedColumn()                  {}
 func (NullableInterval[M]) orderedColumn()          {}
 func (InputNumber[M, I, V]) orderedColumn()         {}

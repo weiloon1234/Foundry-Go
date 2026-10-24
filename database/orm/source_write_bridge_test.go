@@ -24,7 +24,7 @@ func TestSourceWriteBridgesRejectAbsentCapabilities(t *testing.T) {
 	if FoundryUpdateFrom[int](q, ormcore.Source{}, sqlowner.QuerySeal{}).plan.err == nil {
 		t.Fatal("update accepted zero capability")
 	}
-	if FoundryDeleteUsing[int](q, ormcore.Source{}, true, sqlowner.QuerySeal{}).plan.err == nil {
+	if FoundryDeleteUsing[int](q, ormcore.Source{}, true, SoftDeletable[int]{}, sqlowner.QuerySeal{}).plan.err == nil {
 		t.Fatal("delete accepted zero capability")
 	}
 }

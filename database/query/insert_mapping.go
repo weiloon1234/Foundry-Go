@@ -4,8 +4,9 @@ package query
 // MapInsert keeps source ownership and the full destination value type; the
 // insertion plan validates declared columns, duplicates and omission rules.
 type InsertMapping[S, M any] struct {
-	_ [0]*S
-	_ [0]*M
+	insertMappingPhase [0]struct{}
+	_                  [0]*S
+	_                  [0]*M
 	modelValueMapping
 }
 

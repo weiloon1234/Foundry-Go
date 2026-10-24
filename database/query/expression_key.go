@@ -3,8 +3,9 @@ package query
 // ProjectionKey is a selected value used by DISTINCT ON or a window partition.
 // It is distinct from a row Group: aggregate values cannot enter GROUP BY.
 type ProjectionKey[S any] struct {
-	_    [0]*S
-	node valueExpression
+	projectionKeyPhase [0]struct{}
+	_                  [0]*S
+	node               valueExpression
 }
 
 // Group makes this computed row value a scope-owned grouping key. Grouping by

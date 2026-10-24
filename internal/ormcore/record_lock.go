@@ -20,38 +20,56 @@ func LockTargets(lock RowLock, targets []Scope) RowLock {
 }
 func LockRecord(r RecordSource, locks []RowLock) RecordSource {
 	r.Source.Err = errors.Join(r.Source.Err, ValidateRecordSource(r, r.Record.Type, r.Transaction))
-	r.Source.Node.Locks = make([]querycore.LockSpec, len(locks))
+	r.Source = LockSource(r.Source, locks)
+	r.Transaction = true
+	r.Direct = false
+	return r
+}
+
+// LockSource is shared by executable records and non-executable correlations.
+func LockSource(source Source, locks []RowLock) Source {
+	source.Node.Locks = make([]querycore.LockSpec, len(locks))
 	if len(locks) == 0 {
-		r.Source.Err = errors.Join(r.Source.Err, Invalid("locked result requires at least one lock clause"))
+		source.Err = errors.Join(source.Err, Invalid("locked result requires at least one lock clause"))
 	}
 	for i, lock := range locks {
-		r.Source.Err = errors.Join(r.Source.Err, lock.Err)
+		source.Err = errors.Join(source.Err, lock.Err)
 		spec := lock.Spec
 		if spec.Explicit {
 			spec.Targets = make([]string, len(lock.Targets))
 		}
 		for j, t := range lock.Targets {
-			r.Source.Err = errors.Join(r.Source.Err, t.Err, CheckReferences(r.Source, []Reference{t.Reference}))
+			source.Err = errors.Join(source.Err, t.Err, CheckReferences(source, []Reference{t.Reference}))
 			spec.Targets[j] = t.Table
 		}
-		r.Source.Node.Locks[i] = spec
+		source.Node.Locks[i] = spec
 	}
-	r.Transaction = true
-	r.Direct = false
+	return source
+}
+
+func RecordLockBehavior(r RecordSource, behavior querycore.LockBehavior) RecordSource {
+	r.Source = SourceLockBehavior(r.Source, behavior)
 	return r
 }
-func RecordLockBehavior(r RecordSource, behavior querycore.LockBehavior) RecordSource {
-	r.Source.Node.Locks = slices.Clone(r.Source.Node.Locks)
-	for i := range r.Source.Node.Locks {
-		r.Source.Node.Locks[i].Behavior = behavior
+func SourceLockBehavior(s Source, behavior querycore.LockBehavior) Source {
+	if len(s.Node.Locks) == 0 {
+		s.Err = errors.Join(s.Err, Invalid("lock policy requires at least one lock clause"))
+		return s
 	}
-	return r
+	s.Node.Locks = slices.Clone(s.Node.Locks)
+	for i := range s.Node.Locks {
+		s.Node.Locks[i].Behavior = behavior
+	}
+	return s
 }
 func RecordLockTargets(r RecordSource, targets []Scope) RecordSource {
-	if len(r.Source.Node.Locks) != 1 {
-		r.Source.Err = errors.Join(r.Source.Err, Invalid("Of requires a single lock clause"))
-		return r
+	r.Source = SourceLockTargets(r.Source, targets)
+	return r
+}
+func SourceLockTargets(s Source, targets []Scope) Source {
+	if len(s.Node.Locks) != 1 {
+		s.Err = errors.Join(s.Err, Invalid("Of requires a single lock clause"))
+		return s
 	}
-	spec := r.Source.Node.Locks[0]
-	return LockRecord(r, []RowLock{LockTargets(RowLock{Spec: spec}, targets)})
+	return LockSource(s, []RowLock{LockTargets(RowLock{Spec: s.Node.Locks[0]}, targets)})
 }

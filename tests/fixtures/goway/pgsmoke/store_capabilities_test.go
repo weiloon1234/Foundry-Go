@@ -151,7 +151,9 @@ func TestEachWritesWaitForCompleteCandidateSet(t *testing.T) {
 				defer ticker.Stop()
 				for {
 					var blocked bool
-					if err := database.ScanOne(ctx, db, `SELECT $1::integer = ANY(pg_blocking_pids($2::integer))`, []any{blocker, writerPID}, &blocked); err != nil {
+					// Both fixture connections are held by locker and writer. Observe
+					// on locker so polling cannot wait for a third pool connection.
+					if err := database.ScanOne(ctx, locker, `SELECT $1::integer = ANY(pg_blocking_pids($2::integer))`, []any{blocker, writerPID}, &blocked); err != nil {
 						return err
 					}
 					// Observe the actual lock wait before releasing the first row. A SKIP

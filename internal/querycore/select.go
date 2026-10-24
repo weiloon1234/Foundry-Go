@@ -12,13 +12,16 @@ import (
 // All read paths share this relational SELECT node and compiler. Public typed
 // declarations resolve model ownership before entering this private boundary.
 type TableSource struct {
-	Sensitive    map[string]bool // Immutable base-column sensitivity, retained by direct aliases.
-	Table, Alias string
-	Columns      []Column
-	Query        *SelectNode
-	Cte          *CteNode
-	Set          *SetNode
-	Self         *RecursiveReference
+	// RequiresTransaction follows the source through alias and join lowering,
+	// including unlocked sources whose public adapters require a transaction.
+	RequiresTransaction bool
+	Sensitive           map[string]bool // Immutable base-column sensitivity, retained by direct aliases.
+	Table, Alias        string
+	Columns             []Column
+	Query               *SelectNode
+	Cte                 *CteNode
+	Set                 *SetNode
+	Self                *RecursiveReference
 }
 
 func (s TableSource) Name() string {
@@ -150,6 +153,9 @@ func (c *Compiler) SelectSQLWithOuter(s SelectNode, outer *OuterScope) (string, 
 	}
 	c.Sources = make(map[string]map[string]Column, len(s.Joins)+1)
 	add := func(source TableSource) error {
+		if source.RequiresTransaction && !c.AllowLocks {
+			return fault.New(fault.Invalid, "source requires a transaction-scoped query")
+		}
 		if c.Outer != nil && c.Outer.Sources[source.Name()] != nil {
 			return fault.New(fault.Invalid, "inner SELECT shadows a correlated outer source")
 		}

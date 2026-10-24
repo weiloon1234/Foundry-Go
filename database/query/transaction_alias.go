@@ -20,6 +20,7 @@ func AsTransaction[A, R any](source TransactionRecordSource[R], alias string) Tr
 	} else {
 		record = source.transactionRecord()
 	}
+	record.node.Source.RequiresTransaction = true
 	input, metadata := aliasInput[TransactionAlias[A, R]](record, alias)
 	return TransactionAliasedSource[A, R]{input: input, record: metadata}
 }

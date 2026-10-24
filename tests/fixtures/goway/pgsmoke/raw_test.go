@@ -27,7 +27,7 @@ func TestTypedRawHydration(t *testing.T) {
 	}
 	table := orm.Define("raw_records", func(b orm.Builder[record], m *record) orm.Table[record, int64] {
 		orm.TextOf(b, &m.Name)
-		orm.NullableTimeOf(b, &m.DeletedAt)
+		orm.SoftDeleteOf(b, &m.DeletedAt)
 		return orm.TableOf(b, &m.ID)
 	})
 	got, err := table.Raw(ctx, db, `SELECT deleted_at,name AS name,id FROM raw_records ORDER BY id`)

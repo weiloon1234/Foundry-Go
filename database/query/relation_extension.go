@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -39,13 +40,14 @@ type ExtensionSlot[M any] struct{ spec *extensionSlotSpec[M] }
 
 type extensionSlotSpec[M any] struct {
 	name, table string
+	valueType   reflect.Type
 	err         error
 	load        func(context.Context, database.Executor, []M, *relationLoadState, bool) ([]M, error)
 }
 
 // NewExtensionSlot binds generated slot accessors to an external fetch.
 func NewExtensionSlot[M, S any](binding ExtensionBinding[M, S]) ExtensionSlot[M] {
-	spec := &extensionSlotSpec[M]{name: binding.Name, table: binding.Table}
+	spec := &extensionSlotSpec[M]{name: binding.Name, table: binding.Table, valueType: reflect.TypeFor[S]()}
 	switch {
 	case binding.Name == "" || binding.Table == "" || binding.Get == nil || binding.Set == nil || binding.Loaded == nil || binding.Count == nil:
 		spec.err = fault.New(fault.Invalid, "extension slot requires a generated binding")

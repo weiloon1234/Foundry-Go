@@ -32,9 +32,12 @@ type columnData[V any] struct {
 }
 
 // Key identifies a table's primary column. Example: Orders.Key().Eq(id).
-type Key[M any, K comparable] struct {
-	_   [0]*M
-	key columnData[K]
+type Key[M any, K comparable] = keyColumn[M, K, lookupKeyRole]
+
+type keyColumn[M any, K comparable, R columnRole] struct {
+	_    [0]*M
+	role [0]R
+	key  columnData[K]
 }
 
 // Predicate is a model-owned SQL condition. Example: Orders.ID.Eq(id).
@@ -150,20 +153,29 @@ func columnAssignment[M, V any](c columnData[V], v V) Assignment[M] {
 }
 
 // Number exposes ordered numeric comparisons. Example: Number[Order,int64].
-type Number[M any, V NumberValue] struct {
+type Number[M any, V NumberValue] = numberColumn[M, V, ordinaryRole]
+
+type numberColumn[M any, V NumberValue, R columnRole] struct {
 	_      [0]*M
+	role   [0]R
 	number columnData[V]
 }
 
 // Time exposes ordered temporal comparisons. Example: Time[Order,temporal.DateTime].
-type Time[M any, V TimeValue] struct {
+type Time[M any, V TimeValue] = timeColumn[M, V, ordinaryRole]
+
+type timeColumn[M any, V TimeValue, R columnRole] struct {
 	_    [0]*M
+	role [0]R
 	time columnData[V]
 }
 
 // Text exposes literal and pattern matching. Example: Users.Email.Contains("@").
-type Text[M any, V ~string] struct {
+type Text[M any, V ~string] = textColumn[M, V, ordinaryRole]
+
+type textColumn[M any, V ~string, R columnRole] struct {
 	_    [0]*M
+	role [0]R
 	text columnData[V]
 }
 
@@ -191,7 +203,10 @@ type NullableNumber[M any, V NumberValue] struct {
 }
 
 // NullableTime exposes nullable temporal values. Example: Users.Birthday.IsNull().
-type NullableTime[M any, V TimeValue] struct {
+type NullableTime[M any, V TimeValue] = nullableTimeColumn[M, V, ordinaryRole]
+
+type nullableTimeColumn[M any, V TimeValue, R columnRole] struct {
+	role         [0]R
 	_            [0]*M
 	nullableTime nullableColumnData[V]
 }
@@ -209,13 +224,13 @@ type NullableEnum[M any, E enum.Scalar] struct {
 }
 
 // CreatedAt is an explicitly managed creation instant. Example: CreatedAtOf(b,&o.CreatedAt).
-type CreatedAt[M any, V InstantValue] = Time[M, V]
+type CreatedAt[M any, V InstantValue] = timeColumn[M, V, createdRole]
 
 // UpdatedAt is an explicitly managed update instant. Example: UpdatedAtOf(b,&o.UpdatedAt).
-type UpdatedAt[M any, V InstantValue] = Time[M, V]
+type UpdatedAt[M any, V InstantValue] = timeColumn[M, V, updatedRole]
 
 // SoftDelete is a nullable deletion instant. Example: SoftDeleteOf(b,&o.DeletedAt).
-type SoftDelete[M any, V InstantValue] = NullableTime[M, V]
+type SoftDelete[M any, V InstantValue] = nullableTimeColumn[M, V, deletedRole]
 
 func nullAssignment[M, V any](c columnData[V]) Assignment[M] {
 	if c.core == nil || c.core.owner == nil || c.core.automatic == nil {
@@ -240,7 +255,7 @@ func TextOf[M any, V ~string](b Builder[M], ptr *V, opts ...ColumnOption[V]) Tex
 	return Text[M, V]{text: bindModel[M](b.state, ptr, optionCodec(codec.String[V](), opts), false, opts...)}
 }
 
-// TimeOf binds a temporal field. Example: TimeOf(b,&o.CreatedAt).
+// TimeOf binds a temporal field. Example: TimeOf(b,&o.OccurredAt).
 func TimeOf[M any, V TimeValue](b Builder[M], ptr *V, opts ...ColumnOption[V]) Time[M, V] {
 	return Time[M, V]{time: bindModel[M](b.state, ptr, optionCodec(ormcore.TimeCodec[V](), opts), false, opts...)}
 }
@@ -333,22 +348,22 @@ func NullableBytesOf[M any, V ~[]byte](b Builder[M], ptr *value.Nullable[V], opt
 }
 
 // CreatedAtOf explicitly marks a creation timestamp. Example: CreatedAtOf(b,&o.CreatedAt).
-func CreatedAtOf[M any, V InstantValue](b Builder[M], ptr *V) Time[M, V] {
-	c := TimeOf(b, ptr)
+func CreatedAtOf[M any, V InstantValue](b Builder[M], ptr *V) CreatedAt[M, V] {
+	c := CreatedAt[M, V]{time: bindModel[M](b.state, ptr, ormcore.TimeCodec[V](), false)}
 	c.time.core.role = "created"
 	return c
 }
 
 // UpdatedAtOf explicitly marks an update timestamp. Example: UpdatedAtOf(b,&o.UpdatedAt).
-func UpdatedAtOf[M any, V InstantValue](b Builder[M], ptr *V) Time[M, V] {
-	c := TimeOf(b, ptr)
+func UpdatedAtOf[M any, V InstantValue](b Builder[M], ptr *V) UpdatedAt[M, V] {
+	c := UpdatedAt[M, V]{time: bindModel[M](b.state, ptr, ormcore.TimeCodec[V](), false)}
 	c.time.core.role = "updated"
 	return c
 }
 
 // SoftDeleteOf explicitly marks a deletion timestamp. Example: SoftDeleteOf(b,&o.DeletedAt).
-func SoftDeleteOf[M any, V InstantValue](b Builder[M], ptr *value.Nullable[V]) NullableTime[M, V] {
-	c := NullableTimeOf(b, ptr)
+func SoftDeleteOf[M any, V InstantValue](b Builder[M], ptr *value.Nullable[V]) SoftDelete[M, V] {
+	c := SoftDelete[M, V]{nullableTime: bindNullableModel[M](b.state, ptr, ormcore.TimeCodec[V]())}
 	c.nullableTime.base.core.role = "deleted"
 	return c
 }
@@ -399,13 +414,13 @@ func junction[M any](or bool, ps []Predicate[M]) Predicate[M] {
 func NumberKey[M any, K interface {
 	NumberValue
 	comparable
-}](key Key[M, K]) Number[M, K] {
-	return Number[M, K]{number: key.key}
+}, R keyRole](key keyColumn[M, K, R]) numberColumn[M, K, R] {
+	return numberColumn[M, K, R]{number: key.key}
 }
 
 // TextKey derives text capabilities without binding the field again.
-func TextKey[M any, K ~string](key Key[M, K]) Text[M, K] {
-	return Text[M, K]{text: key.key}
+func TextKey[M any, K ~string, R keyRole](key keyColumn[M, K, R]) textColumn[M, K, R] {
+	return textColumn[M, K, R]{text: key.key}
 }
 
 // NullsFirst places NULL before concrete values.

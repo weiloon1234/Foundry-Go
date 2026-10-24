@@ -162,10 +162,10 @@ type CountryTable struct {
 	// CreatedAt preserves an explicitly assigned creation time; when omitted on insert, the ORM uses the application clock.
 	// The insert default is applied after before hooks and before field mutators; updates do not automatically change it.
 	// Example: Countries.CreatedAt.Set(createdAt).
-	CreatedAt orm.Time[Country, temporal.DateTime]
+	CreatedAt orm.CreatedAt[Country, temporal.DateTime]
 	// UpdatedAt is managed: writes replace assigned or omitted values with the application clock after before hooks and before field mutators.
 	// Example: Countries.UpdatedAt.Desc().
-	UpdatedAt orm.Time[Country, temporal.DateTime]
+	UpdatedAt orm.UpdatedAt[Country, temporal.DateTime]
 }
 
 // Countries owns the immutable Country declaration. Example: Countries.Query().First(ctx, tx).
@@ -196,7 +196,7 @@ var Countries = orm.Define("foundry_countries", func(b orm.Builder[Country], m *
 		ConversionRate:      orm.NullableColumnOf(b, &m.ConversionRate),
 		IsDefault:           orm.ColumnOf(b, &m.IsDefault),
 		ReferenceVersion:    orm.TextOf(b, &m.ReferenceVersion),
-		CreatedAt:           orm.TimeOf(b, &m.CreatedAt),
-		UpdatedAt:           orm.TimeOf(b, &m.UpdatedAt),
+		CreatedAt:           orm.CreatedAtOf(b, &m.CreatedAt),
+		UpdatedAt:           orm.UpdatedAtOf(b, &m.UpdatedAt),
 	}
 })

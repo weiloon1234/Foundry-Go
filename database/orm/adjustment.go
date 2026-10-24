@@ -32,13 +32,13 @@ func AtMost[V NumberValue](ceiling V) Bound[V] { return Bound[V]{value: ceiling,
 
 // Increment adds a strictly positive amount in the UPDATE statement.
 // Example: Orders.TotalCents.Increment(100, orm.AtMost[int64](1000)).
-func (c Number[M, V]) Increment(amount V, bound ...Bound[V]) Assignment[M] {
+func (c numberColumn[M, V, R]) Increment(amount V, bound ...Bound[V]) Assignment[M] {
 	return adjustment[M](c.number, amount, false, bound)
 }
 
 // Decrement subtracts a strictly positive amount in the UPDATE statement.
 // Example: Orders.TotalCents.Decrement(50, orm.AtLeast[int64](0)).
-func (c Number[M, V]) Decrement(amount V, bound ...Bound[V]) Assignment[M] {
+func (c numberColumn[M, V, R]) Decrement(amount V, bound ...Bound[V]) Assignment[M] {
 	return adjustment[M](c.number, amount, true, bound)
 }
 

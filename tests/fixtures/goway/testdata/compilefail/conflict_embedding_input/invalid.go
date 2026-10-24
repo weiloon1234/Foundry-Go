@@ -5,7 +5,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-type wrapper struct{ orm.Text[n.Member, string] }
+type wrapper struct {
+	orm.InputText[n.Member, string, string]
+}
 
 func (w wrapper) Set(int) orm.Assignment[n.Member] { return n.Members.Name.Set("redirected") }
 

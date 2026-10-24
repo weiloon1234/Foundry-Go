@@ -37,7 +37,7 @@ type MemberTable struct {
 	orm.Table[Member, int64]
 	Email   orm.InputText[Member, coremodels.EmailInput, coremodels.StoredEmail]
 	Note    orm.NullableInputText[Member, coremodels.LabelInput, coremodels.StoredLabel]
-	Name    orm.Text[Member, string]
+	Name    orm.InputText[Member, string, string]
 	Body    orm.InputColumn[Member, coremodels.BinaryInput, coremodels.StoredBody]
 	Enabled orm.Column[Member, bool]
 }
@@ -47,7 +47,7 @@ var Members = orm.Define("mutator_members", func(b orm.Builder[Member], m *Membe
 		Table:   orm.TableOf(b, &m.ID),
 		Email:   orm.InputTextOf[Member, coremodels.EmailInput](b, &m.Email, nil),
 		Note:    orm.NullableInputTextOf[Member, coremodels.LabelInput](b, &m.Note, nil),
-		Name:    orm.TextOf(b, &m.Name),
+		Name:    orm.InputTextOf[Member, string](b, &m.Name, nil),
 		Body:    orm.InputBytesOf[Member, coremodels.BinaryInput](b, &m.Body, nil),
 		Enabled: orm.ColumnOf(b, &m.Enabled),
 	}

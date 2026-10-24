@@ -42,10 +42,13 @@ func FoundryUpdateFrom[S, M any](q Query[M], source ormcore.Source, seal sqlowne
 	return UpdateSource[S, M]{plan: newSourceWrite(q.state, source, reflect.TypeFor[S](), querycore.UpdateModel, seal)}
 }
 
-// FoundryDeleteUsing creates a source removal plan with explicit visibility. Example: FoundryDeleteUsing[Archive](Users.Query(),source,false,sqlowner.Queries()).
-func FoundryDeleteUsing[S, M any](q Query[M], source ormcore.Source, force bool, seal sqlowner.QuerySeal) DeleteSource[S, M] {
+// FoundryDeleteUsing creates a source removal plan with explicit visibility. Example: FoundryDeleteUsing[Archive](Users.Query(),source,false,SoftDeletable[User]{},sqlowner.Queries()).
+func FoundryDeleteUsing[S, M any](q Query[M], source ormcore.Source, force bool, soft SoftDeletable[M], seal sqlowner.QuerySeal) DeleteSource[S, M] {
 	kind := querycore.DeleteModel
 	if force {
+		if err := checkSoftDelete(soft.capability, q.state.table); err != nil {
+			return DeleteSource[S, M]{plan: sourceWritePlan{err: err}}
+		}
 		kind = querycore.ForceDeleteModel
 	}
 	return DeleteSource[S, M]{plan: newSourceWrite(q.state, source, reflect.TypeFor[S](), kind, seal)}

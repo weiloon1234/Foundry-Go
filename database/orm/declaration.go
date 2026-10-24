@@ -76,6 +76,7 @@ type columnCore struct {
 	mutator          querycore.FieldMutator
 	explicitMutator  bool
 	requiresMutator  bool
+	primaryMapping   bool
 	snapshot         func(unsafe.Pointer, unsafe.Pointer)
 	equal            func(unsafe.Pointer, unsafe.Pointer) bool
 	nullablePolicy   any
@@ -258,6 +259,12 @@ func seal(d *declaration) {
 	if d.typ.Kind() == reflect.Struct {
 		for i := 0; i < d.typ.NumField(); i++ {
 			f := d.typ.Field(i)
+			if d.core.slots[i] != nil {
+				if _, persisted := d.fields[i]; persisted {
+					d.fail(f.Name, "a field cannot be both a persisted column and an extension slot")
+				}
+				continue
+			}
 			if _, ok := d.fields[i]; !ok {
 				tags, err := modelmeta.ParseTags(string(f.Tag))
 				if err != nil {
@@ -397,6 +404,13 @@ func configureConventions(d *declaration) {
 			d.fail("timestamps", "declare both creation and update timestamps, or use NoTimestamps()")
 		} else {
 			for _, c := range []*columnCore{created, updated} {
+				if c.role == "" {
+					carrier := "CreatedAt"
+					if c == updated {
+						carrier = "UpdatedAt"
+					}
+					d.fail(c.field.Name, "managed field requires orm."+carrier+" and orm."+carrier+"Of; ordinary TimeOf is not allowed")
+				}
 				if !isInstant(c.field.Type) || c.metadata.Nullable || c.kind != codec.TypeDateTime || c.metadata.Name == d.core.model.Primary {
 					d.fail(c.field.Name, "managed timestamps require a non-primary time.Time or temporal.DateTime field")
 				}
@@ -405,6 +419,9 @@ func configureConventions(d *declaration) {
 		}
 	}
 	if deleted != nil && !d.noSoftDeletes {
+		if deleted.role != "deleted" {
+			d.fail(deleted.field.Name, "soft-delete field requires orm.SoftDelete and orm.SoftDeleteOf")
+		}
 		if !isNullableInstant(deleted.field.Type) || !deleted.metadata.Nullable || deleted.kind != codec.TypeDateTime || deleted.metadata.Name == d.core.model.Primary {
 			d.fail(deleted.field.Name, "soft deletion requires a non-primary nullable time.Time or temporal.DateTime field")
 		}

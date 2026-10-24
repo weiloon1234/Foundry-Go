@@ -315,14 +315,14 @@ type timed struct {
 }
 type timedTable struct {
 	Table[timed, int]
-	CreatedAt Time[timed, temporal.DateTime]
-	UpdatedAt Time[timed, temporal.DateTime]
-	DeletedAt NullableTime[timed, temporal.DateTime]
+	CreatedAt CreatedAt[timed, temporal.DateTime]
+	UpdatedAt UpdatedAt[timed, temporal.DateTime]
+	DeletedAt SoftDelete[timed, temporal.DateTime]
 }
 
 func timedRecords(opts ...Option) timedTable {
 	return Define("timed", func(b Builder[timed], m *timed) timedTable {
-		return timedTable{TableOf(b, &m.ID), TimeOf(b, &m.CreatedAt), TimeOf(b, &m.UpdatedAt), NullableTimeOf(b, &m.DeletedAt)}
+		return timedTable{TableOf(b, &m.ID), CreatedAtOf(b, &m.CreatedAt), UpdatedAtOf(b, &m.UpdatedAt), SoftDeleteOf(b, &m.DeletedAt)}
 	}, opts...)
 }
 
@@ -370,7 +370,7 @@ func TestTimestampsAndSoftDeletion(t *testing.T) {
 	if err != nil || !strings.HasPrefix(s.SQLText, "UPDATE") || !strings.Contains(s.SQLText, `"deleted_at" IS NULL`) {
 		t.Fatalf("soft delete: %s %v", s.SQLText, err)
 	}
-	if timedRecords(NoTimestamps()).core.model.Timestamps != nil {
+	if unmanagedTimed(NoTimestamps()).core.model.Timestamps != nil {
 		t.Fatal("NoTimestamps ignored")
 	}
 }
@@ -593,7 +593,10 @@ func TestMalformedTagsAndIncompleteTimestampConvention(t *testing.T) {
 		ID        int
 		CreatedAt time.Time
 	}
-	table := Define("half", func(b Builder[half], m *half) Table[half, int] { TimeOf(b, &m.CreatedAt); return TableOf(b, &m.ID) })
+	table := Define("half", func(b Builder[half], m *half) Table[half, int] {
+		TimeOf(b, &m.CreatedAt)
+		return TableOf(b, &m.ID)
+	})
 	if err := Check(table); err != nil || table.core.model.Timestamps != nil {
 		t.Fatalf("lone timestamp differs from generator convention: %v", err)
 	}
@@ -601,4 +604,13 @@ func TestMalformedTagsAndIncompleteTimestampConvention(t *testing.T) {
 	if err := Check(missing); err == nil {
 		t.Fatal("nil table accepted")
 	}
+}
+
+func unmanagedTimed(opts ...Option) Table[timed, int] {
+	return Define("timed", func(b Builder[timed], m *timed) Table[timed, int] {
+		TimeOf(b, &m.CreatedAt)
+		TimeOf(b, &m.UpdatedAt)
+		NullableTimeOf(b, &m.DeletedAt)
+		return TableOf(b, &m.ID)
+	}, append(opts, NoTimestamps(), NoSoftDeletes())...)
 }

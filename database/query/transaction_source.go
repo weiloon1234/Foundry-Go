@@ -26,7 +26,10 @@ type TransactionProjectionSource[S TransactionScope] interface{ transactionProje
 
 // TransactionRecord lifts an ordinary complete record query into transaction
 // composition. Use AsTransaction or TransactionCTE before selecting its fields.
-type TransactionRecord[R any] struct{ record recordQuery[R] }
+type TransactionRecord[R any] struct {
+	transactionRecordPhase [0]struct{}
+	record                 recordQuery[R]
+}
 
 // TransactionOf explicitly lifts an ordinary complete record query. Existing
 // filters, order, limits and complete generated metadata remain intact.
@@ -34,7 +37,9 @@ func TransactionOf[R any](source RecordQuerySource[R]) TransactionRecord[R] {
 	if nilDescriptor(source) {
 		return TransactionRecord[R]{record: recordQuery[R]{err: fault.New(fault.Invalid, "transaction record requires a source")}}
 	}
-	return TransactionRecord[R]{record: source.recordQuery()}
+	record := source.recordQuery()
+	record.node.Source.RequiresTransaction = true
+	return TransactionRecord[R]{record: record}
 }
 
 func (r TransactionRecord[R]) transactionRecord() recordQuery[R] { return r.record }
@@ -70,5 +75,7 @@ func transactionProjection[S TransactionScope](source TransactionProjectionSourc
 	if nilDescriptor(source) {
 		return transactionProjectionAdapter[S]{source: projectionSource[S]{err: fault.New(fault.Invalid, "transaction selection requires a source")}}
 	}
-	return transactionProjectionAdapter[S]{source: source.transactionProjection()}
+	s := source.transactionProjection()
+	s.node.Source.RequiresTransaction = true
+	return transactionProjectionAdapter[S]{source: s}
 }

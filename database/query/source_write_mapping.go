@@ -36,8 +36,9 @@ func (SourceKey[S, M]) Format(state fmt.State, _ rune) {
 // UpdateMapping assigns a stored source expression to a non-primary model field.
 // Use literal draft inputs for fields with Go mutators.
 type UpdateMapping[S, M any] struct {
-	_ [0]*S
-	_ [0]*M
+	updateMappingPhase [0]struct{}
+	_                  [0]*S
+	_                  [0]*M
 	modelValueMapping
 }
 

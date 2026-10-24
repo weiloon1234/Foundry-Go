@@ -13,12 +13,18 @@ import (
 // stored field values; literal inputs retain normal field mutators and clocks.
 // Per-model write and retrieval observers are skipped. Mapped values require at
 // most one source row per affected model; ambiguity rolls back the entire write.
-type UpdateSource[S, M any] struct{ plan sourceMutation[S, M] }
+type UpdateSource[S, M any] struct {
+	updateSourcePhase [0]struct{}
+	plan              sourceMutation[S, M]
+}
 
 // DeleteSource performs an explicit set-based DELETE USING, or a soft-delete
 // update when configured. Duplicate source keys affect each destination once.
 // It skips per-model write and retrieval observers.
-type DeleteSource[S, M any] struct{ plan sourceMutation[S, M] }
+type DeleteSource[S, M any] struct {
+	deleteSourcePhase [0]struct{}
+	plan              sourceMutation[S, M]
+}
 
 type sourceMutation[S, M any] struct {
 	source      projectionSource[S]

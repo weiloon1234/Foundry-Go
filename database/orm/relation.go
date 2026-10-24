@@ -25,16 +25,18 @@ type slotCore struct {
 
 // One identifies a singular model slot. Example: Buyer One[Order,User].
 type One[M, N any] struct {
-	_    [0]*M
-	_    [0]*N
-	core *slotCore
+	onePhase [0]struct{}
+	_        [0]*M
+	_        [0]*N
+	core     *slotCore
 }
 
 // Many identifies a collection slot. Example: Orders Many[User,Order].
 type Many[M, N any] struct {
-	_    [0]*M
-	_    [0]*N
-	core *slotCore
+	manyPhase [0]struct{}
+	_         [0]*M
+	_         [0]*N
+	core      *slotCore
 }
 
 // OneOf binds a singular relation slot during Define. Example: OneOf(b,&o.Buyer).
@@ -85,6 +87,7 @@ type relationBudget struct {
 	remaining, attachments int
 }
 type relationPlan struct {
+	external       bool
 	writeLimit     int
 	aggregate      *aggregatePlan
 	singular       bool
@@ -107,23 +110,26 @@ type Relation[M any] interface{ relationPlan(*M) *relationPlan }
 
 // BelongsTo loads a singular target using a local FK. Example: OrderRelations.Buyer.
 type BelongsTo[M, N any] struct {
-	_    [0]*M
-	_    [0]*N
-	plan *relationPlan
+	belongsToPhase [0]struct{}
+	_              [0]*M
+	_              [0]*N
+	plan           *relationPlan
 }
 
 // HasOne loads at most one target by its FK. Example: UserRelations.Profile.
 type HasOne[M, N any] struct {
-	_    [0]*M
-	_    [0]*N
-	plan *relationPlan
+	hasOnePhase [0]struct{}
+	_           [0]*M
+	_           [0]*N
+	plan        *relationPlan
 }
 
 // HasMany loads target collections by their FK. Example: UserRelations.Orders.
 type HasMany[M, N any] struct {
-	_    [0]*M
-	_    [0]*N
-	plan *relationPlan
+	hasManyPhase [0]struct{}
+	_            [0]*M
+	_            [0]*N
+	plan         *relationPlan
 }
 
 func (r BelongsTo[M, N]) relationPlan(*M) *relationPlan { return r.plan }

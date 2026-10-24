@@ -89,7 +89,10 @@ type Case[S, V any] struct{ builder caseBuilder[S, V] }
 
 // ValueCase is a selected CASE whose conditions/results may contain ordinary
 // aggregates. It never exposes row predicate methods.
-type ValueCase[S, V any] struct{ builder caseBuilder[S, V] }
+type ValueCase[S, V any] struct {
+	valueCasePhase [0]struct{}
+	builder        caseBuilder[S, V]
+}
 
 type caseBuilder[S, V any] struct {
 	_        [0]*S

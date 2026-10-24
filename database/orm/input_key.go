@@ -26,7 +26,7 @@ func InputKeyOf[M, I any, K comparable](b Builder[M], key Key[M, K], transform f
 		d.fail("primary", "InputKeyOf requires this declaration's existing primary key")
 		return InputKey[M, I, K]{}
 	}
-	if core.requiresMutator || core.explicitMutator {
+	if core.primaryMapping || core.requiresMutator || core.explicitMutator {
 		d.fail(core.field.Name, "primary input is already configured")
 		return InputKey[M, I, K]{}
 	}

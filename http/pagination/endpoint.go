@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/validation"
@@ -12,10 +12,10 @@ import (
 
 // NumberedEndpoint receives typed page input and expects an ORM page of explicit
 // response DTOs. Handle supplies metadata and navigation before JSON encoding.
-type NumberedEndpoint[P, F, T any] = pageEndpoint[P, F, query.PageRequest, query.Page[T], NumberedResponse[T]]
+type NumberedEndpoint[P, F, T any] = pageEndpoint[P, F, orm.PageRequest, orm.PageResult[T], NumberedResponse[T]]
 
 // SimpleEndpoint is the corresponding count-free transport contract.
-type SimpleEndpoint[P, F, T any] = pageEndpoint[P, F, query.PageRequest, query.SimplePage[T], SimpleResponse[T]]
+type SimpleEndpoint[P, F, T any] = pageEndpoint[P, F, orm.PageRequest, orm.SimplePage[T], SimpleResponse[T]]
 
 type pageEndpoint[P, F, W, Page, Response any] struct {
 	transport      foundryhttp.Endpoint[P, parameters[F, W], foundryhttp.NoBody, Response]
@@ -35,16 +35,16 @@ func DefineNumbered[P, F, T any](route foundryhttp.Route[P], filters foundryhttp
 }
 
 // DefineSimple creates the same thin handler boundary without a count query or
-// fabricated total metadata. Handlers return query.SimplePage[T].
+// fabricated total metadata. Handlers return orm.SimplePage[T].
 func DefineSimple[P, F, T any](route foundryhttp.Route[P], filters foundryhttp.Query[F], item contract.JSON[T], config Config) SimpleEndpoint[P, F, T] {
 	return newOffsetEndpoint(route, filters, SimpleJSON(item), config, simpleResponse[P, F, T](config.navigation()))
 }
-func newOffsetEndpoint[P, F, Page, Response any](route foundryhttp.Route[P], filters foundryhttp.Query[F], response contract.JSON[Response], config Config, finish func(Request[P, F], Page, func(query.PageRequest) (string, error)) (Response, error)) pageEndpoint[P, F, query.PageRequest, Page, Response] {
+func newOffsetEndpoint[P, F, Page, Response any](route foundryhttp.Route[P], filters foundryhttp.Query[F], response contract.JSON[Response], config Config, finish func(Request[P, F], Page, func(orm.PageRequest) (string, error)) (Response, error)) pageEndpoint[P, F, orm.PageRequest, Page, Response] {
 	if err := config.Validate(); err != nil {
-		return pageEndpoint[P, F, query.PageRequest, Page, Response]{err: err}
+		return pageEndpoint[P, F, orm.PageRequest, Page, Response]{err: err}
 	}
 	maximumPage := config.maximumPage()
-	validate := func(page query.PageRequest) error {
+	validate := func(page orm.PageRequest) error {
 		if err := page.Validate(); err != nil {
 			return err
 		}

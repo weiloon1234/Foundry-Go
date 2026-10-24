@@ -5,7 +5,6 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 )
@@ -80,7 +79,7 @@ func (f *Factory[M, D]) CreateWith(ctx context.Context, writer database.Transact
 // belongs to it. assign copies the parent's key into the child's draft, for
 // example `func(d PostDraft, u User) PostDraft { return d.SetAuthorID(u.ID) }`.
 // Both inserts use writer and their ordinary model lifecycle.
-func CreateFor[M Model[M], D query.CreateDraft[M], P Model[P], PD query.CreateDraft[P]](ctx context.Context, writer database.Transactor, child *Factory[M, D], parent *Factory[P, PD], assign func(D, P) D) (M, P, error) {
+func CreateFor[M, D, P, PD any](ctx context.Context, writer database.Transactor, child *Factory[M, D], parent *Factory[P, PD], assign func(D, P) D) (M, P, error) {
 	if assign == nil {
 		return *new(M), *new(P), fault.New(fault.Invalid, "factory relationship requires an assignment")
 	}
@@ -97,7 +96,7 @@ func CreateFor[M Model[M], D query.CreateDraft[M], P Model[P], PD query.CreateDr
 
 // CreateHas creates one model through f, then count children that belong to it
 // through the child factory in one bounded CreateMany batch.
-func CreateHas[M Model[M], D query.CreateDraft[M], C Model[C], CD query.CreateDraft[C]](ctx context.Context, writer database.Transactor, f *Factory[M, D], child *Factory[C, CD], count int, assign func(CD, M) CD) (M, []C, error) {
+func CreateHas[M, D, C, CD any](ctx context.Context, writer database.Transactor, f *Factory[M, D], child *Factory[C, CD], count int, assign func(CD, M) CD) (M, []C, error) {
 	if assign == nil {
 		return *new(M), nil, fault.New(fault.Invalid, "factory relationship requires an assignment")
 	}

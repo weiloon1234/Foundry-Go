@@ -5,7 +5,7 @@ import (
 	"math"
 	"slices"
 
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -20,7 +20,7 @@ type navigationPolicy struct {
 // window of numbered pages. last is the known final page of a numbered result;
 // count-free pages have none. Links deeper than the endpoint's MaximumPage are
 // omitted instead of failing the response.
-func navigation(page query.PageRequest, more bool, last value.Optional[int64], policy navigationPolicy, build func(query.PageRequest) (string, error)) (Links, error) {
+func navigation(page orm.PageRequest, more bool, last value.Optional[int64], policy navigationPolicy, build func(orm.PageRequest) (string, error)) (Links, error) {
 	link := func(number int) (string, bool, error) {
 		target := page
 		target.Number = number
@@ -106,8 +106,8 @@ func pageItems[T any](items []T) []T {
 	}
 	return slices.Clone(items)
 }
-func numberedResponse[P, F, T any](policy navigationPolicy) func(Request[P, F], query.Page[T], func(query.PageRequest) (string, error)) (NumberedResponse[T], error) {
-	return func(request Request[P, F], page query.Page[T], build func(query.PageRequest) (string, error)) (NumberedResponse[T], error) {
+func numberedResponse[P, F, T any](policy navigationPolicy) func(Request[P, F], orm.PageResult[T], func(orm.PageRequest) (string, error)) (NumberedResponse[T], error) {
+	return func(request Request[P, F], page orm.PageResult[T], build func(orm.PageRequest) (string, error)) (NumberedResponse[T], error) {
 		if err := page.Validate(); err != nil {
 			return NumberedResponse[T]{}, err
 		}
@@ -123,8 +123,8 @@ func numberedResponse[P, F, T any](policy navigationPolicy) func(Request[P, F], 
 }
 
 // simpleResponse has no count, so it never emits a last link or page window.
-func simpleResponse[P, F, T any](policy navigationPolicy) func(Request[P, F], query.SimplePage[T], func(query.PageRequest) (string, error)) (SimpleResponse[T], error) {
-	return func(request Request[P, F], page query.SimplePage[T], build func(query.PageRequest) (string, error)) (SimpleResponse[T], error) {
+func simpleResponse[P, F, T any](policy navigationPolicy) func(Request[P, F], orm.SimplePage[T], func(orm.PageRequest) (string, error)) (SimpleResponse[T], error) {
+	return func(request Request[P, F], page orm.SimplePage[T], build func(orm.PageRequest) (string, error)) (SimpleResponse[T], error) {
 		if err := page.Validate(); err != nil {
 			return SimpleResponse[T]{}, err
 		}

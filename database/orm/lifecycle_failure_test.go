@@ -152,14 +152,14 @@ func TestHookModifiedPrimaryKeyRejectedBeforeMutatorsAndMutationSQL(t *testing.T
 	}
 	type table struct {
 		Table[row, int64]
-		Name Text[row, string]
+		Name InputText[row, string, string]
 	}
 	mutatorCalls := 0
 	var q table
 	q = Define("hook_shape", func(b Builder[row], m *row) table {
-		TimeOf(b, &m.CreatedAt)
-		TimeOf(b, &m.UpdatedAt)
-		return table{TableOf(b, &m.ID), TextOf(b, &m.Name, Mutate(func(v string) (string, error) { mutatorCalls++; return v, nil }))}
+		CreatedAtOf(b, &m.CreatedAt)
+		UpdatedAtOf(b, &m.UpdatedAt)
+		return table{TableOf(b, &m.ID), InputTextOf(b, &m.Name, func(v string) (string, error) { mutatorCalls++; return v, nil })}
 	}, WithHooks(func() Hooks[row] {
 		return Hooks[row]{Updating: func(ctx context.Context, tx *database.Tx, before row, w *Write[row]) error {
 			return WriteSet(w, q.Key().Set(2), q.Name.Set("hook value"))

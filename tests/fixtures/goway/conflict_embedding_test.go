@@ -23,7 +23,7 @@ func (w conflictInputWrapper) SetNull() orm.Assignment[n.Member] {
 }
 
 type conflictNullableWrapper struct {
-	orm.NullableTime[n.Member, time.Time]
+	orm.SoftDelete[n.Member, time.Time]
 	calls *int
 }
 

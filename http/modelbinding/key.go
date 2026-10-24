@@ -9,7 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// KeyQuery is satisfied by generated model queries. Both model M and key K
+// KeyQuery is satisfied by orm.Keyed and legacy generated model queries. Both model M and key K
 // remain concrete; a query for one model cannot resolve another model's ID.
 // Find retains the query's filters, eager loads, soft-delete scope and retrieval
 // hooks. Transaction-only locked queries have a different executor contract.
@@ -18,7 +18,8 @@ type KeyQuery[M, K any] interface {
 	Find(context.Context, database.Executor, K) (value.Optional[M], error)
 }
 
-// ByKey binds a decoded path key to a generated primary-key query. The executor
+// ByKey binds a decoded path key to a scoped primary-key lookup.
+// Example: modelbinding.ByKey(db,orm.Keyed(Users.Query(),Users.Key()),pathKey). The executor
 // is supplied by application assembly, not retrieved from a global container.
 // For a stored alternate key use ByField; Through composes declared parent/child
 // relationships. Define remains available for custom application scopes.

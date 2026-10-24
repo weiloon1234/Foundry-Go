@@ -3,7 +3,7 @@ package pagination
 import (
 	"context"
 
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 )
@@ -11,27 +11,27 @@ import (
 // MapPage converts complete source rows into explicitly chosen DTO values while
 // preserving the ORM's page metadata. The mapper selects stored fields/getters;
 // no persisted model is automatically exposed. Failure returns a zero page.
-func MapPage[From, To any](ctx context.Context, page query.Page[From], mapper func(From) (To, error)) (query.Page[To], error) {
+func MapPage[From, To any](ctx context.Context, page orm.PageResult[From], mapper func(From) (To, error)) (orm.PageResult[To], error) {
 	if err := page.Validate(); err != nil {
-		return query.Page[To]{}, err
+		return orm.PageResult[To]{}, err
 	}
 	items, err := mapItems(ctx, page.Items, mapper)
 	if err != nil {
-		return query.Page[To]{}, err
+		return orm.PageResult[To]{}, err
 	}
-	return query.Page[To]{Items: items, Number: page.Number, Size: page.Size, Total: page.Total, Pages: page.Pages}, nil
+	return orm.PageResult[To]{Items: items, Number: page.Number, Size: page.Size, Total: page.Total, Pages: page.Pages}, nil
 }
 
 // MapSimplePage retains count-free metadata. It never adds a total or page count.
-func MapSimplePage[From, To any](ctx context.Context, page query.SimplePage[From], mapper func(From) (To, error)) (query.SimplePage[To], error) {
+func MapSimplePage[From, To any](ctx context.Context, page orm.SimplePage[From], mapper func(From) (To, error)) (orm.SimplePage[To], error) {
 	if err := page.Validate(); err != nil {
-		return query.SimplePage[To]{}, err
+		return orm.SimplePage[To]{}, err
 	}
 	items, err := mapItems(ctx, page.Items, mapper)
 	if err != nil {
-		return query.SimplePage[To]{}, err
+		return orm.SimplePage[To]{}, err
 	}
-	return query.SimplePage[To]{Items: items, Number: page.Number, Size: page.Size, HasMore: page.HasMore}, nil
+	return orm.SimplePage[To]{Items: items, Number: page.Number, Size: page.Size, HasMore: page.HasMore}, nil
 }
 
 func mapItems[From, To any](ctx context.Context, source []From, mapper func(From) (To, error)) ([]To, error) {

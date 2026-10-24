@@ -14,9 +14,10 @@ import (
 
 // Value identifies a typed computed slot. Example: OrdersCount orm.Value[User,int64].
 type Value[M, V any] struct {
-	_    [0]*M
-	_    [0]*V
-	core *slotCore
+	valuePhase [0]struct{}
+	_          [0]*M
+	_          [0]*V
+	core       *slotCore
 }
 
 // ValueOf binds an aggregate slot during Define. Example: orm.ValueOf(b,&u.OrdersCount).
@@ -35,9 +36,10 @@ func (v Value[M, V]) Using(computation AggregateRelation[M, V]) AggregateRelatio
 // AggregateRelation loads a typed computation into a model slot.
 // Example: Users.Query().With(UserAggregates.OrdersCount).
 type AggregateRelation[M, V any] struct {
-	_    [0]*M
-	_    [0]*V
-	plan *relationPlan
+	aggregateRelationPhase [0]struct{}
+	_                      [0]*M
+	_                      [0]*V
+	plan                   *relationPlan
 }
 
 // Using replaces the computation while retaining this descriptor's slot.

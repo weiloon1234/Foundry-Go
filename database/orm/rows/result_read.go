@@ -75,7 +75,7 @@ func SelectTransactionValue[S, V any](source TransactionSelectionSource[S], sele
 	q := SelectScalar(selectionAdapter[S]{source: transactionSelectionOf(source)}, selected)
 	r := Values(q).core
 	r.Transaction = true
-	return TransactionValue[S, V]{core: r}
+	return TransactionValue[S, V]{core: r, column: q.column}
 }
 
 // TransactionValue is a scalar result executable only through a transaction.
@@ -84,6 +84,7 @@ type TransactionValue[S, V any] struct {
 	_                     [0]*S
 	_                     [0]*V
 	transactionValuePhase [0]struct{}
+	column                ormcore.Column[V]
 	core                  ormcore.RecordSource
 }
 

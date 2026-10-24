@@ -8,10 +8,21 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Complete Stage 6b with transaction-only joins, subqueries, correlation and
+  LATERAL. A go/types conversion guard pins phase boundaries across ORM and the
+  generated API; no temporary input-role conversion exceptions remain.
+- Add typed declaration roles for managed timestamps, source-write targets and
+  primary keys. Mutated fields use Input carriers even when input and stored
+  types match. Force-delete paths require the declaration's SoftDeletable token;
+  the six deferred source-write compiler cases are now ported.
+- Add declaration-owned extension identities/slots, thin extension handles,
+  scoped model binding, HTTP pagination aliases and lifecycle-aware factories.
+  Lookup diagnostics redact private/nested wrappers; wire contracts are retained.
+
 - Add insert-select and source update/delete builders (6e3), retaining scoped
   sources, defaults, conventions, atomic bounded RETURNING and reconciliation.
-  These set writes skip per-model lifecycle callbacks; six declaration-role
-  compiler exclusions remain assigned to the approved typed-role follow-up.
+  These set writes skip per-model lifecycle callbacks; typed declaration roles
+  now enforce their source-write exclusions.
 - Complete Stage 6d with handwritten, startup-validated JSON path declarations,
   typed map keys/indices and explicit missing, SQL NULL and JSON null behavior.
 - Migrate seven more framework stores (8/13 total), preserving schema and wire

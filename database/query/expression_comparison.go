@@ -111,10 +111,13 @@ func (e NullableTextRowExpression[S, V]) Contains(v V) Predicate[S] {
 
 // ValueComparison constructs group predicates over a selected value. It never
 // exposes row predicates. SQL grouping/window restrictions still apply.
-type ValueComparison[S, V any] struct{ expression Expression[S, V] }
+type ValueComparison[S, V any] struct {
+	valueComparisonPhase [0]struct{}
+	expression           Expression[S, V]
+}
 
 func CompareValue[S, V any](v Expression[S, V]) ValueComparison[S, V] {
-	return ValueComparison[S, V]{v}
+	return ValueComparison[S, V]{expression: v}
 }
 
 func (e ValueComparison[S, V]) compare(op operator, v ...V) HavingPredicate[S] {

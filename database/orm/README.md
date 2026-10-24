@@ -106,7 +106,7 @@ passing the guard.
 
 `InsertMany(ctx, tx, [][]orm.Assignment[M]{...})` inserts an atomic bounded batch.
 `NoSoftDeletes()` disables the deletion convention and conflicts with explicit
-`SoftDeleteOf`. `Table.ForceDelete(key)` physically deletes active records by
+`SoftDeleteOf`. `Table.ForceDelete(ctx, db, soft, key)` physically deletes active records by
 default; use package `ForceDelete` with a `WithTrashed` or `OnlyTrashed` query for
 deleted records. `Query.ForceDeleteAll` respects query visibility. Explicit timestamp roles
 win over names; explicit timestamp constructors conflict with `NoTimestamps()`.
@@ -376,13 +376,13 @@ invoke typed functions without reflective dispatch. Mutators use a zero receiver
 so use the input argument rather than receiver state. Accessors are ordinary
 explicit calls and never replace stored hydration or DTO mappings.
 
-For a same-type transformation, either declare the method or pass an option:
+For a same-type transformation, use an input column with a typed transform:
 
 ```go
-Email: orm.TextOf(b, &m.Email, orm.Mutate(normalizeEmail)),
+Email: orm.InputTextOf(b, &m.Email, normalizeEmail),
 ```
 
-For distinct input and storage types, declare an input column:
+Use the same input-column family for distinct input and storage types:
 
 ```go
 Email: orm.InputTextOf(b, &m.Email, normalizeEmailInput),
@@ -489,8 +489,8 @@ Observer discovery shares the generated API's concrete framework-owner lookup;
 it never invokes a wrapper's observer method or gives it an internal capability.
 Per-model writes through wrappers dispatch observers from the supplied transaction.
 
-`Orders.ForceDelete(ctx, db, id)` preserves default active visibility. For deleted
-rows use `ForceDelete(ctx, db, Orders.Query().WithTrashed(), Orders.Key(), id)`;
+`Orders.ForceDelete(ctx, db, Orders.Soft, id)` preserves default active visibility. For deleted
+rows use `ForceDelete(ctx, db, Orders.Query().WithTrashed(), Orders.Soft, Orders.Key(), id)`;
 `OnlyTrashed` and other predicates are retained through locking and deletion.
 
 ## Typed relation aggregate slots
@@ -901,3 +901,97 @@ An uncertain commit or committed after-commit failure returns no successful rows
 proof of persistence. There is no automatic retry. These bounded lifecycle
 operations differ from set-based `UpdateAll`/`DeleteAll`, which explicitly skip
 per-model behavior.
+
+## Declaration roles
+
+Declare managed timestamp pairs with `orm.CreatedAt`/`orm.CreatedAtOf` and
+`orm.UpdatedAt`/`orm.UpdatedAtOf`. These columns retain ordinary time predicates,
+ordering, projections and aggregates. A managed field declared through `TimeOf`
+fails startup validation with the field name and the required constructor. A lone,
+unmanaged creation timestamp keeps `TimeOf` and its existing database-default
+behavior; `NoTimestamps` continues to disable conventional timestamp management.
+
+Mutated fields use `Input*` declarations even when input and stored types match:
+`orm.InputTextOf[User, string](b, &m.Name, nil)` discovers `MutateName`; passing a
+transform function declares it explicitly. Ordinary columns with mutators fail
+startup. Each Input capability family has a distinct private layout: converting a
+column or enum into an ordered input field is rejected by the compiler.
+
+`Table.Key()` is for lookup and ordinary key assignments. `NumberKey` and `TextKey`
+preserve that role. Applications need `PrimaryOf` only when mapping a primary key
+in insert-select: declare `ID orm.Primary[User, int64]` and bind it with
+`orm.PrimaryOf(b, table.Key())`. Numeric/text primary adapters retain their role.
+`PrimaryOf` cannot coexist with `InputKeyOf`; neither lookup keys nor mutated input
+keys can be used as insert-select targets. All primary roles are excluded from
+source-update targets. `KeyColumn` remains a read/relation interface and cannot
+restore mapping eligibility after role erasure.
+
+Expose soft-delete authority as an ordinary declaration field:
+
+```go
+type UserFields struct {
+    orm.Table[User, int64]
+    DeletedAt orm.SoftDelete[User, time.Time]
+    Soft orm.SoftDeletable[User]
+}
+// Inside Define:
+deleted := orm.SoftDeleteOf(b, &m.DeletedAt)
+fields := UserFields{table, deleted, orm.SoftDeletes(deleted)}
+// After declaration:
+_, err := orm.ForceDelete(ctx, db, Users.Query().WithTrashed(), Users.Soft, Users.Key(), id)
+```
+
+Every force-delete entry point requires this token, including `ForceDeleteAll`,
+`rows.ForceDeleteUsing` and pivot `ForceDetach`. Tokens are bound to the exact
+model declaration; zero and foreign-declaration tokens fail before SQL. Query
+visibility remains unchanged. Normal soft deletion does not require the token.
+
+`rows.MapInsert` and `rows.MapUpdate` accept concrete eligible column layouts.
+Both reject Input fields and managed update timestamps; creation timestamps remain
+eligible. Embedding a column in an application wrapper does not grant mapping
+eligibility. Runtime declaration, ownership and SQL-mapping checks remain active.
+
+### Framework adapters
+
+Extension fields remain ordinary `translations.Text`, `attachments.One[M]`,
+`attachments.Many[M]` and `metadata.Value[V]` values on the model. Bind each with
+`orm.SlotOf(b, &m.Title)` inside `Define`; it adds no persisted column. Declare
+policies separately with `translations.TextOf`, `attachments.OneOf` /
+`ManyOf` and `metadata.ValueOf`, passing
+`extensions.BindSlot(Articles.Key(), Articles.Title)`. The owner comes from
+`extensions.DefineORMOwner("articles", orm.IdentityOf(Articles.Table,
+Articles.Key()), extensions.OwnerOptions{StorageModel: "articles"})`. Keep that
+storage identity pinned across table renames.
+
+Bind each descriptor to its concrete manager once, then pass
+`bound.Title.Relation(Articles.Title)` to `With`, `Load` or
+`LoadMissing`. This uses the existing extension fetcher and shared relation row
+budgets, including loaded-empty values and batch splitting. Register
+`slots.DeclareORM(owner, parts)` through the existing model-extension
+assembly to retain deletion cleanup. Runtime managers never live in the table.
+
+HTTP binding accepts `modelbinding.ByKey(db, orm.Keyed(Users.Query(), Users.Key()),
+pathKey)`. Use `ByColumn` for a unique alternate key, `ThroughRelation` for a direct
+parent relationship, and `ThroughSelectedRelation` to retain earlier nested models.
+Duplicate matches fail before eager loading; missing or out-of-scope matches keep
+the existing 404 behavior. Binding does not acquire authorization or locks.
+
+`factory.Define(Users.Table, build)` accepts a builder returning
+`[]orm.Assignment[User]`. Existing states, relationship composition and after-create
+hooks work with that concrete draft type. Batch creation uses `orm.InsertEach`,
+which invokes every row's lifecycle in one bounded transaction, with one enclosing
+savepoint for a caller-owned transaction. Unknown outcomes remain failures with
+reconciliation candidates; no automatic retry occurs. Generated-model factory
+and binding adapters remain available during the staged migration.
+
+Pagination adapters consume `orm.PageResult`, `orm.SimplePage`, `orm.CursorRequest`
+and `orm.CursorPage`. These are aliases of the existing wire types, so reflected
+contract identities and serialized cursor positions remain unchanged.
+
+The extension namespace uses `TextHandle`, `OneHandle`, `ManyHandle` and
+`ValueHandle`: direct typed methods over private, non-generic callback state.
+These handles reuse the existing managers and preserve publication outcomes;
+they do not expose legacy `Field`, `Collection` or `Key` descriptor families.
+`OneHandle` and `ManyHandle` remain distinct, non-convertible capabilities.
+Lookup diagnostics (`Keyed`, `Unique`, `RelatedUnique`) redact scoped values under
+ordinary, detailed and Go-syntax formatting.

@@ -17,16 +17,16 @@ type HavingPredicate[S any] struct {
 
 // Aggregate is an unordered selected aggregate. Example: expr.Exists[User]().
 type Aggregate[S, V any] struct {
-	selectedPhase [0]struct{}
-	_             [0]*S
-	data          rowData[V]
+	aggregatePhase [0]struct{}
+	_              [0]*S
+	data           rowData[V]
 }
 
 // OrderedAggregate is an ordered selected aggregate. Example: expr.Count[User]().Gt(1).
 type OrderedAggregate[S any, V orderedScalar] struct {
-	selectedPhase [0]struct{}
-	_             [0]*S
-	data          rowData[V]
+	aggregatePhase [0]struct{}
+	_              [0]*S
+	data           rowData[V]
 }
 
 // Count counts rows including NULL fields; empty input returns zero. Example: expr.Count[User]().

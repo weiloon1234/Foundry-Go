@@ -13,12 +13,12 @@ type Model struct {
 }
 type Fields struct {
 	orm.Table[Model, int64]
-	Name  orm.Text[Model, string]
-	Maybe orm.NullableText[Model, string]
+	Name  orm.InputText[Model, string, string]
+	Maybe orm.NullableInputText[Model, string, string]
 }
 
 func normalize(v string) (string, error) { return strings.TrimSpace(v), nil }
 
 var Models = orm.Define("explicit", func(b orm.Builder[Model], m *Model) Fields {
-	return Fields{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name, orm.Mutate(normalize)), orm.NullableTextOf(b, &m.Maybe, orm.Mutate(normalize))}
+	return Fields{orm.TableOf(b, &m.ID), orm.InputTextOf(b, &m.Name, normalize), orm.NullableInputTextOf(b, &m.Maybe, normalize)}
 })
