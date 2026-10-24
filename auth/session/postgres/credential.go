@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth/session"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/sessionstore"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -28,7 +29,7 @@ func credential(ctx context.Context, tx *database.Tx, address session.Address, h
 	if err != nil {
 		return sessionstore.Subject{}, sessionstore.Entry{}, false, err
 	}
-	f := sessionstore.EntryFields()
+	f := sessionstore.Entries
 	locator, err := entries(scope, "").Where(f.SecretHash.Eq(hash.Hex())).First(ctx, tx)
 	if err != nil {
 		return sessionstore.Subject{}, sessionstore.Entry{}, false, err
@@ -41,7 +42,7 @@ func credential(ctx context.Context, tx *database.Tx, address session.Address, h
 	if err != nil || !present {
 		return sessionstore.Subject{}, sessionstore.Entry{}, false, err
 	}
-	locked, err := entries(scope, subject.Key).Where(f.SecretHash.Eq(hash.Hex())).ForUpdate().Find(ctx, tx, first.ID)
+	locked, err := entries(scope, subject.Key).Where(f.SecretHash.Eq(hash.Hex())).Where(sessionstore.Entries.ID.Eq(first.ID)).ForUpdate().First(ctx, tx)
 	if err != nil {
 		return sessionstore.Subject{}, sessionstore.Entry{}, false, err
 	}
@@ -128,8 +129,8 @@ func (b *Backend) Rotate(ctx context.Context, address session.Address, old, next
 		if err != nil || !live {
 			return err
 		}
-		draft := sessionstore.EntryDraft{}.SetSecretHash(next.Hex()).SetLastSeenAt(current.LastSeenAt).SetIdleExpiresAt(current.IdleExpiresAt)
-		row, err = entries(subject.Scope, subject.Key).Update(ctx, tx, row.ID, draft)
+		draft := []orm.Assignment[sessionstore.Entry]{sessionstore.Entries.SecretHash.Set(next.Hex()), sessionstore.Entries.LastSeenAt.Set(current.LastSeenAt), sessionstore.Entries.IdleExpiresAt.Set(current.IdleExpiresAt)}
+		row, err = orm.Update(ctx, tx, entries(subject.Scope, subject.Key), sessionstore.Entries.ID, row.ID, draft...)
 		if err != nil {
 			return err
 		}
@@ -158,7 +159,7 @@ func (b *Backend) Revoke(ctx context.Context, address session.Address, hash sess
 		if _, err := record(address, subject, row); err != nil {
 			return err
 		}
-		if _, err := entries(subject.Scope, subject.Key).Delete(ctx, tx, row.ID); err != nil {
+		if _, err := orm.Delete(ctx, tx, entries(subject.Scope, subject.Key), sessionstore.Entries.ID, row.ID); err != nil {
 			return err
 		}
 		removed = true

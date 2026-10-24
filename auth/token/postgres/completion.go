@@ -6,8 +6,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/auth/token"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/tokenstore"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
@@ -48,7 +50,7 @@ func (b *Backend) ConsumePendingIn(ctx context.Context, tx *database.Tx, address
 		if current.ID != expected.ID || current.Subject != expected.Subject || !current.AccessHash.Equal(expected.AccessHash) || current.Assurance != auth.PendingMFA || current.Mode != token.Challenge || current.CreatedAt != expected.CreatedAt || current.AccessExpiresAt != expected.AccessExpiresAt || current.ExpiresAt != expected.ExpiresAt || now.Before(current.CreatedAt.UTC()) || !current.LiveAccess(now) {
 			return auth.Unauthenticated
 		}
-		_, err = families(subject.Scope, subject.Key).Delete(ctx, child, family.ID)
+		_, err = orm.Delete(ctx, child, families(subject.Scope, subject.Key), tokenstore.Families.ID, family.ID)
 		return err
 	})
 }

@@ -13,7 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/session"
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/sessionstore"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
@@ -89,9 +89,9 @@ func (b *Backend) now() (time.Time, error) {
 	}
 	return now, nil
 }
-func entries(scope, subject string) sessionstore.EntryQuery {
-	f := sessionstore.EntryFields()
-	q := sessionstore.QueryFoundrySessions().Where(f.Scope.Eq(scope))
+func entries(scope, subject string) orm.Query[sessionstore.Entry] {
+	f := sessionstore.Entries
+	q := sessionstore.Entries.Query().Where(f.Scope.Eq(scope))
 	if subject != "" {
 		q = q.Where(f.SubjectKey.Eq(subject))
 	}
@@ -111,8 +111,8 @@ func lockSubject(ctx context.Context, tx *database.Tx, address session.Address, 
 		if err != nil {
 			return sessionstore.Subject{}, false, err
 		}
-		draft := sessionstore.SubjectDraft{}.SetKey(key).SetScope(scope).SetIdentity(data)
-		if _, err := sessionstore.QueryFoundrySessionSubjects().Upsert(ctx, tx, draft, query.OnConflict(sessionstore.SubjectFields().Key).DoNothing()); err != nil {
+		draft := []orm.Assignment[sessionstore.Subject]{sessionstore.Subjects.Key().Set(key), sessionstore.Subjects.Scope.Set(scope), sessionstore.Subjects.Identity.Set(data)}
+		if _, err := orm.Upsert(ctx, tx, sessionstore.Subjects.Query(), orm.OnConflict(orm.ConflictKey(sessionstore.Subjects.Key())).DoNothing(), draft...); err != nil {
 			return sessionstore.Subject{}, false, err
 		}
 	}
@@ -123,7 +123,7 @@ func lockSubjectKey(ctx context.Context, tx *database.Tx, address session.Addres
 	if err != nil {
 		return sessionstore.Subject{}, false, err
 	}
-	found, err := sessionstore.QueryFoundrySessionSubjects().Where(sessionstore.SubjectFields().Scope.Eq(scope)).ForUpdate().Find(ctx, tx, key)
+	found, err := sessionstore.Subjects.Query().Where(sessionstore.Subjects.Scope.Eq(scope)).Where(sessionstore.Subjects.Key().Eq(key)).ForUpdate().First(ctx, tx)
 	if err != nil {
 		return sessionstore.Subject{}, false, err
 	}

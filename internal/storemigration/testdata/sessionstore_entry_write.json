@@ -1,0 +1,23 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "UPDATE \"foundry_sessions\" SET \"secret_hash\" = $1 WHERE (\"foundry_sessions\".\"id\" = $2) RETURNING \"foundry_sessions\".\"id\", \"foundry_sessions\".\"scope\", \"foundry_sessions\".\"subject_key\", \"foundry_sessions\".\"secret_hash\", \"foundry_sessions\".\"assurance\", \"foundry_sessions\".\"remember\", \"foundry_sessions\".\"sliding\", \"foundry_sessions\".\"idle_nanos\", \"foundry_sessions\".\"created_at\", \"foundry_sessions\".\"last_seen_at\", \"foundry_sessions\".\"idle_expires_at\", \"foundry_sessions\".\"expires_at\", \"foundry_sessions\".\"client_ip\", \"foundry_sessions\".\"user_agent\", \"foundry_sessions\".\"confirmed_at\", \"foundry_sessions\".\"impersonator_identity\", \"foundry_sessions\".\"impersonator_guard\", \"foundry_sessions\".\"impersonator_session\"",
+      "Args": [
+        "updated",
+        "01890f47-1a00-7000-8000-000000000001"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "09b1879689f7f4e8b6d7f676bbb1d92a6c75bc5cafd1ab65559c7256df32cb23"
+}

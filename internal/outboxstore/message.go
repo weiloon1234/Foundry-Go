@@ -39,20 +39,47 @@ func (Message) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("outb
 
 // MessageTable declares the outbox storage codecs. Example: Messages.Query().Limit(10).
 type MessageTable struct {
+	// Table provides Message queries and writes. Example: Messages.Query().Limit(10).
 	orm.Table[Message, model.ID[Message]]
-	ID              orm.Key[Message, model.ID[Message]]
-	Kind            orm.Text[Message, string]
-	Destination     orm.Text[Message, outbox.Destination]
-	Name            orm.Text[Message, string]
-	Version         orm.Number[Message, uint32]
-	Payload         orm.JSON[Message, json.RawMessage]
-	Origin          orm.JSON[Message, attribution.Origin]
-	CreatedAt       orm.Time[Message, temporal.DateTime]
-	PublishState    orm.Text[Message, outbox.PublicationState]
+	// ID binds the persisted Message.ID column.
+	// Example: Messages.ID.Eq(id).
+	ID orm.Key[Message, model.ID[Message]]
+	// Kind binds the persisted Message.Kind column.
+	// Example: Messages.Kind.Set(kind).
+	Kind orm.Text[Message, string]
+	// Destination binds the persisted Message.Destination column.
+	// Example: Messages.Destination.Set(destination).
+	Destination orm.Text[Message, outbox.Destination]
+	// Name binds the persisted Message.Name column.
+	// Example: Messages.Name.Set(name).
+	Name orm.Text[Message, string]
+	// Version binds the persisted Message.Version column.
+	// Example: Messages.Version.Set(version).
+	Version orm.Number[Message, uint32]
+	// Payload binds the persisted Message.Payload column.
+	// Example: encoded, err := value.NewJSON(payload); if err == nil { _ = Messages.Payload.Set(encoded) }.
+	Payload orm.JSON[Message, json.RawMessage]
+	// Origin binds the persisted Message.Origin column.
+	// Example: encoded, err := value.NewJSON(origin); if err == nil { _ = Messages.Origin.Set(encoded) }.
+	Origin orm.JSON[Message, attribution.Origin]
+	// CreatedAt preserves an explicitly assigned creation time; when omitted on insert, the database supplies its default.
+	// Example: Messages.CreatedAt.Set(createdAt).
+	CreatedAt orm.Time[Message, temporal.DateTime]
+	// PublishState binds the persisted Message.PublishState column.
+	// Example: Messages.PublishState.Set(publishState).
+	PublishState orm.Text[Message, outbox.PublicationState]
+	// PublishAttempts binds the persisted Message.PublishAttempts column.
+	// Example: Messages.PublishAttempts.Set(publishAttempts).
 	PublishAttempts orm.Number[Message, uint32]
-	PublishAfter    orm.Time[Message, temporal.DateTime]
-	PublishedAt     orm.NullableTime[Message, temporal.DateTime]
-	PublishReason   orm.Text[Message, string]
+	// PublishAfter binds the persisted Message.PublishAfter column.
+	// Example: Messages.PublishAfter.Set(publishAfter).
+	PublishAfter orm.Time[Message, temporal.DateTime]
+	// PublishedAt binds the persisted Message.PublishedAt column.
+	// Example: Messages.PublishedAt.SetNull().
+	PublishedAt orm.NullableTime[Message, temporal.DateTime]
+	// PublishReason binds the persisted Message.PublishReason column.
+	// Example: Messages.PublishReason.Set(publishReason).
+	PublishReason orm.Text[Message, string]
 }
 
 // Messages owns the immutable outbox declaration. Example: Messages.Find(ctx, tx, id).

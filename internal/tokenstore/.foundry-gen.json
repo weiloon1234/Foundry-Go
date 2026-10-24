@@ -1,8 +1,4 @@
 {
   "version": 1,
-  "files": {
-    "entry_foundry.gen.go": "33e0fa40227502b64c1d89f1c1a03ae3faa9c102fa3b13bab269e101b94dd65f",
-    "family_foundry.gen.go": "232d2b85a2849030c07c547782e757fac3568183f8511708ef647189f8999180",
-    "subject_foundry.gen.go": "016aa3197459fe79c1f0319edd220a0e1f6673fe036a8a042c876d9b5c5f5b6e"
-  }
+  "files": {}
 }

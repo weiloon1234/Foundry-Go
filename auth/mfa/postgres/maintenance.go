@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth/mfa"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/mfastore"
 )
@@ -23,8 +24,8 @@ func (b *Backend) Prune(ctx context.Context, address mfa.Address, limit int) (ui
 		if err != nil {
 			return err
 		}
-		fields := mfastore.FactorFields()
-		rows, err := factors(scope).Where(fields.PendingUntil.Lte(now)).OrderBy(fields.Key.Asc()).Limit(limit).ForUpdate().SkipLocked().All(ctx, tx)
+		fields := mfastore.Factors
+		rows, err := factors(scope).Where(fields.PendingUntil.Lte(now)).OrderBy(fields.Key().Asc()).Limit(limit).ForUpdate().SkipLocked().All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -38,7 +39,7 @@ func (b *Backend) Prune(ctx context.Context, address mfa.Address, limit int) (ui
 			if !pending || expiry.UTC().After(now.UTC()) {
 				continue
 			}
-			if _, err := factors(scope).Delete(ctx, tx, row.Key); err != nil {
+			if _, err := orm.Delete(ctx, tx, factors(scope), mfastore.Factors.Key(), row.Key); err != nil {
 				return err
 			}
 			removed++

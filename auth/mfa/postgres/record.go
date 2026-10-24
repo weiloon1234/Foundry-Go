@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"github.com/weiloon1234/Foundry-Go/auth/mfa"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/mfastore"
@@ -54,21 +55,21 @@ func decode(address mfa.Address, row mfastore.Factor) (mfa.Record, error) {
 	}
 	return record, record.Validate(address, identity)
 }
-func encode(record mfa.Record) (mfastore.FactorDraft, error) {
+func encode(record mfa.Record) ([]orm.Assignment[mfastore.Factor], error) {
 	if err := record.Validate(record.Address, record.Subject); err != nil {
-		return mfastore.FactorDraft{}, err
+		return nil, err
 	}
-	key, err := record.Address.SubjectKey(record.Subject)
+	_, err := record.Address.SubjectKey(record.Subject)
 	if err != nil {
-		return mfastore.FactorDraft{}, err
+		return nil, err
 	}
 	scope, err := record.Address.Key()
 	if err != nil {
-		return mfastore.FactorDraft{}, err
+		return nil, err
 	}
 	identity, err := value.NewJSON(record.Subject)
 	if err != nil {
-		return mfastore.FactorDraft{}, err
+		return nil, err
 	}
 	hashes := make([]string, len(record.RecoveryHashes))
 	for i, hash := range record.RecoveryHashes {
@@ -76,17 +77,29 @@ func encode(record mfa.Record) (mfastore.FactorDraft, error) {
 	}
 	stored, err := value.NewJSON(hashes)
 	if err != nil {
-		return mfastore.FactorDraft{}, err
+		return nil, err
 	}
-	draft := mfastore.FactorDraft{}.SetKey(key).SetScope(scope).SetIdentity(identity).SetGeneration(model.IDFromBytes[mfastore.Factor](record.ID.Bytes())).SetCiphertext(record.Ciphertext.Encoded()).SetCreatedAt(record.CreatedAt).ClearPendingUntil().ClearConfirmedAt().ClearLastStep().SetRecoveryHashes(stored)
+	draft := []orm.Assignment[mfastore.Factor]{
+		mfastore.Factors.Scope.Set(scope),
+		mfastore.Factors.Identity.Set(identity),
+		mfastore.Factors.Generation.Set(model.IDFromBytes[mfastore.Factor](record.ID.Bytes())),
+		mfastore.Factors.Ciphertext.Set(record.Ciphertext.Encoded()),
+		mfastore.Factors.CreatedAt.Set(record.CreatedAt),
+	}
 	if v, ok := record.PendingUntil.Get(); ok {
-		draft = draft.SetPendingUntil(v)
+		draft = append(draft, mfastore.Factors.PendingUntil.Set(v))
+	} else {
+		draft = append(draft, mfastore.Factors.PendingUntil.SetNull())
 	}
 	if v, ok := record.ConfirmedAt.Get(); ok {
-		draft = draft.SetConfirmedAt(v)
+		draft = append(draft, mfastore.Factors.ConfirmedAt.Set(v))
+	} else {
+		draft = append(draft, mfastore.Factors.ConfirmedAt.SetNull())
 	}
 	if v, ok := record.LastStep.Get(); ok {
-		draft = draft.SetLastStep(v)
+		draft = append(draft, mfastore.Factors.LastStep.Set(v))
+	} else {
+		draft = append(draft, mfastore.Factors.LastStep.SetNull())
 	}
-	return draft, nil
+	return append(draft, mfastore.Factors.RecoveryHashes.Set(stored)), nil
 }

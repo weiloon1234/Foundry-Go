@@ -16,14 +16,17 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/auth/session"
 	"github.com/weiloon1234/Foundry-Go/auth/token"
+	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/database/postgres"
 	"github.com/weiloon1234/Foundry-Go/database/prune"
+	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
-	"github.com/weiloon1234/Foundry-Go/internal/jobarchive"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/jobs/archive"
+	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/outbox/publisher"
 	"github.com/weiloon1234/Foundry-Go/schedule"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -224,7 +227,7 @@ func TestMaintenanceSchedulePrunesConfiguredFrameworkStores(t *testing.T) {
 		// An application-declared prunable model with a cutoff relative to each run.
 		models, err := application.PruneModels(services, "", func(now time.Time) ([]prune.Target, error) {
 			cutoff, err := temporal.NewDateTime(now.Add(-10 * 24 * time.Hour))
-			return []prune.Target{prune.Model("app.stale_failures", jobarchive.QueryFoundryFailedJobs().Where(jobarchive.FailureFields().FailedAt.Lt(cutoff)).Query, prune.Mass)}, err
+			return []prune.Target{prune.Model("app.stale_failures", maintenanceFailureQuery().Where(query.NewOrderedField[maintenanceFailure, temporal.DateTime]("foundry_failed_jobs", "failed_at", codec.DateTime()).Lt(cutoff)), prune.Mass)}, err
 		})
 		return application.FeatureDeclarations{Outbox: []publisher.Route{{Kind: "maintenance.fixture", Destination: "primary", Publish: func(context.Context, publisher.Message) error { return nil }}}, Pruning: []application.Pruning{models}}, err
 	}
@@ -414,4 +417,20 @@ func TestGuardPruningRemovesExpiredSessionsAndTokens(t *testing.T) {
 	if rows("foundry_sessions") != 0 || rows("foundry_token_families") != 0 {
 		t.Fatal("expired credentials survived pruning")
 	}
+}
+
+// This fixture exercises the existing generated-query pruning adapter independently
+// of the archive store's ORM migration. Adapter migration is a separate slice.
+type maintenanceFailure struct {
+	ID       model.ID[maintenanceFailure]
+	FailedAt temporal.DateTime
+}
+
+func maintenanceFailureQuery() query.Query[maintenanceFailure] {
+	id, at := codec.ID[maintenanceFailure](), codec.DateTime()
+	return query.ForModel(query.Define("foundry_failed_jobs", "id", []query.Column{{Name: "id"}, {Name: "failed_at"}}, func(row database.Row) (maintenanceFailure, error) {
+		var r maintenanceFailure
+		err := row.Scan(id.Scan(&r.ID), at.Scan(&r.FailedAt))
+		return r, err
+	}, query.NewModelField("id", id, func(r maintenanceFailure) model.ID[maintenanceFailure] { return r.ID }), query.NewModelField("failed_at", at, func(r maintenanceFailure) temporal.DateTime { return r.FailedAt })))
 }

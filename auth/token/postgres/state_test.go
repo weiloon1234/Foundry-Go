@@ -56,7 +56,7 @@ func families(t *testing.T, s *setup) int64 {
 	var n int64
 	within(t, s, func(tx *database.Tx) error {
 		var err error
-		n, err = tokenstore.QueryFoundryTokenFamilies().Count(t.Context(), tx)
+		n, err = tokenstore.Families.Query().Count(t.Context(), tx)
 		return err
 	})
 	return n

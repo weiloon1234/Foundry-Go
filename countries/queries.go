@@ -18,7 +18,7 @@ func Find(ctx context.Context, store *extensions.Store, code Code) (value.Option
 	var result value.Optional[Country]
 	err := store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		result, err = QueryFoundryCountries().Find(ctx, tx, code)
+		result, err = Countries.Find(ctx, tx, code)
 		return err
 	})
 	if err != nil {
@@ -33,7 +33,7 @@ func Exists(ctx context.Context, store *extensions.Store, code Code) (bool, erro
 	result := false
 	err := store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		result, err = QueryFoundryCountries().Where(CountryFields().ISO2.Eq(code)).Exists(ctx, tx)
+		result, err = Countries.Query().Where(Countries.ISO2.Eq(code)).Exists(ctx, tx)
 		return err
 	})
 	if err != nil {
@@ -50,8 +50,8 @@ func Enabled(ctx context.Context, store *extensions.Store) ([]Country, error) {
 func list(ctx context.Context, store *extensions.Store, enabled bool) ([]Country, error) {
 	var result []Country
 	err := store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
-		f := CountryFields()
-		q := QueryFoundryCountries()
+		f := Countries
+		q := Countries.Query()
 		if enabled {
 			q = q.Where(f.Status.Eq(EnabledStatus))
 		}
@@ -77,7 +77,7 @@ func Default(ctx context.Context, store *extensions.Store) (value.Optional[Count
 	var result value.Optional[Country]
 	err := store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		result, err = QueryFoundryCountries().Where(CountryFields().IsDefault.Eq(true)).First(ctx, tx)
+		result, err = Countries.Query().Where(Countries.IsDefault.Eq(true)).First(ctx, tx)
 		return err
 	})
 	if err != nil {
@@ -95,7 +95,7 @@ func SetDefault(ctx context.Context, store *extensions.Store, code Code) error {
 		return err
 	}
 	return store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		q, f := QueryFoundryCountries(), CountryFields()
+		q, f := Countries.Query(), Countries
 		current, err := q.Where(f.IsDefault.Eq(true)).ForUpdate().All(ctx, tx)
 		if err != nil {
 			return err
@@ -104,11 +104,11 @@ func SetDefault(ctx context.Context, store *extensions.Store, code Code) error {
 			if country.ISO2 == code {
 				continue
 			}
-			if _, err := q.Update(ctx, tx, country.ISO2, CountryDraft{}.SetIsDefault(false)); err != nil {
+			if _, err := Countries.Update(ctx, tx, country.ISO2, Countries.IsDefault.Set(false)); err != nil {
 				return err
 			}
 		}
-		_, err = q.Update(ctx, tx, code, CountryDraft{}.SetIsDefault(true))
+		_, err = Countries.Update(ctx, tx, code, Countries.IsDefault.Set(true))
 		return err
 	})
 }

@@ -1,12 +1,9 @@
 package query
 
 import (
-	"encoding/json"
-	"strings"
-	"unicode/utf8"
-
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -71,22 +68,7 @@ func NewJSONArrayElement[S, P, C any](parent JSONPath[S, P], index int32) JSONPa
 // NewJSONMapEntry is a generator declaration boundary retaining the declared
 // map-key type. It uses the JSON value codec's canonical key validation.
 func NewJSONMapEntry[S, P, C any, K comparable](parent JSONPath[S, P], key K) JSONPath[S, C] {
-	encoded, err := value.NewJSON(map[K]bool{key: true})
-	var name string
-	if err == nil {
-		var text string
-		text, err = encoded.Text()
-		if err == nil {
-			var object map[string]json.RawMessage
-			err = json.Unmarshal([]byte(text), &object)
-			if err == nil && len(object) != 1 {
-				err = fault.New(fault.Invalid, "JSON map key must encode one property")
-			}
-			for k := range object {
-				name = k
-			}
-		}
-	}
+	name, err := querycore.JSONMapKey(key)
 	if err != nil {
 		return JSONPath[S, C]{Expression[S, value.Nullable[value.JSON[C]]]{node: parameterNode{Err: fault.New(fault.Invalid, "invalid JSON map key")}, codec: codec.Nullable(codec.JSON[C]())}}
 	}
@@ -102,8 +84,8 @@ func jsonPathKey[S any](name string, literal bool) RowExpression[S, string] {
 		node.Literal = true
 		result.expression.node = node
 	}
-	if len(name) > value.JSONMaxBytes || !utf8.ValidString(name) || strings.ContainsRune(name, 0) {
-		result.expression.node = parameterNode{Err: fault.New(fault.Invalid, "invalid JSON property name")}
+	if err := querycore.ValidateJSONProperty(name); err != nil {
+		result.expression.node = parameterNode{Err: err}
 	}
 	return result
 }

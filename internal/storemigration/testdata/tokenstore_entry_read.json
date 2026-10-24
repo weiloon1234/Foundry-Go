@@ -1,0 +1,15 @@
+{
+  "Statements": [
+    {
+      "SQL": "SELECT \"foundry_token_generations\".\"id\", \"foundry_token_generations\".\"scope\", \"foundry_token_generations\".\"family_id\", \"foundry_token_generations\".\"generation\", \"foundry_token_generations\".\"access_hash\", \"foundry_token_generations\".\"refresh_hash\", \"foundry_token_generations\".\"issued_at\", \"foundry_token_generations\".\"last_seen_at\", \"foundry_token_generations\".\"access_expires_at\", \"foundry_token_generations\".\"refresh_expires_at\" FROM \"foundry_token_generations\" WHERE (\"foundry_token_generations\".\"id\" = $1) ORDER BY \"foundry_token_generations\".\"id\" ASC LIMIT $2",
+      "Args": [
+        "01890f47-1a00-7000-8000-000000000001",
+        1
+      ]
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "f7d9a3c8706e0a37732846a5df3cf81cde6084ac722f493d68511ac7968901fc"
+}

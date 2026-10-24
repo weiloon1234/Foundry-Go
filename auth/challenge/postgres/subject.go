@@ -5,7 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth/challenge"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/challengestore"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -26,8 +26,8 @@ func lockSubject(ctx context.Context, tx *database.Tx, address challenge.Address
 		if err != nil {
 			return challengestore.Subject{}, false, err
 		}
-		draft := challengestore.SubjectDraft{}.SetKey(key).SetScope(scope).SetIdentity(data)
-		if _, err := challengestore.QueryFoundryChallengeSubjects().Upsert(ctx, tx, draft, query.OnConflict(challengestore.SubjectFields().Key).DoNothing()); err != nil {
+		draft := []orm.Assignment[challengestore.Subject]{challengestore.Subjects.Key().Set(key), challengestore.Subjects.Scope.Set(scope), challengestore.Subjects.Identity.Set(data)}
+		if _, err := orm.Upsert(ctx, tx, challengestore.Subjects.Query(), orm.OnConflict(orm.ConflictKey(challengestore.Subjects.Key())).DoNothing(), draft...); err != nil {
 			return challengestore.Subject{}, false, err
 		}
 	}
@@ -38,7 +38,7 @@ func subjectByKey(ctx context.Context, tx *database.Tx, address challenge.Addres
 	if err != nil {
 		return challengestore.Subject{}, false, err
 	}
-	found, err := challengestore.QueryFoundryChallengeSubjects().Where(challengestore.SubjectFields().Scope.Eq(scope)).ForUpdate().Find(ctx, tx, key)
+	found, err := challengestore.Subjects.Query().Where(challengestore.Subjects.Scope.Eq(scope)).Where(challengestore.Subjects.Key().Eq(key)).ForUpdate().First(ctx, tx)
 	if err != nil {
 		return challengestore.Subject{}, false, err
 	}

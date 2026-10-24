@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/seed"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -60,7 +60,7 @@ func seedReference(ctx context.Context, tx *database.Tx, store *extensions.Store
 	if err != nil {
 		return SeedResult{}, err
 	}
-	drafts := make([]CountryDraft, len(rows))
+	drafts := make([][]orm.Assignment[Country], len(rows))
 	for i, row := range rows {
 		if err := ctx.Err(); err != nil {
 			return SeedResult{}, err
@@ -71,9 +71,9 @@ func seedReference(ctx context.Context, tx *database.Tx, store *extensions.Store
 		}
 		drafts[i] = draft
 	}
-	f := CountryFields()
-	conflict := query.OnConflict(f.ISO2).Update(f.ISO3, f.ISONumeric, f.Name, f.OfficialName, f.Capital, f.Region, f.Subregion, f.Currencies, f.PrimaryCurrencyCode, f.CallingCode, f.CallingRoot, f.CallingSuffixes, f.TLDs, f.Timezones, f.Latitude, f.Longitude, f.Independent, f.UNMember, f.FlagEmoji, f.ReferenceVersion, f.UpdatedAt)
-	stored, err := QueryFoundryCountries().UpsertMany(ctx, tx, drafts, conflict)
+	f := Countries
+	conflict := orm.OnConflict(orm.ConflictKey(f.ISO2)).DoUpdate(orm.ConflictIncoming(f.ISO3), orm.ConflictIncoming(f.ISONumeric), orm.ConflictIncoming(f.Name), orm.ConflictIncoming(f.OfficialName), orm.ConflictIncoming(f.Capital), orm.ConflictIncoming(f.Region), orm.ConflictIncoming(f.Subregion), orm.ConflictIncoming(f.Currencies), orm.ConflictIncoming(f.PrimaryCurrencyCode), orm.ConflictIncoming(f.CallingCode), orm.ConflictIncoming(f.CallingRoot), orm.ConflictIncoming(f.CallingSuffixes), orm.ConflictIncoming(f.TLDs), orm.ConflictIncoming(f.Timezones), orm.ConflictIncoming(f.Latitude), orm.ConflictIncoming(f.Longitude), orm.ConflictIncoming(f.Independent), orm.ConflictIncoming(f.UNMember), orm.ConflictIncoming(f.FlagEmoji), orm.ConflictIncoming(f.ReferenceVersion), orm.ConflictIncoming(f.UpdatedAt))
+	stored, err := orm.UpsertMany(ctx, tx, Countries.Query(), conflict, drafts)
 	if err != nil {
 		return SeedResult{}, err
 	}
@@ -82,44 +82,58 @@ func seedReference(ctx context.Context, tx *database.Tx, store *extensions.Store
 	}
 	return SeedResult{Version: BuiltinVersion, Rows: len(stored)}, nil
 }
-func referenceDraft(r reference, now temporal.DateTime) (CountryDraft, error) {
+func referenceDraft(r reference, now temporal.DateTime) ([]orm.Assignment[Country], error) {
 	currencies, err := value.NewJSON(r.Currencies)
 	if err != nil {
-		return CountryDraft{}, err
+		return nil, err
 	}
 	suffixes, err := value.NewJSON(r.CallingSuffixes)
 	if err != nil {
-		return CountryDraft{}, err
+		return nil, err
 	}
 	tlds, err := value.NewJSON(r.TLDs)
 	if err != nil {
-		return CountryDraft{}, err
+		return nil, err
 	}
 	zones, err := value.NewJSON(r.Timezones)
 	if err != nil {
-		return CountryDraft{}, err
+		return nil, err
 	}
-	d := CountryDraft{}.SetISO2(r.ISO2).SetISO3(r.ISO3).SetName(strings.TrimSpace(r.Name)).SetCurrencies(currencies).SetCallingSuffixes(suffixes).SetTLDs(tlds).SetTimezones(zones).SetStatus(DisabledStatus).ClearConversionRate().SetIsDefault(false).SetReferenceVersion(BuiltinVersion).SetCreatedAt(now).SetUpdatedAt(now)
-	d = optional(d, trimmed(r.ISONumeric), CountryDraft.SetISONumeric, CountryDraft.ClearISONumeric)
-	d = optional(d, trimmed(r.OfficialName), CountryDraft.SetOfficialName, CountryDraft.ClearOfficialName)
-	d = optional(d, trimmed(r.Capital), CountryDraft.SetCapital, CountryDraft.ClearCapital)
-	d = optional(d, trimmed(r.Region), CountryDraft.SetRegion, CountryDraft.ClearRegion)
-	d = optional(d, trimmed(r.Subregion), CountryDraft.SetSubregion, CountryDraft.ClearSubregion)
-	d = optional(d, trimmed(r.PrimaryCurrencyCode), CountryDraft.SetPrimaryCurrencyCode, CountryDraft.ClearPrimaryCurrencyCode)
-	d = optional(d, trimmed(r.CallingCode), CountryDraft.SetCallingCode, CountryDraft.ClearCallingCode)
-	d = optional(d, trimmed(r.CallingRoot), CountryDraft.SetCallingRoot, CountryDraft.ClearCallingRoot)
-	d = optional(d, trimmed(r.FlagEmoji), CountryDraft.SetFlagEmoji, CountryDraft.ClearFlagEmoji)
-	d = optional(d, r.Latitude, CountryDraft.SetLatitude, CountryDraft.ClearLatitude)
-	d = optional(d, r.Longitude, CountryDraft.SetLongitude, CountryDraft.ClearLongitude)
-	d = optional(d, r.Independent, CountryDraft.SetIndependent, CountryDraft.ClearIndependent)
-	d = optional(d, r.UNMember, CountryDraft.SetUNMember, CountryDraft.ClearUNMember)
+	d := []orm.Assignment[Country]{
+		Countries.ISO2.Set(r.ISO2),
+		Countries.ISO3.Set(r.ISO3),
+		Countries.Name.Set(strings.TrimSpace(r.Name)),
+		Countries.Currencies.Set(currencies),
+		Countries.CallingSuffixes.Set(suffixes),
+		Countries.TLDs.Set(tlds),
+		Countries.Timezones.Set(zones),
+		Countries.Status.Set(DisabledStatus),
+		Countries.ConversionRate.SetNull(),
+		Countries.IsDefault.Set(false),
+		Countries.ReferenceVersion.Set(BuiltinVersion),
+		Countries.CreatedAt.Set(now),
+		Countries.UpdatedAt.Set(now),
+	}
+	d = optional(d, trimmed(r.ISONumeric), Countries.ISONumeric.Set, Countries.ISONumeric.SetNull)
+	d = optional(d, trimmed(r.OfficialName), Countries.OfficialName.Set, Countries.OfficialName.SetNull)
+	d = optional(d, trimmed(r.Capital), Countries.Capital.Set, Countries.Capital.SetNull)
+	d = optional(d, trimmed(r.Region), Countries.Region.Set, Countries.Region.SetNull)
+	d = optional(d, trimmed(r.Subregion), Countries.Subregion.Set, Countries.Subregion.SetNull)
+	d = optional(d, trimmed(r.PrimaryCurrencyCode), Countries.PrimaryCurrencyCode.Set, Countries.PrimaryCurrencyCode.SetNull)
+	d = optional(d, trimmed(r.CallingCode), Countries.CallingCode.Set, Countries.CallingCode.SetNull)
+	d = optional(d, trimmed(r.CallingRoot), Countries.CallingRoot.Set, Countries.CallingRoot.SetNull)
+	d = optional(d, trimmed(r.FlagEmoji), Countries.FlagEmoji.Set, Countries.FlagEmoji.SetNull)
+	d = optional(d, r.Latitude, Countries.Latitude.Set, Countries.Latitude.SetNull)
+	d = optional(d, r.Longitude, Countries.Longitude.Set, Countries.Longitude.SetNull)
+	d = optional(d, r.Independent, Countries.Independent.Set, Countries.Independent.SetNull)
+	d = optional(d, r.UNMember, Countries.UNMember.Set, Countries.UNMember.SetNull)
 	return d, nil
 }
-func optional[T any](d CountryDraft, input *T, set func(CountryDraft, T) CountryDraft, clear func(CountryDraft) CountryDraft) CountryDraft {
+func optional[T any](d []orm.Assignment[Country], input *T, set func(T) orm.Assignment[Country], clear func() orm.Assignment[Country]) []orm.Assignment[Country] {
 	if input == nil {
-		return clear(d)
+		return append(d, clear())
 	}
-	return set(d, *input)
+	return append(d, set(*input))
 }
 func trimmed(input *string) *string {
 	if input == nil {

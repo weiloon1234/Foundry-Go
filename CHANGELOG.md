@@ -8,6 +8,18 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Add insert-select and source update/delete builders (6e3), retaining scoped
+  sources, defaults, conventions, atomic bounded RETURNING and reconciliation.
+  These set writes skip per-model lifecycle callbacks; six declaration-role
+  compiler exclusions remain assigned to the approved typed-role follow-up.
+- Complete Stage 6d with handwritten, startup-validated JSON path declarations,
+  typed map keys/indices and explicit missing, SQL NULL and JSON null behavior.
+- Migrate seven more framework stores (8/13 total), preserving schema and wire
+  contracts. Add scoped keyed `orm.Update`/`Delete` through the ordinary lifecycle.
+- Add typed UUID seek predicates and bounded `UpdateEach`/`DeleteEach`, with full
+  candidate locking, one transaction/savepoint, lifecycle callbacks and typed
+  reconciliation candidates. Remaining store migrations are separate work.
+
 - Complete Stage 6c with result/scalar cursors, read/page adapters and transaction-only
   result locks. Sensitive cursor keys fail before SQL across projections, sets,
   CTEs, relation aggregates and computed expressions in both query APIs.

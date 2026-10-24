@@ -186,32 +186,7 @@ func jsonFields(typ reflect.Type) (map[string]jsonField, error) {
 
 // Runtime and source generation use one field/tag promotion algorithm.
 func collectJSONFields(typ reflect.Type) (map[string]jsonField, error) {
-	properties, err := jsonshape.Collect(typ, jsonshape.Adapter[reflect.Type]{
-		NumFields: func(t reflect.Type) (int, bool) {
-			if t.Kind() != reflect.Struct {
-				return 0, false
-			}
-			return t.NumField(), true
-		},
-		Field: func(t reflect.Type, i int) jsonshape.Field[reflect.Type] {
-			f := t.Field(i)
-			return jsonshape.Field[reflect.Type]{Name: f.Name, Tag: f.Tag.Get("json"), Type: f.Type, Anonymous: f.Anonymous, Exported: f.PkgPath == ""}
-		},
-		Pointer: func(t reflect.Type) (reflect.Type, bool) {
-			if t.Kind() == reflect.Pointer {
-				return t.Elem(), true
-			}
-			return t, false
-		},
-		Optional: func(t reflect.Type) bool { _, ok := reflect.Zero(t).Interface().(jsonOptional); return ok },
-		QuotedScalar: func(t reflect.Type) bool {
-			switch t.Kind() {
-			case reflect.Bool, reflect.String, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64:
-				return true
-			}
-			return false
-		},
-	})
+	properties, err := jsonshape.Collect(typ, jsonshape.ReflectAdapter(func(t reflect.Type) bool { _, ok := reflect.Zero(t).Interface().(jsonOptional); return ok }))
 	if err != nil {
 		return nil, invalidJSON()
 	}

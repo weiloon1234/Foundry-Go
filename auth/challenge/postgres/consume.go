@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/auth/challenge"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/challengestore"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -21,7 +22,7 @@ func (b *Backend) Consume(ctx context.Context, address challenge.Address, hash c
 	scope, _ := address.Key()
 	var result value.Optional[challenge.Record]
 	err := b.within(ctx, func(tx *database.Tx) error {
-		candidate, err := entries(scope, "").Where(challengestore.EntryFields().SecretHash.Eq(hash.Hex())).First(ctx, tx)
+		candidate, err := entries(scope, "").Where(challengestore.Entries.SecretHash.Eq(hash.Hex())).First(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -36,7 +37,7 @@ func (b *Backend) Consume(ctx context.Context, address challenge.Address, hash c
 		if !present {
 			return fault.New(fault.Invalid, "stored challenge has no subject")
 		}
-		current, err := entries(scope, subject.Key).ForUpdate().Find(ctx, tx, original.ID)
+		current, err := entries(scope, subject.Key).Where(challengestore.Entries.ID.Eq(original.ID)).ForUpdate().First(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -70,7 +71,7 @@ func (b *Backend) Consume(ctx context.Context, address challenge.Address, hash c
 		if !selected.Live(now.UTC()) {
 			return auth.Unauthenticated
 		}
-		if _, err := entries(scope, subject.Key).Delete(ctx, tx, row.ID); err != nil {
+		if _, err := orm.Delete(ctx, tx, entries(scope, subject.Key), challengestore.Entries.ID, row.ID); err != nil {
 			return err
 		}
 		result = value.Set(selected)

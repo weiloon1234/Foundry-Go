@@ -1,0 +1,23 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "UPDATE \"foundry_token_families\" SET \"name\" = $1 WHERE (\"foundry_token_families\".\"id\" = $2) RETURNING \"foundry_token_families\".\"id\", \"foundry_token_families\".\"scope\", \"foundry_token_families\".\"subject_key\", \"foundry_token_families\".\"name\", \"foundry_token_families\".\"scopes\", \"foundry_token_families\".\"mode\", \"foundry_token_families\".\"assurance\", \"foundry_token_families\".\"access_nanos\", \"foundry_token_families\".\"refresh_idle_nanos\", \"foundry_token_families\".\"rotation_limit\", \"foundry_token_families\".\"generation\", \"foundry_token_families\".\"created_at\", \"foundry_token_families\".\"expires_at\", \"foundry_token_families\".\"client_ip\", \"foundry_token_families\".\"user_agent\"",
+      "Args": [
+        "updated",
+        "01890f47-1a00-7000-8000-000000000001"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "388b5978affb91ae3cc1253dc1894f05070f33d6f637d97fb033daf884ea1c44"
+}

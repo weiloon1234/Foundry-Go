@@ -10,6 +10,7 @@ import (
 	mfapg "github.com/weiloon1234/Foundry-Go/auth/mfa/postgres"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/internal/mfastore"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
@@ -105,9 +106,19 @@ func TestFactorKeyRotationReencryptsStoredFactors(t *testing.T) {
 			case 6:
 				keys = goneRing // Retired key no longer retained.
 			}
-			draft := mfastore.FactorDraft{}.SetKey(owners[i]).SetScope(strings.Repeat("a", 64)).SetIdentity(stored).SetGeneration(generation).
-				SetCiphertext(storedFactor(t, keys, owners[i], generation)).SetCreatedAt(created).SetConfirmedAt(created).SetLastStep(1).SetRecoveryHashes(hashes).ClearPendingUntil()
-			if _, err := mfastore.QueryFoundryMfaFactors().Create(t.Context(), tx, draft); err != nil {
+			draft := []orm.Assignment[mfastore.Factor]{
+				mfastore.Factors.Key().Set(owners[i]),
+				mfastore.Factors.Scope.Set(strings.Repeat("a", 64)),
+				mfastore.Factors.Identity.Set(stored),
+				mfastore.Factors.Generation.Set(generation),
+				mfastore.Factors.Ciphertext.Set(storedFactor(t, keys, owners[i], generation)),
+				mfastore.Factors.CreatedAt.Set(created),
+				mfastore.Factors.ConfirmedAt.Set(created),
+				mfastore.Factors.LastStep.Set(1),
+				mfastore.Factors.RecoveryHashes.Set(hashes),
+				mfastore.Factors.PendingUntil.SetNull(),
+			}
+			if _, err := mfastore.Factors.Insert(t.Context(), tx, draft...); err != nil {
 				return err
 			}
 		}
@@ -151,7 +162,7 @@ func TestFactorKeyRotationReencryptsStoredFactors(t *testing.T) {
 		if _, err := tx.Exec(t.Context(), `SET LOCAL search_path TO "`+schema+`"`); err != nil {
 			return err
 		}
-		rows, err := mfastore.QueryFoundryMfaFactors().All(t.Context(), tx)
+		rows, err := mfastore.Factors.Query().All(t.Context(), tx)
 		if err != nil {
 			return err
 		}

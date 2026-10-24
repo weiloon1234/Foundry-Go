@@ -799,3 +799,105 @@ Encrypted destinations remain excluded. A field with a Go mutator accepts only
 its own proposed value as a calculation; other SQL calculations cannot bypass
 that mutator. Upsert lifecycle, transaction and bounded RETURNING behavior are
 unchanged from the literal conflict API.
+
+## Insert-select and source writes
+
+Source writes use `orm/rows` package functions and immutable builders. Source
+expressions keep their scope and exact stored type, including nullability.
+Mapping, match-key and operation types cannot be converted into one another:
+
+```go
+source := rows.From(Products.Query().Where(Products.Price.Gt(0)).Limit(100))
+insert := rows.InsertFrom(source, Products.Query(),
+    rows.MapInsert(Products.Code, expr.Value(Products.Code)),
+    rows.MapInsert(Products.Price, expr.Value(Products.Price)))
+inserted, err := insert.Returning(ctx, db, 100)
+
+matched := rows.MatchSource(Products.Key(), expr.Value(Products.Code))
+update := rows.UpdateFrom(Products.Query(), source).Match(matched).
+    Select(rows.MapUpdate(Products.Price, expr.Value(Products.Price)))
+count, err := update.Exec(ctx, db)
+count, err = rows.DeleteUsing(Products.Query(), source).Match(matched).Exec(ctx, db)
+```
+
+`Values(assignments...)` replaces fixed inputs and normalizes them once inside
+the owning transaction. SQL mappings cannot bypass Go mutators, copy encrypted
+envelopes, or replace a managed update timestamp. Updates cannot assign primary
+keys. Literal encrypted inputs are rejected for these set-based writes.
+
+Omitted insert fields keep database defaults or NULL. Required fields must be
+mapped or supplied; UUID keys require a source/literal value or database default.
+No single Go-generated UUID is shared across selected rows. Managed creation time
+is supplied only when omitted; update time always comes from the owning clock.
+
+Source filters, windows and tenant scopes remain intact. Destination scopes apply
+to updates and deletes; inserts are unfiltered. Missing tenant context fails
+closed. `MatchNullableSource` allows nullable keys; NULL matches no destination.
+Mapped updates require at most one source match per affected model and roll back
+on ambiguity. Literal-only updates and deletes tolerate repeated source keys.
+
+`Exec` returns an affected count. `Returning` accepts a limit from 1 through
+`query.MaxInsertRows` (1000), hydrates complete models, and rolls back on overflow,
+decode failure or row-close failure. The limit bounds retained models, not SQL
+work or field sizes; it neither truncates the source nor promises result order.
+
+These explicit set-based APIs skip local hooks, observers, automatic audit and
+retrieval callbacks, matching the old source-write API. No `WithoutModelHooks`
+acknowledgement is required. They retain the existing transaction/savepoint and
+write-outcome reconciliation behavior. `DeleteUsing` applies soft deletion when
+configured; `ForceDeleteUsing` requires a soft-delete declaration and preserves
+the supplied destination visibility (`WithTrashed` includes deleted rows).
+
+## Scoped keyed writes
+
+Use package functions when a primary-key write must also retain an existing
+selection, such as a tenant boundary:
+
+```go
+visible := Users.Query().Where(Users.TenantID.Eq(tenantID))
+user, err := orm.Update(ctx, tx, visible, Users.Key(), id, Users.Name.Set("Ada"))
+removed, err := orm.Delete(ctx, tx, visible, Users.Key(), id)
+```
+
+Both predicates constrain the write. The key must come from that exact table
+declaration. Ordinary lifecycle hooks, observers, complete returning hydration,
+savepoints and single-row cardinality checks remain active. A scope mismatch
+returns `database.NotFound`. Delete uses soft deletion when declared; otherwise
+it physically removes the row. Unknown commit outcomes retain `WriteError`
+reconciliation candidates and must not be retried automatically.
+
+## UUID seeks and bounded lifecycle writes
+
+Use `UUIDLess`, `UUIDLessOrEqual`, `UUIDGreater` and `UUIDGreaterOrEqual` for
+PostgreSQL bytewise UUID comparisons. Both the query model and `model.ID[T]` owner
+remain checked by Go. Nullable UUID columns compare present values; SQL NULL
+does not match. The corresponding `expr` functions accept scoped row expressions;
+use their `Nullable` variants for nullable row values. They add no column methods.
+
+```go
+page := Files.Query().Where(orm.UUIDGreater(Files.Key(), after)).
+    OrderBy(Files.Key().Asc()).Limit(100)
+```
+
+`UpdateEach(ctx, writer, query, limit, draft)` accepts a callback of type
+`func(context.Context, *database.Tx, M) ([]orm.Assignment[M], error)`.
+`DeleteEach(ctx, writer, query, limit)` performs normal physical or soft deletion.
+Both lock the complete candidate set in primary-key order, require a positive
+limit no greater than `MaxPerModelWriteRows`, and reject overflow and duplicate
+identities before any draft or lifecycle callback. Incoming lock policies are
+rejected; candidate selection always uses a waiting `FOR UPDATE`. Ordering, pagination,
+eager-loading options and `WithoutModelHooks` are rejected.
+
+Each row uses the normal hooks, observers, mutators, encryption, timestamps and
+change tracking. Internal candidate hydration skips retrieval hooks. Rows are
+closed before callbacks; propagate the supplied callback context and transaction
+to nested work. One atomic transaction (or one enclosing savepoint on a supplied
+transaction) covers all candidates, with no savepoint per model. Cancellation,
+callback failures and later write failures roll back the operation and discard
+its after-commit work. Successful results follow primary-key order.
+
+An uncertain commit or committed after-commit failure returns no successful rows.
+`*orm.WriteError[[]M]` retains reconciliation candidates; `Candidate()` is not
+proof of persistence. There is no automatic retry. These bounded lifecycle
+operations differ from set-based `UpdateAll`/`DeleteAll`, which explicitly skip
+per-model behavior.

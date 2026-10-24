@@ -1,0 +1,24 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "INSERT INTO \"foundry_token_subjects\" AS \"foundry_upsert\" (\"key\", \"scope\", \"identity\") VALUES ($1, $2, $3) ON CONFLICT (\"key\") DO NOTHING RETURNING \"foundry_upsert\".\"key\", \"foundry_upsert\".\"scope\", \"foundry_upsert\".\"identity\"",
+      "Args": [
+        "subject",
+        "stored",
+        "{\"key\":{\"k\":\"int\",\"t\":\"7\"},\"model\":\"subjects\"}"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "928b0d04c55fdb7881831959aa49abec2858b3e434b6c7f3534bcf13f42e7659"
+}

@@ -1,0 +1,23 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "UPDATE \"foundry_challenges\" SET \"secret_hash\" = $1 WHERE (\"foundry_challenges\".\"id\" = $2) RETURNING \"foundry_challenges\".\"id\", \"foundry_challenges\".\"scope\", \"foundry_challenges\".\"subject_key\", \"foundry_challenges\".\"secret_hash\", \"foundry_challenges\".\"binding_hash\", \"foundry_challenges\".\"created_at\", \"foundry_challenges\".\"expires_at\"",
+      "Args": [
+        "updated",
+        "01890f47-1a00-7000-8000-000000000001"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "73c8b8c8e4f366cc45213dbaeaf406c0c83ef93d1a0e179a8a9180242c94938b"
+}

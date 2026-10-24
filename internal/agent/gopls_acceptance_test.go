@@ -3,12 +3,13 @@ package agent
 import (
 	"context"
 	"encoding/json"
-	"github.com/weiloon1234/Foundry-Go/testkit"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/testkit"
 )
 
 // This gate deliberately requires an approved, existing real gopls executable.
@@ -317,7 +318,7 @@ func consumerEditorProbes() []consumerEditorProbe {
 		{"image-native-crop", "profiles/native_images.go", "\t\t", "SmartFill", []string{"SmartFill", "ToSRGB", "Format"}, []string{"CropInterest", "Plan"}, "/imaging/backend.go"},
 		{"image-native-color", "profiles/native_images.go", "\t\t", "ToSRGB", []string{"ToSRGB", "SmartFill", "Metadata"}, []string{"Plan"}, "/imaging/backend.go"},
 		{"image-native-status", "profiles/image_runtime_test.go", "engine.", "NativeError", []string{"NativeError", "Capabilities", "Inspect", "ProcessBytes"}, []string{"error"}, "/imaging/backend.go"},
-		{"country-typed-lookup", "profiles/profile_test.go", "countries.", "Find", []string{"Find", "Seed", "Seeder", "CountryFields"}, []string{"Code", "Country", "error"}, "/countries/queries.go"},
+		{"country-typed-lookup", "profiles/profile_test.go", "countries.", "Find", []string{"Find", "Seed", "Seeder", "Countries"}, []string{"Code", "Country", "error"}, "/countries/queries.go"},
 
 		{"notification-typed-capture", "notifying/orders.go", "binding.", "Capture", []string{"Capture", "Send", "Registration"}, []string{"Reference", "PendingNotification", "error"}, "/notifications/capture.go"},
 		{"notification-transaction-enqueue", "notifying/orders.go", "pending.", "Enqueue", []string{"Enqueue", "Send", "ID"}, []string{"Tx", "DeliveryJob", "Outbox", "error"}, "/notifications/jobs.go"},

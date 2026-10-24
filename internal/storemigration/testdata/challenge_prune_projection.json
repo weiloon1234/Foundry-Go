@@ -1,0 +1,16 @@
+{
+  "Statements": [
+    {
+      "SQL": "SELECT \"foundry_challenges\".\"id\" AS \"id\", \"foundry_challenges\".\"subject_key\" AS \"subject_key\" FROM \"foundry_challenges\" WHERE (\"foundry_challenges\".\"scope\" = $1) AND (\"foundry_challenges\".\"expires_at\" \u003c= $2) ORDER BY \"foundry_challenges\".\"subject_key\" ASC, \"foundry_challenges\".\"id\" ASC LIMIT $3",
+      "Args": [
+        "scope",
+        "2026-10-24T00:00:00Z",
+        10
+      ]
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "a54fa68cae1e1c10ec6b700a367a247a9ee451a364ee48aa3222365656a1449c"
+}

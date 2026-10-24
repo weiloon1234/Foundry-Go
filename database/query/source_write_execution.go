@@ -5,8 +5,8 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 )
 
 func (p sourceMutation[S, M]) validateExecution(ctx context.Context, writer database.Transactor) error {
@@ -81,7 +81,7 @@ func (p sourceMutation[S, M]) exec(ctx context.Context, writer database.Transact
 }
 
 func ambiguousSourceMatch() error {
-	return database.NewError("SQL-mapped update matched multiple source rows for one model", database.TooManyRows)
+	return ormcore.AmbiguousSourceMatch()
 }
 
 func (p sourceMutation[S, M]) returning(ctx context.Context, writer database.Transactor, limit int) ([]M, error) {
@@ -103,28 +103,4 @@ func (p sourceMutation[S, M]) returning(ctx context.Context, writer database.Tra
 	})
 }
 
-// The existing complete-model decoder owns field destinations. The final private
-// column validates the source cardinality before a decoded model is published.
-type sourceMatchRow struct{ database.Row }
-
-// FieldEncryption forwards the underlying stream's decryption scope.
-func (r sourceMatchRow) FieldEncryption() (context.Context, *encryption.Keyring) {
-	return forwardEncryption(r.Row)
-}
-
-func (r sourceMatchRow) Scan(destinations ...any) error {
-	var matches int64
-	withCount := make([]any, len(destinations)+1)
-	copy(withCount, destinations)
-	withCount[len(destinations)] = &matches
-	if err := r.Row.Scan(withCount...); err != nil {
-		return err
-	}
-	if matches > 1 {
-		return ambiguousSourceMatch()
-	}
-	if matches != 1 {
-		return fault.New(fault.Invalid, "source write returned invalid match metadata")
-	}
-	return nil
-}
+type sourceMatchRow = ormcore.SourceMatchRow

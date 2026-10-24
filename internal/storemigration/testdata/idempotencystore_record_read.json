@@ -1,0 +1,15 @@
+{
+  "Statements": [
+    {
+      "SQL": "SELECT \"foundry_idempotency\".\"id\", \"foundry_idempotency\".\"namespace\", \"foundry_idempotency\".\"operation\", \"foundry_idempotency\".\"version\", \"foundry_idempotency\".\"scope_digest\", \"foundry_idempotency\".\"key_digest\", \"foundry_idempotency\".\"fingerprint\", \"foundry_idempotency\".\"result_schema\", \"foundry_idempotency\".\"result_hash\", \"foundry_idempotency\".\"representation\", \"foundry_idempotency\".\"completed_at\", \"foundry_idempotency\".\"expires_at\" FROM \"foundry_idempotency\" WHERE (\"foundry_idempotency\".\"id\" = $1) ORDER BY \"foundry_idempotency\".\"id\" ASC LIMIT $2",
+      "Args": [
+        "01890f47-1a00-7000-8000-000000000001",
+        1
+      ]
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "e60d5c1911d517f7bff2500e2477f97941a31b74eb7210562e77d717e85efcc7"
+}

@@ -1,0 +1,23 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "UPDATE \"foundry_token_generations\" SET \"access_hash\" = $1 WHERE (\"foundry_token_generations\".\"id\" = $2) RETURNING \"foundry_token_generations\".\"id\", \"foundry_token_generations\".\"scope\", \"foundry_token_generations\".\"family_id\", \"foundry_token_generations\".\"generation\", \"foundry_token_generations\".\"access_hash\", \"foundry_token_generations\".\"refresh_hash\", \"foundry_token_generations\".\"issued_at\", \"foundry_token_generations\".\"last_seen_at\", \"foundry_token_generations\".\"access_expires_at\", \"foundry_token_generations\".\"refresh_expires_at\"",
+      "Args": [
+        "updated",
+        "01890f47-1a00-7000-8000-000000000001"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "f7d9a3c8706e0a37732846a5df3cf81cde6084ac722f493d68511ac7968901fc"
+}

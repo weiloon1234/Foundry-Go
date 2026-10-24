@@ -1,0 +1,15 @@
+{
+  "Statements": [
+    {
+      "SQL": "SELECT \"foundry_failed_jobs\".\"id\", \"foundry_failed_jobs\".\"execution\", \"foundry_failed_jobs\".\"queue\", \"foundry_failed_jobs\".\"name\", \"foundry_failed_jobs\".\"version\", \"foundry_failed_jobs\".\"envelope\", \"foundry_failed_jobs\".\"reason\", \"foundry_failed_jobs\".\"attempts\", \"foundry_failed_jobs\".\"exceptions\", \"foundry_failed_jobs\".\"retries\", \"foundry_failed_jobs\".\"failed_at\", \"foundry_failed_jobs\".\"retried_at\" FROM \"foundry_failed_jobs\" WHERE (\"foundry_failed_jobs\".\"id\" = $1) ORDER BY \"foundry_failed_jobs\".\"id\" ASC LIMIT $2",
+      "Args": [
+        "01890f47-1a00-7000-8000-000000000001",
+        1
+      ]
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "13f5767e9a420edd6fd629787f7d9cf75dd9fc21e5f6e264c8b7d820f988890f"
+}

@@ -44,8 +44,8 @@ in one transaction, clearing the previous default first. A missing code returns
 `database.NotFound` and leaves the current default unchanged.
 
 `Find`, `Exists`, `All` and `Enabled` borrow the store. `All` and `Enabled` sort by
-name and code and are bounded to 1000 rows. Generated `QueryFoundryCountries`,
-`CountryFields` and `CountryDraft` provide normal typed queries and administrative
-updates. Currency and timezone collections use typed immutable JSON snapshots;
+name and code and are bounded to 1000 rows. The handwritten `countries.Countries`
+declaration provides typed queries and administrative updates, for example
+`countries.Countries.Update(ctx, tx, code, countries.Countries.Status.Set(countries.EnabledStatus))`. Currency and timezone collections use typed immutable JSON snapshots;
 decode them explicitly to obtain fresh slices. Activation status is a generated
 enum, and optional fields retain the distinction between null and zero.

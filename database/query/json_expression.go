@@ -2,7 +2,7 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -19,12 +19,7 @@ const (
 )
 
 func (k JSONKind) Validate() error {
-	switch k {
-	case JSONObject, JSONArray, JSONString, JSONNumber, JSONBoolean, JSONNull:
-		return nil
-	default:
-		return fault.New(fault.Invalid, "invalid JSON kind")
-	}
+	return querycore.ValidateJSONKind(string(k))
 }
 
 func jsonKindCodec() codec.Codec[JSONKind] {

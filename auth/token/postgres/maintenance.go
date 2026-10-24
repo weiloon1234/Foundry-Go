@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth/token"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/tokenstore"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -24,7 +25,7 @@ func (b *Backend) RevokeID(ctx context.Context, address token.Address, identity 
 			return err
 		}
 		key := model.IDFromBytes[tokenstore.Family](id.Bytes())
-		found, err := families(subject.Scope, subject.Key).ForUpdate().Find(ctx, tx, key)
+		found, err := families(subject.Scope, subject.Key).Where(tokenstore.Families.ID.Eq(key)).ForUpdate().First(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -35,7 +36,7 @@ func (b *Backend) RevokeID(ctx context.Context, address token.Address, identity 
 		if _, err := currentRecord(ctx, tx, address, subject, family); err != nil {
 			return err
 		}
-		if _, err := families(subject.Scope, subject.Key).Delete(ctx, tx, key); err != nil {
+		if _, err := orm.Delete(ctx, tx, families(subject.Scope, subject.Key), tokenstore.Families.ID, key); err != nil {
 			return err
 		}
 		removed = true

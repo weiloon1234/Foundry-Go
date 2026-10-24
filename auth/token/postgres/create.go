@@ -55,7 +55,7 @@ func (b *Backend) create(ctx context.Context, address token.Address, creation to
 		if err != nil {
 			return err
 		}
-		family, err := tokenstore.QueryFoundryTokenFamilies().Create(ctx, tx, draft)
+		family, err := tokenstore.Families.Insert(ctx, tx, draft...)
 		if err != nil {
 			return err
 		}
@@ -63,7 +63,7 @@ func (b *Backend) create(ctx context.Context, address token.Address, creation to
 		if err != nil {
 			return err
 		}
-		entry, err := tokenstore.QueryFoundryTokenGenerations().Create(ctx, tx, next)
+		entry, err := tokenstore.Entries.Insert(ctx, tx, next...)
 		if err != nil {
 			return err
 		}

@@ -147,6 +147,10 @@ func (p writePlan) needsClock() bool {
 	return p.kind.SqlKind() != querycore.DeleteModel && (p.query.table.model.Timestamps != nil || p.kind == querycore.SoftDeleteModel)
 }
 func (p writePlan) conventions(ctx context.Context, source clock.Clock) (writePlan, error) {
+	return p.conventionsFor(ctx, source, p.present, true)
+}
+
+func (p writePlan) conventionsFor(ctx context.Context, source clock.Clock, present func(string) bool, generateKey bool) (writePlan, error) {
 	if p.batch != nil {
 		if p.needsClock() {
 			if source == nil {
@@ -170,7 +174,7 @@ func (p writePlan) conventions(ctx context.Context, source clock.Clock) (writePl
 		return p.withConflictTimestamp(), nil
 	}
 	p.assignments = slices.Clone(p.assignments)
-	if p.kind == querycore.InsertModel {
+	if p.kind == querycore.InsertModel && generateKey {
 		for _, c := range p.query.table.columns {
 			if c.metadata.Name == p.query.table.model.Primary && !c.metadata.DatabaseDefault && c.uuid && (c.mutator.Input == nil || c.mutator.Input == c.field.Type) && !p.present(c.metadata.Name) {
 				id, err := model.NewID[struct{}]()
@@ -210,7 +214,7 @@ func (p writePlan) conventions(ctx context.Context, source clock.Clock) (writePl
 		}
 	}
 	if ts := p.query.table.model.Timestamps; ts != nil {
-		if p.kind == querycore.InsertModel && !p.present(ts.Created) {
+		if p.kind == querycore.InsertModel && !present(ts.Created) {
 			if err := p.setAutomatic(ts.Created, now); err != nil {
 				return p, err
 			}

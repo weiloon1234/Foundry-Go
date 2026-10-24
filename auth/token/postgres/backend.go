@@ -9,7 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/token"
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
@@ -82,17 +82,17 @@ func (b *Backend) now() (time.Time, error) {
 	}
 	return now, nil
 }
-func families(scope, subject string) tokenstore.FamilyQuery {
-	f := tokenstore.FamilyFields()
-	q := tokenstore.QueryFoundryTokenFamilies().Where(f.Scope.Eq(scope))
+func families(scope, subject string) orm.Query[tokenstore.Family] {
+	f := tokenstore.Families
+	q := tokenstore.Families.Query().Where(f.Scope.Eq(scope))
 	if subject != "" {
 		q = q.Where(f.SubjectKey.Eq(subject))
 	}
 	return q
 }
-func entries(scope string, family model.ID[tokenstore.Family]) tokenstore.EntryQuery {
-	f := tokenstore.EntryFields()
-	q := tokenstore.QueryFoundryTokenGenerations().Where(f.Scope.Eq(scope))
+func entries(scope string, family model.ID[tokenstore.Family]) orm.Query[tokenstore.Entry] {
+	f := tokenstore.Entries
+	q := tokenstore.Entries.Query().Where(f.Scope.Eq(scope))
 	if !family.IsZero() {
 		q = q.Where(f.FamilyID.Eq(family))
 	}
@@ -121,8 +121,8 @@ func lockSubject(ctx context.Context, tx *database.Tx, address token.Address, id
 		if err != nil {
 			return tokenstore.Subject{}, false, err
 		}
-		draft := tokenstore.SubjectDraft{}.SetKey(key).SetScope(scope).SetIdentity(data)
-		if _, err := tokenstore.QueryFoundryTokenSubjects().Upsert(ctx, tx, draft, query.OnConflict(tokenstore.SubjectFields().Key).DoNothing()); err != nil {
+		draft := []orm.Assignment[tokenstore.Subject]{tokenstore.Subjects.Key().Set(key), tokenstore.Subjects.Scope.Set(scope), tokenstore.Subjects.Identity.Set(data)}
+		if _, err := orm.Upsert(ctx, tx, tokenstore.Subjects.Query(), orm.OnConflict(orm.ConflictKey(tokenstore.Subjects.Key())).DoNothing(), draft...); err != nil {
 			return tokenstore.Subject{}, false, err
 		}
 	}
@@ -133,12 +133,12 @@ func subjectByKey(ctx context.Context, tx *database.Tx, address token.Address, k
 	if err != nil {
 		return tokenstore.Subject{}, false, err
 	}
-	q := tokenstore.QueryFoundryTokenSubjects().Where(tokenstore.SubjectFields().Scope.Eq(scope))
+	q := tokenstore.Subjects.Query().Where(tokenstore.Subjects.Scope.Eq(scope))
 	var found value.Optional[tokenstore.Subject]
 	if lock {
-		found, err = q.ForUpdate().Find(ctx, tx, key)
+		found, err = q.Where(tokenstore.Subjects.Key().Eq(key)).ForUpdate().First(ctx, tx)
 	} else {
-		found, err = q.Find(ctx, tx, key)
+		found, err = q.Where(tokenstore.Subjects.Key().Eq(key)).First(ctx, tx)
 	}
 	if err != nil {
 		return tokenstore.Subject{}, false, err
@@ -210,7 +210,7 @@ func record(address token.Address, subject tokenstore.Subject, family tokenstore
 	return result, result.Validate(address)
 }
 func currentRecord(ctx context.Context, tx *database.Tx, address token.Address, subject tokenstore.Subject, family tokenstore.Family) (token.Record, error) {
-	found, err := entries(family.Scope, family.ID).Where(tokenstore.EntryFields().Generation.Eq(family.Generation)).First(ctx, tx)
+	found, err := entries(family.Scope, family.ID).Where(tokenstore.Entries.Generation.Eq(family.Generation)).First(ctx, tx)
 	if err != nil {
 		return token.Record{}, err
 	}
@@ -220,39 +220,65 @@ func currentRecord(ctx context.Context, tx *database.Tx, address token.Address, 
 	}
 	return record(address, subject, family, row)
 }
-func familyDraft(r token.Record, scope, subject string) (tokenstore.FamilyDraft, error) {
+func familyDraft(r token.Record, scope, subject string) ([]orm.Assignment[tokenstore.Family], error) {
 	// Persist an empty JSON array rather than null for a deliberate empty grant.
 	names := append([]auth.AccessScopeName{}, r.Scopes...)
 	scopes, err := value.NewJSON(names)
 	if err != nil {
-		return tokenstore.FamilyDraft{}, err
+		return nil, err
 	}
-	draft := tokenstore.FamilyDraft{}.SetID(model.IDFromBytes[tokenstore.Family](r.ID.Bytes())).SetScope(scope).SetSubjectKey(subject).
-		SetName(r.Name).SetScopes(scopes).SetMode(uint8(r.Mode)).SetAssurance(uint8(r.Assurance)).SetAccessNanos(int64(r.Lifetime.Access)).
-		SetRefreshIdleNanos(int64(r.Lifetime.RefreshIdle)).SetRotationLimit(r.RotationLimit).SetGeneration(r.Generation).SetCreatedAt(r.CreatedAt).SetExpiresAt(r.ExpiresAt).
-		ClearClientIP().ClearUserAgent()
+	draft := []orm.Assignment[tokenstore.Family]{
+		tokenstore.Families.ID.Set(model.IDFromBytes[tokenstore.Family](r.ID.Bytes())),
+		tokenstore.Families.Scope.Set(scope),
+		tokenstore.Families.SubjectKey.Set(subject),
+		tokenstore.Families.Name.Set(r.Name),
+		tokenstore.Families.Scopes.Set(scopes),
+		tokenstore.Families.Mode.Set(uint8(r.Mode)),
+		tokenstore.Families.Assurance.Set(uint8(r.Assurance)),
+		tokenstore.Families.AccessNanos.Set(int64(r.Lifetime.Access)),
+		tokenstore.Families.RefreshIdleNanos.Set(int64(r.Lifetime.RefreshIdle)),
+		tokenstore.Families.RotationLimit.Set(r.RotationLimit),
+		tokenstore.Families.Generation.Set(r.Generation),
+		tokenstore.Families.CreatedAt.Set(r.CreatedAt),
+		tokenstore.Families.ExpiresAt.Set(r.ExpiresAt),
+	}
 	// Zero device metadata is stored as NULL.
 	if r.Device.ClientIP.IsValid() {
-		draft = draft.SetClientIP(r.Device.ClientIP.String())
+		draft = append(draft, tokenstore.Families.ClientIP.Set(r.Device.ClientIP.String()))
+	} else {
+		draft = append(draft, tokenstore.Families.ClientIP.SetNull())
 	}
 	if r.Device.UserAgent != "" {
-		draft = draft.SetUserAgent(r.Device.UserAgent)
+		draft = append(draft, tokenstore.Families.UserAgent.Set(r.Device.UserAgent))
+	} else {
+		draft = append(draft, tokenstore.Families.UserAgent.SetNull())
 	}
 	return draft, nil
 }
-func entryDraft(r token.Record, scope string) (tokenstore.EntryDraft, error) {
+func entryDraft(r token.Record, scope string) ([]orm.Assignment[tokenstore.Entry], error) {
 	id, err := model.NewID[tokenstore.Entry]()
 	if err != nil {
-		return tokenstore.EntryDraft{}, err
+		return nil, err
 	}
-	draft := tokenstore.EntryDraft{}.SetID(id).SetScope(scope).SetFamilyID(model.IDFromBytes[tokenstore.Family](r.ID.Bytes())).SetGeneration(r.Generation).
-		SetAccessHash(r.AccessHash.Hex()).SetIssuedAt(r.IssuedAt).SetLastSeenAt(r.LastSeenAt).
-		SetAccessExpiresAt(r.AccessExpiresAt).ClearRefreshHash().ClearRefreshExpiresAt()
+	draft := []orm.Assignment[tokenstore.Entry]{
+		tokenstore.Entries.ID.Set(id),
+		tokenstore.Entries.Scope.Set(scope),
+		tokenstore.Entries.FamilyID.Set(model.IDFromBytes[tokenstore.Family](r.ID.Bytes())),
+		tokenstore.Entries.Generation.Set(r.Generation),
+		tokenstore.Entries.AccessHash.Set(r.AccessHash.Hex()),
+		tokenstore.Entries.IssuedAt.Set(r.IssuedAt),
+		tokenstore.Entries.LastSeenAt.Set(r.LastSeenAt),
+		tokenstore.Entries.AccessExpiresAt.Set(r.AccessExpiresAt),
+	}
 	if hash, present := r.RefreshHash.Get(); present {
-		draft = draft.SetRefreshHash(hash.Hex())
+		draft = append(draft, tokenstore.Entries.RefreshHash.Set(hash.Hex()))
+	} else {
+		draft = append(draft, tokenstore.Entries.RefreshHash.SetNull())
 	}
 	if expiry, present := r.RefreshExpiresAt.Get(); present {
-		draft = draft.SetRefreshExpiresAt(expiry)
+		draft = append(draft, tokenstore.Entries.RefreshExpiresAt.Set(expiry))
+	} else {
+		draft = append(draft, tokenstore.Entries.RefreshExpiresAt.SetNull())
 	}
 	return draft, nil
 }

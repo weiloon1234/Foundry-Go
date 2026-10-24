@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth/session"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/sessionstore"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -24,7 +25,7 @@ func (b *Backend) RevokeID(ctx context.Context, address session.Address, identit
 			return err
 		}
 		key := model.IDFromBytes[sessionstore.Entry](id.Bytes())
-		found, err := entries(subject.Scope, subject.Key).ForUpdate().Find(ctx, tx, key)
+		found, err := entries(subject.Scope, subject.Key).Where(sessionstore.Entries.ID.Eq(key)).ForUpdate().First(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -35,7 +36,7 @@ func (b *Backend) RevokeID(ctx context.Context, address session.Address, identit
 		if _, err := record(address, subject, row); err != nil {
 			return err
 		}
-		if _, err := entries(subject.Scope, subject.Key).Delete(ctx, tx, key); err != nil {
+		if _, err := orm.Delete(ctx, tx, entries(subject.Scope, subject.Key), sessionstore.Entries.ID, key); err != nil {
 			return err
 		}
 		removed = true

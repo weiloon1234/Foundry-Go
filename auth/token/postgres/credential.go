@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth/token"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/tokenstore"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -13,12 +14,12 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-func credentialQuery(scope string, hash token.Digest, refresh bool) tokenstore.EntryQuery {
+func credentialQuery(scope string, hash token.Digest, refresh bool) orm.Query[tokenstore.Entry] {
 	q := entries(scope, model.ID[tokenstore.Family]{})
 	if refresh {
-		return q.Where(tokenstore.EntryFields().RefreshHash.Eq(hash.Hex()))
+		return q.Where(tokenstore.Entries.RefreshHash.Eq(hash.Hex()))
 	}
-	return q.Where(tokenstore.EntryFields().AccessHash.Eq(hash.Hex()))
+	return q.Where(tokenstore.Entries.AccessHash.Eq(hash.Hex()))
 }
 
 // credential uses an initial hash lookup solely as a locator. Mutations lock the
@@ -38,7 +39,7 @@ func readCredential(ctx context.Context, tx *database.Tx, address token.Address,
 	if !present {
 		return tokenstore.Subject{}, tokenstore.Family{}, tokenstore.Entry{}, false, nil
 	}
-	foundFamily, err := families(scope, "").Find(ctx, tx, entry.FamilyID)
+	foundFamily, err := families(scope, "").Where(tokenstore.Families.ID.Eq(entry.FamilyID)).First(ctx, tx)
 	if err != nil {
 		return tokenstore.Subject{}, tokenstore.Family{}, tokenstore.Entry{}, false, err
 	}
@@ -51,7 +52,7 @@ func readCredential(ctx context.Context, tx *database.Tx, address token.Address,
 		return tokenstore.Subject{}, tokenstore.Family{}, tokenstore.Entry{}, false, err
 	}
 	if lock {
-		foundFamily, err = families(scope, subject.Key).ForUpdate().Find(ctx, tx, family.ID)
+		foundFamily, err = families(scope, subject.Key).Where(tokenstore.Families.ID.Eq(family.ID)).ForUpdate().First(ctx, tx)
 		if err != nil {
 			return tokenstore.Subject{}, tokenstore.Family{}, tokenstore.Entry{}, false, err
 		}
@@ -59,7 +60,7 @@ func readCredential(ctx context.Context, tx *database.Tx, address token.Address,
 		if !present {
 			return tokenstore.Subject{}, tokenstore.Family{}, tokenstore.Entry{}, false, nil
 		}
-		found, err = q.ForUpdate().Find(ctx, tx, entry.ID)
+		found, err = q.Where(tokenstore.Entries.ID.Eq(entry.ID)).ForUpdate().First(ctx, tx)
 		if err != nil {
 			return tokenstore.Subject{}, tokenstore.Family{}, tokenstore.Entry{}, false, err
 		}
@@ -202,7 +203,7 @@ func (b *Backend) RevokeRefresh(ctx context.Context, address token.Address, hash
 		}
 		if found {
 			// readCredential locked the subject and this family row.
-			if _, err := families(subject.Scope, subject.Key).Delete(ctx, tx, family.ID); err != nil {
+			if _, err := orm.Delete(ctx, tx, families(subject.Scope, subject.Key), tokenstore.Families.ID, family.ID); err != nil {
 				return err
 			}
 		} else {
@@ -263,7 +264,7 @@ func (b *Backend) Refresh(ctx context.Context, address token.Address, old, acces
 		// Returning nil commits revocation even though the runtime later reports an
 		// invalid refresh credential. Returning auth.Unauthenticated here would undo it.
 		if entry.Generation != family.Generation || !current.LiveRefresh(now) || current.Generation >= current.RotationLimit {
-			_, err := families(subject.Scope, subject.Key).Delete(ctx, tx, family.ID)
+			_, err := orm.Delete(ctx, tx, families(subject.Scope, subject.Key), tokenstore.Families.ID, family.ID)
 			return err
 		}
 		next, live, err := current.Refreshed(now, access, refresh)
@@ -277,11 +278,11 @@ func (b *Backend) Refresh(ctx context.Context, address token.Address, old, acces
 		if err != nil {
 			return err
 		}
-		made, err := tokenstore.QueryFoundryTokenGenerations().Create(ctx, tx, draft)
+		made, err := tokenstore.Entries.Insert(ctx, tx, draft...)
 		if err != nil {
 			return err
 		}
-		family, err = families(subject.Scope, subject.Key).Update(ctx, tx, family.ID, tokenstore.FamilyDraft{}.SetGeneration(next.Generation))
+		family, err = orm.Update(ctx, tx, families(subject.Scope, subject.Key), tokenstore.Families.ID, family.ID, tokenstore.Families.Generation.Set(next.Generation))
 		if err != nil {
 			return err
 		}
@@ -320,7 +321,7 @@ func (b *Backend) Revoke(ctx context.Context, address token.Address, hash token.
 		if _, err := record(address, subject, family, entry); err != nil {
 			return err
 		}
-		if _, err := families(subject.Scope, subject.Key).Delete(ctx, tx, family.ID); err != nil {
+		if _, err := orm.Delete(ctx, tx, families(subject.Scope, subject.Key), tokenstore.Families.ID, family.ID); err != nil {
 			return err
 		}
 		removed = true

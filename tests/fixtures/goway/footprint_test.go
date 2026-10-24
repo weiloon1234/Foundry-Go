@@ -33,17 +33,33 @@ var footprintBudgets = map[string]footprintBudget{
 	"result_cursor": {"./testdata/footprint/result_cursor", 2229},
 	"result_reads":  {"./testdata/footprint/result_reads", 1351},
 
-	"cte_recursive":   {"./testdata/footprint/cte_recursive", 1076},
-	"record_sets":     {"./testdata/footprint/record_sets", 1288},
-	"value_sets":      {"./testdata/footprint/value_sets", 2230},
-	"scalar_text":     {"./testdata/footprint/scalar_text", 2312},
-	"scalar_temporal": {"./testdata/footprint/scalar_temporal", 2625},
+	"cte_recursive": {"./testdata/footprint/cte_recursive", 1076},
+	"record_sets":   {"./testdata/footprint/record_sets", 1288},
+	"value_sets":    {"./testdata/footprint/value_sets", 2230},
+	"uuid_seeks":    {"./testdata/footprint/uuid_seeks", 1023},
+	"each_writes":   {"./testdata/footprint/each_writes", 888},
+
+	"json_paths":     {"./testdata/footprint/json_paths", 6146},
+	"json_functions": {"./testdata/footprint/json_functions", 2736},
+
+	"scalar_text":                {"./testdata/footprint/scalar_text", 2312},
+	"scalar_temporal":            {"./testdata/footprint/scalar_temporal", 2625},
+	"framework_countries":        {"github.com/weiloon1234/Foundry-Go/countries", 4122},
+	"framework_jobarchive":       {"github.com/weiloon1234/Foundry-Go/internal/jobarchive", 2280},
+	"framework_idempotencystore": {"github.com/weiloon1234/Foundry-Go/internal/idempotencystore", 2249},
+	"framework_mfastore":         {"github.com/weiloon1234/Foundry-Go/internal/mfastore", 2947},
+	"framework_challengestore":   {"github.com/weiloon1234/Foundry-Go/internal/challengestore", 2558},
+	"framework_sessionstore":     {"github.com/weiloon1234/Foundry-Go/internal/sessionstore", 4166},
+	"framework_tokenstore":       {"github.com/weiloon1234/Foundry-Go/internal/tokenstore", 5315},
+	"scoped_write":               {"./testdata/footprint/scoped_write", 1111},
+
 	// Framework store migration: actual declaration/write and publisher consumers.
 	"framework_outbox": {"github.com/weiloon1234/Foundry-Go/internal/outboxstore", 2896},
 	"outbox_publisher": {"github.com/weiloon1234/Foundry-Go/outbox/publisher", 1324},
 
 	"records":                    {"./testdata/footprint/records", 1313},
 	"transaction_records":        {"./testdata/footprint/transaction_records", 1296},
+	"source_write":               {"./testdata/footprint/source_write", 1311},
 	"conflict_advanced":          {"./testdata/footprint/conflict_advanced", 1817},
 	"conflict":                   {"./testdata/footprint/conflict", 944},
 	"audit":                      {"./testdata/footprint/audit", 1313},

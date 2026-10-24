@@ -1,0 +1,15 @@
+{
+  "Statements": [
+    {
+      "SQL": "SELECT \"foundry_session_subjects\".\"key\", \"foundry_session_subjects\".\"scope\", \"foundry_session_subjects\".\"identity\" FROM \"foundry_session_subjects\" WHERE (\"foundry_session_subjects\".\"key\" = $1) ORDER BY \"foundry_session_subjects\".\"key\" ASC LIMIT $2",
+      "Args": [
+        "subject",
+        1
+      ]
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "928b0d04c55fdb7881831959aa49abec2858b3e434b6c7f3534bcf13f42e7659"
+}

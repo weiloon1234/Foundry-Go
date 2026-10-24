@@ -1,12 +1,13 @@
 package postgres
 
-import foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
-
 import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/auth/challenge"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/challengestore"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -33,7 +34,7 @@ func (b *Backend) Revoke(ctx context.Context, address challenge.Address, identit
 		if _, err := record(address, subject, row); err != nil {
 			return err
 		}
-		if _, err := entries(subject.Scope, subject.Key).Delete(ctx, tx, row.ID); err != nil {
+		if _, err := orm.Delete(ctx, tx, entries(subject.Scope, subject.Key), challengestore.Entries.ID, row.ID); err != nil {
 			return err
 		}
 		removed = true
@@ -58,8 +59,8 @@ func (b *Backend) Prune(ctx context.Context, address challenge.Address, limit in
 		if err != nil {
 			return err
 		}
-		fields := challengestore.EntryFields()
-		candidates, err := challengestore.ProjectPruneCandidate(entries(scope, "")).SelectID(foundryquery.Value(fields.ID)).SelectSubjectKey(foundryquery.Value(fields.SubjectKey)).Query().Where(fields.ExpiresAt.Lte(now)).OrderBy(fields.SubjectKey.Asc(), fields.ID.Asc()).Limit(limit).All(ctx, tx)
+		fields := challengestore.Entries
+		candidates, err := rows.Select(rows.From(entries(scope, "").Where(fields.ExpiresAt.Lte(now)).OrderBy(fields.SubjectKey.Asc(), fields.ID.Asc()).Limit(limit)), challengestore.PruneCandidateRows, rows.Map(challengestore.PruneCandidateRows.ID, expr.Value(fields.ID)), rows.Map(challengestore.PruneCandidateRows.SubjectKey, expr.Value(fields.SubjectKey))).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -71,7 +72,7 @@ func (b *Backend) Prune(ctx context.Context, address challenge.Address, limit in
 			if !present {
 				return fault.New(fault.Invalid, "stored challenge has no subject")
 			}
-			found, err := entries(scope, subject.Key).ForUpdate().Find(ctx, tx, candidate.ID)
+			found, err := entries(scope, subject.Key).Where(challengestore.Entries.ID.Eq(candidate.ID)).ForUpdate().First(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -90,7 +91,7 @@ func (b *Backend) Prune(ctx context.Context, address challenge.Address, limit in
 			if now.UTC().Before(selected.ExpiresAt.UTC()) {
 				continue
 			}
-			if _, err := entries(scope, subject.Key).Delete(ctx, tx, row.ID); err != nil {
+			if _, err := orm.Delete(ctx, tx, entries(scope, subject.Key), challengestore.Entries.ID, row.ID); err != nil {
 				return err
 			}
 			removed++

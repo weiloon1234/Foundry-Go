@@ -1,0 +1,15 @@
+{
+  "Statements": [
+    {
+      "SQL": "SELECT \"foundry_countries\".\"iso2\", \"foundry_countries\".\"iso3\", \"foundry_countries\".\"iso_numeric\", \"foundry_countries\".\"name\", \"foundry_countries\".\"official_name\", \"foundry_countries\".\"capital\", \"foundry_countries\".\"region\", \"foundry_countries\".\"subregion\", \"foundry_countries\".\"currencies\", \"foundry_countries\".\"primary_currency_code\", \"foundry_countries\".\"calling_code\", \"foundry_countries\".\"calling_root\", \"foundry_countries\".\"calling_suffixes\", \"foundry_countries\".\"tlds\", \"foundry_countries\".\"timezones\", \"foundry_countries\".\"latitude\", \"foundry_countries\".\"longitude\", \"foundry_countries\".\"independent\", \"foundry_countries\".\"un_member\", \"foundry_countries\".\"flag_emoji\", \"foundry_countries\".\"status\", \"foundry_countries\".\"conversion_rate\", \"foundry_countries\".\"is_default\", \"foundry_countries\".\"reference_version\", \"foundry_countries\".\"created_at\", \"foundry_countries\".\"updated_at\" FROM \"foundry_countries\" WHERE (\"foundry_countries\".\"iso2\" = $1) ORDER BY \"foundry_countries\".\"iso2\" ASC LIMIT $2",
+      "Args": [
+        "MY",
+        1
+      ]
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "5231c3afa5af2225c01565f75a6f31485a1720ab4fb6183be6a7e2d3ddc0639e"
+}

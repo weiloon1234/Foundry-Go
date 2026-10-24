@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/challenge"
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/challengestore"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
@@ -74,9 +75,9 @@ func (b *Backend) now() (temporal.DateTime, error) {
 	}
 	return instant, nil
 }
-func entries(scope, subject string) challengestore.EntryQuery {
-	f := challengestore.EntryFields()
-	q := challengestore.QueryFoundryChallenges().Where(f.Scope.Eq(scope))
+func entries(scope, subject string) orm.Query[challengestore.Entry] {
+	f := challengestore.Entries
+	q := challengestore.Entries.Query().Where(f.Scope.Eq(scope))
 	if subject != "" {
 		q = q.Where(f.SubjectKey.Eq(subject))
 	}

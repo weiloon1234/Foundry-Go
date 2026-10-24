@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth/challenge"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/challengestore"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -58,7 +59,7 @@ func (b *Backend) Issue(ctx context.Context, address challenge.Address, identity
 			if _, err := record(address, subject, old); err != nil {
 				return err
 			}
-			if _, err := entries(subject.Scope, subject.Key).Delete(ctx, tx, old.ID); err != nil {
+			if _, err := orm.Delete(ctx, tx, entries(subject.Scope, subject.Key), challengestore.Entries.ID, old.ID); err != nil {
 				return err
 			}
 		}
@@ -66,8 +67,16 @@ func (b *Backend) Issue(ctx context.Context, address challenge.Address, identity
 		if err != nil {
 			return err
 		}
-		draft := challengestore.EntryDraft{}.SetID(id).SetScope(subject.Scope).SetSubjectKey(subject.Key).SetSecretHash(hash.Hex()).SetBindingHash(binding.Hex()).SetCreatedAt(now).SetExpiresAt(expiry)
-		row, err := challengestore.QueryFoundryChallenges().Create(ctx, tx, draft)
+		draft := []orm.Assignment[challengestore.Entry]{
+			challengestore.Entries.ID.Set(id),
+			challengestore.Entries.Scope.Set(subject.Scope),
+			challengestore.Entries.SubjectKey.Set(subject.Key),
+			challengestore.Entries.SecretHash.Set(hash.Hex()),
+			challengestore.Entries.BindingHash.Set(binding.Hex()),
+			challengestore.Entries.CreatedAt.Set(now),
+			challengestore.Entries.ExpiresAt.Set(expiry),
+		}
+		row, err := challengestore.Entries.Insert(ctx, tx, draft...)
 		if err != nil {
 			return err
 		}

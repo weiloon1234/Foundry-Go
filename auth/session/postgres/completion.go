@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/auth/session"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	credentialruntime "github.com/weiloon1234/Foundry-Go/internal/credential"
 	"github.com/weiloon1234/Foundry-Go/internal/sessionstore"
@@ -52,7 +53,7 @@ func (b *Backend) consumeIn(ctx context.Context, tx *database.Tx, address sessio
 		if current.ID != expected.ID || current.Subject != expected.Subject || !current.Hash.Equal(expected.Hash) || current.Assurance != assurance || current.Impersonator.IsSet() || current.CreatedAt != expected.CreatedAt || current.IdleExpiresAt != expected.IdleExpiresAt || current.ExpiresAt != expected.ExpiresAt || now.Before(current.CreatedAt.UTC()) || !current.Live(now) {
 			return auth.Unauthenticated
 		}
-		_, err = entries(subject.Scope, subject.Key).Delete(ctx, child, row.ID)
+		_, err = orm.Delete(ctx, child, entries(subject.Scope, subject.Key), sessionstore.Entries.ID, row.ID)
 		return err
 	})
 }
@@ -117,8 +118,8 @@ func (b *Backend) ResumeActor(ctx context.Context, address session.Address, expe
 		if err != nil || !live {
 			return err
 		}
-		draft := sessionstore.EntryDraft{}.SetSecretHash(next.Hex()).SetLastSeenAt(touched.LastSeenAt).SetIdleExpiresAt(touched.IdleExpiresAt)
-		row, err = entries(subject.Scope, subject.Key).Update(ctx, tx, row.ID, draft)
+		draft := []orm.Assignment[sessionstore.Entry]{sessionstore.Entries.SecretHash.Set(next.Hex()), sessionstore.Entries.LastSeenAt.Set(touched.LastSeenAt), sessionstore.Entries.IdleExpiresAt.Set(touched.IdleExpiresAt)}
+		row, err = orm.Update(ctx, tx, entries(subject.Scope, subject.Key), sessionstore.Entries.ID, row.ID, draft...)
 		if err != nil {
 			return err
 		}

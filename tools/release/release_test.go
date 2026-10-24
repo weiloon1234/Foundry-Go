@@ -219,6 +219,29 @@ func TestGoWaySourceInventory(t *testing.T) {
 		"database/orm/testdata/joined-has.sql",
 		"database/orm/testdata/public-methods.txt",
 		"docs/evidence/goway-6a12-capability-audit.tsv",
+		"internal/storemigration/testdata/challenge_prune_projection.json",
+		"internal/storemigration/testdata/challengestore_entry_read.json",
+		"internal/storemigration/testdata/challengestore_entry_write.json",
+		"internal/storemigration/testdata/challengestore_subject_read.json",
+		"internal/storemigration/testdata/challengestore_subject_write.json",
+		"internal/storemigration/testdata/countries_country_read.json",
+		"internal/storemigration/testdata/countries_country_write.json",
+		"internal/storemigration/testdata/idempotencystore_record_read.json",
+		"internal/storemigration/testdata/idempotencystore_record_write.json",
+		"internal/storemigration/testdata/jobarchive_failure_read.json",
+		"internal/storemigration/testdata/jobarchive_failure_write.json",
+		"internal/storemigration/testdata/mfastore_factor_read.json",
+		"internal/storemigration/testdata/mfastore_factor_write.json",
+		"internal/storemigration/testdata/sessionstore_entry_read.json",
+		"internal/storemigration/testdata/sessionstore_entry_write.json",
+		"internal/storemigration/testdata/sessionstore_subject_read.json",
+		"internal/storemigration/testdata/sessionstore_subject_write.json",
+		"internal/storemigration/testdata/tokenstore_entry_read.json",
+		"internal/storemigration/testdata/tokenstore_entry_write.json",
+		"internal/storemigration/testdata/tokenstore_family_read.json",
+		"internal/storemigration/testdata/tokenstore_family_write.json",
+		"internal/storemigration/testdata/tokenstore_subject_read.json",
+		"internal/storemigration/testdata/tokenstore_subject_write.json",
 		"outbox/publisher/testdata/store_append.json",
 		"outbox/publisher/testdata/store_exhausted.json",
 		"outbox/publisher/testdata/store_failed.json",
@@ -254,7 +277,7 @@ func TestGoWaySourceInventory(t *testing.T) {
 	for _, file := range fixture {
 		present[file.Path] = true
 	}
-	for _, name := range []string{"go.mod", "golden_test.go", "compiler_batch_test.go", "footprint_test.go", "models/user.go", "oldmodels/models.go", "models/.foundry-gen.json", "oldmodels/.foundry-gen.json", "oldmodels/joined/.foundry-gen.json", "oldmodels/mutators/.foundry-gen.json", "oldmodels/hooks/.foundry-gen.json", "oldmodels/reads/.foundry-gen.json", "testdata/noraw/contracts/probe.go", "testdata/noraw/negative/interfaces.go", "testdata/noraw/negative/probe.go", "testdata/noraw/negative/refs_test.go", "testdata/noraw/negative/signatures.go", "testdata/noraw/positive/probe.go", "testdata/noraw/positive/signatures.go", "testdata/noraw/positive/typed.go", "testdata/noraw/raw.test/probe.go", "testdata/noraw/raw.test/probe_test.go", "relation_writes_test.go", "composition_golden_test.go", "conflict_golden_test.go", "pgsmoke/relation_writes_test.go", "pgsmoke/composition_test.go", "pgsmoke/conflict_test.go", "result_read_golden_test.go", "window_golden_test.go", "scalar_golden_test.go", "conflict_advanced_golden_test.go", "pgsmoke/result_cursor_test.go", "pgsmoke/windows_test.go", "pgsmoke/scalars_test.go", "pgsmoke/conflict_advanced_test.go"} {
+	for _, name := range []string{"go.mod", "golden_test.go", "compiler_batch_test.go", "footprint_test.go", "models/user.go", "oldmodels/models.go", "models/.foundry-gen.json", "oldmodels/.foundry-gen.json", "oldmodels/joined/.foundry-gen.json", "oldmodels/mutators/.foundry-gen.json", "oldmodels/hooks/.foundry-gen.json", "oldmodels/reads/.foundry-gen.json", "testdata/noraw/contracts/probe.go", "testdata/noraw/negative/interfaces.go", "testdata/noraw/negative/probe.go", "testdata/noraw/negative/refs_test.go", "testdata/noraw/negative/signatures.go", "testdata/noraw/positive/probe.go", "testdata/noraw/positive/signatures.go", "testdata/noraw/positive/typed.go", "testdata/noraw/raw.test/probe.go", "testdata/noraw/raw.test/probe_test.go", "relation_writes_test.go", "composition_golden_test.go", "conflict_golden_test.go", "pgsmoke/relation_writes_test.go", "pgsmoke/composition_test.go", "pgsmoke/conflict_test.go", "result_read_golden_test.go", "window_golden_test.go", "scalar_golden_test.go", "conflict_advanced_golden_test.go", "pgsmoke/result_cursor_test.go", "pgsmoke/windows_test.go", "pgsmoke/scalars_test.go", "pgsmoke/conflict_advanced_test.go", "source_write_golden_test.go", "json_path_golden_test.go", "store_capabilities_golden_test.go", "pgsmoke/source_write_test.go", "pgsmoke/json_paths_test.go", "pgsmoke/store_capabilities_test.go"} {
 		if !present[name] {
 			t.Errorf("Go-way consumer lost %s", name)
 		}

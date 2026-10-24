@@ -65,16 +65,20 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 6b | Joins, aliases, correlation and lateral queries | In progress; 6b1–6b3 delivered. 6c1 transaction record foundations delivered; CTE-boundary rejection delivered in 6c2; transaction joins remain a later slice. |
 | 6c1 | Complete record/projection adapters and transaction-only composition | Done; committed at `638dc34`. |
 | 6c2 | CTEs, recursive CTEs and record/scalar set operations | Done; committed at `5cbe31d`. |
-| 6c3 | Completed-result cursors, read/page adapters, result locks and sensitivity | Done pending the lead’s commit; accepted patch integrated. |
+| 6c3 | Completed-result cursors, read/page adapters, result locks and sensitivity | Done; committed in integration batch 5 at `5873773`. |
 | 6c | Rows/projections, CTEs, recursive queries, sets and result cursors | COMPLETE for the approved slices. 6c1–6c3 delivered; `transaction_nullable_record` belongs to 6b4. Streaming Each parity remains explicit follow-up. |
-| 6d1 | Windows, ranking/value functions and typed frames | Done pending the lead’s commit. |
-| 6d2 | Text, temporal, interval and geographic functions | Done pending the lead’s commit. |
-| 6d | Windows, JSON, temporal, interval, geographic and text expressions | In progress; 6d1–6d2 delivered, 48/60 catalogue rows ported; 12 JSON rows remain 6d3. |
+| 6d1 | Windows, ranking/value functions and typed frames | Done; committed in integration batch 5 at `5873773`. |
+| 6d2 | Text, temporal, interval and geographic functions | Done; committed in integration batch 5 at `5873773`. |
+| 6d3 | Typed JSON paths and document functions | Done pending the lead’s commit. |
+| 6d | Windows, JSON, temporal, interval, geographic and text expressions | COMPLETE; 6d1–6d3 delivered, all 60 catalogue rows ported. |
 | 6e1 | Column/constraint conflict policies and bounded upserts | Done; committed at `5cbe31d`. |
-| 6e2 | Computed/partial conflict targets and stored/proposed calculations | Done pending the lead’s commit. |
-| 6e | Conflict/upsert, source writes, insert-select, adjustments, prune and explain | In progress; 6e1–6e2 delivered (25/57 rows). Source writes remain 6e3; remaining lifecycle/lookup/prune/explain and D12 parity remain 6e4. |
-| 7s1 | Outbox store and publisher migration | Done pending the lead’s commit; 1/13 framework store packages migrated. |
-| 7 | Framework integrations and wire-contract parity | In progress; outbox migrated. Remaining stores and adapters remain open. |
+| 6e2 | Computed/partial conflict targets and stored/proposed calculations | Done; committed in integration batch 5 at `5873773`. |
+| 6e3 | Insert-select and source update/delete | Done pending the lead’s commit; six declaration-role negatives remain in the approved typed-role follow-up. |
+| 6e | Conflict/upsert, source writes, insert-select, adjustments, prune and explain | In progress; 6e1–6e3 plus four early per-model rows delivered (43/57). Six role rows and eight remaining 6e4 rows stay pending. |
+| 7s1 | Outbox store and publisher migration | Done; committed in integration batch 5 at `5873773`. |
+| 7s2 | Seven more stores and scoped keyed writes | Done pending the lead’s commit; 8/13 store packages migrated. |
+| 7 capabilities | UUID seeks and bounded lifecycle writes | Done pending the lead’s commit; prerequisites for later store migrations. |
+| 7 | Framework integrations and wire-contract parity | In progress; eight stores migrated. Five stores, owner/slot adapters and broader integrations remain open. |
 | 8 | Retire model generation and old query API; extend scaffold | Planned; no deletion before parity |
 | 9 | Migrate consumer fixtures and compiler catalogue | Planned |
 | 10 | Guides, examples and editor coverage | Planned |
@@ -369,6 +373,11 @@ Names in planned rows remain subject to their owning stage's consumer acceptance
 | Result read/page and lock terminals | `rows.Read*`, `SelectTransactionValue`, `ForUpdate`/other lock functions and `LockRows` | 6c3; retained inner windows and transaction-only locks |
 | Window/ranking and scalar function families | `expr.WindowFor`, `Over`, typed frame/range functions and scalar package functions | 6d1–6d2; row and selected phases remain distinct |
 | Computed/partial conflict targets and calculations | `rows.OnConflictKeys`, `ConflictRowsOf`, `SetConflictValue`, target/row predicates and scalar adapters | 6e2; stored/proposed scopes are not SELECT sources |
+| Insert-select and source update/delete | `rows.InsertFrom`, `UpdateFrom`, `DeleteUsing`/`ForceDeleteUsing`, `MapInsert`/`MapUpdate`, `MatchSource` | 6e3; exact scoped mappings, Exec or bounded Returning |
+| Generated JSON path accessors | `expr.JSONFieldOf`, `JSONRoot`, `JSONProperty`, typed key/index/scalar adapters | 6d3; startup validation, no generated path catalogue |
+| Scoped keyed Patch/Remove | `orm.Update` / `orm.Delete` with scoped query, own key and typed identity | 7s2; ordinary lifecycle and scoped cardinality |
+| Ordered UUID predicates | `orm.UUIDLess`/`UUIDGreater` and inclusive variants; scoped/nullable `expr` variants | Stage 7 capabilities; PostgreSQL byte ordering |
+| Per-model UpdateEach/DeleteEach | `orm.UpdateEach` / `orm.DeleteEach` package functions | Stage 7 capabilities; complete candidate locking and one atomic owner |
 | `query.SelectValue(QueryOrders(), ...)` | `rows.SelectValue(Orders.Query(), ...)` | Basic scalar selection ported |
 | Model annotation plus `foundry generate` | Plain struct plus `orm.Define` | Core ported; DTO/enum generation retained |
 
@@ -380,7 +389,7 @@ consumer retains Stage 1 golden coverage and adds core, direct and joined-relati
 | Capability | Old owner/shape | New shape and owning stage |
 | --- | --- | --- |
 | IDs, nullables, numeric/temporal values, enums and bytes | Plain structs and generated codecs | Constructors/codecs retained; natural keys and binary ownership covered in 3.1a |
-| JSON documents and intervals | Generated JSON/interval fields | `JSONOf`/`NullableJSONOf`: equality, membership, containment, assignment, `Asc`/`Desc` and `IsJSONNull`; no range comparisons/text patterns. `IntervalOf`/`NullableIntervalOf`: ordered comparisons, sorting and assignment. Interval functions delivered in 6d2; JSON Kind/Length and paths remain 6d3 |
+| JSON documents and intervals | Generated JSON/interval fields | `JSONOf`/`NullableJSONOf`: equality, membership, containment, assignment, `Asc`/`Desc` and `IsJSONNull`; no range comparisons/text patterns. `IntervalOf`/`NullableIntervalOf`: ordered comparisons, sorting and assignment. Interval functions delivered in 6d2; JSON Kind/Length and typed paths delivered in 6d3 |
 | Password and encrypted fields | Typed values and lifecycle codecs | Stage 3.1b: password scalar capabilities; encrypted typed assignments/null predicates, shared sealing/opening, transaction-keyring enforcement |
 | Column/default tags | Generator reads tags | Startup metadata reads the same tags, Stage 3 |
 | Table name/options | Model annotation | `orm.Define` and typed options, Stage 3 |
@@ -405,7 +414,7 @@ consumer retains Stage 1 golden coverage and adds core, direct and joined-relati
 | Stored change sets | Generated `CompareX` and field structs | B5b delivered: `Changes`, `Compare`, typed `ChangeOf`/nullable/encrypted variants, persisted-only owned snapshots, Assigned versus Changed and existing FieldChange codec policy |
 | Set writes | Explicit bulk lifecycle limits | B5b: `WithoutModelHooks(q)` acknowledges skipped hooks/observers/change capture; required with declared hooks, active observers or unknown executor wrappers; rejected for per-model writes |
 | Force-delete visibility | Active default and scoped physical deletion | B5b: table ForceDelete keeps active visibility; package `orm.ForceDelete` retains supplied query visibility and predicates, including WithTrashed/OnlyTrashed |
-| Draft, batch, lookup, conflict and source writes | Generated drafts/wrappers | Core assignments/batches retained; 6e1 delivers column/constraint conflict policies and upserts. Calculated targets, source/lookup/per-model writes remain 6e2–6e4 |
+| Draft, batch, lookup, conflict and source writes | Generated drafts/wrappers | Core assignments/batches retained; 6e1–6e3 deliver advanced conflicts and source writes, Stage 7 capabilities deliver bounded per-model writes. Remaining lookup/prune/explain/adjustment work and six typed-role exclusions remain open |
 | Reference and identity | `FoundryReference`/`FoundryIdentity` | Table/column-based adapters retaining model/key and persisted identity, Stage 7 |
 | Attachments, translations and metadata | Slot fields plus generated policies | Preserve fields, stored owner names, policies and cleanup; declarations in Stage 7 |
 | Typed raw hydration | Executor-level raw only | Stage 3.1d: model/row decoders, exact named column set, no scopes or automatic routing |
@@ -426,11 +435,14 @@ consumer retains Stage 1 golden coverage and adds core, direct and joined-relati
 | Record and scalar sets | UNION/INTERSECT/EXCEPT and ALL variants | 6c2: separate output scopes, exact records/value codecs/nullability, retained operand windows and read-only composition |
 | Result cursors and read/page adapters | Generated query families | 6c3: explicit completed-output identities, nullable navigation, typed read/page/lock adapters; sensitive keys rejected across composed sources |
 | Windows and frames | Generated window expressions | 6d1: typed Window/RangeWindow, ranking/value functions, aggregate Over, ROWS/GROUPS/RANGE and exclusions |
-| Text, temporal, interval and geographic expressions | Generated scalar expression families | 6d2: typed row/selected and nullable variants, shared compiler and validation owners; JSON remains 6d3 |
+| Text, temporal, interval and geographic expressions | Generated scalar expression families | 6d2: typed row/selected and nullable variants, shared compiler and validation owners; JSON delivered in 6d3 |
 | Conflict policies and upsert | Generated mutation wrappers | 6e1–6e2: column/constraint/computed/partial targets, typed literal/incoming/null and stored/proposed calculations, scoped scalar subqueries; scopes and proposed codecs/conventions retained, lifecycle callbacks explicitly skipped |
+| Insert-select and source update/delete | Shared set-write compiler and generated mappings | 6e3: phase-distinct mappings/plans, scoped sources, defaults/conventions, bounded RETURNING and atomic cardinality checks; six static declaration roles remain deferred |
+| JSON paths | Generated payload accessors | 6d3: handwritten JSONField/JSONFixedArray declarations, exact payload/key/index types and shared tag/codec/compiler validation |
+| Scoped keyed and bounded per-model writes | Generated scoped writes and UpdateEach/DeleteEach | 7s2/capabilities: package functions preserve scope plus key, ordinary lifecycle, candidate locking, one transaction/savepoint and outcome distinctions |
 | Audit capture and history | Generated policies and record adapters | B5d: immutable model-owned Automatic/Exclude/Redact, transactional observer capture, typed stored-value readers and shared sensitive redaction |
 | Typed raw fragments | Explicit raw expression/predicate boundary | 6a4: Raw/RawWithCodec selected values and WhereRaw predicates, shared lexer and binding, scopes retained; no-raw CLI policy |
-| Framework-owned stores | Generated model APIs and handwritten store logic | 7s1: internal/outboxstore and publisher use ORM; public contracts, SKIP LOCKED claims, bounded pruning and outcomes retained; 12 stores remain |
+| Framework-owned stores | Generated model APIs and handwritten store logic | 7s1–7s2: outbox plus countries, jobarchive, idempotency, MFA, challenge, session and token stores use ORM (8/13); schemas, wire contracts, scopes and outcomes retained; five store migrations remain |
 | Model binding, factories, datatables and database validation | Generated metadata and typed query interfaces | Table/column adapters, Stage 7; TS/OpenAPI/manifest contracts must remain identical |
 
 Generated field hover notices move to handwritten comments and declaration docs.
@@ -494,8 +506,8 @@ intentionally accepts byte slices, while identity does not.
 
 | Disposition | Cases |
 | --- | ---: |
-| ported | 421 |
-| port | 161 |
+| ported | 451 |
+| port | 131 |
 | merge | 0 |
 | obsolete | 0 |
 | unaffected | 444 |
@@ -533,7 +545,7 @@ intentionally accepts byte slices, while identity does not.
 | 7 | 81 |
 | — | 444 |
 
-421 old catalogue rows are covered by 413 distinct Go-way cases.
+451 old catalogue rows are covered by 443 distinct Go-way cases.
 
 ## Emitter audit
 
@@ -1418,3 +1430,64 @@ predicate-preserving keyed writes; its earlier readiness assessment was provisio
 Stage 8 retirement and live PostgreSQL acceptance remain separate. Current batch
 checks and source hashes are recorded in each slice's integration evidence; all
 existing footprint ceilings remain fixed.
+
+## Integration batch 6a: source writes, JSON paths and store capabilities
+
+6e3 adds typed insert-select and source update/delete package builders. Source
+scopes, filters and windows remain; destination scopes constrain updates/deletes.
+Mappings, match keys and plans have distinct private phases. Fixed inputs normalize
+once; mapped writes cannot bypass mutators, encryption or managed timestamps.
+Mapped updates reject ambiguous matches atomically. Exec returns a count; bounded
+Returning hydrates complete models and rolls back on overflow, decode or close
+failure. These set writes skip local hooks, observers, retrieval and automatic
+audit while retaining transactions, conventions and reconciliation. See the
+[source-write recipe](../../database/orm/README.md#insert-select-and-source-writes)
+and [6e3 evidence](../../docs/evidence/goway-6e3-source-writes.json).
+
+Fourteen 6e3 catalogue rows are ported. Six declaration-role negatives remain
+pending the approved dedicated typed-role slice: `insert_select_mutator`,
+`insert_select_timestamp`, `source_delete_force`, `source_update_mutator`,
+`source_update_primary`, `source_update_timestamp`. Runtime defenses remain;
+they are not substitutes for those static exclusions. The
+[role feasibility record](../../docs/evidence/goway-6e3-static-role-feasibility.json)
+is historical analysis, not a new approval request. Four additional per-model
+rows arrive with Stage 7 capabilities; Stage 6e is now 43/57 with eight other
+6e4 rows still pending.
+
+Stage 6d is complete: all 60 catalogue rows are ported. JSON paths use
+startup-validated pointer declarations and exact payload, map-key and index types.
+The shared JSON/tag/compiler owners preserve promotion, codecs and parameter
+binding. Missing paths and SQL-null ancestors produce SQL NULL; present JSON null
+remains present for JSON/Kind, while scalar extraction yields SQL NULL. Length is
+NULL for non-arrays. Optional, nullable, pointer and nested-document wrappers are
+explicit. No public contract or generated DTO schema changes. See the
+[JSON recipe](../../database/orm/expr/README.md) and
+[6d3 evidence](../../docs/evidence/goway-6d3.json).
+
+Stage 7 slice 2 migrates seven packages and eleven models: countries, jobarchive,
+idempotency, MFA, challenge, session and token stores. With outbox, eight of
+thirteen store packages now use ORM declarations. Scoped keyed `orm.Update` and
+`orm.Delete` retain both selection and identity predicates and the ordinary
+lifecycle. Existing schema, defaults, codecs, redaction, freshness, lock ordering
+and unknown outcomes remain; session/token maintenance SQL is unchanged. The
+lane captured 23 frozen transcripts and nine identical contract exports. The
+generator removed twelve obsolete model/projection outputs while retaining
+ownership manifests and countries enum output. See the
+[scoped-write recipe](../../database/orm/README.md#scoped-keyed-writes) and
+[7s2 evidence](../../docs/evidence/goway-stage7-slice2.json).
+
+Stage 7 capabilities add typed PostgreSQL UUID seeks and bounded UpdateEach/
+DeleteEach. Candidate sets lock completely in primary-key order; overflow and
+duplicate identities fail before callbacks. Rows close before ordinary lifecycle
+work. One transaction/savepoint covers all candidates, without per-row savepoints;
+unknown or committed failures retain typed candidates and never report successful
+rows or retry. Incoming locks, ordering/windows, eager clauses and hook bypasses
+are rejected. See the [capability recipe](../../database/orm/README.md#uuid-seeks-and-bounded-lifecycle-writes)
+and [capability evidence](../../docs/evidence/goway-stage7-store-capabilities.json).
+
+These prerequisites unblock later work but do not migrate notifications,
+webhooks, extensions, attachments or audit. Owner/slot, datatable, binding,
+factory/identity and pruning adapters remain open. Stage 7 and Stage 8 retirement
+are incomplete. Current integration checks and refreshed hashes accompany each
+slice's evidence; existing footprint ceilings remain unchanged. Live PostgreSQL
+execution remains a separate lead checkpoint.

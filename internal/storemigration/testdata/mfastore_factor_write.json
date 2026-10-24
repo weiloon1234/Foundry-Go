@@ -1,0 +1,23 @@
+{
+  "Statements": [
+    {
+      "SQL": "SAVEPOINT foundry_sp_1",
+      "Args": []
+    },
+    {
+      "SQL": "UPDATE \"foundry_mfa_factors\" SET \"ciphertext\" = $1 WHERE (\"foundry_mfa_factors\".\"key\" = $2) RETURNING \"foundry_mfa_factors\".\"key\", \"foundry_mfa_factors\".\"scope\", \"foundry_mfa_factors\".\"identity\", \"foundry_mfa_factors\".\"generation\", \"foundry_mfa_factors\".\"ciphertext\", \"foundry_mfa_factors\".\"created_at\", \"foundry_mfa_factors\".\"pending_until\", \"foundry_mfa_factors\".\"confirmed_at\", \"foundry_mfa_factors\".\"last_step\", \"foundry_mfa_factors\".\"recovery_hashes\"",
+      "Args": [
+        "updated",
+        "subject"
+      ]
+    },
+    {
+      "SQL": "RELEASE SAVEPOINT foundry_sp_1",
+      "Args": []
+    }
+  ],
+  "Begins": 1,
+  "Commits": 1,
+  "Rollbacks": 0,
+  "Result": "a964e3b3bea85c2c74b655674d546ec9821fa1abc61a382d1cd27f9d5436b12e"
+}

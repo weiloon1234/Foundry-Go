@@ -1,0 +1,1958 @@
+{
+  "slice": "6d3",
+  "recorded_at": "2026-10-23T19:58:06.248471+00:00",
+  "base_commit": "638dc34dc83c808b190b5880fa8ed3e929b33815",
+  "status": "implemented; scoped A/B/C acceptance passes; awaiting lead review",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r2",
+    "GOWORK": "off",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "toolchain": "go version go1.27.1 darwin/arm64"
+  },
+  "accepted_6d1_6d2": "Preserved cumulative uncommitted changes; delta measured against startup snapshot. No generator or model generation.",
+  "api": {
+    "functions": [
+      "JSONFieldOf",
+      "JSONFixedArrayOf",
+      "JSONRoot",
+      "JSONNullableRoot",
+      "JSONProperty",
+      "JSONIndex",
+      "JSONMapKey",
+      "JSONArrayElement",
+      "JSONScalar",
+      "JSONOrderedScalar",
+      "JSONTextScalar",
+      "JSONOptional",
+      "JSONNullable",
+      "JSONPointer",
+      "JSONDocument",
+      "JSONType",
+      "JSONTypeValue",
+      "JSONTypeNullable",
+      "JSONTypeNullableValue",
+      "JSONContains",
+      "JSONContainsValue",
+      "JSONContainsNullable",
+      "JSONContainsNullableValue",
+      "JSONContainedBy",
+      "JSONContainedByValue",
+      "JSONContainedByNullable",
+      "JSONContainedByNullableValue",
+      "JSONLength",
+      "JSONLengthValue",
+      "JSONLengthNullable",
+      "JSONLengthNullableValue"
+    ],
+    "types": [
+      "JSONField[P,V]",
+      "JSONFixedArray[P,V]",
+      "JSONPath[S,P]",
+      "JSONKind"
+    ],
+    "constants": [
+      "JSONObject",
+      "JSONArray",
+      "JSONString",
+      "JSONNumber",
+      "JSONBoolean",
+      "JSONNull"
+    ],
+    "methods": {
+      "JSONField": [
+        "Validate"
+      ],
+      "JSONFixedArray": [
+        "Validate"
+      ],
+      "JSONPath": [
+        "JSON",
+        "Kind",
+        "Length",
+        "Exists",
+        "IsMissing",
+        "IsJSONNull",
+        "Contains"
+      ],
+      "JSONKind": [
+        "Validate"
+      ]
+    },
+    "declaration": "JSONFieldOf(func(*P)*V) resolves the json tag once, shares runtime JSON promotion/validation and model offset uniqueness checks. Validate at startup; invalid and zero descriptors fail closed when used. Fixed arrays bind an element selector; maps/slices constrain element and key types in their signatures.",
+    "state": "Direct method-free rowData and invariant owner/payload markers; no embedding chains, new Query/Table/column methods or capability bridges.",
+    "semantics": "Missing and SQL-null ancestors yield SQL NULL, while present JSON null remains present in JSON/Kind. Scalar extraction maps both missing and JSON null to SQL NULL. Safe Length is SQL NULL for every non-array kind. Runtime map keys/indexes are bound; declared property names are safe literals. Optional/Nullable/pointer/nested JSON wrappers unwrap explicitly; exact payload codec required for scalar extraction."
+  },
+  "ported_rows": [
+    "json_contains_payload",
+    "json_kind_boolean",
+    "json_nullable_input",
+    "json_path_array_index",
+    "json_path_map_key",
+    "json_path_numeric_like",
+    "json_path_owner",
+    "json_path_payload",
+    "json_path_row_phase",
+    "json_path_scalar_type",
+    "json_path_unknown_field",
+    "json_selected_row"
+  ],
+  "extra_regressions": [
+    "json_path_owner_conversion",
+    "json_field_payload_conversion",
+    "json_scalar_codec_type"
+  ],
+  "stage_6d": {
+    "ported": 60,
+    "total": 60
+  },
+  "surface_additions": {
+    "count": 55,
+    "entries": [
+      "expr.JSONField",
+      "  Validate func() error",
+      "*expr.JSONField",
+      "  Validate func() error",
+      "expr.JSONFixedArray",
+      "  Validate func() error",
+      "*expr.JSONFixedArray",
+      "  Validate func() error",
+      "expr.JSONPath",
+      "  Contains func(fragment P) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "  Exists func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "  IsJSONNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "  IsMissing func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "  JSON func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]]",
+      "  Kind func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONKind]]",
+      "  Length func() github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]",
+      "*expr.JSONPath",
+      "  Contains func(fragment P) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "  Exists func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "  IsJSONNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "  IsMissing func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]",
+      "  JSON func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]]",
+      "  Kind func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONKind]]",
+      "  Length func() github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]",
+      "expr.JSONFieldOf func[P, V any](selectField func(*P) *V) github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONField[P, V]",
+      "expr.JSONFixedArrayOf func[P, V any](selectElement func(*P) *V) github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONFixedArray[P, V]",
+      "expr.JSONRoot func[S, P any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, P]",
+      "expr.JSONNullableRoot func[S, P any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, P]",
+      "expr.JSONProperty func[S, P, V any](parent github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, P], field github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONField[P, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, V]",
+      "expr.JSONIndex func[S any, P ~[]V, V any](parent github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, P], index int32) github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, V]",
+      "expr.JSONMapKey func[S any, P ~map[K]V, K comparable, V any](parent github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, P], key K) github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, V]",
+      "expr.JSONArrayElement func[S, P, V any](parent github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, P], array github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONFixedArray[P, V], index int32) github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, V]",
+      "expr.JSONScalar func[S, P any](path github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, P], c github.com/weiloon1234/Foundry-Go/database/codec.Codec[P]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[P]]",
+      "expr.JSONOrderedScalar func[S any, P github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedScalar](path github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, P], c github.com/weiloon1234/Foundry-Go/database/codec.Codec[P]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, P]",
+      "expr.JSONTextScalar func[S any, P ~string](path github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, P], c github.com/weiloon1234/Foundry-Go/database/codec.Codec[P]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableTextRowExpression[S, P]",
+      "expr.JSONOptional func[S, P any](path github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, github.com/weiloon1234/Foundry-Go/value.Optional[P]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, P]",
+      "expr.JSONNullable func[S, P any](path github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, github.com/weiloon1234/Foundry-Go/value.Nullable[P]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, P]",
+      "expr.JSONPointer func[S, P any](path github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, *P]) github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, P]",
+      "expr.JSONDocument func[S, P any](path github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, P]",
+      "expr.JSONType func[S, P any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONKind]",
+      "expr.JSONTypeValue func[S, P any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONKind]",
+      "expr.JSONTypeNullable func[S, P any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONKind]]",
+      "expr.JSONTypeNullableValue func[S, P any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONKind]]",
+      "expr.JSONContains func[S, P any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, bool]",
+      "expr.JSONContainsValue func[S, P any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, bool]",
+      "expr.JSONContainsNullable func[S, P any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[bool]]",
+      "expr.JSONContainsNullableValue func[S, P any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[bool]]",
+      "expr.JSONContainedBy func[S, P any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, bool]",
+      "expr.JSONContainedByValue func[S, P any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, bool]",
+      "expr.JSONContainedByNullable func[S, P any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[bool]]",
+      "expr.JSONContainedByNullableValue func[S, P any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[bool]]",
+      "expr.JSONLength func[S, P any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]",
+      "expr.JSONLengthValue func[S, P any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]",
+      "expr.JSONLengthNullable func[S, P any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]",
+      "expr.JSONLengthNullableValue func[S, P any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[int64]]"
+    ],
+    "existing_entries_unchanged": true
+  },
+  "footprint": {
+    "method": "Existing fixture harness parseFootprintSymbols over warm native go tool nm T/t export-archive symbols; not a runtime benchmark.",
+    "new_probes": {
+      "json_paths": {
+        "functions": 6146,
+        "ceiling": 7068,
+        "archive_bytes": 26542418
+      },
+      "json_functions": {
+        "functions": 2736,
+        "ceiling": 3147,
+        "archive_bytes": 11606844
+      }
+    },
+    "probes": {
+      "aggregate_families": {
+        "functions": 4362,
+        "baseline": 3799,
+        "ceiling": 4369,
+        "archive_bytes": 19815412
+      },
+      "aggregate_group": {
+        "functions": 2529,
+        "baseline": 2426,
+        "ceiling": 2790,
+        "archive_bytes": 11312282
+      },
+      "aggregate_slot_declaration": {
+        "functions": 1127,
+        "baseline": 1112,
+        "ceiling": 1279,
+        "archive_bytes": 4830082
+      },
+      "aggregate_slot_direct": {
+        "functions": 1490,
+        "baseline": 1490,
+        "ceiling": 1714,
+        "archive_bytes": 6109788
+      },
+      "aggregate_slot_nested": {
+        "functions": 2050,
+        "baseline": 2048,
+        "ceiling": 2356,
+        "archive_bytes": 8435782
+      },
+      "aggregate_slot_pivot": {
+        "functions": 2092,
+        "baseline": 2095,
+        "ceiling": 2410,
+        "archive_bytes": 8722856
+      },
+      "audit": {
+        "functions": 1313,
+        "baseline": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6439732
+      },
+      "column_encrypted_json": {
+        "functions": 1321,
+        "baseline": 1217,
+        "ceiling": 1400,
+        "archive_bytes": 5625318
+      },
+      "column_encrypted_text": {
+        "functions": 1231,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5315136
+      },
+      "column_enum": {
+        "functions": 1344,
+        "baseline": 1232,
+        "ceiling": 1417,
+        "archive_bytes": 5616826
+      },
+      "column_interval": {
+        "functions": 1293,
+        "baseline": 1178,
+        "ceiling": 1355,
+        "archive_bytes": 5558314
+      },
+      "column_json": {
+        "functions": 1391,
+        "baseline": 1280,
+        "ceiling": 1472,
+        "archive_bytes": 5855250
+      },
+      "column_nullable_encrypted_json": {
+        "functions": 1562,
+        "baseline": 1449,
+        "ceiling": 1667,
+        "archive_bytes": 6890992
+      },
+      "column_nullable_encrypted_text": {
+        "functions": 1472,
+        "baseline": 1359,
+        "ceiling": 1563,
+        "archive_bytes": 6557856
+      },
+      "column_nullable_interval": {
+        "functions": 1530,
+        "baseline": 1406,
+        "ceiling": 1617,
+        "archive_bytes": 6775506
+      },
+      "column_nullable_json": {
+        "functions": 1642,
+        "baseline": 1522,
+        "ceiling": 1751,
+        "archive_bytes": 7079772
+      },
+      "column_nullable_password": {
+        "functions": 1535,
+        "baseline": 1417,
+        "ceiling": 1630,
+        "archive_bytes": 6738768
+      },
+      "column_nullable_text": {
+        "functions": 1584,
+        "baseline": 1456,
+        "ceiling": 1675,
+        "archive_bytes": 6549572
+      },
+      "column_number": {
+        "functions": 1267,
+        "baseline": 1172,
+        "ceiling": 1348,
+        "archive_bytes": 5300148
+      },
+      "column_password": {
+        "functions": 1299,
+        "baseline": 1190,
+        "ceiling": 1369,
+        "archive_bytes": 5566492
+      },
+      "column_time": {
+        "functions": 1309,
+        "baseline": 1194,
+        "ceiling": 1374,
+        "archive_bytes": 5438228
+      },
+      "conditional_row": {
+        "functions": 1803,
+        "baseline": 1681,
+        "ceiling": 1934,
+        "archive_bytes": 8194978
+      },
+      "conditional_selected": {
+        "functions": 1647,
+        "baseline": 1511,
+        "ceiling": 1738,
+        "archive_bytes": 7532482
+      },
+      "correlation": {
+        "functions": 2990,
+        "baseline": 2752,
+        "ceiling": 3165,
+        "archive_bytes": 13702480
+      },
+      "cursor": {
+        "functions": 1186,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5341686
+      },
+      "distinct": {
+        "functions": 1174,
+        "baseline": 1135,
+        "ceiling": 1306,
+        "archive_bytes": 5658848
+      },
+      "expr_arithmetic": {
+        "functions": 1256,
+        "baseline": 1162,
+        "ceiling": 1337,
+        "archive_bytes": 5869596
+      },
+      "expr_selected": {
+        "functions": 1696,
+        "baseline": 1551,
+        "ceiling": 1784,
+        "archive_bytes": 7512090
+      },
+      "global_scopes": {
+        "functions": 1389,
+        "baseline": 1374,
+        "ceiling": 1581,
+        "archive_bytes": 6379966
+      },
+      "has": {
+        "functions": 1412,
+        "baseline": 1302,
+        "ceiling": 1498,
+        "archive_bytes": 6230184
+      },
+      "has_one": {
+        "functions": 1403,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6203614
+      },
+      "input_column_kinds": {
+        "functions": 5321,
+        "baseline": 5088,
+        "ceiling": 5852,
+        "archive_bytes": 21981636
+      },
+      "input_key": {
+        "functions": 1049,
+        "baseline": 982,
+        "ceiling": 1130,
+        "archive_bytes": 4841596
+      },
+      "json_functions": {
+        "functions": 2736,
+        "baseline": 2736,
+        "ceiling": 3147,
+        "archive_bytes": 11606844
+      },
+      "json_paths": {
+        "functions": 6146,
+        "baseline": 6146,
+        "ceiling": 7068,
+        "archive_bytes": 26542418
+      },
+      "key_chunk": {
+        "functions": 862,
+        "baseline": 812,
+        "ceiling": 934,
+        "archive_bytes": 4132544
+      },
+      "lateral": {
+        "functions": 3046,
+        "baseline": 2852,
+        "ceiling": 3280,
+        "archive_bytes": 15033364
+      },
+      "lifecycle_changes": {
+        "functions": 1069,
+        "baseline": 1050,
+        "ceiling": 1208,
+        "archive_bytes": 4947374
+      },
+      "lifecycle_write": {
+        "functions": 949,
+        "baseline": 930,
+        "ceiling": 1070,
+        "archive_bytes": 4706874
+      },
+      "model_type": {
+        "functions": 299,
+        "baseline": 299,
+        "ceiling": 344,
+        "archive_bytes": 1272428
+      },
+      "models": {
+        "functions": 6849,
+        "baseline": 6147,
+        "ceiling": 7070,
+        "archive_bytes": 29879210
+      },
+      "models_1": {
+        "functions": 1751,
+        "baseline": 1619,
+        "ceiling": 1862,
+        "archive_bytes": 7237522
+      },
+      "models_3": {
+        "functions": 2605,
+        "baseline": 2435,
+        "ceiling": 2801,
+        "archive_bytes": 10838444
+      },
+      "morph": {
+        "functions": 1155,
+        "baseline": 1088,
+        "ceiling": 1252,
+        "archive_bytes": 5213006
+      },
+      "mutator_explicit": {
+        "functions": 1698,
+        "baseline": 1605,
+        "ceiling": 1846,
+        "archive_bytes": 7016604
+      },
+      "mutators": {
+        "functions": 855,
+        "baseline": 801,
+        "ceiling": 922,
+        "archive_bytes": 4481472
+      },
+      "nested_with": {
+        "functions": 1403,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6242524
+      },
+      "nullable_join_chain": {
+        "functions": 1853,
+        "baseline": 1695,
+        "ceiling": 1950,
+        "archive_bytes": 8816958
+      },
+      "on_comparisons": {
+        "functions": 1589,
+        "baseline": 1454,
+        "ceiling": 1673,
+        "archive_bytes": 7206144
+      },
+      "onequery": {
+        "functions": 854,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 4089548
+      },
+      "outer_join": {
+        "functions": 1788,
+        "baseline": 1668,
+        "ceiling": 1919,
+        "archive_bytes": 8478448
+      },
+      "pivot": {
+        "functions": 1072,
+        "baseline": 1005,
+        "ceiling": 1156,
+        "archive_bytes": 4912286
+      },
+      "q_join": {
+        "functions": 1766,
+        "baseline": 1598,
+        "ceiling": 1838,
+        "archive_bytes": 8377232
+      },
+      "q_select": {
+        "functions": 895,
+        "baseline": 836,
+        "ceiling": 962,
+        "archive_bytes": 4317858
+      },
+      "q_with": {
+        "functions": 1211,
+        "baseline": 1053,
+        "ceiling": 1211,
+        "archive_bytes": 5526794
+      },
+      "raw": {
+        "functions": 1095,
+        "baseline": 1045,
+        "ceiling": 1202,
+        "archive_bytes": 5189206
+      },
+      "raw_fragments": {
+        "functions": 1379,
+        "baseline": 1331,
+        "ceiling": 1531,
+        "archive_bytes": 6183776
+      },
+      "records": {
+        "functions": 1313,
+        "baseline": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6460902
+      },
+      "relation_with": {
+        "functions": 2047,
+        "baseline": 1847,
+        "ceiling": 2125,
+        "archive_bytes": 8748016
+      },
+      "report_pipeline": {
+        "functions": 2120,
+        "baseline": 1905,
+        "ceiling": 2191,
+        "archive_bytes": 11246904
+      },
+      "retrieval_read": {
+        "functions": 831,
+        "baseline": 826,
+        "ceiling": 950,
+        "archive_bytes": 4104086
+      },
+      "scalar_temporal": {
+        "functions": 2625,
+        "baseline": 2625,
+        "ceiling": 3019,
+        "archive_bytes": 11789800
+      },
+      "scalar_text": {
+        "functions": 2312,
+        "baseline": 2312,
+        "ceiling": 2659,
+        "archive_bytes": 9490462
+      },
+      "sensitive_models": {
+        "functions": 2821,
+        "baseline": 2606,
+        "ceiling": 2997,
+        "archive_bytes": 12784406
+      },
+      "subqueries": {
+        "functions": 3059,
+        "baseline": 2837,
+        "ceiling": 3263,
+        "archive_bytes": 13191820
+      },
+      "table_ref": {
+        "functions": 854,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 4250600
+      },
+      "through": {
+        "functions": 986,
+        "baseline": 928,
+        "ceiling": 1068,
+        "archive_bytes": 4416580
+      },
+      "transaction_records": {
+        "functions": 1296,
+        "baseline": 1296,
+        "ceiling": 1491,
+        "archive_bytes": 6103820
+      },
+      "window_frames": {
+        "functions": 1767,
+        "baseline": 1767,
+        "ceiling": 2033,
+        "archive_bytes": 7896632
+      },
+      "window_rank": {
+        "functions": 1345,
+        "baseline": 1345,
+        "ceiling": 1547,
+        "archive_bytes": 6129138
+      }
+    },
+    "existing_68_function_counts_and_ceilings_unchanged": true,
+    "justification": "The path consumer exercises optional properties, nested payloads, a quoted int field, a typed map key, text and numeric extraction, typed predicate construction, mapping and decoding over six JSON columns. JSON codec/result instantiations across these payload shapes account for the larger new probe; all work is opt-in and every existing probe has zero function growth. The functions consumer separately measures Kind, Length, nullable containment and mapping. Ceilings are ceil(final measured * 1.15); no accepted ceiling changed."
+  },
+  "coverage": {
+    "runtime": "Startup pointer/tag binding, promoted embedded-value fields, foreign/ignored/opaque/zero-sized fields, nil selectors, panic/Goexit containment, zero declarations, invalid keys/codecs/kinds, declaration ownership, Param error propagation, fragment snapshots and JSON-null decoding.",
+    "parity": "Whole-document Kind/containment/contained-by (row/selected, required/nullable); Length, optional fields, quoted numeric/string fields, canonical integer and string map keys, negative slice/fixed-array indices, JSON null vs missing/SQL NULL, Exists/IsMissing/IsJSONNull and path fragment containment. Existing 6d1/6d2 and 6a golden results retained.",
+    "postgres": "Source covers actual JSON shape/null semantics, safe length on all six kinds, typed map/index/scalar extraction, existence/containment predicates and transaction participation. Compile and vet only; lead runs PostgreSQL."
+  },
+  "contracts": "Reuse value.JSON, nullable and explicit result codecs. No implicit datatables/manifest/OpenAPI/TypeScript schema; no generators or generated outputs changed.",
+  "checks": {
+    "A": {
+      "name": "A",
+      "command": [
+        "go",
+        "test",
+        "./database/orm/...",
+        "./internal/ormcore",
+        "./internal/querycore",
+        "./internal/sqlowner",
+        "./internal/jsonshape",
+        "./value"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "exit_code": 1,
+      "log": "/private/tmp/goway-6d3/A.log"
+    },
+    "C-catalogue": {
+      "name": "C-catalogue",
+      "command": [
+        "python3",
+        "tools/goway_catalogue.py"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/C-catalogue.log"
+    },
+    "B-golden": {
+      "name": "B-golden",
+      "command": [
+        "go",
+        "test",
+        "-v",
+        "-run",
+        "^TestStage6d3JSONGolden$",
+        "."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/B-golden.log"
+    },
+    "B-parity-footprints": {
+      "name": "B-parity-footprints",
+      "command": [
+        "go",
+        "test",
+        "-v",
+        "-run",
+        "^(TestStage6d[123].*Golden|TestFootprintBudgets|TestStage6a[123].*Golden|TestStage6a4RawFragmentsOpaque|TestOldAndNewDataLayersAgree)$",
+        "."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+      "exit_code": 1,
+      "log": "/private/tmp/goway-6d3/B-parity-footprints.log"
+    },
+    "C-pg-compile": {
+      "name": "C-pg-compile",
+      "command": [
+        "go",
+        "test",
+        "-run",
+        "^$",
+        "./pgsmoke"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/C-pg-compile.log"
+    },
+    "B-cases": {
+      "name": "B-cases",
+      "command": [
+        "go",
+        "test",
+        "-v",
+        "-run",
+        "^TestInvalidPublicContractsFailCompilation$/^(json_contains_payload|json_kind_boolean|json_nullable_input|json_path_array_index|json_path_map_key|json_path_numeric_like|json_path_owner|json_path_payload|json_path_row_phase|json_path_scalar_type|json_path_unknown_field|json_selected_row|json_path_owner_conversion|json_field_payload_conversion|json_scalar_codec_type)$",
+        "."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/B-cases.log"
+    },
+    "A-old": {
+      "name": "A-old",
+      "command": [
+        "go",
+        "test",
+        "./database/query",
+        "-run",
+        "^TestJSON"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/A-old.log"
+    },
+    "A-race-path-final": {
+      "name": "A-race-path-final",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database/orm/expr",
+        "./database/orm/rows",
+        "-run",
+        "JSON"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/A-race-path-final.log"
+    },
+    "A-vet-path-final": {
+      "name": "A-vet-path-final",
+      "command": [
+        "go",
+        "vet",
+        "./database/orm/...",
+        "./internal/ormcore"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/A-vet-path-final.log"
+    },
+    "format-budgets-final": {
+      "name": "format-budgets-final",
+      "command": [
+        "gofmt",
+        "-w",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway/footprint_test.go"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/format-budgets-final.log"
+    },
+    "C-pg-compile-final": {
+      "name": "C-pg-compile-final",
+      "command": [
+        "go",
+        "test",
+        "-run",
+        "^$",
+        "./pgsmoke"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/C-pg-compile-final.log"
+    },
+    "C-diff-final": {
+      "name": "C-diff-final",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/C-diff-final.log"
+    },
+    "B-json-footprints-final": {
+      "name": "B-json-footprints-final",
+      "command": [
+        "go",
+        "test",
+        "-v",
+        "-run",
+        "^(TestStage6d3JSONGolden|TestFootprintBudgets)$",
+        "."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/B-json-footprints-final.log"
+    },
+    "C-docs": {
+      "name": "C-docs",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/C-docs.log"
+    },
+    "A-race": {
+      "name": "A-race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database/orm/expr",
+        "./database/orm/rows",
+        "./internal/ormcore",
+        "./internal/jsonshape",
+        "./value",
+        "-run",
+        "JSON|Reference"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/A-race.log"
+    },
+    "A-vet": {
+      "name": "A-vet",
+      "command": [
+        "go",
+        "vet",
+        "./database/orm/...",
+        "./internal/ormcore",
+        "./internal/querycore",
+        "./internal/jsonshape",
+        "./value",
+        "./database/query"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/A-vet.log"
+    },
+    "A-rows-fix": {
+      "name": "A-rows-fix",
+      "command": [
+        "go",
+        "test",
+        "./database/orm/rows",
+        "-run",
+        "JSON"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/A-rows-fix.log"
+    },
+    "C-docs-final": {
+      "name": "C-docs-final",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/C-docs-final.log"
+    },
+    "A-final": {
+      "name": "A-final",
+      "command": [
+        "go",
+        "test",
+        "./database/orm/...",
+        "./internal/ormcore",
+        "./internal/querycore",
+        "./internal/sqlowner",
+        "./internal/jsonshape",
+        "./value"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "exit_code": 1,
+      "log": "/private/tmp/goway-6d3/A-final.log"
+    },
+    "A-path-final": {
+      "name": "A-path-final",
+      "command": [
+        "go",
+        "test",
+        "./database/orm/...",
+        "./internal/ormcore"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/A-path-final.log"
+    },
+    "C-diff": {
+      "name": "C-diff",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/C-diff.log"
+    },
+    "B-cases-final": {
+      "name": "B-cases-final",
+      "command": [
+        "go",
+        "test",
+        "-v",
+        "-run",
+        "^TestInvalidPublicContractsFailCompilation$/^(json_contains_payload|json_kind_boolean|json_nullable_input|json_path_array_index|json_path_map_key|json_path_numeric_like|json_path_owner|json_path_payload|json_path_row_phase|json_path_scalar_type|json_path_unknown_field|json_selected_row|json_path_owner_conversion|json_field_payload_conversion|json_scalar_codec_type)$",
+        "."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/B-cases-final.log"
+    },
+    "format-budgets": {
+      "name": "format-budgets",
+      "command": [
+        "gofmt",
+        "-w",
+        "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway/footprint_test.go"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/format-budgets.log"
+    },
+    "format": {
+      "name": "format",
+      "command": [
+        "gofmt",
+        "-w",
+        "value/json_shape.go",
+        "internal/jsonshape/reflect.go",
+        "internal/ormcore/json_path.go",
+        "internal/querycore/json_path.go",
+        "tests/fixtures/goway/compiler_cases_test.go",
+        "tests/fixtures/goway/json_path_golden_test.go",
+        "tests/fixtures/goway/pgsmoke/json_paths_test.go",
+        "tests/fixtures/goway/models/jsonpaths/jsonpaths.go",
+        "tests/fixtures/goway/testdata/footprint/json_paths/probe.go",
+        "tests/fixtures/goway/testdata/footprint/json_functions/probe.go",
+        "tests/fixtures/goway/testdata/compilefail/json_kind_boolean/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_contains_payload/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_path_payload/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_path_numeric_like/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_scalar_codec_type/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_path_owner/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_path_owner_conversion/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_path_array_index/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_path_scalar_type/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_path_unknown_field/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_selected_row/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_field_payload_conversion/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_path_row_phase/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_path_map_key/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_nullable_input/invalid.go",
+        "database/orm/method_surface_test.go",
+        "database/query/json_path.go",
+        "database/query/json_expression.go",
+        "database/orm/expr/json_declaration.go",
+        "database/orm/expr/json_path.go",
+        "database/orm/expr/json_declaration_test.go",
+        "database/orm/expr/json_expression.go",
+        "database/orm/rows/json_test.go"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/format.log"
+    },
+    "C-pg-vet-final": {
+      "name": "C-pg-vet-final",
+      "command": [
+        "go",
+        "vet",
+        "./pgsmoke"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/C-pg-vet-final.log"
+    },
+    "C-pg-vet": {
+      "name": "C-pg-vet",
+      "command": [
+        "go",
+        "vet",
+        "./pgsmoke"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC/tests/fixtures/goway",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/C-pg-vet.log"
+    },
+    "gofmt-final": {
+      "command": [
+        "gofmt",
+        "-l",
+        "database/orm/expr/json_declaration.go",
+        "database/orm/expr/json_declaration_test.go",
+        "database/orm/expr/json_expression.go",
+        "database/orm/expr/json_path.go",
+        "database/orm/method_surface_test.go",
+        "database/orm/rows/json_test.go",
+        "database/query/json_expression.go",
+        "database/query/json_path.go",
+        "internal/jsonshape/reflect.go",
+        "internal/ormcore/json_path.go",
+        "internal/querycore/json_path.go",
+        "tests/fixtures/goway/compiler_cases_test.go",
+        "tests/fixtures/goway/footprint_test.go",
+        "tests/fixtures/goway/json_path_golden_test.go",
+        "tests/fixtures/goway/models/jsonpaths/jsonpaths.go",
+        "tests/fixtures/goway/pgsmoke/json_paths_test.go",
+        "tests/fixtures/goway/testdata/compilefail/json_contains_payload/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_field_payload_conversion/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_kind_boolean/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_nullable_input/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_path_array_index/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_path_map_key/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_path_numeric_like/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_path_owner/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_path_owner_conversion/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_path_payload/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_path_row_phase/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_path_scalar_type/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_path_unknown_field/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_scalar_codec_type/invalid.go",
+        "tests/fixtures/goway/testdata/compilefail/json_selected_row/invalid.go",
+        "tests/fixtures/goway/testdata/footprint/json_functions/probe.go",
+        "tests/fixtures/goway/testdata/footprint/json_paths/probe.go",
+        "value/json_shape.go"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "exit_code": 0,
+      "output": "No unformatted files; gofmt -w completed first."
+    },
+    "C-docs-evidence": {
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneC",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-6d3/C-docs-evidence.log"
+    }
+  },
+  "acceptance_resolution": {
+    "A": "A-path-final + unchanged package passes in A-final, A-old; A-vet/A-vet-path-final; A-race/A-race-path-final. Initial row fixture errors corrected and passing.",
+    "B": "B-cases-final and B-json-footprints-final pass. Earlier B-parity-footprints contains passing 6d1/6d2/6a/old-new goldens; its only failures were provisional new probe baseline measurements, corrected and rerun.",
+    "C": "Catalogue/docs/diff, PostgreSQL compile/vet and final gofmt pass. No PostgreSQL executed.",
+    "documentation": "Only Go doc comments and evidence were added after runtime acceptance; current Go files were formatted and docs/diff checks rerun. No runtime source changed."
+  },
+  "corrections": [
+    "Initial invalid-codec runtime regression used a mismatched payload codec which correctly failed compilation; changed it to a zero exact-type codec and retained an external wrong-codec compile-fail test.",
+    "SQL substring expectation corrected to the shared compiler E-literal/cast output; complete old/new SQL equality already passed.",
+    "Footprint probe corrected to existing rows.FieldOf with explicit nullable bool codec.",
+    "Preliminary standalone nm counter incorrectly inspected the last whitespace-delimited field before a generic symbol name; authoritative harness counts include generic names with spaces. Provisional NEW baselines corrected from actual measurements. No existing baseline or ceiling was changed.",
+    "Source audit retained invalid zero-path state through wrapper unwrapping and Param; added runtime regression. JSONPath stores method-free data instead of a selected descriptor."
+  ],
+  "shared_files_touched": [
+    "blueprint/goway-data-layer/compilefail-mapping.tsv",
+    "database/orm/expr/README.md",
+    "database/orm/method_surface_test.go",
+    "database/orm/testdata/public-methods.txt",
+    "database/query/json_expression.go",
+    "database/query/json_path.go",
+    "tests/fixtures/goway/compiler_cases_test.go",
+    "tests/fixtures/goway/footprint_test.go",
+    "value/json_shape.go"
+  ],
+  "new_shared_core_files": [
+    "internal/jsonshape/reflect.go",
+    "internal/ormcore/json_path.go",
+    "internal/querycore/json_path.go"
+  ],
+  "files": [
+    "blueprint/goway-data-layer/compilefail-mapping.tsv",
+    "database/orm/expr/README.md",
+    "database/orm/expr/json_declaration.go",
+    "database/orm/expr/json_declaration_test.go",
+    "database/orm/expr/json_expression.go",
+    "database/orm/expr/json_path.go",
+    "database/orm/method_surface_test.go",
+    "database/orm/rows/json_test.go",
+    "database/orm/testdata/public-methods.txt",
+    "database/query/json_expression.go",
+    "database/query/json_path.go",
+    "internal/jsonshape/reflect.go",
+    "internal/ormcore/json_path.go",
+    "internal/querycore/json_path.go",
+    "tests/fixtures/goway/compiler_cases_test.go",
+    "tests/fixtures/goway/footprint_test.go",
+    "tests/fixtures/goway/json_path_golden_test.go",
+    "tests/fixtures/goway/models/jsonpaths/jsonpaths.go",
+    "tests/fixtures/goway/pgsmoke/json_paths_test.go",
+    "tests/fixtures/goway/testdata/compilefail/json_contains_payload/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/json_field_payload_conversion/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/json_kind_boolean/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/json_nullable_input/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/json_path_array_index/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/json_path_map_key/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/json_path_numeric_like/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/json_path_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/json_path_owner_conversion/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/json_path_payload/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/json_path_row_phase/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/json_path_scalar_type/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/json_path_unknown_field/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/json_scalar_codec_type/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/json_selected_row/invalid.go",
+    "tests/fixtures/goway/testdata/footprint/json_functions/probe.go",
+    "tests/fixtures/goway/testdata/footprint/json_paths/probe.go",
+    "value/json_shape.go"
+  ],
+  "source_sha256": {
+    "CHANGELOG.md": "66657128d9934f24a1557dab256c0aaa956d39c0480489b8f90515dbdeea2759",
+    "Makefile": "10c71a4694eb4cd1233cc5d9daa907eebe884144eef007042b54ba95e7c7fa22",
+    "blueprint/00-master-architecture-and-parity.md": "2d85bb937a2ab54f53282876250d16d8b73a1b9c24c0bd4861a5e2d2c1f5e3b8",
+    "blueprint/goway-data-layer/README.md": "c24434f83086ad4bd40c658f6022a8bf56935c4eae2fa069a2bfe93a73e8b93f",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "98934c0092b079324d045907951f333ddec62e72850c540a089b4d08c7535f06",
+    "database/orm/README.md": "5e63f0d1fc15768861956d5f398e4789c35335d8c4ff3446c559736c8011a0e1",
+    "database/orm/expr/README.md": "dfac65692c98696cb68fdb2107e6823639a6262a37e688310bd3ecc54e094c18",
+    "database/orm/expr/json_declaration.go": "890fb32a0a4a4628581ae41646fe0d97041c6e39bdc545a3771c953a7d98dbf2",
+    "database/orm/expr/json_declaration_test.go": "752157d220944e0f3a2f05a62a556694f425e94be3996602485f9c0e81a66977",
+    "database/orm/expr/json_expression.go": "b9ff35c2f1c0e0eba25dccfcb3da714011d80991ef18d88e339d77185915b2aa",
+    "database/orm/expr/json_path.go": "7c40d87bea66f9ebd86d1f67cf3a3ba71e71979fe34eba3ecf149be01d84ab19",
+    "database/orm/method_surface_test.go": "db04b540919e8190afdbe051fc0108cbbd4bb77bdc9a3804c71da3f3a713e468",
+    "database/orm/rows/json_test.go": "dd95326ac58cb3e07fe3e1c3a973df3b9ce0c6ba77a38e9dfa82adc65a39272c",
+    "database/orm/testdata/public-methods.txt": "9bdd23a3d094ba2eb13b9e9560a95182f2cde8945b39a4ebcca5914b58152624",
+    "database/query/json_expression.go": "8af000bbd0df046ad516ec27189f545b1aa5a7b7fd782bfec7589e50d7885f8b",
+    "database/query/json_path.go": "9a590e57a9ca1bf602ee57dd3990da4e1d786e375e347c42f267646242a728cd",
+    "internal/jsonshape/reflect.go": "49d311b5b3dec3285a834606c8e62495f5604661746c52369460fecf65914bfc",
+    "internal/ormcore/json_path.go": "8877b78a6f9b2ffac92bef05910d5ccafe6fd7619c1156b39ae9f8e608cdaddd",
+    "internal/querycore/json_path.go": "691598d5bc7aaed4bc08c3f967f78a65eebd3e5a3498c3a90b64641c8622b675",
+    "tests/fixtures/goway/compiler_cases_test.go": "9f0abb2eaee1ce97fc3dc0f2291da98a3b14b504bdb1e65f0f8cff01ad3feceb",
+    "tests/fixtures/goway/footprint_test.go": "0c6a374892f1ee264ddfb18a9b7af4368dba2ec89c0f5f7ca437ebb3d7e1e2e9",
+    "tests/fixtures/goway/json_path_golden_test.go": "8459c27bc5a77318a19b90abbc16b0317a3e58e1afb80dd19ad3e3f8703a0734",
+    "tests/fixtures/goway/models/jsonpaths/jsonpaths.go": "1d127b951211eb68be5b8ddb368ad10c8f672745d48085f9d2ad7fd56ebbd4fb",
+    "tests/fixtures/goway/pgsmoke/json_paths_test.go": "87f3a0c14fa16e9247ce5b8896d2a38d3d470a170100fa2035d31fa317f21a9e",
+    "tests/fixtures/goway/testdata/compilefail/json_contains_payload/invalid.go": "7b13884e9a09be4920e63ae160383df8f0c74058faa224996c1f657483cc3799",
+    "tests/fixtures/goway/testdata/compilefail/json_field_payload_conversion/invalid.go": "d22950e83df68258a9f54df2eb31eac684496a85c831867d6432cb9832cf73e3",
+    "tests/fixtures/goway/testdata/compilefail/json_kind_boolean/invalid.go": "c0495942e59cc83ddbbcf0f12809a60eb014b9172d67211ed14e5442747f9c2d",
+    "tests/fixtures/goway/testdata/compilefail/json_nullable_input/invalid.go": "3727d0625cc853e50fb65f91b4e98e12f86cb195f015595a8abf1b35d1700c4f",
+    "tests/fixtures/goway/testdata/compilefail/json_path_array_index/invalid.go": "3166ee0b4d25a303faed16731f4878df1f9b44cad09017ebdf32dee5b607c3e0",
+    "tests/fixtures/goway/testdata/compilefail/json_path_map_key/invalid.go": "ea343268ed335b6adb4d865c15e540e515a7670acf8bbbc14ab74b7eeda9809b",
+    "tests/fixtures/goway/testdata/compilefail/json_path_numeric_like/invalid.go": "a9ac14bceef5a4d469c37152111265f6c3b83e4cf57684e030b10bea7bf70cb9",
+    "tests/fixtures/goway/testdata/compilefail/json_path_owner/invalid.go": "60aeaeae5c5f15a2d93a2069f035d348c1fe63f39482af7acb4e68206f6e63f7",
+    "tests/fixtures/goway/testdata/compilefail/json_path_owner_conversion/invalid.go": "6aef1f85603881a5230465eb2b2dd6a9e5bd38461f1dfa7366d36cd6152b11c9",
+    "tests/fixtures/goway/testdata/compilefail/json_path_payload/invalid.go": "56255c3984013bc39634fe9d0bdcbda5c86699d554d344c8d464b850849a758b",
+    "tests/fixtures/goway/testdata/compilefail/json_path_row_phase/invalid.go": "f98ccdb93e22a81d1a4c15533ab287a98aa85898ab32b82040d9f49a271640b9",
+    "tests/fixtures/goway/testdata/compilefail/json_path_scalar_type/invalid.go": "5a597a7b826ddc4e945d1a5880bf566c37c47eeb06c6b2424760c3dd61a126df",
+    "tests/fixtures/goway/testdata/compilefail/json_path_unknown_field/invalid.go": "3c404c432cd1ccecf48a57d83457c9b4fcc6fdb25cc3297323c3bdcba563cd94",
+    "tests/fixtures/goway/testdata/compilefail/json_scalar_codec_type/invalid.go": "fdf6f12799a5f02183e9fb5759e53002bfc9869a97d634ee410d01c475d089dc",
+    "tests/fixtures/goway/testdata/compilefail/json_selected_row/invalid.go": "4480447f0e02b2eb5ac19f5c5c4f9d1dbe94efe3e66d65b7714caea9dea9466d",
+    "tests/fixtures/goway/testdata/footprint/json_functions/probe.go": "fc9d2da53360793e3d069b817e0455b0e9c9c97c91a8ab7899d1ed217c138bcf",
+    "tests/fixtures/goway/testdata/footprint/json_paths/probe.go": "dbfc2fa27874b292f29fdfbcfd67682902ac7e7b367aa98b773ef3eb847371a5",
+    "tools/release/release_test.go": "e7f357754c8758597e77476c63495824251514efe8f65f76a7e3e4fd68735dd4",
+    "tools/release/source.go": "0a95269a9308b11ff714037a7a85f92ac4833dda4d2f7248089fd84c81621d40",
+    "value/json_shape.go": "518ddbd5e9b66c82631b3a2f23adf7414e2a8c27bb2eaa6e7c87f20860eb9640"
+  },
+  "shared_compiler_owner_sha256": {
+    "internal/querycore/json_operation.go": "107327b1f316564fbe37a8c464b90b0a9fa4699074a46fffbd8886f2453341ac",
+    "internal/querycore/scalar_operation.go": "ab08e1f2af633c980ea6332065098f39cf195ecb3f994efc03be0b42beab2553",
+    "internal/querycore/json_path.go": "691598d5bc7aaed4bc08c3f967f78a65eebd3e5a3498c3a90b64641c8622b675",
+    "internal/jsonshape/fields.go": "1a159981042aa1dbbf4ef7464e1803f18ce8e91dbcbc4097fdb30905303e93e4",
+    "internal/jsonshape/reflect.go": "49d311b5b3dec3285a834606c8e62495f5604661746c52369460fecf65914bfc",
+    "internal/modelmeta/binding.go": "a2a886f6af5d241f97e430092a6521cec007cbc58ad40cd696617f8b1f52e405"
+  },
+  "logs": {
+    "A-path-final.log": "90e61c1cc8499f064a2aba6ccf06c766dd80b5364996915ff20f025c988eac14",
+    "B-golden.log": "155c0c6d0872e8e79cf979fe400af609175cff56eb72159c361081f4b8c193f1",
+    "A.log": "3e1a063f3be90025f92ce1a727a3e362af44b1a635e7a557cef90d49f399c7cd",
+    "format-budgets-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C-diff.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "format.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "B-parity-footprints.log": "04010e80f3e6169fa4b8702768578593900404289c1771ff67d10669c7ddedfa",
+    "format-budgets.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "A-vet-path-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "A-vet.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C-pg-vet-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C-pg-compile-final.log": "d8e311cd2214f592829069953a2b6dd5439ab4fade38206cd91ef1706757da66",
+    "A-race-path-final.log": "35d9f0e1761eb1293580a7e061794bef8583a021aff329163e6ffc02823e4412",
+    "B-cases-final.log": "52389436313de74ac59a8ad936a88d6abd5199a9700e74da26886d9b742ba289",
+    "C-docs-final.log": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06",
+    "A-rows-fix.log": "a1f7d47d442391095391cd4cf1dc2b55c4cf88206977ae7e49334e09e517cb2f",
+    "C-pg-compile.log": "2129274303881ac65f6714b3330bcf5ff7d22eec33bff1867283656f957f0a18",
+    "C-pg-vet.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C-docs.log": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06",
+    "C-catalogue.log": "6b6e9cd3fdcd932bf46d2a61321bf3e7ef1e884b62507ee3b2eee74a1133a5f6",
+    "A-old.log": "07035ee29ef1e5c4e1f8d56ea9b707365b5a847ca2f32b020523b525045f9dab",
+    "B-cases.log": "886e8a2d5d4db83dd6039f3c27bfdcd76920eda1e191452e9e2e9938193ce101",
+    "A-race.log": "d777a736902fb5eeea4ffec7e622e0540f1049ae8c79303db71c56f3d9d92f50",
+    "A-final.log": "31959a7077bc73fc147c45712b0a3dab285cf88fd5d5582c617dad35fee2052f",
+    "B-json-footprints-final.log": "f5b8046710fc49e9d3f57ca13b70d3a1d59cf241f449f923246295ff19e1c34a",
+    "C-diff-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C-docs-evidence.log": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+  },
+  "docs_notes": [
+    "Stage 6d specialized expression catalogue is complete: 60/60 rows ported across 6d1-6d3. JSON paths use handwritten startup-validated pointer declarations, typed keys and indices, shared JSON compiler nodes, and preserve missing/SQL-null/JSON-null semantics.",
+    "No lead-owned docs changed. Package expr README contains the declaration recipe, null-semantics table and projection/contract notes."
+  ],
+  "limits": [
+    "No live PostgreSQL run in this lane; PG sources compile and vet only. Acceptance is the scoped A/B/C slice gate, not a full framework make verify.",
+    "Selectors must address fields in their fresh payload; dereferencing nil embedded pointers and zero-sized fields fails at startup, as documented. Embedded-value promoted fields are supported. Opaque custom serializers and base64 byte slices cannot be traversed structurally."
+  ],
+  "vcs": "No commits or git writes. Prior accepted 6d1/6d2 changes preserved.",
+  "integration_batch6a": {
+    "base_commit": "5873773",
+    "status": "pass",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r2",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off"
+    },
+    "lane_source_sha256": {
+      "blueprint/goway-data-layer/compilefail-mapping.tsv": "185eab290c0faea0de3aaaf7548c385a29ef422783f5860a8c8282a121ee222e",
+      "database/orm/expr/README.md": "22f3475d825b65f12fbb46796b1c65328f3f742d9559333d741e15fa99d1bebd",
+      "database/orm/expr/json_declaration.go": "890fb32a0a4a4628581ae41646fe0d97041c6e39bdc545a3771c953a7d98dbf2",
+      "database/orm/expr/json_declaration_test.go": "752157d220944e0f3a2f05a62a556694f425e94be3996602485f9c0e81a66977",
+      "database/orm/expr/json_expression.go": "b9ff35c2f1c0e0eba25dccfcb3da714011d80991ef18d88e339d77185915b2aa",
+      "database/orm/expr/json_path.go": "7c40d87bea66f9ebd86d1f67cf3a3ba71e71979fe34eba3ecf149be01d84ab19",
+      "database/orm/method_surface_test.go": "7461d68e39d6deb1ad89178e5d5e61cb369afef9a8d7049cc1859b6606cf142d",
+      "database/orm/rows/json_test.go": "dd95326ac58cb3e07fe3e1c3a973df3b9ce0c6ba77a38e9dfa82adc65a39272c",
+      "database/orm/testdata/public-methods.txt": "a9327da8f35b218a7ca4ab21e8e5b05ee1b5a03e5b3ace84a2d1269ccebb273f",
+      "database/query/json_expression.go": "8af000bbd0df046ad516ec27189f545b1aa5a7b7fd782bfec7589e50d7885f8b",
+      "database/query/json_path.go": "9a590e57a9ca1bf602ee57dd3990da4e1d786e375e347c42f267646242a728cd",
+      "internal/jsonshape/reflect.go": "49d311b5b3dec3285a834606c8e62495f5604661746c52369460fecf65914bfc",
+      "internal/ormcore/json_path.go": "8877b78a6f9b2ffac92bef05910d5ccafe6fd7619c1156b39ae9f8e608cdaddd",
+      "internal/querycore/json_path.go": "691598d5bc7aaed4bc08c3f967f78a65eebd3e5a3498c3a90b64641c8622b675",
+      "tests/fixtures/goway/compiler_cases_test.go": "25a735a51f1c3ab10e0e75f5b1ee32178c1ee8b72fb3d5f454bbfbc866ca6414",
+      "tests/fixtures/goway/footprint_test.go": "3c3e4421b4cd17a51fb6dce53c3e4729ce05ffdd0f5727777066ff9f3b705ca9",
+      "tests/fixtures/goway/json_path_golden_test.go": "8459c27bc5a77318a19b90abbc16b0317a3e58e1afb80dd19ad3e3f8703a0734",
+      "tests/fixtures/goway/models/jsonpaths/jsonpaths.go": "1d127b951211eb68be5b8ddb368ad10c8f672745d48085f9d2ad7fd56ebbd4fb",
+      "tests/fixtures/goway/pgsmoke/json_paths_test.go": "87f3a0c14fa16e9247ce5b8896d2a38d3d470a170100fa2035d31fa317f21a9e",
+      "tests/fixtures/goway/testdata/compilefail/json_contains_payload/invalid.go": "7b13884e9a09be4920e63ae160383df8f0c74058faa224996c1f657483cc3799",
+      "tests/fixtures/goway/testdata/compilefail/json_field_payload_conversion/invalid.go": "d22950e83df68258a9f54df2eb31eac684496a85c831867d6432cb9832cf73e3",
+      "tests/fixtures/goway/testdata/compilefail/json_kind_boolean/invalid.go": "c0495942e59cc83ddbbcf0f12809a60eb014b9172d67211ed14e5442747f9c2d",
+      "tests/fixtures/goway/testdata/compilefail/json_nullable_input/invalid.go": "3727d0625cc853e50fb65f91b4e98e12f86cb195f015595a8abf1b35d1700c4f",
+      "tests/fixtures/goway/testdata/compilefail/json_path_array_index/invalid.go": "3166ee0b4d25a303faed16731f4878df1f9b44cad09017ebdf32dee5b607c3e0",
+      "tests/fixtures/goway/testdata/compilefail/json_path_map_key/invalid.go": "ea343268ed335b6adb4d865c15e540e515a7670acf8bbbc14ab74b7eeda9809b",
+      "tests/fixtures/goway/testdata/compilefail/json_path_numeric_like/invalid.go": "a9ac14bceef5a4d469c37152111265f6c3b83e4cf57684e030b10bea7bf70cb9",
+      "tests/fixtures/goway/testdata/compilefail/json_path_owner/invalid.go": "60aeaeae5c5f15a2d93a2069f035d348c1fe63f39482af7acb4e68206f6e63f7",
+      "tests/fixtures/goway/testdata/compilefail/json_path_owner_conversion/invalid.go": "6aef1f85603881a5230465eb2b2dd6a9e5bd38461f1dfa7366d36cd6152b11c9",
+      "tests/fixtures/goway/testdata/compilefail/json_path_payload/invalid.go": "56255c3984013bc39634fe9d0bdcbda5c86699d554d344c8d464b850849a758b",
+      "tests/fixtures/goway/testdata/compilefail/json_path_row_phase/invalid.go": "f98ccdb93e22a81d1a4c15533ab287a98aa85898ab32b82040d9f49a271640b9",
+      "tests/fixtures/goway/testdata/compilefail/json_path_scalar_type/invalid.go": "5a597a7b826ddc4e945d1a5880bf566c37c47eeb06c6b2424760c3dd61a126df",
+      "tests/fixtures/goway/testdata/compilefail/json_path_unknown_field/invalid.go": "3c404c432cd1ccecf48a57d83457c9b4fcc6fdb25cc3297323c3bdcba563cd94",
+      "tests/fixtures/goway/testdata/compilefail/json_scalar_codec_type/invalid.go": "fdf6f12799a5f02183e9fb5759e53002bfc9869a97d634ee410d01c475d089dc",
+      "tests/fixtures/goway/testdata/compilefail/json_selected_row/invalid.go": "4480447f0e02b2eb5ac19f5c5c4f9d1dbe94efe3e66d65b7714caea9dea9466d",
+      "tests/fixtures/goway/testdata/footprint/json_functions/probe.go": "fc9d2da53360793e3d069b817e0455b0e9c9c97c91a8ab7899d1ed217c138bcf",
+      "tests/fixtures/goway/testdata/footprint/json_paths/probe.go": "dbfc2fa27874b292f29fdfbcfd67682902ac7e7b367aa98b773ef3eb847371a5",
+      "value/json_shape.go": "518ddbd5e9b66c82631b3a2f23adf7414e2a8c27bb2eaa6e7c87f20860eb9640"
+    },
+    "conflicts": {
+      "6e3": [
+        "database/orm/method_surface_test.go",
+        "database/orm/testdata/public-methods.txt",
+        "tests/fixtures/goway/compiler_cases_test.go",
+        "tests/fixtures/goway/footprint_test.go"
+      ],
+      "6d3": [
+        "blueprint/goway-data-layer/compilefail-mapping.tsv",
+        "database/orm/method_surface_test.go",
+        "database/orm/testdata/public-methods.txt",
+        "tests/fixtures/goway/compiler_cases_test.go",
+        "tests/fixtures/goway/footprint_test.go"
+      ],
+      "7s2": [
+        "database/orm/README.md",
+        "database/orm/method_surface_test.go",
+        "database/orm/testdata/public-methods.txt",
+        "tests/fixtures/goway/compiler_cases_test.go",
+        "tests/fixtures/goway/footprint_test.go"
+      ],
+      "7caps": [
+        "database/orm/README.md",
+        "database/orm/method_surface_test.go",
+        "database/orm/testdata/public-methods.txt",
+        "tests/fixtures/goway/compiler_cases_test.go",
+        "tests/fixtures/goway/footprint_test.go"
+      ]
+    },
+    "resolution": [
+      "Union cases, probes and function registries; regenerate public snapshot and retain every previous entry. Deduplicate identical registry entries. Existing ceilings unchanged.",
+      "Retain both lanes\u2019 ported catalogue rows, including earlier JSON projection coverage. Merge both README texts. Runtime source applied cleanly."
+    ],
+    "counts": {
+      "catalogue_rows": 1026,
+      "dispositions": {
+        "ported": 451,
+        "unaffected": 444,
+        "port": 131
+      },
+      "distinct_ported_cases": 443,
+      "compiler_cases": 588,
+      "footprint_probes": 93
+    },
+    "footprints": {
+      "aggregate_families": {
+        "functions": 4366,
+        "baseline": 3799,
+        "ceiling": 4369,
+        "archive_bytes": 19869492
+      },
+      "aggregate_group": {
+        "functions": 2533,
+        "baseline": 2426,
+        "ceiling": 2790,
+        "archive_bytes": 11354022
+      },
+      "aggregate_slot_declaration": {
+        "functions": 1127,
+        "baseline": 1112,
+        "ceiling": 1279,
+        "archive_bytes": 4834366
+      },
+      "aggregate_slot_direct": {
+        "functions": 1490,
+        "baseline": 1490,
+        "ceiling": 1714,
+        "archive_bytes": 6116506
+      },
+      "aggregate_slot_nested": {
+        "functions": 2050,
+        "baseline": 2048,
+        "ceiling": 2356,
+        "archive_bytes": 8445216
+      },
+      "aggregate_slot_pivot": {
+        "functions": 2092,
+        "baseline": 2095,
+        "ceiling": 2410,
+        "archive_bytes": 8733062
+      },
+      "audit": {
+        "functions": 1313,
+        "baseline": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6445470
+      },
+      "column_encrypted_json": {
+        "functions": 1321,
+        "baseline": 1217,
+        "ceiling": 1400,
+        "archive_bytes": 5629234
+      },
+      "column_encrypted_text": {
+        "functions": 1231,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5319098
+      },
+      "column_enum": {
+        "functions": 1344,
+        "baseline": 1232,
+        "ceiling": 1417,
+        "archive_bytes": 5621428
+      },
+      "column_interval": {
+        "functions": 1293,
+        "baseline": 1178,
+        "ceiling": 1355,
+        "archive_bytes": 5562770
+      },
+      "column_json": {
+        "functions": 1391,
+        "baseline": 1280,
+        "ceiling": 1472,
+        "archive_bytes": 5859798
+      },
+      "column_nullable_encrypted_json": {
+        "functions": 1562,
+        "baseline": 1449,
+        "ceiling": 1667,
+        "archive_bytes": 6895190
+      },
+      "column_nullable_encrypted_text": {
+        "functions": 1472,
+        "baseline": 1359,
+        "ceiling": 1563,
+        "archive_bytes": 6562068
+      },
+      "column_nullable_interval": {
+        "functions": 1530,
+        "baseline": 1406,
+        "ceiling": 1617,
+        "archive_bytes": 6780426
+      },
+      "column_nullable_json": {
+        "functions": 1642,
+        "baseline": 1522,
+        "ceiling": 1751,
+        "archive_bytes": 7084708
+      },
+      "column_nullable_password": {
+        "functions": 1535,
+        "baseline": 1417,
+        "ceiling": 1630,
+        "archive_bytes": 6743706
+      },
+      "column_nullable_text": {
+        "functions": 1584,
+        "baseline": 1456,
+        "ceiling": 1675,
+        "archive_bytes": 6554532
+      },
+      "column_number": {
+        "functions": 1267,
+        "baseline": 1172,
+        "ceiling": 1348,
+        "archive_bytes": 5304288
+      },
+      "column_password": {
+        "functions": 1299,
+        "baseline": 1190,
+        "ceiling": 1369,
+        "archive_bytes": 5570894
+      },
+      "column_time": {
+        "functions": 1309,
+        "baseline": 1194,
+        "ceiling": 1374,
+        "archive_bytes": 5442464
+      },
+      "conditional_row": {
+        "functions": 1805,
+        "baseline": 1681,
+        "ceiling": 1934,
+        "archive_bytes": 8217582
+      },
+      "conditional_selected": {
+        "functions": 1649,
+        "baseline": 1511,
+        "ceiling": 1738,
+        "archive_bytes": 7551208
+      },
+      "conflict": {
+        "functions": 944,
+        "baseline": 944,
+        "ceiling": 1086,
+        "archive_bytes": 4661796
+      },
+      "conflict_advanced": {
+        "functions": 1817,
+        "baseline": 1817,
+        "ceiling": 2090,
+        "archive_bytes": 9069672
+      },
+      "correlation": {
+        "functions": 2991,
+        "baseline": 2752,
+        "ceiling": 3165,
+        "archive_bytes": 13733582
+      },
+      "cte_recursive": {
+        "functions": 1105,
+        "baseline": 1076,
+        "ceiling": 1238,
+        "archive_bytes": 5359732
+      },
+      "cursor": {
+        "functions": 1186,
+        "baseline": 1127,
+        "ceiling": 1297,
+        "archive_bytes": 5346694
+      },
+      "distinct": {
+        "functions": 1174,
+        "baseline": 1135,
+        "ceiling": 1306,
+        "archive_bytes": 5667604
+      },
+      "each_writes": {
+        "functions": 888,
+        "baseline": 888,
+        "ceiling": 1022,
+        "archive_bytes": 4425374
+      },
+      "expr_arithmetic": {
+        "functions": 1256,
+        "baseline": 1162,
+        "ceiling": 1337,
+        "archive_bytes": 5882660
+      },
+      "expr_selected": {
+        "functions": 1698,
+        "baseline": 1551,
+        "ceiling": 1784,
+        "archive_bytes": 7529588
+      },
+      "framework_challengestore": {
+        "functions": 2560,
+        "baseline": 2558,
+        "ceiling": 2942,
+        "archive_bytes": 11841500
+      },
+      "framework_countries": {
+        "functions": 4126,
+        "baseline": 4122,
+        "ceiling": 4741,
+        "archive_bytes": 17132408
+      },
+      "framework_idempotencystore": {
+        "functions": 2253,
+        "baseline": 2249,
+        "ceiling": 2587,
+        "archive_bytes": 9487258
+      },
+      "framework_jobarchive": {
+        "functions": 2280,
+        "baseline": 2280,
+        "ceiling": 2622,
+        "archive_bytes": 9728980
+      },
+      "framework_mfastore": {
+        "functions": 2947,
+        "baseline": 2947,
+        "ceiling": 3390,
+        "archive_bytes": 12365570
+      },
+      "framework_outbox": {
+        "functions": 2896,
+        "baseline": 2896,
+        "ceiling": 3331,
+        "archive_bytes": 12420576
+      },
+      "framework_sessionstore": {
+        "functions": 4166,
+        "baseline": 4166,
+        "ceiling": 4791,
+        "archive_bytes": 17633346
+      },
+      "framework_tokenstore": {
+        "functions": 5315,
+        "baseline": 5315,
+        "ceiling": 6113,
+        "archive_bytes": 22327322
+      },
+      "global_scopes": {
+        "functions": 1389,
+        "baseline": 1374,
+        "ceiling": 1581,
+        "archive_bytes": 6385812
+      },
+      "has": {
+        "functions": 1412,
+        "baseline": 1302,
+        "ceiling": 1498,
+        "archive_bytes": 6234106
+      },
+      "has_one": {
+        "functions": 1403,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6207952
+      },
+      "input_column_kinds": {
+        "functions": 5321,
+        "baseline": 5088,
+        "ceiling": 5852,
+        "archive_bytes": 21993694
+      },
+      "input_key": {
+        "functions": 1049,
+        "baseline": 982,
+        "ceiling": 1130,
+        "archive_bytes": 4845760
+      },
+      "json_functions": {
+        "functions": 2739,
+        "baseline": 2736,
+        "ceiling": 3147,
+        "archive_bytes": 11639512
+      },
+      "json_paths": {
+        "functions": 6148,
+        "baseline": 6146,
+        "ceiling": 7068,
+        "archive_bytes": 26595248
+      },
+      "key_chunk": {
+        "functions": 862,
+        "baseline": 812,
+        "ceiling": 934,
+        "archive_bytes": 4135502
+      },
+      "lateral": {
+        "functions": 3048,
+        "baseline": 2852,
+        "ceiling": 3280,
+        "archive_bytes": 15061884
+      },
+      "lifecycle_changes": {
+        "functions": 1069,
+        "baseline": 1050,
+        "ceiling": 1208,
+        "archive_bytes": 4951932
+      },
+      "lifecycle_write": {
+        "functions": 949,
+        "baseline": 930,
+        "ceiling": 1070,
+        "archive_bytes": 4714970
+      },
+      "model_type": {
+        "functions": 299,
+        "baseline": 299,
+        "ceiling": 344,
+        "archive_bytes": 1272152
+      },
+      "models": {
+        "functions": 6849,
+        "baseline": 6147,
+        "ceiling": 7070,
+        "archive_bytes": 29897964
+      },
+      "models_1": {
+        "functions": 1751,
+        "baseline": 1619,
+        "ceiling": 1862,
+        "archive_bytes": 7242600
+      },
+      "models_3": {
+        "functions": 2605,
+        "baseline": 2435,
+        "ceiling": 2801,
+        "archive_bytes": 10844472
+      },
+      "morph": {
+        "functions": 1155,
+        "baseline": 1088,
+        "ceiling": 1252,
+        "archive_bytes": 5216954
+      },
+      "mutator_explicit": {
+        "functions": 1698,
+        "baseline": 1605,
+        "ceiling": 1846,
+        "archive_bytes": 7021906
+      },
+      "mutators": {
+        "functions": 855,
+        "baseline": 801,
+        "ceiling": 922,
+        "archive_bytes": 4487496
+      },
+      "nested_with": {
+        "functions": 1403,
+        "baseline": 1281,
+        "ceiling": 1474,
+        "archive_bytes": 6246926
+      },
+      "nullable_join_chain": {
+        "functions": 1854,
+        "baseline": 1695,
+        "ceiling": 1950,
+        "archive_bytes": 8833524
+      },
+      "on_comparisons": {
+        "functions": 1589,
+        "baseline": 1454,
+        "ceiling": 1673,
+        "archive_bytes": 7219160
+      },
+      "onequery": {
+        "functions": 854,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 4092546
+      },
+      "outbox_publisher": {
+        "functions": 1324,
+        "baseline": 1324,
+        "ceiling": 1523,
+        "archive_bytes": 6492334
+      },
+      "outer_join": {
+        "functions": 1789,
+        "baseline": 1668,
+        "ceiling": 1919,
+        "archive_bytes": 8495432
+      },
+      "pivot": {
+        "functions": 1072,
+        "baseline": 1005,
+        "ceiling": 1156,
+        "archive_bytes": 4915632
+      },
+      "q_join": {
+        "functions": 1766,
+        "baseline": 1598,
+        "ceiling": 1838,
+        "archive_bytes": 8389088
+      },
+      "q_select": {
+        "functions": 895,
+        "baseline": 836,
+        "ceiling": 962,
+        "archive_bytes": 4321490
+      },
+      "q_with": {
+        "functions": 1211,
+        "baseline": 1053,
+        "ceiling": 1211,
+        "archive_bytes": 5531868
+      },
+      "raw": {
+        "functions": 1096,
+        "baseline": 1045,
+        "ceiling": 1202,
+        "archive_bytes": 5198952
+      },
+      "raw_fragments": {
+        "functions": 1380,
+        "baseline": 1331,
+        "ceiling": 1531,
+        "archive_bytes": 6193540
+      },
+      "record_sets": {
+        "functions": 1294,
+        "baseline": 1288,
+        "ceiling": 1482,
+        "archive_bytes": 6299190
+      },
+      "records": {
+        "functions": 1327,
+        "baseline": 1313,
+        "ceiling": 1510,
+        "archive_bytes": 6521108
+      },
+      "relation_with": {
+        "functions": 2047,
+        "baseline": 1847,
+        "ceiling": 2125,
+        "archive_bytes": 8754094
+      },
+      "relation_write_attach": {
+        "functions": 1110,
+        "baseline": 1110,
+        "ceiling": 1277,
+        "archive_bytes": 5081432
+      },
+      "relation_write_declaration": {
+        "functions": 361,
+        "baseline": 361,
+        "ceiling": 416,
+        "archive_bytes": 1507054
+      },
+      "relation_write_sync": {
+        "functions": 1124,
+        "baseline": 1124,
+        "ceiling": 1293,
+        "archive_bytes": 5151346
+      },
+      "report_pipeline": {
+        "functions": 2120,
+        "baseline": 1905,
+        "ceiling": 2191,
+        "archive_bytes": 11264536
+      },
+      "result_cursor": {
+        "functions": 2229,
+        "baseline": 2229,
+        "ceiling": 2564,
+        "archive_bytes": 10352824
+      },
+      "result_reads": {
+        "functions": 1351,
+        "baseline": 1351,
+        "ceiling": 1554,
+        "archive_bytes": 6411316
+      },
+      "retrieval_read": {
+        "functions": 831,
+        "baseline": 826,
+        "ceiling": 950,
+        "archive_bytes": 4107254
+      },
+      "scalar_temporal": {
+        "functions": 2629,
+        "baseline": 2625,
+        "ceiling": 3019,
+        "archive_bytes": 11833712
+      },
+      "scalar_text": {
+        "functions": 2315,
+        "baseline": 2312,
+        "ceiling": 2659,
+        "archive_bytes": 9521568
+      },
+      "scoped_write": {
+        "functions": 1111,
+        "baseline": 1111,
+        "ceiling": 1278,
+        "archive_bytes": 5061514
+      },
+      "sensitive_models": {
+        "functions": 2821,
+        "baseline": 2606,
+        "ceiling": 2997,
+        "archive_bytes": 12792144
+      },
+      "source_write": {
+        "functions": 1311,
+        "baseline": 1311,
+        "ceiling": 1508,
+        "archive_bytes": 6407258
+      },
+      "subqueries": {
+        "functions": 3061,
+        "baseline": 2837,
+        "ceiling": 3263,
+        "archive_bytes": 13224418
+      },
+      "table_ref": {
+        "functions": 854,
+        "baseline": 803,
+        "ceiling": 924,
+        "archive_bytes": 4255576
+      },
+      "through": {
+        "functions": 986,
+        "baseline": 928,
+        "ceiling": 1068,
+        "archive_bytes": 4419928
+      },
+      "transaction_records": {
+        "functions": 1376,
+        "baseline": 1296,
+        "ceiling": 1491,
+        "archive_bytes": 6445380
+      },
+      "uuid_seeks": {
+        "functions": 1023,
+        "baseline": 1023,
+        "ceiling": 1177,
+        "archive_bytes": 5047134
+      },
+      "value_sets": {
+        "functions": 2237,
+        "baseline": 2230,
+        "ceiling": 2565,
+        "archive_bytes": 10093532
+      },
+      "window_frames": {
+        "functions": 1769,
+        "baseline": 1767,
+        "ceiling": 2033,
+        "archive_bytes": 7915546
+      },
+      "window_rank": {
+        "functions": 1346,
+        "baseline": 1345,
+        "ceiling": 1547,
+        "archive_bytes": 6139522
+      }
+    },
+    "surface_added_lines": 133,
+    "commands": [
+      {
+        "command": "go build ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch6a/build.log",
+        "log_sha256": "5e1f27ec3063b4fb301544af0ff85328c11dc9457f3a8590dca6874d83ddcc03"
+      },
+      {
+        "command": "go vet ./database/... ./internal/...",
+        "status": "pass",
+        "log": ".cache/goway-batch6a/vet.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "go test -race ./database/... ./internal/...",
+        "status": "pass",
+        "log": ".cache/goway-batch6a/race.log",
+        "log_sha256": "2066b17103b37ad7b060bfeda8998fca695c8dd020ec5f244f7662edcef84242"
+      },
+      {
+        "command": "go test -race ./countries/... ./internal/jobarchive/... ./internal/idempotencystore/... ./internal/mfastore/... ./internal/challengestore/... ./internal/sessionstore/... ./internal/tokenstore/... ./auth/challenge/postgres/... ./auth/mfa/postgres/... ./auth/session/postgres/... ./auth/token/postgres/... ./jobs/archive/...",
+        "status": "pass",
+        "log": ".cache/goway-batch6a/store-race.log",
+        "log_sha256": "5aada66cef533d9999cc80f0dc2dea5a5a8f07bb531a47a15d9c4a873df8e100"
+      },
+      {
+        "command": "go test -race ./application -run 'Test(DeclaredPruning|MaintenanceSchedule|GuardPruning)'",
+        "status": "pass",
+        "log": ".cache/goway-batch6a/application-race.log",
+        "log_sha256": "ec56b659d76bc0bd7e7003769c78908dc687a14922b1cf0f1468c86fc8e3297b"
+      },
+      {
+        "command": "go test -race ./value",
+        "status": "pass",
+        "log": ".cache/goway-batch6a/value-race.log",
+        "log_sha256": "29d6dde71565fff3cc0b4ec7c8e4530fa00fb5e7a2162d8e7be4d4f4157e851e"
+      },
+      {
+        "command": "cd tests/fixtures/goway && go vet ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch6a/fixture-vet.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "cd tests/fixtures/goway && go test -v ./...",
+        "status": "pass",
+        "log": ".cache/goway-batch6a/fixture-test.log",
+        "log_sha256": "cf82efe26ac278af0907f7a3b886810513841bcd904de1143844ecf9b233fd28"
+      },
+      {
+        "command": "python3 tools/goway_catalogue.py",
+        "status": "pass",
+        "log": ".cache/goway-batch6a/catalogue.log",
+        "log_sha256": "2a146588a88fee0e4c3f5e4728690fe4d4b25cbb911dc6d561b193d777943be8"
+      },
+      {
+        "command": "make generate-check",
+        "status": "pass",
+        "log": ".cache/goway-batch6a/generate.log",
+        "log_sha256": "aff9fb69af141873e6432dbf8aac79dce91e16c5bcf0f4ccc0cf5187ac3d14e4"
+      },
+      {
+        "command": "make release-tools-check",
+        "status": "pass",
+        "log": ".cache/goway-batch6a/release-tools.log",
+        "log_sha256": "06e92e9369e1bc8f8e4ae302f7a0804ddd74b8c69deecd7e3e43f03bcecd5392"
+      },
+      {
+        "command": "make docs-check",
+        "status": "pass",
+        "log": ".cache/goway-batch6a/docs.log",
+        "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+      },
+      {
+        "command": "gofmt -l (all repository Go files)",
+        "status": "pass",
+        "log": ".cache/goway-batch6a/gofmt.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": "git diff --check (working tree and staged)",
+        "status": "pass",
+        "log": ".cache/goway-batch6a/diff-check.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "release_inventory": "23 storemigration transcript JSON files explicitly pinned, plus six source-write/JSON/capability golden and pgsmoke files. Existing JSON policy covers all new non-Go assets; no policy widening.",
+    "deferred_role_rows": [
+      "insert_select_mutator",
+      "insert_select_timestamp",
+      "source_delete_force",
+      "source_update_mutator",
+      "source_update_primary",
+      "source_update_timestamp"
+    ],
+    "stores_migrated_total": 8,
+    "not_run": [
+      "Live PostgreSQL (opt-in sources compile/vet; execution remains lead checkpoint)",
+      "Benchmarks and full editor/client contract gates (not requested; lane evidence retained separately)"
+    ],
+    "git": "Only authorized apply -3 --binary and add for integration; no commit.",
+    "lane_shared_compiler_owner_sha256": {
+      "internal/querycore/json_operation.go": "107327b1f316564fbe37a8c464b90b0a9fa4699074a46fffbd8886f2453341ac",
+      "internal/querycore/scalar_operation.go": "ab08e1f2af633c980ea6332065098f39cf195ecb3f994efc03be0b42beab2553",
+      "internal/querycore/json_path.go": "691598d5bc7aaed4bc08c3f967f78a65eebd3e5a3498c3a90b64641c8622b675",
+      "internal/jsonshape/fields.go": "1a159981042aa1dbbf4ef7464e1803f18ce8e91dbcbc4097fdb30905303e93e4",
+      "internal/jsonshape/reflect.go": "49d311b5b3dec3285a834606c8e62495f5604661746c52369460fecf65914bfc",
+      "internal/modelmeta/binding.go": "a2a886f6af5d241f97e430092a6521cec007cbc58ad40cd696617f8b1f52e405"
+    }
+  }
+}

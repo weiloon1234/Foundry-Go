@@ -321,3 +321,67 @@ These functions add no Query/Table/column methods, bypass no surrounding scopes,
 and use the supplied executor or transaction. Results affect manifests, OpenAPI
 and TypeScript only through explicitly declared projection/DTO field codecs.
 JSON paths and JSON Kind/Length remain in the next slice.
+
+### Handwritten JSON paths
+
+JSON paths are ordinary typed declarations beside the model columns. They do not
+use generated `Properties` or `At` accessors:
+
+```go
+var Theme = expr.JSONFieldOf(func(p *Preferences) *value.Optional[string] {
+    return &p.Theme
+})
+// During application startup, check Theme.Validate() along with orm.Check tables.
+
+root := expr.JSONRoot(expr.Value(Documents.Settings))
+path := expr.JSONOptional(expr.JSONProperty(root, Theme))
+theme := expr.JSONTextScalar(path, codec.String[string]())
+q := expr.Where(Documents.Query(), theme.Eq("dark"))
+```
+
+`JSONFieldOf` runs its selector once against a fresh payload and resolves the
+field's JSON tag with the runtime's existing tag/promotion rules. It rejects
+ignored, ambiguous, foreign and zero-sized fields, and opaque custom JSON/text
+encodings. Selectors address fields in that payload, including fields promoted
+through embedded values; they must not dereference nil embedded pointers. Name
+and `,string` metadata are captured, and the selector is discarded. A failed or
+zero declaration also fails closed if used without the startup check.
+
+`JSONMapKey(path, key)` retains the map's exact key type and uses its canonical
+JSON key codec. String keys are accepted only on string-keyed maps.
+`JSONIndex(path, int32Index)` retains a slice's element type; negative indices
+count from the end. Fixed arrays use `JSONFixedArrayOf(func(a *[3]T) *T {
+return &a[0] })` at startup, then `JSONArrayElement(path, declaration, index)`.
+Byte slices and custom-encoded collections cannot be traversed as arrays/maps.
+Declared property names are escaped SQL literals for expression indexes; runtime
+keys and indices use the statement's normal bind parameters.
+
+`JSONOptional`, `JSONNullable`, `JSONPointer` and `JSONDocument` explicitly unwrap
+payload wrappers for traversal. `JSONScalar`, `JSONOrderedScalar` and
+`JSONTextScalar` require a codec for the exact resulting payload type. They cannot
+change the payload type. All path predicates retain the original query owner.
+
+| Operation | Missing path or SQL-null ancestor | Present JSON null |
+| --- | --- | --- |
+| `JSON()` | SQL NULL | Present JSON value, if its payload permits null |
+| `Kind()` | SQL NULL | `expr.JSONNull` |
+| `Exists()` | false | true |
+| `IsMissing()` | true | false |
+| `IsJSONNull()` | does not match | true |
+| scalar extraction | SQL NULL | SQL NULL |
+| `Length()` | SQL NULL | SQL NULL |
+
+`Length` is also SQL NULL for every non-array kind. `Contains` accepts a typed
+payload fragment and does not match a missing path. Whole-document calculations
+use `JSONType`, `JSONLength`, `JSONContains` and `JSONContainedBy`; `Nullable`
+variants propagate SQL NULL and `Value` variants preserve selected phase.
+Use `rows.MapSelected` for their results. Existing columns, queries and tables
+acquire no new methods. JSON calculations do not create implicit public DTO,
+manifest, OpenAPI or TypeScript schemas; those remain explicitly declared.
+
+UUID seeks use `UUIDLess`, `UUIDLessOrEqual`, `UUIDGreater` and
+`UUIDGreaterOrEqual` on row expressions, for example
+`expr.UUIDGreater(expr.At(scope, Files.Key()), after)`. The UUID's model owner
+and expression scope remain distinct types. Nullable row expressions use the
+`Nullable` variants and compare a present UUID. Ordering is PostgreSQL bytewise
+UUID ordering, not a guarantee about UUID generation time.

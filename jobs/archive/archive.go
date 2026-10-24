@@ -13,6 +13,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/jobarchive"
@@ -118,12 +121,22 @@ func (s *Store) RecordFailure(ctx context.Context, failed jobs.FailedJob) error 
 	if err != nil {
 		return err
 	}
-	draft := jobarchive.FailureDraft{}.SetID(id).SetExecution(failed.Envelope.ID()).SetQueue(string(failed.Queue)).SetName(string(failed.Envelope.Name())).
-		SetVersion(uint32(failed.Envelope.Version())).SetEnvelope(string(data)).SetReason(string(failed.Reason)).SetAttempts(failed.Attempts).
-		SetExceptions(failed.Exceptions).SetRetries(failed.Retries).SetFailedAt(at)
-	fields := jobarchive.FailureFields()
+	draft := []orm.Assignment[jobarchive.Failure]{
+		jobarchive.Failures.ID.Set(id),
+		jobarchive.Failures.Execution.Set(failed.Envelope.ID()),
+		jobarchive.Failures.Queue.Set(string(failed.Queue)),
+		jobarchive.Failures.Name.Set(string(failed.Envelope.Name())),
+		jobarchive.Failures.Version.Set(uint32(failed.Envelope.Version())),
+		jobarchive.Failures.Envelope.Set(string(data)),
+		jobarchive.Failures.Reason.Set(string(failed.Reason)),
+		jobarchive.Failures.Attempts.Set(failed.Attempts),
+		jobarchive.Failures.Exceptions.Set(failed.Exceptions),
+		jobarchive.Failures.Retries.Set(failed.Retries),
+		jobarchive.Failures.FailedAt.Set(at),
+	}
+	fields := jobarchive.Failures
 	return s.within(ctx, func(tx *database.Tx) error {
-		_, err := jobarchive.QueryFoundryFailedJobs().Upsert(ctx, tx, draft, query.OnConflict(fields.Execution, fields.Retries).DoNothing())
+		_, err := orm.Upsert(ctx, tx, jobarchive.Failures.Query(), orm.OnConflict(orm.ConflictKey(fields.Execution), orm.ConflictKey(fields.Retries)).DoNothing(), draft...)
 		return err
 	})
 }
@@ -198,15 +211,15 @@ func (s *Store) List(ctx context.Context, options ListOptions) (Page, error) {
 		}
 		request.After = value.Set(cursor)
 	}
-	fields := jobarchive.FailureFields()
+	fields := jobarchive.Failures
 	var page Page
 	err := s.within(ctx, func(tx *database.Tx) error {
 		page = Page{}
-		listing := jobarchive.QueryFoundryFailedJobs().OrderBy(fields.FailedAt.Desc(), fields.ID.Desc())
+		listing := jobarchive.Failures.Query().OrderBy(fields.FailedAt.Desc(), fields.ID.Desc())
 		if options.Name != "" {
 			listing = listing.Where(fields.Name.Eq(string(options.Name)))
 		}
-		result, err := listing.CursorPaginate(ctx, tx, request)
+		result, err := orm.CursorPaginate(ctx, tx, listing, request)
 		if err != nil {
 			return err
 		}
@@ -241,7 +254,7 @@ func (s *Store) Retry(ctx context.Context, dispatcher *jobs.Dispatcher, id ID) (
 	key := model.IDFromBytes[jobarchive.Failure](id.Bytes())
 	var envelope jobs.Envelope
 	err := s.within(ctx, func(tx *database.Tx) error {
-		row, err := jobarchive.QueryFoundryFailedJobs().RequireFind(ctx, tx, key)
+		row, err := jobarchive.Failures.Require(ctx, tx, key)
 		if err != nil {
 			return err
 		}
@@ -260,7 +273,7 @@ func (s *Store) Retry(ctx context.Context, dispatcher *jobs.Dispatcher, id ID) (
 		return execution, err
 	}
 	err = s.within(ctx, func(tx *database.Tx) error {
-		_, err := jobarchive.QueryFoundryFailedJobs().Update(ctx, tx, key, jobarchive.FailureDraft{}.SetRetriedAt(now))
+		_, err := jobarchive.Failures.Update(ctx, tx, key, jobarchive.Failures.RetriedAt.Set(now))
 		return err
 	})
 	return execution, err
@@ -282,13 +295,13 @@ func (s *Store) Prune(ctx context.Context, cutoff time.Time, limit int) (int, er
 	if err != nil {
 		return 0, err
 	}
-	fields := jobarchive.FailureFields()
+	fields := jobarchive.Failures
 	deleted := 0
 	err = s.within(ctx, func(tx *database.Tx) error {
 		// One bounded DELETE ... WHERE id IN (SELECT id ... LIMIT n): no row
 		// (envelope included) is loaded to choose the batch.
-		oldest := query.SelectValue(jobarchive.QueryFoundryFailedJobs().Where(fields.FailedAt.Lt(before)).OrderBy(fields.FailedAt.Asc(), fields.ID.Asc()).Limit(limit), query.Value(fields.ID))
-		removed, err := jobarchive.QueryFoundryFailedJobs().Where(fields.ID.InQuery(oldest)).DeleteAll(ctx, tx)
+		oldest := rows.SelectScalar(rows.From(jobarchive.Failures.Query().Where(fields.FailedAt.Lt(before)).OrderBy(fields.FailedAt.Asc(), fields.ID.Asc()).Limit(limit)), expr.Select(expr.Value(fields.ID)))
+		removed, err := expr.Where(jobarchive.Failures.Query(), rows.InQuery(expr.Value(fields.ID), oldest)).DeleteAll(ctx, tx)
 		deleted = int(removed)
 		return err
 	})

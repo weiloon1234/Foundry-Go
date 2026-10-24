@@ -16,6 +16,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	databasepg "github.com/weiloon1234/Foundry-Go/database/postgres"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/sessionstore"
@@ -142,7 +143,7 @@ func stored(t *testing.T, s *setup) []sessionstore.Entry {
 			return err
 		}
 		var err error
-		rows, err = sessionstore.QueryFoundrySessions().All(t.Context(), tx)
+		rows, err = sessionstore.Entries.Query().All(t.Context(), tx)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -541,7 +542,7 @@ func TestSessionCorruptSubjectFailsClosed(t *testing.T) {
 		if _, err := tx.Exec(t.Context(), `SET LOCAL search_path TO "`+s.schema+`"`); err != nil {
 			return err
 		}
-		_, err := sessionstore.QueryFoundrySessionSubjects().Update(t.Context(), tx, row.SubjectKey, sessionstore.SubjectDraft{}.SetIdentity(data))
+		_, err := orm.Update(t.Context(), tx, sessionstore.Subjects.Query(), sessionstore.Subjects.Key(), row.SubjectKey, sessionstore.Subjects.Identity.Set(data))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -577,7 +578,7 @@ func TestSessionLookupDoesNotWaitForSubjectLock(t *testing.T) {
 			if _, err := tx.Exec(t.Context(), `SET LOCAL search_path TO "`+s.schema+`"`); err != nil {
 				return err
 			}
-			if _, err := sessionstore.QueryFoundrySessionSubjects().ForUpdate().Find(t.Context(), tx, row.SubjectKey); err != nil {
+			if _, err := sessionstore.Subjects.Query().Where(sessionstore.Subjects.Key().Eq(row.SubjectKey)).ForUpdate().First(t.Context(), tx); err != nil {
 				return err
 			}
 			close(locked)

@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/mfa"
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
 	"github.com/weiloon1234/Foundry-Go/internal/mfastore"
@@ -76,8 +77,8 @@ func (b *Backend) now() (temporal.DateTime, error) {
 	}
 	return now, nil
 }
-func factors(scope string) mfastore.FactorQuery {
-	return mfastore.QueryFoundryMfaFactors().Where(mfastore.FactorFields().Scope.Eq(scope))
+func factors(scope string) orm.Query[mfastore.Factor] {
+	return mfastore.Factors.Query().Where(mfastore.Factors.Scope.Eq(scope))
 }
 
 func (b *Backend) Within(ctx context.Context, address mfa.Address, identity model.Identity, prepare func(context.Context, *database.Tx) error, change func(context.Context, *database.Tx, value.Optional[mfa.Record], temporal.DateTime) (mfa.Change, error)) (value.Optional[mfa.Record], error) {
@@ -113,7 +114,7 @@ func (b *Backend) mutate(ctx context.Context, address mfa.Address, identity mode
 		if err := prepare(ctx, tx); err != nil {
 			return err
 		}
-		found, err := factors(scope).ForUpdate().Find(ctx, tx, key)
+		found, err := factors(scope).Where(mfastore.Factors.Key().Eq(key)).ForUpdate().First(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -141,7 +142,7 @@ func (b *Backend) mutate(ctx context.Context, address mfa.Address, identity mode
 		}
 		if mutation.Removes() {
 			if found.IsSet() {
-				if _, err := factors(scope).Delete(ctx, tx, key); err != nil {
+				if _, err := orm.Delete(ctx, tx, factors(scope), mfastore.Factors.Key(), key); err != nil {
 					return err
 				}
 			}
@@ -153,9 +154,9 @@ func (b *Backend) mutate(ctx context.Context, address mfa.Address, identity mode
 			}
 			var row mfastore.Factor
 			if found.IsSet() {
-				row, err = factors(scope).Update(ctx, tx, key, draft.UnsetKey())
+				row, err = orm.Update(ctx, tx, factors(scope), mfastore.Factors.Key(), key, draft...)
 			} else {
-				row, err = mfastore.QueryFoundryMfaFactors().Create(ctx, tx, draft)
+				row, err = mfastore.Factors.Insert(ctx, tx, append(draft, mfastore.Factors.Key().Set(key))...)
 			}
 			if err != nil {
 				return err

@@ -1,0 +1,33 @@
+package json_functions
+
+import (
+	"context"
+	"foundry.test/goway/models/jsonpaths"
+	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/codec"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
+	"github.com/weiloon1234/Foundry-Go/value"
+)
+
+type result struct {
+	Kind     expr.JSONKind
+	Length   value.Nullable[int64]
+	Contains value.Nullable[bool]
+}
+type fields struct {
+	rows.Row[result]
+	Kind     rows.Field[result, expr.JSONKind]
+	Length   rows.Field[result, value.Nullable[int64]]
+	Contains rows.Field[result, value.Nullable[bool]]
+}
+
+var schema = rows.Define(func(b rows.Builder[result], r *result) fields {
+	return fields{b.Row(), rows.FieldOf(b, &r.Kind, orm.Codec(codec.String[expr.JSONKind]().Validated(expr.JSONKind.Validate))), rows.NullableNumberOf(b, &r.Length), rows.FieldOf(b, &r.Contains, orm.Codec(codec.Nullable(codec.Bool[bool]())))}
+})
+
+func Run(ctx context.Context, db database.Executor) ([]result, error) {
+	d := jsonpaths.Documents
+	return rows.Select(rows.FromModel(d.Query()), schema, rows.MapSelected(schema.Kind, expr.JSONTypeValue(expr.Select(expr.Value(d.Settings)))), rows.MapSelected(schema.Length, expr.JSONLengthValue(expr.Select(expr.Value(d.Tags)))), rows.MapSelected(schema.Contains, expr.JSONContainsNullable(expr.Value(d.Backup), expr.NullableRow(expr.Value(d.Settings))).Value())).All(ctx, db)
+}
