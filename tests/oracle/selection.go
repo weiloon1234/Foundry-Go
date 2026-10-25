@@ -10,7 +10,10 @@ import (
 
 // Selection follows Go's slash-separated test regex syntax. Expected records
 // come only from the frozen inventory and flags, never from observed callbacks.
-type Selection struct{ run, skip [][]*regexp.Regexp }
+type Selection struct {
+	run, skip [][]*regexp.Regexp
+	disabled  []string
+}
 
 func SelectTests(run, skip string) (Selection, error) {
 	r, err := testPatterns(run)
@@ -106,6 +109,11 @@ func matchesTest(patterns [][]*regexp.Regexp, name []string) (match, partial boo
 }
 
 func (s Selection) Includes(test string) bool {
+	for _, root := range s.disabled {
+		if test == root || strings.HasPrefix(test, root+"/") {
+			return false
+		}
+	}
 	parts := strings.Split(test, "/")
 	if ok, _ := matchesTest(s.run, parts); !ok {
 		return false

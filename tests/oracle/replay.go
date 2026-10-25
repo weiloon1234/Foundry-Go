@@ -169,6 +169,11 @@ func (r *Replay) Main(m *testing.M) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
+	selection, err = selection.currentEnvironment(r.prefix)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
 	missing, err := Unconsumed(r.bundle, r.prefix, r.consumed, selection)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
