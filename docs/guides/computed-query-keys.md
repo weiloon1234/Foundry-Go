@@ -1,60 +1,62 @@
 # Computed query keys
 
-Typed row expressions can supply `GROUP BY`, `DISTINCT ON` and window partition keys. They share the query AST, codecs and parameter binding used by [conditional expressions](conditional-expressions.md). The [independent consumer](../../tests/fixtures/consumer/keyqueries/) demonstrates grouping, complete model selection, aggregate/window keys, CTEs, correlations and failure boundaries.
+<!-- compiled-examples -->
+
+`expr.Group(rowValue)` constructs a row grouping key. A selected expression's
+`.Key()` constructs an `expr.ProjectionKey[S]` for selected DISTINCT ON and window
+partitioning. Neither operation erases scope or makes an aggregate a row operand.
 
 ## Group by a computed value
 
-```go
-u := models.UserFields()
-bucket := query.When(u.Age.Gt(20), query.Param(u.Age, 1)).Else(query.Param(u.Age, 0))
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/keyqueries/keys_test.go):
 
-counts, err := query.SelectValue(
-    models.QueryUsers(), query.Count[models.User]().Value(),
-).GroupBy(bucket.Group()).OrderBy(bucket.Asc()).All(ctx, db)
+<!-- go-source: tests/fixtures/consumer/keyqueries/keys_test.go -->
+```go
+func buckets() rowset.Query[models.User, keyqueries.BucketCount] {
+	u := models.Users
+	bucket := expr.When(expr.ModelPredicate(u.Age.Gt(20)), expr.Param(u.Age, 1)).Else(expr.Param(u.Age, 0))
+	return rowset.GroupBy(rowset.Select(rowset.From(models.Users.Query()), keyqueries.BucketCounts.Row,
+		rowset.MapSelected(keyqueries.BucketCounts.Bucket, bucket.Value()),
+		rowset.MapSelected(keyqueries.BucketCounts.Count, expr.Count[models.User]().Value()),
+	), expr.Group(bucket)).OrderBy(bucket.Asc())
+}
 ```
 
-The result is `[]int64`. To return each bucket beside its count, declare a projection with `Bucket int` and `Count int64`, as in the [consumer report](../../tests/fixtures/consumer/keyqueries/reports.go). The projection is a complete declared result, separate from a persisted model.
+The `rowset` import above names `database/orm/rows`. The handwritten
+[BucketCounts schema](../../tests/fixtures/consumer/keyqueries/rows.go) maps the
+ordinary result struct. `rows.GroupBy` appends keys. Duplicate/zero keys and
+ungrouped selections fail compilation. Grouping by a CASE result does not make
+its input columns independently selectable; compiler validation does not infer
+functional dependencies from primary keys.
 
-`RowExpression.Group()` preserves its scope and erases only its value type, allowing mixed key types in `...Group[Scope]`. Existing `field.Group()` calls and slices of group descriptors remain valid. `GroupBy` appends keys. Repeated keys and zero descriptors fail query compilation.
+## Selected keys and clauses
 
-A computed grouping key is one grouped value. Grouping by the bucket does not make `u.Age` independently selectable. Selecting the bucket, using it inside a larger selected expression, or filtering with `Having(query.Grouped(bucket.Eq(1)))` is supported. Aggregate expressions cannot become row grouping keys. These rules follow PostgreSQL's [grouping semantics](https://www.postgresql.org/docs/18/sql-select.html#SQL-GROUPBY).
+`rows.DistinctOn` accepts row keys; `rows.DistinctOnValues` accepts selected keys.
+Scalar equivalents are `GroupByScalar`, `HavingScalar`, `DistinctScalar`,
+`DistinctOnScalar` and `DistinctOnScalarValues`. Correlated scalar equivalents
+retain the required outer owner. `DistinctOnValueSet` uses the combined set's
+selected keys. See [distinct reads](model-distinct.md) for ordering-prefix checks.
 
-## Select one model per computed key
-
-```go
-users, err := models.QueryUsers().
-    DistinctOn(bucket.Group()).
-    OrderBy(bucket.Asc(), u.Age.Desc(), u.ID.Asc()).
-    All(ctx, db)
-```
-
-The result remains `[]models.User`, with one complete model per bucket. Order by the distinct keys first, then the desired precedence and a unique tie-breaker. [Distinct reads](model-distinct.md) describes prefix permutations, missing ordering, counting and pagination. No raw SQL or column strings are required.
-
-## Aggregate and window keys
-
-Selected values use `Expression.Key()` to produce `ProjectionKey[Scope]`. Pass these to `PartitionByValues` or `DistinctOnValues`; `GroupBy` accepts only row groups.
-
-```go
-count := query.Count[models.User]()
-window := query.WindowFor(models.QueryUsers()).
-    PartitionByValues(count.Value().Key())
-
-positions, err := query.SelectValue(models.QueryUsers(), query.RowNumber(window)).
-    GroupBy(bucket.Group()).OrderBy(count.Asc()).All(ctx, db)
-```
-
-Here the window partitions the already-grouped rows by their counts. Ordinary aggregates in selected keys establish grouping even when they are absent from the result list. Window functions cannot nest in another window partition at the same SELECT level; the query compiler rejects this before execution. See PostgreSQL's [window evaluation rules](https://www.postgresql.org/docs/18/sql-expressions.html#SYNTAX-WINDOW-FUNCTIONS).
-
-`Window.PartitionBy(...Group)` accepts fields and computed row keys. `PartitionByValues(...ProjectionKey)` additionally accepts selected aggregate/scalar values. Both append keys to the same immutable window definition. Duplicate partition keys are rejected across both methods.
-
-`DistinctOnValues` supports selected aggregate and window keys, following the same grouping and ordering requirements. It replaces an earlier distinct clause and retains the result type. Model, projection, scalar, combined and correlated queries use the same implementation; correlated results retain their outer ownership.
+`Window.PartitionBy` takes row keys and `PartitionByValues` takes selected keys.
+Both append to the same window. Duplicate keys across the two methods fail.
+An aggregate partition key establishes grouping; a window partition cannot
+contain another window at the same SELECT level.
 
 ## Identity and scope boundaries
 
-Equivalent keys match by their canonical compiled SQL and encoded parameter values. The compiler reuses the matched key's parameter positions within one SELECT, including grouped subexpressions inside a larger key. Different parameter values form different keys. Matching does not infer algebraic equivalence or database collation equivalence. Custom codecs must provide stable encodings; comparison and expression work have bounded compiler budgets.
+Key matching uses canonical SQL and encoded parameter values, reusing parameter
+positions within a SELECT. Different values are different keys. No algebraic or
+collation equivalence is inferred. Integer parameters remain values, not ordinal
+references. SQL groups NULL keys together. Custom codecs must encode equivalent
+parameter values consistently for key matching.
 
-Typed parameters are SQL values, including when they contain an integer. They do not become ordinal references to selected columns. NULL remains distinct from zero and empty values through codecs and hydration; SQL grouping puts NULL keys together.
+Grouping a computed key does not permit a nested subquery to capture that key's
+ungrouped raw inputs. Project and alias the grouped result before reusing its
+output as a row field.
 
-CTE discovery and explicit correlation traverse key expressions. Grouping an outer computed value does not authorize a nested query to capture its ungrouped input columns. Expose the grouped value through a declared projection and alias/CTE when another query needs to address it as a field. Compiler grouping checks remain strict and do not infer functional dependencies from primary keys.
+For [result cursors](result-cursor-pagination.md), project the computed value into
+a handwritten rows schema, then name its output field in `UniqueBy`. A computed
+group key is not a declared cursor identity. `rows.CompileCursor` and
+`rows.PreflightCursor` validate cursor keys without I/O.
 
-[Result cursor pagination](result-cursor-pagination.md) requires declared output fields for `UniqueBy`. First project a computed key, then use the generated output field in the cursor scope. A computed `Group()` supplied directly as a cursor identity is rejected.
+For declaration and API migration, see the [ORM migration guide](orm-migration.md).

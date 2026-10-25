@@ -32,21 +32,21 @@ Use a context file inside the consumer workspace, including when symlinks are re
 ## Keep editor and agent answers current
 
 Use the consumer's selected framework version and generated output together.
-Regenerate with that version's CLI after changing declarations or upgrading the
-module, then use `generate --check` to verify output. Add `--field-docs` to both
-commands when the project opts into managed notices on handwritten model fields.
-Without that flag, those handwritten notices are neither updated nor checked.
+Regenerate DTO, configuration, enum and transport contracts with that version's
+CLI after changing them, then use `generate --check`. Model tables, field handles,
+relations and their comments are handwritten and need no model generation.
 
-Generated query fields, draft methods, projection selectors, model change fields,
-extension slots, JSON property selectors, transport validation fields and
-configuration keys retain original field help from their Go declarations.
+Document stored fields and their handles, including getter, mutator, timestamp
+and slot behavior. Completion, hover and definition read these handwritten
+declarations. Generated transport validation fields and configuration keys retain
+help from their contract declarations.
 Configuration help follows nested groups, including imported settings types.
-Original help is separate from generated getter/mutator notices and does not
+Handwritten field help does not
 become an OpenAPI or client schema description.
 
 Inspect the public symbol in the actual consumer before using a remembered API.
-For example, stored fields use `query.Value(field)` and `query.Sum(field)`;
-computed expressions retain their own `Value` method. The
+For example, stored fields feed `expr.Value(field)` and aggregate descriptors in
+`database/orm/expr`. The
 [typed field migration table](typed-field-computations.md) records the exact
 changes. Private query-engine helpers and dated blueprint examples are not
 consumer APIs. Current guides describe supported behavior; dated acceptance
@@ -60,7 +60,7 @@ suggestions or offer a formatting action.
 
 ## Results and process ownership
 
-JSON is the default format. Its wrapper identifies the operation, workspace, source file, UTF-16 position, and server name/version, while `result` retains the actual LSP payload. Completion results can contain additional edits and documentation; they are returned as data. Text output prints completion labels/signatures with their documentation, hover text, or readable definition locations. In particular, [automatic field notices](model-accessors.md#notices-beside-the-actual-field) make existing getters and write mutators visible on ordinary model-field inspection. Markdown formatting in server documentation is retained.
+JSON is the default format. Its wrapper identifies the operation, workspace, source file, UTF-16 position, and server name/version, while `result` retains the actual LSP payload. Completion results can contain additional edits and documentation; they are returned as data. Text output prints completion labels/signatures with their documentation, hover text, or readable definition locations. In particular, handwritten field and handle comments make existing getters and write mutators visible on ordinary model-field inspection. Markdown formatting in server documentation is retained.
 
 Each invocation owns one server process, negotiates the protocol, opens and closes the unsaved document, then shuts the server down. `--timeout` defaults to 30 seconds. Cancellation terminates the owned process; shutdown has a separate bounded cleanup window. Server-requested workspace edits are refused. The command does not control another editor's gopls session.
 
@@ -108,3 +108,5 @@ compared with 130.414s for 903 cases. All actual assertions remain required.
 These are observed acceptance timings under the default native compiler settings;
 controlled resource measurements belong to milestone 24. Cache invalidation and
 unchanged-input reuse were exercised with actual Go child processes.
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).

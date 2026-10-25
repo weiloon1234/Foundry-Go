@@ -1,20 +1,22 @@
 # Typed model history and domain auditing
 
-Audit is opt-in. Foundry records stored model changes through the actual write transaction, using generated observers and the same field codecs as persistence. Application code selects model policies and maps history into its own response DTOs.
+Audit is opt-in. Foundry records stored model changes through the actual write transaction, using `orm.Auditing` observers and the same field codecs as persistence. Application code selects model policies and maps history into its own response DTOs.
 
 ## Register models and storage
 
 The independent [audit consumer](../../tests/fixtures/consumer/auditqueries/domain.go) registers its recorder alongside its database provider:
 
+<!-- orm-example: audit-registration -->
 ```go
-return audit.Register(r, Pool, History,
-    audit.Config{Area: "accounts", RetentionDays: 90},
-    AccountAuditing(AccountAuditPolicy{Note: record.Exclude}),
-    LabelAuditing(LabelAuditPolicy{}),
-)
+func registerAudit(r *foundation.Registrar, pool foundation.Key[*database.DB], history foundation.Key[*audit.Recorder]) error {
+	f := hooks.Members
+	policy := orm.AuditPolicyOf(f.Table, orm.AuditField(f.Note, record.Exclude))
+	return audit.Register(r, pool, history,
+		audit.Config{Area: "accounts", RetentionDays: 90}, orm.Auditing(f.Table, policy))
+}
 ```
 
-`Pool` is a `foundation.Key[*database.DB]`; `History` is a `foundation.Key[*audit.Recorder]`. The generated policy names actual persisted fields and retains its model owner. A policy for another model fails compilation. Duplicate auditing declarations for one model fail application construction through the ordinary observer registry. Recorder construction performs no I/O, owns no second database pool, and shares no global registration state between applications.
+The pool and recorder keys retain their concrete service types. `orm.AuditPolicyOf` accepts typed `orm.AuditField` rules and retains its model and declaration owner. The zero `orm.AuditPolicy[M]` uses `record.Automatic` for every field. A policy for another model fails compilation. Duplicate auditing declarations for one model fail application construction through the ordinary observer registry. Recorder construction performs no I/O, owns no second database pool, and shares no global registration state between applications.
 
 Register `audit.Migrations()` with the application's ordinary migration definitions and run the migration command explicitly. It creates `foundry_audit` in the selected database schema. Migrations and model writes must use the same schema. Missing audit storage fails an enabled model write; Foundry never treats missing storage as permission to discard history.
 
@@ -30,46 +32,68 @@ A large value never fails or rolls back the business write. A value larger than 
 
 Auditing runs in the operation's transaction at `Created`, `Updated`, `Deleted` or `Restored`. `ForceDelete` records once through `Deleted`, using its distinct operation value. A later `Saved`/observer failure rolls back the audit row and model write together. Outer transaction and savepoint rollback retain the existing database semantics. A returned audit ID is not confirmation of outer commit.
 
-Explicit set-based writes skip per-model observers and audit. Use the existing `CreateEach`, `UpdateEach` and `DeleteEach` alternatives when every affected model requires lifecycle history. An explicit domain audit action can record the intent/result of a bulk operation without claiming to contain every model's before/after values.
+Explicit set-based writes skip per-model observers and audit. Use the existing `orm.CreateEach`, `orm.UpdateEach`, `orm.DeleteEach`, `orm.RestoreEach` and `orm.ForceDeleteEach` alternatives when every affected model requires lifecycle history. An explicit domain audit action can record the intent/result of a bulk operation without claiming to contain every model's before/after values.
 
 ## Read typed history
 
+<!-- orm-example: audit-page -->
 ```go
-page, err := audit.ModelHistory(ctx, db, recorder,
-    account.FoundryReference(),
-    query.PageRequest{Number: 1, Size: 20},
-)
+func memberHistoryPage(ctx context.Context, db database.Executor, recorder *audit.Recorder, member hooks.Member) error {
+	identity := orm.IdentityOf(hooks.Members.Table, hooks.Members.Key())
+	_, err := audit.ModelHistory(ctx, db, recorder, identity.ReferenceOf(member),
+		orm.PageRequest{Number: 1, Size: 20})
+	return err
+}
 ```
 
-The result is `query.Page[audit.ModelRecord[Account, model.ID[Account]]]`. Natural-key models preserve their concrete key type instead. `Items` is a native slice; numbered pagination retains the query package's row bounds and count/rows consistency rules. Use an appropriate transaction isolation level when both queries must observe one snapshot.
+The page retains `audit.ModelRecord[M, K]`, including the concrete model and stored key type. The example uses `hooks.Member` with an `int64` key. `Items` is a native slice; numbered pagination retains the shared page bounds and count/rows consistency rules. Use an appropriate transaction isolation level when both queries must observe one snapshot.
 
 History is newest first by the database-assigned insertion `Sequence`. Rows written in one transaction share its `created_at` timestamp; the sequence keeps a creation and a later update in that same transaction in their actual order.
 
 For long histories, `audit.ModelTimeline` reads one indexed keyset page without a count query:
 
+<!-- orm-example: audit-timeline -->
 ```go
-first, err := audit.ModelTimeline(ctx, db, recorder, account.FoundryReference(),
-    audit.TimelineRequest{Size: 20})
-next, more := first.Next.Get()
-if more {
-    older, err := audit.ModelTimeline(ctx, db, recorder, account.FoundryReference(),
-        audit.TimelineRequest{Size: 20, Before: value.Set(next)})
+func memberHistory(ctx context.Context, db database.Executor, recorder *audit.Recorder, member hooks.Member) error {
+	identity := orm.IdentityOf(hooks.Members.Table, hooks.Members.Key())
+	subject := identity.ReferenceOf(member)
+	page, err := audit.ModelTimeline(ctx, db, recorder, subject, audit.TimelineRequest{Size: 20})
+	if err != nil {
+		return err
+	}
+	if next, more := page.Next.Get(); more {
+		_, err = audit.ModelTimeline(ctx, db, recorder, subject,
+			audit.TimelineRequest{Size: 20, Before: value.Set(next)})
+	}
+	return err
 }
 ```
 
-`Size` is 1–`query.MaxPageSize`. `Next` is a position hint, not a snapshot across concurrent writes.
+`Size` is 1–1,000. `Next` is a position hint, not a snapshot across concurrent writes.
 
 Each result exposes `ID`, `Changes`, `Sequence`, `Area`, `Origin`, `Correlation`, `Route` and `CreatedAt`. `Changes` is a model-owned audit representation. It is never an incompletely hydrated application model. The historical subject may already have been physically deleted.
 
+<!-- orm-example: audit-find -->
 ```go
-result, err := audit.FindModel(ctx, db, recorder,
-    (Account{}).FoundryReference(), auditID,
-)
+func findHistory(ctx context.Context, db database.Executor, recorder *audit.Recorder, id audit.ModelID[hooks.Member]) error {
+	identity := orm.IdentityOf(hooks.Members.Table, hooks.Members.Key())
+	_, err := audit.FindModel(ctx, db, recorder, identity.ReferenceOf(hooks.Member{}), id)
+	return err
+}
 ```
 
-`auditID` has type `audit.ModelID[Account]`; another model's ID fails compilation. `ParseModelID[Account]` supplies the explicit string/transport boundary. A foreign model or area is absent. A malformed persisted snapshot fails validation. Neither lookup authenticates the caller nor fetches the original model.
+`id` has type `audit.ModelID[hooks.Member]`; another model's ID fails compilation. `audit.ParseModelID[M]` supplies the explicit string/transport boundary. A foreign model or area is absent. A malformed persisted snapshot fails validation. Neither lookup authenticates the caller nor fetches the original model.
 
-Generated `AccountAuditFields(history.Changes())` exposes concrete historical field types. For an email field, the resulting `fields.Email` is `value.Optional[record.FieldChange[string]]`. `Before` and `After` return typed `FieldValue[string]` values; `Get` returns an optional stored string plus an error. The [compiled consumer example](../../tests/fixtures/consumer/auditqueries/history.go) demonstrates this path.
+`orm.AuditRead` and `orm.AuditReadNullable` read historical fields through current typed columns. Encrypted fields have the corresponding encrypted reader functions. They preserve the historical stored type without hydrating a partial application model.
+
+<!-- orm-example: audit-field -->
+```go
+func historicalName(history record.Model[hooks.Member, int64]) (value.Optional[record.FieldChange[string]], error) {
+	return orm.AuditRead(history, hooks.Members.Name)
+}
+```
+
+The result is optional because a historical record can omit the field. Its `Before` and `After` return typed `record.FieldValue[V]`; `Get` returns an optional stored value and an error. The [audit consumer](../../tests/fixtures/consumer/auditqueries/history.go) demonstrates explicit domain recording with an ORM identity declaration.
 
 The layers preserve different meanings:
 
@@ -81,7 +105,7 @@ The layers preserve different meanings:
 
 ## Redaction and presentation
 
-The zero policy applies automatic sensitive-name redaction. Names are split at snake, kebab, dotted and camel-case boundaries and at letter/digit boundaries; digit suffixes and simple plurals are ignored (`apiKeys2` matches `api key`). Secret, token, password, passphrase, credential, authorization, API/private key, OTP, PIN, CVV/CVC, SSN, card number, cookie, session and recovery-code conventions are recognized, including joined names such as `accesstoken`. Short abbreviations such as `pin` and `otp` match only whole words, so `spinner` is not redacted. Nested JSON objects and arrays use the same rule. `record.Redact` hides a particular field's values; `record.Exclude` removes the field entirely. Neither policy invokes that field's codec to capture the hidden value.
+The zero policy applies automatic sensitive-name redaction. Names are split at snake, kebab, dotted and camel-case boundaries and at letter/digit boundaries; digit suffixes and simple plurals are ignored (`apiKeys2` matches `api key`). Secret, token, password, passphrase, credential, authorization, API/private key, OTP, PIN, CVV/CVC, SSN, card number, cookie, session and recovery-code conventions are recognized, including joined names such as `accesstoken`. Short abbreviations such as `pin` and `otp` match only whole words, so `spinner` is not redacted. Nested JSON objects and arrays use the same rule. `record.Redact` hides a particular field's values; `record.Exclude` removes the field entirely. Sensitive stored types and encrypted fields are redacted automatically, even under `Automatic`. Neither explicit hiding nor automatic sensitive-field redaction binds the hidden plaintext. Nested JSON redaction happens before audit bytes are stored.
 
 Every row stores the redaction policy that wrote it (`record.Redaction`; new rows use `record.CurrentRedaction`). Reads validate each row under its own policy, so recognizing more names never makes older history unreadable, and a row can never claim a newer policy than the one that captured it. `Entry().Redaction()` and `Document().Redaction()` report the policy.
 
@@ -89,26 +113,31 @@ Convention matching cannot identify a secret with an unrelated name. Declare its
 
 Redacted fields keep assignment/change metadata and explicit redaction states. `FieldValue.Get` returns a `fault.Missing` error for redacted data. Partially redacted JSON is available as an audit snapshot, but cannot be decoded into a fabricated partial instance of its original Go type. Persisted redaction flags are checked against the representation on reload.
 
-`Changes().Entry().Payload()` and snapshot JSON are deliberate audit export boundaries. Routine formatting hides stored contents. They contain stored audit data, not automatically computed getter values. Generated history fields carry the same getter/setter notices as the original model, so source readers and gopls can identify the relevant behavior before mapping a DTO.
+`Changes().Entry().Payload()` and snapshot JSON are deliberate audit export boundaries. Routine formatting hides stored contents. They contain stored audit data, not automatically computed getter values. History readers use the handwritten column declaration; accessor evaluation remains an explicit DTO-mapping choice.
 
 ## Explicit domain events
 
 Declare one reusable descriptor for a concrete audit DTO:
 
+<!-- orm-example: audit-action -->
 ```go
 type Approval struct {
-    Reason string `json:"reason"`
+	Reason string `json:"reason"`
 }
 
-var Approved = audit.Define[Approval]("account.approved", 1)
+var Approved = audit.Define[Approval]("member.approved", 1)
 
-id, err := audit.RecordFor(ctx, tx, recorder, Approved,
-    account.FoundryReference(), Approval{Reason: "review completed"})
+func approve(ctx context.Context, tx *database.Tx, recorder *audit.Recorder, member hooks.Member) error {
+	identity := orm.IdentityOf(hooks.Members.Table, hooks.Members.Key())
+	_, err := audit.RecordFor(ctx, tx, recorder, Approved,
+		identity.ReferenceOf(member), Approval{Reason: "review completed"})
+	return err
+}
 ```
 
 Use `Approved.Record(ctx, tx, recorder, payload)` for an event without a model subject. Both paths require the actual `*database.Tx` and preserve its outcome. They do not deliver notifications or publish events. Payloads and subject references retain their concrete types; the serialized identity is confined to the persisted audit metadata boundary.
 
-`Approved.Find(ctx, db, recorder, id)` returns optional `ActionRecord[Approval]`, restricted to the descriptor's name/version and selected area. `id` is `audit.ActionID[Approval]`; `ParseActionID[Approval]` is its transport parser. `Approved.Timeline(ctx, db, recorder, request)` lists that action newest first, and `audit.ActionTimelineFor(ctx, db, recorder, Approved, account.FoundryReference(), request)` lists it for one subject. Both use the keyset `TimelineRequest`. `Document().Decode()` returns a fresh DTO only when complete and unredacted. `Document().Payload()` exposes the sanitized audit representation when a sensitive JSON key was redacted. Explicit domain DTOs should omit fields that must not appear even as markers. Custom JSON callbacks run under the framework's existing fault isolation and must remain pure and deterministic.
+`Approved.Find(ctx, db, recorder, id)` returns optional `ActionRecord[Approval]`, restricted to the descriptor's name/version and selected area. `id` is `audit.ActionID[Approval]`; `ParseActionID[Approval]` is its transport parser. `Approved.Timeline(ctx, db, recorder, request)` lists that action newest first, and `audit.ActionTimelineFor(ctx, db, recorder, Approved, identity.ReferenceOf(member), request)` lists it for one subject. Both use the keyset `TimelineRequest`. `Document().Decode()` returns a fresh DTO only when complete and unredacted. `Document().Payload()` exposes the sanitized audit representation when a sensitive JSON key was redacted. Explicit domain DTOs should omit fields that must not appear even as markers. Custom JSON callbacks run under the framework's existing fault isolation and must remain pure and deterministic.
 
 ## Origin, areas and retention
 
@@ -127,10 +156,12 @@ Heterogeneous timelines return payload-free `audit.Activity` summaries, newest f
 
 `Activity` exposes the operation or action name/version, subject identity and the shared metadata. `audit.ModelActivityID(activity, template)` and `audit.ActionActivityID(activity, action)` convert a row into its typed ID when it belongs to that model or action; load details with `FindModel` or `Find`. None of these reads authorizes the caller.
 
-`Recorder.PruneBefore(ctx, tx, cutoff, limit)` removes at most the requested number of old rows from the selected area. `PruneRetention(ctx, tx, now, limit)` derives its cutoff from configured retention days, each 24 hours. Both use the shared typed query compiler, preserve transaction rollback, avoid loading payloads and perform one bounded batch. The maximum batch size is `query.MaxPageSize`; concurrent pruning may remove fewer rows than requested.
+`Recorder.PruneBefore(ctx, tx, cutoff, limit)` removes at most the requested number of old rows from the selected area. `PruneRetention(ctx, tx, now, limit)` derives its cutoff from configured retention days, each 24 hours. Both use the shared typed query compiler, preserve transaction rollback, avoid loading payloads and perform one bounded batch. The maximum batch size is 1,000; concurrent pruning may remove fewer rows than requested.
 
 `Scope.PruneRetention(ctx, now, batch)` and `Scope.PruneBefore(ctx, cutoff, batch)` loop over bounded batches, each in its own transaction in the configured schema, until a batch removes fewer rows than requested. They return the rows removed by committed batches, including when a later batch fails or the context ends; rerunning is safe. The cutoff is derived once, before the first batch.
 
 `application.AuditCommand()` declares the operator command `audit prune [--before RFC3339] [--area name] [--batch 500] [--format text|json] [--apply]`. Register it in the application's CLI registry. Without `--before` it uses the configured retention and fails when retention is disabled; a `--before` cutoff later than the current time is rejected. By default it only counts the matching entries (`matching=N`, a dry run like the extension `rescope` commands); `--apply` removes them in bounded transactions and prints `removed=N`. It prints only the area and counts, never payloads. `Scope.CountBefore` and `Scope.RetentionCutoff` expose the same count and cutoff to application code.
 
 No pruning runs automatically unless a configured application enables the [housekeeping schedule](production-operations.md#housekeeping-schedule), which applies `Scope.PruneRetention` to the configured area when retention is set. Zero `RetentionDays` disables the configured helpers; `DefaultConfig()` uses that setting. Otherwise a maintenance command or scheduler must explicitly invoke retention. These APIs remove audit history deliberately; they do not reset tables or databases.
+
+For the old-to-new declaration mapping, see [the ORM migration guide](orm-migration.md).

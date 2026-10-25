@@ -5,24 +5,23 @@ handler runs. The original endpoint still owns parsing, validation, middleware,
 errors, URL generation and the explicit response DTO.
 
 The [independent consumer](../../tests/fixtures/consumer/httpmodels/bindings.go)
-uses generated path/model/response declarations:
+uses a handwritten model declaration with generated path and response contracts:
 
+<!-- compiled-source: tests/fixtures/consumer/httpmodels/bindings.go -->
 ```go
-type ShowRequest = modelbinding.Input[
-    httpkernel.UserPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User,
-]
+type ShowRequest = modelbinding.Input[httpkernel.UserPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User]
+```
 
+<!-- compiled-source: tests/fixtures/consumer/httpmodels/bindings.go -->
+```go
 func UserByID(db database.Executor) modelbinding.Resolver[httpkernel.UserPath, models.User] {
-    return modelbinding.ByKey(
-        db,
-        models.QueryUsers().Where(models.UserFields().Status.Eq(models.StatusActive)),
-        func(p httpkernel.UserPath) model.ID[models.User] { return p.User },
-    )
+	return modelbinding.ByKey(db, orm.Keyed(models.Users.Query().Where(models.Users.Status.Eq(models.StatusActive)), models.Users.Key()),
+		func(p httpkernel.UserPath) model.ID[models.User] { return p.User })
 }
 
 func Router(db database.Executor, service Service) (*foundryhttp.Router, error) {
-    bound := modelbinding.Bind(Show, UserByID(db))
-    return foundryhttp.NewRouter(bound.Handle(service.Show))
+	bound := modelbinding.Bind(Show, UserByID(db))
+	return foundryhttp.NewRouter(bound.Handle(service.Show))
 }
 ```
 
@@ -35,7 +34,7 @@ required inside a model.
 
 ## Query behavior
 
-`ByKey` calls the generated query's `Find` method once. The model and primary-key
+`ByKey` consumes `orm.Keyed(query, table.Key())` and calls its `Find` once. The model and primary-key
 types remain intact, including named numeric/string natural keys. The supplied
 query retains filters, soft-delete visibility, eager relations and retrieval
 hooks. Eager loads and hooks can perform their normal additional queries; one
@@ -57,11 +56,9 @@ happen before any path decoding or model resolution.
 `WithMissing` replaces the default 404 for an omitted result, for example with a
 declared application error or a 410 for archived resources:
 
-```go
-resolver := UserByID(db).WithMissing(func(ctx context.Context, p httpkernel.UserPath) error {
-    return UserGone // a declared application error
-})
-```
+Use `UserByID(db).WithMissing(handler)`, where `handler` has type
+`func(context.Context, httpkernel.UserPath) error` and returns a declared
+application error.
 
 The callback receives the decoded path, runs in an owned callback (panics become
 internal errors) and is never invoked for lookup failures. Returning nil keeps 404.
@@ -77,13 +74,12 @@ Use `Define` for a slug, tenant-aware query, alternate key or child route. The
 callback returns `value.Optional[Model]`, preserving the same missing/error rules.
 The consumer's child resolver uses ordinary typed predicates:
 
+<!-- compiled-source: tests/fixtures/consumer/httpmodels/bindings.go -->
 ```go
 func OrderWithinUser(db database.Executor) modelbinding.Resolver[OrderPath, models.Order] {
-    return modelbinding.Define(func(ctx context.Context, p OrderPath) (value.Optional[models.Order], error) {
-        return models.QueryOrders().
-            Where(models.OrderFields().BuyerID.Eq(p.User)).
-            Find(ctx, db, p.Order)
-    })
+	return modelbinding.Define(func(ctx context.Context, p OrderPath) (value.Optional[models.Order], error) {
+		return orm.Keyed(models.Orders.Query().Where(models.Orders.BuyerID.Eq(p.User)), models.Orders.Key()).Find(ctx, db, p.Order)
+	})
 }
 ```
 
@@ -97,8 +93,8 @@ authorize access.
 ## Models, getters and response DTOs
 
 Loaded fields retain their stored values. Choose stored fields or typed getters
-explicitly while constructing the declared response DTO, following the generated
-field notices and [getter contracts](model-accessors.md) and [mutator contracts](model-mutators.md).
+explicitly while constructing the declared response DTO, following the handwritten
+field documentation and [getter contracts](model-accessors.md) and [mutator contracts](model-mutators.md).
 Model binding does not run getters implicitly or add model fields to the public
 wire schema. Endpoint inspection remains the original transport contract.
 
@@ -135,3 +131,5 @@ Authentication, token scopes, permissions and signatures execute before decoding
 or model resolution. The shared resolver still runs once per request, at the
 binding stage before validation; resource policies remain explicit. See [authentication composition](authentication.md#signed-endpoints-and-bound-resources)
 and the [consumer](../../tests/fixtures/consumer/authenticating/composed_routes.go).
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).

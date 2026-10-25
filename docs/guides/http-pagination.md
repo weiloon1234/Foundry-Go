@@ -13,27 +13,25 @@ response metadata and navigation links. The service uses the normal ORM API.
 The independent [consumer](../../tests/fixtures/consumer/httppagination/pagination.go)
 contains the complete declarations and generated contracts for this example:
 
+<!-- compiled-source: tests/fixtures/consumer/httppagination/pagination.go -->
 ```go
-var List = pagination.DefineNumbered(
-    foundryhttp.DefineRoute(
-        foundryhttp.RouteSpec{ID: "members.index", Method: foundryhttp.GET, Access: foundryhttp.Public},
-        foundryhttp.StaticPath("/members"),
-    ),
-    MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultConfig(),
-)
-
 type ListRequest = pagination.Request[foundryhttp.NoPath, MemberFilters]
 
-func (s DatabaseService) List(ctx context.Context, in ListRequest) (query.Page[MemberResponse], error) {
-    builder := mutatorqueries.QueryMutatorMembers()
-    if email, set := in.Filters.Email.Get(); set {
-        builder = builder.Where(mutatorqueries.MemberFields().Email.Eq(email))
-    }
-    page, err := builder.Paginate(ctx, s.DB, in.Page)
-    if err != nil {
-        return query.Page[MemberResponse]{}, err
-    }
-    return pagination.MapPage(ctx, page, PresentMember)
+var List = pagination.DefineNumbered(
+	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.index", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members")),
+	MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultConfig(),
+)
+```
+
+<!-- compiled-source: tests/fixtures/consumer/httppagination/pagination.go -->
+```go
+func (s DatabaseService) List(ctx context.Context, in ListRequest) (orm.PageResult[MemberResponse], error) {
+	builder := memberQuery(in.Filters)
+	page, err := builder.Paginate(ctx, s.DB, in.Page)
+	if err != nil {
+		return orm.PageResult[MemberResponse]{}, err
+	}
+	return pagination.MapPage(ctx, page, PresentMember)
 }
 ```
 
@@ -50,17 +48,16 @@ usual, and pass its concrete `foundryhttp.GuardBinding[Actor]` to
 `pagination.Authenticated`. Numbered, simple and cursor endpoints use the same
 adapter and infer all types from the endpoint and binding:
 
+<!-- compiled-source: tests/fixtures/consumer/httppagination/authenticated.go -->
 ```go
-secured := pagination.Authenticated(list, binding).
-    WithScopes(readScopes).
-    WithPermissions(readPermission).
-    WithAuthorization(service.AuthorizeList)
-registration := secured.Handle(service.List)
+func AuthenticatedNumbered(binding foundryhttp.GuardBinding[Actor]) pagination.AuthenticatedNumberedEndpoint[foundryhttp.NoPath, MemberFilters, Actor, MemberResponse] {
+	return pagination.Authenticated(GuardedList, binding)
+}
 ```
 
 The numbered/simple handler is
 `func(context.Context, Actor, pagination.Request[Path, Filters]) (Page, error)`;
-`Page` remains `query.Page[DTO]` or `query.SimplePage[DTO]`. Cursor handlers use
+`Page` remains `orm.PageResult[DTO]` or `orm.SimplePage[DTO]`. Cursor handlers use
 `pagination.CursorRequest[Path, Filters, Source]` and return
 `pagination.CursorResult[Source, DTO]`. Cursor source, actor and DTO ownership
 remain separate. The [independent consumer](../../tests/fixtures/consumer/httppagination/authenticated.go)
@@ -81,7 +78,7 @@ and invalid-result handling share the existing pagination implementation.
 `DefaultConfig()` uses `page=1`, `per_page=20`, maximum size 100, maximum page
 `pagination.DefaultMaximumPage` (10,000) and relative links. Set `NumberParam`,
 `SizeParam`, `DefaultSize`, `MaximumSize` and `MaximumPage` once per endpoint.
-The maximum size cannot exceed `query.MaxPageSize`. `MaximumPage` bounds how deep
+The maximum size cannot exceed `orm.MaxPageSize`. `MaximumPage` bounds how deep
 an OFFSET scan a client can request (at most `MaximumPage × MaximumSize` skipped
 rows); zero selects the default, and a deeper page fails validation with a 422 at
 `/query/page`. Navigation omits a `next` link beyond the bound. Use
@@ -120,7 +117,7 @@ count and a bounded number of items. Invalid service results fail before success
 bytes are sent. Counts and rows can observe different database states; use the
 ORM's documented transaction isolation when a consistent snapshot is required.
 
-`DefineSimple` expects `query.SimplePage[DTO]`. Use `SimplePaginate` in the service
+`DefineSimple` expects `orm.SimplePage[DTO]`. Use `SimplePaginate` in the service
 and `MapSimplePage` to choose DTO values. Its metadata contains `current_page`,
 `per_page` and `has_more`; it does not claim totals. `HasMore` requires a full page,
 as defined by the ORM's lookahead read.
@@ -144,11 +141,9 @@ the same envelope. No link points beyond `MaximumPage`: a deeper `last` is
 omitted and the window stops at the bound. Simple pages have no count and only
 receive `first`; cursor pages receive neither.
 
-```go
-config := pagination.DefaultConfig()
-config.EdgeLinks = true
-config.PageWindow = 2 // page 5 of 9 links pages 3–7
-```
+Set `config.EdgeLinks = true` and `config.PageWindow = 2` on
+`pagination.DefaultConfig()` to include the first/last links and two neighboring
+pages on each side.
 
 `NumberedJSON(item)` and `SimpleJSON(item)` expose typed response contracts. The
 framework response fields/tags own the envelope; the supplied generated DTO owns
@@ -157,3 +152,5 @@ its item fields and codecs. Models do not automatically become public DTOs.
 by the shared [client contract exporters](client-contracts.md).
 
 [Cursor HTTP pagination](http-cursor-pagination.md) uses the same transport composition while preserving model/projection ownership in navigation positions after DTO mapping.
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).

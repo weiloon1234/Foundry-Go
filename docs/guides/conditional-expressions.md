@@ -1,70 +1,75 @@
 # Typed conditional expressions
 
-Computed values keep their query scope and exact Go result type. Generated fields implement `RowValue[Scope, Value]`, including nullable fields whose value is `value.Nullable[T]`. Row computations return `RowExpression`; its `Value()` promotes it to the existing selected `Expression` used by projections. Aggregates and window expressions cannot be passed as row values.
+<!-- compiled-examples -->
 
-The [independent consumer examples](../../tests/fixtures/consumer/expressionqueries/) exercise these public APIs. Result queries still return native Go slices and share ordinary decoding, streaming and failure behavior.
+`database/orm/expr` preserves the input scope, value type and evaluation phase.
+Use `expr.Value(column)` for a row operand, `expr.Select(row)` or a computed
+expression's `.Value()` for selection, and `rows.MapSelected` for a selected result.
+Aggregates and windows cannot become WHERE predicates.
 
 ## Row values and NULL handling
 
-```go
-u := models.UserFields()
-display := query.Coalesce(u.Nickname, u.Email)
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/expressionqueries/expressions_test.go):
 
-names, err := query.SelectValue(
-    models.QueryUsers().Where(display.Ne("")),
-    display.Value(),
-).OrderBy(display.Asc()).All(ctx, db)
+<!-- go-source: tests/fixtures/consumer/expressionqueries/expressions_test.go -->
+```go
+u := models.Users
+display := expr.Coalesce(expr.Value(u.Nickname), expr.Value(u.Email))
+choice := expr.When(expr.ModelPredicate(u.Age.Gt(20)), expr.Param(u.Email, "older"))
+label := choice.When(expr.ModelPredicate(u.Age.Eq(20)), expr.Value(u.Email)).Else(expr.Param(u.Email, "unknown"))
+statement, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(rows.SelectScalar(rows.From(expr.Where(models.Users.Query(), display.Ne(""))), label.Value()), label.Asc())))
 ```
 
-`Coalesce` requires a nullable input and a non-nullable fallback of the same base type, producing a non-nullable result. An empty string or numeric zero is retained. `CoalesceNullable` accepts nullable inputs and keeps one nullable result layer. `NullIf` makes equal non-nullable inputs into SQL NULL; `NullIfNullable` compares already-nullable inputs without nesting wrappers. Comparisons follow the database's equality and collation rules. See PostgreSQL's [conditional expression semantics](https://www.postgresql.org/docs/18/functions-conditional.html).
-
-`NullableRow(value)` explicitly widens a row value while preserving its SQL evaluation. `NullFor(value)` creates a typed NULL using a non-nullable exemplar's codec without reading the exemplar's SQL value. Nested nullable wrappers are rejected when compiling these expressions.
-
-Computed row values expose `Eq`, `Ne`, `In`, `IsNull` and `IsNotNull`. Literal comparisons accept the expression's exact result type: a nullable computation uses `value.Of(v)` for a present comparison value. Literal SQL NULL must use `IsNull`/`IsNotNull`; equality or membership containing a NULL literal is rejected. Model fields retain their established comparison signatures. Use `Value()` for selection and `Asc`/`Desc` for projection ordering.
+`expr.Coalesce` takes a nullable value and a required fallback with the same base
+type. It removes one nullable layer, retaining empty strings and numeric zero.
+`CoalesceNullable` retains one layer. `NullIf` adds one nullable layer to matching
+required inputs; `NullIfNullable` does not nest wrappers. `NullableRow` explicitly
+widens a required row value. `NullFor` uses an exemplar's codec to construct NULL.
+For generic nullable expressions, literal comparisons take a present
+`value.Nullable[V]` (for example, `value.Of(v)`). A SQL NULL literal in equality
+or membership is rejected; use `IsNull`/`IsNotNull` to test absence. Dedicated
+nullable ordered/text adapters accept the present base value directly.
 
 ## CASE branches
 
-```go
-u := models.UserFields()
-label := query.When(u.Age.Gt(20), query.Param(u.Email, "older")).
-    When(u.Age.Eq(20), query.Param(u.Email, "twenty")).
-    Else(query.Param(u.Email, "younger"))
-
-labels, err := query.SelectValue(models.QueryUsers(), label.Value()).All(ctx, db)
-```
-
-`When` starts a row CASE; additional branches preserve the same owner and result type. The first true condition supplies the value. False and SQL unknown continue to the next branch. `Else` completes the builder with the same result type, while `ElseNull` adds one nullable layer. An unfinished builder cannot be selected. A zero builder may acquire its first branch through `When`; completing a builder with no branches is invalid.
-
-Already-nullable branches use an explicit nullable `Else`, such as a nullable field or `NullFor(nonNullableValue)`. Calling `ElseNull` on an already-nullable result is rejected. Branches and parameters are captured without mutating earlier builders.
+`expr.When` accepts an `expr.Predicate[S]`; adapt a column predicate with
+`expr.ModelPredicate`. Every branch must have the same owner and value type.
+Complete the builder with `Else`, or `ElseNull` for required branches. An unfinished
+builder cannot be selected. A NULL condition continues to the next branch.
+Already-nullable branches require an explicit nullable `Else`. A zero builder
+with no branches fails validation even if an ELSE is supplied.
 
 ## Selected aggregates and windows
 
-The corresponding selected-value operations are `CoalesceValue`, `CoalesceNullableValue`, `NullIfValue`, `NullIfNullableValue` and `WhenValue`. They accept existing `Expression` values, including aggregate/window results, and return selected expressions without row predicate methods.
+`CoalesceValue`, `CoalesceNullableValue`, `NullIfValue`, `NullIfNullableValue` and
+`WhenValue` accept selected expressions. `WhenValue` requires
+`expr.HavingPredicate[S]`. `expr.Grouped` lifts a row predicate, but every referenced
+column must still satisfy the enclosing SELECT's grouping rules. A window cannot
+be hidden inside a conditional to make it legal in HAVING.
 
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/expressionqueries/expressions_test.go):
+
+<!-- go-source: tests/fixtures/consumer/expressionqueries/expressions_test.go -->
 ```go
-o := models.OrderFields()
-total := query.Sum(o.TotalCents)
-amount := query.CoalesceValue(
-    total.Value(),
-    total.Param(decimal.FromInt64(0)).Value(),
-)
-result, err := query.SelectValue(models.QueryOrders(), amount).RequireFirst(ctx, db)
+orders := models.Orders.Query()
+total := expr.Sum(models.Orders.TotalCents)
+computed := expr.CoalesceValue(total.Value(), total.Param(decimal.FromInt64(0)).Value())
 ```
-
-`WhenValue` accepts `HavingPredicate` conditions. `Grouped(rowPredicate)` explicitly lifts a row condition; all referenced columns must still satisfy the surrounding query's grouping rules. Ordinary aggregates nested inside conditional values establish grouping, including when a window consumes those values. Nested windows remain invalid at one SELECT level, and wrapping a window in a conditional expression does not make it valid in HAVING.
-
-Supported subqueries and CTEs remain discoverable inside conditions and selected values. Relation and correlation qualification traverse the same expression tree. No alternate raw SQL renderer is introduced.
 
 ## Bound parameters and codecs
 
-`query.Param(field, v)` captures the field's non-nullable Go type and codec without adding a column reference. `RowExpression.Param(v)` and `Expression.Param(v)` use their exact result type; nullable ordered aggregates accept their concrete comparison type, as shown above. `NullFor` provides typed NULL parameters.
+`expr.Param(column, value)` captures the column's present value type and codec.
+Computed `.Param` retains its expression's ownership errors. Nullable aggregates
+accept a present fallback, as above. Encoding occurs during construction; encoded
+buffers are owned, and encoding errors are returned before execution even when
+SQL would not take that branch.
 
-Encoding occurs once when the parameter is constructed, owning any returned byte buffer. Construction errors are retained and returned before execution. All parameters must be valid even if a CASE branch would not be selected. SQL CASE is also not a general shield against planning-time errors or earlier aggregate evaluation. [PostgreSQL evaluation rules](https://www.postgresql.org/docs/18/sql-expressions.html#SYNTAX-EXP-EVAL)
+The compiler binds parameters and casts them using the codec's parameter type.
+Custom codecs need explicit parameter-type metadata. All-parameter CASE branches
+therefore retain numeric, temporal or other declared types instead of becoming
+text. CASE does not suppress planning-time or earlier aggregate errors.
 
-Parameters are bound, never interpolated. The compiler adds a cast from the codec's `ParameterType`, preventing an all-parameter CASE from becoming text and acquiring text ordering. [PostgreSQL type resolution](https://www.postgresql.org/docs/18/typeconv-union-case.html)
+See [computed keys](computed-query-keys.md), [arithmetic and text](scalar-calculations.md)
+and [typed JSON paths](json-models.md) for composition.
 
-Built-in codecs declare boolean, bigint, double precision, text, UUID, numeric, date, time without time zone, timestamp without time zone or timestamp with time zone representations. Integer widths and unsigned bounds remain enforced by Go codecs; exact decimals retain numeric representation. Nullable and validated codecs preserve this metadata.
-
-Custom codecs opt in with `WithParameterType`, including `TypeBytes` for bytea. They own compatibility between the declared representation and their encode/decode callbacks. Unspecified or unsupported parameter types fail compilation of a parameter expression. This metadata is not a column migration or physical-schema declaration; ordinary column-bound predicates retain their existing codec behavior.
-
-Expression depth, node and parameter limits apply before execution. [Computed query keys](computed-query-keys.md) connect row and selected values to grouping, partitioning and DISTINCT ON. [Typed arithmetic and text calculations](scalar-calculations.md) extend this same expression layer; [typed JSON expressions](json-models.md) extend it with declared JSON paths and codecs.
+For declaration and API migration, see the [ORM migration guide](orm-migration.md).

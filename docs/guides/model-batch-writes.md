@@ -1,80 +1,90 @@
 # Bounded per-model batch writes
 
-Use `CreateEach`, `UpdateEach`, `DeleteEach`, `RestoreEach` and `ForceDeleteEach` when every row needs its ordinary model lifecycle. They return ordinary typed slices and run normal hooks, provider observers, field mutators, timestamps and change capture. The [consumer examples](../../tests/fixtures/consumer/linkqueries/each_postgres_test.go) use the existing membership model and its concrete draft.
+Use `orm.CreateEach`, `orm.UpdateEach`, `orm.DeleteEach`, `orm.RestoreEach` and `orm.ForceDeleteEach` when every model needs its ordinary lifecycle. They return typed model slices and preserve hooks, observers, mutators, conventions and stored changes.
 
-## Creating models
+## Create and update models
 
+<!-- orm-example: each-writes -->
 ```go
-draft := linkqueries.MembershipDraft{}.
-    SetMemberID(member.ID).
-    SetGroupCode(group.Code)
+func updateMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
+	f := hooks.Members
+	return orm.UpdateEach(ctx, tx, f.Query().Where(f.Name.Eq("guest")), 100,
+		func(_ context.Context, _ *database.Tx, current hooks.Member) ([]orm.Assignment[hooks.Member], error) {
+			return []orm.Assignment[hooks.Member]{f.Name.Set("member-" + current.Name)}, nil
+		})
+}
 
-created, err := linkqueries.QueryLinkMemberships().CreateEach(ctx, db,
-    []linkqueries.MembershipDraft{
-        draft.SetRole(" ADMIN "),
-        draft.SetRole(" VIEWER "),
-    })
+func createMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
+	f := hooks.Members
+	return orm.CreateEach(ctx, tx, f.Query(), [][]orm.Assignment[hooks.Member]{
+		{f.Key().Set(1), f.Name.Set("first"), f.Body.Set([]byte{})},
+		{f.Key().Set(2), f.Name.Set("second"), f.Body.Set([]byte{})},
+	})
+}
 ```
 
-`created` is `[]Membership` in input order. Each row receives its normal UUID preparation, hooks, setters and managed timestamps. The original drafts remain unchanged. Before hooks can supply omitted required fields; final validation still happens through the ordinary model pipeline.
+Creation returns models in input order. Assignment slices remain reusable and unchanged. Before hooks may supply required fields. A valid empty batch returns an empty slice without opening a transaction.
 
-`CreateEach` shares bounded draft preparation with `CreateMany`, but invokes ordinary model writes per input. Existing `CreateMany`, `Upsert` and `UpsertMany` retain their explicit [set-based behavior](model-upserts.md). No row count silently changes whether observers run. A valid empty creation batch returns an empty slice without opening a transaction.
+Updates require an explicit positive maximum, at most `orm.MaxPerModelWriteRows`. Foundry locks candidates in primary-key order with one lookahead row, closes the stream and validates the complete candidate set before invoking callbacks. Excess or ambiguous candidates fail rather than silently truncating the batch. Results retain that key order.
 
-## Updating a selected set
+The update callback receives the stored model and the operation's actual transaction. Return typed assignments and propagate the supplied context to related work. Original query predicates remain effective for each model. If earlier callbacks make a later candidate ineligible, the operation fails and rolls back. Read ordering, pagination and eager-load clauses are rejected. Internal candidate reads and write hydration skip retrieval callbacks.
 
+## Delete and restore
+
+<!-- orm-example: each-soft-writes -->
 ```go
-q := linkqueries.QueryLinkMemberships()
-f := linkqueries.MembershipFields()
+func restoreMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
+	f := hooks.Members
+	return orm.RestoreEach(ctx, tx, f.Query().Where(f.Name.Eq("guest")), f.Soft, 100)
+}
 
-updated, err := q.Where(f.GroupCode.Eq(group.Code)).UpdateEach(ctx, db, 100,
-    func(ctx context.Context, tx *database.Tx, current linkqueries.Membership) (linkqueries.MembershipDraft, error) {
-        return linkqueries.MembershipDraft{}.
-            SetRole("owner-" + current.Role), nil
-    })
+func removeMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
+	f := hooks.Members
+	return orm.ForceDeleteEach(ctx, tx, f.Query().OnlyTrashed(), f.Soft, 100)
+}
 ```
 
-The callback receives a complete stored model and returns its concrete draft. [Lookup writes](model-lookup-writes.md) use the same callback contract when choosing between one existing model and creation. The transaction is the actual operation owner and permits related typed database work after candidate rows have closed. Propagate the supplied context to nested operations. The ordinary update pipeline then locks/reads its current snapshot and runs before hooks, final field preparation, SQL and after hooks. Callback work does not replace normal observer behavior.
+`DeleteEach` soft-deletes configured models and physically deletes ordinary models. `RestoreEach` selects deleted rows while retaining explicit predicates. `ForceDeleteEach` requires the exact table's `SoftDeletable[M]` token and preserves the query's visibility. `OnlyTrashed()` is appropriate when removing already deleted models.
 
-The positive maximum is explicit: `100` means the complete matching set must fit within 100 rows. Foundry locks candidates in primary-key order with one lookahead row, closes the stream, checks the bound and validates primary identities before invoking a callback or hook. It reports an error if the set is too large or its primary identities are ambiguous; it never silently truncates a successful batch. The maximum cannot exceed `query.MaxPerModelWriteRows`.
+Ordinary deletion always selects active rows; `OnlyTrashed().DeleteAll` and the equivalent per-model selection cannot delete an already deleted row. Soft deletion returns stored post-write models, restoration returns restored models, and physical deletion returns pre-write models.
 
-Results follow the selected primary-key order. The original predicates remain in force for each ordinary write. If a callback or earlier hook changes a later candidate so it no longer satisfies those predicates, the resulting failure rolls back the operation. Ordinary read ordering, limits, offsets and eager-loading options are rejected rather than repurposed for writes. Internal candidate and mutation hydration skip `Retrieved` callbacks.
+## Atomicity and concurrency
 
-## Deleting and restoring
+One call owns one transaction or one savepoint. Later callback, codec, constraint or SQL failure rolls back earlier models and queued after-commit work. Per-model operations run inside that owner without a savepoint per row. The outer transaction retains locks until commit or rollback.
 
+Cancellation, panic and `runtime.Goexit` follow ordinary lifecycle failure handling. The selected row locks protect existing candidates; they do not claim later inserts or establish serializable predicate locks. There is no hidden retry. A committed callback failure or uncertain commit can retain the candidate slice in `orm.WriteError[[]M]` for reconciliation.
+
+## Set-based writes
+
+<!-- orm-example: set-writes-after -->
 ```go
-deleted, err := q.Where(f.GroupCode.Eq(group.Code)).DeleteEach(ctx, db, 100)
-restored, err := q.Where(f.GroupCode.Eq(group.Code)).RestoreEach(ctx, db, 100)
-removed, err := q.WithTrashed().Where(f.GroupCode.Eq(group.Code)).
-    ForceDeleteEach(ctx, db, 100)
+func setWrite(ctx context.Context, tx *database.Tx) error {
+	_, err := orm.WithoutModelHooks(hooks.Members.Query()).UpdateAll(ctx, tx, hooks.Members.Name.Set("guest"))
+	return err
+}
 ```
 
-Each selected model follows its [normal deletion lifecycle](model-soft-deletes.md). `DeleteEach` soft-deletes configured models and physically removes ordinary models. A soft deletion returns the complete stored post-write model; a physical deletion returns its pre-write model. Restoration selects deleted rows while retaining explicit predicates. Force deletion requires soft-delete metadata and retains the chosen active/trashed visibility.
+`UpdateAll` and `DeleteAll` return affected counts. `Query.ForceDeleteAll` also requires the soft-delete token. These operations retain filters, global scopes and visibility, but skip per-model hooks, observers and audit. `orm.WithoutModelHooks(q)` acknowledges that choice when callbacks exist or an executor wrapper cannot prove their absence. Per-model operations reject this acknowledgement.
 
-Ordinary deletion changes active rows even with `WithTrashed`; `OnlyTrashed().DeleteEach` therefore selects nothing. Each method validates the complete bounded candidate set before its first model hook. Natural keys retain their declared types, and relation detachment shares this candidate-selection and mutation runtime.
+`Table.InsertMany` and `orm.UpsertMany` use assignment batches with explicit set semantics. They never switch to per-model callbacks based on row count. Choose `CreateEach` when those callbacks are required.
 
-## Atomicity, callbacks and concurrency
+## Atomic numeric adjustments
 
-One call is atomic within a transaction or savepoint. A later draft callback, hook, codec, constraint or SQL failure rolls back earlier rows and their queued after-commit work. Rows run directly in that one transaction (or the caller's single savepoint), not in a savepoint per row: PostgreSQL caches only 64 subtransaction IDs per backend, and overflowing it slows every concurrent snapshot. Lookup writes and pivot attachment nest their inner write the same way, and factories' `CreateMany` inherits it through `CreateEach`. Cancellation, panic and `runtime.Goexit` use the existing transaction failure handling. A caller-supplied outer transaction still owns final commit, and its locks remain until that commit or rollback.
-
-Larger workloads explicitly choose batches and whether those batches share an outer transaction. The selected row locks protect the current candidate set; they do not claim rows inserted afterward or provide a serializable predicate lock. Database isolation, uniqueness constraints and ordinary conflict/deadlock errors still apply. There is no hidden retry.
-
-After-commit callbacks run only after the outer commit and remain in-process work. They do not provide crash durability. A committed callback failure or uncertain commit outcome retains the candidate slice in the ordinary typed `query.WriteError[[]Model]`; inspect the outcome before retrying. Side effects outside the transaction retain the [normal hook limitations](model-hooks.md).
-
-The [mode tests](../../tests/fixtures/consumer/linkqueries/each_modes_postgres_test.go) cover bulk/per-model separation, hook vetoes, physical deletion and natural keys. The [concurrency test](../../tests/fixtures/consumer/linkqueries/each_concurrency_postgres_test.go) checks that later candidates are already locked before the first callback and that a concurrent later insert stays outside the batch. Compiler-rejection examples retain draft, callback, result and limit types, while real gopls checks expose the generated concrete signatures.
-
-## Set-based mass writes
-
-When per-model behavior is not needed, generated queries also write every matching row in one statement, like Laravel's query-builder `update`, `delete` and `increment`:
-
+<!-- orm-example: adjustments -->
 ```go
-q := QueryDocuments().Where(DocumentFields().Published.Eq(false))
-updated, err := q.UpdateAll(ctx, db, DocumentDraft{}.SetViews(0))
-viewed, err := QueryDocuments().Where(f.ID.Eq(id)).Increment(ctx, db, f.Views.By(1))
-archived, err := q.Decrement(ctx, db, f.Views.By(1), DocumentDraft{}.SetTitle("archived"))
-deleted, err := q.DeleteAll(ctx, db)             // soft-deletes a soft-delete model
-removed, err := q.WithTrashed().ForceDeleteAll(ctx, db)
+func addCredit(ctx context.Context, tx *database.Tx) (int64, error) {
+	f := models.Orders
+	return f.Query().Where(f.TotalCents.Lt(1000)).UpdateAll(ctx, tx,
+		f.TotalCents.Increment(100, orm.AtMost[int64](1000)))
+}
 ```
 
-Each returns the affected row count. The statement uses the query's filters, [global scopes](model-global-scopes.md) and soft-delete visibility; ordering, pagination and eager-loading options are rejected. `UpdateAll` applies managed update timestamps and field mutators once. `Increment`/`Decrement` take a typed `query.Adjustment` from a numeric generated field (`Field.By(delta)`), compile to `column = column + $1`, leave SQL NULL as NULL, and accept one optional extra draft. `DeleteAll` soft-deletes active rows of a soft-delete model and physically deletes ordinary rows; `ForceDeleteAll` (soft-delete models only) physically deletes the rows the current visibility selects. The [tenant consumer](../../tests/fixtures/consumer/tenantqueries/tenant_postgres_test.go) exercises them against PostgreSQL.
+Numeric columns construct `Increment` and `Decrement` assignments for the SQL update. Supply a strictly positive finite magnitude. `AtMost` bounds an increment's result; `AtLeast` bounds a decrement's result. At most one adjustment is accepted per update, with optional ordinary assignments. NULL remains NULL. Database overflow remains a database error.
 
-These writes never hydrate models, so per-model hooks, provider observers and change capture do not run. On a model that declares hooks, or when the executor cannot prove that no observers are registered, they fail with `fault.Invalid` unless the query acknowledges this with `WithoutModelHooks()`. The acknowledgement affects only set-based writes; per-model writes on such a query are rejected so it cannot be mistaken for disabling hooks. Use the `Each` methods above when every row needs its lifecycle.
+Per-key adjustments return `database.NotFound` for a missing key or a row hidden by scopes, tenant predicates, soft-delete visibility or other caller predicates. A visible row rejected by the adjustment bound returns `orm.ErrBoundExceeded`, wrapped in `fault.Conflict`. These results are identical with and without local hooks or observers.
+
+When the guarded UPDATE returns no row, or the lifecycle's guarded locking read returns no row, the framework issues **one additional key-only SELECT FOR UPDATE** in the same transaction or nested scope. It removes only the adjustment bound and retains the key, all visibility predicates and locking behavior. The diagnostic read does not hydrate a model or invoke retrieval callbacks. Empty selections fail before write factories or callbacks run on the lifecycle locking-read path. Successful writes add no statement: one UPDATE without lifecycle callbacks, or a locking read followed by UPDATE with them. Query, row-close and cancellation failures remain errors; transaction outcome and reconciliation rules are unchanged. The distinction reflects visibility at the diagnostic read; it does not guarantee that a concurrently deleted row still exists.
+
+Set writes return the number of rows that satisfy the guard, including zero with no error. The legacy API exposed only set-based numeric adjustments, so it had no equivalent per-model adjustment result. Its ordinary guarded per-model patches returned `database.NotFound` both with and without lifecycle callbacks. The [legacy and ORM regression cases](../../database/orm/adjustment_lifecycle_test.go) cover that history and the current contract. Primary keys, mutation-input columns and managed timestamps cannot be adjustment targets. See [typed declaration roles](model-declarations.md).
+
+For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

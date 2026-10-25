@@ -108,9 +108,9 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 9 B reads | Retrieval streaming, scalar/DTO/complete-record pagination and safe draft-helper cleanup | Done pending the lead’s commit; EachRead retains callback identity and bounded iteration. |
 | 9 C terminals | Derived aggregates, JSONKind, complete-record DISTINCT ON, relation ordering and cursor inspection | Done pending the lead’s commit; scalarqueries/keyqueries and dependent query consumers migrated. |
 | 9 D loaders | Root direct, joined and aggregate relation tests; editor probes | Done pending the lead’s commit; LoadFrom/LoadMissingFrom preserve query-owned budgets and all existing assertions. |
-| 9 | Migrate consumer fixtures and compiler catalogue | Catalogue complete: 587 ported, 445 unaffected, zero pending. Batch 7g removes independent generated consumers; the barrier remains in progress pending the oracle freeze and remaining legacy owners. |
-| 10 | Guides, examples and editor coverage | Planned |
-| 11 | Full acceptance and whole-app performance evidence | Planned |
+| 9 | Migrate consumer fixtures and compiler catalogue | COMPLETE. 587 ported, 445 unaffected, zero pending; frozen oracles retained. Remaining generator/API retirement belongs to Stage 8c. |
+| 10 | Guides, examples and editor coverage | Done for the integrated guide/editor coverage; compiled examples, excerpt guards and relocated editor anchors. Current acceptance is recorded in batch 10 evidence. |
+| 11 | Full acceptance and whole-app performance evidence | Measurement runbook and tooling prepared. Final paired runtime, Stage 6 timing, footprint and whole-app gates remain pending quiet-host execution. |
 | 12 | Consumer application migration, separately authorized | Later |
 
 Stage 1d used Go 1.27.1 on darwin/arm64. The matched four-model package emitted
@@ -1998,3 +1998,40 @@ and [helper retirement](../../docs/evidence/goway-stage9-d-helper-report.md).
 
 Current-source command results and hashes are recorded in
 [batch 7h evidence](../../docs/evidence/goway-batch7h-integration.json).
+
+## Integration batch 10: guides, editor coverage and measurement preparation
+
+Stage 9 consumer migration and its 1,032-row catalogue are complete. The oracle
+bundle was frozen at `54508185`; `47304fc3` limits replay completeness to enabled
+backends using the reviewed census. This integration preserves those records and
+replays the enabled observations. Legacy emitter/API retirement remains Stage 8c.
+
+The accepted B/C/D guide sets and editor coverage are delivered: typed declarations,
+mutators and lifecycle outcomes; advanced queries, aggregates and row composition;
+identity, extension adapters, authentication, pagination, validation and scaffolds.
+Guide and excerpt guards tie examples to compiled consumers. Editor probes retain
+completion, hover and definition coverage with handwritten field comments and
+separate example anchors. The model scaffolding/tooling guides no longer recommend
+`--field-docs`; retiring that generator flag remains Stage 8c. Cross-cutting legacy
+references outside these guide sets remain listed in the lane reports for retirement.
+
+Bounded per-model adjustments now return `database.NotFound` for a missing or hidden
+key, and `orm.ErrBoundExceeded` for a visible row rejected by the assignment bound.
+Both plain and lifecycle writes classify an empty result with one scoped key-only
+`SELECT FOR UPDATE`, after closing the original result. The diagnostic read removes
+only the assignment guard, retains caller predicates and visibility, and performs
+no hydration or callbacks. Success, set-write semantics and unknown outcomes retain
+their existing behavior. Public method sets and footprint ceilings are unchanged.
+
+Stage 11 is preparation, not a performance gate pass. The
+[measurement runbook](../../docs/guides/goway-final-measurements.md) and
+`tools/goway_compare.py` prepare paired comparisons against pinned baselines;
+execution is explicit. The synthetic harness supports separate legacy/current
+repositories and records warmed test time alongside archive/cache/compiler RSS.
+Quiet-host runtime, Stage 6 timing, footprint and 70-model measurements remain pending.
+
+See the [lane B report](../../docs/evidence/goway-stage10-b-docs.md),
+[lane C report](../../docs/evidence/goway-stage10-lane-c.md),
+[lane D report](../../docs/evidence/goway-stage10-lane-d-report.md),
+[Stage 11 preparation](../../docs/evidence/goway-stage11-lane-c-preparation.md)
+and [integration evidence](../../docs/evidence/goway-batch10-integration.json).

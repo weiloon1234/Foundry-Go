@@ -1,68 +1,51 @@
-# Update and delete using typed query sources
+# Update and delete using typed sources
 
-Generated source-write builders preserve the destination model, source scope, stored field types and draft input types. They support typed joins, aliases, CTEs, predicates and explicit source windows through the same SELECT compiler as reads. These are set-based operations: Foundry does not hydrate and dispatch observers for every candidate.
+`rows.UpdateFrom`, `rows.DeleteUsing` and `rows.ForceDeleteUsing` use query sources to select matching destination models. Sources can retain typed aliases, joins, CTEs, filters and windows. These operations are explicitly set-based and skip per-model lifecycle callbacks.
 
-## Copy stored values from a query
+## Match identities and map stored values
 
-For the independent consumer's `Archive` and `Member` models:
-
+<!-- orm-example: source-update -->
 ```go
-a := linkqueries.ArchiveFields()
-m := linkqueries.MemberFields()
-
-updated, err := linkqueries.UpdateMemberFrom(
-    linkqueries.QueryLinkMembers().Where(m.Name.Ne("protected")),
-    linkqueries.QueryLinkArchives().Where(a.Tag.Eq("approved")),
-).
-    MatchID(query.Value(a.MemberID)).
-    SelectName(query.Value(a.Name)).
-    SelectAlias(query.Value(a.Alias)).
-    Returning(ctx, db, 100)
+func updateMemberBodies(ctx context.Context, tx *database.Tx) (int64, error) {
+	f := hooks.Members
+	destination := f.Query()
+	return rows.UpdateFrom(destination, rows.From(f.Query())).
+		Match(rows.MatchSource(f.Key(), expr.Value(f.Key()))).
+		Select(rows.MapUpdate(f.Body, expr.Value(f.Body))).
+		Values(f.Name.Set("updated")).Exec(ctx, tx)
+}
 ```
 
-`MatchID` matches a source expression to the destination's model-owned primary ID. A natural primary named `Code` has `MatchCode`. Matching never assigns the primary key. A nullable key from an outer join requires `MatchNullableID` or the corresponding natural-key method; SQL NULL matches nothing.
+`rows.MatchSource` matches a stored expression to the destination primary key without assigning it. `MatchNullableSource` permits nullable source keys, such as an outer join; SQL NULL matches nothing. A key match is a distinct type from an assignment and cannot be converted into one.
 
-`SelectAlias` preserves its nullable stored type. Selectors read stored SQL values; they do not call Go getters. Automatic field documentation points to declared getters and setters so callers can choose the correct domain/DTO behavior.
+`rows.MapUpdate` requires the exact stored value and nullable shape and an `orm.UpdateTarget`. Primary keys, managed update timestamps and mutation-input fields cannot be targets. Adapters cannot erase those roles. SQL mappings do not call Go getters or transformations.
 
-The destination query retains its predicates and soft-delete visibility. Apply ordering or limits to the source; destination writes reject pagination and eager-loading options. Source selection is not silently truncated by a result limit.
+Destination predicates, scopes and soft-delete visibility stay effective. Source windows belong to the source; read ordering, limits and eager-load options on the destination are rejected.
 
-## Fixed draft inputs and setters
+## Fixed values and duplicate matches
 
-```go
-fields := linkqueries.MembershipFields()
-count, err := linkqueries.UpdateMembershipFrom(
-    linkqueries.QueryLinkMemberships(),
-    linkqueries.QueryLinkMemberships().Where(fields.Role.Eq("reader")),
-).
-    MatchID(query.Value(fields.ID)).
-    Values(linkqueries.MembershipDraft{}.SetRole(" EDITOR ")).
-    Exec(ctx, db)
-```
+`Values(assignments...)` replaces literal inputs applied once per attempt to every affected model. Mutators and managed conventions run inside the transaction. Fixed inputs and SQL mappings cannot overlap, repeat or patch the primary key. Use per-model batches for Go logic that must run once per selected model.
 
-`Values` replaces fixed inputs applied to every affected model. Ordinary setters normalize each supplied input once per attempt inside the transaction; managed timestamps use that transaction's application clock. A distinct setter input retains its declared Go type. The caller's draft remains unchanged.
-
-A field cannot appear in both `Select<Field>` and `Values`, repeat, or change the primary key. Go-mutated fields and managed update timestamps have no SQL selector; the runtime declaration boundary also rejects those bypasses. Explicit setters cannot execute once per SQL-selected row. Use the [per-model write APIs](model-batch-writes.md) when domain behavior must run for each model.
-
-## Duplicate matches and outcomes
-
-[PostgreSQL UPDATE FROM](https://www.postgresql.org/docs/18/sql-update.html) can otherwise select an arbitrary source row when several rows match one destination. Foundry rejects an SQL-mapped update when any affected model has multiple source matches, returning `database.TooManyRows` and rolling back the write. It does not choose a hidden first row, retry, or infer that duplicate values are equivalent.
-
-Foundry materializes the complete source window, matches it using the destination's actual database key comparison, and counts matches by destination key. `Exec` checks two aggregate scalars inside the owning transaction; it does not collect affected models. Destination-excluded or trigger-suppressed models do not contribute to affected counts or ambiguity errors.
-
-Updates with only fixed inputs and timestamps permit repeated source matches: every affected model receives the same inputs once. Source deletes also affect each matching model once.
-
-`Returning` collects at most its explicit bound, from 1 through `query.MaxInsertRows`. Exceeding the bound rolls back rather than committing a partial selection. This bounds retained models, not database work or individual field sizes, and does not promise result order. Empty matches return zero or an empty slice. Write failures discard results; uncertain commit confirmation retains reconciliation data through the ordinary typed `query.WriteError` contract.
+An SQL-mapped update with multiple source matches for one affected destination fails with `database.TooManyRows` and rolls back. It never selects an arbitrary first source value. The complete source window is materialized and matches use the database's key comparison. Fixed-only updates can accept repeated matches because each destination receives the same inputs once. Deletes also affect each matching destination once.
 
 ## Delete using a source
 
+<!-- orm-example: source-delete -->
 ```go
-fields := linkqueries.MembershipFields()
-count, err := linkqueries.DeleteGroupUsing(
-    linkqueries.QueryLinkGroups(),
-    linkqueries.QueryLinkMemberships().Where(fields.Role.Eq("obsolete")),
-).MatchCode(query.Value(fields.GroupCode)).Exec(ctx, db)
+func deleteMatchingMembers(ctx context.Context, tx *database.Tx) (int64, error) {
+	f := hooks.Members
+	destination := f.Query().OnlyTrashed()
+	return rows.ForceDeleteUsing(destination, f.Soft, rows.From(f.Query().OnlyTrashed())).
+		Match(rows.MatchSource(f.Key(), expr.Value(f.Key()))).Exec(ctx, tx)
+}
 ```
 
-Ordinary removal soft-deletes configured models, including the normal active-only protection and clock conventions. `ForceDelete<Model>Using` exists only for soft-delete models and physically deletes within the destination's explicit visibility; `WithTrashed` includes already deleted records. A model without soft deletion uses physical [DELETE USING](https://www.postgresql.org/docs/18/sql-delete.html). Physical deletion's `Returning` provides complete old models.
+Ordinary `DeleteUsing` soft-deletes configured models and physically deletes ordinary models. `ForceDeleteUsing` requires the declared `SoftDeletable[M]` token and preserves destination visibility. Use `WithTrashed` or `OnlyTrashed` to include deleted models. Physical deletion returns complete pre-deletion models.
 
-These APIs skip per-model write and retrieval hooks. They preserve normal transaction/savepoint ownership and cancellation. Database constraints, triggers and authorization scopes remain runtime concerns. No cross-system durability or per-model audit dispatch is implied by a set-based statement.
+## Results and ownership
+
+`Exec` returns a count without collecting models. `Returning` requires an explicit positive bound, at most 1,000 models. Overflow rolls back rather than truncating. Results have no promised order. Empty matches return zero or an empty slice; destination-excluded and trigger-suppressed rows do not count as affected.
+
+These source writes skip write hooks, observers, audit and retrieval callbacks by their explicit contract, without separate acknowledgement. Source and destination scopes still apply. Transactions/savepoints preserve rollback on failure and cancellation; no hidden retry occurs. `orm.WriteError[R]` retains a complete candidate only for outcome reconciliation, never as proof of commit. See [write outcomes](model-writes.md#transaction-ownership-and-failures).
+
+For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

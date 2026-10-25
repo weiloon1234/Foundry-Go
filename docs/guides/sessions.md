@@ -15,7 +15,7 @@ backend, err := sessionpg.New(db, sessionpg.DefaultConfig())
 store, err := session.NewStore(backend, session.DefaultConfig(namespace))
 // Check err; namespace is a keyspace.Namespace for this application/environment.
 web, err := session.New(store, "users.web", users, "users.session")
-// Check err; users is the existing auth.Provider for the generated User model.
+// Check err; users is the existing auth.Provider for the handwritten User model.
 guard := web.Guard()
 registry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration())
 ```
@@ -27,7 +27,7 @@ Apply `sessionpg.Migrations()` explicitly with the ordinary
 in a request or automatically synchronize schemas at startup. Application session
 code needs no raw SQL. The backend reads request credentials, lists, enforces
 capacity and prunes with explicit schema-qualified statements, and uses
-Foundry-generated model queries for other mutations. Migrations
+ORM declarations for other mutations. Migrations
 `000002_session_device_confirmation` and `000003_session_impersonation` add
 nullable columns with `NOT VALID` checks (metadata-only, no table scan under an
 exclusive lock); `000004_validate_session_state` validates those checks in its
@@ -110,12 +110,14 @@ stored activity backward; clock synchronization remains an operational concern.
 
 ## List and revoke
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/sessions.go -->
 ```go
-sessions, err := web.List(ctx, user.FoundryReference())
-// Each element is session.Info[User, model.ID[User]].
-removed, err := web.RevokeID(ctx, user.FoundryReference(), selectedSessionID)
-removed, err = web.Revoke(ctx, currentSecret)
-count, err := web.RevokeAll(ctx, user.FoundryReference())
+func ListedSessions(ctx context.Context, sessions *UserSessions, user models.User) ([]UserSession, error) {
+	return sessions.List(ctx, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user))
+}
+func RevokeListedSession(ctx context.Context, sessions *UserSessions, user models.User, id session.ID[models.User]) (bool, error) {
+	return sessions.RevokeID(ctx, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user), id)
+}
 ```
 
 These operations require caller authorization through an ordinary policy. A
@@ -170,10 +172,16 @@ future logins. Disable the account or change its credential policy separately.
 of one session binding act as a model of another, or the same, binding (for
 example support staff acting as a customer). `maximum` is at most 24 hours.
 
+<!-- compiled-source: tests/fixtures/goway/guideadapters/auth_test.go -->
 ```go
-support, err := session.NewImpersonation(web, web, time.Hour)
-// Authorize the actor first, for example with a policy on the target model.
-issued, err := support.Start(ctx, customer.FoundryReference(), 30*time.Minute)
+func impersonate(ctx context.Context, web *session.Sessions[Account, int64], customer Account) (session.Issued[Account, int64], error) {
+	support, err := session.NewImpersonation(web, web, time.Hour)
+	if err != nil {
+		return session.Issued[Account, int64]{}, err
+	}
+	// The caller must authorize the actor against this target before starting.
+	return support.Start(ctx, AccountIdentity.ReferenceOf(customer), 30*time.Minute)
+}
 ```
 
 `Start` issues a session for the target, marked with the actor's identity, guard
@@ -281,3 +289,7 @@ and factor in the same transaction that creates the authenticated replacement.
 The original guard/provider and current model eligibility remain authoritative.
 See [MFA completion and HTTP delivery](mfa.md#complete-a-pending-login) for the
 actual API, failure behavior and transport composition.
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).
+
+The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

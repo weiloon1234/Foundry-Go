@@ -1,55 +1,54 @@
 # Typed model writes
 
-Generated `Create`, `Update` and `Delete` methods use concrete model drafts and primary keys. Foundry owns parameter binding, one shared mutation compiler, transaction scope and complete `RETURNING` hydration. The [independent PostgreSQL consumer](../../tests/fixtures/consumer/model_write_postgres_test.go) exercises the public API, including database defaults and rollback.
+`orm.Table[M, K]` creates, updates and deletes complete models with concrete key and assignment types. Columns construct `orm.Assignment[M]` values. Writes use the shared mutation compiler, codecs and complete `RETURNING` hydration.
 
-## Creating and updating
+## Create and update
 
+<!-- orm-example: insert-member -->
 ```go
-q := models.QueryWriteRecords()
-record, err := q.Create(ctx, db, models.WriteRecordDraft{}.SetName("first"))
-if err != nil {
-    return err
+func insertMember(ctx context.Context, tx *database.Tx, id int64) (hooks.Member, error) {
+	f := hooks.Members
+	return f.Insert(ctx, tx, f.Key().Set(id), f.Name.Set("Ada"), f.Body.Set([]byte{}))
 }
-updated, err := q.Update(ctx, db, record.Code,
-    models.WriteRecordDraft{}.SetName("").SetEnabled(false).ClearNote())
 ```
 
-These calls return complete `models.WriteRecord` values. `record.Code` is the declared `models.RecordKey`, including after fluent query derivation. Other models' drafts and incompatible keys fail Go compilation. Draft construction is immutable: setters return a copy, and `Create` leaves the caller's draft unchanged when preparing an ID.
+<!-- orm-example: writes-after -->
+```go
+func write(ctx context.Context, tx *database.Tx, id int64) error {
+	_, err := hooks.Members.Update(ctx, tx, id,
+		hooks.Members.Name.Set("Ada"), hooks.Members.Note.SetNull())
+	return err
+}
+```
 
-An omitted draft field emits no assignment. On insert, the database applies its default or NULL; on update, the existing value stays unchanged. Explicit zero, false and empty string are assignments. A nullable `Clear` requests SQL NULL, while `Unset` removes the assignment. The generator exposes no `Clear` for non-nullable fields.
+The examples use the [compiled member declaration](../../tests/fixtures/goway/models/hooks/models.go). A table's `Insert`, `Update` and `Delete` methods retain its declared key type. For additional tenant or authorization predicates, use package `orm.Update` or `orm.Delete` with the query and table key handle. No match returns `database.NotFound`, discoverable through `errors.Is`.
 
-Non-nullable fields are required on create unless tagged `foundry:"default=database"`. This marker permits omission; the SQL default expression belongs exclusively to the migration. It does not create or verify a database default. Explicit values override omission behavior, subject to the database's own identity/generated-column rules. The [fixture model](../../tests/fixtures/consumer/models/write_record.go) uses an identity key and scalar defaults. Other default expressions in tags are rejected.
+Assignments leave the caller's inputs unchanged. Omission emits no assignment: on insert PostgreSQL supplies its default or NULL; on update the stored value stays unchanged. `Set(0)`, `Set(false)` and `Set("")` are supplied values. A nullable column's `SetNull()` writes SQL NULL. Inside a before-write hook, `orm.WriteUnset` removes an assignment and restores omission.
 
-An omitted `model.ID[ThisModel]` primary key receives a generated UUIDv7 unless tagged with a database-owned default. A supplied ID, including its zero value, is kept and checked by the normal codec/database boundaries. Supply an ID explicitly when application code needs it before persistence. Natural keys without a database default must be supplied.
+Required fields without defaults must be supplied. `foundry:"default=database"` permits omission but neither creates nor verifies the SQL default. Migrations own the schema. An omitted `model.ID[M]` primary receives a UUIDv7 unless it has a database default or a distinct mutation input. Natural keys require a supplied value or a database default. An explicitly supplied key is never replaced.
 
-Models with [automatic field mutators](model-mutators.md) prepare assigned values inside the write transaction, then validate the transformed values before SQL. [Declared hooks](model-hooks.md) run before those transforms and may supply required fields or populate an empty patch. [Managed timestamps](model-timestamps.md) supply the conventional creation/update fields after before hooks and before mutators, including an update timestamp for an otherwise empty patch. Models without hooks, mutators or timestamps retain validation before transaction acquisition. Missing final required fields, invalid codec values, final empty patches and primary-key patches are rejected. Runtime database constraints still apply. SQL casts, column scales, triggers and defaults can alter values; the returned model comes from PostgreSQL's returned row and is decoded through the same codecs used for reads.
+Before hooks can supply missing fields. Managed conventions follow those hooks. Foundry revalidates the effective assignment shape before mutators or encryption, then validates stored values before SQL. Primary-key patches, duplicate/foreign assignments and final empty updates fail. Database defaults and trigger changes are decoded from the returned row; they do not run through Go mutators.
 
-## Scoped single-model writes
+## Visibility and result contracts
 
-`Update(ctx, writer, key, draft)` and `Delete(ctx, writer, key)` add a mandatory primary-key equality to the query's existing filters. No match returns `database.NotFound`, discoverable with `errors.Is`. This permits explicit tenant or authorization scopes. Calling code remains responsible for applying the appropriate scope.
+`orm.Update` and `orm.Delete` add primary-key equality without removing existing predicates, global scopes or soft-delete visibility. A deletion returns the pre-deletion model for physical deletion, or the stored post-write model for soft deletion. See [soft deletion](model-soft-deletes.md).
 
-`Delete` runs declared hooks and registered observers. Ordinary models return their complete pre-deletion model after physical removal. [Soft-delete models](model-soft-deletes.md) instead update the deletion timestamp and return the stored result; their generated APIs also provide typed `Restore` and `ForceDelete`. Writes reject ordering, limits and nonzero offsets. `Create` also rejects query predicates. These restrictions avoid silently dropping read clauses from a write.
+Writes reject read ordering, limits, offsets and eager-load options rather than silently dropping them. Inserts also reject explicit query predicates and non-default visibility. A single-model write must return exactly one complete model. Missing, multiple or malformed rows and row-closure errors fail the operation.
 
-These single-model mutations require exactly one returned row. Missing rows, multiple rows, decoder errors and row-cleanup failures abort the write scope. Partial models are never returned as success. [Typed insertion from queries](model-insert-from-query.md) combines source-owned SQL expressions and literal drafts with explicit set-based lifecycle behavior. [Typed source updates and deletes](model-source-writes.md) add destination-key matching, stored SQL assignments and fixed draft inputs with explicit set-based behavior. [Typed upserts and batch inserts](model-upserts.md) add `Upsert`, `CreateMany` and `UpsertMany` with explicit skipped-row and batch-result contracts through the same compiler and transaction execution.
+[Source writes](model-source-writes.md), [insert-select](model-insert-from-query.md), [upserts](model-upserts.md) and [batch writes](model-batch-writes.md) have explicit result bounds and lifecycle contracts.
 
 ## Transaction ownership and failures
 
-The writer is the focused `database.Transactor` interface. A pool or session opens a transaction. A `Create` on the pool itself (`*database.DB` or `db.Primary()`) when no hook, provider observer or retrieval-independent lifecycle callback can run is sent as one autocommit `INSERT … RETURNING` statement: one round trip instead of `BEGIN`, statement and `COMMIT`. A single-row INSERT is atomic on its own. Only a completely read, cleanly closed one-row result confirms the commit; a failure before sending reports `NoCommit`, a server rejection (constraint, data or permission error) a confirmed rollback, and any other failure after sending — including a returned row that cannot be decoded — `CommitUnknown` with `Outcome() == Unknown`, retaining a hydrated candidate in `query.WriteError` exactly as an uncertain transaction does. Updates and deletes keep their transaction because a declaration does not prove a unique key and a multi-row `RETURNING` result must roll back. An application wrapper that embeds the pool keeps its own `Transaction` for every write. An existing `*database.Tx` creates a savepoint, letting failed model writes roll back without discarding earlier parent work. Nested success releases the savepoint; the returned model is still contingent on the outer transaction committing. Set isolation/read-only options on that outer transaction.
+Writers implement `database.Transactor`. A normal write owns a transaction, or a savepoint inside the caller's `*database.Tx`. Savepoint success remains contingent on the outer commit. Failure rolls back the write and related transactional hook effects without discarding earlier parent work.
 
-No write or transaction callback is automatically retried. A normal error returns a zero model. If complete hydration succeeded but commit confirmation is uncertain or after-commit work failed, `errors.As` can recover `*query.WriteError[models.WriteRecord]`. Its `Candidate()` retains the typed returned row, and its wrapped `*database.Error` retains the outcome and original error codes. Inspect `Outcome()`: `Unknown` requires reconciliation; `Committed` means persistence succeeded despite subsequent failure. A candidate alone never proves persistence. The candidate may contain sensitive fields, so ordinary error formatting excludes it.
+An eligible single insert on a concrete framework pool can use one autocommit `INSERT … RETURNING` when no lifecycle work can run. Complete hydration and clean row closure are required to confirm success. Wrappers retain their transaction ownership. Updates and deletes keep the transaction needed to validate their returned cardinality.
 
-Custom transaction wrappers receive bounded outcome inspection (256 nodes and 64
-wrapping levels). If that inspection is incomplete or fails, a fully hydrated
-candidate remains available through `WriteError` for reconciliation. Its cause
-may lack readable `database.Error` metadata; do not infer a commit or retry from
-the candidate alone. Ordinary known failures still return no candidate.
+Ordinary failures return no model. If commit confirmation is uncertain, or after-commit work fails, `errors.As` can recover `*orm.WriteError[M]`. Its `Candidate()` retains the hydrated model for reconciliation. Inspect the wrapped `*database.Error` outcome: `Unknown` is not a confirmed rollback; `Committed` means persistence succeeded despite a later failure. Neither a candidate nor an incomplete error inspection proves success. No write is automatically retried.
 
-When the caller owns the outer transaction, inspect the outer transaction's error and retain any needed reconciliation identity in caller scope. An inner model write cannot predict a later outer commit failure. After-commit callbacks are process-local and have no crash durability. See [transaction outcomes](database-runtime.md) for details.
+Framework outcome inspection is bounded to **256 error nodes and 64 wrapping levels**. A custom transaction wrapper can make that inspection incomplete or fail. In that case, a fully hydrated reconciliation candidate may remain available even when its cause has no readable `database.Error` metadata. Callers must never infer rollback, success or permission to retry from the candidate. Reconcile using retained identity and independently established persistence state.
 
-Generated drafts supply typed assignments to `query.Query[M].Insert`, `Patch` and `Remove`, plus the insert/upsert batch execution boundaries. Those shared declaration-level APIs use the same compiler metadata and execution path for every model. Writes also reject explicit eager-loading limits. Declared model hooks and registered observers run automatically on normal writes. Use their supplied transaction for [durable event enqueue](outbox.md#register-once-publish-a-concrete-dto); in-process after-commit callbacks remain non-durable.
+Routine error formatting omits model values and application error text. Use `errors.Is` and `errors.As` for identity and cause inspection. Candidate access is deliberate and can reveal sensitive stored data. When you own the outer transaction, retain reconciliation identity in caller scope and inspect that transaction's final error.
 
-## Verification
+Use the transaction supplied to hooks for durable [outbox](outbox.md) or [audit](audit.md) writes. In-process after-commit callbacks are not crash durable.
 
-Compiler tests cover bound SQL, mandatory key scopes, defaults, required fields and invalid assignments. Protocol tests prove rollback on missing/multiple/malformed returned rows, validation before transaction acquisition, nested ownership, uncertain commits and committed after-callback failures. Consumer compile-failure assertions reject draft/key owner mismatches. Real PostgreSQL tests cover generated identities, omitted/zero/null states, exact decimals, filtered updates, uniqueness, deletes of newly created fixture records, malformed returned defaults and savepoint rollback. Test schemas are isolated and retained; no database reset is performed.
-
-[Typed relation writes](model-relation-writes.md) derive pivot keys from existing relationship declarations and preserve normal model lifecycle, typed drafts and transaction outcomes for attach/detach operations.
+For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

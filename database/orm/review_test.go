@@ -353,16 +353,21 @@ func TestAdjustmentsRejectNonpositiveBeforeSQL(t *testing.T) {
 func TestAtomicAdjustmentBounds(t *testing.T) {
 	r := numericRecords()
 	var statements []string
-	db := testDB(t, testConnector{statements: &statements, columns: []string{"id", "signed", "unsigned", "float", "decimal", "nullable"}})
+	db := testDB(t, testConnector{statements: &statements, respond: func(sql string) ([]string, [][]driver.Value) {
+		if strings.HasPrefix(sql, "SELECT ") {
+			return []string{"id"}, [][]driver.Value{{int64(1)}}
+		}
+		return []string{"id", "signed", "unsigned", "float", "decimal", "nullable"}, nil
+	}})
 	_, err := r.Update(t.Context(), db, 1, r.Signed.Decrement(2, AtLeast(int64(0))))
 	if !errors.Is(err, ErrBoundExceeded) || !errors.Is(err, fault.Conflict) || errors.Is(err, fault.Invalid) || errors.Is(err, database.NotFound) {
 		t.Fatalf("bound error: %v", err)
 	}
-	if len(statements) != 1 || !strings.Contains(statements[0], `"signed" = "signed" - $1`) || !strings.Contains(statements[0], ` >= `) {
+	if len(statements) != 2 || !strings.Contains(statements[0], `"signed" = "signed" - $1`) || !strings.Contains(statements[0], ` >= `) {
 		t.Fatalf("guard SQL: %v", statements)
 	}
 	n, err := r.Query().UpdateAll(t.Context(), db, r.Float.Increment(1, AtMost(10.0)))
-	if err != nil || n != 1 || !strings.Contains(statements[1], ` <= `) {
+	if err != nil || n != 1 || !strings.Contains(statements[2], ` <= `) {
 		t.Fatalf("set bound: %v %v", statements, err)
 	}
 	if _, err := r.Query().UpdateAll(t.Context(), db, r.Signed.Decrement(1, AtMost(int64(5)))); !errors.Is(err, fault.Invalid) {

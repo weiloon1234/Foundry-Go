@@ -248,7 +248,7 @@ func modelCallbacks(table *tableCore, candidate unsafe.Pointer) *writeCallbacks 
 					return err
 				}
 				original := reflect.New(table.typ).UnsafePointer()
-				if err = returning(work, rows, func(row database.Row) error { return hydrate(table, row, original) }); err != nil {
+				if err = p.returningAdjustment(work, tx, rows, func(row database.Row) error { return hydrate(table, row, original) }); err != nil {
 					return err
 				}
 				before = snapshotPointer(table, original)

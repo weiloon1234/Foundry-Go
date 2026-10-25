@@ -43,22 +43,20 @@ Password strength does not verify an existing credential or contact a breach API
 
 ## Concurrent I/O
 
+<!-- compiled-source: tests/fixtures/consumer/httpvalidation/async.go -->
 ```go
-fields := RegistrationValidationFields()
-rules := validation.Parallel(
-    fields.Email.Rules(validation.Bail(
-        validation.Email[string](),
-        validation.MaxLength[string](254),
-        databasevalidation.Unique(db, models.QueryUsers(), models.UserFields().Email),
-    )),
-    fields.Tags.Rules(validation.Bail(
-        validation.ItemsBetween[[]string](1, 8),
-        validation.Distinct[[]string](),
-    )),
-)
+func AsyncRouter(service httpendpoints.Service, lookup validation.Lookup[string]) (*foundryhttp.Router, error) {
+	fields := httpdto.UpdateUserValidationFields()
+	endpoint := httpendpoints.Update.WithBodyValidation(validation.Parallel(
+		fields.Email.WithLabel("Email address").Rules(validation.Optional(validation.Bail(validation.Email[string](), validation.Unique(lookup)))),
+		fields.Nickname.Rules(validation.Optional(validation.Nullable(validation.Lowercase[string]()))),
+	))
+	return foundryhttp.NewRouter(endpoint.Handle(service.Update))
+}
 ```
 
-Attach the result with `WithBodyValidation(rules)`. Go request handlers already
+Pass `databasevalidation.Lookup(db, models.Users.Query(), models.Users.Email)`
+as the typed lookup to this router. Go request handlers already
 run independently; no async/await keyword or future is needed. Rules receiving a
 context can call database or HTTP clients directly. `Parallel` runs independent
 branches concurrently, defaulting to four per `Check`; `ParallelLimit` accepts
@@ -107,15 +105,20 @@ pool reuse and isolation after a selected connection closes.
 
 ## Batched model lists
 
+<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go -->
 ```go
-fields := models.UserFields()
-activeUsers := databasevalidation.ExistsAll(
-    db, models.QueryUsers().Where(fields.Status.Eq(models.StatusActive)), fields.ID,
-)
-// Rule[[]model.ID[models.User]]; order IDs or string IDs do not compile.
+func availableEmail(db database.Executor) validation.Rule[string] {
+	return databasevalidation.Unique(db, models.Users.Query(), models.Users.Email)
+}
+
+func activeUsers(db database.Executor) validation.Rule[[]model.ID[models.User]] {
+	return databasevalidation.ExistsAll(db,
+		models.Users.Query().Where(models.Users.Status.Eq(models.StatusActive)),
+		models.Users.Key())
+}
 ```
 
-`query.ValueLookup.AllExist` owns execution. It combines up to 64 parameterized
+`orm.ValueLookup.AllExist` owns execution. It combines up to 64 parameterized
 existence predicates per statement using the shared AST/compiler. This retains
 SQL equality for every input, including codec representations and database
 collation; it never compares a count of Go keys with SQL distinct counts. A list
@@ -134,14 +137,20 @@ value from one outside the caller's scope.
 
 For lists of objects, select one field per element:
 
+<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go -->
 ```go
-assignee := validation.DefineField("assignee_id", func(a Assignment) model.ID[models.User] { return a.Assignee })
-assignees := databasevalidation.ExistsEach(db, activeUsers, fields.ID, assignee)
-// Rule[[]Assignment]; a missing assignee is reported at /2/assignee_id.
+type Assignment struct{ Assignee model.ID[models.User] }
+
+func assignees(db database.Executor) validation.Rule[[]Assignment] {
+	field := validation.DefineField("assignee_id", func(a Assignment) model.ID[models.User] { return a.Assignee })
+	return databasevalidation.ExistsEach(db,
+		models.Users.Query().Where(models.Users.Status.Eq(models.StatusActive)),
+		models.Users.Key(), field)
+}
 ```
 
 `UniqueAll` and `UniqueEach` require that no value is stored, using batched
-`IN` observations (`query.ValueLookup.AnyExist`) and the same per-element paths.
+`IN` observations (`orm.ValueLookup.AnyExist`) and the same per-element paths.
 They do not detect duplicates inside the request; add `Distinct`/`DistinctBy`.
 Base `validation.ExistsEach`/`UniqueEach` accept any `BatchLookup`/`AnyLookup`,
 including `databasevalidation.Lookup` and `Scoped`.
@@ -170,3 +179,7 @@ Request-locale message translation and replacement of static built-in messages
 are delivered in the separate [message follow-up](validation-messages.md).
 The expansion passed the complete gate and relevant races; see
 [acceptance evidence](../evidence/validation-expanded-20260926.json).
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).
+
+The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

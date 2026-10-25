@@ -1,7 +1,8 @@
 # Frozen legacy oracles
 
-This directory is **pending**. No final freeze has been run. Live old/new
-comparisons remain enabled, and ordinary tests never write expectations.
+This directory is **frozen** by the integrated-tree capture at `54508185`.
+Live old/new comparisons remain enabled alongside frozen replay. Ordinary tests
+never write expectations; `state.json` is the publication receipt.
 
 From the repository root, the lead can run these without a Makefile change:
 
@@ -90,8 +91,12 @@ independently of consumed observations. Selected parent bodies and every occurre
 in selected subtests are required, even when they emit zero observations. Excluded
 siblings and skipped descendants are not required; `-list` is inspection only.
 Package identity is explicit so the root goway package cannot consume integrations'
-records. After a full PostgreSQL freeze, an unfiltered full replay requires that
-backend; select the unit tests explicitly for an offline replay. Footprints are
+records. Replay completeness follows enabled backends through the reviewed census: offline
+runs omit only declared PostgreSQL entry points; all ordinary observations remain
+required. `FOUNDRY_ORACLE_REPLAY=full make fixture-check` replays the enabled bundle
+without recapturing or publishing records. Helper subprocesses with a deliberate
+`-test.run` selection clear full-replay mode and enforce their own selection; the
+parent still enforces complete replay. Footprints are
 remeasured by the recorder, not ordinary fixture test processes.
 
 Capture (including `--refreeze`) reads a fresh pending state in a temporary directory.

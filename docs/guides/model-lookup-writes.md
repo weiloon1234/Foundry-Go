@@ -1,65 +1,55 @@
 # Lifecycle-aware lookup writes
 
-`FirstOrCreate` and `UpdateOrCreate` operate on a typed model query within one transaction or savepoint. They return a complete concrete model and reuse normal hooks, observers, field mutators, managed timestamps and change tracking. These methods have different concurrency behavior from a [SQL upsert](model-upserts.md).
+`orm.FirstOrCreate`, `orm.CreateOrFirst` and `orm.UpdateOrCreate` are package functions over a typed model query. They preserve the ordinary per-model lifecycle and return complete stored models.
 
-## Find an existing model or create one
+## Find first or create
 
+<!-- orm-example: first-or-create-user -->
 ```go
-q := linkqueries.QueryLinkMemberships()
-f := linkqueries.MembershipFields()
-selected := q.Where(f.MemberID.Eq(member.ID), f.GroupCode.Eq(group.Code))
-create := linkqueries.MembershipDraft{}.
-    SetMemberID(member.ID).
-    SetGroupCode(group.Code).
-    SetRole(" ADMIN ")
-
-membership, err := selected.FirstOrCreate(ctx, db, create)
+func firstOrCreateUser(ctx context.Context, tx *database.Tx) (models.User, error) {
+	f := models.Users
+	return orm.FirstOrCreate(ctx, tx, f.Query().Where(f.Email.Eq("ada@example.test")),
+		f.Age.Set(30), f.Status.Set(models.StatusActive), f.Level.Set(models.LevelBasic))
+}
 ```
 
-The existing branch returns the first matching model in primary-key ascending order. It does not prepare the creation draft, allocate its UUID, invoke its setters, or run write hooks. Multiple matches intentionally use the same first-row ordering as an ordinary `First`; the helper does not prove that the lookup is unique.
+An existing match is selected in primary-key ascending order without preparing creation inputs or invoking write hooks. Multiple matches do not prove uniqueness; the first is selected. Write-owned lookups skip retrieval callbacks.
 
-The missing branch prepares the creation draft and runs ordinary creation. Like Laravel's merged `firstOrCreate` attributes, omitted draft fields default from the query's top-level equality filters (`Eq` combined with `And` or separate `Where` calls) and from active [global scopes](model-global-scopes.md), including context scopes resolved for this call. Explicit draft inputs always win. Other predicates (ranges, `Or`, `In`), conflicting equalities on one field and fields with custom mutators supply no default, because a stored value is not a mutator input. Normal before hooks may still fill omissions.
+On creation, omitted fields default from supported top-level equality predicates, including active scopes resolved with this context. Explicit assignments win. Ranges, OR, IN, conflicting equalities and Go-mutated fields supply no default: a stored value is not a mutator input. Hooks may still supply required fields.
 
-After creation, Foundry checks that the stored identity satisfies the original predicates and visibility. If normalization, a hook, a database default or a supplied value produces a model outside that scope, the operation fails and rolls back its creation and queued after-commit work. This postcondition does not automatically create a physical unique constraint.
+After creation, the stored identity must satisfy the original predicates and visibility. A default, normalization or hook that moves it outside those conditions causes rollback. This postcondition does not create a unique index.
 
-## Create first, then fall back to the existing model
+## Create first or update an existing model
 
+<!-- orm-example: lookup-branches -->
 ```go
-membership, err := selected.CreateOrFirst(ctx, db, create)
+func createOrFindUser(ctx context.Context, tx *database.Tx) (models.User, error) {
+	f := models.Users
+	return orm.CreateOrFirst(ctx, tx, f.Query().Where(f.Email.Eq("ada@example.test")), f.Age.Set(30), f.Status.Set(models.StatusActive), f.Level.Set(models.LevelBasic))
+}
+
+func updateOrCreateUser(ctx context.Context, tx *database.Tx) (models.User, error) {
+	f := models.Users
+	return orm.UpdateOrCreate(ctx, tx, f.Query().Where(f.Email.Eq("ada@example.test")),
+		[]orm.Assignment[models.User]{f.Age.Set(30), f.Status.Set(models.StatusActive), f.Level.Set(models.LevelBasic)},
+		func(context.Context, *database.Tx, models.User) ([]orm.Assignment[models.User], error) {
+			return []orm.Assignment[models.User]{f.Age.Set(31)}, nil
+		})
+}
 ```
 
-`CreateOrFirst` reverses the order: it prepares the draft and runs ordinary creation in its own savepoint first. If a unique constraint rejects the insert, only that savepoint rolls back and the first primary-ordered model matching the query is returned instead. A concurrent request creating the same unique key is therefore resolved rather than reported, because the competing row is already committed (or the insert waited for it) when it is read. This relies on READ COMMITTED visibility; under REPEATABLE READ or SERIALIZABLE a competitor committed after the snapshot is invisible and the unique violation is returned. The query must select the row that holds the conflicting key: if nothing matches (for example the draft conflicts on a different unique key), the unique violation is returned. Only the model's own `INSERT` failing on a unique index of the model's table is resolved this way; a unique violation raised by a hook or observer (including its own writes), an error that merely claims to be one, or a violation from a trigger writing another table is returned unchanged ([acceptance](../../tests/fixtures/consumer/pivothooks/create_or_first_postgres_test.go)). A created model must satisfy the query, as with `FirstOrCreate`. Prefer `CreateOrFirst` when creation is the common case and a physical unique constraint backs the lookup; prefer `FirstOrCreate` when the row usually exists.
+`CreateOrFirst` attempts ordinary insertion in an isolated savepoint. It rolls that savepoint back and looks up a competitor only for a server-reported unique violation proven to belong to the destination insert. Schema, table and constraint provenance must all match the resolved destination. Hook errors, trigger writes to other tables or schemas, missing metadata and claimed application errors do not enter that recovery path.
 
-## Update an existing model or create one
+If the competitor is not visible under the original query, the unique violation remains an error. This relies on READ COMMITTED visibility; a competitor committed after a REPEATABLE READ/SERIALIZABLE snapshot may remain invisible. Unknown outcomes never become success, definite rollback or an automatic retry.
 
-```go
-membership, err := selected.UpdateOrCreate(ctx, db, create,
-    func(ctx context.Context, tx *database.Tx, current linkqueries.Membership) (linkqueries.MembershipDraft, error) {
-        return linkqueries.MembershipDraft{}.
-            SetRole("editor-" + current.Role), nil
-    })
-```
+`UpdateOrCreate` prepares only the chosen branch. The existing model is locked and rows close before its callback. The callback receives the actual transaction and returns assignments. Creation-only keys stay out of the update. The subsequent ordinary update preserves original predicates and the selected key; changed values may leave the old filter, as with any update.
 
-Only the chosen branch prepares a draft. A missing model uses `create` and never invokes the update callback. An existing model invokes the callback and leaves the creation draft unused. Separate drafts keep creation-only primary keys out of updates.
+## Ownership and concurrency
 
-The existing row is locked before the callback runs, and its result stream is closed first. The callback receives the actual transaction and can perform related typed database work on that connection. Propagate its supplied context to nested operations; it shares the normal lifecycle recursion bound with [per-model batch updates](model-batch-writes.md).
+Lookups retain scopes and soft-delete visibility, reject read windows/eager-load clauses, and never silently restore hidden rows. A hidden deleted row may still own a unique key. Select `WithTrashed` explicitly when that is intended.
 
-The ordinary update retains the original predicates plus the selected model's concrete primary identity. Its new field values may move the result outside the old filter, just as with a normal `Update`. A callback that changes the selected row itself can make the subsequent ordinary update fail; that failure rolls back the entire helper operation.
+Related callback work uses the supplied context and transaction. Callback errors leave the boundary as safe lifecycle failures with `errors.Is`/`errors.As` identity. Hook, codec, constraint, cancellation and postcondition failures roll back the helper's changes and queued after-commit work.
 
-## Visibility and query options
+An absent lookup does not lock absence. `FirstOrCreate` and `UpdateOrCreate` can race to insert; physical uniqueness decides the winner. `CreateOrFirst` has the restricted conflict recovery above, not a general retry loop. Inspect `orm.WriteError[M]` and the outer transaction outcome before reconciliation. See [transaction ownership](model-writes.md#transaction-ownership-and-failures).
 
-Both helpers accept ordinary typed predicates and the model's active/trashed visibility. They reject read ordering, limits, offsets and eager-loading options before opening a transaction. Primary order selects one model; load relations explicitly on the returned model when needed.
-
-Write-owned lookups skip `Retrieved` callbacks. Returned fields remain stored values, and [explicit getters](model-accessors.md) remain deliberate choices for DTO mapping. Foundry does not create a partially filled model or evaluate read getters implicitly.
-
-Soft-deleted rows are hidden by default. A hidden row may still own a unique key, so a missing active lookup can fail on creation with `database.UniqueViolation`. `WithTrashed` and `OnlyTrashed` select their declared visibility, but do not silently restore anything. Creation must satisfy the selected visibility as well as its explicit predicates. Natural keys retain their declared types.
-
-## Transactions and competing requests
-
-The helper holds selected row locks until its owning transaction ends. Normal hooks execute inside that transaction. Callback, hook, codec, constraint, SQL, cancellation or creation-postcondition failures roll back the helper's changes and pending after-commit callbacks. An outer transaction remains the final commit owner, and in-process callbacks are not crash-durable dispatch.
-
-Selecting no row does not lock the absence of a matching row. Two concurrent requests can both take the creation branch. Physical unique constraints govern uniqueness; the losing insert reports its ordinary constraint error. Foundry performs no hidden retry and does not swallow a uniqueness failure from another constraint. Without an appropriate unique constraint, concurrent creations can both succeed. Serializable isolation may instead report an ordinary serialization failure.
-
-Inspect the ordinary typed `query.WriteError[Model]` for a committed callback failure or uncertain commit outcome before deciding whether to retry. The returned candidate is reconciliation data, not proof of persistence. Side effects outside the transaction retain the [normal hook limitations](model-hooks.md).
-
-The [consumer examples](../../tests/fixtures/consumer/linkqueries/lookup_postgres_test.go) cover branch choice, lazy creation inputs, callback I/O, normal lifecycle, natural keys, scopes, visibility and rollback. The [concurrency fixtures](../../tests/fixtures/consumer/linkqueries/lookup_concurrency_postgres_test.go) check existing-row locks before callbacks and competing absent-row creations under a physical unique index. Compiler-rejection fixtures and actual gopls probes preserve concrete model/draft/callback contracts.
+For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

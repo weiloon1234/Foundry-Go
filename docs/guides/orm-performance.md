@@ -2,10 +2,10 @@
 
 The independent consumer's `BenchmarkORMCompile` measures typed query creation,
 validation and SQL compilation without database I/O. `BenchmarkORMPostgresReads`
-compares direct `database/sql`, Foundry SQL execution and generated typed model
+compares direct `database/sql`, Foundry SQL execution and handwritten ORM model
 queries at 1, 100 and 1000 rows. Every variant uses identical compiled SQL, the
 same pgx connector configuration and equivalent concrete codecs. The agreement
-test compares complete generated models, including NULLs, enums, UUIDs and dates.
+test compares complete decoded models, including NULLs, enums, UUIDs and dates.
 
 These are warm, sequential reads over an indexed 1000-row table in a unique
 retained schema. Both pools have one connection; driver statement caches and
@@ -28,13 +28,17 @@ connection and non-destructive namespace setup. Read latency depends on database
 placement, host load, cache warmth and the selected fields; a local ratio cannot
 predict a remote application's latency.
 
-The internal optimization reuses immutable validated model selections, removes
+For the Stage 11 main-versus-branch comparison, use the
+[alternating-trial procedure](goway-final-measurements.md). Main runs its own
+legacy fixture; do not copy this branch's ORM fixture into that checkout.
+
+The historical optimization described below reuses immutable validated model selections, removes
 an unused read compiler map, shares the fixed LIKE escaping grammar and avoids
 splitting identifiers into temporary slices. Codec scanners retain only their
 decoder and concrete destination while still rejecting incomplete codecs and
-publishing values only after successful decode. Public/generated signatures,
-query scopes, SQL text and bindings are preserved; existing consumers need no
-code changes or regeneration.
+publishing values only after successful decode. At that revision, public/generated signatures,
+query scopes, SQL text and bindings are preserved; the optimization required no consumer code changes or regeneration.
+The later ORM migration is covered separately by the [migration guide](orm-migration.md).
 
 ## Measured results — 2026-10-11
 

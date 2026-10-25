@@ -1,0 +1,193 @@
+{
+  "slice": "stage10-b-docs",
+  "base_commit": "545081856a448724eef810bf5e1e8ea877abcb84",
+  "status": "Complete: last-30 corrections and lead-approved bounded-adjustment semantics implemented; requested races, fixture checks, footprint, vet, PostgreSQL compilation, catalogue and docs checks pass.",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r14",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off"
+  },
+  "guides_rewritten": 17,
+  "guides_added": 1,
+  "migration_guide_prose_corrections": 1,
+  "feature_guide_go_blocks": 38,
+  "distinct_compiled_regions": 36,
+  "new_compiled_regions": 23,
+  "checks": [
+    {
+      "directory": ".",
+      "command": "go test -race ./database/orm ./internal/ormcore ./internal/querycore",
+      "exit_code": 0
+    },
+    {
+      "directory": "tests/fixtures/goway",
+      "command": "go list ./... (excluding /pgsmoke); batches of six: go test -race -count=1 -v -timeout=20m <packages>",
+      "exit_code": 1,
+      "result": "First six-package batch: root/compiler/goldens, bench and integrations passed; freeze harness stale census was the sole failure."
+    },
+    {
+      "directory": "tests/fixtures/goway",
+      "command": "go test -race -count=1 ./cmd/freeze-oracles -run '^TestReplayGroupsRequirePostgresOnlyInFullCapture$'",
+      "exit_code": 0
+    },
+    {
+      "directory": "tests/fixtures/goway",
+      "command": "Remaining non-pgsmoke packages from position 7, batches of six: go test -race -count=1 -timeout=20m <packages>",
+      "exit_code": 0
+    },
+    {
+      "directory": "tests/fixtures/goway",
+      "command": "go test -count=1 -v -run '^TestFootprintBudgets$' .",
+      "exit_code": 0
+    },
+    {
+      "directory": "tests/fixtures/goway",
+      "command": "go test -run '^$' ./pgsmoke",
+      "exit_code": 0
+    },
+    {
+      "directory": "tests/fixtures/goway",
+      "command": "go vet ./...",
+      "exit_code": 0
+    },
+    {
+      "directory": ".",
+      "command": "go vet ./database/orm ./internal/ormcore ./internal/querycore",
+      "exit_code": 0
+    },
+    {
+      "directory": ".",
+      "command": "make docs-check",
+      "exit_code": 0
+    },
+    {
+      "directory": ".",
+      "command": "python3 tools/goway_catalogue.py",
+      "exit_code": 0
+    },
+    {
+      "directory": ".",
+      "command": "gofmt -w <changed Go files>; git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "coverage_limits": "In-memory driver assertions execute on plain/local-hook/observer paths. PostgreSQL regression sources compile and are vetted; live execution remains with the lead. Editor probes remain lane D-owned.",
+  "surface_additions": [],
+  "rows_ported": [],
+  "footprint": "All probes passed; no existing ceilings or probe definitions changed. Footprint ran separately because its source excludes race builds.",
+  "contracts": "No schema, directives, generated outputs, manifests, OpenAPI or TypeScript changes.",
+  "shared_files_touched": [
+    "docs/guides/orm-migration.md",
+    "tests/fixtures/goway/migration/guide_test.go",
+    "database/orm/README.md",
+    "database/orm/orm_test.go",
+    "database/orm/relation_pivot_mutation.go",
+    "tests/fixtures/goway/testdata/oracles/comparisons.json"
+  ],
+  "docs_notes": "See docs/evidence/goway-stage10-b-docs.md for lead-owned status text and stale outside-area sections.",
+  "source_sha256": {
+    "database/orm/README.md": "d63bb3bbbf2866b6d9812fba820a91ccbd2ac42cbc74389a9085a313ae4350f2",
+    "database/orm/adjustment.go": "451bec3525f9cb9873aab43ac7779c7b16bbc59fd052c836d9781f3d94c912b4",
+    "database/orm/adjustment_lifecycle_test.go": "6b3b0dfc9fad17772ca903dbc35c76ba9f29cdb27dc9303b256ebd9fdec93454",
+    "database/orm/adjustment_write.go": "b9f0d85be8b1d6a499e35a1592df03fc0ca4b895986b64d552e54c13dad4b80c",
+    "database/orm/conflict_write.go": "bea22bc0192ea3e6add7f642a937e37c085ecd6ee7438292abacc157fc106f08",
+    "database/orm/hooks.go": "34cd13507b9c55ce4e24e798bc30c77fd528de9d10898816ecc660a5247f55f8",
+    "database/orm/orm_test.go": "e47ca2e571170ad841490744ba73ca300f733fb4d5f512a325d7b37bad428be4",
+    "database/orm/relation_pivot_mutation.go": "a873231267e5b9636ccc9042591782fa24da35fd8644960994d58b6604a0b702",
+    "database/orm/review_test.go": "e8d7167e6bc5096355d07cb6945294d72a5126735e03f9e525ad68840b34c05f",
+    "database/orm/write.go": "db876cc463f701f230549c6b5b50d9145e53d031334c140d662866649b51df82",
+    "docs/evidence/goway-stage10-b-docs.md": "1c2c69e03874b8afdf050bdfeed293e310a4154485f0f6c2e625454df5f9b381",
+    "docs/guides/audit.md": "a6036b06180b52d18cc9c5429640b195504d23bddfa1e58aefc02f7f5f4d0a5b",
+    "docs/guides/model-accessors.md": "bda8b8744a230da702731be083170882e61b9eeac66dddc8cd03fc93ed73df60",
+    "docs/guides/model-batch-writes.md": "fa65b90cc224c064a864d8d05cc09a56fdc920e6866108ad896b0920ce0238d5",
+    "docs/guides/model-changes.md": "583146f47e7da1d9e767d0a99c0df972a573ac5ff14e5e3d615fb6e0edc21213",
+    "docs/guides/model-declarations.md": "f78d7c29f485a6856d196654ad69438d2cdcb10bc6e23879f5b7176769b5b43a",
+    "docs/guides/model-global-scopes.md": "7b0e30ba16f36ce03173019a4743374861552a5cb168dafb23ead4c5273b5354",
+    "docs/guides/model-hooks.md": "eac7691b2dfcd868fa33c08fe37661e053370d058eedd7341ebfe8def5377b19",
+    "docs/guides/model-insert-from-query.md": "c67aee727815d537cadd260ef03dc471b84b59887048d3778906047787916ae7",
+    "docs/guides/model-lookup-writes.md": "1227cdc2c79eba85a3b1b1cc122bd22c55f6137936e9372f90ab09e54f668f6a",
+    "docs/guides/model-mutators.md": "07ddc2742b85de5e8ebd1cc2e67a53a15f93eec1d644d681473d05e079eca3a7",
+    "docs/guides/model-pruning.md": "a13fdf09b5f4fbbeb33af0533a9f924e50efce6d0216babb9c1b4e6ca28c7dcd",
+    "docs/guides/model-retrieval.md": "84a4b9d3299bcb3dc592955bc73c00b05b865f411dcd64ba92b0f0d1074fabb5",
+    "docs/guides/model-soft-deletes.md": "1339c3b304fd2f298090ea9238f10273be2f855943d6533c7e5920ed15bfe616",
+    "docs/guides/model-source-writes.md": "e423d930d301e6097b65023759ae5801434d1ce338e83f2fc07dafd8173e4c13",
+    "docs/guides/model-timestamps.md": "e26267efdf9c06b1381c45fe0942bc138ca9d18297476e0732d3d600e0dea229",
+    "docs/guides/model-upserts.md": "668703e33e31ab3a0b784cc71ccca56e329ea3a2b604a786f5a33249a5c53ff3",
+    "docs/guides/model-writes.md": "174a02c5d366e218fe7142e5bd49e2d7671420d9bae1fef9c8dd8a3038275a8c",
+    "docs/guides/orm-migration.md": "046339489a4f28a2ba0c47cb312994d8bf262095f2fd6989909afea4a6e324bd",
+    "docs/guides/query-plans.md": "a7e003092d188727047f2521c76dafb0029ed2912998f96f185517b2579954be",
+    "tests/fixtures/goway/migration/guide_test.go": "6f5b5e9df7c050256330ec00ecceae98c1bacdc569fe21f1f63f6ae45907e450",
+    "tests/fixtures/goway/migration/lifecycle_test.go": "0a60283604682d581fe6a6f7d9b59b4c933f26362e11834e1351764e653c0a6c",
+    "tests/fixtures/goway/pgsmoke/adjustment_test.go": "291522095c337c37051cc1f04fdaf7d834ae21dcd5fc961405eb6375758dfb3b",
+    "tests/fixtures/goway/testdata/oracles/comparisons.json": "6b85875ce9da93c36999efd7193965cd69e527200371f36fd974737dba3977f9"
+  },
+  "review_last30": {
+    "legacy": "Numeric adjustments were set-based only and returned (0,nil) for no match. Ordinary guarded per-model Patch returned NotFound on both paths.",
+    "resolution": "Lead-approved new contract: visible bound rejection is ErrBoundExceeded; missing/hidden key is NotFound. One failure-only key projection retains visibility predicates and FOR UPDATE in the same transaction. Successful statement counts and unknown outcomes are unchanged.",
+    "outcome_inspection": "Restored 256-node/64-level limits and warning that a reconciliation candidate can lack readable database.Error metadata and never implies success, rollback or retry.",
+    "corrected_failures": [
+      "Unused legacy-test import removed before initial characterization pass.",
+      "docs-check initially omitted cache environment; final r14 run passed.",
+      "Fixture source census stale for three owned test files; reviewed those entries only, retained paired tests and frozen records, reran failed test and resumed remaining packages."
+    ]
+  },
+  "footprint_selected_probes": {
+    "aggregate_families": {
+      "functions": 4365,
+      "budget_baseline": 3799,
+      "ceiling": 4369
+    },
+    "q_with": {
+      "functions": 1211,
+      "budget_baseline": 1053,
+      "ceiling": 1211
+    },
+    "terminal_adjustment": {
+      "functions": 1381,
+      "budget_baseline": 1382,
+      "ceiling": 1590
+    }
+  },
+  "pre_integration_batch10_source_sha256": {
+    "database/orm/README.md": "d63bb3bbbf2866b6d9812fba820a91ccbd2ac42cbc74389a9085a313ae4350f2",
+    "database/orm/adjustment.go": "451bec3525f9cb9873aab43ac7779c7b16bbc59fd052c836d9781f3d94c912b4",
+    "database/orm/adjustment_lifecycle_test.go": "6b3b0dfc9fad17772ca903dbc35c76ba9f29cdb27dc9303b256ebd9fdec93454",
+    "database/orm/adjustment_write.go": "b9f0d85be8b1d6a499e35a1592df03fc0ca4b895986b64d552e54c13dad4b80c",
+    "database/orm/conflict_write.go": "bea22bc0192ea3e6add7f642a937e37c085ecd6ee7438292abacc157fc106f08",
+    "database/orm/hooks.go": "34cd13507b9c55ce4e24e798bc30c77fd528de9d10898816ecc660a5247f55f8",
+    "database/orm/orm_test.go": "e47ca2e571170ad841490744ba73ca300f733fb4d5f512a325d7b37bad428be4",
+    "database/orm/relation_pivot_mutation.go": "a873231267e5b9636ccc9042591782fa24da35fd8644960994d58b6604a0b702",
+    "database/orm/review_test.go": "e8d7167e6bc5096355d07cb6945294d72a5126735e03f9e525ad68840b34c05f",
+    "database/orm/write.go": "db876cc463f701f230549c6b5b50d9145e53d031334c140d662866649b51df82",
+    "docs/evidence/goway-stage10-b-docs.md": "1c2c69e03874b8afdf050bdfeed293e310a4154485f0f6c2e625454df5f9b381",
+    "docs/guides/audit.md": "a6036b06180b52d18cc9c5429640b195504d23bddfa1e58aefc02f7f5f4d0a5b",
+    "docs/guides/model-accessors.md": "bda8b8744a230da702731be083170882e61b9eeac66dddc8cd03fc93ed73df60",
+    "docs/guides/model-batch-writes.md": "fa65b90cc224c064a864d8d05cc09a56fdc920e6866108ad896b0920ce0238d5",
+    "docs/guides/model-changes.md": "583146f47e7da1d9e767d0a99c0df972a573ac5ff14e5e3d615fb6e0edc21213",
+    "docs/guides/model-declarations.md": "f78d7c29f485a6856d196654ad69438d2cdcb10bc6e23879f5b7176769b5b43a",
+    "docs/guides/model-global-scopes.md": "7b0e30ba16f36ce03173019a4743374861552a5cb168dafb23ead4c5273b5354",
+    "docs/guides/model-hooks.md": "eac7691b2dfcd868fa33c08fe37661e053370d058eedd7341ebfe8def5377b19",
+    "docs/guides/model-insert-from-query.md": "c67aee727815d537cadd260ef03dc471b84b59887048d3778906047787916ae7",
+    "docs/guides/model-lookup-writes.md": "1227cdc2c79eba85a3b1b1cc122bd22c55f6137936e9372f90ab09e54f668f6a",
+    "docs/guides/model-mutators.md": "07ddc2742b85de5e8ebd1cc2e67a53a15f93eec1d644d681473d05e079eca3a7",
+    "docs/guides/model-pruning.md": "a13fdf09b5f4fbbeb33af0533a9f924e50efce6d0216babb9c1b4e6ca28c7dcd",
+    "docs/guides/model-retrieval.md": "84a4b9d3299bcb3dc592955bc73c00b05b865f411dcd64ba92b0f0d1074fabb5",
+    "docs/guides/model-soft-deletes.md": "1339c3b304fd2f298090ea9238f10273be2f855943d6533c7e5920ed15bfe616",
+    "docs/guides/model-source-writes.md": "e423d930d301e6097b65023759ae5801434d1ce338e83f2fc07dafd8173e4c13",
+    "docs/guides/model-timestamps.md": "e26267efdf9c06b1381c45fe0942bc138ca9d18297476e0732d3d600e0dea229",
+    "docs/guides/model-upserts.md": "668703e33e31ab3a0b784cc71ccca56e329ea3a2b604a786f5a33249a5c53ff3",
+    "docs/guides/model-writes.md": "174a02c5d366e218fe7142e5bd49e2d7671420d9bae1fef9c8dd8a3038275a8c",
+    "docs/guides/orm-migration.md": "046339489a4f28a2ba0c47cb312994d8bf262095f2fd6989909afea4a6e324bd",
+    "docs/guides/query-plans.md": "a7e003092d188727047f2521c76dafb0029ed2912998f96f185517b2579954be",
+    "tests/fixtures/goway/migration/guide_test.go": "6f5b5e9df7c050256330ec00ecceae98c1bacdc569fe21f1f63f6ae45907e450",
+    "tests/fixtures/goway/migration/lifecycle_test.go": "0a60283604682d581fe6a6f7d9b59b4c933f26362e11834e1351764e653c0a6c",
+    "tests/fixtures/goway/pgsmoke/adjustment_test.go": "291522095c337c37051cc1f04fdaf7d834ae21dcd5fc961405eb6375758dfb3b",
+    "tests/fixtures/goway/testdata/oracles/comparisons.json": "7873c05e87a31fcf1ebcb26b418a02966e17c0f930c02a618dcb0dc252c9b5a7"
+  },
+  "integration_batch10": {
+    "base": "47304fc3",
+    "evidence": "docs/evidence/goway-batch10-integration.json",
+    "note": "Lane acceptance above is historical; the integration evidence records current-source checks. Final performance measurements remain pending."
+  }
+}

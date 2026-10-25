@@ -1,0 +1,262 @@
+{
+  "slice": "stage10-lane-d",
+  "base": "54508185",
+  "recorded_at": "2026-10-25T08:29:44.271485+00:00",
+  "status": "complete; review fixes and full editor acceptance passed",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r14",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off",
+    "FOUNDRY_TEST_GOPLS": "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls"
+  },
+  "guides": [
+    "docs/guides/account-recovery.md",
+    "docs/guides/agent-language-tooling.md",
+    "docs/guides/attachments.md",
+    "docs/guides/auth-operations.md",
+    "docs/guides/authentication.md",
+    "docs/guides/countries.md",
+    "docs/guides/credential-changes.md",
+    "docs/guides/developer-tooling-and-testing.md",
+    "docs/guides/http-cursor-pagination.md",
+    "docs/guides/http-model-binding.md",
+    "docs/guides/http-pagination.md",
+    "docs/guides/mfa.md",
+    "docs/guides/model-extension-slots.md",
+    "docs/guides/model-extensions.md",
+    "docs/guides/model-pagination.md",
+    "docs/guides/model-references.md",
+    "docs/guides/model-scaffolding.md",
+    "docs/guides/notifications.md",
+    "docs/guides/password-hashing.md",
+    "docs/guides/scoped-model-binding.md",
+    "docs/guides/sessions.md",
+    "docs/guides/tokens.md",
+    "docs/guides/validation-expanded.md",
+    "docs/guides/validation.md"
+  ],
+  "compiled_excerpts": 47,
+  "public_api_additions": [],
+  "catalogue_changes": [],
+  "footprint_changes": [],
+  "contracts": "No declaration/schema/codec/manifest/OpenAPI/TypeScript behavior changes. Retained generator ownership hash and generated model comments refreshed through make.",
+  "commands": [
+    {
+      "command": "go test ./guideadapters",
+      "directory": "tests/fixtures/goway",
+      "result": "pass",
+      "log": "/private/tmp/stage10d-examples.log"
+    },
+    {
+      "command": "make docs-check",
+      "result": "pass",
+      "log": "/private/tmp/stage10d-docs.log"
+    },
+    {
+      "command": "make agent-smoke",
+      "result": "failed before editor probes: retained generated comments and ownership manifest were stale after handwritten comment edits",
+      "log": "/private/tmp/stage10d-agent.log"
+    },
+    {
+      "command": "make generate GENERATION_DIRS=tests/fixtures/consumer/mutatorqueries",
+      "result": "pass; regenerated 2 files, removed 0",
+      "log": "/private/tmp/stage10d-generate.log"
+    },
+    {
+      "command": "go test -run '^TestTypedModelAccessorsPreserveStoredFields$' ./articles ./authenticating ./httpmodels ./httppagination ./httpvalidation ./nestedbindings ./notifying ./passwords ./profiles ./mutatorqueries",
+      "directory": "tests/fixtures/consumer",
+      "result": "pass; all 10 packages compile, targeted accessor regression executes; no PostgreSQL tests executed",
+      "log": "/private/tmp/stage10d-consumer-examples.log"
+    },
+    {
+      "command": "go test ./guideadapters ./models/extensions",
+      "directory": "tests/fixtures/goway",
+      "result": "pass; final example source, exact snippet correspondence, orm.Check, identity round trip, extension registration validation and factory draft construction",
+      "log": "/private/tmp/stage10d-examples-final.log"
+    },
+    {
+      "command": "make agent-smoke",
+      "result": "generation check passed; 498 editor probes passed, 4 failed solely during gopls shutdown (context canceled, process killed); all 4 passed unchanged serially",
+      "log": "/private/tmp/stage10d-agent-final.log"
+    },
+    {
+      "command": "make docs-check",
+      "result": "pass",
+      "log": "/private/tmp/stage10d-docs-final.log"
+    },
+    {
+      "command": "gofmt -w <changed handwritten Go files>; gofmt -l <all changed Go files>",
+      "result": "pass; no unformatted files"
+    },
+    {
+      "command": "git diff --check",
+      "result": "pass"
+    },
+    {
+      "command": "go test -timeout=20m -count=1 -parallel=1 -v ./internal/agent -run '^TestRealGoplsConsumer$/^(typed-model-reference|typed-source-delete-natural-key|typed-schedule-module|generated-relationship-filter)$'",
+      "result": "pass; 4/4 unchanged probes",
+      "log": "/private/tmp/stage10d-agent-rerun.log"
+    },
+    {
+      "command": "make agent-smoke",
+      "result": "pass; all 502 editor probes, generation freshness included",
+      "log": "/private/tmp/stage10d-review-agent.log",
+      "phase": "review fixes"
+    },
+    {
+      "command": "go test -count=1 ./guideadapters -run '^TestGuideSnippets$'",
+      "directory": "tests/fixtures/goway",
+      "result": "pass",
+      "log": "/private/tmp/stage10d-review-snippets.log",
+      "phase": "review fixes"
+    },
+    {
+      "command": "make docs-check",
+      "result": "pass",
+      "log": "/private/tmp/stage10d-review-docs.log",
+      "phase": "review fixes"
+    },
+    {
+      "command": "go test -count=1 ./tooling ./reporting ./setqueries -run '^TestCompile(Member|Combined)ReportExample$'",
+      "directory": "tests/fixtures/consumer",
+      "result": "pass; factory example compiled, report examples executed",
+      "log": "/private/tmp/stage10d-review-examples.log",
+      "phase": "review fixes"
+    },
+    {
+      "command": "gofmt -w <review-fix Go files>; gofmt -l <all changed Go files>; git diff --check",
+      "result": "pass",
+      "phase": "review fixes"
+    }
+  ],
+  "source_sha256": {
+    "docs/guides/account-recovery.md": "a0f7319bc4c196439fab566dc9e141c1e9b429b8c58faff47ecb16d629da98d2",
+    "docs/guides/agent-language-tooling.md": "62c55b3479d97cfadfdb05060ee9313b861ff85bdc42cad41dab795e662e2025",
+    "docs/guides/attachments.md": "b72dc336fd3eed41b0e826f231550f6c5a81c9b0d30ff798393af1c20429966f",
+    "docs/guides/auth-operations.md": "e2e5d27f0bb9af7e1442a1cce2b5dca9a4bd5eeb0a2017e27469b9e588ed3aef",
+    "docs/guides/authentication.md": "75d67131e43296e70a8358647fd3bf5f4e8d5675d36bd5010cdf50b107bf3ff5",
+    "docs/guides/countries.md": "a6c063810f4e2beed1c6928822b68343f28fe7eb3bca39bb1a3d86372b4500da",
+    "docs/guides/credential-changes.md": "d8335bbf245201d99661f627a1a59ef589b308938c9dfcea94ed03f97987ef8f",
+    "docs/guides/developer-tooling-and-testing.md": "05091fd2d93d08c6cebb6769b6510596d8f187c58b1958ff72906658ec0acd79",
+    "docs/guides/http-cursor-pagination.md": "150ffb633a93a01a761db1fc27b44bc6b41da4c5a147e52e9c7a327ac0ebea63",
+    "docs/guides/http-model-binding.md": "65117cbf81b7f5495af9e078195381648e796ed10065a4a96c8e311e06af906f",
+    "docs/guides/http-pagination.md": "053dfc486b10ea21a855e0425bb679a3289e20d519b12e95f8cf5d9d3322a22f",
+    "docs/guides/mfa.md": "42d06c405d431d275893285af4e84ce6c1fb443073ff8785cb9ca69f1a60a271",
+    "docs/guides/model-extension-slots.md": "189dd450ca4d3ec3de42285e97d6410e126dcdd23c7dd03de83b9fe43376fed1",
+    "docs/guides/model-extensions.md": "86b3f0b8f3102031f04eebec02c8171c6739ca7be82ecea7cbf636874e1ae9bd",
+    "docs/guides/model-pagination.md": "3fc6b0df0b91258bd0a0ce422434dd5c64f5a0bb27f3621ae61a84a4e88d1d1e",
+    "docs/guides/model-references.md": "950791618686cdbe129c98451adb5f2a92ba75d78c721fe3022bd50a06e90973",
+    "docs/guides/model-scaffolding.md": "ebfd1643c77a2b31b086f15a0a957dcaa9342612072746cda20201d262f248e9",
+    "docs/guides/notifications.md": "f04143d0ce5eb54b9612c6f57cd80c82c1c1193d3e4bad896785e28c6c972ab7",
+    "docs/guides/password-hashing.md": "46bb5347303306e4caa1cce1573a0e9154c4a75bdfd5270b6579788687fcf870",
+    "docs/guides/scoped-model-binding.md": "8d988768225167a20763f310ca779c10c9b17381600176b3cdb461436f681d25",
+    "docs/guides/sessions.md": "72c7aa0c7f1737a8dfaa55011b12c187211d36a6a7ca459ef8615e867ac0aa37",
+    "docs/guides/tokens.md": "39627d2e6086799ab1081ed82161354affde79a2aab830a41746512c45bfff1a",
+    "docs/guides/validation-expanded.md": "612e0e9cbf5ef5d510792a0047539213df9d5c0d0e997d975a71fef8fa172e57",
+    "docs/guides/validation.md": "871da272eb06ae90d92cd0b0b522456470a324979faf0ee684ce00e9eef4abe2",
+    "internal/agent/field_documentation_acceptance_test.go": "520ccecf2466d505d5eb12be2a482162254aea8c2b8cdfc85977c90d650a263f",
+    "internal/agent/gopls_acceptance_test.go": "c1cd164db4bbb9f2c53686ab4badf75dbef8476f4fd0986a1ab7719266e97eb5",
+    "tests/fixtures/consumer/mutatorqueries/.foundry-gen.json": "d2ee6b29e6e099d3af3edfcdb042b5b9e9094388af4a9356d1af792207e705e2",
+    "tests/fixtures/consumer/mutatorqueries/member.go": "b0d19f27292e0be392e446f4f6b0dc101a84f99cb82bf375850b0d9a1e32b226",
+    "tests/fixtures/consumer/mutatorqueries/member_foundry.gen.go": "d1d3d0b6319d5b84096737ed57ab19257b3a8868ef3e0a37d3f0d9e2e8d6bd16",
+    "tests/fixtures/consumer/reporting/editor_examples_test.go": "705e3c7d97996ab5d5b78521684ba810d0372aa9b2d6e01b06727df80735b550",
+    "tests/fixtures/consumer/setqueries/derived_aggregate_postgres_test.go": "f37920fba90649162562f7f0e18590425e6e4e975a89fe0bfe8af4843bc94efb",
+    "tests/fixtures/consumer/setqueries/editor_examples_test.go": "60ee7e40c883f9c71cf06e69ab819f3d0b1c7460a9221e409b9e4dd0317cc163",
+    "tests/fixtures/consumer/tooling/editor_examples_test.go": "58a0169b42e4c2c01fb150f9315b119c0605cacfc8483ef061068b2e91777635",
+    "tests/fixtures/goway/guideadapters/auth_test.go": "711372b579d7a4cef1685c2928c60ffdbf8392b58d417c38867593c795d215a9",
+    "tests/fixtures/goway/guideadapters/examples_behavior_test.go": "1b4a72b5ebaccd078d87a1bbdee7ccee1bbb53a210f2c1bcee19c98cea1ad143",
+    "tests/fixtures/goway/guideadapters/examples_test.go": "aa8996aba3b992989ac490a0b456f02f6f1ee305c5ced3814554a20831cb6a2d",
+    "tests/fixtures/goway/guideadapters/scaffold_test.go": "7ecc719d3fb14a0650e8b307e9690d08f2e64c9dcc93038f8653f2c1e7f86314",
+    "tests/fixtures/goway/guideadapters/slots_test.go": "63e54973a4d541465c4a40289cd061dc1bc2462038b81b444e494d905ac7be47",
+    "tests/fixtures/goway/guideadapters/snippets_test.go": "f0f223e12e9dae68312e0a54e12603e00d4c499a73981ec0d572318edec7bca4"
+  },
+  "editor": {
+    "total_probes": 502,
+    "main_run_passed": 502,
+    "shutdown_only_failures": [],
+    "serial_rerun_passed": 0,
+    "deleted_probes": 0,
+    "assertion_failures": 0
+  },
+  "log_sha256": {
+    "/private/tmp/stage10d-examples.log": "8236aae22c335fc3e23b92e77e11cfbc6cde70e23ddeda0afa85c0c9c44282f1",
+    "/private/tmp/stage10d-docs.log": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06",
+    "/private/tmp/stage10d-agent.log": "f0a8673fd8074040203f132a443197fdb63e2588242c9f27dc95a42605d12ed0",
+    "/private/tmp/stage10d-generate.log": "67bcc184c7e1e40aa51c7f3b65d102ccf75b89c0176a30e6ade2082003e08d82",
+    "/private/tmp/stage10d-consumer-examples.log": "043189288c374d9f12d4d8ad44f786c9ad470a781feece184c06555ed5fd3e04",
+    "/private/tmp/stage10d-examples-final.log": "7c2ddc20fcad17f80bc0fe974f38f3edac491ff13424e030c5f077f8cebcc393",
+    "/private/tmp/stage10d-agent-final.log": "ceceae6abd7de95e265176ff20d8701800b4eb18cd952b4ba4fe981ebe7a1154",
+    "/private/tmp/stage10d-docs-final.log": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06",
+    "/private/tmp/stage10d-agent-rerun.log": "9df9358caa1a5586d0c66ed13ea7a0dbdc710b8cda97dc0e5d82a24d736c96d6",
+    "/private/tmp/stage10d-review-agent.log": "c7a187ef4ca6095f3d5b0bea46d2345bba368faf1e370fd4cc533a3983860ac0",
+    "/private/tmp/stage10d-review-snippets.log": "0307701959144feb0986a75a988c2b9de2d2a5f2fee7c8eabfdd92d7ce5517d5",
+    "/private/tmp/stage10d-review-docs.log": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06",
+    "/private/tmp/stage10d-review-examples.log": "a378331d03112e8c2704bc355ef83ef81c6e396c9d7a7acd391da245cee51489"
+  },
+  "report_sha256": "41619ecd6a7c72016ac4c1317af82cb117e7bb2314bf37efb06481dc0f4f1466",
+  "previous_editor_run": {
+    "total_probes": 502,
+    "main_run_passed": 498,
+    "shutdown_only_failures": [
+      "typed-model-reference",
+      "typed-source-delete-natural-key",
+      "typed-schedule-module",
+      "generated-relationship-filter"
+    ],
+    "serial_rerun_passed": 4,
+    "deleted_probes": 0,
+    "assertion_failures": 0
+  },
+  "review_fixes": [
+    "TrackExternalInputs in TestGuideSnippets; direct acceptance uses -count=1",
+    "Removed --field-docs guidance; lane A owns 8c flag retirement",
+    "Moved three probe anchors to generator-independent examples; assertions unchanged"
+  ],
+  "pre_integration_batch10_source_sha256": {
+    "docs/guides/account-recovery.md": "a0f7319bc4c196439fab566dc9e141c1e9b429b8c58faff47ecb16d629da98d2",
+    "docs/guides/agent-language-tooling.md": "62c55b3479d97cfadfdb05060ee9313b861ff85bdc42cad41dab795e662e2025",
+    "docs/guides/attachments.md": "b72dc336fd3eed41b0e826f231550f6c5a81c9b0d30ff798393af1c20429966f",
+    "docs/guides/auth-operations.md": "e2e5d27f0bb9af7e1442a1cce2b5dca9a4bd5eeb0a2017e27469b9e588ed3aef",
+    "docs/guides/authentication.md": "75d67131e43296e70a8358647fd3bf5f4e8d5675d36bd5010cdf50b107bf3ff5",
+    "docs/guides/countries.md": "a6c063810f4e2beed1c6928822b68343f28fe7eb3bca39bb1a3d86372b4500da",
+    "docs/guides/credential-changes.md": "d8335bbf245201d99661f627a1a59ef589b308938c9dfcea94ed03f97987ef8f",
+    "docs/guides/developer-tooling-and-testing.md": "05091fd2d93d08c6cebb6769b6510596d8f187c58b1958ff72906658ec0acd79",
+    "docs/guides/http-cursor-pagination.md": "150ffb633a93a01a761db1fc27b44bc6b41da4c5a147e52e9c7a327ac0ebea63",
+    "docs/guides/http-model-binding.md": "65117cbf81b7f5495af9e078195381648e796ed10065a4a96c8e311e06af906f",
+    "docs/guides/http-pagination.md": "053dfc486b10ea21a855e0425bb679a3289e20d519b12e95f8cf5d9d3322a22f",
+    "docs/guides/mfa.md": "42d06c405d431d275893285af4e84ce6c1fb443073ff8785cb9ca69f1a60a271",
+    "docs/guides/model-extension-slots.md": "189dd450ca4d3ec3de42285e97d6410e126dcdd23c7dd03de83b9fe43376fed1",
+    "docs/guides/model-extensions.md": "86b3f0b8f3102031f04eebec02c8171c6739ca7be82ecea7cbf636874e1ae9bd",
+    "docs/guides/model-pagination.md": "3fc6b0df0b91258bd0a0ce422434dd5c64f5a0bb27f3621ae61a84a4e88d1d1e",
+    "docs/guides/model-references.md": "950791618686cdbe129c98451adb5f2a92ba75d78c721fe3022bd50a06e90973",
+    "docs/guides/model-scaffolding.md": "ebfd1643c77a2b31b086f15a0a957dcaa9342612072746cda20201d262f248e9",
+    "docs/guides/notifications.md": "f04143d0ce5eb54b9612c6f57cd80c82c1c1193d3e4bad896785e28c6c972ab7",
+    "docs/guides/password-hashing.md": "46bb5347303306e4caa1cce1573a0e9154c4a75bdfd5270b6579788687fcf870",
+    "docs/guides/scoped-model-binding.md": "8d988768225167a20763f310ca779c10c9b17381600176b3cdb461436f681d25",
+    "docs/guides/sessions.md": "72c7aa0c7f1737a8dfaa55011b12c187211d36a6a7ca459ef8615e867ac0aa37",
+    "docs/guides/tokens.md": "39627d2e6086799ab1081ed82161354affde79a2aab830a41746512c45bfff1a",
+    "docs/guides/validation-expanded.md": "612e0e9cbf5ef5d510792a0047539213df9d5c0d0e997d975a71fef8fa172e57",
+    "docs/guides/validation.md": "871da272eb06ae90d92cd0b0b522456470a324979faf0ee684ce00e9eef4abe2",
+    "internal/agent/field_documentation_acceptance_test.go": "520ccecf2466d505d5eb12be2a482162254aea8c2b8cdfc85977c90d650a263f",
+    "internal/agent/gopls_acceptance_test.go": "c1cd164db4bbb9f2c53686ab4badf75dbef8476f4fd0986a1ab7719266e97eb5",
+    "tests/fixtures/consumer/mutatorqueries/.foundry-gen.json": "d2ee6b29e6e099d3af3edfcdb042b5b9e9094388af4a9356d1af792207e705e2",
+    "tests/fixtures/consumer/mutatorqueries/member.go": "b0d19f27292e0be392e446f4f6b0dc101a84f99cb82bf375850b0d9a1e32b226",
+    "tests/fixtures/consumer/mutatorqueries/member_foundry.gen.go": "d1d3d0b6319d5b84096737ed57ab19257b3a8868ef3e0a37d3f0d9e2e8d6bd16",
+    "tests/fixtures/consumer/reporting/editor_examples_test.go": "705e3c7d97996ab5d5b78521684ba810d0372aa9b2d6e01b06727df80735b550",
+    "tests/fixtures/consumer/setqueries/derived_aggregate_postgres_test.go": "f37920fba90649162562f7f0e18590425e6e4e975a89fe0bfe8af4843bc94efb",
+    "tests/fixtures/consumer/setqueries/editor_examples_test.go": "60ee7e40c883f9c71cf06e69ab819f3d0b1c7460a9221e409b9e4dd0317cc163",
+    "tests/fixtures/consumer/tooling/editor_examples_test.go": "58a0169b42e4c2c01fb150f9315b119c0605cacfc8483ef061068b2e91777635",
+    "tests/fixtures/goway/guideadapters/auth_test.go": "711372b579d7a4cef1685c2928c60ffdbf8392b58d417c38867593c795d215a9",
+    "tests/fixtures/goway/guideadapters/examples_behavior_test.go": "1b4a72b5ebaccd078d87a1bbdee7ccee1bbb53a210f2c1bcee19c98cea1ad143",
+    "tests/fixtures/goway/guideadapters/examples_test.go": "aa8996aba3b992989ac490a0b456f02f6f1ee305c5ced3814554a20831cb6a2d",
+    "tests/fixtures/goway/guideadapters/scaffold_test.go": "7ecc719d3fb14a0650e8b307e9690d08f2e64c9dcc93038f8653f2c1e7f86314",
+    "tests/fixtures/goway/guideadapters/slots_test.go": "63e54973a4d541465c4a40289cd061dc1bc2462038b81b444e494d905ac7be47",
+    "tests/fixtures/goway/guideadapters/snippets_test.go": "f0f223e12e9dae68312e0a54e12603e00d4c499a73981ec0d572318edec7bca4"
+  },
+  "integration_batch10": {
+    "base": "47304fc3",
+    "evidence": "docs/evidence/goway-batch10-integration.json",
+    "note": "Lane acceptance above is historical; the integration evidence records current-source checks. Final performance measurements remain pending."
+  }
+}

@@ -387,21 +387,17 @@ and other available native formats. The rule does not close the engine.
 Import `validation/database` as `databasevalidation`. The adapter composes the
 ORM declarations and typed column handles:
 
+<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go -->
 ```go
-fields := models.Users
-available := databasevalidation.Unique(db, models.Users.Query(), fields.Email)
-active := databasevalidation.Exists(
-    db,
-    models.Users.Query().Where(fields.Status.Eq(models.StatusActive)),
-    fields.ID,
-)
+func availableEmail(db database.Executor) validation.Rule[string] {
+	return databasevalidation.Unique(db, models.Users.Query(), models.Users.Email)
+}
 
-// An update may retain the current user's existing address.
-availableForUpdate := databasevalidation.Unique(
-    db,
-    models.Users.Query().Where(fields.ID.Ne(currentUser.ID)),
-    fields.Email,
-)
+func activeUsers(db database.Executor) validation.Rule[[]model.ID[models.User]] {
+	return databasevalidation.ExistsAll(db,
+		models.Users.Query().Where(models.Users.Status.Eq(models.StatusActive)),
+		models.Users.Key())
+}
 ```
 
 Each result is an ordinary `validation.Rule` with the field's concrete value
@@ -438,20 +434,25 @@ A rule tree is declared once, yet some scopes depend on the request: the row
 being updated, or the tenant of the authenticated actor. Declare a typed
 `validation.Slot` and provide its value per check instead of rebuilding rules:
 
+<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go -->
 ```go
-current := validation.NewSlot[model.ID[models.User]]()
-fields := models.Users
-email := databasevalidation.UniqueIgnoring(db, models.Users.Query(), fields.Email, fields.ID, current)
+type EmailChange struct {
+	ID    model.ID[models.User]
+	Email string
+}
 
-body := validation.DefineField("body", func(in UpdateRequest) UpdateUser { return in.Body })
-endpoint := Update.WithValidation(validation.Provide(current,
-    func(_ context.Context, in UpdateRequest) (model.ID[models.User], error) { return in.Path.User, nil },
-    body.Rules(UpdateUserValidationFields().Email.Rules(validation.Optional(email))),
-))
+func updateRules(db database.Executor) validation.Rule[EmailChange] {
+	current := validation.NewSlot[model.ID[models.User]]()
+	email := databasevalidation.UniqueIgnoring(db, models.Users.Query(), models.Users.Email, models.Users.Key(), current)
+	field := validation.DefineField("email", func(in EmailChange) string { return in.Email })
+	return validation.Provide(current,
+		func(_ context.Context, in EmailChange) (model.ID[models.User], error) { return in.ID, nil },
+		field.Rules(email))
+}
 ```
 
 `Provide` derives the value from the check context and the input at its level,
-here the path parameter, and makes it available to the rules below it. A derive
+here the trusted `EmailChange.ID`, and makes it available to the rules below it. A derive
 error is an execution failure. `slot.Value(ctx)` returns an error, never a zero
 value, outside its `Provide`. `UniqueIgnoring` and `validation.Requires` record
 that a rule reads a slot; `Validate`, and therefore endpoint registration,
@@ -461,12 +462,15 @@ from trusted route or actor data, never from an untrusted body field alone.
 `databasevalidation.Scoped(db, scope, field)` derives the whole model scope at
 every check, for example from typed request metadata:
 
+<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go -->
 ```go
-lookup := databasevalidation.Scoped(db, func(ctx context.Context) (orm.Query[models.User], error) {
-    tenant, err := tenantOf(ctx) // application-owned typed accessor
-    return models.Users.Query().Where(fields.TenantID.Eq(tenant)), err
-}, fields.ID)
-member := validation.Exists(lookup)
+func enabledAccounts(db database.Executor, enabled func(context.Context) (bool, error)) validation.Rule[int64] {
+	lookup := databasevalidation.Scoped(db, func(ctx context.Context) (orm.Query[Account], error) {
+		value, err := enabled(ctx)
+		return Accounts.Query().Where(Accounts.Enabled.Eq(value)), err
+	}, Accounts.Key())
+	return validation.Exists(lookup)
+}
 ```
 
 The returned scope must satisfy the ordinary lookup restrictions; an invalid
@@ -483,3 +487,7 @@ metadata is shared with endpoint inspection. Bounded image inspection is availab
 clients execute supported rules and explicitly report skipped server checks.
 Request-locale rule messages are described in
 [validation messages](validation-messages.md).
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).
+
+The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

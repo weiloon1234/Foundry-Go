@@ -14,12 +14,48 @@ import (
 	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 )
 
-// The guide includes exact regions of these compiled examples. Every Go block
-// needs a region ID; missing, duplicate and stale snippets fail this test.
+// Every Go block is copied from a region of a compiled example. This checks the
+// text as well as its presence, so prose edits cannot silently fork the examples.
 func TestGuideSnippets(t *testing.T) {
+	root, regions := compiledRegions(t, "migration")
+	used := checkGuideSnippets(t, filepath.Join(root, "docs/guides/orm-migration.md"), regions)
+	for name := range regions {
+		if !used[name] {
+			t.Errorf("compiled example %s is absent from migration guide", name)
+		}
+	}
+}
+
+func TestLifecycleGuideSnippets(t *testing.T) {
+	root, regions := compiledRegions(t, "migration|guide")
+	guides := []string{
+		"model-declarations", "model-writes", "model-batch-writes", "model-changes",
+		"model-hooks", "model-retrieval", "model-global-scopes", "model-timestamps",
+		"model-soft-deletes", "model-mutators", "model-accessors", "model-upserts",
+		"model-lookup-writes", "model-insert-from-query", "model-source-writes",
+		"model-pruning", "query-plans", "audit",
+	}
+	used := map[string]bool{}
+	for _, name := range guides {
+		t.Run(name, func(t *testing.T) {
+			for region := range checkGuideSnippets(t, filepath.Join(root, "docs/guides", name+".md"), regions) {
+				used[region] = true
+			}
+		})
+	}
+	_, added := compiledRegions(t, "guide")
+	for name := range added {
+		if !used[name] {
+			t.Errorf("compiled example %s is absent from feature guides", name)
+		}
+	}
+}
+
+func compiledRegions(t *testing.T, family string) (string, map[string]string) {
+	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
-		t.Fatal("cannot locate migration source")
+		t.Fatal("cannot locate example source")
 	}
 	dir := filepath.Dir(file)
 	root := filepath.Clean(filepath.Join(dir, "../../../.."))
@@ -28,7 +64,7 @@ func TestGuideSnippets(t *testing.T) {
 		t.Fatal(err)
 	}
 	regions := map[string]string{}
-	region := regexp.MustCompile(`(?ms)^// migration:([a-z0-9-]+)\n(.*?)^// migration:end$`)
+	region := regexp.MustCompile(`(?ms)^// (?:` + family + `):([a-z0-9-]+)\n(.*?)^// (?:` + family + `):end$`)
 	for _, source := range sources {
 		data, err := os.ReadFile(source)
 		if err != nil {
@@ -41,14 +77,19 @@ func TestGuideSnippets(t *testing.T) {
 			regions[match[1]] = strings.TrimSpace(match[2])
 		}
 	}
-	data, err := os.ReadFile(filepath.Join(root, "docs/guides/orm-migration.md"))
+	return root, regions
+}
+
+func checkGuideSnippets(t *testing.T, path string, regions map[string]string) map[string]bool {
+	t.Helper()
+	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	doc := string(data)
 	blocks := regexp.MustCompile("(?s)<!-- orm-example: ([a-z0-9-]+) -->\\n```go\\n(.*?)\\n```").FindAllStringSubmatch(doc, -1)
-	if len(blocks) != strings.Count(doc, "```go\n") {
-		t.Fatal("every Go block must name a compiled example")
+	if len(blocks) != strings.Count(doc, "```go\n") || len(blocks) == 0 {
+		t.Fatal("every guide needs Go blocks naming compiled examples")
 	}
 	used := map[string]bool{}
 	for _, block := range blocks {
@@ -62,15 +103,11 @@ func TestGuideSnippets(t *testing.T) {
 		}
 		used[name] = true
 	}
-	for name := range regions {
-		if !used[name] {
-			t.Errorf("compiled example %s is absent from guide", name)
-		}
-	}
+	return used
 }
 
 func TestDeclarationsAndReadSQL(t *testing.T) {
-	if err := orm.Check(Users.Table, models.Users.Table, models.Orders.Table); err != nil {
+	if err := orm.Check(Users.Table, Archives.Table, models.Users.Table, models.Orders.Table); err != nil {
 		t.Fatal(err)
 	}
 	before, err := old.QueryOrders().Where(old.OrderFields().TotalCents.Gt(100)).Compile()

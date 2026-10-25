@@ -1,30 +1,31 @@
 # Typed query pagination
 
-Generated model queries expose numbered, count-free simple and model-owned cursor pages. All keep complete typed models, preserve query filters/orderings, and append primary-key ascending order when the key is absent. The [independent consumer](../../tests/fixtures/consumer/model_pagination_postgres_test.go) verifies natural keys, tied values and backward traversal. [Projection, set and value pages](../../tests/fixtures/consumer/pagequeries/pages_postgres_test.go) reuse the same request and result containers with explicit ordering.
+Handwritten ORM queries provide numbered and count-free simple pages; `orm.CursorPaginate` provides model-owned cursor pages. All keep complete typed models, preserve query filters/orderings, and append primary-key ascending order when the key is absent. The [independent consumer](../../tests/fixtures/consumer/model_pagination_postgres_test.go) verifies natural keys, tied values and backward traversal. [Projection, set and value pages](../../tests/fixtures/consumer/pagequeries/pages_postgres_test.go) reuse the same request and result containers with explicit ordering.
 
 ## Numbered pages
 
 This is the database counterpart of Laravel's `paginate`: Foundry computes the offset, matching total, page count and typed items. [HTTP pagination adapters](http-pagination.md) parse request parameters and build response links through these typed page contracts. The same database API remains usable from CLI and worker code.
 
+<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go -->
 ```go
-page, err := models.QueryUsers().
-    Where(models.UserFields().Age.Gte(18)).
-    Paginate(ctx, db, query.PageRequest{Number: 1, Size: 20})
-// page.Items is []models.User
+func numbered(ctx context.Context, db database.Executor) (orm.PageResult[models.User], error) {
+	return models.Users.Query().Where(models.Users.Age.Gte(18)).
+		Paginate(ctx, db, orm.Page(1, 20))
+}
+
+func simple(ctx context.Context, db database.Executor) (orm.SimplePage[models.User], error) {
+	return models.Users.Query().Where(models.Users.Age.Gte(18)).
+		SimplePaginate(ctx, db, orm.Page(1, 20))
+}
 ```
 
-`Page[models.User]` contains `Items`, `Number`, `Size`, `Total` and `Pages`. Numbers start at one. Empty datasets report zero total/pages and an empty collection. Requests past the last page retain the requested number and return an empty collection. Size must be between one and `query.MaxPageSize`; invalid sizes, page numbers and offset overflow fail before execution. Limits are rejected rather than clamped silently.
+`PageResult[models.User]` contains `Items`, `Number`, `Size`, `Total` and `Pages`. Numbers start at one. Empty datasets report zero total/pages and an empty collection. Requests past the last page retain the requested number and return an empty collection. Size must be between one and `orm.MaxPageSize`; invalid sizes, page numbers and offset overflow fail before execution. Limits are rejected rather than clamped silently.
 
 The total counts every row matching the base filters. It is a separate SQL query from the page read. For a shared snapshot, execute both through a caller-owned repeatable-read transaction. Separate requests do not share that snapshot. Large offsets still require PostgreSQL to process the skipped rows; cursor pagination is appropriate when navigating large datasets without totals. [PostgreSQL LIMIT/OFFSET](https://www.postgresql.org/docs/18/queries-limit.html)
 
 ## Simple pages without a total
 
-```go
-page, err := models.QueryUsers().
-    Where(models.UserFields().Age.Gte(18)).
-    SimplePaginate(ctx, db, query.PageRequest{Number: 1, Size: 20})
-// page.Items is []models.User; page.HasMore reports another row after this page.
-```
+The `simple` function above uses the same scope and a count-free read.
 
 `SimplePage[Result]` contains `Items`, `Number`, `Size` and `HasMore`. It deliberately has no total or page-count fields. This supplies the count-free behavior of [Laravel simple pagination](https://laravel.com/framework/docs/13.x/pagination#simple-pagination). Size/number validation and offset overflow checks reuse `PageRequest`; model ordering uses the same primary-key tie-breaker as numbered pages.
 
@@ -34,19 +35,9 @@ Model simple and cursor pages load requested relations only for returned models.
 
 ## Projected, combined and single-value results
 
-```go
-u := models.UserFields()
-report := reports.SelectUserSummary(models.QueryUsers(),
-    reports.UserSummarySelection[models.User]{
-        ID: query.Value(u.ID), Email: query.Value(u.Email),
-        Nickname: query.Value(u.Nickname), Status: query.Value(u.Status),
-    })
-page, err := report.OrderBy(u.Email.Asc(), u.ID.Asc()).
-    Paginate(ctx, db, query.PageRequest{Number: 1, Size: 20})
-// page.Items is []reports.UserSummary
-```
+For typed result queries, use the [row pagination APIs](result-cursor-pagination.md).
 
-`ProjectionQuery`, `SetQuery`, `ValueQuery` and `ValueSetQuery` expose `Paginate` and `SimplePaginate`. `Page[Result]`/`SimplePage[Result]` retain the complete declared result or selected value, including nullable wrappers and exact decimal codecs. A page of summaries cannot be assigned to a page of persisted users.
+`rows.Paginate` and `rows.SimplePaginate` page declared result queries. `PageResult[Result]`/`SimplePage[Result]` retain the complete declared result or selected value, including nullable wrappers and exact decimal codecs. A page of summaries cannot be assigned to a page of persisted users.
 
 These read-only queries require an explicit ordering at the level being paginated. Foundry cannot infer a unique key for arbitrary grouped rows, joins or reports. Supply all keys needed for a deterministic order; ordering presence can be validated, but uniqueness remains the query/schema contract. Complete-model projections and distinct model selections follow this same rule. Ordering a nested input alone does not order its outer result. [PostgreSQL LIMIT/OFFSET](https://www.postgresql.org/docs/18/queries-limit.html)
 
@@ -56,42 +47,39 @@ An existing limit or nonzero offset on the level being paginated is rejected. De
 
 ## Cursor pages
 
+<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go -->
 ```go
-q := models.QueryWriteRecords().OrderBy(models.WriteRecordFields().Note.Asc())
-page, err := q.CursorPaginate(ctx, db,
-    query.CursorRequest[models.WriteRecord]{Size: 20})
+func cursorPage(ctx context.Context, db database.Executor, request orm.CursorRequest[models.User]) (orm.CursorPage[models.User], error) {
+	q := models.Users.Query().OrderBy(models.Users.Email.Asc())
+	return orm.CursorPaginate(ctx, db, q, request)
+}
 ```
 
-`CursorPage[models.WriteRecord]` contains complete `Items`, `Size`, and optional model-owned `Next`/`Previous` cursors. To continue forward, pass the returned next cursor as `After: value.Set(next)`. To move backward, pass the previous cursor as `Before: value.Set(previous)`. Omit both for the first page; providing both is invalid. Page size may change between requests.
+`orm.CursorPage[models.User]` contains complete `Items`, `Size`, and optional model-owned `Next`/`Previous` cursors. To continue forward, pass the returned next cursor as `After: value.Set(next)`. To move backward, pass the previous cursor as `Before: value.Set(previous)`. Omit both for the first page; providing both is invalid. Page size may change between requests.
 
 `CursorPaginate` performs one query for size plus one rows, with no count. The extra row indicates whether more rows exist in the requested direction. Returned items always follow the declared order, including when moving backward. The opposite navigation cursor uses the first/last returned position and the supplied boundary; it is a navigation hint and does not separately prove a row still exists on that side. Empty results have no navigation cursors.
 
 Multiple sort columns may mix ascending and descending directions. The primary key resolves ties. Nullable fields follow PostgreSQL defaults: NULLs last for ascending, first for descending. Foundry compiles explicit null-aware lexicographic predicates through the shared query AST, reverses ordering when fetching backward, and restores canonical order for the result. When every sort field is declared NOT NULL and all share one direction, the boundary is a single row comparison such as `("created_at", "id") < ($1, $2)`, which a composite index on the same columns in the same direction serves as one range; nullable fields keep the expanded NULL-aware predicate, and NOT NULL fields never add an `IS NULL` alternative. Explicit `NullsFirst`/`NullsLast` placement is rejected for cursor ordering. [PostgreSQL ordering](https://www.postgresql.org/docs/18/queries-order.html)
 
-A cursor binds to the query's filters and their bound values. A filter relative to "now" computed in Go (for example `f.CreatedAt.Gt(now.Add(-24 * time.Hour))`) binds a different value on every request, so the next request's query no longer matches the cursor and is rejected. Keep the relative window in SQL instead, so the bound values stay constant across pages:
+A cursor binds to the query's filters and their bound values. A filter relative to "now" computed in Go (for example `f.CreatedAt.Gt(now.Add(-24 * time.Hour))`) binds a different value on every request, so the next request's query no longer matches the cursor and is rejected.
 
-```go
-elapsed, err := temporal.Elapsed(24 * time.Hour)
-if err != nil {
-    return err
-}
-since := query.SubtractInstantInterval(query.TransactionTime(q), elapsed, query.UTCZone())
-page, err := q.Where(query.Greater(f.CreatedAt, since)).CursorPaginate(ctx, db, request)
-```
+For a fixed relative window, choose the timestamp boundary once and supply the
+same value with every page request. For a window that moves at transaction time,
+compose the shipped temporal expressions described in [interval queries](interval-queries.md).
 
 `TransactionTime` uses the database clock at each request's transaction start, so the window moves between pages; rows that age out of it disappear from later pages, as they would for any live filter. When every page must see the same window, choose the boundary once and send that same value with every page request instead.
 
-At most `query.MaxCursorFields` sort fields, including the tie-breaker, are accepted. All model pagination methods reject a preexisting `Limit` or nonzero `Offset`, and repeated ordered columns. They never silently discard those clauses. Ordinary `Limit`/`Offset` reads remain available separately.
+At most 16 sort fields, including the tie-breaker, are accepted. All model pagination methods reject a preexisting `Limit` or nonzero `Offset`, and repeated ordered columns. They never silently discard those clauses. Ordinary `Limit`/`Offset` reads remain available separately.
 
 ## Typed transport boundary
 
-Use `cursor.Token()` when explicitly exporting a cursor to a transport. `query.ParseCursor[models.WriteRecord](token)` validates its bounded, versioned structure. Query execution then verifies its fingerprint and decodes its keys through generated field codecs. It rejects a different model, selected columns, filters/bindings or ordering. This describes the query itself; connection/session state, authorization policies and database identity are not encoded in that fingerprint.
+Use `cursor.Token()` when explicitly exporting a cursor to a transport. `orm.ParseCursor[models.User](token)` validates its bounded, versioned structure. Query execution then verifies its fingerprint and decodes its keys through declared field codecs. It rejects a different model, selected columns, filters/bindings or ordering. This describes the query itself; connection/session state, authorization policies and database identity are not encoded in that fingerprint.
 
 Cursor types and cursor requests retain their model owner in Go. A cursor or request for an order cannot be passed to a user query. A string arriving over HTTP has no compile-time provenance, so parsing and query validation remain runtime checks. The token is an implementation-owned format; clients should store and return it unchanged.
 
 Tokens contain encoded sort values and are neither encrypted nor signed. They provide position, not permission. Apply authorization and tenant scopes on every request, and expose only sort values appropriate for that transport. Formatting and interpolated errors redact the token, including `%v`, `%+v` and `%#v` through private or nested wrappers; `Token()` is the explicit disclosure boundary. Structural metadata such as page size and `LIMIT`/`OFFSET` is not secret and may remain visible; see the [diagnostic contract](../../database/orm/README.md#diagnostic-redaction). Models and page containers do not automatically become public response DTOs.
 
-Input tokens are bounded by `query.MaxCursorBytes` before decoding. Oversized output tokens fail the entire page; they are never truncated into a different boundary. Keys preserve integer precision, exact decimal strings, nullable state, UUIDs and temporal values. Invalid enums, overflow and malformed keys fail their codecs before SQL. Generation emits typed getters and reuses the same field-codec selection as reads/writes; no runtime field-name lookup or reflection over model fields is required in consumer code.
+Input tokens are bounded to 64 KiB before decoding. Oversized output tokens fail the entire page; they are never truncated into a different boundary. Keys preserve integer precision, exact decimal strings, nullable state, UUIDs and temporal values. Invalid enums, overflow and malformed keys fail their codecs before SQL. The table declaration retains field codecs and accessors shared with reads and writes; no runtime field-name lookup or reflection over model fields is required in consumer code.
 
 ## Consistency and errors
 
@@ -101,6 +89,10 @@ Any query, count, row-decode, lookahead-decode, eager-load, cleanup or token-gen
 
 ## Verification
 
-Unit and protocol tests cover offset overflow, ambiguity rejection, bound SQL, scope mismatches, typed cursor decoding, cancellation, count errors and partial-result disposal. Targeted fuzzing exercises the bounded token parser. Real PostgreSQL consumer tests cover page totals, empty/beyond-last pages, natural keys, ties, nullable/mixed-direction sorts, exact decimals, temporal/UUID boundaries, forward/backward traversal, changed query/model rejection and insertion before/after an existing boundary. Compiler assertions reject incompatible cursor owners/requests and partial response records used as write drafts. gopls exposes pagination alongside the generated read/write methods.
+Unit and protocol tests cover offset overflow, ambiguity rejection, bound SQL, scope mismatches, typed cursor decoding, cancellation, count errors and partial-result disposal. Targeted fuzzing exercises the bounded token parser. Real PostgreSQL consumer tests cover page totals, empty/beyond-last pages, natural keys, ties, nullable/mixed-direction sorts, exact decimals, temporal/UUID boundaries, forward/backward traversal, changed query/model rejection and insertion before/after an existing boundary. Compiler assertions reject incompatible cursor owners/requests and partial response records used as write drafts. gopls exposes pagination on the handwritten query and `orm.CursorPaginate` as a package function.
 
 Simple/projection acceptance additionally checks query counts, exactly full last pages, eager lookahead exclusion, failed related reads, malformed lookahead records, grouped/distinct/join/set totals, nested CTE/set limits, window evaluation and complete result types. Unit checks verify immutable windows, cleared lookahead references, count overflow and failure ordering. Negative compilation checks retain model/projection ownership and nullable result types, and reject totals on simple pages.
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).
+
+The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

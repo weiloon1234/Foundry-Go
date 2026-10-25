@@ -855,7 +855,7 @@
       "sha256": "c4051aefd937641b2c83d38ef7add7ee23a3de8116a5188224fec276b1a62f15"
     },
     "consumer/orm_benchmark_test.go": {
-      "sha256": "d604e51987ac8006016975f8d7e716f7bf1193c9b523740793fa55463a7404e8"
+      "sha256": "f69c4f05047ab7e3ddbeef3b563f8073169faf077a3eddfe1f6ab431842949a3"
     },
     "consumer/outgoing/client_test.go": {
       "sha256": "f629f52a5f6aaf9ef98b1039a809451430d62979ddfb4fde8b25339fb4cc3069"
@@ -939,7 +939,7 @@
       "sha256": "af6071a996cadd5934a9e5689dd0ef09ddde7f8c9b5864e4dd9ccdf1c3172837"
     },
     "consumer/profiles/image_runtime_test.go": {
-      "sha256": "74a7bb3b2d849f8ea50bd285e47b74ebc4cf155e706b609bb4ec80555aab0a66"
+      "sha256": "a5fb187b7153aefeafd07c88201ccc7af8b4197e79e8eced270a44928d3a14ff"
     },
     "consumer/profiles/images_test.go": {
       "sha256": "8497e98be3057d7ec71edef4af94ac02795b4263928c9cbc33c6772bca864ecf"
@@ -1025,6 +1025,9 @@
     },
     "consumer/reporting/application_test.go": {
       "sha256": "8b58df01f0358d53f3178c382b3a91e47d49648b47328248278a5e6c6bc354e5"
+    },
+    "consumer/reporting/editor_examples_test.go": {
+      "sha256": "705e3c7d97996ab5d5b78521684ba810d0372aa9b2d6e01b06727df80735b550"
     },
     "consumer/reporting/export_job_postgres_test.go": {
       "sha256": "f29c89261c05d2598792be67ef9a213a826e0bbe296716e5d9d6572f7692bd67"
@@ -1119,13 +1122,16 @@
       "sha256": "fecc84d42042596638353e396b6c7ea87fb5e32f198c68e88a2f28ab3acdbc70"
     },
     "consumer/setqueries/derived_aggregate_postgres_test.go": {
-      "sha256": "dbdb4303df60849d7206cd89daf1308711db8daf1b1c21a1ce9c36b436b07671"
+      "sha256": "f37920fba90649162562f7f0e18590425e6e4e975a89fe0bfe8af4843bc94efb"
     },
     "consumer/setqueries/derived_aggregate_sql_test.go": {
       "sha256": "d3004e3c81b461fea00b7bb06cc223273afec42b6f200ceeed35a0b01e910e47",
       "paired_tests": [
         "TestDerivedSetAggregateSQLParity"
       ]
+    },
+    "consumer/setqueries/editor_examples_test.go": {
+      "sha256": "60ee7e40c883f9c71cf06e69ab819f3d0b1c7460a9221e409b9e4dd0317cc163"
     },
     "consumer/setqueries/oracle_test.go": {
       "sha256": "89f46fda5ca5e954aeff345e51d1a90628bc288fca40ef47a7af2a530573c7d7"
@@ -1234,6 +1240,9 @@
         "TestUserPlanAndRoutingSQLParity"
       ],
       "sha256": "01f47c0427e109f15a503327fb63e65f6e96d6c5e8b2a4fc9d74e362ca033a9e"
+    },
+    "consumer/tooling/editor_examples_test.go": {
+      "sha256": "58a0169b42e4c2c01fb150f9315b119c0605cacfc8483ef061068b2e91777635"
     },
     "consumer/tooling/helpers_test.go": {
       "sha256": "5f719adf991859da535a917ea27587af3178762f0bfdb0f530e87d8e857a136d"
@@ -1374,7 +1383,7 @@
       "sha256": "fb0d9da937faf55e503026fd5f795b9552221caeeff84605a02120cd8777fe18"
     },
     "goway/compiler_batch_parser_test.go": {
-      "sha256": "1af60ce577d25431b8dbd2baa5780f65ab5743a72b13bd230adf963570864f0c"
+      "sha256": "a1407bfa3d8a8b35ffede40c477c662527acfb8a90b60c0c2fc5e72335f89c07"
     },
     "goway/compiler_batch_test.go": {
       "sha256": "8af03f60e4a065ca96de7e91dd7254bcf2eb5123ccc86b82548cc0d720549422"
@@ -1475,6 +1484,27 @@
       ],
       "sha256": "3ccf84402e056c25b090aeda23764bbe89191325d80e0a296d71fe464af6039d"
     },
+    "goway/guideadapters/auth_test.go": {
+      "sha256": "711372b579d7a4cef1685c2928c60ffdbf8392b58d417c38867593c795d215a9"
+    },
+    "goway/guideadapters/examples_behavior_test.go": {
+      "sha256": "1b4a72b5ebaccd078d87a1bbdee7ccee1bbb53a210f2c1bcee19c98cea1ad143"
+    },
+    "goway/guideadapters/examples_test.go": {
+      "sha256": "aa8996aba3b992989ac490a0b456f02f6f1ee305c5ced3814554a20831cb6a2d"
+    },
+    "goway/guideadapters/scaffold_test.go": {
+      "sha256": "7ecc719d3fb14a0650e8b307e9690d08f2e64c9dcc93038f8653f2c1e7f86314"
+    },
+    "goway/guideadapters/slots_test.go": {
+      "sha256": "63e54973a4d541465c4a40289cd061dc1bc2462038b81b444e494d905ac7be47"
+    },
+    "goway/guideadapters/snippets_test.go": {
+      "sha256": "f0f223e12e9dae68312e0a54e12603e00d4c499a73981ec0d572318edec7bca4"
+    },
+    "goway/guideexamples/guides_test.go": {
+      "sha256": "051fc66a007801eb01e1dddeb75b0192ebc1ab73112c745f51fb1193ca56a2f1"
+    },
     "goway/integration_adapters_behavior_test.go": {
       "sha256": "c3713d0528631a9f004b163d6641263bfca0d283d4038a214fdfdeca61275f18"
     },
@@ -1525,10 +1555,13 @@
       "sha256": "af3cba9ae03b8bb12145977c4891707a221ec4fd2b7c994a8fd12afbb446f3a0"
     },
     "goway/migration/guide_test.go": {
-      "sha256": "cbfa827649f9aa2772764079661445d2639810a414a0af414701128b7393db09",
+      "sha256": "6f5b5e9df7c050256330ec00ecceae98c1bacdc569fe21f1f63f6ae45907e450",
       "paired_tests": [
         "TestDeclarationsAndReadSQL"
       ]
+    },
+    "goway/migration/lifecycle_test.go": {
+      "sha256": "0a60283604682d581fe6a6f7d9b59b4c933f26362e11834e1351764e653c0a6c"
     },
     "goway/migration/oracle_test.go": {
       "sha256": "19e71fc691ed74166190d64de08b817aa4787835474a2e00e959aa711cedfec6"
@@ -1569,6 +1602,9 @@
     },
     "goway/oracle_test.go": {
       "sha256": "dc1d2139c7fa4683b5c91715cb9481c5ae004561d7390d9bb9954d66372a53f1"
+    },
+    "goway/pgsmoke/adjustment_test.go": {
+      "sha256": "291522095c337c37051cc1f04fdaf7d834ae21dcd5fc961405eb6375758dfb3b"
     },
     "goway/pgsmoke/aggregates_test.go": {
       "sha256": "60c7ccb350d369b8998da2a30ae99d93467bcd90c35a70a317e63c3dd1ca6c5e"

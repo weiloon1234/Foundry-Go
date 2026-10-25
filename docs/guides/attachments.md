@@ -9,7 +9,7 @@ A model can also declare collections as `attachments.One`/`Many` fields; see
 publication workflow.
 
 Attachments share the registered [model extension owner](model-extensions.md#shared-owners),
-ordinary generated infrastructure models, and explicit versioned migrations.
+handwritten ORM infrastructure declarations, and explicit versioned migrations.
 Apply `attachments.Migrations()` through the normal migration runner. The
 constructor performs no migration, storage write, seeding or worker startup.
 
@@ -19,19 +19,16 @@ still AVIF and explicit animation plans without an OS codec installation.
 
 ## Declare collection policy once
 
+<!-- compiled-source: tests/fixtures/consumer/profiles/profile.go -->
 ```go
-var ProfileFiles = storage.DefineDisk("profile-files")
-var Avatar = attachments.Define(Profiles, "avatar", attachments.Policy{
-    Disk: ProfileFiles,
-    Cardinality: attachments.Single,
-    Accepted: []storage.MediaType{"image/png", "image/jpeg"},
-    Image: value.Set(imaging.NewPlan().Fill(256, 256, true).Format(imaging.WebP)),
-})
+var Avatar = attachments.Define(Owners, "avatar", attachments.Policy{Disk: Files, Cardinality: attachments.Single, Accepted: []storage.MediaType{"image/png", "image/jpeg"}, Image: value.Set(imaging.NewPlan().Fill(32, 32, false).Format(imaging.PNG))})
+```
 
-manager, err := attachments.New(attachments.Dependencies{
-    Store: store, Disks: disks, Image: engine,
-}, attachments.DefaultConfig(), Avatar.Registration())
-result, err := Avatar.Replace(ctx, manager, profile.FoundryReference(), upload)
+<!-- compiled-source: tests/fixtures/consumer/profiles/profile.go -->
+```go
+func (s Services) ReplaceAvatar(ctx context.Context, profile Profile, upload attachments.Upload) (attachments.Result[Profile, model.ID[Profile]], error) {
+	return Avatar.Replace(ctx, s.Attachments, ProfileIdentity.ReferenceOf(profile), upload)
+}
 ```
 
 Reuse the exact owner, disk and collection descriptors in assembly and calls.
@@ -178,15 +175,15 @@ Locally active writers are excluded.
 
 ## Image variants
 
+<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go -->
 ```go
 var Thumbnail = attachments.DefineVariant("thumbnail",
-    imaging.NewPlan().Fit(320, 320, false).Format(imaging.WebP))
-var Photos = attachments.Define(Profiles, "photos", attachments.Policy{
-    Disk: ProfileFiles, Cardinality: attachments.Multiple,
-    Accepted: []storage.MediaType{"image/jpeg", "image/png"},
-    Variants: []attachments.Variant{Thumbnail},
+	imaging.NewPlan().Fit(320, 320, false).Format(imaging.WebP))
+var Photos = attachments.Define(ext.Owner, "photos", attachments.Policy{
+	Disk: storage.DefineDisk("photos"), Cardinality: attachments.Multiple,
+	Accepted: []storage.MediaType{"image/jpeg", "image/png"},
+	Variants: []attachments.Variant{Thumbnail},
 })
-url, err := Photos.VariantPublicURLOf(ctx, manager, file, Thumbnail)
 ```
 
 A `Variant` is a named derived image built from each ready original with an
@@ -237,16 +234,19 @@ IDs only, and exits with an error when any attachment failed.
 
 ## Ordinary jobs and outbox
 
+<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go -->
 ```go
-job := attachments.DefineReconcileJob("attachments.reconcile",
-    jobs.DefaultPolicy("maintenance"))
-declaration, err := job.Declare(manager)
-// Assemble the ordinary job registry, dispatcher and durable outbox producer.
-queue, err := job.ToOutbox(producer)
-avatar := Avatar.WithReconciliation(queue)
-result, err := avatar.Replace(ctx, manager, profile.FoundryReference(), upload)
+func queuedPhotos(producer *jobs.Outbox) (attachments.Collection[ext.Article, int64], error) {
+	job := attachments.DefineReconcileJob("attachments.reconcile", jobs.DefaultPolicy("maintenance"))
+	queue, err := job.ToOutbox(producer)
+	if err != nil {
+		return attachments.Collection[ext.Article, int64]{}, err
+	}
+	return Photos.WithReconciliation(queue), nil
+}
 ```
 
+Register `job.Declare(manager)` in the ordinary job registry before dispatching its queue.
 Binding a queue does not change collection identity or policy. Cleanup and job
 outbox rows commit in the same transaction, including owner lifecycle cleanup.
 Normal synchronous cleanup still runs after commit; the queued job is an
@@ -312,7 +312,7 @@ orphan pruning and reconciliation preserve that object. `RetainedObject` recover
 its pins after an uncertain detach commit. Retained state is distinct from
 cleaned; no file deletion is implied.
 
-Call `attachments.Cleanup` from the generated owner's Deleted observer with the
+Call `attachments.Cleanup` from the owner's ORM `Deleted` observer with the
 actual transaction and lifecycle operation. Soft deletion preserves files;
 restoration makes them visible again. Hard-delete cleanup first proves that the
 owner is absent even with trashed rows, joins a savepoint, retires ready/stored
@@ -355,3 +355,7 @@ variants. Image inspection uses the engine's capabilities, including when an
 original is retained and only variants are transformed. HEIC/HEIF media aliases
 share acceptance rules. Backend availability and plan compatibility are checked
 when constructing the attachment manager; no codec import is needed in consumers.
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).
+
+The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

@@ -112,7 +112,9 @@ func lockSubject(ctx context.Context, tx *database.Tx, address session.Address, 
 			return sessionstore.Subject{}, false, err
 		}
 		draft := []orm.Assignment[sessionstore.Subject]{sessionstore.Subjects.Key().Set(key), sessionstore.Subjects.Scope.Set(scope), sessionstore.Subjects.Identity.Set(data)}
-		if _, err := orm.Upsert(ctx, tx, sessionstore.Subjects.Query(), orm.OnConflict(orm.ConflictKey(sessionstore.Subjects.Key())).DoNothing(), draft...); err != nil {
+		// First-subject races can hit the primary key or UNIQUE (key, scope).
+		// Cover both, then retain the scoped locking read and identity checks.
+		if _, err := orm.Upsert(ctx, tx, sessionstore.Subjects.Query(), orm.OnConflict[sessionstore.Subject]().DoNothing(), draft...); err != nil {
 			return sessionstore.Subject{}, false, err
 		}
 	}

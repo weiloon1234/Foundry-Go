@@ -63,7 +63,7 @@ func (g *Gate) Execute(ctx context.Context, fn func(context.Context) error) erro
 	if canceled := op.Err(); canceled != nil {
 		// A late cancellation must not erase a known committed/uncertain database
 		// outcome or another operational cause. Keep both identities, safely formatted.
-		return fault.Wrap(fault.Internal, "credential operation canceled", errors.Join(canceled, err))
+		return fault.Wrap(operationFailureCode(err), "credential operation canceled", errors.Join(canceled, err))
 	}
-	return fault.Wrap(fault.Internal, "credential operation failed", err)
+	return fault.Wrap(operationFailureCode(err), "credential operation failed", err)
 }

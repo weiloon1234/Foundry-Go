@@ -1,126 +1,125 @@
 # Declared query projections
 
-A projection returns a complete, separately declared Go record containing the fields a read needs. Foundry generates its selection type and decoder; the shared query compiler selects only those expressions. The [consumer declarations](../../tests/fixtures/consumer/reports/projections.go) and [PostgreSQL acceptance](../../tests/fixtures/consumer/projectionqueries/projections_postgres_test.go) demonstrate partial reads, grouped reports and scalar summaries.
+<!-- compiled-examples -->
+
+A projection returns a complete ordinary Go record with a handwritten
+`database/orm/rows` schema. It has no table or write lifecycle. Its fields keep
+concrete model IDs, enum types and `value.Nullable` wrappers.
 
 ## Declare the result
 
-Annotate an exported, non-generic struct with `//foundry:projection`. Every field must be exported, non-embedded and supported by the [database codecs](database-codecs.md). Imported generated enums and model-owned IDs preserve their concrete types.
+Declare the result struct, then bind its fields with `rows.Define`:
 
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reports/rows.go):
+
+<!-- go-source: tests/fixtures/consumer/reports/rows.go -->
 ```go
-//foundry:projection
-type UserSummary struct {
-    ID       model.ID[models.User]
-    Email    string `foundry:"column=contact_email"`
-    Nickname value.Nullable[string]
-    Status   models.Status
+type UserSummaryColumns struct {
+	rows.Row[UserSummary]
+	ID rows.Field[UserSummary, model.ID[models.User]]
+	// Email is the buyer contact address selected for this report.
+	Email    rows.Field[UserSummary, string]
+	Nickname rows.Field[UserSummary, value.Nullable[string]]
+	Status   rows.Field[UserSummary, models.Status]
 }
+
+var UserSummaries = rows.Define(func(b rows.Builder[UserSummary], r *UserSummary) UserSummaryColumns {
+	return UserSummaryColumns{Row: b.Row(),
+		ID:       rows.IDOf(b, &r.ID),
+		Email:    rows.TextOf(b, &r.Email),
+		Nickname: rows.NullableTextOf(b, &r.Nickname),
+		Status:   rows.EnumOf(b, &r.Status),
+	}
+})
 ```
 
-Projection declarations have no table or primary key. Field names default to snake case; `column` sets the SQL output alias, independently of the source column name. Ignored fields and database defaults are rejected: every result field needs a selection. Ordinary tags such as `json` remain application declarations. Persistence models do not automatically become public response DTOs.
-
-Run the ordinary [generation command](model-generation.md#commands-and-ownership) from the consumer module. It discovers projections alongside models and enums, including dependencies on generated types in another selected package. The same deterministic publication, recovery and stale-output checks apply.
+`rows.Field[R,V]` names a destination with an exact result type. Constructors
+retain codec/capability information. Declarations are validated before use;
+`rows.Check` can validate a schema during startup. The builder binds actual field
+pointers, so field names and offsets do not need a parallel string schema.
 
 ### Public report DTOs
 
-The explicit `//foundry:projection dto=true` opt-in passed milestone 19
-verification. It emits the projection mapping, `YourRowJSON()` contract and
-`YourRowValidationFields()` typed selectors together. The struct is the shared
-source for a report's SQL result and its public JSON fields; ordinary projections
-remain independent from transport contracts. See the [datatable consumer
-declarations](../../tests/fixtures/consumer/reporting/models.go).
-
-The opt-in applies the [ordinary DTO rules](http-dtos.md), including explicit JSON
-field names and rejection of persistence `foundry` tags. Use the typed selection
-to choose source expressions instead of adding a `foundry:"column=..."` alias to
-this public DTO. Do not add a second `//foundry:dto` marker. Models remain excluded
-from implicit public serialization. The [datatable guide](datatable.md) explains
-how these shared selectors bind columns, filters and export cells.
+SQL rows and public JSON have separate declarations. Use an ordinary
+`//foundry:dto` on an explicitly public struct, alongside its handwritten rows
+schema. The DTO generator still owns JSON/validation descriptors. Keep type and
+package identity, JSON tags and descriptor names when migrating a report.
+[Reporting](datatable.md) uses this arrangement for Members, Orders and Totals.
 
 ## Select typed values
 
-Generation supplies `UserSummarySelection[InputScope]` and `SelectUserSummary`. Each expression must match both its input scope and the declared destination type:
+`rows.Select(rows.From(modelQuery), schema, mappings...)` selects a complete result.
+Use `rows.Map(destination, expr.Value(column))` for row values and
+`rows.MapSelected(destination, selected)` for computations, aggregates and windows.
+Mappings must cover every result field exactly once. Missing, duplicate, foreign
+or incompatible mappings fail before SQL. `expr.Nullable` explicitly widens a
+required selected value; it does not substitute a default for NULL.
 
-```go
-f := models.UserFields()
-summary := reports.SelectUserSummary(
-    models.QueryUsers().OrderBy(f.Email.Asc()),
-    reports.UserSummarySelection[models.User]{
-        ID: query.Value(f.ID),
-        Email: query.Value(f.Email),
-        Nickname: query.Value(f.Nickname),
-        Status: query.Value(f.Status),
-    },
-)
-rows, err := summary.Where(f.Status.Eq(models.StatusActive)).All(ctx, db)
-```
-
-`rows` is `[]reports.UserSummary`. A different model's expression, a string expression assigned to an integer field, or nullable input assigned to a non-nullable result fails compilation. `query.Nullable(expression)` explicitly widens a non-nullable value to its nullable result type without changing SQL. It does not replace SQL NULL with a default.
-
-The generated `ProjectUserSummary(source)` fluent builder infers its input scope and provides typed `SelectID`, `SelectEmail` and corresponding setters for every result field. Its `Query()` method builds the same projection query. This is particularly useful for [typed joins](model-joins.md), whose full generic scope names need not appear in consumer code. Every setter returns a new builder; a repeated setter replaces the field's expression. Complete selection coverage is checked before SQL for both construction styles.
-
-Go permits omitted struct-literal fields, so incomplete selections fail validation before SQL execution. Generated mappings must cover each declared result field exactly once. The lower-level `ProjectionDefinition`, `NewProjectionField`, `Map` and `Project` APIs are explicit metadata boundaries; custom definitions must supply an accurate complete decoder.
-
-Queries preserve source filters, ordering and limit/offset. Subsequent `Where`, `OrderBy` and `GroupBy` retain the input model's type. Projection queries expose no model write or key-lookup methods. A projection record cannot be passed as a generated model draft. Source eager-loading clauses and explicit relation-loading limits are rejected because projected records have no model loading pipeline.
+Sources retain scopes, filters, ordering and limit/offset. A projection exposes
+no model mutations or eager loading. For a reusable query source, wrap it in
+`rows.RecordOf`, then `rows.AsRecord`; query output columns with `rows.At`.
 
 ## Grouped and scalar summaries
 
-Select stored fields with `query.Value(field)`; typed [aggregate expressions](model-aggregates.md#loading-and-result-types) retain their `Value()` method. See [typed field computations](typed-field-computations.md) for migration. Integer and decimal sums/averages return nullable exact decimals; counts return `int64`.
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go):
 
+<!-- go-source: tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go -->
 ```go
-f := models.OrderFields()
-totals := reports.SelectBuyerTotals(
-    models.QueryOrders(),
-    reports.BuyerTotalsSelection[models.Order]{
-        BuyerID: query.Value(f.BuyerID),
-        Total: query.Sum(f.TotalCents).Value(),
-        Orders: query.Count[models.Order]().Value(),
-        Average: query.Avg(f.TotalCents).Value(),
-    },
-).GroupBy(f.BuyerID.Group()).OrderBy(f.BuyerID.Asc())
-rows, err := totals.All(ctx, db)
+o := models.Orders
+totals := rowset.GroupBy(rowset.Select(rowset.From(models.Orders.Query()), reports.BuyerTotalRows.Row,
+	rowset.Map(reports.BuyerTotalRows.BuyerID, expr.Value(o.BuyerID)),
+	rowset.MapSelected(reports.BuyerTotalRows.Total, expr.Sum(o.TotalCents).Value()),
+	rowset.MapSelected(reports.BuyerTotalRows.Orders, expr.Count[models.Order]().Value()),
+	rowset.MapSelected(reports.BuyerTotalRows.Average, expr.Avg(o.TotalCents).Value()),
+), expr.Group(expr.Value(o.BuyerID)))
 ```
 
-Every selected or ordered ordinary column must be explicitly grouped when the query contains aggregates or grouping. Foundry does not infer PostgreSQL functional dependencies from primary keys. Duplicate grouping columns and ungrouped selections fail before execution; aggregate expressions do not expose `Group`. `Where` filters input rows before grouping.
-
-A result containing only aggregates needs no `GroupBy`. Over empty input, a scalar aggregate query still returns one record: counts are zero and sums/averages/extrema are SQL NULL. A grouped query with no input has no result rows. `Limit(0)` suppresses either kind of result.
+The `rowset` import names `database/orm/rows`. `rows.GroupBy` requires every selected
+or ordered ordinary column to be grouped; it does not infer primary-key functional
+dependencies. Counts return `int64`; integer/decimal sums and averages return
+`value.Nullable[decimal.Decimal]`. An ungrouped aggregate over empty input yields
+one record with zero counts and NULL summaries; grouped empty input yields no rows.
 
 ## Filter and order groups
 
-Aggregate comparisons produce `HavingPredicate[Input]`. They cannot be passed to model or projection `Where`. Keep row filters in `Where`, then qualify the computed groups with `Having`:
+`rows.Having(q, conditions...)` accepts `expr.HavingPredicate[S]`; conditions and
+repeated calls combine with AND. `expr.Grouped(rowPredicate)` lifts an explicitly
+grouped row condition. Use `expr.HavingAnd`/`HavingOr` and predicate `Not` to compose.
+NULL comparisons remain unknown, including after ordinary SQL negation. HAVING
+can remove the single ungrouped aggregate result.
 
-```go
-qualified := totals.Having(query.HavingAnd(
-    query.Count[models.Order]().Gte(2),
-    query.Sum(f.TotalCents).Gt(decimal.FromInt64(4)),
-))
-rows, err := qualified.All(ctx, db)
-```
-
-Counts expose integer equality, membership and range comparisons. Numeric summaries and extrema compare concrete values of their result type; nullable results add `IsNull` and `IsNotNull`. Boolean existence supports equality and membership, without numeric range methods. For example, a sum over an integer field compares `decimal.Decimal`, and a float average compares `float64`. Passing a different model's condition or an incompatible value fails compilation.
-
-Multiple `Having` arguments/calls are combined with AND. `HavingAnd`, `HavingOr` and `Not` preserve expression grouping and model ownership. Use `query.Grouped(fieldPredicate)` to include an ordinary grouped column in these conditions. Every column in such a predicate must be in `GroupBy`; ungrouped references fail validation before SQL. These operations follow PostgreSQL's [group filtering order](https://www.postgresql.org/docs/18/sql-select.html#SQL-HAVING).
-
-Nullable comparisons accept concrete values. Use explicit NULL predicates instead of passing a nullable wrapper. SQL NULL comparisons remain unknown, including after `Not`; they do not retain a group. An empty `In()` matches no groups. See PostgreSQL's [NULL comparison behavior](https://www.postgresql.org/docs/18/functions-comparison.html). HAVING can remove the otherwise-present single scalar aggregate record over empty input; `Count` and `Exists` observe the filtered result.
-
-Projection `OrderBy` accepts ordinary field orders and typed aggregate/expression orders in the supplied sequence:
-
-```go
-ranked := reports.SelectBuyerTotals(models.QueryOrders(), selection).
-    GroupBy(f.BuyerID.Group()).
-    OrderBy(query.Sum(f.TotalCents).Desc(), f.BuyerID.Asc())
-```
-
-Here `selection` is the complete `BuyerTotalsSelection[models.Order]` shown above. Source orders and later `OrderBy` calls are appended; start with an unordered source when choosing a new primary ranking. Supply a stable tie-breaker when paginating. PostgreSQL's default NULL ordering applies. Model queries still accept only their field-based `Order[Model]`; aggregate ordering requires a projection. An aggregate used only in ordering still makes the SQL query grouped and requires ordinary selected columns to appear in `GroupBy`.
+`rows.OrderBy` appends selected orders. `rows.ReorderUnwindowed` replaces ordering
+for a report but rejects an existing outer limit/offset or DISTINCT ON. Use a
+unique final key for pagination. An aggregate used only in ordering still causes
+grouping. [Filtered aggregates](model-aggregate-filters.md) retain these rules.
 
 ## Execution and failures
 
-- `All` collects complete records and discards the collection on decoding failure.
-- `Each` streams records to a callback and closes rows on callback error, decoding failure or cancellation. Already-delivered callback effects cannot be rolled back by collection semantics. Consumers choose a limit or streaming when the result could be large.
-- `First` returns `value.Optional[Result]`; `RequireFirst` returns `database.NotFound` when absent. Both honor offset and an existing zero limit. Supply ordering when row choice matters.
-- `Count` counts the selected result window, including grouping, HAVING and limit/offset. It counts groups for a grouped query and one row for an ungrouped aggregate result over empty input when HAVING retains that row.
-- `Exists` tests that same result window. Neither `Count` nor `Exists` decodes projected values or executes model lifecycle behavior.
-- `Paginate` adds a total and numbered metadata; `SimplePaginate` uses a lookahead row without counting. Both require explicit ordering and preserve complete projection types. Their [shared pagination contract](model-pagination.md#projected-combined-and-single-value-results) covers grouped totals, nested limits and failure disposal.
+| Input | Read adapter | Compile / context preflight / streaming |
+| --- | --- | --- |
+| `rows.Query[S,R]` | `rows.Read(q)` | `rows.Compile`, `rows.Preflight`, `rows.Each` |
+| `rows.Scalar[S,V]` | `rows.ReadScalar(q)` | `rows.CompileRead`, `rows.PreflightRead`, `rows.EachRead` |
+| Complete record selection | `rows.ReadRecord(q)` | Same `*Read` functions |
+| Record / value set | `rows.ReadSet(q)` / `rows.ReadValues(q)` | Same `*Read` functions |
 
-Queries use the supplied context and executor; transactions remain caller-owned. Result codecs validate database values, including enum membership. Each successful decoder yields a fresh complete record. Separate statements need suitable transaction isolation when a common snapshot is required.
+Read handles expose `All`, `First`, `RequireFirst`, `Count` and `Exists`. `First`
+returns `value.Optional[R]`; `RequireFirst` reports `database.NotFound`. Count
+observes grouping, HAVING, DISTINCT and the selected window. `Limit(0)` stays empty.
+`rows.Count` is the direct projection count function.
 
-[Typed joins and self-join aliases](model-joins.md) supply scoped fields and compiler-checked outer nullability for these projection records. `SelectRecord` can reuse the complete decoder of a preserved model or report scope without individual field mappings. [Derived records and subqueries](model-subqueries.md), [relationship filters](model-relationship-filters.md), [explicit correlations](model-correlations.md), [nonrecursive CTEs](model-ctes.md), [recursive CTEs](model-recursive-ctes.md), [set operations](model-set-operations.md) and [window expressions](model-windows.md) compose through the same compiler. Delivered projections include field grouping, typed HAVING, aggregate ordering, scalar summaries, numbered/simple pagination and [result cursor pagination](result-cursor-pagination.md). [Typed calculations](scalar-calculations.md) and [value comparisons](value-comparisons-and-joins.md) compose fields and computed values without raw SQL. The [master roadmap](../../blueprint/00-master-architecture-and-parity.md) records verification status for the transaction-required projection variants.
+Collected results are discarded on decode failure. Streams close on callback
+error, cancellation and decode failure; earlier callback effects remain the
+caller's responsibility. Complete model reads may run retrieval callbacks in
+bounded batches after closing rows. DTO/scalar streams decode one result at a time.
+Transactions remain caller-owned; avoid another operation on an open transaction
+cursor. Compile/preflight do no I/O and preserve validation errors.
+
+`rows.Paginate` and `rows.SimplePaginate` require explicit ordering and reject an
+existing outer LIMIT or nonzero OFFSET. The same rule applies to common result
+read handles; nested input windows remain intact. Simple pages use one lookahead
+row without a count.
+A total and data read need a suitable transaction isolation level for one snapshot.
+See [pagination](model-pagination.md), [derived records](model-subqueries.md),
+[joins](model-joins.md) and [transaction-required composition](transaction-query-composition.md).
+
+For declaration and API migration, see the [ORM migration guide](orm-migration.md).

@@ -1,141 +1,87 @@
 # Typed model hooks
 
-A model declares its hooks factory explicitly. Generation checks callback names, model snapshots, drafts and change sets as ordinary Go types. Normal `Create`, `Update` and `Delete` calls invoke these hooks automatically.
+Declare a per-write factory returning `orm.Hooks[M]` and attach it with `orm.WithHooks` in the options passed to `orm.Define`.
 
-[Retrieval events](model-retrieval.md) use a separate typed factory and registration
-family. Reads never instantiate these normal-write hooks.
-
+<!-- orm-example: hooks-after -->
 ```go
-//foundry:model table=users hooks=userHooks
-type User struct {
-    ID    model.ID[User]
-    Email string
-}
-
-func userHooks() UserHooks {
-    return UserHooks{
-        Creating: func(ctx context.Context, tx *database.Tx, draft *UserDraft) error {
-            if !draft.Email().IsSet() {
-                *draft = draft.SetEmail("support@example.test")
-            }
-            return nil
-        },
-        Updated: func(ctx context.Context, tx *database.Tx, changes UserChanges) error {
-            if changes.Fields().Email.Changed() {
-                // Perform related domain writes using ctx and tx.
-            }
-            return nil
-        },
-    }
-}
-
-func (User) MutateEmail(email string) (string, error) {
-    return strings.ToLower(strings.TrimSpace(email)), nil
+func memberHooks() orm.Hooks[hooks.Member] {
+	return orm.Hooks[hooks.Member]{Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[hooks.Member]) error {
+		if !orm.WriteIsSet(draft, hooks.Members.Name.Set) {
+			return orm.WriteSet(draft, hooks.Members.Name.Set("guest"))
+		}
+		return nil
+	}}
 }
 ```
 
-The example uses `context`, `strings`, and Foundry's `database` and `model` packages. The factory is a package function with no arguments returning the generated `UserHooks`. A misspelled directive target, callback such as `Creatng`, or another model's draft fails generation before publication. The [independent consumer](../../tests/fixtures/consumer/hookqueries/member.go) demonstrates a default introducer lookup and typed assignment in the same transaction, without field-name strings or manual callback dispatch.
+<!-- orm-example: write-options -->
+```go
+func writeOptions() []orm.Option {
+	return []orm.Option{orm.WithHooks(memberHooks)}
+}
+```
+
+The [member declaration](../../tests/fixtures/goway/models/hooks/models.go) shows the complete attachment. The factory runs once per ordinary write inside the transaction, after an existing model has been locked and read. Closures can hold operation-local state. Query construction, metadata inspection and ordinary reads do not instantiate write factories.
 
 ## Provider observers
 
-Each generated model also provides `<Model>Observer`, `New<Model>Observer`, and `Register<Model>Observer`. Register an observer inside a provider's registration callback, targeting the same typed pool key used by `database.Module` or `postgres.Module`. The generated helper fixes the model and callback types; another model's identifier or hook factory fails compilation.
+Register observers in a provider's registration callback for the same pool key used by the database module:
 
-For example, with `poolKey` and a typed `defaultEmail` service key declared by the application:
-
+<!-- orm-example: register-observer -->
 ```go
-observer := models.NewUserObserver("user.default-email")
-return models.RegisterUserObserver(r, poolKey, observer,
-    func(s foundation.Resolver) (func() models.UserHooks, error) {
-        email, err := foundation.Resolve(s, defaultEmail)
-        if err != nil {
-            return nil, err
-        }
-        return func() models.UserHooks {
-            return models.UserHooks{
-                Creating: func(ctx context.Context, tx *database.Tx, draft *models.UserDraft) error {
-                    if !draft.Email().IsSet() {
-                        *draft = draft.SetEmail(email)
-                    }
-                    return nil
-                },
-            }
-        }, nil
-    })
+func registerMemberObserver(r *foundation.Registrar, pool foundation.Key[*database.DB]) error {
+	return orm.RegisterObserver(r, pool, orm.NewObserver[hooks.Member]("members.defaults"),
+		func(foundation.Resolver) (func() orm.Hooks[hooks.Member], error) {
+			return memberHooks, nil
+		})
+}
 ```
 
-Dependency construction runs once during application construction. The returned factory runs once per normal write, after any existing row has been locked. Keep write-specific state inside that factory; injected application services must support concurrent use. No observer factory runs when building query metadata, reading models, inserting a batch, or performing an SQL upsert.
+The constructor runs at application construction and can resolve injected services. Its returned factory runs once per write. Registration belongs to the application instance and pool, including sessions and nested transactions. Models need no local factory to dispatch registered observers. Do not register the same observer through two assembly paths.
 
-Within each callback stage, callbacks from model-local hooks run first, followed by registered observers in provider dependency/registration order. All `Saving` callbacks precede all `Creating` or `Updating` callbacks. They share one typed draft. Mutators and SQL execute once, followed by all `Created`/`Updated` callbacks and then all `Saved` callbacks, sharing the captured stored changes. The first transactional failure stops later stages and rolls back the write. After-commit callbacks are registered individually; failure in one does not skip later callbacks or roll back committed data.
-
-Models without `hooks=Factory` can still have registered observers. Observer sets belong to a specific pool and survive sessions, nested savepoints, and custom transactor wrappers. A wrapper's actual supplied `*database.Tx` determines ownership. Framework owners without applicable hooks retain the ordinary mutation path; an unknown wrapper may need to enter its transaction before completing required-field validation, because a registered hook can supply those fields. A manually constructed or stale model definition without its observer adapter reports an error when registrations exist rather than skipping them. Regenerate models when upgrading the generated API.
-
-An observer that only reacts to deletions can be declared with
-`lifecycle.NewDeletionObserver[M, H](name)` instead of `New<Model>Observer` and
-registered through the same `Register<Model>Observer`. It runs only for delete,
-soft delete and force delete, through the same hooks type. Creates, updates,
-restores and set-based updates neither construct it nor take the observed path
-because of it, so a model observed only for deletions keeps its unhooked create
-and update paths; set-based deletions still require `WithoutModelHooks()`.
-Generated [model extension slot](model-extension-slots.md#deletion-cleanup)
-cleanup uses it on every connection.
-
-The [independent observer consumer](../../tests/fixtures/consumer/observerqueries/observers_postgres_test.go) exercises automatic writes, multiple providers, stage ordering, transactional effects, cancellation, bulk behavior and concurrent operation-local factories.
+Within each stage, local hooks run first, followed by observers in provider dependency/registration order. All `Saving` callbacks precede all `Creating` or `Updating` callbacks. Transactional failure stops subsequent stages. `orm.NewDeletionObserver[M]` restricts factory construction to deletion operations. `lifecycle.CountObservers[M]` exposes read-only registration counts without constructing or exposing factories.
 
 ## Callback contracts
 
-For a model named `User`, generation provides these optional function fields:
-
 | Callback | Arguments after `context.Context, *database.Tx` |
 | --- | --- |
-| `Saving` | `value.Optional[User], *UserDraft` |
-| `Creating` | `*UserDraft` |
-| `Updating` | `User, *UserDraft` |
-| `Deleting`, `Restoring`, `ForceDeleting` | `User` |
-| `Created`, `Updated`, `Deleted`, `Saved`, `Restored`, `ForceDeleted` | `UserChanges` |
+| `Saving` | `value.Optional[M], *orm.Write[M]` |
+| `Creating` | `*orm.Write[M]` |
+| `Updating` | `M, *orm.Write[M]` |
+| `Deleting`, `Restoring`, `ForceDeleting` | `M` |
+| `Created`, `Updated`, `Deleted`, `Saved`, `Restored`, `ForceDeleted` | `orm.Changes[M]` |
 
-All return `error`. `Saving` receives an absent model on creation and the locked stored model on update. Update and delete snapshots are complete stored values. Query filters remain in force. A missing, ambiguously selected or invalidly decoded model fails before invoking its factory or callbacks.
+All callbacks return `error`. `AfterCommit` instead takes `context.Context`, `lifecycle.Operation` and `orm.Changes[M]`, without a transaction. Nil callbacks are skipped.
 
-The factory runs once per normal write, inside the transaction, after locking an existing row. It can return closures sharing state for that operation. Constructing a query, reading models, or inspecting metadata does not invoke the factory. Nil callback fields are skipped. Independent writes receive separate factory instances.
+Create runs `Saving`, `Creating`, conventions, mutators/encryption, SQL, `Created`, then `Saved`. Update locks the stored model, then runs `Saving`, `Updating`, conventions, transforms, SQL, `Updated`, then `Saved`. Ordinary physical deletion runs `Deleting`, SQL, then `Deleted`. [Soft-delete stages](model-soft-deletes.md#lifecycle-time-and-failures) are separate.
 
-`AfterCommit` has the signature `func(context.Context, lifecycle.Operation, UserChanges) error`; it receives no transaction. The operation is `lifecycle.Create`, `lifecycle.Update`, `lifecycle.Delete`, `lifecycle.SoftDelete`, `lifecycle.Restore` or `lifecycle.ForceDelete`. The same value is available through `changes.Operation()`. Its context is the outer transaction's commit context. Capture any operation-specific attribution needed by this callback in the factory's per-write closures; a nested write's context values are not implicitly merged into the outer context.
+## Read and change the pending draft
 
-## Execution and assignment
+`orm.WriteGet(write, Column.Set)` reads an optional typed input. `WriteNullableGet` preserves omitted, NULL and value separately. `WriteIsSet` tests assignment presence. `WriteSet` replaces pending assignments and `WriteUnset` restores omission:
 
-- Create: `Saving → Creating → managed timestamps → field mutators → INSERT → Created → Saved`.
-- Update: lock and read, then `Saving → Updating → managed timestamps → field mutators → UPDATE → Updated → Saved`.
-- Physical delete on ordinary models: lock and read, then `Deleting → DELETE → Deleted`.
+<!-- orm-example: unset-after -->
+```go
+func unset(draft *orm.Write[hooks.Member]) error {
+	return orm.WriteUnset(draft, hooks.Members.Note.Set)
+}
+```
 
-[Soft deletion, restoration and force deletion](model-soft-deletes.md#lifecycle-time-and-failures) have separate callback sequences and operation values. They do not also emit saving/updating callbacks.
+The field's setter retains model and input types. Drafts belong to their live before-write callback; do not retain them or the transaction. Caller assignments remain unchanged. Before hooks can supply required values or populate an empty update. Framework UUID preparation precedes creation hooks.
 
-Generated drafts retain immutable setters: a callback must write the returned draft back through `*draft`. The caller's draft remains unchanged. Hooks may supply omitted required creation values or populate an otherwise empty patch. Foundry-generated UUIDs are already assigned when creation hooks run. Invalid assignment shape and existing-primary-key assignment are rejected before callbacks; final required fields, nonempty updates, codecs and constraints are checked after the hooks.
-
-Only assigned fields run their [mutators](model-mutators.md), once after the before hooks. [Managed timestamps](model-timestamps.md) add effective assignments using the transaction owner's clock; before hooks see the supplied draft, and changes include automatic assignments. Explicit NULL and omission remain distinct. Database defaults are hydrated from the result and do not pass through Go mutators. A hook failure, panic, `runtime.Goexit`, cancellation, invalid final value or failed SQL aborts the write scope.
-
-The generated adapter builds [typed change sets](model-changes.md) automatically from the locked pre-write snapshot, complete SQL result, and effective assignment presence. Framework UUIDs and hook assignments are included. Assigning an email that normalizes to its existing value is assigned but unchanged. Creation/physical deletion use model absence on the appropriate side; soft deletion retains both stored snapshots. Hooks do not need to call `CompareUser` themselves.
+Foundry validates the final assignment shape after hooks and conventions, before invoking mutators or encryption. A hook cannot patch an existing primary key. Mutators run once on assigned values; NULL clearing skips scalar mutators. Returned models and changes come from stored values, including database defaults and trigger changes.
 
 ## Transactions and ownership
 
-Before and after callbacks run synchronously with result rows closed. Use their supplied context and transaction for related domain operations. Do not retain the draft or transaction pointer, start concurrent work on that transaction, or perform irreversible external effects inside the write transaction.
+Callbacks run with result rows closed. Use their context and actual transaction for related writes. Propagate that context to retain cancellation and the bounded lifecycle nesting count. Do not start concurrent work on the transaction or perform irreversible external effects in transactional callbacks.
 
-Passing an existing transaction to a normal write creates a savepoint. Failure rolls back the model and related hook writes; a successful savepoint transfers its after-commit callbacks to the parent. The outer transaction must commit before they run, and rolling back an ancestor discards them. A post-write callback can still veto persistence. An after-commit callback cannot roll back committed data.
+Errors, panic, `runtime.Goexit` and cancellation abort the write scope. Application errors leave the callback boundary in safe framework diagnostics that retain `errors.Is`/`errors.As` identity. Error formatting does not expose application or model text.
 
-The existing [model write outcomes](model-writes.md) apply: an uncertain commit or an after-commit failure from a write that owns the outer transaction retains a typed reconciliation candidate. A write inside a caller-owned transaction returns before that transaction's final outcome; the caller must handle its outer transaction error. No write or callback is automatically retried. In-process callbacks do not provide crash durability.
+A normal nested write owns a savepoint. Rollback discards its changes and queued after-commit work. Success transfers callbacks to the parent, and only the outer commit runs them. After-commit failure cannot roll back persistence and does not skip later queued callbacks. The commit context belongs to the outer transaction; nested request values are not implicitly merged into it.
 
-Nested hook-aware writes propagate a context-bound depth counter and fail at `query.MaxLifecycleDepth`. This diagnoses accidental recursion without preventing useful writes to other models. Errors retain their identity through `errors.Is`; a nesting diagnostic is available through `errors.As` into `*fault.Error`. Always propagate the supplied context, since replacing it discards cancellation and nesting state.
+No callback is automatically retried. Unknown commit outcomes require reconciliation through the [write outcome contract](model-writes.md#transaction-ownership-and-failures). In-process callbacks have no crash durability. Use [outbox](outbox.md) and [audit](audit.md) in the supplied transaction for persisted effects.
 
-## Bulk behavior and related lifecycle APIs
+## Set and per-model behavior
 
-`CreateMany`, `Upsert`, and `UpsertMany` explicitly skip per-model factories and callbacks, even for one input. Their assigned field inputs and conflict literals retain the documented mutator behavior. A normal `Create` or `Update` never silently switches to bulk semantics. [Relation writes](model-relation-writes.md) use the ordinary pivot lifecycle: attach creates one model, while bounded detach invokes deletion for each selected pivot inside one atomic operation.
+Set updates/deletes skip per-model factories and require the applicable `WithoutModelHooks` acknowledgement. Insert batches, upserts and source writes explicitly skip these callbacks without a separate acknowledgement. Normal writes never silently switch to set behavior. [Per-model batches](model-batch-writes.md) preserve callbacks for every model inside one bounded atomic operation. Retrieval uses a separate factory and observer family described in [retrieval events](model-retrieval.md).
 
-This implementation covers model-local and provider-registered create/update/delete/restore/force-delete callbacks, automatic write capture, and composition by callback stage. [Explicit read getters](model-accessors.md) preserve stored fields and have automatic field documentation; they are separate from [retrieval callbacks](model-retrieval.md). [Distinct mutation inputs](model-mutators.md#different-input-and-stored-types) remain typed in before-hook drafts while after-write changes retain stored snapshots. [Per-model batch writes](model-batch-writes.md) reuse these normal lifecycle stages with a bounded atomic candidate set. [Lookup writes](model-lookup-writes.md) provide typed `FirstOrCreate` and `UpdateOrCreate` through the same ordinary write pipeline, with explicit branch and concurrency behavior. [Events](events.md#dispatching-from-a-model-lifecycle), the [transactional outbox](outbox.md) and [typed audit](audit.md) integrate with these callbacks. Enqueue durable effects or write audit records through the supplied transaction. See the [owning blueprint](../../blueprint/07-model-lifecycle-events-and-audit.md) for their design.
-
-
-## Go-way branch write drafts
-
-Within a live ORM before-write callback, `orm.WriteUnset(write, Members.Email.Set)`
-removes a pending assignment. It restores omission rather than assigning NULL or a
-zero value; database defaults and automatic conventions still apply. Use the
-field's typed setter so model and input ownership remain checked. Expired or
-foreign drafts fail through the shared write validation path. See the
-[ORM lifecycle recipe](../../database/orm/README.md) for typed getters, replacement
-and per-model batch operations.
+For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

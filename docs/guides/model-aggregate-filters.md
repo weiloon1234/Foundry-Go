@@ -1,67 +1,51 @@
 # Typed aggregate filters
 
-`Filter` restricts the rows contributing to one aggregate. Use query `Where` to restrict every calculation's input, and `Having` to filter the completed groups. Generated predicates retain the aggregate's model or joined scope; neither column names nor raw SQL are needed.
+<!-- compiled-examples -->
 
-The [independent consumer examples](../../tests/fixtures/consumer/filterqueries/filters_postgres_test.go) exercise grouped reports, windows, nullable results, CTEs, correlations and relation slots.
+An aggregate's `Filter` restricts its own contributing rows. Source WHERE filters
+all calculations; `rows.Having` filters completed groups. Adapt model predicates
+with `expr.ModelPredicate`; aliased operands already produce expression predicates.
 
-## Different calculations in one report
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/projectionqueries/aggregate_contracts_test.go):
 
+<!-- go-source: tests/fixtures/consumer/projectionqueries/aggregate_contracts_test.go -->
 ```go
-o := models.OrderFields()
-filtered := query.Sum(o.TotalCents).Filter(o.TotalCents.Gt(1))
-
-rows, err := reports.SelectBuyerTotals(models.QueryOrders(),
-    reports.BuyerTotalsSelection[models.Order]{
-        BuyerID: query.Value(o.BuyerID),
-        Total:   filtered.Value(),
-        Orders:  query.Count[models.Order]().Value(),
-        Average: query.Avg(o.TotalCents).Filter(o.TotalCents.Lt(3)).Value(),
-    }).
-    GroupBy(o.BuyerID.Group()).
-    Having(filtered.Gt(decimal.FromInt64(1))).
-    All(ctx, db)
+predicate := expr.ModelPredicate(models.Orders.TotalCents.Gt(0))
+total := expr.Sum(models.Orders.TotalCents).Filter(predicate)
+count := expr.Count[models.Order]().Filter(predicate)
+exists := expr.Exists[models.Order]().Filter(predicate)
+selected := rows.Select(rows.From(models.Orders.Query()), reports.OrderSummaries,
+	rows.MapSelected(reports.OrderSummaries.Total, total.Value()),
+	rows.MapSelected(reports.OrderSummaries.Count, count.Value()))
+got, err := rows.Compile(rows.Having(selected, expr.HavingAnd(count.Gt(0), total.Gt(decimal.FromInt64(1)), exists.Eq(true))))
 ```
 
-`Orders` counts all input orders for each buyer. `Total` sums only amounts above one, while `Average` includes only amounts below three. Each calculation keeps its existing result type and codec. Integer sums and averages remain nullable exact decimals; filtered counts remain `int64` and retain comparisons such as `Gt`.
-
-Chained `Filter` calls append predicates with AND without changing the original aggregate. Use `query.Or`, `query.And` and predicate `Not` for composition. An empty `Filter()` is a no-op; an invalid zero predicate fails compilation of the SQL statement before execution. Query declarations remain immutable.
+Chained `Filter` calls append with AND, leaving previous descriptors unchanged.
+An empty call adds no conditions; an invalid zero predicate fails compilation.
+Use `expr.And`, `expr.Or` and predicate `Not` for explicit logical composition.
+Only true rows contribute; false and SQL unknown do not.
 
 ## Windows and relations
 
-Apply the filter before `Over`:
+Apply the filter before `expr.Over(aggregate, window)`. It changes neither window
+membership nor output cardinality. A frame with no contributing input yields
+zero count, false existence or NULL summary. Grouped window filters can inspect
+only grouped columns. Ranking functions have no aggregate filter.
 
-```go
-base := models.QueryOrders()
-o := models.OrderFields()
-window := query.WindowFor(base).
-    OrderBy(o.TotalCents.Asc(), o.ID.Asc()).
-    RowsBetween(query.UnboundedPreceding(), query.CurrentRow())
+Use the same descriptor with `expr.Related(relation, aggregate)` and a typed
+relation value slot. Target filters belong to the target; pivot filters belong to
+`orm.Pivot(relation)`. Filtering a measure does not reduce the full relationship
+input used for cardinality checks. See [relation aggregates](model-aggregates.md).
 
-running := query.Sum(o.TotalCents).Filter(o.TotalCents.Gt(1)).Over(window)
-values, err := query.SelectValue(base, running).
-    OrderBy(o.TotalCents.Asc(), o.ID.Asc()).All(ctx, db)
-```
+## NULLs and validation
 
-Window filtering does not remove output rows or change the partition/frame. A frame with no qualifying inputs produces the aggregate's empty result. In a grouped query, window filters operate on grouped rows and may reference only grouped columns. `Filter` belongs to aggregate descriptors; ranking functions and completed window expressions do not expose it. PostgreSQL's unsupported distinct window aggregates remain rejected.
+Counts stay `int64`; integer sums/averages stay nullable exact decimals. Empty or
+all-NULL filtered summaries stay NULL. A filter alone never removes an existing
+group. There is no general aggregate DISTINCT API beyond `CountDistinctField`.
 
-The same filtered aggregate can populate a generated relation slot:
+Filters preserve subquery/CTE discovery and explicit correlation. A measured
+field must belong to the aggregate's SELECT. Count/Exists filters that capture
+outer data must also reference their own input; outer-only aggregates are rejected
+before execution. See the [compiled consumer](../../tests/fixtures/consumer/filterqueries/filters_postgres_test.go).
 
-```go
-count := models.UserAggregates().OrderCount.Using(query.Related(
-    models.UserRelations().Orders,
-    query.Count[models.Order]().Filter(models.OrderFields().TotalCents.Gt(2)),
-))
-users, err := models.QueryUsers().With(count).All(ctx, db)
-```
-
-Handwritten `define<Model>Aggregates` declarations may use this same composition. Target aggregates require target predicates; pivot aggregates require pivot predicates. A filter affects the measure, while relation cardinality checks still inspect the complete scoped relationship input. Existing loaded-state, batch and row-budget contracts apply.
-
-## NULLs, subqueries and validation
-
-Only rows whose predicate is true contribute; false and SQL unknown/NULL do not. An empty filtered count is zero and existence is false. Sums, averages and extrema return SQL NULL when no qualifying non-NULL value remains. Filtering does not remove a group that existed in the query input. These are PostgreSQL's [aggregate FILTER semantics](https://www.postgresql.org/docs/18/sql-expressions.html#SYNTAX-AGGREGATES).
-
-Filters accept the existing typed row predicates, including supported subqueries and explicit correlations. CTE dependency discovery, parameter binding, alias qualification and resource bounds use the shared query infrastructure. Ordinary aggregate and window expressions cannot be passed as row predicates; a subquery can own its own calculations.
-
-PostgreSQL can move an aggregate to an enclosing SELECT when all its argument/filter references belong there. Ordinary field aggregates in Foundry require a measured field in their own SELECT. For `Count`/`Exists` without a measured field, a filter referencing outer data must also reference the aggregate's own input; outer-only filters are rejected. References captured through nested correlations follow the same rule. This check does not claim to validate every PostgreSQL semantic constraint at Go compile time.
-
-Fetched models and report rows remain native typed slices. Filtering an aggregate performs SQL work; ordinary Go operations on a returned slice perform no further database query.
+For declaration and API migration, see the [ORM migration guide](orm-migration.md).

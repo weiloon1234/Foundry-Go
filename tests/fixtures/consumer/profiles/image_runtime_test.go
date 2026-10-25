@@ -28,6 +28,8 @@ func TestImageRuntimeMissingLibrary(t *testing.T) {
 		checkMissingImageRuntime(t)
 		return
 	}
+	// Exercise subprocess selection even when the parent gate uses full replay.
+	t.Setenv("FOUNDRY_ORACLE_REPLAY", "full")
 	executable, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +53,9 @@ func TestImageRuntimeMissingLibrary(t *testing.T) {
 			defer cancel()
 			command := exec.CommandContext(ctx, executable, "-test.run=^TestImageRuntimeMissingLibrary$", "-test.timeout=25s")
 			command.WaitDelay = time.Second
-			command.Env = append(os.Environ(), "FOUNDRY_TEST_IMAGE_RUNTIME_CHILD=1", "FOUNDRY_VIPS_LIBRARY="+item.path)
+			// This child runs only the loader test. The parent retains full oracle
+			// completeness; the child checks observations for its own -test.run.
+			command.Env = append(os.Environ(), "FOUNDRY_TEST_IMAGE_RUNTIME_CHILD=1", "FOUNDRY_VIPS_LIBRARY="+item.path, "FOUNDRY_ORACLE_REPLAY=")
 			var output imageRuntimeLog
 			command.Stdout, command.Stderr = &output, &output
 			if err := command.Run(); err != nil {

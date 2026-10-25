@@ -1,79 +1,65 @@
 # Typed set operations
 
-Combine complete model or projection results with `Union`, `UnionAll`, `Intersect`, `IntersectAll`, `Except` and `ExceptAll`. Both inputs must return the same concrete Go record type; projection inputs may come from different model or join scopes. The resulting `SetQuery[Record]` exposes complete read results and a new typed field scope. The [independent consumer fixture](../../tests/fixtures/consumer/setqueries/sets_postgres_test.go) exercises these contracts against PostgreSQL.
+<!-- compiled-examples -->
 
-## Combine models
+`database/orm/rows` combines complete record sources with `Union`, `UnionAll`,
+`Intersect`, `IntersectAll`, `Except` and `ExceptAll`. Use `rows.ModelRecord` for a
+model or `rows.RecordOf` for a projection. Inputs can have different query scopes,
+but must return the same record type and compatible column/codec declarations.
 
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/setqueries/editor_examples_test.go):
+
+<!-- go-source: tests/fixtures/consumer/setqueries/editor_examples_test.go -->
 ```go
-u := models.UserFields()
-combined := models.QueryUsers().Where(u.Age.Lte(21)).
-    Union(models.QueryUsers().Where(u.Age.Gte(21)))
-
-fields := models.UserFieldsAt(combined.Scope())
-users, err := combined.Where(fields.Status.Eq(models.StatusActive)).
-    OrderBy(fields.Email.Asc()).All(ctx, db)
+func derivedReports() rows.SetQuery[reports.BuyerTotals] {
+	u, o, r := models.Users, models.Orders, reports.BuyerTotalRows
+	// Both reports return BuyerTotals while selecting from different model scopes.
+	orders := rows.GroupBy(rows.Select(rows.From(o.Query()), r.Row,
+		rows.Map(r.BuyerID, expr.Value(o.BuyerID)), rows.MapSelected(r.Total, expr.Sum(o.TotalCents).Value()),
+		rows.MapSelected(r.Orders, expr.Count[models.Order]().Value()), rows.MapSelected(r.Average, expr.Avg(o.TotalCents).Value())), expr.Group(expr.Value(o.BuyerID)))
+	people := rows.GroupBy(rows.Select(rows.From(u.Query()), r.Row,
+		rows.Map(r.BuyerID, expr.Value(u.ID)), rows.MapSelected(r.Total, expr.Sum(u.Age).Value()),
+		rows.MapSelected(r.Orders, expr.Count[models.User]().Value()), rows.MapSelected(r.Average, expr.Avg(u.Age).Value())), expr.Group(expr.Value(u.ID)))
+	return rows.UnionAll(rows.RecordOf(orders), rows.RecordOf(people))
+}
 ```
 
-`combined` is `query.SetQuery[models.User]`; `users` is `[]models.User`. The input fields belong to `models.User`. Combined fields belong to `query.Set[models.User]`, preventing an input predicate from accidentally entering the output scope. Ordering and predicates retain their usual field-specific operators, model IDs and value types.
+## Records and single values
 
-`Union` removes duplicate complete SQL rows. It does not deduplicate by primary key alone. `UnionAll` preserves duplicates. Intersection keeps common rows, and difference keeps left rows absent from the right. Their `All` forms retain multiplicity: intersection uses the smaller count, while difference subtracts right counts from left counts. NULL values participate in duplicate matching under the database's set semantics. [PostgreSQL set operations](https://www.postgresql.org/docs/18/queries-union.html)
+The combined record scope is `rows.Set[R]`. Read a field with
+`rows.At(combined.Scope(), schema.Field)` and apply output filters/orders there.
+Use `rows.ReadSet` for common read terminals. `rows.AsRecord` introduces an alias
+when the set becomes an input to another SELECT.
 
-Top-level `query.Union(left, right)` and the corresponding functions for the other operations accept complete record sources, including [CTE descriptors](model-ctes.md). Fluent methods are available on model, projection and set queries. These operations build queries without database I/O.
+For one column, wrap a scalar source in `rows.Values` and use `UnionValues`,
+`UnionAllValues`, `IntersectValues`, `IntersectAllValues`, `ExceptValues` or
+`ExceptAllValues`. `ValueSetQuery.Value()` exposes the combined typed operand;
+`rows.ReadValues` supplies common terminals. Required and nullable types do not
+silently mix; widen explicitly before combining.
 
-## Keep input and output windows separate
+## Multiplicity and boundaries
 
-Filters, ordering, limits and offsets on an input execute before combination. Calls on the set query apply afterward. Foundry parenthesizes every operand and preserves the composition tree, so chaining mixed operations does not depend on SQL operator precedence.
+UNION removes duplicates; UNION ALL retains them. INTERSECT ALL retains the
+minimum multiplicity, and EXCEPT ALL subtracts right multiplicity down to zero.
+Comparison is SQL row comparison, including SQL duplicate treatment of NULL.
 
-```go
-left := models.QueryUsers().OrderBy(u.Age.Desc()).Limit(1)
-right := models.QueryUsers().OrderBy(u.Age.Asc()).Limit(1)
-combined := left.UnionAll(right)
-fields := models.UserFieldsAt(combined.Scope())
-users, err := combined.OrderBy(fields.Age.Asc()).Limit(2).All(ctx, db)
-```
+Each input keeps its own ordering and window inside its SELECT boundary. Ordering
+and pagination applied to the combined result operate after the set operation.
+Input order does not promise final order, and no primary-key order is added.
+Numbered/simple result pages require explicit ordering and no existing outer
+LIMIT or nonzero OFFSET. Mixed set operations preserve the declared tree with
+parentheses, rather than relying on SQL operator precedence.
+Count observes the final selected window, including duplicates and limit/offset.
+Collected decoding failures discard all results; streaming closes on all exits.
 
-Order the final result explicitly when order matters. Input ordering does not promise final ordering. `First` returns an optional record and `RequireFirst` returns a record or `database.NotFound`; both honor the result window, including a zero limit. Set queries do not add implicit primary-key ordering. `Count` counts the selected window after combination and duplicate handling.
+`rows.DistinctSet` and `rows.DistinctValues` deduplicate output. Selected-key
+`rows.DistinctOnValueSet` validates ordering prefixes like other DISTINCT ON
+families. Derived aggregates such as `expr.SumNullableRow(rows.At(...))` require
+the output field's numeric capability. No model writes or eager loading are
+introduced by a set operation. Go record compatibility cannot prove the physical
+SQL types, collations or equality support; those remain database checks.
 
-`Paginate` and `SimplePaginate` return typed pages of the combined result, preserving each operand's limits and duplicate behavior. They require explicit result ordering and reject a preexisting limit/nonzero offset on the combined result. See the shared [pagination contract](model-pagination.md#projected-combined-and-single-value-results).
+See [derived records](model-subqueries.md), [distinct reads](model-distinct.md) and
+[read terminals](model-projections.md#execution-and-failures).
 
-Set results expose read operations. They do not expose model mutations, key lookup or eager loading, and set inputs cannot contain eager-loading clauses. Load relationships explicitly on returned model slices through the ordinary model query when needed. To constrain a write, select typed IDs from a set and use that subquery in the normal model builder.
-
-## Combine declared reports
-
-Use a shared [projection record](model-projections.md) when inputs represent different domain models. For example, the consumer's order and user queries each select a complete `reports.BuyerTotals`, with different input scopes:
-
-```go
-combined := orders.UnionAll(people)
-fields := reports.BuyerTotalsFieldsAt(combined.Scope())
-rows, err := combined.Where(fields.Total.Gte(decimal.FromInt64(20))).
-    OrderBy(fields.Total.Asc()).All(ctx, db)
-```
-
-Here `orders` and `people` are the complete projection queries declared in the consumer fixture; they are not table-name strings. Every selected field must match `BuyerTotals`. Generated output names, exact decimal values, nullable fields and enums survive combination.
-
-Set queries also implement the existing typed projection-source boundary. `ProjectResult(combined)` can select or aggregate their output fields. `As[Tag](combined, "alias")` introduces the result into a join; its filters and window stay within that source. CTEs can consume set queries, and either set input can reference CTEs. Shared CTE descriptors emit once in dependency order across the statement.
-
-## Combine single values
-
-Single-value queries have the same fluent operations and return `ValueSetQuery[V]`. Their sealed single-column contract remains available for typed membership and scalar subqueries:
-
-```go
-o := models.OrderFields()
-buyers := query.SelectValue(models.QueryOrders(), query.Value(o.BuyerID))
-combined := buyers.Where(o.TotalCents.Lt(3)).
-    Union(buyers.Where(o.TotalCents.Gte(3)))
-
-users, err := models.QueryUsers().Where(u.ID.InQuery(combined)).All(ctx, db)
-```
-
-`combined` returns user IDs; order IDs cannot be substituted. Nullable and non-null values cannot be silently combined. Widen an input explicitly with `query.Nullable(expression)` when the shared result should be nullable, then use the nullable membership/scalar APIs where appropriate.
-
-`combined.Value()` is the output expression for `OrderBy(combined.Value().Asc())` or `Desc()`. Further `Limit` and `Offset` calls preserve the single-value boundary. Apply field-specific input filters before combination, or use a declared report with generated output fields for richer output filtering.
-
-## Execution and validation
-
-Sets, models and projections share the SELECT AST/compiler, codec contracts and parameter budget. Projection and set results share collection/streaming execution: `All` discards partial output on failure, while `Each` closes rows on callback errors or cancellation. A callback can already have performed work before a later row fails; streaming does not roll back its external effects.
-
-Wrong record/value owners and input/output field scopes fail compilation. Invalid zero/nil inputs, inconsistent record layouts, unsupported query options, invalid bound values and excessive AST/parameter bounds fail before executor access. Database type compatibility and equality semantics still depend on the physical schema and codecs at explicit declaration boundaries.
-
-[Typed recursive CTEs](model-recursive-ctes.md) combine an anchor and an explicitly owned recursive step through this same set compiler. Ordinary set operations do not grant permission to use a working-table reference outside its owning step.
+For declaration and API migration, see the [ORM migration guide](orm-migration.md).

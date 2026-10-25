@@ -1,110 +1,72 @@
 # Typed subqueries and derived records
 
-Foundry composes model, projection and single-value queries through the same SELECT AST. Each SELECT has its own input scope. IDs, enums and nullable result types survive composition as ordinary Go types, with generated methods visible to gopls. The [independent consumer fixture](../../tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go) exercises these APIs against PostgreSQL; its [report structs](../../tests/fixtures/consumer/reports/subquery_projections.go) remain handwritten domain declarations.
+<!-- compiled-examples -->
+
+`database/orm/rows` composes complete models, handwritten projections and scalar
+selections. Each SELECT owns its scope; parameters use statement-wide numbering.
+IDs, enum codecs and nullable value types survive each boundary.
 
 ## Use a report as a query source
 
-Declare and select a complete [projection record](model-projections.md), then alias it with `As`:
+Wrap a projection in `rows.RecordOf`, then alias it with `rows.AsRecord[Tag]`.
+`rows.At(rows.Scope(alias), schema.Field)` addresses its declared output fields.
+Inner grouping, HAVING, DISTINCT, ordering and limit/offset remain inside the
+derived SELECT. The outer WHERE sees only its output, not hidden input columns.
+The [derived report example](../../tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go)
+shows this with buyer totals.
 
-```go
-o := models.OrderFields()
-totals := reports.ProjectBuyerTotals(models.QueryOrders()).
-    SelectBuyerID(query.Value(o.BuyerID)).
-    SelectTotal(query.Sum(o.TotalCents).Value()).
-    SelectOrders(query.Count[models.Order]().Value()).
-    SelectAverage(query.Avg(o.TotalCents).Value()).
-    Query().GroupBy(o.BuyerID.Group())
-
-type totalsAlias struct{}
-source := query.As[totalsAlias](
-    totals.Having(query.Count[models.Order]().Gte(2)).
-        OrderBy(query.Count[models.Order]().Desc()).Limit(1),
-    "totals",
-)
-fields := reports.BuyerTotalsFieldsAt(source.Scope())
-amounts, err := query.SelectValue(source, query.Value(fields.Total)).
-    Where(fields.Total.Gt(decimal.FromInt64(2))).All(ctx, db)
-```
-
-The derived SELECT retains grouping, HAVING, ordering and its window. The outer WHERE operates on the declared report's output columns. Generated output aliases, such as `contact_email`, are resolved automatically. `amounts` has type `[]value.Nullable[decimal.Decimal]`; a decimal field does not accept float values or text operators.
-
-`BuyerTotalsFields()` describes output mapping destinations. `BuyerTotalsFieldsAt(scope)` describes queryable fields after introducing that record as a source. The latter requires a `RecordScope[Input, BuyerTotals]`: a scope belonging to a different record or model cannot be substituted. `ModelScope` remains the model-facing alias for the shared record scope type.
-
-`As` accepts complete model queries, declared projection queries and [typed CTEs](model-ctes.md). It rejects missing mappings, invalid aliases, eager-loading clauses and loading limits before execution. Its sealed `RecordQuerySource[Result]` contract preserves the output record separately from the original query's input scope. Do not use handwritten field constructors to bypass generated ownership checks; they are explicit metadata declaration boundaries, not schema inference.
+`rows.ModelRecord` adapts a complete model; `rows.As[Tag]` is the direct model
+alias helper. Missing mappings, eager-loading clauses and invalid alias metadata
+fail before execution. Reusing a SQL alias name in an independent SELECT is valid;
+conflicting names/identities in one scope are not.
 
 ## Join derived records
 
-The same [join and scope helpers](model-joins.md) work with derived reports. For example, join the totals above onto users:
+Join aliases using `rows.InnerJoin`/`LeftJoin` and typed `rows.On` or computed
+conditions. A preserved side uses `LeftScope`/`RightScope`; a missing side uses
+`NullableLeftScope`/`NullableRightScope`. `rows.AtNullable` adds a nullable layer to
+a required output field; `rows.AtNullableValue` keeps an already-nullable field
+singly nullable. The corresponding model-column helpers live in `expr`.
 
-```go
-type buyerAlias struct{}
-buyers := query.As[buyerAlias](models.QueryUsers(), "buyer")
-joined := query.LeftJoin(buyers, source,
-    query.On(models.UserFieldsAt(buyers.Scope()).ID, fields.BuyerID))
-
-buyer := models.UserFieldsAt(query.LeftScope(joined, buyers.Scope()))
-stats := reports.BuyerTotalsNullableFieldsAt(
-    query.NullableRightScope(joined, source.Scope()))
-report := reports.ProjectUserOrderStats(joined).
-    SelectID(query.Value(buyer.ID)).SelectEmail(query.Value(buyer.Email)).
-    SelectTotal(query.Value(stats.Total)).SelectOrders(query.Value(stats.Orders)).
-    Query().OrderBy(buyer.Email.Asc())
-```
-
-The outer join makes `Orders` nullable. `Total`, already nullable, retains one nullable layer. Generated nullable accessors require `NullableRecordScope`; ordinary fields cannot erase the missing-row possibility. Model IDs keep their model ownership inside nullable fields.
-
-A complete projection of a joined query may itself be aliased and joined again, including as the right input. This provides a declared result boundary around a nested join tree. The outer query sees only that record's columns; aliases and model fields inside it are not visible. Independent SELECT scopes may reuse SQL alias names. Within one scope, duplicate names and repeated typed alias identities still fail.
+A joined projection may itself become a complete record source. This establishes
+a new declared boundary without exposing its internal aliases. See [joins](model-joins.md).
 
 ## Select one typed value
 
-`SelectValue(source, expression)` returns `ValueQuery[Input, Value]`. It retains the input scope through `Where`, `GroupBy`, `Having` and `OrderBy`, and provides `Limit`, `Offset`, `Compile`, `Each`, `All`, `First`, `RequireFirst`, `Count` and `Exists` through the existing projection runtime. It exposes no model writes or eager loading.
+`rows.SelectScalar(source, selected)` creates `rows.Scalar[S,V]`. It remains a
+subquery value source after `OrderScalar`, `LimitScalar`, `OffsetScalar`,
+`WhereScalar`, `GroupByScalar`, `HavingScalar` or scalar DISTINCT adapters.
+`rows.ReadScalar` supplies execution; `CompileRead`, `PreflightRead` and `EachRead`
+operate on that read handle without flattening the inner SELECT.
 
-```go
-u, o := models.UserFields(), models.OrderFields()
-buyers := query.SelectValue(models.QueryOrders(), query.Value(o.BuyerID)).
-    Where(o.TotalCents.Gte(2))
-users, err := models.QueryUsers().Where(u.ID.InQuery(buyers)).All(ctx, db)
-```
-
-`ValueQuerySource[Value]` is the sealed single-column boundary consumed by `InQuery`. The input scope may differ, but the concrete value type must match. An order's own ID cannot be used in membership against a user ID. The query remains nested SQL; Foundry does not fetch a list first or interpolate values.
-
-`InNullableQuery` explicitly accepts a nullable output of the same base type:
-
-```go
-introducers := query.SelectValue(models.QueryUsers(), query.Value(u.IntroducerID))
-predicate := u.ID.InNullableQuery(introducers)
-```
-
-`predicate.Not()` follows SQL NOT IN behavior. NULL inside the subquery can make non-matches unknown, so negation does not mean every other row. Filter the inner nullable field with `IsNotNull` when the desired set excludes NULL. Empty IN selects no rows; negated empty IN includes all rows. These follow PostgreSQL's [subquery comparison semantics](https://www.postgresql.org/docs/18/functions-subquery.html).
+`rows.InQuery(left, inner)` requires an exact value type; `InNullableQuery`
+explicitly accepts a nullable inner result. Model-owned IDs cannot be substituted.
+SQL NOT IN with a NULL inner value can remain unknown for non-matches; it is not
+an automatic complement. Filter NULLs explicitly if the set should exclude them.
 
 ## Existence and scalar values
 
-`ExistsQuery(outer, inner)` creates an uncorrelated predicate in the outer scope. It accepts model, projection, value, alias and joined sources, preserving the inner result's grouping, HAVING and window. The `outer` argument anchors the Go scope; use the actual outer query to apply its filters.
+`rows.ExistsQuery(outer, inner)` anchors an uncorrelated existence predicate to the
+outer scope. It asks whether the inner selected window has a row. An ungrouped
+COUNT over empty input still has one row unless HAVING or a window removes it.
 
-```go
-eligible := models.QueryUsers().Where(
-    query.ExistsQuery(models.QueryUsers(), buyers))
-```
-
-This condition has the same result for every outer row: it asks whether the inner query returns any rows. A scalar `COUNT(*)` query over empty input still has one result row, so EXISTS is true unless HAVING or a window removes that row.
-
-`ScalarQuery(outer, inner)` turns a single-column query into `Expression[Outer, value.Nullable[Value]]`. An empty inner result becomes NULL; more than one row returns PostgreSQL's cardinality error. Foundry does not silently insert a limit. Specify ordering and `Limit(1)` only when choosing one row is the intended behavior. See PostgreSQL's [scalar subquery rules](https://www.postgresql.org/docs/18/sql-expressions.html#SQL-SYNTAX-SCALAR-SUBQUERIES).
-
-```go
-last := buyers.OrderBy(o.TotalCents.Desc()).Limit(1)
-expression := query.ScalarQuery(models.QueryUsers(), last)
-```
-
-This expression can fill a nullable user-ID field in a declared projection or be selected directly with `SelectValue`. `ScalarNullableQuery` accepts an already nullable value query and preserves a single nullable layer. Present values retain their codec; absent rows and SQL NULL are represented as `value.Null`. A nullable scalar cannot populate a non-nullable result field. Scalar subqueries may also be ordered as typed expressions.
-
-For row calculations and conditions, use `ScalarRowQuery` or `ScalarNullableRowQuery`. Their inner SELECT retains its own aggregate/window phase, while the outer row value composes with typed comparisons and calculations. [Value comparisons and joins](value-comparisons-and-joins.md) also document the corresponding explicit-correlation helpers. These constructors preserve the same NULL and cardinality behavior and add no implicit limit.
+`rows.ScalarQuery(outer, inner)` returns a selected nullable value. An empty inner result
+becomes NULL; multiple rows produce PostgreSQL's scalar cardinality error. No
+implicit limit is added. `ScalarNullableQuery` keeps one nullable layer.
+`ScalarRowQuery`/`ScalarNullableRowQuery` create row operands for outer comparisons;
+the inner SELECT retains its own aggregate/window phase.
 
 ## Failure and resource behavior
 
-Compilation validates each isolated SELECT scope and shares parameter numbering, expression budgets and nesting limits across the complete statement. Invalid source/mapping declarations return no compiled statement. Subqueries are parameterized, with no raw SQL string composition in application code.
+Compiler validation covers scope, complete mappings, codecs, grouping, depth and
+parameter bounds. A bad declaration returns no statement; preflight performs no
+I/O. Collection failures publish no partial slice; streaming closes on all exits.
+Use a savepoint if a PostgreSQL cardinality error must not abort the caller's
+remaining transaction work.
 
-Execution uses the caller's context and executor. `All` discards collected output on failure; `Each` closes rows on callback error, decoding failure or cancellation. Callback effects already performed remain the caller's responsibility. Select a bounded window or stream large outputs. Generated report and single-value decoders validate stored enums and return owned values.
+Use [explicit correlation](model-correlations.md) to capture outer fields,
+[CTEs](model-ctes.md) to share a definition and [read terminals](model-projections.md#execution-and-failures)
+for bounded execution. Ordinary sources cannot silently acquire outer references
+or erase transaction requirements.
 
-A server-side scalar cardinality error aborts the current PostgreSQL transaction scope. Use a savepoint if the outer transaction must continue after such an error. Foundry preserves SQLSTATE metadata through its ordinary database error contract. A local decoding error closes the stream without claiming a server transaction failure.
-
-The ordinary APIs above isolate their SELECT scopes and reject accidental outer-column references. [Explicit correlated subqueries](model-correlations.md) retain outer ownership through existence, membership and scalar expressions, including nested and nullable join scopes. [Relationship filters](model-relationship-filters.md) generate that correlation from existing typed relationship declarations. [Milestone 06](../../blueprint/06-relations-and-advanced-queries.md) records delivered advanced-query contracts.
+For declaration and API migration, see the [ORM migration guide](orm-migration.md).

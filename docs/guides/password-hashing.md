@@ -1,6 +1,6 @@
 # Typed password hashing
 
-Typed Argon2id passwords and hashes integrate with generated model fields, model-first login, lockout and checked credential issuance. See [recovery](account-recovery.md) and [credential changes](credential-changes.md) for related flows.
+Typed Argon2id passwords and hashes integrate with handwritten ORM fields, model-first login, lockout and checked credential issuance. See [recovery](account-recovery.md) and [credential changes](credential-changes.md) for related flows.
 
 Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-10-acceptance) for verification evidence and later integration boundaries.
 
@@ -105,19 +105,29 @@ Go's process memory. Rate limiting and model login policy remain separate contro
 
 ## Typed stored model fields
 
+<!-- compiled-source: tests/fixtures/consumer/passwords/tables.go -->
 ```go
-//foundry:model table=accounts
-type Account struct {
-    ID      model.ID[Account]
-    Email   string
-    Digest  password.Hash
-    Backup  value.Nullable[password.Hash]
-    Enabled bool
+type AccountTable struct {
+	// Table owns the concrete account key. Example: AccountRecords.Key().Eq(id).
+	orm.Table[Account, model.ID[Account]]
+	// Email binds the stored field. Example: AccountRecords.Email.Set("member@example.test").
+	Email orm.Text[Account, string]
+	// Digest binds the stored field. Sensitive stored hash; plaintext verification uses password.Hasher. Example: AccountRecords.Digest.Set(hash).
+	Digest orm.Column[Account, password.Hash]
+	// Backup binds the stored field. Sensitive stored hash; plaintext verification uses password.Hasher. Example: AccountRecords.Backup.Set(hash).
+	Backup orm.NullableColumn[Account, password.Hash]
+	// Enabled binds the stored field. Example: AccountRecords.Enabled.Set(true).
+	Enabled orm.Column[Account, bool]
 }
+
+// AccountRecords preserves the persisted account schema. Example: AccountRecords.Query().
+var AccountRecords = orm.Define("password_accounts", func(b orm.Builder[Account], m *Account) AccountTable {
+	return AccountTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Email), orm.PasswordOf(b, &m.Digest), orm.NullablePasswordOf(b, &m.Backup), orm.ColumnOf(b, &m.Enabled)}
+})
 ```
 
-Generation supplies `AccountDraft{}.SetDigest(hash)`, typed hash predicates,
-hydration and nullable `SetBackup`/`ClearBackup` operations. Hash fields accept
+The declaration supplies `AccountRecords.Digest.Set(hash)`, typed hash predicates,
+hydration and nullable `AccountRecords.Backup.Set(hash)`/`SetNull()` operations. Hash fields accept
 stored `password.Hash` values, never plaintext or arbitrary strings. They expose
 scalar equality rather than string `LIKE` operators. Use equality for conditional
 replacement; verification of submitted plaintext always belongs to the hasher.
@@ -129,11 +139,10 @@ validated codecs retain the flag. Ordinary model JSON redacts the hash; it is
 still not a public DTO contract. Explicit SQL binding and `Hash.Encoded()` are
 intentional persistence boundaries that reveal stored bytes to the database.
 
-The generator adds an owned comment to the handwritten model field and generated
-field/setter declarations. It tells completion, hover and source readers that this
-is a sensitive stored hash and where verification belongs. No separate annotation
-or configuration is needed. Existing getter/setter notices are preserved alongside
-this notice. The [model consumer](../../tests/fixtures/consumer/passwords/account.go)
+Document the sensitive stored hash on the handwritten model field and handle,
+including the distinction between conditional stored-hash replacement and plaintext
+verification. Completion, hover and definition expose those comments directly.
+The `PasswordOf` and `NullablePasswordOf` declarations select the sensitive codec. The [model consumer](../../tests/fixtures/consumer/passwords/account.go)
 and [integration test source](../../tests/fixtures/consumer/passwords/account_postgres_test.go)
 exercise typed CRUD, projections, conditional updates and audit/cursor protection.
 
@@ -206,3 +215,5 @@ It requires the same provider declaration as the original login and performs
 no second provider lookup. Keep the result request-local; the recheck verifies
 current state, not a persisted ticket's age. Pending MFA still requires its
 second factor. See [typed MFA factors](mfa.md). This addition passed the milestone gate.
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).

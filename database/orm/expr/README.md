@@ -40,7 +40,8 @@ zero for empty input. `Exists[S]()` returns required `bool`, false for empty inp
 and exposes no range comparisons. Both use the existing aggregate compiler and
 preserve the source query's scopes, executor and transaction.
 
-Specialized text and temporal functions belong to Stage 6d.
+Text, temporal, interval, geographic and JSON functions share these row/selected
+phases. See the [expression guides](../../../docs/guides/scalar-calculations.md).
 
 Row and selected phases have different private marker fields, so explicit Go
 conversions cannot move selected aggregates or HAVING conditions into row WHERE.

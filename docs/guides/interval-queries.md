@@ -1,24 +1,28 @@
 # Typed interval models and calculations
 
-`temporal.Interval` is a generated model and projection field type. It retains signed calendar months, calendar days and elapsed time separately. The [consumer fixture](../../tests/fixtures/consumer/intervalqueries/) exercises queries, writes, relations, summaries and cursor pages through public APIs.
+<!-- compiled-examples -->
+
+`temporal.Interval` is supported by handwritten ORM columns and rows fields. It retains signed calendar months, calendar days and elapsed time separately. The [consumer fixture](../../tests/fixtures/consumer/intervalqueries/) exercises queries, writes, relations, summaries and cursor pages through public APIs.
 
 ## Models and values
 
-Declare an ordinary Go field such as `Period temporal.Interval`, or `MaybePeriod value.Nullable[temporal.Interval]`. Generation supplies typed draft setters, interval field descriptors and complete decoding through `codec.Interval()`. An explicit zero interval differs from an omitted draft field and SQL NULL.
+Declare an ordinary Go field such as `Period temporal.Interval`, or `MaybePeriod value.Nullable[temporal.Interval]`. Use `orm.IntervalOf` / `orm.NullableIntervalOf`, backed by `codec.Interval()`, as in the [declarations](../../tests/fixtures/consumer/intervalqueries/orm.go). A supplied zero interval differs from an omitted assignment and SQL NULL.
 
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/intervalqueries/orm.go):
+
+<!-- go-source: tests/fixtures/consumer/intervalqueries/orm.go -->
 ```go
-draft := intervalqueries.SampleDraft{}.
-    SetPeriod(temporal.Months(1)).
-    ClearMaybePeriod()
-
-f := intervalqueries.SampleFields()
-samples, err := intervalqueries.QueryIntervalSamples().
-    Where(f.Period.Gte(temporal.Days(7))).
-    OrderBy(f.Period.Asc()).
-    All(ctx, db)
+var Samples = orm.Define("interval_samples", func(b orm.Builder[Sample], s *Sample) SampleColumns {
+	table := orm.TableOf(b, &s.ID)
+	return SampleColumns{
+		Table: table, ID: table.Key(), Period: orm.IntervalOf(b, &s.Period), MaybePeriod: orm.NullableIntervalOf(b, &s.MaybePeriod),
+		Start: orm.TimeOf(b, &s.Start), End: orm.TimeOf(b, &s.End), LocalStart: orm.TimeOf(b, &s.LocalStart), LocalEnd: orm.TimeOf(b, &s.LocalEnd),
+		ClockStart: orm.TimeOf(b, &s.ClockStart), ClockEnd: orm.TimeOf(b, &s.ClockEnd), Date: orm.TimeOf(b, &s.Date),
+	}
+})
 ```
 
-This is a partial draft; required fields must be supplied before creation. Returned models and their collections remain ordinary Go structs and slices.
+The example binds persisted fields to their typed columns. Returned models and results remain Go structs and slices.
 
 `Months(int32)` and `Days(int32)` construct calendar components. `Elapsed(time.Duration)` and `NewInterval(months, days, elapsed)` return an error for sub-microsecond precision. The zero value is valid. Components are immutable and accessible through `Months()`, `Days()` and `Elapsed()`.
 
@@ -30,7 +34,7 @@ Month/day components must fit `int32`; the elapsed component must fit Go's `time
 
 Go `==` compares the three stored components. PostgreSQL interval equality and ordering assume 30 days per month and 24 hours per day. Consequently, `Months(1)`, `Days(30)` and 720 elapsed hours compare equal in SQL while remaining different Go values. [PostgreSQL comparison implementation](https://github.com/postgres/postgres/blob/REL_18_STABLE/src/backend/utils/adt/timestamp.c)
 
-Generated interval predicates, joins, primary-key lookup and conflict handling follow SQL comparison. Eager relation matching and aggregate attachment use the same comparison internally, while returned parent, target and pivot models keep their original components. Cursor pages preserve these SQL ties and append the model primary key as usual. Interval keys are supported, but applications should choose them only when this equality matches their domain identity.
+ORM interval predicates, joins, primary-key lookup and conflict handling follow SQL comparison. Eager relation matching and aggregate attachment use the same comparison internally, while returned parent, target and pivot models keep their original components. Cursor pages preserve these SQL ties and append the model primary key as usual. Interval keys are supported, but applications should choose them only when this equality matches their domain identity.
 
 ## Calculations
 
@@ -50,15 +54,23 @@ All operands retain the owning model or query scope. These functions use the sha
 | `ShiftLocal(local, interval)` | `temporal.LocalDateTime` |
 | `ShiftInstant(instant, interval, zone)` | Same Go instant type |
 
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/intervalqueries/calculation_postgres_test.go):
+
+<!-- go-source: tests/fixtures/consumer/intervalqueries/calculation_postgres_test.go -->
 ```go
-ny, err := query.LoadTimeZone("America/New_York")
+ny, err := expr.LoadTimeZone("America/New_York")
 if err != nil {
-    return err
+	return err
 }
-shifted := query.ShiftInstant(f.Start, f.Period, ny)
-values, err := query.SelectValue(
-    intervalqueries.QueryIntervalSamples(), shifted.Value(),
-).All(ctx, db)
+for _, test := range []struct {
+	period temporal.Interval
+	hours  time.Duration
+}{{temporal.Days(1), 23}, {interval(t, 0, 0, 24*time.Hour), 24}} {
+	got := intervalOne(t, tx, expr.ShiftInstant(expr.Value(f.Start), expr.Param(f.Period, test.period), ny).Value())
+	if got.Sub(samples[0].Start) != test.hours*time.Hour {
+		t.Fatal(got, test.hours)
+	}
+}
 ```
 
 Dynamic shifts follow the [calendar arithmetic rules](temporal-calculations.md): months clip to the final day of a short month, calendar days honor the explicit zone, and elapsed hours retain elapsed meaning. Use `NegateInterval` to subtract a dynamic interval; literal `Add*Interval`/`Subtract*Interval` conveniences remain available.
@@ -67,18 +79,20 @@ PostgreSQL normalizes timestamp differences into 24-hour day components plus rem
 
 ## Summaries, NULL and query phases
 
-Interval fields expose `Sum`, `Avg`, `Min`, `Max`, counts and their usual filters/window adapters. `Sum` and `Avg` return `value.Nullable[temporal.Interval]`, including NULL for empty or all-NULL input. PostgreSQL owns interval averaging and whole-microsecond rounding; fractional months can become days and fractional days can become elapsed time. Overflow remains an execution or decode error.
+Use `expr.SumInterval`, `expr.AvgInterval`, `expr.Min`, `expr.Max`, counts and their filters/window adapters. `SumInterval` and `AvgInterval` return `value.Nullable[temporal.Interval]`, including NULL for empty or all-NULL input. PostgreSQL owns interval averaging and whole-microsecond rounding; fractional months can become days and fractional days can become elapsed time. Overflow remains an execution or decode error.
 
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/intervalqueries/orm_test.go):
+
+<!-- go-source: tests/fixtures/consumer/intervalqueries/orm_test.go -->
 ```go
-summary, err := intervalqueries.ProjectSummary(
-    intervalqueries.QueryIntervalSamples(),
-).
-    SelectTotal(query.Sum(f.Period).Value()).
-    SelectAverage(query.Avg(f.Period).Value()).
-    SelectCount(query.Count[intervalqueries.Sample]().Value()).
-    Query().RequireFirst(ctx, db)
+projection := rows.Select(rows.From(Samples.Query()), Summaries,
+	rows.MapSelected(Summaries.Total, expr.SumInterval(Samples.Period).Value()),
+	rows.MapSelected(Summaries.Average, expr.AvgInterval(Samples.Period).Value()),
+	rows.MapSelected(Summaries.Count, expr.Count[Sample]().Value()))
 ```
 
-Every calculation has `Nullable`, `Value` and `NullableValue` forms. Nullable binary operations require both operands to be nullable; use `NullableRow` or `Nullable` to widen the other operand explicitly. SQL NULL propagates. Selected forms retain aggregates and windows, for example `IntervalMonthsNullableValue(query.Sum(f.Period).Value())`. They cannot silently become row predicates.
+Every calculation has `Nullable`, `Value` and `NullableValue` forms. Nullable binary operations require both operands to be nullable; use `NullableRow` or `Nullable` to widen the other operand explicitly. SQL NULL propagates. Selected forms retain aggregates and windows, for example `expr.IntervalMonthsNullableValue(expr.SumInterval(f.Period).Value())`. They cannot silently become row predicates.
 
-Expression depth, node and parameter limits still apply. `query.MaxScalarSQLBytes` bounds cumulative scalar SQL expansion during one compiler run, excluding parameter contents; it is not a universal statement-byte limit. Nested calculations exceeding that work budget fail before execution. Arithmetic overflow, physical database types and stored values still require runtime checks.
+Expression depth, node and parameter limits still apply. The shared compiler bounds cumulative scalar SQL expansion during one compiler run, excluding parameter contents; it is not a universal statement-byte limit. Nested calculations exceeding that work budget fail before execution. Arithmetic overflow, physical database types and stored values still require runtime checks.
+
+For declaration and API migration, see the [ORM migration guide](orm-migration.md).

@@ -96,15 +96,12 @@ with metadata slots are checked with their generated DTO codecs, then generation
 publishes those codecs. A later generation failure leaves the handwritten file;
 `foundry generate` completes its contracts. No model/query output is generated
 for the scaffolded model. Endpoint, notification and model-with-slots scaffolds
-still pass the tool's framework build and optional `--field-docs` to generation.
-ORM field comments are handwritten; managed notices continue to apply to legacy
-model declarations in the package. Other scaffolds run no generation and refuse
-`--field-docs`.
+pass the tool's framework build to generation. ORM field comments are handwritten.
+Other scaffolds run no generation.
 
 These commands create one consumer-owned artifact, never an application project.
 Existing migration/seeder scaffolds use the same path checks and publisher.
-Generation never edits handwritten files unless `foundry generate --field-docs`
-opts into [managed field notices](model-accessors.md#notices-beside-the-actual-field).
+Keep model and handle documentation in the handwritten declaration.
 Models require an explicit table. DTO identity comes from its Go type. Jobs and
 commands require semantic IDs. Add fields/behavior to the handwritten artifact,
 then run generation for DTO codecs when needed. ORM fields and relations need no generation. Job and command placeholders
@@ -193,12 +190,29 @@ this through a real kernel, native middleware, broadcast and replay.
 ## Typed factories and explicit fakes
 
 The [factory recipe](../../tests/fixtures/consumer/tooling/database.go) returns
-`Factory[models.WriteRecord, models.WriteRecordDraft]`. `Draft` builds without SQL;
+`Factory[models.WriteRecord, []orm.Assignment[models.WriteRecord]]`.
+The same pattern is compiled for users:
+
+<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go -->
+```go
+func usersFactory() (*factory.Factory[models.User, []orm.Assignment[models.User]], error) {
+	return factory.Define(models.Users.Table, func(_ context.Context, n factory.Sequence) ([]orm.Assignment[models.User], error) {
+		return []orm.Assignment[models.User]{
+			models.Users.Email.Set(fmt.Sprintf("reader-%d@example.test", n)),
+			models.Users.Age.Set(18),
+			models.Users.Status.Set(models.StatusActive),
+			models.Users.Level.Set(models.LevelBasic),
+		}, nil
+	})
+}
+```
+
+`Draft` builds without SQL;
 `WithStates` appends ordered typed transformations. Derived states share a
 monotonically increasing sequence; separate factories own independent sequences.
 Failed builds consume their number. Shared callbacks must support concurrency.
 
-`Create` and `CreateMany` use normal generated mutation preparation and model
+`Create` and `CreateMany` use normal ORM mutation preparation and model
 lifecycle hooks. The bounded batch uses per-model `InsertEach`, with atomic
 rollback and real after-commit timing. It never switches to a hook-free bulk
 insert. The [PostgreSQL factory consumer](../../tests/fixtures/consumer/softqueries/factory_postgres_test.go)
@@ -208,7 +222,8 @@ Composition stays typed:
 
 - `DraftWith(ctx, overrides...)` and `CreateWith(ctx, writer, overrides...)`
   apply per-call `State` overrides after the factory's own states without
-  retaining them, for example `func(_ context.Context, d NoteDraft) (NoteDraft, error) { return d.SetTitle("Pinned"), nil }`.
+  retaining them, using `factory.State[[]orm.Assignment[M]]`. Replace an existing assignment
+  to override a field; duplicate assignments are rejected.
 - `AfterCreating(hooks...)` derives a factory whose hooks run in order after each
   created model, inside the transaction that inserted it (a savepoint within
   the caller's transaction); a hook can create related records or return a
@@ -218,7 +233,7 @@ Composition stays typed:
 - `factory.CreateFor(ctx, writer, child, parent, assign)` creates a parent through
   its factory and one child that belongs to it; `factory.CreateHas(ctx, writer,
   owner, child, count, assign)` creates an owner and a bounded batch of children.
-  `assign` copies the parent's key into the child's draft.
+  `assign` adds an assignment carrying the parent's key to the child's inputs.
 
 `factory.NewFaker(seed)` is a small deterministic generator of fictional values
 (`Name`, `Email` at the reserved `example.test` domain and unique per faker,
@@ -226,10 +241,10 @@ Composition stays typed:
 `factory.Pick`). The same seed reproduces a failing test's values; it uses only
 the standard library.
 
-`testkit/dbassert` asserts persisted state through the typed generated queries
+`testkit/dbassert` asserts persisted state through the typed ORM queries
 applications already use: `AssertExists`, `AssertMissing`, `AssertCount` and
-`AssertSoftDeleted` take a generated query (for example
-`QueryNotes().Where(...)`) and the test's executor or transaction. Model scopes,
+`AssertSoftDeleted` take a declaration query (for example
+`models.Users.Query().Where(models.Users.Age.Gte(18))`) and the test's executor or transaction. Model scopes,
 including soft-delete visibility, apply as in application code; the helpers only
 read and never reset or seed data.
 
@@ -292,3 +307,7 @@ The client gate compiles/runs ordinary TS/JS HTTP/WebSocket contracts and the
 optional real React/Vue adapter checks. Missing peers fail required-mode checks.
 External-input fingerprints include the selected compiler's dedicated
 `node_modules` tree, including transitive adapter implementations and types.
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).
+
+The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

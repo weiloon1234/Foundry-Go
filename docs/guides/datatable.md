@@ -1,20 +1,26 @@
 # Typed datatables and exports
 
-Milestone 19 passed native verification and consumer review. The
-[master evidence](../../blueprint/00-master-architecture-and-parity.md#milestone-19-verification-and-consumer-review)
-records the checks and operational limits.
+<!-- compiled-examples -->
+
+Datatables bind handwritten ORM sources to explicit DTO contracts. Members,
+Orders and Totals in the [reporting consumer](../../tests/fixtures/consumer/reporting/)
+cover model, joined and grouped sources.
 
 ## Declare one row and its columns
 
 Declare an explicit response DTO:
 
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reporting/models.go):
+
+<!-- go-source: tests/fixtures/consumer/reporting/models.go -->
 ```go
 //foundry:dto
 type MemberRow struct {
-    ID       model.ID[Member]       `json:"id"`
-    Name     string                 `json:"name"`
-    Nickname value.Nullable[string] `json:"nickname"`
-    Balance  decimal.Decimal        `json:"balance"`
+	ID       model.ID[Member]       `json:"id"`
+	Name     string                 `json:"name"`
+	Nickname value.Nullable[string] `json:"nickname"`
+	State    State                  `json:"state"`
+	Balance  decimal.Decimal        `json:"balance"`
 }
 ```
 
@@ -44,9 +50,8 @@ reuse the same column API.
 
 ## Migrate report sources to ORM declarations
 
-The Go-way branch makes one source cutover: `Spec.Source` returns
-`rows.Query[S, R]` instead of `query.ProjectionQuery[S, R]`. There is no legacy
-query adapter. Keep the DTO type, package, JSON descriptor and validation fields;
+`Spec.Source` returns `rows.Query[S, R]`. Keep the DTO type, package, JSON
+descriptor and validation fields;
 replace SQL projection selection with a handwritten `rows.Define` schema and
 `rows.Select` mappings. The [report declarations](../../tests/fixtures/consumer/reporting/orm.go)
 use `orm.PrimaryOf` and `orm.SoftDeleteOf` to retain declaration roles; the
@@ -54,7 +59,7 @@ use `orm.PrimaryOf` and `orm.SoftDeleteOf` to retain declaration roles; the
 field types. Existing generated DTO descriptors continue to own wire metadata.
 
 Use `expr.Select(expr.Value(Users.Name))` in `SortBy`, or a computed/aggregate
-expression's `.Value()`. `Stable` is now `[]expr.ProjectionOrder[S]`, including a
+expression's `.Value()`. `Stable` is `[]expr.ProjectionOrder[S]`, including a
 unique final key. Filters take `expr.Predicate[S]` for WHERE and
 `expr.HavingPredicate[S]` for HAVING:
 
@@ -69,7 +74,7 @@ unique final key. Filters take `expr.Predicate[S]` for WHERE and
 | Joined text | `expr.TextRowAt(memberScope, Members.Name)` |
 | Aggregate | `expr.Count[User]()` or `expr.Sum(Orders.Amount)` |
 
-`Related` now maps `expr.Predicate[Child]` to `expr.Predicate[Parent]`, normally
+`Related` maps `expr.Predicate[Child]` to `expr.Predicate[Parent]`, normally
 with `expr.Has(ParentRelations.Children, predicate)`. `expr.ModelPredicate`
 adapts an existing `orm.Predicate`. Use `rows.GroupBy` and `rows.Having` for grouped
 reports, and `rows.MapSelected` for aggregates. Text adapters validate the actual
@@ -202,16 +207,19 @@ to `Config.TimeZone`, inherited from the [application timezone](application-time
 in configured assembly or UTC for a direct manager. Explicit per-export
 `Presentation.TimeZone` wins. Formatters must remain bounded and honor cancellation.
 
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reporting/reporting_postgres_test.go):
+
+<!-- go-source: tests/fixtures/consumer/reporting/reporting_postgres_test.go -->
 ```go
-artifact, err := table.Export(ctx, manager, authority, request, datatable.ExportOptions{
-    Format: datatable.CSV,
-    Name: "members.csv",
-    Presentation: datatable.Presentation{Locale: "en", TimeZone: "Asia/Kuala_Lumpur"},
-})
-if err != nil { return err }
+artifact, err := reporting.Totals.Export(scope.Context(), f.manager, authority, datatable.Request{Filters: []datatable.Filter{{Op: datatable.Greater, Column: "total", Values: []string{"10"}}}}, datatable.ExportOptions{Format: datatable.CSV})
+if err != nil {
+	t.Fatal(err)
+}
 defer artifact.Close()
-// Read/Seek, Name, MediaType, Size, Rows and SHA256 describe the completed file.
 ```
+
+The export excerpt uses the test's authenticated scope and manager; the test owns
+and closes the completed artifact. The manager streams query rows into that file.
 
 Export validates page settings but exports **all matching rows**, bounded by
 `MaxExportRows`. It streams one query into a private temporary file and returns
@@ -334,23 +342,36 @@ plus ordinary validation rules for the complete row. The
 [consumer member import](../../tests/fixtures/consumer/reporting/member_import.go)
 declares:
 
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reporting/member_import.go):
+
+<!-- go-source: tests/fixtures/consumer/reporting/member_import.go -->
 ```go
-importer.Define(importer.Spec[MemberImport]{
-    Columns: []importer.Column[MemberImport]{
-        importer.Field("Name", text, func(row *MemberImport, v string) { row.Name = v }),
-        importer.NullableField("Nickname", text, func(row *MemberImport, v value.Nullable[string]) { row.Nickname = v }),
-        importer.Field("State", foundryhttp.EnumQuery[State, *State](Active.EnumDescriptor()), func(row *MemberImport, v State) { row.State = v }),
-        importer.Field("Balance", foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal](), func(row *MemberImport, v decimal.Decimal) { row.Balance = v }),
-    },
-    Rules: []validation.Rule[MemberImport]{name.Rules(validation.NonBlank[string](), validation.MaxLength[string](80))},
-})
+func memberImports() importer.Definition[MemberImport] {
+	text := foundryhttp.StringQuery[string]()
+	name := validation.DefineField("name", func(row MemberImport) string { return row.Name })
+	return importer.Define(importer.Spec[MemberImport]{
+		Columns: []importer.Column[MemberImport]{
+			importer.Field("Name", text, func(row *MemberImport, v string) { row.Name = v }),
+			importer.NullableField("Nickname", text, func(row *MemberImport, v value.Nullable[string]) { row.Nickname = v }),
+			importer.Field("State", foundryhttp.EnumQuery[State, *State](Active.EnumDescriptor()), func(row *MemberImport, v State) { row.State = v }),
+			importer.Field("Balance", foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal](), func(row *MemberImport, v decimal.Decimal) { row.Balance = v }),
+		},
+		Rules: []validation.Rule[MemberImport]{name.Rules(validation.NonBlank[string](), validation.MaxLength[string](80))},
+	})
+}
 ```
 
-Run it with a source and a handler that receives bounded chunks in file order:
+The test below retains its small input to inspect decoded values. In an application,
+process each bounded chunk in the handler without collecting the whole import:
 
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reporting/member_import_test.go):
+
+<!-- go-source: tests/fixtures/consumer/reporting/member_import_test.go -->
 ```go
-report, err := reporting.MemberImports.Run(ctx, importer.CSVSource(upload), func(ctx context.Context, rows []importer.Row[reporting.MemberImport]) error {
-    return saveMembers(ctx, rows)
+var imported []importer.Row[reporting.MemberImport]
+report, err := reporting.MemberImports.Run(t.Context(), importer.CSVSource(strings.NewReader(upload)), func(_ context.Context, rows []importer.Row[reporting.MemberImport]) error {
+	imported = append(imported, rows...)
+	return nil
 })
 ```
 
@@ -413,3 +434,5 @@ The gate never updates those artifacts automatically.
 `make agent-smoke` covers handwritten ORM declarations and row mappings through
 real completion, hover and definition requests. Select the existing native tools
 as described in the [tooling guide](developer-tooling-and-testing.md).
+
+For declaration and API migration, see the [ORM migration guide](orm-migration.md).

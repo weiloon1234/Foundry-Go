@@ -24,7 +24,7 @@ class SyntheticTests(unittest.TestCase):
             self.assertEqual(len(selected), len(set(selected)))
         for style in ('old', 'new'):
             files = synthetic.sources(a, style)
-            self.assertEqual(len(files), 52)
+            self.assertEqual(len(files), 53)
             for i in range(5):
                 source = files[f'models/entity{i:03d}.go']
                 for name, typ, _, _ in synthetic.fields(i, 5):
@@ -87,6 +87,36 @@ class SyntheticTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 synthetic.generate(target, repo, synthetic.schema(2, 1))
 
+    def test_current_roles_and_separate_legacy_generator(self):
+        source = synthetic.model_source(0, 2, 'new')
+        for role in ('Primary', 'CreatedAt', 'UpdatedAt', 'SoftDelete'):
+            self.assertIn('orm.' + role + '[', source)
+        self.assertIn('orm.PrimaryOf(b,table.Key())', source)
+        self.assertIn('rows.Read(rows.Select(', synthetic.report_source(0, 1, 'new'))
+        self.assertNotIn('foundry:projection', synthetic.report_source(0, 1, 'new'))
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name).resolve()
+            repos = {'old': root / 'main', 'new': root / 'branch'}
+            for style, repo in repos.items():
+                fixture = repo / ('tests/fixtures/consumer' if style == 'old' else 'tests/fixtures/goway')
+                fixture.mkdir(parents=True)
+                (repo / 'go.mod').write_text('module framework\ngo 1.2.3\n')
+                (fixture / 'go.mod').write_text('module fixture\ngo 1.2.3\nreplace framework => ../../..\n')
+                (fixture / 'go.sum').write_text('')
+            with patch.object(synthetic, 'run') as run:
+                synthetic.generate(root / 'app', repos['new'], synthetic.schema(2, 1, 1, 1), old_repo=repos['old'])
+            calls = [c for c in run.call_args_list if 'generate' in c.args[0]]
+            self.assertEqual([c.args[1] for c in calls], [repos['old'], repos['new']])
+            for style, repo in repos.items():
+                self.assertIn(str(repo), (root / f'app/{style}/go.mod').read_text())
+            manifest = json.loads((root / 'app/synthetic.json').read_text())
+            self.assertEqual(manifest['format'], 2)
+            self.assertEqual(manifest['repos'], {s: str(p) for s, p in repos.items()})
+            with patch.object(synthetic, 'run') as run:
+                synthetic.generate(root / 'new-only', repos['new'], synthetic.schema(2, 1, 1, 1), styles=('new',))
+            self.assertEqual(sum('generate' in c.args[0] for c in run.call_args_list), 1)
+            self.assertFalse((root / 'new-only/old').exists())
+
     def test_symbols_and_package_totals(self):
         self.assertEqual(synthetic.archive_functions('000 T f\n000 t g\n000 D value\n U import\n'.splitlines()), 2)
         entries = [{'package': synthetic.MODULE + '/handlers/one', 'archive_bytes': 20, 'functions': 3, 'compile_rss_bytes': 40},
@@ -133,7 +163,7 @@ class SyntheticTests(unittest.TestCase):
                     synthetic.measure(target, cache)
             report = json.loads((output / 'measurement.json').read_text())
             self.assertTrue(report['complete'])
-            self.assertEqual(order, ['toolchain', 'old-build', 'old-exports', 'old-nm-0', 'new-build', 'new-exports', 'new-nm-0'])
+            self.assertEqual(order, ['toolchain', 'old-build', 'old-exports', 'old-nm-0', 'old-test', 'new-build', 'new-exports', 'new-nm-0', 'new-test'])
             self.assertEqual(report['profiles']['new']['models']['functions'], 1)
             self.assertIn('not a statistical speed comparison', (output / 'summary.md').read_text())
 

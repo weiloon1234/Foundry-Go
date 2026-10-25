@@ -1,76 +1,64 @@
 # Transaction-required correlation and lateral joins
 
-Use these APIs when an inner query both depends on a parent row and needs row locks. The parent remains part of the type contract; the final query also requires `*database.Tx`. They extend [transaction query composition](transaction-query-composition.md) and share the ordinary [correlation](model-correlations.md) and [lateral](lateral-joins.md) compiler.
+<!-- compiled-examples -->
 
-The examples use the `Record` model and `Summary` projection declared in the transaction guide. The [consumer acceptance](../../tests/fixtures/consumer/transactionqueries/correlations_postgres_test.go) executes these APIs against independent PostgreSQL transactions.
+Use these APIs when an inner query depends on a parent row and must retain locks.
+Both outer ownership and the transaction requirement survive composition. The
+only executable result belongs to the enclosing transaction query.
 
 ## Declare the parent and child
 
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/transactionqueries/correlations_postgres_test.go):
+
+<!-- go-source: tests/fixtures/consumer/transactionqueries/correlations_postgres_test.go -->
 ```go
-type parentAlias struct{}
-type childAlias struct{}
-type chosenAlias struct{}
-
-parent := query.AsTransaction[parentAlias](
-    query.TransactionOf(QueryRecords()), "parent")
-child := query.AsTransaction[childAlias](
-    query.TransactionOf(QueryRecords()), "child")
-
-link := query.TransactionCorrelate(parent, child)
-parentFields := RecordFieldsAt(query.OuterScope(link, parent.Scope()))
-childScope := query.InnerScope(link, child.Scope())
-childFields := RecordFieldsAt(childScope)
-link = link.Where(query.Greater(childFields.ID, parentFields.ID))
+parent := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(Records.ID.In(1, 3)))), "parent")
+child := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "child")
+c := rows.TransactionCorrelate(parent, child)
+p, f := recordAt(rows.TransactionOuterScope(c, rows.TransactionScope(parent))), recordAt(rows.TransactionInnerScope(c, rows.TransactionScope(child)))
+c = c.Where(expr.Greater(f.ID, p.ID))
 ```
 
-`OuterScope`, `InnerScope` and their nullable variants work with both correlation families. Fields lifted into `link` belong to its `TransactionCorrelation[Outer, Inner]` scope. A plain parent or child predicate cannot be substituted for that combined scope. Parent filters still belong to the parent query. Distinct aliases prevent a child source from shadowing its parent.
-
-A transaction correlation can be the outer scope of another correlation. Its visible parent and child fields remain explicit; each nested level retains its own required parent and lock clauses. Use `OuterNullableScope` or `InnerNullableScope` when the supplied record is already nullable.
+The linked package declares the aliases and `recordAt` helper. Lift inputs through
+`TransactionOuterScope`/`TransactionInnerScope`; nullable equivalents preserve
+missing joined rows. A nested transaction correlation can explicitly capture its
+parent and grandparent. Plain predicates from an unlifted source are not substitutes
+for the combined scope.
 
 ## Select a locked correlated result
 
-```go
-selected := ProjectTransactionCorrelatedSummary(link).
-    SelectID(query.Value(childFields.ID)).
-    SelectName(query.Value(parentFields.Name)).
-    Query().
-    OrderBy(childFields.ID.Asc()).Limit(1).
-    ForUpdate().Of(childScope).SkipLocked()
+`rows.ProjectTransactionCorrelated(c, schema, mappings...)` creates a complete
+DTO result. `SelectTransactionCorrelatedRecord` selects a preserved inner model.
+`AsTransactionLateral` followed by `TransactionLeftJoinLateral` retains unmatched
+parents; inner/cross variants keep matching records. Use nullable rows/column
+helpers for missing right fields.
 
-lateral := query.AsTransactionLateral[chosenAlias](selected, "chosen")
-joined := query.TransactionLeftJoinLateral(parent, lateral)
-fields := SummaryNullableFieldsAt(
-    query.NullableRightScope(joined, lateral.Scope()))
-
-ids, err := query.SelectTransactionValue(joined, query.Value(fields.ID)).All(ctx, tx)
-```
-
-`ids` is `[]value.Nullable[int64]`. Each parent requests its own first available child. An unmatched parent remains in a left lateral result with NULL child fields. The child projection can combine explicitly scoped parent and child values.
-
-Use `SelectTransactionCorrelatedRecord(link, childScope)` to select the complete inner model with its original decoder. Generated projections also offer `SelectTransactionCorrelatedSummary(link, selection)` as the struct-selection alternative. These correlated builders cannot execute independently, become an ordinary source, or become an uncorrelated transaction CTE/value query.
-
-`TransactionCrossJoinLateral` and `TransactionInnerJoinLateral` retain matching records; empty inner results remove the parent. Inner and left forms accept optional typed ON conditions. Complete record selection from a lateral result requires a preserved right scope, available with inner/cross joins. Nullable sides use declared projections or nullable values.
-
-Conditions inside the correlated query, ON conditions and final result filters occupy distinct query phases. The inner limit chooses candidates per parent; an outer limit bounds the completed result. PostgreSQL can optimize predicate evaluation, so returned rows and acquired locks are not interchangeable counts.
+The correlated record owns its order, per-parent limit and lock clauses. Ordinary
+aliases, joins and CTEs cannot consume it. ON conditions and final WHERE remain
+separate from filtering before that per-parent limit.
 
 ## Correlated scalars and membership
 
-```go
-values := query.SelectTransactionCorrelatedValue(link, query.Value(childFields.ID)).
-    OrderBy(childFields.ID.Asc()).Limit(1).ForShare()
+`SelectTransactionCorrelatedScalar` retains the outer type and exact selected
+value. `TransactionCorrelatedScalarQuery` yields a nullable outer selected value;
+the nullable counterpart keeps one layer. Row counterparts support outer
+predicates. An empty inner result becomes NULL; multiple rows remain a cardinality error.
 
-scalar := query.TransactionCorrelatedScalarQuery(values)
-ids, err := query.SelectTransactionValue(parent, scalar).All(ctx, tx)
-```
-
-An empty inner result becomes NULL; multiple rows preserve PostgreSQL's cardinality error. No scalar helper adds an implicit limit. `TransactionCorrelatedScalarNullableQuery` keeps one nullable layer for an already nullable input. The corresponding `TransactionCorrelatedScalarRowQuery` and `TransactionCorrelatedScalarNullableRowQuery` helpers allow parent row predicates.
-
-`values.Exists()`, correlated records' `Exists()` and the correlation's own `Exists()` return predicates owned by the declared parent. `TransactionInCorrelatedQuery(parentValue, values)` accepts a field or computed row value with the exact result type and parent scope. `TransactionInNullableCorrelatedQuery` explicitly admits nullable inner results and preserves SQL's three-valued membership semantics.
+`TransactionInCorrelatedQuery`, `TransactionInNullableCorrelatedQuery` and
+`Exists()` retain outer ownership and SQL's three-valued NULL behavior.
 
 ## Lock policies and failures
 
-Both correlated record and value queries support `ForUpdate`, `ForNoKeyUpdate`, `ForShare`, `ForKeyShare`, `Of`, `LockRows`, `NoWait`, `SkipLocked` and `Wait`. Locks belong to the inner SELECT; locks already declared inside its sources remain in their own SELECTs. A strength method replaces this SELECT's clauses. Deriving a policy or predicate leaves its source unchanged.
+Use `ForUpdate`, `ForNoKeyUpdate`, `ForShare`, `ForKeyShare`, `Of`, `LockRows`,
+`NoWait`, `SkipLocked` and `Wait` on supported transaction selections. `Of` takes
+`rows.Target(scope)`. Policies need an existing lock; grouped/distinct/window/set
+lock targets and an outer parent used as an inner lock target fail preflight.
 
-Wait modifiers and `Of` require an existing lock. Empty per-input clauses, an outer parent used as an inner lock target, and grouped/distinct/window/set lock targets fail validation before execution. The same existing lock-target and combined-work bounds apply. Database contention and cardinality errors retain their SQLSTATE and require transaction/savepoint recovery as described in [row locking](row-locking.md).
+Locks stay in the SELECT that declared them. The number of returned rows does
+not promise the number of acquired locks. Concrete aliases, scopes, bounds and
+source capabilities are validated before I/O. Lock contention, cancellation and
+cardinality failures retain normal transaction/savepoint recovery requirements.
+See [transaction composition](transaction-query-composition.md) and
+[row locking](row-locking.md).
 
-The public source interfaces retain both transaction and outer ownership. A lateral source only joins after its declared parent. The shared compiler additionally rejects lock-carrying expressions through ordinary low-level generic query paths. Runtime validation still checks concrete alias visibility, declared columns, query bounds and legal SQL phases. The only executable result belongs to the enclosing transaction-required query.
+For declaration and API migration, see the [ORM migration guide](orm-migration.md).

@@ -11,12 +11,16 @@ attachments and metadata as typed fields on the model itself.
 
 ## Shared owners
 
-Declare an owner from the ORM table and its primary handle once:
+Declare an identity from the ORM table and its primary handle once. The compiled [profiles example](../../tests/fixtures/consumer/profiles/profile.go) binds that identity with `extensions.DefineORMOwner` and pins `StorageModel`.
 
+<!-- compiled-source: tests/fixtures/consumer/profiles/tables.go -->
 ```go
-var Users = extensions.DefineORMOwner("users",
-    orm.IdentityOf(models.Users.Table, models.Users.Key()),
-    extensions.OwnerOptions{StorageModel: "users"})
+var ProfileIdentity = orm.IdentityOf(Profiles.Table, Profiles.Key())
+```
+
+<!-- compiled-source: tests/fixtures/consumer/profiles/profile.go -->
+```go
+var Owners = extensions.DefineORMOwner("profiles", ProfileIdentity, extensions.OwnerOptions{StorageModel: "profiles"})
 ```
 
 `orm.IdentityOf` requires the table declaration and its actual primary handle.
@@ -25,7 +29,7 @@ and sensitive keys fail validation. It retains the primary codec, including
 natural keys, and the declared soft-delete policy. It selects stored
 keys directly, without model presentation getters or retrieval observers.
 
-Register each owner with `extensions.NewRegistry(Users.Registration(), ...)`,
+Register each owner with `extensions.NewRegistry(Owners.Registration(), ...)`,
 then construct `extensions.New(database, registry, config)`. Reuse that exact
 owner declaration for all extension descriptors. Duplicate names and duplicate
 model namespaces are rejected. The store borrows the database and has no
@@ -56,14 +60,14 @@ wait reports `fault.Overloaded`, which HTTP maps to a retryable 503.
 
 Every stored metadata row, translation, attachment and registration key belongs
 to the owner's scope, an opaque digest of the owner name and its *storage model*.
-The storage model defaults to the generated table name, so renaming an owner
+The storage model defaults to the declared table name, so renaming an owner
 table silently moves the owner to a new, empty scope unless its persisted
-identity is declared. Declare the previous table name before renaming:
+identity is declared. For example, a renamed account table can keep its original storage model:
 
+<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go -->
 ```go
-var Users = extensions.DefineOwnerWith("users",
-    query.IdentityOf(models.QueryMembers().Query, models.MemberFields().ID),
-    extensions.OwnerOptions{StorageModel: "users"})
+var AccountOwner = extensions.DefineORMOwner("accounts", AccountIdentity,
+	extensions.OwnerOptions{StorageModel: "original_accounts"})
 ```
 
 The scope, row keys and attachment object paths are then unchanged, and stored
@@ -75,10 +79,10 @@ for the lifetime of the stored data.
 If a table was already renamed without a declaration, rows written under the old
 scope are hidden but intact. Declare the old table name as a previous model:
 
+<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go -->
 ```go
-var Users = extensions.DefineOwnerWith("users",
-    query.IdentityOf(models.QueryMembers().Query, models.MemberFields().ID),
-    extensions.OwnerOptions{PreviousModels: []string{"users"}})
+var RecoverAccountOwner = extensions.DefineORMOwner("accounts", AccountIdentity,
+	extensions.OwnerOptions{PreviousModels: []string{"original_accounts"}})
 ```
 
 `metadata rescope --owner users` and `translations rescope --owner users` (or
@@ -109,14 +113,14 @@ the keys are reused. Soft deletion deliberately retains data for restoration.
 
 ## Typed metadata
 
+<!-- compiled-source: tests/fixtures/consumer/profiles/profile.go -->
 ```go
-var Theme = metadata.Define(Users, "theme", 1, contract.StringJSON[string]())
-
-manager, err := metadata.New(store, Theme.Registration())
-err = Theme.Set(ctx, manager, user.FoundryReference(), "dark")
-theme, err := Theme.Get(ctx, manager, user.FoundryReference())
+func (s Services) SavePreferences(ctx context.Context, profile Profile, input Preferences) error {
+	return PreferencesKey.Set(ctx, s.Metadata, ProfileIdentity.ReferenceOf(profile), input)
+}
 ```
 
+The example declares `PreferencesKey` with `metadata.Define(Owners, "preferences", 1, PreferencesJSON())`.
 Keys bind owner, key name, version and JSON value contract. String, boolean,
 integer and floating descriptors are available from `contract`; structured
 values use their generated DTO JSON descriptor. Native widths, exact integer
@@ -125,7 +129,7 @@ framework contracts. `contract.DynamicJSON()` is the explicit unrestricted JSON
 facility; it still enforces syntax and resource bounds.
 
 Apply `metadata.Migrations()` with the ordinary migration runner in the shared
-store schema. Metadata has ordinary generated framework models internally.
+store schema. Metadata uses handwritten ORM declarations internally.
 Public operations never ask applications to reproduce table or codec schemas.
 
 `Get` returns an omitted optional for a missing key and `database.NotFound` for
@@ -137,7 +141,7 @@ business transaction through an isolated savepoint and restores its search path.
 Parent rollback rolls back the metadata write. There is no automatic transaction
 retry after an uncertain commit.
 
-`Theme.Load(ctx, manager, references)` loads one typed key for up to 1000 owner
+`PreferencesKey.Load(ctx, manager, references)` loads one typed key for up to 1000 owner
 references using two SELECTs: active keys and matching metadata. Repeated batch
 access performs no I/O and returns freshly decoded values. Empty batches do not
 query either table. Metadata accepts values up to 256 KiB and at most 256 keys per
@@ -150,25 +154,24 @@ should use ordinary typed model tables.
 retains model ownership and does not implicitly serialize its private value.
 Decode it with its matching key or use `DynamicValue` explicitly for an
 administrative export. `Forget` removes one key, while `DeleteAll` removes the
-owner's metadata. `metadata.Matching(ctx, manager, Theme, input)` returns an ORM membership
+owner's metadata. `metadata.Matching(ctx, manager, PreferencesKey, input)` returns an ORM membership
 predicate for at most 1000 matching stored owners. It is a materialized scope;
 the subsequent model query retains its own visibility and authorization filters.
 
 For ORM owners declared with `extensions.DefineORMOwner`, use the package
-functions `attachments.Matching(ctx, manager, Avatar.ForLocale("en"))`,
+functions `attachments.Matching(ctx, manager, Localized.ForLocale("en"))`,
 `translations.Matching(ctx, manager, Label, "en", "Hello")`, and
-`metadata.Matching(ctx, manager, Theme, input)`. Pass the returned predicate to
+`metadata.Matching(ctx, manager, PreferencesKey, input)`. Pass the returned predicate to
 `Profiles.Query().Where(predicate)`. Its concrete owner type prevents using it
 on another model's query. These adapters reuse the existing bounded matching
 reads, validate stored identities, preserve exact locale/version selection and
 return a false predicate for no matches. Check the error before using the
 predicate. Zero declarations and legacy owners fail before database work.
-Legacy descriptor methods remain available for `database/query` consumers.
+
 
 ## Cleanup and orphan inspection
 
-Call `metadata.Cleanup` from the generated model's transactional Deleted or
-ForceDeleted observer, passing its original typed reference and lifecycle
+Call `metadata.Cleanup` from the model's transactional ORM `Deleted` observer, passing its original typed reference and lifecycle
 operation. It joins the same database transaction, refuses cleanup while the
 owner still exists, and rolls back with the owner deletion. SoftDelete preserves
 data. Normal bulk model deletes skip per-model observers, so explicit bulk
@@ -202,15 +205,14 @@ or automatically inferred owner table is created.
 
 ## Translated model fields
 
+<!-- compiled-source: tests/fixtures/consumer/profiles/profile.go -->
 ```go
-var ProductName = translations.Define(Products, "name", translations.Options{})
-
-locales, err := i18n.NewLocaleSet("en", "en", "ms", "zh")
-manager, err := translations.New(store, locales, ProductName.Registration())
-err = ProductName.Set(ctx, manager, product.FoundryReference(), "ms", "Baju Merah")
-name, err := ProductName.Resolve(ctx, manager, product.FoundryReference(), "ms")
+func (s Services) SaveLabel(ctx context.Context, profile Profile, locale i18n.LocaleID, text string) error {
+	return Label.Set(ctx, s.Translations, ProfileIdentity.ReferenceOf(profile), locale, text)
+}
 ```
 
+The example declares `Label` with `translations.Define(Owners, "label", translations.Options{MaxBytes: 1024})`.
 `i18n.LocaleID` is a canonical BCP 47 tag. Normalize external text with
 `i18n.ParseLocale`; canonical validity does not grant supported-locale membership.
 The injected `LocaleCatalog` supplies one immutable supported/default snapshot
@@ -224,7 +226,7 @@ value. Unsupported locales fail instead of bypassing catalog membership through
 fallback. Locale removal retains stored rows for migration but excludes them from
 ordinary field values.
 
-`ProductName.Load(ctx, manager, references)` uses one active-owner query and
+`Label.Load(ctx, manager, references)` uses one active-owner query and
 keyset-paged translation queries of 4096 rows in the same snapshot, so 1000 owners
 in several locales load completely; most batches need a single page. `batch.Get(reference)`
 performs no I/O and exposes immutable `Values`; `Entries` returns a fresh map.
@@ -232,7 +234,7 @@ Limits are 1000 owner references and 4 MiB of text per batch; rows are bounded b
 owners × supported locales. Each field defaults to 64 KiB per value and may declare
 a smaller `MaxBytes`.
 
-`translations.Set(ctx, manager, reference, ProductName.SetValue(locale, text), ...)`
+`translations.Set(ctx, manager, reference, Label.SetValue(locale, text), ...)`
 atomically writes multiple fields/locales for one typed owner with one set-based
 `INSERT ... ON CONFLICT`. It validates every assignment before writing; duplicates
 fail. `SetIn` joins a business transaction. An owner can have 64 declared fields
@@ -260,3 +262,5 @@ products [--apply]` with the metadata re-scope semantics. Apply `translations.Mi
 
 Settings and country reference data use the same store and are documented in
 [Settings](settings.md) and [Countries](countries.md).
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).

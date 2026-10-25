@@ -1,106 +1,48 @@
 # Typed model retrieval events
 
-Complete-model reads can invoke typed `Retrieved` callbacks after hydration. This
-is separate from [explicit getters](model-accessors.md): retrieval does not call
-`Access<Field>` methods or replace stored fields with presentation values.
+`orm.RetrievalHooks[M]` dispatches `Retrieved` after complete-model hydration and row closure. It is separate from write hooks and explicit accessors. It does not replace stored fields with presentation values.
 
-Declare a local factory alongside the handwritten model:
-
+<!-- orm-example: retrieved-after -->
 ```go
-//foundry:model table=users retrieval=readHooks
-type User struct {
-    ID   model.ID[User]
-    Name string
-}
-
-func readHooks() UserRetrievalHooks {
-    return UserRetrievalHooks{
-        Retrieved: func(ctx context.Context, executor database.Executor, user User) error {
-            // Scalar reads do not recursively dispatch model retrieval events.
-            _, err := QueryUsers().Count(ctx, executor)
-            return err
-        },
-    }
+func retrieval() orm.RetrievalHooks[reads.Member] {
+	return orm.RetrievalHooks[reads.Member]{Retrieved: func(context.Context, database.Executor, reads.Member) error { return nil }}
 }
 ```
 
-The excerpt uses `context` and Foundry's `database` and `model` packages. The
-factory takes no arguments and returns the generated `UserRetrievalHooks`.
-Generation rejects misspelled callbacks, incompatible model arguments and wrong
-factory results. `hooks=writeHooks` and `retrieval=readHooks` may coexist; read
-and write factories remain separate.
+Attach `orm.WithRetrievalHooks` through `orm.Define` options. Register provider observers for the same typed pool key:
 
-## Provider observers
-
-Every generated model provides `<Model>RetrievalObserver`,
-`New<Model>RetrievalObserver` and `Register<Model>RetrievalObserver`, including
-models without a local factory. They use the same provider registration, typed
-pool key and constructor resolver as [write observers](model-hooks.md#provider-observers):
-
+<!-- orm-example: read-options -->
 ```go
-RegisterUserRetrievalObserver(
-    registrar, pool, NewUserRetrievalObserver("users.read"),
-    func(resolver foundation.Resolver) (func() UserRetrievalHooks, error) {
-        return readHooks, nil
-    },
-)
+func readOptions() []orm.Option {
+	return []orm.Option{orm.WithRetrievalHooks(retrieval)}
+}
+
+func registerReadObserver(r *foundation.Registrar, pool foundation.Key[*database.DB]) error {
+	return orm.RegisterRetrievalObserver(r, pool, orm.NewRetrievalObserver[reads.Member]("members.read"),
+		func(foundation.Resolver) (func() orm.RetrievalHooks[reads.Member], error) {
+			return retrieval, nil
+		})
+}
 ```
 
-The constructor can resolve injected services during application construction.
-Its returned factory runs for reads. Observer names are unique across both read
-and write registrations within a pool. Local callbacks run first, followed by
-registered callbacks in provider/registration order. A nil callback is skipped.
+The [read fixture](../../tests/fixtures/goway/models/reads/models.go) contains the complete declaration. Provider constructors resolve services once during application construction. Each nonempty complete fetch or closed batch constructs local factories first, then observer factories in registration order. Empty results and hydration/closure failures construct none. Dispatch follows row order, with local callbacks before observers.
 
-## Hydration, lifetime and failures
+## Lifetime and failures
 
-Foundry hydrates and closes the complete fetch before constructing callbacks.
-Empty fetches and failed hydration/row closure do not invoke factories. Each
-selected model role constructs factories once per nonempty fetch or batch, then
-dispatches callbacks in row order. Through relations hydrate both target and
-pivot models and dispatch those roles in that order.
+Rows close before callbacks, so callback I/O can reuse the supplied executor. The executor retains wrappers and transaction/session ownership. The context carries request values and cancellation, and expires after callback completion. Propagate it to nested work. Recursive retrieval and write callbacks share the bounded lifecycle depth.
 
-Callbacks receive the same executor supplied to the read, retaining wrappers
-and their capabilities. Rows are closed before callback I/O, allowing further
-queries through the same transaction/session. The callback context retains
-request values, observes query/owner cancellation, and expires after callback
-completion. Propagate it to nested work. Read and write callbacks share
-`query.MaxLifecycleDepth`; recursive hooks fail at that bound.
+Treat models as read-only snapshots. Slices, maps and pointers retain ordinary Go reference semantics. Errors, panic, `runtime.Goexit` and cancellation stop dispatch and discard the pending result. Safe diagnostics preserve error identity without formatting model values.
 
-Treat callback models as read-only snapshots. Ordinary Go value copies preserve
-scalar fields; slices, maps and pointers still follow Go's shared-reference
-rules. Getter evaluation and DTO mapping remain explicit application choices.
+A pool read has no implicit write transaction, so earlier callback side effects are not automatically undone. For atomic related work, read inside a transaction and propagate callback failure from its owner. Retrieval callbacks are not durable events.
 
-Errors, panics, `runtime.Goexit` and cancellation stop dispatch and discard the
-pending collection/page. Earlier callback effects are not automatically undone
-for a pool read: it has no implicit write transaction. When reading inside an
-explicit transaction, propagate the error from its owning callback to roll back
-that unit of work. These callbacks are in-process behavior, not durable events.
+## Complete models and streaming
 
-## Queries and bounded iteration
+Model reads, complete-record selections, pages and relation loads carry retrieval metadata. Set results use the first input's decoder and lifecycle declaration; SQL inputs do not dispatch independently. Through relations dispatch target and pivot roles. `Load` and `LoadMissing` do not redispatch retrieval for supplied parent models.
 
-`All`, `First`, `Find`, locked reads, complete-record selections, aliases, CTEs,
-sets, pages and relation hydration carry the model's retrieval adapter. Set
-results use their first input's decoder and lifecycle declaration; their SQL
-inputs do not dispatch independently. Explicit `Load`/`LoadMissing` loads related
-models without dispatching retrieval again for supplied parent models.
+`Table.Raw` hydrates complete models and dispatches retrieval, but bypasses all automatic scopes. Callers must supply tenant and visibility predicates themselves. DTO projections, scalars, `rows.Raw`, write candidate hydration and SQL `RETURNING` skip retrieval callbacks.
 
-Scalar reads such as `Count`/`Exists`, declared DTO projections, raw row helpers,
-write snapshots and SQL `RETURNING` do not dispatch model retrieval callbacks.
-Pagination lookahead rows are hydrated models and can invoke callbacks even
-when subsequently trimmed from the returned page.
+`Query.Each` and complete-record `rows.EachRead` use bounded closed batches when callbacks may run. Unknown executor wrappers count as potentially observed. Concrete owners with no callbacks can stream directly where no eager load is requested. Each batch constructs its own factories. Pagination lookahead rows can dispatch before being trimmed.
 
-`Each` uses bounded offset batches when retrieval callbacks may run, closing
-rows before callbacks. Complete-record iteration uses the same
-`query.DefaultChunkSize` as model iteration and retains the selected query
-window. Unknown executor wrappers cannot prove callbacks absent. Concrete owners
-without applicable callbacks retain ordinary streaming where no eager load is
-requested.
+Offset batches do not share a database snapshot: concurrent changes can shift later results. Use the typed keyset traversal APIs when that traversal suits the operation. `All` collects its selected result, so apply a query limit when the collection must be bounded.
 
-Batches do not establish a shared database snapshot. Changes to selected
-membership/order can shift later offset results. Model `EachChunked` selects an
-explicit batch size; `EachByID`/`ChunkByID` provide the existing primary-key
-traversal contract. `All` intentionally collects its selected result; apply
-`Limit` when the collection itself must be bounded.
-
-The [master roadmap](../../blueprint/00-master-architecture-and-parity.md) records
-verification status and the remaining lifecycle work.
+For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

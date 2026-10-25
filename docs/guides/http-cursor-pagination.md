@@ -12,26 +12,25 @@ cursor owner after mapping; it is separate from the public DTO type.
 The [independent consumer](../../tests/fixtures/consumer/httppagination/cursor.go)
 contains this complete handler pattern:
 
+<!-- compiled-source: tests/fixtures/consumer/httppagination/cursor.go -->
 ```go
-type CursorListRequest = pagination.CursorRequest[
-    foundryhttp.NoPath, MemberFilters, mutatorqueries.Member]
-type CursorListResult = pagination.CursorResult[
-    mutatorqueries.Member, MemberResponse]
+type CursorListRequest = pagination.CursorRequest[foundryhttp.NoPath, MemberFilters, mutatorqueries.Member]
+type CursorListResult = pagination.CursorResult[mutatorqueries.Member, MemberResponse]
 
 var CursorList = pagination.DefineCursor[mutatorqueries.Member](
-    foundryhttp.DefineRoute(
-        foundryhttp.RouteSpec{ID: "members.cursor", Method: foundryhttp.GET, Access: foundryhttp.Public},
-        foundryhttp.StaticPath("/members/cursor"),
-    ),
-    MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultCursorConfig(),
+	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.cursor", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members/cursor")),
+	MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultCursorConfig(),
 )
+```
 
+<!-- compiled-source: tests/fixtures/consumer/httppagination/cursor.go -->
+```go
 func (s DatabaseService) CursorList(ctx context.Context, in CursorListRequest) (CursorListResult, error) {
-    page, err := memberQuery(in.Filters).CursorPaginate(ctx, s.DB, in.Page)
-    if err != nil {
-        return CursorListResult{}, err
-    }
-    return pagination.MapCursorPage(ctx, page, PresentMember)
+	page, err := orm.CursorPaginate(ctx, s.DB, memberQuery(in.Filters), in.Page)
+	if err != nil {
+		return CursorListResult{}, err
+	}
+	return pagination.MapCursorPage(ctx, page, PresentMember)
 }
 ```
 
@@ -51,7 +50,7 @@ directions fails validation. Explicit invalid sizes are rejected rather than
 replaced or clamped. Ordinary endpoint query-byte and pair limits still apply.
 The size carries the [page size label](http-pagination.md) `http.pagination.size`.
 
-`in.Page` is `query.CursorRequest[Source]`, directly usable by the model paginator.
+`in.Page` is `orm.CursorRequest[Source]`, directly usable by the model paginator.
 For projections, joins, CTEs and complete result queries, declare their actual
 result type as `Source` and use [CursorFor](result-cursor-pagination.md) in the
 service. Both paths preserve the same source-owned tokens through DTO mapping.
@@ -61,7 +60,7 @@ Changing the requested size is permitted within endpoint limits.
 Parsing checks bounded token structure. Actual query execution additionally
 checks the model/result owner, query fingerprint and ordered key codecs.
 Changing filters or ordering invalidates an earlier query's cursor. Cursor input
-and query-scope failures retain `query.CursorInputError`; the adapter returns HTTP
+and query-scope failures retain `orm.CursorInputError`; the adapter returns HTTP
 400 for those errors. Invalid query definitions and infrastructure failures stay
 server errors. Pagination size/direction rules use the ordinary validation response.
 The adapter bounds inspection of service errors, so a cyclic cause cannot retain
@@ -106,3 +105,5 @@ error declarations, middleware, validation, URL policy and DTO boundaries.
 Custom database cursor-codec errors use the same bounded inspection. A reached
 invalid-value marker retains its client-input classification; an incomplete
 search remains a server failure and publishes no cursor boundary.
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).

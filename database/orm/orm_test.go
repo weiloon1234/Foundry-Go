@@ -407,6 +407,7 @@ func TestPublicMethodBudgets(t *testing.T) {
 
 // The connector exercises real database.Rows and transaction ownership without a server.
 type testConnector struct {
+	affected     *int64
 	statements   *[]string
 	bindings     *[][]any
 	onClose      func()
@@ -448,6 +449,9 @@ func (c testConnection) ExecContext(_ context.Context, s string, _ []driver.Name
 		if err := c.execError(s); err != nil {
 			return nil, err
 		}
+	}
+	if c.affected != nil {
+		return driver.RowsAffected(*c.affected), nil
 	}
 	return driver.RowsAffected(1), nil
 }

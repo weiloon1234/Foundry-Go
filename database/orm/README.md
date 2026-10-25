@@ -90,9 +90,12 @@ n, err := Products.Query().Where(Products.Price.Lt(500)).UpdateAll(ctx, tx,
     Products.Price.Increment(10, orm.AtMost(int64(500))))
 ```
 
-The bound is checked by the same SQL UPDATE. A per-key guarded update returning
-no row reports `orm.ErrBoundExceeded` wrapped in `fault.Conflict`; this includes
-a missing key because the single statement cannot distinguish those causes.
+The bound is checked by the same SQL UPDATE. Per-key adjustments return
+`orm.ErrBoundExceeded` wrapped in `fault.Conflict` for a bound-rejected visible row,
+and `database.NotFound` for a missing or hidden key, with or without hooks/observers.
+An empty guarded write or lifecycle locking read adds one key-only locking read
+in the same transaction, retaining all visibility predicates except the bound.
+Successful writes keep their statement count; see the [batch-write guide](../../docs/guides/model-batch-writes.md).
 Set-based writes return the number of rows satisfying the bound. Adjustments
 preserve SQL NULL and accept one numeric adjustment plus ordinary assignments.
 `validation.Positive[N]()` applies the same strictly positive, finite rule to

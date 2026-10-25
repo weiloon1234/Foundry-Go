@@ -71,6 +71,7 @@ type writePlan struct {
 	many             bool
 	adjust           *querycore.Adjustment
 	bounded          bool
+	boundIndex       int
 	batch            [][]querycore.MutationAssignment
 	returnLimit      int
 	conflict         *querycore.Conflict
@@ -103,6 +104,7 @@ func planWrite[M any](q queryState, kind querycore.MutationKind, as []Assignment
 			p.adjust = a.adjust
 			if a.guard != nil {
 				p.bounded = true
+				p.boundIndex = len(p.query.ast.Predicates)
 				p.query.ast.Predicates = append(slices.Clone(p.query.ast.Predicates), a.guard)
 			}
 		} else {
@@ -472,7 +474,7 @@ func writeInTransaction(ctx context.Context, tx *database.Tx, p writePlan, prepa
 				return scan(row)
 			})
 		} else {
-			e = p.returning(ctx, rows, scan)
+			e = p.returning(ctx, tx, rows, scan)
 		}
 		if e != nil {
 			return e
@@ -490,14 +492,11 @@ func writeInTransaction(ctx context.Context, tx *database.Tx, p writePlan, prepa
 }
 
 func returning(ctx context.Context, rows rowSource, scan func(database.Row) error) error {
-	return returningN(ctx, rows, scan, 1, false)
+	return returningN(ctx, rows, scan, 1)
 }
-func returningN(ctx context.Context, rows rowSource, scan func(database.Row) error, expected int, bounded bool) error {
+func returningN(ctx context.Context, rows rowSource, scan func(database.Row) error, expected int) error {
 	n, err := returningCount(ctx, rows, scan, expected)
 	if err == nil && n < expected {
-		if n == 0 && bounded {
-			return boundExceeded()
-		}
 		return database.NewError("model write returned too few rows", database.NotFound)
 	}
 	return err
@@ -626,7 +625,7 @@ func autocommit(ctx context.Context, p writePlan, source clock.Clock, send autoc
 	if err != nil {
 		return err, false
 	}
-	err = p.returning(ctx, rows, scan)
+	err = p.returning(ctx, nil, rows, scan)
 	if err != nil {
 		return inspectOutcome(err, true)
 	}

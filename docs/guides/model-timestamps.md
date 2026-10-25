@@ -1,48 +1,34 @@
 # Managed model timestamps
 
-Declare persisted `CreatedAt` and `UpdatedAt` fields to enable timestamps automatically. Each field can use `time.Time` or `temporal.DateTime`; column tags retain the usual mapping. The [consumer model](../../tests/fixtures/consumer/timequeries/models.go) mixes both types:
+Declare creation and update fields with `orm.CreatedAtOf` and `orm.UpdatedAtOf`. Their carriers retain ordinary stored-time predicates, ordering and expression support. Both fields must be non-null, non-primary `time.Time` or `temporal.DateTime` values. The [typed declaration example](model-declarations.md) shows the complete table.
 
+<!-- orm-example: writes-after -->
 ```go
-//foundry:model table=time_members
-type Member struct {
-    ID        model.ID[Member]
-    Name      string
-    CreatedAt time.Time         `foundry:"column=created_on"`
-    UpdatedAt temporal.DateTime `foundry:"column=changed_on"`
+func write(ctx context.Context, tx *database.Tx, id int64) error {
+	_, err := hooks.Members.Update(ctx, tx, id,
+		hooks.Members.Name.Set("Ada"), hooks.Members.Note.SetNull())
+	return err
 }
 ```
 
-The migration owns the non-null timestamp columns. No database default is needed for these framework-managed values. Generation documents the managed behavior beside each handwritten field and in generated descriptors and draft setters, so ordinary gopls hover exposes it automatically.
+The [member table](../../tests/fixtures/goway/models/hooks/models.go) used here has both roles. Insert supplies creation time when omitted and always supplies update time. Update always assigns update time; it preserves creation time unless explicitly assigned. An otherwise empty update can therefore become a timestamp-only write. Caller assignments remain unchanged.
 
-```go
-q := timequeries.QueryTimeMembers()
-member, err := q.Create(ctx, db, timequeries.MemberDraft{}.SetName("first"))
-if err != nil {
-    return err
-}
-member, err = q.Update(ctx, db, member.ID, timequeries.MemberDraft{}.SetName("updated"))
-```
-
-An insert supplies `CreatedAt` when omitted and always supplies `UpdatedAt`. An update always assigns `UpdatedAt`, while leaving `CreatedAt` unchanged unless explicitly assigned. An empty update draft therefore performs a timestamp-only write. The caller's draft remains unchanged.
-
-The two fields must form a valid pair: non-null, non-primary instants with their exact supported Go types. A lone field remains ordinary. `timestamps=true` on the model directive requires a valid pair; `timestamps=false` disables the convention and leaves both fields subject to ordinary draft/default rules. Defined wrapper types and distinct mutator input types are rejected for managed timestamps; Go aliases and same-type field mutators remain supported.
+Both roles must form a valid pair. A conventional lone field remains ordinary unless an explicit role requires the pair. Binding a managed field through `TimeOf` fails declaration validation with the required carrier. For application-managed fields, use ordinary declarations and `orm.NoTimestamps()`. The opt-out conflicts with explicit managed roles. Role constructors do not accept a Go mutator; put business transformations in hooks or ordinary input fields.
 
 ## Clock and precision
 
-Database modules inherit the clock configured by `foundation.WithClock`, including `testkit.Clock`. Direct `database.Open`/`Prepare` and `postgres.Open` default to `clock.System`. Their optional `database.WithClock(source)` argument supplies an explicit override; `database.Module` and `postgres.Module` accept it too.
+Database modules inherit `foundation.WithClock`, including `testkit.Clock`. Direct pool construction defaults to `clock.System`; `database.WithClock` supplies an override. Sessions and savepoints preserve their pool's clock, while the actual transaction owner supplies the write clock.
 
-Foundry samples the actual transaction owner's clock once per executed write attempt. It converts this framework-produced instant to UTC and truncates it to PostgreSQL microsecond precision. Both automatic fields use that instant. A custom clock must support concurrent use. Sessions and nested savepoints preserve their pool's clock; `db.Clock()`, `session.Clock()` and `tx.Clock()` expose the source without freezing time or extending resource ownership.
+Each executed write attempt samples the clock once after before hooks. Framework time is converted to UTC and truncated to PostgreSQL microseconds. Creation and update conventions share the instant. Clocks must support concurrent use. Time is not promised to be globally monotonic, and retries are never automatic.
 
-Explicitly supplied values retain normal codec validation. For example, an explicit `CreatedAt` with sub-microsecond precision fails rather than silently losing data. An explicit `UpdatedAt` is visible to before hooks but is replaced by the managed value. Invalid clock instants fail the write. Connection acquisition, cancellation and cleanup continue to use real context deadlines.
+Explicit creation time retains normal codec validation, including rejection of unsupported precision. Before hooks can inspect explicit update time, but the convention replaces it. Invalid clock instants fail the write. Context deadlines and connection cleanup still use real cancellation/deadline mechanisms.
 
-Reads, query/draft construction and empty batch operations do not sample model time. Time is sampled inside the write transaction after before hooks; a rejected attempt may therefore sample the clock without persisting anything. Foundry does not automatically retry writes or promise globally monotonic timestamps across applications.
+## Lifecycle and batches
 
-## Hooks, changes and batches
+Conventions run after before hooks and before field preparation and SQL. Captured changes include automatic assignment presence and complete returned stored values, including trigger changes. Physical deletion does not update timestamps. Soft deletion shares a clock sample between deletion and update times; restoration clears deletion time and advances update time.
 
-Normal creation runs `Saving → Creating → timestamps → field mutators → INSERT → Created → Saved`. Updating locks and reads the current model, then runs `Saving → Updating → timestamps → field mutators → UPDATE → Updated → Saved`. Same-type timestamp mutators run once on the effective assignments and their final values must pass the field codecs. Before hooks see the supplied draft; after hooks receive complete stored snapshots, including database-triggered changes.
+Empty batches do not sample time. Set insert/upsert batches share one sample while retaining their explicit callback-skipping contract. On conflict update, managed update time copies the proposed `EXCLUDED` value, including `BEFORE INSERT` trigger effects. Creation time changes on conflict only if selected explicitly. An otherwise invalid empty update policy does not become valid because timestamps exist.
 
-Automatic assignments participate in [typed changes](model-changes.md): `Assigned()` records that the timestamp was written, while `Changed()` compares stored values. Hook failures, invalid values and failed SQL roll back the owning transaction or savepoint. After-commit behavior follows [model hooks](model-hooks.md). Physical deletion does not update timestamps. [Soft deletion](model-soft-deletes.md) shares one sample for `DeletedAt` and managed `UpdatedAt`; restoration clears `DeletedAt` and updates managed `UpdatedAt`.
+Insert-select may map creation time. It cannot map managed update time, which comes from the operation's clock. See [source insertion](model-insert-from-query.md).
 
-`CreateMany`, `Upsert` and `UpsertMany` apply timestamp conventions while retaining their explicit bulk semantics: they skip per-model observers. Each batch shares one clock sample. An upsert update action automatically copies its proposed `UpdatedAt`, preserving its Go normalization and PostgreSQL `BEFORE INSERT` changes without running the Go mutator again. This replaces any explicit update assignment for that field. `CreatedAt` changes on conflict only when the policy explicitly selects it. `DO NOTHING` and update conditions retain their skipped-result behavior.
-
-Conflict targets and original policies must still be valid; an empty update policy does not become valid merely because Foundry could add `UpdatedAt`. Drafts and conflict policies remain reusable. See [typed upserts](model-upserts.md) and the [PostgreSQL timestamp acceptance](../../tests/fixtures/consumer/timequeries/timestamps_postgres_test.go).
+For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

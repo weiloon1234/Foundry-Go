@@ -4,7 +4,7 @@ Milestone 18 passed native verification and consumer review. The
 [master evidence](../../blueprint/00-master-architecture-and-parity.md#milestone-18-verification-and-consumer-review)
 records the checks and operational limits.
 
-`countries.Country` is an ordinary generated model with the typed
+`countries.Country` is an handwritten ORM model with the typed
 natural primary key `countries.Code`. Reference data is installed only through an
 explicit seeder invocation.
 
@@ -49,3 +49,5 @@ declaration provides typed queries and administrative updates, for example
 `countries.Countries.Update(ctx, tx, code, countries.Countries.Status.Set(countries.EnabledStatus))`. Currency and timezone collections use typed immutable JSON snapshots;
 decode them explicitly to obtain fresh slices. Activation status is a generated
 enum, and optional fields retain the distinction between null and zero.
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).

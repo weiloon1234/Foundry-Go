@@ -13,7 +13,7 @@ The adapter's schema contains both the factor table and domain model queries.
 
 Bind `mfa.Factors[M,K]` with the existing model provider, a separate typed MFA
 lockout throttle and `mfa.Model[M,K]`. Domain callbacks lock the current model by its concrete key, select the stored enabled
-flag, update it through normal generated model writes, provide the account label,
+flag, update it through normal ORM writes, provide the account label,
 enforce required-factor policy and invalidate credentials in the supplied
 transaction. Pass `auth.Revocations.Invalidate` for all registered session/token
 guards.
@@ -302,3 +302,5 @@ Compiler and editor cases verify model/key/response ownership. Authentication ev
 rejection notices. `RetireIn` joins an authorized administrative account-deletion
 transaction. See [events and maintenance](auth-operations.md) for concrete consumer
 composition, rollback semantics, lock ordering and limits. These additions passed the milestone gate.
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).

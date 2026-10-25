@@ -62,8 +62,8 @@ checks and model scopes. `Input` and `Scalar` implement `SelectionSource` for
 projections and subqueries, but do not implement the join `Source` interface.
 Use `As` on a model query to join its filtered or limited SELECT through an alias
 boundary. Passing either adapter directly to a join is a compile error.
-Locked queries are excluded. Transaction variants wait
-for Stage 6c's transaction record/projection adapters.
+Locked queries require `LockedRecord` and the explicit
+[transaction source family](transactions.md).
 
 ```go
 outer := rows.From(Users.Query())
@@ -155,16 +155,16 @@ including declarations with identical Go types and SQL names.
 
 Visibility, grouping rules, lateral ordering, bound SQL values, declaration checks
 and nested-query limits use the existing shared compiler. Ordinary join boundary
-checks also apply to the lateral parent. Transaction variants still wait for 6c.
-CTE composition will be covered when the Stage 6c CTE API exists; correlated
-records currently have no ordinary selection-source capability.
+checks also apply to the lateral parent. [Transaction variants](transactions.md)
+retain the lock requirement. Correlated records have no ordinary selection-source
+capability; use an explicit lateral join before [CTE composition](composition.md).
 
 ## Complete record adapters
 
 See [complete records and transaction projections](records.md) for `ModelRecord`,
 `RecordOf`, `AsRecord`, `SelectRecord` and the transaction-required record family.
 These adapters retain complete decoders and provide the shared foundation for
-Stage 6c CTE/set/cursor composition and Stage 6b4 transaction joins.
+CTE/set/cursor composition and transaction joins.
 
 See [CTEs, recursion and set operations](composition.md) for complete-record CTEs,
 transaction CTEs, recursive self scopes, and record/scalar set composition.

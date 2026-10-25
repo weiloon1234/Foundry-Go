@@ -1,78 +1,62 @@
 # Typed lateral joins
 
-A lateral join evaluates a right-hand query using the current preceding row. This supports queries such as the two latest orders per user in one database statement. It uses the same explicit [correlation scopes](model-correlations.md), generated fields and complete record decoders as other Foundry queries. See [PostgreSQL lateral semantics](https://www.postgresql.org/docs/18/queries-table-expressions.html#QUERIES-LATERAL).
+<!-- compiled-examples -->
 
-When the correlated SELECT needs its own row locks, use [transaction-required correlation and lateral joins](transaction-correlations.md). They share these scope and join semantics while retaining the enclosing transaction requirement.
+A lateral source returns complete records for each preceding outer row. Build an
+explicit correlation, then select a complete inner record or a handwritten rows
+projection. `rows.AsLateral[Tag]` retains the required outer owner; lateral join
+helpers require that owner as their left input.
 
-## Complete models per parent
+## Select records per parent
 
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/lateralqueries/records_postgres_test.go):
+
+<!-- go-source: tests/fixtures/consumer/lateralqueries/records_postgres_test.go -->
 ```go
-type buyerAlias struct{}
-type orderAlias struct{}
-type latestAlias struct{}
-
-buyers := query.As[buyerAlias](models.QueryUsers(), "buyer")
-orders := query.As[orderAlias](models.QueryOrders(), "candidate")
-link := query.Correlate(buyers, orders)
-buyer := models.UserFieldsAt(query.OuterScope(link, buyers.Scope()))
-orderScope := query.InnerScope(link, orders.Scope())
-order := models.OrderFieldsAt(orderScope)
-link = link.Where(query.Equal(order.BuyerID, buyer.ID))
-
-records := query.SelectCorrelatedRecord(
-    link, orderScope,
-).OrderBy(order.TotalCents.Desc(), order.ID.Asc()).Limit(2)
-
-latest := query.AsLateral[latestAlias](records, "latest")
-joined := query.CrossJoinLateral(buyers, latest)
-result, err := query.SelectRecord(
-    joined, query.RightScope(joined, latest.Scope()),
-).All(ctx, db)
+func userOrders[L any](outer rows.ScopeSource[L], scope expr.Scope[L, models.User]) (rows.CorrelatedSource[L, rows.Alias[ordersAlias, models.Order]], expr.Scope[rows.Correlation[L, rows.Alias[ordersAlias, models.Order]], models.Order]) {
+	orders := rows.As[ordersAlias](models.Orders.Query(), "orders_for_user")
+	c := rows.Correlate(outer, orders)
+	inner := rows.InnerScope(c, rows.Scope(orders))
+	u, o := rows.OuterScope(c, scope), inner
+	return c.Where(expr.Equal(expr.At(o, models.Orders.BuyerID), expr.At(u, models.Users.ID))), inner
+}
 ```
 
-`result` is `[]models.Order`, hydrated through the original generated decoder. The limit applies independently to each buyer. Multiple matching right rows retain their multiplicity; an empty right result removes that buyer from a cross or inner lateral join. Inner ordering chooses the per-parent records; add final ordering when the completed result order matters.
-
-`SelectCorrelatedRecord` accepts complete preserved inner records, including declared projections. It cannot hydrate a missing outer-join side into an incomplete model.
+The linked package uses `SelectCorrelatedRecord(c, scope)` with an order and
+`Limit(1)`, then `AsLateral` and `LeftJoinLateral` to select one order per user.
+`CrossJoinLateral`/`InnerJoinLateral` drop parents without an inner result;
+`LeftJoinLateral` retains them with nullable right fields. Use `LateralScope` and
+the usual preserved/nullable scope helpers to map outputs.
 
 ## Preserve parents without matches
 
-```go
-joined := query.LeftJoinLateral(buyers, latest)
-nullable := models.OrderNullableFieldsAt(
-    query.NullableRightScope(joined, latest.Scope()),
-)
-totals, err := query.SelectValue(joined, query.Value(nullable.TotalCents)).All(ctx, db)
-```
-
-`totals` is `[]value.Nullable[int64]`. Use a declared projection to include buyer fields beside nullable order fields. A left lateral join retains a buyer when the right query yields no rows or its ON conditions reject every candidate. `LeftNullableScope` preserves an already-nullable field through a later join; `OuterNullableScope` brings it into another explicit correlation.
-
-`InnerJoinLateral` and `LeftJoinLateral` accept optional typed `JoinOn` conditions. Omitting them means `ON TRUE`; multiple conditions combine with AND. Use the existing `On`, computed `OnEqual`/`OnLess`, and `WhereLeft`/`WhereRight` contracts. Conditions inside the correlated query run before its limit, ON runs against those selected candidates, and a final result WHERE can remove preserved parents. These placements are deliberately distinct.
+Inner and left lateral joins accept typed ON conditions; no conditions means
+ON TRUE. Inner WHERE runs before the inner limit. ON filters those candidates;
+final WHERE can remove the preserved parent. An outer limit bounds the completed
+result, not each parent's candidate set. Supply final ordering separately.
 
 ## Declared reports
 
-Each generated projection has `ProjectCorrelatedReport(source)` and `SelectCorrelatedReport(source, selection)` counterparts to its ordinary selectors. The fluent builder infers both scopes and checks every output value:
+`rows.ProjectCorrelated(c, schema, mappings...)` creates a correlated record from
+ordinary model/rows fields and selected expressions. An aggregate without grouping
+returns one row even for no matches: count zero, sum NULL. HAVING can remove it.
+`rows.HavingCorrelatedRecord` and `DistinctCorrelatedRecord` keep the outer owner.
+Window expressions retain their own SELECT phase.
 
-```go
-type statsAlias struct{}
-
-summary := reports.ProjectCorrelatedOrderSummary(link).
-    SelectTotal(query.Sum(order.TotalCents).Value()).
-    SelectCount(query.CountField(order.ID).Value()).Query()
-
-stats := query.AsLateral[statsAlias](summary, "stats")
-joined := query.CrossJoinLateral(buyers, stats)
-```
-
-The filtered `link` from the first example includes only that buyer's orders. A plain aggregate produces one row even for no matching orders: count is zero and sum is NULL. HAVING can remove that aggregate row.
-
-Correlated records retain typed `Where`, `GroupBy`, `Having`, `OrderBy`, `Distinct`, `DistinctOn`, `DistinctOnValues`, `Limit` and `Offset`. Window expressions use `WindowFor(link)` and retain their own SELECT phase. `Exists` returns a predicate for the required outer scope. Complete joined results reuse ordinary pagination, CTEs, sets and explicit transaction-scoped row locking. An outer lock on a chosen preserved source uses the existing `ForUpdate().Of(scope)` contract.
+A complete preserved lateral result can use `SelectRecord`; missing sides need
+nullable projection fields. Read results compose with ordinary pagination, CTEs,
+sets and explicit transaction-required locks.
 
 ## Ownership and validation
 
-`CorrelatedRecordQuery` cannot execute independently, become an ordinary alias/CTE, or enter an ordinary join. `AsLateral` retains its outer type, and lateral join functions require that same left input type. Right/full correlated lateral joins are not exposed because the preserved right side cannot depend on a missing left row.
+Correlated records cannot execute independently or become ordinary uncorrelated
+aliases/CTEs. No right/full correlated lateral join is exposed: a preserved right
+side cannot depend on an absent left row. Concrete alias visibility, grouping,
+window bounds and complete result mappings are validated before I/O, including
+zero-limit reads. Ordinary derived sources still reject accidental correlation.
 
-Runtime validation checks concrete alias names, complete metadata, source visibility, expression bounds and windows before executor access, including zero-limit reads. A lateral input can reference its declared preceding sources; its own alias and future joins cannot satisfy that requirement. Ordinary derived sources continue to reject accidental correlation. Inner aggregates over only outer fields remain invalid because PostgreSQL would assign them to a different query level.
+Use [transaction correlations](transaction-correlations.md) when locks belong to
+the dependent SELECT. Parameter binding and decoding share the normal
+[projection runtime](model-projections.md).
 
-Generation and execution share existing mapping validation, AST traversal, parameter binding, CTE discovery and decoders. Applications provide domain models, declared report structs and typed predicates; they do not construct SQL column strings or a second schema.
-
-The [independent consumer fixtures](../../tests/fixtures/consumer/lateralqueries) exercise these APIs. The [master roadmap](../../blueprint/00-master-architecture-and-parity.md) records verification evidence and remaining milestone work.
+For declaration and API migration, see the [ORM migration guide](orm-migration.md).

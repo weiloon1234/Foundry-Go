@@ -122,7 +122,10 @@ func lockSubject(ctx context.Context, tx *database.Tx, address token.Address, id
 			return tokenstore.Subject{}, false, err
 		}
 		draft := []orm.Assignment[tokenstore.Subject]{tokenstore.Subjects.Key().Set(key), tokenstore.Subjects.Scope.Set(scope), tokenstore.Subjects.Identity.Set(data)}
-		if _, err := orm.Upsert(ctx, tx, tokenstore.Subjects.Query(), orm.OnConflict(orm.ConflictKey(tokenstore.Subjects.Key())).DoNothing(), draft...); err != nil {
+		// Both the primary key and (key, scope) are unique. Concurrent first
+		// inserts can conflict on either index; naming only the primary key
+		// leaves the other violation unhandled. Re-read and validate below.
+		if _, err := orm.Upsert(ctx, tx, tokenstore.Subjects.Query(), orm.OnConflict[tokenstore.Subject]().DoNothing(), draft...); err != nil {
 			return tokenstore.Subject{}, false, err
 		}
 	}

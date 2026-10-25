@@ -1,79 +1,47 @@
 # Soft deletion and restoration
 
-Declare a persisted `DeletedAt` field with `value.Nullable[time.Time]` or `value.Nullable[temporal.DateTime]`. Generation enables soft deletion automatically and documents it beside the actual field, including any custom getter or setter. Column tags retain their usual mapping. The migration owns the nullable timestamp column.
+Declare `value.Nullable[time.Time]` or `value.Nullable[temporal.DateTime]` through `orm.SoftDeleteOf`. Store the resulting `SoftDelete[M, V]` column and `orm.SoftDeletes(column)` token in the table declaration. The [typed roles guide](model-declarations.md) shows `Users.DeletedAt` and `Users.Soft`.
 
-```go
-//foundry:model table=members
-type Member struct {
-    ID        model.ID[Member]
-    Name      string
-    DeletedAt value.Nullable[time.Time]
-}
-```
-
-`soft_deletes=true` on the model directive requires a valid persisted `DeletedAt`; `soft_deletes=false` leaves the field ordinary. Managed deletion fields must be non-primary and use one of the exact nullable instant types above. Go aliases and same-type mutators are supported; distinct mutator inputs are rejected because Foundry cannot invent the input for an automatic timestamp.
+The column must be non-primary. Migrations own its nullable SQL column. `NoSoftDeletes()` leaves an ordinary deletion field under application control and conflicts with an explicit `SoftDeleteOf` role. A nullable timestamp declaration alone does not supply the force-delete capability.
 
 ## Typed writes and visibility
 
-The [independent consumer](../../tests/fixtures/consumer/softqueries/models.go) also declares managed creation/update timestamps, an explicit deletion getter, self-relations and a pivot model. Its generated API supports:
+`Table.Delete` and package `orm.Delete` soft-delete configured models, returning the stored post-write model. `Table.Restore` clears the deletion time on one deleted key. `orm.RestoreEach` restores a bounded set and requires the soft token. Ordinary models retain physical deletion.
 
+<!-- orm-example: force-after -->
 ```go
-q := softqueries.QuerySoftMembers()
-member, err := q.Create(ctx, db, softqueries.MemberDraft{}.SetName("member"))
-if err != nil {
-    return err
+func forceDelete(ctx context.Context, tx *database.Tx, id int64) error {
+	_, err := orm.ForceDelete(ctx, tx, Users.Query().WithTrashed(), Users.Soft, Users.Key(), id)
+	return err
 }
-deleted, err := q.Delete(ctx, db, member.ID)
-if err != nil {
-    return err
-}
-restored, err := q.Restore(ctx, db, deleted.ID)
-if err != nil {
-    return err
-}
-_, err = q.WithTrashed().ForceDelete(ctx, db, restored.ID)
 ```
 
-`Delete` updates the deletion timestamp on one active model and returns its complete stored result. `Restore` selects one deleted model, clears its deletion timestamp and returns the restored result. `ForceDelete` physically removes one model within the query's current visibility and returns its pre-deletion model. All three retain explicit predicates and require the concrete model's primary key; no match returns `database.NotFound`.
+Package `orm.ForceDelete` accepts a query, soft token, typed key handle and stored key. `Table.ForceDelete` also requires the token. Both physically remove the model and return its pre-write snapshot. No match returns `database.NotFound`. Zero and foreign-declaration tokens fail before SQL.
 
-Ordinary model queries select active records. `WithTrashed()` includes active and deleted records; `OnlyTrashed()` selects deleted records; `WithoutTrashed()` restores the default. These immutable options preserve explicit predicates, including a caller's own deletion-field predicate. They apply to reads, counts, projections, pagination, iteration, query sources and updates. Locked queries retain both their visibility and transaction lock policy.
+Default queries select active rows. `WithTrashed()` includes both active and deleted rows, `OnlyTrashed()` selects deleted rows and `WithoutTrashed()` restores default visibility. These immutable choices preserve explicit predicates and global scopes.
 
-`Delete` only changes active records: `WithTrashed().Delete(...)` still selects active records, while `OnlyTrashed().Delete(...)` matches nothing. `Restore` selects deleted records regardless of the implicit visibility previously selected. `ForceDelete` respects the current visibility, so use `WithTrashed()` or `OnlyTrashed()` to physically delete an already-deleted model.
-
-Models without managed soft deletion retain physical `Delete`. Their generated APIs do not add the typed-key `Restore` and `ForceDelete` helpers. Applying trashed visibility or special deletion operations to a declaration without soft-delete metadata fails validation. Creation rejects explicit query predicates and non-default visibility.
+Ordinary delete always selects active rows. Restore selects deleted rows. Force deletion preserves the current query visibility: include trashed rows explicitly when removing already deleted models. Visibility applies to reads, counts, aggregates, relations, source queries and writes. Insert rejects non-default destination visibility.
 
 ## Relations and query composition
 
-Each related model has its own default scope. Changing a parent query's visibility does not expose deleted children or pivots automatically:
+Targets and pivots each retain their own visibility. A parent's `WithTrashed` does not expose deleted children. Relation descriptors support target `WithTrashed`, `OnlyTrashed` and `WithoutTrashed`; through descriptors separately support the pivot variants ending in `Pivot`.
 
-```go
-r := softqueries.MemberRelations()
-members, err := softqueries.QuerySoftMembers().With(
-    r.Children.WithTrashed(),
-    r.Groups.WithTrashed().OnlyTrashedPivot(),
-).All(ctx, db)
-```
-
-Direct and through relation descriptors support `WithTrashed`, `OnlyTrashed` and `WithoutTrashed` for the target model. Through descriptors independently support `WithTrashedPivot`, `OnlyTrashedPivot` and `WithoutTrashedPivot` for the pivot. Eager loading, relation predicates and aggregates use the descriptor's same visibility. Construct an aggregate with `query.Related(scopedRelation, ...)` when it should count that scoped relation.
-
-Visibility stays inside each model source during aliasing, CTEs, set operations and joins. A left join to a hidden model retains its unmatched outer row instead of filtering it away. Explicitly typed projections remain DTOs; soft deletion does not turn models into public transport contracts.
+Joins, subqueries and CTEs keep visibility inside each model source. A left join to a hidden row retains the unmatched outer row. Soft deletion does not cascade, release a unique key or change foreign-key semantics. Migrations must declare any partial unique index needed by the domain.
 
 ## Lifecycle, time and failures
 
-The callback stages are:
+| Operation | Callback order around SQL |
+| --- | --- |
+| Soft delete | `Deleting`, conventions, preparation, `UPDATE`, `Deleted` |
+| Restore | `Restoring`, conventions, preparation, `UPDATE`, `Restored` |
+| Force delete | `ForceDeleting`, `Deleting`, `DELETE`, `Deleted`, `ForceDeleted` |
 
-- Soft delete: `Deleting → automatic fields → mutators → UPDATE → Deleted`.
-- Restore: `Restoring → automatic fields → mutators → UPDATE → Restored`.
-- Force delete: `ForceDeleting → Deleting → DELETE → Deleted → ForceDeleted`.
+Local hooks precede observers within each stage. These operations do not also emit saving/updating stages. Before callbacks receive the locked stored model; after callbacks receive `orm.Changes[M]` with the operation kind. Soft deletion/restoration retain both snapshots; physical deletion has no after-model.
 
-Model-local callbacks run before provider observers within each stage. These operations do not also emit `Saving`, `Updating`, `Updated` or `Saved`. Before callbacks receive the locked stored model; after callbacks receive typed changes. `changes.Operation()` identifies the captured `lifecycle.SoftDelete`, `lifecycle.Restore` or `lifecycle.ForceDelete`. A standalone `Compare<Model>` result has no operation.
+Soft deletion and managed update time share one clock sample. Restoration clears deletion time and updates managed update time. Without managed update time, restoration needs no sample. Force deletion updates neither timestamp.
 
-Soft deletion and managed `UpdatedAt` share one application-clock sample, normalized to UTC microsecond precision. Restoration clears `DeletedAt` and updates managed `UpdatedAt`; restoring a model without managed timestamps does not need a clock sample. Force deletion does not update timestamps. Same-type mutators run once for assigned values; clearing NULL skips a scalar mutator. See [managed timestamps](model-timestamps.md).
+Ordinary assignments to the deletion field remain create/update operations. They do not dispatch deletion or restoration callbacks. Hook errors, cancellation, invalid values and SQL failures roll back the operation or savepoint. A unique-conflict restore leaves the model deleted. After-commit callbacks follow the [normal transaction contract](model-hooks.md#transactions-and-ownership).
 
-Soft deletion retains both stored snapshots in the change set. Only physical deletion has an absent after-model. Automatic assignments participate in field change tracking. Ordinary draft assignments to `DeletedAt` use normal create/update events; they do not implicitly become `Delete` or `Restore` calls. Exported fields remain stored values, and [custom getters](model-accessors.md) remain explicit.
+[Per-model batches](model-batch-writes.md) preserve lifecycle and audit. Set-based operations skip those callbacks, and upsert visibility does not silently become a restoration action.
 
-Hook errors, cancellation and database failures roll back the write or its savepoint. A restore that conflicts with a unique constraint returns the database error and leaves the model deleted. Foreign keys and indexes retain their database semantics: soft deletion does not cascade to relations or remove a row from an ordinary unique index. Use explicit migrations for any partial unique index needed by the domain.
-
-After-commit callbacks follow the [existing transaction contract](model-hooks.md); rollback discards them. Ordinary in-process callbacks do not provide durable delivery. Explicit bulk inserts/upserts still skip per-model observers, and their conflict policy owns conflict updates; default read visibility is not an extra upsert condition. [Per-model batch writes](model-batch-writes.md) preserve normal callbacks. [Events](events.md), the [transactional outbox](outbox.md) and [audit](audit.md) use their existing transaction/lifecycle contracts.
-
-The [lifecycle consumer](../../tests/fixtures/consumer/softqueries/lifecycle_postgres_test.go) and [visibility consumer](../../tests/fixtures/consumer/softqueries/visibility_postgres_test.go) exercise these public contracts. Current verification status is recorded in the [master blueprint](../../blueprint/00-master-architecture-and-parity.md).
+For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

@@ -102,8 +102,9 @@ roles by embedding or converting a column.
 
 Keep `Mutate<Field>` and `Access<Field>` methods as ordinary Go methods. Pass `nil`
 as the input constructor's transform to discover a named mutator at startup, as above.
-Use the constructor's typed transform for an explicit distinct-input binding;
-`orm.Mutate(fn)` is the same-type option on an Input carrier. Do not configure both
+Use the constructor's typed transform for explicit bindings, including same-type
+transformations. The legacy `orm.Mutate(fn)` option is rejected on ordinary columns;
+Input constructors take their transform argument instead. Do not configure both
 an explicit and a discovered mutator. Startup rejects orphan or invalid Mutate/Access
 methods. Accessors are explicit calls, not automatic projection or JSON presentation.
 

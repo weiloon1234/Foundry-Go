@@ -17,7 +17,7 @@ Declare an input DTO with `//foundry:dto`, generate its JSON descriptor, then us
 `notifications.Define(name, version, InputJSON())`. Reuse that same declaration for
 every recipient binding. `DefineRecipient` takes an existing `auth.Provider[M,K]`,
 its exact `auth.Guard[M]` declaration and a preference callback. The framework
-reuses the generated key codec and current eligibility policy. Matching provider
+reuses the declared key codec and current eligibility policy. Matching provider
 names do not permit substituting a different lookup authority.
 
 `notifications.Bind(definition, recipient, channels...)` retains both model and
@@ -33,11 +33,11 @@ the database requires the same protection as application messages.
 
 Capture a typed reference and input once when caller retries must preserve an ID:
 
+<!-- compiled-source: tests/fixtures/consumer/notifying/orders.go -->
 ```go
-pending, err := orders.Capture(ctx, user.FoundryReference(), input,
-    notifications.ID[models.User]{})
-if err != nil { return err }
-report, err := pending.Send(ctx, manager)
+func Capture(ctx context.Context, binding OrdersBinding, user models.User, input OrderPlaced) (notifications.PendingNotification[models.User, OrderPlaced], error) {
+	return binding.Capture(ctx, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user), input, notifications.ID[models.User]{})
+}
 ```
 
 The zero ID generates a UUIDv7. An explicit ID is a transport/retry boundary, not
@@ -73,7 +73,7 @@ never enter the durable snapshot. Snapshot size is bounded by the shared JSON
 limit; notification input and prepared output each have a 768 KiB limit.
 
 `DefineRealtime[C]` creates an owned private room and server-only event using the
-recipient's exact guard and generated model key. Register its `Registration()`
+recipient's exact guard and declared model key. Register its `Registration()`
 with the existing WebSocket registry before constructing a hub or distributed
 publisher. `RealtimeChannel` binds that declaration to a typed renderer and
 publisher; the renderer cannot choose another recipient room. `RealtimeMessage[D]`
@@ -249,3 +249,5 @@ No new dependency or external email provider send is required by notifications.
 Email transport support and the remaining real-provider smoke gap are documented
 in [email](email.md). Verification evidence is recorded in the
 [master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-17-verification-and-consumer-review).
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).

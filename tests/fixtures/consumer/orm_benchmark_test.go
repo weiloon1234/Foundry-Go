@@ -22,6 +22,8 @@ import (
 // Benchmarks use handwritten ORM declarations. Direct SQL is compiled by Foundry
 // before timing, then uses the same adapter and codecs as the ORM decoder.
 // This isolates query compilation and runtime ownership from database/codec cost.
+// Keep workloads/timed boundaries aligned with main's legacy fixture; run each
+// tree's own binary in alternating trials (docs/guides/goway-final-measurements.md).
 func ormBenchmarkStore(t testing.TB) (*database.DB, *sql.DB) {
 	t.Helper()
 	setup := pgtest.Open(t)

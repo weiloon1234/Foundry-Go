@@ -34,7 +34,7 @@ challenge consumption also roll back. Successful revocation is still provisional
 until the outer transaction commits.
 
 Ordinary credential changes can use the same group after locking and updating
-the model through generated APIs. Hold the model lock first and propagate errors.
+the model through ORM APIs. Hold the model lock first and propagate errors.
 Domain authorization, current-password confirmation and password policy still
 belong to their typed authentication/domain boundaries. Merely knowing a model ID
 never authorizes changing its credentials.
@@ -47,7 +47,7 @@ must not be used inside a credential-changing transaction.
 ## Password verification cannot outlive a reset into a new credential
 
 `auth.PasswordModel` now requires a `Lock(ctx, tx, priorModel)` callback. It uses
-the prior model's typed primary key with a generated `ForUpdate().Find` query.
+the prior model's typed primary key with a scoped `Where(key.Eq(id)).ForUpdate().First` query.
 Password verification still performs its normal login lookup and optional rehash.
 The resulting proof captures a check of that post-rehash snapshot.
 
@@ -73,7 +73,7 @@ issued, err := sessions.Issue(ctx, result.Proof(), session.IssueOptions{})
 // Check err. The original proof carries the transaction check automatically.
 ```
 
-Do not rebuild a password proof with `auth.NewProof(result.Subject().FoundryReference(),
+Do not rebuild a password proof with `auth.NewProof(identity.ReferenceOf(result.Subject()),
 ...)`: that constructor is a trusted custom-adapter boundary and does not verify
 credentials or preserve earlier verification. Pass `result.Proof()` directly.
 If narrowing grants, use `proof.WithAccessScopes(scopes)`, which retains its
@@ -98,7 +98,7 @@ ownership through savepoints; it is not a separate authorization capability.
 A shared internal helper scopes the configured schema inside a savepoint. It
 restores the previous search path on success; savepoint rollback restores it on
 failure. It never changes the caller's schema permanently or commits independently.
-Row operations remain generated ORM queries. Search-path inspection/control is
+Row operations remain ORM queries. Search-path inspection/control is
 an explicit infrastructure SQL boundary.
 
 Checked issuance and credential changes lock the application model before session
@@ -125,3 +125,5 @@ The new `Provider.RecheckPassword` shares the issuance validator and returns the
 current locked model to factor management. It retains model/key types and the
 original provider declaration; it does not convert a pending password result
 into full authentication. See [MFA prerequisites](mfa.md). Tests passed the milestone gate.
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).

@@ -8,6 +8,22 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Handle concurrent first-subject inserts across both unique indexes in token,
+  session and challenge stores. Preserve credential contention/admission fault
+  classifications while custom `As`-exposed committed or unknown outcomes remain
+  conservative; no automatic retries or schema changes.
+- Complete the integrated Stage 10 guides and editor coverage for handwritten
+  ORM declarations, lifecycle writes, relations/expressions/rows and framework
+  adapters. Examples are tied to compiled consumers; editor anchors and handwritten
+  field comments retain completion, hover and definition coverage. DTO generation
+  and published report/client contracts remain unchanged.
+- Bounded per-model adjustments distinguish missing or hidden keys
+  (`database.NotFound`) from visible rows rejected by the bound
+  (`orm.ErrBoundExceeded`). Empty guarded results add one scoped key-only locking
+  read; successful writes and unknown-commit handling remain unchanged.
+- Prepare Stage 11 paired measurement tooling and its runbook. Final runtime,
+  footprint and whole-app performance gates still require quiet-host measurements.
+
 - Retire CurrentEmailDraft/CreatorDraft in favor of typed assignment helpers.
   Separate legacy oracle recording from ordinary behavior tests, migrate sensitive
   and mutator PostgreSQL coverage to ORM declarations, and enforce parsed import

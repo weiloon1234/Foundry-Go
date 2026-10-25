@@ -96,9 +96,12 @@ func (p writePlan) mutateConflict(ctx context.Context) (writePlan, error) {
 	return p, nil
 }
 
-func (p writePlan) returning(ctx context.Context, rows rowSource, scan func(database.Row) error) error {
+func (p writePlan) returning(ctx context.Context, tx *database.Tx, rows rowSource, scan func(database.Row) error) error {
 	if p.conflict == nil {
-		return returningN(ctx, rows, scan, p.returnCount(), p.bounded)
+		if p.bounded {
+			return p.returningAdjustment(ctx, tx, rows, scan)
+		}
+		return returningN(ctx, rows, scan, p.returnCount())
 	}
 	count, err := returningCount(ctx, rows, scan, p.returnCount())
 	if err == nil {

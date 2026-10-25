@@ -1,47 +1,41 @@
 # Model pruning
 
-`database/prune` removes obsolete models in bounded batches, like Laravel's `Prunable` and `MassPrunable` models. Declare each prunable model with its typed selection and run the registry explicitly, typically from a scheduled command. Nothing prunes during application boot. The [tenant consumer](../../tests/fixtures/consumer/tenantqueries/prune_postgres_test.go) exercises both modes and the command.
+`database/prune` removes obsolete models in bounded batches. Register typed selections and run the registry explicitly; nothing prunes during application boot.
 
+<!-- orm-example: pruning -->
 ```go
-registry, err := prune.New(
-    prune.Model("app.trashed_documents",
-        QueryDocuments().WithoutGlobalScopes().OnlyTrashed().Query, prune.Mass),
-    prune.Model("app.expired_sessions",
-        QuerySessions().Where(SessionFields().ExpiresAt.Lt(cutoff)).Query, prune.Lifecycle),
-)
-result, err := registry.Run(ctx, db, prune.DefaultOptions())
+func pruneMembers(ctx context.Context, db database.Transactor, cutoff time.Time) (prune.Result, error) {
+	f := hooks.Members
+	registry, err := prune.New(prune.ORMSoftModel("app.old_members",
+		f.Query().OnlyTrashed().Where(f.UpdatedAt.Lt(cutoff)), f.Soft, prune.Lifecycle))
+	if err != nil {
+		return prune.Result{}, err
+	}
+	return registry.Run(ctx, db, prune.DefaultOptions())
+}
 ```
 
-The selection is an ordinary model query, so its filters, [global scopes](model-global-scopes.md) and soft-delete visibility decide what is obsolete; remove scopes explicitly when a maintenance job must see every tenant. A soft-delete model is force-deleted within the selection's visibility, so select trashed models with `OnlyTrashed` or `WithTrashed`.
+`prune.ORMModel` registers an ordinary model. `prune.ORMSoftModel` additionally takes its `SoftDeletable[M]` token for physical pruning. The selection retains predicates, scopes and visibility. Remove global scopes explicitly only when the maintenance task is authorized to cross them. Select `OnlyTrashed` to remove already deleted models.
 
-`prune.Lifecycle` removes each model through its ordinary (force) delete lifecycle, running hooks and provider observers. `prune.Mass` removes each batch with one `DELETE` and no per-model hooks; choosing it is the acknowledgement that hooks are skipped. Each batch is one transaction that locks at most `BatchSize` candidates in primary-key order (`Query.PruneBatch` is the execution boundary). A run repeats batches until one removes fewer than `BatchSize` models or `MaxBatches` is reached, in which case `Count.Remaining` is true. `DefaultOptions` allows 100 batches of 500 models per declaration. A failure stops the run; `Result` reports the committed removals and `StoppedAt`, and committed batches stay removed.
+`prune.Lifecycle` invokes each model's ordinary deletion or force-deletion lifecycle. `prune.Mass` selects one SQL deletion per batch and acknowledges that hooks, observers and audit are skipped. Each batch locks candidates in primary-key order and owns a transaction. Direct `orm.PruneBatch` and `orm.ForcePruneBatch` expose the same bounded operation.
+
+The registry repeats until fewer than `BatchSize` models are removed or `MaxBatches` is reached. In the latter case `Count.Remaining` is true. Defaults allow 100 batches of 500 models per declaration. A later failure preserves earlier committed batches; `Result` reports committed removals and `StoppedAt`. Unknown commit outcomes are not counted as confirmed removal or retried automatically.
 
 ## Command
 
-Consumer binaries expose the registry through the [database commands](migrations-and-seeding.md#consumer-commands) by setting `command.Resources.Prunables`:
+Expose the registry through `command.Resources.Prunables` in the [database command setup](migrations-and-seeding.md#consumer-commands).
 
 ```text
 prune list [--format text|json]
 prune run [--format text|json] [--name app.sessions ...] [--batch-size N] [--max-batches N]
 ```
 
-`prune run` without `--name` runs every declaration in name order.
+Without `--name`, the command runs declarations in name order.
 
 ## Scheduled pruning
 
-Configured applications can run declarations on the scheduler leader through the
-[housekeeping schedule](production-operations.md#housekeeping-schedule). Return
-`application.PruneModels(services, connection, declare)` in
-`FeatureDeclarations.Pruning`; `declare(now)` runs at the start of every run with
-the application clock, so cutoffs stay relative to that run:
+Configured applications can return `application.PruneModels(services, connection, declare)` in `FeatureDeclarations.Pruning`. The `declare(now)` callback returns `[]prune.Target` with cutoffs derived from the application clock at the start of each run.
 
-```go
-models, err := application.PruneModels(services, "", func(now time.Time) ([]prune.Target, error) {
-    cutoff, err := temporal.NewDateTime(now.Add(-30 * 24 * time.Hour))
-    return []prune.Target{prune.Model("app.expired_sessions",
-        QuerySessions().Where(SessionFields().ExpiresAt.Lt(cutoff)).Query, prune.Lifecycle)}, err
-})
-```
+The [housekeeping schedule](production-operations.md#housekeeping-schedule) runs on the scheduler leader. Task `models.<connection>` uses `features.maintenance.models` settings: `batch` supplies `BatchSize`, and `max_batches` supplies `MaxBatches`. Registration does not authorize destructive schema changes or reset any data store.
 
-The task `models.<connection>` uses `features.maintenance.models` batch settings
-(`batch` as `BatchSize`, `max_batches` as `MaxBatches`).
+For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

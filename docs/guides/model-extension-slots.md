@@ -1,351 +1,226 @@
 # Model extension slots
 
-A model can declare translated text, file attachments and typed schemaless
-values as ordinary Go fields. The policy for all of them lives in one model
-method, similar to Laravel model traits such as `HasTranslations` or
-`HasAttachments`, but checked by the compiler and generator. The data is stored
-in the shared framework tables of [model extensions](model-extensions.md) and
-[attachments](attachments.md); a slot never adds a column or a migration to the
-model's own table. The [articles consumer](../../tests/fixtures/consumer/articles/article.go)
-is the compiling example.
-
-The [model extension slot series](../../blueprint/model-extension-slots/README.md)
-owns the design; the [master](../../blueprint/00-master-architecture-and-parity.md#model-extension-slot-delivery)
-records delivery status.
+Declare translations, attachments and metadata as ordinary model fields, bind their
+offsets with `orm.SlotOf`, and declare their policies outside `orm.Define`. Slots
+store data in shared framework tables, not columns in the model's own table.
+The [articles consumer](../../tests/fixtures/consumer/articles/tables.go) contains
+the full declaration and HTTP workflow. See [ORM migration](orm-migration.md) for
+the old-to-new mapping.
 
 ## Declare slots on the model
 
+The [compiled extension example](../../tests/fixtures/goway/models/extensions/models.go)
+uses an integer key and four slot kinds:
+
+<!-- compiled-source: tests/fixtures/goway/models/extensions/models.go -->
 ```go
-//foundry:model table=articles
 type Article struct {
-    ID        model.ID[Article]
-    Slug      string
-    DeletedAt value.Nullable[temporal.DateTime]
-
-    Title     translations.Text          // foundry_model_translations
-    Summary   translations.Text
-    Logo      attachments.One[Article]   // foundry_attachments and a disk
-    Galleries attachments.Many[Article]
-    SEO       metadata.Value[SEO]        // foundry_model_metadata, no column
-}
-
-func defineArticleExtensions() ArticleExtensionSet {
-    return ArticleExtensionSet{
-        Title: translations.Options{MaxBytes: 512, Require: i18n.DefaultLocale},
-        Logo: attachments.Policy{Disk: Files, Accepted: []storage.MediaType{"image/png"},
-            Image: value.Set(imaging.NewPlan().Fill(32, 32, false).Format(imaging.PNG))},
-        Galleries: attachments.Policy{Disk: Files, MaxFiles: 4,
-            Accepted: []storage.MediaType{"image/png"}, Variants: []attachments.Variant{Thumbnail}},
-    }
+	ID      int64
+	Title   translations.Text
+	Cover   attachments.One[Article]
+	Gallery attachments.Many[Article]
+	SEO     metadata.Value[string]
 }
 ```
 
-`foundry make model Article --table articles --translated Title --attachment Logo
---metadata SEO --disk public` now creates [handwritten ORM declarations](model-scaffolding.md#add-extension-slots)
-with typed extension handles and generates only the metadata DTO codec. List each
-attachment policy's accepted media types before assembly. The directive-based
-examples on this page describe the retained legacy API for existing consumers;
-new scaffolded models use `orm.SlotOf`, `extensions.DefineORMOwner` and
-`slots.DeclareORM` instead.
+Its table namespace exposes `orm.Slot[Article, V]` handles; `V` is the exact
+slot field type. Bind each with `orm.SlotOf(b, &m.Field)` inside `orm.Define`.
+The owner derives from the table and its primary key:
 
-| Field type | Stored in | Policy entry | Zero policy |
-| --- | --- | --- | --- |
-| `translations.Text` | `foundry_model_translations`, one row per locale | `translations.Options` | 64 KiB per value, no required locale |
-| `attachments.One[M]` | `foundry_attachments` and the policy's disk | `attachments.Policy` | invalid: a Disk is required |
-| `attachments.Many[M]` | the same, in collection order | `attachments.Policy` | invalid: a Disk is required |
-| `metadata.Value[V]` | `foundry_model_metadata` | `metadata.Spec[V]` | version 1 and an inferred JSON contract |
+<!-- compiled-source: tests/fixtures/goway/models/extensions/models.go -->
+```go
+var Owner = extensions.DefineORMOwner("articles", orm.IdentityOf(Articles.Table, Articles.Key()), extensions.OwnerOptions{StorageModel: "extension_articles"})
+```
 
-Slots are not columns: generation excludes them from SQL, drafts, codecs and
-audit. The `M` argument of `One`/`Many` must be the enclosing model. The slot
-type selects cardinality, so a policy's `Cardinality` must be zero or match.
-Localized attachment collections keep the explicit `ForLocale` API; a slot
-policy with `Localized: true` is rejected.
+`attachments.One[M]` and `attachments.Many[M]` must use the enclosing model type.
+Slot bindings retain the concrete owner, key and value. A translation handle cannot
+load an attachment slot, and a handle for one owner cannot be used on another.
+Slots are excluded from parent SQL, assignments and automatic column audit.
 
-`define<Model>Extensions` is an unexported package function returning the generated
-`<Model>ExtensionSet`. It is required when the model has an attachment slot and
-optional otherwise; omitted entries use the zero policy. It runs once per
-process and must not call `<Model>Extensions()`.
+## Declare policies outside the table
 
-`translations.Options.Require` is an `i18n.LocaleRequirement` selecting the
-locales translated input must supply with nonempty text: `i18n.OptionalLocales`
-(the zero value), `i18n.DefaultLocale` or `i18n.AllLocales`. The slot's input
-rule and exact synchronization enforce it; lower-level translation writes do not.
+The guide binds policies once below. Here, `ext` is the compiled extension model
+package linked above:
 
-A metadata slot infers its JSON contract from a generated DTO (`SEOJSON()`), a
-string, boolean, integer or floating value, a type with a `JSONContract` method,
-or `json.RawMessage` through `contract.DynamicJSON()`. Enums are not inferred,
-because a scalar contract would accept values outside their members; wrap an enum
-in a DTO. Declare `metadata.Spec[V]{JSON: ...}` for any other value type; generation fails when
-such a slot has no `define<Model>Extensions`, and assembly fails when the entry stays
-empty. Adding optional fields to a DTO value needs no migration. Removing or
-renaming a field requires a `Version` increment, because strict decoding rejects
-stored unknown fields.
+<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go -->
+```go
+// ArticleExtensions binds policies to the exact stored slot types.
+// Example: ArticleExtensions.From(runtime).
+var ArticleExtensions = ext.Descriptors{
+	Title:   translations.TextOf(ext.Owner, "title", translations.Options{}, extensions.BindSlot(ext.Articles.Key(), ext.Articles.Title)),
+	Cover:   attachments.OneOf(ext.Owner, "cover", attachments.Policy{Disk: storage.DefineDisk("local"), Accepted: []storage.MediaType{"image/png"}}, extensions.BindSlot(ext.Articles.Key(), ext.Articles.Cover)),
+	Gallery: attachments.ManyOf(ext.Owner, "gallery", attachments.Policy{Disk: storage.DefineDisk("local"), Accepted: []storage.MediaType{"image/png"}}, extensions.BindSlot(ext.Articles.Key(), ext.Articles.Gallery)),
+	SEO:     metadata.ValueOf(ext.Owner, "seo", metadata.Spec[string]{}, contract.StringJSON[string](), extensions.BindSlot(ext.Articles.Key(), ext.Articles.SEO)),
+}
+```
+
+`TextOf`, `OneOf`, `ManyOf` and `ValueOf` produce thin typed handles backed by
+shared state. Their `From` methods borrow the existing translation, attachment
+and metadata managers. Group them in an application-owned namespace whose `From`
+and `All` methods compose those handles. The [compiled declaration](../../tests/fixtures/goway/models/extensions/models.go)
+shows both methods; `All` returns `[]orm.Relation[Article]`, built with each
+handle's `Relation(tableSlot)`.
+
+| Field | Shared storage | Policy |
+| --- | --- | --- |
+| `translations.Text` | `foundry_model_translations` | `translations.Options`; default 64 KiB per value and no required locale |
+| `attachments.One[M]`, `attachments.Many[M]` | `foundry_attachments` and a disk | `attachments.Policy`; a disk and accepted media types or an image plan are required |
+| `metadata.Value[V]` | `foundry_model_metadata` | `metadata.Spec[V]` and an explicit JSON descriptor; default version 1 |
+
+The example accepts PNG files; configure the named disk before assembly. Cardinality
+comes from the handle kind; a conflicting policy is invalid. Localized collections
+use the explicit `attachments.Define` and `ForLocale` path, not slot policies.
+
+`translations.Options.Require` accepts `i18n.OptionalLocales`, `i18n.DefaultLocale`
+or `i18n.AllLocales`. Complete input rules and exact synchronization enforce it;
+merge operations retain other locales. A metadata value uses the same generated
+DTO codec or explicit `contract` descriptor as its public value contract. Adding
+optional DTO fields needs no storage migration. Removing or renaming fields needs
+a metadata version change because strict decoding rejects stored unknown fields.
 
 ## Stored names and owner identity
 
-A slot's stored name is its snake_case Go field name (`Galleries` →
-`galleries`). Renaming the Go field changes the stored name and hides existing
-data, like renaming a column without a migration. Pin the stored name before
-renaming the field (the generated field notice states whether a name is pinned):
+The owner name, `StorageModel`, and each slot's name are explicit persisted identity.
+Keep these literals stable when renaming a Go field or table. A Go field rename
+alone does not move slot data. Changing `"title"` to a different stored name hides
+its old rows until you restore the name or migrate the data.
 
-```go
-Content translations.Text `foundry:"name=body"`
-```
-
-Stored names are lowercase letters, digits, `_`, `.` or `-`, and are unique
-across the model's slots. `From` and `All` are reserved Go field names.
-
-Generation declares one [extension owner](model-extensions.md#shared-owners) per
-model with slots. Its owner name and storage model default to the table name,
-which gives the same scope as `extensions.DefineOwner` with that name. A model
-can therefore move from hand-written declarations to slots without moving data.
-Before renaming a table, pin the owner with the model directive:
-
-```go
-//foundry:model table=posts extension_owner=articles
-```
-
-Recovery after an undeclared rename, with `PreviousModels` and the `rescope`
-commands, stays on the explicit owner path.
-
-## Generated API
-
-For `Article`, generation emits:
-
-- `ArticleExtensionSet`, the policy type returned by `defineArticleExtensions`;
-- `ArticleExtensionSlots`, with one typed descriptor per slot:
-  `translations.TextSlot[Article, K]`, `attachments.OneSlot[Article, K]`,
-  `attachments.ManySlot[Article, K]` and `metadata.ValueSlot[Article, K, V]`;
-- `ArticleExtensions()`, the unbound descriptors, built once per process, with
-  `From(runtime)` to bind them and `All()` listing every slot for eager loading;
-- `ArticleExtensionOwner()`, the owner shared with the explicit APIs;
-- `ArticleExtensionDeclaration()` and a package-level `FoundryExtensions()`
-  listing every slot-owning model of the package.
-
-Each descriptor exposes its underlying declaration (`Field()`, `Collection()` or
-`Key()`), so every existing translation, attachment and metadata operation keeps
-working with the generated owner. Descriptors and slot fields carry generated
-documentation, and `foundry generate --field-docs` adds a notice beside each slot
-field naming its storage, policy and descriptor.
+Stored names use lowercase letters, digits, `_`, `.` or `-`, and are unique across
+the owner's slots. See [owner renames and recovery](model-extensions.md#owner-identity-and-table-renames)
+for `StorageModel`, `PreviousModels` and maintenance commands. Attachment object
+paths embed the scope, so declare the stable storage model before renaming a table.
 
 ## Application assembly
 
-Register a model package once:
+Return `slots.DeclareORM(owner, parts)` from an application-owned declaration
+function. `parts` lists the handles' `Registration()` and `Describe()` values:
 
+<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go -->
 ```go
-app, err := application.New(settings).
-    Models(models.FoundryExtensions()...).
-    Build(ctx)
+func articleDeclaration() slots.Declaration {
+	return slots.DeclareORM(ext.Owner, slots.Parts{
+		Translations: []translations.Registration{ArticleExtensions.Title.Registration()},
+		Attachments:  []attachments.Registration{ArticleExtensions.Cover.Registration(), ArticleExtensions.Gallery.Registration()},
+		Metadata:     []metadata.Registration{ArticleExtensions.SEO.Registration()},
+		Slots:        []extensions.SlotDescription{ArticleExtensions.Title.Describe(), ArticleExtensions.Cover.Describe(), ArticleExtensions.Gallery.Describe(), ArticleExtensions.SEO.Describe()},
+	})
+}
 ```
 
-Each declaration adds its owner and slots to the existing extension, translation,
-attachment and metadata managers, so duplicate detection and limits stay in those
-owners. `Build` fails before acquiring resources when a declaration needs a
-disabled feature, naming its owner: every slot needs `features.extensions`,
-translated slots need `features.locales`, and attachment slots need
-`features.attachments` with storage.
+Pass that declaration to `application.Builder.Models`. Register the model's checked
+tables separately through `application.WithTables`. Assembly rejects duplicate
+registrations and missing feature dependencies before acquiring resources. Every
+slot needs extensions; translated slots need locales, and attachments need storage
+and attachments enabled.
 
-Bind the runtime once in a constructor. `Services.ModelExtensions()` returns the
-enabled managers:
-
-```go
-runtime, err := services.ModelExtensions()
-x := models.ArticleExtensions().From(runtime)
-```
-
-Descriptors borrow the managers; they never look services up per call. A
-manager left nil, for example in a hand-built `slots.Runtime`, leaves that slot
-kind unbound. Direct foundation assembly registers a declaration with
-`declaration.Register(registrar, poolKey, resolve)` on each pool that deletes the
-model, passes its `Owner()` and `Parts()` to the managers it constructs, and sets
-`Runtime.Store` to their extension store; without it, cleanup can only join
-deletions on the store's own pool.
+Bind managers once in a constructor using `services.ModelExtensions()` and your
+namespace's `From(runtime)`. A nil manager leaves its handle unbound. Direct
+foundation assembly registers the declaration's cleanup observers for every pool
+that can delete its owner and supplies `slots.Runtime.Store` for cross-pool cleanup.
 
 ## Loading slots
 
-A bound descriptor is an ordinary eager-loading relation:
-
+<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go -->
 ```go
-list, err := models.QueryArticles().
-    With(models.ArticleRelations().Author, x.Title, x.Logo, x.Galleries, x.SEO).
-    All(ctx, tx)
+func articles(ctx context.Context, db database.Executor, runtime slots.Runtime) ([]ext.Article, error) {
+	bound := ArticleExtensions.From(runtime)
+	return ext.Articles.Query().With(bound.All()...).All(ctx, db)
+}
 ```
 
-Slots load wherever relations load: `All`, `First`, `Find`, `RequireFind`,
-numbered, simple and cursor pagination, `Each`/`Chunk` per batch, explicit
-`Load` and `LoadMissing`, and nested descriptors such as
-`QueryAuthors().With(AuthorRelations().Articles.With(x.Title))`. `x.All()`
-returns every slot for an edit screen: `With(x.All()...)`. `Count` and `Exists`
-never load slots, and repeating a slot in one query fails validation. An
-unbound descriptor fails validation with `fault.Missing` before the parent SQL.
+A bound handle's `Relation` participates in `With`, nested relations, `orm.Load`
+and `orm.LoadMissing`. Use `orm.LoadFrom` or `orm.LoadMissingFrom` when the source
+query carries custom relation limits. `Count` and `Exists` do not load slots.
+Repeated slots fail validation; unbound handles fail before parent SQL.
 
-Each slot costs its manager's batch queries per parent batch, independent of the
-number of parents: an owner check and translation pages for text, an owner check,
-the files and their variants for attachments, and an owner check and values for
-metadata. Parent batches follow `RelationLimits.BatchSize` (500 by default), and
-attachment batches are further limited so `MaxFiles` fits the 4096-file bound. A
-batch beyond a store's row or byte limit is halved and retried, so large content
-loads whenever each owner fits alone.
-Each loaded value (a stored text set, metadata value or file) is charged against
-the query's `RelationLimits` budget as fetched and attached, per parent batch, so
-an over-budget read stops early. Slots also respect `MaxDepth`.
+Each slot uses the manager's batch queries per parent batch: an active-owner check
+and text pages, files and variants, or metadata values. Relation batches default
+to 500 parents. Attachment batches also respect the 4096-file bound. Oversized
+row or byte batches split and retry, until each owner fits or fails alone.
+Fetched and attached values consume the query's relation budget, including depth.
+Load only the slots a response needs.
 
-Loading two translated fields and one metadata value through `With` costs about
-the same as the equivalent explicit batch loads: about 1.9 ms for one article
-(0.2 ms more than explicit loads), 17–26 ms for 100 and 160–170 ms for 1000
-(within 5%), against 0.3–1.6 ms for the parent rows alone, on native PostgreSQL
-on an Apple M4 Max ([measurements](../evidence/model-extension-slots-performance-20260930.json);
-the [E05 baseline](../evidence/model-extension-slots-e05.json) was 280 ms for
-1000). Slot loading derives each parent's owner subject key once per batch and
-reuses it when filling parents, which lowered the median at 1000 parents from
-172 ms to 152–157 ms and at 100 from 28 ms to 25 ms on the same host
-([measurements](../evidence/model-extension-slots-followups-20260930.json)).
-Most of the remaining cost is decoding and checking each stored row's persisted
-owner identity, which is kept: it is what refuses a row whose stored identity
-does not match its owner, so it is not traded for speed. Load only the slots a
-response needs, such as `x.Title` and `x.Logo` for a listing.
-
-When the parent query runs in a `*database.Tx` of the extension store's pool,
-slot loading joins that transaction through a savepoint and sees its own
-uncommitted writes. Any other executor, including a custom wrapper, uses the
-store's own read-only snapshot. The parent query and slot loads are separate
-statements, as with relations. A parent that is soft-deleted (for example read
-with `WithTrashed`) or deleted concurrently keeps an unloaded slot, because
-extension data of inactive owners is unavailable to ordinary reads.
+A parent read through a `*database.Tx` on the store's pool lets slot reads join
+that transaction through a savepoint. Other executors use the store's read-only
+snapshot. Parent reads and slot reads remain separate statements. Inactive owners,
+including soft-deleted models read with `WithTrashed`, keep unloaded slots.
 
 ## Reading loaded slots
 
-Reads never perform I/O. Reading an unloaded slot reports `fault.Missing` or
-its loaded flag; a loaded slot distinguishes empty from present.
+Reads never perform I/O. Loaded state distinguishes an unloaded slot from a loaded
+empty value. Translations expose `Exact`, `Resolve`, `ResolveRequest` and `Values`.
+Their fallback is the requested locale, supported regional parents, catalog default,
+then remaining supported locales. Empty text is a present value.
 
-| Slot | Reads |
-| --- | --- |
-| `translations.Text` | `Exact(locale)`, `Resolve(locale)`, `ResolveRequest(ctx)` and `Values()`, with the existing fallback: requested locale, supported regional parents, catalog default, then the remaining supported locales. Empty text is a present value. `ResolveRequest` uses `i18n.RequestLocale`, or the catalog default. |
-| `attachments.One[M]` | `Get() (value.Optional[attachments.File[M]], bool)` |
-| `attachments.Many[M]` | `Get()`, `Len()` and `All()` in collection order |
-| `metadata.Value[V]` | `Get() (value.Optional[V], bool)`, decoded once at load |
-
-`attachments.File` carries the file's ID, collection, detected info, position,
-properties and ready variants. Bound attachment descriptors derive links from
-loaded slots without database or storage I/O: `x.Logo.PublicURL(ctx, article)`
-returns an absent optional for an empty slot, `x.Galleries.PublicURLs(ctx,
-article)` returns links in collection order, and `URL`, `TemporaryURL` and
-`VariantURL` link one loaded file. They apply the collection's rules, including
-the download-only default for script-capable files and `VariantUnavailable`.
-Authorize access before creating links. Slots refuse implicit JSON serialization;
-map loaded values into response DTOs.
+`attachments.One.Get` and `metadata.Value.Get` return the optional value and a
+loaded flag. `attachments.Many` exposes `Get`, `Len` and ordered `All`.
+Attachment handles derive `PublicURL`, `PublicURLs`, `URL`, `TemporaryURL` and
+`VariantURL` from loaded values without database or storage I/O. Authorize access
+before creating links; script-capable files retain the download-only default.
+Slots refuse implicit JSON serialization. Map loaded values into explicit DTOs.
 
 ## Writing slots
 
-Bound descriptors write for a model value; they derive its owner reference
-without I/O. The `In` forms join a caller's transaction through a savepoint, so a
-parent rollback rolls the write back; the other forms use the manager's own
-transaction. No write is retried automatically after an uncertain commit.
-
+<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go -->
 ```go
-err = db.Transaction(ctx, func(tx *database.Tx) error {
-    article, err := models.QueryArticles().Create(ctx, tx, models.ArticleDraft{}.SetSlug(in.Slug))
-    if err != nil {
-        return err
-    }
-    if err := x.Title.SyncIn(ctx, tx, article, in.Title); err != nil {
-        return err
-    }
-    return x.SEO.SaveIn(ctx, tx, article, in.SEO)
-})
+func saveArticle(ctx context.Context, tx *database.Tx, bound ext.Descriptors, article ext.Article, title map[i18n.LocaleID]string, seo string) error {
+	if err := bound.Title.SyncIn(ctx, tx, article, title); err != nil {
+		return err
+	}
+	return bound.SEO.SaveIn(ctx, tx, article, seo)
+}
 ```
 
-| Slot | Writes |
-| --- | --- |
-| `TextSlot` | `SaveIn`/`Save` merge the supplied locales in one statement and keep the others. `SyncIn`/`Sync` make the supported locales exactly the input and enforce `Options.Require`; locales removed from the catalog keep their retained rows. `ForgetIn`/`Forget` remove one locale and `ClearIn`/`Clear` the field. Every entry is validated before writing; empty text is a present value. |
-| `ValueSlot` | `SaveIn`/`Save` store the value with the declared version and contract; `ForgetIn`/`Forget` remove it. |
-| `OneSlot`, `ManySlot` | `ReplaceFile`/`Replace`, `PrepareFile`/`Prepare` with `ReplaceIn`, `Discard`, `Detach` and `Clear`; `ManySlot` adds `AddFile`/`Add`, `AddIn` and `Reorder`. |
+The `In` forms join the caller's transaction through savepoints. Other forms use
+the manager's transaction. Parent rollback rolls back text and metadata writes.
+Unknown commit outcomes require reconciliation, never an automatic retry.
 
-An attachment write reads, checks and stores the file, recording the upload in
-the manager's own transactions first so it stays visible for recovery whatever
-happens next, and then publishes it. To publish inside a transaction, prepare the
-file before the transaction begins and publish it inside:
+`TextHandle.Save` merges locales; `Sync` makes supported locales match complete
+input and enforces required locales. `Forget` removes one locale, and `Clear`
+removes the field. `ValueHandle.Save` writes the declared metadata version and
+contract; `Forget` removes it. Both have transaction-bound `In` forms.
 
-```go
-id, err := model.NewID[models.Article]()
-logo, err := x.Logo.PrepareFile(ctx, models.Article{ID: id}, in.Logo)
-err = db.Transaction(ctx, func(tx *database.Tx) error {
-    article, err := models.QueryArticles().Create(ctx, tx, draft.SetID(id))
-    if err != nil {
-        return err
-    }
-    _, err = x.Logo.ReplaceIn(ctx, tx, article, logo)
-    return err
-})
-```
+Attachment handles provide `PrepareFile`/`Prepare`, `ReplaceFile`/`Replace`,
+`ReplaceIn`, `Discard`, `Detach` and `Clear`; `ManyHandle` also has `AddFile`, `Add`,
+`AddIn` and `Reorder`. Prepare uploads before the business transaction so its
+snapshot can see them. Publish inside with `ReplaceIn` or `AddIn`; the owner may
+have been created by that transaction. Failed publication leaves the stored upload
+available for explicit recovery or `Discard`. Superseded files are cleaned after
+commit. See [publication and recovery](attachments.md#publication-and-recovery)
+for the full outcome contract.
 
-`PrepareFile` locks an existing owner while recording the intent and accepts a
-model the transaction will create, as here with its key chosen first.
-`ReplaceIn` and `AddIn` publish using only the caller's transaction, which must
-belong to the extension store's pool: the owner can be a model that transaction
-created, the file becomes visible when it commits, and any isolation level works
-because the upload was committed before the transaction began (one prepared after
-a REPEATABLE READ snapshot is reported as not visible). A failed or rolled-back
-publication leaves the prepared upload stored for another attempt; `Discard`
-reclaims it at once, and `attachments.ReconcilePending` after `StoredGrace`.
-Replaced files are cleaned, and unqueued variants generated, after that
-transaction commits; a failure there is returned as its after-commit error and
-leaves the work for reconciliation. A prepared upload belongs to the collection
-and locale that prepared it.
-
-`ReplaceFile` and `AddFile` publish in the manager's own transaction instead:
-commit the model, its text and metadata first, then publish files and inspect
-`Result.Publication` when an error is returned. Both forms accept any
-`attachments.FileSource`, such as `foundryhttp.UploadedFile`,
-and open and close it within the call; request cleanup still owns the spooled
-file. The client content type is only the existing text hint, with parameters
-dropped. For an ORM `ManyHandle`, call
-`attachments.AddFilesTo(ctx, x.Galleries, article, files)`. The retained generated
-`ManySlot` uses `attachments.AddFiles` with the same arguments. Both validate the
-bound slot and batch limit before opening files, then publish in order and stop
-at the first failure, returning every attempted result including the failed one.
-Files before a failure stay published; inspect unknown publication outcomes for
-reconciliation rather than retrying the batch.
+`attachments.AddFilesTo(ctx, bound.Galleries, article, files)` reuses the bounded
+batch implementation. It validates the bound handle and batch limit before opening
+files, publishes in order, and returns every attempted result, including a failed
+attempt. Earlier files remain published. Inspect unknown outcomes before retrying.
 
 ## Request input and validation
 
-Translated input needs no new DTO type. A `map[i18n.LocaleID]string` field is a
-JSON object keyed by locale (a [`LocaleMap<string>`](client-contracts.md) of the
-catalog's supported locales in the TypeScript client), and a multipart form carries it as a JSON part
-(`form:",json"`); use `value.Optional` of the map for PATCH omission. Validation
-comes from the slot:
+A `map[i18n.LocaleID]string` retains locale-keyed JSON and TypeScript contracts.
+Use `value.Optional` for PATCH omission or a JSON multipart part. The articles
+consumer binds its complete input to the handle's rule:
 
+<!-- compiled-source: tests/fixtures/consumer/articles/http.go -->
 ```go
-fields := ArticleInputValidationFields()
-endpoint.WithBodyValidation(fields.Title.Rules(x.Title.Rule()))
+input := ArticleInputValidationFields()
+	textRules := validation.All(
+		input.Slug.Rules(validation.NonBlank[string]()),
+		input.Author.Rules(validation.NonBlank[string]()),
+		input.Title.Rules(s.x.Title.Rule()),
+		input.Summary.Rules(s.x.Summary.Rule()),
+	)
 ```
 
-`Rule()` validates complete input written with `SyncIn`. It takes one locale
-catalog snapshot per check and reports issues at entry paths: an unsupported key
-as `foundry.supported_locale` (`/body/title/fr`), a missing or empty required
-locale as `foundry.required` (`/body/title/ms`) and oversized text as
-`foundry.max_bytes`. Values containing NUL, which writes reject, fail as
-`foundry.not_matches`; a locale key that cannot be a path segment is reported
-at the map itself. `MergeRule()` validates partial input written with `SaveIn`
-and omits the required-locale check, because a merge keeps unmentioned locales. It is built from the new server-only
-`validation.Locales` and `validation.MaxBytes` rules, which other locale-keyed
-inputs can use directly. An unbound slot's rule fails endpoint registration.
+`Rule` enforces complete input for `SyncIn`. `MergeRule` validates partial input
+for `SaveIn`, without requiring omitted locales. Both use one locale snapshot.
+Unsupported keys report `foundry.supported_locale`, required empty or missing
+locales report `foundry.required`, and oversized text reports `foundry.max_bytes`.
+NUL text reports `foundry.not_matches`. Unbound rules fail registration.
 
-`Accepts(ctx, file)` checks an upload against the slot's policy with the same
-filename, size and byte-detected media checks as a write, including image
-inspection, and without storage or database work. It buffers the upload under
-the manager's write admission, like a write. It returns false for a
-rejected file. Wrap it in `validation.Custom` with an application rule ID:
-
-```go
-logo := validation.Custom(validation.Spec{ID: "articles.logo", Message: "The logo is not an accepted image."},
-    func(ctx context.Context, file foundryhttp.UploadedFile) (bool, error) { return x.Logo.Accepts(ctx, file) })
-```
-
-HTTP's generic content sniff is not a substitute: it reports OOXML documents as
-ZIP archives that attachments accept. The write stays authoritative, including
-image transformation limits. The [articles consumer](../../tests/fixtures/consumer/articles/http.go)
-exercises JSON and multipart endpoints end to end.
+`Accepts(ctx, file)` applies the write policy's name, size, detected media and
+image checks without database or storage work. It buffers under manager admission.
+Wrap it in a typed `validation.Custom` rule as the [HTTP example](../../tests/fixtures/consumer/articles/http.go)
+does. The eventual write remains authoritative.
 
 ## Inspection and maintenance
 
@@ -356,8 +231,7 @@ storage table and policy bounds. `App.Models()` returns exactly the declarations
 only, so an agent or operator can see a model's extension storage without
 starting services.
 
-After a slot field is renamed without `foundry:"name=..."`, its rows remain under
-the old stored name. The read-only `undeclared` commands list stored names in an
+If the explicit stored-name literal changes, its rows remain under the old name. The read-only `undeclared` commands list stored names in an
 owner's current scope that no registered slot or declaration uses:
 
 ```sh
@@ -372,19 +246,19 @@ with one query returning at most 256 names; PostgreSQL still scans the owner's
 rows, so run them as maintenance. Beyond 256 stored names the report is marked
 truncated (`(truncated)` in text output) and can omit undeclared names. They never
 load stored text, values or files, and modify nothing. Restore the name
-with `foundry:"name=..."`, or remove the data deliberately through the explicit
+in the handle declaration, or remove the data deliberately through the explicit
 APIs.
 
 ## Deletion cleanup
 
-Each declaration registers a deletion observer (`lifecycle.NewDeletionObserver`)
+Each declaration registers a deletion observer (`orm.NewDeletionObserver`)
 on every configured database connection. Its `Deleted` callback runs the existing
 metadata, translation and attachment cleanup for every configured manager. Soft
 deletion keeps the data for restoration; force deletion removes it. A deletion
 observer takes part only in deletions: creates, updates, `UpdateAll` and
 `Increment` keep their unhooked paths on every connection, while per-model
 deletions take the observed path and set-based deletions (`DeleteAll`,
-`ForceDeleteAll`), which would skip cleanup, still need `WithoutModelHooks()`.
+`ForceDeleteAll`), which would skip cleanup, still need `orm.WithoutModelHooks(query)`.
 
 When the model is deleted through the extension store's connection, cleanup joins
 the deletion transaction, so a parent rollback keeps the data and suppresses file

@@ -7,31 +7,31 @@ Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/
 ## Model-owned flows
 
 The [independent consumer](../../tests/fixtures/consumer/recovering/recovery.go)
-shows ordinary Go models, generated queries and typed callbacks. Its model's
+shows ordinary Go models, ORM declarations and typed callbacks. Its model's
 stored password remains `password.Hash`; getters do not replace stored fields.
 
+<!-- compiled-source: tests/fixtures/goway/guideadapters/auth_test.go -->
 ```go
-// reset is *passwordreset.Reset[Member, model.ID[Member]].
-issued, err := reset.Issue(ctx, member.FoundryReference())
-// Check err. Deliver ONLY to issued.Subject().Email, the locked model snapshot.
-// issued.Token().Secret() is the explicit secret transport boundary.
-
-// Parse incoming data at the transport boundary; parsing does not authorize it.
-link, err := passwordreset.ParseToken[Member](secret.New(submittedToken))
-// Check err. newPassword is password.Plaintext, never a stored Hash or string.
-updated, err := reset.Complete(ctx, link, newPassword)
-// Check err. updated is Member. Completion does not sign the member in.
+func issueReset(ctx context.Context, reset *passwordreset.Reset[Account, int64], account Account) (passwordreset.Issued[Account], error) {
+	return reset.Issue(ctx, AccountIdentity.ReferenceOf(account))
+}
 ```
 
+Deliver only to the current locked subject returned by `issued.Subject()`.
+`issued.Token().Secret()` is the explicit transport boundary. Parse submitted
+tokens with `passwordreset.ParseToken[Account]` and pass the typed token and
+`password.Plaintext` to `Complete`; completion does not sign the account in.
+
+<!-- compiled-source: tests/fixtures/goway/guideadapters/auth_test.go -->
 ```go
-// verification is *emailverification.Verification[Member, model.ID[Member]].
-issued, err := verification.Issue(ctx, member.FoundryReference())
-// Check err before delivering to the issued model's current stored email.
-link, err := emailverification.ParseToken[Member](secret.New(submittedToken))
-// Check err.
-updated, err := verification.Complete(ctx, link)
-// Check err. updated contains the complete verified model.
+func issueVerification(ctx context.Context, verification *emailverification.Verification[Account, int64], account Account) (emailverification.Issued[Account], error) {
+	return verification.Issue(ctx, AccountIdentity.ReferenceOf(account))
+}
 ```
+
+Email verification has its own `emailverification.Token[Account]` and `Complete`
+method. It cannot accept a password-reset token. Check every error before delivery
+or further domain work.
 
 `passwordreset.Token[Member]` and `emailverification.Token[Member]` are different
 Go types. Another model's token is also a different type. Phantom type fields
@@ -147,11 +147,11 @@ before both recipient quota and lookup.
 
 `passwordreset.Model[M,K]` requires:
 
-- `Lock(ctx, tx, key)` using a generated `ForUpdate().Find` query.
+- `Lock(ctx, tx, key)` using a scoped `Where(key.Eq(id)).ForUpdate().First` query.
 - `Email(model)`, `EmailRevision(model)` and `Hash(model)` reading stored fields.
   The revision is a nonzero persisted `challenge.Revision[M]`, replaced in the
   model transaction whenever its email changes.
-- `SetPassword(ctx, tx, model, nextHash)` using a normal generated update and
+- `SetPassword(ctx, tx, model, nextHash)` using a scoped `orm.Update` and
   returning the complete updated model, preserving identity and email.
 - `ValidatePassword(ctx, plaintext)` for domain strength rules.
 - `Invalidate(ctx, tx, updatedModel)` for credential invalidation in the same
@@ -231,7 +231,7 @@ may take time. An action that finishes after expiry rolls back.
 Concurrent uses serialize: only one can complete. Before-commit errors, callback
 panic, `runtime.Goexit`, cancellation and failed model hooks roll back the model
 change and consumption together. A still-live link remains available after rollback.
-All model mutations use the ordinary generated lifecycle/transaction pipeline.
+All model mutations use the ordinary ORM lifecycle and transaction pipeline.
 No writes or callbacks are automatically retried. An uncertain commit returns an
 error and no model or secret; the caller must not blindly replay side effects.
 An after-commit callback failure also returns no model, but its database error
@@ -268,7 +268,7 @@ token adapters and starts no database server.
 Register `challenge/postgres.Migrations()` with the existing migration runner.
 They own `foundry_challenge_subjects` and `foundry_challenges`, constraints and
 indexes. Migrations run explicitly; construction and startup do not synchronize
-schemas automatically. Ordinary data operations use generated model queries;
+schemas automatically. Ordinary data operations use ORM declarations;
 only schema control and migration definitions use infrastructure SQL.
 
 `Revoke(ctx, modelReference)` explicitly revokes that purpose's current link.
@@ -290,3 +290,7 @@ Native PostgreSQL, JSON/HTTP, requester ownership/quota/diagnostics, historical
 email revisions, rollback, compiler and real-gopls tests passed. Generation is
 current for framework stores and consumer DTOs. See the [master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-10-acceptance)
 for complete evidence. Email transport acceptance and durable job delivery retain their separate operational requirements.
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).
+
+The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

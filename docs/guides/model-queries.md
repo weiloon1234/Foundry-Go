@@ -1,128 +1,91 @@
 # Typed model queries
 
-Generated model queries now compile and execute PostgreSQL reads through Foundry's [database runtime](database-runtime.md). Handwritten models remain the source of field names, column mappings and value types. The [independent PostgreSQL consumer](../../tests/fixtures/consumer/model_query_postgres_test.go) exercises the complete public flow.
+<!-- compiled-examples -->
 
-See [ORM performance](orm-performance.md) for reproducible comparisons with
-direct SQL and the internal optimizations that preserve existing consumer APIs.
+Declare a model's table and columns once with `orm.Define`; `Table.Query()` returns
+an immutable `orm.Query[M]`. Models and returned collections remain ordinary Go
+structs and slices. The [handwritten declarations](../../tests/fixtures/consumer/models/orm.go)
+and [migration examples](../../tests/fixtures/goway/migration/examples_test.go)
+show reads using public APIs.
 
 ## Query construction and execution
 
-```go
-fields := models.UserFields()
-users, err := models.QueryUsers().
-    Where(fields.Age.Gte(18), fields.Status.Eq(models.StatusActive)).
-    OrderBy(fields.Age.Asc()).
-    Limit(50).
-    All(ctx, db)
-```
+`Where`, `OrderBy`, `Limit` and `Offset` derive queries without I/O. Conditions
+retain model and value ownership. Execution takes an explicit context and executor;
+a pool, transaction or session stays owned by its caller. Keep work on a single
+transaction/session sequential.
 
-`QueryUsers()` returns a generated `UserQuery` wrapping `query.Query[User]`. Its fluent `Where`, `OrderBy`, `Limit` and `Offset` methods preserve the model-specific wrapper. Queries can be derived and compiled concurrently without changing their source. Execution uses an explicit `database.Executor`, so the same query works with a pool, transaction or connection session. Keep operations on a particular transaction/session sequential.
+| Terminal | Result and behavior |
+| --- | --- |
+| `All(ctx, executor)` | Complete `[]M`; no partial collected result on failure |
+| `First(ctx, executor)` | `value.Optional[M]`; no match is absence, not a zero model |
+| `Require(ctx, executor)` | Complete `M`, or `database.NotFound` |
+| `Count(ctx, executor)` | Selected-window count without model hydration |
+| `Exists(ctx, executor)` | Whether the selected window has a row |
+| `Each(ctx, executor, callback)` | Bounded iteration with cleanup on all exits |
+| `orm.Compile(query)` | Redacted `orm.Statement`, no I/O |
 
-`All` returns a slice of complete models, empty on a successful no-match result. It discards the entire collected result on failure. `Each(ctx, executor, func(User) error)` streams one complete model at a time when nothing runs per model; with eager loading, retrieval hooks/observers or an executor that cannot prove observers absent it uses bounded keyset batches. Rows close on early callback return, error or panic. A callback may already have performed work when a later row or batch fails; these side effects are not rolled back automatically. See [bounded model iteration](model-chunks.md) for `Chunk`, `ChunkByID`, `EachChunked` and `EachByID`.
+Use `rows.Read`/`ReadScalar`/`ReadRecord` and the package terminals for
+[projections and other read families](model-projections.md#execution-and-failures).
+Those read handles call their required-first terminal `RequireFirst`.
 
-The normal Go collection result is `[]User`, usable with `range` and standard slice utilities. A query builder remains separate from the model and its slice of results. `Where` and `OrderBy` only derive a query; execution happens at terminal methods such as `All`, `First` and `RequireFirst`. `First` is optional, while `RequireFirst` returns a concrete model or an error. Plain model field access performs no database operation.
-
-| Operation | Go result | Laravel counterpart |
-| --- | --- | --- |
-| `Where(...).OrderBy(...)` | Immutable typed query builder; no I/O | Query builder |
-| `First(ctx, db)` | `(value.Optional[User], error)` | `first()` with explicit absence/error handling |
-| `RequireFirst(ctx, db)` | `(User, error)` | `firstOrFail()` |
-| `All(ctx, db)` | `([]User, error)` | `get()` |
-
-The idiomatic Go collection is a typed slice, so callers can iterate with `for _, user := range users`. No custom collection wrapper is required to retain model typing. `All` is the collection terminal; the query builder has no duplicate `Get` synonym.
-
-Loaded slices support in-memory operations through Go's standard [slices package](https://pkg.go.dev/slices) and `cmp`:
-
-```go
-// Imports: "cmp" and "slices".
-ordered := slices.Clone(users)
-slices.SortFunc(ordered, func(a, b models.User) int {
-    return cmp.Compare(a.Email, b.Email)
-})
-```
-
-`SortFunc` sorts in place; cloning first preserves the original slice order. The clone is shallow, so nested slices, pointers and other referenced values remain shared. `SortStableFunc` preserves the relative order of equal items. These operations execute no SQL and affect only loaded results. Use query `OrderBy` before pagination to order the full matching dataset; sorting a page in memory only rearranges that page. Domain methods still live on the model, while collection helpers can be ordinary typed functions over slices.
-
-Laravel distinguishes `Model::all()` from a constructed query's `get()`; both retrieve models. Its collection's `all()` instead returns the underlying PHP array. Foundry's `All()` executes the current query and already returns `[]User`, so there is no separate collection-unwrapping step. `Count(ctx, db)` asks the database to count the selected query window; `len(users)` counts an already loaded slice without database work. See [Eloquent retrieval](https://laravel.com/framework/docs/13.x/eloquent#retrieving-models) and [collection all](https://laravel.com/framework/docs/13.x/collections#method-all).
-
-`All` retains its results in memory. Use `Limit` for bounded collections, `Each` for iteration or explicit chunk methods for controlled batch sizes. Execution checks the caller's context and passes it through the database runtime. Pool acquisition retains its separate deadline. [Direct relations](model-relations.md) add `With`, explicit `Load` and `LoadMissing`; eager `Each` closes parent rows before loading each batch's relations and invoking callbacks.
+`All` retains its result in memory. Use a limit, stream, or [bounded chunks](model-chunks.md)
+for large results. Ordinary in-memory Go slice operations issue no SQL; sorting a
+page after reading it does not order the full matching dataset.
 
 ## First rows and typed identities
 
-`First` returns `value.Optional[User]`. An omitted result means no row matched; a zero model is never used as a missing-record sentinel. `RequireFirst` returns a `*database.Error` with code `database.NotFound` when the result is absent, discoverable with `errors.Is` and `errors.As`.
+Filter with the declared primary-key column to retrieve a typed identity.
+`Table.Find` is the direct key lookup; natural keys keep their declared type.
+`First` and `Require` preserve filters/offset and respect a zero limit. Supply
+ordering when row choice matters. Missing and database failure remain different
+outcomes through the framework's typed errors.
 
-Generated `Find(ctx, executor, model.ID[User])` and `RequireFind` apply the concrete primary-key type. A natural-key model uses its declared key type, such as `models.CountryCode`. The methods remain available after fluent query derivation and preserve its filters and pagination. A matching primary key outside the selected window is therefore absent.
+## Typed predicates and expression ordering
 
-`First` caps the selected window at one row and uses primary-key ascending order if no explicit order is present. A zero limit remains empty. For a stable business ordering with ties, add an explicit primary-key order after the business fields. [Numbered and cursor pagination](model-pagination.md) automatically append the primary tie-breaker when absent, preserve filters, and bound their page sizes. Separate requests do not share a database snapshot.
+Columns expose capabilities appropriate to their declaration: equality/membership,
+NULL checks, ordered comparisons or text patterns. Enums remain equality-only;
+model IDs retain their model owner. Empty membership is false. NULL comparisons
+follow SQL three-valued logic; use explicit NULL checks for absence. Empty
+`orm.And` is true and empty `orm.Or` is false. Empty `NotIn` matches everything;
+nonempty `NotIn` does not include NULL operands. Combine it with `IsNull` when
+NULL rows should match.
 
-## Predicates and SQL compilation
+`Contains`, `StartsWith` and `EndsWith` escape pattern metacharacters for literal
+search. `Like`/`ILike` accept SQL patterns. Values are bound, never interpolated.
+Use `expr.Where` and `expr.OrderBy` to apply computed row predicates/orders; adapt
+a model predicate with `expr.ModelPredicate` when composing expressions.
 
-Model fields preserve both model owner and value type. Predicates and orderings from another model fail compilation. Numeric and decimal fields expose range operations; text fields add `Like` and `Contains`; nullable fields expose `IsNull`/`IsNotNull`. `Eq` accepts the concrete non-null type. Generated field constructors attach the same [typed codecs](database-codecs.md) used for hydration, so malformed enum casts, integer overflow and invalid temporal precision fail before SQL execution.
-
-`query.And`, `query.Or` and `Predicate.Not` preserve grouping. For dynamically built filters, an empty `And()` (and `query.True[M]()`) is TRUE and an empty `Or()` (and `query.False[M]()`) is FALSE; `HavingAnd`/`HavingOr` behave the same. `In()` with no values matches nothing, and its negation matches everything. `NotIn(values...)` excludes values (an empty list matches everything); like SQL `NOT IN`, a NULL operand never matches, so combine it with `IsNull` when NULL rows must be included. SQL NULL semantics remain SQL's three-valued logic: use explicit null predicates when null rows must match.
-
-On a column, `In` and `NotIn` bind the whole list as one array parameter — `col = ANY($1)` and `col <> ALL($1)` — for integer, text, boolean, UUID, numeric, date and timestamptz codecs. PostgreSQL infers the element type from the column, so enum, domain and `citext` columns keep their own equality, the statement text no longer changes with list length (the driver's statement cache is reused) and lists are not limited by the protocol's 65,535 parameters (`query.MaxMembershipValues` bounds one list). Other codecs and computed operands keep one parameter per value. Relation eager loading uses the same path.
-
-Ordered fields add `Between(low, high)` (inclusive). Text fields add `StartsWith`, `EndsWith`, their case-insensitive `IStartsWith`/`IEndsWith` (all escaping `%`, `_` and `!` like `Contains`) and `ILike` for a raw case-insensitive pattern. `Order.NullsFirst()` and `Order.NullsLast()` place SQL NULL explicitly; keyset chunking and cursor pagination accept only PostgreSQL's default placement.
-
-[Conditional row values](conditional-expressions.md) add typed CASE, COALESCE and NULLIF expressions. Their comparisons remain model-owned row predicates, and `Value()` promotes a computed value for selection into a declared projection or scalar result. Selected aggregate/window counterparts retain their separate evaluation boundary.
-
-`Contains` matches a literal substring, escaping `%`, `_` and its `!` escape character inside a bound parameter. `Like` accepts a PostgreSQL LIKE pattern with PostgreSQL's normal pattern semantics. Neither operation interpolates input into SQL text.
-
-```go
-u := models.UserFields()
-matches, err := models.QueryUsers().Where(u.Email.Like("%john%")).All(ctx, db)
-// For user-supplied text, match the literal substring, including any % or _.
-matches, err = models.QueryUsers().Where(u.Email.Contains(searchTerm)).All(ctx, db)
-```
-
-Use `Like("john%")` for a prefix pattern and `Like("%@example.com")` for a suffix pattern. `All` is the collection terminal corresponding to Laravel's `get`; `First` returns an optional single model. Generated fields replace string field names, and typed operators replace string operator names. The [architecture's typed model boundary](../../blueprint/00-master-architecture-and-parity.md#agreed-architecture-decisions) applies to advanced queries as well as ordinary CRUD.
-
-[Typed calculations](scalar-calculations.md) add arithmetic and text expressions such as `query.Lower(fields.Email).Contains("example")`. Row calculations also supply computed `OrderBy` keys for normal model reads and numbered/simple pagination; computed cursor keys require declared projection fields.
-
-`Compile()` produces a `query.Statement` without connecting. `SQL()` and `Arguments()` are explicit inspection/adapter boundaries; argument slices are copied, and ordinary statement formatting omits both SQL text and bindings, including through private wrapper fields. Treat explicitly retrieved SQL and argument lists as application data. Table and column identifiers are validated and quoted, and predicates/orderings must reference declared columns. PostgreSQL's default 63-byte identifier bound is enforced before generation/compilation instead of accepting names the server would truncate. [PostgreSQL identifier rules](https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS)
-
-ORM and legacy query handles redact retained predicate literals, bound data values, assignment inputs, numeric guard bounds, cursor tokens, plan contents and fixed pivot bindings from `%v`, `%+v`, `%#v` and interpolated errors, including through private and nested wrappers. Structural metadata such as `LIMIT`/`OFFSET`, identifiers and SQL shape is not covered and may be visible, even when bound as a SQL parameter. Explicit SQL, binding, mutation-input, cursor-token and plan accessors remain disclosure boundaries; returned data, hydrated models and page items are not automatically redacted. The [ORM diagnostic contract](../../database/orm/README.md#diagnostic-redaction) applies to both frontends.
-
-Expression depth, expression count, ordering count and parameter count are bounded by the query package's documented constants. A model declaration is validated once per generated query value rather than on every compiled statement, and generated `QueryUsers()`, `UserFields()`, `UserRelations()` and `UserAggregates()` build their immutable metadata and codecs once per process (`query.Memo`) instead of on every call. The compiler uses one shared AST for every generated model. No string field lookup is needed in normal consumer queries.
+[Conditional values](conditional-expressions.md), [arithmetic/text](scalar-calculations.md),
+[temporal values](temporal-calculations.md) and [JSON paths](json-models.md) preserve
+scope, phase and codecs. Aggregate/window selections do not become row predicates.
 
 ## Aggregates and complete hydration
 
-`Count` and `Exists` query the selected window, including `Limit` and `Offset`, without hydrating models. A count omits the query's ORDER BY unless `DISTINCT ON` or a `Limit`/`Offset` window depends on it; projection, set and value counts follow the same rule. Derive a count from the unpaginated base when a total matching count is needed. `Exists` asks for at most one row. Separate aggregate and model queries do not promise a common snapshot; use an explicit transaction/isolation level when that consistency matters.
+Count/Exists observe filters and the selected limit/offset. Use an unpaginated
+source for a total. Counts omit irrelevant ordering but retain ordering needed
+by DISTINCT ON or a window. Separate statements need appropriate isolation for
+one snapshot.
 
-[Typed relation aggregates](model-aggregates.md) compute per-parent counts and numeric summaries in generated loaded slots, without hydrating related models. [Declared projections](model-projections.md) execute scalar summaries and grouped reports into separate complete result types.
+Complete model reads select declared persisted columns and decode fresh complete
+values. Invalid enums, NULLs or out-of-range values fail decoding. Retrieval
+callbacks apply to complete model reads; DTO/scalar projections have no model
+retrieval pipeline. Relations and [aggregate slots](model-aggregates.md) use
+explicit loading; ordinary field access never queries.
 
-[Distinct reads](model-distinct.md) remove duplicate selected records or choose one ordered record per typed key combination. These read-only selections preserve complete result types and count after deduplication.
+## Diagnostic and resource boundaries
 
-Generated SELECTs enumerate every persisted column in declaration order, respecting column tags and omitting `foundry:"-"` fields. A fresh model is scanned through concrete typed codecs and published only when every field succeeds. SQL NULL, malformed stored enums, exact decimals and temporal values follow their codec contracts. Ignored fields retain their Go zero values.
+`orm.Compile` validates declarations, scopes and bounded SQL construction without
+connecting. Explicit `Statement.SQL()` and `Arguments()` disclose SQL and values;
+argument slices are copied. Ordinary formatting redacts retained bound data,
+including nested wrappers. Structural identifiers/windows and hydrated results
+are not secrets covered by that redaction contract.
 
-Partial reads use [declared projection records](model-projections.md), which have their own generated selection types and complete decoders. `query.Define`/`ForModel` and field constructors are explicit declaration boundaries for generated code and custom integrations; custom decoders are responsible for complete, fresh hydration. `query.For` can still describe a table, but it cannot execute model reads without metadata and a decoder.
+The shared compiler owns identifier, expression, nesting and parameter bounds.
+Declaration metadata is checked once and reused; no per-model generated query
+engine is required. See the [diagnostic contract](../../database/orm/README.md#diagnostic-redaction)
+and [ORM performance](orm-performance.md). [Writes](model-writes.md),
+[relations](model-relations.md) and [pagination](model-pagination.md) share these
+handwritten declarations.
 
-## Current limits and verification
-
-[Model writes](model-writes.md) provide create/update/delete and required/default
-mutation validation. [Pagination](model-pagination.md), [relations](model-relations.md),
-[aggregates](model-aggregates.md) and [projections](model-projections.md) share typed
-query declarations. Complete model reads run declared
-[retrieval callbacks](model-retrieval.md); scalar and DTO projections do not run
-model retrieval callbacks. The [master roadmap](../../blueprint/00-master-architecture-and-parity.md)
-owns verification status. Raw parameterized SQL remains available through
-`database.Executor`.
-
-Compiler tests cover quoting, placeholder ordering, logical grouping, literal substring escaping, cloned bindings, resource bounds and concurrent derivation. Consumer compile-failure assertions include wrong typed `Find` keys after fluent derivation. Real PostgreSQL tests verify complete user/natural-key/decimal model hydration, nullable/self-reference IDs, empty results, filtered lookup, selected-window aggregates, early streaming exit, cancellation and malformed-row rejection. Real gopls checks inspect generated and promoted query methods in the consumer workspace.
-
-## Shared query planning and build resources
-
-Model queries retain their concrete owner, field values, keys, nullable results,
-codecs and callbacks. Private model-independent planning lives in `internal/querycore`: declaration
-checks, SQL ordering, global/soft-delete scopes, stable pagination, keyset
-predicates, SELECT compilation and write eligibility and mutation SQL assembly. Projections, complete
-record selection and joins also lower their checked declarations into shared
-plans. Derived queries retain independent slices and execution always rebinds
-request scopes to its own context.
-
-Query chains and generated declarations retain their signatures. Optional stored-
-field computations move to [typed functions](typed-field-computations.md); update
-those handwritten calls when upgrading. No database migration is required. See the
-[build resource measurements](query-build-resources.md) for measured conditions,
-cache ownership and the distinction between one build and accumulated variants.
+For declaration and API migration, see the [ORM migration guide](orm-migration.md).

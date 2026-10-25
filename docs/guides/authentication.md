@@ -6,28 +6,48 @@ Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/
 
 ## One provider, multiple guards
 
-Reuse generated model references and ordinary typed queries:
+Declare the table once, then implement `FoundryIdentity` for the model-first
+authentication boundary. The provider reuses the stored key codec:
 
+<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go -->
 ```go
-users := auth.DefineProvider("users", (User{}).FoundryReference(),
-    func(ctx context.Context, id model.ID[User]) (value.Optional[User], error) {
-        return QueryUsers().Find(ctx, db, id)
-    },
-    func(ctx context.Context, user User) (bool, error) {
-        return user.Status == Active, nil
-    },
-)
-api := auth.DefineGuard("users.api", users, tokenStrategy)
-web := auth.DefineGuard("users.web", users, sessionStrategy)
+type Account struct {
+	ID      int64
+	Enabled bool
+}
+
+type AccountTable struct {
+	orm.Table[Account, int64]
+	Enabled orm.Column[Account, bool]
+}
+
+var Accounts = orm.Define("guide_accounts", func(b orm.Builder[Account], m *Account) AccountTable {
+	return AccountTable{orm.TableOf(b, &m.ID), orm.ColumnOf(b, &m.Enabled)}
+})
+var AccountIdentity = orm.IdentityOf(Accounts.Table, Accounts.Key())
+
+func (a Account) FoundryIdentity() (model.Identity, error) {
+	return AccountIdentity.ReferenceOf(a).Identity()
+}
+
+func accountProvider(db database.Executor) auth.Provider[Account, int64] {
+	return auth.DefineProvider("accounts", AccountIdentity.Reference(0),
+		func(ctx context.Context, id int64) (value.Optional[Account], error) {
+			return Accounts.Find(ctx, db, id)
+		},
+		func(_ context.Context, account Account) (bool, error) {
+			return account.Enabled, nil
+		},
+	)
+}
 ```
 
-`User`, its status constants and strategy variables above stand for consumer
-models/adapters. The [compiling consumer](../../tests/fixtures/consumer/authenticating/accounts.go)
-uses existing generated models. The [session adapter](sessions.md) supplies
+The [compiling consumer](../../tests/fixtures/consumer/authenticating/accounts.go)
+uses handwritten ORM models. The [session adapter](sessions.md) supplies
 PostgreSQL-backed credentials; [tokens](tokens.md) and [browser login flows](browser-sessions.md) reuse the same provider. No static-token fixture is a production login implementation.
 
 `Provider[M, K]` retains the concrete model and stored key type. It checks the
-returned model's generated identity against the verified identity. Omitted models
+returned model's declared stored identity against the verified identity. Omitted models
 and an eligibility check returning false reject authentication. Provider failures
 remain errors, even if a callback also returned a model. Read getters never change
 credential identity; an Actor or a second model hydration is unnecessary.
@@ -356,7 +376,7 @@ the DTOs. `modelbinding.BindAuthenticated` accepts ordinary or signed typed auth
 transports, retaining a separate type for the bound resource. With optional
 authentication, `S` is `value.Optional[User]`; the handler cannot silently require
 a User instead. The [independent consumer](../../tests/fixtures/consumer/authenticating/composed_routes.go)
-uses actual generated User/Order models, their typed IDs and the existing policy.
+uses actual handwritten User/Order models, their typed IDs and the existing policy.
 
 Admission order is guard, token scope ceiling, authenticated attribution, required
 permissions, URL signature (when present), decoded/validated input, then one bound
@@ -497,3 +517,7 @@ policy before downstream handling. Raw and typed handlers receive this default.
 Explicit downstream cache headers remain an application-owned override; never
 make personalized cookie responses publicly cacheable. Bearer-only routes keep
 their existing response policy.
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).
+
+The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

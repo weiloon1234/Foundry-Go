@@ -1,81 +1,44 @@
-# Automatic model field mutators
+# Typed model field mutators
 
-Declare `Mutate<Field>` on a handwritten model and regenerate. Foundry calls the method automatically when persisting an assigned field. Draft setters keep the supplied value until persistence.
+A mutation input column separates the value accepted by writes from the value stored in the model. `Set` retains input until persistence; reads and predicates use the stored type. Declare the appropriate `Input*` carrier even when input and stored types are identical.
 
+The [complete declaration](model-declarations.md) uses `InputText[User, EmailInput, string]` with a named `MutateEmail` method. This fixture uses distinct input and stored types:
+
+<!-- orm-example: inputs-after -->
 ```go
-//foundry:model table=users
-type User struct {
-    ID    model.ID[User]
-    Email string
+func input(input coremodels.EmailInput) orm.Assignment[mutators.Member] {
+	return mutators.Members.Email.Set(input)
 }
-
-func (User) MutateEmail(email string) (string, error) {
-    return strings.ToLower(strings.TrimSpace(email)), nil
-}
-
-// After generation:
-user, err := QueryUsers().Create(ctx, db,
-    UserDraft{}.SetEmail("  ADA@EXAMPLE.TEST  "))
-// On success, user.Email == "ada@example.test".
 ```
 
-The model imports Foundry's `model` package and Go's `strings` package. The complete [consumer model](../../tests/fixtures/consumer/mutatorqueries/member.go) and [PostgreSQL example](../../tests/fixtures/consumer/mutatorqueries/mutators_postgres_test.go) exercise the generated API without manual normalization calls.
+The [mutator declaration](../../tests/fixtures/goway/models/mutators/models.go) binds input, codec and accessor types. A nil transform argument to `Input*Of` selects the matching `Mutate<Field>` method. Supply a typed `func(Input) (Stored, error)` instead when the transform is explicit. Do not also declare a named mutator. The retained legacy `orm.Mutate` option is rejected on ordinary columns; use the input constructor's transform argument.
 
-## Typed discovery
+## Declaration validation
 
-`Mutate<Field>` names a persisted Go field, independently of its database column tag. It requires a value receiver and exactly `func(Input) (Stored, error)`, where `Stored` is the field's exact non-null type. `Input` can be the same type or another concrete Go type; it does not need a SQL codec. Interfaces and `value.Nullable` input wrappers are rejected. These methods are pure field transformations: the generated adapter binds a zero-valued receiver, so the method must use its argument rather than read receiver fields. They receive no connection and should not perform I/O. Cross-field behavior and transaction-bound domain work belong in [typed lifecycle hooks](model-hooks.md).
+`Mutate<Field>` names a persisted Go field, independently of its SQL column tag. It requires a value receiver, one concrete non-null input, the field's exact scalar stored result, and `error`. A nullable stored field still uses a scalar input/result transform. Unknown fields, pointer receivers, variadic methods, interface inputs and invalid results fail startup validation.
 
-The `Mutate` method prefix is reserved on generated models. An unknown field, pointer receiver, variadic signature, missing error result or incompatible input/output produces a generation error. Signatures are checked from handwritten declarations on a fresh checkout; bodies are checked with the complete generated overlay. Invalid generation preserves existing output. No runtime method-name lookup is used, and gopls resolves the generated registration to the handwritten method.
-
-Generation automatically adds [field behavior notices](model-accessors.md#notices-beside-the-actual-field) beside the stored field and to generated descriptors/draft methods. They identify the custom setter, its persistence timing and any explicit read getter. No extra configuration or handwritten reminder is required.
-
-For `value.Nullable[Stored]`, declare `Mutate<Field>(Input) (Stored, error)`. Foundry preserves explicit NULL without calling the scalar mutator. It also skips omitted fields, including database defaults and untouched patch fields. Explicit zero, false and empty string are present values and do invoke the mutator.
+The receiver is a zero-valued type marker. Transform the argument rather than reading receiver fields. Keep mutators pure and free of I/O; cross-field and transactional work belongs in [hooks](model-hooks.md). Ordinary columns with named mutators also fail startup, naming the field and required `Input*Of` carrier. `application.WithTables` checks these contracts before acquiring resources.
 
 ## Different input and stored types
 
-The [independent input model](../../tests/fixtures/consumer/inputqueries/models.go) makes the distinction visible to the compiler:
+Omitted fields skip the transform, including database defaults and untouched update fields. `SetNull()` preserves SQL NULL and skips a nullable field's scalar transform. Zero, false and empty string are supplied inputs and do run it.
 
-```go
-type EmailInput struct{ Address string }
-type StoredEmail string
+Before-write hooks read `value.Optional[Input]` through `WriteGet` and `value.Optional[value.Nullable[Input]]` through `WriteNullableGet`. `WriteSet` replaces inputs; `WriteUnset` restores omission. After-write changes contain stored types, never fresh inputs.
 
-// Member.Email is StoredEmail.
-func (Member) MutateEmail(input EmailInput) (StoredEmail, error) {
-    return StoredEmail(strings.ToLower(strings.TrimSpace(input.Address))), nil
-}
+An input primary key is declared with `InputKeyOf` over the single table key. Stored-key lookup types remain unchanged. A distinct input disables automatic UUID synthesis: supply input explicitly or use a database-owned default. `PrimaryOf` cannot be combined with `InputKeyOf`.
 
-draft := MemberDraft{}.SetEmail(EmailInput{Address: " ADA@EXAMPLE.TEST "})
-member, err := QueryInputMembers().Create(ctx, db, draft)
+## Execution and safe failures
 
-// Comparisons use the stored column's type; conflict setters accept fresh input.
-fields := MemberFields()
-filtered := QueryInputMembers().Where(fields.Email.Eq(StoredEmail("ada@example.test")))
-conflict := query.OnConflict(fields.ID).DoUpdate(
-    fields.Email.Set(EmailInput{Address: " NEXT@EXAMPLE.TEST "}))
-```
+Each assigned input transforms once per attempt in model declaration order, inside the transaction/savepoint after before hooks and conventions. Final shape validation precedes transforms; codecs validate their results before SQL. Reusing assignments starts from original inputs. Mutator failures roll back the scope without retrying.
 
-The surrounding function supplies `ctx` and `db` and handles the returned error. The [PostgreSQL consumer](../../tests/fixtures/consumer/inputqueries/inputs_postgres_test.go) exercises these calls, hooks, bulk writes and reusable conflict policies. Passing `StoredEmail` to either setter, or `EmailInput` to `Eq`, fails compilation. Stored operators, JSON paths, relation keys and alias ownership retain their existing types. Automatic field notices name both the input and stored types alongside any explicit getter.
+Errors retain identity through `errors.Is` and `errors.As`; safe formatting names the field without application error text. Panic and `runtime.Goexit` are contained. Cancellation does not release callback ownership before the callback exits. Reads, direct struct assignments and assignment construction never invoke mutators.
 
-`draft.Email()` returns `value.Optional[EmailInput]`. Before-write hooks see that fresh input and may replace it through the typed setter. After-write change sets contain `StoredEmail` snapshots, with separate assignment and change flags; they do not capture the original input. Nullable stored fields produce `Optional[Nullable[Input]]` draft getters, scalar `Set<Field>(Input)`, and the existing `Clear`/`Unset` methods.
+Encrypted columns reject Go mutators. Transform plaintext before assigning the encrypted value; encryption then uses the persisted identity boundary. Password transformations use an appropriate input column and stored password codec. Do not treat an arbitrary string normalizer as password hashing.
 
-An omitted UUID primary key with a distinct input mutator cannot be synthesized as that input type. Supply its input explicitly or declare a database-owned default. Key lookup and relation comparisons continue to use the stored key type. Concrete password hashing and verification arrive with authentication; this API supplies a type distinction that a plaintext/hash implementation can use.
+## Set-based and conflict writes
 
-## Execution and failures
+Bulk inserts transform each supplied input. Conflict literals supplied through `orm.ConflictSet` transform once per statement, independently of the number of proposed rows. Reusing a conflict policy retains its original input. `ConflictNull` preserves NULL.
 
-Each assigned field transforms once per write attempt, in model declaration order. Reusing a draft starts from its original input. Transformation runs inside the write transaction/savepoint, before final codec validation and SQL compilation. For example, a named enum's supplied spelling can normalize into a valid enum before membership validation. Invalid transformed output fails the write.
+`ConflictIncoming` copies the proposed stored value without running the Go transform twice. An own-field proposed expression can do the same. Other SQL calculations into mutated fields are rejected before SQL: PostgreSQL cannot execute an application Go mutator per row. Input carriers are excluded from source `MapInsert` and `MapUpdate`; fixed `Values` inputs still transform once per attempt. Use per-model batches when each source value needs Go behavior.
 
-Mutator errors retain their identity through `errors.Is`. With Foundry's transaction runtime, a panic or `runtime.Goexit` aborts the write scope without exposing the panic payload. The caller's parent transaction can continue after the failed savepoint. There is no automatic retry. Cancellation is checked between transformations and before SQL; an individual pure Go function must return before execution can continue.
-
-Reads, model field assignment and draft setters do not invoke write mutators. A returned model is hydrated from PostgreSQL, including any changes from database defaults or triggers. Pending values are omitted from ordinary mutation diagnostic formatting. Generated drafts implement `fmt.Formatter`, printing only a model-specific draft label for ordinary formatting verbs, including `%+v` and `%#v`. The persisted Go field name `Format` is reserved because it would collide with that method. Explicit draft getters still expose their typed input to the caller; this formatting behavior does not make caller-created logs, errors or serialized payloads safe automatically.
-
-## Bulk and upsert inputs
-
-`CreateMany`, `Upsert` and `UpsertMany` apply the same field transformations to explicitly supplied draft values. Their set-based contract still skips per-model observers. Empty batches validate the declared query/conflict policy without invoking field mutators or opening a transaction. A failed transformation aborts the whole batch before its INSERT statement executes.
-
-An upsert's conflict target sees the transformed proposed row. Literal conflict assignments made with `Set` run the destination field's mutator once per statement, independently of the number of proposed rows. `SetNull` preserves NULL. Reusing a conflict policy starts with its original literal inputs. Final codec validation uses each transformed value.
-
-`Incoming()`, `Update(fields...)`, and `SetConflictValue` with the destination's own proposed field copy that value without another Go transformation. A field with a Go mutator rejects other SQL conflict expressions, including calculations and copies from a different proposed field, before SQL. An arbitrary Go function cannot be applied inside PostgreSQL; rejecting those expressions prevents an alternate assignment path from silently bypassing the field behavior. Fields without mutators retain their full typed SQL conflict expressions. Database constraints remain necessary, and omitted database defaults do not pass through Go mutators.
-
-## Milestone boundary
-
-This milestone 07 increment supplies field normalization with the same or distinct input types. [Typed hooks and provider observers](model-hooks.md) run before mutators and receive captured [change sets](model-changes.md) after SQL. [Explicit read getters and automatic field documentation](model-accessors.md) preserve stored fields and make getter/mutator choices discoverable. [Retrieval callbacks](model-retrieval.md) also preserve stored fields. Soft deletion, relation/bulk-source writes and events/outbox/audit integration are also delivered. A string normalizer alone does not establish password hashing or prevent double hashing. See the [milestone contract](../../blueprint/07-model-lifecycle-events-and-audit.md) for the delivered contracts and verification status.
+For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

@@ -34,9 +34,9 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 		documentation                          []string
 	}{
 		{"sensitive-password-field", "passwords/account_postgres_test.go", "return account.", "Digest", "/passwords/account.go", []string{"Sensitive stored password hash", "password.Codec", "redacted", "Compare-and-swap"}},
-		{"raw-field-both", "mutatorqueries/accessors_test.go", "storedEmail := member.", "Email", "/mutatorqueries/member.go", []string{"Custom getter", "AccessEmail", "Custom setter", "MutateEmail", "email_address", "Delivery address."}},
-		{"raw-field-getter", "mutatorqueries/accessors_test.go", "if member.", "ID", "/mutatorqueries/member.go", []string{"Custom getter", "AccessID", "ID is the database identity."}},
-		{"raw-field-setter", "mutatorqueries/accessors_test.go", "|| member.", "Attempts", "/mutatorqueries/member.go", []string{"Custom setter", "MutateAttempts", "persistence", "Direct field assignment"}},
+		{"raw-field-both", "mutatorqueries/accessors_test.go", "storedEmail := member.", "Email", "/mutatorqueries/member.go", []string{"Email is the delivery address stored in email_address", "Call AccessEmail explicitly", "MutateEmail runs during persistence through Members.Email.Set", "assigning this field does not invoke it"}},
+		{"raw-field-getter", "mutatorqueries/accessors_test.go", "if member.", "ID", "/mutatorqueries/member.go", []string{"ID is the database identity", "Stored reads keep the key", "call AccessID explicitly for presentation"}},
+		{"raw-field-setter", "mutatorqueries/accessors_test.go", "|| member.", "Attempts", "/mutatorqueries/member.go", []string{"Attempts stores the persisted count", "MutateAttempts runs during persistence through Members.Attempts.Set", "Direct assignment"}},
 		{"query-field", "mutatorqueries/mutators_postgres_test.go", "q.Query().Where(f.", "Email", "/mutatorqueries/orm.go", []string{"Custom getter", "AccessEmail", "Custom setter", "MutateEmail", "delivery address."}},
 		{"extension-slot-field", "articles/cleanup_postgres_test.go", "if article.", "Title", "/articles/article.go", []string{"Extension slot, not a column", "foundry_model_translations", "ArticleSlots.Title", "From(runtime)", "localized article heading shown to readers"}},
 		{"draft-setter", "mutatorqueries/mutators_postgres_test.go", "mutatorqueries.Members.", "Email", "/mutatorqueries/orm.go", []string{"MutateEmail", "not during assignment construction", "delivery address."}},

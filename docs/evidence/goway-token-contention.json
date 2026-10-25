@@ -1,0 +1,173 @@
+{
+  "slice": "token-contention-follow-up",
+  "recorded_at": "2026-10-25T08:47:17.483264+00:00",
+  "status": "complete; custom-As review finding and session/challenge follow-ups addressed",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r14",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off",
+    "FOUNDRY_TEST_POSTGRES_REQUIRED": "1 for token PostgreSQL runs",
+    "credentials": "loaded privately from authorized .env.test; omitted"
+  },
+  "public_api_additions": [],
+  "schema_changes": [],
+  "footprint_ceiling_changes": [],
+  "commands": [
+    {
+      "command": "go test -count=1 ./auth/token/postgres -run ^TestTokenContentionClassification$",
+      "result": "blocked: sandbox database unavailable; rerun with database access",
+      "log": "/private/tmp/token-contention-before.log"
+    },
+    {
+      "command": "go test -count=1 ./auth/token/postgres -run ^TestTokenContentionClassification$",
+      "result": "expected pre-fix failure: lock/pool outer classification internal",
+      "log": "/private/tmp/token-contention-before-retry.log"
+    },
+    {
+      "command": "go test -race -count=1 ./internal/credential ./auth/token/...",
+      "result": "pass after shared classification fix",
+      "log": "/private/tmp/token-contention-after.log"
+    },
+    {
+      "command": "go test -race -count=5 ./auth/token/postgres -run ^(TestTokenContentionClassification|TestCredentialGateDatabaseOutcomes|TestConcurrentIssueCapacityAndSubjectRevocation)$",
+      "result": "fail: original concurrent test reproduced 23505 on foundry_token_subjects_key_scope_key; corrected store insert policy",
+      "log": "/private/tmp/token-contention-repeat.log"
+    },
+    {
+      "command": "go test -race -count=20 ./auth/token/postgres -run ^(TestTokenContentionClassification|TestCredentialGateDatabaseOutcomes|TestConcurrentIssueCapacityAndSubjectRevocation)$",
+      "result": "pass after store fix",
+      "log": "/private/tmp/token-contention-repeat-fixed.log"
+    },
+    {
+      "command": "go test -race ./auth ./auth/session ./auth/challenge ./auth/mfa ./auth/lockout ./auth/lockout/memory",
+      "result": "pass; PostgreSQL environment unset",
+      "log": "/private/tmp/token-contention-consumers.log"
+    },
+    {
+      "command": "go test -race -count=1 ./internal/credential ./auth/token/...",
+      "result": "pass on final source, including custom unknown-outcome inspection",
+      "log": "/private/tmp/token-contention-final-inspection.log"
+    },
+    {
+      "command": "go vet ./internal/credential ./auth/token/...",
+      "result": "pass on final source",
+      "log": "/private/tmp/token-contention-vet-final.log"
+    },
+    {
+      "command": "make docs-check",
+      "result": "pass",
+      "log": "/private/tmp/token-contention-docs.log"
+    },
+    {
+      "command": "gofmt -l <follow-up Go sources>; git diff --check",
+      "result": "pass"
+    },
+    {
+      "command": "go test -race ./auth ./auth/session ./auth/challenge ./auth/mfa ./auth/lockout ./auth/lockout/memory",
+      "result": "pass on final source; PostgreSQL environment unset",
+      "log": "/private/tmp/token-contention-consumers-final.log"
+    },
+    {
+      "phase": "B39 review follow-ups",
+      "command": "go test -count=1 ./internal/credential -run ^TestCredentialFailureCustomAsFailsClosed$",
+      "result": "expected pre-fix failure: typed-nil, panic and Goexit As cases incorrectly classified as overloaded",
+      "log": "/private/tmp/b39-as-before.log"
+    },
+    {
+      "phase": "B39 review follow-ups",
+      "command": "go test -race -count=1 ./internal/credential ./auth/token/postgres ./auth/session/postgres ./auth/challenge/postgres",
+      "result": "pass; PostgreSQL required, all suites executed",
+      "log": "/private/tmp/b39-postgres.log"
+    },
+    {
+      "phase": "B39 review follow-ups",
+      "command": "go test -race -count=10 ./auth/session/postgres ./auth/challenge/postgres -run ^(TestSessionConcurrentFirstSubjectCreation|TestChallengeConcurrentFirstSubjectCreation)$",
+      "result": "pass; PostgreSQL required",
+      "log": "/private/tmp/b39-concurrency-repeat.log"
+    },
+    {
+      "phase": "B39 review follow-ups",
+      "command": "go test -race ./auth ./auth/token ./auth/session ./auth/challenge ./auth/mfa ./auth/lockout ./auth/lockout/memory ./auth/password",
+      "result": "pass; PostgreSQL environment unset",
+      "log": "/private/tmp/b39-consumers.log"
+    },
+    {
+      "phase": "B39 review follow-ups",
+      "command": "go vet ./internal/credential ./auth/token/postgres ./auth/session/postgres ./auth/challenge/postgres",
+      "result": "pass",
+      "log": "/private/tmp/b39-vet.log"
+    },
+    {
+      "phase": "B39 review follow-ups",
+      "command": "make docs-check",
+      "result": "pass",
+      "log": "/private/tmp/b39-docs.log"
+    },
+    {
+      "phase": "B39 review follow-ups",
+      "command": "gofmt -l <affected Go files>; git diff --check",
+      "result": "pass"
+    }
+  ],
+  "source_sha256": {
+    "auth/challenge/postgres/subject.go": "22bf2eeeaab241663c6179607d6a363ae732d5a9b12ef43c98e8ed3820a1e334",
+    "auth/challenge/postgres/subject_concurrency_test.go": "60fb1f94ea731dda3b0434364ec7cff50ec8d802b22f7bd296c988f761ed3e20",
+    "auth/session/postgres/backend.go": "0c473f079bca3750b9b04dc3f19cca51930d70de69fdec137b23d9e064004cb8",
+    "auth/session/postgres/subject_concurrency_test.go": "d4056cede892c20e00c5873e2641937307023289f8d9b8d6493fb47c788acb44",
+    "auth/token/postgres/backend.go": "3eb793e8fca7d543c50d1084359f6dd882162b8a06e78947ca6699fe0b2b228c",
+    "auth/token/postgres/backend_test.go": "98bdc510ebabbfafbca650f8c28eeb2d8b5d496eb2dafc18f3b7338dda642e35",
+    "auth/token/postgres/contention_test.go": "0426077e0166f170f9763b569b25cb7711c2ee9c3f8892f37ad7572bbaf36632",
+    "docs/evidence/goway-b39-main-port.md": "4a2369fa2d03795d5f387edee19b0b52163b245e0c44b16ea8de1bc2cec3c422",
+    "docs/evidence/goway-token-contention-report.md": "330d96cf213d3239abba166082eb519249064d9ebfb9916f38b46b4ab00ec0aa",
+    "docs/guides/tokens.md": "1f55651547c33e9a60966472e1df4eb7087785069abbaa8e530343af387bd93a",
+    "internal/credential/failure.go": "103e40f0f396750e6dcaade8cd3f10481362635e847d24c66dc7ed7e951258ed",
+    "internal/credential/gate.go": "17bbad7b10f7ce58ccfc58df6b4035d1f8c831a95d2b803218a93455826165c3",
+    "internal/credential/gate_test.go": "255640bba2eb30ee623cd6276f89f84b6b75969e9141285e6e412def11a61755"
+  },
+  "log_sha256": {
+    "/private/tmp/token-contention-before.log": "5aaec15c82689e45940c7096b055d67ee6a6c467b4d8d4208aedbdf8e54c6a33",
+    "/private/tmp/token-contention-before-retry.log": "ff4f353bdec8834267b2f1b9638d8eb7effcd11cff1ab26c72ee1fd6a3d98746",
+    "/private/tmp/token-contention-after.log": "fbd422d7f8a618556477c509c10a1fa36d44f14a340107eb7ecb171d8098dd94",
+    "/private/tmp/token-contention-repeat.log": "f941a8685287bdf940b9a8586bc90f11479e01a763f95d8bf5e074cdcea8733a",
+    "/private/tmp/token-contention-repeat-fixed.log": "a4a4226865a70de83b5f0810abaf5641ce3d51cf2c7d6400ba26d9deed08daa3",
+    "/private/tmp/token-contention-consumers.log": "1581da3acd220b397c75370ae04588a2a97807aa58ec417c2894d8d1d439089d",
+    "/private/tmp/token-contention-final-inspection.log": "6c9fc7d2395c35be80e193a4a887ff267cbd31a4a9b14027d9af3e2a2b99501b",
+    "/private/tmp/token-contention-vet-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/private/tmp/token-contention-docs.log": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06",
+    "/private/tmp/token-contention-consumers-final.log": "341d4e8d933e49b93ee78691072a4984e4d310b48aa47c6b38c4fb62853fbbdb",
+    "/private/tmp/b39-as-before.log": "8df6e7d53bd57f8ccdb86dbe17973f7f5d75d9b44ae0914efb3331401e73fc15",
+    "/private/tmp/b39-postgres.log": "2f684ef049054389680f27e4508c87ef27fc0feb075f674d14ceaa9e357cff16",
+    "/private/tmp/b39-concurrency-repeat.log": "d9445b8383f8ed4af305fdfbefd73ada6f8c218ad4a4f3fe3618b6a3a78fe725",
+    "/private/tmp/b39-consumers.log": "a656318b49c301e7822fa6d92e78a5bd1edef611a8e2d0a5d0ee7881b2841585",
+    "/private/tmp/b39-vet.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/private/tmp/b39-docs.log": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+  },
+  "main_port_note": "docs/evidence/goway-b39-main-port.md",
+  "review_followups": [
+    "Bounded shallow As inspection; committed/unknown outcomes remain conservative in both join orders; typed-nil/panic/Goexit fail closed",
+    "Session and challenge first-subject inserts handle both unique indexes with unchanged scoped locking and identity validation",
+    "Store-specific concurrent PostgreSQL regressions preserve capacity, revocation, replacement and single-use behavior"
+  ],
+  "pre_integration_batch10_source_sha256": {
+    "auth/challenge/postgres/subject.go": "22bf2eeeaab241663c6179607d6a363ae732d5a9b12ef43c98e8ed3820a1e334",
+    "auth/challenge/postgres/subject_concurrency_test.go": "60fb1f94ea731dda3b0434364ec7cff50ec8d802b22f7bd296c988f761ed3e20",
+    "auth/session/postgres/backend.go": "0c473f079bca3750b9b04dc3f19cca51930d70de69fdec137b23d9e064004cb8",
+    "auth/session/postgres/subject_concurrency_test.go": "d4056cede892c20e00c5873e2641937307023289f8d9b8d6493fb47c788acb44",
+    "auth/token/postgres/backend.go": "3eb793e8fca7d543c50d1084359f6dd882162b8a06e78947ca6699fe0b2b228c",
+    "auth/token/postgres/backend_test.go": "98bdc510ebabbfafbca650f8c28eeb2d8b5d496eb2dafc18f3b7338dda642e35",
+    "auth/token/postgres/contention_test.go": "0426077e0166f170f9763b569b25cb7711c2ee9c3f8892f37ad7572bbaf36632",
+    "docs/evidence/goway-b39-main-port.md": "b574a1acc597989620ef3c5cf8cf78a984b8ef5d00665aab04c0985b385d8fda",
+    "docs/evidence/goway-token-contention-report.md": "330d96cf213d3239abba166082eb519249064d9ebfb9916f38b46b4ab00ec0aa",
+    "docs/guides/tokens.md": "1f55651547c33e9a60966472e1df4eb7087785069abbaa8e530343af387bd93a",
+    "internal/credential/failure.go": "103e40f0f396750e6dcaade8cd3f10481362635e847d24c66dc7ed7e951258ed",
+    "internal/credential/gate.go": "17bbad7b10f7ce58ccfc58df6b4035d1f8c831a95d2b803218a93455826165c3",
+    "internal/credential/gate_test.go": "255640bba2eb30ee623cd6276f89f84b6b75969e9141285e6e412def11a61755"
+  },
+  "integration_batch10": {
+    "evidence": "docs/evidence/goway-batch10-integration.json",
+    "section": "auth_followup",
+    "status": "pass",
+    "note": "Original lane commands above are historical. The integration ran all 14 affected packages under race with live PostgreSQL required on r15; no frozen recordings changed."
+  }
+}

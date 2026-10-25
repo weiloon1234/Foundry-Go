@@ -168,7 +168,7 @@ func TestRealGoplsConsumer(t *testing.T) {
 					}
 				case "definition":
 					if !strings.Contains(string(result.Payload), probe.definition) {
-						t.Fatal("query definition missed generated consumer method")
+						t.Fatal("query definition missed the handwritten ORM method")
 					}
 				}
 			}
@@ -255,7 +255,7 @@ func consumerEditorProbes() []consumerEditorProbe {
 		{"tooling-factory-new", "tooling/database.go", "factory.", "Define", []string{"Define", "Sequence", "Factory"}, []string{"Build[", "Assignment[", "error"}, "/testkit/factory/orm.go"},
 		{"tooling-query-plan", "tooling/database.go", "orm.", "Explain", []string{"Explain", "ExplainAnalyze", "ExplainLocked"}, []string{"Executor", "Plan", "error"}, "/database/orm/explain.go"},
 		{"tooling-locked-analysis", "tooling/database.go", "orm.", "ExplainAnalyzeLocked", []string{"ExplainLocked", "ExplainAnalyzeLocked"}, []string{"Tx", "LockedQuery[", "Plan", "error"}, "/database/orm/explain.go"},
-		{"tooling-factory-draft", "tooling/database_test.go", "records.", "Create", []string{"Draft", "Create", "CreateMany", "WithStates"}, []string{"WriteRecord", "Context", "error"}, "/testkit/factory/factory.go"},
+		{"tooling-factory-draft", "tooling/editor_examples_test.go", "records.", "Create", []string{"Draft", "Create", "CreateMany", "WithStates"}, []string{"WriteRecord", "Context", "error"}, "/testkit/factory/factory.go"},
 		{"plugin-registration", "pluginusage/bootstrap.go", "foundry.New().", "RegisterPlugin", []string{"RegisterPlugin", "Register", "Build", "Inspect", "OverrideContributions"}, []string{"Plugin", "Builder"}, "/foundation/plugins.go"},
 		{"plugin-inspection", "pluginusage/bootstrap.go", "builder.", "Inspect", []string{"Inspect", "Build", "RegisterPlugin"}, []string{"context.Context", "Inspection", "error"}, "/foundation/inspection.go"},
 		{"plugin-override", "pluginusage/bootstrap.go", "builder.", "OverrideContributions", []string{"OverrideContributions", "RegisterPlugin", "Replace"}, []string{"ProviderID", "Registrar", "Builder"}, "/foundation/inspection.go"},
@@ -315,7 +315,7 @@ func consumerEditorProbes() []consumerEditorProbe {
 		{"orm-report-total-field", "reporting/orders.go", "MemberTotals.", "Total", []string{"MemberID", "Count", "Total"}, []string{"Field[", "MemberTotal", "Nullable[", "Decimal"}, "/reporting/rows.go"},
 		{"orm-report-count-field", "reporting/orders.go", "MemberTotals.", "Count", []string{"MemberID", "Count", "Total"}, []string{"Field[", "MemberTotal", "int64"}, "/reporting/rows.go"},
 		{"orm-report-aggregate", "reporting/orders.go", "expr.", "Sum", []string{"Sum", "Count", "Avg", "Min"}, []string{"NullableOrderedAggregate[", "Decimal"}, "/database/orm/expr/aggregate_fields.go"},
-		{"orm-report-compile", "reporting/source_golden_test.go", "rows.", "Compile", []string{"Compile", "Count", "Each", "Paginate", "SimplePaginate"}, []string{"Query[", "Statement", "error"}, "/database/orm/rows/read.go"},
+		{"orm-report-compile", "reporting/editor_examples_test.go", "rows.", "Compile", []string{"Compile", "Count", "Each", "Paginate", "SimplePaginate"}, []string{"Query[", "Statement", "error"}, "/database/orm/rows/read.go"},
 		{"orm-report-join", "reporting/orders.go", "rows.", "InnerJoin", []string{"InnerJoin", "LeftJoin", "On", "Scope"}, []string{"JoinOn[", "Source[", "InnerJoined["}, "/database/orm/rows/join.go"},
 		{"orm-report-nullable-text", "reporting/members.go", "expr.", "TextNullableRow", []string{"TextNullableRow", "TextRow", "TextRowAt"}, []string{"TextExpressionColumn[", "Nullable[", "NullableTextRowExpression["}, "/database/orm/expr/filter.go"},
 		{"orm-report-primary-role", "reporting/orm.go", "orm.", "PrimaryOf", []string{"PrimaryOf", "TableOf", "SoftDeleteOf"}, []string{"Builder[", "Key[", "Primary["}, "/database/orm/column_role.go"},
@@ -569,7 +569,7 @@ func consumerEditorProbes() []consumerEditorProbe {
 		{"typed-cte-materialization", "ctes/ctes_postgres_test.go", "rowset.CTE(\"eligible_users\", rowset.ModelRecord(models.Users.Query().Where(u.Age.Gte(21)))).", "Materialized", []string{"Materialized", "NotMaterialized"}, []string{"CommonTable[", "User", "Materialized"}, "/database/orm/rows/cte.go"},
 		{"typed-cte-fields", "ctes/ctes_postgres_test.go", "expr.At(df, models.Users.", "Status", []string{"ID", "Email", "Status", "Nickname"}, []string{"Enum[", "User", "Status"}, "/models/orm.go"},
 		{"typed-model-union", "setqueries/sets_postgres_test.go", ".Materialized()\n\tcombined := rowset.", "Union", []string{"Union", "UnionAll", "Intersect", "Except"}, []string{"RecordSource[", "SetQuery["}, "/database/orm/rows/set_operations.go"},
-		{"combined-record-fields", "setqueries/derived_aggregate_sql_test.go", "reports.BuyerTotalRows.", "Total", []string{"BuyerID", "Total", "Orders", "Average"}, []string{"Field[", "BuyerTotals", "Nullable[", "Decimal"}, "/reports/rows.go"},
+		{"combined-record-fields", "setqueries/editor_examples_test.go", "reports.BuyerTotalRows.", "Total", []string{"BuyerID", "Total", "Orders", "Average"}, []string{"Field[", "BuyerTotals", "Nullable[", "Decimal"}, "/reports/rows.go"},
 		{"combined-value-expression", "setqueries/sets_postgres_test.go", "combined.", "Value", []string{"Value", "All", "Where", "OrderBy"}, []string{"RowExpression[", "Set[", "int"}, "/database/orm/rows/value_set.go"},
 		{"joined-complete-model-slice", "recordqueries/records_postgres_test.go", "builder.", "All", []string{"All", "Where", "OrderBy", "Limit"}, []string{"All", "[]", "User", "error"}, "/database/orm/rows/record.go"},
 		{"recursive-cte-construction", "recursivequeries/recursive_postgres_test.go", "rowset.", "RecursiveCTE", []string{"RecursiveCTE", "RecursiveAllCTE", "SelectRecord"}, []string{"RecursiveSelf[", "RecordSource[", "CommonTable["}, "/database/orm/rows/recursive_cte.go"},

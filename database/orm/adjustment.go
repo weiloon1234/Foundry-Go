@@ -10,8 +10,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
-// ErrBoundExceeded means a guarded per-key adjustment returned no row. This
-// includes a missing key: the atomic statement cannot distinguish the causes.
+// ErrBoundExceeded means a guarded per-key adjustment rejected a visible row.
+// A missing or hidden key returns database.NotFound instead.
 var ErrBoundExceeded = errors.New("numeric adjustment bound exceeded")
 
 // Bound constrains the result of an atomic numeric adjustment. Construct bounds

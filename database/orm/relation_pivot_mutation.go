@@ -104,6 +104,7 @@ func changePivots(ctx context.Context, tx *database.Tx, q queryState, kind query
 		p.assignments = update.assignments
 		p.adjust = update.adjust
 		p.bounded = update.bounded
+		p.boundIndex = len(p.query.ast.Predicates) + update.boundIndex
 		// Retain numeric adjustment bounds captured by the typed assignment.
 		p.query.ast.Predicates = append(slices.Clone(p.query.ast.Predicates), update.query.ast.Predicates...)
 	}

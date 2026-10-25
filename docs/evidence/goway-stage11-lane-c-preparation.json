@@ -1,0 +1,115 @@
+{
+  "slice": "stage11-lane-c-preparation",
+  "base_commit": "545081856a448724eef810bf5e1e8ea877abcb84",
+  "main_commit": "10030ad4eaf6ecf6caf269dfb5e970b0816f366e",
+  "stage6_baseline": "35f8d45",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r14",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off"
+  },
+  "load_average_initial": [
+    29.89,
+    24.87,
+    30.13
+  ],
+  "performance_verdict": "not measured; preparation and functional smoke only",
+  "tiny_spec": {
+    "models": 2,
+    "handlers": 1,
+    "reports": 1,
+    "seed": 1
+  },
+  "acceptance": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p 'goway_*test.py'",
+      "result": "pass",
+      "tests": 22
+    },
+    {
+      "command": "python3 tools/goway_synthetic.py generate /private/tmp/goway-stage11-tiny --repo <branch> --old-repo <main> --models 2 --handlers 1 --reports 1 --seed 1",
+      "result": "pass"
+    },
+    {
+      "cwd": "/private/tmp/goway-stage11-tiny/new",
+      "command": "go test -count=1 ./...",
+      "result": "pass"
+    },
+    {
+      "cwd": "/private/tmp/goway-stage11-tiny/old",
+      "command": "go test -count=1 ./...",
+      "result": "pass"
+    },
+    {
+      "cwd": "tests/fixtures/consumer",
+      "command": "go test orm_benchmark_test.go -run '^$' -bench '^BenchmarkORMCompile$' -benchtime=1x -count=1",
+      "result": "pass"
+    },
+    {
+      "cwd": "tests/fixtures/goway",
+      "command": "go test ./bench -run '^$' -bench '^Benchmark(ChainBuild|ChainCompile|Hydrate1000)$' -benchmem -benchtime=1x -count=1",
+      "result": "pass"
+    },
+    {
+      "command": "goway_compare.py orm and footprint dry plans against pinned main",
+      "result": "pass"
+    },
+    {
+      "command": "make docs-check",
+      "result": "pass"
+    },
+    {
+      "command": "gofmt -w tests/fixtures/consumer/orm_benchmark_test.go",
+      "result": "pass"
+    },
+    {
+      "command": "git diff --check",
+      "result": "pass"
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p 'goway_compare_test.py'",
+      "result": "pass",
+      "tests": 5,
+      "note": "Targeted rerun after the final plan metadata adjustment; other tooling sources retain their 22-test suite result."
+    }
+  ],
+  "not_run": [
+    "PostgreSQL runtime comparison",
+    "paired Stage 6 measurement",
+    "full footprint suites",
+    "cold-cache measurement",
+    "70-model measurement"
+  ],
+  "legacy_dependency": "Synthetic old generation uses main only; new generation uses retained enums only.",
+  "source_hashes": {
+    "tools/goway_compare.py": "905bd79073e512d3e58299838ad3243b73d2ba0698c7a4f00a8f14bc6cc37c95",
+    "tools/goway_compare_test.py": "579377a0dda65d897df395ef5fe40cbaf43420df3ccf47b5c735ed819e3f835d",
+    "tools/goway_synthetic.py": "be2cc503e87ac8b53d53eb67fc2f7e4b08c56a9cb082436322393cdf906d5872",
+    "tools/goway_synthetic_test.py": "3a964b6800a6185023b68144d175ef6a18cef761bbfb1abc17b52c2c77d8f757",
+    "tests/fixtures/consumer/orm_benchmark_test.go": "f69c4f05047ab7e3ddbeef3b563f8073169faf077a3eddfe1f6ab431842949a3",
+    "tests/fixtures/goway/bench/chain_test.go": "9db283b8926487f0a88e737060f31e8fd2c35c380db1d1e5f9caa91dd785a505",
+    "tests/fixtures/goway/bench/hydrate_test.go": "40f9409ee7dde623d57815e24fa1c8d1be9aeb7c66863119efefed1bcf70a254",
+    "docs/guides/goway-final-measurements.md": "09d4496d130caa07c442994fa2940459e182b9cbbd44ef8eeeb7dae2c6441a50",
+    "docs/guides/orm-performance.md": "0ef67e917276efd3d99ee1cc72a503ac013ef37ce956464c5ef4fcb5da494f00",
+    "docs/evidence/goway-stage11-lane-c-preparation.md": "4631309bb09093a20bb5edeeeda4c2c4f342b08a76e6a1532174503466567d93"
+  },
+  "baseline_benchmark_sha256": "759bb814f9fb40a2f03de040ed2a4f345ac9a5348f07f5f950eae01f6fae0ba2",
+  "pre_integration_batch10_source_hashes": {
+    "tools/goway_compare.py": "905bd79073e512d3e58299838ad3243b73d2ba0698c7a4f00a8f14bc6cc37c95",
+    "tools/goway_compare_test.py": "579377a0dda65d897df395ef5fe40cbaf43420df3ccf47b5c735ed819e3f835d",
+    "tools/goway_synthetic.py": "be2cc503e87ac8b53d53eb67fc2f7e4b08c56a9cb082436322393cdf906d5872",
+    "tools/goway_synthetic_test.py": "3a964b6800a6185023b68144d175ef6a18cef761bbfb1abc17b52c2c77d8f757",
+    "tests/fixtures/consumer/orm_benchmark_test.go": "f69c4f05047ab7e3ddbeef3b563f8073169faf077a3eddfe1f6ab431842949a3",
+    "tests/fixtures/goway/bench/chain_test.go": "9db283b8926487f0a88e737060f31e8fd2c35c380db1d1e5f9caa91dd785a505",
+    "tests/fixtures/goway/bench/hydrate_test.go": "40f9409ee7dde623d57815e24fa1c8d1be9aeb7c66863119efefed1bcf70a254",
+    "docs/guides/goway-final-measurements.md": "09d4496d130caa07c442994fa2940459e182b9cbbd44ef8eeeb7dae2c6441a50",
+    "docs/guides/orm-performance.md": "0ef67e917276efd3d99ee1cc72a503ac013ef37ce956464c5ef4fcb5da494f00",
+    "docs/evidence/goway-stage11-lane-c-preparation.md": "4631309bb09093a20bb5edeeeda4c2c4f342b08a76e6a1532174503466567d93"
+  },
+  "integration_batch10": {
+    "base": "47304fc3",
+    "evidence": "docs/evidence/goway-batch10-integration.json",
+    "note": "Lane acceptance above is historical; the integration evidence records current-source checks. Final performance measurements remain pending."
+  }
+}

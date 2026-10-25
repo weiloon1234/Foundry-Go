@@ -21,6 +21,9 @@ are acceptance examples, not starter applications.
 - Put reusable infrastructure in the framework; applications supply domain models,
   concrete DTOs, business handlers and explicit declarations. Improve a missing
   framework capability instead of making every consumer rebuild it.
+- Handwrite persistence models, `database/orm` table declarations and `orm/rows`
+  projections. Follow the typed-role rules in [database/AGENTS.md](database/AGENTS.md)
+  and the [migration guide](docs/guides/orm-migration.md).
 - Prefer configured `application.New` for ordinary assembly. Keep direct foundation
   providers as the advanced composition path. Use constructors and small interfaces;
   feature packages must not import root application assembly. Keep private
@@ -53,7 +56,7 @@ are acceptance examples, not starter applications.
 - Go declarations and registered descriptors drive runtime codecs, validation,
   manifests, OpenAPI and TypeScript. Do not hand-maintain parallel wire schemas.
   Persistence models are not implicitly public response DTOs.
-- Preserve omitted/null/value semantics with existing `value` types and generated
+- Preserve omitted/null/value semantics with existing `value` types and typed write
   drafts. A supplied zero, false or empty string is not an omitted field.
 - Never hand-edit generated output or discard its ownership manifests. Change its
   handwritten declaration or generator, then regenerate with the matching framework.
@@ -81,6 +84,8 @@ are acceptance examples, not starter applications.
   Ordinary matching on known native/framework errors need not be replaced blindly.
 - Use safe framework faults and typed/redacted diagnostics. Do not log arbitrary
   error formatting, secrets, credentials, private payloads or partially hydrated models.
+  Wrap application errors before diagnostic formatting while preserving cause identity
+  for `errors.Is`/`errors.As`; see the [diagnostic contract](database/orm/README.md#diagnostic-redaction).
 - Typed identity, authenticated credentials and token scopes do not replace current
   resource/tenant authorization. Authority errors must never grant access. Preserve
   the existing request-scope freshness and registered policy contracts described in
@@ -139,7 +144,7 @@ repository root. These add local invariants without restating this file:
 | HTTP endpoints and middleware | [http/AGENTS.md](http/AGENTS.md) |
 | Authentication, credentials and authorization | [auth/AGENTS.md](auth/AGENTS.md) |
 | Storage disks, adapters and transfers | [storage/AGENTS.md](storage/AGENTS.md) |
-| Declaration discovery and generated APIs | [internal/generate/AGENTS.md](internal/generate/AGENTS.md) |
+| Contract discovery, generation and scaffolds | [internal/generate/AGENTS.md](internal/generate/AGENTS.md) |
 | Independent consumers and plugins | [tests/fixtures/AGENTS.md](tests/fixtures/AGENTS.md) |
 | Verification, packaging and measurements | [tools/AGENTS.md](tools/AGENTS.md) |
 

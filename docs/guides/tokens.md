@@ -22,7 +22,7 @@ api, err := token.New(store, "users.api", users, "users.bearer", declaredScopes)
 // Check err and register api.Guard().Registration().
 ```
 
-Generated internal models own subject locks, token families and retained token
+Handwritten ORM declarations own subject locks, token families and retained token
 generations. Request authentication, listing, capacity enforcement, revocation
 of many families and pruning use explicit schema-qualified SQL: bearer
 verification is one joined read with no transaction or row lock, so parallel
@@ -59,6 +59,15 @@ with `auth.CredentialLimit` (HTTP 409 `conflict`), or `auth.EvictOldest`, which
 revokes the oldest families so the new one fits. Challenge tokens never count
 toward that cap: they have their own `MaxPendingPerSubject` (default 8) and a new
 challenge always replaces the oldest. Expired families never count.
+
+The shared credential gate reports confirmed database lock-timeout, deadlock and
+serialization rollbacks as `fault.Conflict`. Pool admission exhaustion retains
+`fault.Overloaded`; deadline failures retain `fault.Timeout`. Database codes,
+SQLSTATE and transaction outcomes remain available through `errors.Is` and
+`errors.As`. These classifications do not authorize automatic replay. Committed
+or unknown outcomes take precedence and require reconciliation; issuance never
+returns partial credentials on failure. The gate keeps private causes out of
+formatted errors.
 
 Issuance records display-only device metadata (`Info().Device()`): the trusted
 client IP and the user agent, truncated to 512 bytes on a rune boundary, from the
@@ -285,7 +294,7 @@ without extending access, refresh-idle or absolute expiry. Only a successful
 refresh renews idle expiry, always capped by the original absolute deadline.
 Instances sharing persistence require synchronized clocks; tests inject one clock.
 
-`List(ctx, user.FoundryReference())` returns typed metadata for current live families,
+`List(ctx, UserIdentity.ReferenceOf(user))` returns typed metadata for current live families,
 including families whose access token expired while refresh remains live, in one
 statement without taking the subject lock. Authorize inspection of another subject
 with an ordinary model policy. `RevokeID` requires both its model-owned family ID
@@ -388,3 +397,5 @@ and factor in the same transaction that creates the authenticated replacement.
 The original guard/provider and current model eligibility remain authoritative.
 See [MFA completion and HTTP delivery](mfa.md#complete-a-pending-login) for the
 actual API, failure behavior and transport composition.
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).

@@ -33,11 +33,14 @@ func MemberFields() MemberFieldSet {
 type MemberScopedFieldSet[FoundryScope any] struct {
 	// ID describes mutator_members.id.
 	//
-	// ID is the database identity.
+	// ID is the database identity. Stored reads keep the key; call AccessID explicitly for presentation.
 	//
 	// Member.ID retains stored mutator_members.id. Custom getter: [Member.AccessID]; choose the stored field or getter result explicitly when mapping a DTO.
 	ID foundryquery.ScalarField[FoundryScope, model.ID[Member]]
 	// Email describes mutator_members.email_address.
+	//
+	// Email is the delivery address stored in email_address. Call AccessEmail explicitly for display.
+	// MutateEmail runs during persistence through Members.Email.Set; assigning this field does not invoke it.
 	//
 	// Delivery address.
 	//
@@ -50,6 +53,10 @@ type MemberScopedFieldSet[FoundryScope any] struct {
 	// The write mutator skips omitted values and explicit SQL NULL; an assigned scalar zero value still invokes it.
 	Nickname foundryquery.NullableTextField[FoundryScope, string]
 	// Attempts describes mutator_members.attempts.
+	//
+	// Attempts stores the persisted count. MutateAttempts runs during persistence through Members.Attempts.Set.
+	// Direct assignment does not run the mutator.
+	//
 	// Member.Attempts retains stored mutator_members.attempts. Custom setter: [Member.MutateAttempts] transforms assigned values during persistence through [MemberDraft.SetAttempts]. Direct field assignment and draft construction do not invoke it.
 	Attempts foundryquery.ExactField[FoundryScope, int]
 	// State describes mutator_members.state.
@@ -72,11 +79,14 @@ func MemberFieldsAt[FoundryScope any](scope foundryquery.ModelScope[FoundryScope
 type MemberNullableFieldSet[FoundryScope any] struct {
 	// ID describes mutator_members.id.
 	//
-	// ID is the database identity.
+	// ID is the database identity. Stored reads keep the key; call AccessID explicitly for presentation.
 	//
 	// Member.ID retains stored mutator_members.id. Custom getter: [Member.AccessID]; choose the stored field or getter result explicitly when mapping a DTO.
 	ID foundryquery.NullableField[FoundryScope, model.ID[Member]]
 	// Email describes mutator_members.email_address.
+	//
+	// Email is the delivery address stored in email_address. Call AccessEmail explicitly for display.
+	// MutateEmail runs during persistence through Members.Email.Set; assigning this field does not invoke it.
 	//
 	// Delivery address.
 	//
@@ -89,6 +99,10 @@ type MemberNullableFieldSet[FoundryScope any] struct {
 	// The write mutator skips omitted values and explicit SQL NULL; an assigned scalar zero value still invokes it.
 	Nickname foundryquery.NullableTextField[FoundryScope, string]
 	// Attempts describes mutator_members.attempts.
+	//
+	// Attempts stores the persisted count. MutateAttempts runs during persistence through Members.Attempts.Set.
+	// Direct assignment does not run the mutator.
+	//
 	// Member.Attempts retains stored mutator_members.attempts. Custom setter: [Member.MutateAttempts] transforms assigned values during persistence through [MemberDraft.SetAttempts]. Direct field assignment and draft construction do not invoke it.
 	Attempts foundryquery.NullableExactField[FoundryScope, int]
 	// State describes mutator_members.state.
@@ -781,27 +795,30 @@ type MemberDraft struct {
 
 // ID returns the typed mutation state for id.
 //
-// ID is the database identity.
+// ID is the database identity. Stored reads keep the key; call AccessID explicitly for presentation.
 //
 // Member.ID retains stored mutator_members.id. Custom getter: [Member.AccessID]; choose the stored field or getter result explicitly when mapping a DTO.
 func (d MemberDraft) ID() foundryvalue.Optional[model.ID[Member]] { return d.fieldID }
 
 // SetID returns a new draft with id explicitly set.
 //
-// ID is the database identity.
+// ID is the database identity. Stored reads keep the key; call AccessID explicitly for presentation.
 //
 // Member.ID retains stored mutator_members.id. Custom getter: [Member.AccessID]; choose the stored field or getter result explicitly when mapping a DTO.
 func (d MemberDraft) SetID(v model.ID[Member]) MemberDraft { d.fieldID = foundryvalue.Set(v); return d }
 
 // UnsetID omits id without requesting a zero or null write.
 //
-// ID is the database identity.
+// ID is the database identity. Stored reads keep the key; call AccessID explicitly for presentation.
 func (d MemberDraft) UnsetID() MemberDraft {
 	d.fieldID = foundryvalue.Optional[model.ID[Member]]{}
 	return d
 }
 
 // Email returns the typed mutation state for email_address.
+//
+// Email is the delivery address stored in email_address. Call AccessEmail explicitly for display.
+// MutateEmail runs during persistence through Members.Email.Set; assigning this field does not invoke it.
 //
 // Delivery address.
 //
@@ -811,6 +828,9 @@ func (d MemberDraft) Email() foundryvalue.Optional[string] { return d.fieldEmail
 
 // SetEmail returns a new draft with email_address explicitly set.
 //
+// Email is the delivery address stored in email_address. Call AccessEmail explicitly for display.
+// MutateEmail runs during persistence through Members.Email.Set; assigning this field does not invoke it.
+//
 // Delivery address.
 //
 // Member.Email retains stored mutator_members.email_address. Custom getter: [Member.AccessEmail]; choose the stored field or getter result explicitly when mapping a DTO.
@@ -818,6 +838,9 @@ func (d MemberDraft) Email() foundryvalue.Optional[string] { return d.fieldEmail
 func (d MemberDraft) SetEmail(v string) MemberDraft { d.fieldEmail = foundryvalue.Set(v); return d }
 
 // UnsetEmail omits email_address without requesting a zero or null write.
+//
+// Email is the delivery address stored in email_address. Call AccessEmail explicitly for display.
+// MutateEmail runs during persistence through Members.Email.Set; assigning this field does not invoke it.
 //
 // Delivery address.
 func (d MemberDraft) UnsetEmail() MemberDraft {
@@ -855,14 +878,25 @@ func (d MemberDraft) ClearNickname() MemberDraft {
 }
 
 // Attempts returns the typed mutation state for attempts.
+//
+// Attempts stores the persisted count. MutateAttempts runs during persistence through Members.Attempts.Set.
+// Direct assignment does not run the mutator.
+//
 // Member.Attempts retains stored mutator_members.attempts. Custom setter: [Member.MutateAttempts] transforms assigned values during persistence through [MemberDraft.SetAttempts]. Direct field assignment and draft construction do not invoke it.
 func (d MemberDraft) Attempts() foundryvalue.Optional[int] { return d.fieldAttempts }
 
 // SetAttempts returns a new draft with attempts explicitly set.
+//
+// Attempts stores the persisted count. MutateAttempts runs during persistence through Members.Attempts.Set.
+// Direct assignment does not run the mutator.
+//
 // Member.Attempts retains stored mutator_members.attempts. Custom setter: [Member.MutateAttempts] transforms assigned values during persistence through [MemberDraft.SetAttempts]. Direct field assignment and draft construction do not invoke it.
 func (d MemberDraft) SetAttempts(v int) MemberDraft { d.fieldAttempts = foundryvalue.Set(v); return d }
 
 // UnsetAttempts omits attempts without requesting a zero or null write.
+//
+// Attempts stores the persisted count. MutateAttempts runs during persistence through Members.Attempts.Set.
+// Direct assignment does not run the mutator.
 func (d MemberDraft) UnsetAttempts() MemberDraft {
 	d.fieldAttempts = foundryvalue.Optional[int]{}
 	return d
@@ -894,10 +928,13 @@ func (MemberDraft) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("
 type MemberFieldChanges struct {
 	// ID retains the typed change for id.
 	//
-	// ID is the database identity.
+	// ID is the database identity. Stored reads keep the key; call AccessID explicitly for presentation.
 	//
 	ID lifecycle.FieldChange[model.ID[Member]]
 	// Email retains the typed change for email_address.
+	//
+	// Email is the delivery address stored in email_address. Call AccessEmail explicitly for display.
+	// MutateEmail runs during persistence through Members.Email.Set; assigning this field does not invoke it.
 	//
 	// Delivery address.
 	//
@@ -905,6 +942,10 @@ type MemberFieldChanges struct {
 	// Nickname retains the typed change for nickname.
 	Nickname lifecycle.FieldChange[foundryvalue.Nullable[string]]
 	// Attempts retains the typed change for attempts.
+	//
+	// Attempts stores the persisted count. MutateAttempts runs during persistence through Members.Attempts.Set.
+	// Direct assignment does not run the mutator.
+	//
 	Attempts lifecycle.FieldChange[int]
 	// State retains the typed change for state.
 	State lifecycle.FieldChange[State]

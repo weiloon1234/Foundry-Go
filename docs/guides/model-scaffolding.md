@@ -28,91 +28,95 @@ unchanged; bare digit-leading and non-ASCII SQL identifiers are rejected.
 
 ## Register and check declarations
 
-Compose the per-model helpers in one application-owned function. The scaffold
-does not overwrite this function when you add another model:
-
-```go
-func Tables() []orm.CheckedTable {
-    return append(WidgetTables(), OrderTables()...)
-}
-```
-
-Check the declarations with `orm.Check(models.Tables()...)`. Where the application
-assembly uses `WithTables`, pass this same explicit list to its table-registration
-option. Add every model to the list; the scaffold performs no package-wide runtime
-discovery. `WithTables` is application integration, not a method on the model table.
+The scaffold supplies a per-model `WidgetTables()` helper. Compose it with other
+models in an application-owned `Tables()` function, shown below. Check that list
+with `orm.Check(Tables()...)` and pass it to `application.WithTables(Tables()...)`
+where the application uses table registration. No runtime package discovery runs.
 
 ## Add fields with lifecycle roles
 
-For managed timestamps, add `CreatedAt` and `UpdatedAt` fields of type
-`temporal.DateTime`. Add the matching handles to `WidgetTable`:
+The scaffold has no timestamp, soft-delete, mutator or ordinary relation flags.
+The following compiled example extends its initial struct and table declaration:
 
+<!-- compiled-source: tests/fixtures/goway/guideadapters/scaffold_test.go -->
 ```go
-CreatedAt orm.CreatedAt[Widget, temporal.DateTime]
-UpdatedAt orm.UpdatedAt[Widget, temporal.DateTime]
-```
+type NameInput struct{ Text string }
 
-Bind them in the declaration:
+type Widget struct {
+	ID   model.ID[Widget] `foundry:"column=id"`
+	Name string
+	// CreatedAt preserves supplied input; omission uses the owning clock.
+	CreatedAt temporal.DateTime
+	// UpdatedAt is managed by the write pipeline.
+	UpdatedAt temporal.DateTime
+	DeletedAt value.Nullable[temporal.DateTime]
+	Children  relation.Many[Child]
+}
 
-```go
-CreatedAt: orm.CreatedAtOf(b, &m.CreatedAt),
-UpdatedAt: orm.UpdatedAtOf(b, &m.UpdatedAt),
+type WidgetTable struct {
+	orm.Table[Widget, model.ID[Widget]]
+	Name      orm.InputText[Widget, NameInput, string]
+	CreatedAt orm.CreatedAt[Widget, temporal.DateTime]
+	UpdatedAt orm.UpdatedAt[Widget, temporal.DateTime]
+	DeletedAt orm.SoftDelete[Widget, temporal.DateTime]
+	Soft      orm.SoftDeletable[Widget]
+	Children  orm.Many[Widget, Child]
+}
+
+var Widgets = orm.Define("widgets", func(b orm.Builder[Widget], m *Widget) WidgetTable {
+	deleted := orm.SoftDeleteOf(b, &m.DeletedAt)
+	return WidgetTable{
+		Table: orm.TableOf(b, &m.ID),
+		Name: orm.InputTextOf(b, &m.Name, func(input NameInput) (string, error) {
+			return strings.TrimSpace(input.Text), nil
+		}),
+		CreatedAt: orm.CreatedAtOf(b, &m.CreatedAt),
+		UpdatedAt: orm.UpdatedAtOf(b, &m.UpdatedAt),
+		DeletedAt: deleted,
+		Soft:      orm.SoftDeletes(deleted),
+		Children:  orm.ManyOf(b, &m.Children),
+	}
+})
 ```
 
 Creation time preserves supplied input and uses the owning clock when omitted.
-Update time is managed by the write pipeline. Document those behaviors beside
-the model fields and handles; do not use ordinary `TimeOf` for these roles.
-
-For soft deletion, add `DeletedAt value.Nullable[temporal.DateTime]`, a
-`DeletedAt orm.SoftDelete[Widget, temporal.DateTime]` handle and a
-`Soft orm.SoftDeletable[Widget]` capability. Bind the field once and derive the
-capability from that handle:
-
-```go
-deleted := orm.SoftDeleteOf(b, &m.DeletedAt)
-return WidgetTable{
-    Table: orm.TableOf(b, &m.ID),
-    DeletedAt: deleted,
-    Soft: orm.SoftDeletes(deleted),
-}
-```
-
-Keep the other declared fields in the returned table. The `Soft` capability is
-required for physical deletion of a soft-deletable model.
-
-For a mutated field, keep the stored model type and select an `Input*` handle for
-its write input. For example, a stored `Name string` can accept a distinct
-`NameInput`:
-
-```go
-type NameInput struct { Text string }
-// In WidgetTable:
-// Name orm.InputText[Widget, NameInput, string]
-
-// In the WidgetTable literal inside Define:
-Name: orm.InputTextOf(b, &m.Name, func(input NameInput) (string, error) {
-    return strings.TrimSpace(input.Text), nil
-}),
-```
-
-`Widgets.Name.Set` now accepts `NameInput`; predicates retain the stored `string`
-type. Use the corresponding numeric, nullable, JSON or other `Input*` family for
-other stored types. A nil transform selects the model's named mutator.
+Update time is managed by the write pipeline. Document both on fields and handles.
+`SoftDeletes` derives the capability needed for physical deletion. `InputTextOf`
+keeps the stored string separate from `NameInput`; predicates accept the stored
+string, while `Set` accepts the input type. A nil transform selects a named model
+mutator. Other `Input*` families preserve their corresponding storage types.
 
 ## Add relations after table declarations
 
-Add a `Children relation.Many[Child]` field and an
-`orm.Many[Widget, Child]` handle, bound with `orm.ManyOf(b, &m.Children)`. Declare
-the computation after both tables, keeping it outside `orm.Define`:
+Bind relation slots inside each `orm.Define`, then declare computations after both
+tables. This avoids initialization cycles:
 
+<!-- compiled-source: tests/fixtures/goway/guideadapters/scaffold_test.go -->
 ```go
-var WidgetChildren = orm.HasManyOf(
-    Widgets.Children, Widgets.Key(), Children.WidgetID,
-)
+type Child struct {
+	ID       model.ID[Child]
+	WidgetID model.ID[Widget]
+}
+
+type ChildTable struct {
+	orm.Table[Child, model.ID[Child]]
+	WidgetID orm.Column[Child, model.ID[Widget]]
+}
+
+var Children = orm.Define("children", func(b orm.Builder[Child], m *Child) ChildTable {
+	return ChildTable{orm.TableOf(b, &m.ID), orm.ColumnOf(b, &m.WidgetID)}
+})
+var WidgetChildren = orm.HasManyOf(Widgets.Children, Widgets.Key(), Children.WidgetID)
+
+func WidgetTables() []orm.CheckedTable { return []orm.CheckedTable{Widgets} }
+func ChildTables() []orm.CheckedTable  { return []orm.CheckedTable{Children} }
+
+func Tables() []orm.CheckedTable {
+	return append(WidgetTables(), ChildTables()...)
+}
 ```
 
-Load it with `Widgets.Query().With(WidgetChildren)`. This separates field offsets
-from cross-table references and avoids initialization cycles. See the
+Load with `Widgets.Query().With(WidgetChildren)`. See the
 [ORM API guide](../../database/orm/README.md) for other relation kinds.
 
 ## Add extension slots
@@ -137,12 +141,15 @@ owner identity and stored slot names stable when renaming Go fields or tables.
 
 `ArticleSEO` remains a generated-codec DTO. The scaffold generates its codec
 before returning; run `foundry generate` after changing its JSON fields.
-`--field-docs` still applies to the generation run by model-with-slots scaffolds;
 ORM field comments are ordinary handwritten documentation. Plain model scaffolds
-continue to reject this flag because they run no generation.
+run no generation.
 
 The [scaffold tests](../../internal/generate/scaffold_model_test.go) compile the
 output and exercise `orm.Check`, typed roles and relation declarations. The
 [plain model](../../internal/generate/testdata/scaffold/model.golden) and
 [extension model](../../internal/generate/testdata/scaffold/extensions.golden)
 goldens show complete initial files.
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).
+
+The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

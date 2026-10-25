@@ -154,9 +154,13 @@ func TestCompilerOutputBoundCancelsAndKeepsOnlyItsBudget(t *testing.T) {
 }
 
 func TestCompilerNamedSelectionPrecedesBatchExecution(t *testing.T) {
+	t.Setenv("FOUNDRY_ORACLE_REPLAY", "full")
 	for _, test := range []struct{ filter, want string }{{"beta", "beta"}, {"(alpha|gamma)", "alpha,gamma"}} {
 		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCompilerSelectionHelper$/^"+test.filter+"$", "--", "compiler-selection")
+		// The helper checks only its selected subtests; full oracle completeness
+		// remains the responsibility of this parent process.
+		cmd.Env = append(os.Environ(), "FOUNDRY_ORACLE_REPLAY=")
 		configureCompilerCommand(cmd)
 		output, err := cmd.CombinedOutput()
 		cancel()

@@ -1,27 +1,24 @@
 # Typed temporal queries
 
+<!-- compiled-examples -->
+
 Temporal calculations share the query AST, parameters, scope checking and result codecs used by [scalar calculations](scalar-calculations.md). The [consumer fixture](../../tests/fixtures/consumer/temporalqueries/) declares ordinary model fields for `time.Time`, `temporal.DateTime`, `temporal.Date`, `temporal.LocalDateTime`, `temporal.Time` and their nullable forms.
 
 PostgreSQL 18 is the tested backend for these operations, including its explicit-timezone `date_add` and `date_subtract` functions.
 
 ## Calendar fields and instants
 
-Calendar extraction accepts dates or local date-times. Clock extraction accepts times or local date-times. For an instant, select the timezone explicitly before extracting calendar or clock components:
+Calendar extraction accepts dates or local date-times. Clock extraction accepts times or local date-times. For an instant, use `expr.LocalAt(input, zone)` to select the timezone before extracting calendar or clock components. This example groups a date field by year:
 
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/temporalqueries/orm_test.go):
+
+<!-- go-source: tests/fixtures/consumer/temporalqueries/orm_test.go -->
 ```go
-f := temporalqueries.SampleFields()
-ny, err := query.LoadTimeZone("America/New_York")
-if err != nil {
-    return err
-}
-year := query.Year(query.LocalAt(f.At, ny))
-samples, err := temporalqueries.QueryTemporalSamples().
-    Where(year.Eq(2024)).
-    OrderBy(f.ID.Asc()).
-    All(ctx, db)
+year := expr.Year(expr.Value(Samples.Date))
+report := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(Samples.Query()), CalendarSummaries, rows.MapSelected(CalendarSummaries.Year, year.Value()), rows.MapSelected(CalendarSummaries.Rows, expr.Count[Sample]().Value()), rows.MapSelected(CalendarSummaries.Latest, expr.Max(Samples.Date).Value())), expr.Group(year)), year.Asc())
 ```
 
-The returned `samples` is `[]temporalqueries.Sample`. These expressions run in PostgreSQL; sorting a loaded slice with Go's `slices` package remains a separate in-memory operation.
+The example is a grouped rows projection over the handwritten `Samples` declaration. Extraction and ordering run in PostgreSQL; sorting an already-loaded slice is a separate Go operation.
 
 Calendar functions include `Year`, `Month`, `Day`, `DayOfWeek`, `ISODayOfWeek`, `DayOfYear`, `ISOWeek`, `ISOYear`, `Quarter`, `Century`, `Decade`, `Millennium` and `JulianDay`. Clock functions include `Hour`, `Minute`, `Second`, `Milliseconds` and `Microseconds`. Weekdays use Sunday = 0 for `DayOfWeek` and Monday = 1 for `ISODayOfWeek`; ISO week-years can differ from calendar years.
 
@@ -29,13 +26,16 @@ Integral components return `int64`. `Second`, `Milliseconds`, `JulianDay` and `U
 
 ## Truncation and timezone resolution
 
+These functions live in `expr`; `field` below is a row operand such as
+`expr.Value(Samples.Date)`. Selected forms take `expr.Selected` values instead.
+
 | Operation | Input | Result |
 | --- | --- | --- |
-| `TruncateDate(field, query.DateMonth)` | `temporal.Date` | `temporal.Date` |
-| `TruncateLocal(field, query.TimestampHour)` | `temporal.LocalDateTime` | `temporal.LocalDateTime` |
-| `TruncateInstant(field, query.TimestampDay, zone)` | `time.Time` or `temporal.DateTime` | Same instant type |
+| `TruncateDate(field, expr.DateMonth)` | `temporal.Date` | `temporal.Date` |
+| `TruncateLocal(field, expr.TimestampHour)` | `temporal.LocalDateTime` | `temporal.LocalDateTime` |
+| `TruncateInstant(field, expr.TimestampDay, zone)` | `time.Time` or `temporal.DateTime` | Same instant type |
 | `LocalAt(field, zone)` | Either instant type | `temporal.LocalDateTime` |
-| `ResolveLocal(field, zone, query.PostgresStandardTime)` | `temporal.LocalDateTime` | `temporal.DateTime` |
+| `ResolveLocal(field, zone, expr.PostgresStandardTime)` | `temporal.LocalDateTime` | `temporal.DateTime` |
 | `DateOf(field)` / `TimeOf(field)` | `temporal.LocalDateTime` | `temporal.Date` / `temporal.Time` |
 | `CombineDateTime(date, clock)` | Date and time in the same scope | `temporal.LocalDateTime` |
 
@@ -49,14 +49,27 @@ Date and timestamp truncation units have distinct Go types. Invalid zero units o
 
 `AddDateInterval`/`SubtractDateInterval` return local date-times because intervals can include clock components. `AddLocalInterval`/`SubtractLocalInterval` preserve local date-times. `AddInstantInterval`/`SubtractInstantInterval` preserve the instant's Go type and require an explicit timezone:
 
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/intervalqueries/calculation_postgres_test.go):
+
+<!-- go-source: tests/fixtures/consumer/intervalqueries/calculation_postgres_test.go -->
 ```go
-tomorrow := query.AddInstantInterval(f.At, temporal.Days(1), ny)
-elapsed, err := temporal.Elapsed(24 * time.Hour)
+ny, err := expr.LoadTimeZone("America/New_York")
 if err != nil {
-    return err
+	return err
 }
-after24Hours := query.AddInstantInterval(f.At, elapsed, ny)
+for _, test := range []struct {
+	period temporal.Interval
+	hours  time.Duration
+}{{temporal.Days(1), 23}, {interval(t, 0, 0, 24*time.Hour), 24}} {
+	got := intervalOne(t, tx, expr.ShiftInstant(expr.Value(f.Start), expr.Param(f.Period, test.period), ny).Value())
+	if got.Sub(samples[0].Start) != test.hours*time.Hour {
+		t.Fatal(got, test.hours)
+	}
+}
 ```
+
+The excerpt uses dynamic interval operands to contrast a calendar day with 24 elapsed
+hours; the literal `Add*Interval` forms retain the same arithmetic semantics.
 
 Calendar months clip to the destination month's final day. A calendar day across a DST transition can span 23 or 25 elapsed hours. Elapsed durations keep their elapsed meaning. `AddClockElapsed`/`SubtractClockElapsed` take `time.Duration`, wrap at midnight and reject sub-microsecond values. Calendar and elapsed components remain separate in `temporal.Interval`. [PostgreSQL date/time arithmetic](https://www.postgresql.org/docs/18/functions-datetime.html)
 
@@ -64,14 +77,16 @@ Calendar months clip to the destination month's final day. A calendar day across
 
 [Typed interval queries](interval-queries.md) extend these literal operations with interval model fields, summaries, differences, component extraction and dynamic `ShiftDate`/`ShiftLocal`/`ShiftInstant` operands.
 
-`TransactionTime(source)` returns PostgreSQL's transaction start instant as `temporal.DateTime`; repeated statements within one transaction see the same value. It uses the database clock. For controllable application time, pass a value from Foundry's clock through a typed parameter instead.
+`TransactionTime(scope)` returns PostgreSQL's transaction start instant as `temporal.DateTime`; repeated statements within one transaction see the same value. It uses the database clock. For controllable application time, pass a value from Foundry's clock through a typed parameter instead.
 
 ## NULL, phases and failures
 
 Each temporal operation has a nullable counterpart, such as `YearNullable` and `AddInstantIntervalNullable`. SQL NULL propagates. Binary nullable operations require explicit widening of any non-null input using `NullableRow`. Use `Coalesce` for a declared fallback.
 
-The `Value` forms accept selected expressions, including aggregates and windows. For example, `YearNullableValue(query.Max(f.Date).Value())` retains aggregate semantics, while `UnixMillisecondsValue(FromUnixMillisValue(query.RowNumber(window)))` retains window semantics. Row constructors cannot accept selected expressions. Existing grouping, HAVING and nested SELECT checks still apply.
+The `Value` forms accept selected expressions, including aggregates and windows. For example, `expr.YearNullableValue(expr.Max(f.Date).Value())` retains aggregate semantics, while `UnixMillisecondsValue(FromUnixMillisValue(expr.RowNumber(window)))` retains window semantics. Row constructors cannot accept selected expressions. Existing grouping, HAVING and nested SELECT checks still apply.
 
 Dates and timestamps retain Foundry's years 1–9999 and whole-microsecond codec contracts. PostgreSQL can represent values outside this range, but result decoding rejects them and collected reads publish no partial slice. Database arithmetic overflow remains a database error; callers can use a savepoint when recovering within a transaction. Invalid units, zero zones, unsupported resolution policies and sub-microsecond elapsed values fail before I/O. Cancellation follows the normal query runtime.
 
-Interval operands in this increment are typed literal values. Interval-valued model codecs, interval result expressions and general timestamp differences remain separate advanced-query work; no raw SQL is needed for the operations documented here.
+Interval fields, computed differences and dynamic shifts are also available; see [interval calculations](interval-queries.md).
+
+For declaration and API migration, see the [ORM migration guide](orm-migration.md).

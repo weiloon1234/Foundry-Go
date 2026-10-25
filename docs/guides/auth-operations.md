@@ -11,7 +11,7 @@ Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/
 `Subject()` is the affected model reference and `Action()` identifies enrollment,
 disable, successful login completion, recovery replacement, reencryption or retirement.
 Neither notice nor payload needs a complete authenticatable model or its secrets.
-Use normal generated model observers for password/email/eligibility changes.
+Use normal ORM model observers for password/email/eligibility changes.
 
 Map notices to a small domain event DTO and call `events.Topic.Enqueue` with that
 transaction. Foundry owns JSON capture, attribution, outbox storage and rollback.
@@ -73,7 +73,7 @@ hard-deleting its model. This locks the existing model before factor state, clea
 the enabled flag, invalidates configured session/token guards, removes pending or
 confirmed factors and emits `Retired` in the same transaction. Disabled models can
 be retired; absent or mismatched models fail. All changes roll back with the outer
-transaction, including generated domain deletion and outbox entries.
+transaction, including ORM domain deletion and outbox entries.
 
 Unlike self-service `Disable`, retirement does not ask the departing account for a
 password or factor and does not apply its `CanDisable` rule. Authorize the admin
@@ -87,3 +87,5 @@ model. Recovery links from the old revision then remain invalid. Already orphane
 factors from out-of-band deletes require an audited maintenance procedure while
 creation/issuance for that identity is stopped. Retirement cannot infer a deleted
 model's policies or safely race a replacement account into existence.
+
+For the old-to-new API mapping, see [ORM migration](orm-migration.md).
